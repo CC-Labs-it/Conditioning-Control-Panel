@@ -29,7 +29,7 @@ import { phraseCameraGuide } from '../core/phraseFlight.js';
 /** Kick numbers; LOOK.camKick (render/look.js, integrator) overrides any of them. */
 export const KICK_DEFAULTS = Object.freeze({
   hz: 3.6, zeta: 0.6, gentleMul: 0.5, gentleZeta: 1, maxM: 0.8, maxFovDeg: 9,
-  bumpM: 0.45, bumpUpM: 0.16, bumpFovDeg: 2.5, bumpMinMps: 1.5, bumpLiftMinMps: 6, bumpFullMps: 9,
+  bumpM: 0.45, bumpFovDeg: 2.5, bumpMinMps: 1.5, bumpFullMps: 9,
   landM: Object.freeze([0.16, 0.3, 0.46]), landFovDeg: 1.2, landMinFallMps: 3,
   // polish 5 (J1): the held boost kick is the ladder (fov.kickByTierDeg via fx/cues.js boostLadder); this is
   // only the snap on its IN, small so the peak stays near the ladder (2.5 / 3.5 / 5 / 4 / 5.5 before)
@@ -65,11 +65,8 @@ export function createKick(L = KICK_DEFAULTS) {
       if (!(mag >= L.bumpMinMps)) return false;
       // No minimum-strength jump: a barely audible graze must barely move the camera.
       const k = clamp((mag - L.bumpMinMps) / (L.bumpFullMps - L.bumpMinMps), 0, 1) * g;
-      // A glancing side contact must not look like driving over a raised floor tile.
-      // Keep its lateral/FOV response; reserve vertical lift for a substantial impact.
-      const liftFrom = L.bumpLiftMinMps ?? KICK_DEFAULTS.bumpLiftMinMps;
-      const lift = clamp((mag - liftFrom) / Math.max(1e-3, L.bumpFullMps - liftFrom), 0, 1) * g;
-      push(sx, -Math.sign(side || 1) * L.bumpM * k); push(sy, L.bumpUpM * lift); push(sf, L.bumpFovDeg * k);
+      // Road-plane impacts push sideways. A vertical kick falsely implies raised road or a hop.
+      push(sx, -Math.sign(side || 1) * L.bumpM * k); push(sf, L.bumpFovDeg * k);
       return true;
     }
     if (kind === 'land') {

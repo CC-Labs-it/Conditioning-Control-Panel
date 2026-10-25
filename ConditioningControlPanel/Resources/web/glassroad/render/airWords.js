@@ -1,6 +1,7 @@
 /* The words themselves are solid, bevelled stepping surfaces. There is no tray or backing. */
 import { Group, Mesh, InstancedMesh, Object3D, OctahedronGeometry, BufferGeometry,
-  MeshStandardNodeMaterial, MeshBasicNodeMaterial, Matrix4, Vector3, Color } from 'three/webgpu';
+  MeshStandardNodeMaterial, MeshBasicNodeMaterial, Matrix4, Vector3, Color, BackSide } from 'three/webgpu';
+import { positionLocal, normalLocal, vec3 } from 'three/tsl';
 import { FACES } from './fonts.js';
 import { wordTheme, wordFace } from './wordTheme.js';
 import { letterContours, extrudeLetters, letterCatchPoints } from './wordSolid.js';
@@ -70,10 +71,14 @@ export function createAirWords(scene, track, { feel, photosafe, doc = globalThis
       emissive: theme.accent, emissiveIntensity: .13, transparent: true, opacity: 0 });
     const side = new MeshStandardNodeMaterial({ color: new Color(theme.accent).multiplyScalar(.58),
       roughness: .34, metalness: .2, emissive: theme.accent, emissiveIntensity: .05, transparent: true, opacity: 0 });
-    materials.push(top, side);
+    const outlineMaterial = new MeshBasicNodeMaterial({ color: 0x000000, side: BackSide, transparent: true, opacity: 0 });
+    // Expand each glyph's closed hull along its normals, including the inner counters.
+    outlineMaterial.positionNode = positionLocal.add(normalLocal.mul(vec3(.012, .035, .018)));
+    materials.push(top, side, outlineMaterial);
     const letters = new Mesh(warm.geometry, [top, side]); letters.name = 'solid-letters'; root.add(letters);
     const bits = new InstancedMesh(bitGeo, bitMaterial, BITS); bits.count = 0; bits.frustumCulled = false; root.add(bits);
-    rows.push({ root, letters, top, side, bits, entry: warm, id: null, text: '', solid: false, safety: false });
+    const outline = new Mesh(warm.geometry, outlineMaterial); outline.name = 'solid-letter-outline'; root.add(outline);
+    rows.push({ root, letters, outline, outlineMaterial, top, side, bits, entry: warm, id: null, text: '', solid: false, safety: false });
   }
   scene.add(object);
   let clock = 0, visible = 0, solidCount = 0, particles = 0, disposed = false;
@@ -101,7 +106,10 @@ export function createAirWords(scene, track, { feel, photosafe, doc = globalThis
       const row = rows[index], w = Math.max(.01, p.widthM), l = Math.max(.01, p.lengthM);
       if (row.id !== p.id || row.text !== p.text) {
         row.id = p.id; row.safety = photosafe?.request('phrase') === false;
-        if (row.text !== p.text) { row.text = p.text; row.entry = geometry(p.text); row.letters.geometry = row.entry.geometry; }
+        if (row.text !== p.text) {
+          row.text = p.text; row.entry = geometry(p.text);
+          row.letters.geometry = row.outline.geometry = row.entry.geometry;
+        }
       }
       p.catchPoints = row.entry.catchPoints; p.catchText = p.text;
       const soft = gentle || row.safety;
@@ -112,9 +120,12 @@ export function createAirWords(scene, track, { feel, photosafe, doc = globalThis
       row.letters.position.y = wordPose.y;
       row.letters.rotation.z = wordPose.tilt;
       row.letters.scale.set(w, wordPose.depth, l);
+      row.outline.position.copy(row.letters.position);
+      row.outline.rotation.copy(row.letters.rotation);
+      row.outline.scale.copy(row.letters.scale);
       row.solid = !!p.solid; visible++; if (p.solid) solidCount++;
       // The simulation's arrival envelope supplies the only reveal, with no positional pop.
-      row.top.opacity = alpha; row.side.opacity = alpha;
+      row.top.opacity = row.side.opacity = row.outlineMaterial.opacity = alpha;
       row.bits.count = soft ? 12 : BITS; particles += row.bits.count;
       for (let i = 0; i < row.bits.count; i++) {
         airWordBit(i, clock, w, l, alpha, soft, pose);

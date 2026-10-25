@@ -131,18 +131,19 @@ test('one phrase arrives early enough to read and sends the kart across the rest
   assert.equal(ev.all('air-word-hop').length, 1);
 });
 
-test('contact compresses, springs visibly upward and opens the hat only after the rebound apex', () => {
+test('contact springs without stopping forward travel and opens the hat only after the rebound apex', () => {
   const f = setup(), { st, ev } = f;
   while (!ev.all('air-word-land').length) tick(f);
-  const landed = ev.t, p = ev.all('air-word-land')[0].payload.p, height = st[S.posY];
+  const p = ev.all('air-word-land')[0].payload.p, height = st[S.posY];
   assert.ok(phraseBounceActive(st));
   assert.ok(Math.hypot(...p.map((v, i) => v - st[S.posX + i])) < .001);
-  while (!ev.all('air-word-hop').length) {
-    assert.equal(glideActive(st), false); tick(f);
-  }
-  assert.ok(ev.t - landed >= .17 && ev.t - landed <= .21, 'the compression has readable time');
+  assert.equal(ev.all('air-word-hop').length, 1, 'contact and spring occur in the same simulation step');
+  assert.ok(st[S.airborne] && !st[S.grounded], 'contact never starts a stationary grounded hold');
   assert.deepEqual(ev.all('air-word-hop')[0].payload.p, p);
-  for (let i = 0; i < 18; i++) tick(f);
+  for (let i = 0; i < 18; i++) {
+    const previousS = st[S.s]; tick(f);
+    assert.ok(st[S.s] > previousS + .05, 'forward progress continues throughout the visible compression');
+  }
   assert.ok(st[S.posY] > height + 1 && st[S.velY] > 0, 'visible immediate spring ascent');
   assert.equal(glideActive(st), false, 'hat does not mask the launch');
   while (!glideActive(st)) tick(f);
@@ -209,7 +210,8 @@ test('quiet song sections get compact trigger words, with only two supports visi
       tick(f);
       assert.ok(f.run.platforms.length <= 2);
       for (const row of f.run.platforms) {
-        assert.ok(row.widthM <= 7 && row.lengthM <= 2.6, 'letters leave the chase view open');
+        assert.ok(row.widthM <= 8.5 && row.lengthM <= 3.2, 'larger letters leave the chase view open');
+        assert.ok(row.widthM >= 4.4 && row.lengthM >= 3.1, 'phrases gain about a quarter in glyph size');
         assert.ok(['LET GO', 'DRIFT AWAY', 'BREATHE SLOW', 'FLOAT ON'].includes(row.text));
         seen.add(row.text);
       }

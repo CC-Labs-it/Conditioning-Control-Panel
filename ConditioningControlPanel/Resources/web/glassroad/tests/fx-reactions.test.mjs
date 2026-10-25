@@ -103,11 +103,11 @@ test('hop squashes then stretches; a heavy landing squashes, dusts and shakes, g
   assert.equal(fx.state.dust, 0); assert.ok(Math.abs(fx.state.squash) < 1e-9);
 });
 
-test('a phrase tap compresses then rebounds without a camera kick and settles completely', () => {
+test('same-tick phrase contact and hop compress then stretch without a camera kick', () => {
   const { bus, fx, run } = rig();
-  bus.emit('land', { tier: 0, airWord: true }); run(.08);
-  assert.ok(fx.state.squash > .2);
-  bus.emit('air-word-hop', {}); run(.1);
+  bus.emit('land', { tier: 0, airWord: true }); bus.emit('air-word-hop', {});
+  run(.05); assert.ok(fx.state.squash > .15, 'contact compression survives a simultaneous hop');
+  run(.22);
   assert.ok(fx.state.squash < -.15);
   assert.equal(fx.state.fovKick, 0); assert.deepEqual(fx.state.shake, [0, 0, 0]);
   run(.7); assert.ok(Math.abs(fx.state.squash) < 1e-9);

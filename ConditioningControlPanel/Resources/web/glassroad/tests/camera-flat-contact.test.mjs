@@ -5,7 +5,18 @@ import { loadTrack } from '../track/load.js';
 import { step } from '../sim/kart.js';
 import { S } from '../sim/state.js';
 import { createCamRig, createKick } from '../render/cameraMath.js';
+import { registerHooks } from 'node:module';
+import { createBus } from '../core/events.js';
+import { createFx } from '../fx/reactions.js';
+import { createGentle } from '../fx/gentle.js';
+import { createPhotosafe } from '../fx/photosafe.js';
 import { makeFeel, place, acts, recorder, DT } from './sim-fake.mjs';
+
+const hooks = registerHooks({ resolve(name, context, next) {
+  return name === 'three/webgpu' ? { url: new URL('../vendor/three/build/three.webgpu.min.js', import.meta.url).href, shortCircuit: true } : next(name, context);
+} });
+const { createChaseCamera } = await import('../render/camera.js');
+hooks.deregister();
 
 test('Mainframe flat opening keeps camera height through repeated glancing contacts', () => {
   const track = loadTrack(JSON.parse(readFileSync(new URL('../tracks/mainframe.json', import.meta.url), 'utf8')));
@@ -26,17 +37,40 @@ test('Mainframe flat opening keeps camera height through repeated glancing conta
   assert.ok(maxCameraStep < 0.001, 'no false floor-step camera lift: ' + maxCameraStep);
 });
 
-test('vertical collision lift rises continuously for hard hits while landing dips remain', () => {
-  const peaks = [];
+test('even hard planar collisions stay sideways while real landing dips remain', () => {
   for (const speed of [5.9, 6, 6.1, 7.5, 9]) {
     const kick = createKick(); kick.hit('wall', speed, 1);
-    let peak = 0;
-    for (let t = 0; t < 1; t += DT) peak = Math.max(peak, kick.update(DT).y);
-    peaks.push(peak);
+    let side = 0;
+    for (let t = 0; t < 1; t += DT) { const out = kick.update(DT); assert.equal(out.y, 0); side = Math.max(side, Math.abs(out.x)); }
+    assert.ok(side > 0, 'the impact still moves away from contact');
   }
-  assert.equal(peaks[0], 0); assert.equal(peaks[1], 0);
-  assert.ok(peaks[2] > 0 && peaks[2] < 0.01);
-  assert.ok(peaks[3] > peaks[2] && peaks[4] > 0.12);
   const landing = createKick(); landing.hit('land', 2);
   assert.ok(landing.update(DT).y < -0.1, 'real landing still dips');
+});
+
+test('hard racer and wall events through the actual FX bus never create floor steps at 60 or 20 fps', () => {
+  const track = loadTrack(JSON.parse(readFileSync(new URL('../tracks/mainframe.json', import.meta.url), 'utf8')));
+  for (const fps of [60, 20]) for (const gentle of [false, true]) {
+    const feel = makeFeel({ 'gentle.on': gentle }), bus = createBus(), cam = createChaseCamera(feel, { bus });
+    const fx = createFx(bus, feel, { gentle: createGentle(feel, { search: '' }), photosafe: createPhotosafe(feel) });
+    const st = place(track, { s: 12, speed: 28 }), rec = recorder(), dt = 1 / fps;
+    cam.snap(st, track, 16 / 9); const eyeY = cam.camera.position.y;
+    let maxStep = 0, maxSide = 0, thud = 0, lastY = eyeY;
+    for (let frame = 0; frame < fps * 3; frame++) {
+      for (let sub = 0; sub < 120 / fps; sub++) step(st, acts({ throttle: 1 }), track, feel, 1 / 120, rec);
+      if (frame % Math.round(fps * .3) === 0) {
+        bus.emit('bump', { a: 0, b: 3, dv: 14, p: [st[S.posX], 0, st[S.posZ] + 1] });
+        bus.emit('wall', { dv: 13, side: frame % 2 ? -1 : 1 });
+      }
+      fx.update(dt, st); cam.update(st, fx.state, track, dt, 16 / 9);
+      assert.equal(st[S.posY], 0); assert.equal(st[S.airborne], 0);
+      assert.ok(Math.abs(cam.camera.position.y - eyeY) < 1e-7, 'flat support keeps a constant camera height');
+      assert.equal(fx.state.shake[1], 0);
+      maxStep = Math.max(maxStep, Math.abs(cam.camera.position.y - lastY)); lastY = cam.camera.position.y;
+      maxSide = Math.max(maxSide, Math.abs(cam.rig.kick.out.x)); thud = Math.max(thud, fx.state.rumble);
+    }
+    assert.ok(maxStep < 1e-7 && maxSide > .1 && maxSide <= .8, 'lateral response remains bounded');
+    if (!gentle) assert.ok(thud > 0, 'contact still has a thud');
+    cam.dispose(); fx.dispose();
+  }
 });

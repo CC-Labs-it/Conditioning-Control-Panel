@@ -260,8 +260,12 @@ export const FX_CUES = {
     fx.fire('duck', C.darken, rise(fx), 0, C.outS);
   },
   // the rest change nothing on screen; kept so every event has its one entry
-  wall(fx, { dv = 0 }) {
-    if (dv >= fx.feel.get('wall.shakeFrac') * fx.feel.get('wall.cueFullDvMps')) fx.shake.kick('hit');
+  wall(fx, { dv = 0, side = 1 }) {
+    const full = fx.feel.get('wall.cueFullDvMps');
+    if (dv < fx.feel.get('wall.shakeFrac') * full) return;
+    const amount = Math.min(1, Math.max(0, dv / full));
+    fx.side?.(.14 * amount, -Math.sign(side || 1));
+    fx.fire('thud', fx.gentle.kick(rumbleOf(fx, 2) * amount), 0, 0, j(fx, 'landGoneS'));
   },
   checkpoint() {},
   lap() {},
@@ -269,8 +273,8 @@ export const FX_CUES = {
   'phrase-gate'() {},
   'press-thud'() {},
   'air-word-hop'(fx) {
-    fx.release('squash', .06);
-    fx.fire('stretch', fx.gentle.scroll(.2), .06, .12, .28);
+    // The landing squash finishes while the kart is already moving into its rebound.
+    fx.fire('stretch', fx.gentle.scroll(.2), .14, .12, .28);
   },
   pause(fx, { on = false }) { fx.paused = !!on; },
 };

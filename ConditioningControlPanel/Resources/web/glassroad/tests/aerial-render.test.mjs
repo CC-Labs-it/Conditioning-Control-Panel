@@ -8,7 +8,7 @@ const hooks = registerHooks({ resolve(s, c, next) {
 } });
 const { createAirWords, AIR_WORD_CAPACITY, airWordBit, airWordPose } = await import('../render/airWords.js');
 const { letterContours, extrudeLetters, letterCatchPoints } = await import('../render/wordSolid.js');
-const { Scene, Box3, Mesh, MeshBasicMaterial, Raycaster, Vector3 } = await import('three/webgpu');
+const { Scene, Box3, Mesh, MeshBasicMaterial, Raycaster, Vector3, BackSide } = await import('three/webgpu');
 hooks.deregister();
 
 function ringPixels(w, h) {
@@ -83,7 +83,7 @@ test('pooled solid words keep course typography and colours with their top at th
     view.update(run, 1 / 60);
     const root = view.object.children[0], letters = root.children[0];
     assert.equal(root.visible, true); assert.deepEqual(root.position.toArray(), p.p);
-    assert.equal(root.children.length, 2, 'only the letters and their particles');
+    assert.equal(root.children.length, 3, 'letters, particles and a glyph outline, never a backplate');
     assert.equal(letters.name, 'solid-letters');
     root.updateMatrixWorld(true);
     const bounds = new Box3().setFromObject(letters);
@@ -100,6 +100,28 @@ test('pooled solid words keep course typography and colours with their top at th
     view.dispose(); assert.equal(scene.children.length, 0);
   }
   assert.equal(colors.size, 5);
+});
+
+test('black outlines share each solid glyph and follow its tilt, compression and fade', () => {
+  const { view } = fixture(), p = platform({ catchS: 4, landedS: 4 });
+  const root = view.object.children[0], letters = root.children[0], outline = root.children[2];
+  const material = outline.material;
+  assert.equal(outline.name, 'solid-letter-outline');
+  assert.equal(material.color.getHex(), 0x000000);
+  assert.equal(material.side, BackSide);
+  assert.ok(material.positionNode, 'expanded glyph hull is compiled during covered warmup');
+  for (const timeS of [3.6, 4, 4.18, 4.4]) {
+    p.text = 'phrase ' + timeS; p.alpha = timeS > 4 ? .45 : 1;
+    view.update({ timeS, platforms: [p] }, .1);
+    assert.equal(outline.geometry, letters.geometry, 'outline preserves individual contours and counters');
+    assert.deepEqual(outline.position.toArray(), letters.position.toArray());
+    assert.deepEqual(outline.rotation.toArray(), letters.rotation.toArray());
+    assert.deepEqual(outline.scale.toArray(), letters.scale.toArray());
+    assert.equal(material.opacity, letters.material[0].opacity);
+    assert.equal(outline.material, material, 'no new material at phrase contact');
+  }
+  let released = 0; material.addEventListener('dispose', () => released++);
+  view.dispose(); view.dispose(); assert.equal(released, 1);
 });
 
 test('materialization and dissolve never grow or move the support silhouette', () => {
