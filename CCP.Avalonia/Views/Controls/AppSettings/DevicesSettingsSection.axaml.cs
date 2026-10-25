@@ -31,7 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
     /// are read. Without the guard, opening the app would silently write 0.3 over the user's wake
     /// threshold. Same trap the popup had, and Avalonia raises the event exactly as WPF did.</para>
     /// </summary>
-    public partial class DevicesSettingsSection : UserControl
+    public partial class DevicesSettingsSection : UserControl, IAppSettingsSection
     {
         private bool _loading = true;
         private bool _micPopulating;   // Items.Clear()/SelectedItem raise SelectionChanged
@@ -76,15 +76,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             Platform.WebcamTracker.Instance.StateChanged += RefreshWebcamStatus;
             RefreshWebcamStatus();
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
-            // The WPF section implements IAppSettingsSection.OnSectionShown because device lists go
-            // stale the moment someone plugs a headset in. Attach is this head's equivalent reveal
-            // hook, so the mic list is re-enumerated here too.
-            SyncFromSettings();
-            PopulateMicDevices();
-            PopulateWebcamDevices();   // WPF OnSectionShown -> RefreshDeviceSettingsLists
+            OnSectionShown();
             _lockdown = LockdownService.Current;
             if (_lockdown != null) { _lockdown.LockdownActivated += OnLockdownChanged; _lockdown.LockdownDeactivated += OnLockdownChanged; }
             ApplyLockdownHold();
+        }
+
+        /// <summary>WPF's per-open refresh: tabs stay attached when hidden, so attachment alone
+        /// cannot pick up a camera or headset plugged in while another tab was open.</summary>
+        public void OnSectionShown()
+        {
+            SyncFromSettings();
+            PopulateMicDevices();
+            PopulateWebcamDevices();
         }
 
         private LockdownService? _lockdown;
