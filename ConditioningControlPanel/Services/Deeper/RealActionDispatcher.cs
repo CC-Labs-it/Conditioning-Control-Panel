@@ -14,8 +14,13 @@ namespace ConditioningControlPanel.Services.Deeper
     /// is best-effort and silent on failure — a missing device or unsupported
     /// action must never throw out of the engine tick.
     /// </summary>
-    public sealed class RealActionDispatcher : IActionDispatcher
+    public sealed class RealActionDispatcher : IActionDispatcher, IEnhancementRunCleanup
     {
+        // The engine (now in Core) asks for these on Stop; they are the App services it used to call.
+        public void ResetOverlayBands() => App.Overlay?.ResetDeeperOverlayBands();
+        public void StopOneShotFlashes() => App.Flash?.StopOneShotFlashes();
+        public void StopOneShotSubliminals() => App.Subliminal?.StopOneShotSubliminals();
+
         // Per-EffectId tracking for band-mode effects. Lets Stop hide the right
         // overlay kind and Restart re-issue a haptic with its previously dispatched
         // samples + intensity but a freshly-computed remaining duration.

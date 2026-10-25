@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using ConditioningControlPanel.Services;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -17,13 +19,13 @@ namespace CCP.Avalonia.Tests;
 
 /// <summary>The run-lifecycle slice of WPF ChaosModeService on a stepped clock: countdown -> 4 Hz
 /// ticks -> recap; nothing ticks while the overlay is hidden or paused; panic during the countdown
-/// or mid-run tears everything down; the recap never saves.</summary>
+/// or mid-run tears everything down and pays nothing; FALL IN starts a run whose end banks the payout.</summary>
 public sealed class ChaosRunHostTests
 {
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -85,6 +87,132 @@ public sealed class ChaosRunHostTests
             }
             finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
             return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>WPF ChaosToyButtonWindow: one hero button per equipped toy; a real click fires the
+    /// toy (cooldown starts, the status counts down on the run clock); the toy key rides the panic
+    /// key's listener; panic closes every button and unhooks the key.</summary>
+    [Fact]
+    public async Task Toy_button_fires_on_click_counts_down_and_panic_closes_it()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var meta = ChaosMeta.State;
+            int pockets = meta.ToyPockets;
+            bool hadActive = meta.ActiveLifetimeBoons.Contains("vibe_popping");
+            bool hadLevel = meta.LifetimeBoonLevels.TryGetValue("vibe_popping", out int level);
+            var s = CoreSettings.Current;
+            (bool pe, string pk, string k1) = (s.PanicKeyEnabled, s.PanicKey, s.ChaosAccessoryKey1);
+            s.PanicKeyEnabled = true;
+            s.PanicKey = "F8";
+            s.ChaosAccessoryKey1 = "Q";
+            meta.ToyPockets = 1;
+            meta.ActiveLifetimeBoons.Add("vibe_popping");
+            meta.LifetimeBoonLevels["vibe_popping"] = 1;
+            var shell = new MainShellWindow();
+            shell.Show();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();   // P08: only stepped Ticks move the run clock
+                var btn = Assert.Single(ChaosRunHost.ToyButtons);
+                Assert.True(btn.IsVisible);
+                Assert.Equal("ready", btn.Status.Text);
+                Assert.Equal(new[] { "Q" }, ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKeys!());
+
+                // Hit testing reads the compositor's last frame: wait until a frame with the button is drawn
+                // (one forced tick is not enough once the run opens its other overlay windows).
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                var batch = global::Avalonia.Rendering.Composition.ElementComposition.GetElementVisual(btn)!.Compositor.RequestCompositionBatchCommitAsync();
+                var deadline = System.Diagnostics.Stopwatch.StartNew();
+                while (!batch.Rendered.IsCompleted)
+                {
+                    Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "the compositor never drew the toy button");
+                    global::Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                }
+                var mid = new Point(btn.Width / 2, btn.Height / 2);
+                btn.MouseDown(mid, global::Avalonia.Input.MouseButton.Left);
+                btn.MouseUp(mid, global::Avalonia.Input.MouseButton.Left);
+                Assert.Equal(20, btn.Toy.CooldownRemainingSec);   // VibePopping's 20 s cooldown
+                Assert.Equal("20s", btn.Status.Text);
+                Ticks(4);   // one run-clock second
+                Assert.Equal("19s", btn.Status.Text);
+
+                ChaosRunHost.OnToyKey("F8");   // the panic key never fires a toy
+                ChaosRunHost.OnToyKey("Q");    // cooling: denied, the cooldown is untouched
+                Assert.Equal(19, btn.Toy.CooldownRemainingSec, 3);
+
+                shell.HandlePanicKeyPress(new DateTime(2026, 1, 1, 12, 0, 0));
+                Assert.False(btn.IsVisible);
+                Assert.Empty(ChaosRunHost.ToyButtons);
+                Assert.Null(ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKey);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown(); shell.Close();
+                meta.ToyPockets = pockets;
+                if (!hadActive) meta.ActiveLifetimeBoons.Remove("vibe_popping");
+                if (hadLevel) meta.LifetimeBoonLevels["vibe_popping"] = level; else meta.LifetimeBoonLevels.Remove("vibe_popping");
+                (s.PanicKeyEnabled, s.PanicKey, s.ChaosAccessoryKey1) = (pe, pk, k1);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>The hub offers digit toy keys ("1"-"4"); on the Win32 hook the digit row is D1..D4.</summary>
+    [Fact]
+    public void Win32_hook_fires_a_digit_toy_key()
+    {
+        var fired = new List<string>();
+        try
+        {
+            ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKeys = () => new[] { "1" };
+            ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKey = fired.Add;
+            ConditioningControlPanel.Avalonia.Platform.Win32PanicKey.OnDown(0x31, DateTime.UtcNow);   // VK '1'
+            ConditioningControlPanel.Avalonia.Platform.Win32PanicKey.OnUp(0x31);
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKey = null;
+            ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKeys = null;
+        }
+        Assert.Equal(new[] { "1" }, fired);
+    }
+
+    /// <summary>WPF EndRun (ChaosModeService.cs:3228) closes the braindrain wash itself, so it never sits over the results card.</summary>
+    [Fact]
+    public async Task The_run_ending_closes_the_wash_before_the_results_card()
+    {
+        var gif = ChaosFlashOverlayTests.WriteGif(out var dir);
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            Setup();
+            var schedule = ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.Schedule;
+            try
+            {
+                ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.SkipPlatformChecksForTests = true;
+                ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.Schedule = (_, _) => { };
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                await ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.ShowPath(
+                    new[] { new PixelRect(0, 0, 1920, 1080) }, gif, 60000, 0.30);
+                Assert.True(ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.IsShowing);
+                Ticks(244);   // past the 60 s run
+                Assert.True(ChaosRunHost.Overlay!.FindControl<Border>("ResultsPanel")!.IsVisible);
+                Assert.False(ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.IsShowing);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.CloseActive();
+                ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.SkipPlatformChecksForTests = false;
+                ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.Schedule = schedule;
+                System.IO.Directory.Delete(dir, true);
+            }
         });
     }
 
@@ -238,6 +366,7 @@ public sealed class ChaosRunHostTests
                 for (int i = 0; i < 3; i++) ChaosRunHost.SpawnTick();
                 Assert.True(BubbleOverlay.ChaosCount >= 3);
                 var b = BubbleOverlay.Field.Bubbles.First(x => x.Spec != null && !x.Popping);
+                Assert.False(b.Spec!.IsLive);   // this click-to-pop test explicitly enables only treats
                 BubbleOverlay.Pop(b);
                 Assert.True(state.Score > 0);
                 Assert.Equal(1, state.Combo);
@@ -535,7 +664,7 @@ public sealed class ChaosRunHostTests
                 var b = BubbleOverlay.SpawnChaos(LiveSpec());
                 BubbleOverlay.Press(b, b.CenterX, b.CenterY);
                 for (int i = 0; i < 40 && !b.Popping; i++) BubbleOverlay.Field.Step();
-                Assert.Equal(new[] { "sfx:defuse_hiss", "label:SNAP", "pulse:90,255,150@0.16", "pulse:255,170,80@0.05" }, log.Where(e => !e.StartsWith("label:+")));
+                Assert.Equal(new[] { "sfx:defuse_hiss", "label:SNAP", "pulse:90,255,150@0.16" }, log.Where(e => !e.StartsWith("label:+")));
 
                 string[] Press(int shields, int collars)
                 {
@@ -578,7 +707,7 @@ public sealed class ChaosRunHostTests
                 var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
                     { VariantId = "spiral", SizePx = 200, Payload = new FlashPayload() });
                 BubbleOverlay.Press(b, b.CenterX, b.CenterY);
-                Assert.Equal(new[] { "sfx:", "label:SPIRAL", "pulse:255,200,235@0.10", "pulse:255,170,80@0.05" },
+                Assert.Equal(new[] { "sfx:", "label:SPIRAL" },
                     log.Where(e => !e.StartsWith("label:+")).Select(e => e.StartsWith("sfx:Pop") ? "sfx:" : e));
             }
             finally { Unjuice(); ChaosRunHost.ForceShutdown(); FreshMeta(); }
@@ -588,10 +717,10 @@ public sealed class ChaosRunHostTests
 
     /// <summary>WPF OnDefused (:1984-2052): the first snap banks its first-time bonus with a feed line
     /// (OnFirstTimeAwarded :209), each snap raises this loop's snap_field (ChaosLessonHooks :161) and
-    /// feeds Slow Recovery (CountRegenPop :2427), and CheckComboMilestone (:3067) beats x10 in gold,
-    /// 25/50/100 once per streak with the milestone cue, a micro pulse between; a broken streak re-arms.</summary>
+    /// feeds Slow Recovery (CountRegenPop :2427); last_breath counts only a held brink snap.
+    /// Combo milestones are lane fin2-chaos-fx-window's.</summary>
     [Fact]
-    public async Task Snaps_bank_the_first_time_raise_snap_field_regrow_resistance_and_beat_combo_milestones()
+    public async Task Snaps_bank_the_first_time_raise_snap_field_and_regrow_resistance()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
@@ -620,24 +749,6 @@ public sealed class ChaosRunHostTests
                 Assert.Equal(3, state.Shields);   // the second pop regrows one
                 Assert.Contains("pulse:120,220,160@0.18", log);
                 Assert.Contains("\u2665 resistance regrows", state.RecentEvents);
-
-                state.Combo = 9;
-                Snap();
-                Assert.Equal("pulse:255,200,60@0.40", log.Last());
-                Assert.Contains("\U0001F525 streak x10!", state.RecentEvents);
-                state.Combo = 24;
-                Snap();
-                Assert.Equal(new[] { "sfx:streak_milestone", "pulse:255,230,120@0.55", "pulse:255,170,80@0.08" },
-                    log.Where(e => e.StartsWith("sfx:streak") || e.StartsWith("pulse:255,")).ToArray());
-                Snap();
-                Assert.DoesNotContain("sfx:streak_milestone", log);   // once per crossing per streak
-
-                state.Focus = 0; state.Shields = 0; state.CollarSaves = 0;
-                var c = BubbleOverlay.SpawnChaos(LiveSpec());
-                BubbleOverlay.Press(c, c.CenterX, c.CenterY);   // a bare hit breaks the streak
-                state.Combo = 24;
-                Snap();
-                Assert.Contains("sfx:streak_milestone", log);   // re-armed
 
                 // last_breath (ChaosLessonHooks :159): only a HELD snap started with <= 0.8 s of fuse.
                 Assert.Equal(0, ChaosLessons.Progress("last_breath"));   // free snaps never count

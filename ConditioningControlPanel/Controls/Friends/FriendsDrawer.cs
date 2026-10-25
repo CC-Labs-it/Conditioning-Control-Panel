@@ -325,7 +325,7 @@ public sealed partial class FriendsDrawer : Border
         if (_svc?.Available != true) return;
         bool shared;
         try { shared = _svc.PresenceShared; } catch { shared = false; }
-        if (shared || PresenceAsk.Asked()) return;
+        if (!FriendsPresenceAsk.ShouldAsk(true, shared, PresenceAsk.Asked())) return;
 
         var pill = new Border
         {
@@ -1233,15 +1233,6 @@ public sealed partial class FriendsDrawer : Border
 /// </summary>
 internal static class PresenceAsk
 {
-    internal static Func<bool> Asked { get; set; } = () =>
-    {
-        try { return File.Exists(MarkerPath); } catch { return false; }
-    };
-
-    internal static Action MarkAsked { get; set; } = () =>
-    {
-        try { File.WriteAllText(MarkerPath, DateTime.UtcNow.ToString("o")); } catch { }
-    };
-
-    private static string MarkerPath => Path.Combine(App.UserDataPath, "friends_presence_asked.flag");
+    internal static Func<bool> Asked { get; set; } = () => FriendsPresenceAsk.Asked(App.UserDataPath);
+    internal static Action MarkAsked { get; set; } = () => FriendsPresenceAsk.MarkAsked(App.UserDataPath);
 }

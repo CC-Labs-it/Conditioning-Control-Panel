@@ -759,6 +759,10 @@ namespace ConditioningControlPanel
                     // Restore normal theme
                     RestoreLockdownTheme();
 
+                    // The padlock veil stood down while the lockdown ran (a sign-out mid-lockdown
+                    // must not bury the way out); put it back now if premium lapsed meanwhile.
+                    RefreshLockdownGate();
+
                     App.Logger?.Information("Lockdown UI deactivated");
                 }
                 catch (Exception ex)

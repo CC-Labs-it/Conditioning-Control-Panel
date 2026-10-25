@@ -53,7 +53,7 @@ internal sealed class FirstShowEffects : IDisposable
         _screen = System.Windows.Forms.Screen.PrimaryScreen?.Bounds ?? new System.Drawing.Rectangle(0, 0, 1920, 1080);
         // These draw lists are stepped by the show host, never by a second compositor host.
         _engine.Dispose();
-        _pink = new(_engine.Wake); _spiral = new(_engine); _subliminal = new(_engine.Wake); _particles = new(_engine);
+        _pink = new(_engine.Wake); _spiral = new(_engine); _subliminal = new(_engine.Wake); _particles = ChaosFxLayerWpf.Create(_engine);
         try
         {
             var bitmap = new BitmapImage(new Uri("pack://application:,,,/Resources/bubble.png"));

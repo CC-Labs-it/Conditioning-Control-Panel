@@ -254,6 +254,18 @@ namespace ConditioningControlPanel
             // Chaos bubble payloads are Core data; what firing one does is this head's.
             Services.Chaos.EffectPayload.Firer = Services.Chaos.EffectPayloadFiring.Fire;
 
+            // Goon Game seams (CCP.Core/Services/GoonGame): the Scrolller downloader and the
+            // Discord link both live in this head.
+            Services.GoonGame.GoonOnlineMedia.Materialize = (url, ct) => Services.Fyp.Online.RemoteMediaCache.MaterializeAsync(url, ct, ownerReleases: true);
+            Services.GoonGame.GoonOnlineMedia.ReleaseTempFile = Services.Fyp.Online.RemoteMediaCache.ReleaseTempFile;
+            Services.GoonGame.GoonAvatarCache.OwnDiscordProvider = () =>
+                Discord is { IsAuthenticated: true } d ? (true, d.Avatar, d.GetAvatarUrl(128)) : (false, null, null);
+            // Own-media transfer (CCP.Core/Services/Media/Transfer): the library walk, the webp
+            // header check and the WinRT video engine are this head's.
+            Services.Transfer.AssetCompressionPlanner.ActivePool = Services.Chaos.DtrhAssetManifest.EnumerateActive;
+            Services.Transfer.AssetCompressionPlanner.IsAnimatedWebp = Services.AnimatedWebp.IsAnimated;
+            Services.Transfer.WinRtVideoTranscoder.Install();
+
             // Mod seam. Localization moved to CCP.Core and VocabTokens needs the active mod's
             // overrides, but App derives from System.Windows.Application and cannot exist there.
             // These run lazily on every read, so the mod system coming up after localization is
@@ -286,8 +298,12 @@ namespace ConditioningControlPanel
                 op.Abort();
                 return (false, null);
             };
+            // The Goon Game match engine moved to Core; it drops UI callbacks once the dispatcher dies.
+            Services.GoonGame.GoonDispatch.ShutdownStarted = () =>
+                Current?.Dispatcher is { } gd && (gd.HasShutdownStarted || gd.HasShutdownFinished);
 
             Services.Deeper.EnhancementResolver.LibraryMatchProvider = (path, type) => EnhancementLibrary?.FindMatch(path, type);
+            Services.Deeper.AudioWaveformCache.Decoder = Services.Deeper.MediaDurationProbe.DecodeWaveform;
             Services.SettingsPaletteIndex.JustDropDoorAvailableProvider = () => Services.JustDrop.JustDropService.DoorAvailable;
             Services.SettingsPaletteIndex.GameAvailableProvider = id => Services.Launcher.LauncherCatalogue.Find(id)?.Available == true;
             Services.Companion.ConversationDelivery.QuestsOpenProvider = () => Quests?.HasUnfinishedQuest();
@@ -310,9 +326,22 @@ namespace ConditioningControlPanel
             // The settings model now lives in Core; Core code reads the live instance through
             // this. Settings is created later in OnStartup; the delegate reads it lazily.
             CoreSettings.ServiceProvider = () => Settings;
+            // The browser video gate's rules live in Core; the WebView2 engine half stays here.
+            // Touching Instance also kicks off the shared environment build on first use, so a
+            // later video finds IsAvailable already settled. A file the page cannot serve (outside
+            // every mapped virtual host) would 404 and cost a pointless fallback, so it is decided
+            // here rather than at runtime.
+            Services.Video.Browser.BrowserVideoGate.EngineAccepts = (path, stableKey) =>
+                Services.Video.Browser.BrowserVideoEngine.Instance.IsAvailable
+                && Services.Video.Browser.BrowserVideoEngine.BuildPageUrl(path) != null
+                && !Services.Video.Browser.BrowserUnsafeVideoCache.Contains(path, stableKey);
             // Race rules live in Core; the prize store and the NAudio decoder stay here.
             Services.Race.RacingAccess.IsGrantedProvider = Services.Prizes.PrizeGrants.IsGranted;
             Services.Race.TrackDecoder.DecodeProvider = Services.Race.NAudioTrackDecode.Decode;
+            // The Bureau's evidence index lives in Core; it reads this head's pack service.
+            Services.Bureau.BureauIndexService.InstalledPacksProvider = () => ContentPacks?.InstalledPacks;
+            Services.Bureau.BureauIndexService.ImageFilesProvider = packId => ContentPacks?.GetPackFiles(packId, "image") ?? new();
+            Services.Bureau.BureauIndexService.OpenFileProvider = (packId, entry) => ContentPacks?.GetPackFileStream(packId, entry);
             // The compositor layers moved to Core; their per-monitor fill gate resolves screens here.
             Services.Compositor.BaseLayer.ScreenTargetGate = ShouldRenderTargetOnScreen;
             // The mod service's side effects on a switch, and what it asks the head.
@@ -376,9 +405,33 @@ namespace ConditioningControlPanel
             // EmiLineEngine lives in Core; the two ask probes it used to read off App land here.
             Services.EmiDesk.EmiLineEngine.AskSituationProbe = () => EmiDesk?.AskSituationOk() == true;
             Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe = Services.EmiDesk.EmiOffers.EffectFeasible;
+            // EmiNudgeWorld lives in Core too; whether the desktop is quiet is the head's call.
+            Services.EmiDesk.EmiNudgeWorld.QuietProbe = () => EmiDesk?.NudgeQuiet() == true;
             // The V2 client lives in Core; its 409-merged recovery re-runs head sign-in.
             Services.V2AuthService.MergedRecovery = Services.MergedAccountRecovery.TryHandleAsync;
+            // Goon signaling moved to Core with its transports; its 409-merged recovery stays here.
+            Services.GoonGame.GoonSignalingClient.MergedAccountHook = Services.MergedAccountRecovery.TryHandle;
             Services.MergedAccountRecoveryHead.Seed();
+            // The 401 path lives in Core too (AuthRecovery, ex ProfileSyncService.HandleUnauthorizedAsync). Its hooks
+            // run off the UI thread, so both hop back: a recovery restarts the heartbeat; the re-validate is
+            // Patreon first, then Discord (invite-code / email sessions have no provider to mint from).
+            Services.AuthRecovery.Recovered = () => Current?.Dispatcher.BeginInvoke(() => ProfileSync?.StartHeartbeat());
+            Services.AuthRecovery.ProviderRevalidate = () => Current?.Dispatcher.InvokeAsync(async () =>
+            {
+                if (Patreon?.IsAuthenticated == true)
+                {
+                    Logger?.Information("[Auth] Re-validating Patreon to have the server re-issue the auth token");
+                    await Patreon.ValidateSubscriptionAsync(forceRefresh: true);
+                    return true;
+                }
+                if (Discord?.IsAuthenticated == true)
+                {
+                    Logger?.Information("[Auth] Re-validating Discord to have the server re-issue the auth token");
+                    await Discord.ValidateAndRefreshUserAsync(forceRefresh: true);
+                    return true;
+                }
+                return false;
+            }).Task.Unwrap() ?? Task.FromResult(false);
             Services.Arcademy.ArcademySyncService.MergedRecovery = Services.MergedAccountRecovery.TryHandle;
             // The Patreon/SubscribeStar lifecycle lives in Core too; validate prizes land here.
             Services.ProviderSubscription.PrizesSink = Services.ProfileSyncService.ApplyValidatePrizes;
@@ -468,6 +521,7 @@ namespace ConditioningControlPanel
             Services.Invites.InviteApi.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
             Services.Lobby.LobbyWire.DefaultIdentity = Services.BackRoom.BackRoomApi.AppIdentity;
             Services.Lobby.LobbyWire.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
+            Services.Stakes.StakeAppHooks.Seed();
             Services.BackRoom.BackRoomApi.MergedReply = MergedAccountRecovery.TryHandle;
             Services.BackRoom.BackRoomApi.DefaultApplyPrizes = (account, revision, grants) => Ownership?.ApplySnapshot(account, revision, grants);
             Services.WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
@@ -606,6 +660,10 @@ namespace ConditioningControlPanel
             // declared null! until then - so the provider must not capture it now.
             CoreWebcam.IsAvailableProvider = () => Webcam != null;
             CoreWebcam.RevokeConsentAction = () => Webcam?.RevokeConsent();
+            // The Deeper engine and its host moved to Core; the effects and the tracker stay here.
+            Services.Deeper.EnhancementHostService.DispatcherFactory = () => new Services.Deeper.RealActionDispatcher();
+            Services.Deeper.EnhancementHostService.WebcamProvider = () =>
+                Webcam == null ? null : new Services.Deeper.WebcamEnhancementEvents(Webcam);
 
             // Speech capability, for the views that ask whether voice input is worth offering.
             // SpeechService itself stays here - it owns a capture device. Reading ModelStatus
@@ -2346,10 +2404,7 @@ namespace ConditioningControlPanel
                 }
 
                 // Check for rendering thread failure - this is unrecoverable and can cause dialog loops
-                var isRenderFailure = args.Exception.Message.Contains("RENDER") ||
-                                      args.Exception.Message.Contains("0x88980406") ||
-                                      args.Exception.HResult == unchecked((int)0x88980406) ||
-                                      args.Exception is OutOfMemoryException;
+                var isRenderFailure = Services.Diagnostics.UiThreadExit.IsRenderFailure(args.Exception);
 
                 // Render-thread failure / OOM in the composition channel is unrecoverable.
                 // Exit IMMEDIATELY, before any UI attempt - MessageBox.Show runs a nested
@@ -2357,13 +2412,23 @@ namespace ConditioningControlPanel
                 // so we can't safely show a dialog. (See 2026-05-25 crash storm:
                 // 10,251 cascading reports because the exit branch was gated behind a
                 // blocking MessageBox.Show that never returned.)
+                // Never Environment.Exit on this thread: ProcessExit's SystemEvents.Shutdown waits on
+                // a Send to this very thread, and the "hard exit" froze the app (ccp-bugs #1468).
                 if (isRenderFailure)
                 {
                     if (Interlocked.Exchange(ref exitInProgress, 1) == 0)
                     {
                         try { Logger?.Error("Render thread failure / OOM - hard exit to prevent cascade"); } catch { }
-                        Environment.Exit(1);
+                        Services.Diagnostics.UiThreadExit.Begin(1,
+                            beforeTerminate: Services.Logging.LogPipeline.WriteSessionFooter);
                     }
+                    args.Handled = true;
+                    return;
+                }
+
+                // The exit thread is already on its way out (up to 5 s): never open a dialog meanwhile.
+                if (Volatile.Read(ref exitInProgress) == 1)
+                {
                     args.Handled = true;
                     return;
                 }
@@ -2467,6 +2532,15 @@ namespace ConditioningControlPanel
             {
                 Logger?.Warning(ex, "Settings migration failed (non-fatal, defaults apply)");
             }
+
+            // The last session crashed or was killed before it handed the user's settings back:
+            // put them back now, before anything reads them (SessionSettingsJournal).
+            try
+            {
+                if (Services.SessionSettingsJournal.HealOnLaunch(UserDataPath, Settings.Current))
+                    Settings.Save();
+            }
+            catch (Exception ex) { Logger?.Warning(ex, "Session settings heal failed (non-fatal)"); }
 
             // One Descent: stamp this install's age once, from whatever on-disk evidence still
             // exists. Silent — nothing in the UI reads it. Must run after Settings so it can read
@@ -2620,7 +2694,12 @@ namespace ConditioningControlPanel
             // Initialize companion leveling system (v5.3) - migrate existing users if needed
             CompanionService.MigrateFromLegacy(Settings.Current);
             Companion = new CompanionService();
-            CommunityPrompts = new CommunityPromptService();
+            CommunityPrompts = new CommunityPromptService(validatorProvider: () => PromptValidator);
+            CommunityPrompts.ValidationAdvisory += (_, count) => Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try { MessageBox.Show(Loc.GetF("community_prompt_warning_body", count), Loc.Get("community_prompt_warning_title"), MessageBoxButton.OK, MessageBoxImage.Warning); }
+                catch (Exception ex) { Logger?.Debug("Community prompt advisory failed: {Error}", ex.Message); }
+            }));
 
             // Initialize personality preset system (v5.5) - migrate from legacy SlutModeEnabled
             Personality = new PersonalityService();
@@ -2716,7 +2795,23 @@ namespace ConditioningControlPanel
             _ = DailyFree.RefreshAsync();
             // Prize ownership. Pure constructor: no I/O, no network; it only reads the DEBUG
             // CCP_PRIZE_GRANTS desk-test override. The static PrizeGrants facade the effect lanes call forwards here.
-            Ownership = new Services.Prizes.OwnershipService();
+            // Core holds the rules; WPF hands it the UI-thread marshal (inline when already on the
+            // UI thread, dropped once the dispatcher is shutting down, synchronous with no Application).
+            Ownership = new Services.Prizes.OwnershipService(invoke =>
+            {
+                try
+                {
+                    var dispatcher = Current?.Dispatcher;
+                    if (dispatcher is null) { invoke(); return; }
+                    if (dispatcher.HasShutdownStarted) return;
+                    if (dispatcher.CheckAccess()) invoke();
+                    else dispatcher.BeginInvoke(invoke);
+                }
+                catch (Exception ex)
+                {
+                    Logger?.Debug("[Prizes] could not raise OwnershipChanged: {Error}", ex.Message);
+                }
+            });
             Services.Prizes.PrizeGrants.Attach(Ownership);
             // Buying a v2 prize from the options panel instead of the Back Room (owner decision,
             // 2026-09-19). Pure constructor: the counter is read only when a "Get it" row is put on
@@ -2729,7 +2824,7 @@ namespace ConditioningControlPanel
             V2Purchase = new Services.Prizes.V2PurchaseService(
                 new Services.BackRoom.BackRoomApi(null, Services.BackRoom.BackRoomApi.AppIdentity, adoptSp: null),
                 () => Services.BackRoom.BackRoomApi.AppIdentity()?.UnifiedId,
-                Services.Prizes.V2PurchaseRule.OwnsPrize,
+                id => Services.Prizes.V2PurchaseRule.OwnsPrize(id, Services.Prizes.PrizeGrants.IsGranted),
                 () => Settings?.Current?.SkillPoints ?? 0,
                 // The account is captured when the reply lands and checked AGAIN inside the
                 // marshalled write, the `canAdopt` shape BackRoomBridge.AdoptSp uses: the write
@@ -3172,6 +3267,7 @@ namespace ConditioningControlPanel
             // The service lives in Core; its 15 s refresh ticks hop back to this UI thread (was a DispatcherTimer).
             DiscordRichPresenceService.PostToUi = a => Dispatcher.BeginInvoke(a);
             DiscordRpc = new DiscordRichPresenceService();
+            CoreDiscord.ServiceProvider = () => DiscordRpc;
             if (Settings.Current.DiscordRichPresenceEnabled && Settings.Current.HasLinkedDiscord)
             {
                 DiscordRpc.IsEnabled = true;
@@ -3330,6 +3426,15 @@ namespace ConditioningControlPanel
             // prior run that was killed mid-lockdown so the panic key isn't stuck off.
             LockdownService.PanicKeyUiSync = () => MainWindowRef?.SyncNoPanicState();
             LockdownService.RecoverIfNeeded();
+            // A Remote Control session the app died in: the controller's spiral / pink / strict lock
+            // values go back to the wearer's own. After Lockdown's recovery, which can put a
+            // controller's strict lock back first (RemoteHoldings).
+            try
+            {
+                if (Services.Remote.RemoteHoldings.HealOnLaunch(UserDataPath, Settings?.Current) > 0)
+                    Settings?.Save();
+            }
+            catch (Exception ex) { Logger?.Warning(ex, "Remote holdings heal failed (non-fatal)"); }
             Lockdown = new LockdownService();
             LockdownService.Current = Lockdown;
             // Possession: the haunt that rides the lockdown timer. It only arms when a lockdown starts
@@ -6278,6 +6383,10 @@ Application State:
             // Save settings FIRST (before cloud sync) to persist the user's current local state.
             // This prevents cloud sync from overwriting local values with stale data before save.
             // Use SaveImmediate to flush any pending debounced writes and ensure final state is on disk.
+            // Temporary values (ramp, Takeover pulse, remote controller) go back first: the restores
+            // further down in this method are never saved (MainWindow.SettleTemporarySettingsForExit).
+            try { MainWindowRef?.SettleTemporarySettingsForExit(); }
+            catch (Exception ex) { Logger?.Warning(ex, "Exit: temporary settings settle failed"); }
             Settings?.SaveImmediate();
 
             // Sync profile to cloud on exit (short timeout to avoid blocking shutdown)
