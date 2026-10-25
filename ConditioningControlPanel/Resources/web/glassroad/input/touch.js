@@ -63,12 +63,21 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
   const onBtn = (t) => !!(t && typeof t.closest === 'function' && t.closest('.gr-touch-btn'));
   const sideOf = (x) => { const r = layer.getBoundingClientRect(); return x - r.left < (r.width || 1) * STEER_SIDE ? 'left' : 'right'; };
 
-  const onPause = (e) => { if (e.cancelable) e.preventDefault(); e.stopPropagation(); touched = true; pauseEdge = true; devices.use('touch'); };
+  const onPause = (e) => {
+    if (e.cancelable) e.preventDefault(); e.stopPropagation(); pauseEdge = true;
+    if (e.pointerType !== 'mouse') { touched = true; devices.use('touch'); }
+  };
   pauseBtn.addEventListener('pointerdown', onPause);
 
   function endSteer() { steerId = -1; steer = 0; pad.style.display = 'none'; }
+  function onBlur() {
+    const id = steerId;
+    endSteer(); actId = -1; hopEdge = false; pauseEdge = false;
+    try { if (id >= 0) layer.releasePointerCapture(id); } catch (err) { /* already gone */ }
+  }
+  const onVisibility = () => { if (d.hidden) onBlur(); };
   function onDown(e) {
-    if (disposed || onBtn(e.target)) return;
+    if (disposed || e.pointerType === 'mouse' || onBtn(e.target)) return;
     touched = true;
     devices.use('touch');
     if (sideOf(e.clientX) === 'left') {
@@ -117,7 +126,9 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
   layer.addEventListener('touchstart', onTouchStart, { passive: false });
   layer.addEventListener('touchend', onTouchEnd, { passive: false });
   layer.addEventListener('touchcancel', onTouchEnd, { passive: false });
+  d.addEventListener?.('visibilitychange', onVisibility);
   if (w && typeof w.addEventListener === 'function') {
+    w.addEventListener('blur', onBlur);
     w.addEventListener('pointerup', onUp, true);
     w.addEventListener('pointercancel', onUp, true);
   }
@@ -142,7 +153,9 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
     layer.removeEventListener('touchstart', onTouchStart);
     layer.removeEventListener('touchend', onTouchEnd);
     layer.removeEventListener('touchcancel', onTouchEnd);
+    d.removeEventListener?.('visibilitychange', onVisibility);
     if (w && typeof w.removeEventListener === 'function') {
+      w.removeEventListener('blur', onBlur);
       w.removeEventListener('pointerup', onUp, true);
       w.removeEventListener('pointercancel', onUp, true);
     }
