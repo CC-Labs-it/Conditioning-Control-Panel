@@ -41,12 +41,4 @@ namespace ConditioningControlPanel.Services.Deeper
         /// </summary>
         PlaybackRect GetVideoRect();
     }
-
-    /// <summary>System.Windows.Rect's part in the engine: the rendered video frame in screen
-    /// units. <see cref="Empty"/> is what an audio source answers (gaze rules then skip).</summary>
-    public readonly record struct PlaybackRect(double X, double Y, double Width, double Height)
-    {
-        public static readonly PlaybackRect Empty = new(0, 0, -1, -1);
-        public bool IsEmpty => Width < 0 || Height < 0;
-    }
 }

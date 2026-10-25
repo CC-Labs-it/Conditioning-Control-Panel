@@ -1162,6 +1162,29 @@ public sealed partial class EmiDeskService : IDisposable
 
     private readonly EmiNudgeWorld _nudgeWorld = new();
 
+    /// <summary>
+    /// The head half of <see cref="EmiNudgeWorld.Quiet"/> (App wires it as the Core probe): is the
+    /// desktop calm enough for a tutorial line?
+    /// </summary>
+    internal bool NudgeQuiet()
+    {
+        if (!IsOut) return false;
+
+        // AskSituationOk is already the app's answer to "is anything owning the screen or the
+        // user's attention right now": a live ask, a mandatory video, a running session, a tube
+        // bubble, a minimised app. Reusing it means the nudge cannot develop its own idea of quiet
+        // and drift away from the offers'.
+        if (!AskSituationOk()) return false;
+
+        var win = Window;
+        if (win == null || win.Visibility != Visibility.Visible) return false;
+        if (win.ChainLive) return false;
+
+        // A hold is the safety silence: panic pressed, attention check up, lockdown counting
+        // down. Nothing tutorial-shaped speaks through one.
+        return !EmiLineEngine.Instance.HoldActive;
+    }
+
     private System.Windows.Threading.DispatcherTimer? _nudgeTimer;
 
     /// <summary>

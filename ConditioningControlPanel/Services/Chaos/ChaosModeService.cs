@@ -1745,9 +1745,7 @@ public sealed class ChaosModeService
         if (_state == null) return;
         bool clean = _waveDetonations == 0;
         _waveDetonations = 0;
-        int tip = (int)Math.Round(Random.Shared.Next(3, 7) * _state.Config.DifficultyMult);
-        if (clean) tip *= 2;
-        tip = GoldScaled(tip);
+        int tip = ChaosPayout.LoopTip(Random.Shared.Next(3, 7), _state.Config.DifficultyMult, clean, _state);
         BankGold(tip);
         _state.PushEvent(clean
             ? $"{ChaosGlyphs.Gold} clean loop — she tips +{tip} gold"
@@ -3241,11 +3239,8 @@ public sealed class ChaosModeService
         try { _fx?.Close(); } catch (Exception ex) { Diag.Swallowed(ex); }
         _fx = null;
 
-        double durMin = Math.Max(1, _state.RunDurationSec) / 60.0;
-        double capBase = 250.0 * durMin * _state.Config.DifficultyMult;
-        double baseXp = Math.Min(_state.Score, capBase);
-        double skillMult = _state.SkillMult;
-        double finalXp = baseXp * skillMult;
+        var (baseXp, skillMult, finalXp) = ChaosPayout.Xp(_state.RunDurationSec,
+            _state.Config.DifficultyMult, _state.Score, _state.SkillMult);
 
         try { App.Progression?.AddXP(baseXp, XPSource.Chaos); }
         catch (Exception ex) { App.Logger?.Debug("Chaos payout AddXP: {E}", ex.Message); }
@@ -3266,8 +3261,7 @@ public sealed class ChaosModeService
         ChaosRank? rankUp = null;
         try
         {
-            var nowRank = ChaosRanks.For(ChaosMeta.State.RunsCompleted);
-            if ((int)nowRank > ChaosMeta.State.LastRankSeen) rankUp = nowRank;
+            rankUp = ChaosPayout.RankUp(ChaosMeta.State.RunsCompleted, ChaosMeta.State.LastRankSeen);
         }
         catch (Exception ex) { Diag.Swallowed(ex); }
 

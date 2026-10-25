@@ -10,9 +10,9 @@
 // sunken tray / pill drop bands / pressed-in fill (wave 10, SectionTabStrip.Fx.cs) and the hover
 // lift / glyph wiggle / choose sparks / idle sheen (wave 7, same partial). The "?" help badges:
 // SectionTabStrip.Help.cs.
-// ponytail: not yet here (lane sync6-nav-polish-d): the choose ring (NavGlow.Once, rides the
-// rail-c NavGlow port), the press squish (MotionFx.PressSquish), the "Moved" note, Just Drop's
-// ask-first, the right-click pin menu.
+// Choose rings reuse NavGlow; the press squish shares WPF MotionFx's Core values.
+// ponytail: wire-ctrl-section-tab-strip-b owns the Moved redirects/note, Just Drop ask-first
+// with its missing window, absent Companion/Premium paths and section edge lap/fog/embers.
 
 using System;
 using System.Collections.Generic;
@@ -53,7 +53,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             public IBrush RestGlyph = Brushes.Gainsboro, ActiveGlyph = Brushes.Black;
             public Border Drop = null!;
             public TranslateTransform FaceShift = new(), HoverLift = new();
-            public ScaleTransform HoverScale = new();
+            public ScaleTransform PressScale = new(), HoverScale = new();
             public bool Pressed, Hovered;
             public System.Threading.CancellationTokenSource? FaceRun;
         }
@@ -325,7 +325,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     BorderBrush = Brushes.Transparent, Child = face,
                     // wave 7: the ring carries the hover lift and grow (WPF RenderTransformOrigin 0.5,0.5)
                     RenderTransformOrigin = RelativePoint.Center,
-                    RenderTransform = new TransformGroup { Children = { parts.HoverScale, parts.HoverLift } },
+                    RenderTransform = new TransformGroup { Children = { parts.PressScale, parts.HoverScale, parts.HoverLift } },
                 };
                 // wave 10: the drop band sits on the sheet under the face (it does not travel).
                 parts.Drop = new Border
@@ -347,12 +347,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 global::Avalonia.Automation.AutomationProperties.SetAutomationId(pill, "NavPill_" + tab.Key);
                 pill.PointerEntered += (_, _) => { if (!IsActive(tab.Key)) face.Background = parts.Hover; FxHover(parts, true, animate: true); };
                 pill.PointerExited += (_, _) => { if (!IsActive(tab.Key)) face.Background = parts.Plate; FxHover(parts, false, animate: true); };
-                pill.AddHandler(PointerPressedEvent, (_, _) => DepthPress(parts, true), RoutingStrategies.Tunnel);
-                pill.AddHandler(PointerReleasedEvent, (_, _) => DepthPress(parts, false), RoutingStrategies.Tunnel);
+                pill.AddHandler(PointerPressedEvent, (_, e) => { if (e.GetCurrentPoint(pill).Properties.IsLeftButtonPressed) DepthPress(parts, true); }, RoutingStrategies.Tunnel);
+                pill.AddHandler(PointerReleasedEvent, (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) DepthPress(parts, false); }, RoutingStrategies.Tunnel);
                 pill.PointerCaptureLost += (_, _) => DepthPress(parts, false);
                 pill.GotFocus += (_, _) => ring.BorderBrush = FocusRing;
                 pill.LostFocus += (_, _) => ring.BorderBrush = Brushes.Transparent;
-                pill.Click += (_, e) => { e.Handled = true; parts.Pressed = false; Choose(tab, focus: false); };
+                pill.Click += (_, e) => { e.Handled = true; PressSquish(parts, false); parts.Pressed = false; Choose(tab, focus: false); };
                 // The pill rides in a host with its "?" badge (WPF d0ec7aa8d): hovering the badge never presses the pill.
                 _pillRow.Children.Add(HostWithHelp(section, tab, pill, labelText, tint));
                 parts.Pill = pill;
