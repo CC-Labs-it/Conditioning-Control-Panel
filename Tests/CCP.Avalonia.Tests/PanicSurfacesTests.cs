@@ -86,7 +86,6 @@ public sealed class PanicSurfacesTests
     /// ordering pairs below retain both lanes' safety contracts.</summary>
     private static readonly string[] SafetyCritical =
     {
-        "roster-personality",
         "intake",
         "leash-task",
         "tour",
@@ -119,6 +118,7 @@ public sealed class PanicSurfacesTests
         "tube-speech",
         "lock-cards",
         "speak-cue",
+        "roster-personality",
         "companion-transcript",
         "possession",
         "attention-test",
