@@ -3082,3 +3082,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-win-emi-book: +600
 - EMI book: welcome replay, card tours via CoreTutorial, WPF rail art (shared Core painters), bundled pixel fonts.
 - Fix round 2: refused replay restores the book; dead ledger ref removed.
+
+## avalonia-port/wire-win-mod-creator: +602
+- Mod Creator Advanced panel (tube layout, bubble scale, skill labels, tooltip overrides) on Avalonia, with rules shared from Core.
+- Row stays stub; art/barks/mantras/audio/portraits/emotes panels left for wire-win-mod-creator-b.
