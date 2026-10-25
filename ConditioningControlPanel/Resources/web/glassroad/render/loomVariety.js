@@ -45,7 +45,7 @@ export function createLoomDisplayFrames(make, tier = 'high') {
     }
     return changed;
   }, dispose() {
-    try { field?.gl?.getExtension('WEBGL_lose_context')?.loseContext(); } catch { /* already lost */ }
+    field?.dispose();
     field = null;
   } };
 }

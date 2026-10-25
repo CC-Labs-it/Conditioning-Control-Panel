@@ -140,7 +140,7 @@ export function createGateScreen(host, { feel = null, photosafe = null, gentle =
 
   function dispose() {
     stop();
-    try { const lose = field && field.gl && field.gl.getExtension && field.gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext(); } catch (e) { /* gone */ }
+    field?.dispose?.();
     if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
     canvas = null; field = null; ctx2d = null; broken = true;
   }
