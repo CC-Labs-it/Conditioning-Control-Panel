@@ -5,7 +5,7 @@
 // WPF runs one storyboard per tween; here ONE frame clock steps every tween, and only while the launcher is shown
 // and not minimised (P01) and something is moving. It stops the moment nothing is. No allocation per frame.
 // ponytail: not ported (docs/avalonia-parity.md win-launcher): cursor parallax, Ken-Burns art drift, sparkle trail,
-// card/wordmark sheens, wordmark drift, running-dot breath, title tint, embers layer.
+// wordmark sheen, wordmark drift, running-dot breath, title tint, embers layer.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -113,6 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Called once from the constructor, after the first BuildTiles.</summary>
         private void HookFx()
         {
+            HookSheens();
             _fxClock.Tick += (_, _) =>
             {
                 long now = Stopwatch.GetTimestamp();
@@ -198,6 +199,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     if (!first) WelcomeBack();
                     RefreshPanelComet();
                 }, DispatcherPriority.Loaded);
+                StartSheens();
                 EnsureFxClock();
             }
             catch (Exception ex) { Log.Debug(ex, "[Launcher] FxOnShown failed"); }
@@ -209,6 +211,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             ParkComets();
             _fxClock.Stop();
+            StopSheens();
             try
             {
                 _edgeFlareT = _glintT = -1;
@@ -323,6 +326,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _fxActive = active;
             if (!active) ClearHoverComet();
             RefreshPanelComet();
+            if (active) StartSheens(); else StopSheens();
             if (active) { EnsureFxClock(); OnEdgeActivated(); }
         }
 

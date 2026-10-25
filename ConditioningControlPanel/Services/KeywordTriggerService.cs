@@ -23,9 +23,9 @@ namespace ConditioningControlPanel.Services
     {
         #region Fields
 
-        private readonly StringBuilder _buffer = new(200);
-        private DateTime _lastKeyTime = DateTime.MinValue;
-        private DateTime _lastGlobalTriggerTime = DateTime.MinValue;
+        private readonly KeywordTextInput _input = new();
+        private readonly KeywordCooldowns _cooldowns = new();
+        private DateTime _lastGlobalTriggerTime { get => _cooldowns.LastGlobal; set => _cooldowns.LastGlobal = value; }
         private bool _isActive;
         private bool _disposed;
 
@@ -58,8 +58,6 @@ namespace ConditioningControlPanel.Services
         // Maps lowercase keyword → UTC time when the mute expires. Muted keywords are
         // skipped across ALL sources (OCR / keyboard / clipboard) so a trigger's own
         // output (flash text, bubble, spoken word) cannot re-arm it.
-        private readonly Dictionary<string, DateTime> _mutedKeywords = new(StringComparer.OrdinalIgnoreCase);
-        private readonly object _muteLock = new();
 
         // --- Awareness Engine: live pulse ring buffer ---
         // Bounded history of recent trigger fires for the Awareness tab pulse feed.
@@ -81,20 +79,7 @@ namespace ConditioningControlPanel.Services
 
         private bool IsKeywordMuted(string keyword)
         {
-            if (string.IsNullOrEmpty(keyword)) return false;
-            // The _mutedKeywords dict is the single source of truth. RecordFire
-            // writes to it only when AwarenessLoopProtectionEnabled is on, but
-            // ForceMuteKeyword writes unconditionally for self-echoing effects,
-            // so both cases are honored by a direct dict lookup here.
-            lock (_muteLock)
-            {
-                if (_mutedKeywords.TryGetValue(keyword, out var expiresAt))
-                {
-                    if (DateTime.UtcNow < expiresAt) return true;
-                    _mutedKeywords.Remove(keyword);
-                }
-                return false;
-            }
+            return !string.IsNullOrEmpty(keyword) && _cooldowns.IsMuted(keyword, DateTime.UtcNow);
         }
 
         /// <summary>
@@ -106,15 +91,7 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         private void ForceMuteKeyword(string keyword, int muteMs)
         {
-            if (string.IsNullOrEmpty(keyword) || muteMs <= 0) return;
-            lock (_muteLock)
-            {
-                var expiresAt = DateTime.UtcNow.AddMilliseconds(muteMs);
-                // Extend rather than shrink if an existing mute is already longer.
-                if (!_mutedKeywords.TryGetValue(keyword, out var existing) || existing < expiresAt)
-                    _mutedKeywords[keyword] = expiresAt;
-            }
-            App.Logger?.Debug("ForceMuteKeyword: '{Keyword}' muted for {Ms}ms (self-echo guard)", keyword, muteMs);
+            _cooldowns.Mute(keyword, muteMs, DateTime.UtcNow);
         }
 
         /// <summary>
@@ -159,31 +136,7 @@ namespace ConditioningControlPanel.Services
         {
             var settings = App.Settings?.Current;
 
-            // 1. Temporal mute — suppress this exact keyword for a short window across all sources.
-            //    Two layers write to the same _mutedKeywords dict:
-            //      a) Optional user-controlled loop protection window (AwarenessLoopProtectionMs)
-            //      b) HARD per-keyword cooldown (KeywordPerKeywordCooldownSeconds, default 15s)
-            //         which ALWAYS applies regardless of loop-protection setting.
-            //    We take the longer of the two so a user who cranks loop protection above 15s
-            //    still gets what they asked for.
-            if (settings != null && !string.IsNullOrEmpty(trigger.Keyword))
-            {
-                int loopMs = settings.AwarenessLoopProtectionEnabled ? settings.AwarenessLoopProtectionMs : 0;
-                int hardMs = settings.KeywordPerKeywordCooldownSeconds * 1000;
-                int finalMs = Math.Max(loopMs, hardMs);
-
-                if (finalMs > 0)
-                {
-                    var expiresAt = DateTime.UtcNow.AddMilliseconds(finalMs);
-                    lock (_muteLock)
-                    {
-                        // Extend (don't shrink) existing mute entries — a ForceMuteKeyword
-                        // already in progress should not be cut short by this.
-                        if (!_mutedKeywords.TryGetValue(trigger.Keyword, out var existing) || existing < expiresAt)
-                            _mutedKeywords[trigger.Keyword] = expiresAt;
-                    }
-                }
-            }
+            if (settings != null) _cooldowns.Record(trigger, settings, DateTime.UtcNow);
 
             // 2. Live pulse ring buffer — newest entry at the front, drop oldest past capacity.
             var record = new TriggerFireRecord
@@ -230,7 +183,7 @@ namespace ConditioningControlPanel.Services
             }
 
             _isActive = true;
-            _buffer.Clear();
+            _input.Clear();
             App.Logger?.Debug("KeywordTriggerService started");
         }
 
@@ -241,7 +194,7 @@ namespace ConditioningControlPanel.Services
         {
             if (!_isActive) return;
             _isActive = false;
-            _buffer.Clear();
+            _input.Clear();
             StopTriggerAudio();
             App.Logger?.Debug("KeywordTriggerService stopped");
         }
@@ -261,68 +214,25 @@ namespace ConditioningControlPanel.Services
         public void OnKeyPressed(Key key, int vkCode)
         {
             if (!_isActive || _disposed) return;
-
             var settings = App.Settings?.Current;
-            if (settings == null || !settings.KeywordTriggersEnabled) return;
-
-            // Entitlement can lapse while the hook is live (the ? box's free day rotating out at
-            // midnight, a subscription expiring mid-session). Start() checks HasAccess() once and
-            // never again, so without this per-press re-check the feature kept firing from behind
-            // the re-drawn padlock veil - which also covers the OFF toggle (the "can't turn it
-            // off after it rotated" reports). Cheap: a dictionary lookup + cached tier flags.
-            if (!HasAccess()) return;
-
-            // App scope, checked before the buffer rather than before the match. Dropping the
-            // keystrokes is the point: if it only refused to FIRE, a keyword typed into a blocked
-            // app would still be sitting in the rolling buffer, ready to go off the moment focus
-            // moved somewhere allowed. Clearing also means a word half-typed either side of an app
-            // switch cannot be stitched into a match that was never typed anywhere.
-            if (!IsForegroundAppAllowed("Keyboard"))
-            {
-                if (_buffer.Length > 0) _buffer.Clear();
-                return;
-            }
-
-            // Check buffer timeout — reset if too much time has passed
+            if (settings == null || !settings.KeywordTriggersEnabled || !HasAccess()) return;
+            if (!IsForegroundAppAllowed("Keyboard")) { _input.Clear(); return; }
             var now = DateTime.Now;
-            var timeoutMs = settings.KeywordBufferTimeoutMs;
-            if ((now - _lastKeyTime).TotalMilliseconds > timeoutMs && _buffer.Length > 0)
+            var special = key switch
             {
-                _buffer.Clear();
-            }
-            _lastKeyTime = now;
-
-            // Handle special keys
-            if (key == Key.Return || key == Key.Escape || key == Key.Tab)
+                Key.Return or Key.Escape or Key.Tab => (KeywordInputKey?)KeywordInputKey.Clear,
+                Key.Back => KeywordInputKey.Backspace,
+                Key.Space => KeywordInputKey.Space,
+                _ => null,
+            };
+            if (special is { } k)
             {
-                _buffer.Clear();
+                if (_input.Key(k, now, settings.KeywordBufferTimeoutMs)) CheckForMatches();
                 return;
             }
-
-            if (key == Key.Back)
-            {
-                if (_buffer.Length > 0)
-                    _buffer.Remove(_buffer.Length - 1, 1);
-                return;
-            }
-
-            if (key == Key.Space)
-            {
-                _buffer.Append(' ');
-                CheckForMatches();
-                return;
-            }
-
-            // Translate vkCode → actual character using Win32
-            var ch = TranslateVkCode(vkCode);
-            if (ch == null) return;
-
-            _buffer.Append(ch.Value);
-
-            // Cap buffer length
-            if (_buffer.Length > 200)
-                _buffer.Remove(0, _buffer.Length - 200);
-
+            _input.Key(KeywordInputKey.None, now, settings.KeywordBufferTimeoutMs);
+            if (TranslateVkCode(vkCode) is not { } ch) return;
+            _input.Append(ch, now, settings.KeywordBufferTimeoutMs);
             CheckForMatches();
         }
 
@@ -773,19 +683,7 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         private static IEnumerable<KeywordTrigger> OrderedByPresetPriority(List<KeywordTrigger> triggers)
         {
-            // Materialize once; small list, cheap to partition.
-            for (int i = 0; i < triggers.Count; i++)
-            {
-                var t = triggers[i];
-                if (t?.Id?.StartsWith("preset:", StringComparison.Ordinal) == true)
-                    yield return t;
-            }
-            for (int i = 0; i < triggers.Count; i++)
-            {
-                var t = triggers[i];
-                if (t?.Id?.StartsWith("preset:", StringComparison.Ordinal) != true)
-                    yield return t;
-            }
+            return KeywordMatchRules.Ordered(triggers);
         }
 
         #region OCR Word Matching
@@ -1071,20 +969,7 @@ namespace ConditioningControlPanel.Services
                 return;
 
             // Collect all triggers whose keyword appears in the text, then merge.
-            var firedTriggers = new List<KeywordTrigger>();
-            foreach (var trigger in OrderedByPresetPriority(triggers))
-            {
-                if (!trigger.Enabled || string.IsNullOrEmpty(trigger.Keyword)) continue;
-                if (trigger.IsOnCooldown) continue;
-                if (IsKeywordMuted(trigger.Keyword)) continue;
-
-                bool matched = trigger.MatchType == KeywordMatchType.Regex
-                    ? TryRegexMatch(text, trigger.Keyword)
-                    : ContainsWholeWord(text, trigger.Keyword);
-
-                if (matched)
-                    firedTriggers.Add(trigger);
-            }
+            var firedTriggers = KeywordMatchRules.Collect(triggers, text, now, IsKeywordMuted);
 
             if (firedTriggers.Count == 0) return;
 
@@ -1273,20 +1158,7 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         private static bool ContainsWholeWord(string haystack, string keyword)
         {
-            if (string.IsNullOrEmpty(haystack) || string.IsNullOrEmpty(keyword)) return false;
-            try
-            {
-                var parts = keyword.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                var escaped = string.Join("\\s+", parts.Select(Regex.Escape));
-                var pattern = $@"\b{escaped}\b";
-                return Regex.IsMatch(haystack, pattern,
-                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
-                    TimeSpan.FromMilliseconds(100));
-            }
-            catch
-            {
-                return false;
-            }
+            return KeywordMatchRules.ContainsWholeWord(haystack, keyword);
         }
 
         #endregion
@@ -1306,30 +1178,17 @@ namespace ConditioningControlPanel.Services
             if ((now - _lastGlobalTriggerTime).TotalSeconds < settings.KeywordGlobalCooldownSeconds)
                 return;
 
-            var bufferText = _buffer.ToString();
+            var bufferText = _input.Text;
             if (string.IsNullOrEmpty(bufferText)) return;
 
             // Collect all triggers whose keyword is in the rolling buffer, then
             // merge-dispatch. Clearing the buffer happens after the scan so that
             // all simultaneous hits in the same buffer are found in one pass.
-            var firedTriggers = new List<KeywordTrigger>();
-            foreach (var trigger in OrderedByPresetPriority(triggers))
-            {
-                if (!trigger.Enabled || string.IsNullOrEmpty(trigger.Keyword)) continue;
-                if (trigger.IsOnCooldown) continue;
-                if (IsKeywordMuted(trigger.Keyword)) continue;
-
-                bool matched = trigger.MatchType == KeywordMatchType.Regex
-                    ? TryRegexMatch(bufferText, trigger.Keyword)
-                    : ContainsWholeWord(bufferText, trigger.Keyword);
-
-                if (matched)
-                    firedTriggers.Add(trigger);
-            }
+            var firedTriggers = KeywordMatchRules.Collect(triggers, bufferText, now, IsKeywordMuted);
 
             if (firedTriggers.Count == 0) return;
 
-            _buffer.Clear(); // Prevent re-triggering on the same buffer
+            _input.Clear(); // Prevent re-triggering on the same buffer
             foreach (var t in firedTriggers)
             {
                 t.LastTriggeredAt = now;
@@ -1343,17 +1202,7 @@ namespace ConditioningControlPanel.Services
 
         private static bool TryRegexMatch(string input, string pattern)
         {
-            try
-            {
-                return Regex.IsMatch(input, pattern,
-                    RegexOptions.IgnoreCase,
-                    TimeSpan.FromMilliseconds(100));
-            }
-            catch
-            {
-                // Bad regex pattern — silently fail
-                return false;
-            }
+            return KeywordMatchRules.Match(input, pattern);
         }
 
         #endregion
@@ -1408,6 +1257,15 @@ namespace ConditioningControlPanel.Services
         private async Task DispatchMergedAsync(List<KeywordTrigger> firedTriggers, List<OcrWordHit>? matchedWords)
         {
             if (firedTriggers == null || firedTriggers.Count == 0) return;
+            // A panic's quiet (PanicAftermath, the same five minutes as Trigger Mode): a keyword on
+            // screen or typed must not flash, play or pulse the toy seconds after the panic stopped
+            // everything. The haptic mixer's own panic mute lasts 400 ms.
+            if (Safety.PanicAftermath.TriggersSilenced())
+            {
+                App.Logger?.Information("KeywordTriggers: [{Keywords}] held - a panic is still quiet",
+                    string.Join(",", firedTriggers.Select(t => t.Keyword)));
+                return;
+            }
             var first = firedTriggers[0];
 
             // If only one trigger matched, skip the merge allocation and dispatch directly.
@@ -2017,9 +1875,8 @@ namespace ConditioningControlPanel.Services
                     App.Audio?.ApplyPreferredDevice(_triggerPlayer);
 
                     // Apply volume curve (same as AudioService)
-                    var volume = volumePercent / 100.0f;
                     var masterVolume = (App.Settings?.Current?.MasterVolume ?? 100) / 100.0f;
-                    var curvedVolume = Math.Max(0.05f, (float)Math.Pow(volume * masterVolume, 1.5));
+                    var curvedVolume = KeywordMatchRules.AudioVolume(volumePercent, App.Settings?.Current?.MasterVolume ?? 100);
                     _triggerAudioFile.Volume = curvedVolume;
 
                     _triggerPlayer.Init(_triggerAudioFile);
