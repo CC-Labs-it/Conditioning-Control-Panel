@@ -72,6 +72,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
         public Descent.DescentCountdownService? Countdown { get; set; }
         public DateTime? LastSyncTime { get; private set; }
+        /// <summary>The live reader; an accepted push refreshes only an already-lit account (WPF).</summary>
+        public Descent.DescentService? DescentReader { get; set; }
 
         /// <param name="localAchievements">This install's unlocked achievement ids.</param>
         /// <param name="inSession">The heartbeat's in_session.</param>
@@ -235,6 +237,7 @@ namespace ConditioningControlPanel.Services
                 if (Countdown != null && Descent.DescentCountdownService.TryReadCeremonyAt(json, out var ceremonyAt))
                     Countdown.ApplyCeremonyAt(ceremonyAt);
                 CoreSettings.Save();
+                if (DescentReader?.HasSeenBlock == true) DescentReader.RequestRefresh("v2 sync accepted");
                 return true;
             }
             catch (Exception ex)

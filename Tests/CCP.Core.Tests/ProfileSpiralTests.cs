@@ -47,6 +47,86 @@ public sealed class ProfileSpiralTests : IDisposable
         Assert.False(ProfileSpiral.IsWithheld(null, true, true));
     }
 
+    [Theory]
+    [InlineData("clean", true)]
+    [InlineData("dirty", false)]
+    [InlineData("unproven", false)]
+    [InlineData("season", false)]
+    [InlineData("pending", false)]
+    [InlineData("offline", false)]
+    [InlineData("lower", false)]
+    public void PollAdoptsOnlyProvenCleanSameSeasonLedger(string gate, bool adopts)
+    {
+        var s = new AppSettings { UnifiedId = "fake-user", CurrentSeason = "2026-08",
+            PlayerLevel = 2, PlayerXP = 10 };
+        var total = ProfileAdopt.TotalXp(s);
+        s.LastConfirmedServerXpAccount = s.UnifiedId;
+        s.LastConfirmedServerXpSeason = s.CurrentSeason;
+        s.LastConfirmedServerXp = gate == "unproven" ? 0 : gate == "dirty" ? total - 1 : total;
+        if (gate == "pending") s.PendingDescentMigrationChoice = "restore";
+        s.OfflineMode = gate == "offline";
+        var user = Newtonsoft.Json.Linq.JObject.FromObject(new { level = 3,
+            xp = gate == "lower" ? total - 1 : total + 1000,
+            current_season = gate == "season" ? "2026-07" : s.CurrentSeason });
+        Assert.Equal(adopts, ProfileAdopt.AdoptProfilePoll(s, user));
+        Assert.Equal(adopts ? 3 : 2, s.PlayerLevel);
+        Assert.Equal(adopts ? total + 1000 : total, ProfileAdopt.TotalXp(s), 5);
+    }
+
+    [Fact]
+    public void PollFollowsCurveBeforeComparingXp_AndMalformedReadDoesNothing()
+    {
+        var s = new AppSettings { UnifiedId = "fake-user", PlayerLevel = 2, PlayerXP = 10 };
+        var total = ProfileAdopt.TotalXp(s);
+        Assert.False(ProfileAdopt.AdoptProfilePoll(s, new Newtonsoft.Json.Linq.JObject()));
+        Assert.True(ProfileAdopt.AdoptProfilePoll(s, Newtonsoft.Json.Linq.JObject.Parse(
+            """{"level":2,"xp":1,"curve_epoch":1}""")));
+        Assert.Equal(1, s.DescentEpoch);
+        Assert.Equal(total, ProfileAdopt.TotalXp(s), 5);
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task AcceptedSyncRefreshesOnlyAnAlreadyLitReader(bool lit, bool accepted)
+    {
+        var old = CoreSettings.ServiceProvider;
+        var oldLogin = CoreAccount.IsLoggedInProvider;
+        CoreAccount.IsLoggedInProvider = () => true;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        try
+        {
+            var s = service.Current;
+            s.UnifiedId = "fake-user"; s.AuthToken = "fake-token"; s.OfflineMode = false;
+            s.PlayerLevel = 2; s.PlayerXP = 10; s.LastConfirmedServerXp = 0;
+            var wire = new Wire();
+            var reader = Reader(s, wire);
+            var now = DateTime.UtcNow;
+            reader.UtcNow = () => now;
+            if (lit) await reader.RefreshAsync("light");
+            now = now.AddMinutes(1);
+            var received = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            reader.BlockChanged += (_, _) => received.TrySetResult();
+            var pushWire = new PushWire(accepted);
+            var sync = new SyncPush(() => Array.Empty<string>(), () => false, pushWire) { DescentReader = reader };
+            sync.MarkLoaded(Array.Empty<string>());
+            Assert.Equal(accepted, await sync.PushAsync("test"));
+            if (lit && accepted) await received.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            else Assert.False(received.Task.IsCompleted);
+            Assert.Equal(lit ? accepted ? 2 : 1 : 0, wire.Calls);
+        }
+        finally { CoreSettings.ServiceProvider = old; CoreAccount.IsLoggedInProvider = oldLogin; }
+    }
+
+    private sealed class PushWire(bool accepted) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(accepted ? HttpStatusCode.OK : HttpStatusCode.BadRequest)
+                { Content = new StringContent("{}") });
+    }
+
     private sealed class Wire : HttpMessageHandler
     {
         internal int Calls;

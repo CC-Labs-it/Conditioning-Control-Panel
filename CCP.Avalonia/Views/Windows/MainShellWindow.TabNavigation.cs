@@ -191,6 +191,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                // Re-read the room gate before unrelated per-tab decoration can fail.
+                if (tab == "spiral") Named<Tabs.SpiralTabView>("SpiralTab")?.OnTabShown();
                 RefreshEntitlementVeils();
                 EvaluateProfileSpiralPoll(); // the Trainer Card poll follows the card (ProfileSpiral.cs)
                 switch (tab)

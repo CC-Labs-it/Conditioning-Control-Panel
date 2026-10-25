@@ -36,23 +36,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// (its spiral geometry, spin, breath and marquee), the waiting room's ambience, the embed
     /// slab, the help chip and the 32px inset that keeps it alive over a browser.</para>
     ///
-    /// <para><b>What is stubbed, and why each one is a stub:</b></para>
-    /// <list type="bullet">
-    ///   <item><c>SpiralRoom.StateFor</c> (Core) reads the real settings and fuse, but
-    ///     <c>App.DescentMigration</c> (the withhold) and <c>App.Descent</c> (the block) are WPF-head
-    ///     services, so <see cref="Refresh"/> passes false for both and Spiral is unreachable — see the
-    ///     placeholder there.</item>
-    ///   <item><c>SpiralFirstLightVisual</c> is a WPF <c>DrawingVisual</c>, so <c>FogHost</c> stays
-    ///     empty and FIRST LIGHT hands straight back rather than holding a black room for its three
-    ///     and a half seconds. The reveal's frame loop, its block wait and its timeout go with it;
-    ///     all three exist only to drive that canvas.</item>
-    ///   <item><c>SpiralEmbedView</c> (WebView2, Windows-only) becomes
-    ///     <see cref="WebHost"/>, whose <c>Navigated</c>/<c>Failed</c>/<c>Ready</c>/<c>PostState</c>
-    ///     have no twin yet — see <see cref="EnsureEmbed"/>.</item>
-    ///   <item><c>MotionFx</c>, <c>DescentRoomSfx</c> and <c>DescentBarkWatcher</c> are
-    ///     WPF-head services; each is a stub at its call site. <c>HelpPopover</c> is real on
-    ///     this head and carries the shared Core topic.</item>
-    /// </list>
+    /// <para>The room reads the shell's shared profile reader. Remaining gaps: migration offer
+    /// runtime notifications, browser state/ready/failure protocol, room sounds and companion greeting.
+    /// The retained first-light entry point still has no canvas on this head.</para>
     ///
     /// <para><b>Escape is never handled here.</b> The global panic key must reach its hook
     /// untouched; nothing in this tab looks at the keyboard at all.</para>
@@ -200,6 +186,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>The embed, for as long as this tab is the one on screen in the spiral state.</summary>
         private WebHost? _embed;
+        private DescentService? _profileReader;
+        internal void SetProfileReader(DescentService reader) { _profileReader = reader; Refresh(); }
+        internal void RefreshFromProfile() => Refresh();
+        internal void StopForPanic() => Suspend();
 
         private SpiralRoomState _state = SpiralRoomState.Waiting;
 
@@ -288,8 +278,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         internal void OnTabShown() => Refresh();
 
-        /// <summary>WPF Wire: the fuse's phase and tick drive the fog. BlockChanged has no twin
-        /// (DescentService is WPF-only).</summary>
+        /// <summary>The fuse drives the fog; the shell forwards its shared reader's block changes.</summary>
         private void Wire()
         {
             if (_wiredFuse != null || App.DescentCountdown is not { } fuse) return;
@@ -351,11 +340,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     CoreSettings.Current,
                     fuse?.LastAnnouncedPhase ?? DescentFusePhase.Dark,
                     fuse?.IsArmed == true,
-                    // ponytail: DescentMigrationService.SpiralWithheld and DescentService.Current
-                    // (the block) are WPF-head network services, so this head can reach Fog and
-                    // Waiting but never Spiral; the embed seam below waits for them.
-                    spiralWithheld: false,
-                    hasBlock: false));
+                    // ponytail: live offer notifications await the migration host; persisted withhold is real.
+                    spiralWithheld: ProfileSpiral.IsWithheld(CoreSettings.Current),
+                    hasBlock: _profileReader?.Current is not null));
             }
             catch (Exception ex)
             {

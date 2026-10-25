@@ -17,6 +17,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -70,11 +71,19 @@ public sealed class ProfileSpiralTests
             var row = shell.Named<Button>("ProfileMenuSpiralRow")!;
             Assert.False(plate.IsVisible);
             Assert.False(row.IsVisible);
+            s.PlayerLevel = 2; s.PlayerXP = 10;
+            var agreedXp = ProfileAdopt.TotalXp(s);
+            s.LastConfirmedServerXpAccount = s.UnifiedId;
+            s.LastConfirmedServerXpSeason = s.CurrentSeason ?? "";
+            s.LastConfirmedServerXp = agreedXp;
+            wire.Body = """{"user":{"level":3,"xp":10000,"descent":{"devotion_days":12,"stage":{"n":3,"next_at":21}}}}""";
             s.OfflineMode = false;
             shell.UpdateQuickLoginUI();
             await shell.ProfileDescent!.RefreshAsync("signed in", force: true);
             Assert.True(await Until(() => plate.IsVisible)); // the sign-in ask may hold the fetch gate first
             Assert.True(row.IsVisible);
+            Assert.Equal(3, s.PlayerLevel);
+            Assert.Equal(10000, ProfileAdopt.TotalXp(s), 5);
             // WPF ProfileVat.cs:133-170: the poll runs only while the card is on screen and the
             // window is presenting; minimising or leaving the card stops it.
             Assert.True(shell.ProfileSpiralPollRunning);
@@ -110,6 +119,18 @@ public sealed class ProfileSpiralTests
             shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
             shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
             Assert.Equal("spiral", shell.CurrentTab);
+            var room = shell.Named<SpiralTabView>("SpiralTab")!;
+            Assert.True(room.IsShowingSpiral);
+            s.PendingDescentMigrationChoice = null;
+            shell.ProfileDescent.NotifySurfaces("offer persisted");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(room.IsShowingSpiral);
+            s.PendingDescentMigrationChoice = "restore";
+            shell.OpenSpiralMapFromProfile(); // re-enter the current tab: entry must re-read gates too
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(room.IsShowingSpiral);
+            Assert.Single(PanicSurfaces.All, surface => surface.Id == "spiral-room").Stop(shell);
+            Assert.Empty(room.FindControl<Grid>("EmbedHost")!.Children);
             shell.ShowTab("discord");
             shell.OpenProfileBubbleMenu();
             row.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -121,7 +142,19 @@ public sealed class ProfileSpiralTests
             Dispatcher.UIThread.RunJobs();
             Assert.False(plate.IsVisible);
             Assert.False(row.IsVisible);
+            Assert.False(room.IsShowingSpiral);
             Assert.Empty(shell.Named<TextBlock>("ProfileMenuSpiralSummary")!.Text!);
+            s.PendingDescentMigrationChoice = null;
+            var later = Newtonsoft.Json.Linq.JObject.Parse("""{"level":4,"xp":20000}""");
+            shell.ProfileDescent.AdoptProgression!(later);
+            s.UnifiedId = "other-fake-user";
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(3, s.PlayerLevel); // queued work cannot land on another account
+            s.UnifiedId = "fake-user";
+            shell.ProfileDescent.AdoptProgression!(later);
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(3, s.PlayerLevel); // or on a closed shell
         }
         finally
         {

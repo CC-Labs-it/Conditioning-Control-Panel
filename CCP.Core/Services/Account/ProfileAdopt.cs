@@ -108,6 +108,33 @@ namespace ConditioningControlPanel.Services
             return true;
         }
 
+        /// <summary>WPF TryAdoptFromServerProgression: a profile poll may advance only a proven clean,
+        /// same-season ledger. The sync merge owns dirty ledgers and season rollover. Does not save.</summary>
+        public static bool AdoptProfilePoll(AppSettings settings, JObject user)
+        {
+            var level = user["level"]?.Value<int?>() ?? 0;
+            var xp = user["xp"]?.Value<double?>();
+            if (level <= 0 || xp is null) return false;
+            var before = (settings.PlayerLevel, settings.PlayerXP, settings.DescentEpoch);
+            ApplyCurveEpoch(settings, ParseCurveEpoch(user["curve_epoch"]));
+            var season = user["current_season"]?.Type == JTokenType.String ? user.Value<string>("current_season") : null;
+            if (!settings.OfflineMode && !string.IsNullOrEmpty(settings.UnifiedId)
+                && !DescentMigrationChoices.IsValid(settings.PendingDescentMigrationChoice)
+                && (season is null || string.Equals(season, settings.CurrentSeason ?? "", StringComparison.Ordinal))
+                && xp.Value > 0 && double.IsFinite(xp.Value))
+            {
+                var local = TotalXp(settings);
+                var agreed = ActiveXpWatermark(settings);
+                if (xp.Value > local + 0.01 && agreed > 0 && local <= agreed + 0.01)
+                {
+                    settings.PlayerLevel = level;
+                    settings.PlayerXP = XpCurve.GetCurrentLevelXP(level, xp.Value, Epoch(settings));
+                    RecordAgreedServerXp(settings, xp.Value, TotalXp(settings), "profile poll");
+                }
+            }
+            return before != (settings.PlayerLevel, settings.PlayerXP, settings.DescentEpoch);
+        }
+
         /// <summary>True if the string is a "yyyy-MM" month key.</summary>
         public static bool LooksLikeMonthKey(string k) =>
             k.Length == 7 && k[4] == '-' && int.TryParse(k.Substring(0, 4), out _) && int.TryParse(k.Substring(5, 2), out _);

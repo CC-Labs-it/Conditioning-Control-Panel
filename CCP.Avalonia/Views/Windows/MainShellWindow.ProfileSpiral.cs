@@ -5,6 +5,9 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services.Descent;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
+using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows;
 
@@ -32,7 +35,10 @@ public partial class MainShellWindow
     {
         // Shared WPF reader: read-only, ten-second floor, stale-account fence, deferred retry.
         _profileDescent = new DescentService(() => CoreSettings.Current, AccountSeed.NewV2());
+        _profileDescent.AdoptProgression = AdoptSpiralProgression;
         _profileDescent.BlockChanged += OnSpiralBlockChanged;
+        if (AccountSeed.Sync is { } sync) sync.DescentReader = _profileDescent;
+        Named<SpiralTabView>("SpiralTab")?.SetProfileReader(_profileDescent);
         AccountSeed.ProfileLoaded += OnSpiralProfileLoaded;
         // WPF's Trainer Card poll (MainWindow.ProfileVat.cs:133-170): runs only while the card is on
         // screen, the window is presenting (not minimised/hidden/inactive) and this account has
@@ -55,6 +61,8 @@ public partial class MainShellWindow
             _profileSpiralPoll.Stop();
             AccountSeed.ProfileLoaded -= OnSpiralProfileLoaded;
             _profileDescent.BlockChanged -= OnSpiralBlockChanged;
+            _profileDescent.AdoptProgression = null;
+            if (AccountSeed.Sync?.DescentReader == _profileDescent) AccountSeed.Sync.DescentReader = null;
             _profileDescent.Reset();
         };
     }
@@ -78,8 +86,26 @@ public partial class MainShellWindow
         if (_profileSpiralClosed) return;
         RefreshProfileSpiralPlate();
         RefreshProfileMenuSpiral();
+        Named<SpiralTabView>("SpiralTab")?.RefreshFromProfile();
         EvaluateProfileSpiralPoll();
     });
+
+    private void AdoptSpiralProgression(JObject user)
+    {
+        // Reader callbacks arrive on the pool. Fence the posted adopt against logout/account switch.
+        var settings = CoreSettings.Current;
+        var account = settings.UnifiedId;
+        var token = settings.AuthToken;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_profileSpiralClosed || settings != CoreSettings.Current
+                || account != settings.UnifiedId || token != settings.AuthToken) return;
+            if (!ProfileAdopt.AdoptProfilePoll(settings, user)) return;
+            CoreSettings.Save();
+            UpdateQuickLoginUI();
+            RefreshProfileBubble();
+        });
+    }
 
     private void RefreshProfileSpiralAccount()
     {
