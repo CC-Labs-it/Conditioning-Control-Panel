@@ -58,6 +58,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 catch (Exception ex) { Log.Warning(ex, "Workshop: companion switch failed"); }
             };
 
+            WirePhrasePresets(parts);
+
             // Deliberately NOT wired, each for the reason a previous layer already recorded:
             //
             //  · Behavior.CameraShortcutRequested — the combo drives MainWindow.SessionIO.cs:1485
