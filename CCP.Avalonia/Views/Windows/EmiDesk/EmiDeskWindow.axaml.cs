@@ -925,8 +925,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         }
 
         // ponytail: the five canon body moves (bounce, thud, nod, droop, shiver) were WPF
-        // DoubleAnimations on _crtScale / _moveShift. Reachable only through a chain, and nothing on
-        // this head can start one, so the animation is left out rather than ported blind - the
+        // DoubleAnimations on _crtScale / _moveShift. Reachable only through a chain; chains now
+        // play here but the animation is still left out rather than ported blind - the
         // upgrade is an Avalonia.Animation.Animation with KeyFrames on the same two transforms.
         private void RunBodyMove(string move)
         {
@@ -966,7 +966,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         // already uses in EmiProps), so it is ONE seam swap: a System.Threading.Timer ticking
         // through CoreDispatch.Post. Neither is a re-derivation candidate - inlining these numbers
         // here would be a second copy of a table EmiAlive's own header forbids retuning outside the
-        // plan, and it would still drive a PlayChain that no-ops and a SetPose with no art to swap.
+        // plan. (The chain player is now Core EmiChainPlayback; the idle beats still are not ported.)
         public void RestartIdleBeats()
         {
         }
@@ -2165,6 +2165,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         /// <summary>True between the wake chain starting and <see cref="FinishSummon"/>.</summary>
         private bool _summonChainLive;
+        private int _summonEpoch;
 
         private Action? _summonDone;
 
@@ -2199,8 +2200,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
                 Burst(spark: false);
 
+                // A dismiss before the wake chain starts must win: it bumps the epoch.
+                int epoch = ++_summonEpoch;
                 After(SmokeLeadMs, () =>
                 {
+                    if (epoch != _summonEpoch) return;
                     SetPose("idle");
                     DrawFace("-_-");
                     _bodyRoot.IsVisible = true;
@@ -2208,6 +2212,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
                     After(CrtOnMs + 20, () =>
                     {
+                        if (epoch != _summonEpoch) return;
                         _transiting = false;
                         InputLocked = false;
 
@@ -2268,6 +2273,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     return;
                 }
 
+                _summonEpoch++;
                 _transiting = true;
                 InputLocked = true;
                 StopIdleBeats();
@@ -2667,6 +2673,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 _closingForGood = true;
+                _player?.Dispose();
                 _bodyImage.Source = null;
                 foreach (var image in _bodyCache.Values) image.Dispose();
                 _bodyCache.Clear();

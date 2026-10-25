@@ -66,7 +66,7 @@ public sealed class EmiDeskSummonTests
             Assert.True(heard);
 
             Click();
-            await Pump(2000);   // wink + CRT off + burst sweep
+            await Pump(3000);   // wink + CRT off + burst sweep
             Assert.False(svc.IsOut);
             Assert.False(svc.Window!.IsVisible);
             Assert.False(heard);
@@ -156,7 +156,7 @@ public sealed class EmiDeskSummonTests
         svc.Dismiss();               // the x while the prompt is up
         answer(EmiMuteChoice.Mute);
         await first;
-        await Pump(1500);
+        await Pump(3000);
         Assert.False(svc.Window!.IsVisible);
         Assert.False(svc.IsOut);
 
@@ -186,11 +186,27 @@ public sealed class EmiDeskSummonTests
             await svc.Summon();
             Assert.True(svc.IsOut);
             section.FindControl<CheckBox>("ChkEnabled")!.IsChecked = false;
-            await Pump(2000);
+            await Pump(3000);
             Assert.False(svc.IsOut);
             Assert.False(svc.Window!.IsVisible);
         }
         finally { host.Close(); }
+    });
+
+    /// <summary>P06: the panic registry's emi-chain entry kills a running chain.</summary>
+    [Fact]
+    public Task PanicEntryCancelsHerChain() => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async svc =>
+    {
+        CoreSettings.Current.EmiDeskMuteAvatar = false;
+        await svc.Summon();
+        var win = svc.Window!;
+        win.PlayChain("shock");
+        Assert.True(win.ChainLive);
+        var entry = Assert.Single(ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All, s => s.Id == "emi-chain");
+        entry.Stop(null);
+        Assert.False(win.ChainLive);
+        svc.Dismiss();
+        await Pump(3000);
     });
 
     /// <summary>WPF EmiDeskService.Summon :313/:325: a summon counts in EmiState and puts her back
@@ -212,7 +228,7 @@ public sealed class EmiDeskSummonTests
         win.RestorePlacement();
         Assert.Equal(moved, win.Position);
         svc.Dismiss();
-        await Pump(2000);
+        await Pump(3000);
     });
 
     /// <summary>WPF EmiDock.Refresh :150-163: while she is out the chip's mini face mirrors the
@@ -235,7 +251,7 @@ public sealed class EmiDeskSummonTests
             Assert.Equal(">_<", mini.Text);
 
             svc.Dismiss();
-            await Pump(2000);
+            await Pump(3000);
             Assert.False(svc.IsOut);
             Assert.Equal("0_0", mini.Text);
             svc.Window!.DrawFace("^_^");
