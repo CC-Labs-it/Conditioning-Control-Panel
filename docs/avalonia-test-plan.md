@@ -673,3 +673,7 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Startup countdown speech
+
+1. Launch with a cached future Descent ceremony timestamp and the avatar disabled, then enable the avatar. The current phase line should arrive on the next one-second tick, once for that phase, with no giggle sound or AI badge. Existing queued preset speech is replaced; panic clears the bubble. With no timestamp startup remains dark. WPF `ConditioningControlPanel/App.xaml.cs:3184` + `CCP.Core/Services/Descent/DescentCountdownService.cs:527`. Rows: `shell-app-startup`.

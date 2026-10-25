@@ -214,6 +214,18 @@ namespace ConditioningControlPanel.Avalonia
             Mods.Initialize(CoreSettings.Current.ActiveModId);
         }
 
+        // WPF App.xaml.cs:3184: resolve the avatar lazily; it is created after the fuse.
+        internal static Services.Descent.DescentCountdownService CreateDescentCountdown(
+            Func<Views.AvatarTube.AvatarTubeWindow?> avatar) => new()
+        {
+            Speaker = line =>
+            {
+                if (avatar() is not { } tube) return false;
+                tube.GigglePriority(line, playSound: false, aiGenerated: false);
+                return true;
+            },
+        };
+
         /// <summary>The cclabs catalogue client (WPF App.Catalogue): the same Core client and inputs as WPF's
         /// CatalogueService. Settable so a test can hand in a fake-handler client.</summary>
         internal static CatalogueClient Catalogue { get; set; } = new(
@@ -622,8 +634,7 @@ namespace ConditioningControlPanel.Avalonia
                 // After the version seed (the proxy client's headers carry it). Fail closed; the
                 // startup validate runs on the UI thread as WPF's does (App.xaml.cs OnStartup).
                 // WPF App.xaml.cs:2856. Start() arms nothing without a cached ceremony timestamp.
-                // ponytail: no Speaker - the tube's speech coupling is not ported, so phase lines stay unsaid.
-                DescentCountdown = new Services.Descent.DescentCountdownService();
+                DescentCountdown = CreateDescentCountdown(() => Views.AvatarTube.AvatarTubeWindow.Live);
                 DescentCountdown.Start();
                 Descent = new Services.Descent.DescentService
                 {
@@ -880,9 +891,8 @@ namespace ConditioningControlPanel.Avalonia
                 // entitled, because an entitlement seam that failed open would hand every Linux
                 // user the paid tier.
                 //
-                // CoreSpeech is deliberately left unseeded: there is no speech engine on this head
-                // yet, and the seam's unseeded answers (no mic, empty device list, NotProbed) are
-                // exactly what that is. Seeding it with anything else would be a lie.
+                // CoreSpeech was seeded by PulseMicSource above on Linux. Windows capture and
+                // sherpa wake-word support still need their platform hosts.
 
                 // Open the session catalogue only on the ordinary desktop path. A failed load must
                 // not leak the manager that may already contain built-ins into the shell: the custom
