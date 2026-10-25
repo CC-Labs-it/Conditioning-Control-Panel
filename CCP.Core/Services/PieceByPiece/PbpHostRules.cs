@@ -21,6 +21,12 @@ namespace ConditioningControlPanel.Services.PieceByPiece;
 /// </summary>
 public static class PbpHostRules
 {
+        // WPF MotionFx.ResolveLevel: neither the OS cap nor gentle visuals may add motion.
+        public static ConditioningControlPanel.Models.MotionLevel Motion(
+            ConditioningControlPanel.Models.MotionLevel setting, bool osAnimations, bool gentle) =>
+            setting == ConditioningControlPanel.Models.MotionLevel.Off ? setting
+                : !osAnimations || gentle ? ConditioningControlPanel.Models.MotionLevel.Reduced : setting;
+
     /// <summary>Where <c>/v2/pbp/*</c> lives. The same proxy every other online surface uses.</summary>
     public const string ProxyBaseUrl = "https://codebambi-proxy.vercel.app";
 

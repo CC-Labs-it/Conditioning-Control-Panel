@@ -1,8 +1,8 @@
 // PORTED from ConditioningControlPanel/Services/PieceByPiece/PieceByPieceHostService.cs (WPF 7.1.5).
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Online pictures and friend invites are in the Media/Friends partials.
-// Not here yet: PvP stakes (stakes-host), Lobby intents (views-tab-available-subjects, the unported Lobby tab), the kept Escape (pbp:escape),
-// MergedAccountRecovery and SeasonRecapService.TrackFeature.
+// ponytail: Not here yet: Lobby intents (the unported Lobby tab), browser process-failed close, and
+// MergedAccountRecovery (account recovery seams are not seeded on this head).
 
 using System;
 using System.Collections.Generic;
@@ -19,6 +19,7 @@ using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.PieceByPiece.Media;
 using ConditioningControlPanel.Services.Quiz;
+using ConditioningControlPanel.Services.Stakes;
 using Newtonsoft.Json.Linq;
 using Serilog;
 
@@ -56,6 +57,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         private static readonly Random PbpRng = new();
 
+        internal static GameWindow? PbpInFront()
+        {
+            lock (Open) return Open.FirstOrDefault(w => w.Spec.Id == PbpId && w.IsActive);
+        }
+
+        internal bool PbpReady => IsReady && !_closing;
+
+        internal void PostPbpKeptEscape()
+        {
+            Post(new { type = "pbp:escape" });
+            Web.Focus();
+        }
+
+        // One bridge for the app session: settlement keeps running after the board closes.
+        private static StakeBridge? _pbpStakes;
+        internal static void ResetPbpStakesForTests() => _pbpStakes = null;
+        internal static Func<Action<JObject>, StakeBridge> PbpStakeFactory = StakesHead.CreatePbp;
+        private static void PostPbpStake(JObject frame) => Dispatcher.UIThread.Post(() =>
+        {
+            GameWindow? board;
+            lock (Open) board = Open.FirstOrDefault(w => w.Spec.Id == PbpId && !w._closing);
+            board?.Post(frame);
+        });
+
         private bool _pbpOpen;
         private bool _pbpSettingsPosted;   // pbp:settings goes out exactly once per boot
         private bool _pbpIdentityPosted;   // and so does pbp:identity
@@ -76,6 +101,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_pbpOpen) return;
             _pbpOpen = true;
+            // WPF TrackFeature(pbp): pbp has no season Catalog entry; only its day-log event is recorded.
+            App.FeatureDayLog?.Note(SeasonFeatureKeys.ToDayLogEvent(SeasonFeatureKeys.PieceByPiece)!);
             _pbpLastBeatUtc = _pbpLastProgressUtc = DateTime.UtcNow;
             Closed += (_, _) => ClosePbp();
             _pbpWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
@@ -109,6 +136,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var type = (string?)o["type"];
             try
             {
+                if (StakeBridge.Handles(type))
+                {
+                    _pbpStakes ??= PbpStakeFactory(PostPbpStake);
+                    PbpPending = _pbpStakes.Handle(o);
+                    return true;
+                }
                 switch (type)
                 {
                     case "ready":
@@ -161,7 +194,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 _pbpSettingsPosted = true;
                 var s = CoreSettings.Current;
-                Post(PbpWatchRules.SettingsFrame(PbpHostRules.VideoHoldSec(s.VideoMinDurationSeconds), s.MotionLevel != MotionLevel.Full, PbpWhispers(), s, PbpMediaAvailable(), null));
+                var osAnimations = MotionPreference.AnimationsEnabled();
+                Post(PbpWatchRules.SettingsFrame(PbpHostRules.VideoHoldSec(s.VideoMinDurationSeconds), PbpHostRules.Motion(s.MotionLevel, osAnimations, s.GentleVisuals) != MotionLevel.Full, PbpWhispers(), s, PbpMediaAvailable(), null,
+                    PbpWatchRules.GentleIntroSpeed(s.GentleVisuals, PbpHostRules.Motion(s.MotionLevel, osAnimations, false), s.GentleSpeed)));
             }
             if (!_pbpIdentityPosted)
             {

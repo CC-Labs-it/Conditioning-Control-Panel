@@ -673,3 +673,7 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+1. WPF `Services/PieceByPiece/PieceByPieceHostService.cs` + `MainWindow/MainWindow.xaml.cs`: open Piece by Piece; Escape during boot must not pause the later board. Once ready, first Escape pauses and focuses the board; a second within two seconds closes it through panic. Reopen after two seconds: first Escape pauses again. Rows: `feat-pbp-host`.
+2. WPF `Services/MotionFx.cs` + `Services/PieceByPiece/PieceByPieceHostService.cs`: with Full motion, toggle gentle visuals and Windows animation effects; settings reducedMotion must be true when either caps it, and gentleIntroSpeed is the configured gentle speed only when gentle visuals alone caused the cap. Rows: `feat-pbp-host`.
+3. WPF `Services/Stakes/StakeAppHooks.cs` + `Services/PieceByPiece/PieceByPieceHostService.cs`: in online PvP inspect limits, offer, state and settle; time is unavailable without linked/unpaused Chaster. A time offer enables pvp_loss before sending. Close while settling: a lost time stake still books once, wallet updates only for the requesting account, and no frame targets a closed board. Fresh launches increment e_pb; refocusing does not. Rows: `feat-pbp-host`.

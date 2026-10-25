@@ -312,6 +312,36 @@ public sealed class GameWindowTests
         }
     });
 
+    [Fact]
+    public void PieceByPiece_EscapePauses_ThenPanics_AndBootEscapeIsNotQueued() => Run((shell, launcher) =>
+    {
+        launcher.Hide();
+        var s = CoreSettings.Current;
+        var old = (s.PanicKey, s.PanicKeyEnabled);
+        try
+        {
+            s.PanicKey = "Escape";
+            s.PanicKeyEnabled = true;
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            w.Activate();
+            Dispatcher.UIThread.RunJobs();
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            var now = DateTime.UtcNow;
+            Assert.True(shell.TryGamePauseOnEscape(now));
+            Assert.Empty(sent); // booting pages must never receive a delayed Escape
+            w.HandleMessage("{\"type\":\"ready\"}");
+            sent.Clear();
+            shell.HandlePanicKeyPress(now.AddSeconds(3));
+            Assert.Equal("pbp:escape", (string?)Assert.Single(sent)["type"]);
+            Assert.True(GameWindow.IsAnyOpen());
+            shell.HandlePanicKeyPress(now.AddSeconds(4));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+        }
+        finally { (s.PanicKey, s.PanicKeyEnabled) = old; }
+    });
+
     // These tests exercise the real board and settings bridge, without the unrelated main shell FX.
     private static void RunBoard(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
@@ -334,6 +364,128 @@ public sealed class GameWindowTests
             Directory.Delete(root, true);
         }
     });
+
+    [Fact]
+    public void PieceByPiece_TracksFreshLaunchOnly_AndStakeLossRowIsIdempotent() => RunBoard(() =>
+    {
+        var property = typeof(global::ConditioningControlPanel.Avalonia.App).GetProperty("FeatureDayLog",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var old = property.GetValue(null);
+        var root = Directory.CreateTempSubdirectory("pbp-daylog-").FullName;
+        using var log = new ConditioningControlPanel.Services.FeatureDayLogService(
+            () => new ConditioningControlPanel.Models.AchievementProgress(), Path.Combine(root, "log.json"));
+        try
+        {
+            property.SetValue(null, log);
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            Assert.Same(w, GameWindow.Launch(GameWindow.PbpId));
+            Assert.Equal(1, log.Log.Days.Sum(d => d.Events.GetValueOrDefault("e_pb")));
+            w.Close();
+            GameWindow.Launch(GameWindow.PbpId);
+            Assert.Equal(2, log.Log.Days.Sum(d => d.Events.GetValueOrDefault("e_pb")));
+            Assert.False(StakesHead.TimeOk()); // unlinked Chaster never offers a time stake
+            StakesHead.EnableLossRow();
+            StakesHead.EnableLossRow();
+            Assert.Single(CoreSettings.Current.ChasterPrices!, r => r == "pvp_loss");
+        }
+        finally { property.SetValue(null, old); log.Dispose(); Directory.Delete(root, true); }
+    });
+
+    [Fact]
+    public void PieceByPiece_MotionSettings_RespectOsAndGentleCaps() => RunBoard(() =>
+    {
+        var old = MotionPreference.AnimationsEnabled;
+        try
+        {
+            foreach (var os in new[] { true, false })
+            foreach (var gentle in new[] { true, false })
+            {
+                MotionPreference.AnimationsEnabled = () => os;
+                var s = CoreSettings.Current;
+                s.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+                s.GentleVisuals = gentle;
+                s.GentleSpeed = 0.5;
+                var w = GameWindow.Launch(GameWindow.PbpId)!;
+                var sent = new List<JObject>();
+                w.Posted += json => sent.Add(JObject.Parse(json));
+                w.HandleMessage("{\"type\":\"ready\"}");
+                Assert.Equal(!os || gentle, (bool)sent[0]["reducedMotion"]!);
+                Assert.Equal(os && gentle ? 0.5 : 0, (double)sent[0]["gentleIntroSpeed"]!);
+                w.Close();
+            }
+        }
+        finally { MotionPreference.AnimationsEnabled = old; }
+    });
+
+    [Fact]
+    public void PieceByPiece_StakeWalletRechecksAccountBeforeUiWrite() => RunBoard(() =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.UnifiedId, s.OfflineMode, s.SkillPoints, CoreSecrets.RetrieveProvider);
+        try
+        {
+            s.UnifiedId = "account";
+            s.OfflineMode = false;
+            s.SkillPoints = 100;
+            CoreSecrets.RetrieveProvider = _ => "test-token";
+            var snapshot = new JObject { ["ok"] = true, ["sp"] = 50 };
+            StakesHead.Settlement.AdoptBalance("limits", "account", snapshot);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(100, s.SkillPoints); // snapshots cannot undo local earnings
+            StakesHead.Settlement.AdoptBalance("offer", "account", snapshot);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(50, s.SkillPoints); // a receipt may lower the balance
+            StakesHead.Settlement.AdoptBalance("offer", "account", new JObject { ["ok"] = true, ["sp"] = 10 });
+            s.UnifiedId = "other-account";
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(50, s.SkillPoints);
+        }
+        finally { (s.UnifiedId, s.OfflineMode, s.SkillPoints, CoreSecrets.RetrieveProvider) = old; }
+    });
+
+    [Fact]
+    public void PieceByPiece_StakesRouteAllFrames_AndSettleAfterClose() => RunBoard(() =>
+    {
+        var old = GameWindow.PbpStakeFactory;
+        int booked = 0;
+        var api = new BoardStakeApi();
+        var settlement = new ConditioningControlPanel.Services.Stakes.StakeSettlement(
+            (_, seconds) => { booked += seconds; return seconds; }, null, () => "account");
+        try
+        {
+            GameWindow.PbpStakeFactory = post => new("pbp", post, api, settlement, () => false, () => { });
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            foreach (var type in new[] { "stake-limits", "stake-offer", "stake-state" })
+            {
+                w.HandleMessage(new JObject { ["type"] = type, ["match"] = "match", ["kind"] = "sp", ["amount"] = 10 }.ToString());
+                Assert.True(w.PbpPending.Wait(TimeSpan.FromSeconds(5)));
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.Equal(new[] { "limits", "offer", "state" }, sent.Select(o => (string?)o["op"]));
+            Assert.All(sent, o => Assert.Equal("pbp", (string?)o["game"]));
+            Assert.False((bool)sent[0]["time_ok"]!);
+            w.HandleMessage("{\"type\":\"stake-settle\",\"match\":\"match\"}");
+            w.Close();
+            api.Settled.TrySetResult(new JObject { ["ok"] = true, ["settled"] = new JObject { ["result"] = "lost", ["time_s"] = 60 } });
+            Assert.True(w.PbpPending.Wait(TimeSpan.FromSeconds(5)));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(60, booked);
+            Assert.Equal(3, sent.Count); // no late frame to the closed window
+        }
+        finally { GameWindow.PbpStakeFactory = old; GameWindow.ResetPbpStakesForTests(); }
+    });
+
+    private sealed class BoardStakeApi : ConditioningControlPanel.Services.Stakes.IStakeApi
+    {
+        private int _states;
+        internal readonly System.Threading.Tasks.TaskCompletionSource<JObject?> Settled = new(System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
+        public string? Account() => "account";
+        public System.Threading.Tasks.Task<JObject?> CallAsync(string op, JObject body, System.Threading.CancellationToken ct = default)
+            => op == "state" && ++_states > 1 ? Settled.Task
+                : System.Threading.Tasks.Task.FromResult<JObject?>(new JObject { ["ok"] = true });
+    }
 
     [Fact]
     public void PieceByPiece_SettingsWhisperOwnClips_AndPostOnlyOnce() => RunBoard(() =>

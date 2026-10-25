@@ -15,6 +15,14 @@ namespace ConditioningControlPanel.Tests;
 /// identity and settings frames, the library reservoir, and the watchdog.</summary>
 public sealed class PbpHostRulesTests
 {
+    [Theory]
+    [InlineData(0, true, false, 0)]
+    [InlineData(0, false, false, 1)]
+    [InlineData(0, true, true, 1)]
+    [InlineData(2, false, true, 2)]
+    public void MotionCapsNeverAddMotion(int setting, bool os, bool gentle, int expected)
+        => Assert.Equal(expected, (int)PbpHostRules.Motion((ConditioningControlPanel.Models.MotionLevel)setting, os, gentle));
+
     private sealed class Capture : HttpMessageHandler
     {
         public HttpRequestMessage? Seen;
