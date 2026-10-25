@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -33,47 +35,98 @@ public sealed class EmiMomentBubbleTests
         finally { win.ShutDown(); Dispatcher.UIThread.RunJobs(); }
     });
 
-    private static async Task Pump(int milliseconds)
+    /// <summary>Stepped clock for the window's one-shot timers (P08): Advance fires due ticks in order.</summary>
+    private sealed class Steps
     {
-        for (int t = 0; t < milliseconds; t += 20)
+        private sealed class Entry { public long Due; public Action Tick = () => { }; public bool Stopped; }
+        private readonly List<Entry> _pending = new();
+        private long _now;
+        public Steps(EmiDeskWindow win) => win.StartTimer = Start;
+        public Action Start(int ms, Action tick)
         {
-            await Task.Delay(20);
-            Dispatcher.UIThread.RunJobs();
+            var entry = new Entry { Due = _now + ms, Tick = tick };
+            _pending.Add(entry);
+            return () => entry.Stopped = true;
+        }
+        public void Advance(int ms)
+        {
+            long end = _now + ms;
+            while (_pending.Where(e => !e.Stopped && e.Due <= end).OrderBy(e => e.Due).FirstOrDefault() is { } next)
+            {
+                _pending.Remove(next); _now = next.Due; next.Tick();
+            }
+            _now = end;
         }
     }
 
     [Fact]
-    public Task AskTypesThenWaitsAndParksSpeechUntilAChip() => Run(async win =>
+    public void DeskLinesShipBesideTheExe() =>
+        Assert.True(File.Exists(Path.Combine(AppContext.BaseDirectory, "Resources", "emi", "desk-lines.json")));
+
+    [Fact]
+    public Task AskTypesThenWaitsAndParksSpeechUntilAChip() => Run(win =>
     {
+        var clock = new Steps(win);
         string? effect = null;
         win.RunAskEffect = value => { Assert.False(win.AskLive); effect = value; };
         win.ShowAsk(Ask());
         Assert.Equal(".", win.MomentBubbleText);
-        win.SpeakLine(Line("parked"));
-        win.SpeakLine(Line("dropped"));
+        win.SpeakLine(Line("older"));
+        win.SpeakLine(Line("newest"));
         Assert.Equal(".", win.MomentBubbleText);
-        await Pump(1500);
+        clock.Advance(1360);
         Assert.Equal("a question?", win.MomentBubbleText);
+        win.SpeakLine(new LineDraw("hold", "test", "", "-_-", null, 2, true, 500));
+        clock.Advance(1600);
         Assert.True(win.AskLive);
-        await Pump(1600);
-        Assert.True(win.AskLive);
+        Assert.Equal("a question?", win.MomentBubbleText);
         win.AnswerAsk(0);
         Assert.False(win.AskLive);
         Assert.Equal("book:open", effect);
-        await Pump(2400);
-        Assert.Equal("parked", win.MomentBubbleText);
+        Assert.Equal(".", win.MomentBubbleText);
+        clock.Advance(420);
+        Assert.Equal("..", win.MomentBubbleText);
+        clock.Advance(480 + 1360);
+        Assert.Equal("newest", win.MomentBubbleText);
+        return Task.CompletedTask;
     });
 
     [Fact]
-    public Task FullScreenMomentCancelsAskAndTeardownCancelsTimers() => Run(async win =>
+    public Task ReplyLandsAfterAChip() => Run(win =>
     {
+        var clock = new Steps(win);
+        win.RunAskEffect = _ => { };
+        win.ShowAsk(Ask());
+        clock.Advance(1360);
+        win.AnswerAsk(1);
+        clock.Advance(1360);
+        Assert.Equal("reply.no", win.MomentBubbleText);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PresentationCancelsTheAsk() => Run(win =>
+    {
+        new Steps(win);
+        win.ShowAsk(Ask());
+        win.BeginPresentation(() => { });
+        try { Assert.False(win.AskLive); }
+        finally { win.EndPresentation(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FullScreenMomentCancelsAskAndTeardownCancelsTimers() => Run(win =>
+    {
+        var clock = new Steps(win);
         win.ShowAsk(Ask());
         EmiDeskService.Instance.Fire("videoRunning");
         Assert.False(win.AskLive);
         win.StopMomentBubble();
-        await Pump(1500);
+        clock.Advance(1500);
         Assert.False(win.AskLive);
         Assert.DoesNotContain(win.BubbleHost.Children, c => c.IsVisible);
+        return Task.CompletedTask;
     });
 
     [Fact]
@@ -92,10 +145,11 @@ public sealed class EmiMomentBubbleTests
             service.MomentFired += heard;
             try { service.Window!.ToggleRing(); Assert.Equal("ringOpen", moment); }
             finally { service.MomentFired -= heard; }
+            var clock = new Steps(service.Window!);
             service.Window!.ShowAsk(Ask());
             PanicSurfaces.All.Single(s => s.Id == "emi-moment-bubble").Stop(null);
             Assert.False(service.Window.AskLive);
-            await Pump(1500);
+            clock.Advance(1500);
             Assert.DoesNotContain(service.Window.BubbleHost.Children, c => c.IsVisible);
         }
         finally

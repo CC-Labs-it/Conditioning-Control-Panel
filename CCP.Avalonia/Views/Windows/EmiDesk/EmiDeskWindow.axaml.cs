@@ -903,7 +903,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>Kill the running chain without firing its done hook.</summary>
         public void CancelChain()
         {
-            if (!AskLive) { _speechTimer?.Stop(); _speechTimer = null; }
+            if (!AskLive) StopSpeechTimer();
             try { OnBubbleTextCore(null); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
         }

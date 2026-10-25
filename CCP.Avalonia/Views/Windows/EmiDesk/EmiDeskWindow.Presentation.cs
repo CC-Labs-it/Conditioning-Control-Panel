@@ -23,7 +23,7 @@ public partial class EmiDeskWindow
         _stopPresentation = stop;
         try
         {
-            FinishSummon(); CancelChain(); CloseRing(); CloseOptionsPanel(); CloseBook();
+            FinishSummon(); CancelChain(); CancelAsk(); _holdTimerSlot?.Stop(); CloseRing(); CloseOptionsPanel(); CloseBook();
             StopIdleBeats(); DisarmPet(); _dragging = false; SweepFx(all: true); TearDownReactions();
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] presentation setup step failed"); }

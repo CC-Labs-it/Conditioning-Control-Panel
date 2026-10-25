@@ -13,7 +13,31 @@ public partial class EmiDeskWindow
 {
     private StackPanel? _speech, _answerChips;
     private TextBlock? _speechText;
-    private DispatcherTimer? _speechTimer;
+    // WPF keeps the typing/ask chain and the hold (held face, parked-line release) on separate
+    // timers (Bubble.cs:101 _holdTimer), so a release never cuts the reply's own typing.
+    private OneShot? _speechTimerSlot, _holdTimerSlot;
+    private OneShot SpeechTimer => _speechTimerSlot ??= new OneShot(this);
+    private OneShot HoldTimer => _holdTimerSlot ??= new OneShot(this);
+    /// <summary>Test seam (P08): start a one-shot of N ms, return its stop. Tests swap in a stepped clock.</summary>
+    internal Func<int, Action, Action> StartTimer = (ms, tick) =>
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ms) };
+        timer.Tick += (_, _) => { timer.Stop(); tick(); };
+        timer.Start();
+        return timer.Stop;
+    };
+    private sealed class OneShot(EmiDeskWindow owner)
+    {
+        private Action? _stop;
+        private int _epoch;
+        public void After(int ms, Action action)
+        {
+            Stop();
+            int epoch = _epoch;
+            _stop = owner.StartTimer(ms, () => { if (epoch == _epoch) { _stop = null; action(); } });
+        }
+        public void Stop() { _stop?.Invoke(); _stop = null; _epoch++; }
+    }
     private AskDraw? _ask;
     private LineDraw? _parkedLine;
     public bool AskLive => _ask != null;
@@ -79,14 +103,8 @@ public partial class EmiDeskWindow
         if (!AskLive) PaintSpeech(text);
     }
 
-    private void AfterSpeech(int milliseconds, Action action)
-    {
-        _speechTimer?.Stop();
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(milliseconds) };
-        _speechTimer = timer;
-        timer.Tick += (_, _) => { timer.Stop(); if (ReferenceEquals(_speechTimer, timer)) { _speechTimer = null; action(); } };
-        timer.Start();
-    }
+    private void AfterSpeech(int milliseconds, Action action) => SpeechTimer.After(milliseconds, action);
+    internal void StopSpeechTimer() => _speechTimerSlot?.Stop();
 
     private void TypeSpeech(string text, string face, Action landed)
     {
@@ -110,12 +128,15 @@ public partial class EmiDeskWindow
     public void SpeakLine(LineDraw line)
     {
         if (PresentationActive) return;
-        if (AskLive && !line.Hold) { _parkedLine ??= line; return; }
+        // WPF :511: one slot, newest wins.
+        if (AskLive && !line.Hold) { _parkedLine = line; return; }
         EmiLineEngine.Instance.Ack(line.Id, spoke: !line.Hold);
         if (line.Hold)
         {
-            _speechTimer?.Stop(); PaintSpeech(null); DrawFace(line.Face);
-            AfterSpeech(line.HoldMs > 0 ? line.HoldMs : 1400, () => DrawFace(EmiChains.RestFace));
+            // WPF HoldFace (:545) runs on the hold timer and leaves an open question alone.
+            if (!AskLive) { StopSpeechTimer(); PaintSpeech(null); }
+            DrawFace(line.Face);
+            HoldTimer.After(line.HoldMs > 0 ? line.HoldMs : 1400, () => DrawFace(EmiChains.RestFace));
         }
         else if (!string.IsNullOrWhiteSpace(line.Text)) Say(line.Text, line.Face);
         else DrawFace(line.Face);
@@ -158,7 +179,7 @@ public partial class EmiDeskWindow
 
     private void ClearAsk()
     {
-        _ask = null; _speechTimer?.Stop(); _speechTimer = null;
+        _ask = null; StopSpeechTimer();
         _answerChips?.Children.Clear(); PaintSpeech(null);
     }
 
@@ -178,13 +199,13 @@ public partial class EmiDeskWindow
     private void ReleaseParkedLine()
     {
         var line = _parkedLine; _parkedLine = null;
-        if (line != null) AfterSpeech(900, () => SpeakLine(line));
+        if (line != null) HoldTimer.After(900, () => SpeakLine(line)); // WPF :855
     }
 
     internal void StopMomentBubble()
     {
         if (AskLive) { EmiLineEngine.Instance.NoteAskIgnored(); _ask = null; }
-        _parkedLine = null; _speechTimer?.Stop(); _speechTimer = null;
+        _parkedLine = null; StopSpeechTimer(); _holdTimerSlot?.Stop();
         _answerChips?.Children.Clear();
         if (_speech != null) _speech.IsVisible = false;
     }
