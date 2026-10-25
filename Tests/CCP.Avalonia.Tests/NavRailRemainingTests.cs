@@ -54,15 +54,13 @@ public sealed class NavRailRemainingTests
         var homeEnglish = loc.GetEnglish(NavSections.Find(NavSections.Home)!.LabelKey)!;
         var searchEnglish = loc.GetEnglish("nav_search_label")!;
         var backEnglish = loc.GetEnglish("nav_back_label")!;
-        var webEnglish = loc.GetEnglish("nav_door_webapp")!;
         CoreMods.MakeModAwareProvider = text => text == homeEnglish ? "The nest" : text == searchEnglish ? "Seek"
-            : text == backEnglish ? "Retreat" : text == webEnglish ? "Hive" : text;
+            : text == backEnglish ? "Retreat" : text;
         CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, false));
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("THE NEST", home.Text);
         Assert.Equal("Seek", w.Named<TextBlock>("TxtNavSearchLabel")!.Text);
         Assert.Equal("Retreat", w.Named<TextBlock>("TxtNavBackLabel")!.Text);
-        Assert.Equal("Hive", w.Named<TextBlock>("TxtNavWebAppLabel")!.Text);
 
         loc.SetLanguage("de"); Dispatcher.UIThread.RunJobs();
         Assert.Equal("THE NEST", home.Text); // a changed English label overrides localization

@@ -339,7 +339,8 @@
             </Border>
           </Grid>
           <Grid x:Name="SlotDtrh">
-            <Border Theme="{StaticResource PlayCardT2}">
+            <Border Theme="{StaticResource PlayCardT2}"
+                    fx:TierFxBorder.Tier="2" fx:TierFxBorder.RimThickness="3">
               <Grid>
                 <Grid RowDefinitions="Auto,Auto,*,Auto">
                   <Border Grid.Row="0" Theme="{StaticResource PlayCardArtPlate}">
@@ -365,7 +366,8 @@
             </Border>
           </Grid>
           <Grid x:Name="SlotArcademy">
-            <Border Theme="{StaticResource PlayCardT2}">
+            <Border Theme="{StaticResource PlayCardT2}"
+                    fx:TierFxBorder.Tier="2" fx:TierFxBorder.RimThickness="3">
               <Grid>
                 <Grid RowDefinitions="Auto,Auto,*,Auto">
                   <Border Grid.Row="0" Theme="{StaticResource PlayCardArtPlate}">

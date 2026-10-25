@@ -24,8 +24,8 @@
 //   - The Bark and EmiDesk open-counter hooks run in ShowTab, as on WPF.
 //   - The keys that are WINDOWS, not tabs, and the one launcher door: "patreon" (Settings · Account,
 //     as WPF ShowAppInfoPopup - wired), "fyp" (OpenFypFeed), "justdrop" (the shop host).
-//     fyp opens the feed (GameWindow.Fyp.cs); justdrop opens its GameWindow (MainShellWindow.JustDrop.cs). The "webapp" door is
-//     wired (DoorWebApp_Click opens it through the Launcher).
+//     fyp opens the feed (GameWindow.Fyp.cs); justdrop opens its GameWindow (MainShellWindow.JustDrop.cs). The Web App
+//     is the Play GAMES card (WPF 7e50c9381 took it off the rail); OpenPlayWebApp opens it through the Launcher.
 //
 // Every panel and door is resolved by x:Name through FindControl, never by generated field, so
 // a panel this head does not carry is skipped rather than a compile error.
@@ -316,19 +316,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static string? NavDoorForTab(string tab) =>
             NavSections.SectionForTab(tab == "lab" ? "play" : tab) is { } s ? (s == NavSections.Settings ? "appsettings" : s) : null;
 
-        // WPF MainWindow.TabNavigation.cs:986-994: open the web app, retire the banner beat.
+        // WPF MainWindow.PlayTab.cs OpenPlayWebApp (the Play card): open the web app, retire the banner beat.
         // No browser -> show the URL, as WPF's BrowserLauncher.OpenUrlOrPrompt does.
-        private async void DoorWebApp_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        internal async void OpenPlayWebApp()
         {
             const string url = "https://app.cclabs.app";
             try
             {
-                if (!await Platform.ExternalOpener.OpenAsync(this, url))
+                if (!await OpenWebAppLink(this, url))
                     await Dialogs.MessageDialog.ShowLinkCopiedAsync(this, url, "open the CC Labs web app");
                 RetireWebBannerBeat();
             }
-            catch (Exception ex) { Serilog.Log.Warning(ex, "DoorWebApp_Click failed"); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "OpenPlayWebApp failed"); }
         }
+
+        /// <summary>Test seam: the sandbox refuses the public URL under test.</summary>
+        internal static System.Func<global::Avalonia.Controls.TopLevel, string, System.Threading.Tasks.Task<bool>> OpenWebAppLink =
+            (top, url) => Platform.ExternalOpener.OpenAsync(top, url);
 
         // WPF MainWindow.TabNavigation.cs:1066: the Media Log is a window, deliberately no ShowTab.
         private void BtnNavMediaLog_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)

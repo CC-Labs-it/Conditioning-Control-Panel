@@ -14,9 +14,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        // WPF OpenPlayWebApp and the rail door use the same browser fallback and banner retirement.
-        internal void OpenPlayWebApp() => DoorWebApp_Click(this, new global::Avalonia.Interactivity.RoutedEventArgs());
-
         /// <summary>Builds the Mantra Lab. Tests swap it to make the open fail.</summary>
         internal static System.Func<MantraWindow> NewMantraWindow = () => new MantraWindow();
 

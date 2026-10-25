@@ -21,9 +21,9 @@ namespace CCP.Avalonia.Tests;
 public sealed class PlayWallTests
 {
     [Fact]
-    public async Task WebAppCardUsesBrowserFallbackThenRetiresBanner()
+    public void WebAppCardUsesBrowserFallbackThenRetiresBanner()
     {
-        await AvaloniaTestDispatcher.RunAsync(async () =>
+        AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
                 AppBuilder.Configure<AvApp>().UseSkia()
@@ -31,6 +31,10 @@ public sealed class PlayWallTests
                     .SetupWithoutStarting();
             var seen = CoreSettings.Current.SeenFeatureIntros;
             bool hadKey = seen.Remove(MainShellWindow.WebBannerSeenKey);
+            var previousOpen = MainShellWindow.OpenWebAppLink;
+            var opened = new System.Collections.Generic.List<string>();
+            bool browserTakesIt = false;
+            MainShellWindow.OpenWebAppLink = (_, url) => { opened.Add(url); return Task.FromResult(browserTakesIt); };
             var shell = new MainShellWindow();
             shell.Show();
             try
@@ -40,22 +44,25 @@ public sealed class PlayWallTests
                 var play = shell.Named<Control>("PlayTab")!;
                 var button = play.FindControl<Button>("BtnPlayWebApp")!;
                 Assert.True(button.IsEnabled);
+                // No browser takes the link: WPF OpenUrlOrPrompt copies it and says so.
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                // The sandbox refuses the public URL: no real browser or desktop is touched.
-                for (int i = 0; i < 50 && !shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>().Any(); i++)
-                {
-                    Dispatcher.UIThread.RunJobs();
-                    await Task.Delay(10);
-                }
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(new[] { "https://app.cclabs.app" }, opened);
                 var prompt = Assert.Single(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>());
                 Assert.Contains("https://app.cclabs.app", prompt.FindControl<TextBlock>("TxtMessage")!.Text);
                 Assert.DoesNotContain(MainShellWindow.WebBannerSeenKey, seen);
                 prompt.Close();
-                for (int i = 0; i < 50 && !seen.Contains(MainShellWindow.WebBannerSeenKey); i++)
-                {
-                    Dispatcher.UIThread.RunJobs();
-                    await Task.Delay(10);
-                }
+                Dispatcher.UIThread.RunJobs();
+                Assert.Contains(MainShellWindow.WebBannerSeenKey, seen);
+                Assert.Equal("play", shell.CurrentTab);
+
+                // The browser opens: no prompt, and the beat retires.
+                seen.Remove(MainShellWindow.WebBannerSeenKey);
+                browserTakesIt = true;
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(2, opened.Count);
+                Assert.Empty(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>());
                 Assert.Contains(MainShellWindow.WebBannerSeenKey, seen);
                 Assert.Equal("play", shell.CurrentTab);
             }
@@ -63,6 +70,7 @@ public sealed class PlayWallTests
             {
                 foreach (var window in shell.OwnedWindows.ToArray()) window.Close();
                 shell.Close();
+                MainShellWindow.OpenWebAppLink = previousOpen;
                 if (!hadKey) seen.Remove(MainShellWindow.WebBannerSeenKey);
                 else if (!seen.Contains(MainShellWindow.WebBannerSeenKey)) seen.Add(MainShellWindow.WebBannerSeenKey);
             }
@@ -142,6 +150,13 @@ public sealed class PlayWallTests
                     games.Children.Skip(4).Select(c => c.Name));
                 foreach (var name in new[] { "BackRoom", "Dtrh", "Arcademy", "RacingThoughts", "WebApp" })
                     Assert.NotNull(C<Border>("Play" + name + "HeroPlate").Background);
+                // WPF PlayCardT2 (PlayTabView.xaml:131-132): tier-2 living-metal rim, 3 px.
+                foreach (var slot in new[] { "SlotBreakout", "SlotDtrh", "SlotArcademy" })
+                {
+                    var card = (Border)C<Grid>(slot).Children[0];
+                    Assert.Equal(2, ConditioningControlPanel.Avalonia.Controls.TierFxBorder.GetTier(card));
+                    Assert.Equal(3, ConditioningControlPanel.Avalonia.Controls.TierFxBorder.GetRimThickness(card));
+                }
 
                 // "Configure in settings" lands on the Devices section (WPF OpenDeviceSettings).
                 C<Button>("BtnOpenDeviceSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
