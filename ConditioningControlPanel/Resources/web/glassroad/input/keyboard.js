@@ -21,6 +21,8 @@ export function createKeyboard({ target = window } = {}) {
   const held = (what) => { for (const c of down) if (HELD[c] === what) return true; return false; };
 
   function onKey(e) {
+    // Focus and modifiers may change between a press and its release.
+    if (e.type === 'keyup') { down.delete(e.code || ''); return; }
     if (e.altKey || e.metaKey || e.ctrlKey) return;
     const code = e.code || '', tag = (e.target && e.target.tagName) || '';
     if (TYPING.test(tag)) return;

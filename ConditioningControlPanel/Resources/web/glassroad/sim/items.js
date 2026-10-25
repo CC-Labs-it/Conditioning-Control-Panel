@@ -101,7 +101,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
   const rs = (i) => (R[i] ||= { eff: null, viewEndT: -1e9, ledger: [], glass: 0, golden: 0, echo: 0, echoT: 0, snapGuard: 0 });
   const racer = (i) => (list[i] && list[i].i === i ? list[i] : list.find((r) => r.i === i));
   const free = (r) => !r.finished && (r.st[S.respawnPhase] === RESPAWN.NONE || r.st[S.respawnPhase] === RESPAWN.GRACE);
-  const low = (r) => r.st[S.grounded] || r.st[S.height] <= g('pickHeightM');
+  const low = (r) => r.st[S.grounded] || Math.abs(r.st[S.height]) <= g('pickHeightM');
   const near = (r, s, x, rad, seg = -1) => {
     if (!track.forks?.length) return Math.abs(sd(r.st[S.s], s)) <= rad && Math.abs(r.st[S.lateral] - x) <= rad;
     const f = track.pathFrameAt(s, seg), delta = f.p.map((v, i) => r.st[S.posX + i] - v - f.b[i] * x);
