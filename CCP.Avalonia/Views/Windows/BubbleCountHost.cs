@@ -33,6 +33,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public bool OtherInteractionActive =>
             CoreEngine.Video?.IsPlaying == true || LockCardWindow.IsAnyOpen() || PopQuizWindow.IsAnyOpen();
 
+        public bool FeedOwnsTheScreen => Dispatcher.UIThread.Invoke(Games.GameWindow.IsForYouOnScreen);
+
+        // ponytail: shared overlay parking is unported; reuse the existing video text hold.
+        public void SetEffectsHold(bool hold) => Dispatcher.UIThread.Invoke(() =>
+        {
+            // WPF ReleaseFullscreenHold: a video that took over retains its own text pause.
+            if (hold || CoreEngine.Video?.IsPlaying != true) Overlays.BouncingTextOverlay.PauseForVideo(hold);
+        });
+
+        public void ShowNoVideos() => Dispatcher.UIThread.Invoke(() =>
+        {
+            var packs = ContentPackStore.Current;
+            var key = BubbleCountScheduler.NoVideosMessageKey(packs?.InstalledPackIds.Count ?? 0,
+                packs?.GetActivePackIds().Count ?? 0);
+            App.Notifications.Show(global::ConditioningControlPanel.Localization.Loc.Get(key), Helpers.NotificationType.Warning);
+        });
+
         // The app seeds CoreDispatch (AvaloniaCoreDispatch), but headless tests do not: every door hops onto the UI thread.
         // WPF skips the game outright when the shared LibVLC is unusable (BubbleCountService.cs:373):
         // opening it would end as a failed count and, in strict mode, retry forever.
