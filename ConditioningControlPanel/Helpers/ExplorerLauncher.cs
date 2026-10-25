@@ -90,43 +90,12 @@ namespace ConditioningControlPanel.Helpers
             }
         }
 
-        /// <summary>
-        /// Command line that opens Explorer on <paramref name="fullPath"/>'s folder with the file
-        /// selected. Null if the path cannot be expressed safely on a command line.
-        /// </summary>
-        internal static string? BuildRevealArguments(string fullPath)
-        {
-            if (!IsQuotable(fullPath)) return null;
-            // The switch must stay outside the quotes: explorer parses `/select,` off the front and
-            // treats the rest as the target. Quoting the pair together is what broke #1108.
-            return $"/select,\"{fullPath}\"";
-        }
+        /// <summary>Command line that opens Explorer on <paramref name="fullPath"/>'s folder with the file
+        /// selected; null if the path cannot be expressed safely. The one copy is in CCP.Core.</summary>
+        internal static string? BuildRevealArguments(string fullPath) => RevealArguments.ExplorerSelect(fullPath);
 
-        /// <summary>
-        /// Command line that opens Explorer on the folder <paramref name="fullPath"/>. Null if the
-        /// path cannot be expressed safely on a command line.
-        /// </summary>
-        internal static string? BuildFolderArguments(string fullPath)
-        {
-            if (!IsQuotable(fullPath)) return null;
-            // No switch here, so the quotes are only there for the spaces.
-            return $"\"{fullPath}\"";
-        }
-
-        /// <summary>
-        /// A double quote cannot appear in a Windows path, so one showing up means the string is
-        /// not a path we can hand to explorer without changing where it points.
-        /// </summary>
-        private static bool IsQuotable(string fullPath)
-        {
-            if (string.IsNullOrWhiteSpace(fullPath)) return false;
-            if (fullPath.IndexOf('"') >= 0)
-            {
-                App.Logger?.Warning("ExplorerLauncher: refusing path containing a quote: {Path}", fullPath);
-                return false;
-            }
-            return true;
-        }
+        /// <summary>Command line that opens Explorer on the folder <paramref name="fullPath"/>; null as above.</summary>
+        internal static string? BuildFolderArguments(string fullPath) => RevealArguments.ExplorerFolder(fullPath);
 
         private static bool Launch(string arguments)
         {
