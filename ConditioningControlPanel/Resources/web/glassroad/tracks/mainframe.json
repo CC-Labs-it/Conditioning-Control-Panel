@@ -497,8 +497,8 @@
   ],
   "jumps": [],
   "routes": [
-    {"id":"bus-cut-1","kind":"drop","side":"L","from":394,"to":398,"open":{"ds":3,"len":25},"land":{"from":441,"to":457},"pad":{"node":450,"x":-4}},
-    {"id":"bus-cut-2","kind":"drop","side":"L","from":415,"to":419,"open":{"ds":3,"len":25},"land":{"from":462,"to":478},"pad":{"node":471,"x":-4}}
+    {"id":"bus-cut-1","kind":"drop","side":"L","from":394,"to":398,"land":{"from":441,"to":457},"pad":{"node":450,"x":-4}},
+    {"id":"bus-cut-2","kind":"drop","side":"L","from":415,"to":419,"land":{"from":462,"to":478},"pad":{"node":471,"x":-4}}
   ],
   "courts": [],
   "fields": [

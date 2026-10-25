@@ -24,9 +24,13 @@ const GAPS = {
   'route.cleanHoldS': 0.6,
   'route.kickUpMps': 2.5,     // EDGES lane: the opening's kicker lip throws a kart driving off it up this fast
   'route.holdSteer': 0.25,    // polish 6: a grounded kart turning away from the opening this hard is held like the rail
-  'route.airPull': 1,         // in the air over the landing road: drift back to its middle at this many m/s per metre off
-  'route.airMaxMps': 5,       // at most this fast
-  'route.airAccel': 6,        // changing by at most this many m/s per second
+  'route.airPull': 2,         // in the air near the landing road: drift back toward its middle
+  'route.airMaxMps': 10,
+  'route.airAccel': 30,
+  'route.catchMarginM': 8,    // guide nearby approaches, with no extra physical support or landing credit
+  'route.alignTcS': 0.18,
+  'route.alignRadS': 4,       // bounded turn toward the landing direction, in air and just after contact
+  'route.alignHoldS': 0.65,
   // polish 6 THE LOOP (sim/kart.js): on a magnet stretch the road carries the kart round
   'loop.guideTcS': 0.15,      // the nose eases toward its own line up the road with this time constant
   'loop.guideAheadS': 0.25,   // aiming this many seconds of speed ahead (at least 4 m)

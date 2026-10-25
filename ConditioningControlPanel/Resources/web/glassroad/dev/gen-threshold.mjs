@@ -134,7 +134,7 @@ const ITEM_JUMP_CLEAR_M = 40, ITEM_OPEN_CLEAR_M = 30, ITEM_PAD_CLEAR_M = 8, ITEM
 // keyhole. land may span pieces (land .. landEnd); drop is the allowed height range over the landing road.
 const ROUTES = [
   { id: 'dare', kind: 'gap', side: 'L', piece: 'c1', from: 0.6, to: 0.99, land: 'c3', landFrom: 0.5, landTo: 0.98,
-    open: { ds: 3.5, len: 15 }, pad: { at: 0.85, ds: 0, x: 0 }, drop: [3, 8], reachM: 6 },
+    pad: { at: 0.85, ds: 0, x: 0 }, drop: [3, 8], reachM: 6 },
 ];
 // Falls (contract P6.2): open stretches over a road EARLIER in the lap; a kart that falls lands there and
 // loses ground. side L | R | both.

@@ -136,7 +136,7 @@ test('shortcut: a kart that does not steer for it never falls in (centre line, h
     for (const [v0, boosted] of [[24, false], [30, false], [30, true]]) {
       for (const lat0 of [-4, -2, 0, 2, 4]) {
         // the centre line: the nose at the road centre 12 m ahead
-        const centre = run({ lat0, v0, boosted, mode, maxS: 5, hands: (st) => { const f = track.frameAt(st[S.s] + 12); return pursue(st, f.p[0], f.p[2]); } });
+        const centre = run({ lat0, v0, boosted, mode, maxS: 6, hands: (st) => { const f = track.frameAt(st[S.s] + 12); return pursue(st, f.p[0], f.p[2]); } });
         assert.ok(!centre.landed && !centre.fell && !centre.names.includes('route-drop'), mode + ' centre ' + v0 + ' ' + lat0 + ': ' + centre.names.join(','));
         assert.ok(wrap(centre.st[S.s] - R0.openS1, L) < L / 2, 'went on round the helix');
       }

@@ -50,7 +50,7 @@ export function buildKeep() {
     const landFrom = node('north-tower', (365 + i * 360) / 810), landTo = node('north-tower', (485 + i * 360) / 810);
     for (let k = from; k < to; k++) nodes[k].flags = ['railL'];
     return { id: 'keep-stair-cut-' + i, kind: 'drop', side: 'R', from, to,
-      open: { ds: 2, len: 28 }, land: { from: landFrom, to: landTo }, pad: { node: node('north-tower', (430 + i * 360) / 810), x: 3 } };
+      land: { from: landFrom, to: landTo }, pad: { node: node('north-tower', (430 + i * 360) / 810), x: 3 } };
   });
   const track = {
     format: 'glassroad-track', version: 1, id: 'keep', name: { en: 'The Keep' }, author: 'ccl', created: '2026-10-24',

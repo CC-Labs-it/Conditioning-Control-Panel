@@ -611,7 +611,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (wordFx) wordFx.update(dt, view.camera);
     if (roadWords) roadWords.update(view.song || null, view.songS, k, mf, { gentle, paused: !!view.paused });
     if (wordRush) wordRush.update(dt, !!view.paused);
-    phraseGates.update(k, dt, { paused: !!view.paused, mode: view.mode });
+    phraseGates.update(k, dt, { paused: !!view.paused, mode: view.mode, song: view.song, songS: view.songS });
   }
 
   let disposed = false;
