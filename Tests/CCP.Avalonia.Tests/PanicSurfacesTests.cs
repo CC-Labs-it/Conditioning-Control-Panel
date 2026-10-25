@@ -98,6 +98,7 @@ public sealed class PanicSurfacesTests
         "chaos-field-fx",
         "chaos-flash",
         "chaos-intro",
+        "emi-moment-bubble",
         "chaos-skia-fx",
         "chaos-vibe-trail",
         "companion-transcript",

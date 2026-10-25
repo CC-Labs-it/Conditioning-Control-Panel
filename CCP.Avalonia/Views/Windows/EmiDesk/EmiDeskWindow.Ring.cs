@@ -31,6 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         partial void OnTearDownCore()
         {
+            StopMomentBubble();
             try { _ring?.CloseRing(); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] ring tear-down failed"); }
         }
@@ -59,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             ring.SetWidgetGeometry(BodyPx(), AnchorPx());
             ring.OpenRing();
             if (!ring.IsOpen) return;
+            EmiDeskService.Instance.Fire("ringOpen");
             try { EmiState.NoteRingOpen(); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] ring-open bookkeeping failed"); }
         }

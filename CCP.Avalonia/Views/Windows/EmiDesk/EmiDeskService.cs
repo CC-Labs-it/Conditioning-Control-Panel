@@ -17,8 +17,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// Dismiss :420, EnsureWindow :607, MaybeAskAboutMuting :1541, AvatarMuted :80. The dock chip,
     /// the hover x and the settings switch all route here, so none of them owns her twice.</para>
     ///
-    /// <para>ponytail: not here yet, each a named WPF member: the moment bus (<c>Fire</c>, greeting,
-    /// backSoon/weekend/bedtime beats; EmiLineEngine and EmiState are in Core, unwired here), the nudge machine, the
+    /// <para>ponytail: not here yet, each a named WPF member: greeting (
+    /// backSoon/weekend/bedtime beats; EmiLineEngine and EmiState are in Core), the nudge machine, the
     /// knock (<c>TryKnock</c>) and the tube hand-off wiring (the <c>TubeDeskVisibility</c> rule itself is in
     /// CCP.Core; only the head call that hides/restores the desk is missing). The system-wide chord
     /// (<c>ApplyHotkey</c>) is here, grabbed through Platform/X11SummonChord.</para>
@@ -26,6 +26,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     internal sealed class EmiDeskService
     {
         public static EmiDeskService Instance { get; } = new();
+
+        private readonly EmiMomentBus _moments = new(EmiLineEngine.Instance);
+        private EmiDeskService()
+        {
+            _moments.SpeakingRequested += (_, moment) =>
+            {
+                void Deliver()
+                {
+                    if (!IsOut || _window is not { IsVisible: true, PresentationActive: false } win) return;
+                    try
+                    {
+                        var (line, ask) = _moments.Draw(moment);
+                        if (ask != null) win.ShowAsk(ask);
+                        else if (line != null) win.SpeakLine(line);
+                    }
+                    catch (Exception ex) { Log.Debug(ex, "[EmiDesk] speaking failed"); }
+                }
+                if (Dispatcher.UIThread.CheckAccess()) Deliver();
+                else Dispatcher.UIThread.Post(Deliver);
+            };
+            EmiLineEngine.AskSituationProbe = () => IsOut && _window is { IsVisible: true, PresentationActive: false, AskLive: false };
+            // ponytail: only the existing book surface and no-op effects are feasible in part A.
+            EmiLineEngine.EffectFeasibleProbe = effect => effect is "none" or "book:open";
+        }
+        public event EventHandler<EmiMoment>? MomentFired
+        {
+            add => _moments.MomentFired += value;
+            remove => _moments.MomentFired -= value;
+        }
+        public void Fire(string id, object? context = null) => _moments.Fire(id, context, IsOut);
+        public void ReleaseHold(string id) => _moments.ReleaseHold(id);
+        internal void StopMomentBubble() { _window?.StopMomentBubble(); Fire("panicPressed"); }
 
         private EmiDeskWindow? _window;
         private long _summonGen;

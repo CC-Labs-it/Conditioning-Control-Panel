@@ -673,3 +673,5 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+1. EMI moment host part A. WPF `ConditioningControlPanel/Services/EmiDesk/EmiDeskService.cs` and `ConditioningControlPanel/Windows/EmiDesk/EmiDeskWindow.Bubble.cs`. Rows: `win-emi-desk`, `win-emi-codex`. Summon EMI and open the ring: a ringOpen moment reaches the bus (authored odds may choose silence). Run EmiMomentBusTests and EmiMomentBubbleTests: verify persistent question after typing dots, one line parked behind it, chip answer before effect, full-screen cancellation, and panic clearing the service-owned bubble without a late timer repaint. Book-offer scheduling and other effects remain outside part A.
