@@ -3253,3 +3253,7 @@ Roster entrance stagger (WPF StaggerSubjectCards/MotionFx.StaggerIn) on the shar
 
 ## avalonia-port/wire-views-tab-deeper-b: +550
 - Deeper tab: real multi-file import + window drop through Core EnhancementImportBatch (WPF shares it) with 1.8 s row reveal; Tutorial/welcome Tour via TutorialHead (panic closes it); webcam chip follows live tracker state (stale-run publishes dropped). Row views-tab-deeper wired.
+
+## avalonia-port/sync7-scrolller-a: +308
+- "via Scrolller" credit: Core ScrolllerCreditRules (WPF forwards), badge on First Show + Media History, "Media from Scrolller" line on Assets + launcher media dialog (rows 166, 193 ported).
+- Rows 152/153/170/251/256/268 deferred to sync7-scrolller-a-next (no Scrolller feed on video/flash, no GIF cascade on this head).
