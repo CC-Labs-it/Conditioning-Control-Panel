@@ -121,10 +121,11 @@ public sealed class DeeperPlayerWebcamTests
         var win = Player();
         bool running = false, accept = false, succeed = false;
         int starts = 0, stops = 0, messages = 0;
+        string? lastMessage = null;
         win.WebcamRunning = () => running;
         win.StartWebcam = () => { starts++; running = succeed; return Task.FromResult(succeed); };
         win.StopWebcam = () => { stops++; running = false; return Task.CompletedTask; };
-        win.WebcamMessage = (_, confirm) => { messages++; return Task.FromResult(confirm && accept); };
+        win.WebcamMessage = (m, confirm) => { messages++; lastMessage = m; return Task.FromResult(confirm && accept); };
         try
         {
             settings.WebcamConsentGiven = false;
@@ -138,6 +139,8 @@ public sealed class DeeperPlayerWebcamTests
             await win.TogglePlayerWebcamAsync();
             Assert.Equal(1, starts);
             Assert.Equal(4, messages); // first-time, declined, accepted, failed
+            // WPF shows the state name, never the tracker's English LastError.
+            Assert.Equal(string.Format(Loc.Get("deeper_player_eye_tracking_start_failed_fmt"), "Error"), lastMessage);
             succeed = true;
             await win.TogglePlayerWebcamAsync();
             Assert.Equal("deeper_player_btn_eye_tracking_stop", Assert.IsType<IconLabel>(win.FindControl<Button>("BtnEyeTracking")!.Content).Key);

@@ -399,13 +399,16 @@
         <StackPanel Grid.Row="3" x:Name="MiniTimelinePanel" Margin="0,0,0,10"
                     IsVisible="False">
             <Border x:Name="WebcamBanner" IsVisible="False" Padding="10,6" Margin="0,0,0,6"
-                    Background="{DynamicResource DeeperAccentTransparent20Brush}" CornerRadius="4">
+                    Background="{DynamicResource DeeperAccentTransparent20Brush}" CornerRadius="6"
+                    BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}" BorderThickness="1">
                 <DockPanel>
                     <Button x:Name="BtnWebcamBannerDismiss" DockPanel.Dock="Right" Padding="6,2"
                             AutomationProperties.Name="{loc:Str inbox_dismiss}">
                         <fx:IconGlyph Kind="Dismiss" Size="12"/>
                     </Button>
                     <Button x:Name="BtnWebcamBannerEnable" DockPanel.Dock="Right" Margin="8,0"
+                            Padding="10,3" FontSize="11" BorderThickness="0" Foreground="White"
+                            Background="{DynamicResource DeeperAccentBrush}"
                             Content="{loc:Str deeper_player_webcam_banner_enable}"/>
                     <TextBlock x:Name="TxtWebcamBanner" TextWrapping="Wrap" VerticalAlignment="Center"/>
                 </DockPanel>

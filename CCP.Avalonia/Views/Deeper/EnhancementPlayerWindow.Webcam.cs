@@ -26,8 +26,8 @@ public partial class EnhancementPlayerWindow
     private void InitializeWebcamControls()
     {
         WebcamMessage = (message, confirm) => confirm
-            ? MessageDialog.ConfirmAsync(this, Loc.Get("deeper_player_btn_eye_tracking_start"), message)
-            : MessageDialog.ShowAsync(this, Loc.Get("deeper_player_btn_eye_tracking_start"), message);
+            ? MessageDialog.ConfirmAsync(this, IconText.BareLoc("deeper_player_btn_eye_tracking_start"), message)
+            : MessageDialog.ShowAsync(this, IconText.BareLoc("deeper_player_btn_eye_tracking_start"), message);
         this.FindControl<Button>("BtnWebcamBannerEnable")!.Click += async (_, _) => await EnableWebcamBannerAsync();
         this.FindControl<Button>("BtnWebcamBannerDismiss")!.Click += (_, _) =>
             this.FindControl<Border>("WebcamBanner")!.IsVisible = false;
@@ -120,7 +120,8 @@ public partial class EnhancementPlayerWindow
                 _playerStartedWebcam = true;
                 this.FindControl<Border>("WebcamBanner")!.IsVisible = false;
             }
-            else await ReportWebcamFailure(banner, WebcamTracker.Instance.LastError ?? "Stopped");
+            // WPF shows the state name (.xaml.cs:807,910), not the tracker's English LastError.
+            else await ReportWebcamFailure(banner, WebcamTracker.Instance.StartWasStopped ? "Stopped" : "Error");
         }
         catch (Exception ex)
         {
