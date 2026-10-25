@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -161,6 +162,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// (UpdatePatreonUI/UpdateDiscordUI/UpdateSubscribeStarUI/UpdateAccountLinkingUI) repaint it.</summary>
         public void Refresh()
         {
+            Find<Views.Tabs.ExclusivesTabView>("PlansView").RefreshVault();
+            if (this.FindAncestorOfType<MainShellWindow>() is { } shell)
+            {
+                var invites = Find<Views.Tabs.ExclusivesTabView>("PlansView")
+                    .FindControl<Views.Controls.Invites.InvitePanel>("InvitesHost")!;
+                invites.Read -= shell.ApplyInviteTicket;
+                invites.Read += shell.ApplyInviteTicket;
+                _ = invites.RefreshAsync();
+            }
             RefreshTierBadge();
             try { RefreshProviders(); RefreshLinking(); }
             catch (Exception ex) { Log.Debug("AccountSettingsSection.RefreshProviders failed: {E}", ex.Message); }

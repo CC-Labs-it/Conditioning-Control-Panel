@@ -59,6 +59,55 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             this.FindControl<ItemsControl>("ExclusivesShelf")!.SizeChanged += (_, e) => { if (e.WidthChanged) FitShelf(); };
         }
 
+        private bool _plansMode;
+        private AppSettingsTabView? _plansSettings;
+        private bool _plansRoom;
+        internal bool PlansRoomRequested => _plansRoom;
+
+        /// <summary>WPF Account &amp; Plans: header, Premium door and invites, without a nested scroller.</summary>
+        public bool PlansMode
+        {
+            get => _plansMode;
+            set
+            {
+                _plansMode = value;
+                this.FindControl<ItemsControl>("ExclusivesShelf")!.IsVisible = !value;
+                this.FindControl<Border>("SpotlightCard")!.IsVisible = !value;
+                this.FindControl<Button>("BtnSeePremium")!.IsVisible = value;
+                foreach (var (name, key) in new[] {
+                    ("TxtVaultTitle", value ? "plans_header_title" : "premium_page_title"),
+                    ("TxtVaultSub", value ? "plans_header_sub" : "premium_page_sub") })
+                    this.FindControl<TextBlock>(name)!.Bind(TextBlock.TextProperty,
+                        (global::Avalonia.Data.Binding)new Localization.StrExtension(key).ProvideValue(null!));
+                var scroll = this.FindControl<ScrollViewer>("ContentScroll")!;
+                if (value && scroll.Content is Control content && scroll.Parent is Panel host)
+                {
+                    var index = host.Children.IndexOf(scroll);
+                    scroll.Content = null;
+                    host.Children.RemoveAt(index);
+                    host.Children.Insert(index, content);
+                }
+                RefreshVault();
+                UpdateMotion();
+            }
+        }
+
+        private void SeePremium_Click(object? sender, RoutedEventArgs e)
+            => this.FindAncestorOfType<Windows.MainShellWindow>()?.ShowTab("premium");
+
+        private void PlansSettingsChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+        {
+            if (e.Property == IsVisibleProperty) SyncPlansRoom();
+        }
+
+        private void SyncPlansRoom()
+        {
+            bool want = _plansSettings is { IsVisible: true, CheckedSectionKey: "account" };
+            if (want == _plansRoom) return;
+            _plansRoom = want;
+            if (want) StartAmbient(); else _ambientFx.Stop();
+        }
+
         public static readonly StyledProperty<double> CardWidthProperty = AvaloniaProperty.Register<ExclusivesTabView, double>(nameof(CardWidth), Services.UI.ExclusiveShelfFit.BaseWidth);
         public static readonly StyledProperty<double> CardHeightProperty = AvaloniaProperty.Register<ExclusivesTabView, double>(nameof(CardHeight), Services.UI.ExclusiveShelfFit.BaseHeight);
         public static readonly StyledProperty<double> GroupHeadWidthProperty = AvaloniaProperty.Register<ExclusivesTabView, double>(nameof(GroupHeadWidth), double.NaN);
@@ -84,7 +133,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CoreMods.ModChanged += OnModChanged;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             AmbientFxCanvas.Env.MotionGateChanged += UpdateMotion;
-            StartAmbient();
+            if (PlansMode)
+            {
+                _plansSettings = this.FindAncestorOfType<AppSettingsTabView>();
+                if (_plansSettings != null)
+                {
+                    _plansSettings.SectionChecked += SyncPlansRoom;
+                    _plansSettings.PropertyChanged += PlansSettingsChanged;
+                }
+                SyncPlansRoom();
+            }
+            else StartAmbient();
             UpdateMotion();
         }
 
@@ -114,6 +173,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CoreMods.ModChanged -= OnModChanged;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
             AmbientFxCanvas.Env.MotionGateChanged -= UpdateMotion;
+            if (_plansSettings != null)
+            {
+                _plansSettings.SectionChecked -= SyncPlansRoom;
+                _plansSettings.PropertyChanged -= PlansSettingsChanged;
+                _plansSettings = null;
+            }
+            _plansRoom = false;
             _ambientFx.Stop();
             UpdateMotion();
         }
@@ -133,6 +199,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // WPF ArrangeVaultShelf (polish 12): Basic, Prime, Free, each under its header, open doors first,
             // roster order within each half (Core PremiumShelfOrder). The two reserved seats are dropped. Just
             // Drop until the server opens its door and the Arcademy behind its build flag are hidden, not veiled.
+            if (PlansMode)
+            {
+                this.FindControl<ItemsControl>("ExclusivesShelf")!.ItemsSource = Array.Empty<object>();
+                RefreshTierPlates();
+                return;
+            }
             var rows = new List<object>();
             var cards = ExclusiveFeature.All.Where(f => f.Shown()).Select(f => new ExclusiveCardRow(f));
             foreach (var (group, items) in Services.UI.PremiumShelfOrder.Arrange(cards, r => r.Feature.Key, r => r.Tier, r => !r.IsLocked))
@@ -213,7 +285,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>The only start/stop: visible, attached and MotionFx.AllowAmbientLoops (PLAYBOOK P01).</summary>
         private void UpdateMotion()
         {
-            bool want = IsVisible && this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
+            bool want = !PlansMode && IsVisible && this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
             // Re-dressed either way: a glow-gate change (performance tier) alone must re-apply the glows.
             if (want == (_motion != null)) { }
             else if (want)

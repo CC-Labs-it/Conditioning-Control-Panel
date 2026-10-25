@@ -58,6 +58,8 @@ public sealed class AccountSettingsSectionTests
             CoreSettings.ServiceProvider = () => service;
             var s = CoreSettings.Current;
             // Every repaint with a cloud identity asks for the backup status: never the real server from a test.
+            var oldInviteIdentity = ConditioningControlPanel.Services.Invites.InviteApi.DefaultIdentity;
+            ConditioningControlPanel.Services.Invites.InviteApi.DefaultIdentity = () => null;
             var oldCloud = AccountSettingsSection.CloudData;
             AccountSettingsSection.CloudData = () => new V2AuthService(() => s, new OfflineServer());
             MainShellWindow? shell = null;
@@ -79,6 +81,7 @@ public sealed class AccountSettingsSectionTests
                 CoreSecrets.StoreProvider = oldSet;
                 CoreSettings.ServiceProvider = oldSettings;
                 AccountSettingsSection.CloudData = oldCloud;
+                ConditioningControlPanel.Services.Invites.InviteApi.DefaultIdentity = oldInviteIdentity;
                 // P02: providers that read the process settings again, not this test's thrown-away ones.
                 AccountSeed.Seed(p => new ProviderSubscription(p));
                 CoreAccount.IsLoggedInProvider = CoreAccount.HasPremiumAccessProvider = CoreAccount.HasLabAccessProvider = CoreAccount.IsWhitelistedProvider = null;
@@ -127,6 +130,49 @@ public sealed class AccountSettingsSectionTests
 
     /// <summary>The tier badge's colour is its meaning (WPF 🧪 violet / 🔒 gold): the Fluent icon must
     /// keep it through the shared semantic brushes (fluent-icons 2026-10-10).</summary>
+    [Fact]
+    public void AccountPlansHasCompactHeaderInvitesAndPremiumDoor()
+    {
+        Run((shell, section, s, secrets) =>
+        {
+            var plans = section.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.ExclusivesTabView>("PlansView");
+            Assert.NotNull(plans);
+            Assert.True(plans.PlansMode);
+            Assert.False(plans.FindControl<Border>("SpotlightCard")!.IsVisible);
+            Assert.False(plans.FindControl<ItemsControl>("ExclusivesShelf")!.IsVisible);
+            Assert.Empty((System.Collections.IEnumerable)plans.FindControl<ItemsControl>("ExclusivesShelf")!.ItemsSource!);
+            Assert.Equal(Loc.Get("plans_header_title"), plans.FindControl<TextBlock>("TxtVaultTitle")!.Text);
+            Assert.Equal(Loc.Get("plans_header_sub"), plans.FindControl<TextBlock>("TxtVaultSub")!.Text);
+            var scroll = plans.FindControl<ScrollViewer>("ContentScroll")!;
+            Assert.Null(scroll.Content); // wheel events reach Settings, as in WPF PlansMode
+            Assert.NotNull(plans.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.Invites.InvitePanel>("InvitesHost"));
+            Assert.False(plans.MotionRunning); // WPF PlansMode moves only the ambient canvas
+            var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+            try
+            {
+                LocalizationManager.Instance.SetLanguage("de");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(Loc.Get("plans_header_title"), plans.FindControl<TextBlock>("TxtVaultTitle")!.Text);
+            }
+            finally { LocalizationManager.Instance.SetLanguage(oldLanguage); }
+            shell.OpenAppSettingsSection("account");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(plans.PlansRoomRequested);
+            shell.AppSettingsPage!.FocusSection("general");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(plans.PlansRoomRequested);
+            shell.OpenAppSettingsSection("account");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(plans.PlansRoomRequested);
+            var door = plans.FindControl<Button>("BtnSeePremium")!;
+            Assert.True(door.IsVisible);
+            door.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.ExclusivesTabView>("ExclusivesTab")!.IsVisible);
+            Assert.False(plans.PlansRoomRequested);
+        });
+    }
+
     [Fact]
     public void TierBadgeKeepsTheTierColourAsAFluentIcon()
     {

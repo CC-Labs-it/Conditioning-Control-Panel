@@ -13,6 +13,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:tabs="clr-namespace:ConditioningControlPanel.Avalonia.Views.Tabs"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.AccountSettingsSection">
 
@@ -59,6 +60,8 @@
                 </Grid>
             </Grid>
         </Border>
+
+        <tabs:ExclusivesTabView x:Name="PlansView" PlansMode="True" Margin="0,0,0,12"/>
 
         <!-- Brand card: keeps Patreon red, takes the shared edge-bar pattern in that colour. -->
         <Border x:Name="PatreonLoginCard" CornerRadius="12" Padding="0" Margin="0,0,0,12"

@@ -151,6 +151,8 @@ public sealed class InvitePanelTests
             var ticket = shell.Named<Button>("BtnInviteTicket")!;
             string reply = Mine;
             shell.InviteTicketApi = () => new InviteApi(new HttpClient(new Wire(reply, "{}")), () => ("u_me", "tok"), "http://127.0.0.1:9");
+            shell.AppSettingsPage!.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.AccountSettingsSection>("SectionAccount")!
+                .FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.ExclusivesTabView>("PlansView")!.FindControl<InvitePanel>("InvitesHost")!.Api = shell.InviteTicketApi;
             await shell.RefreshInviteTicketAsync();
             Assert.True(ticket.IsVisible); // BAMBI-AAAA is unused
             reply = """{"ok":true,"codes":[{"code":"BAMBI-BBBB","state":"trying","invitee_name":"Mia","day":2}]}""";
@@ -165,7 +167,9 @@ public sealed class InvitePanelTests
             Assert.False(vault.IsVisible);
             ld.Deactivate();
             shell.BtnInviteTicket_Click(ticket, new RoutedEventArgs(Button.ClickEvent));
-            Assert.True(vault.IsVisible);
+            Assert.False(vault.IsVisible);
+            Assert.True(shell.AppSettingsPage!.IsVisible);
+            Assert.Equal("account", shell.AppSettingsPage.CheckedSectionKey);
         }
         finally
         {
@@ -183,11 +187,12 @@ public sealed class InvitePanelTests
         try
         {
             InviteApi.DefaultIdentity = () => ("u_me", "tok");
-            shell.Show();
             var ticket = shell.Named<Button>("BtnInviteTicket")!;
-            var card = shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.ExclusivesTabView>("ExclusivesTab")!.FindControl<InvitePanel>("InvitesHost")!;
+            var card = shell.AppSettingsPage!.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.AccountSettingsSection>("SectionAccount")!
+                .FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.ExclusivesTabView>("PlansView")!.FindControl<InvitePanel>("InvitesHost")!;
             string reply = Mine;
             card.Api = () => new InviteApi(new HttpClient(new Wire(reply, "{}")), () => ("u_me", "tok"), "http://127.0.0.1:9");
+            shell.Show();
             await card.RefreshAsync(force: true); // the card's read repaints the ticket
             Assert.True(ticket.IsVisible);
             Assert.True(shell.InviteWobbleRunning);
