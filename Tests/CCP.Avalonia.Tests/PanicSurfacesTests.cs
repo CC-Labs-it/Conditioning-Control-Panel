@@ -122,6 +122,7 @@ public sealed class PanicSurfacesTests
         "attention-test",
         "deeper-editor-audio",
         "knock-cards",
+        "asset-preview",
         "camera",
     };
 
@@ -251,7 +252,6 @@ public sealed class PanicSurfacesTests
         ["Program"] = "--speech-check CLI diagnostic: no window, exits when done",
         ["WebHost"] = "a control, not a surface: the window hosting it registers",
         ["LayeredAudio"] = "WPF parity (#668: only stopped when the master switch is off)",
-        ["MiniPlayerWindow"] = "only --video-check (a CLI diagnostic) opens it",
         ["DeeperLocalAudio"] = "the Deeper editor's transport: the 'deeper-editor-audio' surface pauses every open editor",
         ["BillboardCardHost"] = "the Home Tonight Board deck: no audio (WPF c0c67ff47), no window; its hold stops off screen",
         ["ClipArtView"] = "WPF parity: the showcase card's muted, no-audio loop on Home (holds off screen, freed on shell close); WPF panic leaves the board alone",
