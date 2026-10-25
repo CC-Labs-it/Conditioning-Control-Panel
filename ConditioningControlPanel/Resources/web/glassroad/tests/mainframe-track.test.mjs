@@ -30,8 +30,9 @@ test('Mainframe is reproducible, closed, spacious and has three distinct acts', 
 });
 test('Mainframe six scan approaches stay wide and clear of stepping gaps', () => {
   assert.equal(built.scanHalls.length, 6);
-  assert.deepEqual(scanZones(track).map(zone => zone.s), built.scanHalls.map(hall => hall.s));
-  for (const hall of built.scanHalls) {
+  const authored = loadTrack(json, { aerials: false });
+  assert.deepEqual(scanZones(authored).map(zone => zone.s), built.scanHalls.map(hall => hall.s));
+  for (const hall of scanZones(track)) {
     for (let s = hall.s - 35; s <= hall.s + 25; s += 5) {
       const frame = track.frameAt(s);
       assert.ok(frame.w >= 24);

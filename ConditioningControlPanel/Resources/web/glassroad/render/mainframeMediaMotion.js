@@ -11,7 +11,14 @@ export function motionEnvelope(slot, M) {
 }
 
 export function fitMainframeBillboard(spec, track, samples, M) {
-  if (!spec.float) return placeBillboard(spec, track, samples, M);
+  if (!spec.float) {
+    // A raised ramp can rotate a fixed screen into another deck. Keep the landmark nearby.
+    for (const shift of [0, -4, 4, -8, 8, -12, 12, -16, 16, -20, 20, -24, 24]) {
+      const slot = placeBillboard({ ...spec, f: spec.f + shift / track.lengthM }, track, samples, M);
+      if (slot) return slot;
+    }
+    return null;
+  }
   for (let attempt = 0; attempt < 12; attempt++) {
     const slot = placeBillboard({ ...spec, offM: (spec.offM ?? 7) + attempt * 4 }, track, samples, M);
     if (!slot) continue;

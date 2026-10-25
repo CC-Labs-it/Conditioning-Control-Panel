@@ -18,7 +18,12 @@ test('track: length and node arc lengths', () => {
   for (let i = 0; i < N; i++) assert.ok(tr.nodeS[i + 1] > tr.nodeS[i] + 5, 'node ' + i);
   // polish 6: the stacked course, within +-25% of the 1350 m ring it replaced (water wave 1: + the chute and pool)
   assert.ok(tr.lengthM > 5000 && tr.lengthM < 6500, 'length ' + tr.lengthM);
-  for (let i = 0; i < N; i++) assert.ok(dist(tr.frameAt(tr.nodeS[i]).p, json.nodes[i].p) < 1e-6, 'passes node ' + i);
+  const authored = loadTrack(json, { aerials: false });
+  for (let i = 0; i < N; i++) {
+    assert.ok(dist(authored.frameAt(authored.nodeS[i]).p, json.nodes[i].p) < 1e-6, 'passes authored node ' + i);
+    const p = tr.frameAt(tr.nodeS[i]).p, original = json.nodes[i].p;
+    assert.ok(Math.hypot(p[0] - original[0], p[2] - original[2]) < 1e-6, 'runtime keeps node footprint ' + i);
+  }
 });
 
 test('track: loop closes', () => {
