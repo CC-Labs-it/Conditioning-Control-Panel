@@ -1202,6 +1202,15 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs`, `Tests/CCP.Core.Tests/LinuxDependenciesTests.cs`
   (GstAudioSinkDependencyTests), each new row fail-proven by mutation.
 
+## 2026-10-14: Companion v2 room collapse and the Companion pages (avalonia-port/companion-v2-pages-b)
+- Supersedes the 2026-10-10 choice B above: the v2 ConversationPage is mounted now, so the head follows WPF
+  (CompanionTabView.xaml.cs:36-40): the room is collapsed, and Personality / Permissions / Links are pages that adopt the
+  live zones (`CompanionPageHost.Adopt`, no give-back; AiPage changed to match).
+- The tab owns the visibility edge (`CompanionTabView`, EffectiveVisibility); the collapsed room's own clocks stay parked,
+  as in WPF. The Awareness tab adopts the room's privacy card + Workshop Awareness cell (WPF HostCompanionPrivacy) on
+  ShowTab("awareness") rather than at Loaded; the card follows its own effective visibility (WPF IsVisibleChanged).
+- Zone tests for surfaces v2 leaves only in the room (hero, attention, roster, drawer) show the room via
+  `Tests/CCP.Avalonia.Tests/CollapsedRoom.cs`; the v2 layout itself is `CompanionPagesTests`.
 ## 2026-10-13: push-triggered port workflows skip cloud-* and gate-* branches (avalonia-port/ci-skip-cloud)
 - Question: the GitHub Free plan shares 20 concurrent jobs between rgate (build.yml dispatched on `avalonia-port/gate-*`),
   PR CI and push-triggered workflows. Each push of a throwaway `avalonia-port/cloud-*` (Claude cloud session) branch
@@ -1314,3 +1323,19 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Option B: keep scoped sending; record the difference in the `views-profile-privacy-panel` parity row.
 - Choice: B, interim. Advised by the supervisor: never risk revoking a server privacy grant without an owner decision.
   oracle-deep decision pending; follow-up lane wire-views-profile-privacy-panel-b.
+## 2026-10-22: Scrolller web gate on Avalonia: headers + navigation guard; refusing sub-resources is a follow-up (avalonia-port/sync7-scrolller-d)
+- Question: WPF ScrolllerWebGate (main c45d58a65, f7102be55, 92fdebaa4) answers Scrolller requests inside WebView2 pages:
+  a local 403 while the licence switch is off, the device cache (200/206/416), whole fetches charged to the daily share. Licence
+  compliance: with the switch off the app must not fetch Scrolller.
+- Finding: Avalonia.Controls.WebView 12.1.0's `WebResourceRequestedEventArgs` carries only `Request` (Uri, Method, Headers with
+  TrySet/TryRemove): no response, no deferral, no cancel. On Linux it is raised from WebKitGTK `resource-load-started`.
+- Options: (A) rules into Core, WebHost rewrites the headers it can; (B) native interop per engine (WebKitGTK user content
+  filter, WebView2 COM filter via `TryGetPlatformHandle`).
+- Answer (advised by: supervisor; oracle-deep review pending): interim A plus a navigation guard. Core `ScrolllerWebRules` holds
+  the gate's pure rules (WPF forwards, one copy). `WebHost` gives every hosted page's Scrolller requests the honest user-agent and
+  replaces a foreign Referer; while `ScrolllerPolicy.Enabled` is off it cancels top-level navigations to Scrolller and refuses
+  `Navigate`/`Source` to it. The in-app browser (`GateScrolller="False"`) is the user's own browsing and stays untouched, as in WPF.
+- Gap: Scrolller sub-resources embedded in a page cannot be refused, served from the device cache or charged on this engine.
+  Follow-up unit `sync7-scrolller-d-native`: WebKitGTK user content filter (Linux, tested) + WebView2 AddWebResourceRequestedFilter
+  (Windows, compiled-not-run).
+- Tests: `Tests/CCP.Avalonia.Tests/WebHostScrolllerGateTests.cs`, `Tests/CCP.Core.Tests/ScrolllerWebRulesTests.cs`.

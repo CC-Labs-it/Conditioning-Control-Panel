@@ -66,6 +66,8 @@
     <Color x:Key="TransparentPink40">#40FF69B4</Color>
     <!-- 50% alpha accent for selected overlays -->
     <Color x:Key="TransparentPink50">#50FF69B4</Color>
+    <!-- Text selection: WPF draws SelectionBrush at its default SelectionOpacity 0.4 (0x66) -->
+    <Color x:Key="SelectionPink">#66FF69B4</Color>
 
     <!-- New: de-saturated accent for headers/labels -->
     <Color x:Key="PinkSoft">#FFDF6BA0</Color>

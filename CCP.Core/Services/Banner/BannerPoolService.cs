@@ -215,7 +215,7 @@ namespace ConditioningControlPanel.Services.Banner
 
         // ------------------------------------------------------------------ conditions + tokens
 
-        private static bool Passes(BannerPoolCond? cond, AppSettings settings)
+        internal static bool Passes(BannerPoolCond? cond, AppSettings settings)
         {
             if (cond == null) return true;
             var value = Resolve(cond.Key, settings);
@@ -231,7 +231,7 @@ namespace ConditioningControlPanel.Services.Banner
         /// key we do not hold or one that reads zero: a line built around a number is a lie without
         /// the number.
         /// </summary>
-        private static string? Render(string text, AppSettings settings)
+        internal static string? Render(string text, AppSettings settings)
         {
             if (text.IndexOf('{') < 0) return text;
 

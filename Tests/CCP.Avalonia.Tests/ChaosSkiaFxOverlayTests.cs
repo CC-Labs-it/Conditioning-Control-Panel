@@ -88,10 +88,14 @@ public sealed class ChaosSkiaFxOverlayTests
                 System.Runtime.InteropServices.Marshal.Copy(fb.Address + y * fb.RowBytes + x * 4, px, 0, 4);
             Assert.True(px[3] > 200, $"no sparkle drawn at the burst: alpha {px[3]}");
 
-            // The field dies (longest shard 0.65 s); three idle frames later the loop parks, the grace is armed.
-            frames.Step(30);
-            Assert.True(w.IsRendering);
-            frames.Step(30);
+            // The field dies (shard life is random, 0.30-0.65 s, so a fixed frame count is a flake); the loop
+            // renders every frame while particles live, then three idle frames later it parks, the grace is armed.
+            for (int i = 0; i < 60 && w.Fx.ParticleCount > 0; i++)
+            {
+                Assert.True(w.IsRendering);
+                frames.Step();
+            }
+            frames.Step(5);
             Assert.Equal(0, w.Fx.ParticleCount);
             Assert.False(w.IsRendering);
             Assert.Empty(frames.Subs);

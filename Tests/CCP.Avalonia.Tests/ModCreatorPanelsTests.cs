@@ -47,6 +47,75 @@ public sealed class ModCreatorPanelsTests
         (StackPanel)w.GetLogicalDescendants().OfType<TextBlock>().First(t => t.Text == text).Parent!;
 
     [Fact]
+    public void AdvancedPanelEditsLayoutLabelsAndTooltips()
+    {
+        Run(w =>
+        {
+            Navigate(w, "advanced");
+            var stack = Section(w, "Avatar Tube Layout");
+            Assert.True(((Control)stack.Parent!).IsVisible);
+            var boxes = stack.Children.OfType<TextBox>().ToList();
+            Assert.Equal(16, boxes.Count);
+            boxes[0].Text = "2001";
+            boxes[1].Text = "-2001";
+            boxes[2].Text = "1.25";
+            boxes[3].Text = "501";
+            boxes[4].Text = "-501";
+            boxes[5].Text = "0.7543";
+            boxes[6].Text = "  Keeper Skills  ";
+            boxes[15].Text = new string('x', 201);
+            Click(stack.Children.OfType<Button>().Single(b => Label(b) == "+ Add boost tooltip"));
+            var row = stack.GetLogicalDescendants().OfType<Grid>().Single();
+            var tooltipBoxes = row.Children.OfType<TextBox>().ToList();
+            tooltipBoxes[0].Text = " pink_rush ";
+            tooltipBoxes[1].Text = "  Rush now  ";
+            var result = w.BuildManifestFromForm();
+            Assert.Equal(1000, result.TubeLayout!.AvatarOffsetX);
+            Assert.Equal(-1000, result.TubeLayout.AvatarDetachedOffsetX);
+            Assert.Equal(1.25, result.TubeLayout.AvatarScale);
+            Assert.Equal(500, result.TubeLayout.AvatarOffsetY);
+            Assert.Equal(-500, result.TubeLayout.AvatarDetachedOffsetY);
+            Assert.Equal(0.754, result.BubbleScale);
+            Assert.Equal("Keeper Skills", result.EnhancementOverrides!.TreeTitle);
+            Assert.Equal(200, result.EnhancementOverrides.LuckyBubbleLabel!.Length);
+            Assert.Equal("Rush now", result.EnhancementOverrides.BoostTooltips!["pink_rush"]);
+            var del = row.Children.OfType<Button>().Single();
+            Assert.Equal("Remove", global::Avalonia.Automation.AutomationProperties.GetName(del));
+            Click(del);
+            Assert.Null(w.BuildManifestFromForm().EnhancementOverrides!.BoostTooltips);
+        });
+    }
+
+    [Fact]
+    public void AdvancedLoadedValuesCanBeClearedAndReplaced()
+    {
+        Run(w =>
+        {
+            w.PopulateFromManifest(new ModManifest
+            {
+                TubeLayout = new ModTubeLayout { AvatarOffsetX = 17, AvatarScale = 1.2 },
+                BubbleScale = 5,
+                EnhancementOverrides = new ModEnhancementOverrides { TreeTitle = "Changed",
+                    StatPillTooltips = new() { ["lucky_bimbo"] = "Lucky" } },
+            });
+            Navigate(w, "advanced");
+            var stack = Section(w, "Avatar Tube Layout");
+            var boxes = stack.Children.OfType<TextBox>().ToList();
+            Assert.Equal("17", boxes[0].Text);
+            Assert.Equal("1.5", boxes[5].Text);
+            Assert.Equal("Changed", boxes[6].Text);
+            Assert.Equal("Lucky", w.BuildManifestFromForm().EnhancementOverrides!.StatPillTooltips!["lucky_bimbo"]);
+            w.PopulateFromManifest(new ModManifest());
+            var cleared = w.BuildManifestFromForm();
+            Assert.Null(cleared.TubeLayout);
+            Assert.Null(cleared.BubbleScale);
+            Assert.Null(cleared.EnhancementOverrides);
+            Assert.All(boxes, b => Assert.True(string.IsNullOrEmpty(b.Text)));
+            Assert.Empty(stack.GetLogicalDescendants().OfType<Grid>());
+        });
+    }
+
+    [Fact]
     public void PoolsPanelRowsExportLikeWpf()
     {
         Run(w =>
