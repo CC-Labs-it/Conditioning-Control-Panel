@@ -37,10 +37,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// </summary>
         private void WireCellHostActions(WorkshopShelfParts parts)
         {
+            Drawer.Expanded += (_, _) => parts.Behavior.SyncFromSettings();
             parts.Behavior.ChatShortcutRequested += async (_, _) => await RebindChatShortcutAsync();
             // WPF BtnCameraShortcut_Click (MainWindow.SessionIO.cs:1403): the combo drives the in-window
             // KeyBinding that toggles Platform/WebcamTracker (CameraShortcut.ApplyTo, also applied by the
-            // shell at startup). Only WPF's system-wide RegisterHotKey half is missing on this head.
+            // shell at startup); the shell also re-arms the Windows global slot.
             parts.Behavior.CameraShortcutRequested += async (_, _) => await RebindCameraShortcutAsync();
 
             // Browser pause forwards from the cell to the shell's live Home WebHost.
@@ -60,10 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// WPF's one handler serves both surfaces and repaints both labels
         /// (MainWindow.SessionIO.cs:1326/1332).
         ///
-        /// <para>The system-wide half of the toggle (GlobalHotkeyService, a Win32 RegisterHotKey)
-        /// stays in the WPF head; the flag is still stored, since it is one settings file across
-        /// both heads, and the in-window binding applied here is exactly what WPF falls back to
-        /// when the flag is off.</para>
+        /// <para>The shell re-arms the Windows global slot after saving this combo.</para>
         /// </summary>
         private async System.Threading.Tasks.Task RebindChatShortcutAsync()
         {
@@ -95,6 +93,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 CoreSettings.Save();
 
                 AvatarTube.AvatarTubeWindow.ApplyChatShortcutTo(owner);
+                (owner as ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow)?.RefreshCompanionHotkeys();
                 AvatarTube.AvatarTubeWindow.ApplyChatShortcutTo(AvatarTube.AvatarTubeWindow.Live);
                 (DataContext as WorkshopRuntimeVm)?.Parts.Behavior.RefreshChatShortcutLabel();
                 Log.Information("Chat shortcut rebound to {Combo}",

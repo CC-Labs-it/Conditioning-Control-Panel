@@ -152,9 +152,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             TxtIdleIntervalCompanion.Text = $"{value}s";
             CoreSettings.Current.IdleGiggleIntervalSeconds = value;
             CoreSettings.Save();
-            // ponytail: WPF also restarts the tube's idle timer (RestartIdleTimer). This head's
-            // tube has no idle-giggle loop yet (wire-views-companion-workshop-behavior-cell-b-next);
-            // the interval is on CoreSettings, which WPF's OnIdleTick re-reads every tick anyway.
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.Tube?.RestartIdleTimer();
         }
 
         private void SliderBubbleDuration_ValueChanged(object? sender, RangeBaseValueChangedEventArgs e)

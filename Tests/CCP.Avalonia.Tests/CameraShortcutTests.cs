@@ -62,6 +62,14 @@ public sealed class CameraShortcutTests
             var cell = shell.GetLogicalDescendants().OfType<WorkshopBehaviorCell>().Single();
             var label = cell.FindControl<TextBlock>("TxtCameraShortcutLabel")!;
 
+            // WPF SliderIdleInterval_ValueChanged restarts the live tube immediately.
+            s.AvatarEnabled = true;
+            shell.ShowAvatarTube();
+            cell.FindControl<Slider>("SliderIdleIntervalCompanion")!.Value = 20;
+            Assert.Equal(20, s.IdleGiggleIntervalSeconds);
+            Assert.Equal(TimeSpan.FromSeconds(20), shell.Tube!.IdleInterval);
+
+
             // Startup (WPF MainWindow.xaml.cs:239): the default combo is bound and labelled.
             Assert.Equal("Ctrl+Alt+K", label.Text);
             Assert.Equal(new KeyGesture(Key.K, KeyModifiers.Control | KeyModifiers.Alt), CameraBinding(shell).Gesture);

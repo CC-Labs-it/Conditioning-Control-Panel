@@ -34,6 +34,59 @@ public sealed class BarkEngineTests : IDisposable
         return e;
     }
 
+    private sealed class IdleRandom(double roll) : Random
+    {
+        public override double NextDouble() => roll;
+        public override int Next(int maxValue) => maxValue - 1;
+    }
+
+    [Theory]
+    [InlineData(0.34, true, "gated")]
+    [InlineData(0.36, true, "plain")]
+    [InlineData(0.0, false, "plain")]
+    public void IdleBiasUsesOnlyEligibleGatedRules(double roll, bool cameraOn, string expected)
+    {
+        var gated = Rule("Idle", "gated");
+        gated.Conditions = new Dictionary<string, object> { ["webcam_running"] = true };
+        var plain = Rule("Idle", "plain");
+        var e = new BarkEngine(() => new BarkRuleSet(new[] { gated, plain }), new IdleRandom(roll))
+        { Speak = _said.Add, LiveField = _ => cameraOn };
+        e.Start();
+        Assert.True(e.DispatchIdle());
+        Assert.Equal(expected, Assert.Single(_said).Text);
+    }
+
+    [Fact]
+    public void IdleRotatesAcrossRulesPersistsAndHonorsMuteSpeechAndTheGlobalGap()
+    {
+        var priorRotation = _s.BarkIdleRotation;
+        try
+        {
+            var a = Rule("Idle", "a"); var b = Rule("Idle", "b"); var c = Rule("Idle", "c");
+            var clock = new PopQuizSchedulerTests.FakeClock();
+            var e = Engine(a, b, c); e.Clock = clock;
+            _s.MasterVolume = 0;
+            Assert.False(e.DispatchIdle());
+            _s.MasterVolume = 50;
+            e.IsSpeaking = () => true;
+            Assert.False(e.DispatchIdle());
+            e.IsSpeaking = () => false;
+            Assert.True(e.DispatchIdle());
+            Assert.False(e.DispatchIdle());
+            Assert.Single(_s.BarkIdleRotation.Where(id => new[] { a.Id, b.Id, c.Id }.Contains(id)));
+            // A new engine restores the persisted pool-wide rotation.
+            e = Engine(a, b, c); e.Clock = clock;
+            Assert.True(e.DispatchIdle());
+            clock.Advance(TimeSpan.FromSeconds(61));
+            Assert.True(e.DispatchIdle());
+            Assert.Equal(3, _said.Select(x => x.Text).Distinct().Count());
+            clock.Advance(TimeSpan.FromSeconds(61));
+            Assert.True(e.DispatchIdle());
+            Assert.NotEqual(_said[2].Text, _said[3].Text);
+        }
+        finally { _s.BarkIdleRotation = priorRotation; }
+    }
+
     [Fact]
     public void TheHighestPriorityRuleWhoseConditionsPassSpeaksWithSubstitutions()
     {

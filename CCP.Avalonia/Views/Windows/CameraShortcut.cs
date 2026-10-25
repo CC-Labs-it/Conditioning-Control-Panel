@@ -16,8 +16,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// The in-window camera shortcut (default Ctrl+Alt+K) and the shared tracker toggle behind it.
     /// Port of WPF ApplyCameraShortcutTo / FormatCameraShortcut / ToggleCameraCommand
     /// (MainWindow.SessionIO.cs:1264-1378) and ToggleWebcamFromHotkey / ToggleWebcamTrackingAsync
-    /// (MainWindow.BlinkTrainer.cs:310-369). The system-wide half (ApplyGlobalCameraHotkey, a Win32
-    /// RegisterHotKey) stays in the WPF head; the Global flag is still stored, as for chat.
+    /// (MainWindow.BlinkTrainer.cs:310-369). The shell also registers the system-wide Win32 companion slots.
     /// </summary>
     internal static class CameraShortcut
     {
@@ -96,6 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CoreSettings.Save();
 
             ApplyTo(owner);
+            (owner as MainShellWindow)?.RefreshCompanionHotkeys();
             Log.Information("Camera shortcut rebound to {Combo}", Format());
             return true;
         }

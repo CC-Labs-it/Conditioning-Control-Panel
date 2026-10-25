@@ -319,6 +319,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // chamber rather than on the stock one.
             RefreshTubeLayout();
 
+            RestartIdleTimer();
             AttachAwareness();   // WPF xaml.cs:317-322 (Reactions.cs)
 
             // ponytail: WPF's OnLoaded also ran StartFloatingAnimation / StartFullscreenDetection
@@ -340,6 +341,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // failure the constructor's note refuses to risk.
             LocalizationManager.Instance.LanguageChanged -= OnTubeLanguageChanged;
             _poseTimer.Stop();
+            _idleTimer?.Stop();
             _speechTimer?.Stop();
             ClearSpeechQueue();
             _cooldownTickTimer?.Stop();
@@ -1274,6 +1276,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     _currentSpeechSource = source;
                     _currentSpeechLength = text.Length;
 
+                    ResetIdleTimer();
                     StartBubbleHideTimer(text);
                     Log.Debug("Companion says ({Chars} chars, ai={Ai})", text.Length, aiGenerated);   // never the text
                 }
@@ -1322,6 +1325,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     step = (step + 1) % 4;
                     _txtSpeech.Text = baseText + new string('.', step);
                 };
+                ResetIdleTimer();
                 _listeningDotsTimer = timer;
                 timer.Start();
             });
@@ -1532,7 +1536,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// The stored shortcut, defaulted. One reader for both the label and the binding so they can
         /// never disagree about what an unparseable setting means.
         /// </summary>
-        private static (Key Key, KeyModifiers Mods) CurrentChatShortcut()
+        internal static (Key Key, KeyModifiers Mods) CurrentChatShortcut()
         {
             var s = CoreSettings.Current.CompanionPrompt;
             var keyName = string.IsNullOrWhiteSpace(s?.ChatShortcutKey) ? "T" : s!.ChatShortcutKey;

@@ -139,6 +139,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.xaml.cs:234-240 (Loaded): the in-window chat and camera shortcuts.
             AvatarTube.AvatarTubeWindow.ApplyChatShortcutTo(this);
             CameraShortcut.ApplyTo(this);
+            InitializeCompanionHotkeys();
             InitializeRemoteControlOverlay(); // MainShellWindow.RemoteControl.cs (WPF MainWindow.RemoteControl.cs:784)
             InitializeLeashGate(); // MainShellWindow.LeashGate.cs (WPF MainWindow.Leash.cs InitializeLeash)
             // WPF MainWindow.xaml.cs:3695: the tube is built on load when the companion is enabled.

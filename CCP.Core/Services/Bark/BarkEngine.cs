@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Services.Bark
     /// one-shot latches, safety hold, chat suppression, speaking, the 60 s floor and its exemptions,
     /// cooldown, chance), the no-repeat variant rotation persisted in AppSettings (:1793-1941) and the
     /// {0}/{key} substitutions (:2000). The head owns the event subscriptions and the mouth.
-    /// ponytail: DispatchIdle, PickVoiceLine, the awareness arbiter and CCP_BARK_DRYRUN land with a caller;
+    /// ponytail: PickVoiceLine, the awareness arbiter and CCP_BARK_DRYRUN land with a caller;
     /// the whisper / Chaos-narrator gates with a source; tier latches key on "None" until a tier reaches Core.
     /// </summary>
     public sealed class BarkEngine
@@ -45,6 +45,8 @@ namespace ConditioningControlPanel.Services.Bark
         private readonly Dictionary<string, string> _lastVariantKey = new(StringComparer.OrdinalIgnoreCase);
         private readonly Queue<string> _recentlySpoken = new();
         private readonly HashSet<string> _recentlySpokenSet = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _usedIdleRules = new(StringComparer.OrdinalIgnoreCase);
+        private string? _lastIdleRuleId;
         private DateTime _globalLastFireUtc = DateTime.MinValue;
         private DateTime _safetyHoldUntilUtc = DateTime.MinValue;
         private DateTime _lastUserMessageUtc = DateTime.MinValue;
@@ -93,6 +95,8 @@ namespace ConditioningControlPanel.Services.Bark
             lock (_gate)
             {
                 _rules = fresh;
+                _usedIdleRules.Clear();
+                foreach (var id in s.BarkIdleRotation) _usedIdleRules.Add(id);
                 _usedVariantKeys.Clear();
                 foreach (var kv in s.BarkVariantRotation)
                     _usedVariantKeys[kv.Key] = new HashSet<string>(kv.Value ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
@@ -148,6 +152,44 @@ namespace ConditioningControlPanel.Services.Bark
                 return SpeakLine(winner, pool[idx], ctx);
             }
             catch (Exception ex) { Log.Warning(ex, "BarkEngine: Raise('{Trigger}') failed", trigger); return false; }
+        }
+
+        /// <summary>WPF DispatchIdle / PickIdleRuleLocked: rotate across eligible rules, with a
+        /// 35% bias toward gated lines, then use the ordinary speech gate and variant rotation.</summary>
+        public bool DispatchIdle()
+        {
+            try
+            {
+                if (CoreSettings.Current.MasterVolume == 0 || Safe(() => IsSpeaking?.Invoke() == true)) return false;
+                var ctx = new BarkContext("Idle");
+                BarkRule winner;
+                List<BarkVariant> pool;
+                int index;
+                lock (_gate)
+                {
+                    var eligible = _rules.ForTrigger("Idle").Where(r => ConditionsPass(r, ctx)).ToList();
+                    if (eligible.Count == 0) return false;
+                    var unused = eligible.Where(r => !_usedIdleRules.Contains(r.Id)).ToList();
+                    if (unused.Count == 0)
+                    {
+                        _usedIdleRules.Clear();
+                        if (_lastIdleRuleId != null) _usedIdleRules.Add(_lastIdleRuleId);
+                        CoreSettings.Current.BarkIdleRotation = new List<string>(_usedIdleRules);
+                        CoreSettings.Save();
+                        unused = eligible.Where(r => !_usedIdleRules.Contains(r.Id)).ToList();
+                        if (unused.Count == 0) unused = eligible;
+                    }
+                    var gated = unused.Where(r => r.Conditions?.Count > 0).ToList();
+                    var choices = gated.Count > 0 && _rng.NextDouble() < 0.35 ? gated : unused;
+                    winner = choices[_rng.Next(choices.Count)];
+                    pool = ResolvePool(winner);
+                    (var fire, index, _) = EvaluateGate(winner, pool, false);
+                    if (!fire || Speak == null) return false;
+                    CommitFire(winner, index, pool);
+                }
+                return SpeakLine(winner, pool[index], ctx);
+            }
+            catch (Exception ex) { Log.Warning(ex, "BarkEngine: DispatchIdle failed"); return false; }
         }
 
         public bool ConditionsPass(BarkRule rule, BarkContext ctx) =>
@@ -314,6 +356,13 @@ namespace ConditioningControlPanel.Services.Bark
             set.Add(key);
             _lastVariantKey[rule.Id] = key;
             PersistVariantRotation(rule.Id);
+            if (string.Equals(rule.Trigger, "Idle", StringComparison.OrdinalIgnoreCase))
+            {
+                _usedIdleRules.Add(rule.Id);
+                _lastIdleRuleId = rule.Id;
+                CoreSettings.Current.BarkIdleRotation = new List<string>(_usedIdleRules);
+                CoreSettings.Save();
+            }
         }
 
         /// <summary>WPF PickVariant (:1867): an unused line, preferring a clip no rule spoke lately; -1 when all used.</summary>

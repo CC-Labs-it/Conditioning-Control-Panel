@@ -803,6 +803,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 CoreSettings.Save();
 
                 AvatarTubeWindow.ApplyChatShortcutTo(owner);
+                (owner as ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow)?.RefreshCompanionHotkeys();
                 AvatarTubeWindow.ApplyChatShortcutTo(AvatarTubeWindow.Live);
                 RefreshChatShortcutLabel();
                 Log.Information("Chat shortcut rebound to {Combo}", AvatarTubeWindow.FormatChatShortcut());
