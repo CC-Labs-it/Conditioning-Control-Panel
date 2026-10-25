@@ -12,5 +12,8 @@ export function thresholdGlassFinish(p) {
   return {
     body: ribbon.mul(.034).add(casting.mul(.026)).add(grain.mul(.008)).add(.98),
     glaze: casting.mul(.22).add(grain.mul(.08)).add(.96),
+    // A shallow moulded face bends the highlight while the accepted driving surface stays flat.
+    height: sin(p.x.mul(2.3).add(sin(ribbonPhase).mul(.7))).mul(.018)
+      .add(sin(ribbonPhase).mul(.045)),
   };
 }

@@ -111,13 +111,19 @@ test('runtime warm captures use the same camera and restore paused capture polic
   const frontZ = room.group.getObjectByName('mirror-plane:0').position.z;
   const geometry = new BoxGeometry(), material = new MeshBasicNodeMaterial();
   const pooled = new InstancedMesh(geometry, material, 1); pooled.count = 0; pooled.visible = false; material.visible = false; scene.add(pooled);
-  const mainTarget = {}, mainMrt = {}; let target = mainTarget, mrt = mainMrt, draws = 0, compiles = 0;
-  const raw = { autoClear: false, coordinateSystem: WebGLCoordinateSystem,
+  const mainTarget = {}, mainMrt = {}; let target = mainTarget, mrt = mainMrt, draws = 0, compiles = 0, reflectedCompiles = 0;
+  const raw = { autoClear: false, coordinateSystem: WebGLCoordinateSystem, _callDepth: 0,
     getDrawingBufferSize: out => out.set(1440, 900), getRenderTarget: () => target, getMRT: () => mrt,
     setRenderTarget: value => { target = value; }, setMRT: value => { mrt = value; }, clear() {}, render() {
       draws++;
       assert.equal(pooled.visible, draws <= 3); assert.equal(material.visible, draws <= 3);
       assert.equal(pooled.count, draws <= 3 ? 1 : 0); assert.equal(pooled.frustumCulled, draws > 3);
+    }, async compileAsync(s, c, owner, progress, depth) {
+      const reflection = room.reflections[reflectedCompiles++].reflector;
+      assert.equal(s, scene); assert.equal(c, reflection.getVirtualCamera(camera));
+      assert.equal(target, reflection.getRenderTarget(c)); assert.equal(mrt, null); assert.equal(depth, 3);
+      assert.equal(pooled.visible, true); assert.equal(pooled.count, 1); assert.equal(pooled.frustumCulled, false);
+      room.group.traverse(o => { if (/^mirror-(live-scene|prismatic-shutter|backplate)/.test(o.material?.name || '')) assert.equal(o.material.visible, false); });
     } };
   const capture = () => room.reflections.forEach((node, i) => node.reflector.updateBefore({ scene, camera, renderer: raw,
     material: room.group.children.find(m => m.material?.name === (i === 2 ? 'mirror-prismatic-shutter:0' : 'mirror-live-scene:' + (i ? 1 : -1))).material }));
@@ -130,7 +136,7 @@ test('runtime warm captures use the same camera and restore paused capture polic
   room.update(.1, { camera, raceTimeS: 7, paused: true });
   capture(); assert.equal(draws, 0);
   await room.warmCapture(renderer, scene, camera);
-  assert.equal(compiles, 3); assert.equal(draws, 9);
+  assert.equal(compiles, 3); assert.equal(reflectedCompiles, 3); assert.equal(draws, 9);
   assert.equal(room.group.getObjectByName('mirror-plane:0').position.z, frontZ);
   assert.ok(camera.quaternion.angleTo(quaternion) < 1e-7);
   assert.equal(target, mainTarget); assert.equal(mrt, mainMrt); assert.equal(raw.autoClear, false);
@@ -141,5 +147,15 @@ test('runtime warm captures use the same camera and restore paused capture polic
   assert.ok(camera.quaternion.angleTo(quaternion) < 1e-7);
   assert.equal(target, mainTarget); assert.equal(mrt, mainMrt); assert.equal(raw.autoClear, false);
   assert.equal(pooled.visible, false); assert.equal(material.visible, false); assert.equal(pooled.count, 0); assert.equal(pooled.frustumCulled, true);
+  capture(); assert.equal(draws, 9);
+  renderer.post = () => ({ async compileAsync() {}, render: capture });
+  raw.compileAsync = async () => { throw Error('reflected compile failure'); };
+  const materialVisibility = new Map();
+  room.group.traverse(o => { if (o.material) materialVisibility.set(o.material, o.material.visible); });
+  await assert.rejects(room.warmCapture(renderer, scene, camera), /reflected compile failure/);
+  for (const [m, visible] of materialVisibility) assert.equal(m.visible, visible);
+  assert.equal(target, mainTarget); assert.equal(mrt, mainMrt); assert.equal(raw.autoClear, false);
+  assert.equal(pooled.visible, false); assert.equal(material.visible, false); assert.equal(pooled.count, 0); assert.equal(pooled.frustumCulled, true);
+  assert.ok(camera.quaternion.angleTo(quaternion) < 1e-7); assert.equal(room.group.getObjectByName('mirror-plane:0').position.z, frontZ);
   capture(); assert.equal(draws, 9); room.dispose(); pooled.dispose(); geometry.dispose(); material.dispose();
 });

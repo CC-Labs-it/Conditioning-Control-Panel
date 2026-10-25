@@ -4,6 +4,8 @@ import { acquireLoomAtlas } from './loomAtlas.js';
 import { wordTheme } from './wordTheme.js';
 import { placeOnFrame, pop, ease, unit, rng, hashId, beatPhase } from './cueKit.js';
 import { S } from '../sim/state.js';
+import { screenBodyGeometry, screenBodyMaterial } from './screenBody.js';
+import { screenBodySize } from './screenBodyMath.js';
 
 // Browser-style windows in the world, beside the road. SWARM opens them on the beat (the rate doubles on each
 // of its jolts) and closes them in a ripple at its end. PROP screens-turn stands a row of side screens that all
@@ -14,31 +16,35 @@ export function createCueWindows(scene, track, { source = () => null, make = () 
   acquireAtlas = acquireLoomAtlas } = {}) {
   const object = new Group(); object.name = 'cue-windows'; scene.add(object);
   const theme = wordTheme(track), box = new BoxGeometry(1, 1, 1), plane = new PlaneGeometry(1, 1);
+  const cabinetGeometry = screenBodyGeometry(), bezelGeometry = screenBodyGeometry(true);
   const mats = [], mat = o => { const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, fog: false, ...o }); mats.push(m); return m; };
-  const chrome = mat({ color: '#f4f0f6' }), bar = mat({ color: theme.accent }), close = mat({ color: '#ff3b5c' });
-  const cross = mat({ color: '#ffffff' }), back = mat({ color: '#1b1420' }), dot = mat({ color: '#ffffff' });
+  const bar = mat({ color: theme.accent }), close = mat({ color: '#ff3b5c' });
+  const cabinet = screenBodyMaterial(false, { color: '#4d4654', transparent: true, depthWrite: false });
+  const bezel = screenBodyMaterial(true, { color: '#f4f0f6', transparent: true, depthWrite: false }); mats.push(cabinet, bezel);
+  const cross = mat({ color: '#ffffff' }), dot = mat({ color: '#ffffff' });
   let atlas = null; try { atlas = acquireAtlas(); } catch { /* procedural surface */ }
   const surfaces = Array.from({ length: SURFACES }, (_, i) => createMarqueeSurface(make(), atlas?.texture, i + 2));
   const faces = surfaces.map(s => mat({ map: s.texture, side: DoubleSide }));
   const slots = [];
   for (let i = 0; i < CAPACITY; i++) {
     const root = new Group(), body = new Group(); root.add(body); root.visible = false; object.add(root);
-    const frame = new Mesh(box, chrome), title = new Mesh(box, bar), face = new Mesh(plane, faces[i % SURFACES]);
-    const xBtn = new Mesh(box, close), x1 = new Mesh(box, cross), x2 = new Mesh(box, cross), rear = new Mesh(plane, back);
+    const frame = new Mesh(cabinetGeometry, cabinet), edge = new Mesh(bezelGeometry, bezel), title = new Mesh(box, bar), face = new Mesh(plane, faces[i % SURFACES]);
+    const xBtn = new Mesh(box, close), x1 = new Mesh(box, cross), x2 = new Mesh(box, cross);
     const dots = [0, 1, 2].map(() => new Mesh(box, dot));
-    body.add(frame, title, face, xBtn, x1, x2, rear, ...dots);
-    slots.push({ root, body, frame, title, face, xBtn, x1, x2, rear, dots, id: null, born: 0, closeAt: Infinity, turnAt: Infinity,
+    body.add(frame, edge, title, face, xBtn, x1, x2, ...dots);
+    slots.push({ root, body, frame, edge, title, face, xBtn, x1, x2, dots, id: null, born: 0, closeAt: Infinity, turnAt: Infinity,
       s: 0, x: 0, y: 0, w: 6, chrome: true, flee: false });
   }
   const f = { p: [0, 0, 0], t: [0, 0, 1], n: [0, 1, 0], b: [1, 0, 0], w: 0 };
   const along = (s, from) => { const L = track.lengthM, d = ((s - from) % L + L) % L; return d > L / 2 ? d - L : d; };
   function layout(slot) {
     const w = slot.w, h = w * .62, t = slot.chrome ? h * .14 : 0;
-    slot.frame.scale.set(w + .3, h + t + .3, .25); slot.frame.position.set(0, t / 2, -.05);
+    const depth = screenBodySize({ w, h: h + t }).depth;
+    slot.frame.scale.set(w, h + t, depth); slot.frame.position.set(0, t / 2, .1);
+    slot.edge.scale.copy(slot.frame.scale); slot.edge.position.copy(slot.frame.position);
     slot.title.visible = slot.xBtn.visible = slot.x1.visible = slot.x2.visible = slot.chrome;
     for (const d of slot.dots) d.visible = slot.chrome;
     slot.face.scale.set(w, h, 1); slot.face.position.set(0, 0, .12);
-    slot.rear.scale.set(w, h + t, 1); slot.rear.position.set(0, t / 2, -.2); slot.rear.rotation.y = Math.PI;
     if (!slot.chrome) return;
     slot.title.scale.set(w + .3, t, .3); slot.title.position.set(0, h / 2 + t / 2, .02);
     const b = slot.flee ? t * 2.4 : t * .8;
@@ -124,5 +130,5 @@ export function createCueWindows(scene, track, { source = () => null, make = () 
   return { object, update,
     clear() { for (const s of slots) { s.id = null; s.root.visible = false; } seen.clear(); for (const s of surfaces) s.clear(); },
     get stats() { return { active: slots.filter(s => s.id).length, capacity: CAPACITY }; },
-    dispose() { object.removeFromParent(); for (const s of surfaces) s.dispose(); mats.forEach(m => m.dispose()); box.dispose(); plane.dispose(); atlas?.dispose(); } };
+    dispose() { object.removeFromParent(); for (const s of surfaces) s.dispose(); mats.forEach(m => m.dispose()); box.dispose(); plane.dispose(); cabinetGeometry.dispose(); bezelGeometry.dispose(); atlas?.dispose(); } };
 }

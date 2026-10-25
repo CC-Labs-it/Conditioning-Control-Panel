@@ -33,6 +33,7 @@ import { createBoudoirRoadSurface } from '../boudoirMaterials.js';
 import { createBoudoirWaterPalette } from '../boudoirWater.js';
 import { createAudioReactiveUniforms, reactiveRoadLight, reactiveTint, mainframeTileLight } from '../audioReactive.js';
 import { thresholdGlassFinish } from '../thresholdFinish.js';
+import { reliefNormal, reliefFootprint } from '../surfaceRelief.js';
 import { boudoirMusicFloor } from './boudoirMusicFloor.js';
 
 /** Road polish numbers; LOOK.roadPolish overrides any key. */
@@ -296,11 +297,12 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const [tu, tv] = LOOK.artRoadTileM;
   const haze = rough ? mix(float(1 - LOOK.artHaze), float(1 + LOOK.artHaze), texture(rough, p.div(LOOK.artHazeTileM)).r) : float(1);
   const nrm = art && art.tex('road-glass-normal');
+  const finishNormal = castGlass ? reliefNormal(normalWorld, castGlass.height, reliefFootprint(p), { slope: .18 }) : normalWorld;
   let sheen = float(0), nt = vec2(0, 0);
   if (nrm) {
     nt = texture(nrm, p.div(LOOK.artHazeTileM)).xy.mul(2).sub(1);
     const H = normalize(normalize(vec3(...LOOK.sheenDir)).add(V));
-    const ndh = clamp(dot(normalWorld, H).add(nt.x.add(nt.y).mul(LOOK.sheenBump * 0.5)), 0, 1);
+    const ndh = clamp(dot(finishNormal, H).add(nt.x.add(nt.y).mul(LOOK.sheenBump * 0.5)), 0, 1);
     const fres = pow(float(1).sub(abs(dot(normalWorld, V))), 4).mul(LOOK.sheenFresnel);
     sheen = pow(ndh, LOOK.sheenPow).mul(LOOK.sheenGain).add(fres).mul(u.sheen);
   }
@@ -312,7 +314,7 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const deepCol = ramp(deepF).mul(P.depthGain).mul(u.contrast);
 
   // sky reflection along the bumped reflected ray, spectrum tinted
-  const N = normalize(normalWorld.add(vec3(nt.x, 0, nt.y).mul(P.reflBump)));
+  const N = normalize(finishNormal.add(vec3(nt.x, 0, nt.y).mul(P.reflBump)));
   const R = reflect(V.negate(), N);
   const skyRef = skyRamp(R.y.mul(0.35).add(R.x.mul(0.2)).add(0.5)).mul(LOOK.skyDim);
   const schlick = float(P.reflF0).add(pow(float(1).sub(abs(dot(normalWorld, V))), 5).mul(1 - P.reflF0));

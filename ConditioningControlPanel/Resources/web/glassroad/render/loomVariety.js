@@ -45,7 +45,7 @@ export function createLoomDisplayFrames(make, tier = 'high') {
     }
     return changed;
   }, dispose() {
-    field?.dispose();
+    field?.dispose?.();
     field = null;
   } };
 }

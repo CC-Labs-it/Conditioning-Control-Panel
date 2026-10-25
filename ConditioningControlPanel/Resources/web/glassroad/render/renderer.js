@@ -257,7 +257,7 @@ export async function warmAll(renderer, scene, camera, extras = [], { onProgress
     // shadow receivers (road, pads, catchers) stay in every pass: the shadow pass only runs in a frame that
     // draws a receiver, so without them each group's casters linked their depth programs in the last pass
     const receivers = items.filter((o) => o.receiveShadow), casting = items.filter((o) => !o.receiveShadow);
-    groups = warmGroups(casting);
+    groups = warmGroups(casting, renderer.backend === 'webgpu' ? WARM.webgpuPerGroup : WARM.perGroup);
     for (const o of casting) o.visible = false;
     // pass 0: the post chain and the receivers alone (the road's programs are big), then a painted frame
     await compile();

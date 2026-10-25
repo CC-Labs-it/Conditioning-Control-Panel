@@ -4,24 +4,39 @@ import { materialColor, positionWorld, positionGeometry, normalWorld, normalLoca
 import { LOOK } from './look.js';
 import { prisonPlan } from './keepPrison.js';
 import { waterSpills } from './waterMath.js';
+import { reliefNormal, reliefFootprint } from './surfaceRelief.js';
 
 export function keepStoneMaterial(hex, art, mortar = true, outline = true, finish = 'stone') {
   const material = new MeshBasicNodeMaterial({ color: new Color(hex) });
-  const N = normalize(normalWorld), light = clamp(dot(N, normalize(vec3(...LOOK.lightDir))).mul(0.58).add(0.64), 0.19, 1.14);
+  let N = normalize(normalWorld), masonry = null;
+  if (mortar) {
+    const worldNormal = modelNormalMatrix.mul(normalLocal);
+    const brickAxis = select(worldNormal.x.abs().greaterThan(worldNormal.z.abs()), float(1), float(0))
+      .toVarying('keepBrickAxis').setInterpolation('flat');
+    const y = positionWorld.y.div(2.4), edge = fract(y);
+    const across = mix(positionWorld.x, positionWorld.z, brickAxis).div(4.8);
+    const staggered = across.add(fract(floor(y).mul(.5))), brick = fract(staggered);
+    const cell = vec2(brick, edge), border = min(cell, vec2(1).sub(cell)).mul(vec2(4.8, 2.4));
+    const height = smoothstep(.035, .23, min(border.x, border.y)).mul(.17)
+      .add(sin(across.mul(15).add(sin(y.mul(11)))).mul(.009));
+    N = reliefNormal(N, height, reliefFootprint(vec2(staggered, y)), { from: .12, to: .4, slope: .55 });
+    masonry = { y, edge, staggered, brick };
+  } else if (finish === 'iron' || finish === 'cap') {
+    const hammered = sin(positionGeometry.x.mul(19).add(positionGeometry.y.mul(11)))
+      .mul(sin(positionGeometry.z.mul(17).sub(positionGeometry.y.mul(7)))).mul(.008);
+    N = reliefNormal(N, hammered, reliefFootprint(positionGeometry.xy.mul(4)), { slope: .2 });
+  }
+  const light = clamp(dot(N, normalize(vec3(...LOOK.lightDir))).mul(0.58).add(0.64), 0.19, 1.14);
   const map = art?.tex('road-glass-roughness');
   const grain = map ? texture(map, positionGeometry.xz.mul(vec2(3, 6))).r.add(texture(map, positionGeometry.xy.mul(vec2(3, 6))).r).mul(0.5) : float(0.5);
   let colour = materialColor.rgb.mul(light).mul(smoothstep(.2, .8, grain).mul(.33).add(.83));
   if (mortar) {
-    const y = positionWorld.y.div(2.4), edge = fract(y), aa = fwidth(y).max(0.008);
+    const { y, edge, staggered, brick } = masonry, aa = fwidth(y).max(0.008);
     const horizontal = smoothstep(.015, aa.add(.025), edge).mul(smoothstep(.015, aa.add(.025), float(1).sub(edge)));
     // Decide the projection in world space at the vertex, once for the whole face. A fragment
     // normal's camera-space round trip can flip this comparison on 45-degree walls, producing
     // crawling black mortar speckles even with a perfectly filtered texture.
-    const worldNormal = modelNormalMatrix.mul(normalLocal);
-    const brickAxis = select(worldNormal.x.abs().greaterThan(worldNormal.z.abs()), float(1), float(0))
-      .toVarying('keepBrickAxis').setInterpolation('flat');
-    const across = mix(positionWorld.x, positionWorld.z, brickAxis).div(4.8);
-    const staggered = across.add(fract(floor(y).mul(.5))), brick = fract(staggered), bx = fwidth(staggered).max(.006);
+    const bx = fwidth(staggered).max(.006);
     const vertical = smoothstep(.008, bx.add(.018), brick).mul(smoothstep(.008, bx.add(.018), float(1).sub(brick)));
     const joint = horizontal.mul(vertical);
     const variation = hash(floor(staggered).add(floor(y).mul(37))).mul(.24).add(.86);

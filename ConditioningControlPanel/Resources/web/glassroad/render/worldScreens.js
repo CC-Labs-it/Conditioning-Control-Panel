@@ -5,11 +5,13 @@ import { fitMainframeBillboard, motionEnvelope } from './mainframeMediaMotion.js
 import { boudoirWorldPlan, boudoirBoxesIntersect, boudoirSegmentBlocked } from './boudoirMedia.js';
 import { getKeepLayout } from '../track/keep-layout.js';
 import { prisonPlan } from './keepPrison.js';
+import { spatialCandidates } from './spatialCandidates.js';
+import { screenBodyBox } from './screenBodyMath.js';
 
 const { add, sub, mul, dot, norm } = V3;
 const WORLD = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
 const local = (f, x, y, z = 0) => add(add(add(f.p, mul(f.b, x)), mul(f.n, y)), mul(f.t, z));
-const box = slot => ({ p: slot.C, size: [slot.w + .6, slot.h + .6, .4], axes: [slot.X, slot.Y, slot.Z] });
+const box = screenBodyBox;
 export const WORLD_SCREEN_TIERS = Object.freeze({
   high: Object.freeze({ max: 240, totalMax: 300, stations: 112, spacingM: 48 }),
   mid: Object.freeze({ max: 176, totalMax: 220, stations: 80, spacingM: 65 }),
@@ -126,6 +128,7 @@ export function worldScreenLayout(track, { tier = 'high', samples = null, solids
     .map(f => prepare({ p: local(f, 0, -.5), size: [f.w, 1, (road.stepM || 4) + 1], axes: [f.b, f.n, f.t] }))];
   const count = Math.min(T.stations, Math.max(0, Math.floor(maxSlots / 2)), Math.max(20, Math.ceil(track.lengthM / T.spacingM)));
   const base = existingSlots.map(box).map(prepare), accepted = [];
+  const corridorNear = spatialCandidates(corridors), blockerNear = spatialCandidates(blockers), sightNear = spatialCandidates(sightBlockers);
   const orbits = existingSlots.map(slot => slot.orbitEnvelope).filter(Boolean);
   let rejected = 0;
   const hazardous = s => {
@@ -157,10 +160,10 @@ export function worldScreenLayout(track, { tier = 'high', samples = null, solids
       if (orbits.some(orbit => {
         const d = sub(body.p, orbit.p), height = dot(d, orbit.axis);
         return Math.abs(height) < orbit.halfHeight + radius && Math.hypot(...sub(d, mul(orbit.axis, height))) < orbit.radius + radius;
-      }) || corridors.some(row => near(row, body.p, radius) && boudoirBoxesIntersect(body, row))
-        || blockers.some(row => near(row, body.p, radius) && boudoirBoxesIntersect(body, row, .25))
+      }) || corridorNear(body.p, radius).some(row => boudoirBoxesIntersect(body, row))
+        || blockerNear(body.p, radius).some(row => boudoirBoxesIntersect(body, row, .25))
         || [...base, ...accepted].some(row => near(row, body.p, radius) && boudoirBoxesIntersect(body, row, 1.2))) { rejected++; continue; }
-      const nearby = sightBlockers.filter(row => near(row, body.p, radius + 80));
+      const nearby = sightNear(body.p, radius + 80);
       if (worldScreenSightlines(track, slot, nearby) < 2) { rejected++; continue; }
       slots.push(slot); accepted.push(body); return;
     }

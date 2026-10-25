@@ -225,6 +225,28 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
           });
           scene.updateMatrixWorld(true);
           await pass.compileAsync();
+          if (!side) {
+            // The post quad enters depth 1, its scene depth 2, and each real mirror
+            // depth 3. Prepare those target/camera variants asynchronously before
+            // the first capture would otherwise link their programs synchronously.
+            const excluded = [...mirrorMaterials, ...shutterMaterials, backingMat];
+            const visible = excluded.map(material => material.visible);
+            const previousTarget = raw.getRenderTarget(), previousMrt = raw.getMRT();
+            try {
+              excluded.forEach(material => { material.visible = false; });
+              raw.setMRT(null);
+              for (const reflection of reflections) {
+                const base = reflection.reflector, reflectedCamera = base.getVirtualCamera(camera);
+                const target = base.getRenderTarget(reflectedCamera);
+                base._updateResolution(target, raw);
+                raw.setRenderTarget(target);
+                await raw.compileAsync(scene, reflectedCamera, null, null, raw._callDepth + 3);
+              }
+            } finally {
+              excluded.forEach((material, i) => { material.visible = visible[i]; });
+              raw.setMRT(previousMrt); raw.setRenderTarget(previousTarget);
+            }
+          }
           // Reflectors update once per renderer frame. Capture at the real nested post depth.
           await new Promise(resolve => globalThis.requestAnimationFrame ? requestAnimationFrame(resolve) : setTimeout(resolve, 0));
           pass.render();

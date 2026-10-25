@@ -241,11 +241,15 @@ function centreline(track, stepM = 4) {
 async function boot(course, options, lifetime, isCurrent) {
   const qs = new URLSearchParams(location.search), TRACK_ID = course.id;
   const debug = { phase: 'boot', drops: 0, rescues: 0, laps: 0, fps: 0, events: {}, effects: [], place: 0 };
+  const loadStarted = performance.now();
+  debug.loading = { startedAt: loadStarted, milestones: [], totalMs: null };
+  const loaded = stage => debug.loading.milestones.push({ stage, ms: Math.round(performance.now() - loadStarted) });
   window.__glassroad = debug;
   cardEl.innerHTML = cardTemplate;
   const bridge = scopedBridge(shared.bridge, lifetime), hostEscape = shared.hostEscape;
   const init = await bridge.init;
   if (!lifetime.alive) return;
+  loaded('host');
   let CHARTS = courseSongs(TRACK_ID, location.search,
     songCharts({ search: location.search, devHost: DEV_HOST, songs: init.caps.songs }));
   const songCache = shared.songCache;
@@ -268,6 +272,7 @@ async function boot(course, options, lifetime, isCurrent) {
   const onlineCourseHash = await courseHash(trackJson, shared.baseFeel,
     { aerialRevision: AERIAL_REVISION, aerials: track.aerials });
   if (!lifetime.alive) return;
+  loaded('course');
   debug.trackId = track.id;
   const keepLayout = getKeepLayout(track);
   const boudoirLayout = getBoudoirLayout(track);
@@ -345,19 +350,27 @@ async function boot(course, options, lifetime, isCurrent) {
   // the saved display options (frame cap, render scale, quality, fps readout) reach the renderer at boot
   const renderer = shared.renderer ||= await createRenderer(canvas, { forceRenderer: init.caps.forceRenderer, options: hud.options });
   if (!lifetime.alive) { renderer.dispose(); return; }
+  loaded('renderer');
   if (!shared.counts.renderer) shared.counts.renderer++;
   renderer.beginCourse(); renderer.setHold(true);
   shared.counts.courses++;
   if (!shared.artLibrary && qs.get('art') !== '0') {
     shared.artLibrary = createArtLibrary(renderer);
-    shared.garageArt = await shared.artLibrary.acquire({ trackId: 'shared', want: GARAGE_ART_IDS });
-    if (!lifetime.alive) { shared.artLibrary.dispose(); return; }
   }
+  // Both leases share in-flight decodes. Course-only textures start while the garage's
+  // models arrive, without decoding the common racers twice or retaining another world.
+  const garageArtTask = shared.garageArt || (shared.artLibrary
+    ? shared.artLibrary.acquire({ trackId: 'shared', want: GARAGE_ART_IDS }) : null);
   // wave 1 art (never blocks: a missing asset keeps its greybox); ?art=0 races the greybox
   showLoading('Bringing the racers in', 0.08);
-  const art = qs.get('art') === '0' ? null
-    : await shared.artLibrary.acquire({ trackId: track.id, onProgress: (d, n) => showLoading('Bringing the racers in', 0.08 + 0.4 * d / n) });
-  if (!lifetime.alive) { art?.release(); return; }
+  const [art, garageArt] = await Promise.all([
+    qs.get('art') === '0' ? null : shared.artLibrary.acquire({ trackId: track.id,
+      onProgress: (d, n) => showLoading('Bringing the racers in', 0.08 + 0.4 * d / n) }),
+    garageArtTask,
+  ]);
+  if (!lifetime.alive) { art?.release(); garageArt?.release(); return; }
+  shared.garageArt ||= garageArt;
+  loaded('assets');
   for (const retired of shared.retiredArt.splice(0)) retired.release();
   if (art) lifetime.defer(() => shared.retiredArt.push(art));
   showLoading('Setting the course', 0.5);
@@ -372,6 +385,7 @@ async function boot(course, options, lifetime, isCurrent) {
   // and the Shadows option turns it on or off in applyOptions
   const world = buildWorld(track, feel, { art, bus, seed, count: COUNT, renderer, photosafe, kartPool: shared.kartPool, shadowsOn: qs.get('shadows') !== '0',
     spiralLayout: qs.get('spirals') === '0' ? null : undefined });   // ?spirals=0 (dev): no spiral gates
+  loaded('world');
   lifetime.defer(() => {
     if (!renderer.releaseScene(world.scene, undefined, () => world.shadows?.dispose())) world.shadows?.dispose();
     world.dispose();
@@ -385,8 +399,6 @@ async function boot(course, options, lifetime, isCurrent) {
   lifetime.defer(() => { flashMedia.dispose(); subliminalBurst.dispose(); });
   if (cardMedia) {
     lifetime.defer(() => cardMedia.dispose());
-    await cardMedia.ready;
-    if (!lifetime.alive) return;
   }
   Object.defineProperty(debug, 'cardMedia', { get: () => world.media?.stats() || null });
   Object.defineProperty(debug, 'songGates', { get: () => world.phraseGates.stats });
@@ -402,6 +414,7 @@ async function boot(course, options, lifetime, isCurrent) {
   const garage = shared.garage ||= await createGarage({ art: shared.garageArt, renderer, canvas,
     track: trackName, laps, trackId: track.id, online: course.online });
   if (!lifetime.alive) { garage?.dispose(); return; }
+  loaded('garage');
   if (garage) {
     if (!shared.counts.garage) shared.counts.garage++;
     garage.setCourse({ trackId: track.id, track: trackName, laps, online: course.online });
@@ -929,6 +942,11 @@ async function boot(course, options, lifetime, isCurrent) {
   });
 
   // warm every material and the post chain behind the warming card, a group at a time (the bar moves)
+  // Clip transport overlaps garage setup. The same complete, consent-valid sources still
+  // settle before shader preparation and the cover lifting; no streaming shortcut is used.
+  if (cardMedia) await cardMedia.ready;
+  if (!lifetime.alive) return;
+  loaded('media');
   showLoading('Getting the lights ready', 0.55);
   await paintGap();
   // Native mirrors skip capture from behind their planes. Warm from inside the hall
@@ -945,6 +963,7 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     warm = await renderer.compile(world.scene, cam.camera, undefined,
       { onProgress: (k, n) => showLoading('Getting the lights ready', 0.55 + 0.4 * k / n) });
+    loaded('shaders');
     if (warmPose) {
       showLoading('One last look', .96);
       await paintGap();
@@ -958,6 +977,7 @@ async function boot(course, options, lifetime, isCurrent) {
       });
       world.update(warmView(warmKarts));
       await world.mirrorRoom.warmCapture(renderer, world.scene, cam.camera);
+      loaded('mirrors');
     }
   } finally {
     if (warmPose) {
@@ -972,6 +992,7 @@ async function boot(course, options, lifetime, isCurrent) {
     await paintGap();
     await world.waterVolume.warmReflections({ playerPos: world.kart.position, playerS: 0,
       onProgress: (k, n) => hud.setLoading('Preparing water reflections ' + k + '/' + n, 0.96) });
+    loaded('water');
   }
   // and the gate screen's own context and Loom program (its first build froze the race at the first gate)
   showLoading('One last look', 0.97);
@@ -984,7 +1005,9 @@ async function boot(course, options, lifetime, isCurrent) {
   hud.setReady(true);
   bridge.ready();
   toMenu();
-  loading.finish();
+  loading.finish().then(() => {
+    if (isCurrent()) { loaded('ready'); debug.loading.totalMs = Math.round(performance.now() - loadStarted); }
+  });
   // ?r=<token>: a friend's race link goes straight to the lobby card, which claims it (seated, waiting or refused)
   const linkTok = course.online ? linkToken(location.search) : null;
   const pendingRoom = sessionStorage.getItem('glassroad.pendingRoom');

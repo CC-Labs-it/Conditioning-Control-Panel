@@ -1,8 +1,9 @@
 /* Opaque enamel and triangle-based ink. All nodes are shared by WebGPU and WebGL2. */
 import { MeshBasicNodeMaterial, Color, DoubleSide, BackSide, FrontSide, DataTexture, RGBAFormat, UnsignedByteType, LinearFilter, RepeatWrapping } from 'three/webgpu';
-import { vec2, vec3, float, uv, positionGeometry, positionWorld, normalWorld, cameraPosition, normalize, dot, max, min, abs, pow, mix, smoothstep, fract, fwidth, texture, sin } from 'three/tsl';
+import { vec2, vec3, float, uniform, uv, positionGeometry, positionWorld, normalWorld, cameraPosition, normalize, dot, max, min, abs, pow, mix, smoothstep, fract, fwidth, texture, sin } from 'three/tsl';
 import {getGoonworksLayout} from '../track/goonworks-layout.js';
 import { goonworksMusicFloor } from './materials/goonworksMusicFloor.js';
+import { reliefNormal, reliefFootprint } from './surfaceRelief.js';
 
 export const GOONWORKS_PALETTE = Object.freeze({ fuchsia: '#b60870', hot: '#dc4296', wine: '#661448',
   magenta:'#993e91',rose:'#ca6897',plum:'#513751',pink:'#e78eb8',
@@ -40,7 +41,11 @@ export function createGoonworksMaterial(hex, { ink = false, paper = false, unlit
   const material = new MeshBasicNodeMaterial({ side: outline ? BackSide : DoubleSide, toneMapped:false });
   material.name = 'goonworks-' + (outline || ink ? 'ink' : hex);
   if (outline || ink || unlit) { material.colorNode = rgb(ink || outline ? GOONWORKS_PALETTE.ink : hex); return material; }
-  const base = rgb(hex), N = normalize(normalWorld), L = normalize(vec3(-.38, .82, .42));
+  const base = uniform(new Color(hex)), L = normalize(vec3(-.38, .82, .42));
+  // Paper has shallow pressed tooth; the enamel is gently rolled rather than perfectly planar.
+  const mould = sin(dot(positionGeometry, vec3(3.2, 1.4, 2.1))).mul(paper ? .006 : .028)
+    .add(sin(dot(positionGeometry, vec3(19.7, 7.3, 11.1))).mul(paper ? .0018 : .001));
+  const N = reliefNormal(normalWorld, mould, reliefFootprint(positionGeometry.xy.mul(3)), { slope: paper ? .12 : .28 });
   const V = normalize(cameraPosition.sub(positionWorld)), light = dot(N, L), H = normalize(L.add(V));
   const bands = smoothstep(-.08, .08, light).mul(.17).add(smoothstep(.52, .66, light).mul(.13)).add(.7);
   const highlight = pow(max(dot(N,H),0), paper ? 22 : 36).mul(paper ? .035 : .28);

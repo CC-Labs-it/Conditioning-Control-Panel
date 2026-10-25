@@ -208,6 +208,8 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
       const mat = keepMat(new MeshBasicNodeMaterial({ side: DoubleSide }));
       mat.colorNode = mix(vec3(0.06, 0.24, 0.14), texture(tex).rgb, loomContrast);
       const disc = new Mesh(keepGeo(new CircleGeometry(radius, 64)), mat); disc.name = 'mainframe-loom-display'; holder.add(disc);
+      const cabinet = new Mesh(keepGeo(new CylinderGeometry(radius + .8, radius - .6, 2.8, 48).rotateX(Math.PI / 2)), metal);
+      cabinet.name = 'mainframe-loom-cabinet'; cabinet.position.z = -1.45; holder.add(cabinet);
       const rim = new Mesh(keepGeo(new TorusGeometry(radius + 0.6, 1, 8, 64)), metal); holder.add(rim);
       displays.push({ disc, center, radius, frame: f, tex, bound: new Sphere(new Vector3(...center), radius + 2) });
     }
