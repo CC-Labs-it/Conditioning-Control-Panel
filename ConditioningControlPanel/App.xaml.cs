@@ -254,6 +254,18 @@ namespace ConditioningControlPanel
             // Chaos bubble payloads are Core data; what firing one does is this head's.
             Services.Chaos.EffectPayload.Firer = Services.Chaos.EffectPayloadFiring.Fire;
 
+            // Goon Game seams (CCP.Core/Services/GoonGame): the Scrolller downloader and the
+            // Discord link both live in this head.
+            Services.GoonGame.GoonOnlineMedia.Materialize = (url, ct) => Services.Fyp.Online.RemoteMediaCache.MaterializeAsync(url, ct, ownerReleases: true);
+            Services.GoonGame.GoonOnlineMedia.ReleaseTempFile = Services.Fyp.Online.RemoteMediaCache.ReleaseTempFile;
+            Services.GoonGame.GoonAvatarCache.OwnDiscordProvider = () =>
+                Discord is { IsAuthenticated: true } d ? (true, d.Avatar, d.GetAvatarUrl(128)) : (false, null, null);
+            // Own-media transfer (CCP.Core/Services/Media/Transfer): the library walk, the webp
+            // header check and the WinRT video engine are this head's.
+            Services.Transfer.AssetCompressionPlanner.ActivePool = Services.Chaos.DtrhAssetManifest.EnumerateActive;
+            Services.Transfer.AssetCompressionPlanner.IsAnimatedWebp = Services.AnimatedWebp.IsAnimated;
+            Services.Transfer.WinRtVideoTranscoder.Install();
+
             // Mod seam. Localization moved to CCP.Core and VocabTokens needs the active mod's
             // overrides, but App derives from System.Windows.Application and cannot exist there.
             // These run lazily on every read, so the mod system coming up after localization is
@@ -651,7 +663,7 @@ namespace ConditioningControlPanel
             // The Deeper engine and its host moved to Core; the effects and the tracker stay here.
             Services.Deeper.EnhancementHostService.DispatcherFactory = () => new Services.Deeper.RealActionDispatcher();
             Services.Deeper.EnhancementHostService.WebcamProvider = () =>
-                Webcam == null ? null : (_deeperWebcam ??= new Services.Deeper.EnhancementWebcamAdapter(Webcam));
+                Webcam == null ? null : new Services.Deeper.WebcamEnhancementEvents(Webcam);
 
             // Speech capability, for the views that ask whether voice input is worth offering.
             // SpeechService itself stays here - it owns a capture device. Reading ModelStatus
@@ -1267,7 +1279,6 @@ namespace ConditioningControlPanel
         public static BugReportService BugReport { get; private set; } = null!;
         public static WallpaperService? Wallpaper { get; private set; }
         public static WebcamTrackingService Webcam { get; private set; } = null!;
-        private static Services.Deeper.EnhancementWebcamAdapter? _deeperWebcam;
         public static NotificationService Notifications { get; private set; } = null!;
         public static AttentionCheckService AttentionCheck { get; private set; } = null!;
         public static FocusGameService FocusGame { get; private set; } = null!;
@@ -2393,10 +2404,7 @@ namespace ConditioningControlPanel
                 }
 
                 // Check for rendering thread failure - this is unrecoverable and can cause dialog loops
-                var isRenderFailure = args.Exception.Message.Contains("RENDER") ||
-                                      args.Exception.Message.Contains("0x88980406") ||
-                                      args.Exception.HResult == unchecked((int)0x88980406) ||
-                                      args.Exception is OutOfMemoryException;
+                var isRenderFailure = Services.Diagnostics.UiThreadExit.IsRenderFailure(args.Exception);
 
                 // Render-thread failure / OOM in the composition channel is unrecoverable.
                 // Exit IMMEDIATELY, before any UI attempt - MessageBox.Show runs a nested
@@ -2404,13 +2412,23 @@ namespace ConditioningControlPanel
                 // so we can't safely show a dialog. (See 2026-05-25 crash storm:
                 // 10,251 cascading reports because the exit branch was gated behind a
                 // blocking MessageBox.Show that never returned.)
+                // Never Environment.Exit on this thread: ProcessExit's SystemEvents.Shutdown waits on
+                // a Send to this very thread, and the "hard exit" froze the app (ccp-bugs #1468).
                 if (isRenderFailure)
                 {
                     if (Interlocked.Exchange(ref exitInProgress, 1) == 0)
                     {
                         try { Logger?.Error("Render thread failure / OOM - hard exit to prevent cascade"); } catch { }
-                        Environment.Exit(1);
+                        Services.Diagnostics.UiThreadExit.Begin(1,
+                            beforeTerminate: Services.Logging.LogPipeline.WriteSessionFooter);
                     }
+                    args.Handled = true;
+                    return;
+                }
+
+                // The exit thread is already on its way out (up to 5 s): never open a dialog meanwhile.
+                if (Volatile.Read(ref exitInProgress) == 1)
+                {
                     args.Handled = true;
                     return;
                 }
@@ -2514,6 +2532,15 @@ namespace ConditioningControlPanel
             {
                 Logger?.Warning(ex, "Settings migration failed (non-fatal, defaults apply)");
             }
+
+            // The last session crashed or was killed before it handed the user's settings back:
+            // put them back now, before anything reads them (SessionSettingsJournal).
+            try
+            {
+                if (Services.SessionSettingsJournal.HealOnLaunch(UserDataPath, Settings.Current))
+                    Settings.Save();
+            }
+            catch (Exception ex) { Logger?.Warning(ex, "Session settings heal failed (non-fatal)"); }
 
             // One Descent: stamp this install's age once, from whatever on-disk evidence still
             // exists. Silent — nothing in the UI reads it. Must run after Settings so it can read
@@ -3398,6 +3425,15 @@ namespace ConditioningControlPanel
             // prior run that was killed mid-lockdown so the panic key isn't stuck off.
             LockdownService.PanicKeyUiSync = () => MainWindowRef?.SyncNoPanicState();
             LockdownService.RecoverIfNeeded();
+            // A Remote Control session the app died in: the controller's spiral / pink / strict lock
+            // values go back to the wearer's own. After Lockdown's recovery, which can put a
+            // controller's strict lock back first (RemoteHoldings).
+            try
+            {
+                if (Services.Remote.RemoteHoldings.HealOnLaunch(UserDataPath, Settings?.Current) > 0)
+                    Settings?.Save();
+            }
+            catch (Exception ex) { Logger?.Warning(ex, "Remote holdings heal failed (non-fatal)"); }
             Lockdown = new LockdownService();
             LockdownService.Current = Lockdown;
             // Possession: the haunt that rides the lockdown timer. It only arms when a lockdown starts
@@ -6346,6 +6382,10 @@ Application State:
             // Save settings FIRST (before cloud sync) to persist the user's current local state.
             // This prevents cloud sync from overwriting local values with stale data before save.
             // Use SaveImmediate to flush any pending debounced writes and ensure final state is on disk.
+            // Temporary values (ramp, Takeover pulse, remote controller) go back first: the restores
+            // further down in this method are never saved (MainWindow.SettleTemporarySettingsForExit).
+            try { MainWindowRef?.SettleTemporarySettingsForExit(); }
+            catch (Exception ex) { Logger?.Warning(ex, "Exit: temporary settings settle failed"); }
             Settings?.SaveImmediate();
 
             // Sync profile to cloud on exit (short timeout to avoid blocking shutdown)

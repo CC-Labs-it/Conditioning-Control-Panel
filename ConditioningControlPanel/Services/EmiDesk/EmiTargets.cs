@@ -122,7 +122,7 @@ public static class EmiTargets
         if (string.IsNullOrEmpty(tabKey)) return;
         try
         {
-            if (EmiDoors.TabTargets.TryGetValue(tabKey, out var id)) App.EmiDesk?.NoteOpen(id);
+            if (EmiDoors.TargetForTab(tabKey) is { } id) App.EmiDesk?.NoteOpen(id);
         }
         catch (Exception ex)
         {
@@ -136,7 +136,7 @@ public static class EmiTargets
         if (string.IsNullOrEmpty(rackKey)) return;
         try
         {
-            if (EmiDoors.RackTargets.TryGetValue(rackKey, out var id)) App.EmiDesk?.NoteOpen(id);
+            if (EmiDoors.TargetForRack(rackKey) is { } id) App.EmiDesk?.NoteOpen(id);
         }
         catch (Exception ex)
         {

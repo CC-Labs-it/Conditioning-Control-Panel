@@ -37,6 +37,9 @@ public sealed class StatusPulseLifecycleTests
         CoreSettings.ServiceProvider = () => settings;
         settings.Current.MotionLevel = MotionLevel.Full;
         settings.Current.PerformanceMode = false;
+        // The Awareness tab re-drives its pulse from the master switch whenever it is shown
+        // (WPF SyncAwarenessTabUI -> UpdateAwarenessStatusIndicator(masterOn)), so the master must be on.
+        settings.Current.KeywordTriggersEnabled = true;
         var clock = new Clock();
         BeatLoop.Time = clock;
         var shell = new MainShellWindow();
