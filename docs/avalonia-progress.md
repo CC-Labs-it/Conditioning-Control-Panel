@@ -2904,6 +2904,11 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 - The New enhancement dialog's HypnoTube/TikTok sample now comes from a shared Core selector (`HypnotubeDefaultLinks.SelectTikTokTutorialVideo`), which both heads call. On Avalonia the table is still the static one, so users see no change yet.
 - Headless tests click the real button from the shell's Deeper tab and cover native Browse/Create (fail-proven). The row stays stub: the three interactive tutorials are deferred to lane `-b`.
 
+## avalonia-port/wire-views-tab-friends (cloud merge-fix)
+- Retains this lane's one-time presence question: Yes shares, No stays hidden, both persist the Core FriendsPresenceAsk marker; WPF delegates to the same rule.
+- Merges wire-views-deeper-new-enhancement-dialog at e9eb9cd94c81796f4ce89d39f4f9d563cdde0946, including friends feed/send trails, unread badge and open tables without removing their behavior or assertions.
+- Consolidates parity IDs at the most advanced unverified status and retains distinct evidence/context. The incoming progress entries and panic-surface ordering/assertions are retained.
+
 ## avalonia-port/panic-tests-derive: +93
 - Panic ordering rules now sit on the PanicSurfaces registry entries (`After`, with WPF cites); the test reads them, so its hand-kept order list is gone.
 - SafetyCritical is kept as one sorted id per line so new panic surfaces merge without conflicts; fail-proven for line deletion and pair swap.
@@ -3154,3 +3159,63 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-theme-main-window: +1
 - Review nits: tab themes reindented, help cursor/rest brushes asserted (fail-proven), ledger cites gate not unbacked counts.
 - rgate 39691420992: only P108 GoonClock red.
+
+## avalonia-port/wire-feat-companion-ai-cloud-chat: +282
+- Avalonia startup seeds one Core moderation session before the AI provider; refusal records carry no chat text.
+- Selecting Local restores the WPF Ollama setup offer (Yes/Cancel; Yes opens the wizard, Ready stays silent); tests await the in-flight offer.
+
+## avalonia-port/wire-win-emi-desk: +268
+- EMI Desk pat faces (poke ladder moved to Core): pat, wink, glee and chime, annoyed, rage. A live face eats clicks the way WPF does.
+- The full chain player, particles and body are deferred to wire-win-emi-desk-b. The row stays stub.
+
+## avalonia-port/stakes-host: +359
+- Piece by Piece board routes PvP stake frames to Core StakeBridge and posts replies back; StakeHead seeds the Chaster gate, loss row and wallet adoption (WPF StakeAppHooks).
+- feat-stakes stays stub: no Goon host on Avalonia; live /v2/stakes steps queued in live-queue/prizes.md.
+
+## avalonia-port/wire-shell-awareness: +180
+- Awareness app-scope list commits on Enter/blur through Core AwarenessAppScopeRules (shared with WPF), logged and guarded.
+- Review fixes: parser name aligned with the views-tab lane; ledger citation fixed.
+
+## avalonia-port/wire-shell-mod-catalogue: +365
+- Avalonia Manage Mods: Share now submits `ccp-mod/v1` metadata through a Core builder that WPF also uses.
+- The second review round added a fail-proven assertion for the auth toast. Gate run 39697561326 is green except a known RaceTrackPlayer flake.
+
+## avalonia-port/wire-views-tab-friends: +161
+- Friends page once-only presence question ported (Core FriendsPresenceAsk shared by WPF + Avalonia).
+- Review fixes: ledger rows no longer list the ask as missing; feed/trails and tables point at lanes friends-feed / friends-open-tables. Gate run 39699624563 green apart from the known RaceTrack flake.
+
+## avalonia-port/wire-ctrl-card-sheen-adorner: +309
+- CardSheenAdorner hosted on the selected preset/session card, the Chaster hero, the Launcher CTA and wandering launcher tiles (WPF radii and timing); the launcher tile glow stays on its DropShadowEffect.
+- Assets hover sheen deferred to lane -b; the row stays `stub`.
+
+## avalonia-port/wire-feat-split-card: +659
+- feat-split-card: WPF half depth (travel/tilt/spring), dashboard click inversion and cached grey HalfMute via Core DashboardDepthLaw/CardMuteRule; re-gating via the shell's RefreshFx; tilt keeps one transition per transform, grey art scales first (no PNG round trip).
+- Gaps logged: no Avalonia DashboardInvertClicks writer; single FeatureCard ignores inversion.
+
+## avalonia-port/wire-shell-programs-tab: +311
+- Live Programs session clock/bar/sheen driven by the shell tick; Core ProgramSessionProgress shared with WPF.
+- Review fixes: test seam without reflection, parity FX items moved to shell-programs-fx; sheen/hide/panic/percent fail-proven.
+
+## avalonia-port/wire-views-companion-workshop-community-cell: +1
+- Community prompt Workshop cell wired on Core CommunityPromptService; rows and Z4 readout stay in sync on Activate/Remove, Z4 Reset/preset pick and tab show, like WPF.
+- Gate: rgate 39697210905 green except known flakes (RaceTrack, GoonClock P108); consent gate tested.
+
+## avalonia-port/wire-win-whatmoved-card: +117
+- What moved card: parity tests for the Show me landings, read mode, keys and fresh install. Duplicate tests removed.
+- Row icons are now Fluent glyphs (IconMap, 📑 -> Tabs), not emoji text.
+
+## avalonia-port/wire-ctrl-section-tab-strip: +251
+- Section strip pills: choosing one draws the NavGlow ring (Full/Reduced/Off), and pointer press squishes the pill to 0.97 over 80 ms through Core InteractionPressMotion, which WPF MotionFx shares. Covered by SectionStripChoosePressTests; the row stays stub, with the remaining work in follow-up -b.
+- Review fixes: the NavGlow clock is restored per test, siblings share one bare app builder, and the press Transitions are built once so the 80 ms release ease survives a click (fail-proven). Final rgate 39732875251 was green except the lone RaceTrackPlayer flake (P115).
+
+## avalonia-port/wire-shell-tab-navigation: +115
+- Shell ShowTab refuses unknown keys before the bark hook; Blink Trainer refreshes on every visit, including a same-page re-visit.
+- Review fixes: no double refresh when arriving from another tab; the ledger now names the Presets/Patreon refresh follow-ups. Gates 39681859342/39732888606 were green apart from listed flakes.
+
+## avalonia-port/wire-dialogs-username-picker-b: +202
+- UsernamePickerDialog: HttpClient + TimeProvider test seams; 7 headless tests cover debounce, trimmed/escaped query, taken/error responses, stale and post-close replies with no wall-clock waits (fail-proven).
+- Ledger row dialogs-username-picker stays stub (WPF has no live caller); host work is lane wire-dialogs-username-picker-c.
+
+## avalonia-port/wire-feat-feature-card: +276
+- FeatureCard TeaseTier attaches the shared-clock gold/diamond TierFxBorder; hover lift/rim snap at Off; window focus/minimize and loaded-only motion gates; FeatureCardFxTests (fail-proven).
+- Ledger `feat-feature-card` stays stub: DimWhenInactive, DashboardDepth, DashboardInvertClicks, ShowV2Badge left for wire-feat-feature-card-b.

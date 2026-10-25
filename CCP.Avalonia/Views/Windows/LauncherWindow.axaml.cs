@@ -557,10 +557,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void BuildTiles()
         {
+            StopWanderingSheen();
             GamesGrid.Children.Clear();
             _revealedAtBuild.Clear();
             foreach (var card in VisibleCards) { GamesGrid.Children.Add(CreateTile(card)); _revealedAtBuild[card.Id] = true; }
-            SeatGrid();
+            SeatGrid();   // the wander timer keeps running and picks from the new tiles; the CTA sheen is untouched
         }
 
         /// <summary>WPF GamesColumn_SizeChanged / FitTiles (LauncherWindow.xaml.cs:550): columns and card
