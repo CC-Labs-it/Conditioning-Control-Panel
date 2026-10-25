@@ -449,6 +449,7 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.SecretStore.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
+                Platform.WallpaperHead.Initialize();
                 // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
                 global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
@@ -1182,6 +1183,7 @@ namespace ConditioningControlPanel.Avalonia
             // Restore any app we ducked; a pending Unduck would otherwise die with the process.
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
             try { Platform.LayeredAudio.Instance?.Shutdown(); } catch { }
+            try { Platform.WallpaperHead.Service?.ShutdownAsync().GetAwaiter().GetResult(); } catch { }
             try { ReleaseContent?.Dispose(); } catch { }
             try { Platform.ChasterHead.Service?.Dispose(); } catch { }
 

@@ -123,6 +123,7 @@ public sealed class PanicSurfacesTests
         "tour",
         "tube-speech",
         "voice-capture",
+        "wallpaper",
     };
 
     [Fact]

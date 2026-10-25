@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Wallpaper host (part-a)
+
+1. Choose a wallpaper folder containing two supported images. Enable Takeover wallpaper actions and trigger a shuffle. With Keep off, check restoration after the configured duration; trigger again before expiry and check the newer pulse gets its full duration. WPF `Services/AutonomyService.cs:1158` Rows: `host-wallpaper-service`, `shell-autonomy`.
+2. Enable Keep, shuffle, then disable Keep: the original returns immediately. Stop Takeover with Keep off: the original returns. WPF `MainWindow/MainWindow.Autonomy.cs` Rows: `views-tab-bambi-takeover`, `host-wallpaper-service`.
+3. **[SAFETY]** With Keep on and an override active, panic and exit separately: both restore the original. Restart after an interrupted restore and check recovery. Repeat with different GNOME light/dark pictures and KDE per-screen images. Solid colour or unsupported desktops must remain unchanged. WPF `Services/Video/WallpaperService.cs:124` Rows: `host-wallpaper-service`.

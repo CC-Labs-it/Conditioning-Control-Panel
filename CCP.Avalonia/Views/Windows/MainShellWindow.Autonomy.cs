@@ -9,7 +9,7 @@
 // and available, else a preset phrase through the tube), Mind Wipe (only once CoreMindWipe is
 // seeded). Never picked here (CanPerform false, exactly as WPF skips an unavailable action):
 // ponytail: Spiral pulse and Brain Drain pulse (no spiral / blur overlay on this head), Web Video
-// (no browser media service), Wallpaper (Win32 WallpaperService). Spoken Mantra runs through the
+// (no browser media service). Spoken Mantra runs through the
 // voice funnel (MainShellWindow.VoiceCommands.cs, Core SpokenMantra). Add each to CanPerformAutonomy the day its surface lands.
 // The TakeoverAnnouncerOverlay banner shows on the announced roll (AutonomyService.cs:961). Not here: the avatar
 // countdown bar, the announcement's event audio (CompanionPhraseService), the diagnostic Test
@@ -98,6 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             AutonomyActionType.Subliminal => CoreSubliminal.ShowProvider != null,
             AutonomyActionType.LockCard => CoreLockCard.ShowHandler != null,
             AutonomyActionType.Video => CoreEngine.Video != null,
+            AutonomyActionType.WallpaperShuffle => Platform.WallpaperHead.Service != null,
             AutonomyActionType.StartBubbles => CoreBubbles.StartAction != null,
             AutonomyActionType.BouncingText => CoreBouncingText.StartAction != null,
             // WPF SelectAction's mantraOk: engine up and idle, no prompt in flight, the tube shown and the
@@ -116,6 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (announced) TakeoverAnnouncerOverlay.Announce(AutonomyScheduler.TakeoverEffectLabel(a));
             switch (a)
             {
+                case AutonomyActionType.WallpaperShuffle: _ = TriggerWallpaperChangeAsync(); break;
                 case AutonomyActionType.Flash: CoreFlash.ShowProvider?.Invoke(); break;
                 case AutonomyActionType.Subliminal:
                     if (CoreSubliminal.PickPhrase() is { } phrase) CoreSubliminal.ShowProvider?.Invoke(phrase);
@@ -148,6 +150,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// session runs (it owns the overlays). <see cref="PinkFilterOverlay.PulseHold"/> is WPF's
         /// "pulse started the overlay service" (#1180): it shows the tint with the engine off and
         /// is released, not left on, when the pulse ends.</summary>
+        private int _wallpaperGen;
+        internal async System.Threading.Tasks.Task TriggerWallpaperChangeAsync()
+        {
+            var host = Platform.WallpaperHead.Service;
+            if (host == null) return;
+            var gen = ++_wallpaperGen;
+            if (!await host.ShuffleAsync() || gen != _wallpaperGen) return;
+            if (CoreSettings.Current.WallpaperEnabled) return;
+            PulseTimer(() =>
+            {
+                if (gen == _wallpaperGen && !CoreSettings.Current.WallpaperEnabled)
+                    _ = host.DeactivateAsync();
+            }, TimeSpan.FromSeconds(CoreSettings.Current.WallpaperPulseSeconds));
+        }
+
         private void PulsePinkFilter()
         {
             if (App.Sessions?.IsRunning == true || _pinkPulse) return;
@@ -217,6 +234,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void CancelAutonomyPulses()
         {
             _pulseGen++;
+            _wallpaperGen++;
+            if (!CoreSettings.Current.WallpaperEnabled) _ = Platform.WallpaperHead.Service?.DeactivateAsync();
             if (_bubblesPulse) { _bubblesPulse = false; CoreBubbles.Stop(); }
             if (_bouncingPulse) { _bouncingPulse = false; CoreBouncingText.Stop(); }
             EndPinkPulse(cancelled: true);
