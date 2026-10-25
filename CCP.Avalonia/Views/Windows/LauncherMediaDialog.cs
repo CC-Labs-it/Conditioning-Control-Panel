@@ -36,6 +36,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly List<ToggleButton> _nicheChips = new();
         private readonly TextBlock _sourceHint, _ratioLabel, _masterLabel;
         private readonly Grid _ratioRow;
+        /// <summary>WPF ScrolllerCreditLine (xaml :104-106): the online source's credit, shown while online is in play.</summary>
+        internal readonly ScrolllerCreditLine CreditLine = new() { Margin = new Thickness(0, 4, 0, 0), IsVisible = false };
         private readonly Slider _ratioSlider, _masterSlider;
         private readonly ComboBox _presetCombo = new()
             { FontSize = 13, MinHeight = 32, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -114,6 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ToolTip.SetTip(Chip(Loc.Get("launcher_media_src_" + key), key, _sourceChips, sourcePanel, SourceChip_Changed),
                     Loc.Get("launcher_media_src_" + key + "_hint"));
             _sourceHint = Copy("launcher_media_src_local_hint", 13, 2);
+            CreditLine.Foreground = copy;
             _ratioSlider = new Slider { Minimum = 5, Maximum = 95, TickFrequency = 5, IsSnapToTickEnabled = true, VerticalAlignment = VerticalAlignment.Center };
             _ratioSlider.ValueChanged += (_, _) => RatioSlider_Changed();
             _ratioLabel = new TextBlock { Margin = new Thickness(14, 0, 0, 0), MinWidth = 90, Foreground = copy, FontSize = 13, VerticalAlignment = VerticalAlignment.Center };
@@ -152,7 +155,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         Children =
                         {
                             Copy("launcher_media_blurb"),
-                            Eyebrow("launcher_media_source", 22), sourcePanel, _sourceHint, _ratioRow,
+                            Eyebrow("launcher_media_source", 22), sourcePanel, _sourceHint, CreditLine, _ratioRow,
                             Eyebrow("launcher_media_niches", 22), nichePanel, Copy("launcher_media_niches_hint", 13, 2),
                             Eyebrow("launcher_media_library", 22), Copy("launcher_media_preset", 13),
                             Row(_presetCombo, browser, 6), Copy("launcher_media_preset_hint", 13, 2),
@@ -270,6 +273,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 foreach (var chip in _sourceChips)
                     chip.IsChecked = string.Equals(chip.Tag as string, source, StringComparison.Ordinal);
                 _sourceHint.Text = Loc.Get("launcher_media_src_" + source + "_hint");
+                CreditLine.IsVisible = source != LauncherMediaSettings.SourceLocal;
                 _ratioSlider.Value = s.RemoteMediaRatio;
                 _ratioLabel.Text = Loc.GetF("launcher_media_mixed_share", s.RemoteMediaRatio);
                 _ratioRow.IsVisible = source == LauncherMediaSettings.SourceMixed;

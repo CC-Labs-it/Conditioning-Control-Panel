@@ -50,7 +50,7 @@ namespace ConditioningControlPanel.Services
         /// user made and filled, and staying usable matters. Only the bare roots are refused.
         /// </summary>
         public static bool IsPersonalFolderRoot(string? directory)
-            => PersonalFolderRoots.IsPersonalFolderRoot(directory);
+            => AssetFolderSafety.IsPersonalFolderRoot(directory);
 
         /// <summary>
         /// Sanitizes a filename to prevent directory traversal and invalid characters
