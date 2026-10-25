@@ -31,6 +31,27 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The lookup resumes off the UI thread (ConfigureAwait(false)); its opener builds a window.</summary>
         internal static Task<bool> OnUiThread(Func<bool> open) => Dispatcher.UIThread.InvokeAsync(open).GetTask();
 
+        /// <summary>WPF App.xaml.cs:2853/2928: publish the ledger, sweep retention on disk (creates nothing),
+        /// and let the awareness switch start/stop it. Startup calls this; tests drive the same hook.</summary>
+        internal static void InstallPrivacyLedger(ConditioningControlPanel.Services.Awareness.ActivityLedger ledger)
+        {
+            ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger = ledger;
+            try { ledger.PruneOnDisk(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "ActivityLedger: startup retention sweep failed"); }
+            WindowAwarenessService.V2Lifecycle = start =>
+            {
+                if (start && System.IO.File.Exists(ledger.LedgerPath)) ledger.Start();
+                else if (!start) ledger.Stop();
+            };
+        }
+
+        /// <summary>WPF App.OnExit:6285: dispose the ledger and unpublish it.</summary>
+        internal static void ReleasePrivacyLedger()
+        {
+            try { ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger?.Dispose(); } catch { }
+            ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger = null;
+        }
+
         /// <summary>The achievement engine (achievements.json), or null on the headless render path.
         /// Local-only: no sync, no streak writes, no ResetProgress on this head (oracle-achievements.md).</summary>
         internal static AchievementEngine? Achievements { get; private set; }
@@ -72,6 +93,7 @@ namespace ConditioningControlPanel.Avalonia
         {
             Services.DiscordRichPresenceService.PostToUi = a => Dispatcher.UIThread.Post(a);
             DiscordRpc = new Services.DiscordRichPresenceService();
+            CoreDiscord.ServiceProvider = () => DiscordRpc;
             ApplyRichPresence();
         }
 
@@ -95,6 +117,9 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>The Core quest board (WPF App.Quests), built by StartQuests before the shell.</summary>
         internal static QuestService? Quests { get; set; }
+
+        /// <summary>WPF App.QuestDefinitions: the quest catalogue and the season title.</summary>
+        internal static QuestDefinitionService? QuestDefinitions { get; set; }
 
         /// <summary>WPF App.Programs (App.xaml.cs:2704), the full writing instance since programs 3a
         /// (docs/avalonia-decisions.md): timers, startup repair + rollover, Dispose flush. A file stamped by
@@ -131,7 +156,7 @@ namespace ConditioningControlPanel.Avalonia
             CoreQuests.MicrophoneProbe = () => Platform.PulseMicSource.MicrophonePresent(
                 Platform.LibVlcAudio.PactlInstalled, () => Platform.LibVlcAudio.Pactl("list short sources"));
 
-            var definitions = new QuestDefinitionService();
+            var definitions = QuestDefinitions = new QuestDefinitionService();
             _ = definitions.InitializeAsync(); // cache first, then the server, as WPF
             Quests = new QuestService(definitions);
             global::ConditioningControlPanel.Services.Companion.ConversationDelivery.QuestsOpenProvider = () => Quests?.HasUnfinishedQuest();
@@ -470,6 +495,10 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.SecretStore.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
+                // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
+                // the ledger starts when awareness turns on. No observer feeds it on this head yet.
+                InstallPrivacyLedger(new ConditioningControlPanel.Services.Awareness.ActivityLedger());
+
                 // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
                 global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
@@ -582,8 +611,9 @@ namespace ConditioningControlPanel.Avalonia
                 CoreEntitlement.IntakePassAvailableProvider = () => IntakePass.IsPassAvailable;
                 // WPF App.xaml.cs:2875/2941: the one HapticService, gated (premium / daily free) in its
                 // mixer. Connects only to what the user runs (Intiface at ButtplugUrl, Lovense Remote).
-                // ponytail: no MockToast (mock toys log only), no funscript playhead (FunScriptService.
+                // ponytail: no funscript playhead (FunScriptService.
                 // SubscribePlaybackTime unseeded: no video time source here), no EMI Desk.
+                Views.Overlays.HapticMockToast.Seed();
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
                 _ = CoreHaptics.Service.AutoConnectOnStartupAsync();
                 StartRichPresence();
@@ -1189,7 +1219,9 @@ namespace ConditioningControlPanel.Avalonia
 
             // WPF App.OnExit:5965: haptics FIRST and synchronously (bounded ~2 s). A Lovense level has no
             // server-side watchdog, so a toy not countermanded here keeps running after the app is gone.
+            Services.Haptics.Core.MockProviderV2.Toast = null;
             try { CoreHaptics.Service?.ShutdownStop(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Haptics shutdown stop failed"); }
+            try { Views.Overlays.HapticMockToast.Close(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Mock haptics feedback close failed"); }
 
             try { (((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).MainWindow as Views.Windows.MainShellWindow)?.Tray?.Dispose(); } catch { }
 
@@ -1225,6 +1257,7 @@ namespace ConditioningControlPanel.Avalonia
             try { DiscordRpc?.Dispose(); } catch { /* WPF App.OnExit:6296 */ }
             try { Platform.FriendsLanding.Stop(); } catch { /* WPF FriendsLanding.Stop on the panel's Closed: no card outlives the app */ }
             try { (Platform.FriendsHead.Service as IDisposable)?.Dispose(); } catch { /* WPF App.OnExit: the friends poll stops */ }
+            ReleasePrivacyLedger();
             try { Brain?.Dispose(); } catch { /* WPF App.OnExit:6121; flushes the turn log */ }
             try { Ai?.Dispose(); } catch { /* WPF App.OnExit:6250 (#629): unloads the local Ollama model */ }
             // WPF App.OnExit:6336: only the `ollama serve` this app spawned; a user's own server is untouched.

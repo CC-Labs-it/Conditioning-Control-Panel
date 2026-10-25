@@ -2,13 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Serilog;
+using ConditioningControlPanel.Services.Leash;
 using Tmds.DBus.Protocol;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
 /// <summary>
 /// The panic key for NATIVE Wayland windows: org.freedesktop.portal.GlobalShortcuts (CreateSession,
-/// BindShortcuts, Activated), raw over Tmds.DBus.Protocol like the tray probe. X11 focus is
+/// BindShortcuts, Activated/Deactivated), raw over Tmds.DBus.Protocol like the tray probe. X11 focus is
 /// <see cref="X11PanicKey"/>'s job; this covers the rest.
 ///
 /// <para><b>Unlike the X11 listener this CONSUMES the key desktop-wide</b> - it is a compositor
@@ -22,7 +23,19 @@ internal static class PortalPanicShortcut
     private const string Iface = "org.freedesktop.portal.GlobalShortcuts", Id = "panic";
 
     private static string? _session;
-    private static IDisposable? _activated;
+    private static IDisposable? _activated, _deactivated;
+    private static Action? _onReleased;
+    private static volatile bool _held, _reportsRelease;
+    private static DateTime _lastDown;
+    internal static bool IsHeld => _held;
+    /// <summary>This compositor has sent a Deactivated for our shortcut, so a hold can trust its release.</summary>
+    internal static bool ReportsRelease => _reportsRelease;
+
+    /// <summary>Test seam: a bound session without D-Bus.</summary>
+    internal static void SetSessionForTests(string? session, Action? onReleased)
+    {
+        (_session, _onReleased, _held, _reportsRelease) = (session, onReleased, false, false);
+    }
     private static DBusConnection? _bus;
 
     internal static bool IsBound => !string.IsNullOrEmpty(_session);
@@ -31,9 +44,11 @@ internal static class PortalPanicShortcut
     /// "panic" shortcut. <paramref name="onActivated"/> runs on a D-Bus thread. Returns the trigger
     /// the compositor actually assigned (the user may have changed it; "" if it did not say), or
     /// null when the portal is absent, the user refused, or anything failed - never throws.</summary>
-    internal static async Task<string?> BindAsync(string key, string description, Action onActivated)
+    internal static async Task<string?> BindAsync(string key, string description, Action onActivated, Action onDeactivated)
     {
         if (!OperatingSystem.IsLinux() || _session != null) return null;
+        _onReleased = onDeactivated;
+        _reportsRelease = false;
         _session = "";   // claimed: a second caller while this one waits gets null, not a second session
         try
         {
@@ -60,7 +75,18 @@ internal static class PortalPanicShortcut
                 (Message m, object? _) => { var r = m.GetBodyReader(); return (r.ReadObjectPathAsString(), r.ReadString()); },
                 (Exception? ex, (string Session, string Id) a, object? _, object? _) =>
                 {
-                    if (ex == null && a.Session == session && a.Id == Id) onActivated();
+                    if (ex == null) Route(a.Session, a.Id, true, onActivated, onDeactivated);
+                    else Release();
+                },
+                null, null, false, ObserverFlags.None);
+
+            _deactivated = await bus.AddMatchAsync(
+                new MatchRule { Type = MessageType.Signal, Interface = Iface, Member = "Deactivated", Path = DesktopPath },
+                (Message m, object? _) => { var r = m.GetBodyReader(); return (r.ReadObjectPathAsString(), r.ReadString()); },
+                (Exception? ex, (string Session, string Id) a, object? _, object? _) =>
+                {
+                    if (ex == null) Route(a.Session, a.Id, false, onActivated, onDeactivated);
+                    else Release();
                 },
                 null, null, false, ObserverFlags.None);
 
@@ -95,6 +121,36 @@ internal static class PortalPanicShortcut
             Log.Warning("Panic key: GlobalShortcuts portal unavailable ({Why}); native Wayland windows rely on the tray", why);
             return null;
         }
+    }
+
+    // Ignore other sessions/shortcuts. An Activated within LeashHoldToCut.RepeatGap of the last one while
+    // held is a repeat (WPF MainWindow.Leash.cs:310-357); after the gap it is a new press even if a
+    // Deactivated was lost, so the panic key never goes dead.
+    internal static bool Route(string session, string id, bool pressed, Action down, Action up, DateTime? now = null)
+    {
+        if (string.IsNullOrEmpty(_session) || session != _session || id != Id) return false;
+        var t = now ?? DateTime.UtcNow;
+        if (pressed)
+        {
+            var repeat = _held && t - _lastDown <= LeashHoldToCut.RepeatGap && t >= _lastDown;
+            _lastDown = t;
+            if (repeat) return true;
+            _held = true;
+            down();
+        }
+        else
+        {
+            _reportsRelease = true;
+            if (_held) { _held = false; up(); }
+        }
+        return true;
+    }
+
+    private static void Release()
+    {
+        var held = _held;
+        _held = false;
+        if (held) _onReleased?.Invoke();
     }
 
     /// <summary>`--portal-check`: CreateSession, expect Response 0 with a session_handle, then
@@ -168,6 +224,10 @@ internal static class PortalPanicShortcut
         if (session == "") session = null;
         _activated?.Dispose();
         _activated = null;
+        _deactivated?.Dispose();
+        _deactivated = null;
+        Release();
+        _onReleased = null;
         var bus = _bus;
         _bus = null;
         if (bus == null) return;

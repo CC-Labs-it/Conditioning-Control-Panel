@@ -57,6 +57,31 @@ namespace ConditioningControlPanel.Services
             return true;
         }
 
+        // settings.json keys of the six privacy switches (AppSettings' serialized names).
+        private static readonly (string Key, SyncBody.Field Field)[] PrivacyKeys =
+        {
+            ("AllowDiscordDm", SyncBody.Field.AllowDiscordDm), ("ShowOnlineStatus", SyncBody.Field.ShowOnlineStatus),
+            ("ShareProfilePicture", SyncBody.Field.ShareProfilePicture), ("PublicShareRealAvatar", SyncBody.Field.PublicShareAvatar),
+            ("goonShareAvatar", SyncBody.Field.GoonShareAvatar), ("goonShareDiscordDm", SyncBody.Field.GoonShareDm),
+        };
+
+        /// <summary>Decision 2026-10-22 (option C, oracle-deep): a settings.json written by WPF (no <c>consentOwnedFields</c>
+        /// key, so no consent-aware build ever saved it) with a non-empty UnifiedId and all six privacy switches as JSON bools
+        /// hands that account ownership of all six: WPF sent all six on every sync, so the local values are the server's.
+        /// Anything else (fresh install, no UnifiedId, any of the six missing or not a bool) seeds nothing and stays scoped (B).</summary>
+        public static void SeedFromWpfSettings(AppSettings s, JObject raw)
+        {
+            if (raw.ContainsKey("consentOwnedFields") || raw.ContainsKey("consentOwnedAccount")) return;
+            if (string.IsNullOrEmpty(s.UnifiedId)
+                || raw["UnifiedId"] is not JValue { Type: JTokenType.String } id || (string?)id != s.UnifiedId) return;
+            var read = SyncBody.Field.None;
+            foreach (var (key, field) in PrivacyKeys)
+                if (raw[key]?.Type == JTokenType.Boolean) read |= field;
+            if (read != Privacy) return;
+            s.ConsentOwnedAccount = s.UnifiedId;
+            s.ConsentOwnedFields = (long)read;
+        }
+
         public static readonly TimeSpan Cooldown = TimeSpan.FromSeconds(30);
         public static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(120);
         private static readonly TimeSpan NudgeSettle = TimeSpan.FromSeconds(3), NudgeCooldownSlack = TimeSpan.FromSeconds(2);

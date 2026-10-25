@@ -341,6 +341,7 @@ namespace ConditioningControlPanel.Services
                 if (!ReferenceEquals(mine, _preroll) || !_playing) return;
                 Dispose(ref _preroll);
                 CoreBubbles.Pause();   // WPF StartVideoPlayback: App.Bubbles?.PauseAndClear(), until the run ends
+                CoreDiscord.Service?.SetVideoActivity(); // WPF StartVideoPlayback:3133
                 try { _host.Show(path, strict); }
                 catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); End(); return; }
                 LastVideoPath = path;
@@ -370,6 +371,7 @@ namespace ConditioningControlPanel.Services
             Penalties = 0;
             CoreBubbles.Resume();   // WPF Cleanup: App.Bubbles?.Resume() - not before a verdict replay
             if (_running && CoreSettings.Current.FlashEnabled) CoreFlash.Start();
+            else CoreDiscord.Service?.SetIdleActivity(); // WPF Cleanup:7962
             if (_running) ScheduleNext();
         }
 
@@ -413,7 +415,10 @@ namespace ConditioningControlPanel.Services
             _retryGeneration++;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.
-            if (Finish() && _running) CoreBubbles.Resume();   // Stop() clears _running first: no resume after an engine stop
+            if (!Finish()) return;
+            // Deviation: WPF ForceCleanup leaves the presence on "Watching"; a closed clip is not watched.
+            CoreDiscord.Service?.SetIdleActivity();
+            if (_running) CoreBubbles.Resume();   // Stop() clears _running first: no resume after an engine stop
         }
 
         private bool Finish()

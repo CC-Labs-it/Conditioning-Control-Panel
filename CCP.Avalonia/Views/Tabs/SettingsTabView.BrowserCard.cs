@@ -85,7 +85,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void ApplyBrowserMute()
         {
             BrowserMuteApplies++;
-            _ = BrowserWebHost.SetMutedAsync(CoreSettings.Current.BrowserVideoMuted);
+            // While the Workshop pause holds, a new page stays muted whatever the saved preference.
+            _ = BrowserWebHost.SetMutedAsync(BrowserWebHost.MediaPaused || CoreSettings.Current.BrowserVideoMuted);
         }
 
         /// <summary>WPF SyncBrowserMuteIcon: the header glyph matches the saved preference.</summary>
