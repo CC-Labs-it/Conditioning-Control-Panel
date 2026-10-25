@@ -1,45 +1,49 @@
 using System;
-using System.Threading.Tasks;
 using System.IO;
-using Avalonia.Controls;
-using ConditioningControlPanel.Avalonia.Helpers;
-using ConditioningControlPanel.Avalonia.Views.Dialogs;
-using ConditioningControlPanel.Models;
 using SkiaSharp;
-using Serilog;
+using System.Threading.Tasks;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Models;
+using Avalonia.Controls;
+using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        /// <summary>WPF ShareModToCatalogueAsync: affirmation + MEGA link, metadata POST, status record.</summary>
+        /// <summary>WPF metadata-only mod share. Affirmation and the creator's MEGA URL gate the POST.</summary>
         internal async Task ShareModToCatalogueAsync(ModPackage mod, Window? owner = null)
         {
-            if (mod.IsBuiltIn || string.IsNullOrEmpty(mod.InstalledPath)) return;
+            if (mod == null || mod.IsBuiltIn || string.IsNullOrEmpty(mod.InstalledPath)) return;
             if (!CatalogueSignedIn()) return;
-            var dialog = new AssetSubmitDialog(mod.Name, CoreAccount.DisplayName,
+            var dialog = new Dialogs.AssetSubmitDialog(mod.Name, CoreAccount.DisplayName,
                 requireDownloadUrl: true,
-                defaultTags: mod.Manifest.Tags != null ? string.Join(", ", mod.Manifest.Tags) : null);
+                defaultTags: mod.Manifest.Tags == null ? null : string.Join(", ", mod.Manifest.Tags));
             if (!await dialog.ShowDialogSafe<bool>(owner ?? this) || !dialog.Confirmed) return;
-
+            JObject asset;
+            try { asset = ModCatalogueAsset.Build(mod, dialog.DownloadUrl, TryBuildModPreviewThumb(mod)); }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[Catalogue] Mod asset build failed");
+                App.Notifications.Show(Loc.Get("catalogue_toast_unknown_error"), Helpers.NotificationType.Error, TimeSpan.FromSeconds(8));
+                return;
+            }
             SubmissionResult result;
             try
             {
-                var asset = ModCatalogueAsset.Build(mod, dialog.DownloadUrl, TryBuildModPreviewThumb(mod));
                 result = await App.Catalogue.SubmitCatalogueAssetAsync(CatalogueKindMods, asset,
                     ModCatalogueAsset.Schema, dialog.Creator, dialog.Tags, default);
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "[Catalogue] Mod share failed");
+                Log.Warning(ex, "[Catalogue] Mod share threw unexpectedly");
                 result = new SubmissionResult.UnknownError(0, ex.Message);
             }
             RecordCatalogueSubmission(CatalogueKindMods, mod.Id, result);
             if (result is SubmissionResult.Success)
-                App.Notifications.Show(Loc.Get("catalogue_toast_mod_success"), NotificationType.Success,
-                    TimeSpan.FromSeconds(10));
+                App.Notifications.Show(Loc.Get("catalogue_toast_mod_success"), Helpers.NotificationType.Success, TimeSpan.FromSeconds(10));
             else ShowCatalogueSubmissionResultToast(result);
         }
 

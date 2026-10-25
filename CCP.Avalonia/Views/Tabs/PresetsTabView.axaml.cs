@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -389,6 +390,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BtnSharePreset.IsEnabled = !preset.IsDefault;
             UpdatePresetShareStatusBadge(preset);
             RefreshSessionRackSelection();
+            RefreshCardSheen();
         }
 
         /// <summary>WPF UpdatePresetShareStatusBadge (MainWindow.PresetIO.cs:332).</summary>
@@ -491,6 +493,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (e.InitialPressMouseButton != MouseButton.Left) return;
             e.Handled = true;
             if (Shell is not { } owner) return;
+            await PromptSaveNewPreset(owner);
+        }
+
+        internal async Task PromptSaveNewPreset(Window owner)
+        {
             var dialog = new Dialogs.InputDialog(Loc.Get("title_new_preset"),
                 Loc.Get("msg_enter_a_name_for_your_preset"), Loc.Get("label_my_custom_preset"));
             if (await dialog.ShowDialogSafe<bool?>(owner) != true || string.IsNullOrWhiteSpace(dialog.ResultText)) return;
@@ -833,6 +840,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             UpdateRackCount(shown.Count);
             RefreshSessionRackSelection();
+            RefreshCardSheen();
         }
 
         private Border RackRow(Session session)
@@ -1092,6 +1100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtSessionTimeline.Text = session.GetSpoilerTimeline();
 
             RefreshSessionRackSelection();
+            RefreshCardSheen();
         }
 
         /// <summary>WPF GenerateSessionTimelineDescription (MainWindow.SessionIO.cs:984), localized.</summary>
