@@ -47,7 +47,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     ///         markup, so <c>OnSourceInitialized</c> and the two DllImports go with them. NOT
     ///         equivalent in one respect worth naming: WS_EX_NOACTIVATE makes activation
     ///         *impossible*, where <c>ShowActivated="False"</c> only declines it at show time - a
-    ///         click on this panel can still focus it on X11.</item>
+    ///         click on this panel can still focus it on X11. Windows additionally stamps
+    ///         WS_EX_NOACTIVATE through Win32OptionsDismiss.</item>
     ///   <item><b>Windows has scoped, non-consuming global hooks</b>; X11Pointer polls on Linux. See
     ///         <see cref="InstallHooks"/> for what that does and does not cover.</item>
     ///   <item><b>The owner is optional.</b> <c>EmiDeskWindow</c> is the widget this panel hangs
@@ -115,8 +116,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             _owner = owner;
             // Headless/render test windows never install hooks on the real desktop.
             StartDismissListener = callback => TryGetPlatformHandle()?.HandleDescriptor == "HWND"
-                ? Win32OptionsDismiss.Start(callback) : null;
+                ? Win32OptionsDismiss.Start(callback)
+                : TryGetPlatformHandle()?.HandleDescriptor == "XID" ? X11PanicKey.ListenForOptions(callback) : null;
             AvaloniaXamlLoader.Load(this);
+            Win32OptionsDismiss.PreventActivation(this);
 
             _btnPanelClose = this.FindControl<Button>("BtnPanelClose")!;
             _btnOpenCards = this.FindControl<Button>("BtnOpenCards")!;
@@ -658,7 +661,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         internal Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadPointer = X11Pointer.Read;
 
         /// <summary>Use the WPF non-consuming hooks on Windows; retain the X11 fallback.
-        /// ponytail: Wayland-native windows and sub-tick X11 presses remain follow-up work.</summary>
+        /// Reuse the shared XI2 listener on X11, including presses shorter than a poll tick.
+        /// ponytail: Wayland-native input still needs a compositor-supported host. Raw button
+        /// events have no coordinates; query the pointer immediately on the listener thread.</summary>
         private void InstallHooks()
         {
             if (_dismissListener != null || _awayPoll != null) return;
