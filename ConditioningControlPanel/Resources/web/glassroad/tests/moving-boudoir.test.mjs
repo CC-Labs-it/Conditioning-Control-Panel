@@ -31,9 +31,11 @@ test('Boudoir alternates six sliding and crushing stations on clear supported ap
   assert.deepEqual(movingStations({ id: 'threshold' }), { traps: [], bridge: null });
 });
 
-test('Boudoir bridge forms on the shorter dry fork with a permanently supported water bypass', () => {
-  const bridge = plan.bridge, fork = track.forks.find(f => f.id === bridge.forkId);
-  assert.equal(fork.id, 'bath-dry-bridge');
+test('Boudoir powder bridge is shorter than its permanent bypass and leaves the dry fork intact', () => {
+  const subject = loadTrack(source, { moving: true });
+  const bridge = plan.bridge, fork = subject.forks.find(f => f.id === bridge.forkId);
+  assert.equal(fork.id, 'boudoir-powder-piston-bridge');
+  assert.ok(!subject.forks.find(f => f.id === 'bath-dry-bridge').movingBridge);
   assert.ok(fork.lengthM < (fork.toS - fork.fromS) * .9);
   assert.ok(bridge.openS > (bridge.toU - bridge.fromU) * fork.lengthM / 12 + 2);
   assert.equal(bridge.periodS, 14);
