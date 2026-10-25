@@ -137,11 +137,12 @@ public sealed class ThemeEvidenceTests
         try
         {
             w.Show();
-            w.ShowTab("companion");
+            // Companion v2 (WPF CompanionTabView.xaml.cs:36-40): the Community cell lives on
+            // Companion > Personality (WPF PersonalityPage.xaml.cs:47), not in the collapsed room.
+            w.ShowTab("personality");
             Dispatcher.UIThread.RunJobs();
-            w.GetLogicalDescendants().OfType<WorkshopAccordion>().Single().ExpandAndReveal();
-            Dispatcher.UIThread.RunJobs();
-            var cell = w.GetLogicalDescendants().OfType<WorkshopCommunityCell>().Single();
+            var personality = w.Named<ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages.PersonalityPage>("CompanionPersonalityTab")!;
+            var cell = personality.GetVisualDescendants().OfType<WorkshopCommunityCell>().Single();
             var button = cell.FindControl<Button>("BtnBrowsePrompts")!;
             var chrome = button.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "Chrome");
             Assert.Equal(11, button.FontSize);
