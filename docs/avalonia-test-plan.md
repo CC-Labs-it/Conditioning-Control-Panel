@@ -673,3 +673,7 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Stake host follow-up
+
+1. WPF `Services/PieceByPiece/PieceByPieceHostService.cs` + `Services/Stakes/StakeAppHooks.cs`. Rows: `feat-stakes`. Open Piece by Piece from the launcher, sign in, enter online PvP: check Off, 15/30 minute (only with linked, enabled, unpaused Chaster and no safety hold), then 5/10/25 Sparkle picks and localized labels. A time pick enables `pvp_loss` once. Confirm offers/refusals and locked stake state match WPF; solo/hotseat never offer stakes. Finish won/lost/void matches: wallet receipts may lower SP, snapshots may only raise it, and changing account before a reply prevents adoption. A time loss books only the tab-accepted seconds once, respecting pause, safety hold and caps. Close/panic during settlement, reopen the board: the watch continues and posts to the current board without duplicate booking. Goon is still unavailable on this head; do not mark its stakes complete.

@@ -2,8 +2,7 @@
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
 // media-flavour / media-more / online-media), whisper clips (needs asset-server routes for ccp.subaudio /
-// ccp.words; the settings frame sends none, which the page reads as "no whispers"), PvP stakes (Core StakeBridge.ForApp
-// is not routed here yet: stakes-host), friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape),
+// ccp.words; the settings frame sends none, which the page reads as "no whispers"), friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape),
 // MergedAccountRecovery and SeasonRecapService.TrackFeature.
 
 using System;
@@ -17,6 +16,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.Stakes;
 using ConditioningControlPanel.Services.PieceByPiece;
 using Newtonsoft.Json.Linq;
 using Serilog;
@@ -54,6 +54,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Environment.GetEnvironmentVariable(FriendsHead.EnvVar));
 
         private static readonly Random PbpRng = new();
+
+        // WPF: app lifetime, so a settle watch survives closing the board. Replies go to the
+        // current board (or nowhere), and the shared settlement deduplicates across reopen.
+        internal static StakeBridge? PbpStakes { get; set; }
+        internal Task StakePending { get; private set; } = Task.CompletedTask;
+
+        private static void PostPbpStake(JObject reply) => Dispatcher.UIThread.Post(() =>
+        {
+            GameWindow? board;
+            lock (Open) board = Open.FirstOrDefault(w => w.Spec.Id == PbpId);
+            if (board != null && !board._closing) board.Post(reply);
+        });
 
         private bool _pbpOpen;
         private bool _pbpSettingsPosted;   // pbp:settings goes out exactly once per boot
@@ -103,6 +115,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var type = (string?)o["type"];
             try
             {
+                if (StakeBridge.Handles(type))
+                {
+                    PbpStakes ??= StakeBridge.ForApp("pbp", PostPbpStake);
+                    StakePending = PbpStakes.Handle(o);
+                    return true;
+                }
                 switch (type)
                 {
                     case "ready":

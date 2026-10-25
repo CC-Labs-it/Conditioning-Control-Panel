@@ -781,6 +781,7 @@ namespace ConditioningControlPanel.Avalonia
                 Services.Invites.InviteRewards.TryUnlockProvider = id => Achievements?.TryUnlock(id) == true;
                 Platform.FriendsHead.SeedInvites(
                     Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"), Environment.GetEnvironmentVariable(Platform.FriendsHead.EnvVar));
+                Platform.StakeHead.Seed();
                 CoreProgression.TrackBubbleCountResultProvider = correct => Achievements?.TrackBubbleCountResult(correct);
                 CoreProgression.TrackBubbleCountGameStartedProvider = () => Achievements?.TrackBubbleCountGameStarted();
                 CoreProgression.TrackBubbleCountCompletedProvider = () => Quests?.TrackBubbleCountCompleted();
