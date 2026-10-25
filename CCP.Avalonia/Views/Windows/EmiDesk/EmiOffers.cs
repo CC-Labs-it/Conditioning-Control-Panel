@@ -81,6 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     case "bedtime":
                         EmiState.Current.BedtimeUntil = EmiBedtime.UntilUtc(DateTime.Now);
                         EmiState.SaveSoon();
+                        Log.Information("[EmiDesk] bedtime set until {Until:t} local", EmiState.Current.BedtimeUntil.ToLocalTime());
                         EmiDeskService.Instance.Fire("bedtimeSet", new { fromAsk });
                         return;
                     case "burst": FireBurst(fromAsk); return;
