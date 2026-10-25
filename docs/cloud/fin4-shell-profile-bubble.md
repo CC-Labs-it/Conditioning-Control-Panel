@@ -40,4 +40,4 @@ The base has Core Descent models/parser/refresh gate and a Spiral Room surface, 
 - Panic and changing motion Off also reset in-flight header reactions; this extends teardown safety without adding a window.
 - Keep `stub` while the service-backed spiral door is unavailable, and complete the independent user-visible gaps first under the line cap.
 
-Final whitespace check: `git diff --cached --check` exited 0. Added lines versus the pinned base: 226 (below the 1000-line cap).
+Final whitespace check: `git diff --cached --check` exited 0. Added lines versus the pinned base: 228 (below the 1000-line cap).
