@@ -21,7 +21,8 @@ public sealed class PanicSurfacesTests
     public void EachPanicRouteCallsStopAllExactlyOnce() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            // Shipped app builder (fonts included): the subliminal card (closed by panic) needs its face.
+            // Use the shipped bootstrap, including Inter and AppFonts: the first app setup
+            // decides process-wide fonts, including the subliminal card closed by panic.
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
@@ -120,8 +121,10 @@ public sealed class PanicSurfacesTests
         "companion-transcript",
         "possession",
         "attention-test",
+        "descent-fuse",
         "deeper-editor-audio",
         "knock-cards",
+        "asset-preview",
         "camera",
     };
 
@@ -251,11 +254,10 @@ public sealed class PanicSurfacesTests
         ["Program"] = "--speech-check CLI diagnostic: no window, exits when done",
         ["WebHost"] = "a control, not a surface: the window hosting it registers",
         ["LayeredAudio"] = "WPF parity (#668: only stopped when the master switch is off)",
-        ["MiniPlayerWindow"] = "only --video-check (a CLI diagnostic) opens it",
         ["DeeperLocalAudio"] = "the Deeper editor's transport: the 'deeper-editor-audio' surface pauses every open editor",
         ["BillboardCardHost"] = "the Home Tonight Board deck: no audio (WPF c0c67ff47), no window; its hold stops off screen",
         ["ClipArtView"] = "WPF parity: the showcase card's muted, no-audio loop on Home (holds off screen, freed on shell close); WPF panic leaves the board alone",
-        ["InlineLoopVideo"] = "WPF parity: the help card's muted, no-audio clip poster; it lives only while that card is open, and closing the card detaches and frees it",
+        ["InlineLoopVideo"] = "muted help poster detaches on card close; gaze panes detach and free players when the 'gaze-minigame' surface closes the game",
         ["RaceTrackPlayer"] = "the race window owns it: the 'games' surface closes GameWindow, whose teardown disposes it (Race_TrackPick_ChartsPlaysAndPanicStops)",
         ["SpiralRailHost"] = "a rail chip, not a surface: no audio, window or device; it only draws the shared glyph (WPF parity)",
         ["MediaHistoryWindow"] = "WPF parity: the Media Log's muted preview of a user-picked row; WPF panic leaves that window alone",

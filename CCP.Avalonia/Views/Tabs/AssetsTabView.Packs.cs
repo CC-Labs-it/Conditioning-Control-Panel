@@ -44,7 +44,10 @@ public partial class AssetsTabView
         var root = new AssetTreeItem { Name = "Content Packs", IsPackFolder = true, IsExpanded = true };
         foreach (var id in store.GetActivePackIds())
         {
-            var node = AssetPackTree.Build(id, store.GetPackName(id), store.GetPackFiles(id), S.DisabledAssetPaths);
+            // WPF BuildPackTree (MainWindow.Assets.cs:559-561): the built-in pack name, else the raw pack id.
+            var name = ConditioningControlPanel.Services.Packs.ContentPackService.Current?.GetBuiltInPacks()
+                .FirstOrDefault(p => p.Id == id)?.Name ?? id;
+            var node = AssetPackTree.Build(id, name, store.GetPackFiles(id), S.DisabledAssetPaths);
             if (node == null) continue;
             node.Parent = root;
             root.Children.Add(node);

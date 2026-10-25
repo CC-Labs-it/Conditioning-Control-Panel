@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Services;
@@ -77,6 +78,7 @@ public sealed class AvatarTubeWindowingTests
         AssertClear();
 
         // Float (no room either side, she hangs over the shell): both clear margins are cut, her art keeps input.
+        main.WindowState = WindowState.Maximized; // WPF never makes room by resizing a maximized shell
         main.Width = 4000;
         Dispatcher.UIThread.RunJobs();
         var f = tube.InputRect!.Value;
@@ -113,7 +115,8 @@ public sealed class AvatarTubeWindowingTests
     private static Task Run(bool detached, Action<Window, AvatarTubeWindow> body, double scale = 1.0) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();
