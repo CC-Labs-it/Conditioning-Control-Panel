@@ -81,6 +81,12 @@ namespace ConditioningControlPanel.Services.Awareness
     /// <param name="Position">Playback position, when the session reports a timeline. Used to spot loops.</param>
     public sealed record MediaSample(string Title, string? Artist, string PlaybackState, TimeSpan Position)
     {
+        /// <summary>Shared SMTC/MPRIS sample validation; a blank title is no usable session.</summary>
+        internal static MediaSample? FromSession(string? title, string? artist, string? state, TimeSpan position) =>
+            string.IsNullOrWhiteSpace(title) ? null : new MediaSample(title,
+                string.IsNullOrWhiteSpace(artist) ? null : artist,
+                string.IsNullOrWhiteSpace(state) ? "Unknown" : state, position);
+
         /// <summary>True when this is actually playing rather than paused/stopped.</summary>
         public bool IsPlaying =>
             string.Equals(PlaybackState, "Playing", StringComparison.OrdinalIgnoreCase);

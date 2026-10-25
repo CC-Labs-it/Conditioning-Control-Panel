@@ -531,9 +531,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         public CompanionHeaderViewModel(CompanionHeroCardViewModel hero)
         {
-            // ponytail: the tutorial chip needs the Companion tutorial (WPF BtnCompanionTutorial_Click),
-            // which the shell's TutorialOverlay does not script yet; no-op until it does.
-            TutorialCommand = new RelayCommand(() => { });
+            // WPF BtnCompanionTutorial_Click: StartTutorial(Companion). The seeded seam owns
+            // the existing overlay, navigation, one-tour guard and panic abandonment.
+            TutorialCommand = new RelayCommand(() => CoreTutorial.Start("Companion"));
             OpenPatreonCommand = new RelayCommand(() => hero.Shell?.ShowTab("patreon"));
         }
 

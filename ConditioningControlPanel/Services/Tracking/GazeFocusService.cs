@@ -356,6 +356,7 @@ public class GazeFocusService : IDisposable
     private const int CalOriginCacheMs = 1000;
     private static Vector _calOriginDips;
     private static DateTime _calOriginAt = DateTime.MinValue;
+    private static int _calOriginMonitorRevision = -1;
 
     /// <summary>
     /// Origin of the calibrated monitor expressed in DESKTOP DIPs, or (0,0)
@@ -373,7 +374,10 @@ public class GazeFocusService : IDisposable
         try
         {
             var now = DateTime.UtcNow;
-            if ((now - _calOriginAt).TotalMilliseconds < CalOriginCacheMs) return _calOriginDips;
+            int revision = App.Webcam?.GazeMonitorRevision ?? 0;
+            if (_calOriginMonitorRevision == revision
+                && (now - _calOriginAt).TotalMilliseconds < CalOriginCacheMs) return _calOriginDips;
+            _calOriginMonitorRevision = revision;
 
             var result = default(Vector);
             var webcam = App.Webcam;

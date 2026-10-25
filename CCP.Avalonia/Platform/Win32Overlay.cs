@@ -10,7 +10,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// window's platform handle is an "HWND" - callers never see this class. Same bits the WPF head
 /// sets on every desktop overlay (ConditioningControlPanel/Services/Notifications/OverlayService.cs:1415,
 /// Services/Flash/FlashService.cs:4614 ApplyClickability, :4838 ForceTopmost):
-/// WS_EX_LAYERED|WS_EX_TOOLWINDOW always, WS_EX_TRANSPARENT|WS_EX_NOACTIVATE toggled together with
+/// WS_EX_LAYERED|WS_EX_TOOLWINDOW always, WS_EX_TRANSPARENT|WS_EX_NOACTIVATE normally toggled together with
 /// click-through (as Chaos/ChaosOverlayWindow.xaml.cs:1073-1076 does, so an interactive mode can
 /// take focus), HWND_TOPMOST via SetWindowPos.
 ///
@@ -47,16 +47,21 @@ internal static class Win32Overlay
     // Passive toasts (achievement / item unlock): WS_EX_NOACTIVATE even while they take clicks, as
     // WPF Helpers.PassiveToastWindow - click-to-dismiss must not hand them the foreground.
     private static readonly ConditionalWeakTable<TopLevel, object> Passive = new();
+    // Subliminal opt-in: keep TRANSPARENT but clear NOACTIVATE, including on Avalonia rebuilds.
+    private static readonly ConditionalWeakTable<TopLevel, object> FocusAllowed = new();
+    private static bool AllowsFocus(TopLevel window) => FocusAllowed.TryGetValue(window, out _);
     private static bool IsPassive(TopLevel window) => Passive.TryGetValue(window, out _);
 
-    internal static uint Style(uint exStyle, bool clickThrough, bool passive = false)
-        => (exStyle | OverlayBits) & ~ClickThroughBits | (clickThrough ? ClickThroughBits : 0) | (passive ? WsExNoActivate : 0);
+    internal static uint Style(uint exStyle, bool clickThrough, bool passive = false, bool allowFocus = false)
+        => (exStyle | OverlayBits) & ~ClickThroughBits
+            | (clickThrough ? WsExTransparent : 0)
+            | ((clickThrough && !allowFocus || passive) ? WsExNoActivate : 0);
 
     internal static bool SetClickThrough(TopLevel window, IntPtr hwnd, bool clickThrough)
     {
         if (!OperatingSystem.IsWindows()) return false;
         Track(window).Value = clickThrough;
-        return Apply(hwnd, clickThrough, IsPassive(window));
+        return Apply(hwnd, clickThrough, IsPassive(window), AllowsFocus(window));
     }
 
     /// <summary>Tool/no-activate/layered + HWND_TOPMOST: the Windows form of an override-redirect overlay.</summary>
@@ -64,14 +69,22 @@ internal static class Win32Overlay
     {
         if (!OperatingSystem.IsWindows()) return false;
         if (passive) Passive.AddOrUpdate(window, Passive);
-        return Apply(hwnd, Track(window).Value, IsPassive(window))
+        return Apply(hwnd, Track(window).Value, IsPassive(window), AllowsFocus(window))
             && SetWindowPos(hwnd, new IntPtr(-1), 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+    }
+
+    /// <summary>WPF ApplyWindowStyles(stealsFocus): activation and mouse pass-through are independent.</summary>
+    internal static bool AllowFocus(TopLevel window, IntPtr hwnd)
+    {
+        if (!OperatingSystem.IsWindows() || IsPassive(window)) return false;
+        FocusAllowed.AddOrUpdate(window, FocusAllowed);
+        return Apply(hwnd, Track(window).Value, false, true);
     }
 
     internal static bool SetOpacity(TopLevel window, IntPtr hwnd, double alpha)
     {
         if (!OperatingSystem.IsWindows()) return false;
-        return Apply(hwnd, Track(window).Value, IsPassive(window))
+        return Apply(hwnd, Track(window).Value, IsPassive(window), AllowsFocus(window))
             && SetLayeredWindowAttributes(hwnd, 0, (byte)Math.Round(Math.Clamp(alpha, 0, 1) * 255), LwaAlpha);
     }
 
@@ -105,16 +118,43 @@ internal static class Win32Overlay
         return SetClickThrough(window, hwnd, through);
     }
 
+    [DllImport("user32.dll")] private static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, bool redraw);
+    [DllImport("gdi32.dll")] private static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);
+    [DllImport("gdi32.dll")] private static extern int CombineRgn(IntPtr destination, IntPtr first, IntPtr second, int mode);
+    [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr obj);
+
+    internal static bool SetWindowInputRegion(TopLevel window, IntPtr hwnd, global::Avalonia.PixelRect[]? rects)
+    {
+        if (!OperatingSystem.IsWindows() || !SetClickThrough(window, hwnd, false)) return false;
+        if (rects is null) return SetWindowRgn(hwnd, IntPtr.Zero, true) != 0;
+        var region = CreateRectRgn(0, 0, 0, 0);
+        if (region == IntPtr.Zero) return false;
+        try
+        {
+            foreach (var r in rects)
+            {
+                var part = CreateRectRgn(r.X, r.Y, r.Right, r.Bottom);
+                if (part == IntPtr.Zero) return false;
+                try { if (CombineRgn(region, region, part, 2 /* RGN_OR */) == 0) return false; }
+                finally { DeleteObject(part); }
+            }
+            if (SetWindowRgn(hwnd, region, true) == 0) return false;
+            region = IntPtr.Zero; // user32 owns the region after success.
+            return true;
+        }
+        finally { if (region != IntPtr.Zero) DeleteObject(region); }
+    }
+
     private static StrongBox<bool> Track(TopLevel window) => Wanted.GetValue(window, w =>
     {
         var box = new StrongBox<bool>();
-        Win32Properties.AddWindowStylesCallback(w, (style, ex) => (style, Style(ex, box.Value, IsPassive(w))));
+        Win32Properties.AddWindowStylesCallback(w, (style, ex) => (style, Style(ex, box.Value, IsPassive(w), AllowsFocus(w))));
         return box;
     });
 
-    private static bool Apply(IntPtr hwnd, bool clickThrough, bool passive)
+    private static bool Apply(IntPtr hwnd, bool clickThrough, bool passive, bool allowFocus)
     {
-        SetWindowLong(hwnd, GwlExStyle, Style(GetWindowLong(hwnd, GwlExStyle), clickThrough, passive));
+        SetWindowLong(hwnd, GwlExStyle, Style(GetWindowLong(hwnd, GwlExStyle), clickThrough, passive, allowFocus));
         // Attributes never set = invisible layered window. Checked by attributes, not by the old
         // style bit, because the style callback can make a window layered behind our back.
         return GetLayeredWindowAttributes(hwnd, out _, out _, out _) || SetLayeredWindowAttributes(hwnd, 0, 255, LwaAlpha);

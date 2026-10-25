@@ -462,16 +462,42 @@ public class AwarenessReviewFixTests : IDisposable
 
     /// <summary>The media watcher's restart guard has to clear, or the SMTC signal never comes back.</summary>
     [Fact]
-    public void TheMediaWatcherIsRestartableAfterStop()
+    public async Task TheMediaWatcherIsRestartableAfterStop()
     {
-        using var watcher = new SmtcMediaWatcher();
-        var started = typeof(SmtcMediaWatcher).GetField("_started", BindingFlags.NonPublic | BindingFlags.Instance);
-        Assert.NotNull(started);
+        // SmtcMediaWatcher delegates its lifecycle to Core's MediaSessionWatcher; drive that with fakes.
+        var sample = new MediaSample("Song", "Artist", "Playing", TimeSpan.Zero);
+        using var watcher = new MediaSessionWatcher(() => Task.FromResult(true),
+            () => Task.FromResult<MediaSample?>(sample), new InertClock());
 
         watcher.Start();
+        var first = watcher.StartCompletion;
+        await first;
         watcher.Stop();
+        Assert.Null(watcher.Current);
 
-        Assert.False((bool)started!.GetValue(watcher)!);
+        // A second Start must re-arm instead of no-op: a no-op leaves the watcher stopped, so the poll below
+        // reads nothing. (Comparing StartCompletion instances raced: an arm that completes synchronously is the
+        // runtime's one cached completed Task, so both Starts could return the same instance.)
+        watcher.Start();
+        await watcher.StartCompletion;
+        await watcher.PollAsync();
+
+        Assert.True(watcher.IsAvailable);
+        Assert.Equal(sample, watcher.Current);
+    }
+
+    /// <summary>Timers that never fire: the test polls by hand, so no background read races it.</summary>
+    private sealed class InertClock : TimeProvider
+    {
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+            => new InertTimer();
+
+        private sealed class InertTimer : ITimer
+        {
+            public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
     }
 
     // =====================================================================================
