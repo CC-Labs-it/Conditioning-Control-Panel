@@ -492,8 +492,8 @@ namespace ConditioningControlPanel.Features
         private void RouteClick(MouseButtonEventArgs e, bool right)
         {
             if (FromHelpButton(e)) return;
-            bool toggle = Services.UI.DashboardClickRules.IsToggle(right, DashboardDepth, true,
-                App.Settings?.Current?.DashboardInvertClicks == true);
+            bool invert = DashboardDepth && App.Settings?.Current?.DashboardInvertClicks == true;
+            bool toggle = Services.UI.DashboardDepthLaw.ToggleFor(DashboardDepth, invert, right);
             bool halfA = ResolveHalfA(e.GetPosition(ContentRoot));
             if (right || toggle) e.Handled = true;
             var evt = toggle ? (halfA ? ToggleAEvent : ToggleBEvent) : (halfA ? ClickAEvent : ClickBEvent);
