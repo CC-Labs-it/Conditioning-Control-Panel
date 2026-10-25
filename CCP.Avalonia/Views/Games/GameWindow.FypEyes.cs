@@ -29,7 +29,7 @@ internal sealed partial class GameWindow
         if (FypConsent != null) return await FypConsent();
         if (WebcamConsent.IsCurrent(CoreSettings.Current)) return true;
         var dialog = new WebcamConsentDialog();
-        return await dialog.ShowDialog<bool>(this) && dialog.ConsentGiven;
+        return await dialog.ShowDialogSafe<bool>(this) && dialog.ConsentGiven;
     }
 
     private async Task EnableFypEyes()

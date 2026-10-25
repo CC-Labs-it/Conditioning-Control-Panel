@@ -116,10 +116,12 @@ public sealed class GameWindowFypTests
         var w = GameWindow.Launch(GameWindow.FypId)!;
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
+        w.FypConsent = () => Task.FromResult(false);   // the saved eye setting re-arms on ready; refuse it here
         w.HandleMessage("{\"type\":\"ready\"}");
-        var init = sent.Single();
+        Wait(w.FypEyeTask!);
+        var init = sent[0];
         Assert.Equal("init", (string?)init["type"]);
-        Assert.False((bool)init["settings"]!["eyeControl"]!);
+        Assert.True((bool)init["settings"]!["eyeControl"]!);
         Assert.EndsWith("/ccp.assets/videos/clip.mp4", (string?)init["assets"]!.Single()["url"]);
         Assert.Equal(new Uri((string)init["assets"]![0]!["url"]!).Authority, w.PageUrl!.Authority);
         sent.Clear();
@@ -127,7 +129,6 @@ public sealed class GameWindowFypTests
         Assert.Equal(new[] { "clickThrough", "ghost-unavailable" }, sent.Select(o => (string?)o["type"]));
         Assert.False((bool)sent[0]["on"]!);
         sent.Clear();
-        w.FypConsent = () => Task.FromResult(false);
         w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}");
         Wait(w.FypEyeTask!);
         Assert.False(CoreSettings.Current.FypEyeControl);
