@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using ConditioningControlPanel.Services.Companion;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
@@ -106,6 +108,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
 
                 this.FindControl<TextBlock>($"TxtCompanion{i}Lock")!.IsVisible = false;
                 card.Opacity = 1.0;
+            }
+
+            // WPF UpdateCompanionPromptLabels runs after UpdateCompanionCardsUI, even for
+            // unsupported cards. Reuse the installed JSON reader WPF's service delegates to.
+            var folder = Path.Combine(CorePaths.UserData, InstalledCommunityPrompts.FolderName);
+            for (int i = 0; i < 5; i++)
+            {
+                var promptId = s.GetCompanionPromptId(i);
+                var promptName = string.IsNullOrEmpty(promptId) ? null
+                    : InstalledCommunityPrompts.Load(folder, promptId, s.ActiveCommunityPromptId)?.Name;
+                var displayName = CoreMods.MakeModAware(promptName ?? "");
+                var label = this.FindControl<TextBlock>($"TxtCompanion{i}Prompt")!;
+                label.Text = displayName;
+                ToolTip.SetTip(label, string.IsNullOrEmpty(displayName)
+                    ? null : Loc.GetF("tooltip_ai_personality", displayName));
             }
         }
     }

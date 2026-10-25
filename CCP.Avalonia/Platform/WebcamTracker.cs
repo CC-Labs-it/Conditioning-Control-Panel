@@ -227,6 +227,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (Interlocked.Exchange(ref _busy, 1) != 0) return false;
             var run = new Run();
             bool began = false;
+            var failureState = WebcamTrackingState.Error;
             try
             {
                 LastError = null;
@@ -267,10 +268,21 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 Progress(0.55, "Opening camera…");
                 run.Source = SourceFactory();
                 bool opened;
-                try { opened = run.Source.Open(); } catch (Exception ex) { Log.Warning(ex, "[Webcam] open threw"); opened = false; }
+                try
+                {
+                    opened = run.Source.Open();
+                    if (!opened) failureState = WebcamTrackingState.CameraDenied; // WPF Open returned false on every backend
+                }
+                catch (UnauthorizedAccessException ex)
+                {
+                    Log.Warning(ex, "[Webcam] access denied");
+                    failureState = WebcamTrackingState.CameraDenied;
+                    opened = false;
+                }
+                catch (Exception ex) { Log.Warning(ex, "[Webcam] open threw"); opened = false; }
                 if (!opened)
                 {
-                    LastError = "No camera could be opened. Check that a webcam is connected and not in use by another app.";
+                    LastError = "No camera could be opened. Check that a webcam is connected, camera access is allowed, and it is not in use by another app.";
                     run.Release();
                     return false;
                 }
@@ -302,7 +314,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             finally
             {
                 Interlocked.Exchange(ref _busy, 0);
-                if (began && !IsRunning) SetTrackingState(StartWasStopped ? WebcamTrackingState.Stopped : WebcamTrackingState.Error);
+                if (began && !IsRunning) SetTrackingState(StartWasStopped ? WebcamTrackingState.Stopped : failureState);
                 Dispatcher.UIThread.Post(() => StateChanged?.Invoke());
             }
         }

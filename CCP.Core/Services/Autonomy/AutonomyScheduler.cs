@@ -238,6 +238,49 @@ namespace ConditioningControlPanel.Services
 
         public bool IsEnabled => _enabled;
         public DateTime NextRandomFire => _nextRandom;
+        private double _lastRandomIntervalSeconds;
+
+        /// <summary>WPF NextRandomFireFraction: fraction of this interval remaining; null when
+        /// the random timer is off. Adapted from parity/trunk a2e36678fa0266110c153c52598b72a0b727b55c.</summary>
+        public double? NextRandomFireFraction =>
+            !_enabled || _nextRandom == DateTime.MaxValue || _lastRandomIntervalSeconds <= 0 ? null
+                : Math.Clamp((_nextRandom - Clock()).TotalSeconds / _lastRandomIntervalSeconds, 0, 1);
+
+        /// <summary>WPF GetDiagnosticStatus, using this scheduler's live state and the same copy/order.</summary>
+        public string GetDiagnosticStatus()
+        {
+            var s = CoreSettings.Current;
+            return string.Join("\n", new[]
+            {
+                $"Service Enabled: {_enabled}",
+                $"Idle Timer Running: {_enabled && _nextIdle != DateTime.MaxValue}",
+                $"Random Timer Running: {_enabled && _nextRandom != DateTime.MaxValue}",
+                $"On Cooldown: {(Clock() - _lastAction).TotalSeconds < s.AutonomyCooldownSeconds}",
+                $"Interaction Queue Busy: {IsBusy()}",
+                $"Last Action: {(_lastAction == DateTime.MinValue ? "Never" : _lastAction.ToString("HH:mm:ss"))}",
+                $"Current Mood: {MoodAt(Clock().Hour)}",
+                "", "Settings:",
+                $"  AutonomyModeEnabled: {s.AutonomyModeEnabled}",
+                $"  AutonomyConsentGiven: {s.AutonomyConsentGiven}",
+                $"  PlayerLevel: {s.PlayerLevel}",
+                $"  IdleTriggerEnabled: {s.AutonomyIdleTriggerEnabled}",
+                $"  RandomTriggerEnabled: {s.AutonomyRandomTriggerEnabled}",
+                $"  RandomIntervalMinutes: {s.AutonomyRandomIntervalMinutes}",
+                $"  CooldownSeconds: {s.AutonomyCooldownSeconds}",
+                "", "Enabled Actions:",
+                $"  Flash: {s.AutonomyCanTriggerFlash}",
+                $"  Video: {s.AutonomyCanTriggerVideo}",
+                $"  Subliminal: {s.AutonomyCanTriggerSubliminal}",
+                $"  BrainDrain: {s.AutonomyCanTriggerBrainDrain}",
+                $"  Bubbles: {s.AutonomyCanTriggerBubbles}",
+                $"  Comment: {s.AutonomyCanComment}",
+                $"  MindWipe: {s.AutonomyCanTriggerMindWipe}",
+                $"  LockCard: {s.AutonomyCanTriggerLockCard}",
+                $"  Spiral: {s.AutonomyCanTriggerSpiral}",
+                $"  PinkFilter: {s.AutonomyCanTriggerPinkFilter}",
+                $"  BouncingText: {s.AutonomyCanTriggerBouncingText}"
+            });
+        }
 
         /// <summary>WPF Start: refuses without enable + consent + entitlement; idempotent.</summary>
         public bool Start(bool withTimer = true)
@@ -289,6 +332,7 @@ namespace ConditioningControlPanel.Services
             _nextRandom = _enabled && s.AutonomyRandomTriggerEnabled
                 ? now.AddSeconds(NextRandomSeconds(s, retry, false, now.Hour, Rng.NextDouble()))
                 : DateTime.MaxValue;
+            _lastRandomIntervalSeconds = _nextRandom == DateTime.MaxValue ? 0 : (_nextRandom - now).TotalSeconds;
         }
 
         /// <summary>WPF CanTakeAction: on, entitled (a lapse mid-run stops her acting), not busy, past the cooldown.</summary>
@@ -350,6 +394,9 @@ namespace ConditioningControlPanel.Services
 
         private void Run(AutonomyActionType a, bool announced)
         {
+            // WPF PerformAction #1458: either switch may change during the two-second announcement.
+            if (a == AutonomyActionType.MindWipe
+                && (!CoreSettings.Current.AutonomyCanTriggerMindWipe || !CoreSettings.Current.MindWipeEnabled)) return;
             Log.Information("Autonomy: performing {Action}", a);
             try { Perform?.Invoke(a, announced); }
             catch (Exception ex) { Log.Warning(ex, "Autonomy: {Action} failed", a); }
