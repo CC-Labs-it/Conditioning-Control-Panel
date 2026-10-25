@@ -108,7 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     var report = new BugReportWindow();
                     _raceReport?.Close();
                     _raceReport = report;
-                    _ = report.ShowDialog(this);
+                    _ = report.ShowDialogSafe(this);
                     return true;
                 case "run-started":
                     if (_raceRun.TryStart()) Log.Information("RaceHost: run started (seed={Seed})", (string?)o["seed"]);
@@ -246,17 +246,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     CoreSettings.Save();
                     SparklePointRewards.PublishCredit(before, settings.SkillPoints, SparklePointSource.BubbleMilestone);
                     int total = App.Achievements!.Progress.TotalBubblesPopped;
-                    App.ShowAchievementPopup(new Achievement
-                    {
-                        Id = "bubble_milestone", Name = Loc.GetF("achievement_bubble_milestone_name", total - total % 100),
-                        FlavorText = Loc.Get("achievement_bubble_milestone_flavor"), ImageName = "bubble_pop.png",
-                        Category = AchievementCategory.Minigames,
-                    });
+                    // WPF AchievementService.cs:512: the sparkle header, not the trophy one.
+                    var popup = new AchievementPopup(Loc.GetF("achievement_bubble_milestone_name", total - total % 100),
+                        Loc.Get("achievement_bubble_milestone_flavor"), "bubble_pop.png",
+                        headerText: Loc.Get("achievement_bubble_milestone_header"));
+                    popup.FindControl<global::ConditioningControlPanel.Avalonia.Controls.IconGlyph>("TxtHeaderIcon")!.Kind = IconKind.Sparkle;   // WPF "✨" (IconMap)
+                    RaceShowPopup(popup);
                 }
                 App.Quests?.TrackBubblesPopped(count);
             }
             catch (Exception ex) { Log.Debug("RaceHost bubble credit: {E}", ex.Message); }
         }
+
+        /// <summary>Shows the milestone popup; tests capture it.</summary>
+        internal static Action<Window> RaceShowPopup = p => p.Show();
 
         private MandatoryVideoScheduler? _raceVideo;
         private void OnRaceVideoStarted() => PostRacePause(true);
@@ -298,12 +301,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var owned = RacingAccess.OwnedTracks;
             if (!RacingAccess.CanLaunch || _raceOwnedTracks.Except(owned).Any())
             {
-                if (!_raceExiting)
+                if (IsReady && !_raceExiting)   // WPF CloseActive (:239): a ready page gets exit-request + watchdog
                 {
                     _raceExiting = true;
                     Post(new { type = "exit-request" });
                     DispatcherTimer.RunOnce(() => { if (!_closing) Close(); }, TimeSpan.FromMilliseconds(1200));
                 }
+                else Close();   // not ready (or already exiting): WPF DisposeAll at once
                 return;
             }
             if (_raceOwnedTracks.SequenceEqual(owned)) return;

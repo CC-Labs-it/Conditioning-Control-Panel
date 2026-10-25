@@ -13,12 +13,15 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Launcher;
 using ConditioningControlPanel.Services.Race;
 using Newtonsoft.Json.Linq;
 using Xunit;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -371,14 +374,14 @@ public sealed class GameWindowTests
     /// <summary>WPF OnPageReady :255 (init with the race settings block, then manifest) and OnRunEnded :431:
     /// one payout per run, score / 5 under 250 XP a minute, Sparks banked on score / 5.</summary>
     [Fact]
-    public void Race_BootAndOnePayoutPerRun() => RunRace("rt.original.03", (_, xp, sparks) =>
+    public void Race_BootAndOnePayoutPerRun() => RunRace("rt.original.03", (_, xp, sparks) => WithFavorite("race-favorite.png", () =>
     {
         var w = GameWindow.Launch("race")!;
         Assert.Contains("dtrh/race.html", w.PageUrl!.AbsolutePath);
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
         w.HandleMessage("{\"type\":\"ready\"}");
-        Assert.Equal(new[] { "init", "manifest", "loom-list" }, sent.Where(o => (string?)o["type"] != "favorites").Select(o => (string?)o["type"]));
+        Assert.Equal(new[] { "init", "manifest", "favorites", "loom-list" }, sent.Select(o => (string?)o["type"]));
         Assert.Equal(new[] { 3 }, sent[0]["settings"]!["racingTracks"]!.Values<int>());
         Assert.False((bool)sent[0]["settings"]!["cloud"]!);
         sent.Clear();
@@ -388,13 +391,79 @@ public sealed class GameWindowTests
         Assert.True(w.RaceRunActive);
         w.HandleMessage("{\"type\":\"run-ended\",\"score\":5000,\"durationSec\":60}");
         w.HandleMessage("{\"type\":\"run-ended\",\"score\":5000,\"durationSec\":60}");   // a second end pays nothing
-        var pay = Assert.Single(sent.Where(o => (string?)o["type"] == "payout-result"));
-        Assert.Equal("payout-result", (string?)pay["type"]);
+        Assert.Equal(new[] { "meta", "payout-result" }, sent.Select(o => (string?)o["type"]));
+        var pay = sent[1];
         Assert.Equal(250, (int)pay["baseXp"]!);                 // min(5000 / 5, 250 * 1 min)
         Assert.Equal(7, (int)pay["sparksEarned"]!);
         Assert.Equal(new[] { 250.0 }, xp);
         Assert.Equal(new[] { 1000.0 }, sparks);
         Assert.Equal((40, 40), GameWindow.RacePayout(200, 60, 1.0));
+    }));
+
+    /// <summary>Seeds the asset-stats cache with one favourite (no disk write) and restores it (P02).</summary>
+    private static void WithFavorite(string name, Action body)
+    {
+        var field = typeof(DtrhAssetStatsStore).GetField("_stats",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var old = field.GetValue(null);
+        field.SetValue(null, new Dictionary<string, DtrhAssetStatsStore.AssetStat>(StringComparer.OrdinalIgnoreCase)
+        {
+            [name] = new() { Weighted = 100 },
+        });
+        try { body(); }
+        finally { field.SetValue(null, old); }
+    }
+
+    /// <summary>WPF AchievementService.TrackBubblesPopped :480-515 + QuestService.TrackBubblesPopped: a run's
+    /// pops credit one sparkle point per 100 crossed, show the sparkle milestone popup, and tick the quests.</summary>
+    [Fact]
+    public void Race_BubbleMilestone_CreditsPointsPopupAndQuests() => RunRace("rt.original.03", (_, _, _) =>
+    {
+        var achProp = typeof(global::ConditioningControlPanel.Avalonia.App).GetProperty("Achievements",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)!;
+        var settings = CoreSettings.Current;
+        var (oldAch, oldQuests, oldPopup, oldPoints) = (achProp.GetValue(null), global::ConditioningControlPanel.Avalonia.App.Quests,
+            GameWindow.RaceShowPopup, settings.SkillPoints);
+        var dir = Directory.CreateTempSubdirectory("race-bubbles-").FullName;
+        var popups = new List<global::Avalonia.Controls.Window>();
+        var awards = new List<SparklePointAward>();
+        EventHandler<SparklePointAward> onAward = (_, a) => awards.Add(a);
+        var quests = new QuestService(null, dir);
+        try
+        {
+            var engine = new AchievementEngine(new AchievementStore(Path.Combine(dir, "achievements.json")));
+            engine.Progress.TotalBubblesPopped = 50;
+            achProp.SetValue(null, engine);
+            quests.Progress.DailyQuests = new List<ActiveQuest>();
+            quests.Progress.WeeklyQuest = new ActiveQuest("bubble_storm_w");
+            global::ConditioningControlPanel.Avalonia.App.Quests = quests;
+            GameWindow.RaceShowPopup = popups.Add;
+            settings.SkillPoints = 3;
+            SparklePointRewards.Awarded += onAward;
+            var w = GameWindow.Launch("race")!;
+            w.HandleMessage("{\"type\":\"run-started\"}");
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":100,\"popped\":160}");   // 50 -> 210: two milestones
+            Assert.Equal(210, engine.Progress.TotalBubblesPopped);
+            Assert.Equal(5, settings.SkillPoints);
+            Assert.Equal(new[] { new SparklePointAward(2, 5, SparklePointSource.BubbleMilestone) }, awards);
+            var popup = Assert.IsType<AchievementPopup>(Assert.Single(popups));
+            Assert.Equal(Loc.GetF("achievement_bubble_milestone_name", 200), global::Avalonia.Controls.ControlExtensions.FindControl<global::Avalonia.Controls.TextBlock>(popup, "TxtName")!.Text);
+            Assert.Equal(Loc.Get("achievement_bubble_milestone_header"), global::Avalonia.Controls.ControlExtensions.FindControl<global::Avalonia.Controls.TextBlock>(popup, "TxtHeaderText")!.Text);
+            Assert.Equal(IconKind.Sparkle, global::Avalonia.Controls.ControlExtensions.FindControl<global::ConditioningControlPanel.Avalonia.Controls.IconGlyph>(popup, "TxtHeaderIcon")!.Kind);
+            Assert.Equal(160, quests.Progress.WeeklyQuest.CurrentProgress);
+        }
+        finally
+        {
+            SparklePointRewards.Awarded -= onAward;
+            foreach (var p in popups) p.Close();
+            achProp.SetValue(null, oldAch);
+            global::ConditioningControlPanel.Avalonia.App.Quests = oldQuests;
+            GameWindow.RaceShowPopup = oldPopup;
+            settings.SkillPoints = oldPoints;
+            quests.Dispose();
+            GameWindow.CloseAllForPanic();
+            Directory.Delete(dir, true);
+        }
     });
 
     /// <summary>WPF StartHeartbeatWatch :595: idle until ready; silent past 20 s on the menu (10 s mid-run)
@@ -465,9 +534,8 @@ public sealed class GameWindowTests
     });
 
     [Fact]
-    public void Race_FavoritesAndMeta_AreRealStoreFrames() => RunRace("rt.original.03", (_, _, _) =>
+    public void Race_FavoritesAndMeta_AreRealStoreFrames() => RunRace("rt.original.03", (_, _, _) => WithFavorite("race-favorite.png", () =>
     {
-        DtrhAssetStatsStore.Merge(JObject.Parse("{\"stats\":[{\"name\":\"race-favorite.png\",\"weighted\":100}]}"));
         var w = GameWindow.Launch("race")!;
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
@@ -480,7 +548,7 @@ public sealed class GameWindowTests
         Assert.Equal(1, (int)sent[0]["rev"]!);
         Assert.NotNull(sent[0]["state"]!["runsCompleted"]);
         Assert.False((bool)sent[0]["testMode"]!);
-    });
+    }));
 
     [Fact]
     public void Race_RunEndAndExit_StopTheAudio() => RunRace("rt.original.03", (_, _, _) =>
@@ -509,18 +577,22 @@ public sealed class GameWindowTests
     public void Race_OwnershipRefreshAndLoss_AndPanicCloseReport() => RunRace("rt.original.03", (_, _, _) =>
     {
         var settings = CoreSettings.Current;
-        var old = (settings.UnifiedId, settings.AuthToken, settings.OfflineMode, RacingAccess.IsGrantedProvider);
+        var old = (settings.UnifiedId, settings.OfflineMode, RacingAccess.IsGrantedProvider, CoreSecrets.RetrieveProvider);
         try
         {
-            (settings.UnifiedId, settings.AuthToken, settings.OfflineMode) = ("race-test", "test-token", false);
+            (settings.UnifiedId, settings.OfflineMode) = ("race-test", false);
+            CoreSecrets.RetrieveProvider = n => n == CoreSecrets.AuthToken ? "test-token" : null;   // P02: never the keyring
             RacingAccess.IsGrantedProvider = PrizeOwnership.Held;
             PrizeOwnership.ApplySnapshot("race-test", 1, new[] { "rt.original.03" });
-            var w = GameWindow.Launch("race")!;
+            var w = Assert.IsType<GameWindow>(GameWindow.Launch("race"));
+            w.HandleMessage("{\"type\":\"ready\"}");   // WPF CloseActive asks a ready page to exit
+            Dispatcher.UIThread.RunJobs();
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
             PrizeOwnership.ApplySnapshot("race-test", 2, new[] { "rt.original.03", "rt.original.04" });
             Dispatcher.UIThread.RunJobs();
-            Assert.Equal(new[] { 3, 4 }, Assert.Single(sent)["tracks"]!.Values<int>());
+            Assert.Equal(new[] { "race-ownership" }, sent.Select(o => (string?)o["type"]));
+            Assert.Equal(new[] { 3, 4 }, sent[0]["tracks"]!.Values<int>());
             sent.Clear();
             PrizeOwnership.ApplySnapshot("race-test", 1, Array.Empty<string>()); // stale
             Dispatcher.UIThread.RunJobs();
@@ -537,10 +609,17 @@ public sealed class GameWindowTests
             PrizeOwnership.ApplySnapshot("race-test", 4, new[] { "rt.original.05" });
             Dispatcher.UIThread.RunJobs();
             Assert.Empty(sent);
+            PrizeOwnership.ApplySnapshot("race-test", 5, new[] { "rt.original.03" });
+            var loading = GameWindow.Launch("race")!;   // never ready: WPF DisposeAll at once, no 1200 ms wait
+            loading.Posted += json => sent.Add(JObject.Parse(json));
+            PrizeOwnership.ApplySnapshot("race-test", 6, Array.Empty<string>());
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.Empty(sent);
         }
         finally
         {
-            (settings.UnifiedId, settings.AuthToken, settings.OfflineMode, RacingAccess.IsGrantedProvider) = old;
+            (settings.UnifiedId, settings.OfflineMode, RacingAccess.IsGrantedProvider, CoreSecrets.RetrieveProvider) = old;
             PrizeOwnership.ResetHeld();
         }
     });

@@ -130,7 +130,6 @@ internal sealed class AchievementEngine
             if (level >= milestone) TryUnlock(id);
     }
 
-    /// <summary>A bubble-count answer: the correct-answer streak (mathematicians_nightmare) and the totals.</summary>
     /// <summary>WPF AchievementService.TrackBubblesPopped: one save and all crossed 100-pop
     /// milestones. The head owns points, quests and the single milestone notification.</summary>
     public int TrackBubblesPopped(int count)
@@ -146,6 +145,7 @@ internal sealed class AchievementEngine
         return after / 100 - before / 100;
     }
 
+    /// <summary>A bubble-count answer: the correct-answer streak (mathematicians_nightmare) and the totals.</summary>
     public void TrackBubbleCountResult(bool correct)
     {
         if (correct)
