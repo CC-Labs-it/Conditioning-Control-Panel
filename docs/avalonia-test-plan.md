@@ -1,0 +1,5 @@
+# Avalonia tester steps
+
+1. Enable clickable flashes, choose Glitch exit, and pop a flash with full motion. Expect seven displaced strips with red left/cyan right ghost copies that separate as it fades. Stop everything during the leave; all layers disappear. WPF `ConditioningControlPanel/Services/Compositor/FlashLayer.cs:DrawGlitch`. Rows: `feat-flash-exit-stay`.
+2. Disable flash glow and show a transparent flash image. Its transparent pixels have black backing. With Flashes v2 owned and rounded corners enabled, black follows the rounded picture edge. WPF `ConditioningControlPanel/Services/Flash/FlashService.cs:2013-2028`. Rows: `feat-flash-exit-stay`.
+3. With Lucky Bubbles owned and perk notifications enabled, pop bubbles until a lucky roll. Expect the reused “LUCKY! 20x XP!” toast; repeat after exhausting the daily bubble XP budget. Suppress perk notifications and confirm the toast stays hidden. Panic dismisses the toast through the existing registered surface. WPF `ConditioningControlPanel/Services/Progression/SkillTreeService.cs:RollLuckyBubble` and `MainWindow.Enhancements.cs:OnLuckyProc`. Rows: `feat-flash-exit-stay`.

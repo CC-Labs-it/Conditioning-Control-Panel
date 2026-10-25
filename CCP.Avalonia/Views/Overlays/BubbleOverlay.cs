@@ -39,6 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal static class BubbleOverlay
     {
         internal static readonly AmbientBubbleField Field = new();
+        internal static Action<string, int> LuckyProc = LuckyToastWindow.OnLuckyProc;
         private static readonly List<BubbleOverlayWindow> Windows = new();
         private static readonly List<Screen> Targets = new();
         private static DispatcherTimer? _spawnTimer;
@@ -145,11 +146,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Windows[0].RequestAnimationFrame(Windows[0].FrameCallback);
         }
 
+        private static void OnLuckyRoll(int multiplier) => LuckyProc(
+            App.Mods?.GetLuckyBubbleLabel() ?? ConditioningControlPanel.Localization.Loc.Get("skill_lucky_bubble"), multiplier);
+
         /// <summary>WPF AwardAmbientPop, head half: sound, XP, quest credit.</summary>
         internal static void Pop(AmbientBubble b)
         {
             var s = CoreSettings.Current;
-            var paid = Field.Pop(b, s);
+            var paid = Field.Pop(b, s, OnLuckyRoll);
             if (paid > 0) CoreProgression.AddXP(paid, "Bubble");
             XpBudgetChanged?.Invoke();
             App.NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureBubbles);   // WPF OnBubblePopped

@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using SkiaSharp;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -34,6 +36,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private readonly Border _glow, _whiten;
         private Canvas? _sparks;
         private Panel? _slices;
+        private Image[]? _ghosts;
         private Panel? _shards;
         internal FlashShatterState? Shatter { get; private set; }
         private double _alpha = 1;
@@ -199,8 +202,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         Source = src, Stretch = Stretch.Uniform, RenderTransform = new TranslateTransform(),
                         Clip = new RectangleGeometry(new Rect(0, h * k / n, w, h / n)),
                     });
+                // WPF FlashLayer.DrawGlitch: modulated red/cyan copies under the seven slices.
+                // ponytail: bake these two immutable pictures once per leave, rather than adding
+                // a shader/effect or allocating a colour filter on every frame.
+                _ghosts = new[] { Ghost(new SKColor(255, 40, 90, 127)), Ghost(new SKColor(40, 230, 255, 127)) };
+                var layers = new Panel { Children = { _ghosts[0], _ghosts[1], _slices } };
                 _image.IsVisible = false;
-                _card.Children.Insert(_card.Children.IndexOf(_image) + 1, _slices);
+                _card.Children.Insert(_card.Children.IndexOf(_image) + 1, layers);
             }
             if (FlashExit.SparkCount(exit) > 0)
             {
@@ -209,6 +217,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     _sparks.Children.Add(new global::Avalonia.Controls.Shapes.Ellipse { Fill = new SolidColorBrush(Color.FromRgb(0xFF, 0x69, 0xB4)) });
                 _root.Children.Add(_sparks);
             }
+        }
+
+        private Image Ghost(SKColor tint)
+        {
+            using var original = new MemoryStream();
+            ((Bitmap)_image.Source!).Save(original);
+            using var source = SKBitmap.Decode(original.ToArray());
+            using var surface = SKSurface.Create(new SKImageInfo(source.Width, source.Height));
+            using var filter = SKColorFilter.CreateBlendMode(tint, SKBlendMode.Modulate);
+            using var paint = new SKPaint { ColorFilter = filter };
+            surface.Canvas.Clear(SKColors.Transparent);
+            surface.Canvas.DrawBitmap(source, 0, 0, paint);
+            using var snapshot = surface.Snapshot(); // immutable before publishing to Avalonia
+            using var png = snapshot.Encode(SKEncodedImageFormat.Png, 100);
+            using var stream = png.AsStream();
+            var bitmap = new Bitmap(stream);
+            Closed += (_, _) => bitmap.Dispose();
+            return new Image { Source = bitmap, Stretch = Stretch.Uniform, RenderTransform = new TranslateTransform(), IsVisible = false };
         }
 
         private void Apply(FlashExitSample s)
@@ -221,6 +247,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _exitShift!.Y = s.OffsetY * _card.Bounds.Height;
             // TV off: the picture burns white as it collapses (FlashLayer: white at Whiten x alpha).
             _whiten.Opacity = Math.Clamp(s.Whiten, 0, 1);
+            if (_ghosts is { } ghosts)
+            {
+                var split = s.Glitch * 0.04 * _card.Bounds.Width;
+                for (var i = 0; i < ghosts.Length; i++)
+                {
+                    ghosts[i].IsVisible = split * DesktopScaling > 0.5;
+                    ((TranslateTransform)ghosts[i].RenderTransform!).X = i == 0 ? -split : split;
+                }
+            }
             if (_slices != null && Exit is { } exit)
                 for (var k = 0; k < _slices.Children.Count; k++)
                     ((TranslateTransform)_slices.Children[k].RenderTransform!).X = FlashExit.SliceOffset(exit, k) * _card.Bounds.Width;
@@ -351,7 +386,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             IsHitTestVisible = false;
             _image = new Image { Source = picture, Stretch = Stretch.Uniform };
             _image.SizeChanged += (_, _) => ClipCorners();
-            _glow = new Border { IsHitTestVisible = false };
+            _glow = new Border { Background = Brushes.Black, IsHitTestVisible = false };
             _whiten = new Border { Background = Brushes.White, Opacity = 0, IsHitTestVisible = false };
             // Centred, so the card is the letterboxed picture, not the window (as the bare Image was).
             _card = new Panel

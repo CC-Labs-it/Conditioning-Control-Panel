@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using SkiaSharp;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -92,6 +94,59 @@ public sealed class FlashPopTests
         clock.Now += TimeSpan.TicksPerSecond;
         w.ExitFrame();
         Assert.True(closed);
+        Assert.Empty(FlashOverlay.Exiting);
+    });
+
+    [Fact]
+    public Task A_plain_flash_has_a_black_backing_that_rounds_with_the_picture() => OnUi((_, _) =>
+    {
+        var w = Shown(clickable: false);
+        w.ApplyCorners(12);
+        var backing = w.GetVisualDescendants().OfType<Border>().Single(b => b.Background == Brushes.Black);
+        Assert.Equal(new CornerRadius(12), backing.CornerRadius);
+        Assert.Equal(0, backing.BoxShadow.Count);
+    });
+
+    [Fact]
+    public Task Glitch_ghosts_split_red_left_and_cyan_right_and_stop_with_the_flash() => OnUi((s, clock) =>
+    {
+        s.FlashExitStyle = FlashExitStyle.Glitch;
+        s.MotionLevel = MotionLevel.Full;
+        var w = Shown(clickable: true);
+        w.MouseDown(new Point(200, 150), MouseButton.Left);
+        w.UpdateLayout();
+        var layers = (Panel)w.Slices!.Parent!;
+        var ghosts = layers.Children.OfType<Image>().ToArray();
+        Assert.Equal(2, ghosts.Length);
+        static (long R, long G, long B, byte Alpha) Colour(Image image)
+        {
+            using var stream = new MemoryStream();
+            ((global::Avalonia.Media.Imaging.Bitmap)image.Source!).Save(stream);
+            using var bitmap = SKBitmap.Decode(stream.ToArray());
+            long r = 0, g = 0, b = 0;
+            byte alpha = 0;
+            foreach (var pixel in bitmap.Pixels)
+            {
+                r += pixel.Red; g += pixel.Green; b += pixel.Blue;
+                alpha = Math.Max(alpha, pixel.Alpha);
+            }
+            return (r, g, b, alpha);
+        }
+        var red = Colour(ghosts[0]);
+        var cyan = Colour(ghosts[1]);
+        Assert.True(red.R > cyan.R && red.G < cyan.G && red.B < cyan.B);
+        Assert.Equal((byte)127, red.Alpha);
+        Assert.Equal((byte)127, cyan.Alpha);
+        Assert.All(ghosts, g => Assert.False(g.IsVisible)); // no split at progress zero
+        clock.Now += TimeSpan.TicksPerSecond / 10;
+        w.ExitFrame();
+        var split = w.Exit!.Progress * 0.04 * w.Slices.Bounds.Width;
+        Assert.True(split > 0.5);
+        Assert.Equal(-split, ((TranslateTransform)ghosts[0].RenderTransform!).X, 5);
+        Assert.Equal(split, ((TranslateTransform)ghosts[1].RenderTransform!).X, 5);
+        Assert.All(ghosts, g => Assert.True(g.IsVisible));
+        FlashOverlay.CloseAll(final: false);
+        Assert.False(w.IsVisible);
         Assert.Empty(FlashOverlay.Exiting);
     });
 

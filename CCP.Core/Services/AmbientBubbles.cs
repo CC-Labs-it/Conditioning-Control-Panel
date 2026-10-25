@@ -143,11 +143,13 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF AwardAmbientPop's pure half: roll lucky (5% for 20x with the lucky_bubbles
         /// skill), draw 5 x multiplier from the daily bucket. A lucky roll that paid nothing gets the
         /// ordinary pop. Returns the XP to award; the head plays the sound and credits it.</summary>
-        public int Pop(AmbientBubble b, AppSettings s)
+        public int Pop(AmbientBubble b, AppSettings s, Action<int>? luckyProc = null)
         {
             if (b.Popping) return 0;
             b.Popping = true;
             var multiplier = SkillTreeRules.HasSkill(s, "lucky_bubbles") && Random.NextDouble() < 0.05 ? 20 : 1;
+            // WPF RollLuckyBubble raises LuckyProc before the daily budget is applied.
+            if (multiplier > 1) luckyProc?.Invoke(multiplier);
             var paid = AmbientBubbleXp.Take(s, 5 * multiplier);
             b.Lucky = multiplier > 1 && paid > 0;
             return paid;

@@ -16,6 +16,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Flash;
+using ConditioningControlPanel.Services;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
@@ -93,6 +94,31 @@ public sealed class FlashLuckyTests
             TimeSpan.FromSeconds(6), clickable: false, ambient: false, hydraGeneration: 0));
         return FlashOverlay.Active[^1].Window;
     }
+
+    [Fact]
+    public Task Lucky_bubbles_raise_the_same_toast_even_after_the_daily_budget_is_spent() => OnUi((s, _) =>
+    {
+        var old = BubbleOverlay.LuckyProc;
+        var (day, paid) = (s.AmbientBubbleXpDayKey, s.AmbientBubbleXpPaidToday);
+        var procs = new List<(string Label, int Multiplier)>();
+        try
+        {
+            BubbleOverlay.LuckyProc = (label, multiplier) => procs.Add((label, multiplier));
+            s.UnlockedSkills.Add("lucky_bubbles");
+            s.AmbientBubbleXpDayKey = DateTime.Today.ToString("yyyy-MM-dd");
+            s.AmbientBubbleXpPaidToday = 300;
+            for (var i = 0; i < 600 && procs.Count == 0; i++)
+                BubbleOverlay.Pop(new AmbientBubble());
+            Assert.Single(procs);
+            Assert.Equal(20, procs[0].Multiplier);
+            Assert.Equal(300, s.AmbientBubbleXpPaidToday);
+        }
+        finally
+        {
+            BubbleOverlay.LuckyProc = old;
+            (s.AmbientBubbleXpDayKey, s.AmbientBubbleXpPaidToday) = (day, paid);
+        }
+    });
 
     [Fact]
     public Task A_lucky_flash_raises_the_proc_and_pulses_its_gold_glow_the_others_hold_still() => OnUi((s, clock) =>
