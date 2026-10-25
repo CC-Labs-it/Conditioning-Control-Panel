@@ -3405,3 +3405,8 @@ Mantra Lab completion close timer is now stopped in Cleanup, so an early-closed 
 ## avalonia-port/cloud-settings-backup: +747
 - Cloud settings Backup now / Restore / status line on Avalonia through Core CloudSettingsBackup (same endpoints as WPF). Absolute-path fields are never uploaded, including the AudioLayers, CornerGifOverlays and KeywordTriggers lists, whose items carry paths, and every restore keeps this machine's values (oracle-deep Q1). SettingsBackupBudget moved to Core; WPF untouched.
 - Export, 401 recovery, automatic backup and the startup restore prompt remain as wire-views-settings-account-b-next.
+
+## avalonia-port/fin-avatar-tube-window: +619
+- Tube look picker (WPF order, custom labels with blank-label fallback, per-mod restore, 200 ms fade, companion coupling), detached Ctrl+wheel/arrow zoom, Core make-room with user takeover and restore. The emote registry is cached and parse errors are not fatal.
+- Row avatar-tube-window stays stub: animation, speech producers, reactions and Fuse are still missing.
+- Evidence: ~/ccp-port/evidence/review-fin-avatar-tube-window/ (full.diff, failproofs-fix.md).
