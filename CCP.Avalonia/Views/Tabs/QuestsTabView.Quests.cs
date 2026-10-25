@@ -38,6 +38,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             base.OnAttachedToVisualTree(e);
             UpdateAmbient(attached: true);
+            CoreMods.ModChanged += OnJournalModChanged;
+            ApplyBimboJournalModVisibility();
             if (App.Quests is not { } quests) return;
             quests.QuestCompleted += OnQuestCompleted;
             quests.QuestProgressChanged += OnQuestProgressChanged;
@@ -50,6 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             base.OnDetachedFromVisualTree(e);
             UpdateAmbient(attached: false);
+            CoreMods.ModChanged -= OnJournalModChanged;
             if (App.Quests is not { } quests) return;
             quests.QuestCompleted -= OnQuestCompleted;
             quests.QuestProgressChanged -= OnQuestProgressChanged;

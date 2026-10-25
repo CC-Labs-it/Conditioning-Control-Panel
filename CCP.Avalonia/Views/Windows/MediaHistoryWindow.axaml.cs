@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
@@ -10,10 +11,12 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Fyp.Online;
 using LibVLCSharp.Shared;
 using MediaType = ConditioningControlPanel.Models.MediaType;
 using Serilog;
@@ -50,6 +53,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly TextBlock _txtCount, _txtEmpty, _searchPlaceholder, _copyLinkText;
         private readonly TextBlock _previewHint, _previewMissing, _previewName, _previewPath;
         private readonly Image _previewImage;
+        /// <summary>WPF MediaHistoryWindow.xaml.cs:35: "via Scrolller" on an online row's preview.</summary>
+        internal readonly ScrolllerCreditBadge Credit = new() { Margin = new Thickness(0, 0, 8, 6) };
         private readonly Button _btnFilterAll, _btnFilterImages, _btnFilterVideos, _btnFilterAudio;
         private readonly Button _btnPreviewOpenFolder, _btnPreviewOpenFile, _btnPreviewCopyLink, _btnPreviewOpenSource, _btnPreviewLoad;
         private MediaPreviewPlan? _plan;   // the selected row's plan; what the action buttons obey
@@ -77,6 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _previewName = this.FindControl<TextBlock>("PreviewName")!;
             _previewPath = this.FindControl<TextBlock>("PreviewPath")!;
             _previewImage = this.FindControl<Image>("PreviewImage")!;
+            (_previewImage.Parent as Panel)?.Children.Add(Credit);
             _btnFilterAll = this.FindControl<Button>("BtnFilterAll")!;
             _btnFilterImages = this.FindControl<Button>("BtnFilterImages")!;
             _btnFilterVideos = this.FindControl<Button>("BtnFilterVideos")!;
@@ -258,6 +264,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             StopPreview();
             _previewHint.IsVisible = false;
             _previewName.Text = row.DisplayName;
+            Credit.SetShown(ScrolllerCreditRules.IsScrolllerMedia(row.Entry.FilePath));
 
             // No RemoteMediaCache on this head: an online entry is never cached here.
             var plan = _plan = MediaHistoryPreviewRules.Plan(row.Entry.FilePath, row.Entry.Type, row.FileExists,
@@ -364,6 +371,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void ShowPreviewNone()
         {
+            Credit.SetShown(false);
             StopPreview();
             _plan = null;
             _previewHint.IsVisible = true;

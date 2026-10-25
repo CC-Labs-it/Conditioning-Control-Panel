@@ -9,6 +9,7 @@ namespace ConditioningControlPanel.Services.Awareness;
 /// The heads resolve windows; these rules never inspect the desktop.</summary>
 public static class AwarenessAppScopeRules
 {
+    /// <summary>Whole process names, ignoring case, list-entry whitespace and an optional .exe suffix.</summary>
     public static bool MatchesAppList(IEnumerable<string>? list, string processName)
     {
         if (list == null || string.IsNullOrWhiteSpace(processName)) return false;
@@ -24,6 +25,7 @@ public static class AwarenessAppScopeRules
         return false;
     }
 
+    /// <summary>Split comma/semicolon/newline entries, retaining the first spelling of each process.</summary>
     public static List<string> ParseAppList(string? text)
     {
         var result = new List<string>();
