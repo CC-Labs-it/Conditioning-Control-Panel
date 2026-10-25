@@ -144,3 +144,25 @@ test('audio crossing event shares the exact visual onset and never repeats durin
   effect.clear();effect.update(at(-2),.1);effect.update(at(2),.1);assert.equal(events.length,2);
   effect.dispose();
 });
+
+test('a chart replaces fixed phrases with pooled song gates and emits the recorded cue only on crossing', () => {
+  const track = tracks[1], scene = new Scene(), bus = createBus();
+  const effect = createPhraseGates(scene, track, { doc: null, bus });
+  const start = effect.gates[0].s - 40, events = [];
+  const song = { words: [], triggers: [{ kind: 'word', w: 'follow the signal', startS: 2 }] };
+  bus.on('phrase-gate', e => events.push(e));
+  const pool = scene.getObjectByName('phrase-gates'), roots = pool.children.slice();
+  for (let i = 0; i <= 6 * 60; i++) {
+    const t = i / 60, s = start + t * 30, f = track.frameAt(s), st = createState();
+    st[S.s] = s; st[S.seg] = f.seg; st[S.grounded] = 1;
+    for (let k = 0; k < 3; k++) { st[S.posX + k] = f.p[k]; st[S.velX + k] = f.t[k] * 30; }
+    effect.update(st, 1 / 60, { song, songS: t });
+  }
+  assert.equal(events.length, 1);
+  assert.equal(events[0].song, true); assert.equal(events[0].text, 'follow the signal');
+  assert.ok(Math.abs(events[0].songS - 2) < .05);
+  assert.equal(effect.stats.hits, 1); assert.equal(effect.stats.gates, 1);
+  assert.deepEqual(pool.children, roots, 'no gate meshes allocated during the song');
+  assert.ok(pool.children.every(root => !root.visible), 'finished cue leaves no generic gate behind');
+  effect.dispose(); assert.equal(scene.children.length, 0);
+});

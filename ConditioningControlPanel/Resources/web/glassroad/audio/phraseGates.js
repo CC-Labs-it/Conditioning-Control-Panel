@@ -25,7 +25,8 @@ export function phraseGateNotes(course, index = 0, gentle = false) {
   ];
 }
 
-export function playPhraseGate(syn, { course, index = 0, gentle = false } = {}) {
+export function playPhraseGate(syn, { course, index = 0, gentle = false, song = false } = {}) {
+  if (song) return; // The recording already supplies this moment's voice and musical drop.
   for (const { semis, ratio, ...opts } of phraseGateNotes(course, index, gentle)) {
     syn.tone(syn.semis(semis) * ratio, opts);
   }

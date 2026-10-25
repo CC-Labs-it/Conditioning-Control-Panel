@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { MAINFRAME_CHART, verseChart, mixEnvelope } from './verseChart.mjs';
+import { KEEP_CHART, lockedChunks, lockedChart } from './lockedChart.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 // the app serves Resources/web whole, so glassroad's ../../arcademy imports (the Loom) resolve to /arcademy/
@@ -18,6 +19,29 @@ const PRIVATE = resolve(process.env.GLASSROAD_AUDIO_DIR || 'C:/Projects/glassroa
 const MOUNTS = [['/arcademy/', ARCADEMY], ['/private-audio/', PRIVATE]];
 const PORT = Number(process.argv[2] || process.env.PORT || 8790);
 let mainframeChart;
+let keepChart;
+async function readKeepChart() {
+  if (!keepChart) keepChart = (async () => {
+    const dir = join(PRIVATE, 'locked-cock');
+    const script = await readFile(join(dir, 'script.md'), 'utf8');
+    const mixSource = await readFile(join(dir, 'mix_v3.py'), 'utf8');
+    const block = mixSource.match(/MANTRAS\s*=\s*\{([\s\S]*?)\}/)?.[1] || '';
+    const mantras = [...block.matchAll(/"([^"]+)"/g)].map(m => m[1]);
+    if (!mantras.length) throw new Error('Missing recorded mantra selection');
+    const notes = JSON.parse(await readFile(join(dir, 'out/v3/NOTES.json'), 'utf8'));
+    const takes = [], samples = [];
+    for (let i = 0; i < lockedChunks(script).length; i++) {
+      const name = 's' + String(i).padStart(2, '0');
+      takes.push(JSON.parse(await readFile(join(dir, 'work/voice', name + '.json'), 'utf8')));
+      const { stdout } = await promisify(execFile)('ffmpeg', ['-v', 'error', '-threads', '2',
+        '-i', join(dir, 'work/voice', name + '.mp3'), '-vn', '-ac', '1', '-ar', '44100',
+        '-threads', '2', '-f', 's16le', 'pipe:1'], { encoding: 'buffer', maxBuffer: 32 * 1024 * 1024, windowsHide: true });
+      samples.push(stdout.length / 2);
+    }
+    return JSON.stringify(lockedChart(script, takes, samples, notes, mantras));
+  })().catch(e => { keepChart = null; console.warn('[keep chart]', e.message); throw e; });
+  return keepChart;
+}
 async function readMainframeChart() {
   if (!mainframeChart) mainframeChart = (async () => {
     const dir = join(PRIVATE, 'tracks-2026-10-24/mainframe/out/v3');
@@ -43,6 +67,12 @@ const MIME = {
 
 const server = createServer(async (req, res) => {
   const head = { 'Cache-Control': 'no-store', 'Cross-Origin-Opener-Policy': 'same-origin' };
+  if (new URL(req.url, 'http://local').pathname === KEEP_CHART) {
+    if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405, head); res.end(); return; }
+    try { const body = await readKeepChart(); res.writeHead(200, { ...head, 'Content-Type': 'application/json' }); res.end(req.method === 'HEAD' ? undefined : body); }
+    catch { res.writeHead(503, head); res.end('Private Keep recording unavailable'); }
+    return;
+  }
   if (new URL(req.url, 'http://local').pathname === MAINFRAME_CHART) {
     if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405, head); res.end(); return; }
     try {

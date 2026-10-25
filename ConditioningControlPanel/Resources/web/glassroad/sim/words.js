@@ -151,9 +151,9 @@ const signed = (d, lapM) => { const x = wrap(d, lapM); return x > lapM / 2 ? x -
  *   pops: number, shown: number, total: number, streak: number, best: number, lines: number,
  *   reset(seed?: number): void, onPop(fn: Function): () => void, words: object[] }}
  */
-export function createWordRun(song, track, { seed = 1, look = WORD_LOOK, pick = pickWords } = {}) {
+export function createWordRun(song, track, { seed = 1, look = WORD_LOOK, pick = pickWords, songGates = false } = {}) {
   const L = look, lapM = track.lengthM;
-  const picked = scriptBubbles(song, L, pick);
+  const picked = scriptBubbles(song, L, songGates ? s => pick(s).map(k => k >= GATE ? ROAD : k) : pick);
   const fr = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0], w: 14 };
   let shares = laneShares(picked, seed, L);
   const rowOf = (b) => (b.row === 5 ? L.triggerRow : b.row === 3 ? L.gateRow : null);

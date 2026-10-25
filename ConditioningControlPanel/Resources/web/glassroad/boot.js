@@ -374,6 +374,12 @@ async function boot(course, options, lifetime, isCurrent) {
     if (!lifetime.alive) return;
   }
   Object.defineProperty(debug, 'cardMedia', { get: () => world.media?.stats() || null });
+  Object.defineProperty(debug, 'songGates', { get: () => world.phraseGates.stats });
+  bus.on('phrase-gate', e => {
+    if (!e.song || !words) return;
+    wordCount.pop(!!feel.get('gentle.on'), { gate: true });
+    if (online) online.s.wordPop(words.pops + world.phraseGates.stats.hits);
+  });
   const garage = shared.garage ||= await createGarage({ art: shared.garageArt, renderer, canvas,
     track: trackName, laps, trackId: track.id, online: course.online });
   if (!lifetime.alive) { garage?.dispose(); return; }
@@ -557,10 +563,10 @@ async function boot(course, options, lifetime, isCurrent) {
     const song = audio.music && audio.music.song;
     if (!song || !song.words.length) { words = null; wordCount.show(false); return; }
     if (!words || words.song !== song) {
-      words = createWordRun(song, track, { seed }); words.song = song;
+      words = createWordRun(song, track, { seed, songGates: true }); words.song = song;
       words.onPop((e) => {
         bus.emit('word-pop', e); wordCount.pop(!!feel.get('gentle.on'), e);
-        if (online && words) online.s.wordPop(words.pops);   // a pulse for the others, the total for the standings
+        if (online && words) online.s.wordPop(words.pops + world.phraseGates.stats.hits);
       });
     } else words.reset(seed);
     wordCount.show(true);
@@ -1076,7 +1082,10 @@ async function boot(course, options, lifetime, isCurrent) {
     const pv = P.view;
     const wordLive = words && song ? words.update(songS,
       { s: pv[S.s], lat: pv[S.lateral], speedMps: Math.max(0, pv[S.speedPct]) * feel.get('speed.topMps') }) : NO_WORDS;
-    if (words) wordCount.set(words.pops, words.total, words.streak);
+    if (words) {
+      const gates = world.phraseGates.stats;
+      wordCount.set(words.pops + (gates.song ? gates.hits : 0), words.total + (gates.song ? gates.gates : 0), words.streak);
+    }
     // renderTime (sim time + alpha x dt), not simTime: whole sim steps would judder the world on a
     // display that is not 60 Hz
     for (let i = 0; i < kartViews.length; i++) kartViews[i].glide = !online && glideActive(racers.list[i].st);
