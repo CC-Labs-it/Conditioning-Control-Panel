@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### fin4 shell Inbox arbitration
+
+1. In a sandbox fresh launch complete the wizard; post an announcement during its modal. Confirm one Inbox row, opened only on request with dismissal bookkeeping intact. WPF `Services/Startup/StartupPresenter.cs`, `MainWindow/MainWindow.Inbox.cs`. Rows: `shell-inbox`.
+2. Queue owed startup surfaces at different and equal priorities. Confirm priority/FIFO, one modal at a time, 750 ms settle, dedupe and passive cards arriving between modals opening after drain. WPF `Services/Startup/StartupPresenter.cs`. Rows: `shell-inbox`.
+3. Boot into launcher, wait over five minutes, return to panel. Confirm owed update has not expired; repeat with a game. Restore from tray and confirm hold releases. WPF `Services/Startup/StartupPresenter.cs`. Rows: `shell-inbox`.
+4. Let first-launch quiet expire: one quiet-change event, existing rows stay filed. An unavailable owner abandons only its waiting modal after five unparked minutes; later higher-priority modal gets its own wait. Automated: `StartupLadderTests`. WPF `Services/Startup/StartupPresenter.cs`. Rows: `shell-inbox`.

@@ -10,6 +10,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
@@ -129,6 +130,7 @@ public sealed class FirstShowStageTests
     public Task ShownOnceAfterTheFirstRunWizard() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
+        StartupLadder.ResetForTests();
         var service = new SettingsService();
         var old = CoreSettings.ServiceProvider;
         CoreSettings.ServiceProvider = () => service;
@@ -140,6 +142,8 @@ public sealed class FirstShowStageTests
             CoreSettings.Current.HasAcceptedAgeVerification = false;
             shell = new MainShellWindow { OpenWelcomeShow = _ => { opened++; return true; } };
             shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromMilliseconds(750));
             await Until(() => shell.OwnedWindows.OfType<FirstRunWizard>().Any());
             var wizard = shell.OwnedWindows.OfType<FirstRunWizard>().Single();
             Assert.Equal(0, opened);
@@ -160,6 +164,7 @@ public sealed class FirstShowStageTests
             foreach (var w in new[] { shell, second }) { foreach (var o in w?.OwnedWindows.ToList() ?? new()) o.Close(); w?.RequestExit(); }
             Dispatcher.UIThread.RunJobs();
             service.SaveImmediate(); CoreSettings.ServiceProvider = old;
+            StartupLadder.ResetForTests();
         }
     });
 

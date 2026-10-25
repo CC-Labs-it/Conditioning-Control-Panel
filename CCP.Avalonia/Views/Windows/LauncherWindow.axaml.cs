@@ -133,6 +133,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 try { Services.LockdownService.Current?.NotifyEscapeAttempt(Services.Possession.EscapeKinds.Close); } catch { }
                 return false;
             }
+            Platform.StartupLadder.Hold();
             panel.Hide();
             panel.HideAvatarTube();
             OpenFor(panel);
@@ -161,6 +162,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                Platform.StartupLadder.Hold();
                 panel.Hide();
                 panel.HideAvatarTube();
                 if (!(Boot.Surface == BootSurface.Game && Boot.GameId is { } id && LaunchGame(panel, id)))
@@ -169,7 +171,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex)
             {
                 Log.Error(ex, "[Launcher] boot routing failed; leaving the panel up");
-                try { panel.ShowFromTray(); } catch (Exception ex2) { Log.Debug(ex2, "[Launcher] ShowFromTray after failed boot routing"); }
+                try { Platform.StartupLadder.Release(); panel.ShowFromTray(); } catch (Exception ex2) { Log.Debug(ex2, "[Launcher] ShowFromTray after failed boot routing"); }
             }
         }
 
@@ -188,7 +190,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static void OpenPanel(MainShellWindow panel)
         {
             if (_window != null) _window.OpenPanel();
-            else panel.ShowFromTray();
+            else { Platform.StartupLadder.Release(); panel.ShowFromTray(); }
         }
 
         /// <summary>A second launch (Platform/SingleInstance): WPF RouteSurfaceHandoff for a
@@ -239,6 +241,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             AfterExitBeat(() =>
             {
                 Hide();
+                Platform.StartupLadder.Release();
                 panel.ShowFromTray();
                 try { then?.Invoke(panel); }
                 catch (Exception ex) { Log.Debug(ex, "[Launcher] step after OpenPanel failed"); }
