@@ -2,9 +2,12 @@
 import { Group, Mesh, InstancedMesh, BoxGeometry, SphereGeometry, CylinderGeometry, TorusGeometry, BufferGeometry, Float32BufferAttribute,
   PlaneGeometry, IcosahedronGeometry, MeshBasicNodeMaterial, Matrix4, Vector3, Quaternion, Color, DoubleSide } from 'three/webgpu';
 import { vec3, uniform, normalize, normalWorld, dot, clamp } from 'three/tsl';
-import { BOUDOIR_HAZARD as K, getBoudoirSetpieces, powderPressPhase, mascaraHeads, mascaraPhase, ribbonPhase } from '../track/boudoir-setpieces.js';
+import { BOUDOIR_HAZARD as K, getBoudoirSetpieces, powderPressPhase as pressPose, mascaraHeads, mascaraPhase as brushPose, ribbonPhase as ribbonPose } from '../track/boudoir-setpieces.js';
+import { machineryBeatAt } from '../track/machineryBeat.js';
 import { LOOK } from './look.js';
 export function createBoudoirHazardView(scene, track) {
+  const timed = pose => (row, timeS) => pose(row, timeS, machineryBeatAt(track,timeS));
+  const powderPressPhase = timed(pressPose), mascaraPhase = timed(brushPose), ribbonPhase = timed(ribbonPose);
   const plan = getBoudoirSetpieces(track), group = new Group(); group.name = 'boudoir-interactions'; scene.add(group);
   const geometries = [], materials = [], entries = [], belts = [], burst = [], byId = new Map();
   const own = geometry => { geometries.push(geometry); return geometry; }, box = own(new BoxGeometry(1, 1, 1)), sphere = own(new SphereGeometry(1, 20, 12));
@@ -129,7 +132,7 @@ export function createBoudoirHazardView(scene, track) {
       } else {
         let motion = 0;
         for (const head of entry.heads) {
-          const p = mascaraPhase(head.row, clock); head.pivot.rotation.z = p.angle;
+          const p = mascaraPhase(head.row, clock); head.pivot.rotation.z = p.angle; head.pivot.position.y = p.pivotY;
           motion = Math.max(motion, Math.abs(p.vx) / (K.brushAmplitudeM * Math.PI * 2 / head.row.cycleS));
         }
         entry.opacity.value = (.1 + .12 * Math.min(1, motion)) * (gentle ? .65 : 1);

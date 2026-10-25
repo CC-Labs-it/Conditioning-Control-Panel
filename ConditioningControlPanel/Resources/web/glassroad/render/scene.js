@@ -51,6 +51,8 @@ import { setLensCamera } from './lens.js';
 import { racerLabels } from '../hud/format.js';
 import { createMusicRoad } from './musicRoad.js';
 import { updateAudioReactiveUniforms } from './audioReactive.js';
+import { createPressContacts } from './pressContacts.js';
+import { createSpiralBeatClock } from './spiralBeat.js';
 import { worldScreenLayout, worldScreenSolids, worldScreenExistingSlots } from './worldScreens.js';
 import { createWordBubbles } from './wordBubbles.js';
 import { createWordPopFx } from './wordPopFx.js';
@@ -462,6 +464,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   }
 
   let lastT = null, padPhase = 0, eyeSet = false;
+  const pressContacts = createPressContacts(track, (name, payload) => bus?.emit(name, payload));
+  const padBeat = createSpiralBeatClock();
   const fwd = [0, 0, -1], head = [0, 0, -1], eye = [0, -1, 0], eR = [1, 0, 0], eU = [0, 0, -1], q = [0, 0, 0, 1], F = [0, 0, -1], UP = [0, 1, 0];
   /** The spiral eye: tilted from the nadir toward a slow (skyEyeTcS) flat heading, below the horizon ahead. */
   function aimEye(k, dt) {
@@ -491,6 +495,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (keepChains) keepChains.update(view.raceTimeS ?? 0);
     goonworksHazards?.update(view.raceTimeS ?? 0);
     const { kart: k, fx } = view;
+    pressContacts.update(view.raceTimeS ?? 0, [k[S.posX], k[S.posY], k[S.posZ]],
+      { active: view.mode === 'race', paused: !!view.paused, gentle: !!feel.get('gentle.on') });
     solo[0].st = k;
     const racers = view.karts && view.karts.length ? view.karts : solo;
     if (labelsOf !== racers || labels.length !== racers.length) {
@@ -572,6 +578,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     // pad ring: scale from padRing, brightness from the padGlow envelope (photosafe + Gentle rise)
     const pr = fx.padRing || 0, glow = fx.padGlow || 0;
     pad.uniforms.phase.value = lip.uniforms.phase.value = padPhase;
+    if (!view.paused && pad.uniforms.spiralTurn) pad.uniforms.spiralTurn.value =
+      (pad.uniforms.spiralTurn.value + dt * .45 * scroll * padBeat.update(dt, view, gentle)) % (Math.PI * 2);
     pad.uniforms.pulse.value = glow;
     ringMesh.visible = pr > 0 && glow > 0;
     ringMesh.scale.setScalar(1 + pr * LOOK.ringMaxM);
@@ -599,8 +607,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (view.camera) {
       kartPos.length = 0;
       for (const o of kartObjs) if (o.visible) kartPos.push(o.position);
-      if (spirals) spirals.update(dt, { camera: view.camera, karts: kartPos, player: 0, gentle, paused: !!view.paused });
-      if (media) media.update(dt, { camera: view.camera, gentle, scrollMul: scroll, contrastMul: contrast, paused: !!view.paused });
+      if (spirals) spirals.update(dt, { camera: view.camera, karts: kartPos, player: 0, gentle, paused: !!view.paused, song: view.beatSong || view.song, songS: view.songS, audioReactive: view.audioReactive });
+      if (media) media.update(dt, { camera: view.camera, gentle, scrollMul: scroll, contrastMul: contrast, paused: !!view.paused, song: view.beatSong || view.song, songS: view.songS, audioReactive: view.audioReactive });
     }
     if (routes) routes.update(dt, { gentle, paused: !!view.paused, scroll });
     if (edges) edges.update(dt, { gentle, paused: !!view.paused });
@@ -608,7 +616,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     wakes.update(dt);
     lines.update(dt, k, fx, kart);
     if (view.mode === 'menu') lines.object.visible = false;
-    if (itemVis && view.items) itemVis.update(view.items, dt, racers, view.camera);   // visuals read racer .st (CONTRACT-B1 view.karts)
+    if (itemVis && view.items) itemVis.update(view.items, dt, racers, view.camera, view);   // visuals read racer .st (CONTRACT-B1 view.karts)
     if (wordVis) wordVis.update(view.words || [], view.song || null, dt);
     if (wordFx) wordFx.update(dt, view.camera);
     if (roadWords) roadWords.update(view.song || null, view.songS, k, mf, { gentle, paused: !!view.paused });

@@ -1,5 +1,6 @@
 // The physical toys and their visible parts share this deterministic race-clock description.
 import { getGoonworksLayout } from './goonworks-layout.js';
+import { beatCycle, gearBeatTravel, machineryRearming } from './machineryBeat.js';
 
 export const GOONWORKS_TOYS = Object.freeze({ kartRadius: .7, kartHeight: 1.6, stallS: .28, repeatS: 1.1,
   wheelRadius: 15.5, wheelCenterY: 12.5, wheelDepth: 2.4, wheelGap: 125 * Math.PI / 180 });
@@ -35,25 +36,44 @@ export function goonworksSetpieces(track, layout = getGoonworksLayout(track)) {
   return rows.sort((a, b) => a.s - b.s);
 }
 
-export function goonworksPose(row, timeS = 0) {
+export function goonworksPose(row, timeS = 0, beat = null) {
   const time = Number.isFinite(timeS) ? Math.max(0, timeS) : 0;
+  const offset = Math.round((row.offsetS || 0) / (beat?.beatS || 1));
+  // Moving toys follow their authored pickup pose. Rising toys wait for a full warning cycle.
+  const moving = row.kind === 'wheel' || row.kind === 'shutter';
+  const waiting = beat && !moving && beat.beat < beatCycle(-offset,16);
+  if (beat && (waiting || (beat.rearming && machineryRearming(beat, offset)))) return { angle: row.kind === 'wheel' ? -Math.PI / 2 : 0, phase: 'warn', warning: true,
+    active: row.kind === 'wheel' || row.kind === 'shutter', x: row.x,
+    height: row.kind === 'wheel' ? row.radius * 2 : row.kind === 'shutter' ? row.h : 0 };
   if (row.kind === 'wheel') {
-    const angle = row.phase + time * row.speed;
+    const angle = (beat?.rearming ? -Math.PI / 2 : row.phase) + (beat ? gearBeatTravel(Math.max(0, beat.beat)) * Math.sign(row.speed) * Math.PI / 12 : time * row.speed);
     const down = Math.abs(Math.atan2(Math.sin(-Math.PI / 2 - angle), Math.cos(-Math.PI / 2 - angle)));
     return { angle, phase: down < row.gap * .38 ? 'open' : 'turning', warning: down < row.gap * .65,
       active: true, x: row.x, height: row.radius * 2 };
   }
-  const t = cycle(time + (row.offsetS || 0), row.periodS);
+  const t = beat ? beatCycle(beat.beat + offset, 16) : cycle(time + (row.offsetS || 0), row.periodS);
   if (row.kind === 'shutter') {
-    const angle = t / row.periodS * TAU;
+    const angle = (beat ? gearBeatTravel(t) / 16 : t / row.periodS) * TAU;
     return { x: row.x + Math.sin(angle) * row.travel, height: row.h, active: true,
       warning: Math.abs(Math.cos(angle)) > .7, phase: 'sweep', angle: 0 };
   }
   if (row.kind === 'block') {
+    if (beat) {
+      const phase = t < 5 ? 'clear' : t < 8 ? 'warn' : t < 9 ? 'rise' : t < 12 ? 'hold' : t < 14 ? 'lower' : 'clear';
+      const height = phase === 'rise' ? row.height * ease((t - 8) / .7) : phase === 'hold' ? row.height
+        : phase === 'lower' ? row.height * (1 - ease((t - 12) / 2)) : 0;
+      return { x: row.x, height, phase, active: height > .12, warning: phase === 'warn', angle: 0 };
+    }
     const phase = t < 3 ? 'clear' : t < 4.3 ? 'warn' : t < 5 ? 'rise' : t < 6.7 ? 'hold' : t < 7.6 ? 'lower' : 'clear';
     const height = phase === 'rise' ? row.height * ease((t - 4.3) / .7) : phase === 'hold' ? row.height
       : phase === 'lower' ? row.height * (1 - ease((t - 6.7) / .9)) : 0;
     return { x: row.x, height, phase, active: height > .12, warning: phase === 'warn', angle: 0 };
+  }
+  if (beat) {
+    const phase = t < 5 ? 'rest' : t < 8 ? 'warn' : t < 8.5 ? 'flip' : t < 9 ? 'hold' : t < 11 ? 'lower' : 'rest';
+    const lift = phase === 'flip' ? ease((t - 8) / .5) : phase === 'hold' ? 1 : phase === 'lower' ? 1 - ease((t - 9) / 2) : 0;
+    return { x: row.x, height: row.height * lift, angle: Math.asin(row.height / row.depth) * lift,
+      phase, active: phase === 'flip', warning: phase === 'warn' };
   }
   const phase = t < 3.5 ? 'rest' : t < 4.7 ? 'warn' : t < 5 ? 'flip' : t < 5.35 ? 'hold' : t < 6.2 ? 'lower' : 'rest';
   const lift = phase === 'flip' ? ease((t - 4.7) / .3) : phase === 'hold' ? 1 : phase === 'lower' ? 1 - ease((t - 5.35) / .85) : 0;

@@ -171,7 +171,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     compile(scene, camera, extras, opts) { return warmAll(api, scene, camera, extras, opts); },
     resize,
     /** dt (frame seconds) reaches post.update for the item screen effect (CONTRACT-B1). */
-    render({ scene, camera, fx, dt = 0 }) {
+    render({ scene, camera, fx, dt = 0, musicView = {} }) {
       const now = performance.now();
       if (!gated) gate.due(now);                 // unwired: still learn the display rate for the targets
       const gap = last ? now - last : 0;
@@ -190,7 +190,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
       count(now);
       const p = postFor(scene, camera);
       three.info.reset();
-      p.update(fx, dt, Math.max(1, canvas.clientWidth) / Math.max(1, canvas.clientHeight));
+      p.update(fx, dt, Math.max(1, canvas.clientWidth) / Math.max(1, canvas.clientHeight), musicView);
       p.render();
     },
     stats() {

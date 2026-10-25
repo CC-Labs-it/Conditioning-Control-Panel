@@ -8,6 +8,8 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { MAINFRAME_CHART, verseChart, mixEnvelope } from './verseChart.mjs';
 import { KEEP_CHART, lockedChunks, lockedChart } from './lockedChart.mjs';
+import { GOON_CHART, GOON_AUDIO, GOON_SHA256, goonChart } from './goonChart.mjs';
+import { verifiedRecording, sendRecording } from './privateRecording.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 // the app serves Resources/web whole, so glassroad's ../../arcademy imports (the Loom) resolve to /arcademy/
@@ -20,6 +22,28 @@ const MOUNTS = [['/arcademy/', ARCADEMY], ['/private-audio/', PRIVATE]];
 const PORT = Number(process.argv[2] || process.env.PORT || 8790);
 let mainframeChart;
 let keepChart;
+let goonRecording, goonChartBody;
+async function readGoonRecording() {
+  if (!goonRecording) goonRecording = verifiedRecording([
+    process.env.GLASSROAD_GOON_RECORDING || 'C:/Users/Admin/Downloads/Keep Watching - remix v4.mp3',
+    join(PRIVATE, 'tracks-2026-10-24/goon/remix/out/keep-watching_remix_v4.mp3'),
+  ], GOON_SHA256).catch(e => { goonRecording = null; throw e; });
+  return goonRecording;
+}
+async function readGoonChart() {
+  if (!goonChartBody) goonChartBody = (async () => {
+    const recording = await readGoonRecording(), dir = join(PRIVATE, 'tracks-2026-10-24/goon/remix/work');
+    const [beat, words, arrangement] = await Promise.all([
+      readFile(join(dir, 'beat.json'), 'utf8'), readFile(join(dir, 'words.json'), 'utf8'), readFile(join(dir, 'remix.py'), 'utf8'),
+    ]);
+    const { stdout } = await promisify(execFile)('ffmpeg', ['-v', 'error', '-threads', '2',
+      '-i', recording.file, '-vn', '-ac', '1', '-ar', '8000', '-threads', '2', '-f', 'f32le', 'pipe:1'],
+    { encoding: 'buffer', maxBuffer: 16 * 1024 * 1024, windowsHide: true });
+    const pcm = new Float32Array(stdout.buffer.slice(stdout.byteOffset, stdout.byteOffset + stdout.byteLength));
+    return JSON.stringify(goonChart(JSON.parse(beat), JSON.parse(words), arrangement, pcm.length / 8000, mixEnvelope(pcm)));
+  })().catch(e => { goonChartBody = null; throw e; });
+  return goonChartBody;
+}
 async function readKeepChart() {
   if (!keepChart) keepChart = (async () => {
     const dir = join(PRIVATE, 'locked-cock');
@@ -67,6 +91,19 @@ const MIME = {
 
 const server = createServer(async (req, res) => {
   const head = { 'Cache-Control': 'no-store', 'Cross-Origin-Opener-Policy': 'same-origin' };
+  const pathname = new URL(req.url, 'http://local').pathname;
+  if (pathname === GOON_CHART || pathname === GOON_AUDIO) {
+    if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405, head); res.end(); return; }
+    try {
+      if (pathname === GOON_AUDIO) sendRecording(req, res, (await readGoonRecording()).bytes, head);
+      else {
+        const body = await readGoonChart();
+        res.writeHead(200, { ...head, 'Content-Type': 'application/json' });
+        res.end(req.method === 'HEAD' ? undefined : body);
+      }
+    } catch { res.writeHead(503, head); res.end('Private GOONWORKS recording unavailable'); }
+    return;
+  }
   if (new URL(req.url, 'http://local').pathname === KEEP_CHART) {
     if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405, head); res.end(); return; }
     try { const body = await readKeepChart(); res.writeHead(200, { ...head, 'Content-Type': 'application/json' }); res.end(req.method === 'HEAD' ? undefined : body); }
@@ -128,7 +165,7 @@ const server = createServer(async (req, res) => {
     res.end('not found');
   }
 });
-server.listen(PORT, '127.0.0.1', () => console.log('glassroad on http://127.0.0.1:' + PORT + '/'));
+server.listen(PORT, '127.0.0.1', () => console.log('glassroad on http://127.0.0.1:' + server.address().port + '/'));
 server.on('close', () => liveCards?.dispose());
 if (liveCards) {
   const stop = () => { liveCards.dispose(); server.close(); };

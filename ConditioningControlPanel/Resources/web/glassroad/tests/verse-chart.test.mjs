@@ -54,7 +54,7 @@ test('Mainframe selects its private mix only on the dev fallback, preserving exp
   const fallback = ['/private-audio/pink-road/chart.json'];
   assert.deepEqual(courseSongs('mainframe', '', fallback), [MAINFRAME_CHART]);
   assert.deepEqual(courseSongs('threshold', '', fallback), fallback);
-  assert.deepEqual(courseSongs('goonworks', '', fallback), []);
+  assert.deepEqual(courseSongs('goonworks', '', fallback), ['/private-audio/goonworks/race-chart.json']);
   assert.deepEqual(courseSongs('mainframe', '', ['/host-chart.json']), []);
   assert.deepEqual(courseSongs('mainframe', '?chart=0', []), []);
   assert.deepEqual(courseSongs('mainframe', '?chart=/own.json', ['/own.json']), ['/own.json']);

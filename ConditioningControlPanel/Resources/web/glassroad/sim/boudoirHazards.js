@@ -3,13 +3,16 @@ import { S, BOOST, RESPAWN, cloneState } from './state.js';
 import { clamp, wrap } from '../core/math.js';
 import { gateSweep, createKeepGates } from './keepGates.js';
 import { makeQuery } from '../track/query.js';
-import { BOUDOIR_HAZARD as K, getBoudoirSetpieces, powderPressPhase, mascaraHeads, mascaraPhase, ribbonPhase, mirrorGatePhase } from '../track/boudoir-setpieces.js';
+import { BOUDOIR_HAZARD as K, getBoudoirSetpieces, powderPressPhase as pressPose, mascaraHeads, mascaraPhase as brushPose, ribbonPhase as ribbonPose, mirrorGatePhase as mirrorPose } from '../track/boudoir-setpieces.js';
+import { machineryBeatAt } from '../track/machineryBeat.js';
 const RADIUS = .7, HEIGHT = 1.6;
 const dot = (a, b) => a.reduce((sum, v, i) => sum + v * b[i], 0);
 const dist = (a, b) => Math.hypot(...[0, 1, 2].map(i => a[S.posX + i] - b[S.posX + i]));
 function local(st, f) { const d = [0, 1, 2].map(i => st[S.posX + i] - f.p[i]); return [dot(d, f.b), dot(d, f.t), dot(d, f.n)]; }
 function clearBoost(st) { st[S.boostKind] = BOOST.NONE; st[S.boostT] = st[S.boostAmount] = st[S.boostHoldS] = 0; st[S.driftDir] = st[S.driftCharge] = st[S.driftStage] = 0; }
 export function createBoudoirHazards(track, layout = null) {
+  const timed = pose => (row, timeS) => pose(row, timeS, machineryBeatAt(track, timeS));
+  const powderPressPhase = timed(pressPose), mascaraPhase = timed(brushPose), ribbonPhase = timed(ribbonPose), mirrorGatePhase = timed(mirrorPose);
   const plan = layout?.presses ? layout : getBoudoirSetpieces(track, layout || undefined);
   const rows = [...plan.presses, ...plan.sweepers.flatMap(mascaraHeads), ...plan.mirrorGates].map(row => ({ ...row, frame: track.frameAt(row.s) }));
   const unique = [...plan.presses, ...plan.sweepers, ...plan.mirrorGates.filter(row => row.lane === 1)].map(row => ({ ...row, x: 0, w: 14 }));
@@ -24,6 +27,7 @@ export function createBoudoirHazards(track, layout = null) {
       if (Math.abs(delta) > travel + row.depthM / 2 + Math.abs(row.longitudinalM || 0) + 4) continue;
       const A = local(a, row.frame), B = local(b, row.frame), brush = row.kind === 'sweeper';
       const pa = brush ? mascaraPhase(row, ta) : null, pb = brush ? mascaraPhase(row, tb) : null;
+      if (pa?.safe || pb?.safe) continue;
       const fraction = gateSweep([A[0] - (brush ? pa.x : row.x), A[1] - (brush ? pa.z : 0)], [B[0] - (brush ? pb.x : row.x), B[1] - (brush ? pb.z : 0)],
         (brush ? pa.radiusM : row.w / 2) + RADIUS, row.depthM / 2 + RADIUS);
       if (fraction === null) continue;

@@ -83,6 +83,8 @@ export function chartAudioUrl(chartUrl, chart) {
   const base = String(chartUrl);
   if (chart && typeof chart.audio === 'string' && chart.audio) {
     try { return new URL(chart.audio, base).href; } catch (e) { /* a relative base */ }
+    // A path-only chart URL still permits an origin-rooted or absolute audio URL.
+    if (chart.audio.startsWith('/') || /^[a-z][a-z0-9+.-]*:/i.test(chart.audio)) return chart.audio;
     const dir = base.slice(0, base.lastIndexOf('/') + 1);
     return dir + chart.audio;
   }

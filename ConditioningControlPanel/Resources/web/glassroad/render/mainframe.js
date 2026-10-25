@@ -352,7 +352,7 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
       updateBubbles(dt * (gentle ? 0.5 : 1));
       coolantTime.value += dt * (gentle ? 0.5 : 1);
       loomContrast.value += ((gentle ? 0.5 : 1) - loomContrast.value) * Math.min(1, dt / 0.3);
-      if (loomFrames?.update(dt, gentle)) for (const display of displays) display.tex.needsUpdate = true;
+      if (loomFrames?.update(dt, gentle, view)) for (const display of displays) display.tex.needsUpdate = true;
       for (const display of displays) display.disc.rotation.z += dt * (gentle ? 0.18 : 0.45);
       for (const scan of scans) {
         const pose = scanPose(scan.zone, view.scanTimeS ?? view.timeS ?? 0, view.scanBpm || 120);

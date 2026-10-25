@@ -1,17 +1,27 @@
 /* Pure authored interaction stations and one race-clock pose authority for every client. */
 import { getBoudoirLayout } from './boudoir-layout.js';
 import { keepGatePhase } from '../sim/keepGates.js';
+import { pendulumBeatPhase } from '../sim/keepChains.js';
+import { beatCycle, machineryRearming } from './machineryBeat.js';
 const TAU = Math.PI * 2, ease = u => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
 export const BOUDOIR_HAZARD = Object.freeze({ pressWidthM: 14, pressDepthM: 8, pressHeightM: 3.2,
   brushAmplitudeM: 2.9, brushRadiusM: 1.12, brushDepthM: 2.5, brushCycleS: 6.4,
   brushArmM: 8.6, brushPivotY: 10.25, brushImpulseMps: 5.2,
   mirrorCycleS: 9.6, mirrorLiftM: 8.4, mirrorWidthM: 7, mirrorHeightM: 6,
   ribbonCycleS: 12, ribbonAccelMps2: 10, ribbonDragMps2: 7, ribbonMaxMps: 42 });
-export function powderPressPhase(row, timeS) { return keepGatePhase(row, timeS); }
+export function powderPressPhase(row, timeS, beat = null) { return keepGatePhase(row, timeS, {}, beat); }
 export function mascaraHeads(row) { return row.heads || [row]; }
-export function mascaraPhase(row, timeS) {
+export function mascaraPhase(row, timeS, beat = null) {
   const head = mascaraHeads(row)[0], K = BOUDOIR_HAZARD;
   const armM = head.armM ?? K.brushArmM, pivotY = head.pivotY ?? K.brushPivotY, amplitudeM = head.amplitudeM ?? K.brushAmplitudeM;
+  if (beat) {
+    const p = pendulumBeatPhase(head, head.cycleS || K.brushCycleS, beat), angleMax = Math.asin(amplitudeM / armM);
+    const angle = p.swing * angleMax, angleRate = p.speed * angleMax;
+    return { x: (head.x || 0) + Math.sin(angle) * armM, y: pivotY + p.lift - Math.cos(angle) * armM, z: head.longitudinalM || 0,
+      vx: Math.cos(angle) * armM * angleRate, vy: Math.sin(angle) * armM * angleRate + p.liftSpeed, angle,
+      pivotX: head.x || 0, pivotY: pivotY + p.lift, armM, radiusM: head.radiusM ?? K.brushRadiusM,
+      depthM: head.depthM ?? K.brushDepthM, warning: p.safe || Math.abs(p.swing) < .7, safe: p.safe };
+  }
   const rate = TAU / (head.cycleS || K.brushCycleS), t = Math.max(0, Number.isFinite(timeS) ? timeS : 0) + (head.offsetS || 0);
   const a = t * rate, angleMax = Math.asin(amplitudeM / armM), angle = Math.sin(a) * angleMax, angleRate = Math.cos(a) * angleMax * rate;
   return { x: (head.x || 0) + Math.sin(angle) * armM, y: pivotY - Math.cos(angle) * armM, z: head.longitudinalM || 0,
@@ -19,13 +29,32 @@ export function mascaraPhase(row, timeS) {
     pivotX: head.x || 0, pivotY, armM, radiusM: head.radiusM ?? K.brushRadiusM, depthM: head.depthM ?? K.brushDepthM,
     warning: Math.abs(Math.cos(a)) > .55 };
 }
-export function ribbonPhase(row, timeS) {
+export function ribbonPhase(row, timeS, beat = null) {
+  if (beat) {
+    const period = Math.max(4, Math.ceil(12 / beat.beatS / 4) * 4), offset = Math.round((row.offsetS || 0) / beat.beatS);
+    const u = beatCycle(beat.beat + offset, period), phase = machineryRearming(beat,offset,period) ? 'warn'
+      : u < period / 2 ? 'forward' : u < period / 2 + 2 ? 'warn' : u < period - 2 ? 'reverse' : 'clear';
+    return { phase, direction: phase === 'forward' ? 1 : phase === 'reverse' ? -1 : 0, timeS: u * beat.beatS };
+  }
   const t = ((Math.max(0, Number.isFinite(timeS) ? timeS : 0) + (row.offsetS || 0)) % 12 + 12) % 12;
   const phase = t < 5.5 ? 'forward' : t < 7.5 ? 'warn' : t < 10.5 ? 'reverse' : 'clear';
   return { phase, direction: phase === 'forward' ? 1 : phase === 'reverse' ? -1 : 0, timeS: t };
 }
 /** The next mirror lane opens before the old lane closes, so a full-width wall never forms. */
-export function mirrorGatePhase(row, timeS) {
+export function mirrorGatePhase(row, timeS, beat = null) {
+  if (beat) {
+    const offset = Math.round((row.offsetS || 0) / beat.beatS), absolute = beat.beat + offset, cycle = Math.floor(absolute / 16), t = beatCycle(absolute,16);
+    const openLane = ((cycle + (row.sequence || 0)) % 3 + 3) % 3, nextLane = (openLane + 1) % 3, previousLane = (openLane + 2) % 3;
+    if (machineryRearming(beat,offset)) return { liftM:8.4,openLane,nextLane,phase:'warn',blocking:false,warning:true,cycleS:t*beat.beatS };
+    const lane = row.lane ?? 0; let liftM = lane === openLane ? 8.4 : 0;
+    if (lane === previousLane && t < 2) liftM = 8.4 * (1 - ease(t / 2));
+    if (lane === nextLane && t >= 13) liftM = 8.4 * ease((t - 13) / 3);
+    // Return from the all-open pickup or seek pose once, never on later cycles.
+    const elapsed = beat.beat - (beat.rearming ? beatCycle(-offset,16) : 0), returning = elapsed >= 0 && elapsed < 2;
+    if (returning) liftM = 8.4 + (liftM - 8.4) * ease(elapsed / 2);
+    return { liftM,openLane,nextLane,phase:lane === openLane ? 'clear' : returning ? 'lower' : lane === nextLane && t >= 10 ? 'warn' : 'hold',
+      blocking:liftM < 1.6,warning:returning || t >= 10,cycleS:t*beat.beatS };
+  }
   const absolute = Math.max(0, Number.isFinite(timeS) ? timeS : 0) + (row.offsetS || 0), cycle = Math.floor(absolute / 9.6), t = absolute % 9.6;
   const openLane = ((cycle + (row.sequence || 0)) % 3 + 3) % 3, nextLane = (openLane + 1) % 3, previousLane = (openLane + 2) % 3;
   const lane = row.lane ?? 0; let liftM = lane === openLane ? 8.4 : 0;

@@ -4,6 +4,7 @@ import { clamp, wrap } from '../core/math.js';
 import { yawParams, calmOf } from './steer.js';
 import { makeQuery } from '../track/query.js';
 import { GOONWORKS_TOYS as K, goonworksSetpieces, goonworksPose, goonworksLocal, apertureContains } from '../track/goonworks-setpieces.js';
+import { machineryBeatAt } from '../track/machineryBeat.js';
 
 const travel = (a, b) => Math.hypot(...[0, 1, 2].map(j => b[S.posX + j] - a[S.posX + j]));
 export function goonworksOverlap(row, pose, p) {
@@ -20,6 +21,7 @@ export function goonworksOverlap(row, pose, p) {
 
 export function createGoonworksHazards(track, layout) {
   const rows = goonworksSetpieces(track, layout), query = makeQuery(), yp = {};
+  const poseAt = (row, timeS) => goonworksPose(row, timeS, machineryBeatAt(track, timeS));
   let memory = new WeakMap(), hits = 0, launches = 0;
   function mem(r) {
     if (!memory.has(r)) memory.set(r, { timeS: null, after: null, until: new Map(), hall: null, lane: 0 });
@@ -70,15 +72,16 @@ export function createGoonworksHazards(track, layout) {
       const start = goonworksLocal(a, row), end = goonworksLocal(b, row);
       if (Math.min(start.h, end.h) > (row.kind === 'wheel' ? row.centerY + row.radius : row.height || row.h) + 2 || Math.max(start.h, end.h) < -1.2) continue;
       const at = f => ({ x: start.x + (end.x - start.x) * f, along: start.along + (end.along - start.along) * f, h: start.h + (end.h - start.h) * f });
-      const solid = f => goonworksOverlap(row, goonworksPose(row, t0 + (t1 - t0) * f), at(f));
+      const solid = f => goonworksOverlap(row, poseAt(row, t0 + (t1 - t0) * f), at(f));
       // Already-inside racers can escape a closing toy. An after-contact sweep below prevents rear-bump tunnelling.
       if (row.kind !== 'flipper' && solid(0)) continue;
-      const steps = Math.min(96, Math.max(2, Math.ceil((distance + Math.max(0, t1 - t0) * 12) / .3)));
+      const edgeSpeed = machineryBeatAt(track,t1) ? 90 : 12;
+      const steps = Math.min(96, Math.max(2, Math.ceil((distance + Math.max(0, t1 - t0) * edgeSpeed) / .3)));
       for (let i = 0; i <= steps; i++) {
         const fraction = i / steps; if (!solid(fraction)) continue;
         let lo = Math.max(0, (i - 1) / steps), hi = fraction;
         for (let j = 0; j < 8 && hi > lo; j++) { const mid = (lo + hi) / 2; if (solid(mid)) hi = mid; else lo = mid; }
-        const pose = goonworksPose(row, t0 + (t1 - t0) * hi);
+        const pose = poseAt(row, t0 + (t1 - t0) * hi);
         return bump(r, row, a, b, hi, t1, pose, m, events);
       }
     }
@@ -121,5 +124,5 @@ export function createGoonworksHazards(track, layout) {
     return true;
   }
   return { rows, apply, steer, reset() { memory = new WeakMap(); hits = 0; launches = 0; },
-    inspect(timeS = 0) { return { hits, launches, toys: rows.map(row => ({ id: row.id, kind: row.kind, s: row.s, ...goonworksPose(row, timeS) })) }; } };
+    inspect(timeS = 0) { return { hits, launches, toys: rows.map(row => ({ id: row.id, kind: row.kind, s: row.s, ...poseAt(row, timeS) })) }; } };
 }

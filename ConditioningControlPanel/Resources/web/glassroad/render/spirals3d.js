@@ -37,6 +37,8 @@ import {
 } from './spiralMath.js';
 import { GATE_LENS } from './atlas.js';
 import { createSpiralCloud } from './spiralCloud.js';
+import { createSpiralBeatClock } from './spiralBeat.js';
+import { screenRateMul } from './spiralMath.js';
 
 const TAU = Math.PI * 2, GOLD_K = LOOM_GOLDEN_K;
 const LOOM = await loadLoom();
@@ -219,6 +221,7 @@ function buildBurst(L) {
  */
 export function createSpiralGates(scene, track, { layout = null, photosafe = null, feel = null, look = SPIRAL_LOOK, onPass = null } = {}) {
   const L = look;
+  const beat = createSpiralBeatClock();
   if (!layout || !Array.isArray(layout.gates) || !layout.gates.length) return null;
   const group = new Group();
   group.name = 'spiral-gates';
@@ -257,14 +260,15 @@ export function createSpiralGates(scene, track, { layout = null, photosafe = nul
    * @param {number} dt seconds
    * @param {{ camera: Camera, karts?: Array<Vector3|number[]|Object3D>, player?: number, gentle?: boolean }} view
    */
-  function update(dt, { camera = null, karts = [], player = 0, gentle = false, paused = false } = {}) {
+  function update(dt, view = {}) {
+    const { camera = null, karts = [], player = 0, gentle = false, paused = false } = view;
     if (!camera || paused) return;
     camera.updateMatrixWorld();
     pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     frustum.setFromProjectionMatrix(pv);
     cam[0] = camera.position.x; cam[1] = camera.position.y; cam[2] = camera.position.z;
     const ks = karts.map(xyz), me = ks[player] || null;
-    const turn = L.turnMul * (gentle ? L.gentleTurnMul : 1);
+    const turn = L.turnMul * beat.update(dt, view, gentle);
     for (const gate of gates) {
       const gf = gate.gf, dist = Math.hypot(cam[0] - gf.c[0], cam[1] - gf.c[1], cam[2] - gf.c[2]);
       // the player's crossing (always checked, it is cheap)
@@ -285,7 +289,7 @@ export function createSpiralGates(scene, track, { layout = null, photosafe = nul
       if (gate.cloud.object.visible) gate.cloud.update(dt, { gentle });
       if (!gate.sprite.visible || dist > L.activeM) continue;
       // the Loom phase: one seamless loop per loopMs2, slowed by Gentle
-      gate.phaseT = (gate.phaseT + dt * turn) % (gate.loop * 1000);
+      gate.phaseT = (gate.phaseT + dt * screenRateMul(gate.params, { gentle, speed: turn }, L)) % (gate.loop * 1000);
       const st = loomState(gate.params, (gate.phaseT % gate.loop) / gate.loop), u = gate.u;
       u.rot1.value = st.rot1 % TAU; u.rot2.value = st.rot2 % TAU; u.zoom.value = st.zoom; u.wobPhase.value = st.wobPhase;
       const rows = hueRows(st.hue);

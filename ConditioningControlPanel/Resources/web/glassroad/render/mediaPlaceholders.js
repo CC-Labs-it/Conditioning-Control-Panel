@@ -18,6 +18,7 @@
  * Three-free (a plain 2D context), so the node suite can draw every program into a stub context.
  */
 import { safeSpin } from './mediaMath.js';
+import { loomVariation } from './loomVariety.js';
 
 
 // The Loom, from its own tree (phone pack: ship arcademy/engine/loom/ beside glassroad/, see MEDIA.md).
@@ -37,6 +38,16 @@ const at = (cols, x) => { const i = Math.floor(x), f = x - i, a = pick(cols, i),
 /** Loom params for a placeholder: v2 schema through the Loom's own normalizer. */
 export function loomParams(kind, cols, step = 0) {
   if (!LOOM) return null;
+  if (kind.startsWith('loom-style-')) {
+    const i = Number(kind.slice(11)) || 0, q = loomVariation(i);
+    q.layer2.enabled = false;
+    if (cols.length) {
+      const stride = Math.max(1, Math.floor(cols.length / 3));
+      q.layer.colors = [0, stride, stride * 2].map(offset => hex(pick(cols, i + offset)));
+      q.bg.color = hex(pick(cols, i + 8).map(v => v * .12));
+    }
+    return LOOM.normalizeParams2(q);
+  }
   const a = pick(cols, step), b = pick(cols, step + 3), bg = pick(cols, step + 6);
   const dark = bg.map((v) => v * 0.18);
   const layer = kind === 'loom-b'
@@ -144,6 +155,12 @@ const PROGRAMS = [
     },
   },
 ];
+for (let i = 0; i < 6; i++) {
+  const id = 'loom-style-' + i, params = loomVariation(i);
+  PROGRAMS.push({ id, loom: true, spinRadps: .45, arms: params.layer.arms,
+    draw(g, w, h, t, cols, st) { drawLoom(g, w, h, id, cols, st); } });
+}
+export const LOOM_PROGRAMS = Object.freeze([6, 7, 8, 9, 10, 11]);
 export { PROGRAMS };
 
 // One WebGL Loom field renderer, shared by both Loom programs and released once the slots are built

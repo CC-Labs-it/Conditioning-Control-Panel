@@ -7,6 +7,8 @@ import { goonworksWorldPlan } from './goonworksWorld.js';
 import { createGoonworksMaterial, createGoonworksTubeMaterial, createGoonworksPlatformMaterial, GOONWORKS_PAPER_MATERIALS, GOONWORKS_PALETTE as C } from './goonworksMaterials.js';
 import {goonworksTubeShell,goonworksPlatformGeometry} from './goonworksGeometry.js';
 import { Q } from './quality.js';
+import { machineryBeatAt, gearBeatTravel } from '../track/machineryBeat.js';
+import { createGearSpiralPaint } from './gearSpirals.js';
 export { applyGoonworksRoad, applyGoonworksRails } from './goonworksMaterials.js';
 export { goonworksMediaLayout, goonworksSpiralLayout } from './goonworksMedia.js';
 
@@ -79,6 +81,7 @@ export function buildGoonworks(track,art=null,pal=null,samples=null){
   const materials={};for(const[name,hex]of Object.entries(C))materials[name]=createGoonworksMaterial(hex,{ink:name==='ink',paper:GOONWORKS_PAPER_MATERIALS.includes(name),unlit:name.startsWith('distant')});
   materials.gear=createGoonworksMaterial(C.ivory,{paper:true});materials.gear.side=FrontSide;
   materials.gear.colorNode=mix(materials.gear.colorNode,materials.gold.colorNode,attribute('goonworksAccent','float'));
+  const gearPaint=createGearSpiralPaint(materials.gear,.5,4);
   const ink=createGoonworksMaterial(C.ink,{outline:true}),owned=[ink],extraGeometry=[];
   function upload(data){const g=new BufferGeometry();g.setAttribute('position',new BufferAttribute(data.positions,3));g.setAttribute('normal',new BufferAttribute(data.normals,3));g.setAttribute('uv',new BufferAttribute(data.uvs,2));g.setIndex(new BufferAttribute(data.indices,1));g.computeBoundingSphere();extraGeometry.push(g);return g;}
   const M=new Matrix4(),B=new Matrix4(),P=new Vector3(),S=new Vector3(),rotation=new Quaternion(),X=new Vector3(),Y=new Vector3(),Z=new Vector3();
@@ -126,10 +129,15 @@ export function buildGoonworks(track,art=null,pal=null,samples=null){
   const sparkleCount=Math.min(Q.name==='phone'?450:1900,plan.particles.length*11),sparkle=new InstancedMesh(geometries.spark,materials.white,sparkleCount);
   sparkle.name='goonworks-ink-sparkles';group.add(sparkle);
   const bubblesCount=Math.min(Q.name==='phone'?80:260,plan.particles.length*2),bubbles=new InstancedMesh(geometries.torus,materials.cream,bubblesCount);bubbles.name='goonworks-floating-bubbles';group.add(bubbles);
-  let time=0,disposed=false;const spin=new Quaternion(),axis=new Vector3();
+  let time=0,drive=0,lastBeat=null,disposed=false;const spin=new Quaternion(),axis=new Vector3();
   function update(dt=0,view={},gentle=!!view.gentle){
-    if(disposed||view.paused)return;time+=Math.max(0,Math.min(dt,1))*(gentle?.45:1);
-    for(const item of moving){const{row,mesh,index,hull,hullIndex}=item;axis.fromArray(row.axes[row.motion.axis??1]);spin.setFromAxisAngle(axis,time*row.motion.spin+row.motion.phase);rotation.copy(spin).multiply(item.rest);P.fromArray(row.p);S.fromArray(row.size);mesh.setMatrixAt(index,M.compose(P,rotation,S));mesh.instanceMatrix.needsUpdate=true;
+    if(disposed||view.paused)return;const step=Math.max(0,Math.min(dt,1)),speed=gentle?.45:1;time+=step*speed;
+    const beat=machineryBeatAt(track,view.raceTimeS??view.timeS),nextBeat=beat&&!beat.safe?beat.beat:null;
+    // Integrate beat travel so pickup, seeks and Gentle changes never reset decorative gear angles.
+    const advance=nextBeat!==null&&lastBeat!==null&&nextBeat>=lastBeat&&nextBeat-lastBeat<2
+      ?(gearBeatTravel(nextBeat)-gearBeatTravel(lastBeat))*beat.beatS:step;
+    drive+=advance*speed;lastBeat=nextBeat;
+    for(const item of moving){const{row,mesh,index,hull,hullIndex}=item;axis.fromArray(row.axes[row.motion.axis??1]);spin.setFromAxisAngle(axis,drive*row.motion.spin+row.motion.phase);rotation.copy(spin).multiply(item.rest);P.fromArray(row.p);S.fromArray(row.size);mesh.setMatrixAt(index,M.compose(P,rotation,S));mesh.instanceMatrix.needsUpdate=true;
       if(hullIndex>=0){S.set(row.size[0]+.45,row.size[1]+.45,row.size[2]+.45);hull.setMatrixAt(hullIndex,M.compose(P,rotation,S));hull.instanceMatrix.needsUpdate=true;}}
     for(let i=0;i<sparkleCount;i++){const seed=plan.particles[Math.floor(i/11)%plan.particles.length],phase=i*2.399963+seed.phase,rise=((time*1.4+phase*2)%25+25)%25;
       P.fromArray(seed.p);P.x+=Math.sin(phase+time*.09)*seed.spread;P.z+=Math.cos(phase+time*.07)*seed.spread;P.y+=rise;
@@ -143,8 +151,8 @@ export function buildGoonworks(track,art=null,pal=null,samples=null){
   }
   update();sparkle.computeBoundingSphere();bubbles.computeBoundingSphere();if(sparkle.boundingSphere)sparkle.boundingSphere.radius+=50;if(bubbles.boundingSphere)bubbles.boundingSphere.radius+=60;
   const hit=event=>{const id=typeof event==='string'?event:event?.id,platform=platformGroups.find(p=>p.row.id===id);if(platform){platform.age=0;return platform.row;}return null;};
-  const reset=()=>{time=0;for(const p of platformGroups){p.age=Infinity;p.holder.position.copy(p.rest);}update();};
+  const reset=()=>{time=0;drive=0;lastBeat=null;for(const p of platformGroups){p.age=Infinity;p.holder.position.copy(p.rest);}update();};
   const stats={draws:0,parts:plan.rows.length,rooms:plan.rooms.length,media:plan.mounts.length,platforms:platformGroups.length,sparkles:sparkleCount,bubbles:bubblesCount,rejected:plan.rejected};group.traverse(o=>{if(o.isMesh)stats.draws++;});
   return{group,plan,stats,casters:[],update,hit,reset,platforms:platformGroups,
-    dispose(){if(disposed)return;disposed=true;group.removeFromParent();group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});Object.values(geometries).forEach(g=>g.dispose());extraGeometry.forEach(g=>g.dispose());Object.values(materials).forEach(m=>m.dispose());owned.forEach(m=>m.dispose());}};
+    dispose(){if(disposed)return;disposed=true;group.removeFromParent();gearPaint.dispose();group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});Object.values(geometries).forEach(g=>g.dispose());extraGeometry.forEach(g=>g.dispose());Object.values(materials).forEach(m=>m.dispose());owned.forEach(m=>m.dispose());}};
 }
