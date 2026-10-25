@@ -3503,3 +3503,7 @@ Restores the late Dormant shimmer in ChatThresholdView (WPF State -> PlayDormant
 ## avalonia-port/wire-views-settings-account: +334
 - Discord link and a Discord-first sign-in (#749) offer achievement sharing via Core AchievementSharePromptDecision (Ask on panel / Inbox while a game or hidden panel). The privacy-panel share toggle is wired.
 - Review fix: #749 sign-in path, localized Yes, merged duplicate ledger rows. rgate 39750547417 green apart from the RaceTrack flake (P115).
+
+## avalonia-port/fin-shell-tab-navigation: +622
+
+Review FIX round done in 78dd1813a: snapshot fade cut (listed under Missing), entrance on FrameClock + TabClock TimeProvider, EMI case-insensitive, stale notes fixed. rgate 39901379337 red only on known RaceTrack flake (P115). Not pushed.
