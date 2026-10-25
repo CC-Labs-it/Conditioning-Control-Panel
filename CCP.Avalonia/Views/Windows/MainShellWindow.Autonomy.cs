@@ -6,15 +6,15 @@
 // Performed here (AutonomyService.PerformAction :935): Flash, Subliminal, LockCard, Video
 // (mandatory), Bubbles and Bouncing Text as 30 s pulses, Pink Filter as a 30 s pulse (X11 only -
 // only where the compositor can show the tint), Bubble Count (forced game), Comment (AI when chat is on
-// and available, else a preset phrase through the tube), Mind Wipe (only once CoreMindWipe is
-// seeded). Never picked here (CanPerform false, exactly as WPF skips an unavailable action):
-// ponytail: Spiral pulse and Brain Drain pulse (no spiral / blur overlay on this head), Web Video
+// and available, else a preset phrase through the tube), Mind Wipe (LibVLC startup seeds CoreMindWipe). Never picked here (CanPerform false, exactly as WPF skips an unavailable action):
+// ponytail: Spiral and Brain Drain pulses have no WPF picker caller. Web Video
 // (no browser media service), Wallpaper (Win32 WallpaperService). Spoken Mantra runs through the
 // voice funnel (MainShellWindow.VoiceCommands.cs, Core SpokenMantra). Add each to CanPerformAutonomy the day its surface lands.
-// The TakeoverAnnouncerOverlay banner shows on the announced roll (AutonomyService.cs:961). Not here: the avatar
-// countdown bar, the announcement's event audio (CompanionPhraseService), the diagnostic Test
-// dialogs and Force Start (debug). Voice/PTT/wake word: MainShellWindow.VoiceCommands.cs.
+// The TakeoverAnnouncerOverlay banner shows on the announced roll (AutonomyService.cs:961). The avatar
+// countdown bar lives in AvatarTubeWindow.Countdown.cs; announcement audio uses Core CompanionEventAudio.
+// Force Start stays hidden, matching WPF. Voice/PTT/wake word: MainShellWindow.VoiceCommands.cs.
 using System;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -81,10 +81,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 SetTakeoverActiveUi(on);
                 UpdateAutonomyButtonState(on);
             });
-            // WPF AnnounceAction: the tube says it (text only; no event audio here).
-            Autonomy.AnnouncementMade += (_, phrase) => Dispatcher.UIThread.Post(() =>
-                _avatarTubeWindow?.GigglePriority(phrase, false, aiGenerated: false));
-            Closed += (_, _) => { CancelAutonomyPulses(); Autonomy.Stop(); TakeoverAnnouncerOverlay.CloseActive(); _takeoverQuestTick?.Stop(); StopVoiceInput(); };
+            Autonomy.AnnouncementMade += (_, phrase) => Dispatcher.UIThread.Post(() => AnnounceAutonomy(phrase));
+            Closed += (_, _) => { CloseAutonomyDiagnostic(); CancelAutonomyPulses(); Autonomy.Stop(); TakeoverAnnouncerOverlay.CloseActive(); _takeoverQuestTick?.Stop(); StopVoiceInput(); };
             Opened += (_, _) => { ResumeAutonomyOnStartup(); RefreshVoiceInputModes(); };
         }
 
@@ -258,14 +256,52 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return true;
         }
 
-        /// <summary>The Test button. WPF TestTrigger explains itself when Takeover is off.</summary>
-        internal void TestAutonomy()
+        // WPF TestTrigger shows status BEFORE executing. Keep the dialog in the Takeover panic
+        // surface so dismissing it during panic cannot launch a delayed manual action.
+        private MessageDialog? _autonomyDiagnostic;
+        internal Func<string, string, Task>? AutonomyDiagnosticForTests;
+        private int _autonomyDiagnosticGeneration;
+
+        internal void AnnounceAutonomy(string phrase)
         {
-            if (Autonomy.IsEnabled) { Autonomy.TestTrigger(); return; }
+            var audio = Services.Companion.CompanionEventAudio.Resolve(phrase);
+            _avatarTubeWindow?.GigglePriority(phrase, audio != null, aiGenerated: false, phraseAudioPath: audio);
+        }
+
+        private async Task ShowAutonomyDiagnostic(string title, string text)
+        {
+            if (AutonomyDiagnosticForTests is { } show) { await show(title, text); return; }
+            var dialog = new MessageDialog(title, text, showCancel: false);
+            _autonomyDiagnostic = dialog;
+            try { await dialog.ShowDialogSafe<bool?>(this); }
+            finally { if (_autonomyDiagnostic == dialog) _autonomyDiagnostic = null; }
+        }
+
+        internal void TestAutonomy() => _ = TestAutonomyAsync();
+
+        internal async Task TestAutonomyAsync()
+        {
+            var generation = _autonomyDiagnosticGeneration;
+            var status = Autonomy.GetDiagnosticStatus();
+            Log.Information("AutonomyService Diagnostic Status:\n{Status}", status);
+            if (Autonomy.IsEnabled)
+            {
+                await ShowAutonomyDiagnostic("Autonomy Test", $"Triggering test action...\n\nCurrent Status:\n{status}");
+                if (generation == _autonomyDiagnosticGeneration) Autonomy.TestTrigger();
+                return;
+            }
             var reason = !AutonomyScheduler.HasEntitlement
                 ? "Bambi Takeover requires Patreon access."
                 : "Click the green \"Start\" button to enable it, then press Test again.";
-            _ = MessageDialog.ShowAsync(this, "Autonomy Not Running", $"Autonomy Mode isn't running yet.\n\n{reason}");
+            await ShowAutonomyDiagnostic("Autonomy Not Running",
+                $"Autonomy Mode isn't running yet.\n\n{reason}\n\nDiagnostic Status:\n{status}");
+        }
+
+        internal void CloseAutonomyDiagnostic()
+        {
+            _autonomyDiagnosticGeneration++;
+            _autonomyDiagnostic?.Close();
+            _autonomyDiagnostic = null;
         }
 
         /// <summary>Panic (key or tray): Takeover stops with everything else and its queued
@@ -273,6 +309,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// already refused the panic before this is reached.</summary>
         internal void StopAutonomyForPanic()
         {
+            CloseAutonomyDiagnostic();
             Autonomy.Stop();
             TakeoverAnnouncerOverlay.CloseActive();   // the queued cues go with the action
             CancelVoicePrompt();   // decisions "Panic ↔ mic": the capture in flight ends, the loop stays armed

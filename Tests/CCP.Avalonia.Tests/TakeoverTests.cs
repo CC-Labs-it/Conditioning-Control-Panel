@@ -28,6 +28,9 @@ public sealed class TakeoverTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .WithInterFont()
+                    .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                    .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var s = CoreSettings.Current;
@@ -107,6 +110,9 @@ public sealed class TakeoverTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .WithInterFont()
+                    .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                    .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var s = CoreSettings.Current;
@@ -187,6 +193,9 @@ public sealed class TakeoverTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .WithInterFont()
+                    .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                    .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var s = CoreSettings.Current;
@@ -221,6 +230,76 @@ public sealed class TakeoverTests
             }
             return Task.CompletedTask;
         });
+
+    [Fact]
+    public Task CountdownDrainsFromTheLeftAndStopsWithTakeover() => WithArmedShell((shell, _) =>
+    {
+        var settings = CoreSettings.Current;
+        var (show, random) = (settings.ShowTakeoverCountdownBar, settings.AutonomyRandomTriggerEnabled);
+        var tube = new global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow(shell);
+        try
+        {
+            var now = new DateTime(2026, 1, 1, 14, 0, 0);
+            shell.Autonomy.Clock = () => now;
+            settings.ShowTakeoverCountdownBar = settings.AutonomyRandomTriggerEnabled = true;
+            shell.Autonomy.RefreshRandomTimer();
+            tube.Show();
+            tube.UpdateTakeoverCountdown();
+            var bar = tube.FindControl<Border>("TakeoverCountdownBar")!;
+            var fill = tube.FindControl<Border>("TakeoverCountdownFill")!;
+            Assert.True(bar.IsVisible);
+            Assert.True(tube.CountdownTicking);
+            var interval = shell.Autonomy.NextRandomFire - now;
+            now += interval / 2;
+            tube.UpdateTakeoverCountdown();
+            Assert.Equal(0.5, ((global::Avalonia.Media.ScaleTransform)fill.RenderTransform!).ScaleX, 6);
+            Assert.Equal(new RelativePoint(0, 0.5, RelativeUnit.Relative), fill.RenderTransformOrigin);
+            settings.ShowTakeoverCountdownBar = false;
+            tube.UpdateTakeoverCountdown();
+            Assert.False(bar.IsVisible);
+            settings.ShowTakeoverCountdownBar = true;
+            settings.AutonomyRandomTriggerEnabled = false;
+            shell.Autonomy.RefreshRandomTimer();
+            tube.UpdateTakeoverCountdown();
+            Assert.False(bar.IsVisible);
+            shell.StopAutonomyForPanic();
+            Assert.False(tube.CountdownTicking);
+            Assert.False(bar.IsVisible);
+        }
+        finally
+        {
+            tube.Close();
+            Assert.False(tube.CountdownTicking);
+            (settings.ShowTakeoverCountdownBar, settings.AutonomyRandomTriggerEnabled) = (show, random);
+        }
+    });
+
+    [Fact]
+    public Task TestShowsDiagnosticsBeforeActingAndPanicCancelsIt() => WithArmedShell((shell, _) =>
+    {
+        var dismissed = new TaskCompletionSource();
+        string? title = null, body = null;
+        shell.AutonomyDiagnosticForTests = (t, b) => { title = t; body = b; return dismissed.Task; };
+        var performed = 0;
+        shell.Autonomy.Perform = (_, _) => performed++;
+        var test = shell.TestAutonomyAsync();
+        Assert.False(test.IsCompleted);
+        Assert.Equal("Autonomy Test", title);
+        Assert.Contains("Service Enabled: True", body);
+        Assert.Contains("Current Status:", body);
+        Assert.Equal(0, performed);
+        PanicSurfaces.StopAll("diagnostic test", shell);
+        dismissed.SetResult();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(test.IsCompletedSuccessfully);
+        Assert.Equal(0, performed);
+
+        shell.AutonomyDiagnosticForTests = (t, b) => { title = t; body = b; return Task.CompletedTask; };
+        Assert.True(shell.TestAutonomyAsync().IsCompletedSuccessfully);
+        Assert.Equal("Autonomy Not Running", title);
+        Assert.Contains("Diagnostic Status:", body);
+        Assert.Contains("Service Enabled: False", body);
+    });
 
     /// <summary>overlay-takeover-announcer: an announced action queues the "TAKEOVER" cue (WPF
     /// AutonomyService.cs:961, #534 silent roll shows none), cues play in turn on the real timings,
@@ -289,6 +368,9 @@ public sealed class TakeoverTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var w = new TakeoverAnnouncerWindow(live: true);
@@ -399,6 +481,9 @@ public sealed class TakeoverTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var tube = new global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow(null);

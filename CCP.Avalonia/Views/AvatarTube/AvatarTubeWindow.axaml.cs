@@ -304,6 +304,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // Fallback when ScalingChanged never comes (or never agrees): restore once anyway.
             DispatcherTimer.RunOnce(() => { if (IsVisible) RestoreSavedPlacement(force: true); }, TimeSpan.FromSeconds(1));
             ToggleDetachedSink = ToggleDetached;
+            InitTakeoverCountdown();
 
             // The z-order pairing the WPF head got from native (GWL_HWNDPARENT) ownership. Safe to
             // call unconditionally - the shim returns false off X11 and on the headless render.
@@ -322,8 +323,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
             AttachAwareness();   // WPF xaml.cs:317-322 (Reactions.cs)
 
-            // ponytail: WPF's OnLoaded also ran StartFloatingAnimation / StartFullscreenDetection
-            // and InitTakeoverCountdownBar; none has ported.
+            // ponytail: WPF's StartFloatingAnimation / StartFullscreenDetection remain unported.
         }
 
         protected override void OnClosed(EventArgs e)
@@ -332,6 +332,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // target and method, which is what makes "is the sink still MINE?" answerable at all;
             // ReferenceEquals would be false every time because the conversion allocates.
             if (OpenChatSink == (Action)OpenChatInput) OpenChatSink = null;
+            StopTakeoverCountdown();
             ReleaseWindowing();
             DetachAwareness();
             UnwireContentPolicyWarning();

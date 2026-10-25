@@ -62,6 +62,8 @@ compare text, order, layout, sound and timing with the same screen on Windows. R
 
 ### Tabs and features hosted by the shell
 18. **[SAFETY] developers re-check this before release.** Takeover tab -> enable, press Test. Expect a takeover action to run; panic stops it but keeps the switch on. WPF `MainWindow/MainWindow.StartStop.cs:485`. Rows: `shell-autonomy`, `shell-takeover-ui`.
+
+
 19. Awareness: turn it on (consent), switch between apps. Expect the companion to react to the window title (X11 apps only). WPF `MainWindow/MainWindow.CompanionRoom.cs:236`. Rows: `shell-awareness`.
 20. Programs tab -> enrol in a program. Expect the banner and step list as on Windows. WPF `MainWindow/MainWindow.ProgramsTab.cs:605`, `:2251`. Rows: `shell-programs-tab`, `shell-program-banner`.
 21. Presets tab -> apply, save and import a preset. WPF `MainWindow/MainWindow.Presets.cs:2202-2381`, `MainWindow/MainWindow.SessionIO.cs:453`. Rows: `shell-presets`, `shell-preset-io`, `shell-session-io`.
@@ -71,6 +73,12 @@ compare text, order, layout, sound and timing with the same screen on Windows. R
 25. Spiral room, Lab tab, Quests, Achievements, Leaderboard, Roadmap, Profile: open each and use every control. WPF `MainWindow/MainWindow.SpiralRoom.cs:76`, `MainWindow/MainWindow.LabTab.cs:134-153`, `App.xaml.cs:414`. Rows: `shell-spiral-room`, `shell-lab-tab`, `shell-quests`, `shell-achievements-tab`, `shell-leaderboard`, `shell-roadmap`, `shell-profile-card`.
 26. Chaster tab: link a test lock. Expect the rail padlock and hero to update. WPF `App.xaml.cs:3149`. Rows: `shell-chaster`.
 27. **[SAFETY] developers re-check this before release.** Remote Control: let a controller connect, press panic. Expect the controller to drop and everything to stop. WPF `MainWindow/MainWindow.RemoteControl.cs:1401`. Rows: `shell-remote-control`.
+
+### Takeover follow-up
+
+1. Takeover -> enable random actions and countdown; show the avatar. Expect the pink bar to drain from the left, restart after each scheduled interval, disappear when random actions/countdown is disabled, and stop on panic or tube close. WPF `AvatarTube/AvatarTubeWindow.Avatar.cs:43`. Rows: `shell-autonomy`.
+2. Takeover -> Test while stopped, then while running. Expect WPF diagnostic fields and reason when stopped; when running the action waits for the status dialog to close. Panic while the dialog is open must close it and prevent the pending Test action. WPF `Services/AutonomyService.cs:173`. Rows: `shell-autonomy`.
+3. With a mod shipping event_audio, set announcements to 100% and trigger a Takeover action; expect the matching generated clip with the tube caption. A missing clip stays text-only; panic cuts speech. WPF `Services/AutonomyService.cs:1758`. Rows: `shell-autonomy`.
 
 ### Possession
 28. Start a session with Possession on; watch shell buttons nudge, drift, breathe or wobble, then ease home. WPF `Services/Possession/Possession.cs`. Rows: `shell-possession`.

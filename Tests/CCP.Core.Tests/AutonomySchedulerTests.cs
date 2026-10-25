@@ -65,6 +65,27 @@ public class AutonomySchedulerTests : IDisposable
     }
 
     [Fact]
+    public void CountdownTracksTheCurrentIntervalAndHidesWithoutRandomTimer()
+    {
+        var scheduler = Make();
+        Assert.Null(scheduler.NextRandomFireFraction);
+        scheduler.Start(withTimer: false);
+        Assert.Equal(1, scheduler.NextRandomFireFraction);
+        var interval = scheduler.NextRandomFire - _now;
+        _now += interval / 2;
+        Assert.Equal(0.5, scheduler.NextRandomFireFraction!.Value, 6);
+        _now += interval;
+        Assert.Equal(0, scheduler.NextRandomFireFraction);
+        scheduler.RefreshRandomTimer();
+        Assert.Equal(1, scheduler.NextRandomFireFraction);
+        CoreSettings.Current.AutonomyRandomTriggerEnabled = false;
+        scheduler.RefreshRandomTimer();
+        Assert.Null(scheduler.NextRandomFireFraction);
+        scheduler.Stop();
+        Assert.Null(scheduler.NextRandomFireFraction);
+    }
+
+    [Fact]
     public void RandomTriggerFiresWithinTheJitteredInterval()
     {
         var s = Make();
