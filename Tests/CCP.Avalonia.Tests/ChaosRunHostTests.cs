@@ -25,7 +25,7 @@ public sealed class ChaosRunHostTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -366,6 +366,7 @@ public sealed class ChaosRunHostTests
                 for (int i = 0; i < 3; i++) ChaosRunHost.SpawnTick();
                 Assert.True(BubbleOverlay.ChaosCount >= 3);
                 var b = BubbleOverlay.Field.Bubbles.First(x => x.Spec != null && !x.Popping);
+                Assert.False(b.Spec!.IsLive);   // this click-to-pop test explicitly enables only treats
                 BubbleOverlay.Pop(b);
                 Assert.True(state.Score > 0);
                 Assert.Equal(1, state.Combo);

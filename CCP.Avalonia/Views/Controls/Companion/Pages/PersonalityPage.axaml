@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             x:Class="ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages.PersonalityPage">
+    <!-- PORTED from ConditioningControlPanel/Views/Controls/Companion/Pages/PersonalityPage.xaml (5681c132a):
+         Companion > Personality, the room's MakeHerYoursView (presets / re-interview / adjust) and the
+         Workshop Community cell, hosted live. ponytail: the "who" card (PickerHost, CompanionPickerCard,
+         lane companion-picker-host) sits between the subtitle and the presets in WPF and waits on
+         companion-v2-pages-c. -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+        <StackPanel Margin="24,16,24,24" MaxWidth="1100" HorizontalAlignment="Stretch">
+            <TextBlock Text="{loc:Str nav_tab_personality}" Theme="{StaticResource Type.PageTitle}"/>
+            <TextBlock Text="{loc:Str companion_page_personality_intro}" Theme="{StaticResource Type.PageSubtitle}" Margin="0,4,0,16"/>
+
+            <!-- Presets, re-interview, adjust -->
+            <ContentControl x:Name="PresetsHost" Focusable="False" Margin="0,0,0,16"/>
+
+            <!-- Advanced: the full prompt editor (trait dashboard, fork, knowledge links) -->
+            <Border x:Name="AdvancedRow" Background="#14FFFFFF" CornerRadius="10" Padding="16" Margin="0,0,0,16">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{loc:Str companion_page_personality_advanced}" Theme="{StaticResource Type.CardTitle}"/>
+                        <TextBlock Text="{loc:Str companion_page_personality_advanced_note}" Theme="{StaticResource Type.Body}" TextWrapping="Wrap" Margin="0,2,12,0"/>
+                    </StackPanel>
+                    <Button x:Name="BtnOpenPromptEditor" Grid.Column="1" Theme="{StaticResource SecondaryButton}" VerticalAlignment="Center"
+                            Click="OpenPromptEditor_Click"><TextBlock Text="{loc:Str companion_page_personality_open_editor}"/></Button>
+                </Grid>
+            </Border>
+
+            <!-- Community prompts: browse / import / export / refresh -->
+            <Border Background="#14FFFFFF" CornerRadius="10" Padding="16" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="{loc:Str companion_page_personality_community}" Theme="{StaticResource Type.CardTitle}" Margin="0,0,0,8"/>
+                    <ContentControl x:Name="CommunityHost" Focusable="False"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

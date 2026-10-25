@@ -98,6 +98,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             c.Root.Opacity = t < HoldMs ? Math.Min(1, t / InMs) : Math.Max(0, 1 - (t - HoldMs) / OutMs);
             c.Slide.Y = -14 + 14 * BackOut(Math.Min(1, t / SlideMs), 0.4);
+            AnimateCard(c, t);
+        }
+
+        internal static void AnimateCard(Card c, double t)
+        {
             double pop = 0.4 + 0.6 * BackOut(Math.Clamp((t - IconDelayMs) / IconMs, 0, 1), 0.7);
             c.IconScale.ScaleX = c.IconScale.ScaleY = pop;
             // One accent-glow flare: 24 -> 46 -> 24 blur, 0.5 -> 0.9 -> 0.5 opacity (AutoReverse).
@@ -118,7 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static BoxShadows Glow(Color c, double blur, double opacity) =>
             new(new BoxShadow { Blur = blur, Color = Color.FromArgb((byte)(opacity * 255), c.R, c.G, c.B) });
 
-        private sealed class Card
+        internal sealed class Card
         {
             public required Border Root;
             public required TranslateTransform Slide;
@@ -128,7 +133,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         /// <summary>WPF ChaosUnlockCards.BuildCardVisual, control for control.</summary>
-        private static Card Build(ChaosUnlockCardInfo d, double width)
+        internal static Card Build(ChaosUnlockCardInfo d, double width)
         {
             var accent = Color.FromRgb((byte)(d.AccentRgb >> 16), (byte)(d.AccentRgb >> 8), (byte)d.AccentRgb);
             var accentBrush = new SolidColorBrush(accent);

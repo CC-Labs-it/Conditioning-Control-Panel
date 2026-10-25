@@ -28,8 +28,9 @@ public sealed class ProfileBubbleTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().With(AppFonts.Options(systemEmoji: false))
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
 
@@ -38,7 +39,7 @@ public sealed class ProfileBubbleTests
     {
         Setup();
         var saved = (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, CoreAccount.DisplayNameProvider,
-            CoreAccount.HasLabAccessProvider, CoreAccount.HasPremiumAccessProvider, MainShellWindow.OpenProfileLink);
+            CoreAccount.HasLabAccessProvider, CoreAccount.HasPremiumAccessProvider, MainShellWindow.OpenProfileLink, MainShellWindow.ProfileLinkAllowed);
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         service.Current.ShareProfilePicture = false;
@@ -49,6 +50,7 @@ public sealed class ProfileBubbleTests
         CoreAccount.HasPremiumAccessProvider = () => signedIn;
         string? opened = null;
         MainShellWindow.OpenProfileLink = url => { opened = url; return true; };
+        MainShellWindow.ProfileLinkAllowed = _ => true;
         var shell = new MainShellWindow();
         try
         {
@@ -101,7 +103,7 @@ public sealed class ProfileBubbleTests
             shell.Close();
             Dispatcher.UIThread.RunJobs();
             (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, CoreAccount.DisplayNameProvider,
-                CoreAccount.HasLabAccessProvider, CoreAccount.HasPremiumAccessProvider, MainShellWindow.OpenProfileLink) = saved;
+                CoreAccount.HasLabAccessProvider, CoreAccount.HasPremiumAccessProvider, MainShellWindow.OpenProfileLink, MainShellWindow.ProfileLinkAllowed) = saved;
         }
         return Task.CompletedTask;
     });

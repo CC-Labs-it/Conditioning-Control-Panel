@@ -64,6 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) { NotifyShellVisibility(); SyncFoldArrowBreath(); } };
 
             WireStubs();
+            InitializeClickChoice();
             InitFavoritesDrawer();
             InitProgramTodayCard();   // the Training Programs "Today" card (SettingsTabView.ProgramToday.cs)
             InitializeMarqueeStrip(); // SettingsTabView.Marquee.cs

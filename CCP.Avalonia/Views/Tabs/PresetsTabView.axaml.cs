@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -30,7 +31,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// Preset Load / New / Save-over / Delete are wired (WPF MainWindow.Presets.cs:2202-2381).
     /// Reveal spoilers and the Catalogue chip are wired. The corner-GIF option panel is wired
     /// (WPF MainWindow.Presets.cs:515-636, applied at start :1586 and live during a run, #474), and
-    /// so is the selected-card sheen (WPF OnPresetsTabVisibilityChanged / RefreshCardSheen).
+    /// so are the focal tab FX in PresetsTabView.Fx.cs (selected-card sheen, entrances, press scale;
+    /// WPF MainWindow.TabFxPresetsQuestsAchievements.cs, OnPresetsTabVisibilityChanged / RefreshCardSheen).
     /// ponytail: the Takeaway shelf needs JustDropOrdersService (row shell-takeaway).
     /// </summary>
     public partial class PresetsTabView : UserControl
@@ -83,86 +85,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtSessionDuration.Text = Loc.Get("label_30_minutes");
             TxtSessionXP.Text = Loc.Get("label_50_xp");
             TxtSessionDifficulty.Text = Loc.Get("label_easy_2");
+            InitializeFocalFx();
             SeedRailRackAndTakeaway();
             WireCornerGifOption();
-            // WPF PresetsTabView_IsVisibleChanged -> OnPresetsTabVisibilityChanged: the sheen
-            // starts when the tab appears and its clock is dropped the moment it is hidden.
-            PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) RefreshCardSheen(); };
         }
-
-        private Window? _window;
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             RefreshLocalizedDetails();
-            // WPF re-runs RefreshCardSheen on window activation; TabFxAmbientAllowed drops it while inactive.
-            _window = TopLevel.GetTopLevel(this) as Window;
-            if (_window != null)
-            {
-                _window.Activated += OnWindowActivationChanged;
-                _window.Deactivated += OnWindowActivationChanged;
-            }
-            RefreshCardSheen();
+            AttachFocalFx();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
-            if (_window != null)
-            {
-                _window.Activated -= OnWindowActivationChanged;
-                _window.Deactivated -= OnWindowActivationChanged;
-                _window = null;
-            }
-            DetachCardSheen();
+            DetachFocalFx();
             base.OnDetachedFromVisualTree(e);
-        }
-
-        private void OnWindowActivationChanged(object? sender, EventArgs e) => RefreshCardSheen();
-
-        // ---- the selected-card sheen (WPF MainWindow.TabFxPresetsQuestsAchievements.cs:517-600) ----
-
-        private const double PresetCardCornerRadius = 17;
-        private CardSheenAdorner? _cardSheen;
-        private Control? _cardSheenHost;
-        internal Control? CardSheenHost => _cardSheen == null ? null : _cardSheenHost;   // test seam
-
-        /// <summary>WPF TabFxAmbientAllowed + _presetsTabVisible.</summary>
-        private bool CardSheenAllowed =>
-            IsVisible && _window is { IsActive: true, WindowState: not WindowState.Minimized }
-            && AmbientFxCanvas.Env.AllowAmbientLoops;
-
-        /// <summary>WPF RefreshCardSheen: the sheen sits on whatever the detail pane describes.
-        /// Called on selection, rail/rack rebuild, tab show and window (de)activation.</summary>
-        internal void RefreshCardSheen()
-        {
-            var target = CardSheenAllowed ? FindSelectedCard() : null;
-            if (target is not { IsVisible: true }) { DetachCardSheen(); return; }
-            if (ReferenceEquals(target, _cardSheenHost) && _cardSheen != null) return;
-            DetachCardSheen();
-            var radius = ReferenceEquals(target.Parent, PresetCardsPanel) ? PresetCardCornerRadius : SessionCardCornerRadius;
-            // Null when the card has no adorner layer yet: the next selection or tab show tries again.
-            _cardSheen = CardSheenAdorner.Attach(target, radius);
-            _cardSheenHost = target;
-        }
-
-        private void DetachCardSheen()
-        {
-            CardSheenAdorner.Detach(_cardSheen);
-            _cardSheen = null;
-            _cardSheenHost = null;
-        }
-
-        /// <summary>WPF FindSelectedCard: the rail chip or rack row the detail pane describes.</summary>
-        private Control? FindSelectedCard()
-        {
-            if (_selectedPreset is { } p)
-                return PresetCardsPanel.Children.OfType<Border>().FirstOrDefault(c => c.Tag as string == p.Id);
-            if (_selectedSession is { } s)
-                return SessionRackPanel.Children.OfType<Border>().FirstOrDefault(r => (r.Tag as Session)?.Id == s.Id);
-            return null;
         }
 
         private void OnLanguageChanged(object? sender, EventArgs e) =>
@@ -402,6 +342,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// ahead of the fixed "+ New" chip.</summary>
         internal void RefreshPresetsList()
         {
+            DetachCardSheen();
             var presets = Preset.GetDefaultPresets();
             presets.AddRange(CoreSettings.Current.UserPresets);
 
@@ -412,6 +353,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             int at = 0;
             foreach (var preset in presets)
                 PresetCardsPanel.Children.Insert(at++, PresetChip(preset));
+            RefreshCardSheen();
         }
 
         /// <summary>WPF's SelectPreset (MainWindow.Presets.cs:461).</summary>
@@ -448,6 +390,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BtnSharePreset.IsEnabled = !preset.IsDefault;
             UpdatePresetShareStatusBadge(preset);
             RefreshSessionRackSelection();
+            RefreshCardSheen();
         }
 
         /// <summary>WPF UpdatePresetShareStatusBadge (MainWindow.PresetIO.cs:332).</summary>
@@ -550,6 +493,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (e.InitialPressMouseButton != MouseButton.Left) return;
             e.Handled = true;
             if (Shell is not { } owner) return;
+            await PromptSaveNewPreset(owner);
+        }
+
+        internal async Task PromptSaveNewPreset(Window owner)
+        {
             var dialog = new Dialogs.InputDialog(Loc.Get("title_new_preset"),
                 Loc.Get("msg_enter_a_name_for_your_preset"), Loc.Get("label_my_custom_preset"));
             if (await dialog.ShowDialogSafe<bool?>(owner) != true || string.IsNullOrWhiteSpace(dialog.ResultText)) return;
@@ -685,6 +633,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Theme = TabTheme(selected ? "SdPresetChipSelected" : "SdPresetChip"),
                 Child = line,
             };
+            PrepareChipFx(chip);
             chip.PointerPressed += (_, e) => { SelectPreset(preset); e.Handled = true; };
             return chip;
         }
@@ -866,6 +815,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>Rebuild only the filtered rows; details and selected model remain view state.</summary>
         private void RepaintSessionRack()
         {
+            DetachCardSheen();
             SessionRackPanel.Children.Clear();
             SeedSessionRack();
         }
@@ -890,6 +840,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             UpdateRackCount(shown.Count);
             RefreshSessionRackSelection();
+            RefreshCardSheen();
         }
 
         private Border RackRow(Session session)
@@ -1004,8 +955,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             };
             row.PointerPressed += SessionRow_PointerPressed;
             row.KeyDown += SessionRow_KeyDown;
-            row.PointerEntered += (_, _) => AttachRowSweep(row);
-            row.PointerExited += (_, _) => { if (ReferenceEquals(row, _rowSweepHost)) _rowSweep?.Leave(); };
+            CardTransforms(row);
+            row.PointerEntered += (_, _) => { LiftSessionRow(row, true); AttachRowSweep(row); };
+            row.PointerExited += (_, _) => { LiftSessionRow(row, false); if (ReferenceEquals(row, _rowSweepHost)) _rowSweep?.Leave(); };
             return row;
         }
 
@@ -1148,6 +1100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtSessionTimeline.Text = session.GetSpoilerTimeline();
 
             RefreshSessionRackSelection();
+            RefreshCardSheen();
         }
 
         /// <summary>WPF GenerateSessionTimelineDescription (MainWindow.SessionIO.cs:984), localized.</summary>
@@ -1234,7 +1187,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var selected = row.Tag is Session session && session.Id == _selectedSession?.Id;
                 row.Theme = selected ? selectedStyle : normalStyle;
             }
-            RefreshCardSheen();   // every selection and rebuild lands here (rows are new controls)
+            RefreshCardSheen();
         }
 
         /// <summary>WPF MainWindow.Presets.cs BtnSessionHistory_Click.</summary>
@@ -1411,6 +1364,43 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _sessionManager.LoadAllSessions();
             }
             return _sessionManager;
+        }
+
+        /// <summary>WPF SyncCustomSessionsFromDisk (MainWindow.SessionIO.cs:1761, #614): when the manager's
+        /// CustomSessions folder holds a .session.json it has never seen (the Graded Intake draft whose
+        /// registration hop failed), reload it, re-point the selection at the fresh instance and rebuild the
+        /// toolbar counts. Raises no SessionAdded, so nothing downstream fires twice. No manager, no disk read.</summary>
+        internal void SyncCustomSessionsFromDisk()
+        {
+            try
+            {
+                if (_sessionManager == null) return;
+                var folder = _sessionManager.CustomSessionsFolder;
+                if (!Directory.Exists(folder)) return;
+
+                var known = new HashSet<string>(
+                    _sessionManager.CustomSessions
+                        .Select(s => s.SourceFilePath)
+                        .Where(p => !string.IsNullOrEmpty(p))
+                        .Select(p => Path.GetFullPath(p!)),
+                    StringComparer.OrdinalIgnoreCase);
+                var onDisk = Directory.GetFiles(folder, "*.session.json");
+                if (onDisk.All(f => known.Contains(Path.GetFullPath(f)))) return;
+
+                var selectedId = _selectedSession?.Id;
+                _sessionManager.LoadAllSessions();
+                _availableSessions = _sessionManager.AllSessions.ToArray();
+                if (!string.IsNullOrEmpty(selectedId) && _sessionManager.GetSession(selectedId) is { } again)
+                    _selectedSession = again;
+                RackSourceChips.Children.Clear();
+                RackDifficultyChips.Children.Clear();
+                SeedRackToolbar();
+
+                Serilog.Log.Information(
+                    "SyncCustomSessionsFromDisk: picked up {N} session file(s) written after startup",
+                    onDisk.Length - known.Count);
+            }
+            catch (Exception ex) { Serilog.Log.Debug("SyncCustomSessionsFromDisk: {E}", ex.Message); }
         }
 
         private static async System.Threading.Tasks.Task<string?> PickSessionSavePath(Window owner, string titleKey, Session session)
