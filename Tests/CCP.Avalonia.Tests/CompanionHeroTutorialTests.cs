@@ -50,6 +50,8 @@ public sealed class CompanionHeroTutorialTests
         try
         {
             shell.Show();
+            // V2 hides the legacy hero behind Conversation; exercise its chip like the other room tests.
+            CollapsedRoom.Show(shell);
             shell.ShowTab("companion");
             Dispatcher.UIThread.RunJobs();
             TutorialHead.Seed();
@@ -61,6 +63,7 @@ public sealed class CompanionHeroTutorialTests
                 .Single(b => ReferenceEquals(b.Command, hero.ViewModel!.Header!.TutorialCommand));
             chip.BringIntoView();
             Dispatcher.UIThread.RunJobs();
+            Assert.True(chip.IsEffectivelyVisible);
             var position = chip.TranslatePoint(new Point(chip.Bounds.Width / 2, chip.Bounds.Height / 2), shell)!.Value;
             shell.MouseDown(position, MouseButton.Left);
             shell.MouseUp(position, MouseButton.Left);

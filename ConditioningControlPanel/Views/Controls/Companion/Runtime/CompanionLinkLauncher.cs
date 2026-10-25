@@ -34,8 +34,7 @@ namespace ConditioningControlPanel.Views.Controls.Companion.Runtime
                     return;
                 }
 
-                if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
-                    (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+                if (!CompanionLinkNavigation.TryBrowserUri(url, out var uri))
                 {
                     App.Logger?.Warning("Companion watch chip refused a non-http(s) link");
                     return;
@@ -58,7 +57,7 @@ namespace ConditioningControlPanel.Views.Controls.Companion.Runtime
                 // active web-media session.
                 App.BrowserMedia?.OnMediaStopped("embedded-browser-unavailable");
 
-                if (uri.Scheme == Uri.UriSchemeHttps)
+                if (CompanionLinkNavigation.CanOpenExternally(uri!))
                 {
                     App.Logger?.Warning("Embedded browser unavailable, opening the watch chip externally");
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });

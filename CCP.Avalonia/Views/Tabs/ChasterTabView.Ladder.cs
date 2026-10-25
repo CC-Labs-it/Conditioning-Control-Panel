@@ -98,6 +98,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ApplyPriceToggles();
             foreach (var lit in new[] { "attention", "typo", "session" }) { _priceToggles[lit].IsChecked = true; PaintRowLit(lit, true); }
             BtnResetPrices.IsVisible = true;
+            LimitsCard.IsVisible = true;
+            RefreshLimits();
             BeginPriceEdit(TabPageText.Split(TabPrices.All).Item1.First(p => TabPriceEdit.Editable(p.Id)).Id);
             // the menu sits below the 780 px frame: scroll its top in once laid out
             AttachedToVisualTree += (_, _) => Dispatcher.UIThread.Post(() => PageScroll.Offset = new Vector(0, MenuPanel.Bounds.Top), DispatcherPriority.Background);
