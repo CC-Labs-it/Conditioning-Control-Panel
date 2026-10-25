@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
@@ -96,7 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF LoadBackdrop: null keeps what is already painted rather than blanking the room.</summary>
         private void LoadBackdrop()
         {
-            var art = Helpers.ModArt.TryLoad("exclusives/vault_backdrop.png");
+            var art = Helpers.ModArt.TryLoad("exclusives/vault_backdrop.png", 1400);
             if (art != null) this.FindControl<Image>("VaultBackdrop")!.Source = art;
         }
 
@@ -129,6 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void RefreshVault()
         {
             RetintVaultChrome();
+            RefreshHeaderArt();
             // WPF ArrangeVaultShelf (polish 12): Basic, Prime, Free, each under its header, open doors first,
             // roster order within each half (Core PremiumShelfOrder). The two reserved seats are dropped. Just
             // Drop until the server opens its door and the Arcademy behind its build flag are hidden, not veiled.
@@ -175,6 +178,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             RefreshTierPlates();
             Dress(this.FindControl<Control>("SpotFreeToday")!);
             Dress(this.FindControl<Control>("SpotVeilLock")!);   // WPF :799 breathes only under a shown veil
+        }
+
+        private void RefreshHeaderArt()
+        {
+            // Same precedence as WPF ModTileVariant; a third-party mod owns the base path.
+            foreach (var path in FavoritesRailArt.Candidates("features/vault.png",
+                FavoritesRailArt.ThemeSuffix(CoreMods.ActiveModId)))
+            {
+                if (ModArt.TryLoad(path, 480) is not { } art) continue;
+                this.FindControl<Image>("VaultHeroImage")!.Source = art;
+                break; // null preserves the last painted face
+            }
+            for (int tier = 1; tier <= 2; tier++)
+                if (ModArt.TryLoadBuiltIn($"Patreon tier{tier}.png", 160) is { } art)
+                    this.FindControl<Image>($"TierPlate{tier}Art")!.Source = art;
         }
 
         // WPF RetintVaultChrome: only decor follows the mod; gold free-day and tier commerce do not.
@@ -384,11 +402,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.OpenExclusiveFeature(feature.Key);
         }
 
-        /// <summary>WPF OnExclusiveCardHover: the shared hover pop on the art, driven from the card.
-        /// ponytail: no MotionFx.HoverLift or glow bloom on this head yet.</summary>
-        private void Card_PointerEntered(object? sender, PointerEventArgs e) => HoverPop.Enter(CardArt(sender));
+        // WPF OnExclusiveCardHover: lift even unavailable cards; destinations own the gates.
+        private void Card_PointerEntered(object? sender, PointerEventArgs e) => CardHover(sender, true);
+        private void Card_PointerExited(object? sender, PointerEventArgs e) => CardHover(sender, false);
 
-        private void Card_PointerExited(object? sender, PointerEventArgs e) => HoverPop.Leave(CardArt(sender));
+        private static void CardHover(object? sender, bool on)
+        {
+            if (sender is not Border card) return;
+            if (card.RenderTransform is not ScaleTransform scale)
+                card.RenderTransform = scale = new ScaleTransform();
+            scale.Transitions = AmbientFxCanvas.Env.AllowTransitions ? new Transitions
+            {
+                new DoubleTransition { Property = ScaleTransform.ScaleXProperty, Duration = TimeSpan.FromMilliseconds(150), Easing = new QuadraticEaseOut() },
+                new DoubleTransition { Property = ScaleTransform.ScaleYProperty, Duration = TimeSpan.FromMilliseconds(150), Easing = new QuadraticEaseOut() },
+            } : null;
+            scale.ScaleX = scale.ScaleY = on ? 1.02 : 1;
+            var glow = card.GetVisualDescendants().OfType<Border>().FirstOrDefault(b => b.Name == "HoverGlow");
+            if (glow != null)
+            {
+                var tier = AmbientFxCanvas.Env.CurrentTier;
+                glow.IsVisible = on && AmbientFxCanvas.Env.AllowGlow(tier);
+                // Read the current mod colour on every hover, just as WPF refreshes its cached bloom.
+                glow.BoxShadow = glow.IsVisible
+                    ? Glow(AmbientFxCanvas.Env.GlowColor, 0.55, Math.Min(24, AmbientFxCanvas.Env.MaxGlowBlurRadius(tier)))
+                    : default;
+            }
+            if (on) HoverPop.Enter(CardArt(card)); else HoverPop.Leave(CardArt(card));
+        }
 
         private static Control? CardArt(object? card) =>
             (card as Control)?.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => c.Name == "CardArt");

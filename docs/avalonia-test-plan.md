@@ -673,3 +673,6 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+1. Open Premium, hover an available and an unavailable shelf card: both lift to 1.02 and bloom in the current mod colour; leave restores the card. Set Motion Off and confirm the lift snaps; performance mode suppresses bloom. Switch mods and hover again to check the new colour. WPF `MainWindow/MainWindow.Exclusives.cs:OnExclusiveCardHover`. Rows: `views-tab-exclusives`.
+2. Open Premium under the default and built-in mods: header vault art follows the mod, tier plates show the shipped art, and entitlement changes preserve the existing dim/breath state. WPF `Views/Tabs/ExclusivesTabView.xaml` and `MainWindow/MainWindow.Exclusives.cs:RefreshExclusivesTab`. Rows: `views-tab-exclusives`.
