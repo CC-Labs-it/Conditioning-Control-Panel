@@ -28,9 +28,9 @@ public sealed class ProfileBubbleTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().WithInterFont()
-                .With(AppFonts.Options(systemEmoji: false)).UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().With(AppFonts.Options(systemEmoji: false))
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
 

@@ -6,10 +6,11 @@
 // QuestsTabView.Quests.cs now feeds its real weekly fraction into a 0.6 s width transition and
 // seats resizes immediately. AchievementsTabView.Fx.cs already owns its unlocked tilt/lift/pop/stagger.
 //
-// Follow-up wire-shell-tab-fx-presets-quests-achievements-b: WPF's data-before-FX arrival funnel
-// (SyncCustomSessionsFromDisk, RepaintSessionRack, RefreshTakeawayShelf) and IsIncomingTab guard
-// for the shell's transient outgoing-tab re-show. The receipt drawer is still a separate stub;
-// its data path and the cross-head custom-session discovery rule cannot be invented here.
+// The data-before-FX arrival funnel (SyncCustomSessionsFromDisk, RepaintSessionRack, shelf repaint)
+// runs in PresetsTabView.Fx.cs OnPropertyChanged before the stagger. IsIncomingTab has nothing to
+// filter: ShowTab snaps tabs, there is no FadeOutgoingTab re-show on this head yet.
+// Follow-up wire-shell-tab-fx-presets-quests-achievements-b-next: real Takeaway receipts, blocked on
+// JustDropOrdersService (not in Core; see MainShellWindow.Takeaway.cs).
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow { }

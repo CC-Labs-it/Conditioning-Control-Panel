@@ -122,6 +122,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             HookAutonomy();     // MainShellWindow.Autonomy.cs: Takeover seeds; starts only on the user's switch
             InitializeDescentFuse(); // MainShellWindow.DescentFuse.cs (WPF MainWindow ctor); no-op without App.DescentCountdown
             InitializeProfileBubble(); // MainShellWindow.ProfileBubble.cs (WPF MainWindow ctor): face + reactions
+            InitializeProfileVat();
             InitializeProfileFx();     // MainShellWindow.ProfileFx.cs: search glow + OG border loop gate
             InitializeInboxBadge(); // MainShellWindow.Inbox.cs (WPF MainWindow.Inbox.cs:27)
             InitializeServerAnnouncement(); // MainShellWindow.Announcement.cs (WPF MainWindow.Marquee.cs:688)
@@ -143,6 +144,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeMicActivePill(); // MainShellWindow.SheListening.cs (WPF MainWindow.xaml.cs:3594 WireMicActivePill)
             InitializeStatPills(); // MainShellWindow.UiUpdates.cs (WPF MainWindow.xaml.cs:3726 StartStatPillUpdateTimer)
             InitializeWebcamActivePill(); // MainShellWindow.SafetyPills.cs (WPF LabTab.cs:134 WireWebcamActivePill)
+            InitializeFocusGaze();        // MainShellWindow.LabTab.cs (WPF MainWindow.xaml.cs:262 HookFocusGazeService)
             InitializeRapidBlinkStop();   // MainShellWindow.BlinkStop.cs (WPF LabTab.cs:168 WireRapidBlinkRecalibrateShortcut)
             InitializeRemoteControlOverlay(); // MainShellWindow.RemoteControl.cs (WPF MainWindow.RemoteControl.cs:784)
             InitializeLeashGate(); // MainShellWindow.LeashGate.cs (WPF MainWindow.Leash.cs InitializeLeash)
