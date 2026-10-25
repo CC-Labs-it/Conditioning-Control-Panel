@@ -27,10 +27,10 @@ test('gen: tracks/threshold.json is the generator output', () => {
 
 test('gen: everyday lanes give slides room while the nested loops retain clearance', () => {
   const widths = id => built.track.nodes.filter((_, i) => PIECES[built.meta[i].piece].id === id).map(n => n.w);
-  for (const id of ['sweepA', 'hairpin', 'sweepD', 'sweepE', 'sweepF']) assert.ok(Math.min(...widths(id)) >= 24.5, id);
-  for (const id of ['start', 'home']) assert.ok(Math.min(...widths(id)) >= 28, id);
-  assert.ok(Math.min(...widths('prism-run')) >= 34);
-  assert.ok(Math.min(...widths('lens-gallery')) >= 38);
+  for (const id of ['sweepA', 'hairpin', 'sweepD', 'sweepE', 'sweepF']) assert.ok(Math.min(...widths(id)) >= 32, id);
+  for (const id of ['start', 'home']) assert.ok(Math.min(...widths(id)) >= 36, id);
+  assert.ok(Math.min(...widths('prism-run')) >= 40);
+  assert.ok(Math.min(...widths('lens-gallery')) >= 48);
   for (const id of ['wheel', 'hoop', 'c1', 'c2']) assert.ok(Math.max(...widths(id)) <= 14, id + ' keeps its air gap');
 });
 
@@ -83,7 +83,7 @@ test('gen: open sides read the rail flags', () => {
 test('gen: Bambi stepping minigame doubles the islands and reserves genuine jumping gaps', () => {
   const field = json.fields.find(f => f.id === 'bridge-stones');
   assert.equal(field.platforming, true);
-  assert.deepEqual(field.lanes, [-14, 0, 14]);
+  assert.deepEqual(field.lanes, [-18, 0, 18]);
   const fromS = built.meta[field.from].s, toS = built.meta[field.to].s;
   assert.ok(toS - fromS >= 55 && toS - fromS <= 60, 'shorter field keeps the broad islands');
   for (const x of field.lanes) {
@@ -91,7 +91,7 @@ test('gen: Bambi stepping minigame doubles the islands and reserves genuine jump
     assert.equal(lane[0].s, fromS, 'generous lead deck');
     assert.ok(Math.abs(lane.at(-1).s + lane.at(-1).len - (toS - 2)) < .02, 'safe closing deck');
     for (let i = 1; i < lane.length; i++) {
-      assert.ok(Math.abs(lane[i].s - lane[i-1].s - lane[i-1].len - 12) < .02, 'real twelve-metre air gaps');
+      assert.ok(Math.abs(lane[i].s - lane[i-1].s - lane[i-1].len - 15) < .02, 'real fifteen-metre air gaps');
       assert.equal(lane[i].w, 10, 'double original island width');
     }
   }

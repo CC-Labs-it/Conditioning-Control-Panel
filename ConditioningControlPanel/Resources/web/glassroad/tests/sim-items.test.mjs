@@ -55,16 +55,17 @@ test('table: every id has a use, an icon and a duration; buckets from place and 
   assert.equal(bucketOf(f, 7, 200), 'back');
 });
 
-test('roll weights by bucket: only the toys kit draws; front gets Snap, the back Tether and Big Spiral', () => {
+test('roll weights restore the repelling shield and fog beside the toys; front gets Snap, the back Tether and Big Spiral', () => {
   const f = makeFeel();
   const ids = (b) => weightsFor(f, b).map(([id]) => id);
-  const kit = ['pendulum', 'disc', 'tether', 'melt', 'snap', 'surge', 'bigSpiral'];
+  const kit = ['pendulum', 'disc', 'tether', 'melt', 'snap', 'surge', 'bigSpiral', 'glass', 'pink'];
   for (const b of ['front', 'middle', 'back']) for (const id of ids(b)) assert.ok(kit.includes(id), id + ' still draws in ' + b);
   for (const big of ['tether', 'bigSpiral']) {
     assert.ok(!ids('front').includes(big), big + ' in front');
     assert.ok(ids('back').includes(big), big + ' missing at the back');
   }
   assert.ok(ids('front').includes('melt') && ids('front').includes('snap'));
+  for (const b of ['front', 'middle', 'back']) assert.ok(ids(b).includes('glass') && ids(b).includes('pink'), b);
   const rand = makeRand(3), n = 20000, count = {};
   for (let k = 0; k < n; k++) { const id = rollItem(f, 'front', rand); count[id] = (count[id] || 0) + 1; }
   const list = weightsFor(f, 'front'), total = list.reduce((a, [, w]) => a + w, 0);

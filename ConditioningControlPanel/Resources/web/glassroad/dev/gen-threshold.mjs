@@ -29,7 +29,7 @@ const DEG = Math.PI / 180;
 // y = target height at the piece end; ease: smooth | lin | kick (grade grows to the end)
 export const PIECES = [
   // induction: ground level, the climb onto deck 1, the bridge over the start straight
-  { id: 'start', len: 90, y: 0, w: 28, sec: 0, pad: { at: 0.45, x: 0 } },
+  { id: 'start', len: 90, y: 0, w: 36, sec: 0, pad: { at: 0.45, x: 0 } },
   // water wave 1: the first sweep from u 0.15 and all of L2 are a STREAM; the current runs +5 m/s along and
   // -2.5 m/s to the left (the outside of the right turn), eased in over the first two stream nodes and out
   // over the last two (STREAM_RAMP). The hairpin after it stays glass.
@@ -40,13 +40,13 @@ export const PIECES = [
   // the returning ground road by ten metres while the open field sits beyond that crossing.
   { id: 'bridge', len: 324, y: 18, sec: 0, pad: { at: 0.35, x: -3 } },
   // A long excursion leaves the compact induction stack before returning above it.
-  { id: 'prism-approach', len: 160, y: 48, w: 34, sec: 3 },
-  { id: 'tidal-in', turn: 90, r: 90, roll: 16, y: 28, w: 34, sec: 3 },
-  { id: 'tidal-gallery', len: 450, y: 28, w: 38, sec: 3, surface: 'stream', flow: [4, 0] },
+  { id: 'prism-approach', len: 160, y: 48, w: 40, sec: 3 },
+  { id: 'tidal-in', turn: 90, r: 90, roll: 16, y: 34, w: 34, sec: 3 },
+  { id: 'tidal-gallery', len: 450, y: 34, w: 48, sec: 3, surface: 'stream', flow: [4, 0] },
   { id: 'tidal-out', turn: 90, r: 90, roll: 18, y: 38, w: 34, sec: 3 },
-  { id: 'prism-run', len: 300, y: 48, w: 34, sec: 4 },
+  { id: 'prism-run', len: 300, y: 48, w: 40, sec: 4 },
   { id: 'observatory-spiral', turn: -360, r: 110, roll: 22, y: 84, ease: 'lin', w: 34, sec: 4 },
-  { id: 'lens-gallery', len: 400, y: 84, w: 38, sec: 4 },
+  { id: 'lens-gallery', len: 400, y: 84, w: 48, sec: 4 },
   { id: 'lens-out', turn: 90, r: 90, roll: 16, y: 84, w: 34, sec: 5 },
   { id: 'cascade-descent', len: 350, y: -16, w: 34, surface: 'stream', flow: [5, 0], sec: 5 },
   { id: 'cascade-return', turn: 90, r: 90, roll: 18, y: -16, w: 34, sec: 5 },
@@ -82,7 +82,7 @@ export const PIECES = [
   { id: 'landing', len: 24, y: -1, sec: 2 },
   { id: 'sweepE', turn: -90, r: 24, roll: 24, y: 0, speed: 0.9, sec: 2 },
   { id: 'sweepF', turn: -90, r: 24, roll: 24, y: 0, speed: 0.85, sec: 2 },
-  { id: 'home', len: 60, y: 0, w: 28, sec: 2 },
+  { id: 'home', len: 60, y: 0, w: 36, sec: 2 },
 ];
 const SECTIONS = [
   { id: 'induction', act: 'induction', palette: 'dawn', sky: 'spiral-slow', bandSpeed: 0.6 },
@@ -93,7 +93,7 @@ const SECTIONS = [
   { id: 'cascade-return', act: 'release', palette: 'afterglow', sky: 'spiral-wide', bandSpeed: 0.7 },
 ];
 // Ordinary lanes have room to correct a slide; nested loops and open shortcuts keep their real gaps.
-const W = 24.5, TOP = 30, G = 28;
+const W = 32, TOP = 30, G = 28;
 /** Loop clearance: the exit lane's edge keeps this much plan room from the entry lane's edge. */
 const LOOP_SIDE_GAP_M = 4;
 /** Lanes marked alongside keep at least this much plan gap between edges and this much height between them. */
@@ -154,9 +154,9 @@ const FALLS = [
 // over FIELD_RAMP_M before the field and back after it. Nodes inside carry `open` (no rails: the lips are the edges).
 export const FIELDS = [
   // Start beyond the lower-road crossing so missed jumps never skip ahead in the lap.
-  { id: 'bridge-stones', piece: 'bridge', from: 0.50, to: 0.50 + 0.26 * 2 / 3, boostClearTo: 0.76, lanes: [-14, 0, 14], stoneM: 10, gapM: 12, staggerM: 7, widthM: 42 },
+  { id: 'bridge-stones', piece: 'bridge', from: 0.50, to: 0.50 + 0.26 * 2 / 3, boostClearTo: 0.76, lanes: [-18, 0, 18], stoneM: 10, gapM: 15, staggerM: 8, widthM: 50 },
 ];
-const FIELD_RAMP_M = 20, FIELD_END_GAP_M = 2, FIELD_SPARE_M = 0.5, FIELD_GAP_M = [11.5, 12.5], FIELD_PAD_LEAD_M = 6;
+const FIELD_RAMP_M = 20, FIELD_END_GAP_M = 2, FIELD_SPARE_M = 0.5, FIELD_GAP_M = [14.5, 15.5], FIELD_PAD_LEAD_M = 6;
 /** Lead and closing islands have generous landing room around the regular ten-metre islands. */
 const FIELD_LEN_M = [6, 34];
 /** One lane of stones as [start, end] pairs from 0 (the field start) to lenM - FIELD_END_GAP_M (the closing edge). */
@@ -265,7 +265,7 @@ export function build(pieces = PIECES) {
       }
       const flags = p.jump ? ['jump'] : p.open ? ['open'] : p.loop ? ['rail', 'magnet'] : ['rail'];
       // Aperture Court opens out on the flat return, then gathers before the launch ramp.
-      const courtWidth = p.id === 'L4d' ? W + (34 - W) * Math.min(1, d / 17, (L - d) / 20) : 0;
+      const courtWidth = p.id === 'L4d' ? W + (40 - W) * Math.min(1, d / 17, (L - d) / 20) : 0;
       // stones: the road widens to the field's width over FIELD_RAMP_M before it and narrows back after it
       const field = FIELDS.find((f) => f.piece === p.id);
       const fieldWidth = field ? W + (field.widthM - W) * Math.max(0, Math.min(1, (d - (field.from * L - FIELD_RAMP_M)) / FIELD_RAMP_M, (field.to * L + field.gapM + FIELD_RAMP_M - d) / FIELD_RAMP_M)) : 0;

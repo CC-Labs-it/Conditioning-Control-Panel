@@ -288,6 +288,7 @@ async function boot(course, options, lifetime, isCurrent) {
   const payoff = createPayoff(bus, feel, { gentle, photosafe });   // subliminal words + flashes for hits, malus and pads
   if (BOT) debug.payoff = payoff.stats;
   fx.state.screen = effects.screen;
+  fx.state.fog = payoff.fog; fx.state.fogTheme = track.id;
   const audio = shared.audio ||= (() => {
     shared.counts.audio++; return createAudio(feel, shared.bus, { gentle, musicFetchFn: songCache.fetch });
   })();
@@ -608,6 +609,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (hazards) hazards.reset();
     if (world.resetReactions) world.resetReactions();   // last race's cheer, sulk and faces never carry over
     fx.state.screen = effects.screen;
+    fx.state.fog = payoff.fog; fx.state.fogTheme = track.id;
     const sec = P.st[S.sectionIdx];
     audio.reset(sec);                         // held tones never carry into a new run
     fx.state.paletteMix = { from: sec, to: sec, t: 1 };

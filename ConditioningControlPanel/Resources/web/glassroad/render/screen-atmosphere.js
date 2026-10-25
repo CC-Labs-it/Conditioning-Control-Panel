@@ -8,6 +8,14 @@ export const ATMOSPHERE = Object.freeze({
 const sat = (v) => Math.max(0, Math.min(1, v));
 const ease = (v) => { const t = sat(v); return t * t * (3 - 2 * t); };
 
+/** The old Pink Fog keeps its wire id; the actual mist belongs to the course. */
+export const FOG_PALETTES = Object.freeze({
+  threshold: ['#8a246b', '#ff9fd3'], mainframe: ['#123e2c', '#8be5ad'],
+  keep: ['#302547', '#bd9cdb'], boudoir: ['#8d4066', '#ffd0e5'],
+  goonworks: ['#650b47', '#f69bdd'],
+});
+export const fogPalette = (theme) => FOG_PALETTES[theme] || FOG_PALETTES.threshold;
+
 export const tunnelRadius = (amount) => ATMOSPHERE.tunnelFrom + (ATMOSPHERE.tunnelTo - ATMOSPHERE.tunnelFrom) * sat(amount);
 export function fogFill(amount, age, durationS = 0) {
   const ingressS = durationS > 0 ? Math.min(ATMOSPHERE.fogFillS, durationS * 0.7) : ATMOSPHERE.fogFillS;
