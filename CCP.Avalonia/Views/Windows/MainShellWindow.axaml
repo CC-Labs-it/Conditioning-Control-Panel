@@ -603,8 +603,10 @@
 
                 <!-- PINNED FOOT (WPF :740): Circe's tab, the fuse chip, the gear, EMI's dock, Friends last. -->
                 <StackPanel Grid.Row="2">
-                    <!-- ponytail: Controls/SpiralRailHost.cs is not ported; a collapsed stand-in. -->
-                    <Border x:Name="SpiralRail" IsVisible="False"/>
+                    <!-- Dormant: WPF no longer mounts SpiralRailHost (MainWindow.xaml:746-749, Circe's tab took
+                         the slot). Nothing in production calls Apply, so it stays collapsed and unfed until WPF
+                         mounts it again; only SpiralRailHostTests feeds it. Do not wire a feed here. -->
+                    <fx:SpiralRailHost x:Name="SpiralRail"/>
                     <fx:ChasterRailChip x:Name="ChasterRail"/>
                     <Border Height="1" Background="{DynamicResource PanelAccentBrush}" Margin="10,4,10,4"/>
                     <fx:DescentFuseRailChip x:Name="FuseRailChip"/>

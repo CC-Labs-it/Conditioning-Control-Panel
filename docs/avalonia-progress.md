@@ -3146,3 +3146,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-shell-quests: +148
 - Off-tab quest completion bursts 85 sparks from the centre of the owning Quests nav row. Fallbacks (the track, the nav row) fire from their centre, as in WPF FireBurstAtFirstVisible; only the filled bar keeps RightEdge.
 - The shell-quests row stays stub and is reworded to "Added".
+
+## avalonia-port/wire-ctrl-spiral-rail-host: +271
+- Native spiral rail host + shared Core rail rules; shell mount kept dormant (WPF retired it), row stays stub.
+- Review fixes gated: rgate 39722260221 GATE-OK.
