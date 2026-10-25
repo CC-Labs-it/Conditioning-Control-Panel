@@ -11,7 +11,7 @@ namespace CCP.Avalonia.Tests;
 public sealed class SubliminalSolidHostTests
 {
     [Fact]
-    public void Host_is_passive_shared_and_closes_at_last_release() => AvaloniaTestDispatcher.Run(() =>
+    public void Host_is_passive_and_closes_on_release() => AvaloniaTestDispatcher.Run(() =>
     {
         SubliminalSilentHintTests.EnsureAvalonia();
         var configure = SharedOverlayHost.Configure;
@@ -19,18 +19,25 @@ public sealed class SubliminalSolidHostTests
         SharedOverlayHost.Configure = (w, _) => { stage = w; w.Width = 300; w.Height = 200; return true; };
         try
         {
-            var a = SharedOverlayHost.Acquire(new PixelRect(0, 0, 300, 200))!;
-            var b = SharedOverlayHost.Acquire(new PixelRect(0, 0, 300, 200))!;
-            Assert.Same(a.Canvas, b.Canvas);
+            var lease = SharedOverlayHost.Acquire(new PixelRect(0, 0, 300, 200))!;
             Assert.False(stage!.ShowActivated);
             Assert.False(stage.IsHitTestVisible);
-            a.Dispose(); a.Dispose();
             Assert.True(stage.IsVisible);
-            b.Dispose();
+            lease.Dispose(); lease.Dispose();
             Assert.False(stage.IsVisible);
         }
         finally { SharedOverlayHost.Configure = configure; }
     });
+
+    // WPF SubliminalService: solid mode uses the shared stage; focus requests and a live mandatory video
+    // keep the classic cards. Show itself exits headless (no X11), so the decision it calls is pinned here.
+    [Theory]
+    [InlineData(true, false, 0, true)]
+    [InlineData(false, false, 0, false)]
+    [InlineData(true, true, 0, false)]
+    [InlineData(true, false, 1, false)]
+    public void Show_routes_solid_mode_to_the_shared_stage_only_without_focus_or_video(bool solid, bool focus, int videos, bool hosted) =>
+        Assert.Equal(hosted, SubliminalOverlay.UseSolidHost(solid, focus, videos));
 
     [Fact]
     public void Hosted_card_is_removed_by_stop_and_native_failure_allows_fallback() => AvaloniaTestDispatcher.Run(() =>

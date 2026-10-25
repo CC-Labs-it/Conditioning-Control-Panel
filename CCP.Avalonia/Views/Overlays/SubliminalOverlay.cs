@@ -36,6 +36,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static readonly Dictionary<PixelRect, SharedOverlayHost.Lease> Hosts = new();
         private static readonly List<Action> RetireHosted = new();
 
+        /// <summary>Solid mode goes to the shared stage unless focus is requested or a mandatory video owns the screen.</summary>
+        internal static bool UseSolidHost(bool solidMode, bool stealsFocus, int liveVideoWindows) =>
+            solidMode && !stealsFocus && liveVideoWindows == 0;
+
         internal static bool ShowHosted(PixelRect bounds, string text, double alpha, TimeSpan hold)
         {
             if (!Hosts.TryGetValue(bounds, out var lease))
@@ -108,8 +112,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var alpha = SubliminalCard.Alpha(opacity ?? s.SubliminalOpacity);
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
-                if (s.SubliminalSolidMode && !s.SubliminalStealsFocus &&
-                    MandatoryVideoOverlay.Instance.Windows.Count == 0 && ShowHosted(screens[i].Bounds, text, alpha, hold)) continue;
+                if (UseSolidHost(s.SubliminalSolidMode, s.SubliminalStealsFocus, MandatoryVideoOverlay.Instance.Windows.Count) &&
+                    ShowHosted(screens[i].Bounds, text, alpha, hold)) continue;
                 var w = new SubliminalOverlayWindow(text);
                 if (!X11Overlay.SetClickThrough(w, true) || !X11Overlay.SetOpacity(w, 0) || !X11Overlay.SetOverrideRedirect(w, screens[i].Bounds))
                 {
