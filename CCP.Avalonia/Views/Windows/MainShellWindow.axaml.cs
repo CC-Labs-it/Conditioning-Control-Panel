@@ -91,6 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             // WPF put these on the Window element itself; Avalonia routes them as attached events.
             HookResizeEdges();
+            HookLauncherPanelFade();
             HookWindowChromeState();
             // handledEventsToo: a drop the Sessions tab already imported must still clear the overlay.
             AddHandler(DragDrop.DropEvent, Window_Drop, RoutingStrategies.Bubble, handledEventsToo: true);

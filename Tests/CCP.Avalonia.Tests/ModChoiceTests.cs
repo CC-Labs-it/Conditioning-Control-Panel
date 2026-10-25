@@ -238,7 +238,11 @@ public sealed class ModChoiceTests
         server.Handle = original;
         var attempts = server.PackGets;
         PressDownload(picker);
-        await WaitFor(() => AvApp.Mods.ActiveModId == BuiltInMods.BambiSleepId && card.IsInstalled);
+        // PackInstalled marks the card and activates the mod before the RequestPackAsync continuation
+        // relabels the button, so wait for the label too.
+        var close = ConditioningControlPanel.Localization.Loc.Get("modpicker_btn_close");
+        await WaitFor(() => AvApp.Mods.ActiveModId == BuiltInMods.BambiSleepId && card.IsInstalled
+            && picker.FindControl<TextBlock>("TxtDownload")!.Text == close);
         Assert.Equal(attempts + 1, server.PackGets);
         Assert.True(card.IsInstalled);
         Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("modpicker_btn_close"),

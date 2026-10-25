@@ -21,12 +21,8 @@ public sealed class PanicSurfacesTests
     public void EachPanicRouteCallsStopAllExactlyOnce() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            // Shipped font setup: whichever class boots the process-wide app first decides fonts,
-            // and the subliminal card (closed by panic) fails to resolve its face on a bare bootstrap.
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .WithInterFont()
-                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
-                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+            // Shipped app builder (fonts included): the subliminal card (closed by panic) needs its face.
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
@@ -116,6 +112,7 @@ public sealed class PanicSurfacesTests
         "engine",
         "pink-rush",
         "corner-gif",
+        "emi-desk-feedback",
         "tube-speech",
         "lock-cards",
         "speak-cue",
