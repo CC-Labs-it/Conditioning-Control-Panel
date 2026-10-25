@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { perfumePhase, createBoudoirPerfume } from '../sim/boudoirPerfume.js';
 import { ribbonPhase, powderPressPhase, mascaraPhase } from '../track/boudoir-setpieces.js';
-import { setMachineryBeat, machineryBeatAt } from '../track/machineryBeat.js';
+import { setMachineryBeat, machineryBeatAt, MACHINERY_PACE } from '../track/machineryBeat.js';
 import { fakeTrack, place, recorder } from './sim-fake.mjs';
 import { S } from '../sim/state.js';
 import { loadTrack } from '../track/load.js';
@@ -56,7 +56,10 @@ hooks.deregister();
 test('perfume drawing and swept contact share heard time, pause and seek rearming', () => {
   const track = fakeTrack({ w: 36 }), events = recorder(), sim = createBoudoirPerfume(track, events, { zones: [zone] });
   const view = createBoudoirPerfumeView(new Group(), track, { zones: [zone] }); anchor(track);
-  const r = { i: 0, kind: 'local', st: place(track, { s: 120, lateral: -5, speed: 35 }), finished: false }, t = 10.5 * beatS;
+  const r = { i: 0, kind: 'local', st: place(track, { s: 120, lateral: -5, speed: 35 }), finished: false };
+  // At twice the pace the 600 ms spray rise still spans two subdivisions before contact.
+  const sprayT = 10.5 * beatS / MACHINERY_PACE, t = 11.5 * beatS / MACHINERY_PACE;
+  sim.update([r], sprayT); assert.equal(events.all('perfume-contact').length, 0); assert.equal(sim.inspect().zones[0].phase, 'spray');
   sim.update([r], t); assert.equal(events.all('perfume-contact').length, 1); assert.equal(sim.inspect().zones[0].phase, 'active');
   for (let n = 0; n < 30; n++) view.update(t, { gentle: true });
   assert.ok(view.inspect().cloudOpacity[0] > .1);
