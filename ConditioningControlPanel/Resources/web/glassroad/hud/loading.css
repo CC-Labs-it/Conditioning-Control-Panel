@@ -1,4 +1,5 @@
 /* Opaque from the first paint, including every forced GPU warm-up frame. */
+#race-loading[hidden]{display:none}
 body[data-boot=loading] #view,body[data-boot=loading] #hud,body[data-boot=loading] #card,body[data-boot=loading] #race-garage{visibility:hidden!important}
 #race-loading{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;background:#132f39;color:#fff4df;font-family:'Segoe UI',sans-serif;transition:opacity .45s ease;isolation:isolate;overflow:hidden}
 #race-loading::before{content:'';position:absolute;inset:20px;border:2px solid #080e19;border-radius:22px;box-shadow:inset 0 0 0 2px #2c6974;pointer-events:none}
