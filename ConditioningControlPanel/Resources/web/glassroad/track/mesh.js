@@ -451,11 +451,16 @@ function buildRouteMeshes(track, builder) {
         f.p[2] + f.b[2] * (cx + ca * rr) + f.t[2] * sa * rr + f.n[2] * DECAL_M * 2], f.n, k / RING_SEGS, 1)));
     }
     for (let k = 0; k < RING_SEGS; k++) land.quad(ring[k][0], ring[k][1], ring[k + 1][0], ring[k + 1][1]);
-    for (const [d0, u] of [[-1.6, 0.3], [0.6, 0.7]]) {
-      for (const s of [-1, 1]) {
-        const pts = [[cx, d0 + 1.4], [cx, d0 + 1.4 - CHEV_W * 1.5], [cx + s * 1.6, d0], [cx + s * 1.6, d0 - CHEV_W * 1.5]];
-        flat(land, f, pts, [u, u, u - 0.15, u - 0.15], 1, DECAL_M * 2);
+    // Large repeated forward chevrons extend out of the ring, so the exit reads from above and on landing.
+    for (let s = Math.max(r.land.fromS + 5, r.pad.s - 8); s <= Math.min(r.land.toS - 5, r.pad.s + 56); s += 12) {
+      track.frameAt(s, f);
+      const x = Math.max(-f.w / 2 + 2.8, Math.min(f.w / 2 - 2.8, cx));
+      const u = (s - r.land.fromS) / (r.land.toS - r.land.fromS);
+      for (const side of [-1, 1]) {
+        const pts = [[x, 3], [x, 2.2], [x + side * 2.5, 0], [x + side * 2.5, -0.8]];
+        flat(land, f, pts, [u, u, u - 0.05, u - 0.05], 1.3, DECAL_M * 2);
       }
+      flat(land, f, [[x - 0.45, -2.6], [x + 0.45, -2.6], [x - 0.45, 2.2], [x + 0.45, 2.2]], [u, u, u, u], 1.3, DECAL_M * 2);
     }
   }
   return { routeEdge: edge.done(), routeLand: land.done() };

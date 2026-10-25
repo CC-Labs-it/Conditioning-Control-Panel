@@ -1,7 +1,7 @@
 /* tests/sim-routes.test.mjs - the shortcut route (polish 6: "dare", a gap jump off the OUTSIDE of the coil's first turn
  * onto its last, which runs round outside it 2.5 m off and 4-5 m lower, the same way round): the open window, the
- * kicker lip and rails, a sharp cut that lands on the last turn and is credited, the exploit guard, a timid cut the
- * rail past the opening holds, the rescue on a wild miss and the bots. */
+ * kicker lip and rails, a sharp cut that lands on the last turn and is credited, the exploit guard, a forgiving
+ * shallow cut, the rescue on a wild miss and the bots. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -98,11 +98,11 @@ test('routes: a sharp cut across the opening lands on the outer turn, s jumps fo
   }
 });
 
-test('routes: the opening is a kicker lip, the rest of the open side a rail', () => {
+test('routes: the whole marked opening is a kicker lip with real rails either side', () => {
   const q = (s) => { const f = track.frameAt(s); return track.query(f.p[0] + f.b[0] * 6 * SIDE, f.p[1] + f.b[1] * 6 * SIDE, f.p[2] + f.b[2] * 6 * SIDE, f.seg); };
   assert.equal(edgeAt(track, q((R0.openS0 + R0.openS1) / 2), 6 * SIDE), 'kicker');
-  assert.equal(edgeAt(track, q(R0.openS0 - 3), 6 * SIDE), 'rail');
-  assert.equal(edgeAt(track, q(R0.openS1 + 1.5), 6 * SIDE), 'rail');
+  assert.ok(q(R0.openS0 - 3).railed);
+  assert.ok(q(R0.openS1 + 1.5).railed);
   assert.equal(edgeAt(track, q(R0.openS0 - 0.5), 6 * SIDE, 0.7), 'kicker', 'a body over the opening never scrapes the rail end');
   assert.equal(edgeAt(track, q((R0.openS0 + R0.openS1) / 2), -6 * SIDE), null, 'the far side is a plain rail');
 });
@@ -144,15 +144,12 @@ test('routes: a jump held in the air waits for touchdown; a rescue back never cr
   assert.equal(st[S.checkpoint], 2, 'no credit for a miss');
 });
 
-test('routes: a timid cut runs out of opening and the rail past it holds the kart on the first turn; a wild one overshoots to the rescue', () => {
-  // half way in, nose 10 deg out at 20 m/s: the kart reaches the edge past the opening, where the route rail stands
+test('routes: a shallow late cut now lands; a true overshoot still rescues without skip credit', () => {
   const timid = cut({ v: 20, yawDeg: 10, ds: 8, maxS: 3 });
   const why = timid.names.filter((n) => /route|drop|rescue|edge|fall|wall/.test(n)).join(',');
-  assert.ok(!timid.names.some((n) => /^(route-|fall|drop|edge-)/.test(n)), 'timid: ' + why);
-  assert.ok(timid.names.includes('wall'), 'timid: the rail past the opening holds it (' + why + ')');
-  assert.ok(timid.st[S.s] > R0.openS1 && timid.st[S.s] < R0.toS + 120, 'timid: on round the first turn, s ' + timid.st[S.s].toFixed(0));
-  // a full-speed cut at 55 deg with no hop clears the last turn: nothing beneath, the normal edge rescue
-  const wild = cut({ v: 30, yawDeg: 55, maxS: 6 });
+  assert.ok(timid.names.includes('route-land') && timid.names.includes('route-skip'), 'timid: ' + why);
+  assert.ok(!timid.names.includes('drop'), 'timid: ' + why);
+  const wild = cut({ v: 50, yawDeg: 80, hop: true, maxS: 6 });
   assert.ok(!wild.names.includes('route-land') && !wild.names.includes('route-skip'), 'wild: ' + wild.names.join(','));
   assert.ok(wild.names.includes('drop'), 'wild: ' + wild.names.filter((n) => /route|drop|rescue|edge|fall/.test(n)).join(','));
 });

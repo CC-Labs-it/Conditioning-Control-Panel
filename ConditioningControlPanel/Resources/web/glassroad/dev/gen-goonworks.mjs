@@ -71,7 +71,7 @@ export function buildGoonworks() {
     const from = descent.from + Math.round(turns * phase), to = from + 4, target = from + Math.round(turns * 2 / 3);
     for (let n = from; n < to; n++) nodes[n].flags = ['railR'];
     track.routes.push({ id: 'grand-fold-cut-' + (i+1), kind: 'drop', side: 'L', from, to,
-      open: { ds: 3, len: 25 }, land: { from: target-3, to: Math.min(descent.to-1,target+13) }, pad: { node: target+6, x: -4 } });
+      land: { from: target-3, to: Math.min(descent.to-1,target+13) }, pad: { node: target+6, x: -4 } });
   }
   const result = validate(track); if (!result.ok || result.warnings.length) throw Error(JSON.stringify(result));
   return track;
