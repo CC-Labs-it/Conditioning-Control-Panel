@@ -30,6 +30,20 @@ public sealed class AchievementEngineTests : IDisposable
         new AchievementStore(path).Load().IsUnlocked(id);
 
     [Fact]
+    public void RaceBubbleBatch_CreditsEveryMilestone_UnlocksAndPersists()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        engine.Progress.TotalBubblesPopped = 98;
+        Assert.Equal(3, engine.TrackBubblesPopped(250));
+        Assert.Equal(348, new AchievementStore(MainPath).Load().TotalBubblesPopped);
+        Assert.Equal(7, engine.TrackBubblesPopped(652));
+        Assert.True(OnDisk(MainPath, "pop_the_thought"));
+        Assert.Equal(0, engine.TrackBubblesPopped(-1));
+        Assert.Equal(0, engine.TrackBubblesPopped(0));
+        Assert.Equal(1000, engine.Progress.TotalBubblesPopped);
+    }
+
+    [Fact]
     public void AttentionTrackersCountAndUnlockAtWpfThresholds()
     {
         var engine = new AchievementEngine(new AchievementStore(MainPath));

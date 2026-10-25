@@ -3,12 +3,19 @@
 // manifest), run-started / run-ended with the one-payout latch (:336, :431), the ping-then-close heartbeat
 // watchdog (:595) and the teardown funnel (:686). Shell frames the race shares (boot-error, exit's 1200 ms
 // watchdog, exit-done) stay in GameWindow.HandleMessage, and panic closes it with every other game.
-// ponytail: still missing on this head, each its own unit (parity row game-race): BambiCloud levels
-// (cloud-open/cloud-start, settings.cloud stays false so the page hides the verb), the track player and
-// its decoder seed (own tracks + charting are GameWindow.RaceTracks.cs), sfx / fire-payload (no ChaosSfx bank or payload bridge here), favorites +
-// loom-list, report-bug, fullscreen-set, the mandatory-video pause, the grants watcher (PrizeOwnership has
-// no change event: nothing grants mid-run here), the meta frame, bubble credit and SeasonRecap TrackFeature.
+// ponytail: cloud levels, Back Room handoff, creator media and season hooks
+// remain tracked explicitly in docs/avalonia-parity.md; do not advertise unavailable cloud levels.
 using System;
+using System.Linq;
+using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.EmiDesk;
+using ConditioningControlPanel.Localization;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Friends;
@@ -48,6 +55,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_raceStarted) return;
             _raceStarted = true;
+            EmiState.NoteUsage("race");
+            try { _ = App.ReleaseContent?.RequestPackAsync(ReleaseContentService.PackAudioWeb); }
+            catch (Exception ex) { Log.Debug("RaceHost: audio-web request: {E}", ex.Message); }
+            _raceOwnedTracks = RacingAccess.OwnedTracks;
+            PrizeOwnership.Changed += OnRaceOwnershipChanged;
+            _raceVideo = CoreEngine.Video;
+            if (_raceVideo != null)
+            {
+                _raceVideo.VideoStarted += OnRaceVideoStarted;
+                _raceVideo.VideoEnded += OnRaceVideoEnded;
+            }
             _raceRun.Reset();
             _raceExiting = _racePinged = false;
             _raceLastHeartbeatUtc = RaceUtcNow();
@@ -75,6 +93,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     _raceLastHeartbeatUtc = RaceUtcNow();
                     _racePinged = false;
                     return true;
+                case "sfx":
+                    if ((string?)o["name"] is { Length: > 0 } name)
+                        ChaosOverlayWindow.ChaosSfx.Play(name, (float?)o["scale"] ?? 0.6f);
+                    return true;
+                case "fire-payload":
+                    FireRacePayload(o);
+                    return true;
+                case "fullscreen-set":
+                    WindowState = (bool?)o["on"] == true ? WindowState.FullScreen : WindowState.Normal;
+                    Post(new { type = "fullscreen", on = WindowState == WindowState.FullScreen });
+                    return true;
+                case "report-bug":
+                    var report = new BugReportWindow();
+                    _raceReport?.Close();
+                    _raceReport = report;
+                    _ = report.ShowDialog(this);
+                    return true;
                 case "run-started":
                     if (_raceRun.TryStart()) Log.Information("RaceHost: run started (seed={Seed})", (string?)o["seed"]);
                     return true;
@@ -82,6 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     OnRaceRunEnded(o);
                     return true;
                 case "exit":
+                    RaceStopTrack();
                     _raceExiting = true;   // the shell arms the 1200 ms close (WPF ArmExitWatchdog)
                     return false;
                 default:
@@ -94,6 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             _raceLastHeartbeatUtc = RaceUtcNow();
             _racePinged = false;
+            Web.Focus();
             Post(RaceInitMessage());
             try
             {
@@ -102,6 +139,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Post(GameMediaManifest.Frame(m));
             }
             catch (Exception ex) { Log.Warning("CaucusHostService.OnPageReady: {E}", ex.Message); }
+            var favorites = DtrhAssetStatsStore.TopAssets(12);
+            if (favorites.Count > 0) Post(new { type = "favorites", names = favorites });
+            PostRaceLoom();
+            DtrhLoomStore.Changed -= OnRaceLoomChanged;
+            DtrhLoomStore.Changed += OnRaceLoomChanged;
         }
 
         internal object RaceInitMessage() => new
@@ -141,6 +183,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private void OnRaceRunEnded(JObject o)
         {
             if (!_raceRun.TryEnd()) return;
+            RaceStopTrack();
             try
             {
                 double score = Math.Max(0, (double?)o["score"] ?? 0);
@@ -152,7 +195,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     RunDurationSec: durationSec, DifficultyMult: 1.0, SparkGainMult: 1.0, Score: score / 5.0,
                     TrickleDrops: 0, DripFeedMaxed: false, BestCombo: (int?)o["bestCombo"] ?? 0,
                     Defused: (int?)o["effects"] ?? 0, ElapsedSec: durationSec));
+                Post(new
+                {
+                    type = "meta", rev = ++_raceMetaRev, testMode = false,
+                    state = JObject.Parse(JsonConvert.SerializeObject(ChaosMeta.State,
+                        new JsonSerializerSettings { ContractResolver = new CamelCasePropertyNamesContractResolver() })),
+                });
                 CoreProgression.AddXP(pay.BaseXp, "Chaos");   // WPF :469 AddXP(baseXp, XPSource.Chaos)
+                CreditRaceBubbles((int?)o["popped"] ?? 0);
                 Post(new
                 {
                     type = "payout-result", baseXp = pay.BaseXp, skillMult, finalXp = pay.FinalXp,
@@ -182,11 +232,124 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             return "closed";
         }
 
+        private static void CreditRaceBubbles(int count)
+        {
+            if (count <= 0) return;
+            try
+            {
+                int milestones = App.Achievements?.TrackBubblesPopped(count) ?? 0;
+                if (milestones > 0)
+                {
+                    var settings = CoreSettings.Current;
+                    int before = settings.SkillPoints;
+                    settings.SkillPoints += milestones;
+                    CoreSettings.Save();
+                    SparklePointRewards.PublishCredit(before, settings.SkillPoints, SparklePointSource.BubbleMilestone);
+                    int total = App.Achievements!.Progress.TotalBubblesPopped;
+                    App.ShowAchievementPopup(new Achievement
+                    {
+                        Id = "bubble_milestone", Name = Loc.GetF("achievement_bubble_milestone_name", total - total % 100),
+                        FlavorText = Loc.Get("achievement_bubble_milestone_flavor"), ImageName = "bubble_pop.png",
+                        Category = AchievementCategory.Minigames,
+                    });
+                }
+                App.Quests?.TrackBubblesPopped(count);
+            }
+            catch (Exception ex) { Log.Debug("RaceHost bubble credit: {E}", ex.Message); }
+        }
+
+        private MandatoryVideoScheduler? _raceVideo;
+        private void OnRaceVideoStarted() => PostRacePause(true);
+        private void OnRaceVideoEnded() => PostRacePause(false);
+        private void PostRacePause(bool on) => Dispatcher.UIThread.Post(() =>
+        {
+            if (_closing || _raceDisposed) return;
+            Post(new { type = "pause", on });
+            if (!on) Web.Focus();
+        });
+
+        private int _raceMetaRev;
+        private int[] _raceOwnedTracks = Array.Empty<int>();
+        private BugReportWindow? _raceReport;
+        internal bool RaceReady => IsReady && !_raceExiting && !_closing;
+        internal static GameWindow? RaceInFront()
+        {
+            lock (Open) return Open.FirstOrDefault(w => w.IsRace && w.IsActive);
+        }
+
+        // WPF CaucusHostService.FirePayload: only native audio; all visual kinds stay in-world.
+        private static void FireRacePayload(JObject o)
+        {
+            if (!string.Equals((string?)o["kind"], "audio", StringComparison.OrdinalIgnoreCase)) return;
+            try
+            {
+                var payload = EffectPayloadFactory.Build(EffectBubblePayloadKind.Audio);
+                payload.Strength = Math.Clamp((int?)o["strength"] ?? 60, 0, 100);
+                payload.DurationMult = Math.Clamp((double?)o["durationMult"] ?? 1, 0.1, 10);
+                payload.Fire();
+            }
+            catch (Exception ex) { Log.Warning("RaceHost.FirePayload: {E}", ex.Message); }
+        }
+
+        // WPF OnRaceGrantsChanged: additions refresh the menu; loss closes gracefully.
+        private void OnRaceOwnershipChanged() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_closing || _raceDisposed) return;
+            var owned = RacingAccess.OwnedTracks;
+            if (!RacingAccess.CanLaunch || _raceOwnedTracks.Except(owned).Any())
+            {
+                if (!_raceExiting)
+                {
+                    _raceExiting = true;
+                    Post(new { type = "exit-request" });
+                    DispatcherTimer.RunOnce(() => { if (!_closing) Close(); }, TimeSpan.FromMilliseconds(1200));
+                }
+                return;
+            }
+            if (_raceOwnedTracks.SequenceEqual(owned)) return;
+            _raceOwnedTracks = owned;
+            Post(new { type = "race-ownership", tracks = owned });
+        });
+
+        private void OnRaceLoomChanged() => Dispatcher.UIThread.Post(() =>
+        {
+            if (RaceReady && !_raceDisposed) PostRaceLoom();
+        });
+
+        private void PostRaceLoom()
+        {
+            Post(new
+            {
+                type = "loom-list",
+                spirals = DtrhLoomStore.List().Select(s => new
+                {
+                    slug = s.Slug, url = "/__loom/loom_" + s.Slug + ".gif",
+                    @params = ParseRaceLoomParams(s.ParamsJson),
+                }),
+            });
+        }
+
+        private static JObject? ParseRaceLoomParams(string? json)
+        {
+            try { return string.IsNullOrWhiteSpace(json) ? null : JObject.Parse(json); }
+            catch { return null; }
+        }
+
         /// <summary>WPF DisposeAll (:686): the one funnel every exit reaches (Closed). Idempotent.</summary>
         private void DisposeRace()
         {
             if (!_raceStarted || _raceDisposed) return;
             _raceDisposed = true;
+            PrizeOwnership.Changed -= OnRaceOwnershipChanged;
+            if (_raceVideo != null)
+            {
+                _raceVideo.VideoStarted -= OnRaceVideoStarted;
+                _raceVideo.VideoEnded -= OnRaceVideoEnded;
+                _raceVideo = null;
+            }
+            DtrhLoomStore.Changed -= OnRaceLoomChanged;
+            _raceReport?.Close();
+            _raceReport = null;
             try { _raceHeartbeatWatch?.Stop(); } catch { }
             _raceHeartbeatWatch = null;
             try { DisposeRaceTracks(); }

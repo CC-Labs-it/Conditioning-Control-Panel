@@ -378,7 +378,7 @@ public sealed class GameWindowTests
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
         w.HandleMessage("{\"type\":\"ready\"}");
-        Assert.Equal(new[] { "init", "manifest" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal(new[] { "init", "manifest", "loom-list" }, sent.Where(o => (string?)o["type"] != "favorites").Select(o => (string?)o["type"]));
         Assert.Equal(new[] { 3 }, sent[0]["settings"]!["racingTracks"]!.Values<int>());
         Assert.False((bool)sent[0]["settings"]!["cloud"]!);
         sent.Clear();
@@ -388,7 +388,7 @@ public sealed class GameWindowTests
         Assert.True(w.RaceRunActive);
         w.HandleMessage("{\"type\":\"run-ended\",\"score\":5000,\"durationSec\":60}");
         w.HandleMessage("{\"type\":\"run-ended\",\"score\":5000,\"durationSec\":60}");   // a second end pays nothing
-        var pay = Assert.Single(sent);
+        var pay = Assert.Single(sent.Where(o => (string?)o["type"] == "payout-result"));
         Assert.Equal("payout-result", (string?)pay["type"]);
         Assert.Equal(250, (int)pay["baseXp"]!);                 // min(5000 / 5, 250 * 1 min)
         Assert.Equal(7, (int)pay["sparksEarned"]!);
@@ -420,6 +420,268 @@ public sealed class GameWindowTests
         Dispatcher.UIThread.RunJobs();
         Assert.False(GameWindow.IsAnyOpen());
         Assert.False(w.RaceWatchRunning);               // DisposeAll stops it (P65)
+    });
+
+    [Fact]
+    public void Race_NativeAudioOnly_ClampsPayload() => RunRace("rt.original.03", (_, _, _) =>
+    {
+        var old = EffectPayload.Firer;
+        var fired = new List<EffectPayload>();
+        try
+        {
+            EffectPayload.Firer = fired.Add;
+            var w = GameWindow.Launch("race")!;
+            foreach (var kind in new[] { "video", "flash", "", "overlay" })
+                w.HandleMessage(new JObject { ["type"] = "fire-payload", ["kind"] = kind }.ToString());
+            Assert.Empty(fired);
+            w.HandleMessage("{\"type\":\"fire-payload\",\"kind\":\"AUDIO\",\"strength\":200,\"durationMult\":0}");
+            var payload = Assert.IsType<AudioPayload>(Assert.Single(fired));
+            Assert.Equal(100, payload.Strength);
+            Assert.Equal(0.1, payload.DurationMult);
+            w.HandleMessage("{\"type\":\"fire-payload\",\"kind\":\"audio\"}");
+            Assert.Equal(60, fired[1].Strength);
+            Assert.Equal(1, fired[1].DurationMult);
+        }
+        finally { EffectPayload.Firer = old; }
+    });
+
+    [Fact]
+    public void Race_Fullscreen_EchoesResult_AndBootErrorCloses() => RunRace("rt.original.03", (_, _, _) =>
+    {
+        var w = GameWindow.Launch("race")!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(global::Avalonia.Controls.WindowState.FullScreen, w.WindowState);
+        Assert.True((bool)Assert.Single(sent)["on"]!);
+        sent.Clear();
+        w.HandleMessage("{\"type\":\"fullscreen-set\"}");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(global::Avalonia.Controls.WindowState.Normal, w.WindowState);
+        Assert.False((bool)Assert.Single(sent)["on"]!);
+        w.HandleMessage("{\"type\":\"boot-error\",\"message\":\"no WebGL\"}");
+        Assert.False(GameWindow.IsAnyOpen());
+    });
+
+    [Fact]
+    public void Race_FavoritesAndMeta_AreRealStoreFrames() => RunRace("rt.original.03", (_, _, _) =>
+    {
+        DtrhAssetStatsStore.Merge(JObject.Parse("{\"stats\":[{\"name\":\"race-favorite.png\",\"weighted\":100}]}"));
+        var w = GameWindow.Launch("race")!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Contains("race-favorite.png", sent.Single(x => (string?)x["type"] == "favorites")["names"]!.Values<string>());
+        sent.Clear();
+        w.HandleMessage("{\"type\":\"run-started\"}");
+        w.HandleMessage("{\"type\":\"run-ended\"}");
+        Assert.Equal(new[] { "meta", "payout-result" }, sent.Select(x => (string?)x["type"]));
+        Assert.Equal(1, (int)sent[0]["rev"]!);
+        Assert.NotNull(sent[0]["state"]!["runsCompleted"]);
+        Assert.False((bool)sent[0]["testMode"]!);
+    });
+
+    [Fact]
+    public void Race_RunEndAndExit_StopTheAudio() => RunRace("rt.original.03", (_, _, _) =>
+        WithTrackFiles((_, _) => Tone(1), paths =>
+    {
+        var player = new FakeTrackPlayer();
+        try
+        {
+            var w = GameWindow.Launch("race")!;
+            w.RacePickFile = () => Task.FromResult<string?>(paths[0]);
+            w.RaceNewPlayer = () => player;
+            w.HandleMessage("{\"type\":\"track-pick\"}");
+            Settle(w);
+            w.HandleMessage("{\"type\":\"track-play\"}");
+            w.HandleMessage("{\"type\":\"run-started\"}");
+            w.HandleMessage("{\"type\":\"run-ended\"}");
+            Assert.False(player.IsPlaying);
+            w.HandleMessage("{\"type\":\"track-play\"}");
+            w.HandleMessage("{\"type\":\"exit\"}");
+            Assert.False(player.IsPlaying);
+        }
+        finally { GameWindow.CloseAllForPanic(); }
+    }));
+
+    [Fact]
+    public void Race_OwnershipRefreshAndLoss_AndPanicCloseReport() => RunRace("rt.original.03", (_, _, _) =>
+    {
+        var settings = CoreSettings.Current;
+        var old = (settings.UnifiedId, settings.AuthToken, settings.OfflineMode, RacingAccess.IsGrantedProvider);
+        try
+        {
+            (settings.UnifiedId, settings.AuthToken, settings.OfflineMode) = ("race-test", "test-token", false);
+            RacingAccess.IsGrantedProvider = PrizeOwnership.Held;
+            PrizeOwnership.ApplySnapshot("race-test", 1, new[] { "rt.original.03" });
+            var w = GameWindow.Launch("race")!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            PrizeOwnership.ApplySnapshot("race-test", 2, new[] { "rt.original.03", "rt.original.04" });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { 3, 4 }, Assert.Single(sent)["tracks"]!.Values<int>());
+            sent.Clear();
+            PrizeOwnership.ApplySnapshot("race-test", 1, Array.Empty<string>()); // stale
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(sent);
+            w.HandleMessage("{\"type\":\"report-bug\"}");
+            var report = Assert.Single(w.OwnedWindows.OfType<BugReportWindow>());
+            Assert.True(report.IsVisible);
+            PrizeOwnership.ApplySnapshot("race-test", 3, new[] { "rt.original.04" });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("exit-request", (string?)Assert.Single(sent)["type"]);
+            GameWindow.CloseAllForPanic();
+            Assert.False(report.IsVisible); // report belongs to the registered games surface
+            sent.Clear();
+            PrizeOwnership.ApplySnapshot("race-test", 4, new[] { "rt.original.05" });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(sent);
+        }
+        finally
+        {
+            (settings.UnifiedId, settings.AuthToken, settings.OfflineMode, RacingAccess.IsGrantedProvider) = old;
+            PrizeOwnership.ResetHeld();
+        }
+    });
+
+    [Fact]
+    public void Race_LoomRefresh_UsesOnlyServedGifs_AndUnsubscribes() => RunRace("rt.original.03", (_, _, _) =>
+    {
+        var w = GameWindow.Launch("race")!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"ready\"}");
+        sent.Clear();
+        try
+        {
+            var gif = Convert.ToBase64String(new byte[] { 71, 73, 70, 56, 57, 97, 0, 0, 0, 0, 0, 0, 0, 0, 0, 59 });
+            Assert.True(DtrhLoomStore.Save("race-proof", gif, JObject.Parse("{\"speed\":2}"), true).Ok);
+            Dispatcher.UIThread.RunJobs();
+            var spiral = Assert.Single(sent)["spirals"]!.Single(x => (string?)x["slug"] == "race-proof");
+            Assert.Equal(2, (int)spiral["params"]!["speed"]!);
+            using var server = new WebAssetServer(Directory.CreateTempSubdirectory("race-web-").FullName);
+            Assert.NotNull(server.ResolveFile((string)spiral["url"]!));
+            Assert.Null(server.ResolveFile("/__loom/loom_race-proof.json"));
+            Assert.Null(server.ResolveFile("/__loom/../settings.json"));
+            GameWindow.CloseAllForPanic();
+            sent.Clear();
+            DtrhLoomStore.Delete("race-proof");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(sent);
+        }
+        finally { DtrhLoomStore.Delete("race-proof"); }
+    });
+
+    [Fact]
+    public void Race_EscapePauses_SecondPressPanics() => Run((shell, _) =>
+    {
+        var settings = CoreSettings.Current;
+        var old = (settings.PanicKey, settings.PanicKeyEnabled, RacingAccess.IsGrantedProvider);
+        try
+        {
+            settings.PanicKey = "Escape";
+            settings.PanicKeyEnabled = true;
+            RacingAccess.IsGrantedProvider = id => id == "rt.original.03";
+            var w = GameWindow.Launch("race")!;
+            w.Activate();
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Dispatcher.UIThread.RunJobs();
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            var now = new DateTime(2026, 1, 1);
+            shell.HandlePanicKeyPress(now);
+            Assert.Equal("kept-escape", (string?)Assert.Single(sent)["type"]);
+            Assert.True(GameWindow.IsAnyOpen());
+            shell.HandlePanicKeyPress(now.AddSeconds(1));
+            Assert.False(GameWindow.IsAnyOpen());
+        }
+        finally { (settings.PanicKey, settings.PanicKeyEnabled, RacingAccess.IsGrantedProvider) = old; }
+    });
+
+    private sealed class RaceVideoHost : IMandatoryVideoHost
+    {
+        public void Show(string path, bool strict) { }
+        public double CloseAll() => 0;
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) => then();
+    }
+
+    private sealed class RaceVideoClock : TimeProvider
+    {
+        public Action? Due;
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan due, TimeSpan period)
+            => new Timer(this, () => callback(state));
+        private sealed class Timer(RaceVideoClock clock, Action tick) : ITimer
+        {
+            public bool Change(TimeSpan due, TimeSpan period)
+            {
+                clock.Due = due == Timeout.InfiniteTimeSpan ? null : tick;
+                return true;
+            }
+            public void Dispose() => clock.Due = null;
+            public ValueTask DisposeAsync() { Dispose(); return default; }
+        }
+    }
+
+    [Fact]
+    public void Race_VideoPausesResumes_AndStopsPostingAfterPanic() => RunRace("rt.original.03", (_, _, _) =>
+    {
+        var old = CoreEngine.Video;
+        var clock = new RaceVideoClock();
+        var video = new MandatoryVideoScheduler(new RaceVideoHost(), clock, () => new[] { "test.mp4" });
+        try
+        {
+            CoreEngine.Video = video;
+            var w = GameWindow.Launch("race")!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            video.Trigger();
+            clock.Due!();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True((bool)Assert.Single(sent)["on"]!);
+            video.End();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False((bool)sent[1]["on"]!);
+            GameWindow.CloseAllForPanic();
+            sent.Clear();
+            video.Trigger();
+            clock.Due!();
+            video.End();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(sent);
+        }
+        finally { video.Stop(); CoreEngine.Video = old; }
+    });
+
+    [Fact]
+    public void Race_SfxUsesTheAudioService_AndOpenCountsOnce() => RunRace("rt.original.03", (_, _, _) =>
+    {
+        var state = ConditioningControlPanel.Services.EmiDesk.EmiState.Current;
+        state.Usage.TryGetValue("race", out var before);
+        var w = GameWindow.Launch("race")!;
+        Assert.Same(w, GameWindow.Launch("race"));
+        Assert.Equal(before + 1, state.Usage["race"]);
+        var file = Path.Combine(ContentLocator.InstallRoot, "Resources", "sounds", "chaos", "race-test.mp3");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        var oldAudio = CoreAudio.PlayOneShotProvider;
+        var oldVolume = CoreSettings.Current.MasterVolume;
+        try
+        {
+            File.WriteAllBytes(file, new byte[] { 0 }); // backend is captured, no decoder or real speakers
+            var played = new List<string>();
+            CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => played.Add(path);
+            CoreSettings.Current.MasterVolume = 50;
+            w.HandleMessage("{\"type\":\"sfx\",\"name\":\"race-test\"}");
+            Assert.Equal(file, Assert.Single(played));
+            w.HandleMessage("{\"type\":\"sfx\",\"name\":\"../race-test\"}");
+            Assert.Single(played);
+        }
+        finally
+        {
+            File.Delete(file);
+            CoreAudio.PlayOneShotProvider = oldAudio;
+            CoreSettings.Current.MasterVolume = oldVolume;
+        }
     });
 
     // ---- Racing Thoughts own tracks (WPF CaucusHostService.cs :353-368, :736-1035) ----

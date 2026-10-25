@@ -131,6 +131,21 @@ internal sealed class AchievementEngine
     }
 
     /// <summary>A bubble-count answer: the correct-answer streak (mathematicians_nightmare) and the totals.</summary>
+    /// <summary>WPF AchievementService.TrackBubblesPopped: one save and all crossed 100-pop
+    /// milestones. The head owns points, quests and the single milestone notification.</summary>
+    public int TrackBubblesPopped(int count)
+    {
+        if (count <= 0) return 0;
+        int before = Progress.TotalBubblesPopped;
+        Progress.TotalBubblesPopped += count;
+        int after = Progress.TotalBubblesPopped;
+        _isDirty = true;
+        if (before < AchievementRules.PopTheThoughtBubbles && after >= AchievementRules.PopTheThoughtBubbles)
+            TryUnlock("pop_the_thought");
+        Save();
+        return after / 100 - before / 100;
+    }
+
     public void TrackBubbleCountResult(bool correct)
     {
         if (correct)

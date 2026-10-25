@@ -205,6 +205,15 @@ public sealed class WebAssetServer : IDisposable
     {
         var rel = Uri.UnescapeDataString(urlPath).TrimStart('/');
         var root = _root;
+        // Only Loom GIFs are exposed from the profile; never its JSON or unrelated files.
+        if (rel.StartsWith("__loom/", StringComparison.Ordinal))
+        {
+            var file = rel[7..];
+            if (!System.Text.RegularExpressions.Regex.IsMatch(file, "^loom_[a-z0-9_-]{1,24}\\.gif$")) return null;
+            var folder = ConditioningControlPanel.Services.Chaos.DtrhLoomStore.SpiralsFolder;
+            var gif = Path.Combine(folder, file);
+            return File.Exists(gif) && LinksStayInside(gif, folder + Path.DirectorySeparatorChar) ? gif : null;
+        }
         bool asset = rel.StartsWith(AssetsPrefix, StringComparison.Ordinal);
         if (asset)
         {

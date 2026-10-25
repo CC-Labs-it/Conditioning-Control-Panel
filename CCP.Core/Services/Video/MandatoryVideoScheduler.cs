@@ -74,6 +74,9 @@ namespace ConditioningControlPanel.Services
         /// <summary>A clip is on screen (WPF VideoService.VideoStarted, VideoService.cs:3370).</summary>
         public event Action? VideoStarted;
 
+        /// <summary>The displayed clip closed, including force cleanup and verdict replay.</summary>
+        public event Action? VideoEnded;
+
         /// <summary>The clip <see cref="VideoStarted"/> announced (WPF VideoService.LastVideoPath).</summary>
         public string? LastVideoPath { get; private set; }
 
@@ -425,6 +428,8 @@ namespace ConditioningControlPanel.Services
             double watched = 0;
             try { watched = _host.CloseAll(); }
             catch (Exception ex) { Log.Warning(ex, "VideoService: close failed"); }
+            try { VideoEnded?.Invoke(); }
+            catch (Exception ex) { Log.Debug("VideoEnded handler failed: {Error}", ex.Message); }
             if (watched >= 1.0) CoreProgression.TrackVideoWatched(watched);
             // WPF CloseAll (VideoService.cs:7916): every teardown path stops the vibe and the funscript.
             _ = CoreHaptics.Service?.StopVideoBackgroundVibeAsync();

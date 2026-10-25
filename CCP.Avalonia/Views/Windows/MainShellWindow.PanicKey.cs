@@ -117,25 +117,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private DateTime? _lastGameEscapeClaim;
 
-        /// <summary>WPF TryRacePauseOnEscape (MainWindow.xaml.cs:1505): Escape in front of Down the Rabbit Hole
+        /// <summary>WPF TryRacePauseOnEscape (MainWindow.xaml.cs:1505): Escape in front of Racing Thoughts or Down the Rabbit Hole
         /// is its pause, not a panic (owner, 2026-10-12: Escape only pauses the game). Every condition is Core
         /// PanicPolicy.GameClaimsEscapeAsPause, including a second Escape within 2 s being a full panic (which
         /// closes the game through PanicSurfaces "games"). The kept press is handed to the page as well
         /// (KeptEscapePage.Dtrh), since its own keydown never comes while the web view is out of focus.
-        /// ponytail: race, board and Breakout keep closing on Escape here until their hosts post kept-escape.</summary>
+        /// ponytail: board and Breakout keep closing on Escape here until their hosts post kept-escape.</summary>
         internal bool TryGamePauseOnEscape(DateTime now)
         {
             try
             {
+                var race = Games.GameWindow.RaceInFront();
                 var dtrh = Games.GameWindow.DtrhInFront();
                 bool claim = PanicPolicy.GameClaimsEscapeAsPause(CoreSettings.Current.PanicKey,
-                    gameInFront: dtrh != null, engineRunning: CoreEngine.IsRunning,
+                    gameInFront: race != null || dtrh != null, engineRunning: CoreEngine.IsRunning,
                     lockCardOpen: LockCardWindow.IsAnyOpen(), lastClaimUtc: _lastGameEscapeClaim, nowUtc: now);
                 if (!claim) { _lastGameEscapeClaim = null; return false; }
                 _lastGameEscapeClaim = now;
-                Serilog.Log.Information("Panic: Escape kept by Down the Rabbit Hole as its pause (again within 2 s = full panic)");
-                if (PanicPolicy.KeptEscapeGoesTo(claim, false, false, false, false, false, false,
-                        dtrhInFront: dtrh != null, dtrhReady: dtrh?.DtrhReady == true) == PanicPolicy.KeptEscapePage.Dtrh)
+                Serilog.Log.Information("Panic: Escape kept by a game as its pause (again within 2 s = full panic)");
+                var page = PanicPolicy.KeptEscapeGoesTo(claim, race != null, race?.RaceReady == true, false, false, false, false,
+                        dtrhInFront: dtrh != null, dtrhReady: dtrh?.DtrhReady == true);
+                if (page == PanicPolicy.KeptEscapePage.Race) race!.PostKeptEscape();
+                if (page == PanicPolicy.KeptEscapePage.Dtrh)
                     dtrh!.PostKeptEscape();
                 return true;
             }

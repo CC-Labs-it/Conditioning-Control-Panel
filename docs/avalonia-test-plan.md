@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Racing Thoughts host completion (fin4)
+
+1. Own a racing track and launch Racing Thoughts. Hear shipped pop audio after the audio-web pack is installed; fullscreen toggles on/off and the dock reflects the result. The bug button opens an owned report; panic closes both windows. WPF `Services/Chaos/CaucusHostService.cs:132-310`, `:323-334`, `:502-538`. Rows: `game-race`.
+2. Start a local track, finish its run, then start another and exit: audio stops each time. Only one payout and one bubble batch are credited per run; crossing multiple 100-pop boundaries grants every sparkle point and one highest-boundary popup. WPF `Services/Chaos/CaucusHostService.cs:431-487`, `:381-386`. Rows: `game-race`.
+3. With the race in front, press Escape once: Brake/pause, including when the web view lacks keyboard focus. Press again within two seconds: panic closes it. Open/end a mandatory video: the page receives pause/resume and regains keyboard focus. WPF `Services/Chaos/CaucusHostService.cs:95-119`, `:554-587`. Rows: `game-race`.
+4. Open with favorite media and a saved Loom spiral; both feeds reach the page. Save/delete a spiral during a session: the list refreshes. Add ownership: the track menu refreshes; revoke an owned track: exit is requested, with a 1200 ms forced close. After closing, changes must not post frames. WPF `Services/Chaos/CaucusHostService.cs:298-310`, `:648-683`, `:1102-1110`. Rows: `game-race`.
