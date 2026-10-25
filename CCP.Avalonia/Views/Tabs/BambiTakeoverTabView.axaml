@@ -434,6 +434,13 @@
                                         </Grid>
                                     </Border>
 
+                                    <!-- One home for what the companion may do: Companion > Permissions (WPF 5681c132a; the
+                                         Hyperlink is a Button, Avalonia has no inline Hyperlink) -->
+                                    <Button x:Name="TxtPermissionsLiveInCompanion" Margin="2,0,0,8" Cursor="Hand" Click="OpenCompanionPermissions_Click">
+                                        <Button.Template><ControlTemplate><ContentPresenter Content="{TemplateBinding Content}" Background="Transparent"/></ControlTemplate></Button.Template>
+                                        <TextBlock Text="{loc:Str companion_page_permissions_live_here}" FontSize="12" FontWeight="Normal" TextWrapping="Wrap" Foreground="{DynamicResource PinkBrush}"/>
+                                    </Button>
+
                                     <!-- ============ SUBSECTION 3: BEHAVIORS (folded into an expander) ============ -->
                                     <Expander IsExpanded="False" Margin="0,0,0,10" HorizontalAlignment="Stretch"
                                               Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="Bold">
