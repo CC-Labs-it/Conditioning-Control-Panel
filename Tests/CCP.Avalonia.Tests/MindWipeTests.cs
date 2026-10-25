@@ -90,7 +90,6 @@ public sealed class MindWipeTests
             {
                 CoreMindWipe.Stop();
                 CoreMindWipe.StartProvider = null; CoreMindWipe.StopProvider = null; CoreMindWipe.IsRunningProvider = null;
-                CoreMindWipe.StartSessionProvider = null;
                 CoreMindWipe.TriggerOnceProvider = null; CoreMindWipe.StartLoopProvider = null; CoreMindWipe.StopLoopProvider = null;
                 CoreMindWipe.IsLoopingProvider = null; CoreMindWipe.UpdateSettingsProvider = null;
                 CoreMindWipe.ReloadClipsProvider = null; CoreMindWipe.ClipCountProvider = null;
@@ -140,24 +139,6 @@ public sealed class MindWipeTests
             Assert.Equal(3, voices.Count);
         }
         finally { host.Close(); }
-    });
-
-    /// <summary>WPF MindWipeService.StartSession + Timer_Tick (:232, :715): the session's Mind Wipe
-    /// escalates one play per five-minute block (MindWipeSchedule.SessionProbability).</summary>
-    [Fact]
-    public void Session_mode_escalates_one_play_per_five_minute_block() => Run((player, voices, clock) =>
-    {
-        CoreMindWipe.StartSession(10, 0.3);                           // what SessionRunner calls
-        Assert.True(player.IsRunning);
-        clock.Advance(TimeSpan.FromSeconds(890));
-        Assert.Empty(voices);                                         // blocks 0-2: 10-12 of 30 ticks, under the 0.4 roll
-        clock.Advance(TimeSpan.FromSeconds(10));
-        Assert.Equal(0.3, Assert.Single(voices).Vol, 3);              // block 3: 13 of 30 beats it
-
-        player.Stop();
-        player.Start(6, 0.3);                                         // normal mode again: 6/h never beats 0.4
-        clock.Advance(TimeSpan.FromMinutes(20));
-        Assert.Single(voices);
     });
 
     [Fact]

@@ -29,10 +29,6 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private IVoice? _oneShot, _loop;
         private bool _running;
         private double _frequency = 6, _volume = 0.5;
-        // WPF _sessionMode / _sessionBaseFrequency / _sessionStartTime (MindWipeService.cs:44-46).
-        private bool _sessionMode;
-        private int _sessionBase;
-        private long _sessionStart;
 
         /// <summary>Raised with the loop's length in seconds once it has played 60 s (WPF Clean Slate).</summary>
         internal Action<double>? CleanSlate;
@@ -55,7 +51,6 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal void Seed()
         {
             CoreMindWipe.StartProvider = Start;
-            CoreMindWipe.StartSessionProvider = StartSession;
             CoreMindWipe.StopProvider = Stop;
             CoreMindWipe.IsRunningProvider = () => IsRunning;
             CoreMindWipe.TriggerOnceProvider = TriggerOnce;
@@ -81,7 +76,6 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 if (!_running)
                 {
                     _running = started = true;
-                    _sessionMode = false;   // WPF Start: normal mode (MindWipeService.cs:216)
                     var every = MindWipeSchedule.TickInterval;
                     _tick = _time.CreateTimer(_ => Tick(), null, every, every);
                 }
@@ -90,26 +84,6 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (started) App.DiscordRpc?.SetMindWipeActivity();   // WPF MindWipeService.cs:179
             Log.Information("MindWipe: Started (frequency: {Freq}/hour, volume: {Vol}%, files: {Count})",
                 frequencyPerHour, volume * 100, ClipCount);
-        }
-
-        /// <summary>WPF Volume setter + StartSession (MindWipeService.cs:107, :232): escalating session
-        /// mode, one extra play per five-minute block; a no-op on a running service, as WPF.</summary>
-        internal void StartSession(int baseFrequency, double volume)
-        {
-            lock (_lock)
-            {
-                _volume = MindWipeSchedule.ClampVolume(volume);
-                if (_oneShot != null) _oneShot.Volume = _volume;
-                if (_loop != null) _loop.Volume = _volume;
-                if (_running) return;
-                _running = _sessionMode = true;
-                _sessionBase = baseFrequency;
-                _sessionStart = _time.GetTimestamp();
-                var every = MindWipeSchedule.TickInterval;
-                _tick = _time.CreateTimer(_ => Tick(), null, every, every);
-            }
-            App.DiscordRpc?.SetMindWipeActivity();   // WPF MindWipeService.cs:245
-            Log.Information("MindWipe: Started in session mode (base multiplier: {Base})", baseFrequency);
         }
 
         /// <summary>Everything off, running or not: panic reaches a test clip played with the service stopped.</summary>
@@ -148,10 +122,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             lock (_lock)
             {
                 if (!_running || _loop != null || _clips.Length == 0) return;
-                var p = _sessionMode   // WPF Timer_Tick (MindWipeService.cs:715)
-                    ? MindWipeSchedule.SessionProbability(_sessionBase, _time.GetElapsedTime(_sessionStart))
-                    : MindWipeSchedule.Probability(_frequency);
-                if (_roll() >= p) return;
+                if (_roll() >= MindWipeSchedule.Probability(_frequency)) return;
             }
             PlayOnce();
         }
