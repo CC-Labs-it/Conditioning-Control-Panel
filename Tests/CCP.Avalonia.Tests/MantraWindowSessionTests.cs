@@ -9,6 +9,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -222,6 +223,113 @@ public sealed class MantraWindowSessionTests
             foreach (var w in shell?.OwnedWindows.ToArray() ?? Array.Empty<Window>()) w.Close();
             shell?.Close();
             MantraWindow.DroneOpener = opener;
+        }
+        return Task.CompletedTask;
+    });
+
+    /// <summary>WPF StartMantraSession's catch: a failed open is not silent, it shows WPF's "Mantras" warning
+    /// with the exception message.</summary>
+    [Fact]
+    public Task FailedOpenShowsWpfsWarning() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+
+        var factory = MainShellWindow.NewMantraWindow;
+        MainShellWindow.NewMantraWindow = () => throw new InvalidOperationException("no window");
+        MainShellWindow? shell = null;
+        try
+        {
+            shell = new MainShellWindow();
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            shell.StartMantraSession(3);
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (DateTime.UtcNow < deadline && !shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>().Any())
+            {
+                Dispatcher.UIThread.RunJobs();
+                await Task.Yield();
+            }
+
+            var dialog = Assert.Single(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>());
+            var texts = dialog.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+            Assert.Contains("Mantras", texts);
+            Assert.Contains("Couldn't start the mantra session:\n\nno window", texts);
+            Assert.Empty(shell.OwnedWindows.OfType<MantraWindow>());
+        }
+        finally
+        {
+            MainShellWindow.NewMantraWindow = factory;
+            foreach (var w in shell?.OwnedWindows.ToArray() ?? Array.Empty<Window>()) w.Close();
+            shell?.Close();
+            AvApp.Mantra.EndSession();
+        }
+    });
+
+    /// <summary>A completed lab closed early must cancel its delayed close. Otherwise its stale
+    /// callback ends App.Mantra's NEW session when the next Programs task door opens (shard 2).</summary>
+    [Fact]
+    public Task ClosingCompletedLabDoesNotEndTheNextProgramTaskSession() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+
+        var (opener, play) = (MantraWindow.DroneOpener, CoreAudio.PlayOneShotProvider);
+        MantraWindow.DroneOpener = _ => new FakeDrone();
+        CoreAudio.PlayOneShotProvider = (_, _, _, _, done) => done?.Invoke();
+        MainShellWindow? shell = null;
+        MantraWindow? completed = null;
+        DispatcherTimer? closeTimer = null;
+        try
+        {
+            AvApp.Mantra.StartSession(1);
+            completed = new MantraWindow();
+            completed.Show();
+            Dispatcher.UIThread.RunJobs();
+            var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+            // Drive completion presentation directly: this test covers window lifetime,
+            // not MantraService's anti-cheat floor (covered by TypedMantraCompletesTheSession).
+            AvApp.Mantra.EndSession();
+            typeof(MantraWindow).GetMethod("OnSessionComplete", flags)!
+                .Invoke(completed, new object[] { 1, 1 });
+            Assert.True(completed.FindControl<Border>("CompletionOverlay")!.IsVisible);
+            closeTimer = (DispatcherTimer)typeof(MantraWindow).GetField("_closeTimer", flags)!.GetValue(completed)!;
+            Assert.Equal(TimeSpan.FromSeconds(5), closeTimer.Interval);
+            Assert.True(closeTimer.IsEnabled);
+            // Make the REAL timer due without sleeping. Do not pump until the old window is
+            // closed and the new session is running: this is the failing shard's ordering.
+            closeTimer.Interval = TimeSpan.Zero;
+            completed.Close();
+
+            shell = new MainShellWindow();
+            shell.Show();
+            var tab = shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.ProgramsTabView>("ProgramsTab")!;
+            tab.BtnProgramOpenMantras_Click(new Button { Tag = 4 }, new global::Avalonia.Interactivity.RoutedEventArgs());
+            // Executing a job promotes due DispatcherTimers; RunJobs then drains their callbacks.
+            Dispatcher.UIThread.Post(() => { });
+            Dispatcher.UIThread.RunJobs();
+
+            var lab = Assert.Single(shell.OwnedWindows.OfType<MantraWindow>());
+            Assert.True(lab.IsVisible);
+            Assert.True(AvApp.Mantra.IsActive);
+            Assert.Equal(4, AvApp.Mantra.TargetCount);
+            Assert.Equal("/4", lab.FindControl<TextBlock>("TxtTarget")!.Text);
+            Assert.False(closeTimer.IsEnabled);
+            lab.Close();
+            Assert.False(AvApp.Mantra.IsActive);
+        }
+        finally
+        {
+            closeTimer?.Stop();
+            completed?.Close();
+            foreach (var w in shell?.OwnedWindows.ToArray() ?? Array.Empty<Window>()) w.Close();
+            shell?.Close();
+            (MantraWindow.DroneOpener, CoreAudio.PlayOneShotProvider) = (opener, play);
         }
         return Task.CompletedTask;
     });

@@ -128,6 +128,21 @@ public sealed class ProgramsRunControlsTests
             .Single(b => b.IsEffectivelyVisible && b.Tag is int && b.GetVisualDescendants().OfType<TextBlock>()
                 .Any(t => t.Text == Loc.Get("btn_program_open_mantras")));
         Assert.Equal(Math.Max(1, target), door.Tag);
+        // ...and the click opens the Mantra Lab at those reps (win-mantra's user path).
+        var opener = MantraWindow.DroneOpener;
+        MantraWindow.DroneOpener = _ => null;
+        try
+        {
+            Click(door);
+            var lab = await Owned<MantraWindow>(shell);
+            Dispatcher.UIThread.RunJobs();   // Loaded paints the target
+            Assert.True(AvApp.Mantra.IsActive);
+            Assert.Equal(Math.Max(1, target), AvApp.Mantra.TargetCount);
+            Assert.Equal($"/{Math.Max(1, target)}", lab.FindControl<TextBlock>("TxtTarget")!.Text);
+            lab.Close();
+            Assert.False(AvApp.Mantra.IsActive);
+        }
+        finally { MantraWindow.DroneOpener = opener; }
 
         // Restart is a new attempt: refused like CanEnroll for a program this head cannot finish.
         enrollment.State = ProgramEnrollmentState.Lapsed;
@@ -146,7 +161,9 @@ public sealed class ProgramsRunControlsTests
 
     private static async Task<T> Owned<T>(Window owner) where T : Window
     {
-        for (var i = 0; i < 250 && !owner.OwnedWindows.OfType<T>().Any(); i++)
+        // P73: bounded by wall time, not by a count of dispatcher turns.
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (DateTime.UtcNow < deadline && !owner.OwnedWindows.OfType<T>().Any())
         {
             Dispatcher.UIThread.RunJobs();
             await Task.Yield();
@@ -161,7 +178,7 @@ public sealed class ProgramsRunControlsTests
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 

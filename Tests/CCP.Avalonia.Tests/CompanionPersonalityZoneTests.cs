@@ -59,7 +59,7 @@ public sealed class CompanionPersonalityZoneTests
         try
         {
             shell.Show();
-            shell.ShowTab("companion");
+            shell.ShowTab("personality");   // Companion > Personality hosts the zone (v2)
             shell.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
             var view = shell.GetLogicalDescendants().OfType<MakeHerYoursView>().Single();
@@ -119,7 +119,7 @@ public sealed class CompanionPersonalityZoneTests
             s.ActiveCommunityPromptId = "community-x";
             shell.ShowTab("achievements");
             Dispatcher.UIThread.RunJobs();
-            shell.ShowTab("companion");   // re-read on return (CompanionRoomView.ResumeClocks)
+            shell.ShowTab("personality");   // re-read on return (PersonalityPage.OnShown -> Sync)
             shell.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
             Assert.True(vm.CanResetPersonality);

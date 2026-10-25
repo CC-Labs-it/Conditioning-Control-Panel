@@ -89,6 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _washSection = section;
                 var hue = NavStripRules.Accent(section);
                 PaintSectionInk(section);
+                Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.QuestsTabView>("QuestsTab")?.PaintDepthQuests(hue);
                 var level = CoreSettings.Current.MotionLevel;
                 int ms = level switch { Models.MotionLevel.Off => 0, Models.MotionLevel.Reduced => SectionWashMs / 2, _ => SectionWashMs };
                 PaintFill(Named<Border>("SectionWashFill"), NavStripRules.WithAlpha(hue, SectionWashAlpha / 255.0), ms);
@@ -96,6 +97,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PaintSectionEdge(hue, level, ms);
             }
             catch (Exception ex) { Serilog.Log.Debug("PaintSectionWash failed: {E}", ex.Message); }
+        }
+
+        /// <summary>
+        /// The chrome half of WPF CmbMotionLevel_SelectionChanged (MainWindow.UiUpdates.cs:2529): the
+        /// window edge, the strip's sheen clock, the favourites handle glow and the fold arrow's breath
+        /// re-read the level now, not at the next section change or tab visit. The other loops it
+        /// names listen to the gate themselves.
+        /// A static event: subscribed while open, never rooting a closed shell (P41).
+        /// </summary>
+        private void InitializeMotionChrome()
+        {
+            Opened += (_, _) => { AmbientFxCanvas.Env.MotionGateChanged -= OnMotionChrome; AmbientFxCanvas.Env.MotionGateChanged += OnMotionChrome; };
+            Closed += (_, _) =>
+            {
+                AmbientFxCanvas.Env.MotionGateChanged -= OnMotionChrome;
+                StopLockdownPulse();
+            };
+        }
+
+        internal void OnMotionChrome()
+        {
+            try
+            {
+                // Before the first navigation the frame wears Home's hue (the XAML default; WPF _edgeHue).
+                PaintSectionEdge(NavStripRules.Accent(_washSection ?? NavSections.Home), CoreSettings.Current.MotionLevel, 0);
+                PageStrip?.UpdateSheenClock();
+                if (!AmbientFxCanvas.Env.AllowAmbientLoops) StopLockdownPulse();
+                if (Named<Tabs.SettingsTabView>("SettingsTab") is { } dash)
+                {
+                    dash.SyncFavoritesDrawerFx();   // WPF PaintFavoritesDrawer: the handle glow's breath
+                    dash.PaintFoldArrow(BrowserFolded);
+                }
+            }
+            catch (Exception ex) { Serilog.Log.Debug("Motion chrome refresh failed: {E}", ex.Message); }
         }
 
         /// <summary>WPF PaintSectionEdge (SectionEdge.cs :105) with no fog running (the full band):

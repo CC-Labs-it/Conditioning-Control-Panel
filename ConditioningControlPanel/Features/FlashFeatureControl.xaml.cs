@@ -185,7 +185,7 @@ namespace ConditioningControlPanel.Features
         /// tries the break first and only falls back to the leave animation without it), so the
         /// "when clicked" picker would do nothing. PURE.
         /// </summary>
-        internal static bool ShatterDecidesClick(bool shatterOn, bool ownsMotion) => shatterOn && ownsMotion;
+        internal static bool ShatterDecidesClick(bool shatterOn, bool ownsMotion) => Services.Flash.FlashShatter.DecidesClick(shatterOn, ownsMotion);
 
         // Greys the "when clicked" picker and shows the one-line reason while Shatter owns the click.
         private void RefreshExitRow()

@@ -32,9 +32,10 @@
 //
 // STILL OUT, by blocker:
 //   (UpdateLevelDisplay's header half is live in MainShellWindow.HeroFx.cs.)
-//   (UpdateStatPills + StartStatPillUpdateTimer are live below, reading the leaderboard tab's last page.)
+//   (UpdateStatPills + StartStatPillUpdateTimer, startup leaderboard read, mic backstop and XP bonus chips
+//    are live below; the Quests view applies the shared journal mod policy on attach and mod change.)
 //   App.Progression / the XP bar - UpdateXPBarLoginState,
-//     RefreshXPBarBonuses, GetBonusChipTooltip, XPBarTrack_ToolTipOpening,
+//     XPBarTrack_ToolTipOpening,
 //     RefreshAccountChip and the three AccountChip* brushes. CoreProgression is a seam, but the
 //     chip and the pills read App.Account / App.Patreon tier state on top of it, and a chip that
 //     paints the logged-out tier unconditionally is the same failure recorded for
@@ -43,7 +44,7 @@
 //   SyncConditioningTimeToServerAsync - the 15-minute and on-stop ProfileSync push. Core's SyncPush does not
 //     send total_conditioning_minutes yet, so there is nothing for the timer to call.
 //   UpdateUI / QueueModAwareSurfaceSweep / RefreshModAwareSurfaces / SweepStep /
-//     EnsureModSweepWatchers / ApplyModFeatureNames / ApplyBimboJournalModVisibility - the sweep
+//     EnsureModSweepWatchers / ApplyModFeatureNames - the sweep
 //     walks named controls across every tab, most of which are unported; it is a pass over the
 //     finished UI, so it lands last, not first.
 //   UpdateUnlockablesVisibility / SetFeatureImageBlur - App.Unlockables plus a WPF BlurEffect.
@@ -62,7 +63,13 @@
 //     is missing here is only the WPF handler shell around it and the copy-the-old-library
 //     migration, which needs the assets tree to say what it copied.
 
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Media;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -80,23 +87,56 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         // ---- header stat pills (WPF MainWindow.UiUpdates.cs:530-641 UpdateStatPills, :717 timer) ----
         private global::Avalonia.Threading.DispatcherTimer? _statPillTimer;
-        private static int _lbOnline, _lbRank, _lbTotal, _lbEntries;
+        private static int _lbOnline, _lbPercentile, _lbEntries;
 
         /// <summary>The last leaderboard page the pills read (WPF App.Leaderboard OnlineUsers/YourRank/
         /// YourTotal/Entries, LeaderboardService.cs:106-108). LeaderboardTabView calls it when a page lands
         /// and repaints its host, as WPF's post-refresh UpdateStatPills does (MainWindow.xaml.cs:3721).</summary>
-        internal static void NoteLeaderboardPage(int onlineUsers, int? yourRank, int? yourTotal, int entries)
-            => (_lbOnline, _lbRank, _lbTotal, _lbEntries) = (onlineUsers, yourRank ?? 0, yourTotal ?? 0, entries);
+        internal static void NoteLeaderboardPage<T>(LeaderboardPage<T> page) where T : LeaderboardEntryData
+        {
+            _lbOnline = page.OnlineUsers;
+            _lbEntries = page.Entries?.Count ?? 0;
+            _lbPercentile = LeaderboardClient.PlayerPercentile(page.YourRank, page.YourTotal,
+                (System.Collections.Generic.IReadOnlyList<T>?)page.Entries ?? Array.Empty<T>(), page.TotalUsers,
+                CoreAccount.UnifiedUserId, Platform.AccountSeed.Discord?.UserId, CoreAccount.DisplayName);
+        }
+
+        internal async Task RefreshStatPillLeaderboardAsync()
+        {
+            if (CoreSettings.Current.OfflineMode || !CoreAccount.IsLoggedIn) return;
+            try
+            {
+                var (page, _) = await Tabs.LeaderboardTabView.NewClient().FetchAsync<LeaderboardEntryData>(
+                    "all-time", CoreAccount.UnifiedUserId, DateTime.UtcNow);
+                if (page != null && !_statPillsClosed) { NoteLeaderboardPage(page); UpdateStatPills(); }
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Initial stat pill leaderboard fetch failed"); }
+        }
+
+        private bool _statPillsClosed;
+
+        /// <summary>The signed-in startup fetch started on Opened; tests await it and zero the delay.</summary>
+        internal Task StartupPillFetch { get; private set; } = Task.CompletedTask;
+        internal static TimeSpan StartupPillFetchDelay = TimeSpan.FromMilliseconds(500);
+
+        private async Task StartupPillFetchAsync()
+        {
+            if (!CoreAccount.IsLoggedIn || CoreSettings.Current.OfflineMode) return;
+            await Task.Delay(StartupPillFetchDelay);
+            if (!_statPillsClosed) await RefreshStatPillLeaderboardAsync();
+        }
 
         /// <summary>WPF StartStatPillUpdateTimer (MainWindow.xaml.cs:3726): paint now, then every 30 s.</summary>
         private void InitializeStatPills()
         {
             UpdateStatPills();
+            // WPF MainWindow.xaml.cs:3716: signed-in startup fetch, after the window has loaded.
+            Opened += (_, _) => StartupPillFetch = StartupPillFetchAsync();
             _statPillTimer = new global::Avalonia.Threading.DispatcherTimer { Interval = System.TimeSpan.FromSeconds(30) };
             _statPillTimer.Tick += (_, _) => UpdateStatPills();
             _statPillTimer.Start();
             // The tracker too: App's Closed handler drops the engine-stopped hook before it stops the engine.
-            Closed += (_, _) => { _statPillTimer?.Stop(); StopConditioningTimeTracker(); };
+            Closed += (_, _) => { _statPillsClosed = true; _statPillTimer?.Stop(); StopConditioningTimeTracker(); };
         }
 
         // ---- conditioning-time tracker (WPF MainWindow.UiUpdates.cs:746-842) ----
@@ -140,11 +180,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (System.Exception ex) { Serilog.Log.Warning(ex, "Error finalizing conditioning time"); }
         }
 
+        private void RefreshXPBarBonuses()
+        {
+            if (Named<StackPanel>("XPBarBonusList") is not { } list) return;
+            list.Children.Clear();
+            // ponytail: this head has no armed LiveEventService; use the same zero event boost as EnhancementsTabView.
+            foreach (var (source, value) in SkillTreeRules.GetMultiplierBreakdown(CoreSettings.Current, DateTime.Now.Hour, 0.0).Skip(1))
+            {
+                var chip = new Border
+                {
+                    Background = SolidColorBrush.Parse("#2A2A4A"), CornerRadius = new global::Avalonia.CornerRadius(10),
+                    Padding = new global::Avalonia.Thickness(6, 3, 6, 3), Margin = new global::Avalonia.Thickness(0, 0, 8, 0),
+                    Child = new TextBlock
+                    {
+                        Text = $"+{value:P0} {CoreMods.MakeModAware(source)}", FontSize = 10,
+                        Foreground = SolidColorBrush.Parse(App.Mods?.GetAccentLightColorHex() ?? "#FFB6C1"),
+                        VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center
+                    }
+                };
+                ToolTip.SetTip(chip, SkillTreeRules.GetBonusChipTooltip(source, id => App.Mods?.GetBoostTooltip(id)));
+                list.Children.Add(chip);
+            }
+        }
+
         /// <summary>WPF UpdateStatPills: each pill shows only with the skill that buys it. The conditioning
-        /// figure is live while the tracker runs (baseline + elapsed); the mic pill and the XP bonus
-        /// chips WPF also refreshes here are not on this head.</summary>
+        /// figure is live while the tracker runs (baseline + elapsed). Also repairs the mic pill and
+        /// rebuilds the active XP chips on each refresh, including the 30 s backstop.</summary>
         internal void UpdateStatPills()
         {
+            UpdateMicPill(); // Privacy backstop on the same 30 s timer as WPF.
+            RefreshXPBarBonuses();
             var s = CoreSettings.Current;
             bool Has(string skill) => ConditioningControlPanel.Models.SkillTreeRules.HasSkill(s, skill);
             if (Named<Border>("PillConditioningTime") is { } time && (time.IsVisible = Has("pink_hours"))
@@ -159,8 +224,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Named<Border>("PillRankPercentile") is { } rank && (rank.IsVisible = Has("popular_girl"))
                 && Named<TextBlock>("TxtPillRankPercentile") is { } rt)
             {
-                // WPF LeaderboardService.GetPlayerPercentile, server-rank branch (:158-166).
-                int pct = _lbRank > 0 && _lbTotal > 0 ? System.Math.Clamp((int)System.Math.Ceiling((double)_lbRank / _lbTotal * 100), 1, 99) : 0;
+                // Shared WPF percentile rule: server rank or the fetched-board identity fallback.
+                int pct = _lbPercentile;
                 rt.Text = pct > 0 ? $"Top {pct}%" : Loc.Get(_lbEntries > 0 ? "label_unranked" : "label_loading_2");
             }
             if (Named<Border>("StreakFirePill") is { } fire && (fire.IsVisible = Has("good_girl_streak")))

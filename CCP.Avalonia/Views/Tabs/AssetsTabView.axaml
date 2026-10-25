@@ -310,6 +310,10 @@
                             <!-- Inline, non-blocking reason under the box (a hint, not an alarm). -->
                             <TextBlock x:Name="TxtRemoteSubError" Foreground="{DynamicResource TextMutedBrush}"
                                        FontSize="11.5" FontStyle="Italic" TextWrapping="Wrap" Margin="2,0,0,2" IsVisible="False"/>
+                            <!-- Credit for the online source (WPF AssetsTabView.xaml:454-461): "Media from Scrolller"
+                                 links scrolller.com (refused under any lock), inside the fold like WPF. -->
+                            <fx:ScrolllerCreditLine x:Name="TxtScrolllerCredit" Margin="2,10,0,0"
+                                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
                         </StackPanel>
                     </ScrollViewer>
                 </StackPanel>
@@ -355,6 +359,7 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:PackCardViewModel">
                                     <Border Classes="packCard" Classes.external="{Binding IsExternal}"
+                                            PointerEntered="PackCard_PointerEntered" PointerExited="PackCard_PointerExited"
                                             Width="192" Height="240" Margin="0,0,10,0" CornerRadius="8"
                                             Background="{DynamicResource SurfaceBgBrush}"
                                             BorderBrush="{DynamicResource PanelAccentBrush}" BorderThickness="1">
@@ -633,7 +638,10 @@
                                         <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
                                                   IsThreeState="False" Click="FolderCheckBox_Click"
                                                   VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                        <fx:IconGlyph Kind="Folder" Size="12" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                        <fx:IconGlyph Kind="Folder" Size="12" Margin="0,0,4,0" VerticalAlignment="Center"
+                                                      IsVisible="{Binding !IsPackRoot}"/>
+                                        <fx:IconGlyph Kind="Box" Size="12" Margin="0,0,4,0" VerticalAlignment="Center"
+                                                      IsVisible="{Binding IsPackRoot}"/>
                                         <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
                                         <TextBlock Text="{Binding FileCountDisplay}"
                                                    Foreground="{DynamicResource TextMutedBrush}"

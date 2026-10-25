@@ -15,5 +15,5 @@
     <content_attribute id="sex-themes">intense</content_attribute>
   </content_rating>
   <launchable type="desktop-id">io.github.CodeBambi.ConditioningControlPanel.desktop</launchable>
-  <url type="homepage">https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF</url>
+  <url type="homepage">https://github.com/CC-Labs-it/Conditioning-Control-Panel</url>
 </component>

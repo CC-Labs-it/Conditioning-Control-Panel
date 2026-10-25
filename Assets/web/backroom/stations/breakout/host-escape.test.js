@@ -46,7 +46,7 @@ function makePage(mod) {
     makeEvent: () => new FakeKey({key: 'Escape', code: 'Escape', isTrusted: false})});
   const acts = [];
   let paused = false;
-  win.addEventListener('keydown', e => { if (e.key !== 'Escape') return; acts.push(paused ? 'leave' : 'pause'); paused = true; });
+  win.addEventListener('keydown', e => { if (e.key !== 'Escape') return; acts.push(paused ? 'resume' : 'pause'); paused = !paused; });
   return {hostEscape, realKey, acts, advance, capture, body};
 }
 
@@ -78,12 +78,12 @@ for (const [name, mod] of [['shared', shared], ['race', race]]) {
     assert.deepEqual(p.acts, ['pause']);
   });
 
-  test(`${name}: a later kept press plays again (Escape, Escape leaves)`, () => {
+  test(`${name}: a later kept press plays again (Escape on the pause card resumes)`, () => {
     const p = makePage(mod);
     p.hostEscape.kept(); p.advance(mod.LOOK_AHEAD_MS);
     p.advance(2100);
     p.hostEscape.kept(); p.advance(mod.LOOK_AHEAD_MS);
-    assert.deepEqual(p.acts, ['pause', 'leave']);
+    assert.deepEqual(p.acts, ['pause', 'resume']);
   });
 
   test(`${name}: dispose drops a waiting press and the listener`, () => {
@@ -116,15 +116,13 @@ test('play.html makes the listener before the station and plays the host frame t
   const made = page.indexOf('const hostEscape = createHostEscape();');
   assert.ok(made > 0 && made < page.indexOf('await mount(ctx)'), 'made before the station mounts');
   assert.match(page, /bridge\.on\(HOST_ESCAPE, \(\) => hostEscape\.kept\(\)\);/);
-  assert.match(page, /if \(m\.breakoutStandalone\) ctx\.hostKeepsEscape = true;/, 'only the desktop window leaves on Escape, Escape');
 });
 
-test('station: a held Escape is one press; on the desktop an Escape on any pause card leaves', () => {
+test('station: a held Escape is one press; desktop and web both toggle pause', () => {
   const s = read('./station.js');
   const repeat = s.indexOf("if(e.key==='Escape'&&e.repeat)");
   assert.ok(repeat > 0 && repeat < s.indexOf('setPaused(!paused);if(paused)'), 'repeats are dropped before the toggle');
-  assert.match(s, /if\(e\.key==='Escape'&&paused&&ctx\.hostKeepsEscape\)\{back\(\);return;\}/);
-  assert.doesNotMatch(s, /escPaused/, 'no arming step: one Escape on any pause card leaves');
+  assert.doesNotMatch(s, /hostKeepsEscape/, 'no desktop-only exit on Escape');
   assert.match(s, /demoComplete&&!ui\.demoCard\.hidden\)\{e\.preventDefault\(\);ui\.demoCard\.querySelector\('\[data-demo="menu"\]'\)\.click\(\)/,
     'Escape on the demo card is its Menu button, never a dead key');
 });

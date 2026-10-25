@@ -33,6 +33,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         public static EmiTarget? Find(string? id) =>
             All.FirstOrDefault(t => string.Equals(t.Id, id, StringComparison.Ordinal));
 
+        /// <summary>Every navigation route teaches the same ring as a card pick (WPF NoteTabOpened).</summary>
+        public static void NoteTabOpened(string? tabKey)
+        {
+            try
+            {
+                if (EmiDoors.TargetForTab(tabKey) is { } id) EmiState.NoteUsage(id);
+            }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] tab open not counted for {Tab}", tabKey); }
+        }
+
+        /// <summary>A rack open scores its module, never Studio (WPF NoteRackOpened).</summary>
+        public static void NoteRackOpened(string? rackKey)
+        {
+            try
+            {
+                if (EmiDoors.TargetForRack(rackKey) is { } id) EmiState.NoteUsage(id);
+            }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] rack open not counted for {Rack}", rackKey); }
+        }
+
         private static (Func<bool> Available, Func<bool> Locked, Action Open) Free(Action open) => (Always, Never, open);
 
         /// <summary>A premium door: WPF's PremiumOk probe and PremiumPrompt refusal, over Core TierGate.</summary>
@@ -69,20 +89,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             "settings" => Free(() => Nav("appsettings")),
             _ => null,
         };
-
-        // WPF EmiTargets.cs:140-178: all entry routes score the same destination.
-        internal static void NoteTabOpened(string tab)
-        {
-            var id = tab?.ToLowerInvariant() switch // WPF matches OrdinalIgnoreCase
-            {
-                "presets" => "sessions", "companion" => "companion", "awareness" => "awareness",
-                "remotecontrol" => "remote", "bambitakeover" => "takeover", "lockdown" => "lockdown",
-                "premium" => "vault", "discord" => "profile", "appsettings" => "settings",
-                "progression" => "progression", _ => null,
-            };
-            if (id != null) EmiState.NoteUsage(id);
-            // ponytail: TargetOpened's nudge listener awaits the EMI moment bus port.
-        }
 
         private static MainShellWindow? Shell =>
             (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainShellWindow;
