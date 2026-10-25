@@ -132,6 +132,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ShowAvatarTube();
         }
 
+        /// <summary>WPF HideForLauncher: keep the engine alive, suppress the balloon only at boot.</summary>
+        internal void HideForLauncher(bool quiet = false)
+        {
+            if (LockdownActive) return;
+            Hide();
+            HideAvatarTube();
+            RestoreLauncherPanelOpacity();
+            if (!quiet && TrayHostPresent()) NotifyFirstMinimize();
+        }
+
+        private void NotifyFirstMinimize()
+        {
+            if (_shownFirstMinimizeNotification) return;
+            _shownFirstMinimizeNotification = true;
+            Platform.OsNotifications.Show(Loc.Get("app_title"), Loc.Get("tray_balloon_body"), ShowFromTray);
+        }
+
         /// <summary>MainWindow.Launcher.cs RequestExit: the one real exit; OnDesktopExit saves. Circe's bill
         /// shows only on the user's own exits - the tray's Exit and Settings' Exit button (both land
         /// here); double panic and the 18+ refusals come through <see cref="ExitWithoutBill"/>.</summary>
@@ -174,11 +191,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Hide();
                 HideAvatarTube();
                 // ponytail: WPF fires App.EmiDesk "minimizedToTray" here (WindowChrome.cs:362); this head has no EmiDesk Fire moment bus yet.
-                if (!_shownFirstMinimizeNotification)
-                {
-                    _shownFirstMinimizeNotification = true;
-                    Platform.OsNotifications.Show(Loc.Get("app_title"), Loc.Get("tray_balloon_body"), ShowFromTray);
-                }
+                NotifyFirstMinimize();
             }
             // A tray hide is not an exit: preserve the session and public Closing subscriptions.
             if (e.Cancel) return;

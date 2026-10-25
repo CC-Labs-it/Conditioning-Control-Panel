@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### fin4 shell launcher boot
+
+1. On a welcomed, age-accepted install with skip-to-panel off, launch normally and with a supported `--game` argument. The panel must not flash, activate or enter the taskbar during boot; opening the panel later restores opaque content and its taskbar entry. WPF `MainWindow/MainWindow.Launcher.cs:ShowHiddenForBoot`. Rows: `shell-launcher`.
+2. While booted into the launcher, offer a passive startup notice: it appears in the Inbox, never over the launcher. Open the panel; a subsequent eligible passive notice may present normally. WPF `Services/Launcher/LauncherHost.cs:HoldStartupLadder/ShowPanel`. Rows: `shell-launcher`.
+3. Start Lockdown before the boot routing step (including during panel Opened work). The panel remains visible and startup is not held behind the launcher. WPF `MainWindow/MainWindow.Launcher.cs:HideForLauncher`, `App.xaml.cs:RouteBootSurface`. Rows: `shell-launcher`.
+4. With a tray host, boot into the launcher silently, then open the panel and use its CC Labs door twice. Only the first user tuck requests the minimize notification. WPF `Services/Notifications/TrayIconService.cs:MinimizeToTray`. Rows: `shell-launcher`.
