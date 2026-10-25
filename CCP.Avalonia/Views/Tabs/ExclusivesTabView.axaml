@@ -84,15 +84,19 @@
                             Margin="0,0,0,20">
                         <Grid>
                             <Border Background="{StaticResource TabHueWashBrush}" CornerRadius="14"/>
-                            <Image x:Name="VaultHeroImage" Width="240" HorizontalAlignment="Right"
-                                   Stretch="UniformToFill" Opacity="0.9">
-                                <Image.OpacityMask>
+                            <!-- WPF: rounded right corners, art cropped from the right edge. -->
+                            <Border x:Name="VaultHero" CornerRadius="0,14,14,0" Width="240"
+                                    HorizontalAlignment="Right" ClipToBounds="True">
+                                <Border.Background>
+                                    <ImageBrush Stretch="UniformToFill" AlignmentX="Right" Opacity="0.9"/>
+                                </Border.Background>
+                                <Border.OpacityMask>
                                     <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
                                         <GradientStop Color="#00000000" Offset="0"/>
                                         <GradientStop Color="#E6000000" Offset="0.55"/>
                                     </LinearGradientBrush>
-                                </Image.OpacityMask>
-                            </Image>
+                                </Border.OpacityMask>
+                            </Border>
                             <StackPanel VerticalAlignment="Center" Margin="18,0,0,0">
                                 <TextBlock Theme="{StaticResource Type.CardTitle}" Text="{loc:Str premium_page_title}"/>
                                 <TextBlock Text="{loc:Str premium_page_sub}"

@@ -313,6 +313,8 @@ Set the panic key to Enter for steps 1-4 (Settings -> panic key).
 11. **[SAFETY] developers re-check this before release.** Remote Control tab: share a code, let a controller in, end it from both sides. WPF `MainWindow/MainWindow.RemoteControl.cs:325-480`. Rows: `views-tab-remote-control`.
 12. Blink Trainer, Haptics, Discord, Leaderboard, Deeper, Enhancements, Exclusives, Friends, Leash, Play, Programs, She's Listening, Spiral, Chaster, Subjects, Takeover tabs: open each, use every control. WPF `MainWindow/MainWindow.Presets.cs:118` (Blink Trainer). Rows: `views-tab-*`.
 13. Deeper editor: new enhancement, URL prompt, gaze picker, play one. Rows: `views-deeper-*`.
+14. Open Premium, hover an available and an unavailable shelf card: both lift to 1.02 and bloom in the current mod colour; leave restores the card. Set Motion Off and confirm the lift snaps; performance mode suppresses bloom. Switch mods and hover again to check the new colour. WPF `MainWindow/MainWindow.Exclusives.cs:OnExclusiveCardHover`. Rows: `views-tab-exclusives`.
+15. Open Premium under the default and built-in mods: header vault art follows the mod, tier plates show the shipped art, and entitlement changes preserve the existing dim/breath state. WPF `Views/Tabs/ExclusivesTabView.xaml` and `MainWindow/MainWindow.Exclusives.cs:RefreshExclusivesTab`. Rows: `views-tab-exclusives`.
 
 ### Rows (general check G)
 - [ ] `views-adorned-avatar` - WPF `Views/Controls/AdornedAvatar.xaml`
@@ -673,6 +675,3 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
-
-1. Open Premium, hover an available and an unavailable shelf card: both lift to 1.02 and bloom in the current mod colour; leave restores the card. Set Motion Off and confirm the lift snaps; performance mode suppresses bloom. Switch mods and hover again to check the new colour. WPF `MainWindow/MainWindow.Exclusives.cs:OnExclusiveCardHover`. Rows: `views-tab-exclusives`.
-2. Open Premium under the default and built-in mods: header vault art follows the mod, tier plates show the shipped art, and entitlement changes preserve the existing dim/breath state. WPF `Views/Tabs/ExclusivesTabView.xaml` and `MainWindow/MainWindow.Exclusives.cs:RefreshExclusivesTab`. Rows: `views-tab-exclusives`.

@@ -187,7 +187,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 FavoritesRailArt.ThemeSuffix(CoreMods.ActiveModId)))
             {
                 if (ModArt.TryLoad(path, 480) is not { } art) continue;
-                this.FindControl<Image>("VaultHeroImage")!.Source = art;
+                ((ImageBrush)this.FindControl<Border>("VaultHero")!.Background!).Source = art;
                 break; // null preserves the last painted face
             }
             for (int tier = 1; tier <= 2; tier++)
