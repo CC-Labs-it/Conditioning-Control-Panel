@@ -105,6 +105,7 @@ namespace ConditioningControlPanel.Services.JustDrop
         internal static Func<DateTime> UtcNow = () => DateTime.UtcNow;
 
         internal static void SetServerEnabledForTests(bool enabled) => ServerEnabled = enabled;
+        internal static bool ServerEnabledForTests => ServerEnabled;
 
         /// <summary>
         /// Ask the server whether this door exists. Fire-and-forget from MainWindow's startup

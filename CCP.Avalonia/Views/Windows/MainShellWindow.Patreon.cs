@@ -58,9 +58,9 @@
 //   internal void SyncLabEffectPermsUI(…)
 //   private void SyncAiBrainUI(…)
 //   internal void ChkMuteWhispers_Changed(…)
-//   internal async void ChkPauseBrowser_Changed(…)
+//   (ChkPauseBrowser_Changed / SetBrowserPaused: Home browser part ported, WorkshopBehaviorCell ->
+//    MainShellWindow.WorkshopBehavior.cs; the Avatar Tube mirror is not)
 //   internal void ChkVoiceLines_Changed(…)
-//   private async Task SetBrowserPaused(…)
 //   public void SyncQuickControlsUI(…)
 //   public void SyncWhispersUI(…)
 //   private int _preMuteMasterVolume

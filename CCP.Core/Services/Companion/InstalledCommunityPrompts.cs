@@ -18,7 +18,8 @@ public static class InstalledCommunityPrompts
         try
         {
             // Prompt IDs are filenames, never paths supplied by an imported manifest.
-            if (string.IsNullOrEmpty(promptId) || promptId.Contains('/') || promptId.Contains('\\')
+            if (string.IsNullOrWhiteSpace(promptId) || promptId.Contains('/') || promptId.Contains('\\')
+                || promptId.Contains(':')
                 || promptId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
                 return null;
             var path = Path.Combine(folder, promptId + ".json");

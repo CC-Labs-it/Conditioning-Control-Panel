@@ -12,8 +12,8 @@ using AvApp = global::ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
-/// <summary>Takeaway shelf on the Presets tab: this head has no order drawer and no Just Drop door,
-/// so it paints WPF PaintTakeawayShelf's empty state (MainWindow.Takeaway.cs:107-185) - never
+/// <summary>Takeaway shelf on the Presets tab with an empty signed-out drawer and withheld door:
+/// it paints WPF PaintTakeawayShelf's empty state (MainWindow.Takeaway.cs:107-185) - never
 /// sample orders.</summary>
 public sealed class PresetsTakeawayEmptyStateTests
 {
@@ -21,7 +21,7 @@ public sealed class PresetsTakeawayEmptyStateTests
     public Task ShelfShowsWpfEmptyStateNotSampleOrders() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var shell = new MainShellWindow();

@@ -1,5 +1,8 @@
 using System;
 using System.Threading.Tasks;
+using System.IO;
+using Avalonia.Platform;
+using Serilog;
 using Avalonia.Controls;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Views.Controls;
@@ -37,36 +40,87 @@ namespace ConditioningControlPanel.Avalonia.Controls
         {
             if (_started || _disposed) return;
             _started = true;
-            _web = new WebHost { AllowNavigation = SpiralEmbedBridge.AllowsNavigation, InjectCarrier = true };
-            _web.WebMessage += Receive;
-            _web.NavigationFinished += OnNavigated;
-            Children.Add(_web);
-            if (!_web.HasEngine)
+            try
             {
-                Fail(WebHost.UnavailableReason ?? "browser unavailable");
-                return;
+                _web = new WebHost { Background = Background, AllowNavigation = SpiralEmbedBridge.AllowsNavigation, InjectCarrier = true };
+                _web.EnvironmentRequested += OnEnvironmentRequested;
+                _web.WebMessage += Receive;
+                _web.NavigationFinished += OnNavigated;
+                Children.Add(_web);
+                if (!_web.HasEngine)
+                {
+                    Fail(WebHost.UnavailableReason ?? "browser unavailable");
+                    return;
+                }
+                _web.Source = new Uri(Url);
             }
-            _web.Source = new Uri(Url);
+            catch (Exception ex) { Fail(ex.Message); }
+        }
+
+        // WPF SpiralEmbedView.InitAsync: one profile for mini/map, devtools off, and the
+        // anti-occlusion switches that keep a rail-docked canvas painting on Windows.
+        private void OnEnvironmentRequested(WebViewEnvironmentRequestedEventArgs e)
+        {
+            try { ConfigureEnvironment(e); }
+            catch (Exception ex) { Fail(ex.Message); }
+        }
+
+        internal static void ConfigureEnvironment(WebViewEnvironmentRequestedEventArgs e)
+        {
+            e.EnableDevTools = false;
+            var folder = Path.Combine(CorePaths.UserData, "browser_data_spiral");
+            Directory.CreateDirectory(folder);
+            switch (e)
+            {
+                case WindowsWebView2EnvironmentRequestedEventArgs win:
+                    win.UserDataFolder = folder;
+                    win.AdditionalBrowserArguments =
+                        "--disable-direct-composition-video-overlays " +
+                        "--disable-features=CalculateNativeWinOcclusion " +
+                        "--disable-backgrounding-occluded-windows";
+                    break;
+                case GtkWebViewEnvironmentRequestedEventArgs gtk:
+                    gtk.BaseDataDirectory = folder;
+                    gtk.BaseCacheDirectory = Path.Combine(folder, "cache");
+                    break;
+                case LinuxWpeWebViewEnvironmentRequestedEventArgs wpe:
+                    wpe.DataDirectory = folder;
+                    wpe.CacheDirectory = Path.Combine(folder, "cache");
+                    break;
+            }
+            // ponytail: 12.1's public adapter API has no context-menu, accelerator, zoom,
+            // status/error-page settings, document-created script or process-failure signal.
         }
 
         public void PostState(DescentBlock? block)
         {
             if (_disposed) return;
-            var state = SpiralEmbedBridge.BuildState(block,
-                CoreSettings.Current.MotionLevel != MotionLevel.Full, AmbientFxCanvas.Env.CurrentTier);
-            if (_bridge.Post(state.ToString(Formatting.None)) is { } message) _ = Send(message);
+            try
+            {
+                var state = SpiralEmbedBridge.BuildState(block,
+                    CoreSettings.Current.MotionLevel != MotionLevel.Full, AmbientFxCanvas.Env.CurrentTier);
+                if (_bridge.Post(state.ToString(Formatting.None)) is { } message) _ = Send(message);
+            }
+            catch (Exception ex) { Log.Debug("[Spiral] PostState: {Error}", ex.Message); }
         }
 
         internal void Receive(string message)
         {
             if (_disposed) return;
-            var wasReady = IsReady;
-            if (_bridge.Receive(message) is { } latest) _ = Send(latest);
-            if (IsReady && !wasReady) Ready?.Invoke(this, EventArgs.Empty);
+            try
+            {
+                var wasReady = IsReady;
+                if (_bridge.Receive(message) is { } latest) _ = Send(latest);
+                if (IsReady && !wasReady) Ready?.Invoke(this, EventArgs.Empty);
+            }
+            catch (Exception ex) { Log.Debug("[Spiral] OnWebMessageReceived: {Error}", ex.Message); }
         }
 
-        private Task Send(string message) => SendJson?.Invoke(message) ??
-            _web?.PostJsonAsync(message) ?? Task.CompletedTask;
+        private async Task Send(string message)
+        {
+            try { await (SendJson?.Invoke(message) ?? _web?.PostJsonAsync(message) ?? Task.CompletedTask); }
+            catch (Exception ex) { Log.Debug("[Spiral] PostState: {Error}", ex.Message); }
+        }
 
         internal void OnNavigated(Uri url, bool success)
         {
@@ -76,14 +130,17 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 Fail("navigation failed");
                 return;
             }
-            Navigated?.Invoke(this, EventArgs.Empty);
+            try { Navigated?.Invoke(this, EventArgs.Empty); }
+            catch (Exception ex) { Log.Debug("[Spiral] Navigated handler threw: {Error}", ex.Message); }
         }
 
         private void Fail(string reason)
         {
+            if (_disposed) return;
             HasFailed = true;
             Dispose();
-            Failed?.Invoke(this, reason);
+            try { Failed?.Invoke(this, reason); }
+            catch (Exception ex) { Log.Debug("[Spiral] Failed handler threw: {Error}", ex.Message); }
         }
 
         public void Dispose()
@@ -93,11 +150,13 @@ namespace ConditioningControlPanel.Avalonia.Controls
             _bridge.Reset();
             if (_web is { } web)
             {
+                _web = null;
+                web.EnvironmentRequested -= OnEnvironmentRequested;
                 web.WebMessage -= Receive;
                 web.NavigationFinished -= OnNavigated;
-                web.Source = null;
-                Children.Remove(web);
-                _web = null;
+                try { web.Source = null; }
+                catch (Exception ex) { Log.Debug("[Spiral] dispose: {Error}", ex.Message); }
+                finally { Children.Remove(web); }
             }
         }
     }
