@@ -668,7 +668,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { setItemMediaSource: source => itemVis?.setMediaSource(source), primaryColour: () => pal.primaryHex(), scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, worldScreens, musicRoad, reactive: road.uniforms.reactive, roadWords, wordRush, phraseGates, airWords, terrace, court, stones, mainframe, boudoirDressing, boudoirForks, perfumeView, boudoirHazardView, mirrorRoom, waterVolume, underwaterFx, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge, goonworks, goonworksHazards,
+  return { setItemMediaSource: source => itemVis?.setMediaSource(source), primaryColour: () => pal.primaryHex(), musicColours: () => [pal.primaryHex(), pal.accentHex()], scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, worldScreens, musicRoad, reactive: road.uniforms.reactive, roadWords, wordRush, phraseGates, airWords, terrace, court, stones, mainframe, boudoirDressing, boudoirForks, perfumeView, boudoirHazardView, mirrorRoom, waterVolume, underwaterFx, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge, goonworks, goonworksHazards,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles

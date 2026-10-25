@@ -76,7 +76,7 @@ export function createScreenFx(three, art = currentArt()) {
   const spiralAngle = uniform(0), spiralStyle = uniform(0);
   let wasSpiral = false, spiralSerial = 0;
   const u = {
-    any: uniform(0), blurOn: uniform(0), t: uniform(0), runT: uniform(0), aspect: uniform(16 / 9), blurMul: uniform(1),
+    any: uniform(0), blurOn: uniform(0), t: uniform(0), runT: uniform(0), aspect: uniform(16 / 9), blurMul: uniform(1), musicEdgeX: uniform(0),
     flash: uniform(0), spiral: uniform(0), drain: uniform(0), freeze: uniform(0), black: uniform(0), pink: uniform(0),
     melt: uniform(0), shatter: uniform(0), dimOnly: uniform(0), tilt: uniform(0), iris: uniform(L.irisFrom),
     rx: uniform(0.5), ry: uniform(0.5), rw: uniform(0.2), rh: uniform(0.2),
@@ -101,7 +101,9 @@ export function createScreenFx(three, art = currentArt()) {
 
   function node(sceneTex) {
     return Fn(() => {
-      const uv0 = screenUV;
+      // Music flexes only the outer 16% on each side. Centre, camera and HUD remain fixed.
+      const edge = smoothstep(.34, .5, abs(screenUV.x.sub(.5))).mul(sign(screenUV.x.sub(.5)));
+      const uv0 = clamp(screenUV.add(vec2(edge.mul(u.musicEdgeX), 0)), .0001, .9999);
       const out = sceneTex.sample(uv0).rgb.toVar();
       If(u.any.greaterThan(0.0005), () => {
         const asp = u.aspect, toH = vec2(asp, 1);
@@ -310,6 +312,7 @@ export function createScreenFx(three, art = currentArt()) {
   }
 
   function update(screen, dt, aspect, view = {}) {
+    u.musicEdgeX.value = Number.isFinite(view.musicEdgeShift) ? Math.max(-.01, Math.min(.01, view.musicEdgeShift)) : 0;
     const a = screenAmounts(screen, amt), m = meterLook(screen);
     const activeSpiral = a.spiral > 0;
     if (activeSpiral && !wasSpiral) spiralStyle.value = spiralSerial++ % 6;
