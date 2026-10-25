@@ -3007,3 +3007,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/chaos-payout-fallin-c: +341
 - Chaos fuse ring flash/brink phases + danger breathe; SNAP/NO FOCUS/effect labels; defuse/detonation cues and HUD flashes; WPF pulse/shake calls behind unseeded hooks.
 - Barks deferred to chaos-payout-barks (needs companion-barks BarkEngine); remap/heavy gate/pulse window/shake to chaos-payout-fallin-d.
+
+## avalonia-port/wire-shell-clickthrough-overlays: +318
+- Tutorial spotlight/transparent-wait steps set a native input region (X11 XFixes, Win32 GDI) so background clicks pass through; geometry in Core `SpotlightInputRegion`.
+- Review fixes x2: real-path tests, layout-size fallback, ledger rows (LayeredCompositorHost, spotlight hole); gate run 39691313720 green except P108 + known RaceTrack flake.
