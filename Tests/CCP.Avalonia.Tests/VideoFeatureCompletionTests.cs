@@ -37,14 +37,18 @@ public sealed class VideoFeatureCompletionTests
         {
             Setup();
             var card = new VideoFeatureControl();
+            var hero = card.FindControl<Border>("VideoHeroArt")!;
+            var side = card.FindControl<Border>("VideoSideArt")!;
+            Assert.NotNull(hero);
+            Assert.NotNull(side);
+            var heroWash = hero.Background;
+            var sideWash = side.Background;
+            Assert.IsNotType<ImageBrush>(heroWash); // painted on attach, not in the constructor
+            Assert.NotNull(heroWash);
             var host = new Window { Content = card };
             host.Show();
             try
             {
-                var hero = card.FindControl<Border>("VideoHeroArt")!;
-                var side = card.FindControl<Border>("VideoSideArt")!;
-                Assert.NotNull(hero);
-                Assert.NotNull(side);
                 var first = Assert.IsType<ImageBrush>(hero.Background);
                 Assert.NotNull(first.Source);
                 Assert.Equal(AlignmentX.Right, first.AlignmentX);
@@ -63,10 +67,18 @@ public sealed class VideoFeatureCompletionTests
                 }
                 finally { CoreModArt.OverridePathProvider = previousResolver; }
                 host.Close();
-                var detached = hero.Background;
-                CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, false));
-                Dispatcher.UIThread.RunJobs();
-                Assert.Same(detached, hero.Background);
+                Assert.Same(heroWash, hero.Background); // detach puts the authored wash back
+                Assert.Same(sideWash, side.Background);
+                var afterDetach = 0;
+                try
+                {
+                    CoreModArt.OverridePathProvider = _ => { afterDetach++; return null; };
+                    CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, false));
+                    Dispatcher.UIThread.RunJobs();
+                }
+                finally { CoreModArt.OverridePathProvider = previousResolver; }
+                Assert.Equal(0, afterDetach); // unhooked: a mod switch no longer resolves art
+                Assert.Same(heroWash, hero.Background);
             }
             finally { host.Close(); }
             return Task.CompletedTask;

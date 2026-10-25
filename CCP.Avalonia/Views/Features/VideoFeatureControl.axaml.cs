@@ -45,6 +45,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             // InitializeComponent, not AvaloniaXamlLoader.Load: only the generated one assigns the
             // x:Name fields, and everything below reads them.
             InitializeComponent();
+            _heroWash = VideoHeroArt.Background;
+            _sideWash = VideoSideArt.Background;
 
             ChkEnable.IsCheckedChanged += ChkEnable_Changed;
             CmbMonitor.DropDownOpened += (_, _) => PopulateMonitors();
@@ -69,8 +71,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             BtnTestVideo.Click += BtnTestVideo_Click;
 
             LoadFromSettings();
-
-            ApplyFeatureArt();
         }
 
         // ---- settings instance tracking (WPF: SettingsHook + ISettingsRebindable) --------------
@@ -98,6 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         private Bitmap? _heroArt, _sideArt;
+        private readonly IBrush? _heroWash, _sideWash; // the authored plates, restored on detach
 
         private void OnModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(() =>
         {
@@ -127,7 +128,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
 
         private void ClearFeatureArt()
         {
-            VideoHeroArt.Background = VideoSideArt.Background = null;
+            VideoHeroArt.Background = _heroWash;
+            VideoSideArt.Background = _sideWash;
             _heroArt?.Dispose(); _sideArt?.Dispose();
             _heroArt = _sideArt = null;
         }
