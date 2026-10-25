@@ -17,7 +17,8 @@ const ease = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 export function keepGatePhase(gate, timeS, out = {}, beat = null) {
   if (beat) {
     const offset = Math.round((gate.offsetS || 0) / beat.beatS), t = beatCycle(beat.beat + offset, 16);
-    const safe = machineryRearming(beat, offset), phase = safe ? 'warn' : t < 5 ? 'clear' : t < 8 ? 'warn'
+    // Initial offsets also wait for a clear cycle with the full warning before descent.
+    const safe = machineryRearming(beat, offset) || beat.beat < beatCycle(-offset,16), phase = safe ? 'warn' : t < 5 ? 'clear' : t < 8 ? 'warn'
       : t < 9 ? 'lower' : t < 12 ? 'hold' : t < 14 ? 'rise' : 'clear';
     const liftM = phase === 'lower' ? KEEP_GATE.liftM * (1 - ease(t - 8)) : phase === 'hold' ? 0
       : phase === 'rise' ? KEEP_GATE.liftM * ease((t - 12) / 2) : KEEP_GATE.liftM;

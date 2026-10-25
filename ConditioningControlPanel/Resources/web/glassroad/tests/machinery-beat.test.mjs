@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { loadTrack } from '../track/load.js';
 import { setMachineryBeat, machineryBeatAt, gearBeatTravel } from '../track/machineryBeat.js';
 import { industryPose, industryZones, createMainframeIndustry } from '../sim/mainframeIndustry.js';
+import { keepGatePhase, KEEP_GATE } from '../sim/keepGates.js';
 import { goonworksPose, goonworksSetpieces } from '../track/goonworks-setpieces.js';
 import { createGoonworksHazards } from '../sim/goonworksHazards.js';
 import { makeFeel, place, recorder } from './sim-fake.mjs';
@@ -84,6 +85,48 @@ test('song-synced rising blocks and flippers preserve warning time and actual cl
     const row={...rows.find(r=>r.kind===kind),offsetS:0},pose=b=>goonworksPose(row,b*.625,machineryBeatAt(track,b*.625));
     for(let b=5;b<8;b+=.1){assert.equal(pose(b).warning,true);assert.equal(pose(b).active,false);}
     assert.equal(pose(0).height,0);assert.equal(pose(15).height,0);assert.ok(pose(8.3).height>0);
+  }
+});
+
+test('initial pickup keeps authored Goon wheel and shutter motion continuous through the downbeat',()=>{
+  const rows=goonworksSetpieces(trackFor('goonworks')),epsilon=.00001;
+  for(const bpm of [40,96.75,240])for(const row of rows.filter(r=>r.kind==='wheel'||r.kind==='shutter')){
+    const pose=b=>goonworksPose(row,0,{beat:b,beatS:60/bpm,safe:b<0,rearming:false});
+    const a=pose(-epsilon),p=pose(0),b=pose(epsilon);
+    for(const key of ['angle','x','height']){
+      assert.ok(Math.abs(a[key]-p[key])<.001,row.id+' before '+key);
+      assert.ok(Math.abs(b[key]-p[key])<.001,row.id+' after '+key);
+    }
+    if(row.kind==='wheel')assert.equal(a.angle,row.phase);
+  }
+});
+
+test('initial offset presses and gates remain clear until a complete warning cycle',()=>{
+  for(const bpm of [40,96.75,240])for(const offsetS of [0,1.6,4.8,-2.2,10.1]){
+    const beatS=60/bpm,offset=Math.round(offsetS/beatS),start=((-offset%16)+16)%16;
+    const frame=beat=>({beat,beatS,safe:beat<0,rearming:false});
+    const press=b=>industryPose({kind:'piston',offsetS},0,frame(b)),gate=b=>keepGatePhase({offsetS},0,{},frame(b));
+    for(const b of [-.00001,0,.00001,start,start+3.9]){
+      assert.equal(press(b).lift,7);assert.equal(press(b).active,false);
+      assert.equal(gate(b).liftM,KEEP_GATE.liftM);assert.equal(gate(b).blocking,false);
+    }
+    for(const b of [4,5,6.99]){assert.equal(press(start+b).warning,true);assert.equal(press(start+b).active,false);}
+    for(const b of [5,6,7.99]){assert.equal(gate(start+b).phase,'warn');assert.equal(gate(start+b).blocking,false);}
+    assert.equal(press(start+8).lift,0);assert.equal(gate(start+9).liftM,0);
+  }
+});
+
+test('initial Goon rising toys start clear and seek release preserves every toy pose',()=>{
+  const rows=goonworksSetpieces(trackFor('goonworks')),epsilon=.00001;
+  for(const bpm of [40,96.75,240])for(const row of rows){
+    const beatS=60/bpm,offset=Math.round((row.offsetS||0)/beatS),start=((-offset%16)+16)%16;
+    const pose=(beat,rearming)=>goonworksPose(row,0,{beat,beatS,safe:beat<0,rearming});
+    if(row.kind==='block'||row.kind==='flipper'){
+      for(const b of [-epsilon,0,epsilon,start,start+4.99])assert.equal(pose(b,false).height,0);
+      for(const b of [5,6,7.99]){assert.equal(pose(start+b,false).warning,true);assert.equal(pose(start+b,false).active,false);}
+    }
+    const a=pose(start-epsilon,true),b=pose(start+epsilon,true);
+    for(const key of ['x','height','angle'])assert.ok(Math.abs(a[key]-b[key])<.001,row.id+' '+key);
   }
 });
 

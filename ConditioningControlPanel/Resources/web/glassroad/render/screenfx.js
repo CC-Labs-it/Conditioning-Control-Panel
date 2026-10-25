@@ -229,7 +229,7 @@ export function createScreenFx(three, art = currentArt()) {
         const glint = smoothstep(0.02, 0.14, facet).oneMinus().mul(front).mul(L.frostGlint);
         col.assign(mix(col, rgb(L.frostColour).add(ice.mul(L.frostVeins)).add(facet.mul(0.12)), frost.mul(min(u.freeze.mul(3), 1)).mul(L.frostAlpha)));
         col.addAssign(vec3(glint).mul(u.freeze));
-        // Spiral: a hypnotic two-band spiral over the whole view, opening from the centre (a soft dim under Gentle)
+        // A varied Loom field opens from the centre, with a soft dim under Gentle.
         const reveal = smoothstep(u.spiralR.sub(0.2), u.spiralR.add(0.001), rad).oneMinus().mul(smoothstep(0, L.spiralHole, rad));
         const ca = cos(spiralAngle), sa = sin(spiralAngle);
         const spiralUv = vec2(c.x.mul(ca).sub(c.y.mul(sa)), c.x.mul(sa).add(c.y.mul(ca))).mul(.7).add(.5);

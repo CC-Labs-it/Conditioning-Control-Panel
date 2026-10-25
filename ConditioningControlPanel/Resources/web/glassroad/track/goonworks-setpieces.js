@@ -39,7 +39,10 @@ export function goonworksSetpieces(track, layout = getGoonworksLayout(track)) {
 export function goonworksPose(row, timeS = 0, beat = null) {
   const time = Number.isFinite(timeS) ? Math.max(0, timeS) : 0;
   const offset = Math.round((row.offsetS || 0) / (beat?.beatS || 1));
-  if (beat && machineryRearming(beat, offset)) return { angle: -Math.PI / 2, phase: 'warn', warning: true,
+  // Moving toys follow their authored pickup pose. Rising toys wait for a full warning cycle.
+  const moving = row.kind === 'wheel' || row.kind === 'shutter';
+  const waiting = beat && !moving && beat.beat < beatCycle(-offset,16);
+  if (beat && (waiting || (beat.rearming && machineryRearming(beat, offset)))) return { angle: row.kind === 'wheel' ? -Math.PI / 2 : 0, phase: 'warn', warning: true,
     active: row.kind === 'wheel' || row.kind === 'shutter', x: row.x,
     height: row.kind === 'wheel' ? row.radius * 2 : row.kind === 'shutter' ? row.h : 0 };
   if (row.kind === 'wheel') {
