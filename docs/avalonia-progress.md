@@ -3170,3 +3170,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-shell-awareness: +180
 - Awareness app-scope list commits on Enter/blur through Core AwarenessAppScopeRules (shared with WPF), logged and guarded.
 - Review fixes: parser name aligned with the views-tab lane; ledger citation fixed.
+
+## avalonia-port/wire-shell-mod-catalogue: +365
+- Avalonia Manage Mods: Share now submits `ccp-mod/v1` metadata through a Core builder that WPF also uses.
+- The second review round added a fail-proven assertion for the auth toast. Gate run 39697561326 is green except a known RaceTrackPlayer flake.
