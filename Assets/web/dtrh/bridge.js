@@ -10,7 +10,8 @@
 
 export const PROTOCOL = 1;
 
-const webview = window.chrome && window.chrome.webview;
+import { carrier } from '../shared/carrier.js';
+const webview = carrier(window);
 const handlers = new Map();   // type -> fn
 const preBuffer = [];         // messages that arrived before their handler
 

@@ -60,13 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             SliderOpacity.ValueChanged += SliderOpacity_Changed;
             CmbMonitor.DropDownOpened += (_, _) => PopulateMonitors();
             CmbMonitor.SelectionChanged += CmbMonitor_Changed;
-            BtnOpenLoom.Click += (_, _) =>
-            {
-                // ponytail: needs Services.Chaos.LoomHostService.Launch()
-                // (ConditioningControlPanel/Services/Chaos/), still in the WPF head. Its live-save
-                // feed, Services.Chaos.DtrhLoomStore.Changed, is in the same place - which is why
-                // this panel does not subscribe to it either.
-            };
+            BtnOpenLoom.Click += (_, _) => Games.GameWindow.Launch("loom");
             BtnCornerGifs.Click += BtnCornerGifs_Click;
             BtnSelectGif.Click += BtnSelectGif_Click;
             BtnOpenSpiralFolder.Click += BtnOpenSpiralFolder_Click;
@@ -82,12 +76,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += RebindToCurrentSettings;
             RebindToCurrentSettings();
             RefreshLibrary();
+            ConditioningControlPanel.Services.Chaos.DtrhLoomStore.Changed += OnLoomStoreChanged;
         }
+
+        private void OnLoomStoreChanged() => Dispatcher.UIThread.Post(RefreshLibrary);
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= RebindToCurrentSettings;
             Unhook();
+            ConditioningControlPanel.Services.Chaos.DtrhLoomStore.Changed -= OnLoomStoreChanged;
             base.OnDetachedFromVisualTree(e);
         }
 

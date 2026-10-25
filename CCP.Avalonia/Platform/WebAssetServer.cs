@@ -195,6 +195,15 @@ public sealed class WebAssetServer : IDisposable
     {
         var rel = Uri.UnescapeDataString(urlPath).TrimStart('/');
         var root = _root;
+        if (rel.StartsWith("ccp.spirals/", StringComparison.Ordinal))
+        {
+            var name = rel["ccp.spirals/".Length..];
+            if (!name.StartsWith("loom_", StringComparison.Ordinal) || !name.EndsWith(".gif", StringComparison.Ordinal)) return null;
+            var path = ConditioningControlPanel.Services.Chaos.DtrhLoomStore.GifPathFor(name[5..^4]);
+            var folder = Path.GetFullPath(ConditioningControlPanel.Services.Chaos.DtrhLoomStore.SpiralsFolder)
+                .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            return path != null && LinksStayInside(path, folder) ? path : null;
+        }
         bool asset = rel.StartsWith(AssetsPrefix, StringComparison.Ordinal);
         if (asset)
         {
