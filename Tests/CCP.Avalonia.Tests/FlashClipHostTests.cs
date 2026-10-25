@@ -93,10 +93,14 @@ public sealed class FlashClipHostTests
             Assert.Equal(entry.Url, path);
             Assert.True(FlashOverlay.Show(bmp, rect, path, screen, 1, TimeSpan.Zero, TimeSpan.FromSeconds(6),
                 clickable: false, ambient: false, hydraGeneration: 0));
-            Assert.Equal(clip, FlashOverlay.Active[^1].Window.ClipSource);
+            var ownedClip = FlashOverlay.Active[^1].Window.ClipSource;
+            Assert.NotNull(ownedClip);
+            Assert.NotEqual(clip, ownedClip);
+            File.Delete(clip); // the shared cache can sweep its own copy after the draw
+            Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(ownedClip));
 
             FlashOverlay.CloseAll(final: false);   // the engine Stop button
-            Assert.Equal(clip, RemoteFlashSource.ClipPath(entry.Url));
+            Assert.Equal(ownedClip, RemoteFlashSource.ClipPath(entry.Url));
 
             int stopped = 0;
             var lease = FlashClipPlayer.Budget.TryAcquire(() => stopped++);
@@ -106,6 +110,7 @@ public sealed class FlashClipHostTests
             Assert.Equal(0, FlashClipPlayer.Budget.Live);
             Assert.Null(RemoteFlashSource.ClipPath(entry.Url));
             Assert.Equal(0, RemoteFlashSource.ReadyCount);
+            Assert.False(File.Exists(ownedClip));
         }
         finally
         {

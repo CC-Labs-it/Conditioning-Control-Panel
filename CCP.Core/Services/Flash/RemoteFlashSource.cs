@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -124,7 +123,7 @@ namespace ConditioningControlPanel.Services.Flash
 
         private static readonly RemoteFlashPool Pool = new();
         private static readonly object Lock = new();
-        private static readonly ConcurrentDictionary<string, RemoteFlashItem> Items = new();
+        private static readonly RemoteClipFiles Clips = new();
         private static CancellationTokenSource Cts = new();
         private static bool _inFlight;
         private static DateTime _lastFetchUtc = DateTime.MinValue;
@@ -190,30 +189,50 @@ namespace ConditioningControlPanel.Services.Flash
             if (!FlashSourceRules.RemoteEnabled(Settings())) return null;
             lock (Lock)
             {
-                Func<string, bool> usable = url => Items.TryGetValue(url, out var it) && File.Exists(it.PosterPath) && File.Exists(it.ClipPath);
+                Func<string, bool> usable = url => Clips.TryUse(url, Environment.TickCount64, out var clip, out var poster) && File.Exists(poster) && File.Exists(clip);
                 var url = Pool.Take(rng, usable) ?? Pool.TakeShown(usable);
-                return url != null && Items.TryGetValue(url, out var item) ? item : null;
+                return url != null && Clips.TryUse(url, Environment.TickCount64, out var path, out var posterPath)
+                    ? new RemoteFlashItem(url, posterPath, path) : null;
             }
         }
 
         internal static string? ClipPath(string url)
         {
-            lock (Lock) return Items.TryGetValue(url, out var item) && File.Exists(item.ClipPath) ? item.ClipPath : null;
+            lock (Lock) return Clips.TryUse(url, Environment.TickCount64, out var path, out _) && File.Exists(path) ? path : null;
         }
 
         // Panic and final exit (WPF FlashService teardown :3846-3848, :5141-5145) drop the warm pool
-        // and invalidate in-flight downloads; the files stay in the device cache, which ages them.
+        // and invalidate in-flight downloads; owned clip copies are released outside the draw lock.
         // A later user trigger may warm again.
         internal static void CleanupCache()
         {
+            List<string> dropped;
             lock (Lock)
             {
                 Cts.Cancel();
                 Cts = new CancellationTokenSource();
                 Pool.Clear();
-                Items.Clear();
+                dropped = Clips.TakeAll();
                 _lastFetchUtc = DateTime.MinValue;
             }
+            foreach (var path in dropped) ReleaseClip(path);
+        }
+
+        // ponytail: copy only clips after the device-cache consent/allowance gate; its sweep may
+        // remove its copy at any time. Posters stay in that cache, matching the WPF still path.
+        private static string OwnClip(string source)
+        {
+            var folder = Path.Combine(CorePaths.MediaTemp(), "flash-clips");
+            Directory.CreateDirectory(folder);
+            var path = Path.Combine(folder, Guid.NewGuid().ToString("N") + Path.GetExtension(source));
+            try { File.Copy(source, path); return path; }
+            catch { ReleaseClip(path); throw; }
+        }
+
+        private static void ReleaseClip(string path)
+        {
+            try { File.Delete(path); }
+            catch (Exception ex) { Log.Debug("Flash: clip release failed: {Error}", ex.Message); }
         }
 
         private static async Task PrefetchBatchAsync(CancellationToken ct, int generation)
@@ -240,7 +259,7 @@ namespace ConditioningControlPanel.Services.Flash
                 foreach (var entry in entries)
                 {
                     if (ct.IsCancellationRequested) break;
-                    lock (Lock) if (Pool.Count >= ReadyMax || Items.Count >= 256) break;
+                    lock (Lock) if (Pool.Count >= ReadyMax) break;
                     if (!RemoteMediaFormats.Validate(entry, FeedMediaKind.GifClip, out var reason))
                     {
                         Log.Debug("Flash: dropped remote entry {Id}: {Reason}", entry?.Id, reason);
@@ -248,18 +267,35 @@ namespace ConditioningControlPanel.Services.Flash
                     }
                     if (string.IsNullOrEmpty(entry.PosterUrl)) continue;
                     var url = entry.SmallUrl ?? entry.Url;
-                    var poster = await Download(entry.PosterUrl!, PosterMaxBytes, ct).ConfigureAwait(false);
-                    if (poster == null) continue;
-                    var clip = await Download(url, ClipMaxBytes, ct).ConfigureAwait(false);
-                    if (clip == null) continue;
-                    RefreshSelection();
-                    lock (Lock)
+                    var held = ClipPath(url);
+                    string? path = held;
+                    bool ours = false;
+                    List<string>? dropped = null;
+                    try
                     {
-                        if (ct.IsCancellationRequested || generation != Pool.Generation) return;
-                        // The files belong to the device cache, which ages them; TryTake skips one it already removed.
-                        if (Items.Count >= 256 && !Items.ContainsKey(url)) break;
-                        Items[url] = new RemoteFlashItem(url, poster, clip);
-                        if (Pool.Add(generation, url)) warmed++;
+                        if (path == null)
+                        {
+                            var cached = await Download(url, ClipMaxBytes, ct).ConfigureAwait(false);
+                            if (cached == null) continue;
+                            path = OwnClip(cached);
+                            ours = true;
+                        }
+                        var poster = await Download(entry.PosterUrl!, PosterMaxBytes, ct).ConfigureAwait(false);
+                        if (poster == null) continue;
+                        RefreshSelection();
+                        lock (Lock)
+                        {
+                            if (ct.IsCancellationRequested || generation != Pool.Generation) return;
+                            dropped = Clips.Put(url, path, poster, Environment.TickCount64);
+                            ours = false;
+                            if (Pool.Add(generation, url)) warmed++;
+                        }
+                    }
+                    finally
+                    {
+                        // Even cancellation during poster fetch must release an unpublished copy.
+                        if (ours && path != null) ReleaseClip(path);
+                        if (dropped != null) foreach (var old in dropped) ReleaseClip(old);
                     }
                 }
                 if (warmed > 0) Log.Information("Flash: warmed {Warmed} remote clip(s), {Ready} ready", warmed, ReadyCount);

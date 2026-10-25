@@ -25,6 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static readonly ConditioningControlPanel.Services.Flash.ClipSlotBudget Budget = new(MaxPlayers, MaxSharedPlayers);
         internal static void StopAll() => Budget.StopAll();
         private static int _tearingDown;
+        private static long _lastRefusedLogMs;
         internal static int TearingDown => Volatile.Read(ref _tearingDown);
         internal static bool CanStartFlash => TearingDown < MaxTearingDown && Budget.CanAcquireFor(true);
         private readonly ConditioningControlPanel.Services.Flash.ClipSlotBudget.Lease _lease;
@@ -49,14 +50,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             refusedAtCap = false;
             if (string.IsNullOrEmpty(path) || vlc == null || !System.IO.File.Exists(path)) return null;
-            if (TearingDown >= MaxTearingDown) { refusedAtCap = true; return null; }
+            if (TearingDown >= MaxTearingDown) { refusedAtCap = true; LogRefused(); return null; }
             FlashClipPlayer? created = null;
             var lease = Budget.TryAcquire(() => created?.Dispose(), out _, reserved: flash);
-            if (lease == null) { refusedAtCap = true; return null; }
+            if (lease == null) { refusedAtCap = true; LogRefused(); return null; }
             try
             {
                 created = new FlashClipPlayer(vlc, path, width, height, show, speed, lease);
                 created._stopped = stopped;
+                Log.Debug("CLIP acquire live={Live}/{Max} shared={Shared}/{SharedMax}", Budget.Live, MaxPlayers, Budget.LiveShared, MaxSharedPlayers);
                 return created;
             }
             catch (Exception ex)
@@ -65,6 +67,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Log.Debug("Flash clip failed: {Error}", ex.Message);
                 return null;
             }
+        }
+
+        private static void LogRefused()
+        {
+            var now = Environment.TickCount64;
+            if (now - Interlocked.Read(ref _lastRefusedLogMs) <= 1000) return;
+            Interlocked.Exchange(ref _lastRefusedLogMs, now);
+            Log.Debug("CLIP refused live={Live}/{Max} shared={Shared}/{SharedMax} tearingDown={TearingDown}",
+                Budget.Live, MaxPlayers, Budget.LiveShared, MaxSharedPlayers, TearingDown);
         }
 
         /// <summary>The decode size: the flash's size scaled so its long side is at most 480 px.</summary>
@@ -144,7 +155,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (Interlocked.Exchange(ref _disposeOnce, 1) != 0) return;
             _disposed = true;
-            _lease.Dispose();
+            if (_lease.Release()) Log.Debug("CLIP release live={Live}/{Max}", Budget.Live, MaxPlayers);
             _stopped?.Invoke();
             _bitmap?.Dispose();
             _bitmap = null;
