@@ -5,8 +5,18 @@ import { loadTrack } from '../track/load.js';
 import { S, RESPAWN } from '../sim/state.js';
 import { step, spawn } from '../sim/kart.js';
 import { glideActive } from '../sim/glide.js';
-import { createAirWordRun, bindAirWords, airWordQuery } from '../sim/airWords.js';
+import { createAirWordRun, bindAirWords, airWordQuery, phraseBounceActive } from '../sim/airWords.js';
 import { DT, place, makeFeel, recorder, acts } from './sim-fake.mjs';
+
+test('interpolated kart views share contact squash state and detach on run replacement', () => {
+  const f = setup(), view = f.st.slice();
+  bindAirWords(view, f.run);
+  for (let i = 0; i < 900 && !phraseBounceActive(f.st); i++) tick(f);
+  assert.equal(phraseBounceActive(f.st), true);
+  assert.equal(phraseBounceActive(view), true);
+  bindAirWords(view, null);
+  assert.equal(phraseBounceActive(view), false);
+});
 test('an asynchronously loaded or replaced song preserves the active airborne route', () => {
   const f = setup(), { run, st, ev } = f;
   while (!run.platforms.some(r => r.alpha > .1)) tick(f);
@@ -105,21 +115,50 @@ test('all ten gaps auto-cross with no input, braking and full steering at varied
     }
 });
 
-test('one phrase assembles during descent and sends the kart across the rest of the gap', () => {
+test('one phrase arrives early enough to read and sends the kart across the rest of the gap', () => {
   const f = setup(), { run, ev, st } = f;
-  let firstSeen = null, firstContact = null, previousHeight = Infinity;
+  let firstSeen = null, firstContact = null;
   for (let i = 0; i < 900; i++) {
     tick(f);
     if (run.platforms.length && firstSeen === null) {
       firstSeen = ev.t;
-      assert.ok(st[S.posY] < previousHeight, 'the racer is already falling when the word arrives');
+      assert.ok(st[S.airborne], 'the phrase arrives while approaching the catch');
     }
     if (firstContact === null && ev.all('air-word-land').length) firstContact = ev.t;
-    previousHeight = st[S.posY];
     if (st[S.s] > f.zone.gapS1 + 12) break;
   }
-  assert.ok(firstContact - firstSeen >= .8 && firstContact - firstSeen <= .95);
+  assert.ok(firstContact - firstSeen >= 1.3 && firstContact - firstSeen <= 1.45);
   assert.equal(ev.all('air-word-hop').length, 1);
+});
+
+test('contact compresses, springs visibly upward and opens the hat only after the rebound apex', () => {
+  const f = setup(), { st, ev } = f;
+  while (!ev.all('air-word-land').length) tick(f);
+  const landed = ev.t, p = ev.all('air-word-land')[0].payload.p, height = st[S.posY];
+  assert.ok(phraseBounceActive(st));
+  assert.ok(Math.hypot(...p.map((v, i) => v - st[S.posX + i])) < .001);
+  while (!ev.all('air-word-hop').length) {
+    assert.equal(glideActive(st), false); tick(f);
+  }
+  assert.ok(ev.t - landed >= .17 && ev.t - landed <= .21, 'the compression has readable time');
+  assert.deepEqual(ev.all('air-word-hop')[0].payload.p, p);
+  for (let i = 0; i < 18; i++) tick(f);
+  assert.ok(st[S.posY] > height + 1 && st[S.velY] > 0, 'visible immediate spring ascent');
+  assert.equal(glideActive(st), false, 'hat does not mask the launch');
+  while (!glideActive(st)) tick(f);
+  assert.ok(st[S.velY] <= 0, 'hat follows the actual world-space apex');
+  f.run.reset(); assert.equal(phraseBounceActive(st), false);
+});
+
+test('steering changes the real flight lane and releasing the key keeps that lane', () => {
+  const f = setup(), { st, ev } = f;
+  while (!ev.all('air-word-hop').length) tick(f);
+  for (let i = 0; i < 30; i++) tick(f, acts({ steer: 1 }));
+  const heldLane = st[S.lateral]; assert.ok(heldLane > 1.5);
+  for (let i = 0; i < 30; i++) tick(f);
+  assert.ok(Math.abs(st[S.lateral] - heldLane) < .15, 'release does not spring the kart back to centre');
+  for (let i = 0; i < 45; i++) tick(f, acts({ steer: -1 }));
+  assert.ok(st[S.lateral] < heldLane - 2, 'the opposite key traverses the lane');
 });
 
 test('pause freezes flight and particles, while song seeks or silence cannot remove the catch', () => {

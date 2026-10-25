@@ -17,7 +17,7 @@ export function airWordPose(p, timeS, gentle = false, out = {}) {
   const gain = gentle ? .25 : 1;
   out.y = approaching ? Math.sin(timeS * 2.2 + (p.index || 0)) * .09 * approaching * gain : 0;
   out.tilt = approaching ? Math.sin(timeS * 1.7 + (p.index || 0)) * .035 * approaching * gain : 0;
-  out.depth = 1 - recoil * .26 * gain;
+  out.depth = 1 - recoil * .42 * gain;
   return out;
 }
 

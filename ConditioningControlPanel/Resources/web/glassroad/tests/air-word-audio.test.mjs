@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { playAirWordHop } from '../audio/airWordHop.js';
+import { playAirWordHop, playAirWordLand } from '../audio/airWordHop.js';
 import { AUDIO_CUES } from '../audio/cues.js';
 import { sfxPlan, resolvePlan } from '../audio/sfxmap.js';
 import { createAudio } from '../audio/bus.js';
@@ -46,13 +46,16 @@ test('duplicate launches stay quiet; Gentle softens each layer and the air sweep
   for (const p of [{}, payload(-1), payload(Infinity), payload(.5)]) assert.equal(playAirWordHop(normal.syn, p), false);
 });
 
-test('bank-loaded audio keeps the custom spring and suppresses its redundant landing impact', () => {
+test('bank-loaded audio keeps a distinct contact tap and rebound spring', () => {
   assert.equal(AUDIO_CUES['air-word-hop'], playAirWordHop);
   assert.equal(resolvePlan(sfxPlan('air-word-hop', payload(0)), () => true), 'synth');
-  assert.deepEqual(sfxPlan('land', { tier: 3, airWord: true }), []);
+  assert.equal(resolvePlan(sfxPlan('land', { tier: 3, airWord: true }), () => true), 'synth');
   const { syn, sounds } = recorder();
-  AUDIO_CUES.land(syn, { tier: 3, airWord: true }); assert.equal(sounds.length, 0);
-  AUDIO_CUES.land(syn, { tier: 3 }); assert.equal(sounds.length, 2);
+  AUDIO_CUES.land(syn, { tier: 3, airWord: true }); assert.equal(sounds.length, 2);
+  assert.ok(sounds.every(s => s.dur <= .12 && s.vol <= .075));
+  AUDIO_CUES.land(syn, { tier: 3 }); assert.equal(sounds.length, 4);
+  const soft = recorder(true); playAirWordLand(soft.syn);
+  assert.ok(soft.sounds.every((s, i) => s.vol < sounds[i].vol));
 });
 
 function context() {

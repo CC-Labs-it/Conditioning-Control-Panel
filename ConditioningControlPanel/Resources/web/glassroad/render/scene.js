@@ -389,6 +389,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   if (bus) {
     const on = (name, fn) => offs.push(bus.on(name, (p) => pending.push(fn(p || {}))));
     on('land', ({ tier = 0 }) => ['land', 0, tier]);
+    for (const name of ['air-word-land', 'air-word-hop']) on(name, p => ['phrase-bounce', 0, name === 'air-word-hop' ? 1 : 0, p]);
     // polish 4 drift and trick moments go to the particle layer with their payloads; the player's arrive bare
     for (const n of P4_EVENTS) on(n, (p) => ['p4', 0, n, p]);
     // Go bursts at the player's own kart (the countdown card is the HUD half of it)
@@ -419,6 +420,15 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const posOf = (i) => { const o = kartObjs[i]; return o ? [o.position.x, o.position.y, o.position.z] : null; };
   function juice(e, gentle) {
     const [kind, i, a, p, b] = e, k = karts.list[i], obj = kartObjs[i], few = gentle ? 0.6 : 1;
+    if (kind === 'phrase-bounce') {
+      const at = p?.p || posOf(i);
+      if (!at || !obj) return;
+      const colours = [pal.primaryHex(), pal.accentHex(), '#fff3d9'];
+      particles.burst(at, Math.round((a ? 56 : 34) * few), { colours, speed: gentle ? 1.7 : a ? 5.2 : 3.4,
+        up: a ? 3.6 : .8, g: a ? 1.8 : .8, sizeM: a ? .16 : .12, lifeS: a ? .9 : .6, sparkle: .8, near: true });
+      wakes.ring(at, obj.quaternion, a ? 3.3 : 2.2, { gentle, gain: a ? .85 : .65 });
+      return;
+    }
     if (kind === 'boudoir-press-hit' || kind === 'boudoir-sweeper-hit' || kind === 'boudoir-mirror-hit') {
       boudoirHazardView?.hit(p);
       particles.burst(posOf(i), Math.round(24 * few), { colours: ['#f6cbdc', '#e6b563', '#ffffff'], speed: 5, up: 2, sparkle: .65, near: i === 0 });

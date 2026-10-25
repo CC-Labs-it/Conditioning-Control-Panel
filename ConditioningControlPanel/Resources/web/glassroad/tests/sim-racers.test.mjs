@@ -87,6 +87,27 @@ test('place() resets laps, items, mods, fxv and the clock', () => {
     [0, 0, false, null, 1, null, RESPAWN.NONE, 0]);
 });
 
+test('press correction reaches progress before a blocked crossing earns credit', () => {
+  const feel = makeFeel(), tr = threshold(), q = queue();
+  const racers = createRacers(tr, feel, q, { count: 1 }), race = createRace(tr, feel, q);
+  const actions = Object.assign(createActions(), { throttle: 1 });
+  go(race, actions, racers.player.st);
+  const order = [];
+  const industry = { apply(r, previous, time, events, dt) {
+    assert.equal(previous, r.prev);
+    assert.equal(events, r.events);
+    assert.equal(dt, DT, 'tar damping uses the real fixed-step duration');
+    order.push('press');
+    r.st[S.posZ] = 123;
+  } };
+  racers.player.progress.update = st => {
+    order.push('progress');
+    assert.equal(st[S.posZ], 123);
+  };
+  racers.step(DT, actions, race, { industry });
+  assert.deepEqual(order, ['press', 'progress']);
+});
+
 test('nearby: closest rivals first, pan + to the player\'s right', () => {
   const feel = makeFeel(), tr = threshold(), r = createRacers(tr, feel, queue());
   const near = r.nearby(3, 80);

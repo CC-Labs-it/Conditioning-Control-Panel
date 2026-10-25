@@ -11,9 +11,10 @@ const smooth = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 const frame = () => ({ p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] });
 const dot = (p, row, axis) => p.reduce((v, x, i) => v + (x - row.p[i]) * row[axis][i], 0);
 const FALLBACK = ['LET GO', 'DRIFT AWAY', 'BREATHE SLOW', 'FLOAT ON'];
-const HOLD_S = .06, APPEAR_S = .9, FADE_S = .5;
+const HOLD_S = .18, APPEAR_S = 1.4, FADE_S = .5;
 const LYRIC_WINDOW_S = 1.25;
 export function bindAirWords(st, run) { runs.set(st, run); held.delete(st); }
+export function phraseBounceActive(st) { return !!runs.get(st)?.bouncing; }
 export function resetAirWords(value) { const run = runs.get(value) || value; if (run?.reset) run.reset(); held.delete(value); }
 export function stepAirWords(st, action, feel, dt, events) {
   return runs.get(st)?.step(st, action, feel, dt, events) || false;
@@ -30,7 +31,8 @@ export function createAirWordRun(song, track) {
     widthM: 7, lengthM: 2.6, alpha: 0, solid: false, bornS: Infinity, endS: -1 }));
   const platforms = [], f = frame(), next = frame(), q = [0, 0, 0, 1];
   let clock = 0, songS = 0, rider = null, previous = null, route = null, paused = false, enabled = true;
-  const run = { platforms, timeS: 0, activeSection: null, update, reset, step, setSong };
+  const run = { platforms, timeS: 0, activeSection: null, update, reset, step, setSong,
+    get bouncing() { return route?.stage === 'hold' || route?.stage === 'flight' && route.leg === 1; } };
   function reset() {
     platforms.length = 0;
     if (rider) { held.delete(rider); setPhraseGlide(rider, false); }
@@ -115,7 +117,7 @@ export function createAirWordRun(song, track) {
   }
   function launch(st, events) {
     const r = route, from = r.points[r.leg], to = r.points[r.leg + 1];
-    r.stage = 'flight'; r.elapsed = 0;
+    r.stage = 'flight'; r.elapsed = 0; r.reboundedApex = false;
     r.duration = clamp((to.s - from.s) / 23, r.leg === 0 ? 2.2 : 2.8, 7);
     track.frameAt(from.s, f); from.offset ||= f.b.map(v => v * r.lateral);
     track.frameAt(to.s, f); to.defaultOffset = f.b.map(v => v * r.lateral);
@@ -127,8 +129,13 @@ export function createAirWordRun(song, track) {
       to.row.catchS = clock + r.duration;
     }
     st[S.airborne] = 1; st[S.grounded] = 0; st[S.airTime] = 0; st[S.hopT] = 0;
-    if (from.row) events.emit('air-word-hop', { id: from.row.id, section: r.zone.id, index: from.row.index, s: from.s, p: [...from.row.p] });
+    if (from.row) events.emit('air-word-hop', contact(from));
     else events.emit('airborne', { cause: 'lip' });
+  }
+  function contact(point) {
+    const row = point.row;
+    return { id: row.id, section: route.zone.id, index: row.index, text: row.text, s: point.s,
+      p: row.p.map((v, i) => i === 1 ? v : v + point.offset[i]), n: [...row.n], b: [...row.b] };
   }
   function step(st, action, feel, dt, events) {
     if (!enabled || !(dt > 0)) return false;
@@ -144,8 +151,10 @@ export function createAirWordRun(song, track) {
     if (Math.abs(st[S.s] - r.s) > 20) { reset(); return false; }
     dt = Math.min(dt, .1); clock += dt; r.age += dt;
     const old = [st[S.posX], st[S.posY], st[S.posZ]], steering = clamp(Number(action.steer) || 0, -1, 1);
-    const limit = Math.min(2.6, r.zone.widthM * .18), target = steering * limit;
-    r.lateral += (target - r.lateral) * (1 - Math.exp(-dt / .5));
+    const limit = Math.min(2.6, r.zone.widthM * .18);
+    // Steering changes the actual flight lane and stays there when released.
+    const target = clamp(r.lateral + steering * 4 * dt, -limit, limit);
+    r.lateral += clamp(target - r.lateral, -4 * dt, 4 * dt);
     let y = null, onGround = false, end = false, offset = null;
     if (r.stage === 'ramp' || r.stage === 'exit') {
       r.speed += clamp(24 - r.speed, -14 * dt, 14 * dt);
@@ -160,7 +169,7 @@ export function createAirWordRun(song, track) {
       r.elapsed = Math.min(r.duration, r.elapsed + dt);
       const u = r.elapsed / r.duration, from = r.points[r.leg], to = r.points[r.leg + 1];
       const candidates = to.row?.catchText === to.row?.text && to.row?.catchPoints;
-      if (to.catchU === null && candidates?.length) {
+      if (to.catchU === null && candidates?.length && u >= .72) {
         let best = null, score = Infinity;
         for (const point of candidates) {
           if (!Number.isFinite(point.x) || !Number.isFinite(point.z) || Math.abs(point.x) > .5 || Math.abs(point.z) > .5) continue;
@@ -174,19 +183,23 @@ export function createAirWordRun(song, track) {
       }
       const catchBlend = to.catchU === null ? 0 : smooth((u - to.catchU) / Math.max(.001, 1 - to.catchU));
       track.frameAt(from.s + (to.s - from.s) * u, f);
-      offset = from.offset.map((v, i) => v * (1 - u) + to.defaultOffset[i] * u +
-        (to.offset[i] - to.defaultOffset[i]) * catchBlend + f.b[i] * steering * 1.2 * Math.sin(Math.PI * u));
+      const launchBlend = smooth(Math.min(1, r.elapsed / .3));
+      offset = from.offset.map((v, i) => (v * (1 - launchBlend) + f.b[i] * r.lateral * launchBlend) *
+        (1 - catchBlend) + to.offset[i] * catchBlend);
+      if (!to.row) to.offset = [...offset];
       r.s = from.s + (to.s - from.s) * u;
-      // Zero vertical velocity at either contact avoids the hard down/up reversal.
-      y = from.y + (to.y - from.y) * smooth(u) + (r.leg === 0 ? 1.5 : 1.8) * Math.sin(Math.PI * u) ** 2;
+      // A soft catch, then an immediate spring ascent that settles gently onto the far deck.
+      const arc = r.leg === 0 ? 2.4 * Math.sin(Math.PI * u) ** 2 : 3.5 * 6.75 * u * (1 - u) ** 2;
+      y = from.y + (to.y - from.y) * smooth(u) + arc;
       st[S.airTime] += dt;
       if (u >= 1) {
         st[S.airborne] = 0; st[S.grounded] = 1; onGround = true;
-        events.emit('land', { tier: to.row ? 0 : 1, airTime: st[S.airTime], airWord: !!to.row });
+        events.emit('land', { tier: to.row ? 0 : 1, airTime: st[S.airTime], airWord: !!to.row,
+          ...(to.row ? contact(to) : {}) });
         if (to.row) {
           to.row.bornS = Math.min(to.row.bornS, clock - .34);
           to.row.landedS = clock;
-          events.emit('air-word-land', { id: to.row.id, text: to.row.text, s: to.s });
+          events.emit('air-word-land', contact(to));
           r.leg++; r.stage = 'hold'; r.hold = HOLD_S; held.set(st, to.row);
         } else {
           r.stage = 'exit'; r.speed = 24; held.delete(st);
@@ -211,7 +224,8 @@ export function createAirWordRun(song, track) {
     boostFloor(st, feel, feel.get('speed.topMps'), dt, events);
     if (onGround) { st[S.grounded] = 1; st[S.airborne] = 0; st[S.latchSeg] = f.seg; }
     else { st[S.grounded] = 0; st[S.airborne] = 1; }
-    setPhraseGlide(st, r.stage === 'flight' && r.leg === 1 && r.elapsed / r.duration >= .2);
+    if (r.stage === 'flight' && r.leg === 1 && r.elapsed / r.duration >= .44 && v[1] <= 0) r.reboundedApex = true;
+    setPhraseGlide(st, r.stage === 'flight' && r.leg === 1 && r.reboundedApex);
     renderRows();
     if (end) { run.activeSection = null; route = null; }
     return true;

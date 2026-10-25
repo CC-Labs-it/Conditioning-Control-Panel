@@ -463,7 +463,7 @@ async function boot(course, options, lifetime, isCurrent) {
   let race, racers, ai, contact, standings, items, scan, industry, perfume, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
   let runAssist = false;                          // the Options assist switch (applyOptions), carried into every rebuilt run
   function buildRun(s = null) {
-    if (P) bindAirWords(P.st, null);
+    if (P) { bindAirWords(P.st, null); bindAirWords(P.view, null); }
     airWords?.reset(); airWords = null; airSong = null;
     const q = s ? s.tap(queue) : queue, sd = s ? s.seed : seed;
     race = createRace(track, feel, q);
@@ -486,8 +486,11 @@ async function boot(course, options, lifetime, isCurrent) {
     items = s ? s.mount(racers, race, q) : createItems(track, feel, q, { seed: sd });
     P = racers.player;
     assist = createAssist(track, P.feel);
-    if (!s) { airWords = createAirWordRun(null, track); bindAirWords(P.st, airWords); }
-    sctx = { ai, items, standings, hazards };
+    if (!s) {
+      airWords = createAirWordRun(null, track);
+      bindAirWords(P.st, airWords); bindAirWords(P.view, airWords);
+    }
+    sctx = { ai, items, standings, hazards, industry };
     aiCtx = { racers: racers.list, items, standings, race };
     kartViews = racers.list.map((r) => ({ st: r.view, meta: r.meta, fxv: r.fxv }));
     mapXz = new Float32Array(racers.list.length * 2);
@@ -607,10 +610,10 @@ async function boot(course, options, lifetime, isCurrent) {
   function armWords() {
     const song = audio.music && audio.music.song;
     songCues?.dispose(); songCues = song ? createSongCueRun(song, track) : null;
-    if (online) { airWords?.reset(); airWords = null; bindAirWords(P.st, null); }
+    if (online) { airWords?.reset(); airWords = null; bindAirWords(P.st, null); bindAirWords(P.view, null); }
     else if (!airWords) {
       airSong = song;
-      airWords = createAirWordRun(song, track); bindAirWords(P.st, airWords);
+      airWords = createAirWordRun(song, track); bindAirWords(P.st, airWords); bindAirWords(P.view, airWords);
     } else if (airSong !== song) {
       airSong = song; airWords.setSong(song);
     }
@@ -1075,7 +1078,6 @@ async function boot(course, options, lifetime, isCurrent) {
       if (race.phase === 'racing' || race.phase === 'finished') {
         const sc = scanClock(online ? null : audio.music, racers.clockS);
         scan.update(racers.list, sc.timeS, sc.bpm);
-        industry.update(racers.list, racers.clockS, clock.dt);
         perfume.update(racers.list, racers.clockS, clock.dt);
       }
       contact.update(clock.dt, racers.list, race);                //    bumps, ghosts, slipstream

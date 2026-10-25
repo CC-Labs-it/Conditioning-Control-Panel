@@ -140,9 +140,13 @@ export const FX_CUES = {
   airborne(fx) {
     fx.hold('stretch', fx.feel.get('air.squash')[0], 2 * rise(fx));
   },
-  land(fx, { tier = 0 }) {
+  land(fx, { tier = 0, airWord = false }) {
     const gone = j(fx, 'landGoneS');
     fx.release('stretch', rise(fx));
+    if (airWord) {
+      fx.fire('squash', fx.gentle.scroll(.24), .04, .08, .16);
+      return;
+    }
     if (tier < 1) return;
     fx.fire('squash', fx.feel.get('air.squash')[Math.min(tier, 3) - 1], 0, 0, gone);
     fx.fire('dust', tier / 3, 0, 0, gone);
@@ -264,7 +268,10 @@ export const FX_CUES = {
   // The gate renderer already owns the crossing pulse and text; do not add a second camera beat.
   'phrase-gate'() {},
   'press-thud'() {},
-  'air-word-hop'() {}, // The scripted trajectory supplies the jump motion; audio adds the contact cue.
+  'air-word-hop'(fx) {
+    fx.release('squash', .06);
+    fx.fire('stretch', fx.gentle.scroll(.2), .06, .12, .28);
+  },
   pause(fx, { on = false }) { fx.paused = !!on; },
 };
 

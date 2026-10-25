@@ -130,7 +130,7 @@ export function sfxPlan(name, p = {}, o = {}) {
     }
     case 'hop': return [one('hop')];
     case 'land': {
-      if (p.airWord) return []; // The scripted launch carries its own rounded contact note.
+      if (p.airWord) return null; // The soft contact tap stays separate from the rebound spring.
       const t = p.tier | 0;
       if (t <= 0) return [];
       return t >= 3 ? [one('land-heavy')] : [one('land-light', t === 1 ? 0.55 : 1)];

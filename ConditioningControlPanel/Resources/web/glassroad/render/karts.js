@@ -36,6 +36,7 @@ import {
 } from 'three/tsl';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { S, RESPAWN } from '../sim/state.js';
+import { phraseBounceActive } from '../sim/airWords.js';
 import { LOOK } from './look.js';
 import { KART_VIEW } from './viewMath.js';
 import { Q } from './quality.js';
@@ -411,7 +412,10 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     body.position.set(0, o.lift, 0);
     body.quaternion.setFromAxisAngle(UPY, p.yawAdd + o.yaw)
       .multiply(QX.setFromAxisAngle(FZ, p.roll * o.stiff * (rig ? rig.bank : 1) + o.roll)).multiply(QX.setFromAxisAngle(RX, (rig ? 0 : p.pitch) + o.pitch));
-    body.scale.set(1 + o.sq / 2, 1 - o.sq, 1 + o.sq / 2);
+    // Phrase squash acts on the whole kart, preserving clip ownership of every joint.
+    const phraseSq = rig && phraseBounceActive(st) ? Math.max(-.2, Math.min(.24, squash || 0)) : 0;
+    const bodySq = phraseSq ? Math.max(-.25, Math.min(.35, o.sq + phraseSq)) : o.sq;
+    body.scale.set(1 + bodySq / 2, 1 - bodySq, 1 + bodySq / 2);
     const near = k.i === 0 || distM <= Q.kartLodM;
     if (near && rig) { if (k.face) k.face.set(o.face, o.blink, r.t); }
     else if (near) {
