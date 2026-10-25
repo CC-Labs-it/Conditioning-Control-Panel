@@ -206,21 +206,22 @@ public sealed class LeashHoldTests
         int played = 0;
         CoreAudio.PlayOneShotProvider = (path, volume, tag, _, _) =>
         {
+            played++;   // first: Tick swallows exceptions, so a throwing assert below must not hide a play
             Assert.EndsWith("countdown_tick.mp3", path);
             Assert.Equal(0.05f, volume);
             Assert.Equal("leash-tick", tag);
-            played++;
         };
         try
         {
-            CoreAudio.IsOutputSuppressedProvider = () => false;
-            LeashHoldSound.Tick();
-            Assert.Equal(1, played);
+            // Silenced cases first: after a play, the shared 130 ms leash gap would hide a missing check.
             CoreAudio.IsOutputSuppressedProvider = () => true;
             LeashHoldSound.Tick();
-            Assert.Equal(1, played);
+            Assert.Equal(0, played);
             settings.Current.MasterVolume = 0;
             CoreAudio.IsOutputSuppressedProvider = () => false;
+            LeashHoldSound.Tick();
+            Assert.Equal(0, played);
+            settings.Current.MasterVolume = 50;
             LeashHoldSound.Tick();
             Assert.Equal(1, played);
         }

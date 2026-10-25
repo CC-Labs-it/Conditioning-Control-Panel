@@ -9,7 +9,9 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// <summary>WPF LeashFx.Tick: the countdown cue, with the shared leash sound rules.</summary>
 internal static class LeashHoldSound
 {
-    private static readonly LeashSfxRules Rules = new();
+    /// <summary>The ONE leash sound-rule instance for this head: WPF LeashFx shares a single 130 ms gap across every
+    /// leash cue, so any later leash cue must call TryPlay on this, never on its own LeashSfxRules.</summary>
+    internal static readonly LeashSfxRules Rules = new();
 
     internal static void Tick()
     {
