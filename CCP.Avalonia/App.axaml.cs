@@ -23,6 +23,7 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>Weekly free-tier pass for the Graded Intake (WPF App.IntakePass).</summary>
         public static IntakePassService IntakePass { get; } = new();
+        internal static IntakePunchCardService? IntakePunchCard { get; set; }
 
         /// <summary>HT-URL lookup + download (WPF App.CatalogueLookup). The shell registers the opener.</summary>
         internal static CatalogueLookup CatalogueLookup { get; set; } = new(
@@ -710,6 +711,8 @@ namespace ConditioningControlPanel.Avalonia
                 // IsSessionRunningProvider, so the feature lock fires for a session, not a plain Start.
                 CoreSession.IsEngineRunningProvider = () => CoreEngine.IsRunning;
                 Sessions = new SessionRunner(new SessionLogService());
+                IntakePunchCard = new IntakePunchCardService();
+                WireIntakeSessionCredit(Sessions);
                 // WPF App.xaml.cs:2566: the media recap. FlashOverlay feeds images; the video scheduler feeds clips.
                 MediaHistory = new MediaHistoryService();
                 if (CoreEngine.Video is { } recapVideo)
@@ -1190,6 +1193,7 @@ namespace ConditioningControlPanel.Avalonia
             // WPF AchievementService.Dispose saves synchronously; only when dirty here, so an idle exit
             // never rewrites the file (or rotates its .bak) - it may be shared with the WPF head.
             try { if (Achievements is { IsDirty: true } a) a.Save(); } catch { /* the store logs write failures */ }
+            try { IntakePunchCard?.Dispose(); } catch { /* flush pending intake credit */ }
             try { Quests?.Dispose(); } catch { /* WPF App.OnExit:6104; saves only when dirty */ }
             try { FeatureDayLog?.Dispose(); } catch (Exception ex) { Serilog.Log.Debug(ex, "FeatureDayLog flush on shutdown failed"); } // WPF App.OnExit:6270
             try { Programs?.Dispose(); } catch { /* WPF App.OnExit:6309; flushes unsaved program state */ }

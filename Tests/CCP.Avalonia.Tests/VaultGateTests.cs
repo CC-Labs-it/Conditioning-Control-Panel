@@ -276,6 +276,44 @@ public sealed class VaultGateTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task SpentIntakeToastOpensThePricedIntakeCard() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureAvalonia();
+        var settings = CoreSettings.Current;
+        var week = settings.IntakePassSpentWeek;
+        var utc = settings.IntakePassSpentUtc;
+        var login = CoreAccount.IsLoggedInProvider;
+        var lab = CoreAccount.HasLabAccessProvider;
+        CoreAccount.IsLoggedInProvider = () => true;
+        CoreAccount.HasLabAccessProvider = () => false;
+        var shell = new MainShellWindow();
+        shell.Show();
+        var host = new StackPanel();
+        global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(host);
+        host.Children.Clear();
+        try
+        {
+            settings.IntakePassSpentWeek = IntakePassService.CurrentWeekKey();
+            settings.IntakePassSpentUtc = DateTime.UtcNow;
+            shell.Named<GradedIntakeTabView>("GradedIntakeTab")!.BtnStartIntake_Click(null, new RoutedEventArgs());
+            Click(host, Loc.Get("intake_gate_spent_cta"));
+            Assert.NotNull(VaultGateDialog.Open);
+            Assert.Contains(Loc.Get("vaultgate_chip_vault"), Texts(VaultGateDialog.Open!));
+        }
+        finally
+        {
+            VaultGateDialog.Open?.Close();
+            shell.Close();
+            settings.IntakePassSpentWeek = week;
+            settings.IntakePassSpentUtc = utc;
+            CoreAccount.IsLoggedInProvider = login;
+            CoreAccount.HasLabAccessProvider = lab;
+            global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(new StackPanel());
+        }
+        return Task.CompletedTask;
+    });
+
     private static ConditioningControlPanel.Avalonia.Helpers.NotificationService Toasts(out StackPanel host)
     {
         var toasts = new ConditioningControlPanel.Avalonia.Helpers.NotificationService();

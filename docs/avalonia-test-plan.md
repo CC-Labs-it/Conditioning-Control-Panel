@@ -673,3 +673,5 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+32. While intake is open, spend the pass and press Begin Intake again: the live intake focuses without a gate toast. With intake closed and the pass spent, See tiers opens the priced Basic intake card. Complete a Graded Intake and use its Run it now toast to reveal the saved session and confirm starting it. Stop below 50%: no stamp; run that same draft to 50% or natural completion: exactly one stamp, never credit another session. Restart the app and launch intake again: the saved completed-intake history now permits main-window ducking; closing or panic restores it. The punch-card panel remains hidden. WPF `Services/Quiz/IntakeHostService.cs:568`, `Services/Progression/IntakePunchCardService.cs:151`, `MainWindow/MainWindow.Presets.cs:1653`. Rows: `views-tab-graded-intake`.
