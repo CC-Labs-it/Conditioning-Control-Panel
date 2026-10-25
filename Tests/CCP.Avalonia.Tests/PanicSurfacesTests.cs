@@ -123,6 +123,7 @@ public sealed class PanicSurfacesTests
         "deeper-editor-audio",
         "knock-cards",
         "asset-preview",
+        "gaze-debug-cursor",
         "camera",
     };
 

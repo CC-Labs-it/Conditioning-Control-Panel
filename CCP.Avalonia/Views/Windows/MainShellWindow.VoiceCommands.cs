@@ -190,7 +190,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void OnPushToTalkKey()
         {
-            if (!_pttArmed || Volatile.Read(ref _voiceBusyFlag) != 0 || !CoreSpeech.IsAvailable) return;
+            if (Controls.AppSettings.DevicesSettingsSection.CapturingPttKey || !_pttArmed || Volatile.Read(ref _voiceBusyFlag) != 0 || !CoreSpeech.IsAvailable) return;
             Log.Information("Push-to-talk pressed");
             Dispatcher.UIThread.Post(() => OnWakeWordHeard(null));
         }

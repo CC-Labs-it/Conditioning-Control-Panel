@@ -151,7 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeLeashHold(); // MainShellWindow.LeashHold.cs (WPF MainWindow.Leash.cs hold-to-cut)
             // WPF MainWindow.xaml.cs:3695: the tube is built on load when the companion is enabled.
             Opened += (_, _) => { if (CoreSettings.Current.AvatarEnabled) InitializeAvatarTube(); };
-            Closed += (_, _) => _avatarTubeWindow?.Close();
+            Closed += (_, _) => { _avatarTubeWindow?.Close(); Overlays.GazeDebugCursor.CloseActive(); };
             // WPF MainWindow.xaml.cs:674: catalogue downloads open in the player.
             App.CatalogueLookup.SetOpener(OpenCatalogueEnhancement);
             Closed += (_, _) =>

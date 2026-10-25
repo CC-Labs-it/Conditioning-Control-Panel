@@ -53,6 +53,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             TxtSpeechWakeWords.LostFocus += TxtSpeechWakeWords_LostFocus;
             CmbMicDevice.SelectionChanged += CmbMicDevice_SelectionChanged;
             BtnMicRefresh.Click += BtnMicRefresh_Click;
+            ChkSpeechWakeWord.IsCheckedChanged += ChkSpeechWakeWord_Changed;
+            ChkSpeechPushToTalk.IsCheckedChanged += ChkSpeechPushToTalk_Changed;
+            BtnSetPttKey.Click += BtnSetPttKey_Click;
+            ChkWebcamDebugCursor.IsCheckedChanged += ChkWebcamDebugCursor_Changed;
             BtnChatShortcutDevices.Click += BtnChatShortcut_Click;
             BtnPanicKey.Click += BtnPanicKey_Click;
             BtnPauseKey.Click += BtnPauseKey_Click;
@@ -79,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             RefreshWebcamStatus();
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
             OnSectionShown();
+            ChkWebcamDebugCursor.IsChecked = Overlays.GazeDebugCursor.Active != null;
             _lockdown = LockdownService.Current;
             if (_lockdown != null) { _lockdown.LockdownActivated += OnLockdownChanged; _lockdown.LockdownDeactivated += OnLockdownChanged; }
             ApplyLockdownHold();
@@ -106,10 +111,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         {
             Platform.WebcamTracker.Instance.StateChanged -= RefreshWebcamStatus;
             SubscribeWebcamDiagnostics(false);
+            _cancelPttCapture?.Invoke();
             if (_lockdown != null) { _lockdown.LockdownActivated -= OnLockdownChanged; _lockdown.LockdownDeactivated -= OnLockdownChanged; _lockdown = null; }
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
             base.OnDetachedFromVisualTree(e);
         }
+
+        private MainShellWindow? Main => TopLevel.GetTopLevel(this) as MainShellWindow ?? MainShellWindow.Current;
 
         // A cloud restore or a factory reset swaps the instance; repaint from it, on the UI thread.
         private void OnCurrentReplaced() => Dispatcher.UIThread.Post(() => { SyncFromSettings(); PopulateWebcamDevices(); PopulateWebcamMonitors(); });
@@ -198,8 +206,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             if (_loading) return;
             CoreSettings.Current.SpeechHeadphonesMode = ChkHeadphones.IsChecked == true;
             CoreSettings.Save();
-            // ponytail: WPF also re-quotes the device on the She's Listening chip
-            // (MainWindow.RefreshSheListeningDeviceChips); no such host on this head.
+            Main?.RefreshSheListeningDeviceChips();
         }
 
         /// <summary>
@@ -242,10 +249,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             s.SpeechInputDeviceIndex = idx;
             s.SpeechInputDeviceName = name; // matched by name on reopen - robust to ordinal reshuffle (#441b)
             CoreSettings.Save();
-            // ponytail: WPF also cuts the open capture so the wake loop reopens on the new device
-            // (App.Speech.StopListening + App.Autonomy.RefreshVoiceInputModes) and re-quotes the
-            // device on the She's Listening chip. The seam carries capability only, and neither
-            // the autonomy service nor that chip exists on this head.
+            if (s.MicConsentGiven && (s.SpeechWakeWordEnabled || s.SpeechPushToTalkEnabled))
+            {
+                Platform.PulseMicSource.Speech?.StopListening();
+                Main?.RefreshVoiceInputModes();
+            }
+            Main?.RefreshSheListeningDeviceChips();
         }
 
         private void BtnMicRefresh_Click(object? sender, RoutedEventArgs e) => PopulateMicDevices();
@@ -260,8 +269,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         ///
         /// Quick Recal and Tracker Test are live over the tracker's gaze feed.
         /// The camera picker is live over <see cref="Platform.V4l2Cameras"/>.
-        /// <para>ponytail: the debug cursor stays disabled until its overlay is ported.
-        /// The status pill follows the real tracker's state transitions.</para>
+        /// <para>The status pill follows the real tracker's state transitions.</para>
         /// </summary>
         private void RefreshWebcamAvailability()
         {
@@ -275,13 +283,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             CmbWebcamDevice.IsEnabled = has;
             BtnWebcamDeviceRefresh.IsEnabled = has;
             CmbWebcamMonitor.IsEnabled = has;
-            ChkWebcamDebugCursor.IsEnabled = false;
-            ToolTip.SetShowOnDisabled(ChkWebcamDebugCursor, true);
-            ToolTip.SetTip(ChkWebcamDebugCursor, "Not available on this build yet (needs the gaze cursor overlay).");
+            ChkWebcamDebugCursor.IsEnabled = has;
             if (!has)
                 AppendWebcamDebugLog("No webcam tracking engine on this build — camera controls are unavailable.");
             RefreshWebcamStartLabel();
             RefreshWebcamStatus();
+        }
+
+        private void ChkWebcamDebugCursor_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_loading) return;
+            if (ChkWebcamDebugCursor.IsChecked == true)
+            {
+                Overlays.GazeDebugCursor.ShowCursor();
+                if (Overlays.GazeDebugCursor.Active is { } cursor)
+                    cursor.Closed += (_, _) => ChkWebcamDebugCursor.IsChecked = false;
+                else
+                {
+                    _loading = true; ChkWebcamDebugCursor.IsChecked = false; _loading = false;
+                    AppendWebcamDebugLog("Debug cursor unavailable: the platform cannot provide a transparent click-through overlay.");
+                    return;
+                }
+                AppendWebcamDebugLog("Debug cursor enabled. Tracking must be running + calibrated for the dot to appear.");
+            }
+            else
+            {
+                Overlays.GazeDebugCursor.CloseActive();
+                AppendWebcamDebugLog("Debug cursor hidden.");
+            }
         }
 
         internal void RefreshWebcamStatus()
@@ -551,7 +580,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// refused — it would keep three of the dialog's four promises and claim all four.</para>
         ///
         /// <para>WPF also refreshes three blink-trainer rows; here the Blink Trainer page re-reads
-        /// consent whenever it is shown, and the debug cursor does not exist on this head.</para>
+        /// consent whenever it is shown.</para>
         /// </summary>
         private async void BtnWebcamRevokeConsent_Click(object? sender, RoutedEventArgs e)
         {
@@ -572,6 +601,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 if (!ok) return;
 
                 CoreWebcam.RevokeConsent();
+                ChkWebcamDebugCursor.IsChecked = false;
                 RefreshWebcamStartLabel();
                 AppendWebcamDebugLog("Consent revoked. Calibration deleted; webcam features disabled.");
             }
@@ -624,22 +654,111 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         //  voice modes
         // =====================================================================================
 
-        // ponytail: ChkSpeechWakeWord / ChkSpeechPushToTalk need App.Autonomy.RefreshVoiceInputModes
-        // (ConditioningControlPanel/Services/Autonomy/), still in the WPF head. TierGate is not the
-        // blocker any more - CCP.Core/Services/TierGate.cs - but the mic half is. They are
-        // seeded above and left without a write handler: a toggle that saved the flag but could
-        // neither charge the premium bar nor open the mic would be a lie in both directions.
-        // BtnSetPttKey likewise needs MainWindow's global-hook key capture.
+        // WPF MainWindow.Autonomy.cs:609-747: premium -> consent -> always-on warning.
+        // Disarming is never gated. The existing head host owns the capture and wake loop.
+        private bool _voiceChanging;
+        private async void ChkSpeechWakeWord_Changed(object? sender, RoutedEventArgs e)
+            => await ChangeVoiceModeAsync(ChkSpeechWakeWord, wake: true);
+
+        private async void ChkSpeechPushToTalk_Changed(object? sender, RoutedEventArgs e)
+            => await ChangeVoiceModeAsync(ChkSpeechPushToTalk, wake: false);
+
+        private async System.Threading.Tasks.Task ChangeVoiceModeAsync(CheckBox toggle, bool wake)
+        {
+            if (_loading || _voiceChanging) return;
+            _voiceChanging = true;
+            ChkSpeechWakeWord.IsEnabled = ChkSpeechPushToTalk.IsEnabled = false;
+            try
+            {
+                bool on = toggle.IsChecked == true;
+                if (on)
+                {
+                    if (!TierGate.DemandPremium(Loc.Get("tab_shelistening"), "voice")) return;
+                    if (TopLevel.GetTopLevel(this) is not Window owner) return;
+                    if (!CoreSettings.Current.MicConsentGiven)
+                    {
+                        var consent = new MicConsentDialog();
+                        await consent.ShowDialogSafe(owner);
+                        if (!consent.ConsentGiven) return;
+                    }
+                    if (wake && !await MessageDialog.ConfirmAsync(owner, "Always-on microphone",
+                        "Wake word keeps the microphone open continuously while Takeover is running so she can hear you call her.\n\n" +
+                        "Everything stays offline — audio is processed on your device and never recorded or sent anywhere.\n\n" +
+                        "Turn on always-on listening?", okText: "Yes", cancelText: "No")) return;
+                }
+                if (wake) CoreSettings.Current.SpeechWakeWordEnabled = on;
+                else CoreSettings.Current.SpeechPushToTalkEnabled = on;
+                CoreSettings.Save();
+                Main?.RefreshSheListeningTab();
+            }
+            catch (Exception ex) { Log.Warning(ex, "Settings/Devices: voice mode change failed"); }
+            finally
+            {
+                _voiceChanging = false;
+                ChkSpeechWakeWord.IsEnabled = ChkSpeechPushToTalk.IsEnabled = true;
+                // Posted like WPF RevertToggle; no temporary checkmark survives a declined gate.
+                Dispatcher.UIThread.Post(SyncFromSettings);
+            }
+        }
+
+        internal static bool CapturingPttKey { get; private set; }
+        private Action? _cancelPttCapture;
+        private void BtnSetPttKey_Click(object? sender, RoutedEventArgs e)
+        {
+            if (CapturingPttKey || TopLevel.GetTopLevel(this) is not { } top) return;
+            CapturingPttKey = true;
+            SetButtonLabel(BtnSetPttKey, Loc.Get("rf_btn_press_a_key"));
+            top.AddHandler(KeyDownEvent, Capture, RoutingStrategies.Tunnel);
+            if (top is Window w) w.Deactivated += Cancel;
+            _cancelPttCapture = () => Cancel(null, EventArgs.Empty);
+
+            void Detach()
+            {
+                top.RemoveHandler(KeyDownEvent, Capture);
+                if (top is Window window) window.Deactivated -= Cancel;
+                _cancelPttCapture = null;
+                var label = new TextBlock();
+                label.Bind(TextBlock.TextProperty, new global::Avalonia.Data.Binding("[set2_btn_set_key]")
+                    { Source = LocalizationManager.Instance });
+                BtnSetPttKey.Content = label;
+            }
+            void Cancel(object? s, EventArgs e)
+            {
+                Detach();
+                CapturingPttKey = false;
+            }
+            void Capture(object? s, KeyEventArgs e)
+            {
+                if (e.Key is Key.None or Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
+                    or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin) return;
+                e.Handled = true;
+                Detach();
+                CoreSettings.Current.SpeechPushToTalkKey = e.Key.ToString();
+                CoreSettings.Save();
+                TxtPttKey.Text = e.Key.ToString();
+                Main?.RefreshSheListeningTab();
+                // The global hook may queue a copy of this press after the focused capture.
+                PttReleaseLater(() => CapturingPttKey = false, TimeSpan.FromMilliseconds(300));
+            }
+        }
+
+        /// <summary>Test seam: schedules the post-capture release (a real one-shot timer in the app).</summary>
+        internal static Action<Action, TimeSpan> PttReleaseLater = (a, t) => DispatcherTimer.RunOnce(a, t);
 
         private void TxtSpeechWakeWords_LostFocus(object? sender, RoutedEventArgs e)
         {
             if (_loading) return;
+            var s = CoreSettings.Current;
             var text = TxtSpeechWakeWords.Text?.Trim();
-            CoreSettings.Current.SpeechWakeWords = string.IsNullOrWhiteSpace(text) ? "hey bambi" : text;
+            var words = string.IsNullOrWhiteSpace(text) ? "hey bambi" : text;
             if (string.IsNullOrWhiteSpace(text)) TxtSpeechWakeWords.Text = "hey bambi";
+            if (words == s.SpeechWakeWords) return;
+            s.SpeechWakeWords = words;
             CoreSettings.Save();
-            // ponytail: WPF also restarts the wake loop so new phrases take effect immediately
-            // (App.Autonomy.RefreshVoiceInputModes); no speech engine on this head.
+            // Re-arm only an open mic, as the mic picker does: a focus loss alone must not cut it.
+            if (s.MicConsentGiven && (s.SpeechWakeWordEnabled || s.SpeechPushToTalkEnabled))
+                Platform.PulseMicSource.Speech?.StopListening();
+            Main?.RefreshSheListeningTab();
         }
 
         // =====================================================================================

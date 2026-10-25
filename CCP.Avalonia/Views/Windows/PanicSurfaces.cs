@@ -96,6 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("deeper-editor-audio", _ => Deeper.DeeperEditorWindow.PauseAllForPanic()),   // P06; WPF left it playing
             new("knock-cards", _ => Overlays.KnockCard.FoldAll()),   // P06; WPF left them up. Folded as Later: they wait in the Inbox
             new("asset-preview", _ => MiniPlayerWindow.CloseAllForPanic()),  // Library local and encrypted-pack previews (P06; WPF left the preview open)
+            new("gaze-debug-cursor", _ => Overlays.GazeDebugCursor.CloseActive()),
             new("camera", _ => MainShellWindow.StopCameraForPanic(), After: ["gaze-minigame"]),   // decision C: last, fire-and-forget; gaze reads it
         };
 
