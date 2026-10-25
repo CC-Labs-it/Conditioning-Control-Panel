@@ -3304,3 +3304,7 @@ Header mod selector regains the WPF "Open Mod Manager" footer row, and Home feat
 ## avalonia-port/wire-svc-content-packs: +49
 - Restacked on wire-views-tab-assets (P105 duplicate dropped): one Library test for pack-file name sort, videos-folder check vs the pack video pool, and deactivate hiding the pack.
 - Ledger svc-content-packs row points at the Library pack tree; still stub (wire-svc-content-packs-b).
+
+## avalonia-port/wire-svc-discord-rich-presence: +192
+- Discord presence follows Flash, Session and Video lifecycles through the Core `CoreDiscord` hook; the attention retry keeps "Watching" as WPF does.
+- Brain Drain, Goon Game and Mind Wipe session callers follow in wire-svc-discord-rich-presence-b.
