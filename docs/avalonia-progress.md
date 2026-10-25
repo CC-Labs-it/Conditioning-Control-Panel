@@ -3036,3 +3036,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-views-tab-exclusives: +322
 - Premium vault accent chrome (untiered rims, spotlight rim/glow/badge/pill, every shelf badge/pill/title glow) follows the active mod palette through Core VaultHue; row stays stub (follow-up wire-views-tab-exclusives-b).
 - Accent test drives the real CoreMods.ModChanged path (fail-proven rcheck 39721281655); rgate 39721698896 green except the known RaceTrack flake.
+
+## avalonia-port/wire-feat-friends-blocked-presence: +296
+- Per-account block fallback and the once-only presence ask, shared with WPF through Core `FriendsBlockList`. The local list is retired only by the landing tick, as on WPF.
+- Fix round: the Core test compiles again, and the WPF `FriendsDrawerKnockTests` regression is fixed (reads stay pure).
