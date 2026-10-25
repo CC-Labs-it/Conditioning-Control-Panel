@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -11,6 +13,7 @@ using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Webcam;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
@@ -64,6 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             BtnWebcamDebugTrackerTest.Click += BtnWebcamDebugTrackerTest_Click;
             CmbWebcamDevice.SelectionChanged += CmbWebcamDevice_SelectionChanged;
             BtnWebcamDeviceRefresh.Click += BtnWebcamDeviceRefresh_Click;
+            CmbWebcamMonitor.SelectionChanged += CmbWebcamMonitor_SelectionChanged;
 
             SyncFromSettings();
             PopulateMicDevices();
@@ -80,6 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             SyncFromSettings();
             PopulateMicDevices();
             PopulateWebcamDevices();   // WPF OnSectionShown -> RefreshDeviceSettingsLists
+            PopulateWebcamMonitors();
             _lockdown = LockdownService.Current;
             if (_lockdown != null) { _lockdown.LockdownActivated += OnLockdownChanged; _lockdown.LockdownDeactivated += OnLockdownChanged; }
             ApplyLockdownHold();
@@ -101,7 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         }
 
         // A cloud restore or a factory reset swaps the instance; repaint from it, on the UI thread.
-        private void OnCurrentReplaced() => Dispatcher.UIThread.Post(() => { SyncFromSettings(); PopulateWebcamDevices(); });
+        private void OnCurrentReplaced() => Dispatcher.UIThread.Post(() => { SyncFromSettings(); PopulateWebcamDevices(); PopulateWebcamMonitors(); });
 
         // =====================================================================================
         //  seed
@@ -249,9 +254,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         ///
         /// Quick Recal and Tracker Test are live over the tracker's gaze feed.
         /// The camera picker is live over <see cref="Platform.V4l2Cameras"/>.
-        /// <para>ponytail: the monitor combo and the debug cursor stay DISABLED with a
-        /// stated reason: calibration follows its own window's screen and the cursor overlay is not ported. The status pill stays
-        /// at its <c>rf_webcam_stopped</c> literal for the same reason (no OnTrackingStateChanged).</para>
+        /// The tracking-monitor combo is live (PopulateWebcamMonitors).
+        /// <para>ponytail: the debug cursor stays DISABLED with a stated reason: the cursor overlay is
+        /// not ported. The status pill stays at its <c>rf_webcam_stopped</c> literal (no OnTrackingStateChanged).</para>
         /// </summary>
         private void RefreshWebcamAvailability()
         {
@@ -264,12 +269,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             BtnWebcamDebugCalibrate.IsEnabled = has;
             CmbWebcamDevice.IsEnabled = has;
             BtnWebcamDeviceRefresh.IsEnabled = has;
-            foreach (var c in new Control[] { CmbWebcamMonitor, ChkWebcamDebugCursor })
-            {
-                c.IsEnabled = false;   // IsEnabled only - never IsChecked, which would fire the handler
-                ToolTip.SetShowOnDisabled(c, true);
-                ToolTip.SetTip(c, "Not available on this build yet (needs monitor selection or the gaze cursor overlay).");
-            }
+            CmbWebcamMonitor.IsEnabled = has;
+            ChkWebcamDebugCursor.IsEnabled = false;   // IsEnabled only - never IsChecked, which would fire the handler
+            ToolTip.SetShowOnDisabled(ChkWebcamDebugCursor, true);
+            ToolTip.SetTip(ChkWebcamDebugCursor, "Not available on this build yet (needs the gaze cursor overlay).");
             if (!has)
                 AppendWebcamDebugLog("No webcam tracking engine on this build — camera controls are unavailable.");
             RefreshWebcamStartLabel();
@@ -322,6 +325,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         {
             int found = PopulateWebcamDevices();
             AppendWebcamDebugLog(found == 0 ? "Re-scanned cameras: none detected." : $"Re-scanned cameras: {found} found.");
+        }
+
+        private bool _webcamMonitorPopulating;   // seeding the combo must not save (WPF _webcamMonitorPopulating)
+
+        /// <summary>The screens as (display name, pixel width, height). A seam so tests need no monitors.</summary>
+        internal static Func<Visual, IReadOnlyList<(string Name, int Width, int Height)>> MonitorSource = v =>
+            Views.Features.ScreenList.Enumerate(v).Select(sc => (sc.DisplayName ?? "", sc.Bounds.Width, sc.Bounds.Height)).ToArray();
+
+        /// <summary>WPF RefreshWebcamMonitorList + FillMonitorCombo (MainWindow.LabTab.cs:1442): Primary
+        /// first, then numbered displays; selects the saved one, or Primary when it is gone - without
+        /// saving over the user's pick, so replugging the display restores it.</summary>
+        private void PopulateWebcamMonitors()
+        {
+            _webcamMonitorPopulating = true;
+            try
+            {
+                var saved = CoreSettings.Current.WebcamCalibrationScreen;
+                CmbWebcamMonitor.Items.Clear();
+                CmbWebcamMonitor.Items.Add(new ComboBoxItem { Content = Loc.Get("webcam_monitor_primary"), Tag = TrackingMonitorPolicy.Primary });
+                int target = 0;
+                foreach (var (name, w, h) in MonitorSource(this))
+                {
+                    int n = CmbWebcamMonitor.Items.Count;
+                    CmbWebcamMonitor.Items.Add(new ComboBoxItem { Content = string.Format(Loc.Get("webcam_monitor_item_fmt"), n, name, w, h), Tag = name });
+                    if (target == 0 && TrackingMonitorPolicy.IsExplicitPick(saved) && string.Equals(name, saved, StringComparison.OrdinalIgnoreCase)) target = n;
+                }
+                CmbWebcamMonitor.SelectedIndex = target;
+            }
+            finally { _webcamMonitorPopulating = false; }
+        }
+
+        /// <summary>WPF CmbWebcamMonitor_SelectionChanged (MainWindow.LabTab.cs:1496), log line verbatim.</summary>
+        private void CmbWebcamMonitor_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+        {
+            if (_webcamMonitorPopulating) return;
+            if (CmbWebcamMonitor.SelectedItem is not ComboBoxItem item || item.Tag is not string name) return;
+            var s = CoreSettings.Current;
+            if (string.Equals(s.WebcamCalibrationScreen, name, StringComparison.OrdinalIgnoreCase)) return;
+            s.WebcamCalibrationScreen = name;
+            CoreSettings.Save();
+            AppendWebcamDebugLog($"Calibration monitor set to {item.Content}.");
         }
 
         private void RefreshWebcamStartLabel()

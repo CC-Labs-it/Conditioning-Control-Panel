@@ -13,9 +13,10 @@
 // through a VlcFrameSink, muted looping video), consent manage/revoke (WebcamTracker.RevokeConsent,
 // the seeded CoreWebcam verb), Quick Recal over the gaze feed, the 16-point calibration
 // (WebcamCalibrationWindow), the help popover, and the status pulse (the page calls
-// SetBlinkTrainerStatusPulse in MainShellWindow.TabFxTakeoverLabStatus.cs). STILL MISSING:
-// ToggleWebcamFromHotkey (global hotkey) and the explicit tracking-monitor pick (follow-up
-// wire-shell-blink-trainer-b-next). Ported below: UpdateWebcamStatusChips (MainWindow.LabTab.cs:356),
+// SetBlinkTrainerStatusPulse in MainShellWindow.TabFxTakeoverLabStatus.cs). The tracking-monitor
+// pick is the Devices combo + Core TrackingMonitorPolicy. STILL MISSING here: ToggleWebcamFromHotkey
+// (the camera shortcut; owned by lanes fin-views-companion-workshop-behavior-cell and
+// fin4-win-webcam-quick-recal). Ported below: UpdateWebcamStatusChips (MainWindow.LabTab.cs:356),
 // the read-only chip on Play, Blink Trainer and Deeper. The loading splash is live in
 // MainShellWindow.WebcamSplash.cs; the Deeper hub webcam twins now relay to the same Blink Trainer
 // actions and refresh consent/calibration/tracker state on both cards.

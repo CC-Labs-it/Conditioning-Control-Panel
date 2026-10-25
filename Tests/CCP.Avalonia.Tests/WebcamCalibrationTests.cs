@@ -346,15 +346,26 @@ public sealed class WebcamCalibrationTests
         finally { src.Release.Set(); shell.Close(); }
     });
 
+    /// <summary>WPF App.ApplyCalibrationScreenPlacement: the Devices tracking-monitor pick, else the
+    /// primary - never the monitor an old calibration was recorded on. Which screen wins for which
+    /// pick is Core TrackingMonitorPolicyTests; headless has one screen.</summary>
     [Fact]
-    public void QuickRecal_OpensOnTheCalibratedMonitor() => WithTracker(start: false, (tracker, _) =>
+    public void QuickRecal_OpensOnTheTrackingMonitorPick() => WithTracker(start: false, (tracker, _) =>
     {
-        var screen = new global::Avalonia.Controls.Window().Screens.All[0];
-        tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { X = screen.Bounds.X, Y = screen.Bounds.Y } };
-        var win = new WebcamQuickRecalWindow();
-        Assert.Equal(WindowStartupLocation.Manual, win.WindowStartupLocation);
-        Assert.Equal(screen.Bounds.Position, win.Position);
-        tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { X = -99999, Y = 7 } };
-        Assert.Equal(WindowStartupLocation.CenterScreen, new WebcamQuickRecalWindow().WindowStartupLocation);   // unknown monitor: left alone
+        var s = CoreSettings.Current;
+        var old = s.WebcamCalibrationScreen;
+        try
+        {
+            var screen = new global::Avalonia.Controls.Window().Screens.All[0];
+            tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { X = -99999, Y = 7 } };
+            foreach (var pick in new[] { "Primary", screen.DisplayName ?? "", "unplugged-display" })
+            {
+                s.WebcamCalibrationScreen = pick;
+                var win = new WebcamQuickRecalWindow();
+                Assert.Equal(WindowStartupLocation.Manual, win.WindowStartupLocation);
+                Assert.Equal(screen.Bounds.Position, win.Position);
+            }
+        }
+        finally { s.WebcamCalibrationScreen = old; }
     });
 }

@@ -438,21 +438,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             while (true)
             {
                 var dlg = new WebcamCalibrationWindow();
-                PlaceOnCalibratedScreen(dlg);
+                PlaceOnTrackingScreen(dlg);
                 final = await dlg.ShowDialogSafe<bool?>(owner);
                 if (!dlg.WantsRecalibrate) break;
             }
             return final;
         }
 
-        /// <summary>WPF App.ApplyCalibrationScreenPlacement: start on the monitor the last calibration
-        /// ran on (matched by pixel origin) so Maximized lands there; unknown monitor: leave it.</summary>
-        internal static void PlaceOnCalibratedScreen(Window window)
+        /// <summary>WPF App.ApplyCalibrationScreenPlacement (App.xaml.cs:1437): start on the Devices
+        /// tracking-monitor pick, else the primary (Core TrackingMonitorPolicy), so Maximized lands there.</summary>
+        internal static void PlaceOnTrackingScreen(Window window)
         {
-            if (Tracker.Calibration?.MonitorBounds is not { } mb || window.Screens is not { } screens) return;
-            if (screens.All.FirstOrDefault(s => s.Bounds.X == mb.X && s.Bounds.Y == mb.Y) is not { } sc) return;
+            if (window.Screens?.All is not { Count: > 0 } all) return;
+            int primary = 0;
+            for (int i = 0; i < all.Count; i++) if (all[i].IsPrimary) { primary = i; break; }
+            int idx = ConditioningControlPanel.Services.Webcam.TrackingMonitorPolicy.CalibrationIndex(CoreSettings.Current.WebcamCalibrationScreen,
+                all.Select(s => s.DisplayName ?? "").ToArray(), primary);
             window.WindowStartupLocation = WindowStartupLocation.Manual;
-            window.Position = sc.Bounds.Position;
+            window.Position = all[idx].Bounds.Position;
         }
 
         /// <summary>WPF: the live cursor for 15 s (re-click restarts the countdown), on the window's clock.</summary>

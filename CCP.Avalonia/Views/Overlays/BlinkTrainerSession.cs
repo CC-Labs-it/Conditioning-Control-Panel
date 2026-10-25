@@ -14,7 +14,7 @@ using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;                 // SeasonFeatureKeys
 using ConditioningControlPanel.Services;
-using ConditioningControlPanel.Services.UI;               // MonitorTarget
+using ConditioningControlPanel.Services.UI;
 using ConditioningControlPanel.Services.Webcam;
 using LibVLCSharp.Shared;
 using Serilog;
@@ -408,8 +408,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _sink = null;
         }
 
-        /// <summary>WPF GazeContentScreenPolicy minus the explicit pick: DualMonitorEnabled ? every
-        /// screen : the primary. Each window must accept click-through and transparency or none show.</summary>
+        /// <summary>WPF GazeContentScreenPolicy (Core TrackingMonitorPolicy): the Devices tracking-monitor
+        /// pick, else DualMonitorEnabled ? every screen : the primary. Each window must accept
+        /// click-through and transparency or none show.</summary>
         private static List<OverlayWindow> DefaultCreateOverlays(Visual host)
         {
             var made = new List<OverlayWindow>();
@@ -417,7 +418,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
             for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
-            foreach (var i in PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, MonitorTarget.FollowGlobal, CoreSettings.Current.DualMonitorEnabled, screens.Count, primary))
+            var s = CoreSettings.Current;
+            foreach (var i in TrackingMonitorPolicy.OverlayIndices(s.WebcamCalibrationScreen, screens.Select(sc => sc.DisplayName ?? "").ToArray(), primary, s.DualMonitorEnabled))
             {
                 var w = new OverlayWindow();
                 w.PlaceOn(screens[i]);
