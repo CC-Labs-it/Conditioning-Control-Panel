@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -13,8 +14,12 @@ using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Awareness;
 using Xunit;
+using AvApp = ConditioningControlPanel.Avalonia.App;
+using BindingFlags = System.Reflection.BindingFlags;
 
 namespace CCP.Avalonia.Tests;
 
@@ -49,64 +54,101 @@ public sealed class ThemeEvidenceTests
         return Task.CompletedTask;
     });
 
+    /// <summary>WPF never repaints a dictionary brush from a Color-key write
+    /// (MainWindow.xaml.cs:2548-2558); its mod switch overwrites the brush entry too. Avalonia's
+    /// RefreshThemeAwareElements does the same, so an open picker's DynamicResource DarkerBgBrush
+    /// follows the real mod switch.</summary>
     [Fact]
-    public Task OpenPickerBrushFollowsRuntimeColorChange() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task ModSwitchRepaintsOpenPickerBackground() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
-        var resources = Application.Current!.Resources;
-        var old = Application.Current.FindResource("DarkerBg");
+        using var snapshot = new CoreModsSnapshot();
+        var oldMods = AvApp.Mods;
+        if (oldMods is null) AvApp.StartMods();
+        var mods = AvApp.Mods!;
+        var startId = mods.ActiveModId;
+        var res = Application.Current!.Resources;
+        var saved = res.Keys.ToDictionary(k => k, k => res[k]);
+        var refresh = typeof(MainShellWindow).GetMethod("RefreshThemeAwareElements",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var shell = new MainShellWindow();
         var w = Picker();
         try
         {
-            w.Show(); Dispatcher.UIThread.RunJobs();
-            resources["DarkerBg"] = Color.Parse("#FF203040");
+            shell.Show(); w.Show(); Dispatcher.UIThread.RunJobs();
+            var before = ColorOf(w.Background);
+            mods.ActivateMod(startId == BuiltInMods.InfectionControlId ? BuiltInMods.CCPDefaultId : BuiltInMods.InfectionControlId);
+            refresh.Invoke(shell, null);
             Dispatcher.UIThread.RunJobs();
-            Assert.Equal(Color.Parse("#FF203040"), ColorOf(w.Background));
+            var expected = Color.Parse(mods.GetBackgroundColorHex() ?? "#1A1A2E");
+            Assert.NotEqual(before, expected);
+            Assert.Equal(expected, ColorOf(w.Background));
         }
-        finally { resources["DarkerBg"] = old; w.Close(); }
+        finally
+        {
+            w.Close();
+            if (mods.ActiveModId != startId) mods.ActivateMod(startId);
+            shell.Close();
+            foreach (var k in res.Keys.ToArray()) if (!saved.ContainsKey(k)) res.Remove(k);
+            foreach (var (k, v) in saved) res[k] = v;
+            typeof(AvApp).GetProperty(nameof(AvApp.Mods), BindingFlags.Static | BindingFlags.NonPublic)!.SetValue(null, oldMods);
+            Dispatcher.UIThread.RunJobs();
+        }
         return Task.CompletedTask;
     });
 
-    [Fact]
-    public Task PickerBoolBindingsCollapseAndRevealRowDetails() => AvaloniaTestDispatcher.RunAsync(() =>
+    /// <summary>Rows come from the dialog's own build (MakeRow): a group token carries the detail
+    /// and, on the deny list only, the recommended chip; a plain app carries neither.</summary>
+    [Theory]
+    [InlineData(AwarenessListKind.Deny)]
+    [InlineData(AwarenessListKind.TitleAllow)]
+    public Task PickerBoolBindingsCollapseAndRevealRowDetails(AwarenessListKind kind) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
-        var w = Picker();
+        var w = new AwarenessAppPickerDialog(kind, Array.Empty<string>(),
+            new[] { AwarenessPrivacyRules.GroupPasswordManagers, "editor" });
         try
         {
             w.Show(); Dispatcher.UIThread.RunJobs();
             var list = w.FindControl<ItemsControl>("ItemList")!;
-            foreach (bool show in new[] { false, true, false })
+            var rows = list.Items.OfType<AwarenessPickRow>().ToArray();
+            Assert.Equal(2, rows.Length);
+            foreach (var row in rows)
             {
-                var row = new AwarenessPickRow { Label = "Editor", Detail = show ? "Detail" : "", IsRecommended = show };
-                list.ItemsSource = new[] { row };
-                w.UpdateLayout(); Dispatcher.UIThread.RunJobs();
-                var detail = list.GetVisualDescendants().OfType<TextBlock>().Single(t => t.FontSize == 11);
-                var chip = list.GetVisualDescendants().OfType<Border>().Single(b => b.Padding == new Thickness(6, 2));
-                Assert.Equal(show, detail.IsVisible);
-                Assert.Equal(show, chip.IsVisible);
-                Assert.Equal(show ? "Detail" : "", detail.Text);
+                bool group = row.Raw == AwarenessPrivacyRules.GroupPasswordManagers;
+                var face = list.GetVisualDescendants().OfType<Border>()
+                    .Single(b => b.DataContext == row && b.CornerRadius == new CornerRadius(6));
+                var detail = face.GetVisualDescendants().OfType<TextBlock>().Single(t => t.FontSize == 11);
+                var chip = face.GetVisualDescendants().OfType<Border>().Single(b => b.Padding == new Thickness(6, 2));
+                Assert.Equal(group, detail.IsVisible);
+                Assert.Equal(group && kind == AwarenessListKind.Deny, chip.IsVisible);
             }
         }
         finally { w.Close(); }
         return Task.CompletedTask;
     });
 
+    /// <summary>Reached as a user does: shell -> Companion tab -> open the Workshop drawer.</summary>
     [Fact]
     public Task WorkshopActionKeepsContentHoverAndDisabledChrome() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
-        var cell = new WorkshopCommunityCell();
-        var w = new Window { Content = cell, Width = 500, Height = 400 };
+        var w = new MainShellWindow();
         try
         {
-            w.Show(); Dispatcher.UIThread.RunJobs();
+            w.Show();
+            w.ShowTab("companion");
+            Dispatcher.UIThread.RunJobs();
+            w.GetLogicalDescendants().OfType<WorkshopAccordion>().Single().ExpandAndReveal();
+            Dispatcher.UIThread.RunJobs();
+            var cell = w.GetLogicalDescendants().OfType<WorkshopCommunityCell>().Single();
             var button = cell.FindControl<Button>("BtnBrowsePrompts")!;
             var chrome = button.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "Chrome");
             Assert.Equal(11, button.FontSize);
             Assert.Equal(new CornerRadius(6), chrome.CornerRadius);
             Assert.Equal(Color.Parse("#FF1C1A2E"), ColorOf(chrome.Background));
             Assert.Contains(button.GetVisualDescendants().OfType<TextBlock>(), t => !string.IsNullOrEmpty(t.Text));
+            button.BringIntoView(); Dispatcher.UIThread.RunJobs();
             var point = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), w)!.Value;
             w.MouseMove(point); Dispatcher.UIThread.RunJobs();
             Assert.Equal(Color.Parse("#FF2A2440"), ColorOf(chrome.Background));
