@@ -151,19 +151,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// PanicPolicy.GameClaimsEscapeAsPause, including a second Escape within 2 s being a full panic (which
         /// closes the game through PanicSurfaces "games"). The kept press is handed to the page as well
         /// (KeptEscapePage.Dtrh), since its own keydown never comes while the web view is out of focus.
-        /// ponytail: race and Breakout keep closing on Escape here until their hosts post kept-escape (board: TryPbpPauseOnEscape).</summary>
+        /// ponytail: Breakout still needs its host pause bridge.</summary>
         internal bool TryGamePauseOnEscape(DateTime now)
         {
             try
             {
                 var dtrh = Games.GameWindow.DtrhInFront();
+                var race = Games.GameWindow.RaceInFront();
                 bool claim = PanicPolicy.GameClaimsEscapeAsPause(CoreSettings.Current.PanicKey,
-                    gameInFront: dtrh != null, engineRunning: CoreEngine.IsRunning,
+                    gameInFront: dtrh != null || race != null, engineRunning: CoreEngine.IsRunning,
                     lockCardOpen: LockCardWindow.IsAnyOpen(), lastClaimUtc: _lastGameEscapeClaim, nowUtc: now);
                 if (!claim) { _lastGameEscapeClaim = null; return false; }
                 _lastGameEscapeClaim = now;
-                Serilog.Log.Information("Panic: Escape kept by Down the Rabbit Hole as its pause (again within 2 s = full panic)");
-                if (PanicPolicy.KeptEscapeGoesTo(claim, false, false, false, false, false, false,
+                Serilog.Log.Information("Panic: Escape kept by game as its pause (again within 2 s = full panic)");
+                if (race?.RaceReady == true) race.PostKeptEscape();
+                else if (PanicPolicy.KeptEscapeGoesTo(claim, false, false, false, false, false, false,
                         dtrhInFront: dtrh != null, dtrhReady: dtrh?.DtrhReady == true) == PanicPolicy.KeptEscapePage.Dtrh)
                     dtrh!.PostKeptEscape();
                 return true;

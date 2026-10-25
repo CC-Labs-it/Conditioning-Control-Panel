@@ -669,6 +669,13 @@ These sections of the ledger point at per-commit lists ([`avalonia-main-sync-202
 one row per Windows commit, not per screen. Test them through the screen each commit touched, using the
 area sections above; report against the commit row only when no screen row fits.
 
+## Racing Thoughts host completion slice
+
+1. Own a Racing Thoughts track, launch from the launcher after the account/leash door, and start a local track. Finish a lap: audio stops immediately, XP/Sparks bank once; exit mid-lap: audio stops before the page's exit animation completes. WPF `ConditioningControlPanel/Services/Chaos/CaucusHostService.cs` (`OnRunEnded`, `exit`). Rows: `game-race`
+2. Use the page fullscreen button, then leave fullscreen: window state and page dock agree. Open the page bug report; it is owned by the race. Panic closes the dialog and game. WPF `ConditioningControlPanel/Services/Chaos/CaucusHostService.cs` (`ApplyHostFullscreen`, `OpenBugReport`, `DisposeAll`). Rows: `game-race`
+3. Bind panic to Escape. With the race in front, press Escape once: the page pauses and keeps keyboard focus. Press again within two seconds: full panic closes it. Rebound panic/background race must not claim a pause. WPF `ConditioningControlPanel/MainWindow/MainWindow.xaml.cs` (`TryRacePauseOnEscape`); `Services/Chaos/CaucusHostService.cs` (`PostKeptEscape`). Rows: `game-race`
+4. With audio content installed, race sound cues follow master volume. With existing DtRH engagement records, boot sends favorites after the manifest. Empty records send no favorites frame. WPF `ConditioningControlPanel/Services/Chaos/CaucusHostService.cs` (`sfx`, `OnPageReady`). Rows: `game-race`
+
 ## Still to write
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.

@@ -3,14 +3,13 @@
 // manifest), run-started / run-ended with the one-payout latch (:336, :431), the ping-then-close heartbeat
 // watchdog (:595) and the teardown funnel (:686). Shell frames the race shares (boot-error, exit's 1200 ms
 // watchdog, exit-done) stay in GameWindow.HandleMessage, and panic closes it with every other game.
-// ponytail: WPF MainWindow.TryRacePauseOnEscape (:1505) keeps a lone Escape as the race's pause; here the
-// first Escape still panics the race closed (only Piece by Piece is ported, MainShellWindow.PanicKey.cs).
-// ponytail: still missing on this head, each its own unit (parity row game-race): BambiCloud levels
-// (cloud-open/cloud-start, settings.cloud stays false so the page hides the verb), the track player and
-// its decoder seed (own tracks + charting are GameWindow.RaceTracks.cs), sfx / fire-payload (no ChaosSfx bank or payload bridge here), favorites +
-// loom-list, report-bug, fullscreen-set, the mandatory-video pause, the grants watcher (PrizeOwnership has
-// no change event: nothing grants mid-run here), the meta frame, bubble credit and SeasonRecap TrackFeature.
+// ponytail: remaining host dependencies are recorded in docs/cloud/fin5-game-race.md.
 using System;
+using System.Linq;
+using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Friends;
@@ -33,6 +32,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>Spark banking (WPF DtrhMetaBridge.AwardRun, real state: ChaosMeta.AwardRunRewards); tests swap it.</summary>
         internal static Func<ChaosMeta.ChaosRunRewardInput, int> RaceBankSparks = input => ChaosMeta.AwardRunRewards(input);
+
+        internal static GameWindow? RaceInFront()
+        {
+            lock (Open) return Open.FirstOrDefault(w => w.IsRace && w.IsActive);
+        }
+
+        internal bool RaceReady => IsReady && !_raceExiting && !_closing;
+        private BugReportWindow? _raceReport;
 
         private bool IsRace => string.Equals(Spec.Id, "race", StringComparison.OrdinalIgnoreCase);
         private readonly RaceRunLifecycle _raceRun = new();
@@ -83,7 +90,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "run-ended":
                     OnRaceRunEnded(o);
                     return true;
+                case "sfx":
+                    var name = (string?)o["name"];
+                    if (!string.IsNullOrEmpty(name)) ChaosOverlayWindow.ChaosSfx.Play(name, (float?)o["scale"] ?? 0.6f);
+                    return true;
+                case "fullscreen-set":
+                    WindowState = (bool?)o["on"] == true ? WindowState.FullScreen : WindowState.Normal;
+                    Post(new { type = "fullscreen", on = WindowState == WindowState.FullScreen });
+                    return true;
+                case "report-bug":
+                    OpenRaceReport();
+                    return true;
                 case "exit":
+                    RaceStopTrack();
                     _raceExiting = true;   // the shell arms the 1200 ms close (WPF ArmExitWatchdog)
                     return false;
                 default:
@@ -96,12 +115,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             _raceLastHeartbeatUtc = RaceUtcNow();
             _racePinged = false;
+            Web.Focus();
             Post(RaceInitMessage());
             try
             {
                 var server = _server;
                 var m = (_library ??= new(() => server == null ? new() : GameMediaManifest.BuildLocal(server.AssetUrl))).Value;
                 Post(GameMediaManifest.Frame(m));
+                var favorites = DtrhAssetStatsStore.TopAssets(12);
+                if (favorites.Count > 0) Post(new { type = "favorites", names = favorites });
             }
             catch (Exception ex) { Log.Warning("CaucusHostService.OnPageReady: {E}", ex.Message); }
         }
@@ -124,6 +146,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             modContent = (object?)null,   // WPF DtrhModContent.BuildInitPayload: null = shipped assets
         };
 
+        private async void OpenRaceReport()
+        {
+            if (_closing) return;
+            if (_raceReport != null) { _raceReport.Activate(); return; }
+            var report = _raceReport = new BugReportWindow();
+            try { await report.ShowDialogSafe(this); }
+            catch (Exception ex) { Log.Warning("RaceHost.report-bug: {E}", ex.Message); }
+            finally { if (_raceReport == report) _raceReport = null; }
+        }
+
         private static T RaceSafe<T>(Func<T> read, T fallback)
         {
             try { return read(); } catch { return fallback; }
@@ -143,6 +175,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private void OnRaceRunEnded(JObject o)
         {
             if (!_raceRun.TryEnd()) return;
+            RaceStopTrack();
             try
             {
                 double score = Math.Max(0, (double?)o["score"] ?? 0);
@@ -189,6 +222,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (!_raceStarted || _raceDisposed) return;
             _raceDisposed = true;
+            _raceReport?.Close();
+            _raceReport = null;
             try { _raceHeartbeatWatch?.Stop(); } catch { }
             _raceHeartbeatWatch = null;
             try { DisposeRaceTracks(); }
