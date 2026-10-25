@@ -3381,3 +3381,7 @@ Windows "Test process did not return valid JSON (non-object)" discovery flake: x
 ## avalonia-port/wire-views-companion-make-her-yours: +209
 - Z4 Community link browses and installs through the Workshop cell's single CommunityPromptService. The readout shows the installed name, and Z4 and the Workshop rows refresh together. Row wired.
 - Stacked on wire-views-companion-workshop-community-cell (5e10cd18a).
+
+## avalonia-port/wire-feat-mod-personality-picks: +118
+- Switching mods now brings back the companion personality picked in that mod, and the live chips update to match.
+- Review fixes: the test no longer checks a fence that could not catch a bug; fail-proof plus rgate green except a known Linux flake.
