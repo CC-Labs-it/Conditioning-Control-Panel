@@ -41,6 +41,15 @@ public sealed class CompanionRosterSwitchTests
             var label = roster.FindControl<TextBlock>("TxtCompanion2Prompt")!;
             Assert.Equal("Kind voice", label.Text);
             Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("tooltip_ai_personality", "Kind voice"), ToolTip.GetTip(label));
+            // A mod-forced switch (CoreModsHooks.SwitchCompanion -> CompanionCore) applies it too (WPF CompanionService.cs:212).
+            CompanionCore.SwitchCompanion((CompanionId)2);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(id, s.ActiveCommunityPromptId);
+            Assert.Equal("be kind", s.CompanionPrompt.Personality);
+            CompanionCore.SwitchCompanion(CompanionId.OGBambiSprite);
+            Dispatcher.UIThread.RunJobs();
+            s.CompanionPrompt = oldPrompt;
+            s.ActiveCommunityPromptId = oldActive;
             Click(shell, roster.FindControl<Border>("CompanionCard2")!, MouseButton.Left);
             Assert.Equal(id, s.ActiveCommunityPromptId);
             Assert.Equal("be kind", s.CompanionPrompt.Personality);
@@ -55,6 +64,56 @@ public sealed class CompanionRosterSwitchTests
             s.CompanionPrompt = oldPrompt;
             s.ActiveCommunityPromptId = oldActive;
             System.IO.File.Delete(file);
+        }
+    });
+
+    [Fact]
+    public Task PersonalityButtonCancelsImportsAndReportsErrors() => WithRoster((shell, room, roster) =>
+    {
+        var s = CoreSettings.Current;
+        var oldId = s.GetCompanionPromptId(3);
+        var oldPrompt = s.CompanionPrompt;
+        var oldPick = MainShellWindow.PickPromptFile;
+        var oldInform = MainShellWindow.InformPrompt;
+        var dir = System.IO.Directory.CreateTempSubdirectory("ccp-prompt-").FullName;
+        string? picked = null;
+        var told = new System.Collections.Generic.List<string>();
+        MainShellWindow.PickPromptFile = (_, _) => Task.FromResult(picked);
+        MainShellWindow.InformPrompt = (_, title, _) => { told.Add(title); return Task.CompletedTask; };
+        void Press() { roster.FindControl<Button>("BtnCompanion3Personality")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
+        try
+        {
+            s.SetCompanionPromptId(3, null);
+            Press();   // cancelled picker: nothing assigned, nothing said
+            Assert.True(string.IsNullOrEmpty(s.GetCompanionPromptId(3)));
+            Assert.Empty(told);
+
+            picked = System.IO.Path.Combine(dir, "Sharp voice.json");
+            System.IO.File.WriteAllText(picked, "{\"Name\":\"x\",\"PromptSettings\":{\"Personality\":\"be sharp\"}}");
+            Press();
+            Assert.False(string.IsNullOrEmpty(s.GetCompanionPromptId(3)));
+            Assert.Equal("Sharp voice", roster.FindControl<TextBlock>("TxtCompanion3Prompt")!.Text);
+            Assert.Equal(new[] { ConditioningControlPanel.Localization.Loc.Get("title_personality_assigned") }, told);
+            Assert.Equal(CompanionId.OGBambiSprite, CompanionCore.ActiveCompanion);
+            Assert.Same(oldPrompt, s.CompanionPrompt);   // not the active card: the live voice is untouched
+
+            System.IO.File.WriteAllText(picked, "{ not json");
+            Press();
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("title_error"), told[^1]);
+        }
+        finally
+        {
+            var installed = s.GetCompanionPromptId(3);
+            if (!string.IsNullOrEmpty(installed))
+            {
+                s.InstalledCommunityPromptIds.Remove(installed);
+                System.IO.File.Delete(System.IO.Path.Combine(CorePaths.UserData, InstalledCommunityPrompts.FolderName, installed + ".json"));
+            }
+            s.SetCompanionPromptId(3, oldId);
+            s.CompanionPrompt = oldPrompt;
+            MainShellWindow.PickPromptFile = oldPick;
+            MainShellWindow.InformPrompt = oldInform;
+            System.IO.Directory.Delete(dir, true);
         }
     });
 
