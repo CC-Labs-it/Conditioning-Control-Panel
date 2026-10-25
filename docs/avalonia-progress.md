@@ -3187,3 +3187,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-ctrl-card-sheen-adorner: +309
 - CardSheenAdorner hosted on the selected preset/session card, the Chaster hero, the Launcher CTA and wandering launcher tiles (WPF radii and timing); the launcher tile glow stays on its DropShadowEffect.
 - Assets hover sheen deferred to lane -b; the row stays `stub`.
+
+## avalonia-port/wire-feat-split-card: +659
+- feat-split-card: WPF half depth (travel/tilt/spring), dashboard click inversion and cached grey HalfMute via Core DashboardDepthLaw/CardMuteRule; re-gating via the shell's RefreshFx; tilt keeps one transition per transform, grey art scales first (no PNG round trip).
+- Gaps logged: no Avalonia DashboardInvertClicks writer; single FeatureCard ignores inversion.
