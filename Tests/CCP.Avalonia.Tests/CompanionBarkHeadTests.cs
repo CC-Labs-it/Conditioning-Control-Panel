@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Headless;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using CCP.Avalonia.Testing;
@@ -215,10 +216,22 @@ public sealed class CompanionBarkHeadTests
         var card = new global::Avalonia.Controls.Window();
         try
         {
-            BarkHead.Engine = Seeded(Rule(flash ? "FlashDisplayed" : "SubliminalDisplayed", "shown"), out var spoken);
-            if (flash) FlashOverlay.Paid("synthetic.png", s, 0, 1);
+            var rule = Rule(flash ? "FlashDisplayed" : "SubliminalDisplayed", "shown");
+            rule.ClassRaw = "safety"; // bypasses timing, so a per-image raise would speak once per image
+            BarkHead.Engine = Seeded(rule, out var spoken);
+            int count = 0;
+            BarkHead.Engine.BarkSpoken += (_, _) => count++;
+            if (flash)
+            {
+                // A three-image batch whose generation is already stale: queued, never shown (WPF FlashService.cs:1672).
+                var batch = Enumerable.Range(0, 3).Select(_ => ((global::Avalonia.Media.Imaging.Bitmap)new global::Avalonia.Media.Imaging.WriteableBitmap(
+                    new global::Avalonia.PixelSize(1, 1), new global::Avalonia.Vector(96, 96)), default(global::Avalonia.PixelRect), "synthetic.png",
+                    (global::Avalonia.Platform.Screen)null!)).ToList();
+                FlashOverlay.Schedule(batch, 0, 0, int.MinValue, 99, 1, System.TimeSpan.Zero, System.TimeSpan.Zero, false, false, 0, null);
+            }
             else SubliminalOverlay.Present(card);
             Assert.Equal("shown", spoken());
+            Assert.Equal(1, count);
         }
         finally { card.Close(); BarkHead.Engine = old; }
     });
@@ -231,10 +244,30 @@ public sealed class CompanionBarkHeadTests
         try
         {
             BarkHead.Engine = Seeded(Rule("Idle", "idle"), out var spoken);
+            tube.Giggle("busy");   // a line on screen: not ready, so the tick stays silent
+            tube.IdleTick();
+            Assert.Null(spoken());
+            tube.Close();
+            tube = new ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow(null);
             tube.IdleTick();
             Assert.Equal("idle", spoken());
         }
         finally { tube.Close(); BarkHead.Engine = old; }
+    });
+
+    [Fact]
+    public void IdleTickClearsAWedgedSpeechLatch() => WithSeamsRestored(_ =>
+    {
+        var tube = new ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow(null);
+        try
+        {
+            // WPF Speech.cs:1612-1614: latched, no bubble, empty queue, no gap pending -> nothing will ever lower it.
+            typeof(ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow)
+                .GetField("_isGiggling", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.SetValue(tube, true);
+            tube.IdleTick();
+            Assert.False(tube.IsSpeaking);
+        }
+        finally { tube.Close(); }
     });
 
     private static BarkRule Rule(string trigger, string line, (string Key, object Value)? condition = null) => new()

@@ -409,7 +409,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // same two timers for the same reason.
             _speechTimer?.Stop();
             _cancelSpeechDelay();   // WPF ChatInput.cs:475 _speechDelayTimer.Stop (the queue stays)
-            _cancelSpeechDelay = static () => { };
+            _cancelSpeechDelay = NoSpeechDelay;
             _isGiggling = false;
 
             _isShowingChatHistory = true;
@@ -1218,9 +1218,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         private int _presetGiggleCounter;
 
-        /// <summary>WPF Giggle (Speech.cs:240): a PRESET line. Dropped while an AI request is in
-        /// flight or an AI bubble is up, never logged to chat history, sound on every fifth. Queued
-        /// behind a line still up, or until the previous line's gap has passed (Speech.cs:273-294).</summary>
+        /// <summary>WPF RestartIdleTimer (Speech.cs): the idle cadence restarts after every line.</summary>
         public void RestartIdleTimer() => RunOnAvatar(() =>
         {
             _idleTimer?.Stop();
@@ -1232,9 +1230,31 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal void IdleTick()
         {
             if (_idleTimer != null) _idleTimer.Interval = TimeSpan.FromSeconds(CoreSettings.Current.IdleGiggleIntervalSeconds);
+            ClearStaleSpeechLatch();   // WPF Speech.cs:1612-1614: the one beat still running once she is wedged
             if (IsSpeechReady()) Platform.BarkHead.Engine?.DispatchIdle();
         }
 
+        /// <summary>WPF ClearStaleSpeechLatch (Speech.cs:3070): drop a latch nothing can lower any more.
+        /// This head has no lead-in timer.</summary>
+        private void ClearStaleSpeechLatch()
+        {
+            if (!ConditioningControlPanel.Services.Companion.SpeechLatchRule.IsLatchStale(
+                    isGiggling: _isGiggling,
+                    bubbleVisible: _speechBubble.IsVisible,
+                    waitingForAi: _isWaitingForAi,
+                    queueEmpty: _speechQueue.Count == 0,
+                    leadInPending: false,
+                    delayPending: _cancelSpeechDelay != NoSpeechDelay))
+                return;
+            _isGiggling = false;
+            _isMouseOverSpeechBubble = false;
+            _lastSpeechEndTime = SpeechNow;
+            Log.Warning("[Speech] stale speech latch cleared - the companion was wedged silent");
+        }
+
+        /// <summary>WPF Giggle (Speech.cs:240): a PRESET line. Dropped while an AI request is in
+        /// flight or an AI bubble is up, never logged to chat history, sound on every fifth. Queued
+        /// behind a line still up, or until the previous line's gap has passed (Speech.cs:273-294).</summary>
         public void Giggle(string text)
         {
             if (_isPlayingUninterruptibleClip || _isWaitingForAi || _isShowingAiBubble) return;
