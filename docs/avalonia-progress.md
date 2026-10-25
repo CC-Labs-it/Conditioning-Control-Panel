@@ -3437,3 +3437,7 @@ Mantra Lab completion close timer is now stopped in Cleanup, so an early-closed 
 ## avalonia-port/wire-shell-haptics-device: +200
 - Mock haptics feedback toast in Avalonia matching WPF MockToast, including ALL STOP staying visible after panic.
 - Tested with a stepped clock (no sleeps). Fail-proven (rcheck 39697261650 red / 39697752707 green); render-all exemption covers only the toast.
+
+## avalonia-port/fin-shell-tab-fx-presets-quests-achievements: +1
+- Dependency-only NOOP audit; ledger row stays stub with explicit Missing list (shell-takeaway, shell-chrome-fx).
+- Review ACCEPT; fix: row reference repointed to PR body. Doc-only, no rgate (pushq re-gates).

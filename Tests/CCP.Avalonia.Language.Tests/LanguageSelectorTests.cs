@@ -126,6 +126,9 @@ public sealed class LanguageSelectorTests
             global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(shell).OfType<Button>()
                 .First(b => b.Name == "NavPill_presets").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
+            // Arriving on the tab repaints the rack (WPF OnPresetsTabVisibilityChanged), so take the fresh row.
+            customRow = presets.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>()
+                .Single(row => (row.Tag as Session)?.Id == "language_custom");
             customRow.Focus();
             shell.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, "");
             Dispatcher.UIThread.RunJobs();
