@@ -15,7 +15,7 @@ export function createPressContacts(track, emit, zones = industryZones(track)) {
       let closest = null, closestDistance = 48;
       for (const z of presses) {
         const pose = industryPose(z, timeS, beat);
-        const index = beat ? pose.impactIndex : Math.floor((Math.max(0, timeS) + z.offsetS - 5.2) / 9);
+        const index = beat && !beat.fallback ? pose.impactIndex : Math.floor((Math.max(0, timeS) * (beat?.pace || 1) + z.offsetS - 5.2) / 9);
         const previous = seen.get(z.id);
         seen.set(z.id, index);
         if (!continuous || !Number.isFinite(index) || !Number.isFinite(previous) || index !== previous + 1) continue;

@@ -2,11 +2,11 @@
 import { S, BOOST, RESPAWN } from './state.js';
 import { clamp, wrap } from '../core/math.js';
 import { gateSweep, createKeepGates } from './keepGates.js';
-import { machineryBeatAt, beatCycle, machineryRearming } from '../track/machineryBeat.js';
-export const KEEP_CHAIN = Object.freeze({ cycleS: 6.4, pivotM: 15, lengthM: 12, angleRad: .72, radiusM: 2.5, stallS: .45 });
-// Whole four-beat cycles put both turning points on beats and never exceed authored peak speed.
+import { machineryBeatAt, beatCycle, machineryRearming, machineryDuration } from '../track/machineryBeat.js';
+export const KEEP_CHAIN = Object.freeze({ cycleS: 6.4, pivotM: 15.9, lengthM: 12, angleRad: .72, radiusM: 3.4, stallS: .45 });
+// Four-subdivision cycles keep both turning points aligned with the heard beat.
 export function pendulumBeatPhase(row, cycleS, beat) {
-  const period = Math.max(4, Math.ceil(cycleS / beat.beatS / 4) * 4);
+  const period = Math.max(4, Math.ceil(machineryDuration(cycleS, beat) / beat.beatS / 4) * 4);
   const offset = Math.round((row.offsetS || 0) / beat.beatS), safe = machineryRearming(beat, offset, period);
   const u = beatCycle(beat.beat + offset, period), rate = Math.PI * 2 / (period * beat.beatS);
   const elapsed = beat.beat - beatCycle(-offset, period), releaseBeats = Math.max(2, Math.ceil(3 / beat.beatS));
@@ -19,6 +19,7 @@ export function pendulumBeatPhase(row, cycleS, beat) {
     liftSpeed: releasing && !safe ? -30 * f * (1 - f) / (releaseBeats * beat.beatS) : 0, safe };
 }
 export function keepChainPhase(row, timeS, beat = null) {
+  if (beat?.fallback) { timeS *= beat.pace; beat = null; }
   const cycleS = row.cycleS || KEEP_CHAIN.cycleS;
   if (beat) {
     const k = KEEP_CHAIN, p = pendulumBeatPhase(row, cycleS, beat), angle = p.swing * k.angleRad;

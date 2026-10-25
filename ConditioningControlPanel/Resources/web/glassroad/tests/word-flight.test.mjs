@@ -107,13 +107,31 @@ test('all ten gaps auto-cross with no input, braking and full steering at varied
         }
         if (st[S.s] > zone.gapS1 + 12 && st[S.grounded]) { done = true; break; }
       }
-      assert.ok(done && contacts === 1 && rotorTicks > 30, `${tr.id}/${zone.id} speed${speed} steer${steer} contacts${contacts}`);
+      assert.ok(done && contacts === 1 && rotorTicks >= 18, `${tr.id}/${zone.id} speed${speed} steer${steer} contacts${contacts} rotorTicks${rotorTicks}`);
       assert.equal(ev.all('airborne').length + ev.all('air-word-hop').length, 2, 'exactly two long airborne legs');
       assert.equal(glideActive(st), false, 'hat closes after the far-deck catch');
       assert.equal(ev.all('air-word-hop').length, contacts);
+      assert.equal(ev.all('air-word-launch').length, 1, 'first takeoff also plays the quiet spring');
       assert.equal(ev.all('hop').length, 0);
       assert.ok(maxSide <= 3.81 && (!steer || maxSide > 1), 'steering works inside the safe corridor');
     }
+});
+
+test('both floating-word legs cross briskly on every course while keeping the real phrase catch', () => {
+  for (const tr of tracks) for (const zone of tr.aerials) {
+    const f = setup(tr, zone), launches = [], landings = [];
+    for (let i = 0; i < 1000 && (f.st[S.s] < zone.gapS1 + 12 || f.run.activeSection); i++) {
+      tick(f);
+      const count = f.ev.all('airborne').length + f.ev.all('air-word-hop').length;
+      if (count > launches.length) launches.push(f.ev.t);
+      if (f.ev.all('land').length > landings.length) landings.push(f.ev.t);
+    }
+    assert.equal(launches.length, 2); assert.equal(landings.length, 2);
+    assert.ok(landings[0] - launches[0] <= 4.4, tr.id + ' first arc is no longer a seven-second float');
+    assert.ok(landings[1] - launches[1] <= 3.3, tr.id + ' rebound is no longer a five-second float');
+    assert.equal(f.ev.all('air-word-land').length, 1);
+    assert.equal(f.st[S.respawnPhase], RESPAWN.NONE);
+  }
 });
 
 test('one phrase rescues a fast visible fall and sends the kart across the rest of the gap', () => {

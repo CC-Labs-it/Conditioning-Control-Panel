@@ -47,6 +47,8 @@ test('duplicate launches stay quiet; Gentle softens each layer and the air sweep
 });
 
 test('bank-loaded audio keeps a distinct contact tap and rebound spring', () => {
+  assert.equal(AUDIO_CUES['air-word-launch'], playAirWordHop);
+  assert.equal(resolvePlan(sfxPlan('air-word-launch', payload(0)), () => true), 'synth');
   assert.equal(AUDIO_CUES['air-word-hop'], playAirWordHop);
   assert.equal(resolvePlan(sfxPlan('air-word-hop', payload(0)), () => true), 'synth');
   assert.equal(resolvePlan(sfxPlan('land', { tier: 3, airWord: true }), () => true), 'synth');
@@ -90,7 +92,7 @@ test('real registry routes word springs through master and SFX controls, freezes
     fetchFn: async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }) });
   await audio.start(); await audio.samplesReady; assert.ok(audio.sfx.loaded > 0);
   const before = oscillators.length;
-  bus.emit('air-word-hop', payload(0)); assert.equal(oscillators.length - before, 4);
+  bus.emit('air-word-launch', payload(0)); assert.equal(oscillators.length - before, 4);
   // Skip each local envelope, whose fake AudioParam already holds its scheduled final zero.
   const voices = oscillators.slice(before).map(n => n.outputs[0].outputs[0]);
   audio.setVolumes({ sfx: 0 }); assert.ok(voices.every(n => mutedAlongPath(n)));

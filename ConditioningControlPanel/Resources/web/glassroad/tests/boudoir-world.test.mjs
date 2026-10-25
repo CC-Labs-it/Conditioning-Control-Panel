@@ -47,10 +47,9 @@ test('Boudoir mounted faces remain unobstructed and share moving media and Loom 
     const face = { p: slot.C, size: [slot.w, slot.h, .1], axes: [slot.X, slot.Y, slot.Z] };
     if (plan.rows.some(r => boudoirBoxesIntersect(face, r))) blocked.push(slot.id);
     assert.ok(rectPoints(slot).every(p => p.every(Number.isFinite)));
-    assert.ok(plan.rows.some(r => r.name === 'mounted-mirror-backing' &&
-      Math.hypot(...r.p.map((v, i) => v - slot.C[i])) < 1.1), 'real furniture mount for ' + slot.id);
   }
   assert.deepEqual(blocked, [], 'no wall, trim, shelf or crossing blocks the displayed pixels');
+  assert.ok(!plan.rows.some(r => r.name.startsWith('mounted-mirror-')), 'Fitted pictures own their cabinets without leaving empty frames');
 });
 
 test('Every mounted picture has a clear driver sightline before reaching it, including both enclosed halls', () => {
