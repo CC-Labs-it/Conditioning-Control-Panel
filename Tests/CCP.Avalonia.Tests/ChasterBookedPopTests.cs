@@ -115,6 +115,52 @@ public sealed class ChasterBookedPopTests
     });
 
     [Fact]
+    public Task InvalidCauseUsesTheCursorAndPanicClosesEveryPop() => WithSeams(true, async (chaster, shell, frames, _) =>
+    {
+        ChasterBookedPop.Cursor = () => Bubble;
+        chaster.NoteAt("attention", new ScreenPoint(double.NaN, 400));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(Bubble, ChasterBookedPop.Live.Single().Origin);
+        var stop = Assert.Single(PanicSurfaces.All.Where(s => s.Id == "chaster-booked-pop"));
+        stop.Stop(shell);
+        Assert.Empty(ChasterBookedPop.Live);
+        Assert.Equal(0, frames.Count);
+        stop.Stop(shell); // idle cleanup is safe
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ClosingTheShellClosesPopsAndUnsubscribes() => WithSeams(true, async (chaster, shell, frames, _) =>
+    {
+        chaster.NoteAt("attention", Bubble);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Single(ChasterBookedPop.Live);
+        shell.Close();
+        Assert.Empty(ChasterBookedPop.Live);
+        Assert.Equal(0, frames.Count);
+        chaster.NoteAt("typo", Bubble);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(ChasterBookedPop.Live);
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ShowingReassertsTopmostAfterPlacement() => WithSeams(true, async (_, shell, _, _) =>
+    {
+        var previous = ChasterBookedPop.Raise;
+        var raised = 0;
+        ChasterBookedPop.Raise = w => { Assert.True(w.IsVisible); raised++; return true; };
+        try
+        {
+            var look = new BookedFlashPlan.Plan("+5:00", BookedFlashPlan.AddColour, 0, 1500, true);
+            Assert.NotNull(ChasterBookedPop.Show(shell, Bubble, look, BookedPopLayout.For(MotionLevel.Full)));
+            Assert.Equal(1, raised);
+        }
+        finally { ChasterBookedPop.Raise = previous; }
+        await Task.CompletedTask;
+    });
+
+    [Fact]
     public void MotionFollowsWpfsTimings()
     {
         var full = BookedPopLayout.For(MotionLevel.Full);
