@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### fin5 webcam completion slice
+
+1. Devices → MON: choose a secondary display; open Calibrate, Quick Recal and Tracker Test. Each must open on that display. Unplug it and reopen: fall back to primary without changing the saved choice; reconnect and reopen: return to the chosen display. WPF `App.xaml.cs:GetWebcamCalibrationScreen/ApplyCalibrationScreenPlacement`, `MainWindow/MainWindow.LabTab.cs:RefreshWebcamMonitorList`. Rows: `shell-webcam`.
+2. Devices → Start: blink, stop, start again. Counters reset to Face: —, Blinks: 0, Gaze: —; prior event log stays. WPF `MainWindow/MainWindow.LabTab.cs:BtnWebcamDebugStart_Click`. Rows: `shell-webcam`.
+3. With a controlled fake/virtual camera, verify flat/static frames are rejected during the 3-second probe, spatial contrast or dim motion accepts the feed, and a driver blocked in Open times out at 90 seconds. Panic during Open must never adopt the late result. A timed-out driver must release its camera when it returns; another Start is refused while it is pending. Automated fake-driver tests never open hardware. WPF `Services/Webcam/WebcamTrackingService.cs:TryOpenCapture/MinProbeStdDev/MinProbeTemporalDelta/CameraOpenTimeoutSeconds`. Rows: `shell-webcam`.

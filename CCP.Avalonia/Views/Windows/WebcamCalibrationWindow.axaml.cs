@@ -454,7 +454,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             while (true)
             {
                 var dlg = new WebcamCalibrationWindow();
-                PlaceOnCalibratedScreen(dlg);
+                Platform.WebcamScreens.Place(dlg);
                 final = await dlg.ShowDialogSafe<bool?>(owner);
                 if (!dlg.WantsRecalibrate) break;
             }
@@ -462,13 +462,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF App.ApplyCalibrationScreenPlacement: start on the monitor the last calibration
-        /// ran on (matched by pixel origin) so Maximized lands there; unknown monitor: leave it.</summary>
+        /// selects in Devices; missing displays fall back to primary without changing the setting.</summary>
         internal static void PlaceOnCalibratedScreen(Window window)
         {
-            if (Tracker.Calibration?.MonitorBounds is not { } mb || window.Screens is not { } screens) return;
-            if (screens.All.FirstOrDefault(s => s.Bounds.X == mb.X && s.Bounds.Y == mb.Y) is not { } sc) return;
-            window.WindowStartupLocation = WindowStartupLocation.Manual;
-            window.Position = sc.Bounds.Position;
+            Platform.WebcamScreens.Place(window);
         }
 
         /// <summary>WPF: the live cursor for 15 s (re-click restarts the countdown), on the window's clock.</summary>

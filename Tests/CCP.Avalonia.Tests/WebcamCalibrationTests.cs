@@ -535,15 +535,25 @@ public sealed class WebcamCalibrationTests
     });
 
     [Fact]
-    public void QuickRecal_OpensOnTheCalibratedMonitor() => WithTracker(start: false, (tracker, _) =>
+    public void QuickRecal_UsesSelectedMonitorAndMissingChoiceFallsBackWithoutRewritingSettings() => WithTracker(start: false, (tracker, _) =>
     {
-        var screen = new global::Avalonia.Controls.Window().Screens.All[0];
-        tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { X = screen.Bounds.X, Y = screen.Bounds.Y } };
-        var win = new WebcamQuickRecalWindow();
-        Assert.Equal(WindowStartupLocation.Manual, win.WindowStartupLocation);
-        Assert.Equal(screen.Bounds.Position, win.Position);
-        tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { X = -99999, Y = 7 } };
-        Assert.Equal(WindowStartupLocation.CenterScreen, new WebcamQuickRecalWindow().WindowStartupLocation);   // unknown monitor: left alone
+        var screens = new global::Avalonia.Controls.Window().Screens;
+        var screen = screens.All[0];
+        string saved = CoreSettings.Current.WebcamCalibrationScreen;
+        try
+        {
+            CoreSettings.Current.WebcamCalibrationScreen = screen.DisplayName ?? "Primary";
+            tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { X = -99999, Y = 7 } };
+            var win = new WebcamQuickRecalWindow();
+            Assert.Equal(WindowStartupLocation.Manual, win.WindowStartupLocation);
+            Assert.Equal(screen.Bounds.Position, win.Position);
+            CoreSettings.Current.WebcamCalibrationScreen = "missing-test-monitor";
+            var fallback = new WebcamQuickRecalWindow();
+            Assert.Equal(WindowStartupLocation.Manual, fallback.WindowStartupLocation);
+            Assert.Equal((screens.Primary ?? screens.All[0]).Bounds.Position, fallback.Position);
+            Assert.Equal("missing-test-monitor", CoreSettings.Current.WebcamCalibrationScreen);
+        }
+        finally { CoreSettings.Current.WebcamCalibrationScreen = saved; }
     });
 
     private static Action<global::Avalonia.Point>? GazeHandlers(WebcamTracker tracker) =>

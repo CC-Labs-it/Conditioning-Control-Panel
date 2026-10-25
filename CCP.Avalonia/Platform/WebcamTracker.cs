@@ -54,8 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// MSMF/MJPG, WebcamTrackingService.CaptureAttempts), each kept only if a frame arrives.
     /// <c>CCP_WEBCAM_DEVICE</c> (an index) overrides the saved camera index; live checks point it at one
     /// with no device so no real camera is opened.
-    /// ponytail: WPF also rejects a flat frozen feed (MinProbeStdDev / temporal delta) before adopting a
-    /// backend; this accepts the first backend that delivers any frame.</summary>
+    /// Probe quality and warmup follow WPF before adopting a backend.</summary>
     internal sealed class OpenCvFrameSource : IFrameSource
     {
         private VideoCapture? _cap;
@@ -82,7 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 _cap = new VideoCapture(index, OperatingSystem.IsLinux() ? VideoCaptureAPIs.V4L2 : VideoCaptureAPIs.ANY);
                 if (!_cap.IsOpened()) return false;
                 Configure(_cap, null);
-                return true;
+                return Warm(_cap);
             }
             foreach (var (api, fourcc) in WindowsAttempts)
             {
@@ -126,14 +125,31 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private bool Warm(VideoCapture cap)
         {
             using var probe = new Mat();
+            using var previous = new Mat();
+            using var diff = new Mat();
             var until = DateTime.UtcNow.AddMilliseconds(3000);   // WPF ProbeWarmupMs
             while (DateTime.UtcNow < until)
             {
                 if (Abandoned()) return false;   // WPF :1505: a panic mid-open drops the camera at once
-                if (cap.Read(probe) && !probe.Empty()) return true;
+                if (cap.Read(probe) && !probe.Empty())
+                {
+                    if (ProbeUsable(probe, previous, diff)) return true;
+                    probe.CopyTo(previous);
+                }
                 Thread.Sleep(200);                // WPF ProbeReadIntervalMs
             }
             return false;
+        }
+
+        // WPF MinProbeStdDev / MinProbeTemporalDelta: a dim live feed may pass on motion.
+        internal static bool ProbeUsable(Mat probe, Mat previous, Mat diff)
+        {
+            Cv2.MeanStdDev(probe, out _, out var std);
+            if (Math.Max(std.Val0, Math.Max(std.Val1, std.Val2)) >= 3.0) return true;
+            if (previous.Empty() || previous.Size() != probe.Size() || previous.Type() != probe.Type()) return false;
+            Cv2.Absdiff(probe, previous, diff);
+            var delta = Cv2.Mean(diff);
+            return Math.Max(delta.Val0, Math.Max(delta.Val1, delta.Val2)) >= 2.0;
         }
 
         /// <summary>The saved camera number when it is listed, else the first listed camera - the one the
@@ -257,7 +273,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private Run? _run;
         private Thread? _wedged;
         /// <summary>A loop a timed-out Stop abandoned still holds the camera; Start refuses until it exits.</summary>
-        internal bool IsClosing => _wedged is { IsAlive: true };
+        internal bool IsClosing => _wedged is { IsAlive: true } || _cameraOpen?.IsPending == true;
+        private CameraOpenAttempt? _cameraOpen;
         private readonly BlinkDetector _blink = new();
         private readonly MouthOpenDetector _mouth = new();
         private readonly GazeEngine _gaze = new();
@@ -331,10 +348,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     return false;
                 }
                 Progress(0.55, "Opening camera…");
-                run.Source = SourceFactory();
-                if (run.Source is OpenCvFrameSource cv) cv.Abandoned = () => Volatile.Read(ref _gen) != gen;
-                bool opened;
-                try { opened = run.Source.Open(); } catch (Exception ex) { Log.Warning(ex, "[Webcam] open threw"); opened = false; }
+                _cameraOpen = new CameraOpenAttempt();
+                run.Source = _cameraOpen.Open(SourceFactory, () => Volatile.Read(ref _gen) != gen,
+                    TimeSpan.FromSeconds(90));
+                bool opened = run.Source != null;
                 if (!opened && Volatile.Read(ref _gen) != gen)
                 {
                     LastError = "Webcam tracking was stopped before the camera finished opening.";
@@ -344,7 +361,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
                 if (!opened)
                 {
-                    LastError = "No camera could be opened. Check that a webcam is connected and not in use by another app.";
+                    LastError = _cameraOpen.TimedOut
+                        ? "Camera open timed out after 90 seconds. The driver may be hung or the camera may be in use by another app."
+                        : "No camera could be opened. Check that a webcam is connected and not in use by another app.";
                     run.Release();
                     return false;
                 }
@@ -377,7 +396,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             finally
             {
                 Interlocked.Exchange(ref _busy, 0);
-                if (began && !IsRunning) SetTrackingState(StartWasStopped ? WebcamTrackingState.Stopped : WebcamTrackingState.Error);
+                if (began && !IsRunning) SetTrackingState(StartWasStopped ? WebcamTrackingState.Stopped
+                    : _cameraOpen?.TimedOut == true ? WebcamTrackingState.CameraInUse : WebcamTrackingState.Error);
                 Dispatcher.UIThread.Post(() => StateChanged?.Invoke());
             }
         }

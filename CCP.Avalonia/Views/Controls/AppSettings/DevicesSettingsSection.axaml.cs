@@ -64,6 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             BtnWebcamDebugTrackerTest.Click += BtnWebcamDebugTrackerTest_Click;
             CmbWebcamDevice.SelectionChanged += CmbWebcamDevice_SelectionChanged;
             BtnWebcamDeviceRefresh.Click += BtnWebcamDeviceRefresh_Click;
+            CmbWebcamMonitor.SelectionChanged += WebcamMonitorChanged;
 
             SyncFromSettings();
             PopulateMicDevices();
@@ -90,6 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             SyncFromSettings();
             PopulateMicDevices();
             PopulateWebcamDevices();
+            PopulateWebcamMonitors();
         }
 
         private LockdownService? _lockdown;
@@ -274,7 +276,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             BtnWebcamDebugCalibrate.IsEnabled = has;
             CmbWebcamDevice.IsEnabled = has;
             BtnWebcamDeviceRefresh.IsEnabled = has;
-            foreach (var c in new Control[] { CmbWebcamMonitor, ChkWebcamDebugCursor })
+            CmbWebcamMonitor.IsEnabled = has;
+            foreach (var c in new Control[] { ChkWebcamDebugCursor })
             {
                 c.IsEnabled = false;   // IsEnabled only - never IsChecked, which would fire the handler
                 ToolTip.SetShowOnDisabled(c, true);
@@ -382,6 +385,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                     if (!Services.Webcam.WebcamConsent.IsCurrent(CoreSettings.Current)) { AppendWebcamDebugLog("Consent declined or dialog cancelled."); return; }
                     AppendWebcamDebugLog("Consent granted.");
                 }
+                ResetWebcamDebug();
                 AppendWebcamDebugLog("Starting webcam (camera open + model load can take a few seconds)…");
                 BtnWebcamDebugStart.IsEnabled = false;
                 bool started = await tracker.StartAsync();
@@ -471,6 +475,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 return;
             }
             AppendWebcamDebugLog(opening);
+            Platform.WebcamScreens.Place(dialog);
             var result = await dialog.ShowDialogSafe<bool?>(owner);
             AppendWebcamDebugLog(closed(result));
             if (startedHere) { await tracker.StopAsync(); RefreshWebcamStartLabel(); }

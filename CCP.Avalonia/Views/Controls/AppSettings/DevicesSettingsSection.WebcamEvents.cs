@@ -30,6 +30,14 @@ public partial class DevicesSettingsSection
         tracker.StateChanged += DebugStateChanged;
     }
 
+    internal void ResetWebcamDebug()
+    {
+        _debugBlinks = _debugMouths = _debugTongues = 0;
+        _debugFace = "—";
+        _debugSide = null;
+        UpdateWebcamCounters();
+    }
+
     private void DebugBlink() { _debugBlinks++; UpdateWebcamCounters(); AppendWebcamDebugLog($"Blink #{_debugBlinks}"); }
     private void DebugMouth() => AppendWebcamDebugLog($"Mouth-open #{++_debugMouths}");
     private void DebugTongue() => AppendWebcamDebugLog($"Tongue-out #{++_debugTongues}");
