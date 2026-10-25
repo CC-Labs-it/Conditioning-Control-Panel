@@ -220,4 +220,48 @@ public sealed class MantraChantTests
         }
         finally { s.MantraChantEnabled = saved; }
     });
+
+    [Fact]
+    public void WatchdogStillStopsMindWipeWhileTheChantIsWedgedInPlay()
+    {
+        // A UI thread hung inside Play() (LibVLC open) holds the chant's lock; the watchdog's chant step
+        // waits on it, so it must come after mind wipe and unduck (review P2).
+        var chant = MantraChantService.Instance;
+        var s = CoreSettings.Current;
+        var hooks = (chant.HasVoiced, chant.Next, chant.Resolve, chant.After, chant.Play);
+        var saved = (s.AvatarMuted, s.MasterVolume, s.MantraChantVolume);
+        var oldStop = CoreMindWipe.StopProvider;
+        using var inPlay = new System.Threading.ManualResetEventSlim();
+        using var release = new System.Threading.ManualResetEventSlim();
+        using var wiped = new System.Threading.ManualResetEventSlim();
+        Task? starter = null, teardown = null;
+        try
+        {
+            (s.AvatarMuted, s.MasterVolume, s.MantraChantVolume) = (false, 80, 50);
+            chant.HasVoiced = () => true;
+            chant.Next = () => new MantraEntry { PromptAudio = "ask", ResponseAudio = "affirm" };
+            chant.Resolve = p => p;
+            chant.After = (a, d) => new Wait(a, d);
+            chant.Play = (_, _, _) => { inPlay.Set(); release.Wait(TimeSpan.FromSeconds(10)); return null; };
+            CoreMindWipe.StopProvider = () => wiped.Set();
+
+            starter = Task.Run(chant.Start);
+            Assert.True(inPlay.Wait(TimeSpan.FromSeconds(10)));
+            teardown = Task.Run(PanicWatchdog.RunEmergencyTeardown);
+            Assert.True(wiped.Wait(TimeSpan.FromSeconds(5)), "mind wipe waited behind the wedged chant");
+            release.Set();
+            Assert.True(teardown.Wait(TimeSpan.FromSeconds(10)));
+            Assert.False(chant.IsRunning);
+        }
+        finally
+        {
+            release.Set();
+            starter?.Wait(TimeSpan.FromSeconds(10));
+            teardown?.Wait(TimeSpan.FromSeconds(10));
+            chant.Stop();
+            (chant.HasVoiced, chant.Next, chant.Resolve, chant.After, chant.Play) = hooks;
+            (s.AvatarMuted, s.MasterVolume, s.MantraChantVolume) = saved;
+            CoreMindWipe.StopProvider = oldStop;
+        }
+    }
 }

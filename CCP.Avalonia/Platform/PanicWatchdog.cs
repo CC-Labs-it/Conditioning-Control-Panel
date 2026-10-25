@@ -104,16 +104,18 @@ internal static class PanicWatchdog
 
     /// <summary>WPF RunEmergencyPanicTeardown: ONLY thread-safe steps, each guarded on its own. No overlay
     /// hiding: overlays are the UI thread's to drop when it comes back and runs the real handler.</summary>
-    private static void RunEmergencyTeardown()
+    internal static void RunEmergencyTeardown()
     {
         Step("haptics", () => CoreHaptics.Service?.PanicStop());
         Step("remote haptics", RemoteCommands.StopHaptics);
         Step("ai follow-ups", () => ConditioningControlPanel.Services.Commands.AiCommandService.CancelAll());
         // Conditional, as WPF (#668): with the standalone Audio Layers master on, the bed is the user's.
         Step("audio layers", () => { if (!CoreSettings.Current.AudioLayersEnabled) LayeredAudio.Instance?.Stop(); });
-        Step("mantra chant", () => MantraChantService.Instance.StopEmergency());
         Step("mind wipe", () => CoreMindWipe.StopProvider?.Invoke());
         Step("unduck", () => LibVlcAudio.Instance?.ForceUnduck());
+        // Last: Stop() takes the chant's lock, which a UI thread hung inside Play() (LibVLC open) still holds.
+        // A wait there must not cost the mind-wipe stop or the unduck.
+        Step("mantra chant", () => MantraChantService.Instance.StopEmergency());
         Log.Information("PANIC FALLBACK complete");
     }
 

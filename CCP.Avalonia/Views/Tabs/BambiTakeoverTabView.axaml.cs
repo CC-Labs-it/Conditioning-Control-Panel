@@ -297,7 +297,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 : s.WallpaperSourceFolder;
 
             // WPF WallpaperService.RemoteMediaEnabled: the source and explicit media consent own the credit.
-            TxtWallpaperCredit.IsVisible = s.MediaSource != null && s.MediaSource != "local" && s.HasRemoteMediaConsent;
+            TxtWallpaperCredit.IsVisible = global::ConditioningControlPanel.Services.Quiz.IntakeRun.RemoteMediaEnabled(s);
             ChkWallpaperKeep.IsChecked = s.WallpaperEnabled;
             // Clamp before assigning, like the other Takeover bars (#485).
             s.WallpaperPulseSeconds = Math.Clamp(s.WallpaperPulseSeconds,

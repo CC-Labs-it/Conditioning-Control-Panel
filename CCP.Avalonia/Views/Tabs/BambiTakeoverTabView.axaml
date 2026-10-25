@@ -591,14 +591,12 @@
                                                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="10,0,0,0"/>
                                                     </Grid>
 
-                                                    <StackPanel x:Name="TxtWallpaperCredit" IsVisible="False" Margin="0,2,0,0">
-                                                        <!-- WPF xaml:538-541: a plain Hyperlink credit. -->
-                                                        <hover:SafeHyperlinkButton x:Name="BtnWallpaperCredit" Padding="0" HorizontalAlignment="Left"
-                                                                                   Foreground="{StaticResource TextMutedBrush}">
-                                                            <TextBlock Text="Media from Scrolller" FontSize="10.5" TextDecorations="Underline"/>
-                                                        </hover:SafeHyperlinkButton>
-                                                        <TextBlock Text="{loc:Str label_online_media_credit}" FontSize="10.5" TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}"/>
-                                                    </StackPanel>
+                                                    <!-- WPF xaml:538-541: one wrapping line, "Media from Scrolller. {credit}", the first part a Hyperlink. -->
+                                                    <TextBlock x:Name="TxtWallpaperCredit" IsVisible="False" Margin="0,2,0,0" FontSize="10.5" TextWrapping="Wrap"
+                                                               Foreground="{StaticResource TextMutedBrush}"><InlineUIContainer BaselineAlignment="TextBottom"><hover:SafeHyperlinkButton
+                                                               x:Name="BtnWallpaperCredit" Padding="0" Foreground="{StaticResource TextMutedBrush}"><TextBlock
+                                                               Text="Media from Scrolller" FontSize="10.5" TextDecorations="Underline"/></hover:SafeHyperlinkButton></InlineUIContainer><Run
+                                                               Text=". "/><Run Text="{loc:Str label_online_media_credit}"/></TextBlock>
 
                                                     <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 

@@ -187,7 +187,7 @@ public sealed class TakeoverTabUiTests
                 shell.ShowTab("settings");
                 (s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented) = (source, consent, false);
                 shell.ShowTab("bambitakeover");
-                Assert.Equal(visible, tab.FindControl<StackPanel>("TxtWallpaperCredit")!.IsVisible);
+                Assert.Equal(visible, tab.FindControl<TextBlock>("TxtWallpaperCredit")!.IsVisible);
             }
             var launched = new List<string>();
             tab.WallpaperCreditOpenerForTests = target => { launched.Add(target); return Task.FromResult(true); };
