@@ -2,8 +2,8 @@
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
 // media-flavour / media-more / online-media), whisper clips (needs asset-server routes for ccp.subaudio /
-// ccp.words; the settings frame sends none, which the page reads as "no whispers"), PvP stakes (Core StakeBridge.ForApp
-// is not routed here yet: stakes-host), friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape),
+// ccp.words; the settings frame sends none, which the page reads as "no whispers"),
+// friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape),
 // MergedAccountRecovery and SeasonRecapService.TrackFeature.
 
 using System;
@@ -18,6 +18,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.PieceByPiece;
+using ConditioningControlPanel.Services.Stakes;
 using Newtonsoft.Json.Linq;
 using Serilog;
 
@@ -54,6 +55,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Environment.GetEnvironmentVariable(FriendsHead.EnvVar));
 
         private static readonly Random PbpRng = new();
+
+        // WPF keeps the bridge for the app session: watches survive close and share deduplication.
+        private static StakeBridge? _pbpStakes;
+        internal static Func<Action<JObject>, StakeBridge> PbpStakeFactory { get; set; } =
+            post => StakeBridge.ForApp("pbp", post);
+        internal Task StakePending { get; private set; } = Task.CompletedTask;
+
+        private static void PostPbpStake(JObject reply) => Dispatcher.UIThread.Post(() =>
+        {
+            // WPF PostStake targets the current board, or quietly drops the reply after close.
+            GameWindow? board;
+            lock (Open) board = Open.FirstOrDefault(w => w.Spec.Id == PbpId);
+            if (board != null && !board._closing) board.Post(reply);
+        });
+
+        internal static void ResetPbpStakesForTests() => _pbpStakes = null;
 
         private bool _pbpOpen;
         private bool _pbpSettingsPosted;   // pbp:settings goes out exactly once per boot
@@ -103,6 +120,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var type = (string?)o["type"];
             try
             {
+                if (StakeBridge.Handles(type))
+                {
+                    _pbpStakes ??= PbpStakeFactory(PostPbpStake);
+                    StakePending = _pbpStakes.Handle(o);
+                    return true;
+                }
                 switch (type)
                 {
                     case "ready":

@@ -621,6 +621,7 @@ namespace ConditioningControlPanel.Avalonia
                     (desktop.MainWindow as Views.Windows.MainShellWindow)?.InitializeChasterFlash(Platform.ChasterHead.Service);
                 }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "[Chaster] service could not be built"); }
+                Platform.StakeHead.Seed();
                 // WPF App.xaml.cs FRIENDS: no request at build; a new identity is the sign-in moment to poll now.
                 try
                 {

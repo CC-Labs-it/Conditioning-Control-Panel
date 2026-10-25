@@ -673,3 +673,11 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+
+### fin5: Piece by Piece stakes host
+
+1. WPF `Services/PieceByPiece/PieceByPieceHostService.cs` + `Assets/web/piecebypiece/net/stake.js`: open Piece by Piece from Play, sign in and start online PvP; check limits/labels and the Off, 15/30 min and 5/10/25 Sparkle options. Solo/bot games must not offer stakes. Rows: `feat-stakes`
+2. WPF `Services/Stakes/StakeAppHooks.cs`: time is unavailable when unlinked, tab disabled, paused or inside the panic safety hold. With an active linked tab, pick time and check that `pvp_loss` becomes enabled once, preserving other rows. Rows: `feat-stakes`
+3. WPF `Services/Stakes/StakeAppHooks.cs` + `CCP.Core/Services/Stakes/StakeSettlement.cs`: finish an online match; a lost time stake books once subject to tab limits, a void books nothing, receipts can debit SP, snapshots cannot undo local credits. Change accounts while a reply is pending: it must not alter the new account wallet. Rows: `feat-stakes`
+4. WPF `Services/PieceByPiece/PieceByPieceHostService.cs` (PostStake): close/panic during settlement, then reopen. The watch must still book once; replies go only to the current board. Goon is unavailable in this build and remains a named parity gap. Rows: `feat-stakes`
