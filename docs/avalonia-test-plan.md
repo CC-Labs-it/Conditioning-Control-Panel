@@ -673,3 +673,11 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### Companion tab completion (fin4)
+
+1. Open Companion, change idle/bubble/trigger settings elsewhere, return: sliders/labels, trigger visibility, hero, AI and roster refresh. Switch each supported companion; its ring/avatar follow. WPF `MainWindow/MainWindow.CompanionTab.cs:38`. Rows: `shell-companion-tab`.
+2. Click a roster personality button: pick JSON from the user prompts folder or shipped fallback. Cancel changes nothing; import assigns the filename label without switching companions. Assign to the active companion: its personality applies now; assign another and switch: it applies then. Unassigned companions keep the current prompt. WPF `MainWindow/MainWindow.CompanionTab.cs:327`. Rows: `shell-companion-tab`.
+3. Community Import adds a row with name/author; activate shows its marker and removes Activate. Explicit content requires acknowledgement; cancelling leaves the prompt unchanged. Remove the active row: empty localized placeholder survives repeated refreshes. Reset clears the active override and repaints the list. WPF `MainWindow/MainWindow.CompanionTab.cs:178`. Rows: `shell-companion-tab`.
+4. Browse from Workshop and Make her yours: no catalogue/all installed messages; otherwise first five in server order, remaining count, Install installs the first uninstalled. Refresh disables itself with ellipsis then restores its localized label; offline uses cache and blocks downloads. Export writes current personality JSON with WPF name/author defaults. WPF `MainWindow/MainWindow.Patreon.cs:2318`. Rows: `shell-companion-tab`.
+5. Open a community confirmation or acknowledgement and press panic: it closes without acceptance. Panic during Browse loading must prevent a late dialog. WPF `MainWindow/MainWindow.CompanionTab.cs:273` (panic closure improves the modal safety path). Rows: `shell-companion-tab`.

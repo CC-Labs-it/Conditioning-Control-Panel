@@ -9,8 +9,7 @@
 //     the Awareness v2 consent dialog (WPF EnsureAwarenessV2Consent, MainShellWindow.CompanionRoom.cs);
 //   * the mod repaint - CoreMods.ModChanged re-reads the roster (WPF UpdateCompanionCardsUI). The
 //     hero re-reads its own name/portrait off the same event (CompanionHeroCard.OnModChanged).
-// WPF's UpdateCompanionPromptLabels half has nothing to repaint: the per-card assigned-prompt
-// labels wait on CompanionService (row shell-companion-tab).
+// Roster.Refresh also repaints assigned-prompt labels through the shared prompt lookup.
 // WPF's IsIncomingTab guard is not needed: this head's ShowTab has no fade-out re-show.
 
 using System;

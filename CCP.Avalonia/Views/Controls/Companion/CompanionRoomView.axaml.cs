@@ -133,6 +133,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// accent ring and supported set follow a mod switch made while the tab is open.</summary>
         internal Runtime.WorkshopShelfParts? WorkshopParts => (WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts;
 
+        internal void RefreshPersonality() => PersonalityZone.ViewModel.Sync();
+
         internal void RefreshRoster() => WorkshopParts?.Roster.Refresh();
 
         /// <summary>WPF UpdateCompanionCardsUI also refreshes the visible room after switching.</summary>

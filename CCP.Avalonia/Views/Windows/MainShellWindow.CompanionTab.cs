@@ -15,11 +15,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (CoreMods.Service?.IsCompanionSupported(id) == false) return;
             if (!CompanionCore.SwitchCompanion(id)) return;
             room.RefreshCompanionIdentity();
+            RefreshCommunityPrompts(room);
             _avatarTubeWindow?.SwitchToCompanionAvatar(id);   // WPF MainWindow.CompanionTab.cs:327-361
         }
 
-        // ponytail: the runtime aggregate/compat accessors, personality prompt assignment,
-        // community browsing/import/export/refresh and prompt labels remain in
-        // wire-views-tab-companion-b. The existing Core engine is the only switching rule.
     }
 }

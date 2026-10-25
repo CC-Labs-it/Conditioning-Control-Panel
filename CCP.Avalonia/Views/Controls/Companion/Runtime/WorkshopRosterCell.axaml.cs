@@ -106,6 +106,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
 
                 this.FindControl<TextBlock>($"TxtCompanion{i}Lock")!.IsVisible = false;
                 card.Opacity = 1.0;
+                var promptName = ConditioningControlPanel.Services.Companion.CompanionCore.GetAssignedPromptName(id) ?? "";
+                var display = mods?.MakeModAware(promptName) ?? promptName;
+                var label = this.FindControl<TextBlock>($"TxtCompanion{i}Prompt")!;
+                label.Text = display;
+                ToolTip.SetTip(label, string.IsNullOrEmpty(display) ? null : Loc.GetF("tooltip_ai_personality", display));
             }
         }
     }

@@ -121,6 +121,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 PersonalityService.ClearCustomPromptOverride(CoreSettings.Current);
                 CoreSettings.Save();
                 Sync();
+                Shell?.RefreshCompanionCommunity();
             });
             Sync();
         }
@@ -187,10 +188,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public ICommand ResetPersonalityCommand { get; }
         public ICommand ViewCompiledPromptCommand { get; }
         public ICommand ForkPromptCommand { get; }
-        // ponytail: WPF BtnBrowsePrompts_Click opens the community prompt browser
-        // (App.CommunityPrompts, WPF-head CommunityPromptService); no browser exists on this head, so the
-        // link stays a null command (disabled) rather than a dead button that looks alive.
-        public ICommand? CommunityPromptsCommand => null;
+        public ICommand CommunityPromptsCommand => new CompanionRelayCommand(async () =>
+        { if (Shell is { } shell) await shell.BrowseCompanionCommunityAsync(); });
 
         /// <summary>Re-reads settings and the personality service (WPF MakeHerYoursRuntimeVm.SyncCore).</summary>
         public void Sync()
@@ -210,9 +209,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             var communityId = settings.ActiveCommunityPromptId;
             if (!string.IsNullOrEmpty(communityId))
             {
-                // ponytail: WPF shows the installed prompt's NAME (CommunityPromptService.GetInstalledPrompt,
-                // head-only); this head has no installed-prompt store yet, so the id stands in.
-                ActivePersonalityLine = Loc.GetF("companion_personality_active_custom_fmt", communityId);
+                var prompt = CommunityPromptsCore.Shared.GetInstalledPrompt(communityId);
+                ActivePersonalityLine = Loc.GetF("companion_personality_active_custom_fmt", prompt?.Name ?? communityId);
                 CanResetPersonality = true;
                 return;
             }
