@@ -22,6 +22,9 @@ test('Keep horizontal ironwork leaves open deck bypasses and clear approach wind
     assert.ok(!track.aerials.some(a => row.s > a.rampS0 - 20 && row.s < a.landingS1 + 20));
     assert.ok(!track.boosts.some(b => Math.abs(row.s - b.s) < b.len / 2 + row.len / 2 + 10));
     assert.ok(![...layout.gates, ...layout.chains].some(g => Math.abs(row.s - g.s) < 30));
+    assert.ok(!track.courts.flatMap(c => c.holes).some(h =>
+      row.s + row.len / 2 + 10 > h.s && row.s - row.len / 2 - 10 < h.s + h.len),
+    row.id + ' clear hole approach and rollout');
   }
 });
 

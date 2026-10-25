@@ -28,6 +28,8 @@ test('every course has six physical traps and a shorter forming bridge with perm
     for (const row of plan.traps) for (let beat = 0; beat < 4; beat += .03) {
       const p = movingPose(row, 0, { beat, beatS: .5, safe: false }), lane = -row.side * (row.roadWidth / 2 - 3);
       assert.ok(Math.abs(lane - p.x) > row.w / 2 + .7, id + ' outer lane is always clear');
+      const road = track.frameAt(row.s), position = road.p.map((v, j) => v + road.b[j] * lane);
+      assert.ok(track.query(...position, road.seg).onRoad, row.id + ' bypass has physical road beneath it');
     }
   }
 });

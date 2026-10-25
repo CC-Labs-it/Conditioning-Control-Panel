@@ -13,6 +13,7 @@ export function movingOverlap(row, pose, p) {
 
 export function createMovingHazards(track) {
   const rows = track.moving?.traps || [], yp = {};
+  const holes = track.id === 'keep' ? (track.courts || []).flatMap(c => c.holes) : [];
   let memory = new WeakMap(), spins = new WeakMap(), hits = 0;
   function apply(r, previous, timeS, events = r.events, dt = 1 / 60) {
     if (!r || r.kind === 'remote' || r.finished || !Number.isFinite(timeS)) return null;
@@ -50,12 +51,19 @@ export function createMovingHazards(track) {
   function steer(r, actions) {
     if (r.finished || r.kind === 'remote' || r.st[S.respawnPhase] !== RESPAWN.NONE || track.forkAtSeg?.(r.st[S.seg]) || r.st[S.airborne]) return false;
     const row = rows.find(row => { const d = (row.s - r.st[S.s] + track.lengthM) % track.lengthM; return d < 65; });
-    if (!row) return false;
+    // Plan slate openings before an upstream boost can lock in the approach speed.
+    const hole = holes.find(h => { const d = h.s - r.st[S.s]; return d >= -h.len - 20 && d < 160; });
+    if (!row && !hole) return false;
     const st = r.st, speed = Math.hypot(st[S.velX], st[S.velY], st[S.velZ]);
     const f = track.frameAt(st[S.s] + Math.max(12, Math.min(20, speed * .65))), here = track.frameAt(st[S.s]);
     const sideV = dot([st[S.velX], st[S.velY], st[S.velZ]], here.b);
-    const halfWidth = Math.min(row.roadWidth, here.w, f.w) / 2;
-    const target = -row.side * Math.max(0, halfWidth - 3.5) - Math.max(-1, Math.min(1, sideV * .45));
+    const halfWidth = Math.min(row?.roadWidth || here.w, here.w, f.w) / 2;
+    const margin = Math.max(0, halfWidth - 3.5);
+    const clearLane = hole ? Math.abs(hole.x) < .1
+      ? (Math.sign(st[S.lateral]) || (r.i % 2 ? 1 : -1)) * (hole.w / 2 + 4)
+      : -Math.sign(hole.x) * Math.min(7, margin)
+      : -row.side * margin;
+    const target = Math.max(-margin, Math.min(margin, clearLane)) - Math.max(-1, Math.min(1, sideV * .45));
     const d = f.p.map((v, j) => v + f.b[j] * target - st[S.posX + j]);
     const x = st[S.quatX], y = st[S.quatY], z = st[S.quatZ], w = st[S.quatW];
     const right = [1 - 2 * (y * y + z * z), 2 * (x * y + w * z), 2 * (x * z - w * y)];

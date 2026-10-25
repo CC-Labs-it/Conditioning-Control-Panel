@@ -13,10 +13,11 @@ import { setMachineryBeat } from '../track/machineryBeat.js';
 import { S } from '../sim/state.js';
 
 for (const [id, bpm] of [['threshold', 120], ['keep', 142], ['mainframe', 135], ['boudoir', 99.02], ['goonworks', 96.75]]) {
-  test(id + ' eight racers finish with beat-fast hazards, moving traps and timed bridge support', () => {
+  for (const seed of id === 'keep' ? [1, 241023, 20261025] : [20261025])
+  test(id + ' eight racers finish with beat-fast hazards, moving traps and timed bridge support, seed ' + seed, () => {
     const track = loadTrack(JSON.parse(readFileSync(new URL('../tracks/' + id + '.json', import.meta.url), 'utf8')), { moving: true });
     track.laps = 1;
-    const run = makeRace({ track, seed: 20261025 }), moving = createMovingHazards(track);
+    const run = makeRace({ track, seed }), moving = createMovingHazards(track);
     const hazards = id === 'keep' ? createKeepHazards(track, getKeepLayout(track))
       : id === 'goonworks' ? createGoonworksHazards(track) : id === 'boudoir' ? createBoudoirHazards(track) : null;
     const industry = createMainframeIndustry(track, { emit() {} });
