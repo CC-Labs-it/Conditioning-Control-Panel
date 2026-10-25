@@ -30,6 +30,106 @@ namespace CCP.Avalonia.Tests;
 public sealed class ModChoiceTests
 {
     [Fact]
+    public Task LanguageChangeRepaintsHomeFallbackWithoutSpendingPendingChoice() => Run(async (shell, svc, server) =>
+    {
+        var manager = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var old = manager.CurrentLanguage;
+        PendingModChoice.Record(BuiltInMods.BambiSleepId, BuiltInMods.CCPDefaultId);
+        try
+        {
+            manager.SetLanguage(old == "fr" ? "en" : "fr");
+            Dispatcher.UIThread.RunJobs();
+            var dash = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView>("SettingsTab")!;
+            Assert.Equal(manager.CurrentLanguage == "fr" ? "Texte Rebondissant" : "Bouncing Text", dash.CardBouncingText.Title);
+            Assert.Equal(BuiltInMods.BambiSleepId, PendingModChoice.Pending);
+        }
+        finally { manager.SetLanguage(old); Dispatcher.UIThread.RunJobs(); }
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task EnhancementDropImportsOnceAndRemembersSourceFolder() => Run(async (shell, svc, server) =>
+    {
+        var path = Path.Combine(TestUserDataProfile.Root, "drop-import.ccpenh.json");
+        var enhancement = new ConditioningControlPanel.Models.Deeper.Enhancement { Metadata = new() { Name = "Drop import test" }, MediaSource = "test.mp3" };
+        File.WriteAllText(path, ConditioningControlPanel.Services.Deeper.EnhancementSerializer.Save(enhancement));
+        string? imported = null;
+        try
+        {
+            await shell.ImportDroppedFilesAsync(new[] { path });
+            using var library = new ConditioningControlPanel.Services.Deeper.EnhancementLibrary();
+            imported = library.FindDuplicateOf(path);
+            Assert.NotNull(imported);
+            Assert.NotEqual(path, imported);
+            Assert.Equal(Path.GetDirectoryName(path), CoreSettings.Current.DeeperLastDirectory);
+            var before = Directory.GetFiles(library.LibraryFolder).Length;
+            await shell.ImportDroppedFilesAsync(new[] { path });
+            Assert.Equal(before, Directory.GetFiles(library.LibraryFolder).Length);
+        }
+        finally { File.Delete(path); if (imported != null) File.Delete(imported); }
+    });
+
+    [Fact]
+    public Task MediaDropOffersWpfChoicesAndPanicCancelsWithoutImporting() => Run(async (shell, svc, server) =>
+    {
+        var path = Path.Combine(TestUserDataProfile.Root, "drop-test.mp3");
+        File.WriteAllBytes(path, new byte[] { 0 });
+        try
+        {
+            var pending = shell.ImportDroppedFilesAsync(new[] { path });
+            var dialog = await Owned<Window>(shell);
+            foreach (var action in new[] { "play", "edit", "library", "cancel" })
+                Assert.NotNull(dialog.FindControl<Button>("MediaDrop_" + action));
+            shell.StopDroppedMediaForPanic();
+            await pending;
+            Assert.False(dialog.IsVisible);
+            Assert.Empty(shell.OwnedWindows);
+        }
+        finally { File.Delete(path); }
+    });
+
+    [Theory]
+    [InlineData("edit")]
+    [InlineData("play")]
+    public Task MediaDropOpensTheExistingHost(string action) => Run(async (shell, svc, server) =>
+    {
+        var path = Path.Combine(TestUserDataProfile.Root, "drop-edit.mp3");
+        File.WriteAllBytes(path, new byte[] { 0 });
+        try
+        {
+            var pending = shell.ImportDroppedFilesAsync(new[] { path });
+            var dialog = await Owned<Window>(shell);
+            dialog.FindControl<Button>("MediaDrop_" + action)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var host = await Owned<Window>(shell);
+            if (action == "edit") Assert.IsType<ConditioningControlPanel.Avalonia.Views.Deeper.DeeperEditorWindow>(host);
+            else Assert.IsType<ConditioningControlPanel.Avalonia.Views.Deeper.EnhancementPlayerWindow>(host);
+            Assert.True(host.IsVisible);
+            shell.StopDroppedMediaForPanic();
+            host.Close();
+            await pending;
+        }
+        finally { File.Delete(path); }
+    });
+
+    [Fact]
+    public Task ExternalActivationRepaintsPaletteHomeAndTakeoverWithoutSpendingPendingChoice() => Run(async (shell, svc, server) =>
+    {
+        PendingModChoice.Record(BuiltInMods.BambiSleepId, BuiltInMods.CCPDefaultId);
+        AvApp.Mods!.ActivateMod(BuiltInMods.DronificationId);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(Color.Parse(AvApp.Mods.GetAccentColorHex()), (Color)Application.Current!.Resources["PinkColor"]!);
+        var dash = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView>("SettingsTab")!;
+        Assert.Equal(AvApp.Mods.MakeModAware("Flash Images"), dash.CardFlash.Title);
+        var takeover = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.BambiTakeoverTabView>("BambiTakeoverTab")!;
+        Assert.Equal(AvApp.Mods.GetTakeoverLabel(), takeover.FindControl<TextBlock>("TxtBambiTakeoverHeader")!.Text);
+        Assert.Equal(AvApp.Mods.GetTakeoverLabel(), takeover.FindControl<ConditioningControlPanel.Avalonia.Controls.IconLabel>("TxtTakeoverLocked")!.Text);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("tooltip_start_stop_takeover", AvApp.Mods.GetTakeoverLabel()),
+            ToolTip.GetTip(takeover.FindControl<Button>("BtnAutonomyStartStop")!));
+        Assert.Equal(BuiltInMods.BambiSleepId, PendingModChoice.Pending);
+        await Task.CompletedTask;
+    });
+
+    [Fact]
     public Task HeaderComboSwitchesTheModSavesAndRethemes() => Run(async (shell, svc, server) =>
     {
         var combo = shell.FindControl<ComboBox>("ModSelectorCombo")!;

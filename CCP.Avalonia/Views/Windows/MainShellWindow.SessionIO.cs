@@ -40,10 +40,8 @@
 //   Drag and drop - PORTED below: Window_DragEnter/Over/Leave/Drop, ImportDroppedFilesAsync,
 //   UpdateDropOverlay, HandleAssetDropAsync, over Core DropRules (the DetectDropType lift both
 //   heads call). Session/preset drops go to PresetsTabView; .ccpmod to HandleModDropAsync
-//   (MainShellWindow.ModCatalogue.cs). Not ported: the single-media Play/Edit choices and the
-//   enhancement import (no Deeper player/editor/library on this head) - a lone playable file
-//   offers "Add to Asset Library"/Cancel only, and an enhancement drop says the library is not
-//   ready, WPF's own string (docs/avalonia-decisions.md, 2026-10-09 window-wide drop).
+//   (MainShellWindow.ModCatalogue.cs). Single media now offers Play/Edit/Library/Cancel over
+//   the existing Deeper hosts; enhancement drops use Core's library writer and duplicate rules.
 //
 //   The two global hotkeys - ApplyGlobalChatHotkey, ApplyGlobalCameraHotkey, ApplyCameraShortcutTo,
 //   ParseModifiers, FormatCameraShortcut, RefreshChatShortcutLabel, RefreshCameraShortcutLabel,
@@ -125,14 +123,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (files == null || files.Length == 0) return;
 
-            // WPF prompts Play / Edit / Add-to-Library. Play and Edit need the Deeper player and
-            // editor, which this head does not host yet, so only the library half is offered.
             if (files.Length == 1 && File.Exists(files[0]) && DropRules.IsDeeperPlayableMedia(files[0]))
             {
-                var library = await Dialogs.MessageDialog.ConfirmAsync(this, Loc.Get("dlg_media_drop_title"),
-                    Path.GetFileName(files[0]), okText: Loc.Get("dlg_media_drop_library"),
-                    cancelText: Loc.Get("dlg_media_drop_cancel"));
-                if (library) await HandleAssetDropAsync(files);
+                var choice = await ShowMediaDropChoiceAsync(files[0]);
+                try
+                {
+                    switch (choice)
+                    {
+                    case "play": ShowOrActivateDeeperPlayer().OpenLocalMediaFile(files[0]); break;
+                    case "edit":
+                        OpenDeeperEditor(new Models.Deeper.Enhancement
+                        {
+                            MediaType = DropRules.AssetVideoExtensions.Contains(Path.GetExtension(files[0]))
+                                ? Models.Deeper.MediaTypes.Video : Models.Deeper.MediaTypes.Audio,
+                            MediaSource = files[0]
+                        }, null);
+                        break;
+                    case "library": await HandleAssetDropAsync(files); break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Failed to open dropped media");
+                    var host = choice == "play" ? "Player" : "Editor";
+                    await Dialogs.MessageDialog.ShowAsync(this, $"Open {host} failed",
+                        $"Couldn't open Deeper {host}:\n\n{ex.GetType().Name}: {ex.Message}");
+                }
                 return;
             }
 
@@ -145,8 +161,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Named<Tabs.PresetsTabView>("PresetsTab")?.HandlePresetDrop(files[0]);
                     break;
                 case DropType.Enhancement:
-                    // WPF ImportEnhancementFiles with no App.EnhancementLibrary (DeeperTab.cs:819).
-                    App.Notifications.Show(Loc.Get("deeper_import_library_not_ready"), Helpers.NotificationType.Warning);
+                    ImportEnhancementFiles(files);
                     break;
                 case DropType.Mod:
                     await HandleModDropAsync(files[0]);
@@ -160,6 +175,92 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     App.Notifications.Show(Loc.Get("drop_not_recognised"), Helpers.NotificationType.Info);
                     break;
             }
+        }
+
+        // WPF MainWindow.DeeperTab.cs ImportEnhancementFiles. ponytail: scope the Core library's
+        // watcher to this import; the existing hub reload below is authoritative for this path.
+        internal void ImportEnhancementFiles(string[] paths)
+        {
+            using var library = new Services.Deeper.EnhancementLibrary();
+            var imported = new System.Collections.Generic.List<string>();
+            var errors = new System.Collections.Generic.List<string>();
+            string? last = null, duplicate = null;
+            int skipped = 0;
+            foreach (var path in paths)
+            {
+                var name = Path.GetFileName(path);
+                try
+                {
+                    if (!Services.Deeper.EnhancementImportRules.IsImportablePath(path))
+                    {
+                        errors.Add(Loc.GetF("deeper_import_err_not_enh_fmt", name));
+                        continue;
+                    }
+                    if (!Services.Deeper.EnhancementImportRules.FileLooksLikeEnhancement(path)) { skipped++; continue; }
+                    if (library.FindDuplicateOf(path) is { } existing) { duplicate = existing; continue; }
+                    var enhancement = Services.Deeper.EnhancementSerializer.LoadFromFile(path);
+                    var saved = library.PromoteToLibrary(enhancement, "import");
+                    if (saved == null) { errors.Add(Loc.GetF("deeper_import_err_write_fmt", name)); continue; }
+                    last = saved;
+                    imported.Add(Path.GetFileName(saved));
+                }
+                catch (Services.Deeper.EnhancementLoadException ex) { errors.Add($"{name}: {ex.Message}"); }
+                catch (Exception ex) { Log.Warning(ex, "Enhancement import failed"); errors.Add($"{name}: {ex.GetType().Name}"); }
+            }
+            if (last != null && paths.FirstOrDefault() is { } source && Path.GetDirectoryName(source) is { Length: > 0 } directory)
+            {
+                CoreSettings.Current.DeeperLastDirectory = directory;
+                CoreSettings.Save();
+            }
+            ReloadDeeperLibraryFromDisk();
+            if (imported.Count > 0)
+                App.Notifications.Show(imported.Count == 1 ? Loc.GetF("deeper_import_done_one_fmt", imported[0])
+                    : Loc.GetF("deeper_import_done_many_fmt", imported.Count), Helpers.NotificationType.Success);
+            if (errors.Count > 0)
+                App.Notifications.Show(Loc.GetF("deeper_import_failed_fmt", errors.Count) + "\n" + string.Join("\n", errors),
+                    Helpers.NotificationType.Warning, TimeSpan.FromSeconds(10));
+            else if (imported.Count == 0)
+            {
+                if (duplicate != null) App.Notifications.Show(Loc.Get("deeper_import_already_in_library"), Helpers.NotificationType.Info);
+                else if (skipped > 0) App.Notifications.Show(Loc.Get("deeper_import_skipped_not_enh"), Helpers.NotificationType.Info);
+            }
+            // ponytail: row reveal needs a selection seam in the hub; the refreshed library is visible.
+            if (last != null || duplicate != null) ShowTab("deeper");
+        }
+
+        private Window? _mediaDropDialog;
+
+        private async Task<string?> ShowMediaDropChoiceAsync(string path)
+        {
+            var dialog = new Window
+            {
+                Title = Loc.Get("dlg_media_drop_title"), Width = 460, CanResize = false,
+                SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner
+            };
+            var scope = new NameScope();
+            NameScope.SetNameScope(dialog, scope);
+            var stack = new StackPanel { Margin = new global::Avalonia.Thickness(20), Spacing = 8 };
+            stack.Children.Add(new TextBlock { Text = dialog.Title, FontSize = 18 });
+            stack.Children.Add(new TextBlock { Text = Path.GetFileName(path), TextWrapping = global::Avalonia.Media.TextWrapping.Wrap });
+            foreach (var action in new[] { "play", "edit", "library", "cancel" })
+            {
+                var value = action;
+                var button = new Button { Name = "MediaDrop_" + action, Content = Loc.Get("dlg_media_drop_" + action),
+                    HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Stretch };
+                scope.Register(button.Name!, button);
+                button.Click += (_, _) => dialog.Close(value);
+                stack.Children.Add(button);
+            }
+            dialog.Content = stack;
+            _mediaDropDialog = dialog;
+            try { return await dialog.ShowDialogSafe<string?>(this); }
+            finally { if (_mediaDropDialog == dialog) _mediaDropDialog = null; }
+        }
+
+        internal void StopDroppedMediaForPanic()
+        {
+            _mediaDropDialog?.Close();
+            _deeperPlayer?.Close();
         }
 
         /// <summary>WPF UpdateDropOverlay (SessionIO.cs:1621), same icons, keys and subtitles.</summary>

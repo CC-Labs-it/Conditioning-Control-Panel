@@ -8,7 +8,7 @@
 // ApplyActiveModChange repaints the selector, logo, palette, BambiCloud radio + site + default
 // page, personality and per-mod default presets. Home tile art, the skill tree, the link editor
 // and the companion room follow CoreMods.ModChanged themselves; the achievement grid refreshes on
-// show. ponytail: WPF's LoadTakeoverImage labels are owned by the takeover tab's port.
+// show. Home and takeover labels are repainted by MainShellWindow.ModLabels.cs.
 
 using System;
 using System.Linq;
@@ -46,7 +46,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Closed += (_, _) => { if (_modSwitchHost == this) _modSwitchHost = null; };
             InitializeModSelector();
             RefreshThemeAwareElements();
-            LoadFeatureImages();
+            RefreshModShell();
+            LocalizationManager.Instance.LanguageChanged += OnModShellLanguageChanged;
+            Closed += (_, _) => LocalizationManager.Instance.LanguageChanged -= OnModShellLanguageChanged;
             CoreMods.ModChanged += OnModChangedFeatureImages;
             Closed += (_, _) => CoreMods.ModChanged -= OnModChangedFeatureImages;
             if (_hookedMods != mods)

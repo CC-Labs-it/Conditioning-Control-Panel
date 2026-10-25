@@ -32,9 +32,9 @@ public sealed class WindowDropTests
         File.WriteAllBytes(video, new byte[] { 1, 2, 3 });
 
         Drop(shell, video);
-        var ask = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault());
-        Assert.Equal(Loc.Get("dlg_media_drop_library"), ButtonText(ask, "BtnOk"));
-        Click(ask, "BtnOk");
+        var ask = await WaitFor(() => shell.OwnedWindows.SingleOrDefault(w => w.FindControl<Button>("MediaDrop_library") != null));
+        Assert.Equal(Loc.Get("dlg_media_drop_library"), ButtonText(ask, "MediaDrop_library"));
+        Click(ask, "MediaDrop_library");
 
         var done = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault(d => d != ask));
         Assert.Equal("Imported 1 video", done.FindControl<TextBlock>("TxtMessage")!.Text);
@@ -51,8 +51,8 @@ public sealed class WindowDropTests
         File.WriteAllBytes(video, new byte[] { 1, 2, 3 });
 
         Drop(shell, video);
-        var ask = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault());
-        Click(ask, "BtnCancel");
+        var ask = await WaitFor(() => shell.OwnedWindows.SingleOrDefault(w => w.FindControl<Button>("MediaDrop_cancel") != null));
+        Click(ask, "MediaDrop_cancel");
         await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().Any() ? null : shell);
 
         Assert.False(File.Exists(Path.Combine(assets, "videos", "clip.mp4")));
@@ -60,12 +60,19 @@ public sealed class WindowDropTests
     });
 
     [Fact]
-    public Task EnhancementDropSaysTheLibraryIsNotReady() => Run(async (shell, root, _) =>
+    public Task EnhancementDropImportsIntoTheLibrary() => Run(async (shell, root, _) =>
     {
         var enh = Path.Combine(root, "wave.ccpenh.json");
-        File.WriteAllText(enh, "{\"$schema\":\"" + ConditioningControlPanel.Models.Deeper.Enhancement.SchemaTag + "\"}");
+        File.WriteAllText(enh, ConditioningControlPanel.Services.Deeper.EnhancementSerializer.Save(
+            new ConditioningControlPanel.Models.Deeper.Enhancement { MediaSource = "wave.mp3" }));
         Drop(shell, enh);
-        await WaitFor(() => Toast(shell, Loc.Get("deeper_import_library_not_ready")));
+        using var library = new ConditioningControlPanel.Services.Deeper.EnhancementLibrary();
+        var imported = library.FindDuplicateOf(enh);
+        Assert.NotNull(imported);
+        Assert.True(File.Exists(enh));
+        Assert.Equal("deeper", shell.CurrentTab);
+        File.Delete(imported!);
+        await Task.CompletedTask;
     });
 
     [Fact]
