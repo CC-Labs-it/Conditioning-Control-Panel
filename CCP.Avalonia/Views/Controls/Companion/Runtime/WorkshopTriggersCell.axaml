@@ -16,8 +16,8 @@
        ValueChanged, SelectionChanged -> wired in the constructor
        DisplayMemberPath/
        SelectedValuePath            ->  DisplayMemberBinding/SelectedValueBinding, as
-                                        ReflectionBinding: ItemsSource is set from code, so the
-                                        item type is not known to the compiled binding. -->
+                                        ReflectionBinding: the item type (Models.PhrasePreset)
+                                        still lives in the WPF head, so it cannot be compiled. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -83,11 +83,11 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <Button x:Name="BtnSavePhrasePreset" Grid.Column="0" Theme="{StaticResource CmpCellButtonStyle}"
+            <Button Grid.Column="0" Theme="{StaticResource CmpCellButtonStyle}"
                     Margin="0,0,3,0" ToolTip.Tip="{Binding LocTooltipSavePreset}">
                 <TextBlock Text="{Binding LocSave}"/>
             </Button>
-            <Button x:Name="BtnDeletePhrasePreset" Grid.Column="1" Theme="{StaticResource CmpCellButtonStyle}"
+            <Button Grid.Column="1" Theme="{StaticResource CmpCellButtonStyle}"
                     Margin="3,0,0,0" ToolTip.Tip="{Binding LocTooltipDeletePreset}">
                 <TextBlock Text="{Binding LocDelete}"/>
             </Button>

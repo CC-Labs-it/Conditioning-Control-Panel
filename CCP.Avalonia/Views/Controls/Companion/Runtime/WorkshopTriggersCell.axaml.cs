@@ -1,6 +1,5 @@
 using System;
 using System.ComponentModel;
-using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
@@ -8,40 +7,22 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
-using ConditioningControlPanel.Models;
 using CoreAppSettings = ConditioningControlPanel.Models.AppSettings;
 using ConditioningControlPanel.Services;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
 {
-    /// <summary>WPF MainWindow.Patreon trigger settings, editor and phrase count, and MainWindow.Assets
-    /// phrase presets (:1815-1967), owned by their Workshop cell.</summary>
+    /// <summary>WPF MainWindow.Patreon trigger settings and editor, owned by their Workshop cell.</summary>
     public partial class WorkshopTriggersCell : UserControl
     {
         private readonly CheckBox _toggle;
         private readonly StackPanel _panel;
         private readonly Slider _slider;
         private readonly TextBlock _intervalText;
-        private readonly TextBlock _phraseCount;
-        private readonly ComboBox _presets;
         private bool _loading, _attached, _writing;
         private CoreAppSettings? _settings;
         private SettingsService? _service;
-
-        /// <summary>Raised after the Phrase Manager closes, wherever it was opened from (WPF
-        /// UpdatePhraseCountDisplay after BtnManagePhrases_Click).</summary>
-        internal static event Action? PhrasesChanged;
-
-        /// <summary>Dialog seams (tests answer them; P08): name prompt, yes/no, notice.</summary>
-        internal Func<Window, string, string, string, Task<string?>> AskText = async (owner, title, prompt, def) =>
-        {
-            var dlg = new InputDialog(title, prompt, def);
-            return await dlg.ShowDialogSafe<bool?>(owner) == true ? dlg.ResultText : null;
-        };
-        internal Func<Window, string, string, Task<bool>> Confirm = (owner, title, msg) =>
-            MessageDialog.ConfirmAsync(owner, title, msg, okText: "Yes", cancelText: "No");
-        internal Func<Window, string, string, Task> Inform = (owner, title, msg) => MessageDialog.ShowAsync(owner, title, msg);
 
         public WorkshopTriggersCell()
         {
@@ -51,8 +32,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             _panel = this.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!;
             _slider = this.FindControl<Slider>("SliderTriggerIntervalCompanion")!;
             _intervalText = this.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!;
-            _phraseCount = this.FindControl<TextBlock>("TxtPhraseCount")!;
-            _presets = this.FindControl<ComboBox>("CmbPhrasePresets")!;
             _toggle.IsCheckedChanged += (_, _) =>
             {
                 _panel.IsVisible = _toggle.IsChecked == true;
@@ -70,13 +49,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 AvatarTubeWindow.Live?.RestartTriggerTimer();
             };
             this.FindControl<Button>("BtnEditTriggersCompanion")!.Click += (_, _) => EditTriggers();
-            this.FindControl<Button>("BtnManagePhrases")!.Click += async (_, _) =>
-            {
-                if (TopLevel.GetTopLevel(this) is Window owner) await ManagePhrasesAsync(owner);
-            };
-            _presets.SelectionChanged += (_, _) => OnPresetSelected();
-            this.FindControl<Button>("BtnSavePhrasePreset")!.Click += (_, _) => SavePreset();
-            this.FindControl<Button>("BtnDeletePhrasePreset")!.Click += (_, _) => DeletePreset();
+            // Manage Phrases, the `N active` count and phrase presets: wire-views-companion-workshop-accordion
+            // and wire-shell-assets-b own them (merged at push time); this lane adds only the tube loop.
             SyncFromSettings();
         }
 
@@ -84,7 +58,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
         {
             base.OnAttachedToVisualTree(e);
             _attached = true;
-            PhrasesChanged += UpdatePhraseCount;
             Rebind();
             SyncFromSettings();
         }
@@ -92,7 +65,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             _attached = false;
-            PhrasesChanged -= UpdatePhraseCount;
             Disconnect();
             base.OnDetachedFromVisualTree(e);
         }
@@ -125,8 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
         private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (!_loading && !_writing && e.PropertyName is null or "" or nameof(CoreAppSettings.TriggerModeEnabled)
-                or nameof(CoreAppSettings.TriggerIntervalSeconds) or nameof(CoreAppSettings.PhrasePresets)
-                or nameof(CoreAppSettings.CurrentPhrasePresetId)) QueueRefresh();
+                or nameof(CoreAppSettings.TriggerIntervalSeconds)) QueueRefresh();
         }
 
         private void QueueRefresh() => Dispatcher.UIThread.Post(() =>
@@ -148,86 +119,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 _intervalText.Text = $"{s.TriggerIntervalSeconds}s";
             }
             finally { _loading = false; }
-            SyncPresets();
-            UpdatePhraseCount();
-        }
-
-        /// <summary>WPF RefreshPhrasePresetsComboBox (MainWindow.Assets.cs:1824).</summary>
-        private void SyncPresets()
-        {
-            _loading = true;
-            try
-            {
-                var s = CoreSettings.Current;
-                _presets.ItemsSource = null;
-                _presets.ItemsSource = s.PhrasePresets;
-                if (!string.IsNullOrEmpty(s.CurrentPhrasePresetId)) _presets.SelectedValue = s.CurrentPhrasePresetId;
-            }
-            finally { _loading = false; }
-        }
-
-        /// <summary>WPF UpdatePhraseCountDisplay (MainWindow.Patreon.cs:1327), English as WPF.</summary>
-        private void UpdatePhraseCount() => _phraseCount.Text = $"{CompanionPhraseEditorDialog.ActivePhraseCount()} active";
-
-        /// <summary>WPF BtnManagePhrases_Click (MainWindow.Patreon.cs:1320); the shell's entry calls this too.</summary>
-        internal static async Task ManagePhrasesAsync(Window owner)
-        {
-            await new CompanionPhraseEditorDialog().ShowDialogSafe(owner);
-            PhrasesChanged?.Invoke();
-        }
-
-        /// <summary>WPF CmbPhrasePresets_SelectionChanged (MainWindow.Assets.cs:1837).</summary>
-        private void OnPresetSelected()
-        {
-            if (_loading || _presets.SelectedItem is not PhrasePreset preset) return;
-            Write(() =>
-            {
-                preset.ApplyToSettings();
-                CoreSettings.Current.CurrentPhrasePresetId = preset.Id;
-            });
-            UpdatePhraseCount();
-            Log.Information("Loaded phrase preset: {Name} ({Count} phrases)", preset.Name, preset.ActivePhraseCount);
-        }
-
-        /// <summary>WPF BtnSavePhrasePreset_Click (MainWindow.Assets.cs:1852).</summary>
-        private async void SavePreset()
-        {
-            if (TopLevel.GetTopLevel(this) is not Window owner) return;
-            var settings = CoreSettings.Current;
-            var active = CompanionPhraseEditorDialog.ActivePhraseCount();
-            var name = await AskText(owner, Loc.Get("title_save_phrase_preset"), "Enter a name for this phrase preset:",
-                $"Preset {settings.PhrasePresets.Count + 1}");
-            if (string.IsNullOrWhiteSpace(name)) return;
-            if (!ReferenceEquals(settings, CoreSettings.Current)) { Log.Warning("Phrase preset save dropped: settings were restored"); return; }
-            var preset = PhrasePreset.FromCurrentSettings(name.Trim(), active);
-            Write(() =>
-            {
-                settings.PhrasePresets.Add(preset);
-                settings.CurrentPhrasePresetId = preset.Id;
-            });
-            SyncPresets();
-            Log.Information("Saved phrase preset: {Name} with {Count} active phrases", preset.Name, active);
-        }
-
-        /// <summary>WPF BtnDeletePhrasePreset_Click (MainWindow.Assets.cs:1942).</summary>
-        private async void DeletePreset()
-        {
-            if (TopLevel.GetTopLevel(this) is not Window owner) return;
-            if (_presets.SelectedItem is not PhrasePreset preset)
-            {
-                await Inform(owner, "No Preset Selected", Loc.Get("msg_please_select_a_preset_to_delete"));
-                return;
-            }
-            var settings = CoreSettings.Current;
-            if (!await Confirm(owner, "Delete Preset", $"Delete phrase preset '{preset.Name}'?\n\nThis cannot be undone.")) return;
-            if (!ReferenceEquals(settings, CoreSettings.Current)) { Log.Warning("Phrase preset delete dropped: settings were restored"); return; }
-            Write(() =>
-            {
-                settings.PhrasePresets.Remove(preset);
-                settings.CurrentPhrasePresetId = null;
-            });
-            SyncPresets();
-            Log.Information("Deleted phrase preset: {Name}", preset.Name);
         }
 
         private async void EditTriggers()

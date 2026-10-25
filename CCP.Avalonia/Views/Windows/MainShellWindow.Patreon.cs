@@ -94,9 +94,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        // WPF MainWindow.Patreon.cs:1320: the dialog, then the Workshop cell's phrase count.
+        // WPF MainWindow.Patreon.cs:1312. ponytail: UpdatePhraseCountDisplay skipped - the
+        // Companion tab's TxtPhraseCount needs CompanionPhraseService, still head-side.
         internal void BtnManagePhrases_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
-            => _ = global::ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime.WorkshopTriggersCell.ManagePhrasesAsync(this);
+            => _ = new Dialogs.CompanionPhraseEditorDialog().ShowDialogSafe(this);
 
         /// <summary>WPF MainWindow.Patreon.cs RefreshEntitlementVeils. Called on every navigation, on
         /// sign-in/out (UpdateQuickLoginUI), on either provider's TierChanged and on the ? box's
