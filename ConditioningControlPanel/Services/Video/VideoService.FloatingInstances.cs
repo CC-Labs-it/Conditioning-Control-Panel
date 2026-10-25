@@ -204,7 +204,7 @@ namespace ConditioningControlPanel.Services
             }
             SpawnTogetherExtras();
 
-            try { App.Bubbles?.PauseAndClear(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // No Bubbles.PauseAndClear either: the bubbles stay up too (VideoFlashRule.ClearsBubbles).
             try { VideoStarted?.Invoke(this, EventArgs.Empty); }
             catch (Exception ex) { App.Logger?.Debug("VideoStarted handler error: {Error}", ex.Message); }
             // The scheduler is normally re-armed only when a video ends. A floating run leaves

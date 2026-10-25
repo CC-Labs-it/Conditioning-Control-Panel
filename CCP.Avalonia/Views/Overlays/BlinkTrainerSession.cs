@@ -122,7 +122,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
                 _pool = pool;
                 _last = null;
-                // WPF LabTab.cs:1000: Closing += Stop - Closing, not Closed, so a close cancelled to the tray still stops it.
+                // WPF LabTab.cs:1000: Closing += Stop. X-to-tray hides without raising Closing (WPF #446), so the trainer keeps running in the tray; only a real exit stops it.
                 _owner = TopLevel.GetTopLevel(host) as Window;
                 if (_owner != null) _owner.Closing += OnOwnerClosing;
                 WebcamTracker.Instance.OnBlink += HandleBlink;
@@ -294,7 +294,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _player = new MediaPlayer(vlc) { EnableHardwareDecoding = true, Mute = true };
             _sink = new VlcFrameSink(_player, () => _media, bmp => images.ForEach(i => i.Source = bmp), () => images.ForEach(i => i.InvalidateVisual()));
             _media = new Media(vlc, path, FromType.FromPath);
-            _media.AddOption(":no-audio");
+            _media.AddOption(LibVlcSilence.NoAudioOption);
             _media.AddOption(":input-repeat=65535");   // WPF MediaEnded -> Position 0 -> Play
             _player.Play(_media);
         }
