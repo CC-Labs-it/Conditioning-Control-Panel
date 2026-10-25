@@ -673,3 +673,11 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## fin4 device settings
+
+1. Enable wake word: premium gate precedes mic consent, then the always-on question; decline each and check the toggle returns off. Enable PTT with consent; turn both off after entitlement lapses (OFF never gates). WPF `MainWindow/MainWindow.Autonomy.cs:609`. Rows: `views-settings-devices`.
+2. Set key: lone modifiers keep waiting; F9 saves, Escape binds Escape; losing focus cancels. Change wake phrases (blank restores hey bambi), mic and headphones; check live re-arm and She's Listening chips. WPF `Views/Controls/AppSettings/DevicesSettingsSection.xaml.cs:238`. Rows: `views-settings-devices`.
+3. Choose a monitor; run Calibrate, Quick Recal and Tracker Test. Disconnect that monitor: Primary is displayed/used without overwriting the saved choice. Reopen settings after changing displays. WPF `MainWindow/MainWindow.LabTab.cs:1433` and WPF `App.xaml.cs:1485`. Rows: `views-settings-devices`.
+4. Track and check face/blink/mouth/gaze logs and counters. Repeated gaze-side frames log only once; leaving/reopening must not duplicate subscriptions. WPF `MainWindow/MainWindow.LabTab.cs:657`. Rows: `views-settings-devices`.
+5. Rebind camera shortcut, cancel, reset to Ctrl+Alt+K; start/stop with consent gating. On Windows enable global and test unfocused, including a held key. Panic still stops the camera. Linux global camera routing remains missing. WPF `MainWindow/MainWindow.SessionIO.cs:1403`. Rows: `views-settings-devices`.

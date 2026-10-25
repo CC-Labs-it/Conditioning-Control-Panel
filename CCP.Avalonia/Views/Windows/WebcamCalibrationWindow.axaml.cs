@@ -447,7 +447,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // ─────────────────────────────────────────────────────────────────────
 
         /// <summary>Shows the dialog, re-opening while the user asks to recalibrate; true when a
-        /// calibration was accepted. Opens on the calibrated monitor (WPF ApplyCalibrationScreenPlacement).</summary>
+        /// calibration was accepted. Opens on the selected monitor (WPF ApplyCalibrationScreenPlacement).</summary>
         public static async Task<bool?> ShowDialogWithRecalibrate(Window owner)
         {
             bool? final;
@@ -461,12 +461,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return final;
         }
 
-        /// <summary>WPF App.ApplyCalibrationScreenPlacement: start on the monitor the last calibration
-        /// ran on (matched by pixel origin) so Maximized lands there; unknown monitor: leave it.</summary>
+        /// <summary>WPF App.ApplyCalibrationScreenPlacement: use the selected display, falling back to Primary.</summary>
         internal static void PlaceOnCalibratedScreen(Window window)
         {
-            if (Tracker.Calibration?.MonitorBounds is not { } mb || window.Screens is not { } screens) return;
-            if (screens.All.FirstOrDefault(s => s.Bounds.X == mb.X && s.Bounds.Y == mb.Y) is not { } sc) return;
+            if (Platform.WebcamScreen.Resolve(window.Screens) is not { } sc) return;
             window.WindowStartupLocation = WindowStartupLocation.Manual;
             window.Position = sc.Bounds.Position;
         }
