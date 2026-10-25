@@ -65,10 +65,10 @@ const one = (id, vol = 1, rate = 1, at = 0) => ({ id, vol, rate, at });
 /** Distinct releases from the shipped bank, all on the existing SFX volume bus. */
 export function toyLaunchPlan(id) {
   switch (id) {
-    case 'pendulum': return [one('fire-throw', .86, .82), one('roll-tick', .75, .72, .035)];
-    case 'disc': return [one('fire-throw', .8, 1.27), one('pad', .3, 1.6, .025)];
-    case 'tether': return [one('fire-throw', .8, .88), one('drift-tick-1', .55, .68, .035), one('roll-tick', .45, .72, .075)];
-    case 'bigSpiral': return [one('fire-lob', .85, .72), one('boost', .24, .65, .04)];
+    case 'pendulum': return [one('fire-throw', 1, .78), one('land-heavy', .42, .68, .015), one('roll-tick', .75, .72, .045)];
+    case 'disc': return [one('fire-throw', 1, 1.27), one('land-light', .36, .85, .012), one('pad', .4, 1.6, .035)];
+    case 'tether': return [one('fire-throw', .95, .82), one('land-heavy', .38, .8, .015), one('drift-tick-1', .65, .68, .045)];
+    case 'bigSpiral': return [one('fire-lob', 1, .68), one('land-heavy', .48, .6, .02), one('boost', .3, .65, .055)];
     case 'melt': return [one('fire-drop', .9, .72), one('bubble-pop', .35, .65, .045)];
     case 'snap': return [one('bubble-pop', .7, 1.55), one('pad', .45, 1.35, .035)];
     case 'surge': return [one('boost', 1, .92), one('drift-release', .3, 1.1, .08)];
@@ -83,9 +83,11 @@ const VOICES = {
 /** Bank-unavailable releases retain each toy's timbre rather than one generic throw. */
 export function playToyLaunch(syn, id) {
   const v = VOICES[id]; if (!v) return false;
-  syn.noise({ dur: .24, vol: .08, freq: v[2], sweep: v[3], q: .9 });
-  syn.tone(syn.semis(v[0]), { type: id === 'tether' ? 'triangle' : 'sine', dur: .25, vol: .055, glide: syn.semis(v[1]), attack: .008 });
-  if (id === 'pendulum' || id === 'tether') syn.tone(syn.semis(v[0] + 12), { type: 'sine', dur: .045, vol: .035, at: .045 });
+  syn.noise({ dur: .2, vol: .095, freq: v[2], sweep: v[3], q: .9 });
+  syn.tone(syn.semis(v[0]), { type: id === 'tether' ? 'triangle' : 'sine', dur: .25, vol: .06, glide: syn.semis(v[1]), attack: .006 });
+  if (['pendulum', 'disc', 'tether', 'bigSpiral'].includes(id)) {
+    syn.tone(syn.semis(id === 'disc' ? -12 : -24), { type: 'sine', dur: .13, vol: .055, glide: syn.semis(-31), attack: .006, at: .012 });
+  }
   return true;
 }
 

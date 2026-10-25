@@ -11,32 +11,7 @@ export function createAudioReactiveUniforms() {
   return u;
 }
 
-/** Fixed green/graphite panels take turns on the heard beat, with measured bands shaping each fill. */
-export function mainframeTileLight(p, u, music, trueEdge, base) {
-  const size = vec2(4, 6), cell = floor(p.div(size)), q = fract(p.div(size)).sub(.5);
-  const lane = mod(cell.x.add(cell.y.mul(3)), 8);
-  let note = float(0);
-  for (let i = 0; i < 8; i++) note = note.add(float(1).sub(step(.5, abs(lane.sub(i)))).mul(u['note' + i]));
-  const pixel = max(fwidth(q), vec2(.001));
-  const inset = float(1).sub(smoothstep(.42, .48, max(abs(q.x), abs(q.y))));
-  const bank = mod(cell.x.add(cell.y.mul(2)), 4);
-  const clock = music.tileBeat.mul(mix(float(1),float(.25),u.gentle));
-  const phase = fract(clock.sub(bank).div(4));
-  // Four banks crossfade on successive beats. Each individual panel rises for >=300ms at 96 BPM.
-  const beatDistance = min(phase,float(1).sub(phase)).mul(4);
-  const pulse = float(1).sub(smoothstep(0,.7,beatDistance));
-  const ringAt = pulse.mul(.21).add(.17), ring = abs(abs(q.x).add(abs(q.y)).sub(ringAt));
-  const trace = float(1).sub(smoothstep(.025, max(pixel.x, pixel.y).mul(1.5).add(.055), ring));
-  const shade = hash(cell.x.add(cell.y.mul(71.3)));
-  const tint = mix(vec3(.015,.42,.035),vec3(.32,.85,.025),shade);
-  const gold = smoothstep(.94,1,sin(music.tileBar.mul(.196))).mul(.14);
-  const green = mix(tint,vec3(.62,.48,.055),gold);
-  const active = music.tileOn.mul(u.energy.mul(6).clamp(0,1));
-  const drive = pulse.mul(.85).add(note.mul(.38)).mul(active).mul(gain(u));
-  const graphite = base.mul(mix(float(.14),float(.78),step(.5,shade)));
-  const lit = graphite.add(green.mul(drive)).add(green.mul(trace).mul(u.mid).mul(.32).mul(gain(u)));
-  return mix(base,lit,inset.mul(smoothstep(.8,2.4,trueEdge)));
-}
+export { mainframeTileLight } from './materials/mainframeMusicFloor.js';
 
 /** Paired strands, crossbars and travelling beads, anchored in the liquid's own coordinates. */
 export function waterHelixLight(p, u, tint) {

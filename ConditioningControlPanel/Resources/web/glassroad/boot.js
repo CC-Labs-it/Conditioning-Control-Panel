@@ -21,7 +21,6 @@
 import { createBridge, songCharts, isLocalSongHost, wantLobbySongs, lobbySongCharts, ROOM_ORIGIN } from './host/bridge.js';
 import { createHostEscape } from './host/hostEscape.js';
 import { createCardMedia } from './host/cardMedia.js';
-import { createFlashMedia } from './fx/flashMedia.js';
 import { createSubliminalBurst } from './fx/subliminalBurst.js';
 import { loadFeel } from './core/feel.js';
 import { createBus, createQueue } from './core/events.js';
@@ -393,10 +392,9 @@ async function boot(course, options, lifetime, isCurrent) {
   // A visual review may keep the Loom faces without requesting or displaying private media.
   const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge });
   world.setItemMediaSource(seed => cardMedia?.sourceForFlash(seed) || null);
-  const flashMedia = createFlashMedia({ source: seed => cardMedia?.sourceForFlash(seed) || null });
   const subliminalBurst = createSubliminalBurst({ parent: document.body, primary: () => world.primaryColour() });
   effects.screen.params.mediaFlash = true;
-  lifetime.defer(() => { flashMedia.dispose(); subliminalBurst.dispose(); });
+  lifetime.defer(() => subliminalBurst.dispose());
   if (cardMedia) {
     lifetime.defer(() => cardMedia.dispose());
   }
@@ -606,7 +604,7 @@ async function boot(course, options, lifetime, isCurrent) {
     industry.reset();
     setMachineryBeat(track, null);
     perfume.reset();
-    effects.reset(); payoff.reset(); ai.reset(); fx.reset(); assist.reset();
+    effects.reset(); payoff.reset(); cueBurst.clear(); ai.reset(); fx.reset(); assist.reset();
     if (hazards) hazards.reset();
     if (world.resetReactions) world.resetReactions();   // last race's cheer, sulk and faces never carry over
     fx.state.screen = effects.screen;
@@ -1120,7 +1118,6 @@ async function boot(course, options, lifetime, isCurrent) {
     fx.update(fxDt, P.st, race);                                  // 4. fx
     effects.update(fxDt);                                         //    the local screen effect
     payoff.update(fxDt);                                          //    payoff words + flashes (toys kit)
-    flashMedia.update(screenFor('flash', effects.screen, payoff.flash), fxDt, renderer.aspect);
     subliminalBurst.update(screenFor('brainDrain', effects.screen, payoff.words), fxDt, renderer.aspect);
     if (HT) hLap('fx');
     const fs = fx.state;
@@ -1202,7 +1199,8 @@ async function boot(course, options, lifetime, isCurrent) {
       cueRunSeen = songCues; cueRevision = cueEpoch;
     }
     for (const cue of cueView?.fired || NO_WORDS) if (cue.kind === 'VEIL' || (cue.kind === 'BURST' && cue.params?.variant === 'cards')) cueBurst.fire(cue);
-    cueBurst.update(frameDt, { paused: frozen, aspect: renderer.aspect, screen: effects.screen });
+    cueBurst.update(frameDt, { paused: frozen, aspect: renderer.aspect, screen: effects.screen,
+      flashes: [effects.screen, payoff.flash] });
     const wordLive = words && song ? words.update(songS,
       { s: pv[S.s], lat: pv[S.lateral], speedMps: Math.max(0, pv[S.speedPct]) * feel.get('speed.topMps') }) : NO_WORDS;
     if (words) {

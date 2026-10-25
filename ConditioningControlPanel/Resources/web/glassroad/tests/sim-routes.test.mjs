@@ -11,7 +11,7 @@ import { S, RESPAWN, createState, setPos, setQuat, setVel } from '../sim/state.j
 import { step } from '../sim/kart.js';
 import { updateRespawn } from '../sim/respawn.js';
 import { createProgress, STEP_MAX_M } from '../sim/progress.js';
-import { registeredSkip, edgeAt } from '../sim/routes.js';
+import { registeredSkip, edgeAt, airCatch } from '../sim/routes.js';
 import { createActions } from '../core/actions.js';
 import { qfromBasis, wrap } from '../core/math.js';
 import { makeFeel, DT } from './sim-fake.mjs';
@@ -37,20 +37,70 @@ function kartAt(s, lat, v = 30, yawDeg = 0) {
 const fakeRace = () => ({ phase: 'racing', timeS: 0, lapStartS: 0, finish() { this.phase = 'finished'; } });
 
 /** The cut: from ds into the opening, lat 3 toward the open side, v, nose yawDeg out; throttle and a little steer. */
-function cut({ ds = 4, v = 30, yawDeg = 55, hop = false, maxS = 4 } = {}) {
+function cut({ ds = 4, v = 30, yawDeg = 55, hop = false, maxS = 4, followS = 0, brakeOnLand = false } = {}) {
   const feel = makeFeel(), st = kartAt(R0.openS0 + ds, 3 * SIDE, v, yawDeg), a = createActions(), ev = [];
+  const rollout = []; let landedAt = -1;
   const sink = { emit: (name, p = {}) => ev.push({ name, p, s: st[S.s] }) };
   const prog = createProgress(track, sink), race = fakeRace();
   prog.reset(st); st[S.checkpoint] = JSON_TRACK.checkpoints.filter((n) => track.nodeS[n] <= st[S.s]).length - 1;
   for (let i = 0; i < maxS / DT; i++) {
-    a.throttle = 1; a.steer = 0.3 * SIDE; a.hop = a.hopPressed = hop && i === 0;
+    const braking = brakeOnLand && landedAt >= 0;
+    a.throttle = braking ? 0 : 1; a.brake = braking ? 1 : 0;
+    a.steer = landedAt >= 0 && followS ? 0 : 0.3 * SIDE; a.hop = a.hopPressed = hop && i === 0;
+    const previous = [st[S.posX], st[S.posY], st[S.posZ]];
     step(st, a, track, feel, DT, sink);
     updateRespawn(st, track, feel, DT, sink);
     race.timeS += DT; prog.update(st, race);
-    if (ev.some((e) => e.name === 'route-skip' || e.name === 'drop')) break;
+    if (landedAt < 0 && ev.some(e => e.name === 'route-land')) landedAt = i;
+    if (landedAt >= 0 && followS) {
+      const f = track.frameAt(st[S.s]);
+      rollout.push({ grounded: st[S.grounded], engine: st[S.engineV],
+        forward: [st[S.velX], st[S.velY], st[S.velZ]].reduce((sum, v, k) => sum + v * f.t[k], 0),
+        moved: [st[S.posX], st[S.posY], st[S.posZ]].reduce((sum, p, k) => sum + (p - previous[k]) * f.t[k], 0) / DT });
+    }
+    if (ev.some(e => e.name === 'drop') || (followS ? landedAt >= 0 && (i - landedAt) * DT >= followS : ev.some(e => e.name === 'route-skip'))) break;
   }
-  return { ev, st, names: ev.map((e) => e.name) };
+  return { ev, st, rollout, names: ev.map((e) => e.name) };
 }
+
+test('shortcut momentum flows through touchdown and a full second of driving without a hop', () => {
+  for (const [v, yawDeg] of [[25, 40], [25, 60], [30, 40]]) {
+    const { names, rollout } = cut({ v, yawDeg, followS: 1 });
+    assert.ok(names.includes('route-skip'));
+    assert.ok(!names.includes('drop') && !names.includes('wall'));
+    assert.equal(names.filter(n => n === 'land').length, 1, 'no secondary traction-delaying bounce');
+    assert.ok(rollout.length >= 60);
+    for (const r of rollout) {
+      assert.equal(r.grounded, 1, 'touchdown restores grip immediately');
+      assert.ok(r.forward >= v * .8, `forward ${r.forward} after ${v} m/s approach at ${yawDeg} degrees`);
+      assert.ok(r.moved >= v * .75, `actual travel ${r.moved} must continue through the contact correction`);
+    }
+  }
+});
+
+test('shortcut rollout still obeys the brake without a forced speed floor', () => {
+  const { st, rollout, names } = cut({ v: 25, yawDeg: 40, followS: 1, brakeOnLand: true });
+  assert.ok(names.includes('route-land') && !names.includes('drop'));
+  assert.ok(st[S.engineV] < rollout[0].engine * .5, 'braking must slow the engine');
+  assert.ok(rollout.at(-1).forward < rollout[0].forward * .5, 'braking must slow actual travel');
+});
+
+test('shortcut air steering conserves surface momentum and leaves falling speed alone', () => {
+  const feel = makeFeel(), f = track.frameAt(R0.pad.s);
+  for (const [bank, slope] of [[0, 0], [.8, .4], [1.2, -.4]]) for (const along of [-20, 0, 20]) for (const lateral of [-16, 0, 16]) {
+    const normal = f.n.map((v, k) => v - f.b[k] * bank - f.t[k] * slope);
+    const length = Math.hypot(...normal);
+    for (let k = 0; k < 3; k++) normal[k] /= length;
+    const V = f.t.map((v, k) => v * along + f.b[k] * lateral - f.n[k] * 24);
+    const energy = V.reduce((sum, v) => sum + v * v, 0);
+    const down = V.reduce((sum, v, k) => sum + v * normal[k], 0);
+    const q = { s: R0.pad.s, lateral: 4, normal };
+    airCatch(track, q, V, feel, DT);
+    assert.ok(Math.abs(V.reduce((sum, v) => sum + v * v, 0) - energy) < 1e-6);
+    assert.ok(Math.abs(V.reduce((sum, v, k) => sum + v * normal[k], 0) - down) < 1e-6);
+    if (along < 0 && !bank && !slope) assert.ok(V.reduce((sum, v, k) => sum + v * f.t[k], 0) < 0, 'no forced forward launch');
+  }
+});
 
 test('routes: threshold carries the dare, a gap route off the outside of the first coil turn onto its last', () => {
   assert.equal(validate(JSON_TRACK).ok, true);

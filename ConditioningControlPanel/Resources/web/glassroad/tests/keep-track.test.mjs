@@ -91,8 +91,9 @@ test('Keep tower wraps three and a half turns with 32m vertical separation and a
 });
 test('Keep chains have a wide dedicated straight and the sluice is real flowing water', () => {
   const t = keep(), layout = getKeepLayout(t), hall = layout.landmarks.find((p) => p.id === 'chain-hall');
-  assert.equal(layout.chains.length, 4);
-  for (const [i, chain] of layout.chains.entries()) {
+  assert.equal(layout.chains.filter(row => row.id.startsWith('chain-')).length, 4);
+  assert.equal(layout.chains.filter(row => row.id.startsWith('descent-chain-')).length, 2);
+  for (const [i, chain] of layout.chains.filter(row => row.id.startsWith('chain-')).entries()) {
     assert.ok(chain.s > hall.s0 + 30 && chain.s < hall.s1 - 25);
     if (i) assert.ok(chain.s - layout.chains[i - 1].s >= 32);
     assert.ok(t.frameAt(chain.s).w >= 33.99);

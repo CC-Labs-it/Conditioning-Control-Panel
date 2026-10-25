@@ -42,3 +42,15 @@ test('view card covers the racing line, Gentle shrinks it; pause stops copies, s
   fx.update({ kind: 'none' }, .1); assert.equal(canvas.style.display, 'none');
   fx.dispose();
 });
+
+test('scattered pictures preserve portrait and landscape proportions with bounded backing pixels', () => {
+  let src = { videoWidth: 1920, videoHeight: 1080 };
+  const ctx = { fillRect() {}, drawImage() {}, fillText() {} };
+  const canvas = { style: {}, setAttribute() {}, getContext: () => ctx, remove() {} };
+  const fx = createFlashMedia({ parent: { appendChild() {} }, source: () => src, make: () => canvas, fallback: null });
+  const screen = { kind: 'flash', k: 1, params: { seed: 1, nativeAspect: true } };
+  fx.update(screen, .1); assert.equal(fx.aspect, 16 / 9); assert.equal(canvas.width, 768);
+  src = { videoWidth: 1080, videoHeight: 1920 };
+  fx.update(screen, .1); assert.equal(fx.aspect, 9 / 16); assert.equal(canvas.height, 768);
+  fx.dispose();
+});

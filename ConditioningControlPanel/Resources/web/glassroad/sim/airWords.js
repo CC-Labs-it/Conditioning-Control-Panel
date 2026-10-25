@@ -30,7 +30,7 @@ export function createAirWordRun(song, track) {
   setSong(song);
   const pool = Array.from({ length: 1 }, (_, i) => ({ id: `air-word-${i}`, text: '', s: 0, ...frame(),
     widthM: 8.5, lengthM: 3.2, alpha: 0, solid: false, bornS: Infinity, endS: -1 }));
-  const platforms = [], f = frame(), next = frame(), q = [0, 0, 0, 1];
+  const platforms = [], f = frame(), q = [0, 0, 0, 1];
   let clock = 0, songS = 0, rider = null, previous = null, route = null, paused = false, enabled = true;
   const run = { platforms, timeS: 0, activeSection: null, update, reset, step, setSong,
     get bouncing() { return route?.stage === 'flight' && route.leg === 1; },
@@ -108,7 +108,7 @@ export function createAirWordRun(song, track) {
       lettering(row, songS + (s - st[S.s]) / 24);
       points.push({ s, y: row.p[1], row });
     }
-    points.push({ s: zone.gapS1 + 2, y: track.frameAt(zone.gapS1 + 2, next).p[1], row: null });
+    points.push({ ...guide[2], row: null });
     track.frameAt(st[S.s], f);
     const speed = Math.max(0, st[S.velX] * f.t[0] + st[S.velY] * f.t[1] + st[S.velZ] * f.t[2]);
     route = { zone, points, s: st[S.s], speed: clamp(speed, 4, 50), lateral: st[S.lateral],
@@ -120,7 +120,7 @@ export function createAirWordRun(song, track) {
   function launch(st, events) {
     const r = route, from = r.points[r.leg], to = r.points[r.leg + 1];
     r.stage = 'flight'; r.elapsed = 0; r.reboundedApex = false;
-    r.duration = clamp((to.s - from.s) / 23, r.leg === 0 ? 2.2 : 2.8, 7);
+    r.duration = r.leg === 0 ? clamp((to.s - from.s) / 23, 2.2, 7) : clamp((to.s - from.s) / 31, 2.2, 5.2);
     track.frameAt(from.s, f); from.offset ||= f.b.map(v => v * r.lateral);
     track.frameAt(to.s, f); to.defaultOffset = f.b.map(v => v * r.lateral);
     to.offset = [...to.defaultOffset]; to.catchU = null;
@@ -187,7 +187,7 @@ export function createAirWordRun(song, track) {
       if (!to.row) to.offset = [...offset];
       r.s = from.s + (to.s - from.s) * u;
       // A real descending arc meets the late phrase with momentum. The next leg springs at once.
-      const arc = r.leg === 0 ? 2.2 * 4 * u * (1 - u) : 1.8 * 6.75 * u * (1 - u) ** 2;
+      const arc = (r.leg === 0 ? 2.2 : 2.6) * 4 * u * (1 - u);
       y = from.y + (to.y - from.y) * smooth(u) + arc;
       st[S.airTime] += dt;
       if (u >= 1) {
@@ -202,7 +202,7 @@ export function createAirWordRun(song, track) {
           to.row.endS = clock + FADE_S;
           r.leg++; held.set(st, to.row); launch(st, events); onGround = false;
         } else {
-          r.stage = 'exit'; r.speed = 24; held.delete(st);
+          r.stage = 'exit'; r.speed = (to.s - from.s) / r.duration; held.delete(st);
           r.lateral = to.offset.reduce((v, x, i) => v + x * f.b[i], 0);
         }
       }
@@ -218,7 +218,7 @@ export function createAirWordRun(song, track) {
     st[S.s] = r.s; st[S.seg] = f.seg; st[S.segT] = f.segT || 0;
     st[S.lateral] = p.reduce((sum, value, i) => sum + (value - f.p[i]) * f.b[i], 0);
     st[S.height] = p[1] - f.p[1]; st[S.edgeT] = 0; st[S.yawRate] = 0;
-    st[S.engineV] = r.stage === 'ramp' ? r.speed : 24; st[S.steerSlew] = steering;
+    st[S.engineV] = r.stage === 'flight' ? 24 : r.speed; st[S.steerSlew] = steering;
     st[S.speedPct] = clamp(Math.hypot(v[0], v[2]) / feel.get('speed.topMps'), 0, feel.get('speed.maxPct'));
     st[S.hopT] += dt; st[S.stalled] = Math.max(0, st[S.stalled] - dt);
     boostFloor(st, feel, feel.get('speed.topMps'), dt, events);

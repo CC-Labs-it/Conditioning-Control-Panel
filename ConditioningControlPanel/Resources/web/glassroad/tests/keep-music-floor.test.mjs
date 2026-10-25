@@ -16,7 +16,7 @@ const { keepMusicFloor } = await import('../render/materials/keepMusicFloor.js')
 const { applyKeepRoad } = await import('../render/keepDressing.js');
 hooks.deregister();
 
-const musicUniforms = () => ({ tileBeat: uniform(0), tileBar: uniform(0) });
+const musicUniforms = () => ({ tileBeat: uniform(0), tileBar: uniform(0), tileOn: uniform(0) });
 
 function graph(root) {
   const nodes = new Set(), pending = [root];
@@ -34,10 +34,11 @@ test('Keep visible masonry responds to all heard bands and the shared song beat,
   for (const name of ['bass', 'mid', 'treble', 'energy', 'gentle', ...Array.from({ length: 8 }, (_, i) => 'note' + i)])
     assert.ok(nodes.has(reactive[name]), 'visible fills consume shared ' + name);
   assert.ok(nodes.has(music.tileBeat)); assert.ok(nodes.has(music.tileBar));
+  assert.ok(nodes.has(music.tileOn), 'the absence of a recording restores the slate finish');
   assert.ok(!nodes.has(reactive.t), 'tile groups move to the beat rather than an independent animation clock');
   assert.ok(nodes.has(mortar), 'existing dark joints mask the fills');
   assert.ok(![...nodes].some(n => n.isTextureNode), 'patterns add no textures or decoders');
-  assert.ok(nodes.size < 500, 'small addition to the existing floor');
+  assert.ok(nodes.size < 850, 'three compositions remain bounded inside the existing floor draw');
 });
 
 test('the final Keep override lights the actual opaque road and retains the original water graph', t => {

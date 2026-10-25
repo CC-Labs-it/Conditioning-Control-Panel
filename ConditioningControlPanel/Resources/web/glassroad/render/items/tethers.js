@@ -3,6 +3,7 @@
 import { Box3, Group, InstancedMesh, Mesh, MeshBasicMaterial, RingGeometry, ConeGeometry, Vector3, Quaternion, Matrix4 } from 'three/webgpu';
 import { S } from '../../sim/state.js';
 import { TETHER_LOOK, tetherPoints, tetherSegment, tetherBreakPose, tetherScale } from './tetherMath.js';
+import { toyScale } from './toyMath.js';
 
 const MAX = 8, UP = new Vector3(0, 1, 0), FORWARD = new Vector3(0, 0, -1);
 
@@ -72,7 +73,7 @@ export function createTethers(root, art) {
     const st = karts[racer]?.st;
     if (isCuff && st) quat.set(st[S.quatX], st[S.quatY], st[S.quatZ], st[S.quatW]);
     else { dir.set(other[0] - p[0], other[1] - p[1], other[2] - p[2]).normalize(); quat.setFromUnitVectors(FORWARD, dir.lengthSq() ? dir : FORWARD); }
-    for (const { mesh } of parts) { mesh.position.copy(pos); mesh.quaternion.copy(quat); mesh.scale.setScalar(isCuff ? 1.65 : 1.8); }
+    for (const { mesh } of parts) { mesh.position.copy(pos); mesh.quaternion.copy(quat); mesh.scale.setScalar(isCuff ? 1.65 : toyScale('tether')); }
   }
   function render(row, points, age, soft, palette, karts, breaking = false) {
     tetherBreakPose(age, 0, row.reason, soft, motion);

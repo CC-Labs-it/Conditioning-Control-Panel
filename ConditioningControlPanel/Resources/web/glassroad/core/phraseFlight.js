@@ -11,7 +11,7 @@ export function phraseFlightPoints(track, zone) {
     cache.set(zone, [{ s: zone.gapS0, y: a },
       { s: zone.gapS0 + (zone.gapS1 - zone.gapS0) * PHRASE_FRACTION,
         y: a + (b - a) * PHRASE_FRACTION - 2 * Math.sin(PHRASE_FRACTION * Math.PI) },
-      { s: zone.gapS1 + 2, y: track.frameAt(zone.gapS1 + 2).p[1] }]);
+      { s: zone.gapS1 + 8, y: track.frameAt(zone.gapS1 + 8).p[1] }]);
   }
   return cache.get(zone);
 }

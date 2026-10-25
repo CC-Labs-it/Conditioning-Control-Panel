@@ -37,6 +37,7 @@ import { applyBoost, boostFloor, endBoost } from './boost.js';
 import { updateDrift, cancelDrift, driftYaw, maybeStartDrift } from './drift.js';
 import { hop, gravityMps2, limitBankHop } from './hop.js';
 import { takeoff, land } from './air.js';
+import { crossedSupportedRoad } from './support.js';
 import { gripYaw, slewSteer } from './steer.js';
 import { beneath, onLanding, firstBeneath, landRoute, catchCap, resetRoute, edgeAt, hopTrack, airCatch, turnsAway, guideLanding } from './routes.js';
 import { fallBeneath, fallLand, resetFall } from './falls.js';
@@ -237,16 +238,19 @@ export function step(st, a, track, feel, dt, ev) {
   const heldRail = !air && qa.onRoad && qb.railed && !qb.hole && road && qb.edgeDist >= -travel &&
     edgeAt(track, qb, qb.lateral, gap(feel, 'kart.radiusM')) !== 'kicker';
   const following = !air && qa.onRoad && qa.forkId === qb.forkId;
-  const band = snap + (following ? travel : Math.abs(vn) * dt);
+  const crossed = air && crossedSupportedRoad(track, qa, qb);
+  const band = snap + (following || crossed ? travel : Math.abs(vn) * dt);
   const previousHeight = (PRE[0] - qb.p[0]) * n[0] + (PRE[1] - qb.p[1]) * n[1] + (PRE[2] - qb.p[2]) * n[2];
   const ground = (qb.onRoad || heldRail) && qb.height >= -band &&
-    (air ? previousHeight >= -.03 && qb.height <= 0 && vn <= 0 : qb.height <= band);
+    (air ? qb.height <= 0 && (crossed || previousHeight >= -.03 && vn <= 0) : qb.height <= band);
   if (ground) {
     // The probe's surface point is exact on a curved bank; a normal-plane step is not.
     v3copy(P, qb.p); v3reject(V, V, n);
     const arrive = Math.hypot(V[0], V[1], V[2]);   // ground speed at touch-down (the splash payload)
     if (air) {
-      land(st, a, feel, ev, V, n, speed, dt, !!qb.airWord || !!qb.stone && !!fieldAtS(track, qb.s)?.platforming);
+      // Shortcut landings roll straight out. A second automatic hop delays grip and steering.
+      const routeLanding = under && onLanding(track, st, qb) === under;
+      land(st, a, feel, ev, V, n, speed, dt, !!routeLanding || !!qb.airWord || !!qb.stone && !!fieldAtS(track, qb.s)?.platforming);
       if (qb.airWord) {
         st[S.airborne] = 0; st[S.grounded] = 1; v3reject(V, V, n);
         ev.emit('air-word-land', { id: qb.airWord.id, text: qb.airWord.text, s: qb.s });

@@ -106,7 +106,7 @@
     "pullWhite": 0.6
   },
   "camera": {
-    "eyeUpM": 1.95,
+    "eyeUpM": 2.2,
     "eyeBackM": 3.9,
     "lookAheadM": 9,
     "lookUpM": 0.3,

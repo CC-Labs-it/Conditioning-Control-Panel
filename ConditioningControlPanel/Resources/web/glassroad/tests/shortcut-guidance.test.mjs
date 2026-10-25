@@ -31,7 +31,9 @@ for (const id of ['threshold', 'keep', 'mainframe', 'boudoir', 'goonworks']) {
           if (st[S.respawnPhase] || (land && i > landedAt + 45)) break;
         }
         const label = `${r.id} offset ${ds}, speed ${v}, yaw ${yaw}`;
-        if (v <= 30) assert.ok(land && !drop, label + ': ordinary entries land');
+        if (v <= 30 || ds >= 10 && yaw === 25) {
+          assert.ok(land && !drop, label + ': ordinary entries and fast runouts land');
+        }
         if (!land) continue;
         passed++;
         assert.equal(registeredSkip(track, start, land.s)?.id, r.id, label + ': registered physical landing');
