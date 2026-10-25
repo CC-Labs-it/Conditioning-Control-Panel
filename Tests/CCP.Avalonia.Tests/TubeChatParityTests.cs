@@ -39,6 +39,8 @@ public sealed class TubeChatParityTests
             AppBuilder.Configure<AvApp>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        var previousSettings = CoreSettings.ServiceProvider;
+        var previousAccount = CoreAccount.UnifiedUserId;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         CoreSettings.Current.AiChatEnabled = true;
@@ -47,32 +49,37 @@ public sealed class TubeChatParityTests
         CoreSettings.Current.AvatarEnabled = true;
         CoreSettings.Current.CompanionAsksEnabled = true;
 
-        var probe = new TcpListener(IPAddress.Loopback, 0);
-        probe.Start();
-        var baseUrl = $"http://127.0.0.1:{((IPEndPoint)probe.LocalEndpoint).Port}";
-        probe.Stop();
-        var gate = new TaskCompletionSource();
-        var requests = new List<string>();
-        using var listener = new HttpListener();
-        listener.Prefixes.Add(baseUrl + "/");
-        listener.Start();
-        _ = Task.Run(async () =>
+        // HttpListener decodes the chunked body AiService sends (JsonContent has no Content-Length).
+        // The probed port can be taken between probe.Stop and Start on a busy runner: retry on a fresh one.
+        HttpListener listener;
+        string baseUrl;
+        for (var attempt = 1; ; attempt++)
         {
-            while (listener.IsListening)
-            {
-                HttpListenerContext ctx;
-                try { ctx = await listener.GetContextAsync(); } catch { return; }
-                string body;
-                using (var r = new StreamReader(ctx.Request.InputStream)) body = r.ReadToEnd();
-                lock (requests) requests.Add(body);
-                await gate.Task;   // hold the reply so the thinking bubble can be observed
-                var id = System.Text.RegularExpressions.Regex.Match(body, "\"request_id\":\"([^\"]+)\"").Groups[1].Value;
-                var json = Encoding.UTF8.GetBytes(
-                    "{\"companion_protocol\":2,\"finish_reason\":\"stop\",\"request_id\":\"" + id + "\",\"content\":\"hi sweetie\"}");
-                ctx.Response.ContentType = "application/json";
-                await ctx.Response.OutputStream.WriteAsync(json);
-                ctx.Response.Close();
-            }
+            var probe = new TcpListener(IPAddress.Loopback, 0);
+            probe.Start();
+            baseUrl = $"http://127.0.0.1:{((IPEndPoint)probe.LocalEndpoint).Port}";
+            probe.Stop();
+            listener = new HttpListener();
+            listener.Prefixes.Add(baseUrl + "/");
+            try { listener.Start(); break; }
+            catch (HttpListenerException) when (attempt < 10) { listener.Close(); }
+        }
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var received = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var server = Task.Run(async () =>
+        {
+            var ctx = await listener.GetContextAsync();
+            string body;
+            using (var r = new StreamReader(ctx.Request.InputStream, Encoding.UTF8)) body = await r.ReadToEndAsync();
+            received.SetResult();
+            await gate.Task;   // the request has arrived; hold the reply while checking thinking
+            var id = System.Text.RegularExpressions.Regex.Match(body, "\"request_id\":\"([^\"]+)\"").Groups[1].Value;
+            var json = Encoding.UTF8.GetBytes(
+                "{\"companion_protocol\":2,\"finish_reason\":\"stop\",\"request_id\":\"" + id + "\",\"content\":\"hi sweetie\"}");
+            ctx.Response.ContentType = "application/json";
+            ctx.Response.ContentLength64 = json.Length;
+            await ctx.Response.OutputStream.WriteAsync(json);
+            ctx.Response.Close();
         });
 
         var dir = Directory.CreateTempSubdirectory("ccp-tube-").FullName;
@@ -82,6 +89,8 @@ public sealed class TubeChatParityTests
             store: new CompanionSessionStore(Path.Combine(dir, "session.json"), Path.Combine(dir, "legacy.json")));
         CoreAccount.UnifiedUserId = "u-tube";
         var tube = new AvatarTubeWindow(null);
+        var now = TimeSpan.Zero;
+        tube.ChatClock = () => now;
         var started = new List<string>();
         var restore = SaveSeams();
         try
@@ -105,40 +114,46 @@ public sealed class TubeChatParityTests
             var send = tube.SendChatAsync();
 
             // In flight: an unbadged thinking phrase that grows dots, and barks are held.
-            async Task Pump(int ms) { for (var t = 0; t < ms; t += 20) { await Task.Delay(20); Dispatcher.UIThread.RunJobs(); } }
-            await Pump(100);
+            await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
             var first = speech.Text;
             Assert.False(string.IsNullOrEmpty(first));
             Assert.True(tube.IsCompanionBusy(0));
             Assert.False(tube.FindControl<Border>("AiBadge")!.IsVisible);
-            await Pump(600);
+            var thinkingFrame = Assert.IsType<Action>(tube.ThinkingFrame);
+            thinkingFrame();
             Assert.NotEqual(first, speech.Text);
 
             gate.SetResult();
+            await send.WaitAsync(TimeSpan.FromSeconds(10));
+            await server.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Contains(tube.ChatHistory, m => !m.IsUser && m.Text == "hi sweetie");
             var host = tube.FindControl<Grid>("AvatarBounceHost")!;
-            double minY = 0;
-            for (var t = 0; t < 2000 && !send.IsCompleted; t += 5) { await Task.Delay(5); Dispatcher.UIThread.RunJobs(); }
-            for (var t = 0; t < 400; t += 5)
+            Assert.NotNull(tube.BounceFrame);   // the reply really started the animation
+            foreach (var (ms, y) in new[] { (80, -15d), (160, 0d), (220, -8d) })
             {
-                await Task.Delay(5);
-                Dispatcher.UIThread.RunJobs();
-                if (host.RenderTransform is TranslateTransform tt) minY = Math.Min(minY, tt.Y);
+                now = TimeSpan.FromMilliseconds(ms);
+                tube.BounceFrame!();
+                Assert.Equal(y, Assert.IsType<TranslateTransform>(host.RenderTransform).Y);
             }
-            Assert.True(minY < -5, $"no double bounce (min Y {minY})");
+            now = TimeSpan.FromMilliseconds(280);
+            tube.BounceFrame!();
             Assert.Null(host.RenderTransform);   // released afterwards, as WPF's FillBehavior.Stop
 
             // The ask card follows: the question takes the bubble with its chips under it (Game has
             // no games here, so WPF's fallback to a Session card).
             var buttons = tube.FindControl<WrapPanel>("AskButtons")!;
-            for (var t = 0; t < 2000 && !buttons.IsVisible; t += 20) { await Task.Delay(20); Dispatcher.UIThread.RunJobs(); }
+            using (var timeout = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10)))
+                while (!buttons.IsVisible) { await Task.Delay(10, timeout.Token); Dispatcher.UIThread.RunJobs(); }
             Assert.True(buttons.IsVisible);
             Assert.Equal(2, buttons.Children.Count);
             var question = speech.Text;
             Assert.NotEqual("hi sweetie", question);
-            await Pump(600);
+            Assert.Null(tube.ThinkingFrame);
+            thinkingFrame();
             Assert.Equal(question, speech.Text);   // the thinking ticker is dead
 
             var chip = (Border)buttons.Children[0];
+            tube.UpdateLayout();
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             var at = chip.TranslatePoint(new Point(chip.Bounds.Width / 2, chip.Bounds.Height / 2), tube)!.Value;
             tube.MouseDown(at, MouseButton.Left);
@@ -151,14 +166,24 @@ public sealed class TubeChatParityTests
             gate.TrySetResult();
             tube.Close();
             Dispatcher.UIThread.RunJobs();
-            listener.Stop();
-            restore();
-            AvApp.Brain?.Dispose();
-            AvApp.Ai?.Dispose();
-            (AvApp.Ai, AvApp.Brain) = (previousAi, previousBrain);
-            CoreAccount.UnifiedUserId = null;
-            CoreSettings.ServiceProvider = null;
-            Directory.Delete(dir, true);
+            try
+            {
+                listener.Close();
+                try { await server.WaitAsync(TimeSpan.FromSeconds(10)); }
+                catch (HttpListenerException) { }
+                catch (ObjectDisposedException) { }
+            }
+            finally
+            {
+                // A fixture shutdown failure must not leave singleton bindings in the next test.
+                restore();
+                AvApp.Brain?.Dispose();
+                AvApp.Ai?.Dispose();
+                (AvApp.Ai, AvApp.Brain) = (previousAi, previousBrain);
+                CoreAccount.UnifiedUserId = previousAccount;
+                CoreSettings.ServiceProvider = previousSettings;
+                Directory.Delete(dir, true);
+            }
         }
     });
 
@@ -256,6 +281,16 @@ public sealed class TubeChatParityTests
         }
         return Task.CompletedTask;
     });
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(40, -7.5)]
+    [InlineData(80, -15)]
+    [InlineData(160, 0)]
+    [InlineData(220, -8)]
+    [InlineData(280, 0)]
+    public void DoubleBounceKeepsTheWpfKeyframes(double ms, double y) =>
+        Assert.Equal(y, AvatarTubeWindow.DoubleBounceY(ms));
 
     [Fact]
     public void ThinkingPhrasesStripTheirOwnDots()

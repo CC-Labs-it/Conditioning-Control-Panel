@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// (a Stop that hangs in native code still hangs the UI thread), the gaze
     /// attention input, no-activate z-order, and the remote-media offer after the "no videos" dialog.
     /// </summary>
-    internal sealed class MandatoryVideoOverlay : IMandatoryVideoHost
+    internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
         public static MandatoryVideoOverlay Instance { get; } = new();
         private MandatoryVideoScheduler _scheduler = null!;
@@ -50,7 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>One screen's window: blurred fill + scrim, the clip, and the attention plane.</summary>
-        internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown);
+        internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons);
 
         private readonly List<Surface> _surfaces = new();
         private readonly List<Window> _messages = new();
@@ -123,7 +123,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private void Play(string path, bool strict)
         {
+            var muted = _userMuted;
             if (_surfaces.Count > 0) CloseAll();
+            _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
             (_path, _strict) = (path, strict);
             _sinceShow.Restart();
             _sinceFrame.Reset();
@@ -156,7 +158,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             // WPF VideoService.cs:3494: software decode unless the user opted into GPU decode.
             _player = new MediaPlayer(vlc) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
-            _player.Volume = MandatoryVideoScheduler.EffectiveVolume(s.MasterVolume, s.VideoVolume);
+            ApplyVolume(_player);
             var blur = s.VideoBlurredBackgroundEnabled;
             _sink = new VlcFrameSink(_player, () => _media, bmp =>
             {
@@ -183,6 +185,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     FirstFrameMs = _sinceShow.ElapsedMilliseconds;
                     if (!_gracePaused) _sinceFrame.Start();   // WPF arms the length/max timers once playing
                     Log.Information("VideoService: first frame after {Ms} ms", FirstFrameMs);
+                    ShowVideoControls();   // mute and close, once the clip is rolling (MandatoryVideoOverlay.Controls.cs)
                 }
                 var fill = _surfaces.Any(x => x.Fill.IsVisible);
                 if (fill && _sink?.Bitmap is { } src && _fill != null)
@@ -236,8 +239,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// Settings · Audio live. UI thread (teardown runs there too).</summary>
         internal void UpdateVolume()
         {
-            var s = CoreSettings.Current;
-            if (_player is { } p) p.Volume = MandatoryVideoScheduler.EffectiveVolume(s.MasterVolume, s.VideoVolume);
+            if (_player is { } p) ApplyVolume(p);
         }
 
         /// <summary>WPF VideoService.VideoScreens -> App.ResolveScreens (ccp-bugs #1154): the Video
@@ -270,6 +272,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var video = new Image { Stretch = Stretch.Uniform };
             var layer = new Canvas { ClipToBounds = true };
             var (grace, countdown) = GraceCard();
+            var buttons = new VideoButtons(ToggleUserMute, CloseFromButton);
             var w = new Window
             {
                 Title = "CCP Video",
@@ -278,7 +281,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ShowInTaskbar = false,
                 CanResize = false,
                 Background = Brushes.Black,
-                Content = new Panel { ClipToBounds = true, Children = { fill, scrim, video, layer, grace } },
+                Content = new Panel { ClipToBounds = true, Children = { fill, scrim, video, layer, grace, buttons.Row } },
             };
             var floating = Floating;
             if (floating)
@@ -329,7 +332,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.WindowState = WindowState.FullScreen;
                 w.Activate();
             }
-            return new Surface(w, fill, scrim, video, layer, grace, countdown);
+            return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons);
         }
 
         /// <summary>WPF GracePauseOverlayWindow's card: 360x200, centred, #1A1A2E with a 2 px pink edge,
@@ -830,11 +833,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.WindowState = WindowState.Maximized;
                 _messages.Add(w);
             }
+            var muted = _mutedAtClose;   // WPF: an attention-check replay skips Cleanup, so it stays muted
             DispatcherTimer.RunOnce(() =>
             {
                 foreach (var w in _messages) w.Close();
                 _messages.Clear();
+                _userMuted = muted;
                 then();
+                if (!Scheduler.IsPlaying) _userMuted = false;   // mercy, or stopped meanwhile: the run is over
             }, TimeSpan.FromMilliseconds(ms));
         });
 
@@ -863,6 +869,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try
             {
                 _attention = _gracePaused = false;
+                // WPF ResetUserMute: the next video has its sound (ShowMessage carries it into a verdict replay).
+                _mutedAtClose = _userMuted;
+                _userMuted = false;
                 _graceTimer?.Stop();
                 _guard?.Stop();
                 _graceTimer = _guard = null;

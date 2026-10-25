@@ -21,9 +21,9 @@ namespace ConditioningControlPanel.Services
     public static class MotionFx
     {
         public const double HoverLiftScale = 1.02;
-        public const double PressSquishScale = 0.97;
+        public const double PressSquishScale = UI.InteractionPressMotion.Scale;
         private const int HoverMs = 150;
-        private const int PressMs = 80;
+        private const int PressMs = UI.InteractionPressMotion.DurationMs;
         private const int StaggerMs = 40;
         private const int StaggerCap = 6;
         private const int AmbientFrameRate = 30;
@@ -93,10 +93,10 @@ namespace ConditioningControlPanel.Services
             if (scale == null) return;
             if (!AllowTransitions)
             {
-                scale.ScaleX = scale.ScaleY = down ? PressSquishScale : 1.0;
+                scale.ScaleX = scale.ScaleY = UI.InteractionPressMotion.ScaleFor(down);
                 return;
             }
-            Scale(scale, down ? PressSquishScale : 1.0, PressMs);
+            Scale(scale, UI.InteractionPressMotion.ScaleFor(down), PressMs);
         }
 
         /// <summary>

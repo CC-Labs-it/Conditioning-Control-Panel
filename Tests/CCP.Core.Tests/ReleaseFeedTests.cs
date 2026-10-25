@@ -261,4 +261,46 @@ public sealed class ReleaseFeedTests
             Directory.Delete(d, true);
         }
     }
+
+    /// <summary>One chunk, then a read that waits until it is cancelled; counts reads.</summary>
+    private sealed class OneChunkThenSilence : Stream
+    {
+        public int Reads;
+        public override async System.Threading.Tasks.ValueTask<int> ReadAsync(Memory<byte> buffer, System.Threading.CancellationToken ct = default)
+        {
+            if (++Reads == 1) { buffer.Span[..10].Fill(7); return 10; }
+            var never = new System.Threading.Tasks.TaskCompletionSource<int>(System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
+            using (ct.Register(() => never.TrySetCanceled(ct))) return await never.Task;
+        }
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => 0; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// WPF ddc9dd047: a cancel from the caller stays a cancel. It must not turn into the stall
+    /// TimeoutException (which the updater retries), and the copy stops reading at once.
+    /// </summary>
+    [Fact(Timeout = 30_000)]
+    public async System.Threading.Tasks.Task CallerCancelStaysACancelAndIsNotRetried()
+    {
+        var src = new OneChunkThenSilence();
+        using var dst = new MemoryStream();
+        using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            ReleaseFeed.CopyWithStallTimeoutAsync(src, dst, TimeSpan.FromSeconds(20), null, cts.Token));
+
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(10), $"took {clock.Elapsed}");   // not the stall window
+        Assert.Equal(2, src.Reads);   // no read after the cancel
+        Assert.Equal(10, dst.Length);
+    }
 }

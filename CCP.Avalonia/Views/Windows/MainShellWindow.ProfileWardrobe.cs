@@ -4,8 +4,8 @@
 // geometry is Core WardrobeStageGeometry - the same call the editor stage makes.
 //
 // Entry points differ from WPF only in who calls them: WPF routes through ApplyProfileCosmetics,
-// which also paints banner/avatar preset/accent/title/pins via Services.CosmeticsCatalog - still
-// WPF-only (see MainShellWindow.ProfileCosmetics.cs). So this head paints the wardrobe half alone:
+// whose banner, accent, title and pin paint now lives in MainShellWindow.ProfileCosmetics.cs.
+// The same own/viewed entry points paint those fields beside the wardrobe:
 // ApplyOwnProfileWardrobe / ApplyViewedProfileWardrobe are the wardrobe slice of WPF's
 // ApplyOwnProfileCosmetics / ApplyViewedProfileCosmetics, sanitized with the same sets
 // CosmeticsCatalog.SanitizeOwn/SanitizeViewed pass for the wardrobe fields.
@@ -42,7 +42,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Your own loadout, straight from settings (WPF ApplyOwnProfileCosmetics, wardrobe half).</summary>
         internal void ApplyOwnProfileWardrobe()
         {
-            try { ApplyProfileWardrobe(SanitizeOwnWardrobe(CoreSettings.Current.ProfileCosmetics)); }
+            try
+            {
+                var cosmetics = SanitizeOwnWardrobe(CoreSettings.Current.ProfileCosmetics);
+                ApplyProfileWardrobe(cosmetics);
+                ApplyProfileCosmeticsPaint(cosmetics);
+            }
             catch (Exception ex) { Log.Debug("ApplyOwnProfileWardrobe: {E}", ex.Message); }
         }
 
@@ -52,9 +57,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                ApplyProfileWardrobe(ProfileCosmetics.Sanitize(cosmetics, null,
+                var clean = ProfileCosmetics.Sanitize(cosmetics, CosmeticsPool.BannerIds,
                     new HashSet<string>(Achievement.All.Keys, StringComparer.Ordinal), null,
-                    WardrobeCatalog.DecoIds(), WardrobeCatalog.CharmIds()));
+                    WardrobeCatalog.DecoIds(), WardrobeCatalog.CharmIds(), CosmeticsPool.AvatarIds);
+                ApplyProfileWardrobe(clean);
+                ApplyProfileCosmeticsPaint(clean);
             }
             catch (Exception ex) { Log.Debug("ApplyViewedProfileWardrobe: {E}", ex.Message); }
         }
