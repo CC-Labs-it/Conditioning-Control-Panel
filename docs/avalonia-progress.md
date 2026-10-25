@@ -3357,3 +3357,7 @@ Windows "Test process did not return valid JSON (non-object)" discovery flake: x
 ## avalonia-port/wire-views-tab-quests-b: +448
 - Quests tab depth pass (wells, seats, planks, DONE stamp) on Core DepthLaw with finite BeatLoop travel; shell hue repaints quest bands.
 - Fix-day status icons now Fluent (IconLabel.Kind), IconGuard ratchets back at baseline; fail-proven tests.
+
+## avalonia-port/wire-views-companion-workshop-behavior-cell: +184
+- Workshop Behavior cell's browser-pause switch drives the Home browser (mute + pause/resume media), live state only.
+- Pause survives navigation; resume restores the saved mute preference.
