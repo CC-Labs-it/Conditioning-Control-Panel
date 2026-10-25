@@ -69,6 +69,26 @@ public sealed class CompanionRosterSwitchTests
         Assert.Equal(0, CoreSettings.Current.ActiveCompanionId);
     });
 
+    [Fact]
+    public Task ShownShellWiresCommunityRefresh() => WithRoster((shell, room, _) =>
+    {
+        var s = CoreSettings.Current;
+        var oldOffline = s.OfflineMode;
+        s.OfflineMode = true; // cached manifest only: no network from a test
+        try
+        {
+            var refresh = room.GetVisualDescendants().OfType<WorkshopCommunityCell>().Single()
+                .FindControl<Button>("BtnRefreshPrompts")!;
+            var states = new System.Collections.Generic.List<bool>();
+            refresh.PropertyChanged += (_, e) => { if (e.Property == InputElement.IsEnabledProperty) states.Add(refresh.IsEnabled); };
+            Click(shell, refresh, MouseButton.Left); // WPF BtnRefreshPrompts_Click (MainWindow.Patreon.cs:2318)
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { false, true }, states);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("btn_refresh"), refresh.Content);
+        }
+        finally { s.OfflineMode = oldOffline; }
+    });
+
     private static Task WithRoster(Action<MainShellWindow, CompanionRoomView, WorkshopRosterCell> test) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)

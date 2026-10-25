@@ -48,7 +48,7 @@ public sealed class CompanionCommunityPromptsTests
             shell.RefreshCommunityPrompts(room);
             Assert.Contains(placeholder, panel.Children);
             Assert.False(placeholder.IsVisible);
-            var activate = panel.GetLogicalDescendants().OfType<Button>().Single(b => Equals(b.Tag, prompt.Id) && b.Content?.ToString() != "×");
+            var activate = panel.GetLogicalDescendants().OfType<Button>().Single(b => Equals(b.Tag, prompt.Id) && b.Content is string);
             activate.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(prompt.Id, s.ActiveCommunityPromptId);
             Assert.Single(panel.GetLogicalDescendants().OfType<Button>());

@@ -4,11 +4,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
@@ -97,7 +100,12 @@ public partial class MainShellWindow
     {
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(0, 2) };
         var name = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        if (prompt.IsActive) name.Children.Add(new TextBlock { Text = "● ", FontSize = 10, Foreground = Brushes.MediumPurple });
+        if (prompt.IsActive)
+        {
+            var dot = IconGlyph.Of(IconKind.Circle, IconVariant.Filled, null, 7);
+            dot.Foreground = Brushes.MediumPurple; dot.Margin = new Thickness(0, 0, 4, 0);
+            name.Children.Add(dot);
+        }
         name.Children.Add(new TextBlock { Text = prompt.Name, FontSize = 10, Foreground = Brushes.White,
             FontWeight = prompt.IsActive ? FontWeight.SemiBold : FontWeight.Normal });
         name.Children.Add(new TextBlock { Text = " " + Loc.GetF("label_by_author", prompt.Author), FontSize = 9, Foreground = Brushes.Gray });
@@ -105,7 +113,7 @@ public partial class MainShellWindow
         var actions = new StackPanel { Orientation = Orientation.Horizontal };
         if (!prompt.IsActive)
         {
-            var activate = new Button { Content = Loc.Get("btn_activate"), FontSize = 9, Padding = new Thickness(6, 2), Tag = prompt.Id };
+            var activate = LinkButton(Loc.Get("btn_activate"), Color.FromRgb(147, 112, 219), 9, new Thickness(6, 2), prompt.Id);
             activate.Click += async (_, _) =>
             {
                 if (!await AcknowledgeCommunityPromptAsync(prompt)) return;
@@ -114,14 +122,24 @@ public partial class MainShellWindow
             };
             actions.Children.Add(activate);
         }
-        var remove = new Button { Content = "×", FontSize = 12, Padding = new Thickness(4, 0), Tag = prompt.Id };
+        var remove = LinkButton("", Color.FromRgb(128, 128, 128), 12, new Thickness(4, 0), prompt.Id);
+        remove.Content = IconGlyph.Of(IconKind.Dismiss, IconVariant.Regular, null, 10);
         ToolTip.SetTip(remove, Loc.Get("btn_uninstall"));
+        AutomationProperties.SetName(remove, Loc.Get("btn_uninstall"));
         remove.Click += (_, _) => { Prompts.RemovePrompt(prompt.Id); RefreshCommunityPrompts(room); };
         actions.Children.Add(remove);
         Grid.SetColumn(actions, 1);
         row.Children.Add(actions);
         return row;
     }
+
+    // WPF MainWindow.CompanionTab.cs:253,295: transparent, borderless, hand-cursor link buttons.
+    private static Button LinkButton(object text, Color foreground, double size, Thickness padding, string id) => new()
+    {
+        Content = text, Background = Brushes.Transparent, Foreground = new SolidColorBrush(foreground),
+        BorderThickness = new Thickness(0), FontSize = size, Padding = padding,
+        Cursor = new Cursor(StandardCursorType.Hand), Tag = id
+    };
 
     private async Task<bool> AcknowledgeCommunityPromptAsync(CommunityPrompt prompt)
     {

@@ -20,10 +20,6 @@ namespace ConditioningControlPanel.Services
         private bool _disposed;
         private const string PromptsManifestUrl = "https://codebambi-proxy.vercel.app/prompts/manifest";
         private const string PromptsDownloadUrl = "https://codebambi-proxy.vercel.app/prompts";
-        public event EventHandler<CommunityPrompt>? PromptInstalled;
-        public event EventHandler<CommunityPrompt>? PromptActivated;
-        public event EventHandler<string>? PromptRemoved;
-        public event EventHandler<Exception>? Error;
         public IReadOnlyList<string> InstalledPromptIds =>
             CoreSettings.Current?.InstalledCommunityPromptIds ?? new List<string>();
         public string? ActivePromptId => CoreSettings.Current?.ActiveCommunityPromptId;
@@ -75,7 +71,6 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex)
             {
                 Log.Warning("Error fetching community prompts manifest: {Error}", ex.Message);
-                Error?.Invoke(this, ex);
             }
             return _availablePrompts;
         }
@@ -131,14 +126,12 @@ namespace ConditioningControlPanel.Services
                     CoreSettings.Save();
                 }
                 prompt.IsInstalled = true;
-                PromptInstalled?.Invoke(this, prompt);
                 Log.Information("Installed community prompt: {Name} by {Author}", prompt.Name, prompt.Author);
                 return prompt;
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Error installing prompt {Id}", promptId);
-                Error?.Invoke(this, ex);
                 return null;
             }
         }
@@ -161,13 +154,11 @@ namespace ConditioningControlPanel.Services
                     }
                     CoreSettings.Save();
                 }
-                PromptRemoved?.Invoke(this, promptId);
                 Log.Information("Removed community prompt: {Id}", promptId);
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Error removing prompt {Id}", promptId);
-                Error?.Invoke(this, ex);
             }
         }
         public CommunityPrompt? GetInstalledPrompt(string promptId)
@@ -208,7 +199,7 @@ namespace ConditioningControlPanel.Services
             try
             {
                 var validator = new PromptValidator();
-                if (validator != null && prompt.PromptSettings != null)
+                if (prompt.PromptSettings != null)
                 {
                     var ps = prompt.PromptSettings;
                     var fieldsToScan = new (string Name, string Text)[]
@@ -248,19 +239,8 @@ namespace ConditioningControlPanel.Services
             settings.ActiveCommunityPromptId = promptId;
             CoreSettings.Save();
             prompt.IsActive = true;
-            PromptActivated?.Invoke(this, prompt);
             Log.Information("Activated community prompt: {Name}", prompt.Name);
             return true;
-        }
-        public static bool ClearCustomPromptOverride(AppSettings? settings) =>
-            PersonalityService.ClearCustomPromptOverride(settings);
-        public void DeactivatePrompt()
-        {
-            var settings = CoreSettings.Current;
-            if (settings == null) return;
-            ClearCustomPromptOverride(settings);
-            CoreSettings.Save();
-            Log.Information("Deactivated community prompt, using default/custom settings");
         }
         public CommunityPrompt ExportCurrentSettings(string name, string author, string description)
         {
@@ -301,14 +281,12 @@ namespace ConditioningControlPanel.Services
                     CoreSettings.Save();
                 }
                 prompt.IsInstalled = true;
-                PromptInstalled?.Invoke(this, prompt);
                 Log.Information("Imported prompt: {Name} by {Author}", prompt.Name, prompt.Author);
                 return prompt;
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Error importing prompt from {Path}", filePath);
-                Error?.Invoke(this, ex);
                 return null;
             }
         }

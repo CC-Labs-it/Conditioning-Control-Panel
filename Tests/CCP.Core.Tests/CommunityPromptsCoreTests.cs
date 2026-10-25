@@ -52,10 +52,6 @@ public sealed class CommunityPromptsCoreTests : IDisposable
     public async Task ImportActivateExportRemoveAndResetMatchWpf()
     {
         using var service = new CommunityPromptsCore(Path.Combine(_folder, "installed"));
-        int installed = 0, activated = 0, removed = 0;
-        service.PromptInstalled += (_, _) => installed++;
-        service.PromptActivated += (_, _) => activated++;
-        service.PromptRemoved += (_, _) => removed++;
         var prompt = service.ImportFromFile(WritePrompt())!;
         Assert.NotNull(prompt);
         Assert.NotEqual("original", prompt.Id);
@@ -73,9 +69,8 @@ public sealed class CommunityPromptsCoreTests : IDisposable
         Assert.Empty(service.GetInstalledPrompts());
         Assert.Null(_s.ActiveCommunityPromptId);
         Assert.True(_s.CompanionPrompt.UseCustomPrompt); // WPF remove clears only the ID
-        service.DeactivatePrompt();
+        PersonalityService.ClearCustomPromptOverride(_s); // WPF BtnDeactivatePrompt_Click
         Assert.False(_s.CompanionPrompt.UseCustomPrompt);
-        Assert.Equal((1, 1, 1), (installed, activated, removed));
     }
     [Fact]
     public void MissingMalformedAndUnsafeIdsDoNotChangeSettings()

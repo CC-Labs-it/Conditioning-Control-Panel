@@ -40,8 +40,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("voice-capture", sh => sh?.CancelVoicePrompt(), After: ["intake"]),   // intake loops end before the mic abort
             // decisions "Panic <-> mic": capture and the command chain end first; WPF :1553 FirstShowService.Stop() before CancelPendingAi.
             new("ai-followups", _ => MainShellWindow.CancelPendingAi(), After: ["voice-capture", "first-show"]),
+            // Community prompt dialogs/advisories (WPF MainWindow.Patreon.cs:2318-2460 ShowStyledDialog, modal, no panic path,
+            // so WPF imposes no order): close them and drop any in-flight browse/install result.
+            new("community-prompts", _ => MainShellWindow.StopCommunityPrompts()),
             // WPF MainWindow.xaml.cs:1732: standalone Lab minigames first; the engine stop never reaches them.
-            new("community-prompts", _ => MainShellWindow.StopCommunityPrompts(), After: ["voice-capture"]),
             new("blink-trainer", _ => Overlays.BlinkTrainerSession.Stop()),
             new("gaze-minigame", _ => Lab.GazeMinigame.GazeMinigameWindow.CloseAllForPanic(), Lab.GazeMinigame.GazeMinigameWindow.IsAnyRunning),   // ends before the camera stop below
             new("mantra", _ => MantraWindow.StopForPanic()),                // WPF KillAllAudio -> Mantra?.Dispose()
