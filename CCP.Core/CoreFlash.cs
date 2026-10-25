@@ -64,20 +64,24 @@ namespace ConditioningControlPanel
                 _timer ??= new Timer(OnTick, null, Timeout.Infinite, Timeout.Infinite);
                 ArmLocked();
             }
+            CoreDiscord.Service?.SetFlashActivity(); // WPF FlashService.Start:543
             Log.Information("Flash schedule started");
         }
 
         /// <summary>Disarm the schedule and close on-screen and queued bursts, as WPF Stop does.</summary>
         public static void Stop()
         {
+            bool wasRunning;
             lock (Gate)
             {
+                wasRunning = _isRunning;
                 _isRunning = false;
                 try { _timer?.Change(Timeout.Infinite, Timeout.Infinite); } catch { }
             }
             try { StopProvider?.Invoke(); }
             catch (Exception ex) { Log.Warning(ex, "Flash stop provider failed"); }
-            Log.Information("Flash schedule stopped");
+            CoreDiscord.Service?.SetIdleActivity(); // WPF FlashService.Stop:580 (even when already stopped)
+            if (wasRunning) Log.Information("Flash schedule stopped");
         }
 
         /// <summary>Re-roll the pending interval after FlashFrequency changes (WPF <c>RefreshSchedule</c>).</summary>

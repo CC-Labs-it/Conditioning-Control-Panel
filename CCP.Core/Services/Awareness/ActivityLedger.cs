@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Awareness
 {
@@ -209,7 +210,7 @@ namespace ConditioningControlPanel.Services.Awareness
 
         /// <summary>
         /// Test/diagnostic constructor. Nothing subscribes to app events and nothing is read from
-        /// <c>App</c> unless a null is passed, so this is safe to build headlessly.
+        /// the head unless a null is passed, so this is safe to build headlessly.
         /// </summary>
         /// <param name="ledgerPath">Full path of awareness_ledger.json.</param>
         /// <param name="localClock">Injectable LOCAL clock. Everything here is about the user's day.</param>
@@ -264,7 +265,7 @@ namespace ConditioningControlPanel.Services.Awareness
 
         private static int DefaultRetentionFromSettings()
         {
-            try { return App.Settings?.Current?.AwarenessRetentionDays ?? DefaultRetentionDays; }
+            try { return CoreSettings.Current.AwarenessRetentionDays; }
             catch { return DefaultRetentionDays; }
         }
 
@@ -304,7 +305,7 @@ namespace ConditioningControlPanel.Services.Awareness
             try { _rolloverTimer.Change(RolloverCheckInterval, RolloverCheckInterval); }
             catch (ObjectDisposedException) { }
 
-            App.Logger?.Information("ActivityLedger: started ({Apps} app(s), retention {Days}d)",
+            Log.Information("ActivityLedger: started ({Apps} app(s), retention {Days}d)",
                 AppCount, Math.Clamp(_retentionDays(), 1, 365));
         }
 
@@ -352,7 +353,7 @@ namespace ConditioningControlPanel.Services.Awareness
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "ActivityLedger: rollover tick failed");
+                Log.Warning(ex, "ActivityLedger: rollover tick failed");
             }
         }
 
@@ -870,7 +871,7 @@ namespace ConditioningControlPanel.Services.Awareness
             if (total.TotalSeconds > MaxSingleAccrualSeconds)
             {
                 // Machine sleep, a suspended process or a clock jump. None of it was screen time.
-                App.Logger?.Debug("ActivityLedger: discarded a {Seconds}s gap as machine sleep",
+                Log.Debug("ActivityLedger: discarded a {Seconds}s gap as machine sleep",
                     (int)total.TotalSeconds);
                 _segmentStart = at;
                 return;
@@ -957,7 +958,7 @@ namespace ConditioningControlPanel.Services.Awareness
             }
 
             PruneRetentionLocked(at);
-            App.Logger?.Information("ActivityLedger: day rollover to {Day}", DayKey(at));
+            Log.Information("ActivityLedger: day rollover to {Day}", DayKey(at));
             RequestSave();
         }
 
@@ -1068,7 +1069,7 @@ namespace ConditioningControlPanel.Services.Awareness
 
             if (droppedDays > 0 || emptyApps.Count > 0 || staleNights.Count > 0)
             {
-                App.Logger?.Information(
+                Log.Information(
                     "ActivityLedger: pruned {Days} day record(s), {Apps} app(s), {Nights} night histogram(s) past {Retention}d",
                     droppedDays, emptyApps.Count, staleNights.Count, days);
                 RequestSave();
@@ -1114,7 +1115,7 @@ namespace ConditioningControlPanel.Services.Awareness
                 DeleteQuietly(LedgerTempPath);
             }
 
-            App.Logger?.Information("ActivityLedger: wiped");
+            Log.Information("ActivityLedger: wiped");
         }
 
         /// <summary>
@@ -1154,7 +1155,7 @@ namespace ConditioningControlPanel.Services.Awareness
             }
 
             SaveNow();
-            App.Logger?.Information("ActivityLedger: forgot {App}", id);
+            Log.Information("ActivityLedger: forgot {App}", id);
         }
 
         private static void DeleteQuietly(string path)
@@ -1165,7 +1166,7 @@ namespace ConditioningControlPanel.Services.Awareness
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "ActivityLedger: failed to delete {File}", path);
+                Log.Warning(ex, "ActivityLedger: failed to delete {File}", path);
             }
         }
 
@@ -1200,7 +1201,7 @@ namespace ConditioningControlPanel.Services.Awareness
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "ActivityLedger: failed to serialize");
+                Log.Warning(ex, "ActivityLedger: failed to serialize");
                 return;
             }
 
@@ -1223,7 +1224,7 @@ namespace ConditioningControlPanel.Services.Awareness
             {
                 if (Volatile.Read(ref _generation) != generation)
                 {
-                    App.Logger?.Debug("ActivityLedger: dropped a stale save (the ledger was erased mid-write)");
+                    Log.Debug("ActivityLedger: dropped a stale save (the ledger was erased mid-write)");
                     return;
                 }
 
@@ -1235,7 +1236,7 @@ namespace ConditioningControlPanel.Services.Awareness
                 }
                 catch (Exception ex)
                 {
-                    App.Logger?.Warning(ex, "ActivityLedger: failed to persist");
+                    Log.Warning(ex, "ActivityLedger: failed to persist");
                 }
             }
         }
@@ -1279,7 +1280,7 @@ namespace ConditioningControlPanel.Services.Awareness
                 }
                 catch (Exception ex)
                 {
-                    App.Logger?.Debug("ActivityLedger: retention sweep could not stat the ledger - {Error}", ex.Message);
+                    Log.Debug("ActivityLedger: retention sweep could not stat the ledger - {Error}", ex.Message);
                     return;
                 }
 
@@ -1289,7 +1290,7 @@ namespace ConditioningControlPanel.Services.Awareness
                 try { json = SerializeLocked(); }
                 catch (Exception ex)
                 {
-                    App.Logger?.Warning(ex, "ActivityLedger: retention sweep failed to serialize");
+                    Log.Warning(ex, "ActivityLedger: retention sweep failed to serialize");
                     ClearInMemoryLocked();
                     return;
                 }
@@ -1305,10 +1306,10 @@ namespace ConditioningControlPanel.Services.Awareness
             {
                 if (Volatile.Read(ref _generation) != generation) return;
                 try { AtomicWrite(_path, json); }
-                catch (Exception ex) { App.Logger?.Warning(ex, "ActivityLedger: retention sweep failed to persist"); }
+                catch (Exception ex) { Log.Warning(ex, "ActivityLedger: retention sweep failed to persist"); }
             }
 
-            App.Logger?.Information("ActivityLedger: retention swept on disk (awareness need not be running)");
+            Log.Information("ActivityLedger: retention swept on disk (awareness need not be running)");
         }
 
         private void ClearInMemoryLocked()
@@ -1381,7 +1382,7 @@ namespace ConditioningControlPanel.Services.Awareness
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "ActivityLedger: could not read the ledger — starting empty");
+                Log.Warning(ex, "ActivityLedger: could not read the ledger — starting empty");
                 return;
             }
 
@@ -1392,7 +1393,7 @@ namespace ConditioningControlPanel.Services.Awareness
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "ActivityLedger: ledger file is corrupt — starting empty");
+                Log.Warning(ex, "ActivityLedger: ledger file is corrupt — starting empty");
                 return;
             }
 
@@ -1438,7 +1439,7 @@ namespace ConditioningControlPanel.Services.Awareness
                 }
             }
 
-            App.Logger?.Information("ActivityLedger: loaded {Apps} app(s)", _apps.Count);
+            Log.Information("ActivityLedger: loaded {Apps} app(s)", _apps.Count);
         }
 
         private static int[] NormalizeBuckets(int[]? raw, int size)

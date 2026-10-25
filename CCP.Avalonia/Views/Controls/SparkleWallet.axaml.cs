@@ -35,6 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         public SparkleWallet()
         {
             InitializeComponent();
+            MascotFace.Draw("^_^");
             for (var i = 0; i < _sparkles.Length; i++)
             {
                 var sparkle = new Polygon
