@@ -259,6 +259,7 @@ public sealed class PanicSurfacesTests
         ["InlineLoopVideo"] = "WPF parity: the help card's muted, no-audio clip poster; it lives only while that card is open, and closing the card detaches and frees it",
         ["RaceTrackPlayer"] = "the race window owns it: the 'games' surface closes GameWindow, whose teardown disposes it (Race_TrackPick_ChartsPlaysAndPanicStops)",
         ["MediaHistoryWindow"] = "WPF parity: the Media Log's muted preview of a user-picked row; WPF panic leaves that window alone",
+        ["HelpVideoWindow"] = "WPF parity: the help window's muted tutorial clip (freed on close); WPF panic leaves that window alone",
     };
 
     [Fact]
