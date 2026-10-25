@@ -23,6 +23,7 @@ internal static class BarkHead
         var e = Engine = new BarkEngine();
         Seed(e);
         e.Start();
+        WebcamTracker.Instance.OnTongueOut += _onTongueOut = () => Engine?.Raise("TongueOut");
         App.Brain?.AttachBarkSource(h => e.BarkSpoken += h, h => e.BarkSpoken -= h);   // App.xaml.cs:2826, the echo
         // The two WireSubscriptions the engine's own state needs: chat suppression (:806) and, on a mod switch,
         // the switch bark off the OLD set then the new mod's manifest (:903).
@@ -37,12 +38,15 @@ internal static class BarkHead
     }
 
     private static Action? _onUserMessage;
+    private static Action? _onTongueOut;
     private static EventHandler<ModPackage>? _onModChanged;
     private static ModService? _mods;
 
-    /// <summary>Drops the engine and the two subscriptions Start made (tests; the seams are the caller's to restore).</summary>
+    /// <summary>Drops the engine and subscriptions Start made (tests; the seams are the caller's to restore).</summary>
     internal static void Stop()
     {
+        WebcamTracker.Instance.OnTongueOut -= _onTongueOut;
+        _onTongueOut = null;
         App.UserMessageSent -= _onUserMessage;
         if (_mods != null) _mods.ModChanged -= _onModChanged;
         (_onUserMessage, _onModChanged, _mods, Engine) = (null, null, null, null);

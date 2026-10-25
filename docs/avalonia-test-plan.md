@@ -673,3 +673,5 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+24. Webcam gesture pipeline: consent and start tracking, open the companion with a TongueOut bark rule, open the mouth and hold the tongue out for at least 350 ms. Expect one event per protrusion; close then repeat after 700 ms. Closed mouth or face loss must cancel a pending hold; panic or revoke before queued delivery must suppress it. In Devices, Windows friendly names must match DirectShow capture indices; Linux keeps sparse V4L2 indices. WPF `Services/Webcam/WebcamTrackingService.cs:2089`, `Services/Companion/BarkService.cs:662`, `Services/Webcam/WebcamDeviceEnumerator.cs:91`. Rows: `shell-webcam`.

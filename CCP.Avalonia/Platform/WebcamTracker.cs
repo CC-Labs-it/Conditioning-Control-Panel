@@ -31,6 +31,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
         public static IReadOnlyList<(int Index, string Name)> Enumerate()
         {
             var list = new List<(int, string)>();
+            if (OperatingSystem.IsWindows())
+            {
+                foreach (var camera in WindowsCameras.Enumerate()) list.Add((camera.Index, camera.Name));
+                return list;
+            }
             try
             {
                 if (!Directory.Exists(Root)) return list;
@@ -60,7 +65,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             int index = int.TryParse(Environment.GetEnvironmentVariable("CCP_WEBCAM_DEVICE"), out var i)
                 ? Math.Max(0, i) : ResolveSavedIndex();
-            _cap = new VideoCapture(index, OperatingSystem.IsLinux() ? VideoCaptureAPIs.V4L2 : VideoCaptureAPIs.ANY);
+            _cap = new VideoCapture(index, OperatingSystem.IsLinux() ? VideoCaptureAPIs.V4L2
+                : OperatingSystem.IsWindows() ? VideoCaptureAPIs.DSHOW : VideoCaptureAPIs.ANY);
             if (!_cap.IsOpened()) return false;
             // WPF's default mode (WebcamTrackingService CaptureWidth/Height/TargetFps).
             _cap.Set(VideoCaptureProperties.FrameWidth, 640);
@@ -89,8 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// BlinkDetector + GazeEngine, the same pipeline WebcamTrackingService.ProcessFrame runs on WPF:
     /// blinks, face lost/found, head pose, raw iris, gaze side and the projected gaze point. Camera
     /// open only between Start and Stop, only with current consent.
-    /// Mouth MAR is shared with Core. ponytail: tongue HSV remains WPF-only, so calibration's tongue
-    /// prompt times out to "moving on", as WPF does on a miss. Gaze lock-on (Core GazeLock) and long
+    /// Mouth MAR and tongue HSV use Core rules. Gaze lock-on (Core GazeLock) and long
     /// stare (Core LongStareDetector) run as WPF EmitGazeEvents does.
     /// </summary>
     internal sealed class WebcamTracker
@@ -104,6 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         public event Action? OnBlink;
         public event Action? OnMouthOpen;
+        public event Action? OnTongueOut;
         /// <summary>Eyes held shut past BlinkDetector.EyesClosedLongMs (WPF OnEyesClosedLong).</summary>
         public event Action? OnEyesClosedLong;
         public event Action? StateChanged;
@@ -175,6 +181,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private sealed class Run
         {
             public volatile bool Stop;
+            public int Generation;
             public IFrameSource? Source;
             public BlazeFaceDetector? Face;
             public FaceMeshDetector? Mesh;
@@ -194,6 +201,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal bool IsClosing => _wedged is { IsAlive: true };
         private readonly BlinkDetector _blink = new();
         private readonly MouthOpenDetector _mouth = new();
+        private readonly TongueOutDetector _tongue = new();
         private readonly GazeEngine _gaze = new();
         private readonly GazeLock _gazeLock = new();
         private readonly LongStareDetector _longStare = new();
@@ -225,7 +233,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             if (IsRunning) return true;
             if (Interlocked.Exchange(ref _busy, 1) != 0) return false;
-            var run = new Run();
+            var run = new Run { Generation = gen };
             bool began = false;
             try
             {
@@ -276,6 +284,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
                 _blink.Reset();
                 _mouth.Reset();
+                _tongue.Reset();
                 _gaze.Reset();
                 _longStare.Clear();
                 run.Thread = new Thread(() => Loop(run)) { IsBackground = true, Name = "WebcamCapture", Priority = ThreadPriority.BelowNormal };
@@ -428,7 +437,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 composed.X0, composed.X1, composed.Y0, composed.Y1, persist);
         }
 
-        /// <summary>WPF ProcessFrame without tongue: face, mesh, face lost/found, head pose,
+        /// <summary>WPF ProcessFrame: face, mesh, face lost/found, head pose,
         /// iris, EAR blink, mouth MAR, then the shared gaze lock, follower and long-stare chain.</summary>
         private void ProcessFrame(Run run, Mat bgr)
         {
@@ -458,6 +467,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 else if (ev == BlinkEvent.EyesClosedLong) Dispatcher.UIThread.Post(() => OnEyesClosedLong?.Invoke());
             }
             ProcessMouthLandmarks(lm, DateTime.UtcNow, run);   // WPF :1740 order: after blink, skipped when both irises are missing
+            ProcessTongue(bgr, lm, DateTime.UtcNow, run);
             (double Dx, double Dy)? vl = left == null ? null
                 : _gaze.NormalizeIris(left.IrisCenter, lm[FaceMeshDetector.LeftEyeOuterIdx], lm[FaceMeshDetector.LeftEyeInnerIdx], rightEye: false);
             (double Dx, double Dy)? vr = right == null ? null
@@ -518,6 +528,19 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return fired;
         }
 
+        internal bool ProcessTongue(Mat bgr, float[][] landmarks, DateTime now) => ProcessTongue(bgr, landmarks, now, _run);
+
+        private bool ProcessTongue(Mat bgr, float[][] landmarks, DateTime now, Run? run)
+        {
+            double ratio = _mouth.IsOpen ? TongueOutDetector.ComputeRatio(bgr, landmarks, out _, out _, out _, out _) : 0;
+            bool fired = _tongue.Update(_mouth.IsOpen, ratio, now);
+            if (fired) Dispatcher.UIThread.Post(() =>
+            {
+                if (run != null && ReferenceEquals(_run, run) && run.Generation == Volatile.Read(ref _gen)) OnTongueOut?.Invoke();
+            });
+            return fired;
+        }
+
         /// <summary>Tests call it bare; the capture thread passes its run so a stale run never publishes.</summary>
         internal void NoFace() => NoFace(null);
 
@@ -530,6 +553,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
             _blink.CancelClosure();
             _mouth.FaceMissing();
+            _tongue.FaceMissing();
             if (_gaze.NoFaceFrames > GazeEngine.FaceLostFramesThreshold * 2) _longStare.Clear();
         }
     }

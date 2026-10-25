@@ -110,6 +110,23 @@ public sealed class CompanionBarkHeadTests
         }
     });
 
+    [Fact]
+    public void TongueEventReachesCompanionAndStopUnsubscribes() => WithSeamsRestored(_ =>
+    {
+        var before = BarkHead.Engine;
+        try
+        {
+            BarkHead.Start();
+            BarkHead.Engine = Seeded(Rule("TongueOut", "tongue detected"), out var spoken);
+            var field = typeof(WebcamTracker).GetField("OnTongueOut", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            ((System.Action?)field.GetValue(WebcamTracker.Instance))?.Invoke();
+            Assert.Equal("tongue detected", spoken());
+            BarkHead.Stop();
+            Assert.Null(field.GetValue(WebcamTracker.Instance));
+        }
+        finally { BarkHead.Stop(); BarkHead.Engine = before; }
+    });
+
     private static BarkRule Rule(string trigger, string line, (string Key, object Value)? condition = null) => new()
     {
         Id = "t_" + trigger, Trigger = trigger, VariantPool = new() { new BarkVariant(line) },
