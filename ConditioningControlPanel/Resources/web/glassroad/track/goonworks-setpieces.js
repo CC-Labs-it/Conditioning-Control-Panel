@@ -3,7 +3,7 @@ import { getGoonworksLayout } from './goonworks-layout.js';
 import { beatCycle, gearBeatTravel, machineryRearming } from './machineryBeat.js';
 
 export const GOONWORKS_TOYS = Object.freeze({ kartRadius: .7, kartHeight: 1.6, stallS: .28, repeatS: 1.1,
-  wheelRadius: 15.5, wheelCenterY: 12.5, wheelDepth: 2.4, wheelGap: 50 * Math.PI / 180, wheelOpenings: 4,
+  wheelRadius: 20, wheelCenterY: 12.5, wheelDepth: 2.4, wheelGap: 50 * Math.PI / 180, wheelOpenings: 4,
   cycleBeats: 4, wheelRadiansPerBeat: Math.PI / 2 });
 const TAU = Math.PI * 2;
 const cycle = (t, period) => ((t % period) + period) % period;
@@ -30,7 +30,9 @@ export function goonworksSetpieces(track, layout = getGoonworksLayout(track)) {
   add('flipper', 'pinball-flipper', part('pinball-table'), .8,
     { x: 0, w: 13, depth: 14, height: 3.2, periodS: 6.8, offsetS: 0, bypass: 14 });
   for (const row of rows) {
-    const extent = row.kind === 'wheel' ? row.radius : row.kind === 'shutter' ? row.travel + row.w / 2 : Math.abs(row.x) + row.w / 2;
+    // A raised wheel's full radius is at hub height. Reserve its actual sweep through a ground kart.
+    const extent = row.kind === 'wheel' ? Math.abs(row.x) + Math.sqrt(Math.max(0, row.radius ** 2 - Math.max(0, row.centerY - GOONWORKS_TOYS.kartHeight) ** 2))
+      : row.kind === 'shutter' ? row.travel + row.w / 2 : Math.abs(row.x) + row.w / 2;
     if (row.roadWidth / 2 - extent < 3) throw Error('GOONWORKS toy needs an outside bypass: ' + row.id);
     row.bypass = Math.min(row.bypass, row.roadWidth / 2 - 3);
   }
@@ -38,6 +40,7 @@ export function goonworksSetpieces(track, layout = getGoonworksLayout(track)) {
 }
 
 export function goonworksPose(row, timeS = 0, beat = null) {
+  if (beat?.fallback) { timeS *= beat.pace; beat = null; }
   const time = Number.isFinite(timeS) ? Math.max(0, timeS) : 0;
   const offset = Math.round((row.offsetS || 0) / (beat?.beatS || 1));
   // Moving toys follow their authored pickup pose. Rising toys wait for a full warning cycle.

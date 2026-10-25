@@ -47,7 +47,7 @@ export function racerLabels(metas = []) {
 /** Item ids (sim/itemTable.js ITEM_IDS) to our names and icons (art/ART.md "fx"). */
 export const ITEM_NAMES = {
   flash: 'Flash', spiral: 'Spiral', brainDrain: 'Brain Drain', freeze: 'Freeze', blackout: 'Blackout',
-  pink: 'Pink', melt: 'Melt', shatter: 'Shatter', surge: 'Surge', glass: 'Glass', echo: 'Echo', golden: 'Golden',
+  pink: 'Fog', melt: 'Melt', shatter: 'Shatter', surge: 'Surge', glass: 'Bubble Shield', echo: 'Echo', golden: 'Golden',
   pendulum: 'Pendulum', disc: 'Disc', tether: 'Tether', snap: 'Snap', bigSpiral: 'Big Spiral',
 };
 const ICON_FILES = {

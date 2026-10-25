@@ -51,6 +51,22 @@ test('wheel support and missing-sector containment stay bounded across a full re
   assert.ok(clear > 30 && blocked > 60);
 });
 
+test('larger windmill spokes reach formerly empty lanes while both marked bypasses stay clear', () => {
+  for (const row of rows.filter(r => r.kind === 'wheel')) {
+    assert.ok(row.radius / 15.5 >= 1.25 && row.radius / 15.5 <= 1.35, 'A noticeable sweep increase');
+    for (const x of [-14, 14]) {
+      const pose = { angle: Math.atan2(.8 - row.centerY, x - row.x) - Math.PI / 4 };
+      assert.equal(goonworksOverlap({ ...row, radius: 15.5 }, pose, { x, along: 0, h: 0 }), false, 'Old sweep misses this lane');
+      assert.equal(goonworksOverlap(row, pose, { x, along: 0, h: 0 }), true, 'New visible spoke catches this lane');
+    }
+    assert.ok(row.roadWidth / 2 - row.bypass >= 3, 'Marked bypass retains steering room inside the rail');
+    for (let step = 0; step < 180; step++) for (const x of [-row.bypass, row.bypass])
+      assert.equal(goonworksOverlap(row, { angle: step * Math.PI / 90 }, { x, along: 0, h: 0 }), false, 'Whole kart clears every blade angle');
+  }
+  const row = rows.find(r => r.kind === 'wheel');
+  for (const x of [-14, 14]) assert.equal(crossing(row, 2, x).hit, row.id, 'Swept driving contact reaches the enlarged outer lane');
+});
+
 test('all four equally spaced windows pass a complete kart, and all four spokes block it', () => {
   const row = rows.find(r => r.kind === 'wheel');
   assert.equal(row.openings, 4);
@@ -150,6 +166,13 @@ test('visible disc geometry has the same road-level opening and closes on the sa
     const { createGoonworksHazardView } = await import('../render/goonworksHazards.js');
     const scene = new Scene(), view = createGoonworksHazardView(scene, track, layout), row = rows.find(r => r.kind === 'wheel');
     const wheel = view.group.getObjectByName(row.id);
+    const supports = wheel.children.filter(child => child.name === 'wheel-support');
+    assert.equal(supports.length, 2);
+    for (const support of supports) {
+      const enamel = support.children[1], top = support.position.y + enamel.scale.y / 2;
+      assert.ok(top >= row.centerY + row.radius + 2.85, 'Posts still connect to the raised crossbar');
+      assert.equal(support.position.y - enamel.scale.y / 2, .5, 'Post bases stay on the original footing');
+    }
     const hitAt = x => {
       scene.updateMatrixWorld(true);
       const p = row.p.map((v, j) => v - row.t[j] * 7 + row.n[j] * .8 + row.b[j] * x);
@@ -157,6 +180,8 @@ test('visible disc geometry has the same road-level opening and closes on the sa
     };
     view.update(0); assert.equal(hitAt(0).length, 0);
     view.update(5); assert.ok(hitAt(0).length > 0); assert.equal(hitAt(row.bypass).length, 0);
+    view.update(2);
+    for (const x of [-14, 14]) assert.ok(hitAt(x).length > 0, 'Visible blade reaches the newly colliding lane');
     const q = wheel.quaternion.toArray(), before = view.group.children.length;
     view.update(5); assert.deepEqual(wheel.quaternion.toArray(), q); assert.equal(view.group.children.length, before);
     assert.equal(view.inspect().wheels, 3); view.dispose(); view.dispose(); assert.equal(scene.children.length, 0);
@@ -201,7 +226,7 @@ test('wheel face colours tile one opaque surface without hidden caps at either v
         view.update(time); scene.updateMatrixWorld(true);
         for (const side of [-1, 1]) for (const distance of [7, 140, 1400]) {
           const direction = new Vector3(0, 0, -side).transformDirection(rotor.matrixWorld);
-          for (let i = 0; i < 49; i++) for (const radius of [.31, 6.13, 9.91, 13.69, 15.39]) {
+          for (let i = 0; i < 49; i++) for (const radius of [.31, 6.13, 9.91, row.radius - 1.81, row.radius - .11]) {
             const angle = (i + .371) * Math.PI * 2 / 49;
             const origin = new Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, side * distance).applyMatrix4(rotor.matrixWorld);
             const hits = new Raycaster(origin, direction, 0, distance + row.depth).intersectObjects(surface, false);
