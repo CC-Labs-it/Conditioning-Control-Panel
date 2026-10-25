@@ -165,6 +165,7 @@ namespace ConditioningControlPanel.Services
         {
             if (response["user"] is not JObject node) return;
             var user = node.ToObject<V2User>()!;
+            AdoptConditioningMinutes(settings, user);
             ApplyCurveEpoch(settings, user.CurveEpoch);
             if (ShouldAdoptServerSeason(user.CurrentSeason, settings.CurrentSeason))
             {
@@ -207,6 +208,7 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public static bool AdoptReadBeforeWrite(AppSettings settings, V2User user)
         {
+            AdoptConditioningMinutes(settings, user);
             var localTotalXp = TotalXp(settings);
             var keepSeason = settings.CurrentSeason;
             var seasonAdvances = ShouldAdoptServerSeason(user.CurrentSeason, keepSeason);
@@ -231,6 +233,13 @@ namespace ConditioningControlPanel.Services
                     string.IsNullOrEmpty(user.CurrentSeason) ? "(none)" : user.CurrentSeason,
                     string.IsNullOrEmpty(scopedSeason) ? "(none)" : scopedSeason);
             return seasonAdvances;
+        }
+        // WPF ProfileSyncService: cloud minutes can lift the local total, never reduce it.
+        private static void AdoptConditioningMinutes(AppSettings settings, V2User user)
+        {
+            if (user.TotalConditioningMinutes is { } minutes && double.IsFinite(minutes)
+                && minutes > settings.TotalConditioningMinutes)
+                settings.TotalConditioningMinutes = minutes;
         }
     }
 }

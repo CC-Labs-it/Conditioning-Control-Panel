@@ -37,6 +37,37 @@ public sealed class MandatoryVideoSchedulerTests
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
 
     [Fact]
+    public void StartupUsesConfiguredFileOrRandomAndEmptyLibraryStaysSilent() => With(6, true, () =>
+    {
+        var s = CoreSettings.Current;
+        var oldPath = s.StartupVideoPath;
+        var file = System.IO.Path.GetTempFileName();
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        try
+        {
+            s.StartupVideoPath = file;
+            Assert.True(v.TriggerStartup());
+            clock.Advance(TimeSpan.FromSeconds(1.3));
+            Assert.Equal((file, true), Assert.Single(host.Shown));
+            v.ForceCleanup();
+            System.IO.File.Delete(file);
+            Assert.True(v.TriggerStartup());
+            clock.Advance(TimeSpan.FromSeconds(1.3));
+            Assert.Contains(host.Shown[1].Path, Clips);
+            v.ForceCleanup();
+            var empty = new MandatoryVideoScheduler(host, clock, () => Array.Empty<string>());
+            int warnings = 0;
+            empty.NoVideos += () => warnings++;
+            Assert.False(empty.TriggerStartup());
+            Assert.Equal(0, warnings);
+            Assert.False(empty.Trigger()); // a later user action still gets its explanation
+            Assert.Equal(1, warnings);
+        }
+        finally { v.ForceCleanup(); s.StartupVideoPath = oldPath; System.IO.File.Delete(file); }
+    });
+
+    [Fact]
     public void Rate_follows_videos_per_hour_with_the_pre_roll_and_End_rearms() => With(6, false, () =>
     {
         var clock = new FakeClock(); var host = new Host();

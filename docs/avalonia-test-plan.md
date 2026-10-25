@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Shell UI updates (fin4)
+
+1. WPF `MainWindow/MainWindow.UiUpdates.cs:412-529`: signed out, verify the XP veil and Sign in chip; sign in and verify name/full XP opacity; change free/T1/T2 entitlement and verify hidden/gold/violet chip badge. Click the signed-out chip to open login; signed-in opens Settings > Account. Rows: `shell-ui-updates`.
+2. WPF `MainWindow/MainWindow.UiUpdates.cs:721-862`: run the engine for 15 minutes online, then stop after a partial minute; confirm a profile push at the timer and after the remainder write, all-time minutes sent, season minutes mirrored. Offline/signed-out must not push. Rows: `shell-ui-updates`.
+3. WPF `MainWindow/MainWindow.xaml.cs:3793-3798` and `MainWindow/MainWindow.UiUpdates.cs:1958-1974`: enable force video on launch; check configured existing video, missing-file random fallback, strict mode and empty-library silence after the 200 ms initialization delay. Disabled launches play nothing; panic closes startup playback. Rows: `shell-ui-updates`.
