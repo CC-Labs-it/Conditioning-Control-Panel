@@ -107,12 +107,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// </summary>
         public string? LoadedFilePath => _filePath;
 
-        private DispatcherTimer? _part2Timer;
+        // Test seam: the 800 ms Part 2 delay runs on this clock (tests step it).
+        internal static TimeProvider Part2Clock = TimeProvider.System;
+        private System.Threading.ITimer? _part2Timer;
+
+        private void StopPart2Timer() { _part2Timer?.Dispose(); _part2Timer = null; }
 
         internal static void StopTutorialContinuationForPanic()
         {
             CoreTutorialEvents.PendingPart2Tutorial = null;
-            foreach (var editor in s_open.ToArray()) editor._part2Timer?.Stop();
+            foreach (var editor in s_open.ToArray()) editor.StopPart2Timer();
+        }
+
+        private void StartPendingPart2(System.Threading.ITimer timer, string pending)
+        {
+            if (!ReferenceEquals(_part2Timer, timer)) return; // closed or panicked before the tick ran
+            StopPart2Timer();
+            try
+            {
+                if (!IsVisible) return;
+                if (CoreTutorial.IsActive) CoreTutorial.Skip();
+                CoreTutorial.Start(pending);
+                if (CoreTutorial.IsActive) new TutorialOverlay(this).Show();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to start interactive tutorial Part 2");
+            }
         }
 
         private bool _isDirty;
@@ -243,8 +264,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             Closed += (_, _) => s_open.Remove(this);
 
             Loaded += DeeperEditorWindow_Loaded;
-            Closing += (_, _) => _part2Timer?.Stop();
-            Closed += (_, _) => _part2Timer?.Stop();
+            Closing += (_, _) => StopPart2Timer();
+            Closed += (_, _) => StopPart2Timer();
             KeyDown += DeeperEditorWindow_KeyDown;
             Closing += Window_Closing;
 
@@ -569,17 +590,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (CoreTutorialEvents.PendingPart2Tutorial is { } pending)
             {
                 CoreTutorialEvents.PendingPart2Tutorial = null; // consume before waiting: one editor only
-                _part2Timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };
-                _part2Timer.Tick += (_, _) =>
-                {
-                    _part2Timer.Stop();
-                    _part2Timer = null;
-                    if (!IsVisible) return;
-                    if (CoreTutorial.IsActive) CoreTutorial.Skip();
-                    CoreTutorial.Start(pending);
-                    if (CoreTutorial.IsActive) new TutorialOverlay(this).Show();
-                };
-                _part2Timer.Start();
+                System.Threading.ITimer? timer = null;
+                timer = Part2Clock.CreateTimer(_ => Dispatcher.UIThread.Post(() => StartPendingPart2(timer!, pending)),
+                    null, TimeSpan.FromMilliseconds(800), System.Threading.Timeout.InfiniteTimeSpan);
+                _part2Timer = timer;
             }
         }
 

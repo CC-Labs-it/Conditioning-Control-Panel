@@ -96,21 +96,24 @@ public sealed class NewEnhancementTutorialTests
     [InlineData("DeeperEditorInteractiveLocalVideoPart2", false, false)]
     [InlineData("DeeperEditorInteractiveHTPart2", true, false)]
     [InlineData("DeeperEditorInteractiveHTPart2", false, true)]
-    public Task EditorConsumesPart2OnceAfterLayoutAndCloseOrPanicCancelsIt(string tour, bool close, bool panic) => Run(async () =>
+    public Task EditorConsumesPart2OnceAfterLayoutAndCloseOrPanicCancelsIt(string tour, bool close, bool panic) => Run(() =>
     {
+        var clock = new ManualClock();
+        DeeperEditorWindow.Part2Clock = clock;
         CoreTutorialEvents.PendingPart2Tutorial = tour;
         var editor = new DeeperEditorWindow(new Enhancement(), null);
-        editor.Show();
-        Dispatcher.UIThread.RunJobs();
         try
         {
+            editor.Show();
+            Dispatcher.UIThread.RunJobs();
             Assert.Null(CoreTutorialEvents.PendingPart2Tutorial);
-            Assert.False(CoreTutorial.IsActive);
-            await Task.Delay(200);
             Assert.False(CoreTutorial.IsActive); // no immediate continuation
+            var timer = Assert.Single(clock.Timers);
+            Assert.Equal(TimeSpan.FromMilliseconds(800), timer.Due);
             if (close) editor.Close();
             if (panic) PanicSurfaces.StopAll("test", null);
-            await Task.Delay(850);
+            Assert.Equal(close || panic, timer.Disposed);
+            timer.Fire(); // a tick already queued when close/panic stopped the timer must still do nothing
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(!close && !panic, CoreTutorial.IsActive);
             if (!close && !panic)
@@ -118,12 +121,40 @@ public sealed class NewEnhancementTutorialTests
                 Assert.Equal(tour, TutorialHead.Service.CurrentTutorialType.ToString());
                 Assert.True(editor.FindControl<Border>("MetadataDrawerContent")!.IsVisible);
                 // The source card's prep opens the collapsed metadata drawer before spotlighting.
+                CoreTutorial.Next();
+                var step = CoreTutorial.CurrentStep!.Id;
+                timer.Fire(); // Part 2 starts once: a second tick must not restart it
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(step, CoreTutorial.CurrentStep!.Id);
                 editor.Close();
                 Assert.False(CoreTutorial.IsActive);
             }
         }
-        finally { editor.Close(); }
+        finally { editor.Close(); DeeperEditorWindow.Part2Clock = TimeProvider.System; }
+        return Task.CompletedTask;
     });
+
+    private sealed class ManualClock : TimeProvider
+    {
+        public readonly System.Collections.Generic.List<ManualTimer> Timers = new();
+        public override System.Threading.ITimer CreateTimer(System.Threading.TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var t = new ManualTimer(() => callback(state), dueTime);
+            Timers.Add(t);
+            return t;
+        }
+    }
+
+    private sealed class ManualTimer(Action fire, TimeSpan due) : System.Threading.ITimer
+    {
+        public TimeSpan Due { get; private set; } = due;
+        public bool Disposed { get; private set; }
+        public void Fire() => fire();
+        public bool Change(TimeSpan dueTime, TimeSpan period) { Due = dueTime; return !Disposed; }
+        public void Dispose() => Disposed = true;
+        public ValueTask DisposeAsync() { Disposed = true; return ValueTask.CompletedTask; }
+    }
+
     [Fact]
     public Task InspectorFieldsAreNamedBeforeAttachmentAndTextEditsAdvanceTheRealCards() => Run(() =>
     {
@@ -169,7 +200,7 @@ public sealed class NewEnhancementTutorialTests
             overlay = new TutorialOverlay(editor);
             overlay.Show();
             Dispatcher.UIThread.RunJobs();
-            typeof(DeeperEditorWindow).GetMethod("AddEffectAt", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(editor, new object[] { EffectTypes.Haptic, 0d });
+            editor.FindControl<MenuItem>("HeroEffectHaptic")!.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("iht_intensity", CoreTutorial.CurrentStep!.Id);
             while (CoreTutorial.CurrentStep!.Id != "iht_addrule") CoreTutorial.Next();
@@ -191,9 +222,12 @@ public sealed class NewEnhancementTutorialTests
     {
         var root = System.IO.Directory.CreateTempSubdirectory("ccp-tutorial-save-");
         var path = System.IO.Path.Combine(root.FullName, "sample.ccpenh.json");
-        var editor = new DeeperEditorWindow(new Enhancement(), null);
+        var editor = new DeeperEditorWindow(new Enhancement(), path);
         editor.Show();
         TutorialOverlay? overlay = null;
+        var saved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        EventHandler<string> onEvent = (_, name) => { if (name == "FileSaved") saved.TrySetResult(); };
+        CoreTutorialEvents.Event += onEvent;
         try
         {
             TutorialHead.Service.Start(TutorialType.DeeperEditorInteractiveHTPart2);
@@ -201,13 +235,14 @@ public sealed class NewEnhancementTutorialTests
             overlay = new TutorialOverlay(editor);
             overlay.Show();
             Dispatcher.UIThread.RunJobs();
-            await (Task)typeof(DeeperEditorWindow).GetMethod("SaveToAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(editor, new object[] { path })!;
+            Click(editor, "BtnEditorSave"); // the toolbar Save the card points at; the path came with the editor
+            await saved.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Dispatcher.UIThread.RunJobs();
             Assert.True(System.IO.File.Exists(path));
             Assert.Equal(path, CoreTutorialEvents.LastSavedEnhancementPath);
             Assert.Equal("iht_done", CoreTutorial.CurrentStep!.Id);
         }
-        finally { overlay?.Close(); editor.Close(); root.Delete(true); CoreTutorialEvents.LastSavedEnhancementPath = null; }
+        finally { CoreTutorialEvents.Event -= onEvent; overlay?.Close(); editor.Close(); root.Delete(true); CoreTutorialEvents.LastSavedEnhancementPath = null; }
     });
 
 }

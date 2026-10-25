@@ -110,17 +110,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void StartInteractiveTutorial(TutorialType part1, TutorialType part2)
         {
             _pendingPart2Tutorial = part2.ToString();
-            _activeTutorialOverlay?.Close();
-            if (CoreTutorial.IsActive) CoreTutorial.Skip();
-            CoreTutorial.Start(part1.ToString());
-            if (!CoreTutorial.IsActive) return;
-            var overlay = new TutorialOverlay(this);
-            _activeTutorialOverlay = overlay;
-            overlay.Closed += (_, _) =>
+            try
             {
-                if (ReferenceEquals(_activeTutorialOverlay, overlay)) _activeTutorialOverlay = null;
-            };
-            overlay.Show();
+                _activeTutorialOverlay?.Close();
+                if (CoreTutorial.IsActive) CoreTutorial.Skip();
+                CoreTutorial.Start(part1.ToString());
+                if (!CoreTutorial.IsActive) return;
+                var overlay = new TutorialOverlay(this);
+                _activeTutorialOverlay = overlay;
+                overlay.Closed += (_, _) =>
+                {
+                    if (ReferenceEquals(_activeTutorialOverlay, overlay)) _activeTutorialOverlay = null;
+                };
+                overlay.Show();
+            }
+            catch (System.Exception ex)
+            {
+                Serilog.Log.Warning(ex, "Failed to start interactive tutorial Part 1");
+            }
         }
 
         private async System.Threading.Tasks.Task BtnCreateAsync()
