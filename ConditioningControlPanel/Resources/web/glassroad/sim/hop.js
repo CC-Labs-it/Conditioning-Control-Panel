@@ -7,9 +7,17 @@
  * just before a lip, jump or crest ahead. The trick event follows the hop event.
  */
 import { S } from './state.js';
-import { v3addScaled, lerp, clamp } from '../core/math.js';
+import { v3addScaled, v3cross, v3norm, v3dot, lerp, clamp } from '../core/math.js';
 import { takeoff } from './air.js';
 import { trickOnHop } from './trick.js';
+
+const BANK_SIDE = [0, 0, 0];
+/** An uphill sideways hop keeps its road-ramp velocity, with a small bank-climb carry. */
+export function limitBankHop(V, normal, tangent, up) {
+  v3norm(BANK_SIDE, v3cross(BANK_SIDE, tangent, normal));
+  const sideSpeed = v3dot(V, BANK_SIDE), rise = sideSpeed * BANK_SIDE[1];
+  if (rise > up * .35) v3addScaled(V, V, BANK_SIDE, sideSpeed * (up * .35 / rise - 1));
+}
 
 /** Hop from the ground: V gains up speed along n. Emits hop { speed }, then trick when it is one. */
 export function hop(st, feel, events, V, n, speed, track = null) {

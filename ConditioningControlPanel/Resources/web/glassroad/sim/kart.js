@@ -35,7 +35,7 @@ import { clamp, lerp, damp, approach, wrap, RAD2DEG, v3, q4, v3copy, v3dot, v3cr
 import { gap } from './gaps.js';
 import { applyBoost, boostFloor, endBoost } from './boost.js';
 import { updateDrift, cancelDrift, driftYaw, maybeStartDrift } from './drift.js';
-import { hop, gravityMps2 } from './hop.js';
+import { hop, gravityMps2, limitBankHop } from './hop.js';
 import { takeoff, land } from './air.js';
 import { gripYaw, slewSteer } from './steer.js';
 import { beneath, onLanding, firstBeneath, landRoute, catchCap, resetRoute, edgeAt, hopTrack, airCatch, turnsAway, guideLanding } from './routes.js';
@@ -179,6 +179,11 @@ export function step(st, a, track, feel, dt, ev) {
   updateDrift(st, a, feel, dt, ev, wasGround, speed, slipDeg);
 
   if (wasGround && a.hopPressed && !stalled) {
+    if (!qa.airWord && qa.railed && !has(qa.flags, 'magnet') &&
+      edgeAt(track, qa, qa.lateral, gap(feel, 'kart.radiusM')) !== 'kicker') {
+      const f = track.pathFrameAt ? track.pathFrameAt(qa.s, qa.seg, FR) : track.frameAt(qa.s, FR);
+      limitBankHop(V, qa.normal, f.t, feel.get('hop.upMps'));
+    }
     // just before a drop shortcut's kicker lip the hop sees that lip too (the trick's early window)
     hop(st, feel, ev, V, qa.normal, speed, hopTrack(track, qa, V, speed, feel.get('trick.earlyS')));
     // Large challenge islands give a deliberate jump more hang time; coasting keeps its small lip kick.
@@ -228,10 +233,17 @@ export function step(st, a, track, feel, dt, ev) {
     if (QD.height <= 0) qb = QD;
   }
   const road = !has(qb.flags, 'jump'), n = qb.normal, vn = v3dot(V, n);
-  const ground = qb.onRoad && qb.height >= -(snap + Math.abs(vn) * dt) &&
-    (air ? qb.height <= 0 && vn <= 0 : qb.height <= snap);
+  const travel = Math.hypot(P[0] - PRE[0], P[1] - PRE[1], P[2] - PRE[2]);
+  const heldRail = !air && qa.onRoad && qb.railed && !qb.hole && road && qb.edgeDist >= -travel &&
+    edgeAt(track, qb, qb.lateral, gap(feel, 'kart.radiusM')) !== 'kicker';
+  const following = !air && qa.onRoad && qa.forkId === qb.forkId;
+  const band = snap + (following ? travel : Math.abs(vn) * dt);
+  const previousHeight = (PRE[0] - qb.p[0]) * n[0] + (PRE[1] - qb.p[1]) * n[1] + (PRE[2] - qb.p[2]) * n[2];
+  const ground = (qb.onRoad || heldRail) && qb.height >= -band &&
+    (air ? previousHeight >= -.03 && qb.height <= 0 && vn <= 0 : qb.height <= band);
   if (ground) {
-    v3addScaled(P, P, n, -qb.height); v3reject(V, V, n);
+    // The probe's surface point is exact on a curved bank; a normal-plane step is not.
+    v3copy(P, qb.p); v3reject(V, V, n);
     const arrive = Math.hypot(V[0], V[1], V[2]);   // ground speed at touch-down (the splash payload)
     if (air) {
       land(st, a, feel, ev, V, n, speed, dt, !!qb.airWord || !!qb.stone && !!fieldAtS(track, qb.s)?.platforming);
@@ -301,6 +313,12 @@ export function step(st, a, track, feel, dt, ev) {
         ev.emit('wall', { dv: into * (1 + keep), side });
       }
     }
+  }
+
+  // A rail moves laterally in the base frame. Re-seat grounded feet on the curved floor.
+  if (ground && !qb.airWord && lat !== qb.lateral) {
+    const q = track.query(P[0], P[1], P[2], qb.seg, QR);
+    if (q.onRoad) { v3copy(P, q.p); v3reject(V, V, q.normal); qb = q; lat = q.lateral; ed = q.edgeDist; }
   }
 
   // edge grace and drop
