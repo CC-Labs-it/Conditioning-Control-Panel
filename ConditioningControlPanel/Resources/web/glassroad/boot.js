@@ -427,7 +427,8 @@ async function boot(course, options, lifetime, isCurrent) {
   Object.defineProperty(debug, 'cueVeils', { get: () => world.veils.stats });
   Object.defineProperty(debug, 'marquees', { get: () => world.marquees?.stats || null });
   Object.defineProperty(debug, 'cueKit', { get: () => ({ shift: world.cueShift?.stats, gantries: world.gantries?.stats, bar: world.cueBar?.stats,
-    particles: world.cueParticles?.stats }) });
+    particles: world.cueParticles?.stats, windows: world.cueWindows?.stats, giants: world.cueGiants?.stats, props: world.cueProps?.stats }) });
+  world.cueProps?.setName(init.identity?.displayName);
   lifetime.defer(() => musicEdges.dispose());
   Object.defineProperty(debug, 'musicEdges', { get: () => musicEdges.stats });
   bus.on('gate-pass', (g) => { if (state === 'race' && !paused) gateScreen.play(g.params, 1); });
@@ -1148,7 +1149,7 @@ async function boot(course, options, lifetime, isCurrent) {
     const cueEpoch = cueView?.revision ?? -1;
     if (cueRunSeen !== songCues || cueRevision !== cueEpoch) {
       cueBurst.clear(); world.veils.clear(); world.marquees?.clear();
-      for (const x of [world.cueShift, world.cueParticles, world.gantries, world.cueBar]) x?.clear();
+      for (const x of [world.cueShift, world.cueParticles, world.gantries, world.cueBar, world.cueWindows, world.cueGiants, world.cueProps]) x?.clear();
       cueRunSeen = songCues; cueRevision = cueEpoch;
     }
     for (const cue of cueView?.fired || NO_WORDS) if (cue.kind === 'VEIL' || (cue.kind === 'BURST' && cue.params?.variant === 'cards')) cueBurst.fire(cue);

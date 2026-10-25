@@ -67,6 +67,9 @@ import { createCueShift } from './cueShift.js';
 import { createCueGantries } from './cueGantry.js';
 import { createCueBar } from './cueBar.js';
 import { createCueParticles } from './cueParticles.js';
+import { createCueWindows } from './cueWindows.js';
+import { createCueGiants } from './cueGiants.js';
+import { createCueProps } from './cueProps.js';
 import { createWaterfall } from './waterfall.js';
 import { buildWaterVolume } from './waterVolume.js';
 import { waterTable, tableCode } from './waterMath.js';
@@ -375,6 +378,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const cueShift = createCueShift(scene, { hemi, sun }), cueParticles = createCueParticles(scene);
   const doc = !!globalThis.document;
   const gantries = doc ? createCueGantries(scene, track) : null, cueBar = doc ? createCueBar(scene, track) : null;
+  const cueWindows = doc ? createCueWindows(scene, track, { source: seed => cueMediaSource(seed) }) : null;
+  const cueGiants = createCueGiants(scene), cueProps = doc ? createCueProps(scene, track, { particles: cueParticles }) : null;
   try { wordRush = globalThis.document ? createWordRush({ bus, feel, track, pal }) : null; } catch (e) { console.warn('[glassroad/world] word rush failed: ' + (e && e.message)); }
 
   // positional juice from the bus, applied in the next update (bus events flush before world.update)
@@ -644,6 +649,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     cueShift.update(cues, view.songS, { paused: !!view.paused, bpm: view.song?.bpm || 0, gentle: cueOpts.gentle, at: view.camera?.position });
     gantries?.update(cues, cueOpts);
     cueBar?.update(cues, view.songCueList || [], cueOpts);
+    cueWindows?.update(cues, cueOpts);
+    cueGiants.update(cues, cueOpts);
+    cueProps?.update(cues, cueOpts);
     for (const row of view.cueFired || []) {
       // Crossing a veil throws confetti off it; the install bar shatters into shards in the sky.
       if (row.kind === 'VEIL' && row.frame) cueParticles.burst('confetti', [row.frame.p[0] + row.frame.n[0] * 3, row.frame.p[1] + row.frame.n[1] * 3, row.frame.p[2] + row.frame.n[2] * 3],
@@ -680,7 +688,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     airWords.dispose();
     veils.dispose();
     marquees?.dispose(); cueMediaSource = () => null;
-    for (const x of [cueShift, cueParticles, gantries, cueBar]) x?.dispose();
+    for (const x of [cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps]) x?.dispose();
     if (waterfall) waterfall.dispose();
     waterVolume.dispose();
     underwaterFx.dispose();
@@ -701,9 +709,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { veils, marquees, cueShift, cueParticles, gantries, cueBar, setItemMediaSource: source => { cueMediaSource = source; itemVis?.setMediaSource(source); }, primaryColour: () => pal.primaryHex(), musicColours: () => [pal.primaryHex(), pal.accentHex()], scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, worldScreens, musicRoad, reactive: road.uniforms.reactive, roadWords, wordRush, phraseGates, airWords, terrace, court, stones, mainframe, boudoirDressing, boudoirForks, perfumeView, boudoirHazardView, mirrorRoom, waterVolume, underwaterFx, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge, goonworks, goonworksHazards,
+  return { veils, marquees, cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps, setItemMediaSource: source => { cueMediaSource = source; itemVis?.setMediaSource(source); }, primaryColour: () => pal.primaryHex(), musicColours: () => [pal.primaryHex(), pal.accentHex()], scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, worldScreens, musicRoad, reactive: road.uniforms.reactive, roadWords, wordRush, phraseGates, airWords, terrace, court, stones, mainframe, boudoirDressing, boudoirForks, perfumeView, boudoirHazardView, mirrorRoom, waterVolume, underwaterFx, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge, goonworks, goonworksHazards,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
-    resetReactions: () => { marquees?.clear(); veils.clear(); for (const x of [cueShift, cueParticles, gantries, cueBar]) x?.clear(); phraseGates.clear(); airWords.clear(); if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); goonworks?.reset(); goonworksHazards?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
+    resetReactions: () => { marquees?.clear(); veils.clear(); for (const x of [cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps]) x?.clear(); phraseGates.clear(); airWords.clear(); if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); goonworks?.reset(); goonworksHazards?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
 }

@@ -10,6 +10,9 @@ const { createCueShift, shiftAmount, SHIFT_PRESETS } = await import('../render/c
 const { createCueBar, barValue } = await import('../render/cueBar.js');
 const { createCueParticles } = await import('../render/cueParticles.js');
 const { createCueGantries } = await import('../render/cueGantry.js');
+const { createCueWindows } = await import('../render/cueWindows.js');
+const { createCueGiants } = await import('../render/cueGiants.js');
+const { createCueProps } = await import('../render/cueProps.js');
 const { Scene, FogExp2, Color } = await import('three/webgpu');
 const { createState, S, setPos } = await import('../sim/state.js');
 hooks.deregister();
@@ -18,6 +21,7 @@ const frameAt = (s, out = {}) => Object.assign(out, { p: [0, 0, s], b: [1, 0, 0]
 const track = { id: 'goonworks', lengthM: 5000, frameAt };
 const canvas = () => { const ctx = new Proxy({}, { get: (o, k) => k in o ? o[k] : (k === 'measureText' ? () => ({ width: 10 }) : k === 'createLinearGradient' || k === 'createRadialGradient' ? () => ({ addColorStop() {} }) : () => {}), set: (o, k, v) => (o[k] = v, true) });
   return { width: 0, height: 0, getContext: () => ctx }; };
+const atlas = () => ({ texture: { image: { width: 768, height: 512 }, clone() { return { repeat: { set() {} }, offset: { set() {} }, dispose() {} }; } }, dispose() {} });
 const kart = s => { const st = createState(); setPos(st, [0, 0, s]); st[S.s] = s; return st; };
 const row = (kind, extra = {}) => ({ id: kind + (extra.id || ''), kind, mode: 'WATCH', startS: 10, endS: 20, alpha: 1, locked: true, s: 300,
   frame: frameAt(300), params: {}, joltTimes: [], ...extra });
@@ -89,4 +93,38 @@ test('arches light on the beat, go dark once crossed, and stand outside the road
   arches.update([{ ...r, hitS: 10 }], { songS: 11, song: { bpm: 120 } });
   arches.update([], { songS: 12 }); assert.equal(arches.stats.active, 0);
   arches.dispose();
+});
+
+test('the swarm opens windows on the beat, doubles on its jolts and closes them all at its end', () => {
+  const scene = new Scene(), wins = createCueWindows(scene, track, { make: canvas, acquireAtlas: atlas });
+  const swarm = row('SWARM', { startS: 0, endS: 6, joltTimes: [3], params: { perBeat: 1, multiply: 2, zone: true } });
+  const song = { bpm: 120, downbeatS: 0 };
+  let before = 0;
+  for (let t = 0; t < 2.9; t += 1 / 30) wins.update([swarm], { songS: t, song, kart: kart(0), speed: 0 });
+  before = wins.stats.active; assert.ok(before >= 5);
+  for (let t = 2.9; t < 4; t += 1 / 30) wins.update([swarm], { songS: t, song, kart: kart(0), speed: 0 });
+  assert.ok(wins.stats.active > before, 'the jolt doubles the rate');
+  for (let t = 4; t < 7.5; t += 1 / 30) wins.update([swarm], { songS: t, song, kart: kart(0), speed: 0 });
+  assert.equal(wins.stats.active, 0);
+  wins.clear(); wins.dispose(); assert.equal(scene.children.length, 0);
+});
+
+test('giants and props build, follow their rows and retire without leaks', () => {
+  const scene = new Scene(), giants = createCueGiants(scene);
+  const heel = row('STOMP', { params: { side: 1 } }), foot = row('PROP', { id: 'f', params: { variant: 'sole', side: -1 }, joltTimes: [12] });
+  giants.update([heel, foot], { songS: 10.1 });
+  assert.deepEqual(giants.stats, { heels: 1, feet: 1 });
+  giants.update([{ ...heel, locked: false }], { songS: 11 });
+  assert.deepEqual(giants.stats, { heels: 0, feet: 0 });
+  giants.dispose();
+  const props = createCueProps(scene, track, { make: canvas, acquireAtlas: atlas, particles: createCueParticles(scene) });
+  props.setName('  a very long display name indeed ');
+  const rows = [row('PROP', { id: 'm', params: { variant: 'mirror' } }), row('PROP', { id: 'c', params: { variant: 'carousel', zone: true } }),
+    row('PROP', { id: 'b', params: { variant: 'name-bin', side: 1 }, joltTimes: [11] }), row('PROP', { id: 's', params: { variant: 'star', zone: true }, joltTimes: [12] })];
+  props.update(rows, { songS: 10.5, song: { bpm: 120 }, kart: kart(250), dt: .016 });
+  const stats = props.stats;
+  assert.ok(stats.mirror && stats.carousel && stats.bin && stats.star);
+  props.update([], { songS: 30, kart: kart(250), dt: .016 });
+  assert.ok(!props.stats.mirror && !props.stats.carousel && !props.stats.bin && !props.stats.star);
+  props.clear(); props.dispose();
 });
