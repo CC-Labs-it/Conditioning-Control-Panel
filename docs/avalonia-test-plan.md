@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### FIN4 hold completion
+
+1. Leashed on X11 or Windows, hold the panic key: hear one quiet countdown tick at seconds 1–4, none on the first press or on release; master zero, suppressed output and mandatory video silence the cue. WPF `Controls/Leash/LeashFx.cs:225`, `MainWindow/MainWindow.Leash.cs:336`. Rows: `feat-leash-receipts-hold`.
+2. With a GlobalShortcuts session already bound, focus a native Wayland window; hold for five seconds to ask, or release early to dismiss the ring. Ending the portal session cancels the hold. WPF `MainWindow/MainWindow.Leash.cs:311-365`. Rows: `feat-leash-receipts-hold`.
+3. Hover No then Yes in the cut confirmation: purple then pink; leaving restores each rest brush. No preserves the leash; Yes hides the gate and closes a punishment window before cutting. WPF `Controls/Leash/LeashCutConfirmWindow.cs`, `MainWindow/MainWindow.Leash.cs:358-365`. Rows: `feat-leash-receipts-hold`.

@@ -205,9 +205,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     Serilog.Log.Information("Panic trigger: GlobalShortcuts portal Activated");
                     Dispatcher.UIThread.Post(() =>
+                    {
+                        if ((Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow is MainShellWindow shell)
+                        {
+                            shell.HandlePanicKeyPress(DateTime.Now);
+                            shell.LeashPortalPressed();
+                        }
+                    });
+                }, () => Dispatcher.UIThread.Post(() =>
                     ((Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainShellWindow)
-                        ?.HandlePanicKeyPress(DateTime.Now));
-                });
+                        ?.LeashHoldReleased()));
             Dispatcher.UIThread.Post(() =>
             {
                 if (trigger == null)
@@ -225,7 +232,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // ponytail: 2 s poll for "last effect stopped" rather than a hook in every stop path.
                 _portalWatch ??= new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background, (_, _) =>
                 {
-                    if (AnyEffectRunning) return;
+                    if (AnyEffectRunning || LeashHoldLeashed) return;
                     _portalWatch!.Stop();
                     _portalWatch = null;
                     _portalBind = null;

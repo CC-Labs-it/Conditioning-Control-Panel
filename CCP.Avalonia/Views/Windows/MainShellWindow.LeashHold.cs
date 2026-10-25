@@ -5,11 +5,9 @@
 // untouched: the first down still runs HandlePanicKeyPress exactly as before (X11PanicKey.Route). The
 // decisions are Core LeashHoldFlow. X11 raw keys do not auto-repeat, so a 250 ms clock feeds the hold
 // while the key is down (a repeat by LeashHoldToCut.RepeatGap), and each tick ends the hold unless the key
-// is physically down (XQueryKeymap), so a lost key-up never asks. Windows has real repeats and no clock.
+// is physically down (XQueryKeymap), so a lost key-up never asks. Portal holds instead use
+// Activated/Deactivated (including unbind); Windows has real repeats and no clock.
 // Like WPF, it works with the panic key switched off and under Lockdown (panic always works on a leash).
-// ponytail: no tick sound (WPF LeashFx.Tick; no leash sfx on this head yet); the GlobalShortcuts portal
-// path reports no key-up, so a native-Wayland-only press cannot hold; the Yes does not close a punish
-// window (WPF LeashPunishWindow.CloseNow; lands with leash-punish).
 using System;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -25,6 +23,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Test seam: is the panic key physically down? False ends the hold; null = unknown.</summary>
         internal static Func<bool?> LeashHoldKeyDown = X11PanicKey.IsPanicKeyDown;
+
+        internal static Action LeashHoldTickSound = LeashHoldSound.Tick;
+        private bool _portalHold;
 
         private readonly LeashHoldFlow _leashHold = new();
         private DispatcherTimer? _leashHoldClock;
@@ -62,21 +63,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The held clock (250 ms): the key is still down. Off the leash, the hold ends (WPF :49-53).</summary>
         internal void LeashHoldClockTick()
         {
-            if (!_leashHold.Held || !LeashHoldLeashed || LeashHoldKeyDown() == false) { LeashHoldReleased(); return; }
+            if (!_leashHold.Held || !LeashHoldLeashed || (!_portalHold && LeashHoldKeyDown() == false)) { LeashHoldReleased(); return; }
             ApplyLeashHold(_leashHold.Down(LeashHoldTime.GetUtcNow().UtcDateTime, true));
         }
 
         /// <summary>The panic key came up: the hold ends, the ring goes, nothing is asked or cut.</summary>
         internal void LeashHoldReleased()
         {
+            _portalHold = false;
             _leashHoldClock?.Stop();
             ApplyLeashHold(_leashHold.Up());
+        }
+
+        internal void LeashPortalPressed()
+        {
+            if (_portalHold) return;
+            _portalHold = true;
+            LeashHoldPressed();
         }
 
         private void ApplyLeashHold(LeashHoldStep step)
         {
             if (step.Dismiss) LeashHoldRing.Dismiss();
             if (step.Ring is { } held) LeashHoldRing.ShowHeld(held);
+            if (step.Tick != null) LeashHoldTickSound();
             if (step.Ask) AskToCutFromHold();
         }
 

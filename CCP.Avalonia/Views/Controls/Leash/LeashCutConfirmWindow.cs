@@ -6,6 +6,8 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Styling;
+using Avalonia.Controls.Presenters;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -40,7 +42,7 @@ internal sealed class LeashCutConfirmWindow : Window
     private LeashCutConfirmWindow() : this(Loc.Get("leash_cut_confirm_title"), Loc.GetF("leash_cut_confirm_body", "Vex"),
         Loc.Get("leash_cut_confirm_yes"), Loc.Get("leash_cut_confirm_no"), "leash-cut-confirm", () => { }) { }
 
-    private LeashCutConfirmWindow(string titleText, string bodyText, string yesText, string noText, string tag, Action onYes)
+    internal LeashCutConfirmWindow(string titleText, string bodyText, string yesText, string noText, string tag, Action onYes)
     {
         WindowDecorations = WindowDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
@@ -59,9 +61,9 @@ internal sealed class LeashCutConfirmWindow : Window
         (body.TextWrapping, body.TextTrimming, body.TextAlignment) = (TextWrapping.Wrap, TextTrimming.None, TextAlignment.Center);
         body.Margin = new Thickness(0, 8, 0, 16);
 
-        NoButton = Pill(noText, new SolidColorBrush(Color.FromRgb(0x1C, 0x12, 0x33)), F.Text, F.Line2, tag + ":no");
+        NoButton = Pill(noText, new SolidColorBrush(Color.FromRgb(0x1C, 0x12, 0x33)), F.Text, F.Line2, tag + ":no", new SolidColorBrush(Color.FromRgb(0x3A, 0x1F, 0x66)));
         NoButton.Click += (_, _) => Close();
-        YesButton = Pill(yesText, F.Red, new SolidColorBrush(Color.FromRgb(0x0B, 0x07, 0x16)), F.Red, tag + ":yes");
+        YesButton = Pill(yesText, F.Red, new SolidColorBrush(Color.FromRgb(0x0B, 0x07, 0x16)), F.Red, tag + ":yes", F.Pink);
         YesButton.Margin = new Thickness(10, 0, 0, 0);
         YesButton.Click += (_, _) =>
         {
@@ -79,11 +81,21 @@ internal sealed class LeashCutConfirmWindow : Window
         };
     }
 
-    private static Button Pill(string text, IBrush bg, IBrush fg, IBrush border, string tag)
+    private static Button Pill(string text, IBrush bg, IBrush fg, IBrush border, string tag, IBrush hover)
     {
         var b = F.Pill(text, bg, fg, tag, border);
         (b.Padding, b.CornerRadius, b.Focusable) = (new Thickness(18, 7, 18, 7), new CornerRadius(10), false);
         if (b.Content is TextBlock t) t.FontSize = 13;
+        // Fluent's template otherwise paints its generic hover over the WPF pill colors.
+        b.Styles.Add(new Style(x => x.OfType<Button>().Class(":pointerover")
+            .Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+        {
+            Setters = { new Setter(ContentPresenter.BackgroundProperty, hover),
+                new Setter(ContentPresenter.BorderBrushProperty, border),
+                new Setter(ContentPresenter.ForegroundProperty, fg) },
+        });
+        b.PointerEntered += (_, _) => { if (b.IsEnabled) b.Background = hover; };
+        b.PointerExited += (_, _) => b.Background = bg;
         return b;
     }
 }

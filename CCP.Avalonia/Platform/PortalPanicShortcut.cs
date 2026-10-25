@@ -8,7 +8,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 
 /// <summary>
 /// The panic key for NATIVE Wayland windows: org.freedesktop.portal.GlobalShortcuts (CreateSession,
-/// BindShortcuts, Activated), raw over Tmds.DBus.Protocol like the tray probe. X11 focus is
+/// BindShortcuts, Activated/Deactivated), raw over Tmds.DBus.Protocol like the tray probe. X11 focus is
 /// <see cref="X11PanicKey"/>'s job; this covers the rest.
 ///
 /// <para><b>Unlike the X11 listener this CONSUMES the key desktop-wide</b> - it is a compositor
@@ -22,7 +22,8 @@ internal static class PortalPanicShortcut
     private const string Iface = "org.freedesktop.portal.GlobalShortcuts", Id = "panic";
 
     private static string? _session;
-    private static IDisposable? _activated;
+    private static IDisposable? _activated, _deactivated;
+    private static Action? _released;
     private static DBusConnection? _bus;
 
     internal static bool IsBound => !string.IsNullOrEmpty(_session);
@@ -31,7 +32,7 @@ internal static class PortalPanicShortcut
     /// "panic" shortcut. <paramref name="onActivated"/> runs on a D-Bus thread. Returns the trigger
     /// the compositor actually assigned (the user may have changed it; "" if it did not say), or
     /// null when the portal is absent, the user refused, or anything failed - never throws.</summary>
-    internal static async Task<string?> BindAsync(string key, string description, Action onActivated)
+    internal static async Task<string?> BindAsync(string key, string description, Action onActivated, Action? onDeactivated = null)
     {
         if (!OperatingSystem.IsLinux() || _session != null) return null;
         _session = "";   // claimed: a second caller while this one waits gets null, not a second session
@@ -54,6 +55,17 @@ internal static class PortalPanicShortcut
             // The spec types session_handle as a string holding an object path; read either.
             var session = handle.Type == VariantValueType.ObjectPath ? handle.GetObjectPathAsString() : handle.GetString();
             _session = session;   // from here on every failure path closes it
+
+            _released = onDeactivated;
+            _deactivated = await bus.AddMatchAsync(
+                new MatchRule { Type = MessageType.Signal, Interface = Iface, Member = "Deactivated", Path = DesktopPath },
+                (Message m, object? _) => { var r = m.GetBodyReader(); return (r.ReadObjectPathAsString(), r.ReadString()); },
+                (Exception? ex, (string Session, string Id) a, object? _, object? _) =>
+                {
+                    // A broken signal subscription must end a hold, never finish it.
+                    if (ex != null || (a.Session == session && a.Id == Id)) onDeactivated?.Invoke();
+                },
+                null, null, false, ObserverFlags.None);
 
             _activated = await bus.AddMatchAsync(
                 new MatchRule { Type = MessageType.Signal, Interface = Iface, Member = "Activated", Path = DesktopPath },
@@ -166,6 +178,10 @@ internal static class PortalPanicShortcut
         var session = _session;
         _session = null;
         if (session == "") session = null;
+        _released?.Invoke();
+        _released = null;
+        _deactivated?.Dispose();
+        _deactivated = null;
         _activated?.Dispose();
         _activated = null;
         var bus = _bus;

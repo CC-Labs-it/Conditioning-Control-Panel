@@ -5,6 +5,8 @@ using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -81,6 +83,9 @@ public sealed class LeashHoldTests
         (CoreSettings.Current.Welcomed, CoreSettings.Current.HasAcceptedAgeVerification, CoreSettings.Current.PanicKeyEnabled) = (true, true, false);
         var (oldSvc, oldTime, oldReleased) = (LeashHead.Service, MainShellWindow.LeashHoldTime, X11PanicKey.PanicReleased);
         var oldKeyDown = MainShellWindow.LeashHoldKeyDown;
+        var oldSound = MainShellWindow.LeashHoldTickSound;
+        int ticks = 0;
+        MainShellWindow.LeashHoldTickSound = () => ticks++;
         bool keyDown = true;
         MainShellWindow.LeashHoldKeyDown = () => keyDown;
         var (oldTargets, oldUi) = (LeashCutSafety.LiveTargets, LeashCutSafety.RunOnUi);
@@ -99,8 +104,10 @@ public sealed class LeashHoldTests
             Hold(shell, clock, 2000);
             Assert.True(LeashHoldRing.IsShown);
             Assert.Equal(3, LeashHoldRing.Number);
+            Assert.Equal(2, ticks);
             Hold2(shell, clock);
             Assert.Equal(1, LeashHoldRing.Number);
+            Assert.Equal(4, ticks);
             Release(clock);
             Assert.False(LeashHoldRing.IsShown);
             Assert.Null(LeashCutConfirmWindow.Current);
@@ -116,6 +123,30 @@ public sealed class LeashHoldTests
             Assert.Null(LeashCutConfirmWindow.Current);
             keyDown = true;
             clock.Now = clock.Now.AddSeconds(5);
+
+            // Portal activation is held independently of XQueryKeymap (native Wayland focus).
+            keyDown = false;
+            shell.LeashPortalPressed();
+            for (int i = 0; i < 8; i++) { clock.Now = clock.Now.AddMilliseconds(250); shell.LeashHoldClockTick(); }
+            Assert.True(LeashHoldRing.IsShown);
+            Assert.Equal(3, LeashHoldRing.Number);
+            shell.LeashHoldReleased();
+            clock.Now = clock.Now.AddSeconds(5);
+            shell.LeashHoldClockTick();
+            Assert.Null(LeashCutConfirmWindow.Current);
+            Assert.False(LeashHoldRing.IsShown);
+            shell.LeashPortalPressed();
+            for (int i = 0; i < 20; i++)
+            {
+                clock.Now = clock.Now.AddMilliseconds(250);
+                if (i == 4) shell.LeashPortalPressed(); // duplicate activation must not restart the hold
+                shell.LeashHoldClockTick();
+            }
+            Assert.NotNull(LeashCutConfirmWindow.Current);
+            Click(LeashCutConfirmWindow.Current!.NoButton);
+            shell.LeashHoldReleased();
+            clock.Now = clock.Now.AddSeconds(5);
+            keyDown = true;
 
             // Five seconds: the question, ring gone. No keeps the leash.
             Hold(shell, clock, 5000);
@@ -147,6 +178,7 @@ public sealed class LeashHoldTests
             (LeashHead.Service, MainShellWindow.LeashHoldTime) = (oldSvc, oldTime);
             X11PanicKey.PanicReleased = oldReleased;
             MainShellWindow.LeashHoldKeyDown = oldKeyDown;
+            MainShellWindow.LeashHoldTickSound = oldSound;
             (LeashCutSafety.LiveTargets, LeashCutSafety.RunOnUi) = (oldTargets, oldUi);
             CoreSettings.ServiceProvider = null;
         }
@@ -162,6 +194,67 @@ public sealed class LeashHoldTests
         }
         Dispatcher.UIThread.RunJobs();
     }
+
+    [Fact]
+    public void TickAudio_UsesCountdownCueAtMasterScaledLevel_AndSuppressionWins()
+    {
+        var oldPlay = CoreAudio.PlayOneShotProvider;
+        var oldSuppressed = CoreAudio.IsOutputSuppressedProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.MasterVolume = 50;
+        int played = 0;
+        CoreAudio.PlayOneShotProvider = (path, volume, tag, _, _) =>
+        {
+            Assert.EndsWith("countdown_tick.mp3", path);
+            Assert.Equal(0.05f, volume);
+            Assert.Equal("leash-tick", tag);
+            played++;
+        };
+        try
+        {
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            LeashHoldSound.Tick();
+            Assert.Equal(1, played);
+            CoreAudio.IsOutputSuppressedProvider = () => true;
+            LeashHoldSound.Tick();
+            Assert.Equal(1, played);
+            settings.Current.MasterVolume = 0;
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            LeashHoldSound.Tick();
+            Assert.Equal(1, played);
+        }
+        finally
+        {
+            CoreAudio.PlayOneShotProvider = oldPlay;
+            CoreAudio.IsOutputSuppressedProvider = oldSuppressed;
+            CoreSettings.ServiceProvider = null;
+        }
+    }
+
+    [Fact]
+    public void ConfirmButtons_HoverUsesWpfBrushes_ExitRestoresRest() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        // Hover handlers do not require showing/measuring text through platform fonts.
+        var ask = new LeashCutConfirmWindow("Cut?", "Body", "Yes", "No", "test", () => { });
+        try
+        {
+            foreach (var pair in new[] { (ask.NoButton, Color.Parse("#3A1F66")), (ask.YesButton, Color.Parse("#FF5FB4")) })
+            {
+                var (button, hover) = pair;
+                var rest = button.Background;
+                button.RaiseEvent(new PointerEventArgs(InputElement.PointerEnteredEvent, button, null!, ask, default, 0, PointerPointProperties.None, KeyModifiers.None));
+                Assert.Equal(hover, ((ISolidColorBrush)button.Background!).Color);
+                button.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, button, null!, ask, default, 0, PointerPointProperties.None, KeyModifiers.None));
+                Assert.Equal(rest, button.Background);
+            }
+        }
+        finally { ask.Close(); }
+    });
 
     /// <summary>The X11 listener's routing: the bound key's press still runs the panic on the first press;
     /// its release only ends a hold; any other key does neither.</summary>
