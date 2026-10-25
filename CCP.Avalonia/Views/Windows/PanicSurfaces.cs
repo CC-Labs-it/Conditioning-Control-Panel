@@ -30,8 +30,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // The intake's say-it loops end before the capture abort below reads as silence; WPF GameSurfaces
             // 'intake' -> CloseActive. A game surface: closing it never arms the exit ladder.
             new("intake", _ => IntakeHostWindow.CloseAllForPanic(), IntakeHostWindow.IsAnyOpen),
-            // New decorative loop: park on panic even though WPF leaves billboard decoration alone.
-            new("billboard-calendar", _ => global::ConditioningControlPanel.Avalonia.Controls.Billboard.CalendarArtView.StopForPanic()),
             // WPF LeashOnPanicPress, the first thing a panic press does: the leash task parks (kept pending), its
             // video window closes, the gate stands back ten minutes.
             new("leash-task", sh => Platform.LeashTaskHost.OnPanicPress(sh)),
@@ -92,6 +90,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)
             new("deeper-editor-audio", _ => Deeper.DeeperEditorWindow.PauseAllForPanic()),   // P06; WPF left it playing
             new("knock-cards", _ => Overlays.KnockCard.FoldAll()),   // P06; WPF left them up. Folded as Later: they wait in the Inbox
+            // New decorative loop: park on panic even though WPF leaves billboard decoration alone; decoration, so near the end.
+            new("billboard-calendar", _ => global::ConditioningControlPanel.Avalonia.Controls.Billboard.CalendarArtView.StopForPanic()),
             new("camera", _ => MainShellWindow.StopCameraForPanic(), After: ["gaze-minigame"]),   // decision C: last, fire-and-forget; gaze reads it
         };
 

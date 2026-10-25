@@ -56,6 +56,11 @@ public sealed class CalendarArtTests
             art.Measure(new Size(800, 300));
             art.Arrange(new Rect(0, 0, 800, 300));
             bitmap.Render(art); // exercises the actual drawing code, including text and progress
+            // Landed frames reuse their number layouts instead of building ~31 per tick.
+            int built = art.TextLayoutsBuilt;
+            Assert.True(built > 0);
+            bitmap.Render(art);
+            Assert.Equal(built, art.TextLayoutsBuilt);
             using var pixels = new MemoryStream();
             bitmap.Save(pixels);
             pixels.Position = 0;
@@ -76,9 +81,14 @@ public sealed class CalendarArtTests
             Assert.False(retired.Running);
             PanicSurfaces.All.Single(s => s.Id == "billboard-calendar").Stop(shell);
             Assert.False(art.Running);
-            art.Run();
-            Assert.False(art.Running);
+            art.Run(); // panic parks, it does not freeze a single-card deck for the session
+            Assert.True(art.Running);
             art.Release();
+            // A hold before the first Run (Begin runs before the shell shows) keeps the counted-day pop.
+            var early = new CalendarArtView(art.Data);
+            early.Hold();
+            Assert.Equal(0, early.Offset);
+            early.Release();
         }
         finally
         {
