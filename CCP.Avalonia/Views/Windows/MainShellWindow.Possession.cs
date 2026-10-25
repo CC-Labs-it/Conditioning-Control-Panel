@@ -9,6 +9,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -28,7 +29,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void InitializePossessionHost()
         {
             Opened += (_, _) => EnsurePossessionLayers();
-            PointerMoved += (_, e) => _possessionPointer = e.GetPosition(this);
+            // WPF PossessionPointer.cs:62 uses Preview (tunnel) move + down, so handled child events still count.
+            AddHandler(PointerMovedEvent, (_, e) => _possessionPointer = e.GetPosition(this),
+                RoutingStrategies.Tunnel, handledEventsToo: true);
+            AddHandler(PointerPressedEvent, (_, e) => _possessionPointer = e.GetPosition(this),
+                RoutingStrategies.Tunnel, handledEventsToo: true);
             Closed += (_, _) =>
             {
                 _possessionClosed = true;

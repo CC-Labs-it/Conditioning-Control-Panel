@@ -25,6 +25,11 @@ public sealed class PossessionHostTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
+        // A returning user: a fresh profile opens the owned first-run / age-gate / What-moved windows,
+        // and any visible owned window makes the host unusable.
+        settings.Current.Welcomed = true;
+        settings.Current.HasAcceptedAgeVerification = true;
+        settings.Current.WhatMovedCardShown = 1;
         var panel = new StackPanel();
         var shell = new MainShellWindow { Width = 600, Height = 700, Content = new Grid { Children = { panel } } };
         try
@@ -32,6 +37,52 @@ public sealed class PossessionHostTests
             shell.Show();
             Dispatcher.UIThread.RunJobs();
             body(shell, panel);
+        }
+        finally
+        {
+            shell.RequestExit();
+            shell.Close();
+            CoreSettings.ServiceProvider = null;
+        }
+    });
+
+    /// <summary>The real shell XAML (rail doors) and the real Lockdown tab carry WPF's hand tags
+    /// (MainWindow.xaml doors, LockdownTabView.xaml:154-:414); without Role="Timer" the reserved-names
+    /// list prunes TxtLockdownTimer and Wobble has no target.</summary>
+    [Fact]
+    public void RealShellAndLockdownXamlCarryWpfHandTags() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        // A returning user: a fresh profile opens the owned first-run / age-gate / What-moved windows,
+        // and any visible owned window makes the host unusable.
+        settings.Current.Welcomed = true;
+        settings.Current.HasAcceptedAgeVerification = true;
+        settings.Current.WhatMovedCardShown = 1;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("lockdown");
+            Dispatcher.UIThread.RunJobs();
+            Control Find(string name) => global::Avalonia.LogicalTree.LogicalExtensions
+                .GetLogicalDescendants(shell).OfType<Control>().Single(c => c.Name == name);
+            Find("LockdownActivePanel").IsVisible = true;
+            shell.UpdateLayout();
+            var targets = shell.GetPossessionTargets();
+            Assert.Contains(targets, t => t.Key == "DoorHome" && t.Role == PossessionRole.TabHeader
+                                          && t.DisplayName == "the Home door");
+            Assert.Contains(targets, t => t.Key == "TxtLockdownTimer" && t.Role == PossessionRole.Timer
+                                          && t.DisplayName == "the timer");
+            Assert.Contains(targets, t => t.Key == "LockdownCardBorder" && t.Role == PossessionRole.Card
+                                          && t.DisplayName == "the lockdown card");
+            Assert.Contains(targets, t => t.Key == "ChkLockdownDose" && t.Role == PossessionRole.Toggle
+                                          && t.DisplayName == "the dose safety");
+            Assert.DoesNotContain(targets, t => t.Key is "BtnEmergencyExit" or "TxtLockdownExit");
+            Assert.True(PossessionTree.GetExclude(Find("BtnEmergencyExit")));
         }
         finally
         {
@@ -169,6 +220,7 @@ public sealed class PossessionHostTests
         var button = Button("Scaled");
         panel.Children.Add(new Viewbox { Width = 200, Height = 60, Child = button });
         Layout(shell);
+        Assert.Empty(shell.OwnedWindows.Where(w => w.IsVisible).Select(w => w.GetType().Name));
         Assert.True(((IPossessionHost)shell).IsUsable);
         Assert.True(shell.TryWindowBounds(button, out var bounds));
         Assert.InRange(bounds.Width, 199, 201);
