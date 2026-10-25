@@ -26,9 +26,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // The intake's say-it loops end before the capture abort below reads as silence; WPF GameSurfaces
             // 'intake' -> CloseActive. A game surface: closing it never arms the exit ladder.
             new("intake", _ => IntakeHostWindow.CloseAllForPanic(), IntakeHostWindow.IsAnyOpen),
+            new("leash-holder-sheets", _ => Controls.Leash.LeashHolderCard.CloseSheetsForPanic()),
             // WPF LeashOnPanicPress, the first thing a panic press does: the leash task parks (kept pending), its
             // video window closes, the gate stands back ten minutes.
-            new("leash-holder-sheets", _ => Controls.Leash.LeashHolderCard.CloseSheetsForPanic()),
             new("leash-task", sh => Platform.LeashTaskHost.OnPanicPress(sh)),
             new("tour", _ => Tours.TutorialHead.OnPanic()),                // a guided tour ends by the abandon route (never latched as walked)
             // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).

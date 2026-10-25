@@ -7,7 +7,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Collections;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -43,6 +45,8 @@ public sealed class LeashHolderCard : Border
     private DispatcherTimer? _resultTimer;
     internal string? OpenSheet => _sheet;
     internal string? ResultText => _result?.Text;
+    internal DispatcherTimer? ResultTimer => _resultTimer;
+    internal void ClearResult() { _resultTimer?.Stop(); _result = null; Render(); }
     internal HeldLeash Held => _h;
 
     internal LeashHolderCard() : this(new HeldLeash(new LeashPerson("sample", "Juno", null), false,
@@ -73,13 +77,19 @@ public sealed class LeashHolderCard : Border
         _body.Children.Add(Label(Loc.Get(dnd ? "leash_state_quiet" : _h.Online ? "leash_state_online" : "leash_state_offline"), F.Muted));
         var r = _h.Report;
         var figures = new UniformGrid { Columns = 3, Margin = new Thickness(0, 10, 0, 0) };
-        void Figure(string value, string key) => figures.Children.Add(Label(value + " · " + Loc.Get(key), F.Text));
+        TextBlock Figure(string value, string key) { var t = Label(value + " · " + Loc.Get(key), F.Text); figures.Children.Add(t); return t; }
         Figure(r == null ? "-" : r.Minutes.ToString(), "leash_fig_minutes");
         Figure(r == null ? "-" : $"{r.QuestsDone}/{r.QuestsTotal}", "leash_fig_quests");
         if (r is { ChasterLinked: true })
         {
-            Figure(r.LockLeftSeconds is int seconds ? LeashUiRules.LockLeft(seconds) : "-", "leash_fig_lock");
-            if (r.TabSeconds is int tab) _body.Children.Add(Label(Loc.GetF("leash_fig_tab", LeashUiRules.Tab(tab)), F.Gold));
+            var lockFig = Figure(r.LockLeftSeconds is int seconds ? LeashUiRules.LockLeft(seconds) : "-", "leash_fig_lock");
+            if (r.TabSeconds is int tab)   // WPF LeashHolderCard.cs:335-337: the tab line sits under the lock figure
+            {
+                figures.Children.Remove(lockFig);
+                var tabLine = Label(Loc.GetF("leash_fig_tab", LeashUiRules.Tab(tab)), tab > 0 ? F.Red : F.Mint);
+                tabLine.Tag = "leash-fig-tab";
+                figures.Children.Add(new StackPanel { Tag = "leash-fig-lock", Children = { lockFig, tabLine } });
+            }
         }
         else Figure(r == null ? "-" : r.Streak.ToString(), "leash_fig_streak_label");
         _body.Children.Add(figures);
@@ -87,7 +97,7 @@ public sealed class LeashHolderCard : Border
             _body.Children.Add(Label(Loc.GetF(a.Status switch { AssignStatus.Done => "leash_task_done", AssignStatus.Missed => "leash_task_missed", _ => "leash_task_open" }, AssignText(a.Kind, a.Size, a.Watch)), F.Gold));
         var week = new UniformGrid { Columns = 7, Tag = "leash-week" };
         foreach (var day in _h.Week.TakeLast(7))
-            week.Children.Add(Label(LeashUiRules.DayLetter(day.Day) + " · " + day.Mark, F.Muted));
+            week.Children.Add(WeekCell(day));
         _body.Children.Add(week);
         if (dnd && _h.DndUntil is { } until) _body.Children.Add(Label(Loc.GetF("leash_holder_dnd", _h.Who.Name, LeashUiRules.DndUntilText(until)), F.Lilac));
         var buttons = new UniformGrid { Columns = 4, Margin = new Thickness(0, 10, 0, 0) };
@@ -121,6 +131,21 @@ public sealed class LeashHolderCard : Border
     internal void ToggleSheet(string id) { _sheet = _sheet == id ? null : id; _videoFor = null; Render(); }
     private static string AssignText(AssignKind kind, int size, LeashWatch? watch) => kind == AssignKind.Video ? Loc.Get("leash_assign_video_n") : Loc.GetF(LeashUiRules.AssignSizeKey(kind), size);
     private static TextBlock Label(string text, IBrush color) => new() { Text = text, Foreground = color, FontFamily = F.Display, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 3) };
+    private static readonly IBrush IdleDot = new SolidColorBrush(Color.FromRgb(0x4A, 0x3D, 0x61));   // WPF LeashLook.Idle
+    // WPF LeashLook.WeekCell (LeashLook.cs:380-405): a dot per mark over the day letter, never the enum name.
+    private static StackPanel WeekCell(WeekDay day)
+    {
+        var dot = new Ellipse { Width = 15, Height = 15, HorizontalAlignment = HorizontalAlignment.Center };
+        switch (day.Mark)
+        {
+            case WeekMark.Did: dot.Fill = F.Mint; break;
+            case WeekMark.Punished: dot.Fill = F.Red; break;
+            case WeekMark.Today: dot.Fill = Brushes.Transparent; dot.Stroke = F.Gold; dot.StrokeThickness = 2; dot.StrokeDashArray = new AvaloniaList<double> { 1.6, 1.2 }; break;
+            default: dot.Fill = IdleDot; break;
+        }
+        var letter = new TextBlock { Text = LeashUiRules.DayLetter(day.Day), FontSize = 9.5, FontWeight = FontWeight.Bold, Foreground = F.Dim, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 3, 0, 0) };
+        return new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Tag = "leash-week:" + day.Mark, Children = { dot, letter } };
+    }
     private static TextBlock Wrap(TextBlock label) { label.TextWrapping = TextWrapping.Wrap; return label; }
     // ---- sheets -----------------------------------------------------------------------
 
@@ -418,7 +443,7 @@ public sealed class LeashHolderCard : Border
         _result = (text, good);
         _resultTimer?.Stop();
         _resultTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-        _resultTimer.Tick += (_, _) => { _resultTimer?.Stop(); _result = null; Render(); };
+        _resultTimer.Tick += (_, _) => ClearResult();
         _resultTimer.Start();
         Render();
     }

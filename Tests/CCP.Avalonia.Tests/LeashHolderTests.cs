@@ -26,7 +26,7 @@ public sealed class LeashHolderTests
         public Task<JObject?> CallAsync(string op, JObject body, CancellationToken ct = default)
         { Calls.Add((op, (JObject)body.DeepClone())); return Task.FromResult<JObject?>(Reply); }
     }
-    private static JObject Block(string intensity = "standard", bool quiet = false, int punished = 0) => new()
+    private static JObject Block(string intensity = "standard", bool quiet = false, int punished = 0, JObject? report = null, JArray? week = null) => new()
     {
         ["me"] = null, ["offers"] = new JArray(), ["events"] = new JArray(),
         ["holding"] = new JArray { new JObject
@@ -34,7 +34,7 @@ public sealed class LeashHolderTests
             ["who"] = new JObject { ["id"] = "u_pet", ["name"] = "Pet" }, ["online"] = true,
             ["intensity"] = intensity, ["since"] = DateTimeOffset.UtcNow.ToString("o"), ["day"] = 3,
             ["dnd_until"] = quiet ? DateTimeOffset.UtcNow.AddHours(1).ToString("o") : null,
-            ["report"] = null, ["week"] = new JArray(), ["pending"] = new JArray(),
+            ["report"] = report, ["week"] = week ?? new JArray(), ["pending"] = new JArray(),
             ["assignment"] = null, ["punished_today"] = punished, ["video_max"] = 12,
         } },
     };
@@ -53,6 +53,36 @@ public sealed class LeashHolderTests
     });
     private static Button Button(Control root, string tag) => root.GetLogicalDescendants().OfType<Button>().Single(b => b.Tag as string == tag);
     private static void Click(Control root, string tag) => LeashGateCardTests.Click(Button(root, tag));
+
+    [Fact]
+    public void WeekStripDrawsAMarkPerDayWithoutEnumTextAndTheTabLineSitsUnderTheLockFigure() => Run((section, service, _) =>
+    {
+        var week = new JArray(new[] { "g", "x", "r", "t" }.Select((c, i) => new JObject { ["day"] = $"2026-10-0{i + 1}", ["c"] = c }));
+        var report = new JObject { ["day"] = "2026-10-04", ["chaster_linked"] = true, ["lock_left_s"] = 3600, ["tab_s"] = 60 };
+        service.ApplyBlock(Block(report: report, week: week));
+        var card = Assert.Single(section.HolderCards);
+        var cells = card.GetLogicalDescendants().OfType<StackPanel>().Select(p => p.Tag as string).Where(t => t?.StartsWith("leash-week:") == true);
+        Assert.Equal(new[] { "leash-week:Did", "leash-week:Idle", "leash-week:Punished", "leash-week:Today" }, cells);
+        foreach (var mark in Enum.GetNames<WeekMark>())
+            Assert.DoesNotContain(card.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text?.Contains(mark) == true);
+        var lockFig = card.GetLogicalDescendants().OfType<StackPanel>().Single(p => p.Tag as string == "leash-fig-lock");
+        Assert.Contains(lockFig.GetLogicalDescendants().OfType<TextBlock>(), t => t.Tag as string == "leash-fig-tab");
+    });
+
+    [Fact]
+    public void ResultLineClearsOnAThreeSecondTimer() => Run((section, _, _) =>
+    {
+        var card = Assert.Single(section.HolderCards);
+        Click(card, "leash-btn:assign");
+        Click(card, "leash-assign:minutes:15");
+        Assert.Contains(card.GetLogicalDescendants().OfType<TextBlock>(), t => t.Tag as string == "leash-result");
+        Assert.Equal(TimeSpan.FromSeconds(3), card.ResultTimer!.Interval);
+        Assert.True(card.ResultTimer.IsEnabled);
+        card.ClearResult();
+        Assert.Null(card.ResultText);
+        Assert.False(card.ResultTimer.IsEnabled);
+        Assert.DoesNotContain(card.GetLogicalDescendants().OfType<TextBlock>(), t => t.Tag as string == "leash-result");
+    });
 
     [Fact]
     public void HoldingRendersAndPollKeepsTheOpenSheetUntilTheLeashEnds() => Run((section, service, _) =>
