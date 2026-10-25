@@ -235,11 +235,11 @@ public sealed class TabTransitionsTests
     public Task IntakePassRefreshesOnHomeEntryAndStateChangesAndParksOnLeave() => Run(shell =>
     {
         var loggedIn = CoreAccount.IsLoggedInProvider;
-        var lab = CoreAccount.HasLabAccessProvider;
+        var premium = CoreAccount.HasPremiumAccessProvider; // tip: IntakePassService.IsPremium reads HasPremiumAccess
         try
         {
             CoreAccount.IsLoggedInProvider = () => true;
-            CoreAccount.HasLabAccessProvider = () => false;
+            CoreAccount.HasPremiumAccessProvider = () => false;
             CoreSettings.Current.MotionLevel = MotionLevel.Off;
             shell.ShowTab("quests");
             shell.ShowTab("settings");
@@ -249,12 +249,12 @@ public sealed class TabTransitionsTests
             Assert.False(logo.IsVisible);
             Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("intake_pass_card_cta"),
                 shell.SettingsPage.FindControl<TextBlock>("IntakePassCta")!.Text);
-            CoreAccount.HasLabAccessProvider = () => true;
+            CoreAccount.HasPremiumAccessProvider = () => true;
             global::ConditioningControlPanel.Avalonia.App.IntakePass.RaiseChanged();
             Dispatcher.UIThread.RunJobs();
             Assert.False(face.IsVisible);
             Assert.True(logo.IsVisible);
-            CoreAccount.HasLabAccessProvider = () => false;
+            CoreAccount.HasPremiumAccessProvider = () => false;
             CoreAccount.IsLoggedInProvider = () => false;
             global::ConditioningControlPanel.Avalonia.App.IntakePass.RaiseChanged();
             Dispatcher.UIThread.RunJobs();
@@ -270,7 +270,7 @@ public sealed class TabTransitionsTests
         finally
         {
             CoreAccount.IsLoggedInProvider = loggedIn;
-            CoreAccount.HasLabAccessProvider = lab;
+            CoreAccount.HasPremiumAccessProvider = premium;
         }
     });
 
@@ -312,14 +312,14 @@ public sealed class TabTransitionsTests
     [Fact]
     public Task IntakeTurnSwapsAtTheThinPointAndCtaUsesTheSharedBeat() => Run(shell =>
     {
-        var saved = (CoreAccount.IsLoggedInProvider, CoreAccount.HasLabAccessProvider);
+        var saved = (CoreAccount.IsLoggedInProvider, CoreAccount.HasPremiumAccessProvider);
         var savedTime = ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
         var time = new SteppedTime();
         ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = time;
         try
         {
             CoreAccount.IsLoggedInProvider = () => true;
-            CoreAccount.HasLabAccessProvider = () => false;
+            CoreAccount.HasPremiumAccessProvider = () => false;
             shell.ShowTab("settings");
             var group = Assert.IsType<TransformGroup>(shell.SettingsPage!.FindControl<Grid>("LogoFlipHost")!.RenderTransform);
             var scale = Assert.Single(group.Children.OfType<ScaleTransform>());
@@ -352,7 +352,7 @@ public sealed class TabTransitionsTests
         }
         finally
         {
-            (CoreAccount.IsLoggedInProvider, CoreAccount.HasLabAccessProvider) = saved;
+            (CoreAccount.IsLoggedInProvider, CoreAccount.HasPremiumAccessProvider) = saved;
             ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = savedTime;
         }
     });
