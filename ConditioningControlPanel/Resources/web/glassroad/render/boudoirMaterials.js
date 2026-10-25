@@ -2,6 +2,7 @@
 import { Color } from 'three/webgpu';
 import { float, vec3, sin, abs, fract, min, max, mix, smoothstep, fwidth, normalize, dot, pow } from 'three/tsl';
 import { getBoudoirLayout } from '../track/boudoir-layout.js';
+import { reliefNormal } from './surfaceRelief.js';
 
 export const BOUDOIR_SURFACES = Object.freeze({
   vanity: Object.freeze({ name: 'rosewood', base: '#874b53', dark: '#542935', light: '#ab7273', border: '#542935', sheen: .045 }),
@@ -124,9 +125,22 @@ export function createBoudoirRoadSurface({ track, p, trueEdge, distance, view, n
   const patterns = { vanity: wood, gallery, wardrobe: satin, spa: porcelain, mirror: stone };
   const shoulder = one().sub(smoothstep(.55, BOUDOIR_FINISH.borderM, trueEdge));
   const h = BOUDOIR_FINISH.transitionM / 2, roadS = fract(s.div(lap)).mul(lap);
+  const weights = zones.map((zone, i) => (i ? smoothstep(zone.s0 - h, zone.s0 + h, roadS) : one())
+    .mul(i < zones.length - 1 ? one().sub(smoothstep(zone.s1 - h, zone.s1 + h, roadS)) : one()));
+  // Wide relief changes the real lighting normal: waxed boards, soft nap and convex glazed tiles.
+  // The height has no derivative filtering inside it, so the normal calculation remains defined.
+  const tileX = fract(x.div(4.5)), tileS = fract(s.div(tilePeriod));
+  const tileEdge = min(min(tileX, one().sub(tileX)).mul(4.5), min(tileS, one().sub(tileS)).mul(tilePeriod));
+  let height = sin(flameCoord.mul(TAU / 1.8)).mul(.012);
+  for (const [i, zone] of zones.entries()) {
+    if (zone.kind === 'wardrobe') height = mix(height, sin(x.mul(TAU / 8)).mul(.075), weights[i]);
+    if (zone.kind === 'spa') height = mix(height, smoothstep(.035, .25, tileEdge).mul(.055), weights[i]);
+  }
+  const finishNormal = reliefNormal(normal, height, max(footprint(x), footprint(s)), { slope: .3 });
   // Different highlight widths give wax, fibres and glaze their own finish, without extra lights.
   const H = normalize(normalize(vec3(.35, .8, -.3)).add(view));
-  const halfLight = max(dot(normal, H), 0), grazing = pow(one().sub(abs(dot(normal, view))), 4);
+  const halfLight = max(dot(finishNormal, H), 0), grazing = pow(one().sub(abs(dot(finishNormal, view))), 4);
+  const reliefLight = max(dot(finishNormal, normalize(vec3(.35, .8, -.3))), 0).mul(.28).add(.76);
   const finishes = {
     vanity: pow(halfLight, 22).mul(one().sub(boards.mul(.8))).mul(.8).add(grazing.mul(.2)),
     gallery: pow(halfLight, 30).mul(one().sub(parquetJoints.mul(.85))).mul(.8).add(grazing.mul(.2)),
@@ -136,11 +150,10 @@ export function createBoudoirRoadSurface({ track, p, trueEdge, distance, view, n
   };
   let colour = vec3(0), sheenGain = float(0);
   for (const [i, zone] of zones.entries()) {
-    const weight = (i ? smoothstep(zone.s0 - h, zone.s0 + h, roadS) : one())
-      .mul(i < zones.length - 1 ? one().sub(smoothstep(zone.s1 - h, zone.s1 + h, roadS)) : one());
+    const weight = weights[i];
     const border = zone.kind === 'spa' ? one().sub(smoothstep(3.5, 5.5, trueEdge)) : shoulder;
     colour = colour.add(mix(patterns[zone.kind], rgb(BOUDOIR_SURFACES[zone.kind].border), border.mul(.78)).mul(weight));
     sheenGain = sheenGain.add(weight.mul(BOUDOIR_SURFACES[zone.kind].sheen).mul(finishes[zone.kind]));
   }
-  return { colour, sheen: rgb('#f7e8d1').mul(sheenGain), zones };
+  return { colour: colour.mul(reliefLight), sheen: rgb('#f7e8d1').mul(sheenGain), zones };
 }

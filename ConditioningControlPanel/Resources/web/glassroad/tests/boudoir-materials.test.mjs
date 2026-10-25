@@ -72,7 +72,7 @@ test('material graph accepts only static spatial inputs without clocks, textures
     if (node.isUniformNode) uniforms.add(node);
     for (const child of node.getChildren()) pending.push(child);
   }
-  assert.ok(seen.size < 1600, 'the five finishes share a bounded shader graph');
+  assert.ok(seen.size < 1600, `the five finishes share a bounded shader graph (${seen.size} nodes)`);
   assert.deepEqual(uniforms, new Set(Object.values(inputs)));
   assert.equal(createBoudoirRoadSurface({ track: { id: 'keep' }, ...inputs }), null);
 });

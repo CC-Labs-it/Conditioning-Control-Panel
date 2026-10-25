@@ -1,6 +1,7 @@
 /* Recessed industrial panels. Geometry-local detail remains attached to moving machinery. */
 import { MeshBasicNodeMaterial, Color } from 'three/webgpu';
-import { vec2, vec3, float, uv, positionGeometry, positionWorld, normalWorld, cameraPosition, normalize, dot, abs, max, min, mix, fract, smoothstep, fwidth, pow, texture, sin, floor } from 'three/tsl';
+import { vec2, vec3, float, uniform, uv, positionGeometry, positionWorld, normalWorld, cameraPosition, normalize, dot, abs, max, min, mix, fract, smoothstep, fwidth, pow, texture, sin, floor } from 'three/tsl';
+import { reliefNormal, reliefFootprint } from './surfaceRelief.js';
 
 export function coolantCaustics(p, time) {
   // Interfering warped wave fronts form moving cells, rather than a scrolling square grid.
@@ -50,13 +51,21 @@ export function machineSurface(p, base, wear = null, details = null, { flush = f
 }
 
 export function createMachineMaterial(hex, art, { glow = false, vent = false, coolant = null } = {}) {
-  const c = new Color(hex), base = vec3(c.r, c.g, c.b), material = new MeshBasicNodeMaterial();
+  const base = uniform(new Color(hex)), material = new MeshBasicNodeMaterial();
   material.name = 'machine-' + hex;
   if (glow) { material.colorNode = base; return material; }
-  const N = normalize(normalWorld), p = positionWorld;
+  const p = positionWorld;
   const wear = art?.detail?.('detail-gold-wear');
   // UV paneling fits each manufactured face. Wear samples pre-instance source coordinates.
   const plane = uv().mul(vec2(6, 10));
+  const cell = fract(plane.div(vec2(4, 6))).mul(vec2(4, 6));
+  const edgeM = min(cell, vec2(4, 6).sub(cell));
+  const pressed = smoothstep(.035, .19, min(edgeM.x, edgeM.y));
+  const lip = max(abs(cell.x.sub(2)).sub(1.25), abs(cell.y.sub(3)).sub(2.1));
+  const recess = float(1).sub(smoothstep(-.06, .10, lip));
+  const relief = pressed.mul(.13).sub(recess.mul(.055))
+    .add(sin(positionGeometry.y.mul(17).add(positionGeometry.x.mul(5))).mul(.003));
+  const N = reliefNormal(normalWorld, relief, reliefFootprint(plane), { slope: .48 });
   let painted = machineSurface(plane, base);
   const brushed = wear ? texture(wear, positionGeometry.xy.mul(vec2(3.5, 11))).r : float(0.5);
   painted = painted.mul(brushed.mul(0.22).add(0.84));
