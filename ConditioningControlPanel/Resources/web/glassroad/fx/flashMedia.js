@@ -27,6 +27,12 @@ export function createFlashMedia({ parent = document.body, source = () => null, 
     }
     const p = flashParams || screen.params || {}, seed = p.seed || 0;
     const media = source(seed), picture = media || fallbackSource(seed) || (fallback?.complete && fallback.naturalWidth ? fallback : null);
+    if (p.nativeAspect && picture) {
+      const ratio = (picture.videoWidth || picture.naturalWidth || picture.width || 4) /
+        (picture.videoHeight || picture.naturalHeight || picture.height || 3);
+      const width = Math.round(768 * Math.min(1, Math.max(.2, ratio))), height = Math.round(768 * Math.min(1, 1 / Math.min(5, ratio)));
+      if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; lastSource = null; }
+    }
     const r = flashLayout(aspect, p);
     Object.assign(canvas.style, { display: 'block', left: r.x * 100 + 'vw', top: r.y * 100 + 'vh',
       width: r.w * 100 + 'vw', height: r.h * 100 + 'vh', opacity: String(Math.min(1, amount)) });
@@ -43,9 +49,11 @@ export function createFlashMedia({ parent = document.body, source = () => null, 
       }
     }
     if (media) {
-      ctx.fillStyle = 'rgba(12,6,20,.78)'; ctx.fillRect(0, 540, 768, 36);
-      ctx.fillStyle = '#fff'; ctx.font = '20px system-ui'; ctx.fillText('via Scrolller', 16, 565);
+      const creditH = Math.max(24, Math.round(canvas.height / 16));
+      ctx.fillStyle = 'rgba(12,6,20,.78)'; ctx.fillRect(0, canvas.height - creditH, canvas.width, creditH);
+      ctx.fillStyle = '#fff'; ctx.font = Math.round(creditH * .56) + 'px system-ui'; ctx.fillText('via Scrolller', 12, canvas.height - creditH * .3);
     }
   }
-  return { canvas, update, dispose() { disposed = true; clear(); lastSource = null; canvas.remove(); } };
+  return { canvas, update, get aspect() { return canvas.width / canvas.height; },
+    dispose() { disposed = true; clear(); lastSource = null; canvas.remove(); } };
 }
