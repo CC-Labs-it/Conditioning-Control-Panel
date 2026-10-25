@@ -305,7 +305,7 @@
                             Command="{Binding ViewCompiledPromptCommand}"/>
                     <Button Content="{Binding LocFork}" Theme="{StaticResource CmpLinkButtonStyle}"
                             Command="{Binding ForkPromptCommand}"/>
-                    <Button Content="{Binding LocCommunity}" Theme="{StaticResource CmpLinkButtonStyle}"
+                    <Button x:Name="BtnCommunityPrompts" Content="{Binding LocCommunity}" Theme="{StaticResource CmpLinkButtonStyle}"
                             Command="{Binding CommunityPromptsCommand}"/>
                 </WrapPanel>
             </Border>

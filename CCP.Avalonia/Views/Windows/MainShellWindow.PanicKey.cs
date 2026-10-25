@@ -12,8 +12,6 @@
 
 using System;
 using System.Threading.Tasks;
-using Avalonia;
-using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Localization;
@@ -202,6 +200,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static bool _portalFailed, _portalAllowed;
         private static DispatcherTimer? _portalWatch;
 
+        // The shell's live hold, not PortalPanicShortcut.IsHeld: that stays true after a lost Deactivated.
+        internal static bool KeepPortalBound => AnyEffectRunning || PortalHoldLive;
+
         private static bool AnyEffectRunning =>
             CoreEngine.IsRunning || CoreFlash.IsRunning || CoreSubliminal.IsRunning || BouncingTextOverlay.IsRunning
             || Views.Overlays.BlinkTrainerSession.IsRunning;
@@ -235,10 +236,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 () =>
                 {
                     Serilog.Log.Information("Panic trigger: GlobalShortcuts portal Activated");
-                    Dispatcher.UIThread.Post(() =>
-                    ((Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainShellWindow)
-                        ?.HandlePanicKeyPress(DateTime.Now));
-                });
+                    Dispatcher.UIThread.Post(() => Current?.OnPortalPanicPressed());
+                },
+                () => Dispatcher.UIThread.Post(() => Current?.OnPortalPanicReleased()));
             Dispatcher.UIThread.Post(() =>
             {
                 if (trigger == null)
@@ -256,7 +256,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // ponytail: 2 s poll for "last effect stopped" rather than a hook in every stop path.
                 _portalWatch ??= new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background, (_, _) =>
                 {
-                    if (AnyEffectRunning) return;
+                    if (KeepPortalBound) return;
                     _portalWatch!.Stop();
                     _portalWatch = null;
                     _portalBind = null;

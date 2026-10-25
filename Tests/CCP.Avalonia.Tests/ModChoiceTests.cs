@@ -8,11 +8,13 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using CCP.Tests.Shared;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
@@ -49,6 +51,74 @@ public sealed class ModChoiceTests
         Assert.Null(PendingModChoice.Pending);                                           // manual switch outranks it
         Assert.Equal(BuiltInMods.DronificationId, ((ModSelectorItem)combo.SelectedItem!).Id);
         Assert.Equal(BuiltInMods.DronificationId, (combo.SelectionBoxItem as ModSelectorItem)?.Id);   // chip not blank
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task CompanionChipPicksAreRememberedAndRestoredByTheHeaderModSwitch() => Run(async (shell, svc, server) =>
+    {
+        var s = CoreSettings.Current;
+        s.ModPersonalityPreset.Clear();
+        s.UserPersonalityPresets.Add(new PersonalityPreset { Id = "pick-neutral", Name = "Neutral pick" });
+        s.UserPersonalityPresets.Add(new PersonalityPreset { Id = "pick-drone", Name = "Drone pick" });
+        s.SlutModeEnabled = false;
+        // Companion v2 collapses the room; the chips live on Companion > Personality, whose OnShown re-syncs them.
+        shell.ShowTab("personality");
+        Dispatcher.UIThread.RunJobs();
+        var personality = shell.GetLogicalDescendants().OfType<MakeHerYoursView>().Single().ViewModel;
+        personality.Presets.Single(p => p.Id == "pick-neutral").IsSelected = true;
+        Assert.Equal("pick-neutral", s.ModPersonalityPreset[BuiltInMods.CCPDefaultId]);
+
+        var combo = shell.FindControl<ComboBox>("ModSelectorCombo")!;
+        combo.SelectedItem = shell.AvailableMods.Single(i => i.Id == BuiltInMods.DronificationId);
+        Dispatcher.UIThread.RunJobs();
+        personality.Presets.Single(p => p.Id == "pick-drone").IsSelected = true;
+        Assert.Equal("pick-drone", s.ModPersonalityPreset[BuiltInMods.DronificationId]);
+
+        // A mod restore is not a fresh pick: it must keep a custom prompt. (No fence assert here:
+        // ModService fences on every mod switch, so it cannot tell a broken restore apart.)
+        s.ActiveCommunityPromptId = "remembered-custom";
+        s.CompanionPrompt.UseCustomPrompt = true;
+        combo.SelectedItem = shell.AvailableMods.Single(i => i.Id == BuiltInMods.CCPDefaultId);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("pick-neutral", s.ActivePersonalityPresetId);
+        Assert.Equal("remembered-custom", s.ActiveCommunityPromptId);
+        Assert.True(s.CompanionPrompt.UseCustomPrompt);
+        Assert.True(personality.Presets.Single(p => p.Id == "pick-neutral").IsSelected);
+        Assert.False(personality.Presets.Single(p => p.Id == "pick-drone").IsSelected);
+        Assert.Equal(2, s.ModPersonalityPreset.Count);
+
+        combo.SelectedItem = shell.AvailableMods.Single(i => i.Id == BuiltInMods.DronificationId);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("pick-drone", s.ActivePersonalityPresetId);
+        Assert.True(personality.Presets.Single(p => p.Id == "pick-drone").IsSelected);
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ModSwitchWithoutAnAvailableStoredPickDoesNotInventAnExplicitChoice() => Run(async (shell, svc, server) =>
+    {
+        var s = CoreSettings.Current;
+        s.ModPersonalityPreset.Clear();
+        s.ActivePersonalityPresetId = "gone-personality";
+        s.PersonaVoiceFenceUtc = DateTime.UnixEpoch;
+        var combo = shell.FindControl<ComboBox>("ModSelectorCombo")!;
+        combo.SelectedItem = shell.AvailableMods.Single(i => i.Id == BuiltInMods.DronificationId);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(s.ModPersonalityPreset);
+        Assert.Equal("gone-personality", s.ActivePersonalityPresetId);
+        // ModService fences replies on every real mod change, independently of restoring a pick.
+        Assert.True(s.PersonaVoiceFenceUtc > DateTime.UnixEpoch);
+        Assert.NotEqual("gone-personality", PersonalityService.Shared.GetActivePreset().Id);
+
+        s.ModPersonalityPreset[BuiltInMods.CCPDefaultId] = "removed-pick";
+        combo.SelectedItem = shell.AvailableMods.Single(i => i.Id == BuiltInMods.CCPDefaultId);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("gone-personality", s.ActivePersonalityPresetId);
+        // ModService fences replies on every real mod change, independently of restoring a pick.
+        Assert.True(s.PersonaVoiceFenceUtc > DateTime.UnixEpoch);
+        Assert.Equal("removed-pick", s.ModPersonalityPreset[BuiltInMods.CCPDefaultId]);
+        Assert.Equal(PersonalityPresets.NeutralDefaultId, PersonalityService.Shared.GetActivePreset().Id);
         await Task.CompletedTask;
     });
 
