@@ -37,6 +37,11 @@ public sealed class LadderDay
     /// a later one; these two are how <see cref="ChasterLadder.Claims"/> moves it there.</summary>
     [JsonProperty("open0")] public int OpenAtStart { get; set; }
     [JsonProperty("open")] public int Open { get; set; }
+
+    /// <summary>Booked seconds a leash cut took back off the tab that UTC day
+    /// (<see cref="CircesTab.DropUnpushedLeash"/>). They never reached a lock and no credit
+    /// cancelled them, so <see cref="ChasterLadder.Claims"/> takes them out of the day's gross.</summary>
+    [JsonProperty("drop")] public int Dropped { get; set; }
 }
 
 /// <summary>The raffle's day ledger, kept in <see cref="TabState"/>: this UTC month and the one
@@ -125,6 +130,16 @@ public static class ChasterLadder
         Sample(state, day);
     }
 
+    /// <summary>A leash cut took booked seconds back off the tab, with the balance already lowered.
+    /// Claims never reads them as time a credit cancelled.</summary>
+    public static void NoteDropped(TabState state, int seconds, DateTime nowUtc)
+    {
+        if (seconds <= 0) return;
+        var day = LedgerDay(state, nowUtc, openBefore: (long)state.BalanceSeconds + seconds);
+        day.Dropped = Sum(day.Dropped, seconds);
+        Sample(state, day);
+    }
+
     /// <summary>
     /// The ledger as the raffle verify sends it: every day of this UTC month and the one before
     /// with anything on it.
@@ -151,7 +166,8 @@ public static class ChasterLadder
         long carried = 0;
         foreach (var (key, day) in days.Where(d => d.Value != null && IsDayKey(d.Key)).OrderBy(d => d.Key, StringComparer.Ordinal))
         {
-            var raw = settled ? (long)day.Gross + day.OpenAtStart - day.Open : day.Gross;
+            var dropped = Math.Max(0, day.Dropped);
+            var raw = settled ? (long)day.Gross + day.OpenAtStart - day.Open - dropped : (long)day.Gross - dropped;
             var pushed = Math.Clamp(day.Pushed, 0, MaxClaimSeconds);
             if (settled)
             {

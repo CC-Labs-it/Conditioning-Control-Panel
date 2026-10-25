@@ -4,9 +4,9 @@
 // card's demo/tour buttons). The index, filter and sort live in DeeperTabViewModel over Core
 // DeeperLocalLibrary; this partial owns the windows, dialogs, timers and files.
 //
-// Still out (see docs/avalonia-parity.md shell-deeper-hub): import (EnhancementLibrary
-// FindDuplicateOf/PromoteToLibrary + RevealDeeperLibraryRow's flash), the bundled-demo seeding, the
-// library FileSystemWatcher (LibraryChanged), the duration probe, and the Deeper tutorial.
+// Import picker/drop and the shared batch live in MainShellWindow.DeeperImport.cs.
+// Still out (shell-deeper-hub): startup demo seeding, the persistent library watcher,
+// and duration probing. The tab's tour uses the existing head tour lifecycle.
 
 using System;
 using System.Collections.Generic;
@@ -154,7 +154,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             CoreBark.NotifyUiAction("deeper_tour");
             DismissDeeperWelcomeCard();
-            // ponytail: StartTutorial(TutorialType.Deeper) - no TutorialService on this head.
+            StartDeeperTabTutorial();
+        }
+
+        internal void StartDeeperTabTutorial()
+        {
+            ShowTab("deeper");
+            UpdateDeeperWelcomeCardVisibility();
+            CoreTutorial.Start("Deeper");
         }
 
         internal void BtnDeeperWelcomeDemo_Click()

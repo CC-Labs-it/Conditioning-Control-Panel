@@ -73,9 +73,6 @@ namespace ConditioningControlPanel.Services
         // The controller switched the panic key off during this session. Restored (and saved) when
         // the session ends, so a crash or a quit after the session cannot leave it off on disk.
         private bool _remoteDisabledPanic;
-        // The controller switched strict lock on (it was off before). Released when the controller
-        // leaves; a strict lock the wearer set themselves is never touched.
-        private bool _remoteSetStrictLock;
         public string? SessionCode { get; private set; }
         public string? ConnectPin { get; private set; }
         public string? Tier { get; private set; }
@@ -197,6 +194,7 @@ namespace ConditioningControlPanel.Services
                 ConnectPin = pin;
                 Tier = tier;
                 IsActive = true;
+                TakeWearerSnapshot();
                 App.Friends?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Remote);
                 _consecutivePollFailures = 0;
                 _consecutivePollSuccesses = 0;
@@ -956,6 +954,10 @@ namespace ConditioningControlPanel.Services
         {
             var force = cause == RemoteEndCause.Panic;
             if (force) MainWindow.CancelPendingAi();   // a remote panic cancels pending AI follow-ups too
+            // The controller's panic is a panic: Trigger Mode and keyword triggers stay quiet and
+            // the Lockdown keeper holds the engine, as after the panic key (PanicAftermath). It only
+            // ever refuses; no pause mark, so the controller may still resume (owner, 2026-10-19).
+            if (force) Safety.PanicAftermath.ArmQuiet();
             if (LeavesLocalRun(cause)) { ReleaseRemoteHoldings(); return; }
             try
             {
@@ -1015,18 +1017,6 @@ namespace ConditioningControlPanel.Services
                 LockCardWindow.ForceCloseAll();
                 BubbleCountWindow.ForceCloseAll();
 
-                // Turn off overlays
-                if (App.Settings?.Current != null)
-                {
-                    App.Settings.Current.PinkFilterEnabled = false;
-                    App.Settings.Current.SpiralEnabled = false;
-                    App.Settings.Current.StrictLockEnabled = false;
-                    App.Settings.Current.PanicKeyEnabled = true;
-                    SyncPanicKeyUi();
-                }
-                RestoreRemoteBrainDrainSetting();
-                App.Overlay?.RefreshOverlays();
-
                 // Stop session engine and main engine — but ONLY when the controller owns the
                 // run (it issued start_session) or this is a panic. A session the subject
                 // started for themselves is not the remote session's to end: see the `force`
@@ -1040,11 +1030,22 @@ namespace ConditioningControlPanel.Services
                     App.Logger?.Information("[RemoteControl] Leaving the subject's own session/engine running — the controller did not start it");
                 }
 
-                // Sync checkbox state and bring window to front
+                // The wearer's own values come back (owner, 2026-10-22): spiral, pink, opacities and
+                // Melt as they were before the controller wrote them, the panic key on, the strict lock
+                // the wearer's own (a running Lockdown keeps the one it forced). Never written off.
+                // AFTER the session stop: its own restore can put a controller's value back first.
+                HandBackWearerVisuals();
+                ReleaseRemoteSafetyState();
+                // Nothing of the wearer's runs: the overlay service the controller started goes, so a
+                // spiral the wearer keeps switched on is not painted over an idle desk.
+                if (MainWindowRef?.IsEngineRunning != true)
+                    App.Overlay?.Stop();
+                else
+                    App.Overlay?.RefreshOverlays();
+
+                // Bring window to front
                 if (MainWindowRef != null)
                 {
-                    MainWindowRef.EnablePinkFilter(false);
-                    MainWindowRef.EnableSpiral(false);
                     MainWindowRef.RestoreFromTrayForRemote();
                     MainWindowRef.ShowAvatarTube();
                 }
@@ -1084,29 +1085,27 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>The controller leaving always hands back what could trap the wearer: the panic
-        /// key comes back on, and a strict lock the controller switched on goes off (ccp-bugs
-        /// #1340). Panic always works. A strict lock the wearer set themselves stays, which is why
-        /// only the controller's own switch-on is undone. This does not depend on
-        /// StopEffectsOnRemoteDisconnect, which only governs the visible effects.</summary>
+        /// key comes back on, and the strict lock goes back to the wearer's own value (ccp-bugs
+        /// #1340, owner 2026-10-22): one the controller switched on goes off, one the wearer set stays,
+        /// and one a running Lockdown forced stays on (Lockdown's record is corrected instead). This
+        /// does not depend on StopEffectsOnRemoteDisconnect, which only governs the visible effects.</summary>
         private void ReleaseRemoteSafetyState()
         {
             var s = App.Settings?.Current;
             if (s == null) return;
-            bool changed = false;
-            if (_remoteSetStrictLock)
+            bool changed = HandBackStrictLock();
+            // A running Lockdown that switched the panic key off keeps it off; its own end puts it
+            // back (owner, 2026-10-22). Outside one, panic always comes back on.
+            if (RemoteHoldings.TurnsPanicBackOn(s.PanicKeyEnabled, _remoteDisabledPanic,
+                    App.Lockdown?.IsActive == true, App.Lockdown?.DisabledPanicKey == true))
             {
-                _remoteSetStrictLock = false;
-                if (s.StrictLockEnabled) { s.StrictLockEnabled = false; changed = true; }
-            }
-            if (!s.PanicKeyEnabled || _remoteDisabledPanic)
-            {
-                _remoteDisabledPanic = false;
                 if (!s.PanicKeyEnabled) { s.PanicKeyEnabled = true; changed = true; }
             }
+            _remoteDisabledPanic = false;
             if (!changed) return;
             App.Settings!.Save();
             SyncPanicKeyUi();
-            App.Logger?.Information("[RemoteControl] Controller left: panic key back on, controller's strict lock released");
+            App.Logger?.Information("[RemoteControl] Controller left: panic key back on, the wearer's own strict lock back");
         }
 
         private bool LeavesLocalRun(RemoteEndCause cause)
@@ -1117,8 +1116,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// The remote session ended over a run the subject started for themselves (ccp-bugs #1405).
         /// Hands back only what the controller holds and leaves the engine, its services, its
-        /// overlays, its audio and its queue exactly as they are. What the controller changed in
-        /// the run stays as the controller left it, the same as the default on a disconnect.
+        /// audio and its queue running. The wearer's own spiral / pink / opacities / Melt / strict
+        /// lock values come back (owner, 2026-10-22), so the run goes on with the wearer's settings.
         /// </summary>
         private void ReleaseRemoteHoldings()
         {
@@ -1128,7 +1127,9 @@ namespace ConditioningControlPanel.Services
                 StopRemoteHaptics();
                 MainWindowRef?.StopBrowserVideoFromRemote();
                 if (_remoteTurnedOnBrainDrain) SetRemoteBrainDrain(false);
+                HandBackWearerVisuals();
                 ReleaseRemoteSafetyState();
+                App.Overlay?.RefreshOverlays();
                 MainWindowRef?.RestoreFromTrayForRemote();
                 MainWindowRef?.ShowAvatarTube();
             }
@@ -1175,23 +1176,18 @@ namespace ConditioningControlPanel.Services
                 LockCardWindow.ForceCloseAll();
                 BubbleCountWindow.ForceCloseAll();
 
-                // Reset overlays that were enabled by remote
-                if (App.Settings?.Current != null)
-                {
-                    App.Settings.Current.PinkFilterEnabled = false;
-                    App.Settings.Current.SpiralEnabled = false;
-                    App.Settings.Current.StrictLockEnabled = false;
-                    App.Settings.Current.PanicKeyEnabled = true;
-                    SyncPanicKeyUi();
-                }
-                RestoreRemoteBrainDrainSetting();
+                // Overlays go back to the wearer's own values (owner, 2026-10-22); they used to be
+                // written OFF, so a wearer who had them on lost them. Strict lock and panic are NOT
+                // touched here: ReleaseRemoteSafetyState (just before) already handed them back
+                // (ccp-bugs #1340).
+                HandBackWearerVisuals();
                 App.Overlay?.RefreshOverlays();
+                if (MainWindowRef?.IsEngineRunning != true)
+                    App.Overlay?.Stop();
 
                 // Restore window visibility but don't stop engine/autonomy
                 if (MainWindowRef != null)
                 {
-                    MainWindowRef.EnablePinkFilter(false);
-                    MainWindowRef.EnableSpiral(false);
                     MainWindowRef.RestoreFromTrayForRemote();
                     MainWindowRef.ShowAvatarTube();
                 }
@@ -1317,6 +1313,7 @@ namespace ConditioningControlPanel.Services
                         case "show_pink_filter":
                             if (App.Settings?.Current != null)
                             {
+                                NoteRemoteWrite(RemoteHeld.Pink, 1);
                                 App.Settings.Current.PinkFilterEnabled = true;
                                 MainWindowRef?.EnablePinkFilter(true);
                                 EnsureOverlayRunning();
@@ -1328,6 +1325,7 @@ namespace ConditioningControlPanel.Services
                         case "stop_pink_filter":
                             if (App.Settings?.Current != null)
                             {
+                                NoteRemoteWrite(RemoteHeld.Pink, 0);
                                 App.Settings.Current.PinkFilterEnabled = false;
                                 MainWindowRef?.EnablePinkFilter(false);
                                 EnsureOverlayRunning();
@@ -1339,6 +1337,7 @@ namespace ConditioningControlPanel.Services
                         case "show_spiral":
                             if (App.Settings?.Current != null)
                             {
+                                NoteRemoteWrite(RemoteHeld.Spiral, 1);
                                 App.Settings.Current.SpiralEnabled = true;
                                 MainWindowRef?.EnableSpiral(true);
                                 EnsureOverlayRunning();
@@ -1350,6 +1349,7 @@ namespace ConditioningControlPanel.Services
                         case "stop_spiral":
                             if (App.Settings?.Current != null)
                             {
+                                NoteRemoteWrite(RemoteHeld.Spiral, 0);
                                 App.Settings.Current.SpiralEnabled = false;
                                 MainWindowRef?.EnableSpiral(false);
                                 EnsureOverlayRunning();
@@ -1362,7 +1362,9 @@ namespace ConditioningControlPanel.Services
                             if (App.Settings?.Current != null && parameters != null)
                             {
                                 var pinkVal = parameters["value"]?.Value<int>() ?? 25;
-                                App.Settings.Current.PinkFilterOpacity = _easedPink.Ask(pinkVal, 50, EasyFactor);
+                                var pinkSet = _easedPink.Ask(pinkVal, 50, EasyFactor);
+                                NoteRemoteWrite(RemoteHeld.PinkOpacity, pinkSet);
+                                App.Settings.Current.PinkFilterOpacity = pinkSet;
                                 EnsureOverlayRunning();
                                 App.Overlay?.RefreshOverlays();
                                 App.Settings.Save();
@@ -1373,7 +1375,9 @@ namespace ConditioningControlPanel.Services
                             if (App.Settings?.Current != null && parameters != null)
                             {
                                 var spiralVal = parameters["value"]?.Value<int>() ?? 25;
-                                App.Settings.Current.SpiralOpacity = _easedSpiral.Ask(spiralVal, 100, EasyFactor);
+                                var spiralSet = _easedSpiral.Ask(spiralVal, 100, EasyFactor);
+                                NoteRemoteWrite(RemoteHeld.SpiralOpacity, spiralSet);
+                                App.Settings.Current.SpiralOpacity = spiralSet;
                                 EnsureOverlayRunning();
                                 App.Overlay?.RefreshOverlays();
                                 App.Settings.Save();
@@ -1569,7 +1573,7 @@ namespace ConditioningControlPanel.Services
                             {
                                 if (App.Settings?.Current != null)
                                 {
-                                    if (!App.Settings.Current.StrictLockEnabled) _remoteSetStrictLock = true;
+                                    NoteRemoteWrite(RemoteHeld.StrictLock, 1);
                                     App.Settings.Current.StrictLockEnabled = true;
                                     App.Settings.Save();
                                 }
@@ -1595,15 +1599,23 @@ namespace ConditioningControlPanel.Services
                         case "enable_strict_lock":
                             if (App.Settings?.Current != null)
                             {
-                                if (!App.Settings.Current.StrictLockEnabled) _remoteSetStrictLock = true;
+                                NoteRemoteWrite(RemoteHeld.StrictLock, 1);
                                 App.Settings.Current.StrictLockEnabled = true;
                                 App.Settings.Save();
                             }
                             break;
 
                         case "disable_strict_lock":
+                            // A strict lock a running Lockdown forced is the Lockdown's, never the
+                            // controller's to switch off (owner, 2026-10-22).
+                            if (RemoteHoldings.RefusesStrictOff(App.Lockdown?.IsActive == true, App.Lockdown?.ForcedStrictLock == true))
+                            {
+                                ReportCommandRefused(action, "the Lockdown holds the strict lock", "Not allowed");
+                                break;
+                            }
                             if (App.Settings?.Current != null)
                             {
+                                NoteRemoteWrite(RemoteHeld.StrictLock, 0);
                                 App.Settings.Current.StrictLockEnabled = false;
                                 App.Settings.Save();
                             }

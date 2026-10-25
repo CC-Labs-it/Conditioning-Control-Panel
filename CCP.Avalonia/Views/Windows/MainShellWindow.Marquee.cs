@@ -1,8 +1,8 @@
 // PORTED from ConditioningControlPanel/MainWindow/MainWindow.Marquee.cs (1,170 lines) - the
 // header banner's rotation, which is the part of that file this head can actually run.
 //
-// WHAT IS REAL HERE: the two-or-three beat rotation over the three TextBlocks
-// MainShellWindow.axaml already carries (TxtBannerPrimary, TxtBannerSecondary, TxtBannerWeb).
+// WHAT IS REAL HERE: the two-to-four beat rotation over the fixed, web and optional pool beats.
+// The optional authored pool beat is shared with WPF through Core BannerPoolService.
 // The beat array is built from CoreSettings (the One Account beat rides SeenFeatureIntros and
 // drops out once spent), the welcome-back line is written from CoreSettings' offline name /
 // display name, the 4s DispatcherTimer crossfades between beats, SetBannerAnnouncement replaces
@@ -41,11 +41,11 @@
 //     formatters, neither of which runs here; Loc.Get already returns the key when a string is
 //     missing, so there is nothing to restore in isolation.
 //   (StartMarqueeAnimation is PORTED onto the page that carries the strip: SettingsTabView.Marquee.cs.)
-//   SweepBannerSheen - MainShellWindow.ChromeFx.cs, still a stub. The BannerSheen border is in
-//     the XAML and parked at Opacity 0, so its absence costs nothing visible.
+//   Banner message sheens are ported in MainShellWindow.ChromeFx.cs.
 
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Threading;
@@ -83,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private TextBlock? BannerPrimary => Named<TextBlock>("TxtBannerPrimary");
         private TextBlock? BannerSecondary => Named<TextBlock>("TxtBannerSecondary");
         private TextBlock? BannerWeb => Named<TextBlock>("TxtBannerWeb");
+        private TextBlock? BannerPool => Named<TextBlock>("TxtBannerPool");
 
         /// <summary>
         /// The only hook this layer has into the window's lifetime - see the header. Guarded as a
@@ -128,6 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _bannerRotationTimer.Tick += BannerRotationTimer_Tick;
             _bannerRotationTimer.Start();
             Closed += (_, _) => _bannerRotationTimer.Stop();
+            InitializeBannerPool();
         }
 
         /// <summary>
@@ -139,10 +141,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private TextBlock[] BuildBannerBeats()
         {
             var spent = CoreSettings.Current.SeenFeatureIntros.Contains(WebBannerSeenKey);
-            var beats = spent
-                ? new[] { BannerPrimary, BannerSecondary }
-                : new[] { BannerPrimary, BannerSecondary, BannerWeb };
+            var beats = new List<TextBlock?> { BannerPrimary, BannerSecondary };
+            if (!spent) beats.Add(BannerWeb);
+            if (_bannerPoolActive) beats.Add(BannerPool);
             return beats.Where(b => b is not null).Select(b => b!).ToArray();
+        }
+
+        /// <summary>Preserve the currently visible beat when optional slots join or leave.</summary>
+        private void RebuildBannerBeats()
+        {
+            var current = _bannerCurrentIndex < _bannerBeats.Length ? _bannerBeats[_bannerCurrentIndex] : null;
+            _bannerBeats = BuildBannerBeats();
+            var index = current is null ? -1 : Array.IndexOf(_bannerBeats, current);
+            _bannerCurrentIndex = index >= 0 ? index : 0;
+            if (index < 0 && current is not null && BannerPrimary is { } primary)
+                Crossfade(current, primary);
         }
 
         /// <summary>
@@ -193,11 +206,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_bannerCurrentIndex >= banners.Length) _bannerCurrentIndex = 0;
 
             var nextIndex = (_bannerCurrentIndex + 1) % banners.Length;
+            ApplyPendingBannerPoolText(banners[_bannerCurrentIndex], banners[nextIndex]);
             Crossfade(banners[_bannerCurrentIndex], banners[nextIndex]);
             _bannerCurrentIndex = nextIndex;
 
-            // ponytail: WPF also calls SweepBannerSheen() here. MainShellWindow.ChromeFx.cs is
-            // still a stub, so the sheen pass is skipped rather than faked.
+            SweepBannerSheen();
         }
 
         /// <summary>
@@ -228,6 +241,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (secondary is not null) secondary.Text = message;
 
             if (_bannerRotationTimer is { IsEnabled: false }) _bannerRotationTimer.Start();
+            SweepBannerSheen(force: true);
         }
 
         /// <summary>WPF BannerWebLink_Click (MainWindow.Marquee.cs:464): the beat's own link opens the
@@ -255,25 +269,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     CoreSettings.Save();
                 }
 
-                var web = BannerWeb;
-                if (web is null || Array.IndexOf(_bannerBeats, web) < 0) return;
-
-                var current = _bannerCurrentIndex < _bannerBeats.Length
-                    ? _bannerBeats[_bannerCurrentIndex]
-                    : BannerPrimary;
-                _bannerBeats = BuildBannerBeats();
-
-                if (ReferenceEquals(current, web))
-                {
-                    _bannerCurrentIndex = 0;
-                    var primary = BannerPrimary;
-                    if (primary is not null) Crossfade(web, primary);
-                }
-                else if (current is not null)
-                {
-                    var idx = Array.IndexOf(_bannerBeats, current);
-                    _bannerCurrentIndex = idx >= 0 ? idx : 0;
-                }
+                RebuildBannerBeats();
             }
             catch (Exception ex)
             {
