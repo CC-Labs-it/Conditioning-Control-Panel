@@ -1,0 +1,4 @@
+# Avalonia tester steps
+
+1. On Windows, set Settings > Performance motion to Full. With Windows animation effects on, then off, post a fresh Spiral state: `reduced_motion` must change from false to true; ambient motion stops when the gate is next evaluated. Reduced stays reduced, and Off keeps transitions disabled even when OS effects are enabled. WPF `ConditioningControlPanel/Services/MotionFx.cs` and `ConditioningControlPanel/Controls/SpiralEmbedView.cs`. Rows: `ctrl-spiral-embed-view`
+   Automated coverage: `MotionPolicyTests` (all six combinations) and `SpiralEmbedViewTests.StateRechecksOsMotionPreferenceWithoutOverridingUserOff` (same live sender and shared gates, simulated OS preference). The real tab remains gated pending the Descent runtime port; this step does not claim user-path completion.

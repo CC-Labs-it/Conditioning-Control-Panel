@@ -30,6 +30,42 @@ public sealed class SpiralEmbedViewTests
     }
 
     [Fact]
+    public Task StateRechecksOsMotionPreferenceWithoutOverridingUserOff() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var oldProbe = global::ConditioningControlPanel.Avalonia.Platform.SystemMotion.AnimationsEnabled;
+        var oldLevel = CoreSettings.Current.MotionLevel;
+        try
+        {
+            bool enabled = true;
+            global::ConditioningControlPanel.Avalonia.Platform.SystemMotion.AnimationsEnabled = () => enabled;
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            var sent = new List<string>();
+            using var view = new SpiralEmbedView("map")
+            { SendJson = json => { sent.Add(json); return Task.CompletedTask; } };
+            view.Receive("{\"type\":\"spiral:ready\"}");
+            view.PostState(null);
+            Assert.False((bool)JObject.Parse(sent[^1])["reduced_motion"]!);
+            enabled = false;
+            view.PostState(null);
+            Assert.True((bool)JObject.Parse(sent[^1])["reduced_motion"]!);
+            Assert.False(AmbientFxCanvas.Env.AllowAmbientLoops);
+            Assert.True(AmbientFxCanvas.Env.AllowTransitions);
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            enabled = true;
+            view.PostState(null);
+            Assert.True((bool)JObject.Parse(sent[^1])["reduced_motion"]!);
+            Assert.False(AmbientFxCanvas.Env.AllowTransitions);
+        }
+        finally
+        {
+            global::ConditioningControlPanel.Avalonia.Platform.SystemMotion.AnimationsEnabled = oldProbe;
+            CoreSettings.Current.MotionLevel = oldLevel;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task PageHandshakeSendsLatestState_ThenLiveUpdates_DisposeStopsMessages() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();

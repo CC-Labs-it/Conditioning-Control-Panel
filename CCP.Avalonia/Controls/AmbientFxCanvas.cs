@@ -1276,13 +1276,11 @@ namespace ConditioningControlPanel.Avalonia.Controls
             public static bool AllowAmbientMotion(PerformanceTier tier) => tier != PerformanceTier.Performance;
 
             /// <summary>
-            /// MotionFx.Level. WPF caps the user's setting to Reduced when Windows' animation-
-            /// effects flag is off; Avalonia exposes no cross-platform twin, and that cap can only
-            /// ever REMOVE motion, so its absence shows the user exactly what they picked rather
-            /// than more than they asked for.
-            /// ponytail: read the desktop's reduced-motion preference here when Avalonia has one.
+            /// MotionFx.Level: cap the configured level using Windows' current animation preference.
+            /// Other platforms preserve the configured level until an equivalent native seam exists.
             /// </summary>
-            public static MotionLevel Level => CoreSettings.Current.MotionLevel;
+            public static MotionLevel Level => ConditioningControlPanel.Motion.MotionPolicy.ResolveLevel(
+                CoreSettings.Current.MotionLevel, Platform.SystemMotion.AnimationsEnabled());
 
             /// <summary>MotionFx.AllowAmbientLoops, now the real gate.</summary>
             public static bool AllowAmbientLoops =>

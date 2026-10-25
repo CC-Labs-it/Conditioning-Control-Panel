@@ -152,14 +152,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// a field captured once would leave the ember loop running for the rest of the session
         /// after someone turned motion off mid-run.</para>
         ///
-        /// <para>ponytail: the ONE thing WPF has that this head does not is the cap to Reduced
-        /// when Windows' animation-effects flag is off — see AmbientFxCanvas.Env.Level, which owns
-        /// that note. AllowTransitions is spelled out rather than read from Env because Env carries
-        /// only the ambient half; MotionFx.cs:56 is this same comparison.</para>
+        /// <para>The shared environment caps the setting to Reduced when Windows animation
+        /// effects are disabled, matching WPF MotionFx.</para>
         /// </summary>
         private static bool AllowAmbientLoops => AmbientFxCanvas.Env.AllowAmbientLoops;
 
-        private static bool AllowTransitions => CoreSettings.Current.MotionLevel != MotionLevel.Off;
+        private static bool AllowTransitions => AmbientFxCanvas.Env.AllowTransitions;
 
         // Test seams: headless has no browser engine, so the engine-path reveal is driven by faking both.
         internal static Func<bool> EngineAvailable = () => WebHost.IsAvailable;
