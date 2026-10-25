@@ -109,6 +109,16 @@ test('Tether keeps the item with nobody close, lets go after tetherMaxS and when
   assert.equal(g.rec.first('tether-break').payload.reason, 'range');
 });
 
+test('a Tether cannot spin a distant victim after the tower jumps ahead in lap progress', () => {
+  const t = setup({ karts: [{ s: 100 }, { s: 120 }] });
+  t.fire(0, 'tether');
+  t.list[0].st[S.s] = 120 + t.f.get('items.tetherBreakM') + 5;
+  t.tick();
+  assert.equal(t.rec.first('tether-break').payload.reason, 'range');
+  assert.equal(t.hits().length, 0); assert.equal(t.items.view().tethers.length, 0);
+  assert.equal(t.list[0].mods.capMul, 1); assert.equal(t.list[1].mods.capMul, 1);
+});
+
 test('Snap shoves close karts away, breaks a Tether on you and pops what reaches you for snapGuardS', () => {
   const s = setup({ karts: [{ s: 100 }, { s: 104, lateral: 1 }] });
   s.fire(0, 'tether');

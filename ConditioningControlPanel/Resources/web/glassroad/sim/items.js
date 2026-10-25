@@ -278,12 +278,14 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       l.t += dt;
       const tower = racer(l.by), vic = racer(l.target);
       if (!tower || !vic || !free(tower) || !free(vic)) { breakLink(l, 'out'); continue; }
+      // A shortcut or separated path can cross lap progress without physically passing the target.
+      const distance = Math.abs(pathGap(tower.st[S.s], tower.st[S.seg], vic.st[S.s], vic.st[S.seg]));
+      if (!Number.isFinite(distance) || distance > g('tetherBreakM')) { breakLink(l, 'range'); continue; }
       if (standings.progressOf(l.by) > standings.progressOf(l.target)) {
         breakLink(l, 'pass');
         // the spin is the one real crash of the kit: like Shatter, never near an open edge
         if (!nearOpenEdge(vic.st[S.s], g('shatterEdgeSafeM'), vic.st[S.seg])) hit(vic, l.by, 'tether', 'tether', kartP(vic));
       } else if (l.t >= g('tetherMaxS')) breakLink(l, 'timeout');
-      else if (Math.abs(pathGap(tower.st[S.s], tower.st[S.seg], vic.st[S.s], vic.st[S.seg])) > g('tetherBreakM')) breakLink(l, 'range');
     }
   }
 

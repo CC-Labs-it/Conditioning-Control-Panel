@@ -67,6 +67,16 @@ test('photosafe refusal drops the flash, never the words', () => {
   assert.equal(t.p.stats.refused, 1);
 });
 
+test('beneficial Mainframe scans add no malus payoff or cooldown before a harmful scan', () => {
+  const t = setup();
+  t.bus.emit('scan-hit', { racer: 0, effect: 'boost', color: 'green', durationS: .7 });
+  assert.equal(t.p.words.kind, 'none'); assert.equal(t.p.flash.kind, 'none');
+  assert.equal(t.p.stats.cascades, 0); assert.deepEqual(t.asked, []);
+  t.bus.emit('scan-hit', { racer: 0, effect: 'slow', color: 'yellow', durationS: .5 });
+  assert.equal(t.p.words.kind, 'brainDrain'); assert.equal(t.p.flash.kind, 'flash');
+  assert.equal(t.p.stats.cascades, 1); assert.deepEqual(t.asked, ['flash']);
+});
+
 test('a pad pays one word by chance and cooldown; payoff.on false silences everything', () => {
   const t = setup({ roll: 0 });
   t.bus.emit('pad', { index: 0 });
