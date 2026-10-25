@@ -61,8 +61,8 @@ public partial class MainShellWindow
         {
             _startCharge ??= new LinearGradientBrush
             {
-                StartPoint = new RelativePoint(0, 0.5, RelativeUnit.Relative),
-                EndPoint = new RelativePoint(1, 0.5, RelativeUnit.Relative),
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 0.35, RelativeUnit.Relative), // WPF HeroFx.cs:279 lean
                 GradientStops = new GradientStops { new(), new(), new() }
             };
             var (h, s, v) = HeroHsv(AmbientFxCanvas.Env.GlowColor);

@@ -56,6 +56,7 @@ public sealed class HeroMomentsTests
         shell.UpdateStartButton();
         var button = shell.FindControl<Button>("BtnStart")!;
         var charge = Assert.IsType<LinearGradientBrush>(button.Background);
+        Assert.Equal(new RelativePoint(1, 0.35, RelativeUnit.Relative), charge.EndPoint); // WPF HeroFx.cs:279 lean
         Assert.True(shell.StartHeroRunning);
         time.Advance(TimeSpan.FromSeconds(0.4725));
         BeatLoop.StepAll();
