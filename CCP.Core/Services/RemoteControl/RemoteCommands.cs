@@ -168,7 +168,16 @@ namespace ConditioningControlPanel.Services
             if (force) StopHaptics(); else RemoteHaptics.Stop();
             try { CoreHaptics.Service?.PanicStop(); } catch { }
             CoreAudio.Unduck();
-            StopOverlays();
+            var s = CoreSettings.Current;
+            // WPF :959/:1150 LeavesLocalRun (#1405): a disconnect over the subject's own run leaves its overlays alone;
+            // otherwise the remote switches go off with them (WPF :1019-1022, :1179-1182).
+            bool clearOverlays = force || !CoreEngine.IsRunning;
+            if (clearOverlays && (s.PinkFilterEnabled || s.SpiralEnabled))
+            {
+                s.PinkFilterEnabled = s.SpiralEnabled = false;
+                CoreSettings.Save();
+            }
+            if (clearOverlays) StopOverlays();
             if (force) CoreEngine.Stop();
             else
             {
@@ -177,7 +186,6 @@ namespace ConditioningControlPanel.Services
             }
             // As WPF, Lockdown or not: this only reduces restraint, and LockdownService.Deactivate restores
             // the pre-lockdown values when the timer ends.
-            var s = CoreSettings.Current;
             if (s.StrictLockEnabled || !s.PanicKeyEnabled)
             {
                 s.StrictLockEnabled = false;

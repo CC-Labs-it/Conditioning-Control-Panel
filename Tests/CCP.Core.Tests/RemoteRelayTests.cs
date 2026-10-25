@@ -124,7 +124,7 @@ public sealed class RemoteRelayTests
     }
 
     [Fact]
-    public void Overlay_commands_refresh_without_starting_engine_and_stop_preserves_switches()
+    public void Overlay_commands_refresh_without_starting_engine_and_remote_cleanup_clears_switches()
     {
         var old = CoreSettings.ServiceProvider;
         var oldRefresh = RemoteCommands.RefreshOverlays;
@@ -150,13 +150,40 @@ public sealed class RemoteRelayTests
             Assert.Null(RemoteCommands.Execute("show_spiral", null));
             Assert.True(states[^1]);
             Assert.False(RemoteCommands.OverlaysStopped);
-            RemoteCommands.StopEffects(force: false); // opted-in disconnect
+            RemoteCommands.StopEffects(force: false); // opted-in disconnect, no local run
             Assert.False(states[^1]);
-            Assert.True(settings.Current.SpiralEnabled);
+            Assert.False(settings.Current.SpiralEnabled || settings.Current.PinkFilterEnabled); // WPF :1179-1182
         }
         finally
         {
             RemoteCommands.StopOverlays(); RemoteCommands.ReleaseOverlayStop();
+            RemoteCommands.RefreshOverlays = oldRefresh; CoreSettings.ServiceProvider = old;
+        }
+    }
+
+    [Fact]
+    public void Remote_cleanup_over_a_local_run_leaves_its_overlays_but_panic_clears_them()
+    {
+        var old = CoreSettings.ServiceProvider;
+        var oldRefresh = RemoteCommands.RefreshOverlays;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        RemoteCommands.RefreshOverlays = () => { };
+        try
+        {
+            CoreEngine.Start();
+            settings.Current.PinkFilterEnabled = true;
+            Assert.Null(RemoteCommands.Execute("set_pink_opacity", JObject.FromObject(new { value = 30 })));
+            RemoteCommands.StopEffects(force: false); // user unticks Remote Control mid-run (WPF LeavesLocalRun, #1405)
+            Assert.False(RemoteCommands.OverlaysStopped);
+            Assert.True(settings.Current.PinkFilterEnabled);
+            RemoteCommands.StopEffects(force: true); // trigger_panic takes the run and the remote switches down
+            Assert.False(CoreEngine.IsRunning);
+            Assert.False(settings.Current.PinkFilterEnabled);
+        }
+        finally
+        {
+            CoreEngine.Stop(); RemoteCommands.ReleaseOverlayStop();
             RemoteCommands.RefreshOverlays = oldRefresh; CoreSettings.ServiceProvider = old;
         }
     }

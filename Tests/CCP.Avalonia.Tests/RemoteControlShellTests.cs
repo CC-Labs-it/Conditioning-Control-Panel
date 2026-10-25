@@ -91,11 +91,11 @@ public sealed class RemoteControlShellTests
                 Assert.Equal(new[] { $"{Loc.Get("title_remote_controller_joined")}|{Loc.Get("msg_remote_controller_joined")}" }, notified);
 
             Assert.Equal(0, attention); // visible joins notify without flashing or restoring
-            shell.Hide();
+            shell.WindowState = WindowState.Minimized; // Hide()+Show() threw "Cannot re-show a closed window" headless
             shell.OnRemoteControllerChanged();
             Assert.Equal(1, attention);
-            Assert.False(shell.IsVisible); // a join never restores the subject's window
-            shell.Show();
+            Assert.Equal(WindowState.Minimized, shell.WindowState); // a join never restores the subject's window
+            shell.WindowState = WindowState.Normal;
 
             // Overlay up with code + PIN; Start disabled, green, "REMOTE CONNECTED" (WPF StartStop.cs:992).
             Assert.True(overlay.IsVisible);
