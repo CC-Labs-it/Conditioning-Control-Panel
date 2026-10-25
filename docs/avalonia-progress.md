@@ -3471,3 +3471,7 @@ All five companion roster cards now repaint their assigned prompt name (mod-awar
 ## avalonia-port/wire-views-tab-quests: +835
 - Quests tab: quest art, server season title, Fix day (Core StreakFix rules, use-oopsie spend); row stays stub until the depth pass.
 - Review P3s: localized Yes/No on the fix-day question; fix rings dropped on a zero-width repaint (fail-proven).
+
+## avalonia-port/wire-win-tutorial-overlay-b: +528
+- Tutorial card lives in the host OverlayLayer with a real pointer hole, resize remeasure, single teardown on Escape/close/panic (Escape in a host TextBox stays with the box); host close defers on any named target window as in WPF.
+- Row stays stub; follow-up wire-win-tutorial-overlay-c.
