@@ -1,7 +1,9 @@
 // PORTED from WPF Controls/Leash/LeashDrawerSection.cs: offer rows and the own card, shared by the
 // Social > Leash page and the friends drawer popup (WPF LeashTabView.xaml.cs:32, FriendsDrawer.cs:52/:395).
-// ponytail: holder cards (LeashHolderCard), the receipts repaint and the friend card's Offer chip are wire-views-tab-leash-b-next.
+// ponytail: friend Offer chip and remaining art/overlay routes are listed in the parity ledger.
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
@@ -21,6 +23,8 @@ public sealed class LeashDrawerSection : StackPanel
     private readonly Func<ILeashService?> _resolve;
     private ILeashService? _svc;
     private LeashSelfCard? _self;
+    private readonly Dictionary<string, LeashHolderCard> _cards = new();
+    internal IReadOnlyCollection<LeashHolderCard> HolderCards => _cards.Values;
     private bool _subscribed;
 
     /// <summary>Raised after every repaint (the page swaps its empty state on it).</summary>
@@ -55,14 +59,16 @@ public sealed class LeashDrawerSection : StackPanel
         if (ReferenceEquals(next, _svc) && _subscribed) return;
         Unsubscribe();
         _svc = next;
-        if (_svc != null) { _svc.SnapshotChanged += OnSnapshot; _subscribed = true; }
+        if (_svc != null) { _svc.SnapshotChanged += OnSnapshot; _svc.ReceiptsChanged += OnReceipts; _subscribed = true; }
     }
 
     internal void Unsubscribe()
     {
-        if (_svc != null && _subscribed) _svc.SnapshotChanged -= OnSnapshot;
+        if (_svc != null && _subscribed) { _svc.SnapshotChanged -= OnSnapshot; _svc.ReceiptsChanged -= OnReceipts; }
         _subscribed = false;
     }
+
+    private void OnReceipts() { foreach (var card in _cards.Values) card.Render(); }
 
     private void OnSnapshot(LeashSnapshot _)
     {
@@ -99,6 +105,16 @@ public sealed class LeashDrawerSection : StackPanel
             Children.Add(_self);
         }
         else _self = null;
+        var keep = new HashSet<string>();
+        foreach (var held in snap.Holding)
+        {
+            keep.Add(held.Who.Id);
+            if (!_cards.TryGetValue(held.Who.Id, out var card))
+                _cards[held.Who.Id] = card = new LeashHolderCard(held, () => _svc);
+            else card.Update(held);
+            Children.Add(card);
+        }
+        foreach (var gone in _cards.Keys.Where(id => !keep.Contains(id)).ToArray()) _cards.Remove(gone);
         IsVisible = Children.Count > 0;
         Changed?.Invoke();
         NoteOnScreen(snap);
