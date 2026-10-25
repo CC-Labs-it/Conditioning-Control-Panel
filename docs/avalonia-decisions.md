@@ -1315,8 +1315,8 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Choice: B, interim. Advised by the supervisor: never risk revoking a server privacy grant without an owner decision.
   oracle-deep decision pending; follow-up lane wire-views-profile-privacy-panel-b.
 
-## 2026-10-25: FIN4 restores WPF privacy payload parity
+## 2026-10-25 privacy sync payload: C dirty-tracking
 
-- Supersedes the interim 2026-10-13 owned-fields policy above. This unit's instruction is to finish the remaining WPF behavior; no separate confirmation is required by that instruction.
-- Every eligible sync sends all six saved privacy values, as WPF does. Fresh-install defaults and changes made signed out therefore replace earlier server grants after login/load. Existing offline, authentication, load, watermark, cooldown and retry gates remain.
-- The regression test first failed on an omitted boolean, then checks the complete payload. The existing cooldown/restart/in-flight-revoke tests retain their delivery assertions and now assert the WPF all-fields contract.
+- Choice: C, dirty-tracking. This relabels the 2026-10-13 interim "B". `SyncPush.ConsentFields` sends only the privacy fields this account owns or changed (`ConsentOwnedAccount`/`ConsentOwnedFields`), never all six booleans. A fresh install's sync body carries none of the six keys (`PrivacySyncTests.FreshInstallSyncBodyCarriesNoneOfTheSixPrivacyKeys`).
+- A/B/D rejected. WPF sends all six (`ProfileSyncService.cs:1710`); that is a recorded divergence, chosen so fresh-install defaults never revoke or grant server consent.
+- Advisor: oracle-deep.

@@ -1,6 +1,8 @@
 namespace ConditioningControlPanel.Services.Privacy;
 
-// Adapted from the WPF rule at base 73b1ccf0d793bb3fde6091c18a9fa6b5c692964a.
+// Copy of Decide/enum from ConditioningControlPanel/Services/AchievementSharePromptRule.cs (base 73b1ccf0d).
+// The WPF file cannot move here unchanged (its GameOnScreen reads head-only Safety.GameSurfaces) and WPF
+// stays frozen (P118), so this twin lives under its own namespace to avoid CS0436 with the head type.
 public enum AchievementSharePromptRouting { Skip, Ask, Inbox }
 
 public static class AchievementSharePromptRule

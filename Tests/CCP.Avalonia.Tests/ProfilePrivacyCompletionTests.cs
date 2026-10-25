@@ -99,6 +99,17 @@ public sealed class ProfilePrivacyCompletionTests
     });
 
     [Fact]
+    public Task OtherCardWithoutANameSaysMessageOnDiscordNotTheRawId() => Run((shell, tab) =>
+    {
+        CoreSettings.Current.UserDisplayName = "me";
+        tab.DisplayProfileEntry(new LeaderboardRow { DisplayName = "", DiscordId = "987654" });
+        Assert.True(tab.FindControl<Button>("BtnProfileDiscord")!.IsVisible);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_message_on_discord"),
+            tab.FindControl<TextBlock>("TxtProfileDiscordId")!.Text); // WPF Browser.cs:2248
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task HiddenShellFilesOfferAndInboxReasksWithoutImplicitConsent() => Run(async (shell, tab) =>
     {
         CoreSettings.Current.DiscordShareAchievements = false;

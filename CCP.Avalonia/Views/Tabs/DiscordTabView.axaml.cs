@@ -370,7 +370,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             BtnProfileDiscord.IsVisible = !string.IsNullOrEmpty(id);
             BtnProfileDiscord.Tag = id;
-            TxtProfileDiscordId.Text = label ?? id ?? "";
+            // WPF Browser.cs:2248: a card without a display name says "Message on Discord", never the raw id.
+            TxtProfileDiscordId.Text = string.IsNullOrEmpty(label) ? ConditioningControlPanel.Localization.Loc.Get("label_message_on_discord") : label;
         }
 
         private void BtnProfileSearch_Click(object? sender, RoutedEventArgs e) => _ = SearchAsync(TxtProfileSearch.Text);

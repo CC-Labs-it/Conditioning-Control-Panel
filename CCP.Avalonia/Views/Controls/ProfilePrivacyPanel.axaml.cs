@@ -7,7 +7,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 {
     /// <summary>
     /// WPF ProfilePrivacyPanel: presence, local sharing and push-on-change audience consent.
-    /// All six saved audience consent values are sent on sync, as on WPF.
+    /// Only explicitly chosen consent fields are sent, scoped to the account that chose them.
     /// </summary>
     public partial class ProfilePrivacyPanel : UserControl
     {
