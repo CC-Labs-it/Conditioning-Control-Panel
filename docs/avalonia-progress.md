@@ -3353,3 +3353,7 @@ Companion chat threshold (Z2) motion matches WPF: staggered thinking dots on the
 ## avalonia-port/flake-language-suite-discovery: +138
 
 Windows "Test process did not return valid JSON (non-object)" discovery flake: xUnit 3.2.2 printed its 1 s shutdown notice into the -assemblyInfo stdout on slow teardowns. A shared module initializer now keeps only the JSON line in that launch (xUnit 4.0's own fix). New AssemblyInfoDiscoveryTests replays the slow exit and was fail-proven. rgate 40189678272 GATE-OK.
+
+## avalonia-port/wire-views-tab-quests-b: +448
+- Quests tab depth pass (wells, seats, planks, DONE stamp) on Core DepthLaw with finite BeatLoop travel; shell hue repaints quest bands.
+- Fix-day status icons now Fluent (IconLabel.Kind), IconGuard ratchets back at baseline; fail-proven tests.
