@@ -29,6 +29,10 @@ namespace ConditioningControlPanel
         private int _completedRepeats = 0;
         private bool _isCompleted = false;
         private DispatcherTimer? _closeTimer;
+        // Gentle visuals: this (pooled) window's Opacity was animated, so a later show with the
+        // switch off must put it back to 1. Never set while gentle visuals stay off.
+        private bool _gentleFaded;
+        private static int _showGeneration;
         private bool _voiceListening = false;
         private System.Threading.CancellationTokenSource? _voiceCts; // cancels the in-flight recognize on close/panic/privacy
         private bool _evictedAutonomy = false; // we stood the "Hey Bambi" wake/PTT mic down and must restore it
@@ -346,7 +350,8 @@ namespace ConditioningControlPanel
             ResetKeystrokeGate();   // a pooled window still carries the previous card's typing credit
 
             _phrase = phrase;
-            _requiredRepeats = repeats;
+            // Never a card with nothing to type: 0 repeats read "0 / 0" (done) yet never closed (#1444).
+            _requiredRepeats = Math.Max(1, repeats);
             _strictMode = strictMode;
             _isPrimary = isPrimary;
             _screen = screen;
@@ -927,7 +932,8 @@ namespace ConditioningControlPanel
             _closeTimer.Tick += (s, e) =>
             {
                 _closeTimer?.Stop();
-                CloseAllWindows();
+                if (Services.Safety.GentleVisuals.On) FadeOutThenDismiss();
+                else CloseAllWindows();
             };
             _closeTimer.Start();
         }
@@ -1155,6 +1161,54 @@ namespace ConditioningControlPanel
         private void CloseAllWindows()
         {
             DismissAll();
+        }
+
+        /// <summary>
+        /// Gentle visuals: a SOLVED card fades out before the normal dismissal. Esc, panic and every
+        /// other door still dismiss at once; a panic or a new card landing mid-fade wins (the visible
+        /// set is empty or the show generation moved), so the deferred dismissal never touches it.
+        /// </summary>
+        private static void FadeOutThenDismiss()
+        {
+            int gen = _showGeneration;
+            var dur = TimeSpan.FromSeconds(Services.Safety.GentleVisuals.FadeSeconds);
+            foreach (var w in _allWindows)
+            {
+                w._gentleFaded = true;
+                try { w.BeginAnimation(OpacityProperty, new DoubleAnimation(0.0, dur)); } catch { }
+            }
+            var t = new DispatcherTimer { Interval = dur };
+            t.Tick += (_, _) =>
+            {
+                t.Stop();
+                if (gen == _showGeneration && _allWindows.Count > 0) DismissAll();
+            };
+            t.Start();
+        }
+
+        /// <summary>Gentle visuals at show: start transparent, rise over the gentle fade (never under
+        /// the 300 ms rise floor). With the switch off, only undoes an earlier gentle fade.</summary>
+        private void GentleBeforeShow()
+        {
+            if (Services.Safety.GentleVisuals.On)
+            {
+                _gentleFaded = true;
+                BeginAnimation(OpacityProperty, null);
+                Opacity = 0;
+            }
+            else if (_gentleFaded)
+            {
+                _gentleFaded = false;
+                BeginAnimation(OpacityProperty, null);
+                Opacity = 1;
+            }
+        }
+
+        private void GentleAfterShow()
+        {
+            if (!Services.Safety.GentleVisuals.On) return;
+            var ms = Services.Safety.GentleVisuals.RiseMs(Services.Safety.GentleVisuals.FadeMs(0));
+            BeginAnimation(OpacityProperty, new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(ms)));
         }
 
         /// <summary>
@@ -1617,6 +1671,7 @@ namespace ConditioningControlPanel
             _deferTimer?.Stop();
             _deferTimer = null;
             _deferAttempts = 0;
+            _showGeneration++;   // a gentle fade-out still running for the previous card must not dismiss this one
 
             // Defensive: hide + pool any still-visible cards from a prior show before starting a new one.
             // The interaction queue normally serializes lock cards, but a stray overlap must never leak a
@@ -1688,8 +1743,10 @@ namespace ConditioningControlPanel
                     using (VideoDiag.UiScope("LockCardWindow.Show(fullscreen layered)"))
                     using (HangContext.Scope("lockCard.show"))
                     {
+                        window.GentleBeforeShow();
                         window.Show();
                         window.OnShown();   // per-show foreground/focus/voice (Loaded no longer re-fires on reuse)
+                        window.GentleAfterShow();
                     }
                 }
                 finally

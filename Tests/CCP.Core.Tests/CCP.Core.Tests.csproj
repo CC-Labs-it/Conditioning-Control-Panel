@@ -25,13 +25,16 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
     <!-- Copies libvosk next to the tests; Core's copy does not flow through the ProjectReference. -->
     <PackageReference Include="Vosk" Version="0.3.38" />
-    <!-- libSkiaSharp for Linux (Core's SkiaSharp brings only the win/mac natives), for the compositor layer tests. -->
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.88.8" />
+    <!-- libSkiaSharp for Linux (Core's SkiaSharp brings only the win/mac natives): compositor layer tests and
+         GlyphFallbackRunTests. The full package (not .NoDependencies) so fontconfig glyph fallback works. -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="2.88.8" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\CCP.Core\CCP.Core.csproj" />
     <Compile Include="..\Shared\BackRoomBridgeRig.cs" Link="BackRoomBridgeRig.cs" />
+    <!-- Existing pure first-light timeline specs also run on Linux against the shared Core engine. -->
+    <Compile Include="..\ConditioningControlPanel.Tests\SpiralFirstLightTimelineTests.cs" Link="SpiralFirstLightTimelineTests.cs" />
   </ItemGroup>
 
   <ItemGroup>

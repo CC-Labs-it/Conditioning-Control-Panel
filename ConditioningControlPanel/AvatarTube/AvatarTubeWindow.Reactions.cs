@@ -145,11 +145,11 @@ namespace ConditioningControlPanel
                 if (isAiResponse)
                 {
                     PlayDoubleBounce();
-                    GigglePriority(reaction);
+                    GigglePriority(reaction, unprompted: true);
                 }
                 else
                 {
-                    Giggle(reaction);
+                    Giggle(reaction, unprompted: true);
                 }
 
                 App.Logger?.Debug("Awareness reaction fired ({Category}, app {AppChars} chars, line {Chars} chars)",
@@ -259,9 +259,9 @@ namespace ConditioningControlPanel
 
                 // AI responses get priority
                 if (isAiResponse)
-                    GigglePriority(reaction);
+                    GigglePriority(reaction, unprompted: true);
                 else
-                    Giggle(reaction);
+                    Giggle(reaction, unprompted: true);
 
                 App.Logger?.Debug("Still-on reaction fired ({Duration}, useServiceOnly={UseService}, app {AppChars} chars, line {Chars} chars)",
                     duration, useServiceNameOnly, (displayName ?? "").Length, (reaction ?? "").Length);
@@ -300,7 +300,7 @@ namespace ConditioningControlPanel
                 if (Application.Current?.Dispatcher?.HasShutdownStarted ?? true) return;
 
                 if (doubleBounce) PlayDoubleBounce();
-                GigglePriority(text, aiGenerated: true);
+                GigglePriority(text, aiGenerated: true, unprompted: true);
 
                 App.Logger?.Debug("Awareness v2 line delivered (rare={Rare}, {Chars} chars)", doubleBounce, (text ?? "").Length);
             }
