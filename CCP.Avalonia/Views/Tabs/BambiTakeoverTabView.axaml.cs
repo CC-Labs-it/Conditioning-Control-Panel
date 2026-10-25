@@ -547,9 +547,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             s.WallpaperEnabled = keep;
             CoreSettings.Save();
             PanelWallpaperDuration.IsVisible = !keep;
+            if (keep && TopLevel.GetTopLevel(this) is Windows.MainShellWindow shell) shell.WarnIfWallpaperLibraryEmpty();
             // ponytail: WPF also puts the original wallpaper straight back when this goes off
-            // (App.Wallpaper.Deactivate) and warns on an empty library when it goes on
-            // (MainWindow.StartStop.cs WarnIfWallpaperLibraryEmpty). Needs
+            // (App.Wallpaper.Deactivate). Needs
             // ConditioningControlPanel/Services/WallpaperService.cs, which is Win32.
         }
 

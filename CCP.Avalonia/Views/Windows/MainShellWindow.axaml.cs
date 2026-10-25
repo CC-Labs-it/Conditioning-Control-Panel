@@ -139,6 +139,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeStatPills(); // MainShellWindow.UiUpdates.cs (WPF MainWindow.xaml.cs:3726 StartStatPillUpdateTimer)
             InitializeWebcamActivePill(); // MainShellWindow.SafetyPills.cs (WPF LabTab.cs:134 WireWebcamActivePill)
             InitializeRapidBlinkStop();   // MainShellWindow.BlinkStop.cs (WPF LabTab.cs:168 WireRapidBlinkRecalibrateShortcut)
+            InitializeSchedule();
+            InitializeShellNotifications();
             InitializeRemoteControlOverlay(); // MainShellWindow.RemoteControl.cs (WPF MainWindow.RemoteControl.cs:784)
             InitializeLeashGate(); // MainShellWindow.LeashGate.cs (WPF MainWindow.Leash.cs InitializeLeash)
             InitializeLeashHold(); // MainShellWindow.LeashHold.cs (WPF MainWindow.Leash.cs hold-to-cut)

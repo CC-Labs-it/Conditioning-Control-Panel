@@ -123,6 +123,7 @@ public sealed class PanicSurfacesTests
         "attention-test",
         "deeper-editor-audio",
         "knock-cards",
+        "webcam-calibration",
         "camera",
     };
 
