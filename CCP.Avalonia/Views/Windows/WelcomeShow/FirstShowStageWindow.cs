@@ -35,7 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 /// effects over the primary screen. The stage is transparent and click-through (<see cref="X11Overlay"/>); EMI is
 /// the real <see cref="EmiDeskWindow"/> presenting; her speech card is its own window so its buttons stay
 /// clickable (WPF :30). Timings are <see cref="FirstShowScript"/>'s; the guide after the verdict is the Guide
-/// partial. Bubble pops reach the click-through stage through its input region (<see cref="SyncPopRegion"/>).</summary>
+/// partial. ponytail: bubble pops need input rects on the click-through stage (WPF's layered canvas took the click).</summary>
 internal sealed partial class FirstShowStageWindow : Window
 {
     private readonly Canvas _stage = new() { Background = null };
@@ -85,21 +85,6 @@ internal sealed partial class FirstShowStageWindow : Window
     internal string SpeechText => _speech.Text ?? string.Concat(_speech.Inlines?.OfType<Run>().Select(r => r.Text) ?? Array.Empty<string>());
     internal IReadOnlyList<Button> ChoiceButtons => _choices.Children.OfType<Button>().ToArray();
     internal bool Playing => _playing;
-    private readonly PixelRect[] _popRects = new PixelRect[8];
-    /// <summary>How many rects the stage's input region holds (<see cref="PopRects"/>); 0 = fully click-through.</summary>
-    internal int PopRegionCount { get; private set; }
-    internal PixelRect[] PopRects => _popRects;
-    /// <summary>WPF's layered canvas took a click on a painted bubble and let every other pixel through. The
-    /// stage is click-through, so its input region follows the live bubbles, re-sent every frame (the Win32
-    /// form polls the cursor, BubbleOverlay.cs:387) and left empty once they gather.</summary>
-    private void SyncPopRegion()
-    {
-        var n = _effects?.BubbleRects(_popRects, RenderScaling > 0 ? RenderScaling : 1) ?? 0;
-        if (n == 0 && PopRegionCount == 0) return;
-        try { X11Overlay.SetInputRects(this, _popRects, n); }
-        catch (Exception ex) { Log.Debug(ex, "First show stage: input region failed"); }
-        PopRegionCount = n;
-    }
     internal FirstShowAudio Audio => _audio;
     internal double LogoOpacity => _logo.Opacity;
     /// <summary>--render-all: the stage at the reveal (logo up), nothing else on it.</summary>
@@ -323,7 +308,6 @@ internal sealed partial class FirstShowStageWindow : Window
         if (_playing)
         {
             _effects?.Tick(time, dt);
-            SyncPopRegion();
             while (_beat + 1 < S.Beats.Length && time >= S.Beats[_beat + 1])
             {
                 _beat++;

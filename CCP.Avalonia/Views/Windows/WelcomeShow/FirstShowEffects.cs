@@ -195,22 +195,6 @@ internal sealed class FirstShowEffects : Control, IDisposable
         if (Particles()) { Burst(a.X, a.Y, Colors.HotPink, 1.3); Ripple(a.X, a.Y, a.W, .5); }
         _cue("pop");
     }
-    /// <summary>The boxes of the circles <see cref="Pop"/> tests, in px at <paramref name="scale"/>: what the
-    /// click-through stage's input region lets through. Empty once the bubbles gather.</summary>
-    internal int BubbleRects(PixelRect[] into, double scale)
-    {
-        if (_disposed || _time >= S.GatherAt) return 0;
-        var n = 0;
-        foreach (var a in _actors)
-        {
-            if (n == into.Length) break;
-            if (!a.Bubble || a.Gone) continue;
-            double r = a.W * .52;
-            int side = (int)Math.Ceiling(2 * r * scale);
-            into[n++] = new PixelRect((int)Math.Floor((a.X - r) * scale), (int)Math.Floor((a.Y - r) * scale), side, side);
-        }
-        return n;
-    }
     // The three ChaosFxLayer emitters the show used (EmitBurst, EmitRipple, EmitTrail), drawn plain.
     private void Burst(double x, double y, Color color, double power)
     {

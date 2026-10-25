@@ -411,10 +411,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             return Math.Max(MinBodyWidth, Math.Min(MaxBodyWidth, w));
         }
 
-        /// <summary>
-        /// Resize her. Width is clamped to 152..420 DIPs; the height, the window, the glass rect and
-        /// the three corner affordances all follow. Raises <see cref="Resized"/>.
-        /// </summary>
         /// <summary>The X11 input region (window px) as last set: BodyRoot's rect, or null (the
         /// whole window) while the bubble layer takes clicks.</summary>
         internal PixelRect? InputRect { get; private set; }
@@ -433,6 +429,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] input region failed"); }
         }
 
+        /// <summary>
+        /// Resize her. Width is clamped to 152..420 DIPs; the height, the window, the glass rect and
+        /// the three corner affordances all follow. Raises <see cref="Resized"/>.
+        /// </summary>
         public void ApplyBodyWidth(double width)
         {
             try
