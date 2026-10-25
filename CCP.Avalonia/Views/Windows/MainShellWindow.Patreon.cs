@@ -158,10 +158,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     && !App.WindowAwareness.IsRunning)
                     App.WindowAwareness.Start();
                 // WPF EnforceEntitlementLapse + UpdatePatreonUI: stop on lapse and re-arm
-                // a saved-on master when asynchronous access validation resolves.
-                Platform.KeywordTriggerHead.Sync();
-                Named<Tabs.AwarenessTabView>("AwarenessTab")?.SyncAwarenessTabUi();
+                // a saved-on master when asynchronous access validation resolves. This runs on every
+                // tab switch, so a running engine is left alone: re-syncing it would re-attach a
+                // Keyboard source the user switched off (WPF re-arms only from UpdatePatreonUI).
+                if (!Platform.KeywordTriggerHead.Engine.IsActive || !Platform.KeywordAudioRuntime.HasAccess)
+                    Platform.KeywordTriggerHead.Sync();
                 if (cleared.Count == 0) return;
+                Named<Tabs.AwarenessTabView>("AwarenessTab")?.SyncAwarenessTabUi();
                 Named<Tabs.BambiTakeoverTabView>("BambiTakeoverTab")?.SyncFromSettings();
                 StudioRack?.HapticsPanel.LoadHapticsSettingsToUi();   // haptics Enabled may just have been cleared
                 RefreshSheListeningTab();   // "voice" / "voice-mic" may just have been cleared

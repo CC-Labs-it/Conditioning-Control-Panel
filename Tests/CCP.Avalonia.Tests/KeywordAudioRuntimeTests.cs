@@ -276,6 +276,28 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     [Fact]
+    public void TabSwitchRefreshWithNothingClearedLeavesAwarenessChipsAlone() => Run((_, s, _) =>
+    {
+        var saved = s.KeywordTriggerApps;
+        var shell = new MainShellWindow();
+        try
+        {
+            CoreEntitlement.HasPremiumProvider = () => true;
+            s.KeywordTriggerApps = new();
+            s.KeywordTriggerAppScope = AwarenessAppScope.ExceptListed;
+            KeywordTriggerHead.Engine.Start();
+            KeywordTriggerHead.Engine.Character('x', "Browser");
+            var view = shell.Named<AwarenessTabView>("AwarenessTab")!;
+            view.SyncAwarenessTabUi();
+            var chip = view.FindControl<WrapPanel>("AwarenessSeenAppsPanel")!.Children.OfType<Button>().First();
+            // WPF MainWindow.Patreon.cs: the Awareness tab is re-synced only when a lapse cleared something.
+            shell.RefreshEntitlementVeils();
+            Assert.Same(chip, view.FindControl<WrapPanel>("AwarenessSeenAppsPanel")!.Children.OfType<Button>().First());
+        }
+        finally { s.KeywordTriggerApps = saved; shell.Close(); }
+    });
+
+    [Fact]
     public void MasterSwitchDrivesTheExistingSharedBeatStatusGlow() => Run((_, s, _) =>
     {
         s.KeywordTriggersEnabled = false;
