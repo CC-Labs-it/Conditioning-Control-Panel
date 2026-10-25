@@ -8118,6 +8118,7 @@
   "panic_portal_description": "Panic: stop everything",
   "panic_portal_bound": "Panic key in every window: {0}",
   "panic_portal_unavailable": "The panic key works only while an X11 app has focus; use tray › Stop everything.",
+  "panic_key_unhearable": "Il tasto panico {0} non può essere rilevato su questo desktop. Scegli un altro tasto oppure usa «Ferma tutto» nella tray.",
   "panic_key_wayland_hint": "On Wayland the panic key is captured desktop-wide only while effects run.",
   "avalonia_compat_language_hint": "Change language",
   "login_not_remembered_title": "Sign-in not remembered",

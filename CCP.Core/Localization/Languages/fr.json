@@ -6422,6 +6422,7 @@
   "panic_portal_description": "Panique : tout arrêter",
   "panic_portal_bound": "Touche panique dans toutes les fenêtres : {0}",
   "panic_portal_unavailable": "La touche panique ne marche que si une fenêtre CCP ou X11 a le focus. Sinon, utilise « Tout arrêter » dans la zone de notification.",
+  "panic_key_unhearable": "La touche panique {0} ne peut pas être détectée sur ce bureau. Choisis une autre touche, ou utilise « Tout arrêter » dans la zone de notification.",
   "panic_key_wayland_hint": "Sous Wayland, la touche panique n'est capturée sur tout le bureau que pendant les effets.",
   "btn_stop_session_no": "Continuer",
   "btn_stop_session_yes": "Arrêter la session",

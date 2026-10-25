@@ -6422,6 +6422,7 @@
   "panic_portal_description": "Pánico: detener todo",
   "panic_portal_bound": "Tecla de pánico en cualquier ventana: {0}",
   "panic_portal_unavailable": "La tecla de pánico solo funciona mientras una ventana de CCP u otra X11 tiene el foco. En otro caso usa «Detener todo» en la bandeja.",
+  "panic_key_unhearable": "La tecla de pánico {0} no se detecta en este escritorio. Elige otra tecla o usa «Detener todo» en la bandeja.",
   "panic_key_wayland_hint": "En Wayland la tecla de pánico se captura en todo el escritorio solo mientras hay efectos activos.",
   "btn_stop_session_no": "Seguir",
   "btn_stop_session_yes": "Parar la sesión",
