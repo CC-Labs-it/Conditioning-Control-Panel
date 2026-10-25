@@ -7,11 +7,12 @@ using ConditioningControlPanel.Services;
 namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 {
     /// <summary>
-    /// SETTINGS · NOTIFICATIONS, ported from the WPF head. Both rows are persisted preferences:
-    /// <c>ChkIntakeNudge</c> controls the weekly intake reminder and
-    /// <c>ChkSuppressPerkNotifications</c> controls live perk announcements.
+    /// SETTINGS · NOTIFICATIONS, ported from the WPF head. All three rows are persisted preferences:
+    /// <c>ChkIntakeNudge</c> controls the weekly intake reminder,
+    /// <c>ChkSuppressPerkNotifications</c> live perk announcements and <c>ChkBannerPool</c> the
+    /// header banner's pool beat.
     /// </summary>
-    public partial class NotificationsSettingsSection : UserControl
+    public partial class NotificationsSettingsSection : UserControl, IAppSettingsSection
     {
         private bool _isLoading = true;
         private SettingsService? _subscribedService;
@@ -21,6 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             InitializeComponent();
             ChkIntakeNudge.IsCheckedChanged += ChkIntakeNudge_Changed;
             ChkSuppressPerkNotifications.IsCheckedChanged += ChkSuppressPerkNotifications_Changed;
+            ChkBannerPool.IsCheckedChanged += ChkBannerPool_Changed;
             SyncFromSettings();
         }
 
@@ -41,6 +43,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
         private void OnCurrentReplaced() => Dispatcher.UIThread.Post(SyncFromSettings);
 
+        // WPF IsVisibleChanged re-seeds on every Settings-door open.
+        public void OnSectionShown() => SyncFromSettings();
+
         /// <summary>Paints the rows from settings without raising an edit.</summary>
         internal void SyncFromSettings()
         {
@@ -50,6 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             {
                 ChkIntakeNudge.IsChecked = s.IntakeNudgeEnabled;
                 ChkSuppressPerkNotifications.IsChecked = s.SuppressPerkNotifications;
+                ChkBannerPool.IsChecked = s.BannerPoolEnabled;
             }
             finally { _isLoading = false; }
         }
@@ -65,6 +71,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         {
             if (_isLoading) return;
             CoreSettings.Current.SuppressPerkNotifications = ChkSuppressPerkNotifications.IsChecked ?? false;
+            CoreSettings.Save();
+        }
+
+        /// <summary>WPF NotificationsSettingsSection.xaml.cs:101-108: a live editor for the header
+        /// banner's pool beat. That beat (BannerPoolService) is not ported to this head yet
+        /// (parity row shell-marquee); the preference still persists for it and for WPF.</summary>
+        private void ChkBannerPool_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            CoreSettings.Current.BannerPoolEnabled = ChkBannerPool.IsChecked ?? true;
             CoreSettings.Save();
         }
     }

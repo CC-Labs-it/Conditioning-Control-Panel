@@ -48,7 +48,15 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         /// Session boundary / housekeeping marker ("app closed", "mod switched to Sissy").
         /// Never sent verbatim to a model — excluded from every prompt window.
         /// </summary>
-        SystemNote
+        SystemNote,
+
+        /// <summary>
+        /// An AI line the avatar tube showed that no other turn records (awareness v2, autonomy
+        /// nudges, random thoughts, brain-off tube chat). Display only, for the Companion page
+        /// history (ccp-bugs #1443): never in a prompt window, never persisted, so prompts stay
+        /// exactly as they were.
+        /// </summary>
+        TubeLine
     }
 
     /// <summary>

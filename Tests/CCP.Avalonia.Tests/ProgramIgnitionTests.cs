@@ -156,6 +156,75 @@ public sealed class ProgramIgnitionTests
             ((ISolidColorBrush)F<Border>("ProgramsGraduatedCard").BorderBrush!).Color);
     });
 
+    [Fact]
+    public void TodaysPipBreathesOnTheBeatAndParksWithEveryGate() => WithRun(lastDay: true, (shell, tab, _, _) =>
+    {
+        var glow = global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(tab)
+            .OfType<Ellipse>().Single(e => e.Name == "PipGlow" && e.DataContext is ProgramDayPip { IsCurrent: true });
+        var scale = (ScaleTransform)glow.RenderTransform!;
+        Assert.Equal(.35, glow.Opacity, 3);
+        Assert.Equal(.9, scale.ScaleX, 3);
+        Assert.Contains(BeatLoop.Running, loop => loop.Owner == glow && loop.OnFrameBeat);
+        Step(1.2);
+        Assert.Equal(.95, glow.Opacity, 3);
+        Assert.Equal(1.12, scale.ScaleX, 3);
+        using (var image = shell.CaptureRenderedFrame())
+            Assert.NotNull(image);
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(.65, glow.Opacity, 3);
+        Assert.Equal(1, scale.ScaleX, 3);
+        Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == glow);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Dispatcher.UIThread.RunJobs();
+        shell.WindowState = WindowState.Minimized;
+        Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == glow);
+        shell.WindowState = WindowState.Normal;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(BeatLoop.Running, loop => loop.Owner == glow);
+        tab.IsVisible = false;
+        Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == glow);
+        Assert.Equal(.65, glow.Opacity, 3);
+    });
+
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Reduced)]
+    [InlineData(MotionLevel.Off)]
+    public void CompletedDayIgnitesItsOwnNodeOnceAndNeverReplays(MotionLevel motion) => WithRun(lastDay: false, (_, tab, svc, _) =>
+    {
+        CoreSettings.Current.MotionLevel = motion;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        svc.TodayRecord!.DayCompleted = true;
+        tab.RefreshPrograms();
+        tab.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        var flare = global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(tab)
+            .OfType<Ellipse>().Single(e => e.Name == "PipIgnite" && e.DataContext is ProgramDayPip { IsCurrent: true });
+        var scale = (ScaleTransform)flare.RenderTransform!;
+        Assert.Equal(0, flare.Opacity);
+        Step(.18);
+        if (motion == MotionLevel.Off) Assert.Equal(0, flare.Opacity);
+        else
+        {
+            Assert.Equal(.95, flare.Opacity, 3);
+            Assert.InRange(scale.ScaleX, .6, 1.35);
+        }
+        Step(.72);
+        Assert.Equal(0, flare.Opacity, 3);
+        Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == flare);
+        // Gate changes reuse carriers; a finished/off-gated moment must remain consumed.
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == flare);
+        tab.RefreshPrograms();
+        Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(tab.FindControl<ItemsControl>("ProgramDayStrip")!.Items.Cast<ProgramDayPip>(), pip => pip.Ignite);
+    });
+
     /// <summary>40 beats of stepped time, time-bounded (P73); returns how many distinct values each loop showed:
     /// edge opacity, the border brush's rotation, the counter ink's X offset and the comet's X offset.</summary>
     private static (int Edge, int Angle, int Shimmer, int Comet) Frames(string phase, StringBuilder log, ProgramsTabView tab)
@@ -197,7 +266,7 @@ public sealed class ProgramIgnitionTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 

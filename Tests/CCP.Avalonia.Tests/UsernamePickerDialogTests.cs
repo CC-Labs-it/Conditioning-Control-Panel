@@ -55,6 +55,8 @@ public sealed class UsernamePickerDialogTests
                 void Expect(string text, string key, IBrush colour)
                 {
                     box.Text = text;
+                    // MaxLength=30 only limits typing; text set from code must not be truncated.
+                    Assert.Equal(text, box.Text);
                     Dispatcher.UIThread.RunJobs();
                     Assert.Equal(Loc.Get(key), status.Text);
                     Assert.Same(colour, status.Foreground);
