@@ -176,6 +176,10 @@ namespace ConditioningControlPanel
             {
                 var settings = App.Settings?.Current;
                 if (settings == null) return;
+                // Before anything below switches yesterday's Daily Gift off: remember it was in use,
+                // for the next launch's relock row (MainWindow.Inbox.cs).
+                if (NoteDailyGiftUse(settings)) App.Settings?.Save();
+
                 // The flag half is Core (CCP.Core/Services/EntitlementLapse.cs), shared with every
                 // head; the engines each cleared flag kept alive are stopped here.
                 var cleared = Services.EntitlementLapse.Enforce(settings);
@@ -237,6 +241,9 @@ namespace ConditioningControlPanel
                 {
                     App.WindowAwareness?.Start();
                 }
+
+                // The day it closes is no longer silent (proposal 4b): the closed row, once.
+                MaybePostConversionRows();
             }
             catch (Exception ex)
             {
@@ -273,8 +280,24 @@ namespace ConditioningControlPanel
             RefreshPremiumGate(RemoteControlTab?.RemoteControlGate, "remote");
             RefreshPremiumGate(AwarenessTab?.AwarenessGate, "awareness");
             // Lockdown is not in the rotation and has no DailyFreeKey.
-            RefreshPremiumGate(LockdownTab?.LockdownGate);
+            RefreshLockdownGate();
             if (SheListeningTab != null) RefreshPremiumGate(SheListeningTab.SheListeningGate, "voice");
+        }
+
+        /// <summary>
+        /// The Lockdown page's padlock veil. Never drawn over a RUNNING lockdown
+        /// (<see cref="Services.LockdownExitRule.ShowsPremiumVeil"/>): it covers the timer's
+        /// five-click handle and the Emergency Exit, so a sign-out mid-lockdown left no way out but
+        /// the clock. OnLockdownDeactivated calls this again, so the veil returns when it ends.
+        /// </summary>
+        internal void RefreshLockdownGate()
+        {
+            var gate = LockdownTab?.LockdownGate;
+            if (gate == null) return;
+            RefreshPremiumGate(gate);
+            if (!Services.LockdownExitRule.ShowsPremiumVeil(App.Patreon?.HasPremiumAccess == true,
+                                                             App.Lockdown?.IsActive == true))
+                gate.Visibility = Visibility.Collapsed;
         }
 
         #endregion
@@ -1124,13 +1147,16 @@ namespace ConditioningControlPanel
             try
             {
                 var patreon = App.Patreon;
-                if (patreon?.HasPremiumAccess != true) return;
+                if (patreon?.HasPremiumAccess != true) { TierOnNoticePass(mayShow: false); return; }
                 // An invite week is a free trial, not a purchase: celebrating it would spend the
                 // tier-1 seen-flag and the friend's real subscription later would get no card.
-                if (patreon.IsInviteWeekOnly) return;
+                if (patreon.IsInviteWeekOnly) { TierOnNoticePass(mayShow: false); return; }
                 var tier = patreon.HasLabAccess ? 2 : 1;
                 var onRise = riseTier > 0;
-                if (!TierCelebration.IsOwed(App.Settings?.Current?.SeenFeatureIntros, tier, onRise)) return;
+                // The big once-ever card is spent: a later rise (a lapse and back, an upgrade
+                // celebrated before) gets the small "Your Prime is on" card instead.
+                if (!TierCelebration.IsOwed(App.Settings?.Current?.SeenFeatureIntros, tier, onRise)) { TierOnNoticePass(mayShow: true); return; }
+                TierOnNoticePass(mayShow: false);   // the celebration below says it
                 var key = TierCelebration.KeyFor(tier)!;
 
                 // A purchase the user just made is celebrated at once, not filed in the Inbox,
@@ -1162,6 +1188,43 @@ namespace ConditioningControlPanel
 
         /// <summary>Tier of a live rise waiting for the celebration pass, 0 when none.</summary>
         private int _pendingRiseTier;
+
+        /// <summary>
+        /// Records the effective tier and, when it rose over the last one this install knew and
+        /// <paramref name="mayShow"/>, posts the small "Your Prime is on" card through the presenter
+        /// (an Inbox row while the user is busy). Drops are recorded only once the server answered
+        /// this run, so a stale cache at launch never sets up a false card (TierOnNotice).
+        /// </summary>
+        private void TierOnNoticePass(bool mayShow)
+        {
+            try
+            {
+                var settings = App.Settings?.Current;
+                if (settings == null) return;
+                var current = EntitlementTierSync.EffectiveTierNow();
+                var verdict = TierOnNotice.Decide(settings.LastKnownEffectiveTier, current,
+                    mayRecordDrop: EntitlementTierSync.ServerAnsweredThisRun);
+                if (verdict.Record != settings.LastKnownEffectiveTier)
+                {
+                    settings.LastKnownEffectiveTier = verdict.Record;
+                    App.Settings?.Save();
+                }
+                if (!verdict.Owed || !mayShow) return;
+                // The once-ever celebration still owed for this tier says it instead (no two cards).
+                if (TierCelebration.IsOwed(settings.SeenFeatureIntros, current, onRise: true)) return;
+                var title = Loc.Get(TierOnNotice.TitleKey(current));
+                var body = Loc.Get("tier_on_body");
+                PresentOrInbox(new Services.Startup.InboxItem
+                {
+                    Key = "tier-on:" + current,
+                    Glyph = "💖",
+                    Title = title,
+                    Summary = body,
+                    Open = () => InboxNoticeCard.Present(this, title, body, null, null),
+                });
+            }
+            catch (Exception ex) { App.Logger?.Debug("Tier-on notice failed: {Error}", ex.Message); }
+        }
 
         private bool CanCelebrateNow()
             => IsVisible && WindowState != WindowState.Minimized
@@ -1206,7 +1269,17 @@ namespace ConditioningControlPanel
             // Instant unlock for a tier bought on the site: a focus refresh when the user clicks back
             // in, and the rise's own fanfare on the profile bubble (EntitlementTierSync).
             Activated += (_, __) => EntitlementTierSync.OnAppFocused();
+            Activated += (_, __) => TierOnNoticePass(mayShow: true);
+            // Back from a Patreon / site checkout through ANY app window (launcher, game, dialog).
+            if (Application.Current != null)
+                Application.Current.Activated += (_, __) => EntitlementTierSync.OnAppActivatedAfterCheckout();
             Activated += (_, __) => MaybeShowInviteEnding();
+            // Conversion rows (lapse warnings and the rest, MainWindow.Inbox.cs): checked on focus and
+            // after any server tier reading that moved the stored lapse signal.
+            Activated += (_, __) => MaybePostConversionRows();
+            EntitlementTierSync.ReadingApplied += MaybePostConversionRows;
+            EntitlementTierSync.ExtrasApplied += MaybePostConversionRows;
+            Services.Startup.Conversion.ConversionSignals.CompanionCapHit += OnCompanionCapHit;
             Services.Invites.InviteGrantSync.ArmExpiry();
             EntitlementTierSync.TierRaised += OnEntitlementTierRaised;
 
@@ -1225,10 +1298,13 @@ namespace ConditioningControlPanel
             // "Muted" is now its own flag, not the inverse of the enable (AppSettings.SubAudioMuted).
             CompanionTab.ChkMuteWhispersCompanion.IsChecked = settings.SubAudioMuted;
             CompanionTab.ChkVoiceLinesCompanion.IsChecked = settings.CompanionVoiceLinesMuted;
+            CompanionTab.ChkIdleVoiceEngineOffCompanion.IsChecked = settings.CompanionSpeaksIdleWhenEngineOff;
             CompanionTab.SliderIdleIntervalCompanion.Value = settings.IdleGiggleIntervalSeconds;
             CompanionTab.TxtIdleIntervalCompanion.Text = $"{settings.IdleGiggleIntervalSeconds}s";
             CompanionTab.SliderBubbleDurationCompanion.Value = settings.BubbleDurationSeconds;
             CompanionTab.TxtBubbleDurationCompanion.Text = $"{(int)settings.BubbleDurationSeconds}s";
+            CompanionTab.SliderVoiceLevelCompanion.Value = settings.CompanionVoiceLevel;
+            CompanionTab.TxtVoiceLevelCompanion.Text = settings.CompanionVoiceLevel.ToString();
 
             // Awareness Mode settings. The on/off checkbox became Z5's dial (design §6: "toggle
             // superseded by Z5 dial"), which reads the same two settings; the cooldowns below are the
@@ -1394,6 +1470,18 @@ namespace ConditioningControlPanel
             App.Settings.Save();
         }
 
+        // 7.1.8: the companion voice's own level. Read by CompanionVoiceGain when a line starts,
+        // so a change is heard from the next line.
+        internal void SliderVoiceLevel_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_isLoading || CompanionTab.TxtVoiceLevelCompanion == null) return;
+
+            var value = (int)Math.Round((sender as Slider)?.Value ?? Services.CompanionVoiceGain.DefaultLevel);
+            CompanionTab.TxtVoiceLevelCompanion.Text = value.ToString();
+            App.Settings.Current.CompanionVoiceLevel = value;
+            App.Settings.Save();
+        }
+
         // ============================================================
         // TRIGGER MODE (Free for all)
         // ============================================================
@@ -1455,6 +1543,8 @@ namespace ConditioningControlPanel
 
                 var dialog = new TextEditorDialog("Trigger Phrases", triggerDict);
                 dialog.Owner = this;
+                // Trigger lines speak through SubliminalService.PlayTriggerAudio: same lookup.
+                dialog.MarkSilentLines(t => App.Subliminal?.HasRecordedVoice(t) ?? true);
 
                 if (dialog.ShowDialog() == true && dialog.ResultData != null)
                 {
@@ -1653,6 +1743,11 @@ namespace ConditioningControlPanel
                 SetAiProviderMode(Views.Controls.Companion.CompanionProviderMode.LocalOllama);
                 UpdateAiBrainPills();
             }
+
+            // The wizard wrote the host it verified (and the model) on Finish, even when the
+            // done page is closed with X: the Engine Room's Host box must show it, not stay blank.
+            if (wizard.LocalAiReady)
+                CompanionRoom?.EngineVm?.Sync();
         }
 
         // The five provider text fields (Ollama model/host, BYO endpoint/model/key, daily limit)
@@ -2043,6 +2138,19 @@ namespace ConditioningControlPanel
             if (App.Settings?.Current != null)
             {
                 App.Settings.Current.CompanionVoiceLinesMuted = checkbox?.IsChecked == true;
+                App.Settings.Save();
+            }
+        }
+
+        // ccp-bugs #1468: let the idle-timer lines speak while the engine is off. Read at the same
+        // choke point (ShowGiggle) through CompanionIdleVoice.ShouldVoiceNow.
+        internal void ChkIdleVoiceEngineOff_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var checkbox = sender as CheckBox;
+            if (App.Settings?.Current != null)
+            {
+                App.Settings.Current.CompanionSpeaksIdleWhenEngineOff = checkbox?.IsChecked == true;
                 App.Settings.Save();
             }
         }

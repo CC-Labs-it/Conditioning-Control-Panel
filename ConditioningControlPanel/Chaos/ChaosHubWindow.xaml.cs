@@ -1377,7 +1377,7 @@ public partial class ChaosHubWindow : Window
         host.Children.Add(SubHeader("WHAT YOU'VE MET"));
         foreach (var v in ChaosBubbleVariants.All)
             host.Children.Add(CodexRow("bubble:" + v.Id, v.Name, ChaosBubbleVariants.DescriptionFor(v.Id),
-                ChaosArt.Resolve("bubbles", v.Id), "●", Color.FromRgb(v.Tint.R, v.Tint.G, v.Tint.B), maxWidth));
+                ChaosArt.Resolve("bubbles", v.Id), "●", Color.FromRgb((byte)(v.Tint >> 16), (byte)(v.Tint >> 8), (byte)v.Tint), maxWidth));
         // Not part of the weighted pool table; listed explicitly.
         host.Children.Add(CodexRow("bubble:darter", "White Rabbit", ChaosBubbleVariants.DescriptionFor("darter"),
             ChaosArt.Resolve("bubbles", "darter"), "✧", Color.FromRgb(0xFF, 0x4D, 0xC4), maxWidth));

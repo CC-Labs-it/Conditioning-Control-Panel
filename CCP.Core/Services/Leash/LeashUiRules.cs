@@ -87,8 +87,19 @@ public static class LeashUiRules
     public static string Key(RewardKind k) => "leash_rew_" + k.ToString().ToLowerInvariant();
     public static string Key(LeashIntensity i) => "leash_level_" + i.ToString().ToLowerInvariant();
 
-    /// <summary>A size as the chip shows it: "5", "20", "+15:00".</summary>
-    public static string SizeText(PunishKind k, int size) => k == PunishKind.Chaster ? "+" + Clock(size) : size.ToString(CultureInfo.InvariantCulture);
+    /// <summary>A size as the chip shows it: "5", "20", "+15m", "+1h". Chaster chips stay short so the
+    /// row keeps room for its name ("+1:00:00" pushed "Chaster time" down to "Chaster t").</summary>
+    public static string SizeText(PunishKind k, int size) => k == PunishKind.Chaster ? "+" + Span(size) : size.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>A chip-sized span: "15m", "1h", "1h 30m".</summary>
+    public static string Span(int seconds)
+    {
+        var t = TimeSpan.FromSeconds(Math.Abs(seconds));
+        var h = (int)t.TotalHours;
+        if (h == 0) return string.Format(CultureInfo.InvariantCulture, "{0}m", Math.Max(1, t.Minutes));
+        return t.Minutes == 0 ? string.Format(CultureInfo.InvariantCulture, "{0}h", h)
+                              : string.Format(CultureInfo.InvariantCulture, "{0}h {1}m", h, t.Minutes);
+    }
 
     /// <summary>The big line on the gate, as (loc key, arg).</summary>
     public static (string Key, object Arg) GateTitle(Punishment p) => p.Kind switch
