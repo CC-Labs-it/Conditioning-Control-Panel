@@ -16,8 +16,7 @@ namespace ConditioningControlPanel.Services.Bark
     /// one-shot latches, safety hold, chat suppression, speaking, the 60 s floor and its exemptions,
     /// cooldown, chance), the no-repeat variant rotation persisted in AppSettings (:1793-1941) and the
     /// {0}/{key} substitutions (:2000). The head owns the event subscriptions and the mouth.
-    /// ponytail: DispatchIdle, the awareness arbiter and CCP_BARK_DRYRUN land with a caller;
-    /// the whisper / Chaos-narrator gates with a source; tier latches key on "None" until a tier reaches Core.
+    /// ponytail: awareness/session state and the remaining head event sources are separate ports.
     /// </summary>
     public sealed class BarkEngine
     {
@@ -83,6 +82,12 @@ namespace ConditioningControlPanel.Services.Bark
             _rng = rng ?? new Random();
         }
 
+        public bool DryRun { get; set; }
+        public Func<string>? CurrentTier;
+        public Func<bool>? WhisperPlaying;
+        public Func<bool>? NarratorPlaying;
+        private readonly HashSet<string> _usedIdleRules = new(StringComparer.OrdinalIgnoreCase);
+        private string? _lastIdleRuleId;
         private VoiceLinePicker? _voiceLines;
 
         /// <summary>Inline wake/command confirmations use the current manifest without spending a bark gate.</summary>
@@ -97,11 +102,14 @@ namespace ConditioningControlPanel.Services.Bark
         /// <summary>WPF Start (:190): the rules and the persisted no-repeat rotation.</summary>
         public void Start()
         {
+            if (Environment.GetEnvironmentVariable("CCP_BARK_DRYRUN") == "1") DryRun = true;
             var fresh = SafeLoad();
             var s = CoreSettings.Current;
             lock (_gate)
             {
                 _rules = fresh;
+                _usedIdleRules.Clear();
+                _usedIdleRules.UnionWith(s.BarkIdleRotation);
                 _usedVariantKeys.Clear();
                 foreach (var kv in s.BarkVariantRotation)
                     _usedVariantKeys[kv.Key] = new HashSet<string>(kv.Value ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
@@ -151,12 +159,51 @@ namespace ConditioningControlPanel.Services.Bark
                     (var fire, idx, var reason) = EvaluateGate(winner, pool, guaranteed);
                     if (!fire) { Log.Debug("[BARK] blocked trigger={Trigger} rule={Rule} reason={Reason}", trigger, winner.Id, reason); return false; }
                     Log.Information("[BARK] FIRE trigger={Trigger} rule={Rule} class={Class} variant#={Idx}", trigger, winner.Id, winner.Class, idx);
-                    if (Speak == null) return false;
+                    if (Speak == null && !DryRun) return false;
                     CommitFire(winner, idx, pool);
                 }
-                return SpeakLine(winner, pool[idx], ctx);
+                return !DryRun && SpeakLine(winner, pool[idx], ctx);
             }
             catch (Exception ex) { Log.Warning(ex, "BarkEngine: Raise('{Trigger}') failed", trigger); return false; }
+        }
+
+        /// <summary>WPF DispatchIdle: pool-wide no-repeat, 35% bias toward eligible gated rules.</summary>
+        public bool DispatchIdle()
+        {
+            if (CoreSettings.Current.MasterVolume == 0 || Safe(IsSpeaking)) return false;
+            var ctx = new BarkContext("Idle");
+            BarkRule winner;
+            List<BarkVariant> pool;
+            int idx;
+            lock (_gate)
+            {
+                var eligible = _rules.ForTrigger("Idle").Where(r => ConditionsPass(r, ctx)).ToList();
+                if (eligible.Count == 0) return false;
+                var unused = eligible.Where(r => !_usedIdleRules.Contains(r.Id)).ToList();
+                if (unused.Count == 0)
+                {
+                    _usedIdleRules.Clear();
+                    if (_lastIdleRuleId != null) _usedIdleRules.Add(_lastIdleRuleId);
+                    PersistIdleRotation();
+                    unused = eligible.Where(r => !_usedIdleRules.Contains(r.Id)).ToList();
+                    if (unused.Count == 0) unused = eligible;
+                }
+                var gated = unused.Where(r => r.Conditions is { Count: > 0 }).ToList();
+                var pick = gated.Count > 0 && _rng.NextDouble() < 0.35 ? gated : unused;
+                winner = pick[_rng.Next(pick.Count)];
+                pool = ResolvePool(winner);
+                (var fire, idx, _) = EvaluateGate(winner, pool, false);
+                if (!fire || (Speak == null && !DryRun)) return false;
+                CommitFire(winner, idx, pool);
+            }
+            return !DryRun && SpeakLine(winner, pool[idx], ctx);
+        }
+
+        private void PersistIdleRotation()
+        {
+            if (DryRun) return;
+            CoreSettings.Current.BarkIdleRotation = new List<string>(_usedIdleRules);
+            CoreSettings.Save(suppressCloudBackup: true);
         }
 
         public bool ConditionsPass(BarkRule rule, BarkContext ctx) =>
@@ -268,6 +315,11 @@ namespace ConditioningControlPanel.Services.Bark
             {
                 var now = Now;
                 if (now < _safetyHoldUntilUtc) return (false, -1, "safety-active");
+                bool attribution = new[] { "PossessionEffect", "PossessionTripwire", "PossessionWarden", "PossessionRungChanged",
+                    "PossessionTimerRestarted", "PossessionRemember", "LockdownConscript", "EmergencyExitOpened", "EmergencyExitVerdict" }
+                    .Contains(rule.Trigger, StringComparer.OrdinalIgnoreCase);
+                if (Safe(WhisperPlaying) && !attribution) return (false, -1, "whisper-active");
+                if (Safe(NarratorPlaying)) return (false, -1, "narrator-active");
                 int window = s.BarkChatSuppressionMs;
                 if (Safe(() => IsCompanionBusy?.Invoke(window) == true)
                     || (window > 0 && (now - _lastUserMessageUtc).TotalMilliseconds < window))
@@ -302,7 +354,7 @@ namespace ConditioningControlPanel.Services.Bark
             _firedOnceSession.Contains(rule.Id)
             || (rule.Scope != BarkScope.Session && CoreSettings.Current.IsBarkFired(LatchKey(rule)));
 
-        private static string LatchKey(BarkRule rule) => rule.Scope == BarkScope.Tier ? rule.Id + "@None" : rule.Id;
+        private string LatchKey(BarkRule rule) => rule.Scope == BarkScope.Tier ? rule.Id + "@" + (CurrentTier?.Invoke() ?? "None") : rule.Id;
 
         /// <summary>WPF CommitFire (:1793). Caller holds the lock.</summary>
         private void CommitFire(BarkRule rule, int idx, List<BarkVariant> pool)
@@ -315,7 +367,7 @@ namespace ConditioningControlPanel.Services.Bark
             if (!rule.Repeatable)
             {
                 _firedOnceSession.Add(rule.Id);
-                if (rule.Scope != BarkScope.Session) CoreSettings.Current.MarkBarkFired(LatchKey(rule));
+                if (rule.Scope != BarkScope.Session && !DryRun) CoreSettings.Current.MarkBarkFired(LatchKey(rule));
             }
             var key = BarkLineId(rule.Id, pool[idx]);
             if (!_usedVariantKeys.TryGetValue(rule.Id, out var set))
@@ -323,6 +375,12 @@ namespace ConditioningControlPanel.Services.Bark
             set.Add(key);
             _lastVariantKey[rule.Id] = key;
             PersistVariantRotation(rule.Id);
+            if (string.Equals(rule.Trigger, "Idle", StringComparison.OrdinalIgnoreCase))
+            {
+                _usedIdleRules.Add(rule.Id);
+                _lastIdleRuleId = rule.Id;
+                PersistIdleRotation();
+            }
         }
 
         /// <summary>WPF PickVariant (:1867): an unused line, preferring a clip no rule spoke lately; -1 when all used.</summary>
@@ -345,6 +403,7 @@ namespace ConditioningControlPanel.Services.Bark
 
         private void PersistVariantRotation(string ruleId)
         {
+            if (DryRun) return;
             CoreSettings.Current.BarkVariantRotation[ruleId] =
                 _usedVariantKeys.TryGetValue(ruleId, out var set) ? new List<string>(set) : new List<string>();
             CoreSettings.Save(suppressCloudBackup: true);   // local-only, rides the next real change to cloud

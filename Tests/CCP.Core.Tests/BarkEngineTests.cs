@@ -35,6 +35,129 @@ public sealed class BarkEngineTests : IDisposable
     }
 
     [Fact]
+    public void IdleVisitsEveryEligibleRuleBeforeRecyclingAndPersistsAcrossLaunches()
+    {
+        var oldIdle = _s.BarkIdleRotation;
+        try
+        {
+            _s.BarkIdleRotation = new();
+            var rules = new[] { Rule("Idle", "a"), Rule("Idle", "b"), Rule("Idle", "c") };
+            var clock = new PopQuizSchedulerTests.FakeClock();
+            for (int i = 0; i < 3; i++)
+            {
+                var e = Engine(rules);
+                e.Clock = clock;
+                Assert.True(e.DispatchIdle());
+            }
+            Assert.Equal(3, _said.Select(x => x.Text).Distinct().Count());
+            Assert.Equal(3, _s.BarkIdleRotation.Count);
+            var same = Engine(rules);
+            same.Clock = clock;
+            Assert.True(same.DispatchIdle());
+            // A new process does not persist the last-id reseed (same as WPF).
+            clock.Advance(TimeSpan.FromSeconds(61));
+            Assert.True(same.DispatchIdle());
+            Assert.NotEqual(_said[^2].Text, _said[^1].Text);
+        }
+        finally { _s.BarkIdleRotation = oldIdle; }
+    }
+
+    [Fact]
+    public void IdleNeverSpeaksWhileMutedOrSpeakingAndKeepsNormalTimingGates()
+    {
+        var e = Engine(Rule("Idle", "idle"));
+        _s.MasterVolume = 0;
+        Assert.False(e.DispatchIdle());
+        _s.MasterVolume = 50;
+        e.IsSpeaking = () => true;
+        Assert.False(e.DispatchIdle());
+        e.IsSpeaking = () => false;
+        Assert.True(e.DispatchIdle());
+        Assert.False(e.DispatchIdle());
+        Assert.Single(_said);
+    }
+
+    [Fact]
+    public void DryRunSimulatesCooldownsWithoutSpeakingOrPersistingLatchesAndRotation()
+    {
+        var r = Rule("T", "silent");
+        (r.Repeatable, r.ScopeRaw) = (false, "lifetime");
+        var e = Engine(r);
+        e.DryRun = true;
+        Assert.False(e.Raise("T"));
+        Assert.False(_s.IsBarkFired(r.Id));
+        Assert.False(_s.BarkVariantRotation.ContainsKey(r.Id));
+        Assert.Empty(_said);
+        e.DryRun = false;
+        Assert.False(e.Raise("T", guaranteed: true)); // in-memory one-shot simulated
+        Assert.True(Engine(r).Raise("T")); // persisted state untouched
+    }
+
+    private sealed class IdleRandom(double roll) : Random
+    {
+        public override double NextDouble() => roll;
+        public override int Next(int maxValue) => 0;
+    }
+
+    [Theory]
+    [InlineData(0.349, "gated")]
+    [InlineData(0.35, "plain")]
+    public void IdleBiasUsesTheWpfThirtyFivePercentBoundary(double roll, string expected)
+    {
+        var idle = _s.BarkIdleRotation;
+        try
+        {
+            _s.BarkIdleRotation = new();
+            var plain = Rule("Idle", "plain");
+            var gated = Rule("Idle", "gated");
+            gated.Conditions = new() { ["master_volume_gt"] = 0 };
+            var impossible = Rule("Idle", "ineligible");
+            impossible.Conditions = new() { ["master_volume_lt"] = 0 };
+            var e = new BarkEngine(() => new BarkRuleSet(new[] { plain, gated, impossible }), new IdleRandom(roll))
+            { Speak = _said.Add };
+            e.Start();
+            Assert.True(e.DispatchIdle());
+            Assert.Equal(expected, Assert.Single(_said).Text);
+        }
+        finally { _s.BarkIdleRotation = idle; }
+    }
+
+    [Theory]
+    [InlineData("T", false)]
+    [InlineData("PossessionEffect", true)]
+    [InlineData("LockdownConscript", true)]
+    [InlineData("EmergencyExitOpened", true)]
+    [InlineData("EmergencyExitVerdict", true)]
+    [InlineData("PossessionUnknown", false)]
+    public void WhisperFloorExemptsOnlyTextAttributionsAndNarratorStillHoldsThem(string trigger, bool allowed)
+    {
+        var e = Engine(Rule(trigger, "line"));
+        e.WhisperPlaying = () => true;
+        Assert.Equal(allowed, e.Raise(trigger));
+        e = Engine(Rule(trigger, "line"));
+        e.NarratorPlaying = () => true;
+        Assert.False(e.Raise(trigger));
+        Assert.True(e.Raise(trigger, guaranteed: true));
+    }
+
+    [Fact]
+    public void TierLatchUsesCurrentTierAcrossEngineRestarts()
+    {
+        var r = Rule("T", "thanks");
+        (r.Repeatable, r.ScopeRaw) = (false, "tier");
+        var e = Engine(r);
+        e.CurrentTier = () => "Level1";
+        Assert.True(e.Raise("T"));
+        Assert.True(_s.IsBarkFired(r.Id + "@Level1"));
+        e = Engine(r);
+        e.CurrentTier = () => "Level1";
+        Assert.False(e.Raise("T", guaranteed: true));
+        e = Engine(r);
+        e.CurrentTier = () => "Level2";
+        Assert.True(e.Raise("T"));
+    }
+
+    [Fact]
     public void TheHighestPriorityRuleWhoseConditionsPassSpeaksWithSubstitutions()
     {
         var high = Rule("T", "level {level} in {0}");

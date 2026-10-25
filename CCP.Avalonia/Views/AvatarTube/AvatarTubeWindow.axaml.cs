@@ -278,7 +278,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // head-side services in ConditioningControlPanel/Services/ with no seam at all, and
             // their handlers live in the Reactions/Speech partials that did not port.
 
-            // ponytail: the WPF ctor also started four timers here - a 2s greeting, the idle-giggle,
+            // ponytail: the WPF ctor also started three timers here - a 2s greeting,
             // the trigger and the random-bubble loops. Deliberately NOT started: every one of them
             // calls into a partial this layer does not have, and --render-all constructs ~180 windows
             // in one process, where a stray timer firing at a closed window is a flaky failure.
@@ -295,6 +295,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         protected override void OnOpened(EventArgs e)
         {
             base.OnOpened(e);
+            RestartIdleTimer();
 
             // WPF OnLoaded: CalculateScaleFactor, then UpdatePosition (attached) or
             // RestoreSavedPlacement (detached). Topmost follows the mode (ApplyModeChrome).
@@ -340,6 +341,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // in one process, and a tick against a torn-down visual tree is exactly the flaky
             // failure the constructor's note refuses to risk.
             LocalizationManager.Instance.LanguageChanged -= OnTubeLanguageChanged;
+            _idleTimer?.Stop();
             _poseTimer.Stop();
             _speechTimer?.Stop();
             ClearSpeechQueue();
@@ -1218,7 +1220,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>WPF Giggle (Speech.cs:240): a PRESET line. Dropped while an AI request is in
         /// flight or an AI bubble is up, never logged to chat history, sound on every fifth. Queued
         /// behind a line still up, or until the previous line's gap has passed (Speech.cs:273-294).</summary>
-        public void Giggle(string text)
+        public void Giggle(string text, string? phraseAudioPath = null, bool barkVoice = false)
         {
             if (_isPlayingUninterruptibleClip || _isWaitingForAi || _isShowingAiBubble) return;
             RunOnAvatar(() =>
@@ -1232,7 +1234,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     ProcessNextSpeech();
                     return;
                 }
-                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true);
+                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, phraseAudioPath, barkVoice, preset: true);
             });
         }
 
@@ -1249,6 +1251,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     // bark output passes aiGenerated:false and must not suppress the next bark.
                     if (aiGenerated) _lastAiBubbleUtc = DateTime.UtcNow;
 
+                    RestartIdleTimer();
                     StopThinkingAnimation();   // the reply pre-empts the thinking bubble (WPF Speech.cs:335)
                     _speechTimer?.Stop();
                     if (!preset) AddToChatHistory(text, isUser: false);   // WPF Giggle logs nothing

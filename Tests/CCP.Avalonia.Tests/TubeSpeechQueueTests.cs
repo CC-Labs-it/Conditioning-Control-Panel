@@ -24,8 +24,9 @@ public sealed class TubeSpeechQueueTests
     private static void EnsureApp()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            AppBuilder.Configure<AvApp>().WithInterFont()
+                .With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
 
@@ -47,6 +48,77 @@ public sealed class TubeSpeechQueueTests
         };
         return delays;
     }
+
+    [Fact]
+    public Task OrdinaryVoicedBarkQueuesAndPanicDropsIt() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            tube.Show();
+            tube.Giggle("already speaking");
+            ConditioningControlPanel.Avalonia.Platform.BarkHead.Speak(new(
+                "ordinary bark", "test-clip.ogg", false, null, false), tube);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("already speaking", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
+            Assert.Equal(1, tube.QueuedSpeechCount);
+            tube.PanicSilence();
+            Assert.Equal(0, tube.QueuedSpeechCount);
+        }
+        finally { tube.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task IdleCadenceReachesBarkEngineOnlyWhenSpeechReady() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var old = ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine;
+        var s = CoreSettings.Current;
+        var settings = (s.AvatarEnabled, s.MasterVolume, s.BarkChatSuppressionMs);
+        var idleRotation = new List<string>(s.BarkIdleRotation);
+        var idleInterval = s.IdleGiggleIntervalSeconds;
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            (s.AvatarEnabled, s.MasterVolume, s.BarkChatSuppressionMs) = (true, 50, 0);
+            int spoken = 0;
+            var rule = new ConditioningControlPanel.Services.Bark.BarkRule
+            {
+                Id = "idle-test-" + Guid.NewGuid(), Trigger = "Idle",
+                VariantPool = new() { new("idle") },
+            };
+            var engine = new ConditioningControlPanel.Services.Bark.BarkEngine(
+                () => new ConditioningControlPanel.Services.Bark.BarkRuleSet(new[] { rule })) { Speak = _ => spoken++ };
+            engine.Start();
+            ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine = engine;
+            tube.Show();
+            s.IdleGiggleIntervalSeconds = 180;
+            tube.RestartIdleTimer();
+            var timer = (DispatcherTimer)typeof(AvatarTubeWindow).GetField("_idleTimer",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(tube)!;
+            Assert.Equal(TimeSpan.FromSeconds(180), timer.Interval);
+            tube.Giggle("busy");
+            tube.IdleTick();
+            Assert.Equal(0, spoken);
+            tube.EndSpeechBubble();
+            var clock = new Clock();
+            clock.Now = DateTimeOffset.Now.AddSeconds(20);
+            tube.SpeechClock = clock;
+            tube.IdleTick();
+            Assert.Equal(1, spoken);
+        }
+        finally
+        {
+            tube.Close();
+            ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine = old;
+            (s.AvatarEnabled, s.MasterVolume, s.BarkChatSuppressionMs) = settings;
+            s.BarkIdleRotation = idleRotation;
+            s.IdleGiggleIntervalSeconds = idleInterval;
+        }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public Task PresetsSpeakInOrderAfterTheEarnedGap() => AvaloniaTestDispatcher.RunAsync(() =>

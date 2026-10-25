@@ -10,8 +10,8 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// <summary>
 /// The head half of WPF 7.1.5 <c>Services/Companion/BarkService.cs</c>: one Core <see cref="BarkEngine"/>, its
 /// mouth (the tube), and the seams WPF App.xaml.cs:313/336-346/604/2826 points at its BarkService.
-/// ponytail: the rest of WireSubscriptions (:660-925) is the next unit (line cap): flash / subliminal / bubble,
-/// video, level-ups, achievements, quests, mantra and lockdown have sources here already.
+/// ponytail: remaining WireSubscriptions and direct notify paths are inventoried in
+/// docs/cloud/fin5-feat-companion-barks.md; existing hosts below are wired once and detached on Stop.
 /// </summary>
 internal static class BarkHead
 {
@@ -23,6 +23,7 @@ internal static class BarkHead
         var e = Engine = new BarkEngine();
         Seed(e);
         e.Start();
+        WireSources(e);
         App.Brain?.AttachBarkSource(h => e.BarkSpoken += h, h => e.BarkSpoken -= h);   // App.xaml.cs:2826, the echo
         // The two WireSubscriptions the engine's own state needs: chat suppression (:806) and, on a mod switch,
         // the switch bark off the OLD set then the new mod's manifest (:903).
@@ -40,9 +41,11 @@ internal static class BarkHead
     private static EventHandler<ModPackage>? _onModChanged;
     private static ModService? _mods;
 
-    /// <summary>Drops the engine and the two subscriptions Start made (tests; the seams are the caller's to restore).</summary>
+    /// <summary>Drops the engine and every subscription Start made (tests; callers restore seams).</summary>
     internal static void Stop()
     {
+        foreach (var unsubscribe in _unsubscribe) unsubscribe();
+        _unsubscribe.Clear();
         App.UserMessageSent -= _onUserMessage;
         if (_mods != null) _mods.ModChanged -= _onModChanged;
         (_onUserMessage, _onModChanged, _mods, Engine) = (null, null, null, null);
@@ -52,6 +55,7 @@ internal static class BarkHead
     internal static void Seed(BarkEngine e)
     {
         e.Speak = Speak;
+        e.CurrentTier = () => AccountSeed.Patreon?.CurrentTier.ToString() ?? "None";
         e.IsSpeaking = () => Views.AvatarTube.AvatarTubeWindow.Live?.IsSpeaking == true;
         e.IsCompanionBusy = ms => Views.AvatarTube.AvatarTubeWindow.Live?.IsCompanionBusy(ms) == true;
         e.EmiDeskAvatarMuted = () => Views.Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted;
@@ -84,14 +88,61 @@ internal static class BarkHead
         CoreSettingsHooks.SettingChangedSink = name => OnSettingChanged(e, name);
     }
 
-    /// <summary>WPF Speak (:1985): preempting barks through GigglePriority, the clip as her voice.
-    /// ponytail: an ordinary VOICED bark goes the same way (this tube's Giggle takes no clip); the gate has
-    /// already dropped it if she was speaking, so it never cuts a line off.</summary>
-    internal static void Speak(BarkSpeech s)
+    private static readonly List<Action> _unsubscribe = new();
+
+    private static void Wire<T>(Action<T> add, Action<T> remove, T handler) where T : Delegate
     {
-        var tube = Views.AvatarTube.AvatarTubeWindow.Live;
+        add(handler);
+        _unsubscribe.Add(() => remove(handler));
+    }
+
+    // WPF WireSubscriptions: use the existing head/Core hosts; retain exact payload names.
+    internal static void WireSources(BarkEngine e)
+    {
+        Wire<Action<int>>(h => ProgressionBank.LevelUp += h, h => ProgressionBank.LevelUp -= h,
+            level => e.Raise("LevelUp", c => c.Set("level", level)));
+        Wire<Action<double, string>>(h => ProgressionBank.Awarded += h, h => ProgressionBank.Awarded -= h,
+            (_, _) => e.Raise("XPChanged", c => c.Set("xp", CoreSettings.Current.PlayerXP)));
+        Wire<Action<CompanionId, int>>(h => ConditioningControlPanel.Services.Companion.CompanionCore.LevelUp += h,
+            h => ConditioningControlPanel.Services.Companion.CompanionCore.LevelUp -= h,
+            (_, level) => e.Raise("CompanionLevelUp", c => c.Set("level", level)));
+        if (App.Achievements is { } achievements)
+            Wire<EventHandler<Achievement>>(h => achievements.Unlocked += h, h => achievements.Unlocked -= h,
+                (_, a) => e.Raise("AchievementUnlocked", c => c.Set("achievement", a.Id)));
+        if (App.Quests is { } quests)
+        {
+            Wire<EventHandler<QuestCompletedEventArgs>>(h => quests.QuestCompleted += h, h => quests.QuestCompleted -= h,
+                (_, _) => e.Raise("QuestCompleted"));
+            Wire<EventHandler<QuestProgressEventArgs>>(h => quests.QuestProgressChanged += h, h => quests.QuestProgressChanged -= h,
+                (_, _) => e.Raise("QuestProgressChanged"));
+            Wire<EventHandler>(h => quests.QuestsRefreshed += h, h => quests.QuestsRefreshed -= h,
+                (_, _) => e.Raise("QuestsRefreshed"));
+        }
+        var mantra = App.Mantra;
+        Wire<Action>(h => mantra.MantraCompleted += h, h => mantra.MantraCompleted -= h, () => e.Raise("MantraCompleted"));
+        Wire<Action<int>>(h => mantra.StreakChanged += h, h => mantra.StreakChanged -= h,
+            streak => e.Raise("MantraStreakChanged", c => c.Set("streak", streak)));
+        Wire<Action>(h => mantra.StreakBroken += h, h => mantra.StreakBroken -= h, () => e.Raise("MantraStreakBroken"));
+        if (LockdownService.Current is { } lockdown)
+        {
+            Wire<Action>(h => lockdown.LockdownActivated += h, h => lockdown.LockdownActivated -= h,
+                () => e.Raise("LockdownActivated"));
+            Wire<Action>(h => lockdown.LockdownDeactivated += h, h => lockdown.LockdownDeactivated -= h,
+                () => e.Raise("LockdownDeactivated"));
+            Wire<Action<TimeSpan>>(h => lockdown.CountdownTick += h, h => lockdown.CountdownTick -= h,
+                ts => e.Raise("LockdownCountdownTick", c => c.Set("remaining_sec", ts.TotalSeconds)));
+        }
+        Wire<Action>(h => Views.Overlays.BubbleOverlay.Popped += h, h => Views.Overlays.BubbleOverlay.Popped -= h,
+            () => e.Raise("BubblePopped"));
+    }
+
+    /// <summary>WPF Speak: ordinary clips queue via Giggle; only preempting rules use priority.</summary>
+    internal static void Speak(BarkSpeech s) => Speak(s, Views.AvatarTube.AvatarTubeWindow.Live);
+
+    internal static void Speak(BarkSpeech s, Views.AvatarTube.AvatarTubeWindow? tube)
+    {
         if (tube == null) return;
-        if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) { tube.Giggle(s.Text); return; }
+        if (s.SilentEgg || !s.Priority) { tube.Giggle(s.Text, s.AudioPath, s.AudioPath != null); return; }
         tube.GigglePriority(s.Text, playSound: s.AudioPath == null, aiGenerated: false,
             phraseAudioPath: s.AudioPath, barkVoice: s.AudioPath != null, mood: s.Mood);
     }
@@ -102,6 +153,8 @@ internal static class BarkHead
     internal static void OnSettingChanged(BarkEngine e, string? name)
     {
         if (string.IsNullOrEmpty(name)) return;
+        if (name == nameof(AppSettings.IdleGiggleIntervalSeconds))
+            Views.AvatarTube.AvatarTubeWindow.Live?.RestartIdleTimer();
         PropertyInfo? pi;
         lock (SettingProps)
             if (!SettingProps.TryGetValue(name!, out pi)) SettingProps[name!] = pi = typeof(AppSettings).GetProperty(name!);

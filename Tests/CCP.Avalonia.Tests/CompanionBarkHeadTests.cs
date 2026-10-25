@@ -110,6 +110,118 @@ public sealed class CompanionBarkHeadTests
         }
     });
 
+    [Theory]
+    [InlineData("LevelUp", "level", 12)]
+    [InlineData("XPChanged", "xp", 42)]
+    [InlineData("CompanionLevelUp", "level", 7)]
+    [InlineData("MantraCompleted", null, 0)]
+    [InlineData("MantraStreakChanged", "streak", 9)]
+    [InlineData("MantraStreakBroken", null, 0)]
+    [InlineData("BubblePopped", null, 0)]
+    public void ExistingHostEventsReachBarksWithWpfPayloads(string trigger, string? key, int value) => WithSeamsRestored(s =>
+    {
+        var old = BarkHead.Engine;
+        var xp = s.PlayerXP;
+        var e = Seeded(Rule(trigger, "reaction", key == null ? null : (key, value)), out var spoken);
+        BarkHead.WireSources(e);
+        try
+        {
+            // Exercise the subscription boundary without windows, timers, XP awards or real notifications.
+            object? owner;
+            System.Type type;
+            string name;
+            object?[] args;
+            if (trigger == "LevelUp" || trigger == "XPChanged")
+            {
+                owner = null; type = typeof(ProgressionBank);
+                name = trigger == "LevelUp" ? "LevelUp" : "Awarded";
+                s.PlayerXP = value;
+                args = trigger == "LevelUp" ? new object?[] { value } : new object?[] { 1.0, "Test" };
+            }
+            else if (trigger == "CompanionLevelUp")
+            {
+                owner = null; type = typeof(ConditioningControlPanel.Services.Companion.CompanionCore);
+                name = "LevelUp";
+                args = new object?[] { (ConditioningControlPanel.Models.CompanionId)0, value };
+            }
+            else if (trigger == "BubblePopped")
+            {
+                owner = null; type = typeof(BubbleOverlay); name = "Popped"; args = System.Array.Empty<object?>();
+            }
+            else
+            {
+                owner = global::ConditioningControlPanel.Avalonia.App.Mantra;
+                type = owner.GetType(); name = trigger.Replace("MantraStreak", "Streak");
+                args = key == null ? System.Array.Empty<object?>() : new object?[] { value };
+            }
+            var field = type.GetField(name, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Instance
+                | System.Reflection.BindingFlags.NonPublic)!;
+            var handlers = ((System.Delegate)field.GetValue(owner)!).GetInvocationList().Length;
+            ((System.Delegate)field.GetValue(owner)!).DynamicInvoke(args);
+            Assert.Equal("reaction", spoken());
+            BarkHead.Stop();
+            // Stop detaches all subscriptions; replaying the host event cannot speak again.
+            Assert.Equal(handlers - 1, ((System.Delegate?)field.GetValue(owner))?.GetInvocationList().Length ?? 0);
+        }
+        finally { BarkHead.Stop(); BarkHead.Engine = old; s.PlayerXP = xp; }
+    });
+
+    [Theory]
+    [InlineData("QuestCompleted")]
+    [InlineData("QuestProgressChanged")]
+    [InlineData("QuestsRefreshed")]
+    [InlineData("AchievementUnlocked")]
+    [InlineData("LockdownActivated")]
+    [InlineData("LockdownDeactivated")]
+    [InlineData("LockdownCountdownTick")]
+    public void ServiceEventsMapToBarksAndDetach(string trigger) => WithSeamsRestored(_ =>
+    {
+        var app = typeof(global::ConditioningControlPanel.Avalonia.App);
+        var property = app.GetProperty("Achievements", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var oldAchievements = property.GetValue(null);
+        var oldQuests = global::ConditioningControlPanel.Avalonia.App.Quests;
+        var oldLockdown = ConditioningControlPanel.Services.LockdownService.Current;
+        var oldEngine = BarkHead.Engine;
+        var sandbox = Path.Combine(Path.GetTempPath(), "bark-events-" + System.Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(sandbox);
+        using var quests = new ConditioningControlPanel.Services.QuestService(null, sandbox);
+        using var lockdown = new ConditioningControlPanel.Services.LockdownService();
+        var achievements = new ConditioningControlPanel.Services.AchievementEngine(
+            new ConditioningControlPanel.Services.AchievementStore(Path.Combine(sandbox, "achievements.json")));
+        property.SetValue(null, achievements);
+        global::ConditioningControlPanel.Avalonia.App.Quests = quests;
+        ConditioningControlPanel.Services.LockdownService.Current = lockdown;
+        var rule = Rule(trigger, "reaction");
+        if (trigger == "AchievementUnlocked") rule.Conditions = new() { ["achievement"] = "test" };
+        if (trigger == "LockdownCountdownTick") rule.Conditions = new() { ["remaining_sec"] = 12.5 };
+        var e = Seeded(rule, out var spoken);
+        BarkHead.WireSources(e);
+        try
+        {
+            object owner = trigger.StartsWith("Quest") ? quests : trigger.StartsWith("Lockdown") ? lockdown : achievements;
+            var field = owner.GetType().GetField(trigger == "AchievementUnlocked" ? "Unlocked" : trigger == "LockdownCountdownTick" ? "CountdownTick" : trigger,
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var handler = (System.Delegate)field.GetValue(owner)!;
+            object?[] args = trigger.StartsWith("Quest") ? new object?[] { null, null }
+                : trigger == "AchievementUnlocked" ? new object?[] { null, new ConditioningControlPanel.Models.Achievement { Id = "test" } }
+                : trigger == "LockdownCountdownTick" ? new object?[] { System.TimeSpan.FromSeconds(12.5) }
+                : System.Array.Empty<object?>();
+            handler.DynamicInvoke(args);
+            Assert.Equal("reaction", spoken());
+            var count = handler.GetInvocationList().Length;
+            BarkHead.Stop();
+            Assert.Equal(count - 1, ((System.Delegate?)field.GetValue(owner))?.GetInvocationList().Length ?? 0);
+        }
+        finally
+        {
+            BarkHead.Stop(); BarkHead.Engine = oldEngine;
+            property.SetValue(null, oldAchievements);
+            global::ConditioningControlPanel.Avalonia.App.Quests = oldQuests;
+            ConditioningControlPanel.Services.LockdownService.Current = oldLockdown;
+            Directory.Delete(sandbox, true);
+        }
+    });
+
     private static BarkRule Rule(string trigger, string line, (string Key, object Value)? condition = null) => new()
     {
         Id = "t_" + trigger, Trigger = trigger, VariantPool = new() { new BarkVariant(line) },
@@ -131,7 +243,8 @@ public sealed class CompanionBarkHeadTests
     private static void WithSeamsRestored(System.Action<ConditioningControlPanel.Models.AppSettings> body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
         var hooks = (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion, CoreModsHooks.ReloadBarkRules,

@@ -673,3 +673,11 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### Companion bark completion lane FIN5
+
+1. With companion enabled and volume audible, complete a quest, unlock an achievement, gain a player/companion level, and complete/break a mantra streak. Expect the matching manifest line with WPF payloads, subject to the 60-second floor. WPF `Services/Companion/BarkService.cs:793-885`. Rows: `feat-companion-barks`.
+2. Start and finish lockdown; its countdown rules receive seconds remaining. Pop an ambient bubble. Expect the corresponding barks when eligible. Stop/restart the bark host: no duplicate handlers. WPF `Services/Companion/BarkService.cs:711-714,889-898`. Rows: `feat-companion-barks`.
+3. Set the idle slider; leave the visible tube quiet. Expect eligible Idle rules to rotate without repeats across restarts; muted or busy speech suppresses idle. Any speech restarts the cadence. WPF `Services/Companion/BarkService.cs:1178-1230`, `AvatarTube/AvatarTubeWindow.Speech.cs:1571-1634`. Rows: `feat-companion-barks`.
+4. Queue an ordinary voiced bark behind a visible preset; the preset stays visible and the bark waits. Panic drops both speech and queue. WPF `Services/Companion/BarkService.cs:1943-1990`. Rows: `feat-companion-barks`.
+5. In a disposable profile, run with CCP_BARK_DRYRUN=1; eligible decisions simulate cooldown/rotation but produce no speech or persisted latches. Restart normally: the one-shot is still available. Tier one-shots persist as id@Tier. WPF `Services/Companion/BarkService.cs:184-200,1781-1830`. Rows: `feat-companion-barks`.
