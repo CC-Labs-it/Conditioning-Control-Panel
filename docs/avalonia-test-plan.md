@@ -230,6 +230,7 @@ Set the panic key to Enter for steps 1-4 (Settings -> panic key).
 18. Help -> Report a bug: fill and send to a test address. WPF `Windows/BugReportWindow.xaml.cs:87-101`. Rows: `win-bug-report`, `win-my-reports`.
 19. Webcam: calibrate, quick recalibrate, gaze tracker. WPF `MainWindow/MainWindow.LabTab.cs:1094`, `MainWindow/MainWindow.xaml.cs:3631`. Rows: `win-webcam-calibration`, `win-webcam-quick-recal`, `win-webcam-gaze-tracker`, `win-webcam-loading-splash`.
 20. Emi desk: open it, its options, ring and book; mute prompt. WPF `AvatarTube/AvatarTubeWindow.Speech.cs:461`. Rows: `win-emi-desk`, `win-emi-options`, `win-emi-ring`, `win-emi-book`, `win-emi-codex`, `win-emi-mute-prompt`.
+   - Open the desk gear on X11, briefly press and release left/right outside the panel and body, and briefly press Escape; each folds the panel without consuming input. Clicking the body or panel keeps it open; reopen after folding, then dismiss the desk and ensure the panel disappears. Repeat on Windows. Record native Wayland and focus limitations. WPF `Windows/EmiDesk/EmiOptionsWindow.xaml.cs` Rows: `win-emi-options`.
 21. Settings palette shortcut opens the command palette. WPF `MainWindow/MainWindow.xaml.cs:280-283`. Rows: `win-settings-palette`.
 
 ### Down the Rabbit Hole game
@@ -673,5 +674,3 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
-
-233. Open the desk gear on X11, briefly press and release left/right outside the panel and body, and briefly press Escape; each folds the panel without consuming input. Clicking the body or panel keeps it open; reopen after folding, then dismiss the desk and ensure the panel disappears. Repeat on Windows. Record native Wayland and focus limitations. WPF `Windows/EmiDesk/EmiOptionsWindow.xaml.cs` Rows: `win-emi-options`.

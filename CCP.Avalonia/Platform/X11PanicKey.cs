@@ -224,12 +224,13 @@ internal static class X11PanicKey
                 XFreeEventData(display, ev);
                 if (keycode < 0) continue;
 
-                Resolve();
+                // Buttons only matter to an open options panel; skip Resolve() so desktop clicks stay cheap.
                 if (evType == XI_RawButtonPress)
                 {
                     RouteOptions(evType, keycode, 0, ReadPointer);
                     continue;
                 }
+                Resolve();
                 if (evType == XI_RawKeyRelease) { Route(false, keycode, onPress); continue; }
                 Route(true, keycode, onPress);
                 RouteOptions(evType, keycode, XKeysymToKeycode(display, 0xff1b), ReadPointer);
