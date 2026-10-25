@@ -1226,24 +1226,29 @@
     "file": "textures/fx-melt-spiral.ktx2",
     "kind": "texture",
     "tris": 0,
-    "texBytes": 1398100,
+    "texBytes": 12582904,
     "boundRadiusM": 0,
     "materialSlots": [
       "fx_melt_spiral"
     ],
     "palette": "all",
-    "width": 512,
-    "height": 512,
-    "mipLevels": 10,
-    "encoding": "ETC1S",
+    "width": 1536,
+    "height": 1536,
+    "mipLevels": 11,
+    "encoding": "UASTC",
     "colorSpace": "linear",
     "wrap": [
       "clamp",
       "clamp"
     ],
-    "texBytesBlock16": 349552,
+    "texBytesBlock16": 3145776,
     "sampleChannel": "r",
-    "meaning": "white is effect strength"
+    "meaning": "white is effect strength",
+    "draws": 1,
+    "uvSizeM": [
+      10.8,
+      10.8
+    ]
   },
   {
     "id": "fx-noise",
@@ -7552,5 +7557,24 @@
     "baseSha256": "7362bfc8d07d36b079e0d086fda15378ca3d5d269bcd3b4fad64df8fb65776f1",
     "attachmentContract": "models/emi-bot-wardrobe.json",
     "compression": "meshopt-lossless"
-  }
+  },
+  {"id":"fx-pendulum","file":"fx/pendulum.png","kind":"icon","width":256,"height":256,"tris":0,"draws":0,"texBytes":262144,"boundRadiusM":0,"mipLevels":1,"format":"RGBA8","bytes":66003,"materialSlots":["toy_icon"],"palette":"all"},
+  {"id":"fx-disc","file":"fx/disc.png","kind":"icon","width":256,"height":256,"tris":0,"draws":0,"texBytes":262144,"boundRadiusM":0,"mipLevels":1,"format":"RGBA8","bytes":64291,"materialSlots":["toy_icon"],"palette":"all"},
+  {"id":"fx-tether","file":"fx/tether.png","kind":"icon","width":256,"height":256,"tris":0,"draws":0,"texBytes":262144,"boundRadiusM":0,"mipLevels":1,"format":"RGBA8","bytes":61949,"materialSlots":["toy_icon"],"palette":"all"},
+  {"id":"fx-snap","file":"fx/snap.png","kind":"icon","width":256,"height":256,"tris":0,"draws":0,"texBytes":262144,"boundRadiusM":0,"mipLevels":1,"format":"RGBA8","bytes":84242,"materialSlots":["toy_icon"],"palette":"all"},
+  {"id":"fx-bigspiral","file":"fx/bigspiral.png","kind":"icon","width":256,"height":256,"tris":0,"draws":0,"texBytes":262144,"boundRadiusM":0,"mipLevels":1,"format":"RGBA8","bytes":85198,"materialSlots":["toy_icon"],"palette":"all"},
+  {"id":"fx-melt","file":"fx/melt.png","kind":"icon","width":256,"height":256,"tris":0,"draws":0,"texBytes":262144,"boundRadiusM":0,"mipLevels":1,"format":"RGBA8","bytes":74029,"materialSlots":["toy_icon"],"palette":"all"},
+  {"id":"fx-gold_droplet","file":"fx/gold_droplet.png","kind":"icon","width":256,"height":256,"tris":0,"draws":0,"texBytes":262144,"boundRadiusM":0,"mipLevels":1,"format":"RGBA8","bytes":69609,"materialSlots":["toy_icon"],"palette":"all"},
+  {"id":"toy-big-spiral","file":"toys/toy-big-spiral.glb","kind":"prop","tris":1296,"draws":3,"texBytes":0,"boundRadiusM":1.601,"materialSlots":["toy_loom","toy_enamel","toy_metal"],"palette":"all","sizeM":[1.6,1.6,0.141952]},
+  {"id":"toy-chain-link","file":"toys/toy-chain-link.glb","kind":"prop","tris":120,"draws":1,"texBytes":0,"boundRadiusM":0.341,"materialSlots":["toy_metal"],"palette":"all","sizeM":[0.210451,0.340451,0.047553]},
+  {"id":"toy-disc","file":"toys/toy-disc.glb","kind":"prop","tris":780,"draws":2,"texBytes":0,"boundRadiusM":0.505,"materialSlots":["toy_enamel","toy_metal"],"palette":"all","sizeM":[1,0.134,1]},
+  {"id":"toy-pendulum-lod0","file":"toys/toy-pendulum-lod0.glb","kind":"prop","tris":1174,"draws":2,"texBytes":0,"boundRadiusM":0.898,"materialSlots":["toy_enamel","toy_metal"],"palette":"all","sizeM":[0.544,0.897,0.1345]},
+  {"id":"toy-pendulum-lod1","file":"toys/toy-pendulum-lod1.glb","kind":"prop","tris":658,"draws":2,"texBytes":0,"boundRadiusM":0.879,"materialSlots":["toy_enamel","toy_metal"],"palette":"all","sizeM":[0.544,0.877661,0.1345]},
+  {"id":"toy-tether-cuff","file":"toys/toy-tether-cuff.glb","kind":"prop","tris":594,"draws":2,"texBytes":0,"boundRadiusM":0.539,"materialSlots":["toy_enamel","toy_metal"],"palette":"all","sizeM":[0.5655,0.537218,0.1055]},
+  {"id":"toy-tether-head","file":"toys/toy-tether-head.glb","kind":"prop","tris":628,"draws":2,"texBytes":0,"boundRadiusM":0.717,"materialSlots":["toy_enamel","toy_metal"],"palette":"all","sizeM":[0.361651,0.715548,0.13]},
+  {"id":"toy-snap-burst","file":"../render/items/toys.js","kind":"procedural","tris":224,"draws":2,"texBytes":0,"boundRadiusM":6.78,"materialSlots":["toy_runtime"],"palette":"all"},
+  {"id":"toy-snap-guard","file":"../render/items/toys.js","kind":"procedural","tris":96,"draws":1,"texBytes":0,"boundRadiusM":1.5255,"materialSlots":["toy_runtime"],"palette":"all"},
+  {"id":"toy-landing-marker","file":"../render/items/toys.js","kind":"procedural","tris":224,"draws":2,"texBytes":0,"boundRadiusM":1.8645,"materialSlots":["toy_runtime"],"palette":"all"},
+  {"id":"toy-leader-slow","file":"../render/items/toys.js","kind":"procedural","tris":48,"draws":1,"texBytes":0,"boundRadiusM":1.7,"materialSlots":["toy_runtime"],"palette":"all"},
+  {"id":"toy-surge-chevrons","file":"../render/karts.js","kind":"procedural","tris":12,"draws":1,"texBytes":0,"boundRadiusM":2.8888,"materialSlots":["toy_runtime"],"palette":"all"}
 ]

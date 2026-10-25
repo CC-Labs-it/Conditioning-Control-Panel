@@ -20,6 +20,7 @@ import { MOTE_TINT } from './look.js';
 import { STATUS_LOOK as L, SHAPE, statusStep, statusState, statusSprites, createBurstPool, createTrail } from './statusMath.js';
 import { lensDepth, lensScale, lensAlpha } from '../lens.js';
 import { createMalusSpirals } from './malusSpirals.js';
+import { TOYS } from './toyMath.js';
 
 const TINT = Object.fromEntries(Object.entries(MOTE_TINT).map(([k, s]) => [k, s.split(',').map((x) => Number(x) / 255)]));
 const WHITE = [1, 1, 1];
@@ -150,6 +151,7 @@ export function createItemStatus(root, feel, { photosafe = null, cap = 1100, tra
       if (seeds[i] === undefined) seeds[i] = i * 2.399;
       const k = statusStep(s, r.fxv ? r.fxv.effect : null, dt, { gentle: soft, riseS });
       if (!s.kind) continue;
+      if (TOYS.has(s.kind)) continue;
       V.set(st[S.posX], st[S.posY], st[S.posZ]);
       Q.set(st[S.quatX], st[S.quatY], st[S.quatZ], st[S.quatW]);
       const self = i === 0, sc = self ? L.selfScale : 1, al = self ? L.selfAlpha : 1;
@@ -162,6 +164,7 @@ export function createItemStatus(root, feel, { photosafe = null, cap = 1100, tra
     // throws: comet heads, trails and sparks; a landing bursts where the trail ended
     const pr = (view && view.projectiles) || [];
     for (const p of pr) {
+      if (TOYS.has(p.kind)) continue;
       let e = trails.get(p.id);
       if (!e) {
         e = { trail: spareTrails.pop() || createTrail(28, 0.4), kind: p.kind, seen: 0 };

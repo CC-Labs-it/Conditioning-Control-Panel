@@ -17,12 +17,14 @@ export const CELLS = ['flash', 'spiral', 'brainDrain', 'freeze', 'blackout', 'pi
 export const cellOf = (id) => { const i = CELLS.indexOf(id); return i < 0 ? CELLS.length - 1 : i; };
 export const ATLAS_GRID = GRID;
 
-// How each icon lives: spin rad/s, beat (scale pulse), tilt (slosh), bob px, slide (copies run down), rings
+// Toy frames remain fixed. A small enamel highlight moves within their centres;
+// Gentle and reduced motion keep them still. Legacy icons retain their own looks.
 const LIFE = {
   flash: { rays: 1 }, spiral: { spin: 0.55, pulse: 0.035 }, brainDrain: { slide: 1 }, freeze: { spin: 0.14, pulse: 0.025, flakes: 1 },
-  blackout: { beat: 0.08 }, pink: { tilt: 0.17 }, melt: { bob: 4, drip: 1 }, shatter: { spin: 0.28 }, surge: { bob: 3.5 },
+  blackout: { beat: 0.08 }, pink: { tilt: 0.17 }, melt: { toy: true, sheen: 0.4 }, shatter: { spin: 0.28 }, surge: { toy: true, sheen: 0.7 },
   glass: {}, echo: { rings: 1 }, golden: { spin: 0.2, pulse: 0.03 }, box: {},
-  pendulum: { tilt: 0.3 }, disc: { spin: 1.2 }, tether: { beat: 0.06 }, snap: { rings: 1 }, bigSpiral: { spin: 0.7, pulse: 0.04 },
+  pendulum: { toy: true, sheen: 0.45 }, disc: { toy: true, sheen: 0.65 }, tether: { toy: true, sheen: 0.35 },
+  snap: { toy: true, sheen: 0.55 }, bigSpiral: { toy: true, sheen: 0.3 },
 };
 const rnd = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 const FILM = ['rgba(255,120,200,1)', 'rgba(120,220,255,0)', 'rgba(170,255,190,0.8)', 'rgba(255,230,140,0)', 'rgba(190,140,255,0.9)', 'rgba(255,120,200,1)'];
@@ -81,9 +83,21 @@ export function createLivingIcons({ px = 256, fps = 30 } = {}) {
     ctx.restore();
   }
 
-  function draw(id, img, t, m) {
+  function draw(id, img, t, m, stillMotion = false) {
     const L = LIFE[id] || {};
     ctx.drawImage(img, 0, 0, S, S);
+    if (L.toy) {
+      // No film, shell, circular darkening or transformed frame on a physical toy.
+      if (!stillMotion) {
+        const x = C + Math.sin(t * L.sheen) * 56;
+        ctx.save(); ctx.beginPath(); ctx.arc(C, C + 8, 54, 0, TAU); ctx.clip();
+        ctx.globalCompositeOperation = 'source-atop';
+        const g = ctx.createLinearGradient(x - 30, 0, x + 30, 0);
+        g.addColorStop(0, 'rgba(255,242,223,0)'); g.addColorStop(0.5, 'rgba(255,242,223,0.12)'); g.addColorStop(1, 'rgba(255,242,223,0)');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, S, S); ctx.restore();
+      }
+      return;
+    }
     if (L.rays) {
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.translate(C, C); ctx.rotate(-t * 0.22);
       for (let k = 0; k < 4; k++) {
@@ -118,12 +132,12 @@ export function createLivingIcons({ px = 256, fps = 30 } = {}) {
     use(id, live = true) { const i = cellOf(id); if (live || !still[i]) want.add(i); },
     /** Redraw the marked cells at the tier fps. timeS already runs at the Gentle rate (the caller
      *  slows its clock), so gentle only shrinks the moves here. */
-    tick(dt, timeS, gentle) {
+    tick(dt, timeS, gentle, reducedMotion = false) {
       acc += dt;
       const rate = typeof fps === 'function' ? fps() : fps;
       if (acc < 1 / rate || !want.size) { want.clear(); return; }
       acc = 0;
-      const m = gentle ? 0.4 : 1, t = timeS, k = px / S;
+      const m = gentle ? 0.4 : 1, t = reducedMotion ? 0 : timeS, k = px / S;
       let drew = false;
       for (const i of want) {
         const e = imgs[i];
@@ -132,7 +146,7 @@ export function createLivingIcons({ px = 256, fps = 30 } = {}) {
         ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
         ctx.clearRect(0, 0, S, S);
         ctx.save(); ctx.beginPath(); ctx.rect(0, 0, S, S); ctx.clip();
-        try { draw(CELLS[i], e.img, t + i * 3.7, m); } catch (_) { /* the still sprite stays */ }
+        try { draw(CELLS[i], e.img, t + i * 3.7, m, gentle || reducedMotion); } catch (_) { /* the still sprite stays */ }
         ctx.restore(); drew = true; still[i] = 1;
       }
       want.clear();

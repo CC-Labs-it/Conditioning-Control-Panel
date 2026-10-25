@@ -76,6 +76,18 @@ export function bubbleCloud(cap, atlas) {
   return { ...c, uniforms: u, dispose: () => m.dispose() };
 }
 
+/** Bare directional badges share one draw and the living atlas, with no glass graph. */
+export function toyIconCloud(cap, atlas) {
+  const m = new SpriteNodeMaterial({ transparent: true, depthWrite: false });
+  const c = cloud(cap, m, 'info'), { pos, size, v } = c.nodes;
+  const g = ATLAS_GRID, p = uv();
+  const at = vec2(p.x.add(mod(v.x, g)), p.y.add(float(g - 1).sub(floor(v.x.div(g))))).div(g);
+  const icon = texture(atlas, at);
+  m.positionNode = pos; m.scaleNode = size;
+  m.colorNode = icon.rgb; m.opacityNode = icon.a.mul(v.y);
+  return { ...c, dispose: () => m.dispose() };
+}
+
 /**
  * The effect-bubble GLB shell (effect_shell), instanced: one draw for every 3D bubble. geometry is the
  * shell centred on its middle at radius 1 (visuals.js builds it with shellFit). push(x, y, z, R, alpha,

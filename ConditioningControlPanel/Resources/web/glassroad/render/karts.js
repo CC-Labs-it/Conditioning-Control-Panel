@@ -18,8 +18,8 @@
  * a sprite (one shared atlas canvas), eased in and out by the reaction layer's markK.
  * Polish 4, items as events: an item hit spins, stomps or flips the kart (kartPose.js itemHit), bursts in the
  * kind's colour, sets stars orbiting EMI's head for the stun and glows the rim in the kind's hue (hue drifts,
- * lightness held; Gentle holds it still and halves it). A throw winds up and lunges. Surge and Echo wrap
- * the kart in an aura plus rising motes; Glass and Golden share one shell in items/visuals.js.
+ * lightness held; Gentle holds it still and halves it). A throw winds up and lunges. Surge leaves flat gold
+ * chevrons behind the kart; Echo keeps its aura. Glass and Golden share one shell in items/visuals.js.
  * ART5, the R4 rig: one AnimationMixer per kart clone plays Astra's 26 clips, picked by kartPose.js
  * directorStep from the same edges and bus kinds the reactions hear (art/models/emi-kart-event-bindings.json).
  * The clips own every joint, so the procedural head, arm and antenna writes and the hop, land, bump, boost,
@@ -29,7 +29,7 @@
  */
 import {
   Group, Mesh, Sprite, SpriteNodeMaterial, MeshBasicNodeMaterial, CanvasTexture, SRGBColorSpace, Quaternion, Vector2, Vector3,
-  Euler, Color, SphereGeometry, AdditiveBlending, AnimationMixer, LoopOnce, LoopRepeat, PropertyBinding,
+  Euler, Color, SphereGeometry, BufferGeometry, Float32BufferAttribute, DoubleSide, AdditiveBlending, AnimationMixer, LoopOnce, LoopRepeat, PropertyBinding,
 } from 'three/webgpu';
 import {
   texture, uv, uniform, vec2, vec3, float, pow, abs, sin, atan, smoothstep, min, max, normalView, normalWorld, positionWorld, positionViewDirection, positionLocal,
@@ -89,6 +89,17 @@ function auraMesh(geo) {
   const mesh = new Mesh(geo, m);
   mesh.scale.set(A.size[0], A.size[1], A.size[2]); mesh.position.y = A.upM; mesh.renderOrder = 2; mesh.visible = false;
   return { mesh, u, material: m, emitAcc: 0, style: {} };
+}
+
+/** Three solid chevrons point forward along -Z. All twelve triangles lie below the saucer. */
+function surgeGeometry() {
+  const p = [];
+  for (let i = 0; i < 3; i++) for (const side of [-1, 1]) {
+    const z = 1.05 + i * .6, w = .8 - i * .12;
+    p.push(0,.15,z, side*w,.15,z+.4, side*w,.15,z+.58,
+      0,.15,z, side*w,.15,z+.58, 0,.15,z+.18);
+  }
+  return new BufferGeometry().setAttribute('position', new Float32BufferAttribute(p, 3));
 }
 
 /** art/palettes.json `karts` (seven colourways); null keeps the LOOK.kartTints fallback. */
@@ -238,6 +249,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
   const R = rivalNumbers(LOOK), RR = reactNumbers(LOOK), RN = rigNumbers(LOOK), list = [];
   const kartGltf = art && art.model ? art.model('emi-teacup-kart') : null;
   const auraGeo = new SphereGeometry(1, 32, 20);
+  const surgeGeo = surgeGeometry();
   // one head mark atlas for every kart (none without a document, e.g. under node)
   let markTex = null;
   if (typeof document !== 'undefined') {
@@ -284,11 +296,14 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     if (stars) for (const sp of stars.sprites) root.add(sp);
     const aura = auraMesh(auraGeo);
     root.add(aura.mesh);
+    const surgeMaterial = new MeshBasicNodeMaterial({ color: '#d7a64f', transparent: true, opacity: 0, depthWrite: false, side: DoubleSide });
+    const surgeMesh = new Mesh(surgeGeo, surgeMaterial); surgeMesh.name = 'surge-chevrons'; surgeMesh.visible = false; root.add(surgeMesh);
+    const surge = { mesh: surgeMesh, material: surgeMaterial, alpha: 0, time: 0 };
     list.push({
       i, root, body, model, mats, bones, look, accessory, face, head, tint: look ? look.cup : [1, 1, 1], tagHex: look ? look.hex : '#fff4fa',
       dress, skin, rig, glideCap, propeller, caustics, underwater:0, life: art3d ? createEmiLife(model, {seed:i}) : null, lifeSignals:{}, lifeAir:0, dir: createDirector(),
       tag: null, tagName: '', pose: createPose(), react: Object.assign(createReact(i), { rig: !!rig }), pend: [], mem: {}, ghost: 0, mark,
-      rims, rimBase: look ? look.rimLin.slice() : [0, 0, 0], rimSet: false, stars, aura,
+      rims, rimBase: look ? look.rimLin.slice() : [0, 0, 0], rimSet: false, stars, aura, surge,
     });
   }
 
@@ -434,7 +449,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     }
     if (k.mark) showMark(k, o, near, gentle);
     showHit(k, o, near, gentle);
-    showAura(k, o, near, gentle, dt);
+    showAura(k, o, near, gentle, paused ? 0 : dt);
   }
 
   /** The stun stars orbit EMI's head; the rim glows the kind's hue (lightness held) while stunned. */
@@ -465,6 +480,13 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
 
   /** A self item's aura: the shell fades with auraK; motes rise off it (fewer on lower tiers and under Gentle). */
   function showAura(k, o, near, gentle, dt) {
+    const s = k.surge, target = o.aura === 'surge' ? o.auraK : 0;
+    s.alpha += Math.max(-dt / .3, Math.min(dt / .3, target - s.alpha));
+    const still = gentle || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if (!still) s.time += dt;
+    s.mesh.position.z = still ? 0 : Math.sin(s.time * 7) * .08;
+    s.mesh.visible = s.alpha > .005; s.material.opacity = s.alpha * .85;
+    if (o.aura === 'surge') { k.aura.mesh.visible = false; k.aura.emitAcc = 0; return; }
     const a = k.aura, A = AURA_LOOK, style = auraStyle(o.aura, k.i === 0, gentle, a.style), on = style.visible && o.auraK > 0.01;
     a.mesh.visible = on;
     if (!on) { a.emitAcc = 0; return; }
@@ -506,6 +528,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
       k.react = Object.assign(createReact(k.i), { rig: !!k.rig }); k.pend.length = 0; k.dir = createDirector();
       if (k.glideCap) k.glideCap.reset();
       k.propeller.reset();
+      k.surge.alpha = k.surge.time = k.surge.material.opacity = 0; k.surge.mesh.visible = false;
       k.underwater=0;k.caustics.amount.value=k.caustics.time.value=0;
       if (k.rig) { k.rig.mixer.stopAllAction(); k.rig.cur = null; }
     }
@@ -521,6 +544,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
       if (k.mark) k.mark.sprite.material.dispose();
       if (k.stars) k.stars.material.dispose();
       k.aura.material.dispose();
+      k.surge.material.dispose();
       if (k.accessory) k.accessory.traverse((o) => { if (o.isMesh && o.material) o.material.dispose(); });
       if (k.life) k.life.dispose();
       if (k.glideCap) k.glideCap.dispose();
@@ -531,6 +555,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     }
     if (markTex) markTex.dispose();
     auraGeo.dispose();
+    surgeGeo.dispose();
     if (!kartGltf) greyGeo?.dispose();
   }
   /** Re-dress seat i (multiplayer: a remote player's { outfit, vehicle } ids; an unknown id gets the default look). */

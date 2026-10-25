@@ -1909,3 +1909,98 @@ Six original propeller beanies follow the accepted W3 concepts: Threshold porcel
 - Packed glTF validation: zero errors or warnings; meshopt decoded and fresh-imported in Blender 5.2.1, then the editable native masters were independently reopened. Final six-view, fitted, low rear, stowed/spin and 26-action sheets are linked in the PR body.
 - Sources and `.blend` masters stay private under `C:/Projects/glassroad-art/glide/beanies/`. All prop geometry is original CC Labs work. Concept-sheet material grain is intentionally expressed with broad geometry/material slots under the 2,000-triangle contract.
 - This is an art delivery with an isolated Three.js fit review. Game-side glide integration and controller feel are not exercised here. Dense animation sampling is not a continuous collision proof between samples.
+
+
+## Toys: directional icons and physical item props (2026-10-25)
+
+Seven original PNG icons replace the borrowed bubble faces. Pendulum, Disc and Tether
+use a forward arrow tab; Big Spiral an arch; Melt a rear notch; Snap and Surge a round
+enamel frame. Direction frames stay fixed while their small interior highlight moves.
+The 5 x 5 living atlas remains shared. Gentle and reduced motion keep the toy cells still.
+Pickup cards retain their existing presentation and reveal these same icon files.
+
+Original Blender geometry, vertex colours and static materials only. No third-party
+geometry or embedded animation. Icons were authored with imagegen, with prompts and
+full-resolution alpha sources retained privately. Native scenes, scripts, decoded
+fresh-import renders and contact sheets stay in the private toys art archive.
+They are review evidence, never runtime assets. Asset rights follow the project terms.
+
+All GLBs use metres, Y up, forward -Z and a base-centred origin. They are compressed
+with EXT_meshopt_compression. All packed meshes were decoded and freshly imported;
+validation found zero errors and zero degenerate triangles. Material draws below
+count primitives, not Blender objects. GLBs carry no textures or animation clips.
+
+| Asset | Triangles | Draws | Texture bytes | Bound radius (m) |
+|---|---:|---:|---:|---:|
+| toy-big-spiral | 1296 | 3 | 0 | 1.601 |
+| toy-chain-link | 120 | 1 | 0 | 0.341 |
+| toy-disc | 780 | 2 | 0 | 0.505 |
+| toy-pendulum-lod0 | 1174 | 2 | 0 | 0.898 |
+| toy-pendulum-lod1 | 658 | 2 | 0 | 0.879 |
+| toy-tether-cuff | 594 | 2 | 0 | 0.539 |
+| toy-tether-head | 628 | 2 | 0 | 0.717 |
+| fx/pendulum.png (256 RGBA) | 0 | 0 shared | 262144 | 0 |
+| fx/disc.png (256 RGBA) | 0 | 0 shared | 262144 | 0 |
+| fx/tether.png (256 RGBA) | 0 | 0 shared | 262144 | 0 |
+| fx/snap.png (256 RGBA) | 0 | 0 shared | 262144 | 0 |
+| fx/bigspiral.png (256 RGBA) | 0 | 0 shared | 262144 | 0 |
+| fx/melt.png (256 RGBA) | 0 | 0 shared | 262144 | 0 |
+| fx/gold_droplet.png (256 RGBA) | 0 | 0 shared | 262144 | 0 |
+| fx-melt-spiral (1536 R8 source) | 0 | 1 existing | 12582904 | 0 |
+
+PNG bytes above are decoded RGBA sources without mips: 1.75 MiB total; the existing
+shared canvas atlas owns the GPU upload. The Melt budget is conservative RGBA8 with
+all 11 mips; block16 residency is 3,145,776 bytes. KTX2 UASTC is linear and sampled
+from R. It replaces the old 512-square mask. The original two broad arms and attached
+drips were re-evaluated at 1536 square, not enlarged from shipped pixels, for the
+10.8 m diameter. The warning ring remains at the actual 5.4 m contact radius.
+
+### Host attachment and motion
+
+- Pendulum: `toy_pendulum_pivot` at (0, 0.9, 0), swing about local Z. LOD1 is 56%
+  of LOD0. The host turns the watch face toward the chase camera and uses the same
+  model for the kart's held pose. The art file keeps its forward -Z contract.
+- Disc: `toy_disc`, 1.0 m across, spins about local Y. The thick gold rim and a
+  shallow bank preserve its edge silhouette. `disc-bounce` produces a brief local
+  spark; it never flashes the screen.
+- Tether: `toy_chain_link`, long axis Y, 0.340451 m long. Ten alternating instances
+  span `tetherPoints()` with its sag and age tightening. The hook is `toy_tether_head`
+  and the receiver wears `toy_tether_cuff`. A pass break recoils both halves and
+  marks the victim's spin; timeout/range/snap breaks do not invent a spin.
+- Big Spiral: `toy_wheel` and double-sided `toy_loom_face`, UV0 0..1, 1.6 m across.
+  The host centres rotation at the wheel centre and binds the shared real Loom atlas.
+  There is no baked spiral texture. Landing marks and a two-second leader slow look
+  use the same runtime source.
+- Snap: a flat six-metre shock ring and a ring of stars for the one-second guard.
+  Neither encloses the kart in a bubble. The course palette colours local accents.
+
+Host time owns all swing, spin, fades and emission. Pause freezes clocks; reduced
+motion stills toy spins. Gentle uses a 300 ms rise, no spin and no fast ring expansion.
+Photosafe grants bright local sparks or leaves a quiet diffuse marker. Payoff words
+and media flashes remain owned by the existing payoff layer. No new audio or speech
+assets were added; the existing item-fire, impact and boost bank remains in use.
+
+
+### Runtime geometry budgets
+
+These source-defined assets are listed as `procedural` manifest rows. Their file is
+the authoring module; the art loader does not request them as external models.
+Bounds below use the effect's local origin and maximum authored scale. Spark tips
+extend beyond the six-metre Snap contact ring; they are decorative. Kart root scale
+applies to the local Surge bound. The leader disc borrows the existing Loom atlas.
+
+| Asset | Triangles | Draws | New texture bytes | Bound radius (m) |
+|---|---:|---:|---:|---:|
+| toy-snap-burst | 224 | 2 | 0 | 6.78 |
+| toy-snap-guard | 96 | 1 | 0 | 1.5255 |
+| toy-landing-marker | 224 | 2 | 0 | 1.8645 |
+| toy-leader-slow | 48 | 1 | 0 | 1.7 |
+| toy-surge-chevrons | 12 | 1 | 0 | 2.8888 |
+
+Surge uses flat gold chevrons behind the kart. The earlier sphere aura is suppressed
+for Surge; its normal boost timing, face and engine/audio behavior remain.
+
+Held Snap, Surge and Melt badges use a separate bare sprite material and one shared
+instance draw, sampling the same 5 x 5 living atlas. Each instance contributes two
+triangles; no new texture is allocated. The legacy glass material is not used for
+these directional frames. Native captures verify their alpha and visibility.
