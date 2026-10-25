@@ -3449,3 +3449,7 @@ Mantra Lab completion close timer is now stopped in Cleanup, so an early-closed 
 ## avalonia-port/flake-leash-hold-panic: +19
 - LeashHoldTests park the shell's real 250 ms hold clock through a new `LeashHoldClockInterval` seam. A stray wall-clock tick after the 5 s ask played a 5th leash-tick. Product interval unchanged.
 - Fail-proved: 1 ms interval, rcheck 40195712417 red. 20x rcheck green before (40195628587) and after (40195831964). rgate 40196883118 GATE-OK.
+
+## avalonia-port/fin-shell-autonomy: +542
+- Takeover countdown bar, diagnostic Test dialogs, event audio, Mind Wipe recheck, Pop Quiz busy guard; ledger row stays `stub`.
+- Review ACCEPT; fixes (068bde1d3): event audio reuses ModCompanionContent.ResolveActive, single Mind Wipe recheck in AutonomyScheduler.Run. rcheck 39921773360 green (fail-proof 39921324849 red), rgate 39922479600 GATE-OK. Not pushed.
