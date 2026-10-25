@@ -245,6 +245,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Bottom,
                     Margin = new Thickness(0, 0, 6, 4),
                 };
+                global::Avalonia.Automation.AutomationProperties.SetName(CreditMark, ScrolllerCredit.Mark); // WPF ScrolllerCreditMark.cs:45
                 _card.Children.Add(CreditMark); // same picture geometry, transform and native window fade
             }
             _root = new Panel { Children = { _card } };

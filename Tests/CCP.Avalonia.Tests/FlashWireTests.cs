@@ -83,10 +83,10 @@ public sealed class FlashWireTests
     private static Bitmap Picture() => new(AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/features/flash.png")));
 
     /// <summary>One flash through the real show path (lucky roll, glow, Spawn, pay), clickable.</summary>
-    private static FlashOverlayWindow ShowOne(int hydraGeneration = 0, bool ambient = false, TimeSpan? lifetime = null)
+    private static FlashOverlayWindow ShowOne(int hydraGeneration = 0, bool ambient = false, TimeSpan? lifetime = null, string path = "a.png")
     {
         var screen = new Window().Screens.All[0];
-        Assert.True(FlashOverlay.Show(Picture(), new PixelRect(100, 100, 400, 300), "a.png", screen, 1, TimeSpan.Zero,
+        Assert.True(FlashOverlay.Show(Picture(), new PixelRect(100, 100, 400, 300), path, screen, 1, TimeSpan.Zero,
             lifetime ?? TimeSpan.FromSeconds(6), clickable: true, ambient, hydraGeneration));
         return FlashOverlay.Active[^1].Window;
     }
@@ -97,6 +97,13 @@ public sealed class FlashWireTests
         ShowOne();
         Assert.Equal(new[] { (4.0, "Flash") }, xp);   // no flash sound on this head: WPF's no-sound 4
         Assert.Equal(1, engine.Progress.TotalFlashImages);
+    });
+
+    [Fact]
+    public Task The_show_path_hands_the_picture_path_to_the_Scrolller_credit() => OnUi((_, _, _, _) =>
+    {
+        Assert.NotNull(ShowOne(path: "ccp_temp_remote_picture.jpg").CreditMark);   // WPF FlashService.cs:2045
+        Assert.Null(ShowOne(path: "a.png").CreditMark);
     });
 
     [Fact]

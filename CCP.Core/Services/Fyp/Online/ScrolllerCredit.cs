@@ -20,7 +20,7 @@ internal static class ScrolllerCredit
         if (pathOrUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
             || pathOrUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return false;
         // ponytail: WPF's remote-temp naming contract; no remote flash fetcher is added in this lane.
-        try { return Path.GetFileName(pathOrUrl).StartsWith("ccp_temp_remote_", StringComparison.OrdinalIgnoreCase); }
+        try { return Path.GetFileName(pathOrUrl).StartsWith(ScrolllerDiskCache.TempPrefix, StringComparison.OrdinalIgnoreCase); }
         catch (ArgumentException) { return false; }
     }
 }

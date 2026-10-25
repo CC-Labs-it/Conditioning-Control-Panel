@@ -29,6 +29,7 @@ public sealed class ScrolllerFlashCreditTests
             var mark = Assert.IsType<Border>(flash.CreditMark);
             Assert.Equal("via Scrolller", Assert.IsType<TextBlock>(mark.Child).Text);
             Assert.False(mark.IsHitTestVisible);
+            Assert.Equal("via Scrolller", global::Avalonia.Automation.AutomationProperties.GetName(mark));
             Assert.Equal(0.75, mark.Opacity);
             Assert.Equal(global::Avalonia.Layout.HorizontalAlignment.Right, mark.HorizontalAlignment);
             Assert.Equal(global::Avalonia.Layout.VerticalAlignment.Bottom, mark.VerticalAlignment);
