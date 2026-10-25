@@ -121,6 +121,26 @@ public sealed class NavRailCoinTests
         var ease = new MainShellWindow.NavSpringEase(1.5);
         Assert.Equal(1.5, ease.Ease(0.6), 6);
         Assert.Equal(1.0, ease.Ease(1.0), 6);
-        Assert.Equal(0.0, MainShellWindow.CoinOvershoot(2, 1));
+    });
+
+    [Fact]
+    public void ReleasingAtFullMotionSpringsPastTheSocketByTheOvershootThenSettles() => Run(w =>
+    {
+        var studio = Row(w, NavSections.Studio);
+        var at = TileAt(w, studio, 0.5, 0.5);
+        w.MouseMove(at, RawInputModifiers.None); Dispatcher.UIThread.RunJobs();
+        w.MouseDown(at, MouseButton.Left, RawInputModifiers.None); Dispatcher.UIThread.RunJobs();
+        Assert.Equal(DepthLaw.PressTravelPx, studio.Lift.Y);              // Off: pressed, snapped
+
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        w.MouseUp(at, MouseButton.Left, RawInputModifiers.None); Dispatcher.UIThread.RunJobs();
+        Assert.Equal(DepthLaw.ActiveSinkPx, studio.Lift.GetBaseValue(TranslateTransform.YProperty).Value);
+        var spring = Assert.IsType<global::Avalonia.Animation.DoubleTransition>(Assert.Single(studio.Lift.Transitions!));
+        Assert.Equal(TimeSpan.FromMilliseconds(DepthLaw.ReleaseMs), spring.Duration);
+        Assert.IsType<MainShellWindow.NavSpringEase>(spring.Easing);
+        double peak = DepthLaw.PressTravelPx + spring.Easing.Ease(0.6) * (DepthLaw.ActiveSinkPx - DepthLaw.PressTravelPx);
+        Assert.Equal(DepthLaw.ActiveSinkPx - DepthLaw.ReleaseOvershootPx, peak, 6);   // past the socket by 1 px
+        Assert.Equal(DepthLaw.ActiveSinkPx - DepthLaw.ReleaseOvershootPx, MainShellWindow.CoinOvershoot(DepthLaw.PressTravelPx, DepthLaw.ActiveSinkPx), 6);
+        Assert.Equal(1.0, spring.Easing.Ease(1.0), 6);
     });
 }

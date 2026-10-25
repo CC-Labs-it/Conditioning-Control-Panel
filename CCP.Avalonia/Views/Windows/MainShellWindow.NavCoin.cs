@@ -202,7 +202,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var span = TimeSpan.FromMilliseconds(ms);
             double from = lift.Y;
             Easing ease = spring && Math.Abs(from - travel) > 0.01
-                ? new NavSpringEase(1 + DepthLaw.ReleaseOvershootPx / Math.Abs(travel - from))
+                ? new NavSpringEase((CoinOvershoot(from, travel) - from) / (travel - from))
                 : new QuadraticEaseOut();
             lift.Transitions = new Transitions { new DoubleTransition { Property = TranslateTransform.YProperty, Duration = span, Easing = ease } };
             lift.Y = travel;
