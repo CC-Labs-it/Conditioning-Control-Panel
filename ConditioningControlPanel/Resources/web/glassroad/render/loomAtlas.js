@@ -21,7 +21,7 @@ export function acquireLoomAtlas(px = 256) {
       if (field) composeFrame(g, field, params, 0, px, px); else drawFallbackFrame(g, params, 0, px, px);
       ctx.drawImage(tile, i % 3 * px, Math.floor(i / 3) * px);
     }
-    try { field?.gl?.getExtension('WEBGL_lose_context')?.loseContext(); } catch { /* gone */ }
+    field?.dispose();
     shared = new CanvasTexture(canvas); shared.colorSpace = SRGBColorSpace;
   }
   refs++;

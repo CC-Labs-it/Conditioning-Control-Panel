@@ -437,14 +437,16 @@ void main() {
 
 function compile(gl, type, src) {
   const sh = gl.createShader(type);
-  gl.shaderSource(sh, src);
-  gl.compileShader(sh);
-  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
-    const info = gl.getShaderInfoLog(sh);
+  if (!sh) throw new Error('loom shader allocation failed');
+  try {
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error('loom shader: ' + gl.getShaderInfoLog(sh));
+    return sh;
+  } catch (error) {
     gl.deleteShader(sh);
-    throw new Error('loom shader: ' + info);
+    throw error;
   }
-  return sh;
 }
 
 /**
@@ -459,21 +461,42 @@ export function createFieldRenderer(canvas) {
   });
   if (!gl) return null;
 
-  const prog = gl.createProgram();
-  gl.attachShader(prog, compile(gl, gl.VERTEX_SHADER, VERT_SRC));
-  gl.attachShader(prog, compile(gl, gl.FRAGMENT_SHADER, FRAG_SRC));
-  gl.linkProgram(prog);
-  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-    throw new Error('loom shader link: ' + gl.getProgramInfoLog(prog));
+  let prog = null, quad = null, aPos = -1, disposed = false;
+  const shaders = [];
+  /** Release owned GPU objects without forcing loss of a sibling game's graphics context. */
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
+    gl.useProgram(null);
+    if (aPos >= 0) gl.disableVertexAttribArray(aPos);
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    if (quad) gl.deleteBuffer(quad);
+    for (const shader of shaders) gl.deleteShader(shader);
+    if (prog) gl.deleteProgram(prog);
+    shaders.length = 0; prog = quad = null;
+    canvas.width = canvas.height = 1;
   }
-  gl.useProgram(prog);
-
-  const quad = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, quad);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-  const aPos = gl.getAttribLocation(prog, 'a_pos');
-  gl.enableVertexAttribArray(aPos);
-  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+  try {
+    prog = gl.createProgram();
+    if (!prog) throw new Error('loom program allocation failed');
+    for (const [type, source] of [[gl.VERTEX_SHADER, VERT_SRC], [gl.FRAGMENT_SHADER, FRAG_SRC]]) {
+      const shader = compile(gl, type, source);
+      shaders.push(shader); gl.attachShader(prog, shader);
+    }
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error('loom shader link: ' + gl.getProgramInfoLog(prog));
+    gl.useProgram(prog);
+    quad = gl.createBuffer();
+    if (!quad) throw new Error('loom buffer allocation failed');
+    gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    aPos = gl.getAttribLocation(prog, 'a_pos');
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+  } catch (error) {
+    dispose();
+    throw error;
+  }
 
   const U = {};
   const loc = (n) => (U[n] !== undefined ? U[n] : (U[n] = gl.getUniformLocation(prog, n)));
@@ -499,6 +522,7 @@ export function createFieldRenderer(canvas) {
    *  `width`/`height` (optional) draw into a viewport of that size at the canvas's bottom-left corner instead
    *  of the whole canvas: backroom/shared/hypno/loom.js keeps one grown canvas and renders each size into it. */
   function render(q, phase, width = 0, height = 0) {
+    if (disposed) return;
     const w = width > 0 ? Math.min(width, canvas.width) : canvas.width, h = height > 0 ? Math.min(height, canvas.height) : canvas.height;
     gl.viewport(0, 0, w, h);
     gl.useProgram(prog);
@@ -523,7 +547,7 @@ export function createFieldRenderer(canvas) {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  return { canvas, render, gl };
+  return { canvas, render, gl, dispose };
 }
 
 // ---- centerpiece + composite --------------------------------------------

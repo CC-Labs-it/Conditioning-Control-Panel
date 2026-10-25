@@ -177,9 +177,9 @@ function loomField(w, h) {
   if (field && (field.canvas.width !== w || field.canvas.height !== h)) { field.canvas.width = w; field.canvas.height = h; }
   return field;
 }
-/** Drop the shared Loom WebGL context (render/media.js calls this after the first draws). */
+/** Release the shared Loom resources after the static frames have been copied. */
 export function releaseLoom() {
-  if (field && field.gl) { try { const x = field.gl.getExtension('WEBGL_lose_context'); if (x) x.loseContext(); } catch { /* gone */ } }
+  field?.dispose();
   field = null; fieldTried = false;
 }
 
