@@ -50,9 +50,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// panel's own master checkbox, which is what WPF does and what keeps the write and the Save
     /// in one place.</para>
     ///
-    /// <para><b>What is stubbed, and why.</b> Everything the WPF code-behind reaches into the app
-    /// head for: the detail crossfade. It is
-    /// marked <c>ponytail:</c> at its site. The FeatureOpened bark is no longer among them - it
+    /// <para><b>Shortcuts.</b> The v2 pills are read once on Loaded (no prize-grant event on this
+    /// head); marked <c>ponytail:</c> at <see cref="RefreshV2Pills"/>. The FeatureOpened bark
     /// crosses on <see cref="CoreBark"/>.</para>
     ///
     /// <para><b>The art is real.</b> The rack's feature plates and the door medallion resolve
@@ -165,6 +164,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             /// <summary>The resting strip's 28px chip. Same swap, same fallback - except on a
             /// tiered row, where the livery well owns the background and art must not take it.</summary>
             public Border? Chip;
+
+            /// <summary>The champagne v2 pills on the strip and the tile (flash and bubbles rows
+            /// only), lit by <see cref="RefreshV2Pills"/> from prize ownership.</summary>
+            public Border? V2Pill;
+            public Border? TileV2Pill;
         }
 
         private readonly List<StudioRackEntry> _entries = new();
@@ -182,6 +186,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal PerimeterCometAdorner? CometFor(string key) => _entries.FirstOrDefault(e => e.Key == key)?.Comet;
         internal Control? HostFor(string key) => EntryFor(key)?.Host;
         internal Ellipse? DotFor(string key) => EntryFor(key)?.DotShape;
+        internal (Border? Strip, Border? Tile, TextBlock? TileLabel) V2PillsFor(string key) =>
+            EntryFor(key) is { } e ? (e.V2Pill, e.TileV2Pill, e.TileLabel) : default;
 
         /// <summary>
         /// Every code-built brush on this page whose colour is the mod accent rather than a fixed
@@ -561,15 +567,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // Tier 1: the rack's one paid module, same bar as the premium rail's chip.
             Add("haptics", I(IconKind.PhoneVibrate), "vibe.png", "Haptics", "tab_haptics", PanelHaptics, null, null,
                 () => CoreSettings.Current.Haptics?.Enabled,
-                // REFUSED, and the page being hosted now does not change it. WPF flips
-                // PanelHaptics.ChkHapticsEnabled so the page's own handler AND its premium gate
-                // run with the write; HapticsTabView.ChkHapticsEnabled_Changed is itself an empty
-                // stub on this head (all 34 of its forwards are - see the header of
-                // CCP.Avalonia/Views/Windows/MainShellWindow.Haptics.cs), so the flip would move a
-                // checkbox and nothing else. Writing CoreSettings.Current.Haptics.Enabled straight
-                // from here instead would skip the gate AND start no device, which is worse than
-                // an inert gesture on a page whose subject is hardware that touches the user.
-                toggle: null,
+                // No wall key: the enable lives on the nested Haptics settings object. As WPF
+                // (StudioTabView.xaml.cs:532), flip the page's own master box so its handler runs
+                // with the write, premium gate included (adapted from trunk 7a6735e8c).
+                toggle: () => FlipMasterCheckBox(PanelHaptics?.ChkHapticsEnabled),
                 tier: 1);
 
             _layout.Add("st4_studio_group_timing");
@@ -721,8 +722,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 e.Row.Click += RackEntry_Click;
                 // Right-click = quick-toggle, the same second gesture the dashboard tiles carry.
                 // On the ROW, not on the dot: the dot is 7px, and the gesture belongs to the whole
-                // entry. Rows with no Toggle fall through unhandled (Visuals, and Haptics until
-                // its page lands with the master box the gesture has to go through).
+                // entry. Rows with no Toggle fall through unhandled (Visuals).
                 e.Row.PointerReleased += RackEntry_RightClick;
                 // Instant, animation-free state swap. Wired to the checked change rather than
                 // driven from SelectEntry so the swap can never drift out of step with IsChecked -
@@ -742,6 +742,67 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>Height of a checked row that has a tile. The RESTING height (38) deliberately
         /// lives only in RackEntryStyle's Height setter, so there is one owner of it.</summary>
         private const double ActiveTileHeight = 56;
+
+        /// <summary>The tile caption's right inset with no pill worn: clears the dot.</summary>
+        internal const double TileLabelInset = 26;
+
+        /// <summary>Where the tile's v2 pill is right-anchored, just inside the dot's slot.</summary>
+        internal const double TilePillInset = 24;
+
+        /// <summary>Clear air between the caption's last glyph (or its ellipsis) and the pill.</summary>
+        internal const double TileLabelGap = 8;
+
+        /// <summary>
+        /// WPF StudioTabView.xaml.cs:717: holds the tile caption off the v2 pill while it is worn
+        /// and gives the room back when it is not. The pill is MEASURED, not allowed for by a
+        /// hand-counted width.
+        /// </summary>
+        internal static void ApplyTileCaptionInset(Border? pill, TextBlock? label, bool worn)
+        {
+            if (label == null) return;
+            var inset = TileLabelInset;
+            if (worn && pill != null)
+            {
+                pill.Measure(Size.Infinity);
+                inset = TilePillInset + pill.DesiredSize.Width + TileLabelGap;
+            }
+            label.Margin = new Thickness(12, 0, inset, 0);
+        }
+
+        /// <summary>Which v2 prize family a rack key wears, or null. Only the two rows whose
+        /// panels host the v2 boxes qualify.</summary>
+        private static string? V2PillFamily(string? rackKey) => rackKey?.ToLowerInvariant() switch
+        {
+            "flash" => "flash",
+            "bubbles" => "bubbles",
+            _ => null,
+        };
+
+        /// <summary>
+        /// WPF RefreshV2Pills: lights or hides the v2 pill on the flash and bubbles rows from
+        /// ownership (<see cref="Platform.PrizeOwnership"/>, WPF V2Badges).
+        /// <para>ponytail: run on Loaded only. WPF re-runs it on <c>PrizeGrants.GrantsChanged</c>;
+        /// ownership cannot change at runtime on this head (no OwnershipService yet, parity row
+        /// svc-prize-ownership), so there is no event to hook.</para>
+        /// </summary>
+        internal void RefreshV2Pills()
+        {
+            bool flash, bubbles;
+            try { flash = Platform.PrizeOwnership.FlashV2Owned(); } catch { flash = false; }
+            try { bubbles = Platform.PrizeOwnership.BubbleV2Owned(); } catch { bubbles = false; }
+            foreach (var e in _entries)
+            {
+                var fam = V2PillFamily(e.Key);
+                if (fam == null) continue;
+                bool worn = fam == "flash" ? flash : bubbles;
+                if (e.V2Pill != null) e.V2Pill.IsVisible = worn;
+                if (e.TileV2Pill != null)
+                {
+                    e.TileV2Pill.IsVisible = worn;
+                    ApplyTileCaptionInset(e.TileV2Pill, e.TileLabel, worn);
+                }
+            }
+        }
 
         /// <summary>
         /// The resting row: chip | caption | state dot.
@@ -839,8 +900,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 grid.Children.Add(newPill);
             }
 
+            // The v2 pill (WPF StudioTabView.xaml.cs:864): a column of its own on THIS row only, so
+            // the dot below still takes the last one and never draws over it. Built hidden;
+            // RefreshV2Pills lights it from ownership.
+            if (V2PillFamily(e.Key) != null)
+            {
+                grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+                e.V2Pill = Features.FlashFeatureControl.NewV2Badge(new Thickness(6, 0, 0, 0), compact: true);
+                e.V2Pill.IsVisible = false;
+                Grid.SetColumn(e.V2Pill, grid.ColumnDefinitions.Count - 1);
+                grid.Children.Add(e.V2Pill);
+            }
+
             if (e.Dot != null)
             {
+                // Its own column, always: a NEW or v2 pill has already taken the one that was last.
+                grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
                 e.DotShape = new Ellipse
                 {
                     Width = 7,
@@ -848,8 +923,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Thickness(6, 0, 2, 0),
                 };
-                // Last column, not a fixed 2: the NEW pill above inserts a column on the row it
-                // badges. Unbadged rows still resolve to 2.
                 Grid.SetColumn(e.DotShape, grid.ColumnDefinitions.Count - 1);
                 grid.Children.Add(e.DotShape);
             }
@@ -911,9 +984,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Foreground = Brushes.White,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                Margin = new Thickness(12, 0, 26, 0),
+                Margin = new Thickness(12, 0, TileLabelInset, 0),
             };
             tile.Children.Add(e.TileLabel);
+
+            // Same pill, right-anchored just inside the dot's slot (WPF :965).
+            if (V2PillFamily(e.Key) != null)
+            {
+                e.TileV2Pill = Features.FlashFeatureControl.NewV2Badge(new Thickness(0, 0, TilePillInset, 0), compact: true);
+                e.TileV2Pill.HorizontalAlignment = HorizontalAlignment.Right;
+                e.TileV2Pill.IsVisible = false;
+                tile.Children.Add(e.TileV2Pill);
+            }
 
             if (e.Dot != null)
             {
@@ -1136,8 +1218,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>
         /// WPF StudioTabView.xaml.cs:1231: the eleven wall modules go through the shell's
         /// <c>ToggleWallFeature</c> (session-lock refusal, Save, <c>CoreEngine.ApplyLive</c>).
-        /// ponytail: the Haptics half is blocked on <c>HapticsTabView.ChkHapticsEnabled_Changed</c>
-        /// being a stub.
+        /// Haptics, Scheduler and Ramp carry their own toggle (the panel's master box).
         /// </summary>
         private void QuickToggle(string key) =>
             (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.ToggleWallFeature(key);
@@ -1359,6 +1440,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void OnLoaded(object? sender, RoutedEventArgs e)
         {
+            RefreshV2Pills();
+            // Per-module wiring from the module partials (StudioTabView.Haptics.cs), as WPF.
+            HookHapticsModule();
             RefreshRackLabels();
             ApplyDoorIcon();
             RefreshDots();

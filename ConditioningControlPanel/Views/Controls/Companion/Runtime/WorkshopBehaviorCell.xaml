@@ -51,6 +51,20 @@
                 ToolTip="{loc:Str tooltip_bubble_duration}"
                 ValueChanged="SliderBubbleDuration_ValueChanged"/>
 
+        <!-- voice level (7.1.8): the voice's own level on top of master. 80 = the loudness from
+             before the slider. In the open on purpose: people tune it. -->
+        <Grid>
+            <TextBlock Text="{loc:Str label_companion_voice_level}" Style="{StaticResource CmpCellLabelStyle}"/>
+            <TextBlock x:Name="TxtVoiceLevelCompanion" x:FieldModifier="internal" Text="80"
+                       Style="{StaticResource CmpCellValueStyle}"/>
+        </Grid>
+        <Slider x:Name="SliderVoiceLevelCompanion" x:FieldModifier="internal" Style="{DynamicResource PinkSlider}"
+                Minimum="0" Maximum="100" Value="80" Margin="0,4,0,2"
+                IsSnapToTickEnabled="True" TickFrequency="1"
+                ValueChanged="SliderVoiceLevel_ValueChanged"/>
+        <TextBlock Text="{loc:Str label_companion_voice_level_hint}" Style="{StaticResource CmpCellHintStyle}"
+                   Margin="0,0,0,9"/>
+
         <!-- the two shortcut editors (the hero shows the live value; changing it happens here) -->
         <Grid Margin="0,0,0,5">
             <Grid.ColumnDefinitions>
@@ -109,6 +123,19 @@
             <CheckBox x:Name="ChkVoiceLinesCompanion" x:FieldModifier="internal" Style="{DynamicResource ToggleStyle}"
                       HorizontalAlignment="Right" VerticalAlignment="Center"
                       Checked="ChkVoiceLines_Changed" Unchecked="ChkVoiceLines_Changed"/>
+        </Grid>
+
+        <!-- ccp-bugs #1468: checked = the idle-timer lines speak with the engine off (the old
+             behaviour). Default off: the bubble shows, quietly. Opposite polarity to the mutes
+             above on purpose: the label names what turning it on does. -->
+        <Grid Margin="0,6,0,0">
+            <StackPanel Margin="0,0,44,0">
+                <TextBlock Text="{loc:Str label_idle_voice_engine_off}" Style="{StaticResource CmpCellLabelStyle}"/>
+                <TextBlock Text="{loc:Str label_idle_voice_engine_off_hint}" Style="{StaticResource CmpCellHintStyle}"/>
+            </StackPanel>
+            <CheckBox x:Name="ChkIdleVoiceEngineOffCompanion" x:FieldModifier="internal" Style="{DynamicResource ToggleStyle}"
+                      HorizontalAlignment="Right" VerticalAlignment="Center"
+                      Checked="ChkIdleVoiceEngineOff_Changed" Unchecked="ChkIdleVoiceEngineOff_Changed"/>
         </Grid>
 
         <!-- TUBE GLASS: MIDNIGHT (Prize Counter restock, 2026-08-26). Always VISIBLE and greyed
