@@ -27,7 +27,7 @@ export const RATES = Object.freeze({
 
 /** Item ids in wire order (must equal sim/itemTable.js ITEM_IDS; a test checks). The first 8 are the hit kinds. */
 export const WIRE_ITEMS = Object.freeze(['flash', 'spiral', 'brainDrain', 'freeze', 'blackout', 'pink', 'melt', 'shatter',
-  'surge', 'glass', 'echo', 'golden']);
+  'surge', 'glass', 'echo', 'golden', 'pendulum', 'disc', 'tether', 'snap', 'bigSpiral']);
 export const EFFECT_COUNT = 8;
 export const SHIELDS = Object.freeze([null, 'glass', 'golden', 'echo']);
 export const MODES = Object.freeze(['throw', 'lob', 'wide', 'drop', 'self']);

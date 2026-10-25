@@ -67,7 +67,7 @@ test('only the local player, only real hits on view kinds and Shatter', () => {
 
 test('photosafe: every start asks; flash and blackout as flash; a refusal lands softer', () => {
   const t = setup();
-  for (const k of ['flash', 'blackout', 'pink', 'melt']) t.hit(k, 1);
+  for (const k of ['flash', 'blackout', 'pink', 'freeze']) t.hit(k, 1);   // Melt no longer touches the view (toys kit)
   assert.deepEqual(t.asked, ['flash', 'flash', 'palette', 'palette']);
   const u = setup({ grant: false });
   u.hit('blackout', 2);

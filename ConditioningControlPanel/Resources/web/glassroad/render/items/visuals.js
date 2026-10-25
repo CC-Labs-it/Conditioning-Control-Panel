@@ -36,6 +36,7 @@ import { bubbleCloud, moteCloud, meltPuddle, ghost, ringGlow, shellCloud, shield
 import { createPickupCards, PICKUP_CARD } from './pickupCards.js';
 import { createItemStatus } from './status.js';
 import { advanceRibbon, flightSpark } from './flight.js';
+import { createTethers } from './tethers.js';
 import { selectShieldShells, shieldLook } from './shieldMath.js';
 
 const UP = new Vector3(0, 1, 0), V = new Vector3(), W = new Vector3(), N = new Vector3(), QT = new Quaternion(), QS = new Quaternion();
@@ -90,6 +91,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
   const confetti = confettiCloud(L.confetti.high * 6 + L.hitConfetti.high * 4);
   root.add(confetti.mesh);
   const status = createItemStatus(root, feel, { photosafe, track, waterVolume });
+  const tethers = createTethers(root);
   const CONF = L.confettiColours.map(hexRgb);
   const mask = art && art.tex ? art.tex('sky-spiral-open-mask') : null;
   const meltTex = art && art.tex ? art.tex(L.meltMask) : null;
@@ -224,6 +226,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     timeS += dt * rate;
     bubbles.uniforms.time.value = timeS;
     status.update(view, dt, karts, musicView);
+    tethers.update(view, dt);
     if (shells) { shells.uniforms.time.value = timeS; shells.begin(); }
     bubbles.begin(); motes.begin(); puddles.begin(); waves.begin(); copies.begin(); marks.begin(); shadows.begin(); confetti.begin(); drawn = 0;
     shields.begin();
@@ -490,7 +493,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     setMediaSource(fn) { pickupCards.setMediaSource(fn); },
     dispose() {
       scene.remove(root);
-      status.dispose(); icons.dispose(); bubbles.dispose(); motes.dispose(); plane.dispose(); ghostGeo.dispose(); shields.dispose();
+      status.dispose(); tethers.dispose(); icons.dispose(); bubbles.dispose(); motes.dispose(); plane.dispose(); ghostGeo.dispose(); shields.dispose();
       if (shells) shells.dispose();
       pickupCards.dispose();
       puddles.each((e) => e.mesh.material.dispose()); waves.each((e) => e.mesh.material.dispose());

@@ -116,15 +116,15 @@ test('enlarged Melt discs isolate mapped paths and reject corners outside their 
     const local = fork.lengthM * .5, centre = local - makeFeel().get('items.dropBehindM');
     const list = [racer(state(fork, local)), racer(state(null, fork.mainS(centre)), 1)], t = setup(list);
     t.fire(0, 'melt'); t.tick(.8);
-    const trap = t.items.view().traps[0], frame = fork.frameAt(centre);
-    assert.equal(trap.radiusM, 3.6);
+    const trap = t.items.view().traps[0], frame = fork.frameAt(centre), radius = makeFeel().get('items.meltRadiusM');
+    assert.equal(trap.radiusM, radius);
     assert.equal(t.hits().length, 0, 'the main racer sharing lap progress stays outside the branch disc');
     // Place the victim using physical tangent-plane offsets, independent of the lap map.
     list[1].st = state(fork, centre);
-    for (let j = 0; j < 3; j++) list[1].st[S.posX + j] += frame.t[j] * 3 + frame.b[j] * 3;
+    for (let j = 0; j < 3; j++) list[1].st[S.posX + j] += frame.t[j] * radius * .83 + frame.b[j] * radius * .83;
     t.tick();
-    assert.equal(t.hits().length, 0, 'a square corner outside the 3.6 m disc cannot hit');
-    list[1].st = state(fork, centre, 3.3); t.tick();
+    assert.equal(t.hits().length, 0, 'a square corner outside the disc cannot hit');
+    list[1].st = state(fork, centre, radius * .92); t.tick();
     assert.equal(t.hits().length, 1, 'the enlarged visible shoulder remains active');
     assert.equal(t.hits()[0].victim, 1);
     assert.ok(distance(t.hits()[0].p, frame.p) < .002);

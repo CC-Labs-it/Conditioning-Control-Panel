@@ -59,6 +59,7 @@ import { createGentle } from './fx/gentle.js';
 import { createPhotosafe } from './fx/photosafe.js';
 import { createFx } from './fx/reactions.js';
 import { createEffects } from './fx/effects.js';
+import { createPayoff, screenFor } from './fx/payoff.js';
 import { createAudio } from './audio/bus.js';
 import { createSongCache } from './audio/songCache.js';
 import { createHud } from './hud/hud.js';
@@ -279,6 +280,8 @@ async function boot(course, options, lifetime, isCurrent) {
   const photosafe = createPhotosafe(feel);
   const fx = createFx(bus, feel, { gentle, photosafe });
   const effects = createEffects(bus, feel, { gentle, photosafe });
+  const payoff = createPayoff(bus, feel, { gentle, photosafe });   // subliminal words + flashes for hits, malus and pads
+  if (BOT) debug.payoff = payoff.stats;
   fx.state.screen = effects.screen;
   const audio = shared.audio ||= (() => {
     shared.counts.audio++; return createAudio(feel, shared.bus, { gentle, musicFetchFn: songCache.fetch });
@@ -286,7 +289,7 @@ async function boot(course, options, lifetime, isCurrent) {
   audio.setLaps(laps); audio.setPaused(false); audio.reset();
   audio.music?.stop();
   lifetime.defer(() => { audio.music?.stop(); audio.setPaused(false); audio.reset(); });
-  lifetime.defer(() => { effects.dispose(); fx.dispose(); });
+  lifetime.defer(() => { effects.dispose(); payoff.dispose(); fx.dispose(); });
   const immersion = createImmersion(track);
   const waterContact = createWaterContact(track);
   if (BOT) Object.defineProperty(debug, 'underwaterAudio', { get: () => audio.underwater });
@@ -582,7 +585,7 @@ async function boot(course, options, lifetime, isCurrent) {
     industry.reset();
     setMachineryBeat(track, null);
     perfume.reset();
-    effects.reset(); ai.reset(); fx.reset(); assist.reset();
+    effects.reset(); payoff.reset(); ai.reset(); fx.reset(); assist.reset();
     if (hazards) hazards.reset();
     if (world.resetReactions) world.resetReactions();   // last race's cheer, sulk and faces never carry over
     fx.state.screen = effects.screen;
@@ -1077,8 +1080,9 @@ async function boot(course, options, lifetime, isCurrent) {
     const fxDt = frozen ? 0 : frameDt;                            //    the pause card freezes every effect too
     fx.update(fxDt, P.st, race);                                  // 4. fx
     effects.update(fxDt);                                         //    the local screen effect
-    flashMedia.update(effects.screen, fxDt, renderer.aspect);
-    subliminalBurst.update(effects.screen, fxDt, renderer.aspect);
+    payoff.update(fxDt);                                          //    payoff words + flashes (toys kit)
+    flashMedia.update(screenFor('flash', effects.screen, payoff.flash), fxDt, renderer.aspect);
+    subliminalBurst.update(screenFor('brainDrain', effects.screen, payoff.words), fxDt, renderer.aspect);
     if (HT) hLap('fx');
     const fs = fx.state;
     const pst = P.st;

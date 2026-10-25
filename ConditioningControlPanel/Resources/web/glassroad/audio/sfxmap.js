@@ -167,7 +167,7 @@ export function sfxPlan(name, p = {}, o = {}) {
       if (racer !== 0 && target === 0 && (mode === 'throw' || mode === 'lob')) return null;   // incoming warning: synth
       // polish 6: every self item answers from the shipped bank too (a release at the kart), each its own figure
       if (mode === 'self') return SELF_FIRE[id] ? SELF_FIRE[id]() : [one('drift-release', 0.55, 1.15)];
-      if (mode === 'throw') return [one('fire-throw')];
+      if (mode === 'throw' || mode === 'bounce' || mode === 'tether') return [one('fire-throw')];
       if (mode === 'lob') return [one('fire-lob')];
       if (mode === 'drop') return [one('fire-drop')];
       return null;

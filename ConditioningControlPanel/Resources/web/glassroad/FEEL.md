@@ -330,18 +330,18 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `items.bubbleHoldS` 0.35: boost hold of a pickup bubble.
 - `items.frontGapM` 25: the leader, and anyone within this of the leader's progress, draws from the front bucket.
 - `items.backGapM` 120: this far or more behind the leader draws from the back bucket; between is middle.
-- `items.flashWeights` [1, 3, 1]: Flash draw weights.
-- `items.spiralWeights` [0, 3, 1]: Spiral draw weights.
-- `items.brainDrainWeights` [0, 3, 1]: Brain Drain draw weights.
-- `items.freezeWeights` [1, 3, 0]: Freeze draw weights.
-- `items.blackoutWeights` [0, 0, 3]: Blackout draw weights (back only).
-- `items.pinkWeights` [0, 1, 2]: Pink draw weights.
-- `items.meltWeights` [4, 1, 0]: Melt draw weights (front trap).
-- `items.shatterWeights` [0, 0, 0.6]: Shatter draw weights (rare, back only).
+- `items.flashWeights` [0, 0, 0]: Flash draw weights.
+- `items.spiralWeights` [0, 0, 0]: Spiral draw weights.
+- `items.brainDrainWeights` [0, 0, 0]: Brain Drain draw weights.
+- `items.freezeWeights` [0, 0, 0]: Freeze draw weights.
+- `items.blackoutWeights` [0, 0, 0]: Blackout draw weights (back only).
+- `items.pinkWeights` [0, 0, 0]: Pink draw weights.
+- `items.meltWeights` [3, 2, 1]: Melt draw weights (front trap).
+- `items.shatterWeights` [0, 0, 0]: Shatter draw weights (rare, back only).
 - `items.surgeWeights` [1, 2, 3]: Surge draw weights.
-- `items.glassWeights` [4, 1, 0]: Glass draw weights (front shield).
-- `items.echoWeights` [0, 0, 2]: Echo draw weights (back).
-- `items.goldenWeights` [0, 0, 0.6]: Golden draw weights (rare, back only).
+- `items.glassWeights` [0, 0, 0]: Glass draw weights (front shield).
+- `items.echoWeights` [0, 0, 0]: Echo draw weights (back).
+- `items.goldenWeights` [0, 0, 0]: Golden draw weights (rare, back only).
 - `items.flashS` 1.2: Flash: a picture over flashCover of the screen, then it fades.
 - `items.spiralS` 2.0: Spiral over the middle of the view, steering drifts with it.
 - `items.brainDrainS` 2.5: Brain Drain: edges blur and go grey, the centre stays sharp.
@@ -382,11 +382,11 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `items.throwArcM` 0.5: extra height of the first arc out of the hand.
 - `items.lobFlightS` 1.6: lob travel duration; its committed landing point allows a late dodge.
 - `items.lobHeightM` 14: lob arc peak height.
-- `items.dropBehindM` 4.8: a dropped trap lands this far behind the user.
+- `items.dropBehindM` 6.4 (was 4.8; clears the bigger Melt): a dropped trap lands this far behind the user.
 - `items.trapLifeS` 45: a trap no one drives over pops after this.
 - `items.trapArmS` 0.6: a trap cannot hit its own layer for this long.
 - `items.trapRadiusM` 2.35: circular trap contact radius, matching its steady warning ring.
-- `items.meltRadiusM` 3.6: circular Melt puddle contact radius.
+- `items.meltRadiusM` 5.4: circular Melt puddle contact radius (the spiral trap, bigger since the toys kit).
 - `items.maxTraps` 12: the oldest trap pops when one more is laid.
 - `items.mercyS` 2: after a screen effect ends, no screen effect lands on that kart for this.
 - `items.viewBudgetS` 3: at most this much blocked view per viewWindowS (a hit is trimmed to fit).
@@ -400,6 +400,48 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `items.gentleSpiralDim` 0.35: under Gentle a Spiral is a soft dim this deep.
 - `items.gentleBlurMul` 0.5: under Gentle every blur is this share.
 - `items.popShowS` 0.6: a pop stays in the item view this long for its burst.
+- `items.pendulumWeights` [2, 3, 2]: Pendulum draw weights.
+- `items.discWeights` [2, 3, 2]: Disc draw weights.
+- `items.tetherWeights` [0, 2, 3]: Tether draw weights (never in front).
+- `items.snapWeights` [3, 1, 0]: Snap draw weights (front and middle).
+- `items.bigSpiralWeights` [0, 0, 2]: Big Spiral draw weights (back only).
+- `items.pendulumS` 1.5: Pendulum hit: the kart swings left and right this long. No screen cover.
+- `items.pendulumSteerAmp` 0.5: Pendulum swing, stick share added at the peak.
+- `items.pendulumSteerHz` 1.1: Pendulum swing rate.
+- `items.discS` 1.0: Disc hit: stall and spin length.
+- `items.discSpeedKeep` 0.5: Disc hit keeps this share of engineV.
+- `items.discSpinTurns` 1: Disc spin turns over discS (render only).
+- `items.discLateralMps` 7: Disc sideways speed; it banks off railed edges and falls off open ones.
+- `items.discBounces` 3: a Disc pops after this many rail bounces.
+- `items.discLifeS` 4: a Disc that hits nothing pops after this.
+- `items.tetherS` 1.0: Tether: the towed kart spins this long once the tower passes it.
+- `items.tetherSpeedKeep` 0.5: the passed kart keeps this share of engineV.
+- `items.tetherSpinTurns` 1: Tether spin turns over tetherS (render only).
+- `items.tetherRangeM` 30: Tether hooks the first kart ahead within this; nobody in range keeps the item.
+- `items.tetherMaxS` 4: a link nobody breaks lets go after this, no spin.
+- `items.tetherBreakM` 45: a link snaps without a spin past this gap.
+- `items.tetherTowCap` 1.15: the tower top speed multiplier while linked.
+- `items.tetherDragCap` 0.85: the towed kart top speed multiplier while linked.
+- `items.snapS` 0.35: Snap shove length on each kart it reaches.
+- `items.snapRadiusM` 6: Snap reaches karts within this.
+- `items.snapGuardS` 1.0: after a Snap, throws, lobs and traps that reach you pop (verdict snapped); a Tether on you breaks.
+- `items.snapShoveSteer` 0.9: Snap shove, stick share pushing away, fading over snapS.
+- `items.bigSpiralS` 2.0: Big Spiral: the leader is slowed this long.
+- `items.bigSpiralCapMul` 0.7: Big Spiral top speed multiplier.
+
+## payoff (toys kit 2026-10-25: subliminal words and flashes for the local player, `fx/payoff.js`; Gentle and photosafe still rule)
+
+- `payoff.on` true: payoff words and flashes play at all.
+- `payoff.cascadeMinS` 1.8: a malus or toy hit plays subliminal words over at least this long (4 words).
+- `payoff.cascadeMaxS` 3.0: and at most this long (7 words; Gentle caps at 4).
+- `payoff.flashS` 0.7: a payoff flash holds this long.
+- `payoff.flashCover` 0.42: share of the view a payoff flash covers (Gentle: a corner card).
+- `payoff.flashCoolS` 6: at most one payoff flash per this many seconds.
+- `payoff.malusCoolS` 2.5: a new cascade waits this long after the last one started.
+- `payoff.padWordChance` 0.35: chance that a boost pad shows one subliminal word.
+- `payoff.padWordS` 1.0: a pad word lasts this long.
+- `payoff.padCoolS` 4: at most one pad word per this many seconds.
+
 
 ## ai (B1 bots, sim/ai.js and sim/racers.js)
 - `ai.stones` { approachM: 80, holdLeadM: 35 }: settle onto the picked lane earlier before stone fields,

@@ -10,9 +10,10 @@
 import { CanvasTexture, SRGBColorSpace } from 'three/webgpu';
 import { ITEMS } from '../../sim/itemTable.js';
 
-const S = 256, C = 128, TAU = Math.PI * 2, GRID = 4;
-/** Atlas cells: the twelve items, then the plain bubble used by boxes and pickups. */
-export const CELLS = ['flash', 'spiral', 'brainDrain', 'freeze', 'blackout', 'pink', 'melt', 'shatter', 'surge', 'glass', 'echo', 'golden', 'box'];
+const S = 256, C = 128, TAU = Math.PI * 2, GRID = 5;   // 5 x 5: 17 items + the box fit
+/** Atlas cells: the items (the toys kit after the first twelve), then the plain bubble used by boxes and pickups. */
+export const CELLS = ['flash', 'spiral', 'brainDrain', 'freeze', 'blackout', 'pink', 'melt', 'shatter', 'surge', 'glass', 'echo', 'golden',
+  'pendulum', 'disc', 'tether', 'snap', 'bigSpiral', 'box'];
 export const cellOf = (id) => { const i = CELLS.indexOf(id); return i < 0 ? CELLS.length - 1 : i; };
 export const ATLAS_GRID = GRID;
 
@@ -21,6 +22,7 @@ const LIFE = {
   flash: { rays: 1 }, spiral: { spin: 0.55, pulse: 0.035 }, brainDrain: { slide: 1 }, freeze: { spin: 0.14, pulse: 0.025, flakes: 1 },
   blackout: { beat: 0.08 }, pink: { tilt: 0.17 }, melt: { bob: 4, drip: 1 }, shatter: { spin: 0.28 }, surge: { bob: 3.5 },
   glass: {}, echo: { rings: 1 }, golden: { spin: 0.2, pulse: 0.03 }, box: {},
+  pendulum: { tilt: 0.3 }, disc: { spin: 1.2 }, tether: { beat: 0.06 }, snap: { rings: 1 }, bigSpiral: { spin: 0.7, pulse: 0.04 },
 };
 const rnd = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 const FILM = ['rgba(255,120,200,1)', 'rgba(120,220,255,0)', 'rgba(170,255,190,0.8)', 'rgba(255,230,140,0)', 'rgba(190,140,255,0.9)', 'rgba(255,120,200,1)'];
