@@ -83,11 +83,11 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <Button Grid.Column="0" Theme="{StaticResource CmpCellButtonStyle}"
+            <Button x:Name="BtnSavePhrasePreset" Grid.Column="0" Theme="{StaticResource CmpCellButtonStyle}"
                     Margin="0,0,3,0" ToolTip.Tip="{Binding LocTooltipSavePreset}">
                 <TextBlock Text="{Binding LocSave}"/>
             </Button>
-            <Button Grid.Column="1" Theme="{StaticResource CmpCellButtonStyle}"
+            <Button x:Name="BtnDeletePhrasePreset" Grid.Column="1" Theme="{StaticResource CmpCellButtonStyle}"
                     Margin="3,0,0,0" ToolTip.Tip="{Binding LocTooltipDeletePreset}">
                 <TextBlock Text="{Binding LocDelete}"/>
             </Button>

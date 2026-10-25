@@ -46,11 +46,6 @@
          Effect sits under a loop.
          ================================================================ -->
 
-    <UserControl.Resources>
-        <!-- ponytail: local copy of ConditioningControlPanel/App.xaml:Font.Mono, hoist when a second view needs it -->
-        <FontFamily x:Key="Font.Mono">Cascadia Mono, Consolas, Courier New</FontFamily>
-    </UserControl.Resources>
-
     <Grid Background="#0A0514">
 
         <!-- WPF first-light drawing port. During fog, the Core intro clock is held before
@@ -194,12 +189,12 @@
              exactly like every other "?" in the app.
 
              ITS SKIN IS NOT THE APP'S, AND THAT IS THE FILE'S LAW, NOT A PREFERENCE.
-             HelpButtonStyle is an 18px circle that hovers to the theme's hot accent,
+             HelpButtonStyle is a 22px circle that hovers to the theme's hot accent,
              which is the mod accent, which this room may never wear (see the header,
              and SpiralRoomTests.TheFogEraWearsTheFusesOwnGoldAndNeverTheModAccent,
              which pins it by refusing this file ANY resource lookup that is not a
              font). So the chip is templated here in the fuse's own literal gold. Same
-             shape, same size, same cursor, same meaning; the room's colour.
+             shape (kept at 18px here), same cursor, same meaning; the room's colour.
 
              DECLARED LAST so it is topmost over the splash and the waiting panel, and
              it lives in the 32px EmbedHost reserves at the top so the browser cannot
