@@ -356,6 +356,8 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
     seen.fill(0);
     let geoDirty = false;
     for (const v of live) {
+      // The void carries physical sung-word platforms, so ordinary floor paint stops at its lips.
+      if ((track.aerials || []).some(a => v.s + v.lenM / 2 > a.gapS0 && v.s - v.lenM / 2 < a.gapS1)) continue;
       let slot = slotOf.get(v.id);
       if (slot === undefined) {
         slot = slotId.indexOf(-1);

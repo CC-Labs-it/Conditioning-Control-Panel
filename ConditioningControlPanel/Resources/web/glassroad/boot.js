@@ -315,6 +315,7 @@ async function boot(course, options, lifetime, isCurrent) {
   lifetime.defer(() => wordCount.dispose());
   const NO_WORDS = [];
   let words = null;
+  let airWords = null, airSong = null;
   let state = 'boot', paused = false, finishAt = 0, result = null, rumbleT = 0, rumbleSent = 0, botT = 0;
   let online = null, lobbyUi = null;
   let songToken = 0, pickedSong = shared.pickedSong;
@@ -379,6 +380,8 @@ async function boot(course, options, lifetime, isCurrent) {
   }
   Object.defineProperty(debug, 'cardMedia', { get: () => world.media?.stats() || null });
   Object.defineProperty(debug, 'songGates', { get: () => world.phraseGates.stats });
+  Object.defineProperty(debug, 'airWords', { get: () => world.airWords?.stats || null });
+  debug.aerials = track.aerials;
   bus.on('phrase-gate', e => {
     if (!e.song || !words) return;
     wordCount.pop(!!feel.get('gentle.on'), { gate: true });
@@ -432,6 +435,8 @@ async function boot(course, options, lifetime, isCurrent) {
   let race, racers, ai, contact, standings, items, scan, industry, perfume, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
   let runAssist = false;                          // the Options assist switch (applyOptions), carried into every rebuilt run
   function buildRun(s = null) {
+    if (P) bindAirWords(P.st, null);
+    airWords?.reset(); airWords = null; airSong = null;
     const q = s ? s.tap(queue) : queue, sd = s ? s.seed : seed;
     race = createRace(track, feel, q);
     racers = createRacers(track, feel, q, s ? { net: s.layout(), seed: sd } : { count: COUNT, seed: sd });
@@ -452,6 +457,7 @@ async function boot(course, options, lifetime, isCurrent) {
     standings = createStandings(track, feel, q);
     items = s ? s.mount(racers, race, q) : createItems(track, feel, q, { seed: sd });
     P = racers.player;
+    if (!s) { airWords = createAirWordRun(null, track); bindAirWords(P.st, airWords); }
     sctx = { ai, items, standings, hazards };
     aiCtx = { racers: racers.list, items, standings, race };
     kartViews = racers.list.map((r) => ({ st: r.view, meta: r.meta, fxv: r.fxv }));
@@ -532,6 +538,7 @@ async function boot(course, options, lifetime, isCurrent) {
   hud.on('option', ({ options }) => applyOptions(options || hud.options));
 
   let glideHintLap = -1;
+  const aerialHints = new Set();
   const intro = createCourseIntro(track);
   let introElapsed = 0, introTarget = null, raceAudioStart = null;
   const introHud = document.getElementById('hud');
@@ -547,6 +554,7 @@ async function boot(course, options, lifetime, isCurrent) {
   function resetAll() {
     introElapsed = 0; introTarget = null; introHud.style.visibility = '';
     glideHintLap = -1;
+    aerialHints.clear(); airWords?.reset();
     for (const r of racers.list) resetGlide(r.st);
     race.reset(); racers.place(); contact.reset(); standings.reset(); items.reset();
     scan.reset();
@@ -568,6 +576,11 @@ async function boot(course, options, lifetime, isCurrent) {
   /** A word run for the playing song (a new song builds one, the same song resets it); none without words. */
   function armWords() {
     const song = audio.music && audio.music.song;
+    if (online) { airWords?.reset(); airWords = null; bindAirWords(P.st, null); }
+    else if (!airWords || airSong !== song) {
+      airWords?.reset(); airSong = song;
+      airWords = createAirWordRun(song, track); bindAirWords(P.st, airWords);
+    } else airWords.reset();
     if (!song || !song.words.length) { words = null; wordCount.show(false); return; }
     if (!words || words.song !== song) {
       words = createWordRun(song, track, { seed, songGates: true }); words.song = song;
@@ -617,7 +630,7 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     } finally { if (my === songToken) debug.songLoading = false; }
   }
-  function stopSong() { songToken++; debug.songLoading = false; if (audio.music) audio.music.stop(); words = null; wordCount.show(false); }
+  function stopSong() { songToken++; debug.songLoading = false; if (audio.music) audio.music.stop(); words = null; airWords?.reset(); wordCount.show(false); }
   // Unlock and decode silently behind the cover. Only the race schedules a music voice.
   async function menuSong() {
     if (!lifetime.alive || !['boot', 'menu'].includes(state) || debug.songLoading) return;
@@ -1012,6 +1025,8 @@ async function boot(course, options, lifetime, isCurrent) {
       const pa = BOT && !debug.assistOn && !coast ? a : assist.apply(a, P.st, clock.dt, race.phase);
       if (devHook && !online) devHook.apply(pa, clock.dt);         //    ?dev=1 only: a scripted drive holds the hands
       race.update(clock.dt, pa, P.st);
+      airWords?.update(audio.music?.playing ? audio.music.songS : NaN, P.st,
+        { active: !online && race.phase === 'racing', paused });
       sctx.timeS = online ? online.s.raceTimeS() : undefined;
       racers.step(clock.dt, pa, race, sctx);
       if (race.phase === 'racing' || race.phase === 'finished') {
@@ -1105,11 +1120,19 @@ async function boot(course, options, lifetime, isCurrent) {
       }
     }
     if (BOT) debug.gliding = !!kartViews[0]?.glide;
+    if (inRace && !paused && !online) for (const zone of track.aerials || []) {
+      const key = `${pst[S.lap]}:${zone.id}`;
+      if (pst[S.s] < zone.rampS0 - 55 || pst[S.s] >= zone.gapS0 || aerialHints.has(key)) continue;
+      aerialHints.add(key);
+      hud.toast(airWords?.platforms.some(row => row.alpha > 0)
+        ? 'Jump on the words, or hold jump to glide' : 'Long jump ahead. Hold jump to glide');
+    }
     const introShot = state === 'intro' ? intro.shotAt(introElapsed) : -1;
     const viewSection = introShot >= 0 && introShot < 3 ? track.sectionAt(intro.shots[introShot].s) : pst[S.sectionIdx];
     const viewFx = state === 'intro' ? { ...fs, paletteMix: { from: viewSection, to: viewSection, t: 1 } } : fs;
     world.update({ kart: P.view, karts: kartViews, fx: viewFx, timeS: renderTime, beat: clock.beat,
       raceTimeS: racers.clockS, sectionIdx: viewSection, items: iv, mode, camera: cam.camera, paused, song, songS, audioReactive, words: wordLive,
+      airWords: inRace && !online ? airWords : null,
       scanTimeS: sc.timeS, scanBpm: sc.bpm, scanReady: scan.ready, perfumeReady: perfume.ready });
     if (BOT && song && world.musicRoad) {                         //    dev only: the boot check reads the music road
       const m = world.musicRoad.frame;
