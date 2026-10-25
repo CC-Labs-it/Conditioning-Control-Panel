@@ -1820,3 +1820,9 @@ ported-by-merge (`Assets/web/dtrh`); lane game-dtrh-host ported two host rows (m
 | id | WPF reference | Avalonia counterpart | status | notes / evidence |
 |---|---|---|---|---|
 | blocked-migration-input | Tests (migration) | - | blocked | the goal needs a migration test from a REAL WPF-release settings file; the repo has only synthetic fixtures and the user's own profile must not be committed. Needs a scrubbed 6.11.x settings.json + provenance README from the user (oracle-updater-installer.md §4) |
+
+## Personality Studio host
+
+| id | WPF reference | Avalonia counterpart | status | notes / evidence |
+|---|---|---|---|---|
+| host-personality-studio | `ConditioningControlPanel/Services/Companion/PersonalityStudio.cs` | `CCP.Avalonia/Views/Windows/PersonalityStudio.cs`; `CCP.Core/Services/Companion/PersonalityStudioRules.cs` | wired | Detached create/edit/delete host, awareness field, existing-text length headroom; Make Her Yours door and picker callback. Adapts sync7 `df219f44d`, `8e1e7f830`. Tests: `PersonalityStudioTests`, `PersonalityStudioRulesTests`; panic closes editor and pending delete confirmation. Full Companion PersonalityPage and Customise picker host remain in their own lanes. |

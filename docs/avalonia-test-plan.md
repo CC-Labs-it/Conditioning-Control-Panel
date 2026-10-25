@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Personality Studio host
+
+1. Open Studio > Companion > Make Her Yours > Personality. WPF `ConditioningControlPanel/Services/Companion/PersonalityStudio.cs`. Rows: `host-personality-studio`. Save a named voice with Advanced screen-awareness reactions and two sample lines; reopen and update it, checking that no duplicate appears. Cancel an edit and confirm the saved voice is unchanged. Delete, decline once, then confirm; the context default becomes active.
+2. With a custom prompt override active, reopen and save; it creates a copy and preserves the original owned preset. Open text longer than the normal field cap and confirm it remains intact and editable (400 characters headroom). WPF `ConditioningControlPanel/Services/Companion/PersonalityStudio.cs`. Rows: `host-personality-studio`.
+3. Open Delete confirmation, press panic, and confirm both windows close without deleting or saving the draft. WPF `ConditioningControlPanel/Services/Companion/PersonalityStudio.cs` (Avalonia additionally dismisses editing surfaces on panic). Rows: `host-personality-studio`.
