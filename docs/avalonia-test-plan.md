@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Cloud settings backup
+
+1. Sign out, then sign in and open Settings > Account: cloud backup card is hidden then visible; status shows no backup or date/version. WPF `MainWindow.CloudBackup.cs:UpdateBackupStatus`. Rows: `shell-cloud-backup`.
+2. Back up now: busy label/button disabled, success/failure dialog, button restored, status refreshed after success. WPF `MainWindow.CloudBackup.cs:BtnBackupSettingsNow_Click`. Rows: `shell-cloud-backup`.
+3. Restore: cancel leaves settings unchanged; a locked session refuses; confirm when idle restores settings and refreshes sections while keeping local identity, progression, entitlement, content root, conversion and audio settings. WPF `MainWindow.CloudBackup.cs:BtnRestoreSettings_Click`. Rows: `shell-cloud-backup`.

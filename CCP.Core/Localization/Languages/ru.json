@@ -3327,6 +3327,7 @@
   "msg_no_cloud_backup_found_or_restore_failed": "Облачная копия не найдена или восстановление не удалось.",
   "title_restore_failed": "Ошибка восстановления",
   "msg_settings_restored_from_cloud": "Настройки восстановлены из облака! Некоторые изменения могут потребовать перезапуска.",
+  "msg_restore_kept_local_paths_0": "Этих путей нет на этом компьютере, поэтому оставлен локальный выбор: {0}",
   "title_settings_restored": "Настройки восстановлены",
   "msg_restore_failed_0": "Ошибка восстановления: {0}",
   "title_restore_error": "Ошибка восстановления",

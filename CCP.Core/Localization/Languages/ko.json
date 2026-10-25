@@ -3327,6 +3327,7 @@
   "msg_no_cloud_backup_found_or_restore_failed": "클라우드 백업을 찾을 수 없거나 복원에 실패했어요.",
   "title_restore_failed": "복원 실패",
   "msg_settings_restored_from_cloud": "클라우드에서 설정이 복원됐어요! 일부 변경 사항은 완전히 적용되려면 재시작이 필요할 수 있어요.",
+  "msg_restore_kept_local_paths_0": "이 경로들은 이 컴퓨터에 없어서 로컬 설정을 유지했어요: {0}",
   "title_settings_restored": "설정 복원됨",
   "msg_restore_failed_0": "복원 실패: {0}",
   "title_restore_error": "복원 오류",

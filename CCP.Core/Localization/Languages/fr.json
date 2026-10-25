@@ -3327,6 +3327,7 @@
   "msg_no_cloud_backup_found_or_restore_failed": "Aucune sauvegarde cloud trouvée ou échec de la restauration.",
   "title_restore_failed": "Échec de la Restauration",
   "msg_settings_restored_from_cloud": "Paramètres restaurés depuis le cloud ! Certains changements peuvent nécessiter un redémarrage pour prendre pleinement effet.",
+  "msg_restore_kept_local_paths_0": "Ces chemins n'existent pas sur cet ordinateur, ton choix local a donc été conservé : {0}",
   "title_settings_restored": "Paramètres Restaurés",
   "msg_restore_failed_0": "Échec de la restauration : {0}",
   "title_restore_error": "Erreur de Restauration",
