@@ -95,6 +95,7 @@ namespace ConditioningControlPanel.Avalonia
         internal static MantraService Mantra { get; } = new();
         /// <summary>WPF App.MantraVoice: the active mod's Spoken Mantras (mantras.json).</summary>
         internal static MantraVoiceService MantraVoice { get; } = new();
+        internal static Platform.MantraChantHost MantraChant { get; } = new();
 
         /// <summary>WPF App.xaml.cs:2527-2536 plus the CoreQuests seeds of :398-421. Seeded where this
         /// head has the service. The streak shield is WPF SkillTreeService.UseStreakShield (:378) over
@@ -449,6 +450,8 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.SecretStore.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
+                // WPF #685: a persisted opt-in never starts unattended audio on launch.
+                MantraChant.StopAndDisarm();
                 // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
                 global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
@@ -1180,6 +1183,7 @@ namespace ConditioningControlPanel.Avalonia
             try { StopMantra(((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).Windows); } catch { }
 
             // Restore any app we ducked; a pending Unduck would otherwise die with the process.
+            try { MantraChant.Dispose(); } catch { }
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
             try { Platform.LayeredAudio.Instance?.Shutdown(); } catch { }
             try { ReleaseContent?.Dispose(); } catch { }

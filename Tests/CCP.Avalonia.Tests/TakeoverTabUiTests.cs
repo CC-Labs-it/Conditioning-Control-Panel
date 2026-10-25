@@ -24,6 +24,49 @@ namespace CCP.Avalonia.Tests;
 public sealed class TakeoverTabUiTests
 {
     [Fact]
+    public Task ChantControlsAndPanicFollowSettings() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var saved = (s.MantraChantEnabled, s.MantraChantVolume, s.MantraChantGapSeconds);
+        var shell = new MainShellWindow();
+        try
+        {
+            s.MantraChantEnabled = false;
+            shell.Show();
+            shell.ShowTab("bambitakeover");
+            Dispatcher.UIThread.RunJobs();
+            var tab = shell.GetLogicalDescendants().OfType<global::ConditioningControlPanel.Avalonia.Views.Tabs.BambiTakeoverTabView>().Single();
+            tab.FindControl<CheckBox>("ChkMantraChant")!.IsChecked = true;
+            Assert.True(s.MantraChantEnabled);
+            // The content-free test mod stays silent rather than opening a device.
+            Assert.False(global::ConditioningControlPanel.Avalonia.App.MantraChant.IsRunning);
+            tab.FindControl<Slider>("SldMantraChantVolume")!.Value = 37;
+            tab.FindControl<Slider>("SldMantraChantGap")!.Value = 7;
+            Assert.Equal(37, s.MantraChantVolume);
+            Assert.Equal(7, s.MantraChantGapSeconds);
+            Assert.Equal("37%", tab.FindControl<TextBlock>("TxtMantraChantVolume")!.Text);
+            Assert.Equal("7s", tab.FindControl<TextBlock>("TxtMantraChantGap")!.Text);
+            PanicSurfaces.All.Single(x => x.Id == "mantra-chant").Stop(shell);
+            Assert.False(s.MantraChantEnabled);
+            tab.IsVisible = false;
+            tab.IsVisible = true;
+            Assert.False(tab.FindControl<CheckBox>("ChkMantraChant")!.IsChecked);
+            global::ConditioningControlPanel.Avalonia.App.MantraChant.StopAndDisarm(); // idempotent
+        }
+        finally
+        {
+            global::ConditioningControlPanel.Avalonia.App.MantraChant.Stop();
+            (s.MantraChantEnabled, s.MantraChantVolume, s.MantraChantGapSeconds) = saved;
+            shell.Close();
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task TabShowsWpfCopyAndItsButtonsGoWhereWpfsDo() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)

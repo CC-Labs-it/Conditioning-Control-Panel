@@ -141,6 +141,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     _lapseUnsaved = false;
                 }
                 // WPF MainWindow.Patreon.cs:108 - the lapse stops the engine, not just the flag.
+                if (cleared.Contains("mantra-chant")) App.MantraChant.Stop();
                 if (cleared.Contains("awareness-mode")) App.WindowAwareness.Stop();
                 // WPF Patreon.cs:152 - the mirror case: entitlement resolving late re-arms what the
                 // settings (and consent) already ask for. Start() re-checks everything itself.

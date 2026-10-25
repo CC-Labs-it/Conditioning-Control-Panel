@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## fin4 Takeover chant
+
+1. Open Takeover with voiced mantras; turn Mantra Chant on. Hear prompt, 2.5-second beat, affirmation, then the gap set by the slider. WPF `Services/MantraChantService.cs` Rows: `views-tab-bambi-takeover`.
+2. Move chant/master volume during playback. Mute mid-pair: audio ends within half a second; unmute starts a fresh prompt. A text-only mod stays silent. WPF `Services/MantraChantService.cs` Rows: `views-tab-bambi-takeover`.
+3. Panic during chant; reopen tab: toggle is off. Relaunch with persisted opt-in: disarmed without audio. Entitlement lapse stops chant; exit releases audio. WPF `App.xaml.cs:3442`, `MainWindow/MainWindow.Patreon.cs:196` Rows: `views-tab-bambi-takeover`.
