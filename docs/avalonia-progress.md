@@ -3015,3 +3015,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-shell-quest-stamps: +902
 - Live header quest stamps (3 daily + weekly): art, progress, completion checks, hover cards, reroll/mod/language refresh, click to Quests; shared QuestStampRules in Core.
 - Review round 2: fail-proof re-run on current code (rcheck 39701823626); P105 quest-art dedupe rule in the ledger; rgate 39702277001 bar P108/P94.
+
+## avalonia-port/wire-shell-awareness-b: +217
+- Awareness status glow breathes behind the steady dot through the shell's one pulse registry, with WPF's full motion/glow/focus gate.
+- Per-tab duplicate pulse removed; status-dot gate gained AllowAmbientLoops/AllowGlow/MaxGlowBlurRadius for all tabs.
