@@ -114,10 +114,23 @@ export function guideLanding(track, st, q, F, feel, dt) {
  * who aimed hard for the opening still comes down on the road while a wild exit still misses. V changes in place.
  */
 export function airCatch(track, q, V, feel, dt, F = null) {
-  const b = track.frameAt(q.s, KF).b, vl = V[0] * b[0] + V[1] * b[1] + V[2] * b[2];
+  const f = track.frameAt(q.s, KF), t = f.t, n = q.normal;
+  // Steer existing surface momentum into the landing direction instead of deleting it.
+  // Use the actual bank normal so falling speed stays separate and cannot become a free boost.
+  const bx = t[1] * n[2] - t[2] * n[1], by = t[2] * n[0] - t[0] * n[2], bz = t[0] * n[1] - t[1] * n[0];
+  const bl = Math.hypot(bx, by, bz) || 1, b = f.b;
+  b[0] = bx / bl; b[1] = by / bl; b[2] = bz / bl;
+  // Canal entry slopes also tilt the normal along the road: complete an orthonormal frame.
+  t[0] = n[1] * b[2] - n[2] * b[1];
+  t[1] = n[2] * b[0] - n[0] * b[2];
+  t[2] = n[0] * b[1] - n[1] * b[0];
+  const vl = V[0] * b[0] + V[1] * b[1] + V[2] * b[2];
+  const vt = V[0] * t[0] + V[1] * t[1] + V[2] * t[2], planar = Math.hypot(vt, vl);
   const m = gap(feel, 'route.airMaxMps'), want = Math.max(-m, Math.min(m, -q.lateral * gap(feel, 'route.airPull')));
-  const lim = gap(feel, 'route.airAccel') * dt, k = Math.max(-lim, Math.min(lim, want - vl));
-  V[0] += b[0] * k; V[1] += b[1] * k; V[2] += b[2] * k;
+  const lim = gap(feel, 'route.airAccel') * dt;
+  const lateral = Math.max(-planar, Math.min(planar, vl + Math.max(-lim, Math.min(lim, want - vl))));
+  const along = Math.sign(vt || 1) * Math.sqrt(Math.max(0, planar * planar - lateral * lateral));
+  for (let i = 0; i < 3; i++) V[i] += b[i] * (lateral - vl) + t[i] * (along - vt);
   if (F) alignLanding(track, q, F, feel, dt);
 }
 const LIP_VIEWS = new WeakMap();
