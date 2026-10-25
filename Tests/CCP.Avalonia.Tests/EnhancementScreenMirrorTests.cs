@@ -94,7 +94,6 @@ public sealed class EnhancementScreenMirrorTests
     [InlineData("outside")]
     [InlineData("player")]
     [InlineData("panic")]
-    [InlineData("navigation")]
     [InlineData("audio")]
     public Task EveryExitRestoresExtendAndReturnsTheSameHost(string exit) => Run(true, (player, host, topo, mirror) =>
     {
@@ -107,7 +106,6 @@ public sealed class EnhancementScreenMirrorTests
         Assert.Equal(new[] { true }, topo.Calls);
         switch (exit)
         {
-            case "navigation": host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/video")); break;
             case "audio":
                 typeof(EnhancementPlayerWindow).GetMethod("ShowMediaPaneFor",
                     System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
@@ -127,6 +125,35 @@ public sealed class EnhancementScreenMirrorTests
         Assert.False(mirror.IsMirroring);
         Assert.Equal(new[] { true, false }, topo.Calls);
         Assert.Contains(host, ((Grid)player.FindControl<Border>("VideoPane")!.Child!).Children);
+    });
+
+    [Fact]
+    public Task NavigationKeepsTheHostAndTheClone() => Run(true, (player, host, topo, mirror) =>
+    {
+        // WPF :1842-1853 (BUG-J9PPPJT274): a video rolling into the next page stays fullscreen.
+        host.OnWebMessage(MainShellWindow.BrowserFullscreenOnMessage);
+        var window = Fullscreen(player);
+        host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/video"));
+        Assert.Same(window, Fullscreen(player));
+        Assert.Same(host, window!.Content);
+        Assert.True(mirror.IsMirroring);
+        Assert.Equal(new[] { true }, topo.Calls);
+    });
+
+    [Fact]
+    public Task HostDropsTopmostWhileAnotherWindowHasFocus() => Run(true, (player, host, topo, mirror) =>
+    {
+        // WPF :2163-2182 (#905): Topmost is rented, so a dialog raised over the video can surface.
+        host.OnWebMessage(MainShellWindow.BrowserFullscreenOnMessage);
+        var window = Fullscreen(player)!;
+        Assert.True(window.Topmost);
+        // Headless never moves activation between windows; raise it the way the platform does.
+        static void Raise(Window w, string name) => typeof(WindowBase).GetMethod(name,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(w, null);
+        Raise(window, "HandleDeactivated");
+        Assert.False(window.Topmost);
+        Raise(window, "HandleActivated");
+        Assert.True(window.Topmost);
     });
 
     [Fact]
@@ -161,6 +188,9 @@ public sealed class EnhancementScreenMirrorTests
     [Fact]
     public Task FullscreenLossDuringTopologyTransitionDoesNotCancelForcedHost() => Run(true, (player, host, topo, mirror) =>
     {
+        // Proves only a signal delivered DURING the transition, as WPF's unsubscribe does (:2094/:2292);
+        // a real web message is asynchronous and may land after it, which headless does not model.
+
         topo.OnApply = clone =>
         {
             if (clone) host.OnWebMessage(MainShellWindow.BrowserFullscreenOffMessage);

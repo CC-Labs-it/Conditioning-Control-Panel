@@ -24,8 +24,6 @@ public partial class EnhancementPlayerWindow
 
     private void OnVideoNavigationCompleted(Uri uri)
     {
-        // A navigation can remove fullscreenElement without sending fullscreenchange (#381).
-        ExitVideoFullscreen();
         if (_videoClosing) return;
         // ponytail: NativeWebView has no document-created hook. Reuse the browser's post-navigation
         // signal/double-click exit bridge; add the player's WPF double-click entry gesture.
@@ -57,6 +55,9 @@ public partial class EnhancementPlayerWindow
         else if (typeof window.invokeCSharpAction === 'function') window.invokeCSharpAction('ccp_exit_fullscreen');
     }, true);
 })();");
+        // WPF :1842-1853 (BUG-J9PPPJT274): a video rolling into the next page keeps the host;
+        // the new document only needs the forced flag back so its escape hatches still work.
+        if (_videoFullscreenWindow != null) _ = _videoBrowser.InvokeScriptAsync("window._ccpForcedFs = true;");
     }
 
     private void OnVideoWebMessage(string message)
@@ -97,6 +98,8 @@ public partial class EnhancementPlayerWindow
             _videoFullscreenWindow = host;
             FullscreenPlayers.Add(this);
             host.Closing += OnVideoHostClosing;
+            host.Deactivated += OnVideoHostDeactivated;
+            host.Activated += OnVideoHostActivated;
             host.AddHandler(KeyDownEvent, OnVideoHostKeyDown, RoutingStrategies.Tunnel);
             using var moving = _videoBrowser.BeginReparenting();
             ((Grid)_videoPane.Child!).Children.Remove(_videoBrowser);
@@ -124,6 +127,11 @@ public partial class EnhancementPlayerWindow
         ExitVideoFullscreen();
     }
 
+    // WPF :2163-2182 (#905): Topmost is rented, so a dialog raised over the video can surface.
+    private void OnVideoHostDeactivated(object? sender, EventArgs e) => ((Window)sender!).Topmost = false;
+
+    private void OnVideoHostActivated(object? sender, EventArgs e) => ((Window)sender!).Topmost = true;
+
     private void OnVideoHostClosing(object? sender, System.ComponentModel.CancelEventArgs e) =>
         ExitVideoFullscreen(closeHost: false);
 
@@ -141,6 +149,8 @@ public partial class EnhancementPlayerWindow
         try
         {
             host.Closing -= OnVideoHostClosing;
+            host.Deactivated -= OnVideoHostDeactivated;
+            host.Activated -= OnVideoHostActivated;
             host.RemoveHandler(KeyDownEvent, OnVideoHostKeyDown);
             _ = _videoBrowser.InvokeScriptAsync(
                 "window._ccpForcedFs = false; try { if(document.fullscreenElement) document.exitFullscreen(); } catch (_) {}");
