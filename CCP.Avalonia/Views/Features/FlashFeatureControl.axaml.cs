@@ -71,7 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             SliderDriftSpeed.ValueChanged += SliderDriftSpeed_Changed;
 
             // WPF OnLoaded: Configure, then RowChanged re-measures the box (OnGetRowChanged -> RefreshV2Box).
-            RowGetFlashesV2.RowChanged += (_, _) => OnGetRowChanged();
+            RowGetFlashesV2.RowChanged += (_, _) => RefreshV2Box();
             RowGetFlashesV2.Configure(ConditioningControlPanel.Services.Prizes.V2PurchaseRule.FlashesPrizeId, "v2_get_flash_blurb", "section_flash_v2");
 
             LoadFromSettings();

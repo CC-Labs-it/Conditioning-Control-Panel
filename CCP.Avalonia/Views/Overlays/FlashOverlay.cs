@@ -363,6 +363,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     for (var i = 0; i < Active.Count; i++)   // a loop, not FindIndex: no closure per frame
                         if (Active[i].Window == w) Active[i] = (Active[i].Window, new PixelRect(p, Active[i].Rect.Size));
                 }
+            // A placed or settled grab parks for good (FlashDrag.Begin: "there it stays"): drop it so the tick can stop.
+            if (Drifting.RemoveAll(e => e.Motion is { Drag: null, Vx: 0, Vy: 0, Style: not FlashMotionStyle.Pendulum }) > 0
+                && Drifting.Count == 0) { _driftTimer?.Stop(); _driftTimer = null; }
         }
 
         /// <summary>Close every flash on screen and drop the spawns still queued. <paramref name="final"/>

@@ -165,6 +165,25 @@ public sealed class FlashWireTests
     });
 
     [Fact]
+    public Task Spawn_rounds_an_owned_flash_by_core_radius_and_leaves_its_glow_unclipped() => OnUi((s, _, _, _) =>
+    {
+        var (seam, rounded) = (PrizeOwnership.IsGranted, s.FlashRoundedCorners);
+        try
+        {
+            PrizeOwnership.IsGranted = id => id == PrizeOwnership.FlashDriftBounce;
+            (s.FlashRoundedCorners, s.FlashGlowEnabled) = (true, true);
+            s.UnlockedSkills.Add("sparkle_boost_1");
+            var w = ShowOne();
+            var clip = Assert.IsType<RectangleGeometry>(w.PictureClip);
+            Assert.Equal(300 * FlashCorners.RoundedFraction, clip.RadiusX, 6);   // 7% of the shorter side
+            Assert.Equal(new Rect(0, 0, 400, 300), clip.Rect);
+            Assert.Equal(1, w.GlowShadow.Count);
+            Assert.Null(w.GlowClip);
+        }
+        finally { (PrizeOwnership.IsGranted, s.FlashRoundedCorners) = (seam, rounded); }
+    });
+
+    [Fact]
     public Task A_pop_in_corruption_mode_spawns_two_hydra_children_with_the_parents_remaining_time() => OnUi((s, clock, _, _) =>
     {
         var spawned = new List<(int Count, TimeSpan Life, int Gen)>();

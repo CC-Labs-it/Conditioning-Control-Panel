@@ -61,7 +61,12 @@ public sealed class FlashV2InteractionTests
     public Task Accepted_ownership_snapshot_rebuilds_an_attached_card_without_saving_a_new_style() => OnUi(() =>
     {
         var s = CoreSettings.Current;
-        var old = (s.OfflineMode, s.UnifiedId, s.AuthToken, s.FlashMotionStyle);
+        // AuthToken lives in CoreSecrets: without an in-memory store the identity reads no token.
+        var (get, put) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
+        var secrets = new System.Collections.Generic.Dictionary<string, string?>();
+        CoreSecrets.RetrieveProvider = n => secrets.TryGetValue(n, out var v) ? v : null;
+        CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
+        var old = (s.OfflineMode, s.UnifiedId, s.FlashMotionStyle);
         Window? host = null;
         try
         {
@@ -85,7 +90,8 @@ public sealed class FlashV2InteractionTests
         {
             host?.Close();
             PrizeOwnership.ResetHeld();
-            (s.OfflineMode, s.UnifiedId, s.AuthToken, s.FlashMotionStyle) = old;
+            (s.OfflineMode, s.UnifiedId, s.FlashMotionStyle) = old;
+            (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (get, put);
         }
     });
 
@@ -106,6 +112,7 @@ public sealed class FlashV2InteractionTests
                 Assert.Equal(radius, clip.RadiusX, 6);
                 Assert.Equal(new Rect(0, 0, 200, 100), clip.Rect);
             }
+            Assert.Null(w.GlowClip);   // the halo is a sibling, never clipped with the picture
         }
         finally { w.Close(); }
     });
@@ -177,6 +184,10 @@ public sealed class FlashV2InteractionTests
         Assert.Equal(0, m.Vx);
         Assert.Null(m.Drag);
         Assert.Contains(FlashOverlay.Active, e => e.Window == w);
+        // A placed Still flash never moves again: the next tick drops it and stops the 16 ms clock.
+        FlashOverlay.DriftTick();
+        Assert.DoesNotContain(FlashOverlay.Drifting, e => e.Window == w);
+        Assert.False(FlashOverlay.DriftRunning);
     });
 
     [Fact]

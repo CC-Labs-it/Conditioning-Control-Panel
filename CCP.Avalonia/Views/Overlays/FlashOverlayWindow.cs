@@ -224,6 +224,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         internal Geometry? PictureClip => _image.Clip;
+        internal Geometry? GlowClip => _glow.Clip;
 
         /// <summary>Pixels the glow added on each edge of the picture (0 without a glow).</summary>
         internal int GlowPadPx { get; private set; }
