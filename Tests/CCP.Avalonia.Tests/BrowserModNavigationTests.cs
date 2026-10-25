@@ -60,6 +60,52 @@ public sealed class BrowserModNavigationTests
             return Task.CompletedTask;
         });
 
+    [Fact]
+    public Task ShellConsumesPopupsAndUsesTheLivePartnerPage() => Run((shell, page, host, mod) =>
+    {
+        Assert.True(host.OpenPopupsInPlace);
+        host.OnNavigationCompleted(new Uri("https://bambicloud.com/"));
+        var requests = host.NavigationRequests;
+        Assert.True(host.OnNewWindowRequested(new Uri("https://exoclick.com/")));
+        Assert.True(host.OnNewWindowRequested(null));
+        Assert.Equal(requests, host.NavigationRequests);
+        var local = new Uri("http://127.0.0.1:9/watch");
+        Assert.True(host.OnNewWindowRequested(local));
+        Assert.Equal(local, host.Source);
+        Assert.Equal(requests + 1, host.NavigationRequests);
+        host.OnNavigationCompleted(new Uri("https://www.hypnotube.com/watch"));
+        Assert.True(host.OnNewWindowRequested(new Uri("http://127.0.0.1:9/ads/watch")));
+        Assert.Equal(requests + 2, host.NavigationRequests);
+        // Partner bypass cannot escape the host's navigation fence or sandbox.
+        host.AllowNavigation = _ => false;
+        host.OnNewWindowRequested(local);
+        Assert.Equal(requests + 2, host.NavigationRequests);
+        host.AllowNavigation = null;
+        host.OnNewWindowRequested(new Uri("https://example.test/"));
+        Assert.Equal(requests + 2, host.NavigationRequests);
+        host.OpenPopupsInPlace = false;
+        Assert.False(host.OnNewWindowRequested(local));
+    });
+
+    [Fact]
+    public Task MissingEngineFallsBackForHttpsLinksButHonoursOfflineAndRejectsOtherSchemes() => Run((shell, page, host, mod) =>
+    {
+        Assert.False(host.HasEngine);
+        var opened = new System.Collections.Generic.List<string>();
+        shell.OpenBrowserFallback = url => { opened.Add(url); return true; };
+        const string link = "https://example.test/watch";
+        Assert.True(shell.NavigateToUrlInBrowser(link));
+        Assert.Equal(new[] { link }, opened);
+        Assert.True(shell.NavigateToUrlInBrowser("http://example.test/watch"));
+        Assert.Single(opened);
+        Assert.True(shell.NavigateToUrlInBrowser("file:///neutral.html"));
+        Assert.Single(opened);
+        CoreSettings.Current.OfflineMode = true;
+        Assert.False(shell.NavigateToUrlInBrowser(link, userInitiated: false));
+        Assert.Single(opened);
+        Assert.False(shell.NavigateToUrlInBrowser(""));
+    });
+
     private static void ModChanged()
     {
         CoreMods.RaiseModChanged(null, AvApp.Mods!.ActiveMod);

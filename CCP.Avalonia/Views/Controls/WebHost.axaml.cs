@@ -26,9 +26,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// carry a settable Cancel — so a per-navigation allowlist that also catches redirects is
     /// possible here, unlike what the first pass of these views assumed) and
     /// <see cref="InvokeScriptAsync"/>, plus the live URL (<see cref="CurrentUrl"/>,
-    /// <see cref="NavigationCompleted"/>). NativeWebView additionally offers WebMessageReceived,
-    /// NewWindowRequested, GoBack/GoForward, Stop and Refresh; nothing needs
-    /// them yet, so they are not wrapped. It has NO zoom factor, no document-created script
+    /// <see cref="NavigationCompleted"/>). NativeWebView also offers GoBack/GoForward, Stop and Refresh;
+    /// those are not wrapped. It has NO zoom factor, no document-created script
     /// injection, and no fullscreen-element signal.
     ///
     /// The whole point is the fallback. A Linux box without webkit2gtk installed is the DEFAULT,
@@ -56,6 +55,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// pointed at pages the app itself chose.
         /// </summary>
         public Func<Uri, bool>? AllowNavigation { get; set; }
+
+        /// <summary>Opt-in shell policy; other hosts retain their own navigation rules.</summary>
+        public bool OpenPopupsInPlace { get; set; }
+
+        internal bool OnNewWindowRequested(Uri? target)
+        {
+            if (!OpenPopupsInPlace) return false;
+            // Always consume the popup, including ads and invalid requests. Never create an OS window.
+            if (target is not null && target.IsAbsoluteUri
+                && ConditioningControlPanel.Services.Browser.BrowserPopupRule.NavigateInPlace(CurrentUrl, target)
+                && ConditioningControlPanel.Services.SandboxNet.Allows(target)
+                && (AllowNavigation?.Invoke(target) ?? true)) Navigate(target);
+            return true;
+        }
 
         /// <summary>
         /// The URL the page actually sits on after its last completed navigation: redirects,
@@ -236,6 +249,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     _web.NavigationStarted += OnNavigationStarted;
                     _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source);
                     _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
+                    _web.NewWindowRequested += (_, e) =>
+                    {
+                        if (OnNewWindowRequested(e.Request)) e.Handled = true;
+                    };
                     _web.WebResourceRequested += (_, e) => StampRequestHeader(e);
                     _webSlot.Children.Add(_web);
                 }

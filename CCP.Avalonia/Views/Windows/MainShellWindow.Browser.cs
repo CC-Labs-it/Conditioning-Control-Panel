@@ -20,6 +20,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     {
         // ============================== the embedded browser ==============================
 
+        // WPF Browser.cs:473: HTTPS-only last resort. ExternalOpener preserves the sandbox fence.
+        internal Func<string, bool> OpenBrowserFallback { get; set; } = Platform.ExternalOpener.Open;
+
         private const string BambiCloudHome = "https://bambicloud.com/";
         private const string HypnoTubeHome = "https://hypnotube.com/";
 
@@ -149,7 +152,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (autoPlayFullscreen)
                 Log.Warning("Auto-play/fullscreen is pending wire-shell-browser-b-next - takeover skipped: {Url}", url);
 
-            return NavigateBrowser(url);
+            var navigated = NavigateBrowser(url);
+            // ponytail: HasEngine only detects construction/unavailability, not asynchronous adapter crashes.
+            // Keep pending-adapter timeout/retry on the ledger until WebHost exposes that lifecycle.
+            if (navigated && BrowserView?.HasEngine == false
+                && Uri.TryCreate(url, UriKind.Absolute, out var target) && target.Scheme == Uri.UriSchemeHttps)
+            {
+                try { OpenBrowserFallback(url); }
+                catch (Exception ex) { Log.Warning("Browser fallback failed: {Error}", ex.Message); }
+            }
+            return navigated;
         }
 
         // ============================== the profile viewer ==============================
