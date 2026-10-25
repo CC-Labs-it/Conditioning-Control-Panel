@@ -206,6 +206,35 @@ public sealed class EmiDeskPresentationTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task BorrowingKeepsAResizeGripDragsCapture() => Run(desk =>
+    {
+        // WPF releases only BodyRoot's own capture; a corner drag in flight keeps the grip.
+        var grip = desk.FindControl<Border>("ResizeGrip")!;
+        var point = grip.TranslatePoint(new Point(grip.Bounds.Width / 2, grip.Bounds.Height / 2), desk)!.Value;
+        IPointer? pointer = null;
+        grip.AddHandler(InputElement.PointerPressedEvent, (_, e) => pointer = e.Pointer,
+            RoutingStrategies.Tunnel, handledEventsToo: true);
+        desk.MouseDown(point, MouseButton.Left);
+        Assert.Same(grip, pointer!.Captured);
+        desk.BeginPresentation(() => { });
+        Assert.Same(grip, pointer.Captured);
+        Assert.True(Field<bool>(desk, "_resizing"));
+        desk.MouseUp(point, MouseButton.Left);
+        Assert.False(Field<bool>(desk, "_resizing"));
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ShutDownDropsPendingFxTimers() => Run(desk =>
+    {
+        desk.RunSummon();
+        Assert.NotEmpty(Field<System.Collections.Generic.HashSet<ITimer>>(desk, "_fxTimers"));
+        desk.ShutDown();
+        Assert.Empty(Field<System.Collections.Generic.HashSet<ITimer>>(desk, "_fxTimers"));
+        return Task.CompletedTask;
+    });
+
     private static Point BodyPoint(EmiDeskWindow desk, Control body) =>
         body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), desk)!.Value;
 

@@ -2554,6 +2554,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             }
         }
 
+        /// <summary>Drop every pending FX step so a closed window roots no timers.</summary>
+        private void CancelFxTimers()
+        {
+            foreach (var t in _fxTimers) t.Dispose();
+            _fxTimers.Clear();
+        }
+
         // ---------------------------------------------------------------- sibling-partial stubs
 
         // Everything below lives in one of the seven OTHER partials of the WPF class, none of which
@@ -2657,6 +2664,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 TearDownVox();
                 CancelChain();
                 SweepFx(all: true);
+                CancelFxTimers();
                 Close();
             }
             catch (Exception ex)
@@ -2678,6 +2686,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 StopChromeGrace();
                 TearDownReactions();
                 TearDownVox();
+                CancelFxTimers();
             }
             catch (Exception ex)
             {
