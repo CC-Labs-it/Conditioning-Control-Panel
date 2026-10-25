@@ -203,7 +203,7 @@ test('Channel boosts still allow the complete compact platform route and exit', 
   const result = followAfterRun(run, { stopS: field.toS + 20 });
   assert.ok(result.done);
   for (const pad of run.pads) assert.ok(contacts(result.events).includes(indexOf(pad)));
-  assert.ok(new Set(result.events.all('stone').map(e => e.payload.id)).size >= 8);
+  assert.ok(new Set(result.events.all('stone').map(e => e.payload.id)).size >= field.stones.length - 1);
   assert.equal(result.events.all('drop').length, 0);
   assert.equal(result.events.all('rescue-pull').length, 0);
 });
