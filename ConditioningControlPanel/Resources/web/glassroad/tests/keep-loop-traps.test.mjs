@@ -4,13 +4,13 @@ import { readFileSync } from 'node:fs';
 import { loadTrack } from '../track/load.js';
 import { getKeepLayout } from '../track/keep-layout.js';
 import { createKeepGates, keepGatePhase } from '../sim/keepGates.js';
-import { createKeepChains, keepChainPhase } from '../sim/keepChains.js';
+import { createKeepChains, keepChainPhase, KEEP_CHAIN } from '../sim/keepChains.js';
 import { setMachineryBeat, machineryBeatAt } from '../track/machineryBeat.js';
 import { S } from '../sim/state.js';
 import { place, makeFeel, recorder } from './sim-fake.mjs';
 
 const track = loadTrack(JSON.parse(readFileSync(new URL('../tracks/keep.json', import.meta.url), 'utf8')));
-const layout = getKeepLayout(track), beatS = 60 / 142;
+const layout = getKeepLayout(track), beatS = 60 / 142 / 2;
 const gates = layout.gates.filter(row => /^(ascent|descent)-/.test(row.id));
 const chains = layout.chains.filter(row => row.id.startsWith('descent-'));
 const clock = beat => {
@@ -65,13 +65,13 @@ test('every spiral grille has real beat-timed collision and two continuously usa
   setMachineryBeat(track, null);
 });
 
-test('descent weights swing on eight beats, hit their visible low sweep and leave wide escape lanes', () => {
+test('descent weights swing on eight subdivisions, hit their visible low sweep and leave wide escape lanes', () => {
   for (const row of chains) {
     const offset = Math.round(row.offsetS / beatS), beat = 64 + 2 - offset;
     clock(beat);
     const pose = keepChainPhase(row, .1, machineryBeatAt(track, .1));
-    const repeated = keepChainPhase(row, .1, { beat: beat + 8, beatS, safe: false });
-    assert.ok(Math.abs(pose.x) < 1e-9 && Math.abs(pose.y - 3) < 1e-9);
+    const repeated = keepChainPhase(row, .1, { beat: beat + 8, beatS, pace: 2, safe: false });
+    assert.ok(Math.abs(pose.x) < 1e-9 && Math.abs(pose.y - (KEEP_CHAIN.pivotM - KEEP_CHAIN.lengthM)) < 1e-9);
     assert.ok(Math.abs(pose.x - repeated.x) < 1e-9 && Math.abs(pose.y - repeated.y) < 1e-9);
     const trap = createKeepChains(track, { chains: [row] }), centre = crossing(row);
     assert.equal(trap.inspect(.1).chains[0].x, pose.x);

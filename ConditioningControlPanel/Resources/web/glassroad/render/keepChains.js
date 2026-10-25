@@ -6,7 +6,7 @@ import { machineryBeatAt } from '../track/machineryBeat.js';
 import { LOOK } from './look.js';
 export function createKeepChainView(scene, track, { chains = [] } = {}) {
   const group = new Group(); group.name = 'keep-chain-gauntlet'; scene.add(group);
-  const owned = [], geometries = [], entries = [], K = KEEP_CHAIN;
+  const owned = [], geometries = [], entries = [], K = KEEP_CHAIN, weightScale = K.radiusM / 2.5;
   const shade = clamp(dot(normalize(normalWorld), normalize(vec3(...LOOK.lightDir))).mul(.35).add(.65), 0, 1);
   function solid(hex) {
     const m = new MeshBasicNodeMaterial(), c = new Color(hex); m.colorNode = vec3(c.r, c.g, c.b).mul(shade); owned.push(m); return m;
@@ -34,21 +34,21 @@ export function createKeepChainView(scene, track, { chains = [] } = {}) {
     const panels = new InstancedMesh(box, iron, 12), studs = new InstancedMesh(weight, gold, 12);
     panels.name = 'pendulum-armour-panels'; studs.name = 'pendulum-rivets';
     for (let i = 0; i < 12; i++) {
-      const a = i * Math.PI / 6, y = i % 2 ? .6 : -.6, radius = 2.13;
+      const a = i * Math.PI / 6, y = (i % 2 ? .6 : -.6) * weightScale, radius = 2.13 * weightScale;
       obj.position.set(Math.sin(a) * radius, -K.lengthM + y, Math.cos(a) * radius);
-      obj.rotation.set(0, a, 0); obj.scale.set(.88, .7, .24); obj.updateMatrix(); panels.setMatrixAt(i, obj.matrix);
-      obj.position.set(Math.sin(a) * 2.31, -K.lengthM + y, Math.cos(a) * 2.31);
+      obj.rotation.set(0, a, 0); obj.scale.set(.88 * weightScale, .7 * weightScale, .24 * weightScale); obj.updateMatrix(); panels.setMatrixAt(i, obj.matrix);
+      obj.position.set(Math.sin(a) * 2.31 * weightScale, -K.lengthM + y, Math.cos(a) * 2.31 * weightScale);
       obj.scale.setScalar(.04); obj.updateMatrix(); studs.setMatrixAt(i, obj.matrix);
     }
     pivot.add(panels, studs);
     const collarGeo = new TorusGeometry(.66, .18, 5, 12); geometries.push(collarGeo);
-    for (const y of [-.3, -K.lengthM + 2]) {
+    for (const y of [-.3, -K.lengthM + 2 * weightScale]) {
       const collar = new Mesh(collarGeo, gold); collar.name = 'pendulum-chain-collar'; collar.position.y = y;
       collar.rotation.x = Math.PI / 2; pivot.add(collar);
     }
     const axle = new Mesh(box, gold); axle.name = 'pendulum-bearing'; axle.position.set(row.x || 0, K.pivotM, 0);
     axle.scale.set(2.3, 1.3, 3.2); holder.add(axle);
-    const band = new Mesh(new TorusGeometry(K.radiusM + .02, .13, 5, 16), gold); geometries.push(band.geometry); band.position.y = -K.lengthM; pivot.add(band);
+    const band = new Mesh(new TorusGeometry(K.radiusM - .13, .13, 5, 16), gold); band.name = 'pendulum-equator-band'; geometries.push(band.geometry); band.position.y = -K.lengthM; pivot.add(band);
     const alpha = uniform(.15), warning = new MeshBasicNodeMaterial({ color: '#ffc58a', transparent: true, depthWrite: false, side: DoubleSide });
     warning.opacityNode = alpha; owned.push(warning);
     const floor = new Mesh(floorGeo, warning); floor.rotation.x = -Math.PI / 2; floor.position.y = .08; holder.add(floor);
