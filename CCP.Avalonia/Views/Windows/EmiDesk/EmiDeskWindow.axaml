@@ -115,9 +115,9 @@
             <Canvas x:Name="FaceLayer" IsHitTestVisible="False" ClipToBounds="False">
                 <!-- THE FACE. In WPF this is <emi:EmiFace/>, a 517-line DrawingContext renderer
                      that draws the mood string as pixel glyphs in #FF69B4 (fill + stroke).
-                     ponytail: needs EmiFace (Services/EmiDesk/EmiFace.cs) and EmiPixel, neither in
-                     Core; until then the mood string is drawn as mono text at the same size, in the
-                     same colour, on the same GazeShift transform, so the glass is never blank.
+                     ponytail: the head's EmiFace (EmiDesk/EmiFace.cs, used by the dock) is not
+                     wired into the widget yet; until then the mood string is drawn as mono text at
+                     the same size, in the same colour, on the same GazeShift transform.
 
                      THE GAZE LEAN (ALIVE wave A): the face glyph slides up to three DIPs toward the
                      cursor on its OWN transform, so the lean composes with the body's CRT scale,

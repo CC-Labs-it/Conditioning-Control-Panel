@@ -183,7 +183,7 @@ public class SpiralGlyphProgressTests
     [Fact]
     public void TheRailChipOwnsNoBrowser()
     {
-        var code = CodeOf("Controls", "SpiralRailHost.cs");
+        var code = WpfCodeOf("Controls", "SpiralRailHost.cs");   // WPF head: CCP.Avalonia has a twin
 
         Assert.DoesNotContain("SpiralEmbedView", code, StringComparison.Ordinal);
         Assert.DoesNotContain("WebView", code, StringComparison.Ordinal);
@@ -199,7 +199,7 @@ public class SpiralGlyphProgressTests
     [Fact]
     public void TheRailChipWearsTheSameGlyphAsTheProfileSurfaces()
     {
-        var code = CodeOf("Controls", "SpiralRailHost.cs");
+        var code = WpfCodeOf("Controls", "SpiralRailHost.cs");   // WPF head: CCP.Avalonia has a twin
 
         Assert.Contains("new SpiralGlyph", code, StringComparison.Ordinal);
         Assert.Contains("_glyph.Apply(block)", code, StringComparison.Ordinal);
@@ -210,5 +210,11 @@ public class SpiralGlyphProgressTests
     private static string CodeOf(params string[] parts)
         => string.Join(" ", Array.FindAll(
             AppFile(parts).Split('\n'),
+            l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+
+    /// <summary><see cref="CodeOf"/> pinned to the WPF head, for files CCP.Avalonia also has.</summary>
+    private static string WpfCodeOf(params string[] parts)
+        => string.Join(" ", Array.FindAll(
+            File.ReadAllText(Path.Combine([SourceRoots.RepoRoot, "ConditioningControlPanel", .. parts])).Split('\n'),
             l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)));
 }

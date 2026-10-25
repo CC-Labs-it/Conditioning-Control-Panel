@@ -52,6 +52,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             AttentionZone.ViewModel?.Sync();
         }
 
+        internal void SetPreviewZones(ChatThresholdViewModel chat, MemoryDiaryViewModel memory, AttentionGaugeViewModel attention)
+        {
+            AttentionZone.ViewModel = attention;
+            // The replacement detaches the old live chat VM from its session before seating
+            // the mock. Wire the navigator now: Loaded does not repeat on a state-strip click.
+            chat.OpenEngineRoom = RevealEngineRoom;
+            ChatZone.ViewModel = chat;
+            MemoryZone.ViewModel = memory; // DataContextChanged -> ForgetConfirm.Bind disarms the two-step
+            ChatZone.ScrollThreadToEnd();
+            ChatZone.PlayDormantShimmer();
+            // ponytail: these zones have no preview mocks here yet and write real settings (hero mute,
+            // provider, awareness, presets), so the debug harness shows them inert instead.
+            foreach (var live in new Control[] { HeroZone, PersonalityZone, AwarenessZone, EngineZone, PermissionsZone, WorkshopZone })
+                live.IsEnabled = false;
+        }
+
         // =====================================================================================
         //  effective-visibility watch
         // =====================================================================================
@@ -84,6 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             foreach (var d in _visibilityWatch) d.Dispose();
             _visibilityWatch.Clear();
+            ParkClocks();
             base.OnDetachedFromVisualTree(e);
         }
 
@@ -176,6 +193,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 // have changed while the tab was hidden, and a resume that restored the state at
                 // park time would be a lie.
                 ChatZone.ViewModel?.Sync();
+                ChatZone.SyncThinking();
                 MemoryZone.ViewModel?.Sync();
                 PersonalityZone.ViewModel.Sync();   // WPF CompanionRoomRuntimeVm.Sync -> PersonalityVm.Sync
                 AttentionZone.ViewModel?.Sync();
@@ -184,10 +202,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 // WPF UpdateCompanionCardsUI runs on the same show: the roster's levels and ring.
                 (WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts.Roster.Refresh();
                 RefreshCommunity();
-                // ponytail: WPF also calls ChatZone.SyncThinking() here. This head's
-                // ChatThresholdView has no thinking clock to sync - WPF's dots are three
-                // RepeatBehavior=Forever Storyboards (CmpThinkingDotsStoryboard) and the port
-                // draws the dots static. Add the call when that animation exists here.
             }
             catch (InvalidOperationException)
             {
@@ -200,6 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             try
             {
                 HeroZone.StopAmbientLoop();
+                ChatZone.StopThinking();
                 // The privacy card parks itself off its own visibility (AwarenessPrivacyView): under v2 it
                 // lives on the Awareness tab, where the room's edges are not its edges.
             }
