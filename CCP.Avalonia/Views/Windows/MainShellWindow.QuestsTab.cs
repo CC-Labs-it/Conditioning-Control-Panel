@@ -3,11 +3,11 @@
 // ComputeQuestXpDisplay (XpCurve + SkillTreeRules, the maths CompleteQuest pays) and
 // RefreshStreakCalendar, all off App.Quests (the Core QuestService).
 //
+// Quest art and mod/settings repaint now live in QuestsTabView.Art.cs.
 // ponytail, still missing:
-//   Quest art and mod/settings repaint now live in QuestsTabView.Art.cs.
 //   RefreshPunchCard / BuildPunchHole - IntakePunchCardService is WPF-only.
 //   BtnFixStreak_Click / StreakFixDay_Click / ExitStreakFixMode: ported in QuestsTabView.StreakFix.cs.
-//   wire-shell-quests-tab-b-next owns the punch-card service above.
+//   App.Quests.cs wires session credit and the shared perfect-week milestone claim.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {

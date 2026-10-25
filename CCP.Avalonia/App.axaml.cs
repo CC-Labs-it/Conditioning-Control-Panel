@@ -99,7 +99,7 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>WPF App.xaml.cs:2527-2536 plus the CoreQuests seeds of :398-421. Seeded where this
         /// head has the service. The streak shield is WPF SkillTreeService.UseStreakShield (:378) over
-        /// Core settings; the perfect-week bonus stays unseeded (the WPF "service is null" answer).
+        /// Core settings; the perfect-week bonus uses Core rules adapted from WPF.
         /// Programs (TrackVerifier) is seeded next to the ProgramService below.</summary>
         private static void StartQuests()
         {
@@ -115,6 +115,7 @@ namespace ConditioningControlPanel.Avalonia
                 return true;
             };
             CoreQuests.PlayCompletionEffectsProvider = PlayQuestCompletionEffects;
+            WireQuestRewards(Sessions);
             // Real probes, not the fail-open default (which reads present + resolved). A throw
             // reaches the gate's CachedProbe and still fails open, as WPF's strict pair does; no pactl at all
             // fails open without spawning it (distro-check F6).

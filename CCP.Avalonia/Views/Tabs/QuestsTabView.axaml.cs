@@ -108,6 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void OnDailyCardRerollRequested(object? sender, EventArgs e)
         {
+            try { CoreBark.UiAction?.Invoke("reroll_daily"); } catch { /* WPF: feedback never blocks a reroll. */ }
             var quests = App.Quests;
             if (quests == null || sender is not DailyQuestCard card) return;
             if (quests.RerollDailyQuest(card.Slot)) { RefreshQuestUI(); return; }
@@ -118,6 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void RerollWeekly()
         {
+            try { CoreBark.UiAction?.Invoke("reroll_weekly"); } catch { /* WPF: feedback never blocks a reroll. */ }
             var quests = App.Quests;
             if (quests == null) return;
             if (quests.RerollWeeklyQuest()) RefreshQuestUI();

@@ -30,6 +30,9 @@ public sealed class QuestsTabLiveTests
         {
             var dir = Directory.CreateTempSubdirectory("ccp-quests-tab-").FullName;
             var oldQuests = AvApp.Quests;
+            var oldUiAction = ConditioningControlPanel.CoreBark.UiAction;
+            var uiActions = new List<string?>();
+            ConditioningControlPanel.CoreBark.UiAction = uiActions.Add;
             Window? host = null;
             QuestService? quests = null;
             // CompleteQuest reads CoreSettings.Service (null when no earlier test set a provider, so it
@@ -111,6 +114,7 @@ public sealed class QuestsTabLiveTests
                 Dispatcher.UIThread.RunJobs();
                 Assert.NotEqual(seat1, quests.Progress.DailyQuests[1]!.DefinitionId);
                 Assert.Equal(budget - 1, quests.GetRemainingDailyRerolls());
+                Assert.Contains("reroll_daily", uiActions);
                 // The seat button re-reads the shared pool: same key, new count (IconLabel.Args re-renders).
                 var seat2Reroll = tab.FindControl<DailyQuestCard>("DailyCard2")!.FindControl<IconLabel>("RerollLabel")!;
                 Assert.Equal(IconText.Bare(budget - 1 > 0
@@ -123,6 +127,7 @@ public sealed class QuestsTabLiveTests
                 Assert.NotEqual(weekly, quests.Progress.WeeklyQuest!.DefinitionId);
                 // WPF "🔄 Reroll (n left)" / "🔄 No rerolls left": Fluent ArrowSync beside the bare text.
                 var weeklyReroll = tab.FindControl<IconLabel>("TxtWeeklyReroll")!;
+                Assert.Contains("reroll_weekly", uiActions);
                 int weeklyLeft = quests.GetRemainingWeeklyRerolls();
                 Assert.Equal(IconKind.ArrowSync, weeklyReroll.Kind);
                 Assert.Equal(weeklyLeft > 0 ? $"Reroll ({weeklyLeft} left)" : "No rerolls left", weeklyReroll.Label.Text);
@@ -134,6 +139,7 @@ public sealed class QuestsTabLiveTests
                 quests?.Dispose();
                 ConditioningControlPanel.CoreSettings.ServiceProvider = oldProvider;
                 AvApp.Quests = oldQuests;
+                ConditioningControlPanel.CoreBark.UiAction = oldUiAction;
                 try { Directory.Delete(dir, recursive: true); } catch { }
             }
         });
