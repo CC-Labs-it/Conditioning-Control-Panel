@@ -33,11 +33,7 @@ public class AchievementService : IDisposable
     /// banked by the same flush.</para>
     /// </summary>
     private const int BubbleSaveEveryNPops = 50;
-    private DateTime _lastPinkFilterCheck = DateTime.Now;
-    private DateTime _lastSpiralCheck = DateTime.Now;
-    private DateTime _lastBrainDrainCheck = DateTime.Now;
     private DateTime _lastMindWipeCheck = DateTime.Now;
-    private DateTime _lastDeeperCheck = DateTime.Now;
 
     // Takeover quest time ("On Autopilot", "Set It and Forget It"), measured on a monotonic clock
     // between ticks instead of capped per tick. The old 10 s per-tick cap starved the quest while
@@ -45,6 +41,11 @@ public class AchievementService : IDisposable
     // of seconds apart (ccp-bugs #1327). RunningTimeCredit credits each interval in full and drops
     // any interval past its 3 min ceiling (sleep, hibernate, a suspended process).
     private readonly RunningTimeCredit _autonomyCredit = new();
+    // The overlay and Deeper minutes, same rule (see TrackTimeBasedProgress).
+    private readonly RunningTimeCredit _pinkFilterCredit = new();
+    private readonly RunningTimeCredit _spiralCredit = new();
+    private readonly RunningTimeCredit _brainDrainCredit = new();
+    private readonly RunningTimeCredit _deeperCredit = new();
     private readonly System.Diagnostics.Stopwatch _trackingClock = System.Diagnostics.Stopwatch.StartNew();
 
     // The unlock thresholds live in CCP.Core AchievementRules (one copy, shared with the meter).
@@ -206,7 +207,6 @@ public class AchievementService : IDisposable
     {
         var settings = App.Settings?.Current;
         if (settings == null) return;
-        var now = DateTime.Now;
 
         // Total conditioning time is NOT credited here. MainWindow's conditioning time tracker
         // (StartConditioningTimeTracker) owns it and writes once a minute. This tick used to add
@@ -220,29 +220,25 @@ public class AchievementService : IDisposable
         var isPinkFilterActive = IsOverlayEffectActive(settings.PinkFilterEnabled,
                                                        App.Overlay?.IsRunning == true,
                                                        App.Overlay?.IsPinkFilterVisible == true);
-        if (isPinkFilterActive)
+        // Every overlay minute below is the measured time between two ticks that both saw it on
+        // (RunningTimeCredit, as the Takeover credit). The old 0.1 minute sanity check threw away
+        // any interval past 6 s whole, and this is the same 1 s timer that #1327 caught arriving
+        // tens of seconds apart with the panel minimised.
+        var clock = _trackingClock.Elapsed;
+        var pinkMinutes = _pinkFilterCredit.Sample(isPinkFilterActive, clock);
+        if (pinkMinutes > 0)
         {
-            var elapsed = (now - _lastPinkFilterCheck).TotalMinutes;
-            if (elapsed > 0 && elapsed < 0.1) // Sanity check - max 6 seconds between ticks
+            _progress.TotalPinkFilterMinutes += pinkMinutes;
+            _isDirty = true;
+
+            // Check Rose-Tinted Reality (10 hours = 600 minutes)
+            if (_progress.TotalPinkFilterMinutes >= RoseTintedPinkFilterMinutes)
             {
-                _progress.TotalPinkFilterMinutes += elapsed;
-                _isDirty = true;
-
-                // Check Rose-Tinted Reality (10 hours = 600 minutes)
-                if (_progress.TotalPinkFilterMinutes >= RoseTintedPinkFilterMinutes)
-                {
-                    TryUnlock("rose_tinted_reality");
-                }
-
-                // Track for quests (accumulate until we have a full minute)
-                App.Quests?.TrackPinkFilterMinutes(elapsed);
+                TryUnlock("rose_tinted_reality");
             }
-            _lastPinkFilterCheck = now;
-        }
-        else
-        {
-            // Reset timer when inactive to prevent time accumulation bugs
-            _lastPinkFilterCheck = now;
+
+            // Track for quests (accumulate until we have a full minute)
+            App.Quests?.TrackPinkFilterMinutes(pinkMinutes);
         }
 
         // Track Spiral time - the persistent feature during a run, OR the spiral actually on screen
@@ -250,80 +246,57 @@ public class AchievementService : IDisposable
         var isSpiralActive = IsOverlayEffectActive(settings.SpiralEnabled,
                                                    App.Overlay?.IsRunning == true,
                                                    App.Overlay?.IsSpiralVisible == true);
-        if (isSpiralActive)
-        {
-            var elapsed = (now - _lastSpiralCheck).TotalMinutes;
-            if (elapsed > 0 && elapsed < 0.1) // Sanity check - max 6 seconds between ticks
-            {
-                _progress.TotalSpiralMinutes += elapsed;
-                _progress.ContinuousSpiralMinutes += elapsed;
-                _isDirty = true;
-
-                // Check Spiral Eyes (20 minutes continuous)
-                if (_progress.ContinuousSpiralMinutes >= 20)
-                {
-                    TryUnlock("spiral_eyes");
-                }
-
-                // Check Threadbare (10 cumulative hours = 600 minutes)
-                if (_progress.TotalSpiralMinutes >= ThreadbareSpiralMinutes)
-                {
-                    TryUnlock("threadbare");
-                }
-
-                // Track for quests
-                App.Quests?.TrackSpiralMinutes(elapsed);
-            }
-            _lastSpiralCheck = now;
-        }
-        else
+        var spiralMinutes = _spiralCredit.Sample(isSpiralActive, clock);
+        if (!isSpiralActive)
         {
             // Reset continuous spiral time when disabled
             _progress.ContinuousSpiralMinutes = 0;
-            // Reset timer when inactive to prevent time accumulation bugs
-            _lastSpiralCheck = now;
+        }
+        else if (spiralMinutes > 0)
+        {
+            _progress.TotalSpiralMinutes += spiralMinutes;
+            _progress.ContinuousSpiralMinutes += spiralMinutes;
+            _isDirty = true;
+
+            // Check Spiral Eyes (20 minutes continuous)
+            if (_progress.ContinuousSpiralMinutes >= 20)
+            {
+                TryUnlock("spiral_eyes");
+            }
+
+            // Check Threadbare (10 cumulative hours = 600 minutes)
+            if (_progress.TotalSpiralMinutes >= ThreadbareSpiralMinutes)
+            {
+                TryUnlock("threadbare");
+            }
+
+            // Track for quests
+            App.Quests?.TrackSpiralMinutes(spiralMinutes);
         }
 
         // Track BrainDrain time - only when overlay is actually running
         var isBrainDrainActive = settings.BrainDrainEnabled &&
                                  App.Overlay?.IsRunning == true;
-        if (isBrainDrainActive)
+        var brainDrainMinutes = _brainDrainCredit.Sample(isBrainDrainActive, clock);
+        if (brainDrainMinutes > 0)
         {
-            var elapsed = (now - _lastBrainDrainCheck).TotalMinutes;
-            if (elapsed > 0 && elapsed < 0.1) // Sanity check - max 6 seconds between ticks
-            {
-                // Track for quests (feeds into Combined/Mindless Minutes)
-                App.Quests?.TrackBrainDrainMinutes(elapsed);
-            }
-            _lastBrainDrainCheck = now;
-        }
-        else
-        {
-            // Reset timer when inactive to prevent time accumulation bugs
-            _lastBrainDrainCheck = now;
+            // Track for quests (feeds into Combined/Mindless Minutes)
+            App.Quests?.TrackBrainDrainMinutes(brainDrainMinutes);
         }
 
         // Track Deeper player time — only while an enhancement is actively playing.
         // Mirrors the spiral/pink-filter accumulation pattern above. Feeds the
         // "permanent_resident" achievement (10 hours = 600 minutes). DeeperMinutes is
         // a lifetime counter persisted on AchievementProgress.
-        if (App.DeeperHost?.IsActivelyPlaying == true)
+        var deeperMinutes = _deeperCredit.Sample(App.DeeperHost?.IsActivelyPlaying == true, clock);
+        if (deeperMinutes > 0)
         {
-            var elapsed = (now - _lastDeeperCheck).TotalMinutes;
-            if (elapsed > 0 && elapsed < 0.1) // sanity: max ~6s between ticks
+            _progress.DeeperMinutes += deeperMinutes;
+            _isDirty = true;
+            if (_progress.DeeperMinutes >= PermanentResidentDeeperMinutes)
             {
-                _progress.DeeperMinutes += elapsed;
-                _isDirty = true;
-                if (_progress.DeeperMinutes >= PermanentResidentDeeperMinutes)
-                {
-                    TryUnlock("permanent_resident");
-                }
+                TryUnlock("permanent_resident");
             }
-            _lastDeeperCheck = now;
-        }
-        else
-        {
-            _lastDeeperCheck = now;
         }
 
         // Track Bambi Takeover (autonomy) active time for Patreon quests — only while
@@ -797,7 +770,9 @@ public class AchievementService : IDisposable
     /// </summary>
     public void TrackVideoAttentionCheckFailed()
     {
-        try { App.Chaster?.Note("attention"); } catch (Exception ex) { Diag.Swallowed(ex, "chaster attention hook"); }
+        // No Chaster booking here: the video's end calls TrackAttentionCheckFailed first, which
+        // books the "attention" row. Booking it here too charged one failed check twice
+        // (+10:00, more with heat on).
         _engine.TrackVideoAttentionCheckFailed();
     }
 

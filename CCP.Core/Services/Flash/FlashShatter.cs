@@ -82,6 +82,9 @@ public sealed class FlashShatterState
 /// </summary>
 public static class FlashShatter
 {
+    /// <summary>An owned, enabled Shatter decides the click before the leave picker (#1386).</summary>
+    public static bool DecidesClick(bool enabled, bool ownsMotion) => enabled && ownsMotion;
+
     /// <summary>How long a full-motion break lasts, seconds.</summary>
     public const double DurationSec = 0.70;
 

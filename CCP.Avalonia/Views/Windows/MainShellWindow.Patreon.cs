@@ -8,9 +8,10 @@
 // The handlers named by MainShellWindow.axaml are real (empty) methods, because a
 // missing one is a XAML compile error, not a runtime gap.
 //
-// Members dropped (74; BtnGateUnlock_Click, RefreshPremiumGate, EnforceEntitlementLapse, RefreshEntitlementVeils,
+// Members dropped (64; BtnGateUnlock_Click, RefreshPremiumGate, EnforceEntitlementLapse, RefreshEntitlementVeils,
 // MaybeShowPremiumCelebration and OnPatreonTierChanged's celebration half restored below; UpdatePatreonUI,
-// BtnPatreonLogin/Discord/Link*, UpdateAccountLinkingUI and BtnVisitPatreon live in AccountSettingsSection):
+// BtnPatreonLogin/Discord/Link*, UpdateAccountLinkingUI and BtnVisitPatreon live in AccountSettingsSection;
+// the ten Chk*_Changed privacy/sharing/presence handlers live in Views/Controls/ProfilePrivacyPanel):
 //   private void UpdatePatreonUI(…)
 //   internal async void BtnPatreonLogin_Click(…)
 //   internal async void BtnDiscordLogin_Click(…)
@@ -18,17 +19,6 @@
 //   private void UpdateAccountLinkingUI(…)
 //   internal async void BtnLinkPatreon_Click(…)
 //   internal async void BtnLinkDiscord_Click(…)
-//   internal void OfferAchievementSharingAfterDiscordLink(…)
-//   internal void ChkShareAchievements_Changed(…)
-//   internal void ChkShareLevelUps_Changed(…)
-//   internal void ChkShowLevelInPresence_Changed(…)
-//   internal async void ChkAllowDiscordDm_Changed(…)
-//   internal async void ChkShareProfilePicture_Changed(…)
-//   internal async void ChkPublicShareRealAvatar_Changed(…)
-//   internal async void ChkGoonShareAvatar_Changed(…)
-//   internal async void ChkGoonShareDiscordDm_Changed(…)
-//   internal void ChkGoonRichPresence_Changed(…)
-//   internal async void ChkShowOnlineStatus_Changed(…)
 //   internal void BtnVisitPatreon_Click(…)
 //   private void OnPatreonTierChanged(…)
 //   private void MaybeShowPremiumCelebration(…)
@@ -49,10 +39,8 @@
 //   internal void SliderAwarenessCooldown_ValueChanged(…)
 //   internal void SliderAwarenessCooldownMax_ValueChanged(…)
 //   internal void BtnSwitchCompanion_Click(…)
-//   internal void RevealCompanionWorkshopCell(…)
+//   (RevealCompanionWorkshopCell + the cell -> page map are ported: MainShellWindow.CompanionFx.cs)
 //   private void OnCompanionProviderSelected(…)
-//   private async Task MaybeOfferLocalAiSetupAsync(…)
-//   internal void BtnSetupLocalAi_Click(…)
 //   internal void BtnLabEffectsSetupLocal_Click(…)
 //   private void LaunchLocalAiSetupWizard(…)
 //   private static void CommitFocusedEdit(…)

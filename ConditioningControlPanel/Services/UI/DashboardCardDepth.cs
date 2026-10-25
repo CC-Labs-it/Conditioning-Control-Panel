@@ -62,20 +62,12 @@ internal sealed class DashboardCardDepth
 
     /// <summary>Where the face sits, px DOWN from the socket line, for a state. Pure: the
     /// shared travel rule plus the off tile's resting lift.</summary>
-    internal static double TravelFor(bool enabled, bool pressed, bool active, bool hovered)
-    {
-        if (!enabled) return 0;
-        double t = DepthRules.TravelFor(enabled, pressed, active, hovered);
-        return !pressed && !active && !hovered ? -RestLiftPx : t;
-    }
+    internal static double TravelFor(bool enabled, bool pressed, bool active, bool hovered) =>
+        UI.DashboardDepthLaw.TravelFor(enabled, pressed, active, hovered);
 
-    /// <summary>The bevel key for a state: on and pressed sit in the socket, everything else is raised.</summary>
-    internal static string BevelKeyFor(bool pressed, bool active) =>
-        pressed || active ? "DepthPressedBevel" : "DepthRaisedBevel";
+    internal static string BevelKeyFor(bool pressed, bool active) => UI.DashboardDepthLaw.BevelKeyFor(pressed, active);
 
-    /// <summary>The tilt for a pointer at (nx, ny) in -1..1 over the tile: the launcher's lean.</summary>
-    internal static double TiltFor(double nx, double ny) =>
-        Math.Clamp(nx, -1, 1) * -Math.Clamp(ny, -1, 1) * DepthRules.TiltDegrees;
+    internal static double TiltFor(double nx, double ny) => UI.DashboardDepthLaw.TiltFor(nx, ny);
 
     private static bool TiltAllowed => DepthRules.TiltAllowed(MotionFx.Level, PerformanceProfile.CurrentTier);
 
