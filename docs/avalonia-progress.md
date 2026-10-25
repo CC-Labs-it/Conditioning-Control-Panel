@@ -3511,3 +3511,7 @@ Review FIX round done in 78dd1813a: snapshot fade cut (listed under Missing), en
 ## avalonia-port/fin-feat-pbp-host: +235
 
 Piece-by-piece standalone host: Core HostNetPathRule/PbpNetRelay reused (pure renames), kept Escape, reduced-motion caps, watch preferences persisted via typed whitelist. Review fix: flush debounced save in GameWindowTests before disk reload. rgate GATE-OK run 39921724996. Row stays `stub` (stakes, media/friends, recovery, SeasonRecap, process-failed close, focus/profile missing).
+
+## avalonia-port/perf-bench-avalonia: +285
+- `--perf-bench <out.json>` on the Avalonia head (real display: startup, per-tab median/p95, working set after GC), plus a report-only xvfb CI job with a strict missing-tab exit-3 proof.
+- docs/avalonia-perf.md skeleton (WPF column pending perf-bench-wpf-compare) + 2026-10-23 decisions entry. CI: ExclusivesTab ~0.8 s per switch; local run skipped (user).
