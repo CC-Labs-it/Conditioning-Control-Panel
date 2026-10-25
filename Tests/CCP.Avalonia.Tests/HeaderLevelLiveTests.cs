@@ -22,7 +22,7 @@ public sealed class HeaderLevelLiveTests
     public Task HeaderPaintsSettingsAndFollowsAwardsAndLevelUps() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();
@@ -35,6 +35,9 @@ public sealed class HeaderLevelLiveTests
         s.MotionLevel = MotionLevel.Off;  // instant widths, so the bar is assertable
         double Need(int level) => XpCurve.GetXPForLevel(level, XpCurve.EpochOf(s));
 
+        var clock = new SteppedTime();
+        var oldTime = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
+        global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = clock;
         var shell = new MainShellWindow();
         try
         {
@@ -64,6 +67,9 @@ public sealed class HeaderLevelLiveTests
             s.MotionLevel = MotionLevel.Full;          // the fill tweens instead of snapping
             ProgressionBank.Add(1, "Quest");
             Dispatcher.UIThread.RunJobs();
+            Assert.Equal($"5 / {(int)Need(11)} XP", Text("TxtXP"));
+            clock.Advance(TimeSpan.FromSeconds(0.7));
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
             Assert.Equal($"6 / {(int)Need(11)} XP", Text("TxtXP"));
             Assert.NotNull(bar.Transitions);
         }
@@ -71,6 +77,7 @@ public sealed class HeaderLevelLiveTests
         {
             shell.Close();
             Dispatcher.UIThread.RunJobs();
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = oldTime;
             s.OfflineMode = false;
             service.SaveImmediate();
             CoreSettings.ServiceProvider = null;
@@ -84,7 +91,7 @@ public sealed class HeaderLevelLiveTests
     public Task AccountChangesRepaint_AndClosedShellUnsubscribes() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();

@@ -14,6 +14,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Launcher;
 using ConditioningControlPanel.Services.Race;
 using Newtonsoft.Json.Linq;
@@ -32,6 +33,7 @@ public sealed class GameWindowTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -187,7 +189,7 @@ public sealed class GameWindowTests
             var oldAssets = CorePaths.EffectiveAssetsProvider;
             CorePaths.EffectiveAssetsProvider = () => root;
             using var server = new WebAssetServer(root);
-            try { Assert.Empty(GameMediaManifest.BuildLocal(server).Videos); }
+            try { Assert.Empty(GameMediaManifest.BuildLocal(server.AssetUrl).Videos); }
             finally { CorePaths.EffectiveAssetsProvider = oldAssets; }
         }
         finally { Directory.Delete(root, true); }
@@ -307,6 +309,204 @@ public sealed class GameWindowTests
             CoreSecrets.RetrieveProvider = oldSecret;
             Environment.SetEnvironmentVariable(FriendsHead.EnvVar, oldLoopback);
             Directory.Delete(lib, true);
+        }
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PieceByPiece_FirstEscapePauses_SecondEscapeCloses(bool overrideAll) => Run((shell, launcher) =>
+    {
+        CoreSettings.Current.PanicKey = "Escape";
+        CoreSettings.Current.PanicOverridesAll = overrideAll;
+        launcher.Hide();
+        var board = GameWindow.Launch("piecebypiece")!;
+        board.Activate();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(board.IsActive);
+        var sent = new List<JObject>();
+        board.Posted += json => sent.Add(JObject.Parse(json));
+        board.Web.OnNavigationCompleted(board.PageUrl!);
+        board.Web.OnWebMessage("{\"type\":\"ready\"}");
+        var now = DateTime.Now;
+        shell.HandlePanicKeyPress(now);
+        Assert.True(board.IsVisible);
+        Assert.Single(sent, x => (string?)x["type"] == "pbp:escape");
+        shell.HandlePanicKeyPress(now.AddSeconds(1));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.Single(sent, x => (string?)x["type"] == "pbp:escape");
+    });
+
+    [Fact]
+    public void PieceByPiece_EscapeDuringBoot_DoesNotQueueAPause() => Run((shell, launcher) =>
+    {
+        CoreSettings.Current.PanicKey = "Escape";
+        launcher.Hide();
+        var board = GameWindow.Launch("piecebypiece")!;
+        board.Activate();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(board.IsActive);
+        var sent = new List<JObject>();
+        board.Posted += json => sent.Add(JObject.Parse(json));
+        shell.HandlePanicKeyPress(DateTime.Now);
+        Assert.True(board.IsVisible);
+        Assert.Empty(sent);
+        board.Web.OnNavigationCompleted(board.PageUrl!);
+        board.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.DoesNotContain(sent, x => (string?)x["type"] == "pbp:escape");
+        PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+        Assert.False(GameWindow.IsAnyOpen());
+    });
+
+    [Theory]
+    [InlineData("F9", true)]
+    [InlineData("Escape", false)]
+    public void PieceByPiece_ReboundOrBackgroundPanic_ClosesImmediately(string key, bool foreground) => Run((shell, launcher) =>
+    {
+        CoreSettings.Current.PanicKey = key;
+        launcher.Hide();
+        var board = GameWindow.Launch("piecebypiece")!;
+        var sent = new List<JObject>();
+        board.Posted += json => sent.Add(JObject.Parse(json));
+        board.Web.OnNavigationCompleted(board.PageUrl!);
+        board.Web.OnWebMessage("{\"type\":\"ready\"}");
+        if (foreground) board.Activate();
+        else { shell.Show(); shell.Activate(); }
+        Dispatcher.UIThread.RunJobs();
+        if (!foreground)
+        {
+            // Headless Activate does not deactivate the previous window; deliver the native
+            // notification after queued activation work, as a compositor does on focus loss.
+            var deactivated = typeof(global::Avalonia.Platform.IWindowBaseImpl).GetProperty("Deactivated",
+                global::System.Reflection.BindingFlags.Instance | global::System.Reflection.BindingFlags.Public
+                | global::System.Reflection.BindingFlags.NonPublic)!;
+            Assert.IsType<Action>(deactivated.GetValue(board.PlatformImpl))();
+        }
+        Assert.Equal(foreground, board.IsActive);
+        shell.HandlePanicKeyPress(DateTime.Now);
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.DoesNotContain(sent, x => (string?)x["type"] == "pbp:escape");
+    });
+
+    // These tests exercise the real board and settings bridge, without the unrelated main shell FX.
+    private static void RunBoard(Action body) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        var (oldSettings, oldServer) = (CoreSettings.ServiceProvider, GameWindow.Server);
+        var root = Directory.CreateTempSubdirectory("pbp-settings-").FullName;
+        using var server = new WebAssetServer(root);
+        CoreSettings.ServiceProvider = () => service;
+        GameWindow.Server = () => server;
+        try { body(); }
+        finally
+        {
+            GameWindow.CloseAllForPanic();
+            (CoreSettings.ServiceProvider, GameWindow.Server) = (oldSettings, oldServer);
+            Directory.Delete(root, true);
+        }
+    });
+
+    [Fact]
+    public void PieceByPiece_SettingsWhisperOwnClips_AndPostOnlyOnce() => RunBoard(() =>
+    {
+        var lib = Directory.CreateTempSubdirectory("pbp-whispers-").FullName;
+        var oldAssets = CorePaths.EffectiveAssetsProvider;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(lib, "braindrain"));
+            File.WriteAllBytes(Path.Combine(lib, "braindrain", "a one.wav"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(lib, "braindrain", "ignored.txt"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(lib, "braindrain", "off.wav"), new byte[] { 1 });
+            CoreSettings.Current.DisabledAssetPaths.Add("braindrain/off.wav");   // unchecked: never offered
+            CorePaths.EffectiveAssetsProvider = () => lib;
+            using var server = new WebAssetServer(lib) { AssetsRoot = () => lib };
+            GameWindow.Server = () => server;
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            var settings = sent.Single(o => (string?)o["type"] == "pbp:settings");
+            var url = (string)settings["whispers"]!.Single()!;
+            Assert.Equal(w.PageUrl!.Authority, new Uri(url).Authority);
+            Assert.EndsWith("/ccp.assets/braindrain/a%20one.wav", url);
+            using var http = new System.Net.Http.HttpClient();   // the offered clip is actually served
+            using var got = http.GetAsync(url + "?ccp_t=" + server.Token).GetAwaiter().GetResult();
+            Assert.Equal(System.Net.HttpStatusCode.OK, got.StatusCode);
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.Single(sent.Where(o => (string?)o["type"] == "pbp:settings"));
+        }
+        finally
+        {
+            CorePaths.EffectiveAssetsProvider = oldAssets;
+            Directory.Delete(lib, true);
+        }
+    });
+
+    [Fact]
+    public void PieceByPiece_SettingsWhispers_AllOwnClipsUnchecked_FallBackToWords() => RunBoard(() =>
+    {
+        var dir = Directory.CreateTempSubdirectory("pbp-off-").FullName;
+        var oldAssets = CorePaths.EffectiveAssetsProvider;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(dir, "braindrain"));
+            File.WriteAllBytes(Path.Combine(dir, "braindrain", "off.wav"), new byte[] { 1 });
+            var words = Directory.CreateDirectory(Path.Combine(dir, "words")).FullName;
+            File.WriteAllBytes(Path.Combine(words, "drop.mp3"), new byte[] { 1 });
+            CoreSettings.Current.DisabledAssetPaths.Add("braindrain/off.wav");
+            CorePaths.EffectiveAssetsProvider = () => dir;
+            using var server = new WebAssetServer(dir) { SubAudioRoot = () => null, WordsRoot = () => words };
+            GameWindow.Server = () => server;
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.EndsWith("/ccp.words/drop.mp3", (string?)sent.Single(o => (string?)o["type"] == "pbp:settings")["whispers"]!.Single());
+        }
+        finally
+        {
+            CorePaths.EffectiveAssetsProvider = oldAssets;
+            Directory.Delete(dir, true);
+        }
+    });
+
+    [Theory]
+    [InlineData(false, ConditioningControlPanel.Models.BuiltInMods.BambiSleepId, "ccp.words/drop.mp3")]
+    [InlineData(true, ConditioningControlPanel.Models.BuiltInMods.BambiSleepId, "ccp.subaudio/BAMBI%20FREEZE.mp3")]
+    [InlineData(true, ConditioningControlPanel.Models.BuiltInMods.CCPDefaultId, "ccp.words/drop.mp3")]
+    public void PieceByPiece_SettingsWhisperFallback_RespectsSharedAudioPermission(bool audible, string modId, string expected)
+        => RunBoard(() =>
+    {
+        var dir = Directory.CreateTempSubdirectory("pbp-fallback-").FullName;
+        var (oldAssets, oldServer, oldMod) = (CorePaths.EffectiveAssetsProvider, GameWindow.Server, CoreMods.ActiveModIdProvider);
+        try
+        {
+            var sub = Directory.CreateDirectory(Path.Combine(dir, "sub")).FullName;
+            var words = Directory.CreateDirectory(Path.Combine(dir, "words")).FullName;
+            File.WriteAllBytes(Path.Combine(sub, "BAMBI FREEZE.mp3"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(words, "drop.mp3"), new byte[] { 1 });
+            CorePaths.EffectiveAssetsProvider = () => dir;
+            CoreMods.ActiveModIdProvider = () => modId;
+            CoreSettings.Current.SubAudioEnabled = true;
+            CoreSettings.Current.SubAudioMuted = !audible;
+            using var server = new WebAssetServer(dir) { SubAudioRoot = () => sub, WordsRoot = () => words };
+            GameWindow.Server = () => server;
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.EndsWith("/" + expected, (string?)sent.Single(o => (string?)o["type"] == "pbp:settings")["whispers"]!.Single());
+        }
+        finally
+        {
+            (CorePaths.EffectiveAssetsProvider, GameWindow.Server, CoreMods.ActiveModIdProvider) = (oldAssets, oldServer, oldMod);
+            Directory.Delete(dir, true);
         }
     });
 
@@ -586,5 +786,208 @@ public sealed class GameWindowTests
             Assert.All(charts, c => Assert.Equal("two.mp3", (string?)c["chart"]!["source"]!["name"]));
             w.Close();
         });
+    });
+
+    // ---- Down the Rabbit Hole (WPF Services/Chaos/DtrhHostService.cs, slice A) ----
+
+    /// <summary>Lab (or not), signed in, a throwaway library; XP and each payout's counts-as-run go to lists.</summary>
+    private static void RunDtrh(bool lab, Action<MainShellWindow, List<double>, List<bool>, List<string>> body) => Run((shell, launcher) =>
+    {
+        var (oldLab, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock) = (CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider,
+            CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow);
+        var (oldRuns, oldForce) = (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun);
+        var lib = Directory.CreateTempSubdirectory("dtrh-lib-").FullName;
+        var xp = new List<double>();
+        var runs = new List<bool>();
+        var denied = new List<string>();
+        try
+        {
+            CoreAccount.IsLoggedInProvider = () => true;
+            CoreEntitlement.HasLabProvider = () => lab;
+            CoreEntitlement.IsFreeTodayProvider = _ => false;
+            CoreEntitlement.ShowDeniedHandler = v => denied.Add(v.Feature);
+            GameWindow.DtrhBankSparks = (_, countsAsRun) => { runs.Add(countsAsRun); return 5; };
+            CoreProgression.AddXPProvider = (amount, _) => xp.Add(amount);
+            CorePaths.EffectiveAssetsProvider = () => lib;
+            ChaosMeta.State.ForceScriptedRun = false;    // a forced replay would write the meta save
+            Directory.CreateDirectory(Path.Combine(lib, "images"));
+            Directory.CreateDirectory(Path.Combine(lib, "videos"));
+            File.WriteAllBytes(Path.Combine(lib, "images", "pic.png"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(lib, "videos", "clip.mp4"), new byte[] { 1 });
+            launcher.Hide();
+            body(shell, xp, runs, denied);
+        }
+        finally
+        {
+            (CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider, CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks,
+                CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow) = (oldLab, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock);
+            (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun) = (oldRuns, oldForce);
+            GameWindow.CloseAllForPanic();
+            Directory.Delete(lib, true);
+        }
+    });
+
+    /// <summary>WPF LauncherCatalogue :241 (Lab door, DemandLab refusal), OnPageReady :271 (init with motionLevel
+    /// and runSetup, then the manifest with videos), OnRequestRun :523, OnRunEnded :583 (one payout per descent)
+    /// and DisposeAll :1002 (a window closed mid-descent banks its last snapshot, paid by the host's clock).</summary>
+    [Fact]
+    public void Dtrh_LabDoor_BootRunLifecycle_AndCloseBanks()
+    {
+        RunDtrh(lab: false, (_, _, _, denied) =>
+        {
+            Assert.True(GameWindow.DtrhLocked());
+            Assert.Null(GameWindow.Launch("dtrh"));
+            Assert.Single(denied);
+            Assert.False(GameWindow.IsAnyOpen());
+        });
+        RunDtrh(lab: true, (_, xp, runs, _) =>
+        {
+            var s = CoreSettings.Current;
+            s.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Reduced;
+            s.ChaosDifficulty = "Normal";
+            Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "dtrh");
+            Assert.False(GameWindow.DtrhLocked());
+            var t0 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            var now = t0;
+            GameWindow.DtrhUtcNow = () => now;
+            var w = GameWindow.Launch("dtrh")!;
+            Assert.Contains("dtrh/index.html", w.PageUrl!.AbsolutePath);
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.Equal(new[] { "init", "manifest" }, sent.Select(o => (string?)o["type"]));
+            Assert.Equal("reduced", (string?)sent[0]["motionLevel"]);
+            Assert.Equal("Normal", (string?)sent[0]["runSetup"]!["difficulty"]);
+            Assert.EndsWith("/ccp.assets/images/pic.png", (string?)sent[1]["images"]!.Single()["url"]);
+            Assert.EndsWith("/ccp.assets/videos/clip.mp4", (string?)sent[1]["videos"]!.Single()["url"]);
+            sent.Clear();
+
+            ChaosMeta.State.RunsCompleted = 0;
+            w.HandleMessage("{\"type\":\"request-run\",\"setup\":{\"difficulty\":\"Hard\"}}");
+            Assert.Equal("Hard", s.ChaosDifficulty);                                   // the hub's choice persists
+            Assert.True((bool)Assert.Single(sent)["runConfig"]!["scriptedFirstRun"]!);  // the first descent is the classroom
+            sent.Clear();
+
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");   // no run-started: nothing
+            Assert.Empty(sent);
+            w.HandleMessage("{\"type\":\"run-started\",\"difficulty\":\"Easy\"}");
+            Assert.True(w.DtrhRunActive);
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");   // a second end pays nothing
+            var pay = Assert.Single(sent);
+            Assert.Equal("payout-result", (string?)pay["type"]);
+            Assert.Equal(300, (double)pay["baseXp"]!);
+            Assert.Equal(5, (int)pay["sparksEarned"]!);
+            Assert.Equal(new[] { 300.0 }, xp);
+            Assert.Equal(new[] { true }, runs);
+
+            // Closed with an endless descent still falling: the last snapshot is banked as left, paid for
+            // the 90 s the host saw (+5 s slack), not the 600 s the page claims.
+            w.HandleMessage("{\"type\":\"run-started\"}");
+            w.HandleMessage("{\"type\":\"run-progress\",\"score\":100000,\"durationSec\":720,\"elapsedSec\":600}");
+            now = t0.AddSeconds(90);
+            w.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.Equal(2, xp.Count);
+            Assert.Equal(250.0 * 95 / 60, xp[1], 6);
+            Assert.Equal(new[] { true, true }, runs);
+        });
+    }
+
+    /// <summary>WPF DtrhHostService.PostManifest / OnRemoteCopiesReady (724ac82bc): the manifest's urls are root-relative
+    /// (hostMedia.js counts only those, not 127.0.0.1, as local); with online media on, copies landing in
+    /// <c>&lt;assets&gt;/.temp</c> re-post the manifest with them as asset urls; a closed window stops listening.</summary>
+    [Fact]
+    public void Dtrh_OnlineCopiesLand_TheManifestIsRepostedWithThemAsAssetUrls() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.MediaSource, s.RemoteMediaConsented, s.RemoteMediaRatio, DtrhRemoteMedia.Fetch, GameWindow.DtrhCopier);
+        var cachePath = Path.Combine(CorePaths.UserData, "dtrh_remote_media.json");
+        try
+        {
+            File.Delete(cachePath);
+            DtrhRemoteMedia.ResetForTests();
+            (s.MediaSource, s.RemoteMediaConsented, s.RemoteMediaRatio) = ("mixed", true, 40);
+            DtrhRemoteMedia.Fetch = (kind, _) => Task.FromResult((kind != DtrhRemoteMedia.Kind.Stills ? new List<global::ConditioningControlPanel.Services.Fyp.FypAssetManifest.Entry>()
+                : new() { new() { Id = "scrolller/Sub/7", Url = "https://cdn/7.webp", Type = "image", Origin = "online" } }, (string?)null));
+            GameWindow.DtrhCopier = new((url, _) =>
+            {
+                var dir = Directory.CreateDirectory(Path.Combine(CorePaths.EffectiveAssets, ".temp")).FullName;
+                var path = Path.Combine(dir, DtrhRemoteMedia.CopyPrefix + "7.webp");
+                File.WriteAllBytes(path, new byte[] { 1 });
+                return Task.FromResult<string?>(path);
+            }, _ => { });
+
+            var w = GameWindow.Launch("dtrh")!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            var first = sent.Single(o => (string?)o["type"] == "manifest");
+            Assert.Equal("/ccp.assets/images/pic.png", (string?)first["images"]!.Single()["url"]);   // cold cache: one launch behind
+            Assert.Equal(1, DtrhRemoteMedia.CopiesReadyListeners);
+
+            // Loops come back dry, so stills are fetched next (the 30 min back-off), copied and re-posted.
+            DtrhRemoteMedia.RefillTask.Wait(TimeSpan.FromSeconds(10));
+            sent.Clear();
+            w.HandleMessage("{\"type\":\"ready\"}");
+            DtrhRemoteMedia.RefillTask.Wait(TimeSpan.FromSeconds(10));
+            DtrhRemoteMedia.CopyTask.Wait(TimeSpan.FromSeconds(10));
+            sent.Clear();
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (!sent.Any(o => (string?)o["type"] == "manifest") && DateTime.UtcNow < deadline) Dispatcher.UIThread.RunJobs();
+            var again = sent.Single(o => (string?)o["type"] == "manifest");
+            var images = again["images"]!.Select(e => ((string?)e["name"], (string?)e["url"])).ToList();
+            Assert.Contains(("pic.png", "/ccp.assets/images/pic.png"), images);                       // mixed: the library stays
+            Assert.Contains(("online40:Sub-7.webp", "/ccp.assets/.temp/ccp_temp_remote_7.webp"), images);
+
+            w.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, DtrhRemoteMedia.CopiesReadyListeners);
+        }
+        finally
+        {
+            (s.MediaSource, s.RemoteMediaConsented, s.RemoteMediaRatio, DtrhRemoteMedia.Fetch, GameWindow.DtrhCopier) = old;
+            DtrhRemoteMedia.ResetForTests();
+            File.Delete(cachePath);
+            File.Delete(Path.Combine(CorePaths.EffectiveAssets, ".temp", DtrhRemoteMedia.CopyPrefix + "7.webp"));
+        }
+    });
+
+    /// <summary>WPF MainWindow.xaml.cs:1505 TryRacePauseOnEscape (DtRH since 2026-10-12): with Escape as the panic
+    /// key and the game in front, the first press is the game's pause (kept-escape to the page, the game stays
+    /// open, nothing exits); a second press inside 2 s is a full panic that closes it (PanicSurfaces "games").</summary>
+    [Fact]
+    public void Dtrh_EscapePauses_ASecondEscapeInsideTwoSecondsClosesIt() => RunDtrh(lab: true, (shell, _, _, _) =>
+    {
+        var s = CoreSettings.Current;
+        var (oldKey, oldEnabled) = (s.PanicKey, s.PanicKeyEnabled);
+        try
+        {
+            s.PanicKey = "Escape";
+            s.PanicKeyEnabled = true;
+            var shellClosed = false;
+            shell.Closed += (_, _) => shellClosed = true;
+            var w = GameWindow.Launch("dtrh")!;
+            w.Activate();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(w, GameWindow.DtrhInFront());
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            sent.Clear();
+            var t0 = new DateTime(2026, 1, 1, 12, 0, 0);
+
+            shell.HandlePanicKeyPress(t0);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(GameWindow.IsAnyOpen());                                 // a pause, not a close
+            Assert.Equal("kept-escape", (string?)Assert.Single(sent)["type"]);
+
+            shell.HandlePanicKeyPress(t0.AddSeconds(1));                          // again within 2 s: panic
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.False(shellClosed);                                            // a game owned the screen: no exit rung
+        }
+        finally { (s.PanicKey, s.PanicKeyEnabled) = (oldKey, oldEnabled); }
     });
 }

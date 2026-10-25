@@ -22,7 +22,7 @@ namespace ConditioningControlPanel.Services.GoonGame
     /// measures its offset to the host. Both sides still run ping rounds — the host needs the RTT
     /// (for scheduler lead) and needs proof the peer answers before it lets anything be scheduled.
     ///
-    /// Time base: an <see cref="Stopwatch"/> anchored to <see cref="Environment.TickCount64"/> at
+    /// Time base: a monotonic <see cref="TimeProvider"/> timestamp (Stopwatch by default) anchored to <see cref="Environment.TickCount64"/> at
     /// construction. Stopwatch alone isn't comparable to TickCount64 (which
     /// <see cref="IMatchClock.MatchMsToLocalMs"/> promises); TickCount64 alone has ~15.6 ms
     /// resolution, which is fine for scheduling and awful for measuring an RTT. The anchor gives
@@ -43,7 +43,8 @@ namespace ConditioningControlPanel.Services.GoonGame
         private readonly bool _isClockMaster;
         private readonly string _tag;
         private readonly long _anchorTickCount;
-        private readonly Stopwatch _sw;
+        private readonly TimeProvider _time;
+        private readonly long _start;
         private readonly long _testSkewMs;
 
         private readonly object _gate = new();
@@ -68,13 +69,16 @@ namespace ConditioningControlPanel.Services.GoonGame
         /// <see cref="MatchMsToLocalMs"/> is offset from <see cref="Environment.TickCount64"/> by
         /// exactly the skew. Compare against <see cref="NowLocalMs"/>, never against TickCount64
         /// directly, and the distinction never bites you.</param>
-        public MatchClock(bool isClockMaster, string tag = "GoonClock", long testSkewMs = 0)
+        /// <param name="time">TEST ONLY: a stepped clock for <see cref="NowLocalMs"/> and the
+        /// scheduled-fire wait. Null (every production path) is <see cref="TimeProvider.System"/>.</param>
+        public MatchClock(bool isClockMaster, string tag = "GoonClock", long testSkewMs = 0, TimeProvider? time = null)
         {
             _isClockMaster = isClockMaster;
             _tag = tag;
             _testSkewMs = testSkewMs;
             _anchorTickCount = Environment.TickCount64;
-            _sw = Stopwatch.StartNew();
+            _time = time ?? TimeProvider.System;
+            _start = _time.GetTimestamp();
         }
 
         // ------------------------------------------------------------------ IMatchClock
@@ -90,7 +94,7 @@ namespace ConditioningControlPanel.Services.GoonGame
         // ------------------------------------------------------------------ local time
 
         /// <summary>Monotonic local ms, directly comparable to <see cref="Environment.TickCount64"/>.</summary>
-        public long NowLocalMs => _anchorTickCount + _sw.ElapsedMilliseconds + _testSkewMs;
+        public long NowLocalMs => _anchorTickCount + _time.GetElapsedTime(_start).Ticks / TimeSpan.TicksPerMillisecond + _testSkewMs;
 
         /// <summary>Offset currently applied to reach match time. 0 on the host, by definition.</summary>
         public long OffsetMs { get { lock (_gate) return _offsetMs; } }
@@ -425,7 +429,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                         // is picked up promptly; far out, long hops keep the timer cheap. The last
                         // ~20 ms is left to the dispatcher hand-off, which is the dominant jitter.
                         var slice = remaining > 400 ? Math.Min(remaining - 200, 1000) : remaining;
-                        await Task.Delay((int)Math.Max(1, slice), _cts.Token).ConfigureAwait(false);
+                        await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(1, slice)), _clock._time, _cts.Token).ConfigureAwait(false);
                     }
 
                     if (_cts.IsCancellationRequested) return;
@@ -473,7 +477,6 @@ namespace ConditioningControlPanel.Services.GoonGame
             try { _cts?.Dispose(); } catch { }
             _cts = null;
             _send = null;
-            _sw.Stop();
         }
     }
 }

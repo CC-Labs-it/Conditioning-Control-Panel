@@ -16,6 +16,7 @@ using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Motion;
 using ConditioningControlPanel.Services.Companion;
 using ConditioningControlPanel.Services.Companion.Brain;
 using ConditioningControlPanel.Services.Moderation;
@@ -23,8 +24,21 @@ using ConditioningControlPanel.Views.Controls.Companion;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 {
-    /// <summary>Z2: WPF's Enter-to-send, newest-line pinning, delayed dormant shimmer and
-    /// staggered thinking dots. Motion shares the window's frame source and parks off screen.</summary>
+    /// <summary>
+    /// Z2 — the chat threshold surface, ported from the WPF head. See the XAML header for the spec.
+    ///
+    /// <para>WPF's Enter-to-send, newest-line pinning, delayed dormant shimmer and staggered
+    /// thinking dots (Core's WPF pulse/stagger rule). Motion shares the window's frame source and
+    /// parks off screen; no infinite style animation remains.</para>
+    ///
+    /// <para>WPF's CompanionWheelRelay is not ported: the thread's ScrollViewer keeps Avalonia's
+    /// default IsScrollChainingEnabled, which already hands a spent notch to the page. Live
+    /// assistant turns resolve sanctioned watch chips through the Core index.</para>
+    ///
+    /// <para>Sending is the viewmodel's. The WPF <c>IChatThresholdVm</c> is routed through
+    /// <c>CompanionBrain.ChatAsync</c>; <see cref="ChatThresholdViewModel.CreateLive"/> sends through
+    /// the same brain, while the default viewmodel remains an isolated artboard.</para>
+    /// </summary>
     public partial class ChatThresholdView : UserControl
     {
         private INotifyCollectionChanged? _watchedTurns;
@@ -69,8 +83,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         private void OnVmChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(ChatThresholdViewModel.IsThinking)) SyncThinking();
-            if (e.PropertyName == nameof(ChatThresholdViewModel.State)) PlayDormantShimmer();
+            bool all = string.IsNullOrEmpty(e.PropertyName);
+            if (all || e.PropertyName == nameof(ChatThresholdViewModel.IsThinking)) SyncThinking();
+            if (all || e.PropertyName == nameof(ChatThresholdViewModel.State)) PlayDormantShimmer();
         }
 
         /// <summary>Convenience for hosts that hand in a viewmodel rather than setting DataContext.</summary>
@@ -156,12 +171,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 StopThinking();
                 return;
             }
-            _thinkingLoop ??= new BeatLoop(ThinkingDots, seconds =>
-            {
-                Dot1.Opacity = DotOpacity(seconds * 1000, 0);
-                Dot2.Opacity = DotOpacity(seconds * 1000, 150);
-                Dot3.Opacity = DotOpacity(seconds * 1000, 300);
-            });
+            // The shared frame beat: parks itself while hidden or minimised, test-clocked (BeatLoop.Time).
+            _thinkingLoop ??= new BeatLoop(ThinkingDots, seconds => PaintThinking(seconds * 1000));
             _thinkingLoop.Start();
             ScrollThreadToEnd();
         }
@@ -172,12 +183,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             Dot1.Opacity = Dot2.Opacity = Dot3.Opacity = 1;
         }
 
-        private static double DotOpacity(double elapsedMs, double delayMs)
+        /// <summary>One beat (Core's WPF CmpThinkingDotsStoryboard rule), stepped explicitly by headless tests.</summary>
+        internal void PaintThinking(double milliseconds)
         {
-            // WPF repeats each cloned storyboard including its child's BeginTime.
-            double phase = elapsedMs % (900 + delayMs) - delayMs;
-            if (phase < 0) return 1;
-            return Math.Clamp(0.25 + 0.75 * (1 - Math.Abs(phase / 450 - 1)), 0, 1);
+            if (_thinkingLoop?.IsRunning != true) return;
+            Dot1.Opacity = CompanionThinkingPulse.Opacity(milliseconds, 0);
+            Dot2.Opacity = CompanionThinkingPulse.Opacity(milliseconds, 1);
+            Dot3.Opacity = CompanionThinkingPulse.Opacity(milliseconds, 2);
         }
 
         /// <summary>Enter sends; Shift+Enter is left alone so a future multi-line box still works.</summary>
@@ -215,6 +227,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private ChatSession? _session;
 
         public ChatThresholdViewModel() : this(live: false) { }
+
+        // WPF MockChatThresholdVm's exhibits. These remain detached from App.Brain even after
+        // the room calls Sync on a visibility edge; sends only append to the in-memory thread.
+        internal static ChatThresholdViewModel CreatePreview(CompanionZoneState state, bool fresh = false)
+        {
+            var vm = new ChatThresholdViewModel { State = state };
+            if (state != CompanionZoneState.Live || fresh)
+            {
+                vm.Turns.Clear();
+                vm.LastHeardCopy = string.Empty;
+            }
+            if (state == CompanionZoneState.Dormant)
+                vm.Turns.Add(new ChatBubble(ChatBubble.BubbleKind.Her, "hi princess~ what are we doing today?"));
+            return vm;
+        }
 
         /// <summary>The live zone (WPF ChatThresholdRuntimeVm): reads App.Brain, sends through brain.ChatAsync.</summary>
         internal static ChatThresholdViewModel CreateLive()
@@ -316,7 +343,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             private set { if (_lastHeardCopy != value) { _lastHeardCopy = value; Raise(); } }
         }
 
-        public string FooterCopy => IsThinking
+        public string FooterCopy => !_live && State != CompanionZoneState.Live ? string.Empty : IsThinking
             ? Loc.Get("companion_chat_footer_picking")
             : Turns.Count == 0
                 ? Loc.Get("companion_chat_footer_first")
