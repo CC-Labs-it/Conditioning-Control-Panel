@@ -1,66 +1,16 @@
-// PORTED-AS-A-NOTE from ConditioningControlPanel/MainWindow/MainWindow.TabFxPresetsQuestsAchievements.cs
-// (834 lines) - PR-3a of the FX overhaul: one focal pass each for Presets, Quests and Achievements.
+// PORTED-IN-PART from ConditioningControlPanel/MainWindow/MainWindow.TabFxPresetsQuestsAchievements.cs.
+// Per-item builders and selection moved into the tab views on this head, so their FX belong there:
+// PresetsTabView.Fx.cs owns the selected preset/session sheen, row/chip hover lift, primary-button
+// press squish, and independent preset/session/Takeaway entrance zones. CardSheenAdorner already
+// uses the shared frame clock; focus/minimise/motion/performance/tab-hide/unload gates live in the view.
+// QuestsTabView.Quests.cs now feeds its real weekly fraction into a 0.6 s width transition and
+// seats resizes immediately. AchievementsTabView.Fx.cs already owns its unlocked tilt/lift/pop/stagger.
 //
-// NOTHING IS RESTORED HERE. The blanket "every member reaches App.*, a service, a device, a
-// WebView2 or Win32" header that used to sit here was untrue of this file - almost none of it
-// touches a service - so it is replaced with what actually blocks each group. The honest summary:
-// this file is nearly all PER-ITEM decoration attached by whoever BUILDS the item, and none of
-// those builders exist here yet. Restoring the attach methods now would give six public entry
-// points no code path can reach, on three tabs, with no render able to say so.
-//
-// Two corrections to earlier notes, both found by reading rather than by grepping for App.:
-//   * ADORNERS ARE NOT THE BLOCKER. Avalonia has AdornerLayer with the same
-//     GetAdornerLayer/SetAdornedElement shape and this head already uses it
-//     (CCP.Avalonia/Controls/TierFxBorder.cs:192-226 attaches and removes one exactly as
-//     CardSheenAdorner and RowSweepAdorner would). Missing are those two WPF controls themselves,
-//     plus their hosts.
-//   * PresetsTabView and QuestsTabView now call InitializeComponent(), not
-//     AvaloniaXamlLoader.Load - MainShellWindow.TabNavigation.cs's header still lists them among
-//     the views whose x:Name fields are permanently null, and that half of it is stale.
-//     AchievementsTabView still loads with AvaloniaXamlLoader, so ITS named controls must be
-//     reached with FindControl.
-//
-// Group by group (62 members):
-//
-//   * the three tab entry points - On{Presets,Quests,Achievements}TabVisibilityChanged,
-//     IsIncomingTab, HookTabFxWindowEvents, TabFx_WindowStateish, TabFx_ModChanged,
-//     TabFxAmbientAllowed and the five guard flags. WPF's caller is each tab's IsVisibleChanged;
-//     here the equivalent is one line per tab in EnsureTabFx (MainShellWindow.AmbientFx.cs) or the
-//     PropertyChanged-on-IsVisibleProperty filter .TabFxTakeoverLabStatus.cs already uses -
-//     neither file is this layer's. TabFxAmbientAllowed is that partial's Pr4aAmbientAllowed;
-//     reuse it, do not define a second gate.
-//   * Presets, the tab's only ambient clock - the three _cardSheen* fields, RefreshCardSheen,
-//     DetachCardSheen, FindSelectedCard, InitializePresetsFx, StaggerPresetCards.
-//     Selected card sheen is now hosted by PresetsTabView.axaml.cs (+ triggers in .Sheen.cs), beside the real preset/session
-//     builders and selection state. The rest of this partial remains a note.
-//   * the session rack rows - the three _rowSweep* fields, PrepareSessionRowFx,
-//     SessionRow_MouseEnter/MouseLeave, Attach/Release/DetachRowSweep, LiftSessionRow,
-//     SessionRowLiftPx, SessionCardCornerRadius. Attached by
-//     MainWindow.SessionIO.BuildSessionRackRow as each row is built. The SWEEP is restored on
-//     PresetsTabView's own rack rows (Controls/RowSweepAdorner.cs); the lift is not.
-//   * ACHIEVEMENTS: ported. Stagger, tilt/lift/pop and the unlocked gate (PrepareAchievementTileFx,
-//     SetAchievementTileUnlocked, AchievementTile_MouseEnter/MouseLeave, TiltAchievementTile,
-//     StaggerAchievementTiles) live in CCP.Avalonia/Views/Tabs/AchievementsTabView.Fx.cs, next to the grid.
-//   * per-card hover (Presets) - PreparePresetCardFx, PresetCard_MouseEnter/MouseLeave. Called by the
-//     builder, MainShellWindow.Presets.cs. In Avalonia these are
-//     pointer-over transitions on the item's own ControlTheme far more cheaply than as C# per-item
-//     hooks - prefer that when the builders land, over a literal transcription.
-//   * the button press squish - WireButtonPress, FxButton_PressDown/PressUp, PressFx,
-//     EnsureCardTransforms, FindTransform<T>. WPF reaches it through Behaviors/MotionFx.cs; this
-//     head has none, and a :pressed setter in Theme/Styles.xaml is the Avalonia answer (off-limits
-//     to this layer, as it was to the WPF PR).
-//   * Quests' weekly bar - _weeklyQuestFraction, _questTracksHooked, InitializeQuestsFx,
-//     QuestTrack_SizeChanged, SetQuestProgress, ApplyQuestProgressBars. THE CONTROLS EXIST
-//     (QuestsTabView.axaml:410 names WeeklyProgressTrack and WeeklyProgressFill) and the body is a
-//     width tween with a no-tween re-seat on resize, which ports directly. What is missing is the
-//     FRACTION: SetQuestProgress is called from RefreshQuestUI, and MainShellWindow.Quests.cs is a
-//     stub blocked on the quest service. A bar seeded to any fraction we can compute here would
-//     report progress nobody measured, so it stays at its authored width.
-
+// Follow-up wire-shell-tab-fx-presets-quests-achievements-b: WPF's data-before-FX arrival funnel
+// (SyncCustomSessionsFromDisk, RepaintSessionRack, RefreshTakeawayShelf) and IsIncomingTab guard
+// for the shell's transient outgoing-tab re-show. The receipt drawer is still a separate stub;
+// its data path and the cross-head custom-session discovery rule cannot be invented here.
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
-    public partial class MainShellWindow
-    {
-        // Nothing references this partial, and nothing is restored - see the header.
-    }
+    public partial class MainShellWindow { }
 }

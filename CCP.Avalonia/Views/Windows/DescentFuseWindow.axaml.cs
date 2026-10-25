@@ -299,12 +299,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (frame.Stage == DescentFuseStage.Crack && !_crackSounded)
             {
                 _crackSounded = true;
-                // ponytail: needs DescentRoomSfx.PlayCrack from
-                // ConditioningControlPanel/Services/Descent/DescentRoomSfx.cs. It cannot come over
-                // as-is: it reads App.DescentCountdown.AudioEnabled and resolves its file through
-                // ChaosSfx.ResolvePath, neither of which is in Core. CoreAudio.PlayOneShot is the
-                // seam it would use - and is itself unseeded on this head (App.axaml.cs), so the
-                // sting would still be silent.
+                // ponytail: the Crack ladder is now in Core (DescentRoomAudio.Play(DescentRoomCue.Crack,
+                // ...)) and CoreAudio is seeded by LibVlcAudio on this head. Wiring the call here
+                // (AudioEnabled + head sound resolver) belongs to lane win-descent-fuse.
             }
 
             if (frame.Stage >= DescentFuseStage.Bloom && !_backdropRaised)
