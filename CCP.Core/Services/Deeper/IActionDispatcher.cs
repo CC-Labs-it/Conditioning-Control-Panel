@@ -127,7 +127,7 @@ namespace ConditioningControlPanel.Services.Deeper
     /// dry-run preview. RecentActions is capped at 50; ActionLogged fires
     /// after the inner dispatcher returns.
     /// </summary>
-    public sealed class RecordingActionDispatcher : IActionDispatcher
+    public sealed class RecordingActionDispatcher : IActionDispatcher, IEnhancementRunCleanup
     {
         private const int MaxRecent = 50;
         private readonly IActionDispatcher _inner;
@@ -175,5 +175,11 @@ namespace ConditioningControlPanel.Services.Deeper
         {
             lock (_gate) _recent.Clear();
         }
+
+        // The host always wraps the real dispatcher in this recorder, so the engine's Stop-time
+        // cleanup has to pass through it to reach the screen.
+        public void ResetOverlayBands() => (_inner as IEnhancementRunCleanup)?.ResetOverlayBands();
+        public void StopOneShotFlashes() => (_inner as IEnhancementRunCleanup)?.StopOneShotFlashes();
+        public void StopOneShotSubliminals() => (_inner as IEnhancementRunCleanup)?.StopOneShotSubliminals();
     }
 }

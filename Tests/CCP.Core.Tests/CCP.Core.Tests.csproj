@@ -33,6 +33,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\CCP.Core\CCP.Core.csproj" />
     <Compile Include="..\Shared\BackRoomBridgeRig.cs" Link="BackRoomBridgeRig.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\AchievementSharePromptRuleTests.cs" Link="AchievementSharePromptRuleTests.cs" />
+    <!-- Existing pure first-light timeline specs also run on Linux against the shared Core engine. -->
+    <Compile Include="..\ConditioningControlPanel.Tests\SpiralFirstLightTimelineTests.cs" Link="SpiralFirstLightTimelineTests.cs" />
   </ItemGroup>
 
   <ItemGroup>

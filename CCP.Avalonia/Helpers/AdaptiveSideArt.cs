@@ -1,6 +1,7 @@
 using System;
 using Avalonia;
 using Avalonia.Controls;
+using ConditioningControlPanel.Helpers;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Helpers
@@ -27,11 +28,11 @@ namespace ConditioningControlPanel.Avalonia.Helpers
         private static readonly AttachedProperty<bool> IsCollapsedProperty =
             AvaloniaProperty.RegisterAttached<Grid, bool>("IsCollapsed", typeof(AdaptiveSideArt));
 
-        /// <summary>WPF AdaptiveSideArt.WidenMargin: wider than any scrollbar.</summary>
-        internal const double WidenMargin = 48;
+        /// <summary>WPF AdaptiveSideArt.WidenMargin: wider than any scrollbar (Core SideArtCollapse).</summary>
+        internal const double WidenMargin = SideArtCollapse.WidenMargin;
 
         internal static bool ShouldCollapse(double width, double threshold, bool collapsedNow)
-            => collapsedNow ? width < threshold + WidenMargin : width < threshold;
+            => SideArtCollapse.ShouldCollapse(width, threshold, collapsedNow);
 
         static AdaptiveSideArt()
         {

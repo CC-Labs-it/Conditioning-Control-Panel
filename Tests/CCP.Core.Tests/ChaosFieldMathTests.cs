@@ -86,4 +86,56 @@ public class ChaosFieldMathTests
         foreach (var v in ChaosBubbleVariants.All)
             Assert.Equal(0xFFu, v.Tint >> 24);
     }
+
+    private static ChaosRunState RunState() => new(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+
+    /// <summary>WPF OnBenignPopped: combo and heat rise BEFORE the points are taken, so the very
+    /// first treat already pays the x1.08 combo and x1.04 heat.</summary>
+    [Fact]
+    public void ATreatPopCountsRefuelsAndScoresInWpfOrder()
+    {
+        var s = RunState();
+        var spec = new EffectBubbleSpec { Payload = new FlashPayload { Strength = 50 } };   // base 120
+        double d = s.DifficultyMult * s.UrgeMult;
+        double pts = ChaosFieldMath.ApplyTreatPop(s, spec, pendulum: 1.0, chanceFlip: 1.0);
+        Assert.Equal(120 * 0.4 * 1.08 * 1.04 * d, pts, 6);
+        Assert.Equal(pts, s.Score, 6);
+        Assert.Equal((1, 1), (s.EffectsFired, s.Combo));
+        Assert.Equal(0.04, s.Heat, 9);
+        Assert.Equal(ChaosTuning.FOCUS_START + ChaosTuning.FOCUS_PER_POP, s.Focus, 9);
+        Assert.Equal(0, s.TrickleDrops);   // Drip Feed unworn
+    }
+
+    [Fact]
+    public void ATreatPopTricklesDripFeedUpToItsCap()
+    {
+        var s = RunState();
+        s.DropPerPop = 2;
+        s.TrickleDrops = ChaosLifetimeBoons.DripFeedCap(2) - 1;
+        ChaosFieldMath.ApplyTreatPop(s, new EffectBubbleSpec(), 1.0, 1.0);
+        Assert.Equal(ChaosLifetimeBoons.DripFeedCap(2), s.TrickleDrops);
+    }
+
+    [Fact]
+    public void APrismPopPaysTenTimesBaseWithItsOwnHeat()
+    {
+        var s = RunState();
+        var spec = new EffectBubbleSpec { Payload = new FlashPayload { Strength = 50 }, IsPrism = true };
+        double pts = ChaosFieldMath.ApplyPrismPop(s, spec);
+        Assert.Equal(1200 * 1.08 * 1.05 * s.DifficultyMult * s.UrgeMult, pts, 6);
+        Assert.Equal(pts, s.Score, 6);
+        Assert.Equal(0.05, s.Heat, 9);
+        Assert.Equal(ChaosTuning.FOCUS_START + ChaosTuning.FOCUS_PER_PRISM, s.Focus, 9);
+    }
+
+    [Fact]
+    public void ChanceFlipIsOneUnwornElseDoubleOrHalf()
+    {
+        var s = RunState();
+        Assert.Equal(1.0, ChaosFieldMath.ChanceFlip(s, new Random(1)));
+        s.ChanceDoubleOdds = 1.0;
+        Assert.Equal(2.0, ChaosFieldMath.ChanceFlip(s, new Random(1)));
+        s.ChanceDoubleOdds = 1e-12;
+        Assert.Equal(0.5, ChaosFieldMath.ChanceFlip(s, new Random(1)));
+    }
 }

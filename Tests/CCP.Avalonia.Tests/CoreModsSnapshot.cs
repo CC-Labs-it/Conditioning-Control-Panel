@@ -18,9 +18,14 @@ internal sealed class CoreModsSnapshot : IDisposable
     private readonly Func<System.Collections.Generic.IReadOnlyDictionary<string, string>?>? _links =
         CoreModsHooks.KnownVideoLinksProvider;
 
+    private readonly Action<string?>? _modSwitched = CoreModsHooks.ModSwitched;
+    private readonly Action? _invalidatePrompt = CoreModsHooks.InvalidateStablePrompt;
+
     public void Dispose()
     {
         for (var i = 0; i < Providers.Length; i++) Providers[i].SetValue(null, _saved[i]);
         CoreModsHooks.KnownVideoLinksProvider = _links;
+        CoreModsHooks.ModSwitched = _modSwitched;
+        CoreModsHooks.InvalidateStablePrompt = _invalidatePrompt;
     }
 }

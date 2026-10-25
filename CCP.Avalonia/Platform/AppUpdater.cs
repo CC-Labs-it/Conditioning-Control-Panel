@@ -43,9 +43,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal static UpdateInfo? Latest { get; private set; }
         private static bool _busy;
+        private static bool _offering;
 
-        /// <summary>WPF App.IsUpdateDialogActive: an update offer or manual check owns the screen.</summary>
-        internal static bool IsUpdateDialogActive => _busy;
+        /// <summary>WPF App.IsUpdateDialogActive: raised only while a newer version is offered
+        /// (App.xaml.cs:5507), not while a manual check still waits on the network.</summary>
+        internal static bool IsUpdateDialogActive => _offering;
         private static string UserData => CorePaths.UserData;
 
         /// <summary>
@@ -193,7 +195,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>The notification dialog: Install (Windows) / Download (elsewhere), or Later = quiet for 24h.</summary>
         private static async Task OfferAsync(Window owner, UpdateInfo info)
         {
-            _busy = true;
+            _busy = _offering = true;
             try
             {
                 var dialog = OpenDialog = new UpdateNotificationDialog(info)
@@ -209,7 +211,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             finally
             {
                 OpenDialog = null;
-                _busy = false;
+                _busy = _offering = false;
             }
         }
 
