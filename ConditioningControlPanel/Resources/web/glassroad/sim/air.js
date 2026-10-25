@@ -27,7 +27,7 @@ export function takeoff(st, events, cause) {
 }
 
 /** Touch down (the caller has already snapped P and removed the normal speed). @returns {number} tier */
-export function land(st, a, feel, events, V, n, speed, dt) {
+export function land(st, a, feel, events, V, n, speed, dt, planted = false) {
   const airTime = st[S.airTime], tier = landTier(airTime, feel);
   st[S.airborne] = 0; st[S.grounded] = 1;
   if (st[S.driftDir]) {
@@ -37,7 +37,7 @@ export function land(st, a, feel, events, V, n, speed, dt) {
   }
   events.emit('land', { tier, airTime });
   trickOnLand(st, feel, events, airTime);
-  const b = tier > 0 ? feel.get('air.bounceM')[tier - 1] : 0;
+  const b = !planted && tier > 0 ? feel.get('air.bounceM')[tier - 1] : 0;
   if (b > 0) {
     v3addScaled(V, V, n, Math.sqrt(2 * feel.get('hop.gravityMps2') * b));
     takeoff(st, events, null);

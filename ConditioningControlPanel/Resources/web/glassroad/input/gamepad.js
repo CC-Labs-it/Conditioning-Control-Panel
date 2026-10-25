@@ -20,6 +20,7 @@ export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigat
   const seen = new Map();                // id -> trigger axes seen moving
   let kept = choices || loadChoices();
   const r = {};
+  const look = { x: 0, y: 0 };
   const offDev = devices.on((type) => { if (type === 'layout') kept = loadChoices(); });
 
   const idOf = (g) => g.id || 'pad';
@@ -53,11 +54,14 @@ export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigat
   function poll(into) {
     const hit = scan();
     into.padLost = lostEdge; lostEdge = false;
-    if (!hit) { was = {}; navWas = null; return; }
+    if (!hit) { was = {}; navWas = null; look.x = look.y = 0; return; }
     const { g, k } = hit, id = idOf(g);
     if (!seen.has(id)) seen.set(id, {});
     readPad(g, profileFor(g, kept), seen.get(id), r);
     const ax = r.x, ay = r.y;
+    const magnitude = Math.hypot(r.lookX, r.lookY);
+    const gain = magnitude > DEADZONE ? Math.min(1, (magnitude - DEADZONE) / (1 - DEADZONE)) / magnitude : 0;
+    look.x = gain ? r.lookX * gain : 0; look.y = gain ? r.lookY * gain : 0;
     into.steer = Math.abs(ax) > DEADZONE ? Math.sign(ax) * Math.min(1, (Math.abs(ax) - DEADZONE) / (1 - DEADZONE)) : 0;
     into.steerKind = 'stick';                       // the action map applies the curve (input/steerCurve.js)
     into.throttle = r.rt;
@@ -74,7 +78,7 @@ export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigat
     if (dir && dir !== navWas) navEdge = dir;
     navWas = dir;
     const used = r.south || r.east || r.west || r.north || r.lb || r.rb || r.start || r.select ||
-      r.up || r.down || r.left || r.right || r.lt > 0.1 || r.rt > 0.1 || Math.abs(ax) > 0.5 || Math.abs(ay) > 0.5;
+      r.up || r.down || r.left || r.right || r.lt > 0.1 || r.rt > 0.1 || Math.abs(ax) > 0.5 || Math.abs(ay) > 0.5 || magnitude > DEADZONE;
     if (used) { active = k; devices.use('pad', infoOf(g)); }
     was = { south: r.south, start: r.start, west: r.west, rb: r.rb };
   }
@@ -89,5 +93,5 @@ export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigat
       if (p && p.catch) p.catch(() => {});
     } catch (e) { /* no rumble on this pad */ }
   }
-  return { poll, rumble, takeNav, dispose() { was = {}; offDev(); } };
+  return { poll, rumble, takeNav, look, dispose() { was = {}; look.x = look.y = 0; offDev(); } };
 }

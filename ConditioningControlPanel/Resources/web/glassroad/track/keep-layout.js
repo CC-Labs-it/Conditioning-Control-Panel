@@ -24,7 +24,8 @@ function pieces() {
     corner('tower-spiral', -1260, 75, 116, { w: 26, linear: true, spiral: true }),
     straight('tower-bridge', 70, 116, 26, { widenTo: 34 }), corner('tower-exit', 90, 75, 116),
     straight('east-battlement', 90, 116, 34, { edge: 'L' }), corner('east-corner', 90, 75, 116),
-    straight('chain-hall', 180, 116, 34), straight('high-gate', 160, 116), straight('north-approach', 180, 116),
+    // The longer north approach reserves a full moat district for the doubled stepping islands.
+    straight('chain-hall', 180, 116, 34), straight('high-gate', 160, 116), straight('north-approach', 570, 116),
     corner('north-tower', 810, 90, 16, { linear: true }), straight('crown-walk', 120, 16, 34, { edge: 'L' }),
     corner('dogleg-in', 45, 75, 16), straight('west-descent', 120, 20), corner('dogleg-out', -45, 75, 14),
     straight('gallows-courtyard', 160, 14, 34), corner('courtyard-exit', -45, 75, 16),
@@ -33,7 +34,8 @@ function pieces() {
     straight('west-approach', 320, 16, 32), corner('west-tower', 90, 90, 14),
     straight('bridge-approach', 80, 14, 34), straight('drawbridge-ramp', 40, 24, 34, { kick: true }),
     straight('drawbridge-gap', 20, 8, 34, { jump: true, linear: true }), straight('drawbridge-landing', 60, 8, 34),
-    straight('stones-approach', 70, 2, 32), straight('stones', 270, 2, 32, { field: true }), straight('stones-exit', 20, 2, 32),
+    // Long width tapers leave the physical parapets outside the whole driving ribbon.
+    straight('stones-approach', 70, 2, 34, { widenTo: 72, taperM: 50 }), straight('stones', 580, 2, 72, { field: true }), straight('stones-exit', 100, 2, 72, { widenTo: 30, taperM: 80 }),
     straight('sluice', 40, 2, 30, { surface: 'stream', flow: [3, 0] }),
     straight('moat-pool', 55, 2, 30, { surface: 'pool' }), straight('moat-return', 0, 0),
     corner('south-tower', 90, 90, 0), straight('home', 80, 0),
@@ -72,10 +74,10 @@ export function getKeepLayout(track) {
   const drawbridge = { rampS0: ramp.s0, rampS1: gap.s0, gapS0: gap.s0, gapS1: landing.s0, landingS0: landing.s0, landingS1: landing.s1, widthM: 34, riseM: 10, gapM: 20 };
   const architecture = { cellblocks: castleBlocks,
     halls: ['outer-gate', 'cell-gallery', 'chain-hall', 'high-gate'].map((id) => ({ id, s0: find(id).s0, s1: find(id).s1, heightM: 24, wingM: 28 })),
-    courts: [{ id: 'gallows', x: 520, z: 510, w: 170, d: 65, baseY: 14, wallM: 12 }],
-    ruins: [{ id: 'collapsed-north-wing', x: 475, z: 590, w: 140, d: 55, baseY: 14, topY: 42 }],
+    courts: [{ id: 'gallows', x: 520, z: 900, w: 170, d: 65, baseY: 14, wallM: 12 }],
+    ruins: [{ id: 'collapsed-north-wing', x: 475, z: 980, w: 140, d: 55, baseY: 14, topY: 42 }],
   };
-  const stoneFields = [{ id: 'keep-stones', s0: find('stones').s0, s1: find('stones').s1, lanes: [-8, 0, 8], widthM: 32, platformWidthM: 28, platformLengthM: 26, gapM: 4.5 }];
+  const stoneFields = [{ id: 'keep-stones', s0: find('stones').s0, s1: find('stones').s1, lanes: [-16, 0, 16], widthM: 72, platformWidthM: 56, platformLengthM: 52, gapM: 14 }];
   const bounds = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity, minY: 0, maxY: 0 };
   for (let s = 0; s < track.lengthM; s += 10) {
     const f = track.frameAt(s), margin = f.w / 2;

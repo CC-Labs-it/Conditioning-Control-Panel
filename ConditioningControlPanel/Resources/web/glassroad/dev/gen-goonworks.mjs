@@ -46,7 +46,11 @@ export function buildGoonworks() {
     const s0 = base.nodeS[spans[id].from];
     for (let i = 0; i < count; i++) {
       const n = nearest(s0 + offsetM + i * spacingM);
-      nodes[n].flags.push('boost'); track.boosts.push({ node: n, x, w: 6, len: 8 });
+      const len = 10, s = base.nodeS[n];
+      // Broad pads keep both the central coast lane and six metres of outer recovery room.
+      const half = Math.min(...[0,2.5,5,7.5,len].map(d => base.frameAt(s+d).w/2));
+      const w = round(Math.min(9, half-2.6-6.1)), lane = round(Math.sign(x)*(w/2+2.6));
+      nodes[n].flags.push('boost'); track.boosts.push({ node: n, x: lane, w, len });
     }
   };
   padRun('rabbit-exit', 5, 3, -6);

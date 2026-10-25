@@ -60,7 +60,8 @@ test('gen: loops carry magnet and both rails, roll 0, and never hold a checkpoin
 test('gen: every open edge over a road ahead is a registered route; the dare runs alongside, lower', () => {
   const rep = openEdgeReport(built.track, built.meta, built.lengthM);
   assert.ok(rep.some((e) => e.under >= 0 && e.ahead >= 0), 'a forward fall exists');
-  assert.ok(rep.some((e) => e.under >= 0 && e.ahead < 0), 'a fall onto an earlier road exists');
+  const bridge = json.fields.find(f => f.id === 'bridge-stones');
+  assert.ok(rep.filter(e => e.node >= bridge.from && e.node < bridge.to).every(e => e.under < 0), 'the larger minigame occupies real void, clear of lower road shortcuts');
   for (const e of rep) if (e.ahead >= 0) assert.ok(e.route, 'node ' + e.node + ' ' + e.side + ' falls ahead with no route');
   const dare = json.routes.find((r) => r.id === 'dare');
   assert.ok(dare, 'the dare route');
@@ -76,4 +77,22 @@ test('gen: open sides read the rail flags', () => {
   assert.deepEqual(openSides(['railR', 'boost']), ['L']);
   assert.deepEqual(openSides(['open']), ['L', 'R']);
   assert.deepEqual(openSides(['jump']), []);
+});
+
+
+test('gen: Bambi stepping minigame doubles the islands and reserves genuine jumping gaps', () => {
+  const field = json.fields.find(f => f.id === 'bridge-stones');
+  assert.equal(field.platforming, true);
+  assert.deepEqual(field.lanes, [-14, 0, 14]);
+  const fromS = built.meta[field.from].s, toS = built.meta[field.to].s;
+  assert.ok(toS - fromS >= 80 && toS - fromS <= 100, 'field is twice the original forty-metre run');
+  for (const x of field.lanes) {
+    const lane = field.stones.filter(h => h.x === x).map(h => ({ ...h, s: built.meta[h.node].s + h.ds }));
+    assert.equal(lane[0].s, fromS, 'generous lead deck');
+    assert.ok(Math.abs(lane.at(-1).s + lane.at(-1).len - (toS - 2)) < .02, 'safe closing deck');
+    for (let i = 1; i < lane.length; i++) {
+      assert.ok(Math.abs(lane[i].s - lane[i-1].s - lane[i-1].len - 12) < .02, 'real twelve-metre air gaps');
+      assert.equal(lane[i].w, 10, 'double original island width');
+    }
+  }
 });

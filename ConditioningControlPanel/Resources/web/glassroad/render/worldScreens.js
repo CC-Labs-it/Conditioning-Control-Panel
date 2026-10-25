@@ -134,8 +134,8 @@ export function worldScreenLayout(track, { tier = 'high', samples = null, solids
     if ((track.routes || []).some(r => s >= r.openS0 - 15 && s <= r.openS1 + 15)) return true;
     return false;
   };
-  function fit(index, side, elevated = false) {
-    const s = (index + .45) / count * track.lengthM;
+  function fit(index, side, elevated = false, atS = null) {
+    const s = atS ?? (index + .45) / count * track.lengthM;
     if (hazardous(s)) return;
     const f = track.frameAt(s), portrait = !elevated && index % 5 === 3;
     // Low panels sit inside Mainframe's solid aisle walls and retain readable picture area.
@@ -166,7 +166,21 @@ export function worldScreenLayout(track, { tier = 'high', samples = null, solids
   // Keep pairs together and space the full lap before adding taller accents.
   for (let i = 0; i < count && slots.length < maxSlots - 1; i++) { fit(i, -1); fit(i, 1); }
   for (let i = 2; i < count && slots.length < maxSlots; i += tier === 'phone' ? 12 : 7) fit(i, i % 2 ? 1 : -1, true);
+  // A short department can fall between the regular stations after a course grows.
+  // Fill its remaining budget with the same solid and sightline checks as every other picture.
+  if (track.id === 'mainframe') for (const [index, section] of track.sections.entries()) {
+    if (slots.length >= maxSlots || slots.some(slot => slot.s >= section.fromS && slot.s < section.toS)) continue;
+    for (const u of [.2,.5,.8]) {
+      const before = slots.length, s = section.fromS + (section.toS-section.fromS)*u;
+      for (const side of [-1,1]) if (slots.length < maxSlots) fit(count+index,side,false,s);
+      if (slots.length > before) break;
+    }
+  }
   // The shared allocator alternates world faces. Even cohorts keep the added split exact.
-  if (slots.length % 2) slots.splice(Math.max(0, slots.findLastIndex(slot => slot.cluster !== 'crown')), 1);
+  if (slots.length % 2) {
+    const sectionOf = slot => track.sectionAt(slot.s);
+    const duplicate = slots.findLastIndex(slot => slot.cluster !== 'crown' && slots.filter(other => sectionOf(other) === sectionOf(slot)).length > 1);
+    slots.splice(Math.max(0, duplicate), 1);
+  }
   return { slots, stats: { slots: slots.length, stations: count, max: T.max, rejected, tier, videoOwners: 0, extraUploads: 0 } };
 }

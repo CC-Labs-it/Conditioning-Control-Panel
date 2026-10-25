@@ -41,7 +41,7 @@ import { gripYaw, slewSteer } from './steer.js';
 import { beneath, onLanding, firstBeneath, landRoute, catchCap, resetRoute, edgeAt, hopTrack, airCatch, turnsAway, guideLanding } from './routes.js';
 import { fallBeneath, fallLand, resetFall } from './falls.js';
 import { waterAt, waterOut, blendPush, gradeDeg, surfaceKind } from './flow.js';
-import { lipLeave, broadPlatformEdgeKick, fieldAtS } from './stones.js';
+import { lipLeave, broadPlatformEdgeKick, platformHopUp, fieldAtS } from './stones.js';
 import { armGlide, glideGravity, resetGlide } from './glide.js';
 
 export { applyBoost };
@@ -177,6 +177,9 @@ export function step(st, a, track, feel, dt, ev) {
   if (wasGround && a.hopPressed && !stalled) {
     // just before a drop shortcut's kicker lip the hop sees that lip too (the trick's early window)
     hop(st, feel, ev, V, qa.normal, speed, hopTrack(track, qa, V, speed, feel.get('trick.earlyS')));
+    // Large challenge islands give a deliberate jump more hang time; coasting keeps its small lip kick.
+    const platformUp = platformHopUp(track, qa, Math.abs(speed), feel.get('hop.upMps'), feel.get('hop.gravityMps2'));
+    v3addScaled(V, V, qa.normal, platformUp - feel.get('hop.upMps'));
     if (st[S.airborne] && (qa.surface === 'stream' || qa.surface === 'pool')) ev.emit('water-hop', { s: qa.s, x: qa.lateral, speed: Math.abs(speed), down: 0, kind: 'hop', p: [...P], normal: [...qa.normal] });
     armGlide(st, track, qa);
     maybeStartDrift(st, a, feel, speed, ev);
@@ -222,7 +225,7 @@ export function step(st, a, track, feel, dt, ev) {
   if (ground) {
     v3addScaled(P, P, n, -qb.height); v3reject(V, V, n);
     const arrive = Math.hypot(V[0], V[1], V[2]);   // ground speed at touch-down (the splash payload)
-    if (air) { land(st, a, feel, ev, V, n, speed, dt); resetGlide(st); }
+    if (air) { land(st, a, feel, ev, V, n, speed, dt, !!qb.stone && !!fieldAtS(track, qb.s)?.platforming); resetGlide(st); }
     // wave 1 WATER: a pool catches the kart: no bounce back up, the water takes its share of speed once, splash
     if (air && surfaceKind(qb.surface) === 'pool') {
       if (st[S.airborne]) { st[S.airborne] = 0; st[S.grounded] = 1; v3reject(V, V, n); }

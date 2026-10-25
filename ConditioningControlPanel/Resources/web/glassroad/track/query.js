@@ -158,6 +158,14 @@ export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = [], field
   function query(px, py, pz, hintSeg = -1, out = makeQuery()) {
     const hint = hintSeg >= 0 && hintSeg < N ? hintSeg | 0 : -1;
     scan(px, py, pz, hint);
+    // A wide platform gallery owns its nearby flight even when another deck has a nearer
+    // centreline. Keep the exact void result: this selects coordinates, never extra support.
+    if (hint >= 0 && fields.some(f => f.platforming && hint >= f.from && hint < f.to)) {
+      solve(best[1] | 0, best[2], px, py, pz, out);
+      const field = fieldAt(fields, out.s);
+      const along = (px - fr.p[0]) * fr.t[0] + (py - fr.p[1]) * fr.t[1] + (pz - fr.p[2]) * fr.t[2];
+      if (field?.platforming && out.edgeDist >= 0 && out.height >= -.8 && out.height <= 8 && Math.abs(along) <= 1e-4) return out;
+    }
     if (hint >= 0 && best[0] > FAR_M * FAR_M) scan(px, py, pz, -1);
     solve(best[1] | 0, best[2], px, py, pz, out);
     // A broad court can be nearer in surface distance while another deck's centreline is nearer.

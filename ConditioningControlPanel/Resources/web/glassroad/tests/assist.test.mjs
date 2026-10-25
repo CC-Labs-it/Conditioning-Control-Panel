@@ -15,6 +15,8 @@ import { cleanOptions, cycleOption, OPTION_DEFAULTS } from '../hud/options.js';
 import { howtoPanels, howtoHtml } from '../hud/howto.js';
 import { makeFeel, DT } from './sim-fake.mjs';
 import { threshold } from './sim-racers-harness.mjs';
+import { fieldAtS } from '../sim/stones.js';
+import { stoneIn, stoneLaneSpan } from '../track/courts.js';
 
 /** The player alone on Threshold, the assist between the hands and the sim (the boot.js order). */
 function solo({ mode = 'light', hands = () => ({}), feelOver = {} } = {}) {
@@ -34,7 +36,7 @@ function solo({ mode = 'light', hands = () => ({}), feelOver = {} } = {}) {
     Object.assign(a, { steer: 0, throttle: 0, brake: 0, hop: false, hopPressed: false, item: false, back: false }, hands(t, P.st, race));
     const raw = a.steer;
     const pa = assist.apply(a, P.st, DT, race.phase);
-    trace.push({ t, raw, out: pa.steer, throttle: pa.throttle, hop: pa.hop || pa.hopPressed, item: pa.item, v: P.st[S.speedPct] * feel.get('speed.topMps'), auto: assist.view.auto, cruise: assist.view.cruise });
+    trace.push({ t, s: P.st[S.s], raw, out: pa.steer, throttle: pa.throttle, hop: pa.hop || pa.hopPressed, item: pa.item, v: P.st[S.speedPct] * feel.get('speed.topMps'), auto: assist.view.auto, cruise: assist.view.cruise });
     race.update(DT, pa, P.st);
     racers.step(DT, pa, race, {});
     t += DT;
@@ -68,7 +70,7 @@ test('hands off from the grid: the autopilot and the soft cruise carry the kart 
     const racing = r.trace.filter((x) => x.t > 12);
     const slow = Math.min(...racing.map((x) => x.v));
     assert.ok(slow > 12, mode + ': keeps rolling, slowest ' + slow.toFixed(1) + ' m/s');
-    assert.ok(r.trace.every((x) => !x.hop && !x.item), mode + ': never hops, drifts or fires');
+    assert.ok(r.trace.every((x) => !x.item && (!x.hop || r.track.fields.some(f => f.platforming && x.s >= f.fromS && x.s < f.toS))), mode + ': automatic hops stay inside authored platform challenges');
     assert.equal(r.events('launch-boost').length, 0, mode + ': never takes the launch boost');
     assert.equal(r.events('drift-start').length, 0, mode + ': never drifts');
     const lapS = r.t;
@@ -81,8 +83,15 @@ test('hands off from the grid: the autopilot and the soft cruise carry the kart 
   }
 });
 
-test('throttle held, no steering: the autopilot steers after about 2 s and the lap has no fall', () => {
-  const r = solo({ hands: () => ({ throttle: 1 }) });
+test('throttle held with player jumps: assist steers after about 2 s and the lap has no fall', () => {
+  let r;
+  r = solo({ hands: (t, st) => {
+    const field = fieldAtS(r.track, st[S.s]);
+    const stone = field?.platforming && stoneIn(field, st[S.s], st[S.lateral]);
+    const span = stone && stoneLaneSpan(stone, st[S.lateral]);
+    const jump = st[S.grounded] > 0 && span && span[1] - st[S.s] >= 0 && span[1] - st[S.s] <= 3 && span[1] < field.toS - 2;
+    return { throttle: 1, hop: !!jump, hopPressed: !!jump };
+  } });
   r.run(200, () => r.P.st[S.lap] >= 1);
   assert.ok(r.P.st[S.lap] >= 1, 'a lap with the throttle held');
   assert.equal(r.events('drop').length, 0, 'never off the road');
@@ -225,4 +234,12 @@ test('how-to card: Throttle dismisses it, the Race door opens it once a session,
   assert.ok(/hud\.nav\('throttle'\)/.test(boot) && /!cardThrottle/.test(boot), 'boot: a throttle press, an edge, reaches the card');
   assert.ok(/assist\.apply\(a, P\.st, clock\.dt, race\.phase\)/.test(boot), 'boot: the assist sits between the input and the sim');
   assert.ok(/racers\.step\(clock\.dt, pa,/.test(boot) && /race\.update\(clock\.dt, pa,/.test(boot), 'boot: the sim reads the assisted hands');
+});
+
+
+test('holding throttle alone never triggers assisted platform jumps', () => {
+  const r = solo({ hands: () => ({ throttle: 1 }) });
+  r.run(90, () => r.events('void').length > 0);
+  assert.ok(r.events('void').length > 0, 'the real jump gap cannot be coasted through');
+  assert.ok(r.trace.every(x => !x.hop), 'active driving still requires the player to jump');
 });

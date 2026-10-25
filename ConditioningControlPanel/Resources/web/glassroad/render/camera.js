@@ -53,12 +53,12 @@ export function createChaseCamera(feel, { bus = null } = {}) {
     rig,
     attach,
     /** track: its magnet stretches put the rig in road mode (the loop). mode: 'race' (chase), 'menu' (attract orbit), 'results' (chase). */
-    update(kart, fx, track, dt, aspect, mode = 'race') {
+    update(kart, fx, track, dt, aspect, mode = 'race', lookInput = null) {
       last = kart;
       if (mode === 'menu') { lastMode = mode; menu(kart, dt, aspect); return; }
       if (lastMode === 'menu') { lastMode = mode; rig.snap(kart, aspect, null, track); apply(aspect); return; }
       lastMode = mode;
-      rig.update(kart, fx, dt, aspect, track); apply(aspect);
+      rig.update(kart, fx, dt, aspect, track, mode === 'race' ? lookInput : null); apply(aspect);
     },
     snap(kart, track, aspect = camera.aspect) { last = kart; rig.snap(kart, aspect, null, track); apply(aspect); },
     dispose() { for (const off of offs) off(); offs.length = 0; },

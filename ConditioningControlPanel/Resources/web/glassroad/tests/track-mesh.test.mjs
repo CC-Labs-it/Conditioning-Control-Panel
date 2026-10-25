@@ -73,7 +73,8 @@ test('mesh: rails only on railed sides, decals on the road', () => {
   for (let v = 0; v < M.pads.positions.length / 3; v++) {
     const q = tr.query(M.pads.positions[v * 3], M.pads.positions[v * 3 + 1], M.pads.positions[v * 3 + 2]);
     assert.ok(Math.abs(q.height - 0.02) < 1e-3 && q.onRoad);
-    assert.ok(M.pads.uvs[v * 2 + 1] >= 0 && M.pads.uvs[v * 2 + 1] <= 6 + 1e-6);
+    const padLen = M.pads.padDesign[v * 4 + 1];
+    assert.ok(M.pads.uvs[v * 2 + 1] >= 0 && M.pads.uvs[v * 2 + 1] <= padLen + 1e-6);
   }
   assert.equal(M.jumps.positions.length / 3 >= 4, true);
 });

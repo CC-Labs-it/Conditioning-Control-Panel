@@ -4,16 +4,18 @@ import { vec3, texture, uv, vec2, mix, step, attribute, float, smoothstep, norma
 import { getKeepLayout } from '../track/keep-layout.js';
 import { createSoftMaterial } from './materials/colossus.js';
 import { buildKeepFortress, keepStoneMaterial } from './keepFortress.js';
+import { keepMusicFloor } from './materials/keepMusicFloor.js';
 
 export function applyKeepRoad(road, art) {
   const map = art?.tex('road-bands-mask');
   const seam = map ? texture(map, vec2(uv().x.div(12), uv().y.div(16))).r : float(0);
   const stone = keepStoneMaterial('#664b69', art, false, false), original = road.material.colorNode;
-  // An opaque slate floor with fixed magenta joints. Music is a subtle surface response.
+  // Keep the opaque slate and fixed joints, with song-lit fills on the final visible surface.
   const cut = smoothstep(.12, .5, seam), bevel = smoothstep(.06, .22, seam).sub(smoothstep(.4, .7, seam));
   const floor = mix(stone.colorNode, vec3(.006, .002, .009), cut.mul(.78)).add(original.mul(.02))
     .add(vec3(.8, .035, .31).mul(bevel).mul(road.uniforms.contrast).mul(.17));
-  road.material.colorNode = mix(floor, original, step(2.5, attribute('surface', 'float')));
+  const litFloor = keepMusicFloor({ p: uv(), base: floor, seam: cut, reactive: road.uniforms.reactive, music: road.uniforms.music });
+  road.material.colorNode = mix(litFloor, original, step(2.5, attribute('surface', 'float')));
   road.material.color.copy(stone.color); road.material.transparent = false; road.material.opacity = 1;
   stone.dispose();
 }

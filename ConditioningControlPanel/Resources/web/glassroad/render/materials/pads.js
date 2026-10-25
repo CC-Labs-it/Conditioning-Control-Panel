@@ -13,7 +13,7 @@
  * edge, so a pad reads as a clear run of bright arrows. Lips (no mask) take a lighter rainbow tint.
  */
 import { MeshBasicNodeMaterial, AdditiveBlending, Color } from 'three/webgpu';
-import { uniform, uv, fract, smoothstep, vec2, vec3, texture, clamp, abs, float, max, mix, fwidth, attribute, step, sin, cos, floor, mod } from 'three/tsl';
+import { uniform, uv, fract, smoothstep, vec2, vec3, texture, clamp, abs, float, max, min, mix, fwidth, attribute, step, sin, cos, floor, mod } from 'three/tsl';
 import { acquireLoomAtlas, loomAtlasUv } from '../loomAtlas.js';
 import { ROAD_AA } from '../roadAaMath.js';
 import { LOOK } from '../look.js';
@@ -30,8 +30,10 @@ export function createPadMaterial(hex, mask = null, { artPads = false } = {}) {
   const F = { ...PAD_FLOW, ...(LOOK.padFlow || {}) };
   const u = { phase: uniform(0), pulse: uniform(0), spiralTurn: uniform(0) };
   const p = uv();
-  const halfW = LOOK.artChevronWideM / 2;
-  const across = mask ? clamp(p.x.div(LOOK.artChevronWideM).add(0.5), 0, 1) : null;
+  const shape = artPads ? attribute('padDesign', 'vec4') : null;
+  const width = shape ? abs(shape.x) : float(LOOK.artChevronWideM);
+  const halfW = width.mul(.5);
+  const across = mask ? clamp(p.x.div(width).add(0.5), 0, 1) : null;
   // no fract here: the mask repeats along v, and a fract made a 1 px seam of the coarsest mip at every wrap
   const at = (back) => p.y.add(back).div(LOOK.artChevronM).sub(u.phase);
   // a lip's plain stripes: on over the back half of each period, both edges blended over a pixel (the wrap
@@ -53,7 +55,7 @@ export function createPadMaterial(hex, mask = null, { artPads = false } = {}) {
   const centre = mask ? float(1).sub(smoothstep(0, 0.6, side)).mul(F.centreGain) : float(0);
   const lo = mask ? LOOK.artChevronFloor : 0.6;
   const body = max(stripe, trail).add(lead);
-  const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending });
+  const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, ...(artPads ? {} : { blending: AdditiveBlending }) });
   const c = new Color(hex);
   // a fixed rainbow along the pad (row 0 of the spectrum ramp); the chevrons run through it, so each
   // lights in its own hue and none ever changes colour in place (the phase wraps, the hue never does)
@@ -64,13 +66,20 @@ export function createPadMaterial(hex, mask = null, { artPads = false } = {}) {
     .mul(u.pulse.mul(LOOK.padPulseGain).add(1));
   if (artPads && (typeof document !== 'undefined' || typeof OffscreenCanvas !== 'undefined')) {
     const atlas = acquireLoomAtlas();
-    const shape = attribute('padDesign', 'vec4'), q = vec2(p.x.div(abs(shape.x).mul(.72)), p.y.div(shape.y.mul(.65)).sub(1 / 1.3));
+    const q = vec2(p.x.div(abs(shape.x).mul(.72)), p.y.div(shape.y.mul(.65)).sub(1 / 1.3));
     const angle = u.spiralTurn, at = vec2(q.x.mul(cos(angle)).sub(q.y.mul(sin(angle))), q.x.mul(sin(angle)).add(q.y.mul(cos(angle)))).add(.5);
     const style = mod(floor(abs(shape.z).div(17)), 6);
     const inset = float(1).sub(smoothstep(.46,.5,max(abs(q.x),abs(q.y)))).mul(float(1).sub(step(0,shape.x)));
     const ink = texture(atlas.texture,loomAtlasUv(at,style)).rgb.dot(vec3(.2126,.7152,.0722));
     m.colorNode = mix(m.colorNode, tint.mul(ink.mul(1.25).add(.1)), inset);
     m.addEventListener('dispose', atlas.dispose);
+  }
+  if (shape) {
+    // All four painted edges sit inside the exact trigger rectangle, including curved wet decals.
+    const distance = min(halfW.sub(abs(p.x)), min(p.y, shape.y.sub(p.y)));
+    const rim = float(1).sub(smoothstep(.12,.34,distance));
+    const gutter = smoothstep(.32,.4,distance).mul(float(1).sub(smoothstep(.5,.7,distance)));
+    m.colorNode = mix(m.colorNode.mul(float(1).sub(gutter.mul(.82))),vec3(1,.97,.88).mul(1.7),rim);
   }
   return { material: m, uniforms: u };
 }

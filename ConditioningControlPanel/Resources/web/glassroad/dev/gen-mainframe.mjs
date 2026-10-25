@@ -22,9 +22,9 @@ export const PIECES = Object.freeze([
   { id: 'core-weave-c', group: 'core-approach', turn: 60, r: 100, y: 24, act: 1 },
   { id: 'core', group: 'spiral-core', turn: 360, r: 85, y: 76, linear: true, roll: 26, act: 1 },
   { id: 'cache-turn', group: 'memory-crossing', turn: 90, r: 90, y: 76, act: 1 },
-  { id: 'memory-flare', group: 'memory-crossing', len: 80, y: 76, wFrom: 28, w: 104, act: 1 },
-  { id: 'memory', group: 'memory-crossing', len: 440, y: 76, w: 104, act: 1 },
-  { id: 'memory-exit', group: 'memory-crossing', len: 180 * Math.sqrt(3) - 240, y: 76, wFrom: 104, w: 28, act: 1 },
+  { id: 'memory-flare', group: 'memory-crossing', len: 80, y: 76, wFrom: 28, w: 216, act: 1 },
+  { id: 'memory', group: 'memory-crossing', len: 800, y: 76, w: 216, act: 1 },
+  { id: 'memory-exit', group: 'memory-crossing', len: 180 * Math.sqrt(3) - 240, y: 76, wFrom: 216, w: 28, act: 1 },
   { id: 'bus-climb', group: 'upper-bus', len: 180, y: 120, act: 1 },
   { id: 'bus-turn', group: 'upper-bus', turn: 90, r: 90, y: 120, act: 1 },
   { id: 'bus-weave-a', group: 'upper-bus', turn: -45, r: 75, y: 126, act: 1 },
@@ -33,15 +33,15 @@ export const PIECES = Object.freeze([
   { id: 'bus-descent', group: 'bus-descent', turn: 720, r: 65, rEnd: 105, y: 60, linear: true, roll: 10, wFrom: 28, w: 72, act: 1 },
   { id: 'bus-runout', group: 'lower-bus', len: 100, y: 48, wFrom: 72, w: 28, act: 1 },
   { id: 'bus-return-turn', group: 'lower-bus', turn: 90, r: 90, y: 44, act: 1 },
-  { id: 'bus-underpass', group: 'lower-bus', len: 220, y: 44, act: 1 },
+  { id: 'bus-underpass', group: 'lower-bus', len: 580, y: 44, act: 1 },
   { id: 'bus-south-turn', group: 'lower-bus', turn: 90, r: 90, y: 16, act: 1 },
   { id: 'bus-return-a', group: 'return-weave', turn: 45, r: 75, y: 16, act: 1 },
   { id: 'bus-return-b', group: 'return-weave', turn: -90, r: 75, y: 16, act: 1 },
-  { id: 'bus-return-c', group: 'return-weave', turn: 45, r: 75, y: 16, act: 1 },
-  { id: 'bus-home-run', group: 'return-weave', len: 100, y: 28, act: 1 },
-  { id: 'bus-home-turn', group: 'return-weave', turn: 90, r: 90, y: 40, act: 1 },
-  { id: 'gantry-turn', group: 'gantry-turn', turn: 180, r: 70, y: 86, act: 1 },
-  { id: 'skybridge', group: 'skybridge', len: 300, y: 86, act: 1 },
+  { id: 'bus-return-c', group: 'return-weave', turn: 45, r: 75, y: 44, act: 1 },
+  { id: 'bus-home-run', group: 'return-weave', len: 100, y: 116, act: 1 },
+  { id: 'bus-home-turn', group: 'return-weave', turn: 90, r: 90, y: 116, act: 1 },
+  { id: 'gantry-turn', group: 'gantry-turn', turn: 180, r: 70, y: 116, act: 1 },
+  { id: 'skybridge', group: 'skybridge', len: 300, y: 116, act: 1 },
   { id: 'spillway-turn', group: 'spillway-turn', turn: -180, r: 70, y: 60, w: 34, surface: 'stream', flow: [5, 0.5], act: 2 },
   { id: 'spillway', group: 'spillway', len: 300, y: 48, w: 34, surface: 'stream', flow: [6, -0.6], act: 2 },
   { id: 'release-turn', group: 'coolant-chute', turn: 90, r: 90, y: 40, w: 34, surface: 'stream', flow: [5, 0], act: 2 },
@@ -110,10 +110,10 @@ export function buildMainframe() {
   for (const s of [95, at('boot-exit', 40), at('canal', 50), at('core', 380), at('memory-flare', 25), at('bus-turn', 70), at('bus-descent', 650), at('bus-underpass', 100), at('skybridge', 100), at('spillway', 180), at('submerged-floor', 75)])
     for (const lateral of [-6, -2, 2, 6]) track.items.push({ node: nearest(s), x: lateral, kind: 'box' });
   for (const s of [60, at('canal', 210), at('core', 270), at('bus-climb', 80), at('bus-underpass', 85), at('skybridge', 70), at('spillway', 70), at('emerge', 85)]) {
-    const node = nearest(s); nodes[node].flags.push('boost'); track.boosts.push({ node, x: 0, w: 4, len: 6 });
+    const node = nearest(s); nodes[node].flags.push('boost'); track.boosts.push({ node, x: 0, w: 6, len: 7.5 });
   }
   for (const d of [80, 90, 100, 110, 120]) track.items.push({ node: nearest(at('canal', d)), x: -3, kind: 'bubble' });
-  const from = spans.memory.from + 4, to = spans.memory.to - 4, lanes = [-40, -20, 0, 20, 40], stones = [];
+  const from = spans.memory.from + 4, to = spans.memory.to - 4, lanes = [-80, -40, 0, 40, 80], stones = [];
   const s0 = loaded.nodeS[from], s1 = loaded.nodeS[to];
   for (let i = from; i < to; i++) nodes[i].flags = ['open'];
   const put = (id, a, b, lateral, width) => {
@@ -121,18 +121,20 @@ export function buildMainframe() {
     while (node + 1 < to && loaded.nodeS[node + 1] <= s0 + a + 1e-8) node++;
     stones.push({ id, node, ds: round(s0 + a - loaded.nodeS[node]), x: lateral, w: width, len: round(b - a), shape: 'hex' });
   };
-  // Separate islands: broad landing faces, visible void and occasional lane-changing links.
-  const count = Math.round((s1 - s0) / 26), pitch = (s1 - s0 + 1) / count;
+  // Each memory block is a destination, with a deliberate jump before its broad landing face.
+  const gapM = 14, count = Math.round((s1 - s0 + gapM) / 68), pitch = (s1 - s0 + gapM) / count;
   for (let row = 0; row < count; row++) {
-    const a = row * pitch, b = row === count - 1 ? s1 - s0 : a + pitch - 1;
-    lanes.forEach((lateral, lane) => put(`memory-${lane}-${row}`, a, b, lateral, 18));
-    if (row < count - 1) for (const [lane, lateral] of (row % 2 ? [-10, 30] : [-30, 10]).entries()) {
-      // Eight-metre links sit inside the shoulder pocket, separated even through a full rotation.
-      put(`memory-link-${lane}-${row}`, b - 3.5, b + 4.5, lateral, 8);
-      if ((row + lane) % 3 === 0) stones.at(-1).spin = row % 2 ? -0.085 : 0.075;
+    const a = row * pitch, b = row === count - 1 ? s1 - s0 : a + pitch - gapM;
+    lanes.forEach((lateral, lane) => {
+      put(`memory-${lane}-${row}`, a, b, lateral, 36);
+      if (row > 0 && row < count - 1) Object.assign(stones.at(-1), { spin: (row + lane) % 2 ? -0.035 : 0.035, swing: 0.14 });
+    });
+    if (row < count - 1) for (const [lane, lateral] of (row % 2 ? [-20, 60] : [-60, 20]).entries()) {
+      // Smaller cross-links offer another route without joining the giant blocks into a floor.
+      put(`memory-link-${lane}-${row}`, b - 1, b + 15, lateral, 16);
     }
   }
-  track.fields.push({ id: 'memory-tiles', from, to, lanes, stones });
+  track.fields.push({ id: 'memory-tiles', from, to, lanes, stones, platforming: true });
   const scanS = [180, loaded.nodeS[spans.canal.from] + 85, loaded.nodeS[spans.canal.from] + 170,
     at('skybridge', 160), loaded.nodeS[spans['memory-exit'].to] - 35, loaded.nodeS[spans.submerged.from] + 130];
   const scanHalls = scanS.map((s, i) => ({ id: 'scan-' + i, s, node: nearest(s), from: nearest(s - 20), to: nearest(s + 20) }));

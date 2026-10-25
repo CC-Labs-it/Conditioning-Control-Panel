@@ -14,7 +14,7 @@ test('P6 panes cover the terrace approach and finish before the first bend', () 
   assert.equal(layout.fromM, -48);
   assert.equal(layout.toM, 84);
   assert.equal(musicTileMask(layout, 32, 4.5, 8), 1);
-  assert.equal(musicTileMask(layout, 46, 4.5, 8), 1);
+  assert.equal(musicTileMask(layout, 46, 5.2, 8), 1);
   for (const s of [90, 110, 500, 1000, track.lengthM - 60]) assert.equal(musicTileMask(layout, s, 3, 8), 0);
   for (let s = -48; s <= 84; s += 2) {
     const f = track.frameAt(s);
@@ -35,7 +35,9 @@ test('start-relative metres and coverage are continuous at the lap seam and inde
 
 test('the entire boost pad and outer shoulder retain their original road treatment', () => {
   const pad = track.boosts[0];
-  for (const ds of [-pad.len / 2, 0, pad.len / 2]) for (const x of [-pad.w / 2, 0, pad.w / 2]) {
+  const underlay = layout.pads.find(p => p.x === pad.x && Math.abs(p.s - (pad.s + pad.len / 2)) < .001);
+  assert.ok(underlay, 'quiet underlay uses the painted pad centre, rather than its entry edge');
+  for (const ds of [0, pad.len / 2, pad.len]) for (const x of [-pad.w / 2, 0, pad.w / 2]) {
     assert.equal(musicTileMask(layout, pad.s + ds, pad.x + x, 8), 0);
   }
   for (const x of [-8, -7.5, -6.2, 6.2, 7.5, 8]) assert.equal(musicTileMask(layout, 32, x, 8), 0);

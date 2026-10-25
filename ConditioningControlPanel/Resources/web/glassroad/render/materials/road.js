@@ -21,7 +21,7 @@ import { MeshBasicNodeMaterial, DoubleSide, DataTexture, RGBAFormat, UnsignedByt
 import { uniform, uv, sin, fract, mix, smoothstep, float, vec2, vec3, texture, normalWorld, positionWorld, cameraPosition,
   normalize, dot, pow, abs, clamp, max, min, reflect, floor, hash, length, atan, step, exp, select, fwidth, attribute } from 'three/tsl';
 import { LOOK } from '../look.js';
-import { SPECTRUM_LOOK, patternZones, patternBytes, fitPeriod } from '../spectrum.js';
+import { SPECTRUM_LOOK, patternZones, patternBytes, fitPeriod, trackTableWidth } from '../spectrum.js';
 import { ROAD_AA } from '../roadAaMath.js';
 import { createMusicTiles } from './musicTiles.js';
 import { ROAD_HALF_WIDTH_RANGE, encodeRoadHalfWidth } from '../musicTilesMath.js';
@@ -113,7 +113,7 @@ export function energyTexture(song) {
 
 /** Half road width per metre of s, sharing one range with the shader decoder. */
 function widthTexture(track) {
-  const n = Math.max(2, Math.ceil(track.lengthM)), data = new Uint8Array(n * 4);
+  const n = trackTableWidth(track.lengthM), data = new Uint8Array(n * 4);
   const f = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
   for (let i = 0; i < n; i++) {
     const fr = track.frameAt((i + 0.5) * track.lengthM / n, f);
@@ -126,7 +126,7 @@ function widthTexture(track) {
 
 /** The per-metre pattern table (spectrum.js patternBytes), nearest sampled. */
 function patternTexture(track, S) {
-  const n = Math.max(2, Math.ceil(track.lengthM));
+  const n = trackTableWidth(track.lengthM);
   const t = new DataTexture(patternBytes(patternZones(track.sections), track.lengthM, S.morphM), n, 1, RGBAFormat, UnsignedByteType);
   t.wrapS = RepeatWrapping; t.wrapT = ClampToEdgeWrapping; t.magFilter = t.minFilter = NearestFilter; t.generateMipmaps = false; t.needsUpdate = true;
   return t;

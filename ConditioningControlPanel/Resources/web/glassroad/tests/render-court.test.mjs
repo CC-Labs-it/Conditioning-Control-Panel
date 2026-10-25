@@ -74,7 +74,7 @@ test('road width encoding preserves the 34 m court without saturation or materia
     assert.ok(Math.abs(byte / 255 * ROAD_HALF_WIDTH_RANGE - half) <= ROAD_HALF_WIDTH_RANGE / 510 + 1e-9);
   }
   assert.equal(encodeRoadHalfWidth(-1), 0);
-  assert.equal(encodeRoadHalfWidth(100), 255);
+  assert.equal(encodeRoadHalfWidth(240), 255);
 });
 
 test('court rendering stays in three small batches and releases its resources exactly once', () => {

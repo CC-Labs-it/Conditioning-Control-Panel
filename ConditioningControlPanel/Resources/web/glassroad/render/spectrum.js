@@ -210,8 +210,11 @@ export function sweepMix(s, u, edgeS, L = SPECTRUM_LOOK) {
  * The per-metre pattern table as RGBA bytes (one texel per metre of s, n = ceil(lengthM)):
  * R = a * 40, G = b * 40, B = 128 + (edgeS - texel centre) * 2 (0.5 m steps, +-63 m), A = 255.
  */
+// Stay within the default WebGPU texture limit, including long courses.
+export const trackTableWidth = lengthM => Math.max(2, Math.min(8192, Math.ceil(lengthM)));
+
 export function patternBytes(zones, lengthM, morphM = SPECTRUM_LOOK.morphM) {
-  const n = Math.max(2, Math.ceil(lengthM)), out = new Uint8Array(n * 4), step = lengthM / n;
+  const n = trackTableWidth(lengthM), out = new Uint8Array(n * 4), step = lengthM / n;
   for (let i = 0; i < n; i++) {
     const c = (i + 0.5) * step, p = patternAt(c, zones, lengthM, morphM);
     out[i * 4] = p.a * 40; out[i * 4 + 1] = p.b * 40;

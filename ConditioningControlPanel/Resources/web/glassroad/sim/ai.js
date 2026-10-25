@@ -27,7 +27,7 @@ import { ITEMS } from './itemTable.js';
 import { bendSpeed, yawParams, calmOf } from './steer.js';
 import { createCourtPaths } from './court-paths.js';
 import { makeQuery } from '../track/query.js';
-import { stoneLaneSpan } from '../track/courts.js';
+import { stoneIn, stoneLaneSpan } from '../track/courts.js';
 
 const YP = {};                       // steering law numbers, read once per bot per tick
 
@@ -533,6 +533,14 @@ export function createAi(track, feel, { seed = 1, forkChoice = null } = {}) {
     driftLogic(r, b, dt, out, s, lat, speed, la, nearLip || !!court || onWater || onChute || inHold, blind);
     // a trick pays a boost on landing: never into an open edge ahead (polish 6: a boost cannot brake for an open bend)
     if (st[S.airborne] > 0 && st[S.airTime] > 0 && st[S.airTime] <= 0.1 && !b.trickRolled) { b.trickRolled = true; if (b.rand() < feel.get('trick.botChance') && !openAhead(s, fg(feel, 'ai.trickOpenM'))) out.hopPressed = true; } else if (st[S.grounded] > 0) b.trickRolled = false;
+    // Challenge fields need a real hop. Use the current physical polygon, including its live yaw.
+    if (inField && fp.field.platforming && st[S.grounded] > 0) {
+      const stone = stoneIn(fp.field, s, lat), span = stone && stoneLaneSpan(stone, lat);
+      const lead = clamp(speed * .1, 1.5, 4.5);
+      if (span && span[1] - s >= 0 && span[1] - s <= lead && span[1] < fp.toS - 2) {
+        out.hop = true; out.hopPressed = true;
+      }
+    }
     if (r.item) itemLogic(r, b, ctx, dt, out);
   }
 

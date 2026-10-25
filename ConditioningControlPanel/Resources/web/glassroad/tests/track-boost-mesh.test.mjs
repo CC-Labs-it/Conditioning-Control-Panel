@@ -97,15 +97,20 @@ test('Dry pads keep their original two-edge strips, metre UVs and vertex count',
 });
 
 test('Wrapped Float32 road UVs retain the preceding face when a pad edge rounds forward', () => {
-  const json = read('mainframe'), row = { node: 104, x: 0, w: 7, len: 6 };
-  const track = loadTrack({ ...json, boosts: [row] }), pad = track.boosts[0];
+  const json = read('mainframe'), track = loadTrack({ ...json, boosts: [] });
   const uv = track.meshes.road.uvs;
-  let roundedAcrossEdge = false;
-  for (let i = 1; i < uv.length; i += 2) {
-    const raw = uv[i], shift = Math.round((pad.s - raw) / track.lengthM) * track.lengthM;
-    if (raw > track.lengthM && raw + shift > pad.s && raw + shift - pad.s < .001) roundedAcrossEdge = true;
-  }
-  assert.ok(roundedAcrossEdge, 'fixture must exercise the wrapped Float32 edge crossing');
+  // Changing the lap length moves Float32 rounding boundaries, so locate a real wet edge.
+  const node = json.nodes.findIndex((_, node) => {
+    const s = track.nodeS[node];
+    if (track.canalProfile(s, 0).blend <= 0) return false;
+    for (let i = 1; i < uv.length; i += 2) {
+      const raw = uv[i], shift = Math.round((s - raw) / track.lengthM) * track.lengthM;
+      if (raw > track.lengthM && raw + shift > s && raw + shift - s < .001) return true;
+    }
+    return false;
+  });
+  assert.ok(node >= 0, 'fixture must exercise the wrapped Float32 edge crossing');
+  const row = { node, x: 0, w: 7, len: 6 };
   const result = checkCurvedPad(json, row);
   assert.ok(Math.abs(result.area - row.w * row.len) < 1e-5, 'the submillimetre edge strip has complete coverage');
 });

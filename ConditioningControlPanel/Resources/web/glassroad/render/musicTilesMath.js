@@ -2,8 +2,8 @@
 import { hexRgb, roadLevel } from './spectrum.js';
 import { smoothstep, aaLine } from './roadAaMath.js';
 
-// Shared by width texture encode/decode. 48 m full width leaves room beyond the 34 m court.
-export const ROAD_HALF_WIDTH_RANGE = 24;
+// Shared by width texture encode/decode, including the broad platform approaches.
+export const ROAD_HALF_WIDTH_RANGE = 120;
 export const encodeRoadHalfWidth = (half) => Math.round(Math.max(0, Math.min(1, half / ROAD_HALF_WIDTH_RANGE)) * 255);
 
 export const MUSIC_TILES = Object.freeze({
@@ -52,7 +52,7 @@ export function musicTileLayout(track) {
   if (toM - fromM < MUSIC_TILES.fadeM * 3) return null;
   const layout = { startS, lapM: track.lengthM, fromM, toM, lateral: origin.b.slice(), forward: origin.t.slice(), pads: [] };
   for (const pad of track.boosts || []) {
-    const s = tileDistance(pad.s, startS, track.lengthM);
+    const s = tileDistance(pad.s + pad.len / 2, startS, track.lengthM);
     if (s + pad.len / 2 >= fromM - 3 && s - pad.len / 2 <= toM + 3) layout.pads.push({ s, x: pad.x, w: pad.w, len: pad.len });
   }
   return layout;
@@ -64,8 +64,8 @@ export function courtTileLayouts(track) {
     const startS = (c.fromS + c.toS) / 2, f = track.frameAt(startS);
     return { startS, lapM: track.lengthM, fromM: c.fromS - startS, toM: c.toS - startS,
       lateral: [...f.b], forward: [...f.t], pads: (track.boosts || [])
-        .filter((p) => p.s + p.len / 2 >= c.fromS && p.s - p.len / 2 <= c.toS)
-        .map((p) => ({ s: p.s - startS, x: p.x, w: p.w, len: p.len })) };
+        .filter((p) => p.s + p.len >= c.fromS && p.s <= c.toS)
+        .map((p) => ({ s: p.s + p.len / 2 - startS, x: p.x, w: p.w, len: p.len })) };
   });
 }
 

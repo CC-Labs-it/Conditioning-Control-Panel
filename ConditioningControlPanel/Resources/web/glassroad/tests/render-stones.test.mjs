@@ -53,13 +53,13 @@ function withFields(track) {
 const track = withFields(loadTrack(json));
 const field = track.fields[0], rows = stoneLayout(track);
 
-test('stone layout: one row per 5 m tile of every stone, the root 0.55 under the deck along the normal, inside the road', () => {
+test('stone layout: one coherent row per challenge island, the root 0.55 under the deck along the normal, inside the road', () => {
   // a lead or closing stone longer than the model is covered by evenly spaced tiles squeezed along the road
-  const tiles = field.stones.reduce((n, st) => n + Math.max(1, Math.round(st.len / STONE_KIT.slab[2])), 0);
+  const tiles = field.stones.length;
   assert.equal(rows.length, tiles);
   assert.equal(new Set(rows.map((r) => r.stone)).size, field.stones.length, 'every stone has a tile');
-  for (const r of rows) assert.ok(r.scaleT > 0.7 && r.scaleT < 1.2, r.id + ' tile scale ' + r.scaleT);
-  assert.ok(rows.length >= 13, 'tiles ' + rows.length);
+  for (const r of rows) assert.ok(r.tiles === 1 && r.scaleT >= 1.4 && r.scaleX === 2, r.id + ' tile scale ' + r.scaleT);
+  assert.ok(rows.length >= 10, 'tiles ' + rows.length);
   for (const r of rows) {
     const f = track.frameAt(r.s);
     const d = r.p.map((v, i) => v - f.p[i]);

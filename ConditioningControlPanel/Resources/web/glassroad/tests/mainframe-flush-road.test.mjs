@@ -22,7 +22,8 @@ function drive(start, seconds, speed = 25, lateral = 0) {
 }
 
 test('Mainframe flush floor crosses repeated visual plate seams without vertical steps or landings', () => {
-  for (const [start, lateral] of [[20, 0], [20, 3], [6000, 0], [6000, -3]]) {
+  const skybridge = track.sections.find(section=>section.id==='skybridge').fromS + 40;
+  for (const [start, lateral] of [[20, 0], [20, 3], [skybridge, 0], [skybridge, -3]]) {
     const r = drive(start, 3, 25, lateral);
     assert.ok(r.st[S.s] - start > 80, 'cross at least thirteen 6 m plate seams');
     assert.equal(r.maxOffset, 0, 'world height is constant across every painted seam');
@@ -34,7 +35,8 @@ test('Mainframe flush floor crosses repeated visual plate seams without vertical
 });
 
 test('Mainframe authored climbs retain physical elevation rather than flattening support', () => {
-  const r = drive(3000, 3);
+  const upperBus = track.sections.find(section=>section.id==='upper-bus').fromS;
+  const r = drive(upperBus + 30, 3);
   assert.ok(r.maxOffset > 20, 'the upper bus still physically climbs more than 20 m');
   assert.equal(r.maxHeight, 0);
   assert.equal(r.airborne, 0);

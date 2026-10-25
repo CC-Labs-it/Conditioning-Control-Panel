@@ -55,7 +55,7 @@ export function chaseFraming(cam, baseVDeg, aspect, { scale = KART_VIEW.scale, r
  */
 export const NEAR_LOOK = Object.freeze({
   spacingM: 13, phoneSpacingM: 26, outM: 1.0, staggerM: 6.5, footM: 1.6,
-  poleM: 3.8, poleR: 0.075, poleSides: 6, armM: 1.1, armR: 0.05,
+  poleM: 4, poleR: 0.075, poleSides: 6, armM: 1.1, armR: 0.05,
   lampR: 0.24, bannerEvery: 2, bannerW: 0.62, bannerH: 1.1, bannerDropM: 0.25, bannerInM: 0.6,
   poleHex: '#2b1838', lampHex: '#fff3dc',
   minUpY: 0.8,             // the road normal must stand this upright (no posts on the loop, steep banks or walls)

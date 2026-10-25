@@ -16,9 +16,9 @@ test('Keep regenerates exactly and is a closed, two-lap fortress course with a l
   assert.ok(formatKeep(json).split('\n').length < 300);
   const t = keep(), end = walkKeep(KEEP_PIECES);
   assert.equal(t.id, 'keep'); assert.equal(t.laps, 2);
-  assert.ok(t.lengthM >= 6500 && t.lengthM <= 7600);
+  assert.ok(t.lengthM >= 7000 && t.lengthM <= 8200);
   assert.ok(Math.hypot(end.x, end.z) < 1e-7);
-  assert.ok(json.nodes.every((n) => n.w >= 26 && n.w <= 40));
+  assert.ok(json.nodes.every((n) => n.w >= 26 && n.w <= 72));
   assert.ok(Math.max(...json.nodes.map((n) => n.p[1])) >= 58);
   for (let i = 0; i < 8; i++) assert.ok(Math.abs(t.spawnPose(i).p[1]) < .001);
 });
@@ -48,7 +48,8 @@ test('Keep broad bends and non-adjacent ribbons never intersect at driving heigh
     if (Math.abs(angle) > .00001) minRadius = Math.min(minRadius, 2 / Math.abs(angle));
     for (let j = i + 1; j < samples.length; j++) {
       const b = samples[j], ds = Math.min(b.s - a.s, t.lengthM - (b.s - a.s));
-      if (ds < 65 || Math.abs(a.p[1] - b.p[1]) >= 22) continue;
+      // Local slices of a seventy-two-metre-wide district naturally share the same footprint.
+      if (ds < Math.max(65, (a.w + b.w) / 2 + 10) || Math.abs(a.p[1] - b.p[1]) >= 22) continue;
       const room = Math.hypot(a.p[0] - b.p[0], a.p[2] - b.p[2]) - (a.w + b.w) / 2;
       minSeparation = Math.min(minSeparation, room);
       assert.ok(room > 4, 'ribbon clearance at ' + a.s + '/' + b.s);
@@ -119,17 +120,17 @@ test('Keep prison blocks clear the road and exposed sections preserve the inner 
     assert.ok(f.w >= 34);
   }
 });
-test('Keep has a real drawbridge and nine broad landing platforms with four-and-a-half metre gaps', () => {
+test('Keep has a real drawbridge and nine doubled landing platforms with real fourteen metre jumps', () => {
   const t = keep(), layout = getKeepLayout(t), bridge = layout.drawbridge;
   assert.equal(t.jumps.length, 1);
   assert.ok(t.frameAt(bridge.gapS0 + 1).flags.includes('jump'));
   assert.ok(t.frameAt(bridge.gapS1 + 1).p[1] < t.frameAt(bridge.gapS0).p[1] - 15);
   assert.ok(t.frameAt(bridge.rampS0 + 25).t[1] > .25);
   const field = t.fields[0], stones = field.stones;
-  assert.equal(field.id, 'keep-stones'); assert.equal(stones.length, 9);
-  assert.ok(Math.abs(field.toS - field.fromS - 270) < .01);
-  assert.ok(stones.every((h) => h.w === 28 && h.len === 26));
+  assert.equal(field.id, 'keep-stones'); assert.equal(stones.length, 9); assert.equal(field.platforming, true);
+  assert.ok(Math.abs(field.toS - field.fromS - 580) < .01);
+  assert.ok(stones.every((h) => h.w === 56 && h.len === 52));
   assert.ok(Math.abs(stones[0].s - field.fromS) < .01);
-  assert.ok(Math.abs(stones.at(-1).s + 26 - field.toS) < .01);
-  for (let i = 1; i < stones.length; i++) assert.ok(Math.abs(stones[i].s - stones[i-1].s - 30.5) < .01);
+  assert.ok(Math.abs(stones.at(-1).s + 52 - field.toS) < .01);
+  for (let i = 1; i < stones.length; i++) assert.ok(Math.abs(stones[i].s - stones[i-1].s - 66) < .01);
 });

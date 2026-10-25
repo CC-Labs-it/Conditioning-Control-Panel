@@ -35,12 +35,10 @@ export const PIECES = [
   // over the last two (STREAM_RAMP). The hairpin after it stays glass.
   { id: 'sweepA', turn: 90, r: 45, roll: 25, y: 1, sec: 0, stream: { from: 0.15, flow: [5, -2.5] } },
   { id: 'L2', len: 24, y: 3, sec: 0, stream: { from: 0, flow: [5, -2.5] } },
-  { id: 'hairpin', turn: 180, r: 36, roll: 28, y: 10, sec: 0 },
-  // WATER FIT (2026-10-23): the chute and pool below need 124 m on the return lane's axis where the old auto L4a
-  // had 51 m, so the bridge grew 124 -> 162 and the two corners after the jump tightened (sweepE
-  // and sweepF r 42 -> 24); sweepD (the court entry) keeps r 40: at r 22 a boosted bot slid into the left hole.
-  // The dare, the court and the start are untouched and the loop closes exactly
-  { id: 'bridge', len: 162, y: 14, sec: 0, pad: { at: 0.35, x: -3 } },
+  { id: 'hairpin', turn: 180, r: 36, roll: 28, y: 14, sec: 0 },
+  // Give the enlarged stepping islands their own bridge district. The higher approach clears
+  // the returning ground road by ten metres while the open field sits beyond that crossing.
+  { id: 'bridge', len: 324, y: 18, sec: 0, pad: { at: 0.35, x: -3 } },
   // A long excursion leaves the compact induction stack before returning above it.
   { id: 'prism-approach', len: 160, y: 48, w: 34, sec: 3 },
   { id: 'tidal-in', turn: 90, r: 90, roll: 16, y: 28, w: 34, sec: 3 },
@@ -146,22 +144,21 @@ const FALLS = [
   { piece: 'sweepF', side: 'L', from: 0, to: 1 },
 ];
 // Stepping-stone fields (stones wave, BRIEF-STONES.md): from `from` to `to` of `piece` the deck is gone and the kart
-// drives on stones over the void (the old bridge FALLS entry became this field; the start straight lies beneath).
+// drives on distinct islands over the void, beyond the lower-road crossing.
 // Three staggered lanes of stoneM-long stones with gapM between them (period stoneM + gapM), lane k's regular
 // stones starting k * staggerM past the field start, so every s of the field has a stone in some lane. Every lane
 // starts with a LEAD stone from the field start to its first regular stone's end (the deck hands over to a stone
 // on every lane, root 2026-10-23: an entry void on a lane the kick cannot reach was a fall) and ends with a
 // CLOSING stone that reaches FIELD_END_GAP_M before the deck (an exit void longer than a gap was a fall too), so
-// stone lengths run FIELD_LEN_M (render tiles the 5 m model along a longer stone). The road eases to widthM
+// stone lengths run FIELD_LEN_M (the renderer scales one island to each authored platform). The road eases to widthM
 // over FIELD_RAMP_M before the field and back after it. Nodes inside carry `open` (no rails: the lips are the edges).
 export const FIELDS = [
-  // `to` 0.66, not the brief's 0.71: the bridge node at u 0.667 sits 11 m over the court (L4d, about 1000 m ahead
-  // in the lap), and an open edge over a road ahead is a shortcut the P6.2 check refuses; the field ends at that node
-  { id: 'bridge-stones', piece: 'bridge', from: 0.40, to: 0.66, lanes: [-7, 0, 7], stoneM: 5, gapM: 4, staggerM: 3, widthM: 21 },
+  // Start beyond the lower-road crossing so missed jumps never skip ahead in the lap.
+  { id: 'bridge-stones', piece: 'bridge', from: 0.50, to: 0.76, lanes: [-14, 0, 14], stoneM: 10, gapM: 12, staggerM: 7, widthM: 42 },
 ];
-const FIELD_RAMP_M = 20, FIELD_END_GAP_M = 2, FIELD_SPARE_M = 0.5, FIELD_GAP_M = [3.5, 4.5], FIELD_PAD_LEAD_M = 6;
-/** Stone length range: a lead or closing stone may run longer than the 5 m model (render tiles it). */
-const FIELD_LEN_M = [3, 12];
+const FIELD_RAMP_M = 20, FIELD_END_GAP_M = 2, FIELD_SPARE_M = 0.5, FIELD_GAP_M = [11.5, 12.5], FIELD_PAD_LEAD_M = 6;
+/** Lead and closing islands have generous landing room around the regular ten-metre islands. */
+const FIELD_LEN_M = [6, 34];
 /** One lane of stones as [start, end] pairs from 0 (the field start) to lenM - FIELD_END_GAP_M (the closing edge). */
 export function laneStones(lenM, phaseM, stoneM, gapM, endGapM = FIELD_END_GAP_M, lenRange = FIELD_LEN_M) {
   const end = lenM - endGapM, out = [[0, phaseM + stoneM]];
@@ -312,7 +309,7 @@ export function build(pieces = PIECES) {
     if (!p.pad) return;
     const i = nodeAt(pi, p.pad.at);
     nodes[i].flags.push('boost');
-    boosts.push({ node: i, x: p.pad.x, w: 4, len: 6 });
+    boosts.push({ node: i, x: p.pad.x, w: 6, len: 7.5 });
   });
   const lipPiece = pieces.findIndex((p) => p.jump);
   const lip = meta.findIndex((m) => m.piece === lipPiece);
@@ -359,10 +356,10 @@ export function build(pieces = PIECES) {
         const s = fromS + a;
         let node = from;
         while (node + 1 < to && meta[node + 1].s <= s + 1e-9) node++;
-        stones.push({ id: fd.id + '-' + li + '-' + k, node, ds: r2(s - meta[node].s), x, w: fd.stoneM, len: r2(b - a) });
+        stones.push({ id: fd.id + '-' + li + '-' + k, node, ds: s - meta[node].s, x, w: fd.stoneM, len: Math.min(b - a, toS - FIELD_END_GAP_M - s) });
       });
     });
-    return { id: fd.id, from, to, lanes: fd.lanes.slice(), stones };
+    return { id: fd.id, from, to, lanes: fd.lanes.slice(), platforming: true, stones };
   });
 
   // checkpoints near the quarter marks, never on a jump or inside a loop
