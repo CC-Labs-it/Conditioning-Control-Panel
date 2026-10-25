@@ -673,3 +673,8 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Inbox notice host
+
+1. WPF `Dialogs/InboxNoticeCard.cs`: Open a notice from Inbox; verify neutral heading/body, optional primary, quiet Close, Escape, draggable background, and replacement rather than two cards. Each choice closes before its action. Panic dismisses without invoking either action. Rows: `host-inbox-notice-card`
+2. WPF `MainWindow/MainWindow.Patreon.cs` TierOnNoticePass: With the tier's celebration already seen and a lower LastKnownEffectiveTier, raise the effective tier during a quiet session; open the tier-on Inbox row and compare localized heading/body. Repeat the check: no duplicate. A first-ever reading records silently; an unspent celebration suppresses the small notice. Rows: `inbox-tier-on-notice`

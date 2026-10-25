@@ -260,6 +260,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void InitializePremiumCelebration()
         {
             Opened += (_, _) => MaybeShowPremiumCelebration();
+            Activated += (_, _) => TierOnNoticePass(mayShow: true);
             System.EventHandler<Models.PatreonTier> tier = (_, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(MaybeShowPremiumCelebration);
             var patreon = Platform.AccountSeed.Patreon;
             var substar = Platform.AccountSeed.SubscribeStar;
@@ -280,11 +281,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                if (!CoreAccount.HasPremiumAccess) return;
+                if (!CoreAccount.HasPremiumAccess) { TierOnNoticePass(mayShow: false); return; }
                 var s = CoreSettings.Current;
-                if (ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, s)) return;
+                if (ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, s))
+                { TierOnNoticePass(mayShow: false); return; }
                 var tier = CoreAccount.HasLabAccess ? 2 : 1;
-                if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise: false)) return;
+                if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise: false))
+                { TierOnNoticePass(mayShow: true); return; }
+                TierOnNoticePass(mayShow: false);
                 var key = TierCelebration.KeyFor(tier)!;
                 Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
                 {

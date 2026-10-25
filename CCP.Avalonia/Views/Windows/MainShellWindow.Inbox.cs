@@ -87,6 +87,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return flat.Length <= max ? flat : flat.Substring(0, max - 1).TrimEnd() + "…";
         }
 
+        /// <summary>WPF MainWindow.Patreon.cs TierOnNoticePass: a repeat rise after the one-time celebration.</summary>
+        internal void TierOnNoticePass(bool mayShow)
+        {
+            try
+            {
+                var settings = CoreSettings.Current;
+                var current = CoreAccount.HasLabAccess ? 2 : CoreAccount.HasPremiumAccess ? 1 : 0;
+                // ponytail: no authoritative server-answered signal on this head yet. Never record a cached drop.
+                var verdict = Services.TierOnNoticeRule.Decide(settings.LastKnownEffectiveTier, current, mayRecordDrop: false);
+                if (verdict.Record != settings.LastKnownEffectiveTier)
+                {
+                    settings.LastKnownEffectiveTier = verdict.Record;
+                    CoreSettings.Save();
+                }
+                if (!verdict.Owed || !mayShow
+                    || Services.TierCelebration.IsOwed(settings.SeenFeatureIntros, current, onRise: true)) return;
+                var title = global::ConditioningControlPanel.Localization.Loc.Get(Services.TierOnNoticeRule.TitleKey(current));
+                var body = global::ConditioningControlPanel.Localization.Loc.Get("tier_on_body");
+                StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
+                {
+                    Key = "tier-on:" + current,
+                    Title = title,
+                    Summary = body,
+                    Open = () => InboxNoticeCard.Present(this, title, body, null, null),
+                });
+            }
+            catch (Exception ex) { Log.Debug(ex, "Tier-on notice failed"); }
+        }
+
         private void CloseInboxPopup()
         {
             try

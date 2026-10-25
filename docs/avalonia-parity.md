@@ -1820,3 +1820,10 @@ ported-by-merge (`Assets/web/dtrh`); lane game-dtrh-host ported two host rows (m
 | id | WPF reference | Avalonia counterpart | status | notes / evidence |
 |---|---|---|---|---|
 | blocked-migration-input | Tests (migration) | - | blocked | the goal needs a migration test from a REAL WPF-release settings file; the repo has only synthetic fixtures and the user's own profile must not be committed. Needs a scrubbed 6.11.x settings.json + provenance README from the user (oracle-updater-installer.md §4) |
+
+### Cloud host: Inbox notice card
+
+| ID | WPF reference | Avalonia / Core | Status | Evidence / remaining work |
+|---|---|---|---|---|
+| host-inbox-notice-card | `ConditioningControlPanel/Dialogs/InboxNoticeCard.cs` | `CCP.Avalonia/Views/Windows/InboxNoticeCard.cs` | wired | Single-instance passive card; optional primary and quiet choice, close before callback, callback failure logging, Escape, owner fallback and drag. Panic registry dismisses without actions. `InboxNoticeCardTests`. Lapse and post-code callers remain for their lanes. |
+| inbox-tier-on-notice | `ConditioningControlPanel/MainWindow/MainWindow.Patreon.cs` TierOnNoticePass; `Services/Account/PatreonActivation.cs` TierOnNotice | `CCP.Core/Services/Account/TierOnNoticeRule.cs`; `CCP.Avalonia/Views/Windows/MainShellWindow.Inbox.cs`, `MainShellWindow.Patreon.cs` | wired | Repeat tier rise opens the localized notice through StartupLadder / Inbox; first reading records only, one-time celebration takes precedence. Focus and provider celebration checks invoke it. Core `TierOnNoticeTests`, headless `InboxNoticeCardTests`. Conservative cached-drop handling until an authoritative server-answered signal exists on this head. |
