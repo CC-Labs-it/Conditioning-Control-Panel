@@ -14,8 +14,7 @@
 //   the XP odometer (MotionFx.Odometer - the readout snaps), the meniscus (AnimateXpMeniscus,
 //   ApplyXpMeniscusPulse), PopLevelChip, the level-up burst (FireBurstAt) and THE BANK hold
 //   (MainWindow.BankFx.cs); the rank title (TxtPlayerTitle, a {loc:Str} a code write would lose);
-//   the Start button's charge/exhale/ignition/heartbeat set and FlashSaveAbsorb - no caller here
-//   (BtnStart_Click and the settings-save half are stubs); level-up sound and toast.
+//   FlashSaveAbsorb; level-up sound and toast. START effects live in MainShellWindow.StartHero.cs.
 // Sign-in, startup profile restore and logout repaint through UpdateQuickLoginUI
 // (MainShellWindow.Login.cs), and the login dialog's ProfileLoad is awaited before a repaint.
 

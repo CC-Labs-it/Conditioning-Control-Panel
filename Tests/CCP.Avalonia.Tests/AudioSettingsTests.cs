@@ -74,6 +74,12 @@ public sealed class AudioSettingsTests
                 Assert.Equal("-40ms", A<TextBlock>("TxtAudioSyncLatency").Text);
                 Assert.Equal("stale-id", s.AudioOutputDeviceId);   // painting writes nothing
 
+                // WPF RampTimer_Tick repaints the open Settings dial, without a UI edit.
+                s.MasterVolume = 48;
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(48, A<Slider>("SliderMaster").Value);
+                Assert.Equal("48%", H<TextBlock>("HomeTxtMaster").Text);
+
                 // Settings slider -> settings + the dashboard copy.
                 A<Slider>("SliderMaster").Value = 64;
                 Assert.Equal(64, s.MasterVolume);

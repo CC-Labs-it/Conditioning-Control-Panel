@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -44,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         private readonly CheckBox _duckOn, _exclude;
         private readonly ComboBox _output;
         private SettingsService? _service;
+        private Models.AppSettings? _observed;
         private bool _syncing;
 
         internal AudioSettingsBinder(Control owner, Slider master, TextBlock txtMaster, Slider video, TextBlock txtVideo,
@@ -74,6 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 Changed += Sync;
                 _service = CoreSettings.Service;
                 if (_service != null) _service.CurrentReplaced += OnReplaced;
+                ObserveCurrent();
                 if (_devices is null) RefreshDevices(); else Sync();
             };
             owner.DetachedFromVisualTree += (_, _) =>
@@ -81,10 +84,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 Changed -= Sync;
                 if (_service != null) _service.CurrentReplaced -= OnReplaced;
                 _service = null;
+                if (_observed != null) _observed.PropertyChanged -= OnSettingChanged;
+                _observed = null;
             };
         }
 
-        private void OnReplaced() => Dispatcher.UIThread.Post(Sync);
+        private void OnReplaced() => Dispatcher.UIThread.Post(() => { if (_service != null) { ObserveCurrent(); Sync(); } });
+
+        private void ObserveCurrent()
+        {
+            if (_observed != null) _observed.PropertyChanged -= OnSettingChanged;
+            _observed = CoreSettings.Current;
+            _observed.PropertyChanged += OnSettingChanged;
+        }
+
+        private void OnSettingChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            // WPF RampTimer_Tick/StopRampTimer paint the live master dial as well as the model.
+            // Post to avoid re-entering Edit while it is changing settings; Sync's guard prevents saves.
+            if (e.PropertyName == nameof(Models.AppSettings.MasterVolume))
+                Dispatcher.UIThread.Post(() => { if (_observed != null) Sync(); });
+        }
 
         /// <summary>Paints every control from settings without raising an edit.</summary>
         internal void Sync()
