@@ -206,7 +206,7 @@ internal static class X11PanicKey
     }
 
     // WPF/Avalonia Key names (the setting stores Key.ToString()) whose X keysym name differs.
-    // ponytail: common keys only; anything else is tried verbatim, and an unknown one logs a warning.
+    // Anything not here is tried verbatim (Escape, F8, Home, Pause...); an unknown one logs a warning.
     private static readonly Dictionary<string, string> XNames = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Space"] = "space", ["Back"] = "BackSpace", ["Enter"] = "Return", ["PageUp"] = "Prior", ["PageDown"] = "Next",
@@ -219,6 +219,11 @@ internal static class X11PanicKey
         ["Oem4"] = "bracketleft", ["OemCloseBrackets"] = "bracketright", ["Oem6"] = "bracketright",
         ["OemPipe"] = "backslash", ["Oem5"] = "backslash", ["LeftCtrl"] = "Control_L", ["RightCtrl"] = "Control_R",
         ["LeftShift"] = "Shift_L", ["RightShift"] = "Shift_R", ["LeftAlt"] = "Alt_L", ["RightAlt"] = "Alt_R",
+        ["OemBackslash"] = "less", ["Oem102"] = "less", ["Apps"] = "Menu", ["LWin"] = "Super_L", ["RWin"] = "Super_R",
+        ["Cancel"] = "Break", ["Separator"] = "KP_Separator", ["Oem8"] = "grave",
+        ["VolumeMute"] = "XF86AudioMute", ["VolumeDown"] = "XF86AudioLowerVolume", ["VolumeUp"] = "XF86AudioRaiseVolume",
+        ["MediaNextTrack"] = "XF86AudioNext", ["MediaPreviousTrack"] = "XF86AudioPrev", ["MediaStop"] = "XF86AudioStop",
+        ["MediaPlayPause"] = "XF86AudioPlay", ["Sleep"] = "XF86Sleep",
     };
 
     /// <summary>The X keysym for a stored key name ("Escape", "F8", "A", "D1", "NumPad0", "OemTilde"); 0 when unknown.</summary>

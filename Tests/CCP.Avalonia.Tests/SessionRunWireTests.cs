@@ -98,4 +98,43 @@ public sealed class SessionRunWireTests
             return Task.CompletedTask;
         });
     }
+
+    /// <summary>WPF MainWindow.Presets.cs:1784 (#905): a recap under a playing mandatory video opens passive
+    /// (not topmost, not activated, non-modal); a buried modal would freeze input for the whole clip.</summary>
+    [Fact]
+    public async Task TheRecapOpensPassiveWhileAMandatoryVideoPlays()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<AvApp>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+
+            var shell = new MainShellWindow();
+            shell.Show();
+            var savedVideo = CoreEngine.Video;
+            var video = new MandatoryVideoScheduler(null!);
+            typeof(MandatoryVideoScheduler).GetField("_playing", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .SetValue(video, true);
+            SessionCompleteWindow? recap = null;
+            try
+            {
+                CoreEngine.Video = video;
+                Assert.True(video.IsPlaying);
+                shell.OnSessionLogReady(null, new SessionLogReadyEventArgs(new SessionLog { SessionName = "Video Test" }));
+                Dispatcher.UIThread.RunJobs();
+                recap = Assert.Single(shell.OwnedWindows.OfType<SessionCompleteWindow>());
+                Assert.False(recap.Topmost);
+                Assert.False(recap.ShowActivated);
+            }
+            finally
+            {
+                recap?.Close();
+                CoreEngine.Video = savedVideo;
+                shell.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
 }

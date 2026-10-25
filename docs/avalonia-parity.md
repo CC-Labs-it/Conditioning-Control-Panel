@@ -616,6 +616,20 @@ The delta ledger for the DTRH feel rework (`11d7c3afc..46e9e908d`) is
 [`avalonia-main-sync-dtrh-feel.md`](avalonia-main-sync-dtrh-feel.md): one row per non-merge commit (27). Web-only rows are
 ported-by-merge (`Assets/web/dtrh`); lane game-dtrh-host ported two host rows (motionLevel init, Escape-as-pause) and the panic close; lane game-dtrh-host-b ported the other three (online copies, loops lane, loops-dry back-off; row `game-dtrh`).
 
+## Ponytail debt (2026-10-25)
+
+Third `ponytail:`/`shortcut:` marker scan over CCP.Core + CCP.Avalonia (lane `avalonia-port/ponytail-debt-3`):
+434 markers (Core 20, Avalonia 414), down from 650 on 2026-10-23; 0 `shortcut:` markers; 18 rated HIGH; 49 still carry
+an upgrade trigger that has already fired; about 293 name no trigger. Fixed in the lane (each with a failing-first test):
+X11 panic-key names for OemBackslash/Oem102, Apps, LWin/RWin and media keys (were keysym 0, so a silently dead panic
+key); leash day inputs now read today's conditioning minutes from the day log (a Minutes assignment could never be met);
+the session recap opens passive while a mandatory video plays (was a buried modal, WPF #905). Top open risks:
+no panic route while leashed with the panic key off (`Platform/LeashTaskHost.cs:5`); no UI-wedge watchdog behind a
+mandatory video or Bubble Count (`MandatoryVideoOverlay.cs:38`, `BubbleCountWindow.axaml.cs:346`); portal panic
+rebind and hold-to-cut key-up on native Wayland (`MainShellWindow.PanicKey.cs:10`, `MainShellWindow.LeashHold.cs:10`);
+no Lockdown veil (`LauncherWindow.axaml.cs:312`); no cloud settings backup or GDPR export
+(`AccountSettingsSection.axaml.cs:253`); Contract D unseeded (`ContentPackService.cs:481`). No ledger rows changed.
+
 ## Retained lane contract rows
 | id | WPF reference | Avalonia counterpart | status | notes / evidence |
 |---|---|---|---|---|

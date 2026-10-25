@@ -188,8 +188,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     var dialog = new SessionCompleteWindow(log);
                     // WPF MainWindow.Presets.cs:1790 (#1303): under a lock card, pop quiz or Bubble
                     // Count cover the recap opens passive - non-modal, not activated - and only one.
-                    // ponytail: videoUp is false until the head has a VideoService.IsPlaying.
-                    var passive = SessionSummaryPresentation.Decide(false, LockCardWindow.IsAnyOpen(),
+                    // A buried modal under a mandatory video freezes input (#905). WPF also counts
+                    // VideoService.IsBrowserSessionActive; this head has no browser video session.
+                    var passive = SessionSummaryPresentation.Decide(CoreEngine.Video?.IsPlaying == true, LockCardWindow.IsAnyOpen(),
                         PopQuizWindow.IsAnyOpen(), BubbleCountWindow.IsAnyOpen()) == SessionSummaryPresentation.Mode.Passive;
                     dialog.Topmost = !passive;   // WPF MainWindow.Presets.cs:1799
                     if (passive)
