@@ -1,4 +1,4 @@
-/* One construction plan owns both the furniture and its mounted moving pictures. */
+/* Furniture plans place pictures; the shared media renderer owns their complete cabinets. */
 import { getBoudoirLayout } from '../track/boudoir-layout.js';
 import { axesFrom, roadSamples, V3 } from './mediaMath.js';
 import { dressBoudoirProps } from './boudoirProps.js';
@@ -247,14 +247,7 @@ export function boudoirWorldPlan(track) {
       const mount = { id: 'boudoir-mirror-' + l.id + '-' + j, s, frame: inside ? 'tunnel' : 'billboard', kind: 'landscape', phone: true,
         w, h, C, ...axes, program: (mounts.length >> 1) % 2 ? 3 : 0 };
       mounts.push(mount);
-      const back = sub(C, mul(axes.Z, 1));
-      put('mounted-mirror-backing', 'lavender', back, [w + 2, h + 2, 1.2], { axes: face.axes });
-      for (const sign of [-1, 1]) {
-        put('mounted-mirror-gold', 'gold', add(back, mul(axes.X, sign * (w / 2 + .9))), [1, h + 2.5, 2.5], { axes: face.axes });
-        put('mounted-mirror-gold', 'gold', add(back, mul(axes.Y, sign * (h / 2 + .9))), [w + 2.5, 1, 2.5], { axes: face.axes });
-      }
-      const foot = sub(back, mul(axes.Y, h / 2 + 5));
-      put('mounted-mirror-stem', 'gold', foot, [1.5, 10, 1.5], { axes: face.axes });
+      // Final fitting may enlarge, move or reject a face. Its backing and rim must follow it.
       break;
     }
   }
@@ -269,5 +262,6 @@ export function boudoirWorldPlan(track) {
 
 export function boudoirMediaLayout(track) {
   const plan = boudoirWorldPlan(track); if (!plan) return null;
-  return { track: 'boudoir', slots: plan.mounts.map(m => ({ ...m, C: [...m.C], X: [...m.X], Y: [...m.Y], Z: [...m.Z] })) };
+  return { track: 'boudoir', cabinetStyle: { body: '#79628f', rim: '#dfb56a' },
+    slots: plan.mounts.map(m => ({ ...m, C: [...m.C], X: [...m.X], Y: [...m.Y], Z: [...m.Z] })) };
 }

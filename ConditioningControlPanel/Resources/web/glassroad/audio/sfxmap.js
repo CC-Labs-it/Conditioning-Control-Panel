@@ -113,7 +113,8 @@ export function sfxPlan(name, p = {}, o = {}) {
   const feel = o.feel || null;
   p = p || {};
   switch (name) {
-    case 'air-word-hop': return null; // Its ascending spring stays on the shared synth even with the bank loaded.
+    case 'air-word-launch':
+    case 'air-word-hop': return null; // Quiet springs at both takeoffs stay on the shared synth with the bank loaded.
     case 'press-thud': return pressThudGain(p) > .01 ? [one('land-heavy', .06 * pressThudGain(p), .68)] : [];
     case 'countdown': return [one('countdown')];
     case 'go': return [one('go')];

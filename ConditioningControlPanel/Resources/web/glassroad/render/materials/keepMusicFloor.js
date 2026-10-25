@@ -1,54 +1,55 @@
-/* Music is projected through broad stained-glass shapes onto the Keep's fixed slate. */
-import { float, vec2, vec3, floor, fract, mod, abs, mix, smoothstep, step, sin, cos, select, length, atan, max, fwidth } from 'three/tsl';
+/* Every slate tile joins the heard-song choreography; the existing joints stay fixed. */
+import { float, vec3, floor, fract, mod, abs, mix, smoothstep, step, sin, cos, select, max, fwidth } from 'three/tsl';
 
 const TAU = Math.PI * 2, one = v => float(1).sub(v);
-const line = (d, width) => {
-  const aa = max(fwidth(d).mul(1.3), .018);
-  return one(smoothstep(width, float(width).add(aa), abs(d))).mul(float(width).div(max(float(width), aa)));
-};
 
-/** Rose windows, organ pipes and woven vaults share heard beats and measured frequency bands. */
+/** Whole-tile waves, alternating steps and crossing bands use the existing song and analyser. */
 export function keepMusicFloor({ p, base, seam, reactive: u, music }) {
-  const gentle = u.gentle, slow = music.tileBar.mul(TAU / 8);
-  const beat = mix(cos(music.tileBeat.mul(TAU)).mul(.5).add(.5), float(.5), gentle);
-  const bank = mod(floor(abs(p.x).div(1.8)), 8);
+  // Match the authored 12 x 16 m seam texture: widths 2/4/4/2 m, staggered 8 m rows.
+  const repeat = floor(p.x.div(12)), localX = fract(p.x.div(12)).mul(12);
+  const within = step(2, localX).add(step(6, localX)).add(step(10, localX));
+  const column = repeat.mul(4).add(within).toVar();
+  const stagger = step(6, localX).mul(.5), row = floor(p.y.div(8).add(stagger)).toVar();
+  const tileX = repeat.mul(12).add(select(within.lessThan(.5), float(1),
+    select(within.lessThan(1.5), float(4), select(within.lessThan(2.5), float(8), float(11)))));
+  const bank = mod(column.add(row.mul(2)), 8);
   let note = float(0);
   for (let i = 0; i < 8; i++) note = note.add(one(step(.5, abs(bank.sub(i)))).mul(u['note' + i]));
   note = note.toVar();
 
-  // Eight coloured petals swell independently in each window. Heavy lead lines retain the pattern.
-  const q = vec2(p.x.div(10), fract(p.y.div(24).add(.5)).sub(.5).mul(2));
-  const radius = length(q), angle = atan(q.y, q.x);
-  const petals = cos(angle.mul(8).add(slow)).mul(u.mid.mul(.10).add(.12)).add(.58);
-  const rim = petals.add(u.bass.mul(beat).mul(.12));
-  const pane = one(smoothstep(rim.sub(.12), rim.add(.035), radius));
-  const petalColour = sin(angle.mul(4).sub(slow)).mul(.5).add(.5);
-  const lead = max(line(radius.sub(rim), .028), line(sin(angle.mul(4).add(slow.mul(.5))), .045).mul(smoothstep(.12, .23, radius)));
-  const rose = pane.mul(.3).add(line(radius.sub(rim.mul(.63)), .055).mul(.65)).add(line(radius.sub(rim), .075)).mul(one(lead.mul(.82)));
+  const gentle = u.gentle, bar = music.tileBar;
+  const motion = mix(music.tileBeat.mul(.5), bar.mul(.25), gentle);
+  const beat = mix(cos(music.tileBeat.mul(TAU)).mul(.5).add(.5), float(.5), gentle);
+  const swell = u.bass.mul(.22).mul(beat).add(note.mul(.3)).add(u.mid.mul(.12));
 
-  // Opposing organ banks grow with the measured notes, carrying a crest down the hall on each bar.
-  const pipe = one(smoothstep(.24, .41, abs(fract(abs(p.x).div(1.8)).sub(.5))));
-  const organY = fract(p.y.div(20).sub(music.tileBar.div(4)));
-  const organHeight = note.mul(.68).add(u.bass.mul(.13)).add(.08);
-  const organ = pipe.mul(one(smoothstep(organHeight, organHeight.add(.08), organY)))
-    .mul(smoothstep(0, .09, organY)).mul(note.mul(.7).add(.3));
+  // Broad fronts roll down every column, with measured notes changing their depth and colour.
+  const wave = sin(row.mul(.72).sub(bar.mul(TAU / 2)).add(column.mul(.34)));
+  const procession = smoothstep(-.85, .7, wave).mul(.66).add(.24).add(swell.mul(.35));
 
-  // Interlaced vault ribbons open with the vocal/mid band; brass stitches answer high frequencies.
-  const weavePhase = p.y.mul(TAU / 28).sub(slow);
-  const vaultX = sin(weavePhase).mul(u.mid.mul(2.2).add(2.5));
-  const weave = max(line(p.x.sub(vaultX), .27), line(p.x.add(vaultX), .27));
-  const stitches = line(sin(p.y.mul(TAU / 3)), .09).mul(weave).mul(u.treble);
-  const vaulted = weave.mul(.7).add(stitches.mul(.6));
+  // Whole rows and their alternating neighbours answer each other on the heard subdivisions.
+  const checker = cos(column.add(row).mul(Math.PI).sub(motion.mul(Math.PI)));
+  const steps = smoothstep(-.8, .8, checker).mul(.58).add(.26)
+    .add(note.mul(.18)).add(u.bass.mul(beat).mul(.12));
 
-  // A two-bar dissolve changes the composition every eight bars, not just its colour.
-  const phrase = music.tileBar.div(8), mode = mod(floor(phrase), 3);
-  const choose = n => select(n.lessThan(.5), rose, select(n.lessThan(1.5), organ, vaulted));
+  // Opposing diagonal bands braid through the tile field, each carried by a different band.
+  const crossingA = sin(row.add(column).mul(Math.PI / 3).sub(bar.mul(TAU / 3)));
+  const crossingB = cos(row.sub(column).mul(Math.PI / 3).add(bar.mul(TAU / 4)));
+  const woven = smoothstep(-.75, .8, crossingA).mul(u.mid.mul(.18).add(.28))
+    .add(smoothstep(-.75, .8, crossingB).mul(u.treble.mul(.16).add(.26)))
+    .add(.24).add(note.mul(.16));
+
+  // The whole field dissolves into a different arrangement over the last two of every eight bars.
+  const phrase = bar.div(8), mode = mod(floor(phrase), 3);
+  const choose = n => select(n.lessThan(.5), procession, select(n.lessThan(1.5), steps, woven));
   const pattern = mix(choose(mode), choose(mod(mode.add(1), 3)), smoothstep(.75, 1, fract(phrase)));
-  const plum = vec3(.43, .07, .50), roseTint = vec3(.75, .12, .29), brass = vec3(.65, .35, .11);
-  const tint = mix(mix(plum, roseTint, petalColour), brass, note.mul(.34).add(stitches.mul(.22)));
-  const detail = one(smoothstep(.45, 1.8, max(fwidth(p.x), fwidth(p.y))));
-  const centre = smoothstep(.7, 2.1, abs(p.x)).mul(.7).add(.3);
-  const active = music.tileOn.mul(mix(u.energy.mul(5).clamp(0, 1), u.energy, gentle)).mul(mix(float(1), float(.32), gentle));
-  const fill = pattern.mul(active).mul(detail).mul(centre).mul(one(seam.mul(.94))).clamp(0, .82);
-  return mix(base, base.mul(.48).add(tint), fill);
+  const tintPhase = sin(column.mul(.63).add(row.mul(.47)).sub(bar.mul(TAU / 8))).mul(.5).add(.5);
+  const plum = vec3(.36, .045, .42), rose = vec3(.68, .10, .25), brass = vec3(.66, .32, .075);
+  const tint = mix(mix(plum, rose, tintPhase), brass, note.mul(.42).add(u.treble.mul(.12)).clamp(0, .62));
+  const distance = one(smoothstep(4, 12, max(fwidth(p.x), fwidth(p.y))));
+  const centre = smoothstep(.7, 3, abs(tileX)).mul(.45).add(.55);
+  const active = music.tileOn.mul(mix(u.energy.mul(4).clamp(0, 1), u.energy, gentle))
+    .mul(mix(float(1), float(.32), gentle));
+  const fill = pattern.mul(note.mul(.65).add(.6)).mul(.83).clamp(0, .86).mul(distance).mul(centre).mul(one(seam.mul(.96)));
+  // Apply energy once, after the composition, so quiet and Gentle onset retain their smooth envelope.
+  return mix(base, mix(base, base.mul(.32).add(tint), fill), active);
 }
