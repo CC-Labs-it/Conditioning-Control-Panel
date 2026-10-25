@@ -29,7 +29,13 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             string? actionLabel, Action? action, string? secondaryLabel, Action? secondaryAction)> _pending = new();
         private readonly Dictionary<string, Border> _stickyByKey = new();
         // Test seam: runs the post-fade removal; tests pass (a, _) => a() instead of waiting 220 ms.
-        internal Action<Action, TimeSpan> RemoveLater { get; set; } = (a, d) => DispatcherTimer.RunOnce(a, d);
+        internal Action<Action, TimeSpan> RemoveLater
+        {
+            get => ScheduleRemoval;
+            set => ScheduleRemoval = value;
+        }
+        // Both lanes use the same scheduler; the app still performs a real one-shot fade.
+        internal Action<Action, TimeSpan> ScheduleRemoval = (remove, delay) => DispatcherTimer.RunOnce(remove, delay);
 
         public void AttachHost(Panel host)
         {
@@ -38,7 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             _pending.Clear();
             foreach (var (msg, type, dur, key, label, action, secondaryLabel, secondaryAction) in queue)
             {
-                if (key != null) ShowStickyInternal(key, msg, type, label, action);
+                if (key != null) ShowSticky(key, msg, type, label, action);
                 else Show(msg, type, dur, label, action, secondaryLabel, secondaryAction);
             }
         }
@@ -59,6 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             timer.Start();
         }
 
+        /// <summary>WPF ShowSticky: no expiry, session deduplication and persistent manual dismissal.</summary>
         public void ShowSticky(string key, string message, NotificationType type = NotificationType.Info,
             string? actionLabel = null, Action? action = null)
         {
@@ -67,6 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             ShowStickyInternal(key, message, type, actionLabel, action);
         }
 
+        /// <summary>Programmatic dismissal leaves the key eligible to appear again.</summary>
         public void Dismiss(string key)
         {
             if (string.IsNullOrWhiteSpace(key)) return;

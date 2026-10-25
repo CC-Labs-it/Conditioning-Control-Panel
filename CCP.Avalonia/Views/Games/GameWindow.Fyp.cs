@@ -5,6 +5,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -21,7 +23,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// the library through the asset gate every game uses, the rules in Core <see cref="FypRules"/> (shared
     /// with WPF). BRIGHT LINE: batches and probes go straight to the provider, media only when RemoteAllowed.
     /// <para>ponytail: not on this head yet - eye control (init says off; a toggle gets eyeStatus "unsupported"),
-    /// ghost mode (WPF's own unavailable answer), the file-menu, calibrate and EMI's fypOpened/fypClosed.</para>
+    /// ghost mode (WPF's own unavailable answer), calibrate and EMI's fypOpened/fypClosed.</para>
     /// </summary>
     internal sealed partial class GameWindow
     {
@@ -35,6 +37,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         private FypMetaStore? _fypMeta;
         private bool _fypHooked;
+        private bool _fypFileMenuHooked;
+        internal ContextMenu? FypFileMenu { get; private set; }
         private int _fypRemoteInFlight;   // 0/1 via Interlocked
         private readonly HashSet<string> _fypProbesInFlight = new(StringComparer.OrdinalIgnoreCase);
 
@@ -143,11 +147,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "probe-sub":
                     FypLastProbe = ProbeFypSub((string?)o["sub"]);
                     return true;
+                case "file-menu":
+                    ShowFypFileMenu((string?)o["id"]);
+                    return true;
                 case "settings-changed":
                     ApplyFypSetting((string?)o["key"], o["value"]);
                     return true;
                 default:
-                    return false;   // close / log / boot-error: the shell's; file-menu / calibrate: see ponytail
+                    return false;   // close / log / boot-error: the shell's; calibrate: see ponytail
+            }
+        }
+
+        /// <summary>WPF FypFileMenu.Show: pointer menu for a served, existing library clip only.</summary>
+        private void ShowFypFileMenu(string? id)
+        {
+            FypFileMenu?.Close();
+            FypFileMenu = null;
+            if (_closing) return;
+            var path = FypFileRules.ResolveLocal(CorePaths.EffectiveAssets, id);
+            if (path == null || !File.Exists(path)) return;
+            var open = new MenuItem { Header = Loc.Get("fyp_menu_open_file") };
+            open.Click += (_, _) => { if (File.Exists(path)) ExternalOpener.Open(path); };
+            var reveal = new MenuItem { Header = Loc.Get("fyp_menu_show_in_folder") };
+            // ponytail: the cross-platform opener reveals the containing folder, without selection.
+            reveal.Click += (_, _) => { if (File.Exists(path)) ExternalOpener.Open(Path.GetDirectoryName(path)); };
+            var menu = new ContextMenu { Placement = PlacementMode.Pointer, ItemsSource = new[] { open, reveal } };
+            FypFileMenu = menu;
+            menu.Open(Web);
+            // The popup cannot outlive its feed, including the existing games panic surface.
+            if (!_fypFileMenuHooked)
+            {
+                _fypFileMenuHooked = true;
+                Closed += (_, _) => { FypFileMenu?.Close(); FypFileMenu = null; };
             }
         }
 
