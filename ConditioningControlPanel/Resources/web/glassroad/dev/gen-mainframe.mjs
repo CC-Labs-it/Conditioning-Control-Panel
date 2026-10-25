@@ -110,7 +110,7 @@ export function buildMainframe() {
   for (const s of [95, at('boot-exit', 40), at('canal', 50), at('core', 380), at('memory-flare', 25), at('bus-turn', 70), at('bus-descent', 650), at('bus-underpass', 100), at('skybridge', 100), at('spillway', 180), at('submerged-floor', 75)])
     for (const lateral of [-6, -2, 2, 6]) track.items.push({ node: nearest(s), x: lateral, kind: 'box' });
   for (const s of [60, at('canal', 210), at('core', 270), at('bus-climb', 80), at('bus-underpass', 85), at('skybridge', 70), at('spillway', 70), at('emerge', 85)]) {
-    const node = nearest(s); nodes[node].flags.push('boost'); track.boosts.push({ node, x: 0, w: 4, len: 6 });
+    const node = nearest(s); nodes[node].flags.push('boost'); track.boosts.push({ node, x: 0, w: 6, len: 7.5 });
   }
   for (const d of [80, 90, 100, 110, 120]) track.items.push({ node: nearest(at('canal', d)), x: -3, kind: 'bubble' });
   const from = spans.memory.from + 4, to = spans.memory.to - 4, lanes = [-80, -40, 0, 40, 80], stones = [];

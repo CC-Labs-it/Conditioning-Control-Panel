@@ -7,8 +7,8 @@ import { getBoudoirSetpieces } from './boudoir-setpieces.js';
 // Parallel runs offer a real line choice. The tight shelf/wardrobe helices stay unboosted:
 // actual steering checks at the 36 m/s pad floor missed pads or reached the rail there.
 const RUNS = [
-  ['vanity-left', 'vanity-grid', [60, 80, 100], -10, 'dry conveyor bypass'],
-  ['vanity-right', 'vanity-grid', [60, 80, 100], 10, 'alternate dry conveyor bypass'],
+  ['vanity-left', 'vanity-grid', [60, 80, 100], -11, 'dry conveyor bypass'],
+  ['vanity-right', 'vanity-grid', [60, 80, 100], 11, 'alternate dry conveyor bypass'],
   ['perfume-dry', 'perfume-court', [20, 40, 60], 13, 'permanent dry perfume bypass'],
   ['gallery-runout', 'upper-runout', [15, 35, 55], 0, 'straight gallery recovery'],
   ['wardrobe-dry', 'wardrobe-bridge', [35, 55, 75], -12, 'dry conveyor and perfume bypass'],
@@ -52,7 +52,7 @@ export function getBoudoirBoostPlan(track) {
     const span = layout.landmarks.find(p => p.id === landmark);
     const pads = offsets.map(offset => {
       const node = nearestNode(span.s0 + offset);
-      return { node, s: track.nodeS[node], x, w: 5, len: 8, runId: id };
+      return { node, s: track.nodeS[node], x, w: 7.5, len: 10, runId: id };
     });
     return { id, landmark, purpose, pads };
   });

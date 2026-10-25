@@ -26,6 +26,7 @@ export function controlRows(family = 'xbox', profile = 'standard') {
   const p = padLabels(family, profile), k = KEY_LABELS;
   return [
     ['Steer', k.steer, 'Left stick', 'Drag on the left half'],
+    ['Look around', 'Hold right mouse and drag', 'Right stick', ''],
     ['Throttle', k.throttle, p.rt, 'Automatic'],
     ['Brake', k.brake, p.lt, ''],
     ['Hop and drift', k.hop, p.south + ', hold', 'Hold the right half'],

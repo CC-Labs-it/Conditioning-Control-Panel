@@ -21,6 +21,7 @@ import { S, BOOST, RESPAWN } from '../sim/state.js';
 import { clamp, damp, angleDiff, qrotate, rad, smoothstep } from '../core/math.js';
 import { LOOK } from './look.js';
 import { RACER_FRAMING } from './framing.js';
+import { createLookAround } from './lookAround.js';
 
 // ---- the kick layer (polish 3) ----
 
@@ -187,7 +188,9 @@ export function aimAtAnchor(out, eye, up, anchor, vFov, screenY = RACER_FRAMING.
 
 /** @returns {CamRig} { eye, look, up, vFov, yaw, pitch, bias, update(kart, fx, dt, aspect), snap(kart, aspect) } */
 export function createCamRig(feel) {
+  const glance = createLookAround();
   const rig = { eye: [0, 0, 0], look: [0, 0, -1], up: [0, 1, 0], vFov: 60, yaw: 0, pitch: 0, bias: 0,
+    glance,
     focus: [0, 0, 0], update, snap, hit, kick: null, watch: {}, useVel: true,
     loop: 0, rf: [0, 0, -1], ru: [0, 1, 0], anchor: [0, 0, 0], airScreen: 0 };
   const KL = kickNumbers(LOOK);
@@ -287,9 +290,10 @@ export function createCamRig(feel) {
         for (let k = 0; k < 3; k++) o[k] += (R[k] * K.x + UU[k] * K.y + B[k] * K.z) * s;
       }
     }
+    glance.apply(rig.eye, rig.look, rig.up);
   }
 
-  function update(kart, fx, dt, aspect, track = null) {
+  function update(kart, fx, dt, aspect, track = null, lookInput = null) {
     const c = (k) => feel.get('camera.' + k);
     const px = kart[S.posX], py = kart[S.posY], pz = kart[S.posZ];
     const F = rig.focus;
@@ -332,6 +336,7 @@ export function createCamRig(feel) {
     const gentle = !!feel.get('gentle.on');
     for (const [kind, mag, side] of kickEdges(rig.watch, kart, dt, KL, rig.useVel)) rig.kick.hit(kind, mag, side, gentle);
     rig.kick.update(dt, gentle);
+    glance.update(lookInput, dt, gentle);
     compose(kart, fx, aspect, dt);
     return rig;
   }
@@ -343,6 +348,7 @@ export function createCamRig(feel) {
     easeFrame(1);
     rig.bias = 0;
     rig.airScreen = 0;
+    glance.reset();
     rig.kick.reset(); rig.watch = {};
     rig.focus[0] = kart[S.posX]; rig.focus[1] = kart[S.posY]; rig.focus[2] = kart[S.posZ];
     lastPosition[0] = kart[S.posX]; lastPosition[1] = kart[S.posY]; lastPosition[2] = kart[S.posZ];

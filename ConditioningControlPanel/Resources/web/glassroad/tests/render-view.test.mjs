@@ -14,8 +14,8 @@ const BEFORE = { eyeUpM: 1.5, eyeBackM: 4.1, lookAheadM: 9, lookUpM: 0.3 };   //
 const BEFORE_SCALE = 0.68;
 const ASPECTS = { desk: 16 / 9, portrait: 390 / 844, landscape: 844 / 390 };
 
-test('view: the reference framing keeps a close chase with a clear view over the racer', () => {
-  assert.ok(cam.eyeBackM / BEFORE.eyeBackM >= 0.75 && cam.eyeBackM / BEFORE.eyeBackM <= 0.85, 'modestly closer');
+test('view: the reference framing opens road-word space while retaining a close chase', () => {
+  assert.ok(cam.eyeBackM / 3.4 >= 1.1 && cam.eyeBackM / 3.4 <= 1.2, 'modestly farther than the accepted close camera');
   assert.ok(cam.eyeUpM >= 1.65 && cam.eyeUpM <= 2, 'eye high enough to see the road over the racer');
   assert.ok(cam.eyeBackM > KART_VIEW.modelRadiusM * KART_VIEW.scale * 4, 'eye stays well behind the vessel');
   assert.equal(cam.lookAheadM, BEFORE.lookAheadM, 'keep the same road focus');
@@ -26,8 +26,8 @@ test('view: the reference framing keeps a close chase with a clear view over the
 test('view: EMI is more readable, with the complete rest model visible at desktop and phone ratios', () => {
   const now = chaseFraming(cam, feel.get('fov.baseVDeg'), ASPECTS.desk);
   assert.ok(KART_VIEW.scale / BEFORE_SCALE >= 1.1 && KART_VIEW.scale / BEFORE_SCALE <= 1.2, 'modest whole-racer enlargement');
-  assert.ok(now.kartW >= 0.14 && now.kartW <= 0.18, 'readable screen width ' + now.kartW);
-  assert.ok(Math.abs(now.kartY - 0.6) < 1e-6, 'player centre matches the reference');
+  assert.ok(now.kartW >= 0.13 && now.kartW <= 0.18, 'readable screen width ' + now.kartW);
+  assert.ok(Math.abs(now.kartY - 0.62) < 1e-6, 'player centre leaves a little more road above the racer');
   assert.ok(now.horizonY < now.kartY - 0.17, 'road ahead between horizon and kart');
 
   // This shipped R4 mesh has identity mesh ancestors and float POSITION bounds. Project all eight

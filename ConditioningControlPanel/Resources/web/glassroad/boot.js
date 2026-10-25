@@ -30,6 +30,7 @@ import { createActionMap, createEdgeLatch } from './core/actions.js';
 import { clamp, v3, qrotate } from './core/math.js';
 import { createKeyboard } from './input/keyboard.js';
 import { createGamepad } from './input/gamepad.js';
+import { createPointerLook } from './input/pointerLook.js';
 import { createTouch } from './input/touch.js';
 import { glideActive, resetGlide } from './sim/glide.js';
 import { S, RESPAWN } from './sim/state.js';
@@ -481,6 +482,9 @@ async function boot(course, options, lifetime, isCurrent) {
   }
 
   const gamepad = createGamepad();
+  const canLook = () => state === 'race' && race.phase === 'racing' && !paused && !hud.card && document.hasFocus();
+  const pointerLook = createPointerLook({ element: canvas, target: window, enabled: canLook });
+  lifetime.defer(() => pointerLook.dispose());
   // the pad's own Start edge (gamepads fire no DOM events); card navigation comes from gamepad.takeNav()
   const pad = { pause: false };
   const padSource = {
@@ -1052,7 +1056,9 @@ async function boot(course, options, lifetime, isCurrent) {
     racers.interpolate(alpha);                                    // 6. camera
     if (online) online.s.drawRemotes();                           //    remote karts at this frame's server time (100 ms back)
     const mode = state === 'menu' ? 'menu' : state === 'results' ? 'results' : 'race';
-    if (!frozen) cam.update(P.view, fs, track, frameDt, renderer.aspect, mode);
+    const mouseLook = pointerLook.read();
+    const lookInput = canLook() ? Math.hypot(mouseLook.x, mouseLook.y) > Math.hypot(gamepad.look.x, gamepad.look.y) ? mouseLook : gamepad.look : null;
+    if (!frozen) cam.update(P.view, fs, track, frameDt, renderer.aspect, mode, lookInput);
     if (state === 'intro') {
       if (!frozen) introElapsed = Math.min(intro.duration, introElapsed + frameDt);
       const gentleIntro = hostGentle || !!feel.get('gentle.on') || !!hud.options.gentlePreview || matchMedia('(prefers-reduced-motion: reduce)').matches;

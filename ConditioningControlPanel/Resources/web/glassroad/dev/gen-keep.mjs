@@ -40,7 +40,7 @@ export function buildKeep() {
   for (const [id, x] of [['east-ascent', 3], ['tower-spiral', -3], ['north-tower', 3], ['west-tower', 3]])
     for (let k = 0; k < 5; k++) items.push({ node: node(id, .35), x, kind: 'bubble', ds: k * 3 });
   for (const id of ['outer-exit', 'cell-gallery', 'west-approach', 'home']) {
-    const n = node(id, .5); nodes[n].flags.push('boost'); boosts.push({ node: n, x: 0, w: 4, len: 6 });
+    const n = node(id, .5); nodes[n].flags.push('boost'); boosts.push({ node: n, x: 0, w: 6, len: 7.5 });
   }
   const fieldStart = node('stones'), fieldEnd = node('stones-exit');
   const fields = [{ id: 'keep-stones', from: fieldStart, to: fieldEnd, lanes: [-16, 0, 16], platforming: true,

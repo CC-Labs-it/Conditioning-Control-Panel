@@ -112,6 +112,8 @@ export function readPad(g, profile, seen = {}, out = {}) {
     return seen[t.axis] ? clamp01((v + 1) / 2) : 0;
   };
   out.x = ax(0); out.y = ax(1);
+  // Generic A reserves axes 2/5 for triggers. Its right stick is on 3/4.
+  out.lookX = ax(p === PROFILES.xinput ? 3 : 2); out.lookY = ax(p === PROFILES.xinput ? 4 : 3);
   out.south = bv(p.south) > 0.5; out.east = bv(p.east) > 0.5; out.west = bv(p.west) > 0.5; out.north = bv(p.north) > 0.5;
   out.lb = bv(p.lb) > 0.5; out.rb = bv(p.rb) > 0.5; out.select = bv(p.select) > 0.5; out.start = bv(p.start) > 0.5;
   out.lt = trig(p.lt); out.rt = trig(p.rt);

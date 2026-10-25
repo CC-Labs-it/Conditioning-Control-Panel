@@ -309,7 +309,7 @@ export function build(pieces = PIECES) {
     if (!p.pad) return;
     const i = nodeAt(pi, p.pad.at);
     nodes[i].flags.push('boost');
-    boosts.push({ node: i, x: p.pad.x, w: 4, len: 6 });
+    boosts.push({ node: i, x: p.pad.x, w: 6, len: 7.5 });
   });
   const lipPiece = pieces.findIndex((p) => p.jump);
   const lip = meta.findIndex((m) => m.piece === lipPiece);

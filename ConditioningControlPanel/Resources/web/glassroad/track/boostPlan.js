@@ -6,7 +6,7 @@ import { getKeepLayout } from './keep-layout.js';
 import { scanZones } from '../sim/mainframeScan.js';
 import { industryZones } from '../sim/mainframeIndustry.js';
 
-export const BOOST_PLAN = Object.freeze({ lenM: 6, widthM: 7, spacingM: 18, runGapM: 68, lookAheadM: 60, itemClearM: 10 });
+export const BOOST_PLAN = Object.freeze({ lenM: 7.5, widthM: 10.5, spacingM: 18, runGapM: 68, lookAheadM: 60, itemClearM: 10 });
 const wrap = (s, length) => ((s % length) + length) % length;
 const distance = (a, b, length) => Math.min(wrap(a - b, length), wrap(b - a, length));
 
@@ -68,8 +68,8 @@ export function densifyBoosts(json) {
     if (originals.some((p) => distance(s, track.nodeS[p.node], track.lengthM) < (compact ? 10 : 14))) continue;
     // Threshold's narrow side strips leave the existing assisted bypass beside
     // each broad centre pad clear, instead of forcing a hands-off kart onto a rail.
-    const lanes = compact ? [-5.75, 0, 5.75] : [0];
-    if (lanes.every((x) => safeBoostStation(track, s, { x, w: compact ? (x === 0 ? 4 : 1.5) : BOOST_PLAN.widthM, exclusions }))) candidates.push({ node, s });
+    const lanes = compact ? [-7.5, 0, 7.5] : [0];
+    if (lanes.every((x) => safeBoostStation(track, s, { x, w: compact ? (x === 0 ? 6 : 2.25) : BOOST_PLAN.widthM, exclusions }))) candidates.push({ node, s });
   }
   const added = [], runs = [];
   let nextStart = compact ? 8 : 16;
@@ -84,8 +84,8 @@ export function densifyBoosts(json) {
       if (gap >= spacing) run.push(candidates[j]);
     }
     if (run.length < 2) continue;
-    for (const { node } of run) for (const x of compact ? [-5.75, 0, 5.75] : [0])
-      added.push({ node, x, w: compact ? (x === 0 ? 4 : 1.5) : BOOST_PLAN.widthM, len: BOOST_PLAN.lenM });
+    for (const { node } of run) for (const x of compact ? [-7.5, 0, 7.5] : [0])
+      added.push({ node, x, w: compact ? (x === 0 ? 6 : 2.25) : BOOST_PLAN.widthM, len: BOOST_PLAN.lenM });
     runs.push(run.map((p) => p.node));
     nextStart = run.at(-1).s + BOOST_PLAN.runGapM;
   }
