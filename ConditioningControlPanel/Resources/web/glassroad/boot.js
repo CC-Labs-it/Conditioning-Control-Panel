@@ -580,14 +580,16 @@ async function boot(course, options, lifetime, isCurrent) {
     finishAt = 0; result = null; debug.result = null; debug.place = 0;
     armWords();
   }
-  /** A word run for the playing song (a new song builds one, the same song resets it); none without words. */
+  /** Song lettering when available; the automatic aerial route also works without a recording. */
   function armWords() {
     const song = audio.music && audio.music.song;
     if (online) { airWords?.reset(); airWords = null; bindAirWords(P.st, null); }
-    else if (!airWords || airSong !== song) {
-      airWords?.reset(); airSong = song;
+    else if (!airWords) {
+      airSong = song;
       airWords = createAirWordRun(song, track); bindAirWords(P.st, airWords);
-    } else airWords.reset();
+    } else if (airSong !== song) {
+      airSong = song; airWords.setSong(song);
+    }
     if (!song || !song.words.length) { words = null; wordCount.show(false); return; }
     if (!words || words.song !== song) {
       words = createWordRun(song, track, { seed, songGates: true }); words.song = song;
@@ -1038,7 +1040,7 @@ async function boot(course, options, lifetime, isCurrent) {
       if (devHook && !online) devHook.apply(pa, clock.dt);         //    ?dev=1 only: a scripted drive holds the hands
       race.update(clock.dt, pa, P.st);
       airWords?.update(audio.music?.playing ? audio.music.songS : NaN, P.st,
-        { active: !online && race.phase === 'racing', paused });
+        { active: !online && (race.phase === 'racing' || race.phase === 'finished'), paused });
       sctx.timeS = online ? online.s.raceTimeS() : undefined;
       racers.step(clock.dt, pa, race, sctx);
       if (race.phase === 'racing' || race.phase === 'finished') {
@@ -1137,8 +1139,7 @@ async function boot(course, options, lifetime, isCurrent) {
       const key = `${pst[S.lap]}:${zone.id}`;
       if (pst[S.s] < zone.rampS0 - 55 || pst[S.s] >= zone.gapS0 || aerialHints.has(key)) continue;
       aerialHints.add(key);
-      hud.toast(airWords?.platforms.some(row => row.alpha > 0)
-        ? 'Jump on the words, or hold jump to glide' : 'Long jump ahead. Hold jump to glide');
+      hud.toast('The words will catch you. Steer if you like');
     }
     const introShot = state === 'intro' ? intro.shotAt(introElapsed) : -1;
     const viewSection = introShot >= 0 && introShot < 3 ? track.sectionAt(intro.shots[introShot].s) : pst[S.sectionIdx];

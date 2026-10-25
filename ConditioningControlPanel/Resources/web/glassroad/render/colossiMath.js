@@ -606,6 +606,8 @@ export function placeHeroes(track, kinds, rowOf, seed, { want, avoid = [], W = W
         for (let lean = lean0; lean > -leanStep + 1e-9; lean -= leanStep) {
           // polish 6: an eased lean under heroLeanMinDeg reads as a mistake, so it stands upright instead
           const lz = lean < (W.heroLeanMinDeg ?? 15) * Math.PI / 180 ? 0 : lean;
+          // Search another station for an intended leaner before the later upright fallback.
+          if (leans && lz === 0) break;
           const Y = norm(add(mul(Y0, Math.cos(lz)), mul(toRoad, Math.sin(lz))));
           const B = sub(p, mul(Y0, hM)), top = add(p, mul(Y, h)), ax = sub(top, B);
           const body = { B, D: norm(ax), len: len(ax), r: pr, top };

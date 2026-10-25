@@ -44,7 +44,7 @@ import { waterAt, waterOut, blendPush, gradeDeg, surfaceKind } from './flow.js';
 import { lipLeave, broadPlatformEdgeKick, platformHopUp, fieldAtS } from './stones.js';
 import { armGlide, glideGravity, resetGlide } from './glide.js';
 import { aerialGapAt } from '../track/aerial.js';
-import { airWordQuery, resetAirWords } from './airWords.js';
+import { airWordQuery, resetAirWords, stepAirWords } from './airWords.js';
 
 export { applyBoost };
 
@@ -90,6 +90,7 @@ export function step(st, a, track, feel, dt, ev) {
   const ph = st[S.respawnPhase];
   if (ph === RESPAWN.PULL || ph === RESPAWN.HOVER || ph === RESPAWN.RELEASE) { HOLE_FALL.delete(st); resetGlide(st); resetAirWords(st); return; }
   const grace = ph === RESPAWN.GRACE;
+  if (stepAirWords(st, a, feel, dt, ev)) { HOLE_FALL.delete(st); return; }
   const top = feel.get('speed.topMps');
   getPos(P, st); getVel(V, st); getQuat(Q, st);
   const qa = airWordQuery(st, P, track.query(P[0], P[1], P[2], st[S.seg] | 0, QA));
@@ -190,6 +191,9 @@ export function step(st, a, track, feel, dt, ev) {
   }
   const air = st[S.airborne] > 0;
   if (air) {
+    // A contact can throw a kart off the ramp before its ordinary lip transition arms the cap.
+    // Arm once on entering the actual corridor, without adding lift or restarting its finite clock.
+    if (!qa.forkId && aerialGapAt(track, qa.s) && qa.height >= -.5 && qa.height <= 16) armGlide(st, track, qa);
     const g = glideGravity(st, a, qa, V, gravityMps2(st, feel), feel, dt);
     if (has(qa.flags, 'magnet')) v3addScaled(V, V, qa.normal, -g * dt); else V[1] -= g * dt;
   }
