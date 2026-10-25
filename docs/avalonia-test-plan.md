@@ -1,0 +1,7 @@
+
+## Friends page completion
+
+1. WPF `ConditioningControlPanel/Controls/Friends/FriendsDrawer.Feed.cs` — Social > Friends: receive more than eight events. Only visible lines become read; More reads the rest. Dots remain until leaving the page, then reopen folded to three read lines. An incoming feed event leaves friend rows intact. Click a feed line to open and scroll to its friend. Check long names, watch titles containing literal `{0}`, relative ages, and Full/Reduced/Off motion. Rows: `views-tab-friends`
+2. WPF `ConditioningControlPanel/Controls/Friends/FriendsDrawer.Trail.cs` — Send a poke/watch/invite; after the five-second send-result hold, inspect sent/arrived/seen and invite-answer pips and words. Leave/reopen; folded drawers must not repaint. Rows: `views-tab-friends`
+3. WPF `ConditioningControlPanel/Controls/Friends/FriendsDrawer.Blocked.cs`, `FriendsBlockList.cs` — Against a server omitting `blocked`, block a friend and a requester, open Blocked, restart, and unblock. Failed mutations must retain the previous list. Switch accounts: lists stay isolated. With a server returning `blocked: []`, local entries disappear without reblocking anyone; a nonempty server list wins over local entries. Rows: `views-tab-friends`
+4. WPF `ConditioningControlPanel/Controls/Friends/FriendsDrawer.Feed.cs` — While a new feed line animates, trigger panic or hide/detach the page. Shared drawer motion stops and no new window remains. Rows: `views-tab-friends`

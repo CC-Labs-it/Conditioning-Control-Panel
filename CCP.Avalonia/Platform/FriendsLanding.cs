@@ -60,6 +60,7 @@ internal static class FriendsLanding
         try
         {
             var current = FriendsHead.Service;
+            if (current != null) ConditioningControlPanel.Services.Friends.FriendsLocalBlocks.MigrateIfDue(current);
             if (!ReferenceEquals(_router?.Service, current))
             {
                 _router?.Dispose();

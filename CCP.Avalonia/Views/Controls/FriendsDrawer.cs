@@ -4,8 +4,7 @@
 // report), request answers, add by code and your own code. Driven only by IFriendsService.
 // The send pickers (poke / invite / watch) are in FriendsDrawer.Pickers.cs.
 // Tier plates, the lock-day chip, the notices bell and the FriendsSfx cues (via FriendsLanding) follow WPF.
-// ponytail: no feed, trails, open tables or leash section, no per-PC block list (the
-// server's list only). A word WPF throws outside the drawer
+// ponytail: open tables and the leash offer await their host workflows. A word WPF throws outside the drawer
 // (FriendsLanding.Tell) is a FloatingWord over the rail chip's window (OwnerWindow).
 using System;
 using System.Collections.Generic;
@@ -161,6 +160,7 @@ public sealed partial class FriendsDrawer : Border
     public void OnClosed()
     {
         try { _svc?.SetDrawerOpen(false); } catch { }
+        FoldFeed();
         CloseJuice();
         Unsubscribe(); // a folded drawer redraws nothing (OnOpened re-subscribes)
         (_isOpen, _openId, _confirm, _picker, _addBox.IsVisible) = (false, null, null, null, false);
@@ -171,11 +171,12 @@ public sealed partial class FriendsDrawer : Border
         if (!ReferenceEquals(next, _svc)) { Unsubscribe(); _svc = next; }
         if (_subscribed || _svc == null) return;
         _svc.SnapshotChanged += OnSnapshot;
+        _svc.SentTrailsChanged += OnTrailsChanged;
         _subscribed = true;
     }
     public void Unsubscribe()
     {
-        if (_subscribed && _svc != null) _svc.SnapshotChanged -= OnSnapshot;
+        if (_subscribed && _svc != null) { _svc.SnapshotChanged -= OnSnapshot; _svc.SentTrailsChanged -= OnTrailsChanged; }
         _subscribed = false;
     }
     private void OnSnapshot(FriendsSnapshot snap)
@@ -282,6 +283,7 @@ public sealed partial class FriendsDrawer : Border
         _list.Children.Clear();
         if (_svc?.Available != true)
         {
+            ListenFeed(null);
             var box = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(18, 28, 18, 28) };
             var line = EmptyLine(Loc.Get("friends_signed_out"));
             line.Margin = new Thickness(0, 0, 0, 12);
@@ -293,6 +295,8 @@ public sealed partial class FriendsDrawer : Border
             _list.Children.Add(box);
             return;
         }
+        _list.Children.Add(_feedBox);
+        FillFeed(snap);
         var (online, offline) = FriendsDrawerRules.Split(snap);
         if (_openId != null && !Contains(snap, _openId)) (_openId, _picker) = (null, null);
         if (_confirm is { } c && !Contains(snap, c.Id)) _confirm = null;
@@ -316,7 +320,7 @@ public sealed partial class FriendsDrawer : Border
         }
         if (online.Count + offline.Count + req == 0 && !_showBlocked) _list.Children.Add(AsPage ? PageEmptyBlock() : EmptyLine(Loc.Get("friends_empty")));
         if (!_showBlocked) return;
-        var blocked = snap.Blocked ?? Array.Empty<BlockedFriend>();
+        var blocked = BlockedRows(snap);
         Section("friends_section_blocked", blocked.Count);
         if (blocked.Count == 0)
             _list.Children.Add(Tagged(Wrap(Label(Loc.Get(snap.Blocked != null ? "friends_blocked_none" : "friends_blocked_empty"), 11.5, Muted)), "friends-blocked-empty"));
@@ -357,6 +361,7 @@ public sealed partial class FriendsDrawer : Border
         }
         mid.Children.Add(nameLine);
         mid.Children.Add(ActivityLine(f));
+        if (TrailLine(f) is { } trail) mid.Children.Add(trail);
         Grid.SetColumn(mid, 1);
         top.Children.Add(avatar);
         top.Children.Add(mid);
@@ -526,6 +531,7 @@ public sealed partial class FriendsDrawer : Border
         if (r == ActResult.Done)
         {
             FriendsLanding.SfxDismiss();
+            if (what == "block") RememberBlock(id, name);
             if (_openId == id) _openId = null;
             // The row is gone after the refresh, so the word goes where the player is looking.
             Say(Loc.GetF(what == "block" ? "friends_blocked_done" : "friends_removed_done", name), true);
@@ -622,7 +628,7 @@ public sealed partial class FriendsDrawer : Border
         if (_svc == null) return ActResult.TryLater;
         ActResult result;
         try { result = await _svc.BlockAsync(request.Id); } catch { result = ActResult.TryLater; }
-        if (result == ActResult.Done) { FriendsLanding.SfxDismiss(); Say(Loc.GetF("friends_blocked_done", request.Name), true); }
+        if (result == ActResult.Done) { RememberBlock(request.Id, request.Name); FriendsLanding.SfxDismiss(); Say(Loc.GetF("friends_blocked_done", request.Name), true); }
         else { FriendsLanding.SfxDenied(); ShowTimed("in:" + request.Id, Loc.Get(FriendsDrawerRules.ActResultKey(result)), false); }
         await SafeRefreshAsync();
         Render();
@@ -678,8 +684,9 @@ public sealed partial class FriendsDrawer : Border
         if (_svc == null) return ActResult.TryLater;
         FriendsLanding.SfxClick();
         ActResult r;
+        var account = FriendsLocalBlocks.Account();
         try { r = await _svc.UnblockAsync(b.Id); } catch { r = ActResult.TryLater; }
-        if (r == ActResult.Done) { FriendsLanding.SfxAccepted(); Say(Loc.GetF("friends_unblocked_done", b.Name), true); await SafeRefreshAsync(); Render(); }
+        if (r == ActResult.Done) { FriendsLocalBlocks.Shared.Remove(account, b.Id); FriendsLanding.SfxAccepted(); Say(Loc.GetF("friends_unblocked_done", b.Name), true); await SafeRefreshAsync(); Render(); }
         else { FriendsLanding.SfxDenied(); ShowTimed("blocked:" + b.Id, Loc.Get(FriendsDrawerRules.ActResultKey(r)), false); }
         return r;
     }
