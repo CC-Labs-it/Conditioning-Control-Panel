@@ -1,6 +1,6 @@
 /* Accepted Keep assets, placed before shader warmup. All colour is supplied by the host. */
 import { Group, Matrix4, Vector3, Color } from 'three/webgpu';
-import { vec3, texture, uv, vec2, mix, step, attribute, float, smoothstep, normalWorld, positionWorld, cameraPosition, normalize, dot } from 'three/tsl';
+import { vec3, texture, uv, vec2, mix, step, attribute, float, smoothstep, normalWorld, positionWorld, cameraPosition, normalize, dot, sin, fwidth } from 'three/tsl';
 import { getKeepLayout } from '../track/keep-layout.js';
 import { createSoftMaterial } from './materials/colossus.js';
 import { buildKeepFortress, keepStoneMaterial } from './keepFortress.js';
@@ -12,7 +12,11 @@ export function applyKeepRoad(road, art) {
   const stone = keepStoneMaterial('#664b69', art, false, false), original = road.material.colorNode;
   // Keep the opaque slate and fixed joints, with song-lit fills on the final visible surface.
   const cut = smoothstep(.12, .5, seam), bevel = smoothstep(.06, .22, seam).sub(smoothstep(.4, .7, seam));
-  const floor = mix(stone.colorNode, vec3(.006, .002, .009), cut.mul(.78)).add(original.mul(.02))
+  // Broad slate lamination stays on the dry stone, below the existing music and navigation marks.
+  const slatePhase = uv().x.mul(2.1).add(sin(uv().y.mul(.37)).mul(.6));
+  const slateDetail = float(1).sub(smoothstep(.5, 1.6, fwidth(slatePhase)));
+  const slate = sin(slatePhase).mul(.055).mul(slateDetail).add(1);
+  const floor = mix(stone.colorNode.mul(slate), vec3(.006, .002, .009), cut.mul(.78)).add(original.mul(.02))
     .add(vec3(.8, .035, .31).mul(bevel).mul(road.uniforms.contrast).mul(.17));
   const litFloor = keepMusicFloor({ p: uv(), base: floor, seam: cut, reactive: road.uniforms.reactive, music: road.uniforms.music });
   road.material.colorNode = mix(litFloor, original, step(2.5, attribute('surface', 'float')));

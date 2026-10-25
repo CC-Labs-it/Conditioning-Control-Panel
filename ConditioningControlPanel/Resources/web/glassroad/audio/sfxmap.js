@@ -9,6 +9,7 @@
  */
 import { mixGet, rollTickTimes, ladderSemis } from './mix.js';
 import { pressThudGain } from './pressThud.js';
+import { toyLaunchPlan } from './itemFlight.js';
 
 /** Per-file level against the one loudness every file is normalised to (linear gain). */
 export const SFX_GAIN = {
@@ -165,6 +166,8 @@ export function sfxPlan(name, p = {}, o = {}) {
     case 'item-fire': {
       const { racer, id, mode, target } = p;
       if (racer !== 0 && target === 0 && (mode === 'throw' || mode === 'lob')) return null;   // incoming warning: synth
+      const toy = toyLaunchPlan(id);
+      if (toy) return toy;
       // polish 6: every self item answers from the shipped bank too (a release at the kart), each its own figure
       if (mode === 'self') return SELF_FIRE[id] ? SELF_FIRE[id]() : [one('drift-release', 0.55, 1.15)];
       if (mode === 'throw' || mode === 'bounce' || mode === 'tether') return [one('fire-throw')];

@@ -30,6 +30,7 @@ import { createSamples } from './samples.js';
 import { sfxPlan, resolvePlan, jitterRate } from './sfxmap.js';
 import { createUnderwater } from './underwater.js';
 import { createWaterTravel } from './water-travel.js';
+import { createItemPassTracker, playItemPass } from './itemFlight.js';
 
 const GESTURES = ['pointerdown', 'touchstart', 'keydown'];
 const clamp01 = (x) => (x > 0 ? (x < 1 ? x : 1) : 0);
@@ -47,6 +48,10 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
   let master = null, sfx = null, bed = null, musicBus = null, musicDuck = null, underwater = null, waterTravel = null;
   const vol = { master: 1, music: 1, sfx: 1 };
   const near = new Map();
+  const itemPasses = createItemPassTracker(p => {
+    bus.emit('item-flyby', p);
+    if (ctx && syn && !paused && ctx.state === 'running') run('item-flyby', playItemPass, p, p.volume, 1, p.pan, true);
+  });
   const g = (k) => mixGet(feel, k);
 
   const glide = (param, v, tc = g('volTcS')) => {
@@ -130,7 +135,9 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
   /** A B1 event: full for the player, by distance for a near bot, silent when far. */
   function playB1(name, payload) {
     if (!ctx || paused || ctx.state !== 'running') return;
-    const lv = LOCAL.has(name) ? { me: true, level: 1, pan: 0 } : eventLevel(payload, near, g('nearCueM'), g('botCueMul'));
+    // A launch belongs at its thrower. Merely targeting the player does not move a distant shot into their ear.
+    const source = name === 'item-fire' && Number.isInteger(payload?.racer) ? { racer: payload.racer } : payload;
+    const lv = LOCAL.has(name) ? { me: true, level: 1, pan: 0 } : eventLevel(source, near, g('nearCueM'), g('botCueMul'));
     if (!(lv.level > 0.01)) return;
     run(name, B1_CUES[name], payload, lv.level, 1, lv.pan, lv.me);
   }
@@ -158,6 +165,11 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
       let n = 3;
       try { n = feel.get('ai.audibleKarts'); } catch (e) { /* Phase A feel */ }
       rivals?.update(list || [], n);
+    },
+    /** Host supplies actual world positions after the item simulation, once per visible race frame. */
+    updateItems(projectiles, listener, timeS, options = {}) {
+      if (dead) return;
+      itemPasses.update(projectiles, listener, timeS, { ...options, paused: paused || options.paused });
     },
     /** Any cue by name; menu blips (UI_CUES) also play from a suspended, unpaused context. */
     cue(name, opts = {}) {
@@ -187,6 +199,7 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
       rivals?.silence();
       near.clear();
       underwater?.reset();
+      itemPasses.reset();
       waterTravel?.reset();
       if (ctx) for (const p of [bed.gain, musicDuck.gain]) { try { p.cancelScheduledValues(ctx.currentTime); } catch (e) { /* none */ } glide(p, 1, 0.05); }
     },
@@ -207,6 +220,7 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
     get sfx() { return { loaded: samples ? samples.loaded : 0, failed: samples ? samples.failed : [], engine: !!engine?.recorded }; },
     dispose() {
       dead = true;
+      itemPasses.reset();
       offs.forEach((off) => off());
       for (const ev of GESTURES) win?.removeEventListener?.(ev, unlock);
       music?.dispose();

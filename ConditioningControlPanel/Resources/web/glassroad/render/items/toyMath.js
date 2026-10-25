@@ -1,8 +1,21 @@
 /* Toys use physical silhouettes. All motion is a function of the host clock. */
 export const TOYS = new Set(['pendulum', 'disc', 'tether', 'melt', 'snap', 'surge', 'bigSpiral']);
 export const TOY_MODELS = Object.freeze({ pendulum: 'toy-pendulum-lod0', disc: 'toy-disc', tether: 'toy-tether-head', bigSpiral: 'toy-big-spiral' });
+// Presentation metres only. Contact radii and targeting remain owned by the simulation.
+export const TOY_SCALE = Object.freeze({ pendulum: 1.65, disc: 1.9, tether: 1.8, bigSpiral: 1.6 });
+export const TOY_TRAIL = Object.freeze({ points: 26, stepM: .42, fadeS: .42, maxRetired: 16 });
 const clamp = x => Math.max(0, Math.min(1, x));
 const smooth = x => { const k = clamp(x); return k * k * (3 - 2 * k); };
+
+export function toyScale(kind, held = false) {
+  return (TOY_SCALE[kind] || 1) * (held ? 1.08 : 1);
+}
+
+/** A readable tapered wake without pulsing. Quiet mode keeps the enlarged prop alone. */
+export function toyTrailPoint(index, count, fade = 1, quiet = false) {
+  const q = clamp((index + 1) / Math.max(1, count));
+  return { size: .18 + .62 * q, alpha: quiet ? 0 : clamp(fade) * q * q * .78 };
+}
 
 export function toyPose(kind, time, still = false) {
   const t = still ? 0 : Math.max(0, time || 0);

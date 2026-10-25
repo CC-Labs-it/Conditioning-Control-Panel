@@ -2,7 +2,7 @@
 import { Group, Mesh, MeshBasicNodeMaterial, RingGeometry, CircleGeometry, BufferGeometry, BufferAttribute, Vector3, Quaternion, DoubleSide } from 'three/webgpu';
 import { texture, uv, uniform, vec2, sin, cos } from 'three/tsl';
 import { acquireLoomAtlas, loomAtlasUv } from '../loomAtlas.js';
-import { TOY_MODELS, toyPose, toyEnvelope, snapRing, guardLook, toyLod } from './toyMath.js';
+import { TOY_MODELS, TOYS, toyPose, toyEnvelope, snapRing, guardLook, toyLod, toyScale } from './toyMath.js';
 import { S } from '../../sim/state.js';
 import { Q } from '../quality.js';
 
@@ -87,7 +87,7 @@ export function createToyProps(root, art, feel, { photosafe = null, palette = ()
     if (kind === 'disc') e.rotator.rotation.set(pose.bank, pose.spin, .16);
     if (kind === 'bigSpiral') e.rotator.rotation.z = pose.spin;
     // The held watch's top chain anchor stays above the kart, at the shared held socket.
-    e.carrier.scale.setScalar(held ? 1.2 : 1);
+    e.carrier.scale.setScalar(toyScale(kind, held));
     setAlpha(e, held ? 1 : Math.min(1, Math.max(0, age) / (still ? .3 : .12)));
     return true;
   }
@@ -144,17 +144,25 @@ export function createToyProps(root, art, feel, { photosafe = null, palette = ()
         const mark = marks[mi - 1]; mark.ring.visible = false;
         mark.stars.position.fromArray(e.p); mark.stars.rotation.x = Math.PI / 2;
       }
+      if (e.name === 'item-flyby') {
+        const mark = marks[mi - 1];
+        N.fromArray(e.v || [0, 0, -1]); if (N.lengthSq() < .01) N.set(0, 0, -1); N.normalize();
+        for (const mesh of [mark.ring, mark.stars]) {
+          mesh.position.fromArray(e.p); mesh.quaternion.setFromUnitVectors(UP, N);
+        }
+      }
     }
   }
   function event(name, e = {}) {
-    if (!['disc-bounce', 'snap-burst', 'item-hit'].includes(name) || !e.p) return;
+    if (!['disc-bounce', 'snap-burst', 'item-hit', 'item-fire', 'item-flyby', 'tether-hook'].includes(name) || !e.p) return;
+    if (name === 'item-fire' && !TOYS.has(e.id)) return;
     if (name === 'item-hit' && !['pendulum','disc','bigSpiral','melt','snap','surge'].includes(e.kind)) return;
     const quiet = !!feel.get('gentle.on') || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
     const bright = !quiet && !!photosafe?.request('item-toy');
     if (effects.length >= 16) effects.shift();
-    effects.push({ name, age: 0, p: [...e.p], n: e.n ? [...e.n] : null, col: palette(), bright,
-      radius: name === 'disc-bounce' ? .65 : e.kind === 'bigSpiral' ? 2.2 : 1.3,
-      duration: name === 'snap-burst' ? (quiet ? .9 : .6) : quiet ? .8 : .6 });
+    effects.push({ name, age: 0, p: [...e.p], n: e.n ? [...e.n] : null, v: e.v ? [...e.v] : null, col: palette(), bright,
+      radius: name === 'disc-bounce' ? 1.15 : name === 'item-flyby' ? 1.25 : name === 'item-fire' ? 2.1 : e.kind === 'bigSpiral' ? 3.3 : 2.2,
+      duration: name === 'snap-burst' ? (quiet ? .9 : .6) : quiet ? .9 : .72 });
   }
   function clear() {
     time = 0; effects.length = 0; landingStates.clear(); slowAge.fill(0); slowFade.fill(0);

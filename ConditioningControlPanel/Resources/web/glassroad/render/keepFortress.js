@@ -10,7 +10,7 @@ export function keepStoneMaterial(hex, art, mortar = true, outline = true, finis
   const N = normalize(normalWorld), light = clamp(dot(N, normalize(vec3(...LOOK.lightDir))).mul(0.58).add(0.64), 0.19, 1.14);
   const map = art?.tex('road-glass-roughness');
   const grain = map ? texture(map, positionGeometry.xz.mul(vec2(3, 6))).r.add(texture(map, positionGeometry.xy.mul(vec2(3, 6))).r).mul(0.5) : float(0.5);
-  let colour = materialColor.rgb.mul(light).mul(smoothstep(.2, .8, grain).mul(.25).add(.87));
+  let colour = materialColor.rgb.mul(light).mul(smoothstep(.2, .8, grain).mul(.33).add(.83));
   if (mortar) {
     const y = positionWorld.y.div(2.4), edge = fract(y), aa = fwidth(y).max(0.008);
     const horizontal = smoothstep(.015, aa.add(.025), edge).mul(smoothstep(.015, aa.add(.025), float(1).sub(edge)));
@@ -24,21 +24,24 @@ export function keepStoneMaterial(hex, art, mortar = true, outline = true, finis
     const staggered = across.add(fract(floor(y).mul(.5))), brick = fract(staggered), bx = fwidth(staggered).max(.006);
     const vertical = smoothstep(.008, bx.add(.018), brick).mul(smoothstep(.008, bx.add(.018), float(1).sub(brick)));
     const joint = horizontal.mul(vertical);
-    const variation = hash(floor(staggered).add(floor(y).mul(37))).mul(.16).add(.9);
+    const variation = hash(floor(staggered).add(floor(y).mul(37))).mul(.24).add(.86);
     const footprint = max(aa, bx), detail = float(1).sub(smoothstep(.14, .42, footprint));
     const bed = min(edge, float(1).sub(edge)), side = min(brick, float(1).sub(brick));
     const bevel = smoothstep(.02, aa.add(.045), bed).mul(float(1).sub(smoothstep(.07, aa.add(.12), bed)))
       .add(smoothstep(.015, bx.add(.03), side).mul(float(1).sub(smoothstep(.05, bx.add(.09), side))));
     // Recessed joints and wide dressed lips give stone mass without extra geometry or dark shimmer.
     colour = colour.mul(variation).mul(mix(float(1), mix(float(.23), float(1), joint), detail))
-      .add(materialColor.rgb.mul(bevel).mul(.20).mul(detail));
+      .add(materialColor.rgb.mul(bevel).mul(.27).mul(detail));
     const beddingPhase = y.mul(8).add(sin(staggered.mul(2.1)).mul(.65));
-    const bedding = sin(beddingPhase).mul(.055).mul(float(1).sub(smoothstep(.4, 1.3, fwidth(beddingPhase))));
+    const bedding = sin(beddingPhase).mul(.08).mul(float(1).sub(smoothstep(.4, 1.3, fwidth(beddingPhase))));
     colour = colour.mul(bedding.add(1));
+    // Rain-darkened lower beds and worn crowns give each block a readable face at driving distance.
+    const damp = float(1).sub(smoothstep(.09, .34, edge)).mul(joint).mul(detail);
+    colour = colour.mul(float(1).sub(damp.mul(.16)));
   }
   if (finish === 'iron' || finish === 'cap') {
     const V = normalize(cameraPosition.sub(positionWorld)), H = normalize(V.add(normalize(vec3(...LOOK.lightDir))));
-    const specular = pow(max(dot(N, H), 0), finish === 'iron' ? 26 : 18);
+    const specular = pow(max(dot(N, H), 0), finish === 'iron' ? grain.mul(18).add(20) : float(18));
     // Plum forged iron and pale dressed crowns keep their accepted colours under a soft polish.
     colour = colour.add(mix(materialColor.rgb, vec3(.65, .52, .57), .3).mul(specular).mul(finish === 'iron' ? .32 : .16));
     if (finish === 'iron') {
