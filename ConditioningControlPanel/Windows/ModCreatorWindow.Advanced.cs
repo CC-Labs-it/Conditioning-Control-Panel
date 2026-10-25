@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -239,37 +240,10 @@ namespace ConditioningControlPanel
         // ─── Apply to Manifest ───────────────────────────────────
         private void ApplyAdvancedToManifest(Models.ModManifest manifest)
         {
-            // ── Tube layout: only emit if at least one field was filled in ──
-            var layout = new Models.ModTubeLayout();
-            bool anyLayout = false;
-
-            if (TryGetAdvInt(_advAvatarOffsetX, out var offX))
-            {
-                layout.AvatarOffsetX = Math.Clamp(offX, -1000, 1000);
-                anyLayout = true;
-            }
-            if (TryGetAdvInt(_advAvatarDetachedOffsetX, out var detX))
-            {
-                layout.AvatarDetachedOffsetX = Math.Clamp(detX, -1000, 1000);
-                anyLayout = true;
-            }
-            if (TryGetAdvDouble(_advAvatarScale, out var scale))
-            {
-                layout.AvatarScale = Math.Clamp(scale, 0.1, 3.0);
-                anyLayout = true;
-            }
-            if (TryGetAdvInt(_advAvatarOffsetY, out var offY))
-            {
-                layout.AvatarOffsetY = Math.Clamp(offY, -500, 500);
-                anyLayout = true;
-            }
-            if (TryGetAdvInt(_advAvatarDetachedOffsetY, out var detY))
-            {
-                layout.AvatarDetachedOffsetY = Math.Clamp(detY, -500, 500);
-                anyLayout = true;
-            }
-
-            manifest.TubeLayout = anyLayout ? layout : null;
+            manifest.TubeLayout = ModAdvancedRules.TubeLayout(
+                GetTextBoxValue(_advAvatarOffsetX), GetTextBoxValue(_advAvatarDetachedOffsetX),
+                GetTextBoxValue(_advAvatarScale), GetTextBoxValue(_advAvatarOffsetY),
+                GetTextBoxValue(_advAvatarDetachedOffsetY));
 
             // ── Bubble scale ──
             // Parsed through ModBubbleScaleRules rather than read raw so a hand-written value is
@@ -382,113 +356,10 @@ namespace ConditioningControlPanel
             _advStatPillTooltipRows.Clear();
         }
 
-        // ─── Value Helpers ───────────────────────────────────────
-        private bool TryGetAdvInt(TextBox? tb, out int value)
-        {
-            value = 0;
-            var text = GetTextBoxValue(tb).Trim();
-            if (text.Length == 0) return false;
-            return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
-        }
+        private string? GetAdvString(TextBox? tb, int maxLength) =>
+            ModAdvancedRules.Text(GetTextBoxValue(tb), maxLength);
 
-        private bool TryGetAdvDouble(TextBox? tb, out double value)
-        {
-            value = 0;
-            var text = GetTextBoxValue(tb).Trim();
-            if (text.Length == 0) return false;
-            return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value)
-                   && !double.IsNaN(value) && !double.IsInfinity(value);
-        }
-
-        /// <summary>Trimmed textbox value capped at <paramref name="maxLength"/>, or null when blank.</summary>
-        private string? GetAdvString(TextBox? tb, int maxLength)
-        {
-            var text = GetTextBoxValue(tb).Trim();
-            if (text.Length == 0) return null;
-            return text.Length > maxLength ? text[..maxLength] : text;
-        }
-
-        /// <summary>Rows → dictionary; skips blank keys/values, caps values at 500 chars and the dictionary at 30 entries (SanitizeManifest limits). Null when empty.</summary>
-        private static Dictionary<string, string>? CollectAdvTooltips(List<(TextBox Key, TextBox Value)> rows)
-        {
-            Dictionary<string, string>? dict = null;
-            foreach (var (keyBox, valueBox) in rows)
-            {
-                var key = keyBox.Text.Trim();
-                var value = valueBox.Text.Trim();
-                if (key.Length == 0 || value.Length == 0) continue;
-                if (value.Length > 500) value = value[..500];
-
-                dict ??= new Dictionary<string, string>();
-                if (dict.Count >= 30 && !dict.ContainsKey(key)) continue;
-                dict[key] = value;
-            }
-            return dict;
-        }
-    }
-
-    /// <summary>
-    /// The editor's half of a manifest's <c>bubbleScale</c>: what the stored number becomes in the
-    /// Advanced box, and what the box becomes on export. Split out of the window for the same
-    /// reason <see cref="ModImageSlotRules"/> and <see cref="ModArtFramingRules"/> were -- these are
-    /// decisions, they need no Dispatcher, and they are the part worth pinning with tests.
-    ///
-    /// <para><b>Why rules at all for one double.</b> The field had no round trip:
-    /// <c>BuildManifestFromForm</c> builds a FRESH <see cref="Models.ModManifest"/>, so a value an
-    /// author typed into <c>mod.json</c> by hand -- the only way to set it before this panel gained a
-    /// box -- vanished the next time they opened the mod in the editor and re-exported. That also
-    /// means the incoming number can be anything a text editor can hold, including NaN, and it has to
-    /// come out as something the runtime would actually honour: <see cref="Services.BubbleSizing"/>
-    /// clamps to 0.5..1.5 and ignores non-finite values, and the editor agrees with it rather than
-    /// showing a figure the app would quietly refuse to use.</para>
-    /// </summary>
-    internal static class ModBubbleScaleRules
-    {
-        /// <summary>
-        /// Decimals kept. An ambient bubble is 150-250 DIP, so a thousandth of a multiplier is a
-        /// quarter of a pixel -- past that it is noise in the box and noise in mod.json.
-        /// </summary>
-        internal const int StoredDecimals = 3;
-
-        /// <summary>
-        /// A manifest value reduced to something worth showing and worth writing back, or null for
-        /// "the mod said nothing". Non-finite is DROPPED rather than clamped: NaN is a typo, not a
-        /// request for the smallest legal bubble, and <c>BubbleSizing</c> already treats it as
-        /// absent -- clamping it to 0.5 here would invent a decision the author never made.
-        /// </summary>
-        internal static double? Sanitize(double? raw)
-        {
-            if (!raw.HasValue) return null;
-
-            var value = raw.Value;
-            if (double.IsNaN(value) || double.IsInfinity(value)) return null;
-
-            return Math.Round(
-                Math.Clamp(value, Services.BubbleSizing.ModScaleMin, Services.BubbleSizing.ModScaleMax),
-                StoredDecimals);
-        }
-
-        /// <summary>
-        /// The box text for a manifest value: invariant culture (the same reason
-        /// <c>ModArtFramingRegistry.TryParsePoint</c> is invariant -- a decimal comma round-trips
-        /// into a different number on a different machine), and blank when there is nothing to show
-        /// so a re-export cannot pin a value the author never chose.
-        /// </summary>
-        internal static string? Format(double? raw) =>
-            Sanitize(raw)?.ToString("0.###", CultureInfo.InvariantCulture);
-
-        /// <summary>
-        /// What the box means on export. Blank or unparseable is null, which keeps the key out of
-        /// mod.json entirely. An explicit 1.0 is KEPT: it changes nothing, but "this art is
-        /// deliberately the app's own size" is a statement an author may want on the record.
-        /// </summary>
-        internal static double? Parse(string? text)
-        {
-            if (string.IsNullOrWhiteSpace(text)) return null;
-            if (!double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
-                return null;
-
-            return Sanitize(value);
-        }
+        private static Dictionary<string, string>? CollectAdvTooltips(List<(TextBox Key, TextBox Value)> rows) =>
+            ModAdvancedRules.Tooltips(rows.Select(row => ((string?)row.Key.Text, (string?)row.Value.Text)));
     }
 }

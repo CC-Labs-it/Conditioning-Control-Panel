@@ -25,20 +25,15 @@ namespace ConditioningControlPanel.Services.Bureau
     ///
     /// Bridge protocol is documented at the top of the site's bureau/bridge.js. Scaffolding
     /// (hardened WebView2, heartbeat watchdog, relaunch-once recovery) mirrors IntakeHostService.
+    /// The pure rules (endpoints, reply shapes, batch, lockers, zip match) live in CCP.Core
+    /// <see cref="BureauHostRules"/>; this file is the WPF/WebView2 shell around them.
     /// </summary>
     internal static class BureauHostService
     {
-        public const string ProductName = "Beta Inspection Bureau";
+        public const string ProductName = BureauHostRules.ProductName;
 
-        private const int Protocol = 1;
-        private const string SiteHost = "cclabs.app";
-        private const string StartUrl = "https://cclabs.app/bureau/index.html";
-        private const string ServerBase = "https://codebambi-proxy.vercel.app";
-        private const int ServerFetchCount = 24;   // over-fetch: not every target resolves locally
-        private const int BatchDecodeCap = 6;      // frames per bridge message (keeps postMessage light)
-
-        /// <summary>Discord channel with the pack catalogue — the "requisition office".</summary>
-        private const string DiscordCatalogueUrl = DiscordLinks.PackCatalogue;
+        private const string StartUrl = BureauHostRules.StartUrl;
+        private const string DiscordCatalogueUrl = BureauHostRules.CatalogueUrl;
 
         private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(25) };
 
@@ -54,10 +49,9 @@ namespace ConditioningControlPanel.Services.Bureau
 
         public static bool IsActive => _host != null;
 
-        private static string? AdminToken => Environment.GetEnvironmentVariable("CCP_BUREAU_ADMIN_TOKEN");
+        private static string? AdminToken => BureauHostRules.AdminToken;
         private static bool HasAuth =>
-            !string.IsNullOrEmpty(App.Settings?.Current?.UnifiedId) &&
-            !string.IsNullOrEmpty(App.Settings?.Current?.AuthToken);
+            BureauHostRules.HasAuth(App.Settings?.Current?.UnifiedId, App.Settings?.Current?.AuthToken);
 
         /// <summary>Launch the Bureau window (idempotent — a running instance is re-focused).</summary>
         public static void Launch()
@@ -69,7 +63,7 @@ namespace ConditioningControlPanel.Services.Bureau
                 _host = new ChaosWebViewHost(new ChaosWebViewHost.Options
                 {
                     StartUrl = StartUrl,
-                    PrimaryHost = SiteHost,
+                    PrimaryHost = BureauHostRules.SiteHost,
                     Mappings = new List<(string, string, CoreWebView2HostResourceAccessKind)>(),
                     UserDataFolderName = "browser_data_bureau",
                     InputEnabled = true,
@@ -132,7 +126,7 @@ namespace ConditioningControlPanel.Services.Bureau
                 Post(new
                 {
                     type = "init",
-                    protocol = Protocol,
+                    protocol = BureauHostRules.Protocol,
                     admin = !string.IsNullOrEmpty(AdminToken),
                     hasAuth = HasAuth,
                     indexing = new { done = BureauIndexService.Done, total = BureauIndexService.Total, ready = BureauIndexService.IsReady },
@@ -212,8 +206,7 @@ namespace ConditioningControlPanel.Services.Bureau
                 // Certify-mode pulls the AI-proposed gold drafts (admin route);
                 // without credentials it falls through to regular casework.
                 var certifying = certify && !string.IsNullOrEmpty(AdminToken);
-                var reqBody = new JObject { ["unified_id"] = App.Settings?.Current?.UnifiedId, ["count"] = ServerFetchCount };
-                if (certifying) reqBody["certify"] = true;
+                var reqBody = BureauHostRules.NextRequest(App.Settings?.Current?.UnifiedId, certifying);
                 var (status, body) = await ServerAsync(HttpMethod.Post, "/v2/bureau/next", reqBody, admin: certifying)
                     .ConfigureAwait(false);
 
@@ -231,31 +224,7 @@ namespace ConditioningControlPanel.Services.Bureau
 
                 var targets = body["targets"] as JArray ?? new JArray();
                 var proposals = certifying ? body["proposals"] as JObject : null;
-                var items = new List<object>();
-                foreach (var t in targets)
-                {
-                    if (items.Count >= BatchDecodeCap) break;
-                    var target = (string?)t;
-                    if (string.IsNullOrEmpty(target)) continue;
-                    var sep = target.IndexOf(':');
-                    if (sep != 64) continue;
-                    if (!int.TryParse(target[(sep + 1)..], out var frame)) continue;
-
-                    // Locker scoping: only serve cases whose evidence lives in the loaded pack.
-                    if (!string.IsNullOrEmpty(packFilter))
-                    {
-                        if (!BureauIndexService.TryResolve(target[..sep], out var owner, out _)) continue;
-                        if (!string.Equals(owner, packFilter, StringComparison.Ordinal)) continue;
-                    }
-
-                    var decoded = BureauIndexService.DecodeFrame(target[..sep], frame);
-                    if (decoded == null) continue;   // not in this user's packs / decoder divergence — skip
-                    var boxes = proposals?[target];
-                    if (boxes != null)
-                        items.Add(new { target, src = decoded.Value.DataUri, dims = new[] { decoded.Value.W, decoded.Value.H }, boxes });
-                    else
-                        items.Add(new { target, src = decoded.Value.DataUri, dims = new[] { decoded.Value.W, decoded.Value.H } });
-                }
+                var items = BureauHostRules.BuildBatch(targets, packFilter, proposals, BureauFrameDecoder.DecodeFrame);
 
                 Post(new
                 {
@@ -277,26 +246,9 @@ namespace ConditioningControlPanel.Services.Bureau
             var target = (string?)o["target"] ?? "";
             try
             {
-                var req = new JObject
-                {
-                    ["unified_id"] = App.Settings?.Current?.UnifiedId,
-                    ["target"] = target,
-                    ["dims"] = o["dims"],
-                    ["boxes"] = o["boxes"] ?? new JArray(),
-                };
-                if (o["amend"]?.Value<bool>() == true) req["amend"] = true;
+                var req = BureauHostRules.SubmitRequest(App.Settings?.Current?.UnifiedId, o);
                 var (status, body) = await ServerAsync(HttpMethod.Post, "/v2/bureau/submit", req).ConfigureAwait(false);
-
-                var reply = status == 200 && body != null ? body : new JObject();
-                reply["type"] = "submit-result";
-                reply["target"] = target;
-                reply["ok"] = status == 200;
-                if (status != 200)
-                {
-                    reply["code"] = status;
-                    reply["error"] = body?["error"]?.ToString() ?? $"server error {status}";
-                }
-                Post(reply);
+                Post(BureauHostRules.SubmitReply(target, status, body));
             }
             catch (Exception ex)
             {
@@ -349,12 +301,8 @@ namespace ConditioningControlPanel.Services.Bureau
             }
             try
             {
-                var (status, body) = await ServerAsync(HttpMethod.Post, "/admin/bureau/gold", new JObject
-                {
-                    ["target"] = target,
-                    ["boxes"] = o["boxes"] ?? new JArray(),
-                    ["remove"] = o["remove"] ?? false,
-                }, admin: true).ConfigureAwait(false);
+                var (status, body) = await ServerAsync(HttpMethod.Post, "/admin/bureau/gold",
+                    BureauHostRules.GoldRequest(o), admin: true).ConfigureAwait(false);
                 Post(new
                 {
                     type = "gold-result",
@@ -387,9 +335,8 @@ namespace ConditioningControlPanel.Services.Bureau
                 {
                     var installed = packs?.IsPackInstalled(p.Id) == true;
                     var indexed = BureauIndexService.PackCounts.TryGetValue(p.Id, out var n) ? n : 0;
-                    if (!installed && p.ImageCount <= 0) continue;   // video-only packs have no casework
-                    if (installed && indexed == 0) continue;
-                    lockers.Add(new { id = p.Id, name = p.Name, installed, images = installed ? indexed : p.ImageCount });
+                    var locker = BureauHostRules.Locker(p.Id, p.Name, p.ImageCount, installed, indexed);
+                    if (locker != null) lockers.Add(locker);
                 }
                 Post(new { type = "packs", lockers, catalogueUrl = DiscordCatalogueUrl });
             }
@@ -465,10 +412,8 @@ namespace ConditioningControlPanel.Services.Bureau
 
                 // Match the zip to a known pack by normalized filename vs pack Name/Id
                 // (distribution zips are named after the pack, e.g. "Bambi Core Collection.zip").
-                static string Norm(string s) => new string(s.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
-                var stem = Norm(System.IO.Path.GetFileNameWithoutExtension(zipPath));
                 var available = await packs.GetAvailablePacksAsync().ConfigureAwait(false);
-                var pack = available.FirstOrDefault(p => Norm(p.Name) == stem || Norm(p.Id) == stem);
+                var pack = available.FirstOrDefault(p => BureauHostRules.ZipMatchesPack(zipPath, p.Name, p.Id));
                 if (pack == null)
                 {
                     Post(new { type = "pack-install-failed", error = "Unrecognized pack zip. Get official packs from the requisition catalogue." });
@@ -510,11 +455,7 @@ namespace ConditioningControlPanel.Services.Bureau
 
         private static async Task<(int Status, JObject? Body)> ServerAsync(HttpMethod method, string path, JObject? body, bool admin = false)
         {
-            using var req = new HttpRequestMessage(method, ServerBase + path);
-            var authToken = App.Settings?.Current?.AuthToken;
-            if (!string.IsNullOrEmpty(authToken)) req.Headers.TryAddWithoutValidation("X-Auth-Token", authToken);
-            if (admin && !string.IsNullOrEmpty(AdminToken)) req.Headers.TryAddWithoutValidation("x-admin-token", AdminToken);
-            if (body != null) req.Content = new StringContent(body.ToString(Formatting.None), Encoding.UTF8, "application/json");
+            using var req = BureauHostRules.BuildRequest(method, path, body, App.Settings?.Current?.AuthToken, AdminToken, admin);
 
             using var resp = await Http.SendAsync(req).ConfigureAwait(false);
             var text = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
@@ -541,11 +482,11 @@ namespace ConditioningControlPanel.Services.Bureau
         {
             StopHeartbeatWatch();
             _lastHeartbeatUtc = DateTime.UtcNow;
-            _heartbeatWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _heartbeatWatch = new DispatcherTimer { Interval = BureauHostRules.HeartbeatCheckInterval };
             _heartbeatWatch.Tick += (_, _) =>
             {
                 if (_host == null || !_host.IsReady || _exiting) return;
-                if ((DateTime.UtcNow - _lastHeartbeatUtc).TotalSeconds > 20)
+                if ((DateTime.UtcNow - _lastHeartbeatUtc).TotalSeconds > BureauHostRules.HeartbeatSilenceSeconds)
                 {
                     App.Logger?.Warning("BureauHostService: page heartbeat silent >20s - recovering");
                     Recover("heartbeat-silent");
@@ -583,7 +524,7 @@ namespace ConditioningControlPanel.Services.Bureau
         private static void ArmExitWatchdog()
         {
             CancelExitWatchdog();
-            _exitWatchdog = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1200) };
+            _exitWatchdog = new DispatcherTimer { Interval = BureauHostRules.ExitGrace };
             _exitWatchdog.Tick += (_, _) => DisposeAll();
             _exitWatchdog.Start();
         }

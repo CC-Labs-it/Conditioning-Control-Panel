@@ -78,7 +78,7 @@ public sealed class AwarenessPrivacyCardTests
         {
             shell.Show();
             Dispatcher.UIThread.RunJobs();
-            shell.GetLogicalDescendants().OfType<ConditioningControlPanel.Avalonia.Views.Tabs.CompanionTabView>().Single().IsVisible = true;
+            shell.ShowTab("awareness");   // v2: the Awareness tab hosts the room's privacy card
             Dispatcher.UIThread.RunJobs();
             var card = shell.GetLogicalDescendants().OfType<AwarenessPrivacyView>().Single();
             var vm = card.ViewModel!;
@@ -149,7 +149,7 @@ public sealed class AwarenessPrivacyCardTests
     });
 
     [Fact]
-    public Task RefreshTicksOnlyWhileTheRoomIsShown() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task RefreshTicksOnlyWhileTheCardIsShown() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<AvApp>()
@@ -160,14 +160,29 @@ public sealed class AwarenessPrivacyCardTests
         {
             shell.Show();
             Dispatcher.UIThread.RunJobs();
-            var tab = shell.GetLogicalDescendants().OfType<ConditioningControlPanel.Avalonia.Views.Tabs.CompanionTabView>().Single();
-            var card = tab.GetLogicalDescendants().OfType<AwarenessPrivacyView>().Single();
-            tab.IsVisible = true;
+            var card = shell.GetLogicalDescendants().OfType<AwarenessPrivacyView>().Single();
+            // v2: the room is collapsed and the Awareness tab hosts the card (WPF HostCompanionPrivacy).
+            shell.ShowTab("awareness");
             Dispatcher.UIThread.RunJobs();
+            Assert.True(shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.AwarenessTabView>("AwarenessTab")!.IsVisualAncestorOf(card));
             Assert.True(card.IsRefreshing);
-            tab.IsVisible = false;
+            shell.ShowTab("settings");
             Dispatcher.UIThread.RunJobs();
             Assert.False(card.IsRefreshing);
+            // Companion -> Awareness: the collapsed room's edges must not park the adopted card.
+            shell.ShowTab("companion");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(card.IsRefreshing);
+            shell.ShowTab("awareness");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(card.IsRefreshing);
+            // Not just an accident of the tab table's order: the Companion tab hiding AFTER the
+            // Awareness tab showed still leaves the card running.
+            var companion = shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.CompanionTabView>("CompanionTab")!;
+            companion.IsVisible = true;
+            companion.IsVisible = false;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(card.IsRefreshing);
         }
         finally
         {

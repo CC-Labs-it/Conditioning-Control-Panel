@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -17,6 +18,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -34,6 +36,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly List<ToggleButton> _nicheChips = new();
         private readonly TextBlock _sourceHint, _ratioLabel, _masterLabel;
         private readonly Grid _ratioRow;
+        /// <summary>WPF ScrolllerCreditLine (xaml :104-106): the online source's credit, shown while online is in play.</summary>
+        internal readonly ScrolllerCreditLine CreditLine = new() { Margin = new Thickness(0, 4, 0, 0), IsVisible = false };
         private readonly Slider _ratioSlider, _masterSlider;
         private readonly ComboBox _presetCombo = new()
             { FontSize = 13, MinHeight = 32, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -51,6 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal IReadOnlyList<ToggleButton> SourceChips => _sourceChips;
         internal IReadOnlyList<ToggleButton> NicheChips => _nicheChips;
         internal Slider MasterSlider => _masterSlider;
+        internal Slider RatioSlider => _ratioSlider;
         internal bool RatioRowVisible => _ratioRow.IsVisible;
 
         public LauncherMediaDialog()
@@ -63,6 +68,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             Background = Res("DarkerBgBrush");
             var (copy, muted) = (Res("TextSecondaryBrush"), Res("TextMutedBrush"));
+            // WPF MediaChip (xaml :39): hover = the elevated surface, on = the cyan wash and rim. Fluent
+            // paints its template part on hover and check, so the states are styles on that part.
+            Styles.Add(ChipState(":pointerover", Res("ElevatedSurfaceBrush"), null));
+            Styles.Add(ChipState(":checked", ChipOn, ChipOnRim));
+            // Done and the link keep their paint under the pointer (Fluent repaints the part on hover
+            // and press); WPF fades Done to 0.92 and underlines the link.
+            foreach (var state in new[] { ":pointerover", ":pressed" })
+            {
+                Styles.Add(ButtonPart("mediaDone", state, Res("AccentGradientBrush"), Brushes.White));
+                Styles.Add(ButtonPart("mediaLink", state, Brushes.Transparent, copy));
+            }
+            Styles.Add(new Style(x => x.OfType<Button>().Class("mediaDone").Class(":pointerover")) { Setters = { new Setter(OpacityProperty, 0.92) } });
+            Styles.Add(new Style(x => x.OfType<Button>().Class("mediaLink").Class(":pointerover").Child().OfType<TextBlock>())
+                { Setters = { new Setter(TextBlock.TextDecorationsProperty, TextDecorations.Underline) } });
 
             TextBlock Copy(string key, double size = 14, double top = 0) => new()
                 { Text = Loc.Get(key), Foreground = copy, FontSize = size, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, top, 0, 0) };
@@ -97,6 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ToolTip.SetTip(Chip(Loc.Get("launcher_media_src_" + key), key, _sourceChips, sourcePanel, SourceChip_Changed),
                     Loc.Get("launcher_media_src_" + key + "_hint"));
             _sourceHint = Copy("launcher_media_src_local_hint", 13, 2);
+            CreditLine.Foreground = copy;
             _ratioSlider = new Slider { Minimum = 5, Maximum = 95, TickFrequency = 5, IsSnapToTickEnabled = true, VerticalAlignment = VerticalAlignment.Center };
             _ratioSlider.ValueChanged += (_, _) => RatioSlider_Changed();
             _ratioLabel = new TextBlock { Margin = new Thickness(14, 0, 0, 0), MinWidth = 90, Foreground = copy, FontSize = 13, VerticalAlignment = VerticalAlignment.Center };
@@ -111,7 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _presetCombo.SelectionChanged += (_, _) => PresetCombo_Changed();
             var browser = new Button
             {
-                Content = new TextBlock { Text = Loc.Get("launcher_media_open_browser") }, Margin = new Thickness(12, 0, 0, 0),
+                Classes = { "mediaLink" }, Content = new TextBlock { Text = Loc.Get("launcher_media_open_browser") }, Margin = new Thickness(12, 0, 0, 0),
                 Padding = new Thickness(4, 2), VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0), Foreground = copy, FontSize = 13, Cursor = new Cursor(StandardCursorType.Hand),
             };
@@ -135,7 +155,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         Children =
                         {
                             Copy("launcher_media_blurb"),
-                            Eyebrow("launcher_media_source", 22), sourcePanel, _sourceHint, _ratioRow,
+                            Eyebrow("launcher_media_source", 22), sourcePanel, _sourceHint, CreditLine, _ratioRow,
                             Eyebrow("launcher_media_niches", 22), nichePanel, Copy("launcher_media_niches_hint", 13, 2),
                             Eyebrow("launcher_media_library", 22), Copy("launcher_media_preset", 13),
                             Row(_presetCombo, browser, 6), Copy("launcher_media_preset_hint", 13, 2),
@@ -152,7 +172,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             (footnote.Foreground, footnote.Margin, footnote.VerticalAlignment) = (muted, new Thickness(4, 0, 120, 0), VerticalAlignment.Center);
             var done = new Button
             {
-                Content = new TextBlock { Text = Loc.Get("launcher_media_done") },
+                Classes = { "mediaDone" }, Content = new TextBlock { Text = Loc.Get("launcher_media_done") },
                 HorizontalAlignment = HorizontalAlignment.Right, Width = 104, Height = 38, FontSize = 14, FontWeight = FontWeight.SemiBold,
                 Foreground = Brushes.White, Background = Res("AccentGradientBrush"), BorderThickness = new Thickness(0),
                 CornerRadius = new CornerRadius(10), Cursor = new Cursor(StandardCursorType.Hand),
@@ -176,20 +196,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Application.Current != null && Application.Current.TryFindResource(key, Application.Current.ActualThemeVariant, out var v) && v is IBrush b
                 ? b : Brushes.Transparent;
 
-        /// <summary>WPF MediaChip (xaml :39): 13 px semibold, radius 15, 14,6 padding. On/off is the theme's
-        /// ToggleButton :checked look, not WPF's cyan wash and rim.</summary>
+        private static readonly IBrush ChipOff = new SolidColorBrush(Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF));
+        private static readonly IBrush ChipOn = new SolidColorBrush(Color.FromArgb(0x33, 0x5E, 0xC8, 0xF2));
+        private static readonly IBrush ChipOnRim = new SolidColorBrush(Color.FromRgb(0x5E, 0xC8, 0xF2));
+
+        /// <summary>WPF MediaChip (xaml :39): 13 px semibold, radius 15, 14,6 padding, off = a faint wash
+        /// with the glass rim; hover and on are the ChipState styles.</summary>
         private static ToggleButton Chip(string label, string tag, List<ToggleButton> list, Panel panel, Action<ToggleButton> changed)
         {
             var chip = new ToggleButton
             {
                 Content = new TextBlock { Text = label }, Tag = tag, Margin = new Thickness(0, 0, 8, 8), Padding = new Thickness(14, 6),
                 CornerRadius = new CornerRadius(15), FontSize = 13, FontWeight = FontWeight.SemiBold, Cursor = new Cursor(StandardCursorType.Hand),
+                Foreground = Res("TextLightBrush"), Background = ChipOff, BorderBrush = Res("GlassBorderBrush"), BorderThickness = new Thickness(1),
             };
             chip.IsCheckedChanged += (_, _) => changed(chip);
             list.Add(chip);
             panel.Children.Add(chip);
             return chip;
         }
+
+        private static Style ButtonPart(string cls, string state, IBrush background, IBrush foreground) => new(x =>
+            x.OfType<Button>().Class(cls).Class(state).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+        {
+            Setters =
+            {
+                new Setter(ContentPresenter.BackgroundProperty, background),
+                new Setter(ContentPresenter.ForegroundProperty, foreground),
+            },
+        };
+
+        private static Style ChipState(string state, IBrush background, IBrush? rim) => new(x =>
+            x.OfType<ToggleButton>().Class(state).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+        {
+            Setters =
+            {
+                new Setter(ContentPresenter.BackgroundProperty, background),
+                new Setter(ContentPresenter.BorderBrushProperty, rim ?? Res("GlassBorderBrush")),
+                new Setter(ContentPresenter.ForegroundProperty, Res("TextLightBrush")),
+            },
+        };
 
         /// <summary>WPF BuildPresets: the saved asset presets, "All Assets" first.</summary>
         private void BuildPresets()
@@ -227,6 +273,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 foreach (var chip in _sourceChips)
                     chip.IsChecked = string.Equals(chip.Tag as string, source, StringComparison.Ordinal);
                 _sourceHint.Text = Loc.Get("launcher_media_src_" + source + "_hint");
+                CreditLine.IsVisible = source != LauncherMediaSettings.SourceLocal;
                 _ratioSlider.Value = s.RemoteMediaRatio;
                 _ratioLabel.Text = Loc.GetF("launcher_media_mixed_share", s.RemoteMediaRatio);
                 _ratioRow.IsVisible = source == LauncherMediaSettings.SourceMixed;
@@ -319,9 +366,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var s = CoreSettings.Current;
                 int level = LauncherMediaSettings.ApplyMasterVolume(s, (int)Math.Round(_masterSlider.Value));
                 _masterLabel.Text = $"{level}%";
-                // WPF mw.SetMasterVolume: the same two lines the Settings page's slider runs (AudioSettingsBinder).
+                // WPF mw.SetMasterVolume: what the Settings page's master slider runs (AudioSettingsBinder).
                 LayeredAudio.Instance?.SetMasterVolumeLive();
-                CoreSettings.Save();
+                MandatoryVideoOverlay.Instance.UpdateVolume();
+                CoreSettings.Save();   // debounced: a whole drag is one write
             }
             catch (Exception ex) { Log.Debug("[Launcher] master volume change failed: {E}", ex.Message); }
         }

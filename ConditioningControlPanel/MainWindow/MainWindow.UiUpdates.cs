@@ -389,9 +389,7 @@ namespace ConditioningControlPanel
             if (QuestsTab.BtnQuestSubRoadmap == null) return;
 
             var modId = App.Mods?.ActiveModId;
-            bool supported = modId == Models.BuiltInMods.CCPDefaultId
-                          || modId == Models.BuiltInMods.BambiSleepId
-                          || modId == Models.BuiltInMods.SissyHypnoId;
+            bool supported = Models.BuiltInMods.SupportsBimboJournal(modId);
 
             QuestsTab.BtnQuestSubRoadmap.Visibility = supported ? Visibility.Visible : Visibility.Collapsed;
 
@@ -680,44 +678,8 @@ namespace ConditioningControlPanel
             }
         }
 
-        private static string? GetBonusChipTooltip(string source)
-        {
-            string M(string text) => App.Mods?.MakeModAware(text) ?? text;
-
-            // Check for explicit mod override first
-            string? modTip = null;
-            if (source.StartsWith("Streak Power"))
-                modTip = App.Mods?.GetBoostTooltip("streak_power");
-            else
-            {
-                var skillId = source switch
-                {
-                    "Sparkle Boost" => "sparkle_boost_1",
-                    "Extra Sparkly" => "sparkle_boost_2",
-                    "Maximum Sparkle" => "sparkle_boost_3",
-                    "Night Shift" => "night_shift",
-                    "Early Bird Bimbo" => "early_bird_bimbo",
-                    "PINK RUSH ACTIVE!" => "pink_rush",
-                    _ => null
-                };
-                if (skillId != null)
-                    modTip = App.Mods?.GetBoostTooltip(skillId);
-            }
-            if (modTip != null) return modTip;
-
-            // Fall back to defaults with MakeModAware
-            if (source.StartsWith("Streak Power")) return M("Skill tree bonus: +0.5% XP per day of consecutive use (max 15%)");
-            return source switch
-            {
-                "Sparkle Boost" => M("Skill tree bonus: +10% XP from Sparkle Boost"),
-                "Extra Sparkly" => M("Skill tree bonus: +15% XP from Extra Sparkly (stacks with Sparkle Boost)"),
-                "Maximum Sparkle" => M("Skill tree bonus: +20% XP from Maximum Sparkle (stacks with other Sparkle skills)"),
-                "Night Shift" => M("Skill tree bonus: +50% XP for conditioning between 11 PM and 5 AM"),
-                "Early Bird Bimbo" => M("Skill tree bonus: +50% XP for conditioning between 5 AM and 8 AM"),
-                "PINK RUSH ACTIVE!" => M("Skill tree bonus: 3x XP multiplier! Random 60-second windows of boosted XP"),
-                _ => null
-            };
-        }
+        private static string? GetBonusChipTooltip(string source) =>
+            Models.SkillTreeRules.GetBonusChipTooltip(source, id => App.Mods?.GetBoostTooltip(id));
 
         /// <summary>
         /// Start a timer to periodically update stat pill values (conditioning time, online users, rank).
@@ -759,6 +721,8 @@ namespace ConditioningControlPanel
             _conditioningStartTime = DateTime.Now;
             _conditioningBaselineMinutes = App.Settings?.Current?.TotalConditioningMinutes ?? 0;
             _conditioningTimeSecondCounter = 0;
+            _conditioningPendingSeconds = 0;
+            _conditioningLastTickUtc = DateTime.UtcNow;
 
             // Update display every second for LIVE tracking
             _conditioningTimeTimer = new DispatcherTimer
@@ -783,11 +747,15 @@ namespace ConditioningControlPanel
                             (int)elapsed.TotalSeconds, App.Settings?.Current?.TotalConditioningMinutes ?? 0);
                     }
 
-                    // Save to local storage every minute (avoid excessive disk writes)
-                    if (_conditioningTimeSecondCounter >= 60)
+                    // Save to local storage every minute (avoid excessive disk writes). Counted by
+                    // the real time between ticks, not by ticks: a busy UI drops them (ConditioningClock).
+                    var nowUtc = DateTime.UtcNow;
+                    var due = Services.Progression.ConditioningClock.Tick(ref _conditioningPendingSeconds,
+                        (nowUtc - _conditioningLastTickUtc).TotalSeconds);
+                    _conditioningLastTickUtc = nowUtc;
+                    if (due > 0)
                     {
-                        var elapsed = DateTime.Now - _conditioningStartTime;
-                        App.SkillTree?.AddConditioningTime(1.0); // Add 1 minute
+                        App.SkillTree?.AddConditioningTime(due);
                         _conditioningTimeSecondCounter = 0;
                         App.Logger?.Debug("Conditioning time saved to storage: {Time}", App.SkillTree?.GetFormattedConditioningTime());
                     }

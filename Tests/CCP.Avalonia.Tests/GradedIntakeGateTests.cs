@@ -42,7 +42,8 @@ public sealed class GradedIntakeGateTests
             try
             {
                 host.Show();
-                Dispatcher.UIThread.RunJobs();
+                host.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
                 var gate = view.FindControl<Border>("GradedIntakeGate")!;
                 var banner = view.FindControl<Border>("GradedIntakePassBanner")!;
                 var gated = view.FindControl<Border>("GradedIntakeGatedContent")!;
@@ -57,14 +58,14 @@ public sealed class GradedIntakeGateTests
                 // Signed in, week unspent: open, with the pass banner.
                 isLoggedIn = true;
                 AvApp.IntakePass.RaiseChanged();
-                Dispatcher.UIThread.RunJobs();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
                 Assert.False(gate.IsVisible);
                 Assert.True(gated.IsEnabled);
                 Assert.True(banner.IsVisible);
 
                 // A completed run spends the week and the page repaints from the event alone.
                 AvApp.IntakePass.ConsumeForCompletedIntake();
-                Dispatcher.UIThread.RunJobs();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
                 Assert.Equal(IntakePassService.CurrentWeekKey(), service.Current.IntakePassSpentWeek);
                 Assert.True(gate.IsVisible);
                 Assert.False(banner.IsVisible);
@@ -73,7 +74,7 @@ public sealed class GradedIntakeGateTests
                 // Any paid tier (WPF 2a1fd1e88, was Prime only): no door, no banner, whatever the week says.
                 isPaid = true;
                 AvApp.IntakePass.RaiseChanged();
-                Dispatcher.UIThread.RunJobs();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
                 Assert.False(gate.IsVisible);
                 Assert.False(banner.IsVisible);
                 Assert.True(gated.IsEnabled);
@@ -186,7 +187,8 @@ public sealed class GradedIntakeGateTests
             try
             {
                 shell.Show();
-                Dispatcher.UIThread.RunJobs();
+                shell.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
                 AvApp.IntakePass.PassStateChanged += onChanged;
                 shell.UpdateQuickLoginUI(accountChanged: true);
                 Assert.Equal(1, raised);
