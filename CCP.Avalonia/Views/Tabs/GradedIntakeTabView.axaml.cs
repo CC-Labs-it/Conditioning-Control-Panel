@@ -186,7 +186,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 {
                     App.Notifications.Show(SpentBody(), Helpers.NotificationType.Warning,
                         TimeSpan.FromSeconds(8), Loc.Get("intake_gate_spent_cta"),
-                        () => (owner as Windows.MainShellWindow)?.ShowVaultGate("gradedintake", 1));
+                        () => (owner as Windows.MainShellWindow)?.OpenPricedCard("gradedintake", 1));
                 }
                 return;
             }
@@ -199,8 +199,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 return;
             }
 
-            // WPF Lab.cs:195: a first-ever run does not duck the control panel (it reads as a crash).
-            OpenIntake(owner, duckMain: IntakePunchCardState.ReadEverCompletedIntake(CorePaths.UserData));
+            // WPF Lab.cs:195/198: a first-ever run does not duck the control panel (it reads as a crash). The live
+            // service first: a finished intake reaches the file only on its next (up to 30 s) save.
+            OpenIntake(owner, duckMain: App.IntakePunchCard?.HasEverCompletedIntake
+                ?? IntakePunchCardState.ReadEverCompletedIntake(CorePaths.UserData));
         }
 
         /// <summary>WPF IntakeHostService.Launch: one live run at a time, focused if already open;

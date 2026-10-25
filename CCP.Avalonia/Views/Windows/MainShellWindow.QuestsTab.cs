@@ -5,7 +5,8 @@
 //
 // ponytail, still missing:
 //   GetQuestArt / ClearQuestArtCache - resolve pack:// quest art this head does not ship.
-//   RefreshPunchCard / BuildPunchHole - IntakePunchCardService is WPF-only.
+//   RefreshPunchCard / BuildPunchHole - the punch-card UI is off in WPF too (UiEnabled=false);
+//     the Core IntakePunchCardService already credits sessions here.
 //   BtnFixStreak_Click / StreakFixDay_Click / ExitStreakFixMode - SpendStreakFix, a server round trip.
 //   OnSettingsPropertyChangedForQuests - mod/settings repaint; the tab repaints on entry instead.
 

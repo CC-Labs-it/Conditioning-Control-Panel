@@ -276,28 +276,52 @@ public sealed class VaultGateTests
         return Task.CompletedTask;
     });
 
+    /// <summary>WPF MainWindow.QuestsTab.cs:96 OpenPricedCard: the spent toast's CTA opens the priced intake
+    /// card, except for a patron whose grant died, who is sent to Reconnect instead. One test, one shell:
+    /// two shells built around a seeded SettingsService break later VaultGate tests.</summary>
     [Fact]
     public Task SpentIntakeToastOpensThePricedIntakeCard() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         EnsureAvalonia();
-        var settings = CoreSettings.Current;
-        var week = settings.IntakePassSpentWeek;
-        var utc = settings.IntakePassSpentUtc;
+        // The pass reads CoreSettings.Service (not CoreSettings.Current), so a service of our own is seeded
+        // around each click only.
+        var prevSettings = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
         var login = CoreAccount.IsLoggedInProvider;
         var lab = CoreAccount.HasLabAccessProvider;
+        var premium = CoreAccount.HasPremiumAccessProvider;
+        var provider = TierGate.ReconnectIsTheAnswerProvider;
+        var reconnect = true;
+        CoreAccount.HasPremiumAccessProvider = () => false;
         CoreAccount.IsLoggedInProvider = () => true;
         CoreAccount.HasLabAccessProvider = () => false;
+        TierGate.ReconnectIsTheAnswerProvider = () => reconnect;
         var shell = new MainShellWindow();
+        var reconnects = 0;
+        shell.ReconnectFromGateOverride = () => { reconnects++; return Task.CompletedTask; };
         shell.Show();
         var host = new StackPanel();
         global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(host);
-        host.Children.Clear();
+        void ClickSpentCta()
+        {
+            host.Children.Clear();
+            CoreSettings.ServiceProvider = () => service;
+            try { shell.Named<GradedIntakeTabView>("GradedIntakeTab")!.BtnStartIntake_Click(null, new RoutedEventArgs()); }
+            finally { CoreSettings.ServiceProvider = prevSettings; }
+            Click(host, Loc.Get("intake_gate_spent_cta"));
+        }
         try
         {
-            settings.IntakePassSpentWeek = IntakePassService.CurrentWeekKey();
-            settings.IntakePassSpentUtc = DateTime.UtcNow;
-            shell.Named<GradedIntakeTabView>("GradedIntakeTab")!.BtnStartIntake_Click(null, new RoutedEventArgs());
-            Click(host, Loc.Get("intake_gate_spent_cta"));
+            service.Current.IntakePassSpentWeek = IntakePassService.CurrentWeekKey();
+            service.Current.IntakePassSpentUtc = DateTime.UtcNow;
+
+            ClickSpentCta();   // lapsed patron: Reconnect, no price card
+            Assert.Equal(1, reconnects);
+            Assert.Null(VaultGateDialog.Open);
+
+            reconnect = false;
+            ClickSpentCta();   // everyone else: the priced Basic intake card
+            Assert.Equal(1, reconnects);
             Assert.NotNull(VaultGateDialog.Open);
             Assert.Contains(Loc.Get("vaultgate_chip_vault"), Texts(VaultGateDialog.Open!));
         }
@@ -305,10 +329,11 @@ public sealed class VaultGateTests
         {
             VaultGateDialog.Open?.Close();
             shell.Close();
-            settings.IntakePassSpentWeek = week;
-            settings.IntakePassSpentUtc = utc;
+            CoreSettings.ServiceProvider = prevSettings;
             CoreAccount.IsLoggedInProvider = login;
             CoreAccount.HasLabAccessProvider = lab;
+            CoreAccount.HasPremiumAccessProvider = premium;
+            TierGate.ReconnectIsTheAnswerProvider = provider;
             global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(new StackPanel());
         }
         return Task.CompletedTask;
