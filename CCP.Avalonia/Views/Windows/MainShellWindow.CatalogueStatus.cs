@@ -4,6 +4,8 @@
 // and MainWindow.PresetIO.cs (CreateCatalogueStatusBadge, RefreshCatalogueShareBadges): the /mine
 // status polls and the share-status pill. Recording a NEW submission (the write side) is U3's.
 //
+// Accepted notices use WPF's sticky key so the user can read them until they dismiss or act.
+
 using System;
 using System.Collections.Generic;
 using System.IO;

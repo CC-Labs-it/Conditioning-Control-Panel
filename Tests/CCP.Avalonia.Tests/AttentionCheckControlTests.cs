@@ -43,16 +43,20 @@ public sealed class AttentionCheckControlTests
         Assert.False(control.IsHitTestVisible);
         var visuals = Assert.IsType<Grid>(control.Content).Children;
         Assert.DoesNotContain(visuals, visual => visual.Effect != null);
-        Assert.Equal(2, visuals.OfType<Border>().Count(border => border.BoxShadow.Count > 0));
-        // WPF's ring glow is the ring's own effect: invisible when nothing is filled.
-        Assert.Equal(expected, control.FindControl<Border>("DotRingGlow")!.Opacity, 8);
+        Assert.Equal(2, visuals.OfType<Border>().Count(border => border.BoxShadow.Count > 0)
+            + visuals.OfType<Image>().Count(image => image.Name == "DotRingGlow"));
+        // Nothing is rasterized before attach, even after SetProgress: the density is unknown until then.
+        Assert.Null(control.FindControl<Image>("DotRingGlow")!.Source);
+        Assert.Same(group, control.FindControl<Image>("DotRingGlow")!.RenderTransform);
+        Assert.Equal(1, visuals.OfType<Border>().Count(border => border.BoxShadow.Count > 0));
+        Assert.Equal(expected, control.FindControl<Image>("DotRingGlow")!.Opacity, 8);
     });
 
     [Fact]
     public void RingGlowStartsDark() => AvaloniaTestDispatcher.Run(() =>
     {
         Setup();
-        Assert.Equal(0, new AttentionCheckControl().FindControl<Border>("DotRingGlow")!.Opacity);
+        Assert.Equal(0, new AttentionCheckControl().FindControl<Image>("DotRingGlow")!.Opacity);
     });
 
     [Fact]
@@ -65,12 +69,17 @@ public sealed class AttentionCheckControlTests
         var control = new AttentionCheckControl();
         var ring = control.FindControl<Ellipse>("DotRingFg")!;
         var scale = ((TransformGroup)ring.RenderTransform!).Children.OfType<ScaleTransform>().Single();
-        var glowScale = Assert.IsType<ScaleTransform>(control.FindControl<Border>("DotRingGlow")!.RenderTransform);
+        var glowTransform = Assert.IsType<TransformGroup>(control.FindControl<Image>("DotRingGlow")!.RenderTransform);
+        var glowScale = Assert.Single(glowTransform.Children.OfType<ScaleTransform>());
         var window = new Window { Width = 150, Height = 150, Content = control };
         try
         {
             window.Show();
             Dispatcher.UIThread.RunJobs();
+            var glow = control.FindControl<Image>("DotRingGlow")!;
+            // Attach rasterizes the glow at the top level's density (headless = 1): 84 + 2*14 px.
+            var bitmap = Assert.IsType<global::Avalonia.Media.Imaging.Bitmap>(glow.Source);
+            Assert.Equal(new PixelSize(112, 112), bitmap.PixelSize);
             control.StartPulse();
             var pulse = Assert.Single(BeatLoop.Running.Where(p => p.Owner == control));
             Assert.True(pulse.OnFrameBeat);
@@ -94,6 +103,7 @@ public sealed class AttentionCheckControlTests
             BeatLoop.StepAll();
             Assert.Equal(1.18, scale.ScaleX, 8);
             window.Content = null;
+            Assert.Null(glow.Source);
             Assert.DoesNotContain(BeatLoop.Running, p => p.Owner == control);
             Assert.Equal(1, scale.ScaleX);
             Assert.Equal(1, scale.ScaleY);
