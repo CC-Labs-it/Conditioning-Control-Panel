@@ -34,6 +34,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private readonly Border _glow, _whiten;
         private Canvas? _sparks;
         private Panel? _slices;
+        private Panel? _shards;
+        internal FlashShatterState? Shatter { get; private set; }
         private double _alpha = 1;
         private DispatcherTimer? _lifetimeTimer;
         private TimeSpan _fade;
@@ -90,7 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// and close when it is done. The flash no longer takes clicks while it leaves.</summary>
         internal void BeginExit(FlashExitState exit)
         {
-            if (Exit != null) return;
+            if (Exit != null || Shatter != null) return;
             Exit = exit;
             _lifetimeTimer?.Stop(); _lifetimeTimer = null;
             IsHitTestVisible = false;
@@ -101,8 +103,63 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _exitShift = new TranslateTransform();
             _card.RenderTransform = new TransformGroup { Children = { _exitScale, _exitRotate, _exitShift } };
             BuildExitLayers(exit);
-            _lastExitTick = FlashOverlay.Clock.GetTimestamp();
             Apply(FlashExit.Sample(exit));
+            StartExitClock();
+        }
+
+        /// <summary>WPF BuildShatter/DrawShards: hard-edged pieces of the letterboxed image,
+        /// no glow halo, stepping the shared pixel-space physics on the monitor it is on now.</summary>
+        internal bool TryBeginShatter(MotionLevel motion, Random rng)
+        {
+            if (Exit != null || Shatter != null || _image.Source is not { } source) return false;
+            UpdateLayout();
+            var fit = Stretch.Uniform.CalculateSize(_image.Bounds.Size, source.Size);
+            var scale = DesktopScaling > 0 ? DesktopScaling : 1;
+            var imageOrigin = _image.TranslatePoint(default, this) ?? default;
+            var local = imageOrigin + new Point((_image.Bounds.Width - fit.Width) / 2, (_image.Bounds.Height - fit.Height) / 2);
+            var x = Position.X + local.X * scale;
+            var y = Position.Y + local.Y * scale;
+            var monitor = Screens.ScreenFromPoint(new PixelPoint((int)(x + fit.Width * scale / 2), (int)(y + fit.Height * scale / 2))) ?? SpawnScreen;
+            var bounds = monitor?.Bounds ?? new PixelRect(Position, PixelSize.FromSize(Bounds.Size, scale));
+            var state = FlashShatter.Create(x, y, fit.Width * scale, fit.Height * scale,
+                bounds.X, bounds.Y, bounds.Width, bounds.Height, motion, rng);
+            if (state.Shards.Length == 0) return false; // Motion Off falls through to FlashExit, like WPF.
+            Shatter = state;
+            IsHitTestVisible = false;
+            X11Overlay.SetClickThrough(this, true);
+            // WPF draws across its full-screen compositor. Give this short-lived break the same room.
+            Position = bounds.Position;
+            Width = bounds.Width / scale;
+            Height = bounds.Height / scale;
+            _card.IsVisible = false;
+            _shards = new Panel
+            {
+                Width = fit.Width, Height = fit.Height,
+                HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left,
+                VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Top,
+                Margin = new Thickness((x - bounds.X) / scale, (y - bounds.Y) / scale, 0, 0),
+            };
+            foreach (var shard in state.Shards)
+            {
+                var cut = new Rect(shard.U0 * fit.Width, shard.V0 * fit.Height,
+                    (shard.U1 - shard.U0) * fit.Width, (shard.V1 - shard.V0) * fit.Height);
+                _shards.Children.Add(new Border
+                {
+                    Name = "FlashShard",
+                    Child = new Image { Source = source, Stretch = Stretch.Fill },
+                    Clip = new RectangleGeometry(cut),
+                    RenderTransformOrigin = new RelativePoint(cut.Center, RelativeUnit.Absolute),
+                    RenderTransform = new TransformGroup { Children = { new RotateTransform(), new TranslateTransform() } },
+                });
+            }
+            _root.Children.Add(_shards);
+            StartExitClock();
+            return true;
+        }
+
+        private void StartExitClock()
+        {
+            _lastExitTick = FlashOverlay.Clock.GetTimestamp();
             _exitTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => ExitFrame());
             _exitTimer.Start();
             Closed += (_, _) => { _exitTimer?.Stop(); _exitTimer = null; };
@@ -133,6 +190,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>One exit frame on real elapsed time (P40); closes the window when it is done.</summary>
         internal void ExitFrame()
         {
+            if (Shatter is { } shatter && _shards is { } shards)
+            {
+                var stamp = FlashOverlay.Clock.GetTimestamp();
+                FlashShatter.Step(shatter, FlashOverlay.Clock.GetElapsedTime(_lastExitTick, stamp).TotalSeconds);
+                _lastExitTick = stamp;
+                var scale = DesktopScaling > 0 ? DesktopScaling : 1;
+                for (var i = 0; i < shards.Children.Count; i++)
+                {
+                    var piece = shatter.Shards[i];
+                    var image = shards.Children[i];
+                    var transform = (TransformGroup)image.RenderTransform!;
+                    ((RotateTransform)transform.Children[0]).Angle = piece.AngleRad * 180 / Math.PI;
+                    var shift = (TranslateTransform)transform.Children[1];
+                    shift.X = piece.Dx / scale;
+                    shift.Y = piece.Dy / scale;
+                    image.Opacity = Math.Clamp(piece.Alpha, 0, 1);
+                }
+                X11Overlay.SetOpacity(this, _alpha);
+                if (shatter.Done) { _exitTimer?.Stop(); _exitTimer = null; Close(); }
+                return;
+            }
             if (Exit is not { } exit) return;
             var now = FlashOverlay.Clock.GetTimestamp();
             FlashExit.Step(exit, FlashOverlay.Clock.GetElapsedTime(_lastExitTick, now).TotalSeconds);
@@ -296,7 +374,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var v = from + (to - from) * i / steps;
                 var last = i == steps;
-                DispatcherTimer.RunOnce(() => { if (Exit != null) return; X11Overlay.SetOpacity(this, v); if (last) done?.Invoke(); }, span * i / steps + TimeSpan.FromMilliseconds(1));
+                DispatcherTimer.RunOnce(() => { if (Exit != null || Shatter != null) return; X11Overlay.SetOpacity(this, v); if (last) done?.Invoke(); }, span * i / steps + TimeSpan.FromMilliseconds(1));
             }
         }
     }

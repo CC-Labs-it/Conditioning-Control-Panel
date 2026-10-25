@@ -533,7 +533,7 @@ public class SpiralRoomTests
     public void EveryDoorIntoTheSpiralGoesThroughShowTab()
     {
         Assert.Contains("ShowTab(SpiralRoom.TabKey)",
-            AppFile("Controls", "SpiralRailHost.cs"), StringComparison.Ordinal);
+            File.ReadAllText(Path.Combine(ProductDir, "Controls", "SpiralRailHost.cs")), StringComparison.Ordinal);   // WPF head: CCP.Avalonia has a twin
 
         Assert.Contains("ShowTab(SpiralRoom.TabKey)",
             AppFile("MainWindow", "MainWindow.ProfileSpiral.cs"), StringComparison.Ordinal);
@@ -689,7 +689,8 @@ public class SpiralRoomTests
         Assert.Contains("ShowSplash()", view, StringComparison.Ordinal);
 
         // The embed raises it, and only on a SUCCESSFUL navigation - a failure still goes to Fail.
-        var embed = AppFile("Controls", "SpiralEmbedView.cs");
+        // Pinned to the WPF head: CCP.Avalonia/Controls/SpiralEmbedView.cs is its own head's twin.
+        var embed = File.ReadAllText(Path.Combine(ProductDir, "Controls", "SpiralEmbedView.cs"));
         Assert.Contains("public event EventHandler? Navigated;", embed, StringComparison.Ordinal);
         Assert.Contains("Navigated?.Invoke(this, EventArgs.Empty)", embed, StringComparison.Ordinal);
     }

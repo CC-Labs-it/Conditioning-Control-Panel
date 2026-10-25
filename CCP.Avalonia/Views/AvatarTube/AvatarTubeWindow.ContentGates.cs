@@ -101,7 +101,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                         Background = darkBg,
                         Foreground = preset.Id == activeId ? AccentBrush : Brushes.White,
                     };
-                    item.Click += (_, _) => _ = ActivatePresetFromMenuAsync(preset.Id);
+                    item.Click += (_, _) => PresetMenuActivation = ActivatePresetFromMenuAsync(preset.Id);
                     root.Items.Add(item);
                 }
                 root.Header = Loc.GetF("avatar_personality_format", PersonalityName(PersonalityService.Shared.GetActivePreset()?.Name ?? "BambiSprite"));
@@ -114,6 +114,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         }
 
         /// <summary>WPF PersonalityMenuItem_Click: the CCBill acknowledgement gate, then the switch.</summary>
+        // Keep the event-launched operation observable through dialog completion.
+        internal Task PresetMenuActivation { get; private set; } = Task.CompletedTask;
+
         internal async Task ActivatePresetFromMenuAsync(string presetId)
         {
             var preset = PersonalityService.Shared.GetPresetById(presetId);

@@ -36,10 +36,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// WPF's vout heal, but on the same shared LibVLC (docs/avalonia-decisions.md). Ambient bubbles
     /// are paused by the Core scheduler.
     /// ponytail: missing against WPF - the off-thread UI-wedge watchdog and the LibVLC retire/quarantine
-    /// (a Stop that hangs in native code still hangs the UI thread), the toy-button/gaze/haptics
-    /// attention inputs, no-activate z-order, and the remote-media offer after the "no videos" dialog.
+    /// (a Stop that hangs in native code still hangs the UI thread), the gaze
+    /// attention input, no-activate z-order, and the remote-media offer after the "no videos" dialog.
     /// </summary>
-    internal sealed class MandatoryVideoOverlay : IMandatoryVideoHost
+    internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
         public static MandatoryVideoOverlay Instance { get; } = new();
         private MandatoryVideoScheduler _scheduler = null!;
@@ -50,11 +50,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>One screen's window: blurred fill + scrim, the clip, and the attention plane.</summary>
-        internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown);
+        internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons);
 
         private readonly List<Surface> _surfaces = new();
         private readonly List<Window> _messages = new();
         private readonly List<Target> _targets = new();
+        private readonly List<(List<Target> Targets, AttentionToyButtonBinding Binding)> _toyBatches = new();
         private List<double> _spawnTimes = new();
         private MediaPlayer? _player;
         private Media? _media;
@@ -67,6 +68,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private bool _healUsed, _strict;
         private string _path = "";
         private readonly Stopwatch _sinceFrame = new();
+        /// <summary>Max-length cap seconds this clip spent before its one heal replay.</summary>
+        private double _capSpent;
+        /// <summary>Test seam (like <see cref="FrameTs"/>): seconds added to this play's clip clock; reset per play.</summary>
+        internal double PlayedSkew { get; set; }
         private DateTime _lastGraceUtc, _gracePausedAt;
         /// <summary>The grace pause's wall clock (dedup, countdown, auto-resume); tests step it.</summary>
         internal TimeProvider Time { get; set; } = TimeProvider.System;
@@ -111,15 +116,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public void Show(string path, bool strict) => Dispatcher.UIThread.Invoke(() =>
         {
             _healUsed = false;   // WPF PlayVideo: one output heal per clip; the heal's replay keeps it spent
+            _capSpent = 0;
             Play(path, strict);
         });
 
         private void Play(string path, bool strict)
         {
+            var muted = _userMuted;
             if (_surfaces.Count > 0) CloseAll();
+            _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
             (_path, _strict) = (path, strict);
             _sinceShow.Restart();
             _sinceFrame.Reset();
+            PlayedSkew = 0;
             FirstFrameMs = -1;
             _watchedMs = 0;
             FillMs = FillCount = 0;
@@ -142,8 +151,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             BouncingTextOverlay.PauseForVideo(true);
             _attention = s.AttentionChecksEnabled;
 
-            _player = new MediaPlayer(vlc) { EnableHardwareDecoding = true };
-            _player.Volume = MandatoryVideoScheduler.EffectiveVolume(s.MasterVolume, s.VideoVolume);
+            // WPF VideoService.cs:3494: software decode unless the user opted into GPU decode.
+            _player = new MediaPlayer(vlc) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
+            ApplyVolume(_player);
             var blur = s.VideoBlurredBackgroundEnabled;
             _sink = new VlcFrameSink(_player, () => _media, bmp =>
             {
@@ -170,6 +180,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     FirstFrameMs = _sinceShow.ElapsedMilliseconds;
                     if (!_gracePaused) _sinceFrame.Start();   // WPF arms the length/max timers once playing
                     Log.Information("VideoService: first frame after {Ms} ms", FirstFrameMs);
+                    ShowVideoControls();   // mute and close, once the clip is rolling (MandatoryVideoOverlay.Controls.cs)
                 }
                 var fill = _surfaces.Any(x => x.Fill.IsVisible);
                 if (fill && _sink?.Bitmap is { } src && _fill != null)
@@ -202,6 +213,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             };
             _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(Scheduler.End);
             _media = new Media(vlc, path, FromType.FromPath);
+            if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
             _guard = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _guard.Tick += (_, _) => GuardTick();
@@ -213,8 +225,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// Settings · Audio live. UI thread (teardown runs there too).</summary>
         internal void UpdateVolume()
         {
-            var s = CoreSettings.Current;
-            if (_player is { } p) p.Volume = MandatoryVideoScheduler.EffectiveVolume(s.MasterVolume, s.VideoVolume);
+            if (_player is { } p) ApplyVolume(p);
         }
 
         /// <summary>WPF VideoService.VideoScreens -> App.ResolveScreens (ccp-bugs #1154): the Video
@@ -247,6 +258,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var video = new Image { Stretch = Stretch.Uniform };
             var layer = new Canvas { ClipToBounds = true };
             var (grace, countdown) = GraceCard();
+            var buttons = new VideoButtons(ToggleUserMute, CloseFromButton);
             var w = new Window
             {
                 Title = "CCP Video",
@@ -255,20 +267,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ShowInTaskbar = false,
                 CanResize = false,
                 Background = Brushes.Black,
-                Content = new Panel { ClipToBounds = true, Children = { fill, scrim, video, layer, grace } },
+                Content = new Panel { ClipToBounds = true, Children = { fill, scrim, video, layer, grace, buttons.Row } },
             };
             Place(w, screen);
             void OnKey(KeyEventArgs e)
             {
                 var s = CoreSettings.Current;
                 var live = s.PanicKeyEnabled && PanicListenerLive();
-                if (MandatoryVideoScheduler.GraceKey(strict, e.Key.ToString(), s.PanicKeyEnabled, s.PanicKey, live) is { } fromPanic
+                var panicKey = HotkeyNames.Canonical(s.PanicKey);   // "Enter" prints as "Return"
+                if (MandatoryVideoScheduler.GraceKey(strict, e.Key.ToString(), s.PanicKeyEnabled, panicKey, live) is { } fromPanic
                     && TryGracePause(fromPanic))
                 {
                     e.Handled = true;
                     return;
                 }
-                switch (MandatoryVideoScheduler.KeyAction(strict, e.Key.ToString(), e.KeyModifiers.HasFlag(KeyModifiers.Alt), s.PanicKeyEnabled, s.PanicKey,
+                switch (MandatoryVideoScheduler.KeyAction(strict, e.Key.ToString(), e.KeyModifiers.HasFlag(KeyModifiers.Alt), s.PanicKeyEnabled, panicKey,
                     s.PanicKeyEnabled && PanicListenerLive()))
                 {
                     case VideoKeyAction.Dismiss: e.Handled = true; Scheduler.End(); break;
@@ -282,7 +295,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.AddHandler(InputElement.KeyDownEvent, (_, e) =>
             {
                 var s = CoreSettings.Current;
-                if (!s.PanicKeyEnabled || e.Key.ToString() != s.PanicKey) return;
+                if (!s.PanicKeyEnabled || !HotkeyNames.Matches(e.Key, s.PanicKey)) return;
                 OnKey(e);
                 e.Handled = true;
             }, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
@@ -292,7 +305,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.Show();
             w.WindowState = WindowState.FullScreen;
             w.Activate();
-            return new Surface(w, fill, scrim, video, layer, grace, countdown);
+            return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons);
         }
 
         /// <summary>WPF GracePauseOverlayWindow's card: 360x200, centred, #1A1A2E with a 2 px pink edge,
@@ -442,16 +455,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (_gracePaused || _surfaces.Count == 0 || !Scheduler.IsPlaying) return;
             var framed = FirstFrameMs >= 0;
-            var why = MandatoryVideoScheduler.Guard(Elapsed, framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed, framed,
+            var played = (framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed) + PlayedSkew;
+            var why = MandatoryVideoScheduler.Guard(Elapsed, played, framed,
                 (_player?.VideoTrackCount ?? -1) != 0, (_player?.Length ?? 0) / 1000.0,
-                Stopwatch.GetElapsedTime(FrameTs).TotalSeconds, CoreSettings.Current.VideoMaxDurationSeconds);
+                Stopwatch.GetElapsedTime(FrameTs).TotalSeconds, CoreSettings.Current.VideoMaxDurationSeconds, _capSpent);
             if (why == null) return;
             if (MandatoryVideoScheduler.GuardHeals(why, _healUsed))
             {
                 // WPF DispatchVoutHeal(retry): the same clip once more, same strictness.
                 Log.Warning("VideoService: clip guard fired ({Why}) after {Sec:F1}s - replaying the clip once", why, Elapsed);
                 Scheduler.NoteReplay();
+                var spent = _capSpent + played;
                 Play(_path, _strict);
+                _capSpent = spent;   // the replay continues the clip's max-length cap (BUG-7NAKK79CZ2)
                 _healUsed = true;
                 return;
             }
@@ -557,6 +573,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (elapsed >= t.Due) { t.Remove(); _targets.Remove(t); continue; }
                 t.Move(dt);
             }
+            ReleaseToyBatches();
+        }
+
+        private void ReleaseToyBatches()
+        {
+            if (_toyBatches.Count == 0) return;   // per-frame path: no allocation when no toy is armed
+            foreach (var batch in _toyBatches.ToList())
+                if (!batch.Targets.Any(t => _targets.Contains(t)))
+                {
+                    batch.Binding.Dispose();
+                    _toyBatches.Remove(batch);
+                }
         }
 
         /// <summary>WPF SpawnTarget: one target per screen from the enabled pool ("CLICK ME" when
@@ -569,23 +597,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Scheduler.NoteSpawn();
             var batch = new List<Target>();
             var caught = false;
+            void Hit(Target t)
+            {
+                if (caught || !_targets.Contains(t)) return;
+                caught = true;
+                PlayPop();
+                Scheduler.NoteHit();
+                foreach (var o in batch) { _targets.Remove(o); if (o != t) o.Remove(); }
+                t.FadeOut();
+                ReleaseToyBatches();
+                Log.Information("ATTENTION: Hit {Hits}/{Spawned}", Scheduler.AttentionHits, Scheduler.AttentionSpawned);
+            }
             foreach (var x in _surfaces)
             {
                 var t = new Target(x.Layer, text, Math.Max(40, s.AttentionSize), elapsed + s.AttentionLifespan, _random);
-                t.OnHit = () =>
-                {
-                    if (caught) return;
-                    caught = true;
-                    PlayPop();
-                    Scheduler.NoteHit();
-                    foreach (var o in batch) { _targets.Remove(o); if (o != t) o.Remove(); }
-                    t.FadeOut();
-                    Log.Information("ATTENTION: Hit {Hits}/{Spawned}", Scheduler.AttentionHits, Scheduler.AttentionSpawned);
-                };
+                t.OnHit = () => Hit(t);   // gaze and pointer share the one batch catch
                 t.Root.PointerPressed += (_, e) => { e.Handled = true; t.Hit(); };
                 batch.Add(t);
                 _targets.Add(t);
             }
+            var binding = AttentionToyButtonBinding.Arm(CoreHaptics.Service,
+                () => batch.Any(t => _targets.Contains(t)),
+                () => Hit(batch.First(t => _targets.Contains(t))));
+            if (binding != null) _toyBatches.Add((batch, binding));
         }
 
         internal static void PlayPop()
@@ -709,7 +743,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 _fill = fill;
                 var ft = new FormattedText(text, System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
-                    new Typeface(new FontFamily($"{(string.IsNullOrWhiteSpace(font) ? "Segoe UI" : font)}, Segoe UI, Arial"), FontStyle.Normal, FontWeight.Bold), size, fill)
+                    new Typeface(new FontFamily($"{(string.IsNullOrWhiteSpace(font) ? "Segoe UI" : font)}, Segoe UI, Arial, {AppFonts.Inter}"), FontStyle.Normal, FontWeight.Bold), size, fill)
                 { TextAlignment = TextAlignment.Center, LineHeight = size * 0.95 };
                 _geo = ft.BuildGeometry(default);
                 var b = _geo?.Bounds ?? default;
@@ -769,11 +803,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.WindowState = WindowState.Maximized;
                 _messages.Add(w);
             }
+            var muted = _mutedAtClose;   // WPF: an attention-check replay skips Cleanup, so it stays muted
             DispatcherTimer.RunOnce(() =>
             {
                 foreach (var w in _messages) w.Close();
                 _messages.Clear();
+                _userMuted = muted;
                 then();
+                if (!Scheduler.IsPlaying) _userMuted = false;   // mercy, or stopped meanwhile: the run is over
             }, TimeSpan.FromMilliseconds(ms));
         });
 
@@ -790,10 +827,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static string NoVideosMessage(MandatoryVideoScheduler s)
         {
             var c = CoreSettings.Current;
-            if (NoVideosReason.LengthFilterEmptied(s.LastFunnelEnabled, s.LastFunnelDuration))
-                return Loc.GetF("video_length_filter_emptied", s.LastFunnelEnabled,
-                    NoVideosReason.FormatRange(c.VideoMinDurationSeconds, c.VideoMaxDurationSeconds));
-            return Loc.GetF("video_no_videos_found", Path.Combine(CorePaths.EffectiveAssets, "videos")) + "\n\n" + Loc.Get("video_add_files_hint");
+            var packs = ContentPackStore.Current;
+            return NoVideosReason.Message(Path.Combine(CorePaths.EffectiveAssets, "videos"),
+                s.LastFunnelEnabled, s.LastFunnelDuration, c.VideoMinDurationSeconds, c.VideoMaxDurationSeconds,
+                packs?.InstalledPackIds.Count ?? 0, packs?.GetActivePackIds().Count ?? 0);
         }
 
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
@@ -802,11 +839,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try
             {
                 _attention = _gracePaused = false;
+                // WPF ResetUserMute: the next video has its sound (ShowMessage carries it into a verdict replay).
+                _mutedAtClose = _userMuted;
+                _userMuted = false;
                 _graceTimer?.Stop();
                 _guard?.Stop();
                 _graceTimer = _guard = null;
                 _spawnTimes.Clear();
                 _targets.Clear();
+                ReleaseToyBatches();
                 // Stop joins the decoder thread, so after it no callback touches the frame buffer.
                 if (_player != null)
                 {

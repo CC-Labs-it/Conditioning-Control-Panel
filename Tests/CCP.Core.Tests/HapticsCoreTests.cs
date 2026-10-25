@@ -133,4 +133,48 @@ public sealed class HapticsCoreTests
         await haptics.AutoConnectOnStartupAsync(delayMs: 0);
         Assert.False(haptics.IsConnected);
     }
+
+    /// <summary>Review of settings-migration-test: a sandboxed run over a copied real profile must
+    /// not dial the user's own Intiface on localhost (SandboxNet lets loopback through).</summary>
+    [Fact]
+    public async Task AutoConnectNeverDialsFromASandbox()
+    {
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        var dials = 0;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (true)
+                {
+                    var c = await listener.AcceptTcpClientAsync();
+                    System.Threading.Interlocked.Increment(ref dials);
+                    c.Client.LingerState = new System.Net.Sockets.LingerOption(true, 0);
+                    c.Dispose();
+                }
+            }
+            catch { }
+        });
+        var url = $"ws://127.0.0.1:{((System.Net.IPEndPoint)listener.LocalEndpoint).Port}";
+        var global = CoreSettings.Current.Haptics;
+        var (savedUrl, savedSandbox) = (global.ButtplugUrl, HapticService.AutoConnectSandboxed);
+        global.ButtplugUrl = url;
+        HapticService.AutoConnectSandboxed = () => true;
+        try
+        {
+            var s = Settings(mock: false, buttplug: true, url);
+            s.AutoConnect = true;
+            using var haptics = new HapticService(s);
+            await haptics.AutoConnectOnStartupAsync(delayMs: 0).WaitAsync(TimeSpan.FromSeconds(30));
+            Assert.False(haptics.IsConnected);
+            Assert.Equal(0, System.Threading.Volatile.Read(ref dials));
+        }
+        finally
+        {
+            global.ButtplugUrl = savedUrl;
+            HapticService.AutoConnectSandboxed = savedSandbox;
+            listener.Stop();
+        }
+    }
 }

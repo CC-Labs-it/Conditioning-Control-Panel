@@ -43,6 +43,8 @@ public sealed partial class AccountSeedTests : IDisposable
         CoreAccount.DeleteAccountProvider = null;
         CoreAccount.UnifiedUserId = null;
         CoreEntitlement.HasPremiumProvider = CoreEntitlement.HasLabProvider = null;
+        AuthRecovery.ProviderRevalidate = null;
+        AuthRecovery.Recovered = null;
     }
 
     private static ProviderSubscription Make(string prefix) => new(prefix, () => new AppSettings());

@@ -1,6 +1,4 @@
 using System;
-using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using Newtonsoft.Json.Linq;
@@ -15,11 +13,6 @@ namespace ConditioningControlPanel
     // on MEGA and the catalogue stores metadata + the download link (ccp-mod/v1).
     public partial class MainWindow
     {
-        private const string CatalogueSchemaMod = "ccp-mod/v1";
-
-        // Preview thumb limits: keep the JSON envelope small.
-        private const int ModPreviewMaxPixels = 160;
-        private const int ModPreviewMaxBytes = 64 * 1024;
 
         internal async Task ShareModToCatalogueAsync(ModPackage mod, Window? owner = null)
         {
@@ -53,7 +46,7 @@ namespace ConditioningControlPanel
             try
             {
                 result = await App.Catalogue.SubmitCatalogueAssetAsync(
-                    CatalogueKindMods, asset, CatalogueSchemaMod,
+                    CatalogueKindMods, asset, ModCatalogueAssetBuilder.Schema,
                     dialog.Creator, dialog.Tags, default).ConfigureAwait(true);
             }
             catch (Exception ex)
@@ -115,77 +108,8 @@ namespace ConditioningControlPanel
             }
         }
 
-        // ccp-mod/v1: metadata from mod.json + the creator's download link. No
-        // sha256 in v1 — the installed mod is an extracted folder, so a locally
-        // re-zipped hash wouldn't match the bytes actually hosted on MEGA.
+        // Shared metadata/preview behavior: both heads submit exactly the same envelope.
         private static JObject BuildModCatalogueAsset(ModPackage mod, string downloadUrl)
-        {
-            var m = mod.Manifest;
-            var asset = new JObject
-            {
-                ["mod_id"] = m.Id,
-                ["name"] = m.Name,
-                ["version"] = m.Version,
-                ["author"] = m.Author,
-                ["download"] = new JObject
-                {
-                    ["provider"] = "mega",
-                    ["url"] = downloadUrl,
-                    ["installed_size_bytes"] = SafeDirectorySize(mod.InstalledPath!),
-                },
-            };
-            if (!string.IsNullOrWhiteSpace(m.Description)) asset["description"] = m.Description;
-            if (!string.IsNullOrWhiteSpace(m.MinAppVersion)) asset["min_app_version"] = m.MinAppVersion;
-
-            var thumb = TryBuildPreviewThumb(mod);
-            if (thumb != null) asset["preview_thumb_b64"] = thumb;
-
-            return asset;
-        }
-
-        private static long SafeDirectorySize(string dir)
-        {
-            try
-            {
-                return new DirectoryInfo(dir)
-                    .EnumerateFiles("*", SearchOption.AllDirectories)
-                    .Sum(f => f.Length);
-            }
-            catch { return 0; }
-        }
-
-        // Downscaled JPEG of the mod's previewImage (if it ships one), base64.
-        // Returns null when there's no usable preview or it won't fit the cap.
-        private static string? TryBuildPreviewThumb(ModPackage mod)
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(mod.Manifest.PreviewImage) || mod.InstalledPath == null)
-                    return null;
-                var path = Path.Combine(mod.InstalledPath, "resources", mod.Manifest.PreviewImage);
-                if (!File.Exists(path)) return null;
-
-                var src = new System.Windows.Media.Imaging.BitmapImage();
-                src.BeginInit();
-                src.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                src.UriSource = new Uri(path, UriKind.Absolute);
-                // Decode straight to thumb size: cheap and memory-safe for big art.
-                src.DecodePixelWidth = ModPreviewMaxPixels;
-                src.EndInit();
-                src.Freeze();
-
-                var encoder = new System.Windows.Media.Imaging.JpegBitmapEncoder { QualityLevel = 80 };
-                encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(src));
-                using var ms = new MemoryStream();
-                encoder.Save(ms);
-                if (ms.Length > ModPreviewMaxBytes) return null;
-                return Convert.ToBase64String(ms.ToArray());
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Debug("[Catalogue] Mod preview thumb failed: {Error}", ex.Message);
-                return null;
-            }
-        }
+            => ModCatalogueAssetBuilder.Build(mod, downloadUrl);
     }
 }

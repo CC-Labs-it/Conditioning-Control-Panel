@@ -183,21 +183,58 @@ public sealed class ChasterBillTests
         Assert.NotNull(shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.ChasterTabView>("ChasterTab")!.FindControl<ChasterAccountBadge>("AccountBadge"));
     }));
 
+    /// <summary>The seeded StakeHead settlement (StakeSettlement.CreateShared) books a lost stake on the real
+    /// Chaster tab under the literal pvp_loss row, once, and nothing while that row is off.</summary>
+    [Fact]
+    public Task ALostStakeBooksThroughTheSeededSettlement() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, _) =>
+    {
+        var s = CoreSettings.Current;
+        var oldCreate = ConditioningControlPanel.Services.Stakes.StakeSettlement.CreateShared;
+        var (oldOffline, oldId, oldGet) = (s.OfflineMode, s.UnifiedId, CoreSecrets.RetrieveProvider);
+        try
+        {
+            StakeHead.Seed();
+            (s.OfflineMode, s.UnifiedId) = (false, "u1");
+            CoreSecrets.RetrieveProvider = n => n == CoreSecrets.AuthToken ? "tok" : oldGet?.Invoke(n);
+            var lost = Newtonsoft.Json.Linq.JObject.Parse("{\"ok\":true,\"settled\":{\"result\":\"lost\",\"time_s\":900,\"sp_delta\":0}}");
+            var settlement = ConditioningControlPanel.Services.Stakes.StakeSettlement.CreateShared();
+            Assert.Equal(0, settlement.Settle("pbp", "off", "u1", lost).BookedSeconds);   // pvp_loss row off: nothing
+            s.ChasterPrices = new List<string> { "attention", "typo", "pvp_loss" };
+            var first = settlement.Settle("pbp", "m1", "u1", lost);
+            Assert.True(first.BookedSeconds > 0);
+            Assert.Equal(0, settlement.Settle("pbp", "m1", "u1", lost).BookedSeconds);   // once per match
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.Stakes.StakeSettlement.CreateShared = oldCreate;
+            (s.OfflineMode, s.UnifiedId, CoreSecrets.RetrieveProvider) = (oldOffline, oldId, oldGet);
+        }
+        await Task.CompletedTask;
+    }));
+
     [Fact]
     public Task ABookingFloatsOffThePadlockAndCoalesces() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, shell) =>
     {
-        shell.InitializeChasterFlash(chaster);
-        var first = chaster.Note("attention");
-        Dispatcher.UIThread.RunJobs();
-        var layer = AdornerLayer.GetAdornerLayer(shell.Named<ChasterRailChip>("ChasterRail")!)!;
-        var flash = layer.Children.OfType<ChasterBookedFlash>().Single();
-        Assert.Equal(CircesTab.Format(first.AppliedSeconds), flash.Figure.Text);
-        Assert.Equal(Color.FromUInt32(BookedFlashPlan.AddColour), ((ISolidColorBrush)flash.Figure.Foreground!).Color);
+        var clock = new StartupLadder.TestClock();         // P08: the coalescing window is stepped, not real time
+        var oldClock = MainShellWindow.ChasterClock;
+        MainShellWindow.ChasterClock = clock;
+        try
+        {
+            shell.InitializeChasterFlash(chaster);
+            var first = chaster.Note("attention");
+            Dispatcher.UIThread.RunJobs();
+            var layer = AdornerLayer.GetAdornerLayer(shell.Named<ChasterRailChip>("ChasterRail")!)!;
+            var flash = layer.Children.OfType<ChasterBookedFlash>().Single();
+            Assert.Equal(CircesTab.Format(first.AppliedSeconds), flash.Figure.Text);
+            Assert.Equal(Color.FromUInt32(BookedFlashPlan.AddColour), ((ISolidColorBrush)flash.Figure.Foreground!).Color);
 
-        var second = chaster.Note("typo");                 // inside the coalescing window: one figure, bigger number
-        Dispatcher.UIThread.RunJobs();
-        Assert.Same(flash, layer.Children.OfType<ChasterBookedFlash>().Single());
-        Assert.Equal(CircesTab.Format(first.AppliedSeconds + second.AppliedSeconds), flash.Figure.Text);
+            clock.Advance(TimeSpan.FromMilliseconds(BookedFlashPlan.CoalesceMs - 1));
+            var second = chaster.Note("typo");                 // inside the coalescing window: one figure, bigger number
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(flash, layer.Children.OfType<ChasterBookedFlash>().Single());
+            Assert.Equal(CircesTab.Format(first.AppliedSeconds + second.AppliedSeconds), flash.Figure.Text);
+        }
+        finally { MainShellWindow.ChasterClock = oldClock; }
         await Task.CompletedTask;
     }));
 

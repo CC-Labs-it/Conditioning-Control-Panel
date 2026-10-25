@@ -84,7 +84,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             ApplyLockdownHold();
         }
 
-        /// <summary>WPF RefreshDeviceSettingsLists: also runs when the cached Settings door reopens.</summary>
+        /// <summary>WPF RefreshDeviceSettingsLists: tabs stay attached when hidden, so attachment alone
+        /// cannot pick up a camera or headset plugged in while another tab was open.</summary>
         public void OnSectionShown()
         {
             SyncFromSettings();

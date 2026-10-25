@@ -81,6 +81,7 @@ public sealed class TubeContentGatesTests
             Assert.True(dlg.IsVisible);   // ...and no IsDefault one: Enter does not either
             dlg.FindControl<Button>("BtnCancel")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
+            await tube.PresetMenuActivation.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Equal(before, s.ActivePersonalityPresetId);
             Assert.False(ExplicitContentGate.IsAlreadyAcknowledged(s.CompanionPrompt));
 
@@ -88,6 +89,7 @@ public sealed class TubeContentGatesTests
             Item().RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             Dialog<ExplicitContentAcknowledgementDialog>(tube).Close();
             Dispatcher.UIThread.RunJobs();
+            await tube.PresetMenuActivation.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Equal(before, s.ActivePersonalityPresetId);
             Assert.False(ExplicitContentGate.IsAlreadyAcknowledged(s.CompanionPrompt));
 
@@ -100,6 +102,7 @@ public sealed class TubeContentGatesTests
             Assert.True(accept.IsEnabled);
             accept.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
+            await tube.PresetMenuActivation.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Equal(explicitPreset.Id, s.ActivePersonalityPresetId);
             Assert.True(ExplicitContentGate.IsAlreadyAcknowledged(s.CompanionPrompt));
             Assert.False(string.IsNullOrEmpty(s.CompanionPrompt.ExplicitAcknowledgedAt));
@@ -107,6 +110,7 @@ public sealed class TubeContentGatesTests
             // Acknowledged once (with the version, in the settings the debounced Save writes): picking it again asks nothing.
             Item().RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             Dispatcher.UIThread.RunJobs();
+            await tube.PresetMenuActivation.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Empty(tube.OwnedWindows.OfType<ExplicitContentAcknowledgementDialog>());
         }
         finally

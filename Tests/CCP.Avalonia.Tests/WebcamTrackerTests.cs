@@ -122,6 +122,24 @@ public sealed class WebcamTrackerTests
     }
 
     [Fact]
+    public void RealStartStopAndFailedOpen_DriveTheTrackingState()
+    {
+        var src = new FakeSource();
+        WithConsent(true, () =>
+        {
+            var t = WebcamTracker.Instance;
+            WebcamTracker.SourceFactory = () => src;
+            Assert.True(t.Start(), t.LastError);
+            Assert.Equal(WebcamTrackingState.Tracking, t.State); // black frames: never found, never lost
+            t.Stop();
+            Assert.Equal(WebcamTrackingState.Stopped, t.State);
+            WebcamTracker.SourceFactory = () => new FakeSource { OpenResult = false };
+            Assert.False(t.Start());
+            Assert.Equal(WebcamTrackingState.Error, t.State);
+        });
+    }
+
+    [Fact]
     public void LiveCapture_LightsThePlayEyeCards()
     {
         var src = new FakeSource();
