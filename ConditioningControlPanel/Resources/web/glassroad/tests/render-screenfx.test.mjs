@@ -1,7 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { screenAmounts, irisRadius, flashRect, shatterTilt, SCREEN_KINDS } from '../render/items/fxmath.js';
 import { SCREEN_LOOK as L } from '../render/items/look.js';
+
+test('screenfx: the browser module parses before its optional loading boundary', () => {
+  const input = readFileSync(new URL('../render/screenfx.js', import.meta.url), 'utf8');
+  assert.doesNotThrow(() => execFileSync(process.execPath, ['--input-type=module', '--check'], { input, encoding: 'utf8' }));
+});
 
 const scr = (kind, k = 1, extra = {}, params = {}) => ({ kind, t: 0.5, durS: 2, k, strength: 1, prevKind: null, prevK: 0,
   ...extra, params: { gentle: false, corner: false, dimOnly: false, blurMul: 1, flicker: true, cover: 0.4, seed: 1, ...params } });
