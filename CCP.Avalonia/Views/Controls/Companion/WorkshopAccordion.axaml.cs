@@ -60,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
             parts.Roster.PersonalityAssignRequested += async (_, index) => await AssignRosterPersonalityAsync(parts.Roster, index);
             WirePhrasePresets(parts);
+            WireCommunity(parts);
 
             // Deliberately NOT wired, each for the reason a previous layer already recorded:
             //
@@ -70,8 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             //  · Behavior.PauseBrowserChanged — WPF mutes and suspends the live WebView2
             //    (MainWindow.Patreon.cs); this drawer holds no WebHost to suspend, and a switch
             //    that flips with nothing behind it would report a paused browser that is playing.
-            //  · Community.Browse/Import/Export/RefreshPromptsRequested — the community-prompt
-            //    service, still in the WPF head.
+
         }
 
         /// <summary>

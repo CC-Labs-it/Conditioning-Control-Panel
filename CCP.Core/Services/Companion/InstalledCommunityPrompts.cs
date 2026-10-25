@@ -22,19 +22,11 @@ public static class InstalledCommunityPrompts
         if (companionIndex is < 0 or > 4) return null;
         try
         {
-            if (!File.Exists(path)) return null;
-            var prompt = JsonConvert.DeserializeObject<CommunityPrompt>(File.ReadAllText(path));
-            if (prompt == null || prompt.PromptSettings == null) return null;
-            prompt.Id = Guid.NewGuid().ToString("N");
-            prompt.Name = Path.GetFileNameWithoutExtension(path);
-            var folder = Path.Combine(CorePaths.UserData, FolderName);
-            Directory.CreateDirectory(folder);
-            File.WriteAllText(Path.Combine(folder, prompt.Id + ".json"), JsonConvert.SerializeObject(prompt, Formatting.Indented));
+            var prompt = Import(path);
+            if (prompt == null) return null;
             var settings = CoreSettings.Current;
-            settings.InstalledCommunityPromptIds.Add(prompt.Id);
             settings.SetCompanionPromptId(companionIndex, prompt.Id);
             CoreSettings.Save();
-            prompt.IsInstalled = true;
             if (settings.ActiveCompanionId == companionIndex) ApplyAssigned((CompanionId)companionIndex);
             return prompt;
         }
@@ -49,9 +41,14 @@ public static class InstalledCommunityPrompts
     /// voice intact; explicit-content acknowledgement is checked before any prompt is applied.</summary>
     public static bool ApplyAssigned(CompanionId companion)
     {
-        var settings = CoreSettings.Current;
-        var id = settings.GetCompanionPromptId((int)companion);
+        var id = CoreSettings.Current.GetCompanionPromptId((int)companion);
+        return Activate(id);
+    }
+
+    public static bool Activate(string? id)
+    {
         if (string.IsNullOrEmpty(id)) return false;
+        var settings = CoreSettings.Current;
         var prompt = Load(Path.Combine(CorePaths.UserData, FolderName), id, settings.ActiveCommunityPromptId);
         if (prompt?.PromptSettings == null) return false;
         if (Services.ExplicitContentGate.RequiresAcknowledgement(new PersonalityPreset { PromptSettings = prompt.PromptSettings }, settings.SlutModeEnabled)
@@ -80,6 +77,44 @@ public static class InstalledCommunityPrompts
         settings.ActiveCommunityPromptId = id;
         CoreSettings.Save();
         return true;
+    }
+
+    public static CommunityPrompt? Import(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return null;
+            var prompt = JsonConvert.DeserializeObject<CommunityPrompt>(File.ReadAllText(path));
+            if (prompt?.PromptSettings == null) return null;
+            prompt.Id = Guid.NewGuid().ToString("N");
+            prompt.Name = Path.GetFileNameWithoutExtension(path);
+            return Install(prompt.Id, prompt);
+        }
+        catch (Exception ex) { Log.Warning(ex, "Could not import community prompt"); return null; }
+    }
+
+    public static CommunityPrompt Install(string id, CommunityPrompt prompt)
+    {
+        if (string.IsNullOrWhiteSpace(id) || id.Contains('/') || id.Contains('\\') || id.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            throw new ArgumentException("Invalid prompt ID", nameof(id));
+        var folder = Path.Combine(CorePaths.UserData, FolderName);
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, id + ".json"), JsonConvert.SerializeObject(prompt, Formatting.Indented));
+        if (!CoreSettings.Current.InstalledCommunityPromptIds.Contains(id))
+            CoreSettings.Current.InstalledCommunityPromptIds.Add(id);
+        CoreSettings.Save();
+        prompt.IsInstalled = true;
+        return prompt;
+    }
+
+    public static void Remove(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id) || id.Contains('/') || id.Contains('\\') || id.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return;
+        var path = Path.Combine(CorePaths.UserData, FolderName, id + ".json");
+        if (File.Exists(path)) File.Delete(path);
+        CoreSettings.Current.InstalledCommunityPromptIds.Remove(id);
+        if (CoreSettings.Current.ActiveCommunityPromptId == id) CoreSettings.Current.ActiveCommunityPromptId = null;
+        CoreSettings.Save();
     }
 
     public static CommunityPrompt? Load(string folder, string promptId, string? activePromptId)
