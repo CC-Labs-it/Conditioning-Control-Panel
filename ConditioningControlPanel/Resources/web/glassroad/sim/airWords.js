@@ -11,10 +11,11 @@ const smooth = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 const frame = () => ({ p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] });
 const dot = (p, row, axis) => p.reduce((v, x, i) => v + (x - row.p[i]) * row[axis][i], 0);
 const FALLBACK = ['LET GO', 'DRIFT AWAY', 'BREATHE SLOW', 'FLOAT ON'];
-const APPEAR_S = 1.4, FADE_S = .5;
+const APPEAR_S = .64, FADE_S = .65;
 const LYRIC_WINDOW_S = 1.25;
 export function bindAirWords(st, run) { runs.set(st, run); held.delete(st); }
 export function phraseBounceActive(st) { return !!runs.get(st)?.bouncing; }
+export function phraseBouncePhase(st) { return runs.get(st)?.bouncePhase ?? null; }
 export function resetAirWords(value) { const run = runs.get(value) || value; if (run?.reset) run.reset(); held.delete(value); }
 export function stepAirWords(st, action, feel, dt, events) {
   return runs.get(st)?.step(st, action, feel, dt, events) || false;
@@ -32,7 +33,8 @@ export function createAirWordRun(song, track) {
   const platforms = [], f = frame(), next = frame(), q = [0, 0, 0, 1];
   let clock = 0, songS = 0, rider = null, previous = null, route = null, paused = false, enabled = true;
   const run = { platforms, timeS: 0, activeSection: null, update, reset, step, setSong,
-    get bouncing() { return route?.stage === 'flight' && route.leg === 1; } };
+    get bouncing() { return route?.stage === 'flight' && route.leg === 1; },
+    get bouncePhase() { return route?.stage === 'flight' ? (route.leg === 0 ? route.elapsed - route.duration : route.elapsed) : null; } };
   function reset() {
     platforms.length = 0;
     if (rider) { held.delete(rider); setPhraseGlide(rider, false); }
@@ -162,7 +164,7 @@ export function createAirWordRun(song, track) {
       if (r.stage === 'ramp' && r.s >= r.zone.gapS0) { r.s = r.zone.gapS0; launch(st, events); onGround = false; }
       if (r.stage === 'exit' && r.s >= Math.min(r.zone.landingS1 - 2, r.zone.gapS1 + 12)) end = true;
     } else {
-      r.elapsed = Math.min(r.duration, r.elapsed + dt);
+      r.elapsed = r.duration - r.elapsed <= dt + 1e-8 ? r.duration : r.elapsed + dt;
       const u = r.elapsed / r.duration, from = r.points[r.leg], to = r.points[r.leg + 1];
       const candidates = to.row?.catchText === to.row?.text && to.row?.catchPoints;
       if (to.catchU === null && candidates?.length && u >= .72) {
@@ -184,8 +186,8 @@ export function createAirWordRun(song, track) {
         (1 - catchBlend) + to.offset[i] * catchBlend);
       if (!to.row) to.offset = [...offset];
       r.s = from.s + (to.s - from.s) * u;
-      // A soft catch, then an immediate spring ascent that settles gently onto the far deck.
-      const arc = r.leg === 0 ? 2.4 * Math.sin(Math.PI * u) ** 2 : 3.5 * 6.75 * u * (1 - u) ** 2;
+      // A real descending arc meets the late phrase with momentum. The next leg springs at once.
+      const arc = r.leg === 0 ? 3.6 * 4 * u * (1 - u) : 3.5 * 6.75 * u * (1 - u) ** 2;
       y = from.y + (to.y - from.y) * smooth(u) + arc;
       st[S.airTime] += dt;
       if (u >= 1) {
