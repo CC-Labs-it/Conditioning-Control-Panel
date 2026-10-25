@@ -3239,3 +3239,7 @@ Post-sign-in Discord achievement-sharing offer (WPF Login.cs:214 / Patreon.cs:83
 ## avalonia-port/wire-shell-profile-cosmetics: +294
 
 Trainer Card cosmetics paint (banner, accent + glow, title, pins) on own/viewed/save/clear paths, per-step guarded like WPF; avatar-slot rule shared from Core. Tests: ProfileCosmeticsPaintTests (viewed path via /user/lookup, glow asserted; fail-proven), ProfileAvatarSlotClaimTests. Ledger shell-profile-cosmetics stays stub (lane -b). rgate GATE-OK.
+
+## avalonia-port/wire-shell-session-feature-lock: +128
+
+Avalonia session feature lock now shows WPF's program-session reason copy (title+day / title / unnamed / ordinary fallback) on the ribbon and the five LockCard dose controls; headless test drives real SessionRunner+ProgramService. Ledger row stays `stub` (BubblePop CmbMotion → follow-up `-b`). Review ACCEPT 62, no fixes.
