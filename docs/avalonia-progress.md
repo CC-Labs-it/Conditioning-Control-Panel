@@ -3495,3 +3495,7 @@ Restores the late Dormant shimmer in ChatThresholdView (WPF State -> PlayDormant
 - Companion room preview: all six states seat a fresh, collapsed WPF Workshop exhibit (6 cells, 25 rows, sliders, caption, inert commands). The permissions exhibit is enabled with the WPF defaults, and edits stay local. The lock CTA reaches the live shell, as in WPF.
 - Ledger row views-companion-room-preview is `wired` under P122. The pinned no-caller grep is inlined. WpfDeadSurfaceTests is still open (dead-in-wpf lane).
 - rgate GATE-OK run 39921331914.
+
+## avalonia-port/wire-win-webcam-quick-recal: +535
+- Windows Ctrl+Alt+G quick recal wired with panic/consent/clash safety and panic-registry close.
+- Hidden/minimized shell never owns the dialog; startup Opened wire pinned by a scan test.
