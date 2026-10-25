@@ -1,6 +1,6 @@
 /* Four short takes, then the exact starting chase pose. Pure track geometry, no scene clock. */
-export const COURSE_INTRO_SECONDS = 6.6;
-const TAKE_SECONDS = 1.5;
+export const COURSE_INTRO_SECONDS = 10.6;
+const TAKE_SECONDS = 2.5;
 const clamp = x => Math.max(0, Math.min(1, x));
 const ease = x => { const u = clamp(x); return u * u * u * (u * (u * 6 - 15) + 10); };
 

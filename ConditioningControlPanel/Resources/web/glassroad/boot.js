@@ -1051,7 +1051,7 @@ async function boot(course, options, lifetime, isCurrent) {
       if (!frozen) introTarget.copy(cam.camera);
       const done = intro.apply(cam.camera, introElapsed, { gentle: gentleIntro, target: introTarget });
       let curtain = 0;
-      if (gentleIntro) for (const cut of [1.5, 3, 4.5]) {
+      if (gentleIntro) for (const cut of [2.5, 5, 7.5]) {
         const t = Math.max(0, 1 - Math.abs(introElapsed - cut) / .3);
         curtain = Math.max(curtain, t * t * (3 - 2 * t));
       }

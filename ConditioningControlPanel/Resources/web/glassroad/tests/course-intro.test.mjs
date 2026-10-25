@@ -9,22 +9,22 @@ import { COURSE_INTRO_SECONDS, sampleCourseIntro } from '../render/courseIntroMa
 for (const id of ['threshold', 'mainframe', 'keep', 'boudoir', 'goonworks']) {
   const track = loadTrack(JSON.parse(readFileSync(new URL(`../tracks/${id}.json`, import.meta.url))));
   const intro = createCourseIntro(track);
-  test(`${id}: intro reveals three distinct districts and ends on the grid at 6.6 seconds`, () => {
-    assert.equal(intro.duration, 6.6);
+  test(`${id}: intro reveals three distinct districts and ends on the grid at 10.6 seconds`, () => {
+    assert.equal(intro.duration, 10.6);
     assert.equal(new Set(intro.shots.map(s => s.section)).size, 3);
-    assert.deepEqual([0, 1.5, 3, 4.5, 6.6].map(intro.shotAt), [0, 1, 2, 3, 3]);
-    for (let frame = 0; frame <= 396; frame++) {
+    assert.deepEqual([0, 2.5, 5, 7.5, 10.6].map(intro.shotAt), [0, 1, 2, 3, 3]);
+    for (let frame = 0; frame <= 636; frame++) {
       const pose = sampleCourseIntro(track, intro.shots, frame / 60);
       assert.ok([...pose.eye, ...pose.look, ...pose.up, pose.fov].every(Number.isFinite));
       assert.ok(Math.hypot(...pose.eye.map((v, i) => v - pose.look[i])) > 1);
     }
-    assert.equal(sampleCourseIntro(track, intro.shots, 4.5).blend, 0);
-    assert.equal(sampleCourseIntro(track, intro.shots, 6.6).blend, 1);
+    assert.equal(sampleCourseIntro(track, intro.shots, 7.5).blend, 0);
+    assert.equal(sampleCourseIntro(track, intro.shots, 10.6).blend, 1);
   });
   test(`${id}: Gentle keeps each take coherent with substantially less pan`, () => {
     const distance = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
     for (let shot = 0; shot < 3; shot++) {
-      const first = shot * 1.5, last = first + 1.49999;
+      const first = shot * 2.5, last = first + 2.49999;
       const eye = (time, gentle) => sampleCourseIntro(track, intro.shots, time, gentle).eye;
       assert.ok(distance(eye(first, true), eye(last, true)) < distance(eye(first, false), eye(last, false)) * .3);
       const saved = eye(first, true);
