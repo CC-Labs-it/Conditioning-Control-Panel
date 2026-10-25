@@ -3415,3 +3415,8 @@ Mantra Lab completion close timer is now stopped in Cleanup, so an early-closed 
 - Cloud session, local review (ACCEPT 55) + fix round.
 - Review fix: ledger row cites the PR body, not docs/cloud; SpiralEmbedViewTests 13/13 via rcheck, environment theory fail-proven (devtools=true -> 3 red).
 - rgate run 39924588177: green except known P115 flakes (RaceTrack, GoonClock).
+
+## avalonia-port/fin-ctrl-spiral-rail-host: +1
+
+- `ctrl-spiral-rail-host` stub -> wired under P122: WPF no longer mounts `SpiralRailHost` (MainWindow.xaml:746-749 gives the slot to `ChasterRailChip`); Avalonia host stays dormant and collapsed.
+- Ledger-only diff (docs/avalonia-parity.md:466). Existing `SpiralRailHostTests` run via rcheck (run 39921170660): 2/2 passed.
