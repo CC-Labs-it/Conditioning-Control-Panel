@@ -8,6 +8,7 @@
  * by speedPct, the one variable; the pitch travels at most audio.engPitchTravelSemis, never a whine.
  */
 import { mixGet, rollTickTimes, ladderSemis } from './mix.js';
+import { pressThudGain } from './pressThud.js';
 
 /** Per-file level against the one loudness every file is normalised to (linear gain). */
 export const SFX_GAIN = {
@@ -111,6 +112,7 @@ export function sfxPlan(name, p = {}, o = {}) {
   const feel = o.feel || null;
   p = p || {};
   switch (name) {
+    case 'press-thud': return pressThudGain(p) > .01 ? [one('land-heavy', .06 * pressThudGain(p), .68)] : [];
     case 'countdown': return [one('countdown')];
     case 'go': return [one('go')];
     case 'launch-boost': return [one('launch')];

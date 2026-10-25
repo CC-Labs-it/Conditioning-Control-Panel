@@ -45,6 +45,7 @@ import { loadTrack } from './track/load.js';
 import { selectTrack, allowsOnline, courseSongs } from './track/selection.js';
 import { createMainframeScan, scanClock } from './sim/mainframeScan.js';
 import { createMainframeIndustry } from './sim/mainframeIndustry.js';
+import { setMachineryBeat } from './track/machineryBeat.js';
 import { createRenderer } from './render/renderer.js';
 import { buildWorld } from './render/world.js';
 import { createArtLibrary, GARAGE_ART_IDS } from './render/art.js';
@@ -544,6 +545,7 @@ async function boot(course, options, lifetime, isCurrent) {
     race.reset(); racers.place(); contact.reset(); standings.reset(); items.reset();
     scan.reset();
     industry.reset();
+    setMachineryBeat(track, null);
     perfume.reset();
     effects.reset(); ai.reset(); fx.reset(); assist.reset();
     if (hazards) hazards.reset();
@@ -988,6 +990,11 @@ async function boot(course, options, lifetime, isCurrent) {
     // online the count keeps server time (bells and go on the room's clock, even through a slow frame)
     if (online && online.go && race.phase === 'countdown') race.syncCount((online.s.serverNow() - online.s.raceStartAt(goS)) / 1000 - steps * clock.dt);
     const simOn = inRace && (online ? online.go : !paused);
+    const machineryMusic = audio.music;
+    const machinerySong = machineryMusic?.song || machineryMusic?.analysis;
+    if (!paused || online) setMachineryBeat(track, { enabled: inRace && !online && (race.phase === 'racing' || race.phase === 'finished') && !!machineryMusic?.playing,
+      songS: machineryMusic?.songS, raceS: racers.clockS + (simOn ? steps * clock.dt : 0),
+      bpm: machinerySong?.bpm, offsetS: machinerySong?.downbeatS ?? machinerySong?.downbeats?.[0] ?? 0, playing: simOn });
     if (simOn) for (let i = 0; i < steps; i++) {                    // 2. sim
       if (BOT && !P.finished) {
         ai.drive(P, aiCtx, clock.dt, a); if (fall) fall.apply(a);
@@ -1072,6 +1079,7 @@ async function boot(course, options, lifetime, isCurrent) {
     const iv = items.view();
     // the song position the player hears (frozen while paused: the context is suspended)
     const music = audio.music, song = inRace && music ? music.song : null;
+    const beatSong = song || (inRace ? music?.analysis : null);
     const songS = inRace && music?.playing ? music.songS : NaN;
     reactiveOptions.paused = paused;
     reactiveOptions.gentle = hostGentle || !!feel.get('gentle.on') || !!opts.gentlePreview;
@@ -1100,7 +1108,7 @@ async function boot(course, options, lifetime, isCurrent) {
     const viewSection = introShot >= 0 && introShot < 3 ? track.sectionAt(intro.shots[introShot].s) : pst[S.sectionIdx];
     const viewFx = state === 'intro' ? { ...fs, paletteMix: { from: viewSection, to: viewSection, t: 1 } } : fs;
     world.update({ kart: P.view, karts: kartViews, fx: viewFx, timeS: renderTime, beat: clock.beat,
-      raceTimeS: racers.clockS, sectionIdx: viewSection, items: iv, mode, camera: cam.camera, paused, song, songS, audioReactive, words: wordLive,
+      raceTimeS: racers.clockS, sectionIdx: viewSection, items: iv, mode, camera: cam.camera, paused, song, songS, audioReactive, words: wordLive, beatSong,
       scanTimeS: sc.timeS, scanBpm: sc.bpm, scanReady: scan.ready, perfumeReady: perfume.ready });
     if (BOT && song && world.musicRoad) {                         //    dev only: the boot check reads the music road
       const m = world.musicRoad.frame;
@@ -1124,7 +1132,8 @@ async function boot(course, options, lifetime, isCurrent) {
     const garageScene=!!garage&&state==='menu',inGarage=garageScene&&hud.card==='menu';
     garage?.setVisible(inGarage);
     if(garageScene)garage.render(frameDt,matchMedia('(prefers-reduced-motion: reduce)').matches,{gentle:hostGentle||!!feel.get('gentle.on')||!!hud.options.gentlePreview});
-    else renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: frozen ? 0 : frameDt });   // 7. render
+    else renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: frozen ? 0 : frameDt,
+      musicView: { song: beatSong, songS, audioReactive, paused: frozen } });   // 7. render
     if (HT) hLap('render');
 
     const place = inRace && standings.order.length ? standings.placeOf(0) : 0;   // 8. hud
@@ -1135,7 +1144,7 @@ async function boot(course, options, lifetime, isCurrent) {
       sectionIdx: pst[S.sectionIdx], paused, place, count: racers.list.length, item: holding ? hudItem : null,
       map: mapXz, finished: P.finished, bestLapS: P.bestLapS, kartAt: goPoint,
       wrongWay: directionWarning.update(pst, frozen ? 0 : frameDt, inRace && race.phase === 'racing' && !P.finished) });
-    gateScreen.update(frameDt, paused, effects.screen);
+    gateScreen.update(frameDt, paused, effects.screen, { song: beatSong, songS, audioReactive });
     slotFx.update(paused ? 0 : frameDt, holding && !P.finished ? hudItem : null, !!feel.get('gentle.on'));
 
     if (!online && state === 'race' && finishAt && now >= finishAt && result) {   // results after the finish swell (online: the room's)
