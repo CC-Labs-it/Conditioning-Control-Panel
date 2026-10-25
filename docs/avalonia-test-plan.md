@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## FIN4 roster personality assignment
+
+1. Open Companion, expand the collapsed room and use hero Switch to reach the Workshop roster. Compare card names, supported visibility, levels/MAX, flavour/mechanic tooltips and active ring. Right-click does not switch; left-click updates the hero, ring and tube avatar set. Award a level while open and check the live labels. WPF `MainWindow/MainWindow.CompanionTab.cs:85,327-361`. Rows: `views-companion-workshop-roster-cell`.
+2. Click a personality button: it must not switch companions. The JSON picker title names that companion and starts in populated user assets/prompts, otherwise shipped assets/prompts. Cancel leaves settings alone. Import a JSON whose embedded name differs from its filename: the filename becomes the label and its tooltip. Repeat import to prove independent IDs. WPF `MainWindow/MainWindow.CompanionTab.cs:367-480`, `Services/Companion/CommunityPromptService.cs:431-492`. Rows: `views-companion-workshop-roster-cell`.
+3. Assign to the active companion and check that the AI uses it immediately; assign to an inactive one and switch to it to apply it. Switching to an unassigned companion leaves the current voice active. Missing/malformed files never report success. A flagged prompt shows the advisory; explicit mode without acknowledgement refuses activation. Panic closes assignment/advisory feedback. Close the window and check that later Core switches do not update the detached roster. WPF `Services/Companion/CompanionService.cs:424-469`, `Services/Companion/CommunityPromptService.cs:273-376`. Rows: `views-companion-workshop-roster-cell`.

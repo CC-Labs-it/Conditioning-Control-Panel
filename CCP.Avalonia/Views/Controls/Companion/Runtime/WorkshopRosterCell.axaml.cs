@@ -66,6 +66,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 _watchingCore = true;
                 CompanionCore.Switched += OnCompanionSwitched;
                 CompanionCore.LevelUp += OnCompanionLevelUp;
+                InstalledCommunityPrompts.ValidationAdvisory += OnValidationAdvisory;
                 _host = TopLevel.GetTopLevel(this) as Window;
                 if (_host != null) _host.Closed += OnHostClosed;
             }
@@ -89,9 +90,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             _watchingCore = false;
             CompanionCore.Switched -= OnCompanionSwitched;
             CompanionCore.LevelUp -= OnCompanionLevelUp;
+            InstalledCommunityPrompts.ValidationAdvisory -= OnValidationAdvisory;
             if (_host != null) _host.Closed -= OnHostClosed;
             _host = null;
         }
+
+        private void OnValidationAdvisory(int count) => Dispatcher.UIThread.Post(async () =>
+        {
+            if (_watchingCore && _host is { IsVisible: true } owner)
+                await WorkshopAccordion.ShowRosterMessageAsync(owner, Loc.Get("community_prompt_warning_title"),
+                    Loc.GetF("community_prompt_warning_body", count));
+        });
 
         private void OnCompanionSwitched(CompanionId id) => RefreshFromCore();
         private void OnCompanionLevelUp(CompanionId id, int level) => RefreshFromCore();
@@ -145,6 +154,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
 
                 card.BorderBrush = id == activeId && Color.TryParse(colors[i], out var c)
                     ? new SolidColorBrush(c) : Brushes.Transparent;
+
+                var prompt = this.FindControl<TextBlock>($"TxtCompanion{i}Prompt")!;
+                var promptId = s.GetCompanionPromptId(i);
+                var promptName = string.IsNullOrEmpty(promptId) ? "" : InstalledCommunityPrompts.Load(
+                    System.IO.Path.Combine(CorePaths.UserData, InstalledCommunityPrompts.FolderName),
+                    promptId, s.ActiveCommunityPromptId)?.Name ?? "";
+                prompt.Text = mods?.MakeModAware(promptName) ?? promptName;
+                ToolTip.SetTip(prompt, string.IsNullOrEmpty(prompt.Text) ? null : Loc.GetF("tooltip_ai_personality", prompt.Text));
 
                 this.FindControl<TextBlock>($"TxtCompanion{i}Lock")!.IsVisible = false;
                 card.Opacity = 1.0;

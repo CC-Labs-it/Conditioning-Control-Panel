@@ -58,6 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 catch (Exception ex) { Log.Warning(ex, "Workshop: companion switch failed"); }
             };
 
+            parts.Roster.PersonalityAssignRequested += async (_, index) => await AssignRosterPersonalityAsync(parts.Roster, index);
             WirePhrasePresets(parts);
 
             // Deliberately NOT wired, each for the reason a previous layer already recorded:
@@ -69,8 +70,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             //  · Behavior.PauseBrowserChanged — WPF mutes and suspends the live WebView2
             //    (MainWindow.Patreon.cs); this drawer holds no WebHost to suspend, and a switch
             //    that flips with nothing behind it would report a paused browser that is playing.
-            //  · Roster.PersonalityAssignRequested — BtnCompanionPersonality_Click needs the
-            //    CommunityPromptService import/assignment path, still in the WPF head.
             //  · Community.Browse/Import/Export/RefreshPromptsRequested — the community-prompt
             //    service, still in the WPF head.
         }

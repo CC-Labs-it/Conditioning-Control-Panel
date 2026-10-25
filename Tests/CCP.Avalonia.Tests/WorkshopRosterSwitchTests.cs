@@ -49,6 +49,10 @@ public sealed class WorkshopRosterSwitchTests
             Dispatcher.UIThread.RunJobs();
             shell.GetLogicalDescendants().OfType<WorkshopAccordion>().Single().ExpandAndReveal("roster");
             Dispatcher.UIThread.RunJobs();
+            // The personality path now opens an OS picker. Exercise cancellation through its seam,
+            // keeping this real-pointer regression entirely off the desktop.
+            shell.GetLogicalDescendants().OfType<WorkshopAccordion>().Single().RosterPromptPicker =
+                (_, _) => Task.FromResult<string?>(null);
             var cell = shell.GetLogicalDescendants().OfType<WorkshopRosterCell>().Single();
             var hero = shell.GetLogicalDescendants().OfType<CompanionHeroCard>().First().ViewModel!;
             void Press(Control target, MouseButton button)
