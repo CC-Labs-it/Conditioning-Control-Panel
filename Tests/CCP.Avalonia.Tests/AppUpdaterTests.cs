@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -99,7 +100,13 @@ public sealed class AppUpdaterTests
                 await Task.Delay(1500);
                 Assert.Null(AppUpdater.OpenDialog);   // waits behind the age gate
                 CoreSettings.Current.HasAcceptedAgeVerification = true;
-                for (var i = 0; i < 100 && AppUpdater.OpenDialog is null; i++) await Task.Delay(50);
+                // The offer waits its turn on the startup ladder's stepped clock (750 ms settle).
+                for (var i = 0; i < 100 && AppUpdater.OpenDialog is null; i++)
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromMilliseconds(250));
+                    await Task.Delay(50);
+                }
                 var dialog = AppUpdater.OpenDialog;
                 Assert.NotNull(dialog);   // offered once at startup, as WPF App.xaml.cs:4903
                 Assert.Equal(Loc.Get("btn_download_installer_manually"),
@@ -117,8 +124,12 @@ public sealed class AppUpdaterTests
                 Assert.Equal(new[] { "/api/releases/latest" }, feed.Requests);
 
                 // "Later": the version is skipped for 24h, so the next startup neither lights nor asks.
+                // The offer runs as a ladder modal now: the ladder drains once "Later" has been handled.
+                var drained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                StartupLadder.Drained += () => drained.TrySetResult();
                 dialog.FindControl<Button>("BtnLater")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                 await startup;
+                await drained.Task.WaitAsync(TimeSpan.FromSeconds(10));
                 Assert.Equal("99.1.0", ReleaseFeed.GetSkippedUpdateVersion(CorePaths.UserData));
                 var shell2 = new MainShellWindow();
                 shell2.Show();

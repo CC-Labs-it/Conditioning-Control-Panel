@@ -31,6 +31,7 @@
 //     worsen it - the fix is ShowWhatsNewIfNeeded, not a second stamp here.
 
 using System;
+using System.Threading.Tasks;
 using Avalonia.Threading;
 using Serilog;
 
@@ -80,13 +81,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void OnAgeGateShellOpened(object? sender, EventArgs e)
         {
             Opened -= OnAgeGateShellOpened;
-            Platform.StartupLadder.EnqueueModal("age-verification", 10, this, async () =>
+            // WPF App.xaml.cs:4092: priority 5, and a gate that never gets its turn (hidden shell,
+            // tray start) asks anyway. ShowDialogSafe survives a hidden owner.
+            async Task Ask()
             {
-                var ok = IsVisible && await Dialogs.MessageDialog.ConfirmAsync(this, "Age Verification", AgeGateBody, defaultToCancel: true);
+                var ok = await Dialogs.MessageDialog.ConfirmAsync(this, "Age Verification", AgeGateBody, defaultToCancel: true);
                 if (!ok) { ExitWithoutBill(); return; }   // WPF App.xaml.cs:3835 Shutdown, no bill
                 CoreSettings.Current.HasAcceptedAgeVerification = true;
                 CoreSettings.Save();
-            });
+            }
+            Platform.StartupLadder.EnqueueModal("age-gate", 5, this, Ask,
+                () => Dispatcher.UIThread.Post(async () => await Ask(), DispatcherPriority.Normal));
         }
 
         /// <summary>Test seam: stands in for <see cref="WelcomeShow.FirstShowService.Open"/>.</summary>

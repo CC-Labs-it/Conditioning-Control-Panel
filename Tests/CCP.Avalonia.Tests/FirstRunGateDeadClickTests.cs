@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -73,6 +74,25 @@ public sealed class FirstRunGateDeadClickTests
     });
 
     [Fact]
+    public Task AgeGateThatNeverGetsItsTurnAsksAnyway() => Run(welcomed: true, accepted: false, async shell =>
+    {
+        // WPF App.xaml.cs:4092 onAbandoned: a tray start hides the shell past the 5-minute wait;
+        // the gate is then asked anyway, never dropped (the app must not run unverified).
+        ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog? asked = null;
+        using var seen = Window.WindowOpenedEvent.AddClassHandler<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>((d, _) => asked = d);
+        var closed = false;
+        shell.Closed += (_, _) => closed = true;
+        shell.Hide();
+        Dispatcher.UIThread.RunJobs();
+        ((StartupLadder.TestClock)StartupLadder.Time).Advance(System.TimeSpan.FromMinutes(5) + System.TimeSpan.FromSeconds(1));
+        await WaitFor(() => asked != null);
+        Assert.Equal(MainShellWindow.AgeGateBody, asked!.FindControl<TextBlock>("TxtMessage")!.Text);
+        asked.FindControl<Button>("BtnOk")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        await WaitFor(() => CoreSettings.Current.HasAcceptedAgeVerification);
+        Assert.False(closed);
+    });
+
+    [Fact]
     public Task DashboardAndLibraryClicksGoWhereWpfGoes() => Run(welcomed: true, accepted: true, shell =>
     {
         var dash = shell.GetLogicalDescendants().OfType<SettingsTabView>().First();
@@ -112,6 +132,8 @@ public sealed class FirstRunGateDeadClickTests
         while (!condition() && System.DateTime.UtcNow < deadline)
         {
             Dispatcher.UIThread.RunJobs();
+            // Startup modals wait on the ladder's stepped clock (750 ms settle), never wall time.
+            ((StartupLadder.TestClock)StartupLadder.Time).Advance(System.TimeSpan.FromMilliseconds(250));
             await Task.Delay(20);
         }
         Assert.True(condition(), "timed out");

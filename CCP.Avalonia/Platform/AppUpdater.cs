@@ -176,7 +176,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 if (info?.IsNewer != true) return;
                 shell.ShowUpdatePill(info.Version);
 
-                StartupLadder.EnqueueModal("update-available", 90, shell, async () =>
+                StartupLadder.EnqueueModal("update-available", 80, shell, async () =>
                 {
                     if (!_busy && CoreSettings.Current.HasAcceptedAgeVerification) await OfferAsync(shell, info);
                 });

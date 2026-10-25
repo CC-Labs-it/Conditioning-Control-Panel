@@ -122,6 +122,25 @@ public sealed class StartupLadderTests
     });
 
     [Fact]
+    public Task ForYouFeedDoesNotParkTheLadderButAGameDoes() => Run((owner, clock) =>
+    {
+        // WPF StartupPresenter.cs:373 SafeGameHostUp counts games only: the feed stays open for hours.
+        var feed = new ConditioningControlPanel.Avalonia.Views.Games.GameWindow(
+            ConditioningControlPanel.Avalonia.Views.Games.GameWindow.Games[ConditioningControlPanel.Avalonia.Views.Games.GameWindow.FypId]);
+        ConditioningControlPanel.Avalonia.Views.Games.GameWindow? game = null;
+        try
+        {
+            feed.Show();
+            Assert.True(ConditioningControlPanel.Avalonia.Views.Games.GameWindow.IsAnyOpen());
+            Assert.False(StartupLadder.World(clock.Now.UtcDateTime).GameHostUp);
+            game = new ConditioningControlPanel.Avalonia.Views.Games.GameWindow();
+            game.Show();
+            Assert.True(StartupLadder.World(clock.Now.UtcDateTime).GameHostUp);
+        }
+        finally { feed.Close(); game?.Close(); }
+    });
+
+    [Fact]
     public Task QuietWatchReportsExpiryOnceAndStopsWithoutOpeningFiledRows() => Run((owner, clock) =>
     {
         var changes = new List<bool>();

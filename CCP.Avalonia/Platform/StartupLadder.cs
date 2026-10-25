@@ -179,7 +179,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             LadderBusy = !IsLadderIdle,
             LauncherHolding = Held,
-            GameHostUp = Views.Windows.PanicSurfaces.AnyOwnsTheScreen(),
+            // WPF SafeGameHostUp (StartupPresenter.cs:373): games only, never the For You feed.
+            GameHostUp = Views.Windows.PanicSurfaces.AnyOwnsTheScreen(skipId: "games") || Views.Games.GameWindow.IsAnyGameOpen(),
             ModalUp = _modalUp || Views.Windows.MainShellWindow.IsStartupDialogShowing || AppUpdater.IsUpdateDialogActive,
             TutorialActive = CoreTutorial.IsActive,
             SessionRunning = CoreSession.IsSessionRunning,
@@ -263,8 +264,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
             _generation++;
             _modalTimer?.Dispose(); _modalTimer = null;
             _quietTimer?.Dispose(); _quietTimer = null;
+            // Only hand back the flag the ladder raised itself: a test (or the wizard) may own it.
+            if (_modalUp) Views.Windows.MainShellWindow.IsStartupDialogShowing = false;
             _lastQuiet = _modalUp = _pumpRunning = Held = false;
-            Views.Windows.MainShellWindow.IsStartupDialogShowing = false;
             Queue.Clear(); Shows.Clear();
             Drained = null; QuietChanged = null;
             _firstLaunchUntilUtc = null;
