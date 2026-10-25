@@ -256,6 +256,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Put("TransparentPink20", A(0x20, accent));
                 Put("TransparentPink40", A(0x40, accent));
                 Put("TransparentPink50", A(0x50, accent));
+                Put("SelectionPink", A(0x66, accent));
                 Put("AccentPressed", pressed);
                 Put("PatreonPurple", secondary);
                 Put("AccentTintedBg", Mix(bg, accent, 0.15));

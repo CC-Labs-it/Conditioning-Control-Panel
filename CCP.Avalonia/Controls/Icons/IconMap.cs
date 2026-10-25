@@ -111,6 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             M(IconKind.Comment, R, null, "💭"); M(IconKind.BrainCircuit, R, null, "🧠"); M(IconKind.Drop, R, null, "💧");
             M(IconKind.EmojiMeh, R, null, "🫠", "😵"); M(IconKind.Water, R, null, "🌊"); M(IconKind.Eye, R, null, "👁", "👀", "😉");
             M(IconKind.EyeOff, R, null, "🙈", "😎"); M(IconKind.EmojiSurprise, R, null, "😮"); M(IconKind.Target, R, null, "🎯");
+            M(IconKind.Tabs, R, null, "📑");    // WhatMovedPlan "tabs" row
             M(IconKind.Games, R, null, "🎮", "🕹", "🎪", "🎰"); M(IconKind.ArrowShuffle, R, null, "🎲"); M(IconKind.Bot, R, null, "🤖");
             M(IconKind.Emoji, R, null, "🎭"); M(IconKind.PersonEdit, R, null, "🪞"); M(IconKind.Wand, R, null, "👗");
             M(IconKind.Beaker, R, null, "🫙"); M(IconKind.Fire, R, null, "🕯"); M(IconKind.Link, R, null, "🧵");

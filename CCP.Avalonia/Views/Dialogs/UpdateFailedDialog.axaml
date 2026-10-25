@@ -34,8 +34,6 @@
         Background="Transparent">
 
     <Window.Resources>
-        <!-- ponytail: local copy of ConditioningControlPanel/App.xaml:Font.Mono, hoist when a second view needs it -->
-        <FontFamily x:Key="Font.Mono">Cascadia Mono, Consolas, Courier New</FontFamily>
 
         <!-- Secondary button: same shape as the "Later" button on the update dialog -->
         <!-- ponytail: local copy of ConditioningControlPanel/Dialogs/UpdateFailedDialog.xaml:SecondaryButtonStyle, hoist when a second view needs it -->

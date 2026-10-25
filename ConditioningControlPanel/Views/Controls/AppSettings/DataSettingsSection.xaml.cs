@@ -130,7 +130,8 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
         /// <para><b>What goes:</b> <c>settings.json</c> (moved aside to
         /// <c>settings.pre-reset-&lt;stamp&gt;.json</c>, not deleted - a reset the user regrets has to
         /// be recoverable by hand), any leftover <c>settings.json*.tmp</c> from an interrupted save,
-        /// and the <c>.restored</c> cloud-restore marker. The temps and the marker MUST go with it:
+        /// the <c>.restored</c> cloud-restore marker and the session / ramp journals
+        /// (<see cref="Services.FactoryResetSweep"/>). The temps and the marker MUST go with it:
         /// <c>SettingsService.RecoverAndCleanTempFiles</c> promotes a surviving temp to
         /// <c>settings.json</c> when the real file is missing, which would quietly undo the reset.</para>
         ///
@@ -146,7 +147,7 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
         /// directly would hit our own single-instance handshake: the still-alive process would ack
         /// and the new one would exit, leaving the user staring at an un-reset app. So the relaunch
         /// is handed to a detached shell that waits for this process to be gone first. The exit is
-        /// <see cref="Environment.Exit"/> rather than the normal shutdown because the normal
+        /// <see cref="Services.Diagnostics.UiThreadExit"/> (Environment.Exit off the UI thread) rather than the normal shutdown because the normal
         /// shutdown calls <c>SaveSettings()</c> - which would write the in-memory settings straight
         /// back over the file we just moved aside.</para>
         /// </summary>
@@ -185,18 +186,9 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
                     App.Logger?.Warning("[RESET] no settings.json to move aside (already at defaults)");
                 }
 
-                foreach (var temp in SafeGlob(dir, "settings.json*.tmp"))
-                {
-                    try { File.Delete(temp); App.Logger?.Information("[RESET] deleted stale temp {Temp}", temp); }
-                    catch (Exception ex) { App.Logger?.Warning("[RESET] could not delete temp {Temp}: {E}", temp, ex.Message); }
-                }
-
-                var marker = settingsPath + ".restored";
-                if (File.Exists(marker))
-                {
-                    try { File.Delete(marker); App.Logger?.Information("[RESET] cleared cloud-restore marker"); }
-                    catch (Exception ex) { App.Logger?.Warning("[RESET] could not clear restore marker: {E}", ex.Message); }
-                }
+                // Temps, the cloud-restore marker and the session / ramp journals: each would hand
+                // old settings back on the next launch (FactoryResetSweep).
+                Services.FactoryResetSweep.Delete(dir, LogSweep);
 
                 // Tell the next launch that the missing settings.json is DELIBERATE. Without this,
                 // App.CheckCloudSettingsRestoreAsync sees WasSettingsFileMissing (the fresh-install
@@ -228,16 +220,25 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
             // Belt and braces: a temp created by a save that was already mid-flight when the sweep
             // above ran would be promoted to settings.json by
             // SettingsService.RecoverAndCleanTempFiles on the next launch, undoing the reset.
-            foreach (var temp in SafeGlob(dir, "settings.json*.tmp"))
-            {
-                try { File.Delete(temp); App.Logger?.Warning("[RESET] deleted late temp {Temp}", temp); }
-                catch (Exception ex) { App.Logger?.Warning("[RESET] could not delete late temp {Temp}: {E}", temp, ex.Message); }
-            }
+            // SealForReset waited out any write already in flight, so this sweep is the last word:
+            // every deletion is done before the exit begins.
+            Services.FactoryResetSweep.Delete(dir, LogSweep);
 
-            // Hard exit on purpose - see the method docs. Serilog buffers, so flush first or the
-            // whole [RESET] trail above is lost exactly when it matters.
+            // The window stays up for the exit's few seconds: nothing in it may be pressed meanwhile.
+            try { if (Window.GetWindow(this) is { } host) host.IsEnabled = false; } catch { }
+
+            // Serilog buffers, so flush first or the whole [RESET] trail above is lost exactly when
+            // it matters. Then leave OFF this thread (UiThreadExit, ccp-bugs #1468): Environment.Exit
+            // here froze the app, since ProcessExit's SystemEvents.Shutdown waits on a Send to the
+            // UI thread. Settings stay sealed for the whole exit window, so nothing writes them back.
             try { App.Logger?.Information("[RESET] flushing log before exit"); Serilog.Log.CloseAndFlush(); } catch { }
-            Environment.Exit(0);
+            Services.Diagnostics.UiThreadExit.Begin(0);
+        }
+
+        private static void LogSweep(string path, string? error)
+        {
+            if (error == null) App.Logger?.Information("[RESET] deleted {Path}", path);
+            else App.Logger?.Warning("[RESET] could not delete {Path}: {E}", path, error);
         }
 
         /// <summary>
@@ -251,11 +252,6 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
             else MessageBox.Show(message, title, MessageBoxButton.OK, icon);
         }
 
-        private static string[] SafeGlob(string dir, string pattern)
-        {
-            try { return Directory.Exists(dir) ? Directory.GetFiles(dir, pattern) : Array.Empty<string>(); }
-            catch { return Array.Empty<string>(); }
-        }
 
         /// <summary>
         /// Schedules "wait a few seconds, then start this exe again" in a detached shell.
@@ -277,7 +273,7 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = "cmd.exe",
-                    Arguments = $"/c timeout /t 4 /nobreak >nul & start \"\" \"{exe}\"",
+                    Arguments = $"/c timeout /t {Services.FactoryResetSweep.RelaunchDelaySeconds} /nobreak >nul & start \"\" \"{exe}\"",
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WorkingDirectory = Path.GetDirectoryName(exe) ?? Environment.CurrentDirectory,
