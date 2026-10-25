@@ -40,8 +40,6 @@ namespace ConditioningControlPanel.Avalonia.Tours
         {
             "BtnProgression",
             "BtnSettings",          // trunk's shell names it; this tip's does not yet
-            "TutorialActionIntensityField",
-            "TutorialTriggerTimeField",
         };
 
         private static bool _seeded;

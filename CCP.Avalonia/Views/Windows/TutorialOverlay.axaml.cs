@@ -90,6 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private DispatcherTimer? _spotlightDelayTimer;
         private Rect? _inputHole;
         private bool _cardInputOnly;
+        internal bool HasClosed => _closed;
         internal PixelRect[]? InputRectangles { get; private set; }
 
         /// <summary>
@@ -167,6 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             if (_live)
             {
+                if (_targetWindow != null) _targetWindow.Closed += OnTargetClosed;
                 CoreTutorial.StepChanged += OnSeamStepChanged;
                 CoreTutorial.Finished += OnSeamFinished;
                 CoreTutorialEvents.Event += OnTutorialEvent;
@@ -200,6 +202,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             else Dispatcher.UIThread.Post(Close);
         }
 
+        private void OnTargetClosed(object? sender, EventArgs e) => Close();
+
         protected override void OnClosed(EventArgs e)
         {
             _closed = true;
@@ -209,6 +213,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             if (_live)
             {
+                if (_targetWindow != null) _targetWindow.Closed -= OnTargetClosed;
                 CoreTutorial.StepChanged -= OnSeamStepChanged;
                 CoreTutorial.Finished -= OnSeamFinished;
                 CoreTutorialEvents.Event -= OnTutorialEvent;
@@ -392,10 +397,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
 
-            // WPF gave the target window a chance to prepare itself here (expand the collapsed
-            // drawer that holds TargetElementName) via step.PrepareTargetWindowAction. That hook
-            // is an Action<System.Windows.Window> and did not cross with the seam - see the class
-            // header for what a step behind a collapsed drawer degrades to.
+            try { Tours.TutorialHead.CurrentHeadStep?.PrepareTargetWindowAction?.Invoke(_targetWindow); }
+            catch { /* tutorial prep must not prevent Skip */ }
             try { _targetWindow.UpdateLayout(); } catch { /* not laid out yet */ }
 
             var targetElement = FindElementByName(_targetWindow, step.TargetElementName);

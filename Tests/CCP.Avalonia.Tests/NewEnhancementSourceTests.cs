@@ -14,6 +14,8 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
+using ConditioningControlPanel.Avalonia.Tours;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using Xunit;
 
@@ -106,12 +108,46 @@ public sealed class NewEnhancementSourceTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task BrowseHidesTheLiveOverlayAndRestoresItOnCancelOrFailure(bool fail) => Run(async () =>
+    {
+        TutorialHead.Seed();
+        TutorialHead.ResetForTests();
+        var provider = DispatchProxy.Create<IStorageProvider, PickerProxy>();
+        var picker = (PickerProxy)(object)provider;
+        picker.Pending = new TaskCompletionSource<IReadOnlyList<IStorageFile>>();
+        using var scope = BindStorageProvider(new Factory(provider));
+        var dialog = new NewEnhancementDialog();
+        dialog.Show();
+        try
+        {
+            dialog.FindControl<Button>("BtnLocalVideoTutorial")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var overlay = (TutorialOverlay)typeof(NewEnhancementDialog).GetField("_activeTutorialOverlay", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(dialog)!;
+            Assert.True(overlay.IsVisible);
+            var browse = (Task)typeof(NewEnhancementDialog).GetMethod("BrowseAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(dialog, null)!;
+            Assert.False(overlay.IsVisible);
+            Assert.True(CoreTutorial.IsActive);
+            if (fail) picker.Pending.SetException(new IOException("picker unavailable"));
+            else picker.Pending.SetResult(Array.Empty<IStorageFile>());
+            if (fail) await Assert.ThrowsAsync<IOException>(() => browse); else await browse;
+            Assert.True(overlay.IsVisible);
+            Assert.True(string.IsNullOrEmpty(dialog.FindControl<TextBox>("TxtSource")!.Text));
+        }
+        finally { dialog.Close(); TutorialHead.ResetForTests(); }
+    });
+
     private static Task Run(Func<Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        await body();
+        var performance = CoreSettings.Current.PerformanceMode;
+        CoreSettings.Current.PerformanceMode = true;
+        try { await body(); }
+        finally { CoreSettings.Current.PerformanceMode = performance; }
     });
 
     // Bind the existing Avalonia native-storage seam; no second picker abstraction in the head.
@@ -136,6 +172,7 @@ public sealed class NewEnhancementSourceTests
 
     public class PickerProxy : DispatchProxy
     {
+        internal TaskCompletionSource<IReadOnlyList<IStorageFile>>? Pending;
         internal IStorageFolder Folder = null!;
         internal IStorageFile Result = null!;
         internal Uri? RequestedFolder;
@@ -150,7 +187,7 @@ public sealed class NewEnhancementSourceTests
             if (method?.Name == "OpenFilePickerAsync")
             {
                 Options = (FilePickerOpenOptions)args![0]!;
-                return Task.FromResult<IReadOnlyList<IStorageFile>>(new[] { Result });
+                return Pending?.Task ?? Task.FromResult<IReadOnlyList<IStorageFile>>(new[] { Result });
             }
             return method?.Name switch
             {

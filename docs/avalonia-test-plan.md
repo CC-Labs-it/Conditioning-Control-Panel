@@ -673,3 +673,11 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+
+### New enhancement interactive tutorial completion
+
+1. WPF `Views/Deeper/NewEnhancementDialog.xaml.cs` — From Deeper, open New enhancement. Launch each Local Video, Local Audio and HypnoTube tutorial. Confirm the media radio, localized cards and order match WPF; HT fills the first known TikTok link and remembers the seen flag. Rows: `views-deeper-new-enhancement-dialog`
+2. WPF `Views/Deeper/NewEnhancementDialog.xaml.cs` — In a local tutorial, Browse. Confirm the overlay disappears while the owned picker is open, remembered directory/media filters match, and Open or Cancel restores the overlay. Cancel the dialog and repeat using window close: no overlay or active tour remains. Rows: `views-deeper-new-enhancement-dialog`
+3. WPF `Views/Deeper/NewEnhancementDialog.xaml.cs` — Clear the source and Create: the source-required message appears and no editor continuation is queued. Enter a valid source and Create: only the matching Part 2 opens in the editor after about 800 ms. Close the editor or panic during that delay: no tutorial appears later or on another editor. Rows: `views-deeper-new-enhancement-dialog`
+4. WPF `Views/Deeper/DeeperEditorWindow.xaml.cs` — Walk each Part 2 through metadata, preview, haptic effect, rule, Save and completion. Confirm metadata drawer preparation, spotlight click-through, text/selection/slider advancement, effect/rule events, file-save wait and HT saved-file follow-up. Close or panic during a tutorial: the overlay disappears. Rows: `views-deeper-new-enhancement-dialog`
