@@ -484,7 +484,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
         /// <summary>Tests only: the client the backup status line and the export ask (WPF App.ProfileSync). Its own
         /// seam, not AccountSeed.NewV2: the status refreshes on every repaint, link flows included.</summary>
-        internal static Func<V2AuthService> CloudData = () => new V2AuthService();
+        // One client across repaints so recovery cooldowns survive repeated clicks.
+        private static readonly V2AuthService CloudClient = new()
+        {
+            RevalidateCloudProvider = async () =>
+            {
+                if (AccountSeed.Patreon?.IsAuthenticated == true)
+                    await AccountSeed.Patreon.ValidateSubscriptionAsync(forceRefresh: true);
+                else if (AccountSeed.Discord?.IsAuthenticated == true)
+                    await AccountSeed.Discord.ValidateAndRefreshUserAsync(forceRefresh: true);
+            },
+            CloudSessionRecovered = () => AccountSeed.Sync?.StartHeartbeat(),
+        };
+        internal static Func<V2AuthService> CloudData = () => CloudClient;
 
         /// <summary>WPF MainWindow.CloudBackup.cs UpdateBackupStatus (:261): the last backup's date and version,
         /// else "no cloud backup found" (WPF answers that for a failed check too).</summary>

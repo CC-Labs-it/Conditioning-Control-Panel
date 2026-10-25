@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 using ConditioningControlPanel.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -27,6 +28,13 @@ namespace ConditioningControlPanel.Services
         private static readonly Lazy<HttpClient> Shared = new(() => Configure(new HttpClient()));
         private readonly HttpClient _http;
         private readonly Func<AppSettings?> _settings;
+        private readonly SemaphoreSlim _cloudRecoveryGate = new(1, 1);
+        private DateTime _lastCloudRestore = DateTime.MinValue;
+        private DateTime _lastCloudProvider = DateTime.MinValue;
+        /// <summary>Head-owned provider validation and heartbeat restart, as WPF ProfileSyncService.</summary>
+        public Func<Task>? RevalidateCloudProvider { get; set; }
+        public Action? CloudSessionRecovered { get; set; }
+        internal Func<DateTime> CloudRecoveryNow = () => DateTime.Now;
         private const string SERVER_URL = "https://codebambi-proxy.vercel.app";
 
         /// <summary>
@@ -808,24 +816,34 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>
         /// GDPR data export (WPF ProfileSyncService.ExportDataAsync): the server's JSON, pretty-printed for the file.
-        /// Errors carry the server's own text. WPF's 401 token-recovery retry is not here (as DeleteAccountAsync).
+        /// Errors carry the server's own text. A 401 recovers the session and retries at most once, as WPF.
         /// </summary>
         public async Task<(bool success, string? error, string? jsonData)> ExportDataAsync(string? unifiedId)
         {
             if (string.IsNullOrEmpty(unifiedId)) return (false, "You must be logged in to export your data", null);
             try
             {
-                var request = new HttpRequestMessage(HttpMethod.Post, $"{SERVER_URL}/v2/user/export-data");
-                AddAuthHeader(request);
-                request.Content = new StringContent(new JObject { ["unified_id"] = unifiedId }.ToString(), Encoding.UTF8, "application/json");
-                var response = await _http.SendAsync(request);
-                var json = await response.Content.ReadAsStringAsync();
-                if (!response.IsSuccessStatusCode)
+                HttpRequestMessage Request()
                 {
-                    if (await TryHandleMergedAsync(response, json))
-                        return (false, Localization.Loc.Get("account_merged_retry_hint"), null);
-                    return (false, ServerError(json, response.StatusCode), null);
+                    var request = new HttpRequestMessage(HttpMethod.Post, $"{SERVER_URL}/v2/user/export-data");
+                    AddAuthHeader(request);
+                    request.Content = new StringContent(new JObject { ["unified_id"] = unifiedId }.ToString(), Encoding.UTF8, "application/json");
+                    return request;
                 }
+                using var request = Request();
+                using var first = await _http.SendAsync(request);
+                var json = await first.Content.ReadAsStringAsync();
+                if (!first.IsSuccessStatusCode && await TryHandleMergedAsync(first, json))
+                    return (false, Localization.Loc.Get("account_merged_retry_hint"), null);
+                if (first.StatusCode == HttpStatusCode.Unauthorized && await RecoverCloudSessionAsync()
+                    && !string.IsNullOrEmpty(_settings()?.AuthToken))
+                {
+                    using var retryRequest = Request();
+                    using var retry = await _http.SendAsync(retryRequest);
+                    json = await retry.Content.ReadAsStringAsync();
+                    if (!retry.IsSuccessStatusCode) return (false, ServerError(json, retry.StatusCode), null);
+                }
+                else if (!first.IsSuccessStatusCode) return (false, ServerError(json, first.StatusCode), null);
                 return (true, null, JToken.Parse(json).ToString(Formatting.Indented));
             }
             catch (Exception ex)
@@ -833,6 +851,62 @@ namespace ConditioningControlPanel.Services
                 Log.Error(ex, "[V2Auth] Export data failed");
                 return (false, "Data export requires an internet connection", null);
             }
+        }
+
+        // WPF ProfileSyncService:4344-4522. Separate cooldowns let a diverged token fall through
+        // immediately to provider validation; a failed recovery never deletes the stored token.
+        private async Task<bool> RecoverCloudSessionAsync()
+        {
+            await _cloudRecoveryGate.WaitAsync();
+            try
+            {
+                var settings = _settings();
+                if (string.IsNullOrEmpty(settings?.UnifiedId)) return false;
+                var now = CloudRecoveryNow();
+                bool recovered = false;
+                if (now - _lastCloudRestore > TimeSpan.FromSeconds(30))
+                {
+                    _lastCloudRestore = now;
+                    try
+                    {
+                        if (!string.IsNullOrEmpty(settings.AuthToken))
+                        {
+                            using var request = new HttpRequestMessage(HttpMethod.Post, $"{SERVER_URL}/v2/auth/restore-session");
+                            AddAuthHeader(request);
+                            request.Content = new StringContent(JsonConvert.SerializeObject(new
+                            { unified_id = settings.UnifiedId, client_version = CoreReleaseContent.AppVersion }), Encoding.UTF8, "application/json");
+                            using var response = await _http.SendAsync(request);
+                            if (await TryHandleMergedAsync(response)) return false;
+                            if (response.IsSuccessStatusCode)
+                            {
+                                var obj = JObject.Parse(await response.Content.ReadAsStringAsync());
+                                if (obj["auth_token"]?.ToString() is { Length: > 0 } token)
+                                {
+                                    settings.AuthToken = token;
+                                    CoreSettings.Save(suppressCloudBackup: true);
+                                }
+                                recovered = true;
+                            }
+                        }
+                    }
+                    catch (Exception ex) { Log.Warning("Export session restore failed: {Error}", ex.Message); }
+                }
+                if (!recovered && now - _lastCloudProvider > TimeSpan.FromMinutes(2))
+                {
+                    _lastCloudProvider = now;
+                    var before = settings.AuthToken;
+                    try
+                    {
+                        if (RevalidateCloudProvider is { } validate) await validate();
+                        var after = _settings()?.AuthToken;
+                        recovered = !string.IsNullOrEmpty(after) && after != before;
+                    }
+                    catch (Exception ex) { Log.Warning("Export provider recovery failed: {Error}", ex.Message); }
+                }
+                if (recovered) CloudSessionRecovered?.Invoke();
+                return recovered;
+            }
+            finally { _cloudRecoveryGate.Release(); }
         }
 
         /// <summary>
@@ -850,7 +924,8 @@ namespace ConditioningControlPanel.Services
                 var response = await _http.SendAsync(request);
                 if (!response.IsSuccessStatusCode)
                 {
-                    await TryHandleMergedAsync(response);
+                    if (await TryHandleMergedAsync(response)) return null;
+                    if (response.StatusCode == HttpStatusCode.Unauthorized) await RecoverCloudSessionAsync();
                     return null;
                 }
                 // Raw date text (no Newtonsoft date conversion), parsed the way WPF's string property was.

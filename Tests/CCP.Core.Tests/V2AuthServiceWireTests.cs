@@ -72,6 +72,103 @@ public sealed class V2AuthServiceWireTests : IDisposable
         }
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("restored")]
+    public async Task ExportRetriesOnceAfterRestoreSessionConfirmsToken(string? rotatedToken)
+    {
+        using var handler = new ExportRecoveryHandler { RestoreToken = rotatedToken };
+        var result = await new V2AuthService(() => _settings, handler).ExportDataAsync(_settings.UnifiedId);
+        Assert.True(result.success, result.error);
+        Assert.Equal(new[] { "/v2/user/export-data", "/v2/auth/restore-session", "/v2/user/export-data" }, handler.Paths);
+        Assert.Equal(rotatedToken ?? Tok, _settings.AuthToken);
+        Assert.Equal(rotatedToken ?? Tok, handler.ExportTokens[1]);
+    }
+
+    [Fact]
+    public async Task BackupMetadataRecoversWithoutRetryingTheMetadataRequest()
+    {
+        using var handler = new ExportRecoveryHandler { RefuseRestore = true };
+        var client = new V2AuthService(() => _settings, handler);
+        // The metadata request is refused, then restore-session is also refused. No provider
+        // token changed: WPF returns no metadata and leaves the stored token intact.
+        Assert.Null(await client.GetSettingsBackupInfoAsync(_settings.UnifiedId));
+        Assert.Equal(new[] { "/v2/user/settings-backup", "/v2/auth/restore-session" }, handler.Paths);
+        Assert.Equal(Tok, _settings.AuthToken);
+    }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task ExportProviderFallbackRequiresChangedTokenAndHonorsCooldowns(bool rotate, bool success)
+    {
+        using var handler = new ExportRecoveryHandler { RefuseRestore = true };
+        var validations = 0;
+        var heartbeats = 0;
+        var now = new DateTime(2026, 10, 25);
+        var client = new V2AuthService(() => _settings, handler)
+        {
+            RevalidateCloudProvider = () =>
+            {
+                validations++;
+                if (rotate) _settings.AuthToken = "renewed";
+                return Task.CompletedTask;
+            },
+            CloudSessionRecovered = () => heartbeats++,
+            CloudRecoveryNow = () => now,
+        };
+        var result = await client.ExportDataAsync(_settings.UnifiedId);
+        Assert.Equal(success, result.success);
+        Assert.Equal(1, validations);
+        Assert.Equal(success ? 1 : 0, heartbeats);
+        Assert.Equal(success ? "renewed" : Tok, _settings.AuthToken);
+        Assert.Equal(success ? 2 : 1, handler.ExportTokens.Count);
+        if (success) Assert.Equal("renewed", handler.ExportTokens[1]);
+        handler.AlwaysRefuseExport = true;
+        await client.ExportDataAsync(_settings.UnifiedId);
+        Assert.Equal(1, validations);
+        Assert.Equal(1, handler.Paths.Count(p => p == "/v2/auth/restore-session"));
+        now = now.AddSeconds(31);
+        await client.ExportDataAsync(_settings.UnifiedId);
+        Assert.Equal(2, handler.Paths.Count(p => p == "/v2/auth/restore-session"));
+        Assert.Equal(1, validations);
+        now = now.AddMinutes(2);
+        await client.ExportDataAsync(_settings.UnifiedId);
+        Assert.Equal(2, validations);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Forbidden, 1)]
+    [InlineData(HttpStatusCode.Unauthorized, 2)]
+    public async Task ExportNeverRetriesNon401OrRetriesMoreThanOnce(HttpStatusCode status, int exports)
+    {
+        using var handler = new ExportRecoveryHandler { AlwaysRefuseExport = true, Refusal = status };
+        var result = await new V2AuthService(() => _settings, handler).ExportDataAsync(_settings.UnifiedId);
+        Assert.False(result.success);
+        Assert.Equal("expired", result.error);
+        Assert.Equal(exports, handler.ExportTokens.Count);
+    }
+
+    private sealed class ExportRecoveryHandler : HttpMessageHandler
+    {
+        public readonly List<string> Paths = new();
+        public readonly List<string> ExportTokens = new();
+        public bool RefuseRestore, AlwaysRefuseExport;
+        public string? RestoreToken;
+        public HttpStatusCode Refusal = HttpStatusCode.Unauthorized;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            Paths.Add(path);
+            var export = path == "/v2/user/export-data";
+            if (export) ExportTokens.Add(request.Headers.GetValues("X-Auth-Token").Single());
+            var refused = export ? ExportTokens.Count == 1 || AlwaysRefuseExport : RefuseRestore;
+            return Task.FromResult(new HttpResponseMessage(refused ? Refusal : HttpStatusCode.OK)
+            { Content = new StringContent(refused ? "{\"error\":\"expired\"}" :
+                !export && RestoreToken != null ? "{\"auth_token\":\"" + RestoreToken + "\"}" : "{}") });
+        }
+    }
+
     [Fact]
     public async Task EveryRequestMatchesTheWpfFixture()
     {
