@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using ConditioningControlPanel.Helpers;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Quiz;
+using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services;
 using Serilog;
 
@@ -89,6 +90,19 @@ public sealed class WebAssetServer : IDisposable
     /// page's WebGL layer may draw it.</summary>
     public static string AssetPath(string rel) =>
         "/" + AssetsPrefix + string.Join('/', rel.Replace('\\', '/').Split('/').Select(Uri.EscapeDataString));
+
+    /// <summary>WPF's whisper virtual hosts, served behind the same token/cookie as the board.</summary>
+    // ponytail: WPF maps only the install folder (AppContext.BaseDirectory, PieceByPieceHostService.cs:773);
+    // ContentLocator also falls back to the downloaded-content folder when the install copy is missing. Harmless, kept.
+    public Func<string?> SubAudioRoot { get; init; } = () => ContentLocator.ResolveDirectory("Resources/sub_audio");
+    public Func<string?> WordsRoot { get; init; } = () => SubliminalWhisper.WordsRoot();
+
+    /// <summary>Translate the shared whisper selector's virtual URL into this server's origin.</summary>
+    internal string WhisperUrl(string url)
+    {
+        var uri = new Uri(url);
+        return $"http://127.0.0.1:{Port}/{uri.Host}{uri.AbsolutePath}";
+    }
 
     /// <summary>Per-port so two runs on 127.0.0.1 (cookies ignore the port) never overwrite each other.</summary>
     string CookieName => $"ccp_t_{Port}";
@@ -206,6 +220,19 @@ public sealed class WebAssetServer : IDisposable
         var rel = Uri.UnescapeDataString(urlPath).TrimStart('/');
         var root = _root;
         bool asset = rel.StartsWith(AssetsPrefix, StringComparison.Ordinal);
+        bool whisper = rel.StartsWith(PbpWhisperClips.SubAudioHost + "/", StringComparison.Ordinal)
+            || rel.StartsWith(PbpWhisperClips.WordsHost + "/", StringComparison.Ordinal);
+        if (whisper)
+        {
+            int slash = rel.IndexOf('/');
+            string? folder = rel[..slash] == PbpWhisperClips.SubAudioHost ? SubAudioRoot() : WordsRoot();
+            if (string.IsNullOrEmpty(folder)) return null;
+            root = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            rel = rel[(slash + 1)..];
+            // Only the bare audio files selected by PbpWhisperClips, never a manifest or another tree.
+            if (rel.Contains('/') || rel.Contains('\\') || rel.StartsWith('.') || !PbpWhisperClips.IsClip(rel)
+                || HoldsUserData(root)) return null;
+        }
         if (asset)
         {
             if (AssetsRoot?.Invoke() is not { Length: > 0 } assets) return null;
@@ -222,7 +249,7 @@ public sealed class WebAssetServer : IDisposable
         if (!Inside(full, root)) return null;
         if (!File.Exists(full))
         {
-            if (asset || !ContentLocator.IsIntakeWebAudio(rel) || ContentRoot?.Invoke() is not { Length: > 0 } content)
+            if (asset || whisper || !ContentLocator.IsIntakeWebAudio(rel) || ContentRoot?.Invoke() is not { Length: > 0 } content)
                 return null;
             root = Path.GetFullPath(content).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
             if (HoldsUserData(root)) return null;
@@ -232,6 +259,7 @@ public sealed class WebAssetServer : IDisposable
             if (!Inside(full, root) || !File.Exists(full)) return null;
         }
         if (!LinksStayInside(full, root)) return null;
+        // Brain-drain whisper clips pass this too; GameWindow.PbpWhispers leaves unchecked ones out of the offer.
         if (asset && !IntakeRun.IsAssetActive(IntakeRun.DisabledAssetSet(DisabledAssets()), root, full)) return null;
         return full;
     }

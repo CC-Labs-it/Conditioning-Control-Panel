@@ -57,7 +57,9 @@ public static class UiHangWatchdog
     // about WHICH subsystem leaked. Sampling the three counters that actually matter every
     // few minutes turns the next long-session report into a straight read: whichever line
     // climbs monotonically over 4h is the leak.
-    private const int SAMPLE_EVERY_BEATS = 60;          // 60 × 2s ≈ every 2 minutes
+    // 60 × 2s ≈ every 2 minutes; a desk run can shorten it with CCP_RES_SAMPLE_SECONDS (floor 10 s).
+    private static readonly int SAMPLE_EVERY_BEATS = MemoryJumpRule.SampleEveryBeats(
+        Environment.GetEnvironmentVariable(MemoryJumpRule.EnvSampleSeconds), HEARTBEAT_MS);
     private const uint GR_GDIOBJECTS = 0;
     private const uint GR_USEROBJECTS = 1;
     private const uint USER_GDI_WARN = 6000;            // per-process default quota is 10,000
@@ -72,6 +74,19 @@ public static class UiHangWatchdog
     private const double MB = 1024.0 * 1024.0;
     private static bool _baselineTaken;
     private static bool _resourceAlarmed;
+
+    // ── NATIVE MEMORY BREAKDOWN (#1484, #1488) ─────────────────────────────
+    // privMB climbing 2 GB -> 8 GB with the GC heap flat says native memory grows, never WHICH
+    // allocator. On a jump (MemoryJumpRule) one [RES-JUMP] line splits private commit into native
+    // heaps / GC / other and lists the biggest private allocations. Once at baseline too, so a
+    // jump has something to compare against. CCP_MEM_BREAKDOWN_EVERY_SAMPLE=1 logs it every sample.
+    private static readonly bool BreakdownEverySample = MemoryJumpRule.ForceEverySample(
+        Environment.GetEnvironmentVariable(MemoryJumpRule.EnvEverySample));
+    private static long _prevPriv, _prevSampleTick;
+    private static double _lastReportedPrivMB;
+    private static long _lastReportTick;
+    private static int _breakdownInFlight;
+    private static bool _partialLogged;
 
     public static void Start(Dispatcher dispatcher)
     {
@@ -223,6 +238,12 @@ public static class UiHangWatchdog
                 App.Logger?.Information(
                     "[RES] baseline user={User} gdi={Gdi} handles={Handles} threads={Threads} privMB={PrivMB:F0} wsMB={WsMB:F0} gcMB={GcMB:F1}",
                     user, gdi, handles, threads, priv / MB, ws / MB, gcHeap / MB);
+                if (priv > 0)
+                {
+                    _prevPriv = priv;
+                    _prevSampleTick = Environment.TickCount64;
+                    StartBreakdown("baseline", priv / MB, priv / MB, 0);
+                }
                 return;
             }
 
@@ -230,6 +251,8 @@ public static class UiHangWatchdog
                 user, gdi, handles, threads, priv, ws, gcHeap,
                 _firstUser, _firstGdi, _firstHandles, _firstThreads,
                 _firstPriv, _firstWs, _firstGcHeap));
+
+            CheckMemoryJump(priv);
 
             uint worst = Math.Max(user, gdi);
             if (worst >= USER_GDI_CRITICAL)
@@ -252,7 +275,78 @@ public static class UiHangWatchdog
     }
 
     /// <summary>
-    /// Render the delta [RES] line: current USER/GDI/handle/thread counts and MB-scaled private
+    /// Decide on this sample's breakdown (MemoryJumpRule) and remember it as the previous sample.
+    /// Watchdog thread; the walk itself runs on its own thread so it can never delay the hang check.
+    /// </summary>
+    private static void CheckMemoryJump(long priv)
+    {
+        try
+        {
+            if (priv <= 0) return;
+            long now = Environment.TickCount64;
+            if (_prevPriv <= 0)
+            {
+                // The baseline sample could not read private bytes: this one is the baseline.
+                _prevPriv = priv; _prevSampleTick = now;
+                StartBreakdown("baseline", priv / MB, priv / MB, 0);
+                return;
+            }
+
+            double prevMB = _prevPriv / MB, nowMB = priv / MB;
+            double secsPrev = (now - _prevSampleTick) / 1000.0;
+            bool jump = MemoryJumpRule.IsJump(prevMB, nowMB, _lastReportedPrivMB, (now - _lastReportTick) / 1000.0);
+            _prevPriv = priv; _prevSampleTick = now;
+
+            if (jump) StartBreakdown("jump", prevMB, nowMB, secsPrev);
+            else if (BreakdownEverySample) StartBreakdown("sample", prevMB, nowMB, secsPrev);
+        }
+        catch { }
+    }
+
+    /// <summary>
+    /// Walk the address space on a short-lived background thread and log one [RES-JUMP] line to
+    /// the app log (rescued into bug reports by DiagMarkers) and the video trace. One walk at a
+    /// time; never throws.
+    /// </summary>
+    private static void StartBreakdown(string kind, double prevMB, double nowMB, double secsPrev)
+    {
+        if (Interlocked.CompareExchange(ref _breakdownInFlight, 1, 0) != 0) return;
+        double lastReported = kind == "baseline" ? nowMB : _lastReportedPrivMB;
+        _lastReportedPrivMB = nowMB;
+        _lastReportTick = Environment.TickCount64;
+        try
+        {
+            var t = new Thread(() =>
+            {
+                try
+                {
+                    var b = MemoryBreakdownCollector.Collect();
+                    string line = MemoryJumpRule.FormatJumpLine(kind, prevMB, nowMB, lastReported, secsPrev,
+                        b, HangContext.DescribeCompact());
+                    App.Logger?.Information("{Line}", line);
+                    VideoDiag.Log("RES-JUMP", line.Substring("[RES-JUMP] ".Length));
+                    if (b.Partial && !_partialLogged)
+                    {
+                        _partialLogged = true;
+                        App.Logger?.Warning("[RES-JUMP] address-space walk hit its {Ms} ms budget; breakdowns are partial",
+                            MemoryBreakdownCollector.BudgetMs);
+                    }
+                }
+                catch { }
+                finally { Volatile.Write(ref _breakdownInFlight, 0); }
+            })
+            {
+                IsBackground = true,
+                Name = "MemBreakdown",
+                Priority = ThreadPriority.BelowNormal
+            };
+            t.Start();
+        }
+        catch { Volatile.Write(ref _breakdownInFlight, 0); }
+    }
+
+    /// <summary>
+    /// Render the delta [RES] line:current USER/GDI/handle/thread counts and MB-scaled private
     /// bytes / working set / managed heap, each with the signed delta from the session's first
     /// sample. privMB/wsMB use F0, gcMB uses F1 (mirrors the Serilog template rendered to the log
     /// file). Invariant-culture so the grep-able text is deterministic. Extracted for headless
