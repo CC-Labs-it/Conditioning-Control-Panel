@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
 using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Dialogs
@@ -61,6 +62,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         /// dismissed the window with the X; a caller of this form normally ignores it.</summary>
         public static async Task<bool> ShowAsync(Window owner, string title, string message)
             => await new MessageDialog(title, message, showCancel: false).ShowDialogSafe<bool?>(owner) == true;
+
+        /// <summary>WPF BrowserLauncher.OpenUrlOrPrompt's failure half: copy <paramref name="url"/> (a locked
+        /// clipboard never suppresses the prompt), then say where it went.</summary>
+        public static async Task ShowLinkCopiedAsync(Window owner, string url, string purpose)
+        {
+            try { if (owner.Clipboard is { } c) await c.SetTextAsync(url); } catch { /* clipboard may be locked */ }
+            await ShowAsync(owner, ConditioningControlPanel.Localization.Loc.Get("title_open_link_in_browser"),
+                ConditioningControlPanel.Localization.Loc.GetF("msg_browser_no_default_for", purpose)
+                + ConditioningControlPanel.Localization.Loc.GetF("msg_browser_link_copied", url));
+        }
 
         /// <summary>Asks the user something. True only on OK - Cancel and the X both answer false.</summary>
         /// <param name="defaultToCancel">

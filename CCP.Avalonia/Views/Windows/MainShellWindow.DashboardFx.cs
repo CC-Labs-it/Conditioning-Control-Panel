@@ -11,7 +11,7 @@
 //     EnsureMysteryTileFx/RequestMysteryFace/RunMysteryFlip/Open/SettleMysteryPlate/StartMysteryPop;
 //   the centre wordmark's sheen - ApplyLogoSheenTimer/SweepLogoSheen (ApplyLogoDrift is LIVE for the logo's
 //     AmbientAllowed gate; its Ken Burns drift only runs for a mod's still logo in WPF, and is not ported);
-//   the browser card's frame sweep and status pulse - ApplyBrowserFrameSweep/ApplyBrowserStatusPulse.
+// LIVE: browser frame sweep and localized loading-status pulse (ApplyBrowserFx), shared BeatLoop.
 // Not to port: PrepareRailArtNudge/ApplyRailHover/ApplyRailDotPulse were retired with the premium
 // quick-toggle rail on WPF (2026-09-11); the dashboard column is the favorites rail now
 // (MainShellWindow.FavoritesRail.cs).
@@ -59,10 +59,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Deactivated += OnDashboardFxWindowStateish;
                 PropertyChanged += OnDashboardFxWindowProperty;
                 if (tab != null)
+                {
                     tab.PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) ApplyVaultCtaBreath(); };
+                    // The browser writes status from many paths. Watch the text as WPF does,
+                    // so connected and failed statuses immediately stop the progress cue.
+                    if (tab.FindControl<TextBlock>("TxtBrowserStatus") is { } status)
+                        status.PropertyChanged += (_, e) => { if (e.Property == TextBlock.TextProperty) ApplyBrowserFx(); };
+                }
                 // A static event: subscribe while open, never root a closed shell (P41).
                 Opened += (_, _) => { Env.MotionGateChanged -= ApplyDashboardFxLoops; Env.MotionGateChanged += ApplyDashboardFxLoops; ApplyDashboardFxLoops(); };
-                Closed += (_, _) => { Env.MotionGateChanged -= ApplyDashboardFxLoops; StopVaultCtaBreath(); };
+                Closed += (_, _) => { Env.MotionGateChanged -= ApplyDashboardFxLoops; StopVaultCtaBreath(); StopBrowserFx(); };
             }
             catch (Exception ex) { Log.Warning(ex, "InitializeDashboardFx failed"); }
         }
@@ -88,6 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 foreach (var card in tab.GetLogicalDescendants().OfType<FeatureCard>()) card.RefreshFx();
                 foreach (var combo in tab.GetLogicalDescendants().OfType<SplitFeatureCard>()) combo.RefreshFx();
                 ApplyVaultCtaBreath();
+                ApplyBrowserFx();
                 // WPF ApplyLogoDrift (:753): the logo animates under the chrome gate; BeatLoop parks it hidden.
                 if (tab.FindControl<AnimatedLogoImage>("ImgLogo") is { } logo)
                     logo.AmbientAllowed = Env.AllowAmbientLoops && IsActive && WindowState != WindowState.Minimized;
@@ -134,6 +141,66 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 logo.SetArtwork(custom == null ? null : new global::Avalonia.Media.Imaging.Bitmap(custom));
             }
             catch (Exception ex) { Log.Warning("Failed to load logo: {Error}", ex.Message); }
+        }
+
+        // WPF MainWindow.DashboardFx.cs:823-919. Frame/header only: never draw over or
+        // transform the native browser surface. Both loops use the shared 30 fps clock.
+        private BeatLoop? _browserFrameSweep;
+        private BeatLoop? _browserStatusPulse;
+
+        private void ApplyBrowserFx()
+        {
+            try
+            {
+                var tab = Named<Tabs.SettingsTabView>("SettingsTab");
+                var frame = tab?.FindControl<Border>("BrowserCardFrame");
+                var status = tab?.FindControl<TextBlock>("TxtBrowserStatus");
+                bool ambient = Env.AllowAmbientLoops && IsActive && WindowState != WindowState.Minimized;
+                if (frame?.BorderBrush is LinearGradientBrush { GradientStops.Count: 3 } brush)
+                {
+                    if (!ambient)
+                    {
+                        _browserFrameSweep?.Stop();
+                        _browserFrameSweep = null;
+                        for (int i = 0; i < 3; i++) brush.GradientStops[i].Offset = -0.30 + i * 0.15;
+                    }
+                    else if (_browserFrameSweep == null)
+                    {
+                        _browserFrameSweep = new BeatLoop(frame, t =>
+                        {
+                            double phase = t % 14.0;
+                            // WPF holds the end position until the discrete reset at 2.45 s,
+                            // then rests until 14 s. Interpolating that reset causes a flash.
+                            double travel = phase < 2.45 ? 1.35 * Math.Min(phase / 2.4, 1) : 0;
+                            for (int i = 0; i < 3; i++) brush.GradientStops[i].Offset = -0.30 + i * 0.15 + travel;
+                        });
+                        _browserFrameSweep.Start();
+                    }
+                }
+                if (status == null) return;
+                bool loading = string.Equals(IconText.Bare(status.Text).Trim(), IconText.BareLoc("label_loading").Trim(), StringComparison.OrdinalIgnoreCase);
+                bool pulse = loading && ambient && Env.AllowTransitions;
+                if (!pulse)
+                {
+                    _browserStatusPulse?.Stop();
+                    _browserStatusPulse = null;
+                    status.Opacity = 1;
+                }
+                else if (_browserStatusPulse == null)
+                {
+                    _browserStatusPulse = new BeatLoop(status, t => status.Opacity = 0.35 + 0.65 * BeatLoop.Breath(t, 1.6));
+                    _browserStatusPulse.Start();
+                }
+            }
+            catch (Exception ex) { Log.Debug("ApplyBrowserFx: {E}", ex.Message); }
+        }
+
+        private void StopBrowserFx()
+        {
+            _browserFrameSweep?.Stop();
+            _browserFrameSweep = null;
+            _browserStatusPulse?.Stop();
+            _browserStatusPulse = null;
         }
 
         private void StopVaultCtaBreath()

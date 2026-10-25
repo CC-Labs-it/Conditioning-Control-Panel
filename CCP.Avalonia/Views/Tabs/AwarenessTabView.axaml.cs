@@ -174,8 +174,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtAwarenessStatus.Text = on ? "Live" : "Off";
             TxtAwarenessStatus.Foreground = on ? pink ?? Brushes.HotPink : OffLabel;
 
-            // ponytail: WPF also breathes the dot while the engine is genuinely live
-            // (SetAwarenessStatusPulse). Cosmetic, and it belongs with the engine seam.
+            // WPF UpdateAwarenessStatusIndicator -> SetAwarenessStatusPulse: the shell's one pulse registry.
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.SetAwarenessStatusPulse(on);
         }
 
         // ------------------------------------------------------------------ live editors
@@ -336,17 +336,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void TxtAwarenessAppList_KeyDown(object? sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Enter) CommitAppList();
+            if (e.Key != Key.Enter) return;
+            CommitAppList();
+            // WPF acknowledges Enter by moving focus off the canonicalized box.
+            TopLevel.GetTopLevel(this)?.FocusManager?.Focus(null);
         }
 
         private void CommitAppList()
         {
-            // ponytail: BLOCKED on KeywordTriggerService.ParseAppList, which canonicalises the box
-            // (split on , ; newline, strip a trailing ".exe", de-duplicate case-insensitively).
-            // That is a pure static with no platform dependency and belongs in Core, but the
-            // service is not this layer's file and copying the parse here would give the two heads
-            // two definitions of what "chrome.exe" means. The box is seeded and readable; commit
-            // lands with the service.
+            if (_isLoading) return;
+            try
+            {
+                var settings = CoreSettings.Current;
+                var parsed = AwarenessAppScopeRules.ParseAppList(TxtAwarenessAppList.Text);
+                if (parsed.SequenceEqual(settings.KeywordTriggerApps ?? new(), StringComparer.OrdinalIgnoreCase)) return;
+                settings.KeywordTriggerApps = parsed;
+                CoreSettings.Save();
+                TxtAwarenessAppList.Text = string.Join(", ", parsed);
+                Log.Information("Awareness app scope list set to {Count} app(s) ({Mode})",
+                    parsed.Count, settings.KeywordTriggerAppScope);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Awareness tab: failed to write KeywordTriggerApps");
+            }
         }
 
         // ------------------------------------------------------------------ highlight colour

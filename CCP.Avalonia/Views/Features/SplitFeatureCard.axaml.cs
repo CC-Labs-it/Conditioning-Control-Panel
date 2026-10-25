@@ -440,15 +440,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (e.Source is Visual src && (src == _btnHelpA || src == _btnHelpB
                 || _btnHelpA.IsVisualAncestorOf(src) || _btnHelpB.IsVisualAncestorOf(src))) return;
             bool halfA = IsInHalfA(e.GetPosition(_contentRoot));
-            if (e.InitialPressMouseButton == MouseButton.Left)
-            {
-                RaiseEvent(new RoutedEventArgs(halfA ? ClickAEvent : ClickBEvent, this));
-            }
-            else if (e.InitialPressMouseButton == MouseButton.Right)
-            {
-                e.Handled = true;
-                RaiseEvent(new RoutedEventArgs(halfA ? ToggleAEvent : ToggleBEvent, this));
-            }
+            if (e.InitialPressMouseButton is not (MouseButton.Left or MouseButton.Right)) return;
+            bool right = e.InitialPressMouseButton == MouseButton.Right;
+            bool toggle = Services.UI.DashboardClickRules.IsToggle(right, DashboardDepth, true, CoreSettings.Current.DashboardInvertClicks);
+            if (right || toggle) e.Handled = true;
+            RaiseEvent(new RoutedEventArgs(toggle ? (halfA ? ToggleAEvent : ToggleBEvent) : (halfA ? ClickAEvent : ClickBEvent), this));
         }
 
         /// <summary>Commits the card to a half: the wash flips, the seam sweeps, its title grows.
