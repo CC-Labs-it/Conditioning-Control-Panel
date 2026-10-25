@@ -3122,3 +3122,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-views-tab-settings: +351
 - Home Click tips popup + saved left/right gesture inversion on feature cards, DashboardToggleHintRule in Core.
 - Review fixes: real-pointer test (fail-proven), ledger rows corrected; P108 core flake only.
+
+## avalonia-port/wire-shell-audio-playback-devices: +208
+- WPF's 2.5 s mid-duck rescan ported to the Linux pactl ducker (shared Core rule), timer retired on unduck/panic/shutdown.
+- GATE-OK (run 39702243881); row stays stub.
