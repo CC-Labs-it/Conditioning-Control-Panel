@@ -19,6 +19,8 @@ namespace CCP.Avalonia.Tests;
 /// <summary>WPF MindWipeService behind the Mind Wipe card: tick on (engine running) starts the
 /// timed service, a tick plays a clip, Test plays one, the loop silences the ticks and pays Clean
 /// Slate at 60 s, untick stops everything, and the engine stop (panic) stops a stopped-service clip.</summary>
+// Runs alone: Mind Wipe gain follows the process-wide master dial (WPF EffectiveVolume).
+[Collection(RunsAloneCollection.Name)]
 public sealed class MindWipeTests
 {
     private sealed class Voice : MindWipePlayer.IVoice
@@ -69,12 +71,12 @@ public sealed class MindWipeTests
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var s = CoreSettings.Current;
-            var saved = (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency);
+            var saved = (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency, s.MasterVolume);
             var engine = CoreSession.IsEngineRunningProvider;
             var dir = Directory.CreateTempSubdirectory();
             var clip = Path.Combine(dir.FullName, "wipe.mp3");
             File.WriteAllText(clip, "x");
-            (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency) = (false, false, clip, 40, 180);
+            (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency, s.MasterVolume) = (false, false, clip, 40, 180, 100);
             var voices = new List<Voice>();
             var clock = new Clock();
             var player = new MindWipePlayer((path, vol, loop, ended) =>
@@ -94,7 +96,7 @@ public sealed class MindWipeTests
                 CoreMindWipe.IsLoopingProvider = null; CoreMindWipe.UpdateSettingsProvider = null;
                 CoreMindWipe.ReloadClipsProvider = null; CoreMindWipe.ClipCountProvider = null;
                 CoreSession.IsEngineRunningProvider = engine;
-                (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency) = saved;
+                (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency, s.MasterVolume) = saved;
                 dir.Delete(true);
             }
             return Task.CompletedTask;

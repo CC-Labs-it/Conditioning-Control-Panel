@@ -117,6 +117,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
         }
 
+        /// <summary>WPF's volume is linear sample gain; LibVLC's is cubic, so 0.5 must land at ~-6 dB, not -18.
+        /// A PlaySound clip follows the master dial like WPF SoundGain (AudioService.cs:889).</summary>
+        internal static int VlcVolume(float volume, bool followMaster, int master)
+            => (int)Math.Round(Math.Cbrt(followMaster
+                ? AudioGain.Sound((int)Math.Round(volume * 100), master)
+                : Math.Clamp(volume, 0f, 1f)) * 100);
+
         internal void StopSounds()
         {
             Action[] stops;
@@ -135,10 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             var media = new Media(_vlc, path, FromType.FromPath);
             media.AddOption(NoVideo);
             var player = new MediaPlayer(media);
-            // WPF's volume is linear sample gain; LibVLC's is cubic, so 0.5 must land at ~-6 dB, not -18.
-            int Volume() => (int)Math.Round(Math.Cbrt(followMaster
-                ? AudioGain.Sound((int)Math.Round(volume * 100), CoreSettings.Current.MasterVolume)
-                : Math.Clamp(volume, 0f, 1f)) * 100);
+            int Volume() => VlcVolume(volume, followMaster, CoreSettings.Current.MasterVolume);
             var done = 0;
             void MasterChanged(int _) => ThreadPool.QueueUserWorkItem(_ =>
             {

@@ -8,6 +8,8 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 
 // No windows, fonts or native audio: exercise the real player with fake output voices.
+// Runs alone: it moves the process-wide CoreSettings.Current dials and the shared master watcher.
+[Collection(RunsAloneCollection.Name)]
 public sealed class MasterGainTests
 {
     private sealed class Voice : MindWipePlayer.IVoice
@@ -94,6 +96,16 @@ public sealed class MasterGainTests
         }
         finally { CoreAudio.PlaySoundProvider = previous; }
     }
+
+    [Theory]
+    [InlineData(1f, true, 100, 100)]
+    [InlineData(1f, true, 50, 71)]   // SoundGain 0.5^1.5 = 0.354, cubic -> 71
+    [InlineData(1f, true, 0, 0)]
+    [InlineData(0.05f, true, 100, 37)] // SoundGain floor 0.05
+    [InlineData(1f, false, 0, 100)]  // a one-shot ignores master
+    [InlineData(0.5f, false, 100, 79)]
+    public void LibVlc_clip_volume_follows_master_only_for_sounds(float own, bool followMaster, int master, int expected)
+        => Assert.Equal(expected, LibVlcAudio.VlcVolume(own, followMaster, master));
 
     private sealed class Folder : IDisposable
     {
