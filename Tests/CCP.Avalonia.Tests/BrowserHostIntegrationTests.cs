@@ -1,16 +1,21 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Controls;
+using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
+using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
@@ -98,26 +103,66 @@ public sealed class BrowserHostIntegrationTests
     [Theory]
     [InlineData(false, 1)]
     [InlineData(true, 0)]
-    public Task HidingSelectedBambiNavigatesOnlyWhenOnline(bool offline, int expectedNavigations) =>
-        AvaloniaTestDispatcher.RunAsync(() =>
+    public Task UncheckingOverrideOnHidingModMovesToHypnoTubeOnlyWhenOnline(bool offline, int expectedNavigations) =>
+        WithMod(BuiltInMods.SissyHypnoId, forceShow: true, offline, (shell, tab, host, mods) =>
+    {
+        Assert.True(tab.FindControl<RadioButton>("RbBambiCloud")!.IsVisible); // the override reveals it
+        tab.FindControl<RadioButton>("RbBambiCloud")!.IsChecked = true;
+        tab.FindControl<CheckBox>("ChkForceShowBambiCloud")!.IsChecked = false; // the user's click
+        Assert.False(CoreSettings.Current.ForceShowBambiCloud);
+        Assert.False(tab.FindControl<RadioButton>("RbBambiCloud")!.IsVisible);
+        Assert.True(tab.FindControl<RadioButton>("RbHypnoTube")!.IsChecked);
+        Assert.Equal(expectedNavigations, host.NavigationRequests);
+        tab.SyncBrowserCard();
+        Assert.Equal(expectedNavigations, host.NavigationRequests); // equal sync is not reload
+    });
+
+    [Theory]
+    [InlineData(false, 2)]
+    [InlineData(true, 1)]
+    public Task SwitchingToModWithoutBambiCloudSendsOpenPageToItsDefault(bool offline, int expectedNavigations) =>
+        WithMod(BuiltInMods.BambiSleepId, forceShow: true, offline, (shell, tab, host, mods) =>
+    {
+        host.Navigate(new Uri("https://bambicloud.com/")); // a page is open
+        tab.FindControl<RadioButton>("RbBambiCloud")!.IsChecked = true;
+        mods.ActivateMod(BuiltInMods.SissyHypnoId);         // WPF MainWindow.xaml.cs:3254
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(tab.FindControl<RadioButton>("RbHypnoTube")!.IsChecked);
+        Assert.Equal(expectedNavigations, host.NavigationRequests);
+        if (!offline) Assert.Equal(mods.GetDefaultBrowserUrl(), host.Source!.AbsoluteUri);
+    });
+
+    private static Task WithMod(string modId, bool forceShow, bool offline,
+        Action<MainShellWindow, SettingsTabView, WebHost, ModService> body) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
-        var old = CoreSettings.Current.OfflineMode;
+        var s = CoreSettings.Current;
+        var (oldOffline, oldForce) = (s.OfflineMode, s.ForceShowBambiCloud);
+        using var coreMods = new CoreModsSnapshot();
+        var oldMods = AvApp.Mods;
+        if (oldMods is null) AvApp.StartMods();
+        var mods = AvApp.Mods!;
+        var startId = mods.ActiveModId;
+        mods.ActivateMod(modId);
+        Dispatcher.UIThread.RunJobs();
         var shell = new MainShellWindow();
         try
         {
-            CoreSettings.Current.OfflineMode = offline;
-            shell.Show(); // the card forwards to its shell through the attached visual tree
+            s.OfflineMode = offline;
+            s.ForceShowBambiCloud = forceShow;
+            shell.Show(); // the card subscribes to ModChanged and reaches its shell through the visual tree
+            Dispatcher.UIThread.RunJobs();
             var tab = shell.FindControl<SettingsTabView>("SettingsTab")!;
-            var host = tab.FindControl<WebHost>("BrowserWebHost")!;
-            tab.FindControl<RadioButton>("RbBambiCloud")!.IsChecked = true;
-            tab.SyncBrowserSite(false, "https://hypnotube.com/", navigateIfChanged: true);
-            Assert.True(tab.FindControl<RadioButton>("RbHypnoTube")!.IsChecked);
-            Assert.Equal(expectedNavigations, host.NavigationRequests);
-            tab.SyncBrowserSite(false, "https://hypnotube.com/", navigateIfChanged: true);
-            Assert.Equal(expectedNavigations, host.NavigationRequests); // equal sync is not reload
+            body(shell, tab, tab.FindControl<WebHost>("BrowserWebHost")!, mods);
         }
-        finally { shell.Close(); CoreSettings.Current.OfflineMode = old; }
+        finally
+        {
+            shell.Close();
+            if (mods.ActiveModId != startId) mods.ActivateMod(startId);
+            Dispatcher.UIThread.RunJobs();
+            typeof(AvApp).GetProperty(nameof(AvApp.Mods), BindingFlags.Static | BindingFlags.NonPublic)!.SetValue(null, oldMods);
+            (s.OfflineMode, s.ForceShowBambiCloud) = (oldOffline, oldForce);
+        }
         return Task.CompletedTask;
     });
 }

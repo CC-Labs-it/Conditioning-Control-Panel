@@ -55,7 +55,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private void OnBrowserCardTrackerChanged() => Dispatcher.UIThread.Post(RefreshBrowserWebcamButton);
-        private void OnBrowserCardModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(SyncBrowserCard);
+        private void OnBrowserCardModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(OnBrowserModSwitched);
+
+        /// <summary>WPF MainWindow.xaml.cs:3245-3262: the radios follow the new mod, and a mod that does not offer
+        /// BambiCloud also sends an open page to its own default, even when the override reveals the radio. Only a
+        /// page that was ever loaded moves (WPF: _browserInitialized), and never offline (#867).</summary>
+        internal void OnBrowserModSwitched()
+        {
+            SyncBrowserCard();
+            if (App.Mods is { } mods && !mods.ShowBambiCloudOption() && BrowserWebHost.Source != null
+                && !CoreSettings.Current.OfflineMode)
+                BrowserWebHost.Navigate(new Uri(mods.GetDefaultBrowserUrl()));
+        }
 
         /// <summary>The saved state into the row: the mute glyph, the webcam pill, the BambiCloud override and the prompt.</summary>
         internal void SyncBrowserCard()
