@@ -288,10 +288,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var rel = Rel(file);
                 var item = new AssetThumbnailViewModel(file, rel) { IsChecked = !S.DisabledAssetPaths.Contains(rel) };
                 _currentFolderFiles.Add(item);
-                loads.Add(LoadThumbnailAsync(item, generation));
+                if (HasThumbnailer(item)) loads.Add(LoadThumbnailAsync(item, generation));
             }
             ThumbnailLoads = Task.WhenAll(loads);
         }
+
+        /// <summary>Videos need the shell thumbnailer; without one (off Windows) they keep the placeholder.</summary>
+        private static bool HasThumbnailer(AssetThumbnailViewModel item) => !item.IsVideo || Platform.VideoThumbnail.Load != null;
 
         /// <summary>WPF decodes at DecodePixelWidth 100 off the UI thread; same here, four at a time,
         /// and a folder switch drops the old folder's queued decodes.</summary>
@@ -308,13 +311,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                         if (generation != Volatile.Read(ref _thumbGeneration)) return null;
                         if (item.IsVideo)
                         {
+                            if (Platform.VideoThumbnail.Load is not { } load) return null;
                             string? temp = null;
                             var store = ContentPackStore.Current;
                             try
                             {
                                 var path = item.PackFileEntry is { } video
                                     ? temp = store?.GetPackFileTempPath(item.PackId!, video) : item.FullPath;
-                                return path == null ? null : Platform.VideoThumbnail.Load(path);
+                                return path == null ? null : load(path);
                             }
                             finally { if (temp != null) store?.DeleteTempFile(temp); }
                         }

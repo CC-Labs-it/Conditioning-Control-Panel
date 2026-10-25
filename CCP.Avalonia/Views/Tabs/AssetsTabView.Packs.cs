@@ -70,8 +70,8 @@ public partial class AssetsTabView
                 IsChecked = !S.DisabledAssetPaths.Contains(key)
             };
             _currentFolderFiles.Add(item);
-            // ponytail: videos keep the existing Fluent placeholder until a portable thumbnailer lands.
-            loads.Add(LoadThumbnailAsync(item, generation));
+            // ponytail: no pack-thumbnail LRU cache (WPF MainWindow.Assets.cs:842-892); each visit decodes again.
+            if (HasThumbnailer(item)) loads.Add(LoadThumbnailAsync(item, generation));
         }
         ThumbnailLoads = Task.WhenAll(loads);
     }

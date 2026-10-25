@@ -1,4 +1,0 @@
-
-1. Open Library, select local and installed-pack video folders. On Windows confirm shell thumbnails appear (or the placeholder if the codec has no handler). Open a pack preview, close it and panic-close another. WPF `ConditioningControlPanel/MainWindow/MainWindow.Assets.cs` Rows: `shell-file-dialogs`
-2. In Library use Open in Explorer on a filename containing spaces: Windows selects the exact file. Delete it externally and repeat: its existing parent opens; an absent parent does nothing. WPF `ConditioningControlPanel/Helpers/ExplorerLauncher.cs` Rows: `shell-file-dialogs`
-3. Close a Library preview with CCP in the foreground: the owner reactivates. Repeat after switching processes: CCP must not steal focus on Windows. WPF `ConditioningControlPanel/MainWindow/MainWindow.Assets.cs` Rows: `shell-file-dialogs`

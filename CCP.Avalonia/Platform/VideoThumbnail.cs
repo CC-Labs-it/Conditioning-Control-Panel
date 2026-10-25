@@ -9,7 +9,8 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 // Adapted from WPF ShellThumbnailHelper at the pinned base. No WPF/System.Drawing dependency.
 internal static class VideoThumbnail
 {
-    internal static Func<string, Bitmap?> Load = path => OperatingSystem.IsWindows() ? LoadWindows(path) : null;
+    // Null off Windows: no thumbnailer, so callers must not decrypt pack videos to disk for nothing.
+    internal static Func<string, Bitmap?>? Load = OperatingSystem.IsWindows() ? LoadWindows : null;
 
     [ComImport, Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IImageFactory

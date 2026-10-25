@@ -116,6 +116,21 @@ public sealed class AssetsTabTests
             Assert.False(tab.CurrentFolderFiles[1].IsChecked);
             Assert.False(Directory.Exists(Path.Combine(root, ".temp"))); // thumbnails decrypt to streams
 
+            // No thumbnailer (Linux): a pack video folder must not decrypt clips to disk.
+            ConditioningControlPanel.Avalonia.Platform.VideoThumbnail.Load = null;
+            tab.SelectFolder(pack.Children[1]);
+            await tab.ThumbnailLoads;
+            Assert.Equal("v.mp4", Assert.Single(tab.CurrentFolderFiles).Name);
+            Assert.False(Directory.Exists(Path.Combine(root, ".temp")));
+            ConditioningControlPanel.Avalonia.Platform.VideoThumbnail.Load = path =>
+            {
+                Assert.True(File.Exists(path));
+                videoTemp = path;
+                return null;
+            };
+            tab.SelectFolder(pack.Children[0]);
+            await tab.ThumbnailLoads;
+
             var cb = await Realized(shell, () => tab.ThumbnailsItemsControl.GetVisualDescendants().OfType<CheckBox>()
                 .FirstOrDefault(c => c.DataContext == tab.CurrentFolderFiles[0]));
             PressSpace(shell, cb);
