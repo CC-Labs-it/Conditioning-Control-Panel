@@ -107,7 +107,7 @@ test('all ten gaps auto-cross with no input, braking and full steering at varied
         }
         if (st[S.s] > zone.gapS1 + 12 && st[S.grounded]) { done = true; break; }
       }
-      assert.ok(done && contacts === 1 && rotorTicks > 60, `${tr.id}/${zone.id} speed${speed} steer${steer} contacts${contacts}`);
+      assert.ok(done && contacts === 1 && rotorTicks > 30, `${tr.id}/${zone.id} speed${speed} steer${steer} contacts${contacts}`);
       assert.equal(ev.all('airborne').length + ev.all('air-word-hop').length, 2, 'exactly two long airborne legs');
       assert.equal(glideActive(st), false, 'hat closes after the far-deck catch');
       assert.equal(ev.all('air-word-hop').length, contacts);
@@ -150,21 +150,27 @@ test('the first arc remains within 2.2 metres of the steady camera grade on ever
   }
 });
 
-test('the rebound leaves room for the separated rider within the steady camera view on every gap', () => {
+test('the higher rebound clears the far lip and lands well onto the deck sooner on every gap', () => {
   for (const tr of tracks) for (const zone of tr.aerials) {
     const f = setup(tr, zone), [, start, end] = phraseFlightPoints(tr, zone);
     while (!f.ev.all('air-word-land').length) tick(f);
-    let peak = 0;
+    const catchTime = f.ev.t, oldEndS = zone.gapS1 + 2;
+    const oldDuration = Math.max(2.8, Math.min(7, (oldEndS - start.s) / 23));
+    let peak = 0, lipClearance = null;
     while (f.st[S.s] < end.s) {
+      const previousS = f.st[S.s];
       tick(f);
       const u = Math.min(1, (f.st[S.s] - start.s) / (end.s - start.s));
       const baseline = start.y + (end.y - start.y) * phraseEase(u);
       const above = f.st[S.posY] - baseline;
-      assert.ok(above <= 1.801, tr.id + ': rebound left its stable framing envelope');
+      assert.ok(above <= 2.601, tr.id + ': rebound remains within its bounded height envelope');
       peak = Math.max(peak, above);
+      if (previousS < zone.gapS1 && f.st[S.s] >= zone.gapS1) lipClearance = f.st[S.posY] - tr.frameAt(f.st[S.s]).p[1];
     }
-    assert.ok(peak > 1.75, tr.id + ': rebound still has a visible spring');
-    assert.ok(peak + .37 * .78 < 2.2, 'separated rider fits within the verified first-jump height');
+    assert.ok(peak > 2.55, tr.id + ': visibly higher spring');
+    assert.ok(lipClearance > .6, `${tr.id}: clear the far edge instead of skimming it (${lipClearance})`);
+    assert.ok(end.s >= zone.gapS1 + 7.9 && end.s < zone.landingS1, 'catch safely onto the landing deck');
+    assert.ok(f.ev.t - catchTime <= oldDuration * .9 + DT, tr.id + ': quicker rebound despite the longer clear landing');
   }
 });
 
