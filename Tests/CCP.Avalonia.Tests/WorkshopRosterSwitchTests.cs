@@ -44,6 +44,7 @@ public sealed class WorkshopRosterSwitchTests
         try
         {
             shell.Show();
+            CollapsedRoom.Show(shell);   // the roster cell sits in the Workshop drawer, which v2 leaves in the collapsed room (WPF too)
             shell.ShowTab("companion");
             Dispatcher.UIThread.RunJobs();
             shell.GetLogicalDescendants().OfType<WorkshopAccordion>().Single().ExpandAndReveal("roster");

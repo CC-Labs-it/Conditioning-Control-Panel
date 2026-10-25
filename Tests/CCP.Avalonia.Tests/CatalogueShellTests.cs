@@ -47,7 +47,7 @@ public sealed class CatalogueShellTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AppA>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -219,9 +219,19 @@ public sealed class CatalogueShellTests
                 await shell.CheckCatalogueSubmissionStatusesAsync(MainShellWindow.CatalogueKindPresets, force: true);
                 Assert.Equal(before, fake.Seen.Count);
                 Assert.Single(Texts(host), t => t == toast);
+                // WPF acceptance notices stay until answered, beyond this head's old 15-second expiry.
+                var notice = host.Children.OfType<Border>()
+                    .Single(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == toast));
+                Assert.Null(notice.Tag); // sticky: no expiry timer
+                notice.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ToastDismiss")
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Contains("catalogue_submission_accepted_c1", s.DismissedNotificationKeys);
+                Assert.False(notice.IsHitTestVisible); // fading out
             }
             finally
             {
+                AppA.Notifications.Dismiss("catalogue_submission_accepted_c1");
+                s.DismissedNotificationKeys.Remove("catalogue_submission_accepted_c1");
                 shell.Close();
                 s.CataloguePresetSubmissions.Remove(preset.Id);
                 AppA.Notifications.Dismiss("catalogue_submission_accepted_c1");
