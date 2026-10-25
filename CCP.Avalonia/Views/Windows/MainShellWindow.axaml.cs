@@ -87,9 +87,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             AvaloniaXamlLoader.Load(this);
             InitializeLanguageSelector();
+            InitializeQuestStamps(); // WPF header quest roster; releases service events on Closed.
 
             // WPF put these on the Window element itself; Avalonia routes them as attached events.
             HookResizeEdges();
+            HookWindowChromeState();
             // handledEventsToo: a drop the Sessions tab already imported must still clear the overlay.
             AddHandler(DragDrop.DropEvent, Window_Drop, RoutingStrategies.Bubble, handledEventsToo: true);
             AddHandler(DragDrop.DragEnterEvent, Window_DragEnter);
@@ -104,6 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // The rail's setup pass. Here, not in OnAttachedToVisualTree: a Window IS the visual
             // root, so that override never fires on it and the rail never opened.
             InitializeNavRail();
+            InitializeChromeFx(); // WPF chrome message cue lifecycle
             InitFavoritesRail(); // MainShellWindow.FavoritesRail.cs (WPF MainWindow.xaml.cs:3501)
             ApplyEnableDeeper(); // MainShellWindow.DeeperTab.cs (WPF LoadSettings: rail door follows EnableDeeper)
             InitializeTabHistoryInput(); // MainShellWindow.TabHistory.cs (WPF MainWindow ctor)
@@ -148,12 +151,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             App.CatalogueLookup.SetOpener(OpenCatalogueEnhancement);
             Closed += (_, _) =>
             {
+                StopLockdownPulse();
                 App.CatalogueLookup.ClearOpener(OpenCatalogueEnhancement);
                 if (Platform.X11PanicKey.PushToTalk == OnPushToTalkKey)
                     Platform.X11PanicKey.PushToTalk = null;
             };
             // WPF MainWindow.xaml.cs:3531-3535: one forced share-status poll per launch.
             Opened += (_, _) => PollCatalogueStatuses(force: true);
+            // WPF MainWindow.xaml.cs:3837 (end of MainWindow_Loaded): MainShellWindow.PendingRegistration.cs.
+            Opened += (_, _) => ArmPendingRegistration();
         }
 
         /// <summary>Uses an already-loaded catalogue without making the parameterless shell open
@@ -350,7 +356,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 //   private System.Windows.Media.Imaging.BitmapImage? LoadQuestImage(…)
 //   private void CenterOnPrimaryScreen(…)
 //   private async void MainWindow_Loaded(…)
-//   private async Task CheckPendingRegistrationAsync(…)
 //   private async Task CheckFirstRunAssetsPromptAsync(…)
 //   private static bool HasAnyLocalMedia(…)
 //   private const int WM_GETMINMAXINFO
