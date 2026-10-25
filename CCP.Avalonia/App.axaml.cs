@@ -1183,7 +1183,8 @@ namespace ConditioningControlPanel.Avalonia
             // Restore any app we ducked; a pending Unduck would otherwise die with the process.
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
             try { Platform.LayeredAudio.Instance?.Shutdown(); } catch { }
-            try { Platform.WallpaperHead.Service?.ShutdownAsync().GetAwaiter().GetResult(); } catch { }
+            // WPF WallpaperService.Dispose: Flush(3 s). A timeout keeps the breadcrumb; the next launch restores it.
+            try { Platform.WallpaperHead.Service?.ShutdownAsync().Wait(TimeSpan.FromSeconds(3)); } catch { }
             try { ReleaseContent?.Dispose(); } catch { }
             try { Platform.ChasterHead.Service?.Dispose(); } catch { }
 

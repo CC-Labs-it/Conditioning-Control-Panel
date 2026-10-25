@@ -42,13 +42,15 @@ public sealed class WallpaperHost
         }
     }
 
-    public Task<bool> RestoreStaleAsync() => Queue(Restore);
+    /// <summary>WPF RestoreStaleOriginal: one attempt, then the breadcrumb is cleared either way.</summary>
+    public Task<bool> RestoreStaleAsync() => Queue(() => Restore(once: true));
 
     public Task<bool> ShuffleAsync() => Queue(() =>
     {
         if (_closed) return false;
-        // A previous failed restore must succeed before we capture a fresh original.
-        if (!IsActive && !string.IsNullOrEmpty(CoreSettings.Current.WallpaperOriginalPath) && !Restore()) return false;
+        // A stale original gets one restore attempt before we capture a fresh one; an unrestorable one
+        // (deleted file, unreadable snapshot) must not refuse every later shuffle.
+        if (!IsActive && !string.IsNullOrEmpty(CoreSettings.Current.WallpaperOriginalPath)) Restore(once: true);
         var custom = CoreSettings.Current.WallpaperSourceFolder;
         var folder = Directory.Exists(custom) ? custom : Path.Combine(CorePaths.EffectiveAssets, "wallpapers");
         var pool = Directory.Exists(folder) ? Directory.GetFiles(folder)
@@ -69,18 +71,20 @@ public sealed class WallpaperHost
         return true;
     });
 
-    public Task<bool> DeactivateAsync() => Queue(Restore);
+    public Task<bool> DeactivateAsync() => Queue(() => Restore());
 
-    private bool Restore()
+    private bool Restore(bool once = false)
     {
         var original = _original ?? CoreSettings.Current.WallpaperOriginalPath;
         if (string.IsNullOrEmpty(original)) return true;
-        if (!_platform.Restore(original)) return false; // Retain breadcrumb on failure for next launch.
+        var ok = _platform.Restore(original);
+        if (!ok && !once) return false; // In session: keep the breadcrumb so the next launch tries once.
+        if (!ok) Log.Warning("Stale wallpaper original {Path} could not be restored; clearing it", original);
         CoreSettings.Current.WallpaperOriginalPath = "";
         CoreSettings.SaveImmediate();
         _original = _current = null;
         IsActive = false;
-        return true;
+        return ok;
     }
 
     /// <summary>Exit drains all pending writes, then restores; subsequent shuffles are refused.</summary>

@@ -72,22 +72,34 @@ public sealed class WallpaperHostTests
     }
 
     [Fact]
-    public async Task FailedRestoreRetainsBreadcrumbForNextLaunch()
+    public async Task FailedRestoreKeepsBreadcrumbInSessionAndStaleRestoreClearsItAfterOneTry()
     {
+        var folder = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(folder);
         var s = CoreSettings.Current;
-        var old = s.WallpaperOriginalPath;
+        var (oldFolder, oldOriginal) = (s.WallpaperSourceFolder, s.WallpaperOriginalPath);
         try
         {
-            s.WallpaperOriginalPath = "saved-original";
+            File.WriteAllText(Path.Combine(folder, "one.png"), "fixture");
+            s.WallpaperSourceFolder = folder;
+            s.WallpaperOriginalPath = "";
             var desktop = new Desktop { RestoreSucceeds = false };
             var host = new WallpaperHost(desktop);
-            Assert.False(await host.RestoreStaleAsync());
-            Assert.Equal("saved-original", s.WallpaperOriginalPath);
-            desktop.RestoreSucceeds = true;
-            Assert.True(await host.RestoreStaleAsync());
-            Assert.Equal("saved-original", Assert.Single(desktop.Writes.Distinct()));
+            Assert.True(await host.ShuffleAsync());
+            Assert.False(await host.DeactivateAsync());
+            Assert.Equal("original", s.WallpaperOriginalPath); // kept for the next launch
+
+            // Next launch (WPF RestoreStaleOriginal): one attempt, cleared either way.
+            var next = new WallpaperHost(desktop);
+            Assert.False(await next.RestoreStaleAsync());
             Assert.Equal("", s.WallpaperOriginalPath);
+
+            // An unrestorable breadcrumb must not refuse every later shuffle.
+            s.WallpaperOriginalPath = "deleted-original";
+            var third = new WallpaperHost(desktop);
+            Assert.True(await third.ShuffleAsync());
+            Assert.Equal("original", s.WallpaperOriginalPath);
         }
-        finally { s.WallpaperOriginalPath = old; }
+        finally { s.WallpaperSourceFolder = oldFolder; s.WallpaperOriginalPath = oldOriginal; Directory.Delete(folder, true); }
     }
 }
