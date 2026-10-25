@@ -86,6 +86,7 @@ public sealed class PanicSurfacesTests
     /// ordering pairs below retain both lanes' safety contracts.</summary>
     private static readonly string[] SafetyCritical =
     {
+        "workshop-trigger-editor",
         "intake",
         "leash-task",
         "tour",

@@ -1,4 +1,6 @@
 using System;
+using Avalonia;
+using Avalonia.Threading;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.VisualTree;
@@ -9,13 +11,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
 {
     /// <summary>Z8 · TRIGGERS &amp; PHRASES. See the XAML header.
     ///
-    /// WPF forwards the controls to MainWindow. This head keeps the toggle's local visibility
-    /// and interval label here, and hoists phrase-preset selection/save/delete to the Workshop host.
-    /// Manage Phrases forwards to the owning shell. Edit Phrases and the live avatar trigger timer
-    /// still await their runtime.
+    /// WPF forwards the controls to MainWindow. This head restores settings locally and
+    /// hoists editing and phrase-preset selection/save/delete to the Workshop host.
+    /// Manage Phrases forwards to the owning shell. The live avatar trigger timer still awaits its runtime.
     /// </summary>
     public partial class WorkshopTriggersCell : UserControl
     {
+        private bool _syncing;
+        public event EventHandler? EditTriggersRequested;
         public event EventHandler? PhrasePresetSelectionChanged;
         public event EventHandler? SavePhrasePresetRequested;
         public event EventHandler? DeletePhrasePresetRequested;
@@ -31,15 +34,62 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             this.FindControl<Button>("BtnManagePhrases")!.Click += (sender, e) =>
                 this.FindAncestorOfType<MainShellWindow>()?.BtnManagePhrases_Click(sender, e);
 
+            this.FindControl<Button>("BtnEditTriggersCompanion")!.Click += (_, _) => EditTriggersRequested?.Invoke(this, EventArgs.Empty);
+
             var toggle = this.FindControl<CheckBox>("ChkTriggerModeCompanion")!;
             var panel = this.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!;
             var slider = this.FindControl<Slider>("SliderTriggerIntervalCompanion")!;
             var intervalText = this.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!;
 
             // WPF wired Checked/Unchecked separately; Avalonia has one event for both.
-            toggle.IsCheckedChanged += (_, _) => panel.IsVisible = toggle.IsChecked == true;
-            slider.ValueChanged += (_, _) => intervalText.Text = $"{(int)slider.Value}s";
+            toggle.IsCheckedChanged += (_, _) =>
+            {
+                panel.IsVisible = toggle.IsChecked == true;
+                if (_syncing) return;
+                CoreSettings.Current.TriggerModeEnabled = toggle.IsChecked == true;
+                CoreSettings.Save();
+                // ponytail: RestartTriggerTimer needs the unported tube trigger/audio loop.
+            };
+            slider.ValueChanged += (_, _) =>
+            {
+                if (_syncing) return;
+                var value = (int)slider.Value;
+                intervalText.Text = $"{value}s";
+                // WPF updates this setting without a Save on every slider tick.
+                CoreSettings.Current.TriggerIntervalSeconds = value;
+            };
+            SyncFromSettings();
         }
+
+        protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnAttachedToVisualTree(e);
+            if (CoreSettings.Service is { } service) service.CurrentReplaced += CurrentReplaced;
+            SyncFromSettings();
+        }
+
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            if (CoreSettings.Service is { } service) service.CurrentReplaced -= CurrentReplaced;
+            base.OnDetachedFromVisualTree(e);
+        }
+
+        private void CurrentReplaced() => Dispatcher.UIThread.Post(SyncFromSettings);
+
+        private void SyncFromSettings()
+        {
+            _syncing = true;
+            try
+            {
+                var s = CoreSettings.Current;
+                this.FindControl<CheckBox>("ChkTriggerModeCompanion")!.IsChecked = s.TriggerModeEnabled;
+                this.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!.IsVisible = s.TriggerModeEnabled;
+                this.FindControl<Slider>("SliderTriggerIntervalCompanion")!.Value = s.TriggerIntervalSeconds;
+                this.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!.Text = $"{s.TriggerIntervalSeconds}s";
+            }
+            finally { _syncing = false; }
+        }
+
     }
 
     /// <summary>

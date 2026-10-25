@@ -673,3 +673,7 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+
+1. Open Companion → AI (or expand the Workshop triggers cell). Restore trigger mode enabled with interval 123; revisit and check the toggle, panel and `123s` label without changing settings. Disable it, then change interval to 137: mode saves and interval updates (WPF does not save on each interval tick). WPF `MainWindow/MainWindow.Patreon.cs:1490-1526`. Rows: `views-companion-workshop-accordion`.
+2. In that cell, Edit phrases with blank and duplicate case variants; check one row per phrase. Disable a row, add a unique phrase and Save; only enabled rows persist and new user phrases retain provenance. Reopen an empty pool and Cancel: no defaults appear. Panic with pending edits closes the editor without a save prompt or settings change. WPF `MainWindow/MainWindow.Patreon.cs:1528-1599`. Rows: `views-companion-workshop-accordion`.
