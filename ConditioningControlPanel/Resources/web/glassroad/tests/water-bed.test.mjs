@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { waterBedPositions } from '../render/waterBed.js';
+import { waterBedPositions, waterBedDepth } from '../render/waterBed.js';
 import { readFileSync } from 'node:fs';
 import { loadTrack } from '../track/load.js';
 import { createWaterField } from '../render/waterField.js';
@@ -38,10 +38,27 @@ for (const aerials of [false, true]) test('Mainframe canal bed sinks on ' + (aer
   let checked=0;
   for(let i=0;i<mesh.positions.length/3;i++) {
     const raw=mesh.uvs[i*2+1],s=raw%track.lengthM;
-    if((!aerials&&raw<track.lengthM)||s<canal.fromS+5||s>canal.toS-5)continue;
+    if((!aerials&&raw<track.lengthM)||s<canal.fromS+6||s>canal.toS-6)continue;
     const distance=Math.hypot(...[0,1,2].map(k=>bed[i*3+k]-mesh.positions[i*3+k]));
     assert.ok(Math.abs(distance-1.05)<.001,'wrapped wet vertices must move below the deepest trough');
     checked++;
   }
   assert.ok(checked>100,'exercise the real wrapped canal mesh');
+});
+
+test('wet beds become shallow continuously at both ends, without a step at a wet lap seam', () => {
+  const field = { runs: [{ fromS: 20, toS: 80 }] };
+  assert.equal(waterBedDepth(20, field, 100), 0);
+  assert.equal(waterBedDepth(80, field, 100), 0);
+  assert.equal(waterBedDepth(26, field, 100), 1.05);
+  let previous = 0;
+  for (let s = 20; s <= 26; s += .25) {
+    const d = waterBedDepth(s, field, 100);
+    assert.ok(d >= previous && d - previous < .07);
+    assert.ok(Math.abs(d - waterBedDepth(100 - s, field, 100)) < 1e-10);
+    previous = d;
+  }
+  const wrap = { runs: [{ fromS: 0, toS: 20 }, { fromS: 80, toS: 100 }] };
+  assert.equal(waterBedDepth(0, wrap, 100), 1.05);
+  assert.equal(waterBedDepth(100, wrap, 100), 1.05);
 });
