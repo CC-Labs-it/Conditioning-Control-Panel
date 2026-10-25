@@ -51,7 +51,7 @@ namespace ConditioningControlPanel.Services
         // Periodic re-enumeration during duck window — catches sessions that appear AFTER Duck() ran
         // (e.g. Discord notification sound, Steam friend ping). Without this they play un-ducked.
         private System.Threading.Timer? _duckRescanTimer;
-        private const int DuckRescanIntervalMs = 2_500;
+        private const int DuckRescanIntervalMs = CoreAudio.DuckRescanIntervalMs;
 
         // Sessions that couldn't be restored at Unduck time (PID gone, app silent). Retried on a timer
         // so when the app starts producing audio again its volume gets restored — fixes "stuck at 0%".
@@ -1534,7 +1534,7 @@ namespace ConditioningControlPanel.Services
                         // Skip sessions already at 0 — most likely they're sessions we ducked in a
                         // prior generation and the PID got recycled; treating their 0 as "original"
                         // would silence the app forever.
-                        if (currentVolume <= 0.001f) continue;
+                        if (CoreAudio.IsSilentForDuckRescan(currentVolume)) continue;
 
                         lock (_lockObj)
                         {

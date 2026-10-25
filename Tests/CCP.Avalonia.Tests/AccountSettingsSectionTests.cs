@@ -42,7 +42,8 @@ public sealed class AccountSettingsSectionTests
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
-                // Real app builder (theirs) plus the headless Segoe-UI mappings PremiumSpark needs (ours).
+                // The production builder includes Inter and AppFonts registration for this headless host;
+                // HeadlessFonts() adds the Segoe-UI mappings PremiumSpark needs.
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().With(HeadlessFonts())
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
