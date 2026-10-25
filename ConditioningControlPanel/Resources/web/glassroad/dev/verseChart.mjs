@@ -17,7 +17,7 @@ export function verseChart(raw, energy = null) {
     sections: raw.sections.map((s, i) => ({ ...s,
       mood: ['build', 'groove', 'peak'][i] || 'outro', loop: i === 1 ? .95 : .6,
       energy: [.45, .7, .85][i] ?? .4 })),
-    lines, words,
+    lines, words, events: raw.events || [],
     triggers: gates.filter(g => g.trigger).map(g => ({ kind: 'word', w: g.w, startS: g.startS })),
     energy: energy?.energy || {}, hits: energy?.hits || {},
   };

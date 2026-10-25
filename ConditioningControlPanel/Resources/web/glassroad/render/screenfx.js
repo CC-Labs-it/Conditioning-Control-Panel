@@ -233,8 +233,8 @@ export function createScreenFx(three, art = currentArt()) {
         col.addAssign(vec3(glint).mul(u.freeze));
         // A varied Loom field opens from the centre, with a soft dim under Gentle.
         const reveal = smoothstep(u.spiralR.sub(0.2), u.spiralR.add(0.001), rad).oneMinus().mul(smoothstep(0, L.spiralHole, rad));
-        const ca = cos(spiralAngle), sa = sin(spiralAngle);
-        const spiralUv = vec2(c.x.mul(ca).sub(c.y.mul(sa)), c.x.mul(sa).add(c.y.mul(ca))).mul(.7).add(.5);
+        const spiralCos = cos(spiralAngle), spiralSin = sin(spiralAngle);
+        const spiralUv = vec2(c.x.mul(spiralCos).sub(c.y.mul(spiralSin)), c.x.mul(spiralSin).add(c.y.mul(spiralCos))).mul(.7).add(.5);
         const bands = texture(loom.texture, loomAtlasUv(spiralUv, spiralStyle)).rgb;
         const spun = mix(col, bands, reveal.mul(u.spiral).mul(keep).mul(L.spiralFullAlpha));
         const dim = col.mul(reveal.mul(u.spiral).mul(keep).mul(L.spiralDim).oneMinus());
