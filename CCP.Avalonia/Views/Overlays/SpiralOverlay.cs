@@ -66,14 +66,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return CoreModArt.SpiralOverridePath() ?? Path.Combine(AppContext.BaseDirectory, "Resources", "spiral.gif");
         }
 
+        // WPF ShowOverlaySustained: voice owns a runtime hold, never the saved feature flag.
+        // ponytail: retain the request through asynchronous decode; panic clears it even if no window opened.
+        internal static double? VoiceOpacity { get; private set; }
+        internal static void SetVoiceHold(Visual host, bool on)
+        {
+            VoiceOpacity = on ? Math.Clamp(CoreSettings.Current.SpiralOpacity / 100.0, 0, 1) : null;
+            Refresh(host);
+        }
+        internal static void StopForPanic() { VoiceOpacity = null; CloseAll(); }
+
         /// <summary>The painted alpha: the slider through WPF's #722 curve.</summary>
-        internal static double PaintedOpacity => SpiralFrames.Paint(CoreSettings.Current.SpiralOpacity / 100.0);
+        internal static double PaintedOpacity => VoiceOpacity ?? SpiralFrames.Paint(CoreSettings.Current.SpiralOpacity / 100.0);
 
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
         public static void Refresh(Visual host)
         {
             var s = CoreSettings.Current;
-            if (!s.SpiralEnabled || !ShouldShow()) { CloseAll(); return; }
+            if (VoiceOpacity == null && (!s.SpiralEnabled || !ShouldShow())) { CloseAll(); return; }
 
             var path = SourcePath();
             if (_framesKey != path)

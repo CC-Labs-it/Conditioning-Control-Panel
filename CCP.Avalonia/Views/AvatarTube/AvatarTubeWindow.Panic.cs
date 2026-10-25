@@ -10,6 +10,13 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>Stops the clip PlaySpeechAudio last started (WPF StopSpokenAudio's handle). Never null.</summary>
         private Action _stopSpoken = static () => { };
 
+        /// <summary>WPF StopVoiceLineAudio: mute cuts the clip without hiding the text bubble.</summary>
+        internal void StopVoiceLineAudio() => RunOnAvatar(() =>
+        {
+            try { _stopSpoken(); } catch { }
+            _stopSpoken = static () => { };
+        });
+
         /// <summary>
         /// WPF PanicSilence: cut the spoken line, drop the thinking/listening animations, the
         /// auto-hide and the bubble in one pass. Nothing is drained afterwards, so nothing speaks

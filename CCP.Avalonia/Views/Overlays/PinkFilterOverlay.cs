@@ -37,6 +37,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// OverlayService, #1180). MainShellWindow.Autonomy.cs sets and releases it.</summary>
         internal static bool PulseHold;
 
+        // WPF voice "go pink": a 40% floor, without dimming a stronger configured tint.
+        internal static double? VoiceOpacity { get; private set; }
+        internal static void SetVoiceHold(Visual host, bool on)
+        {
+            VoiceOpacity = on ? Math.Clamp(Math.Max(0.4, CoreSettings.Current.PinkFilterOpacity / 100.0), 0, 1) : null;
+            Refresh(host);
+        }
+        internal static void StopForPanic() { VoiceOpacity = null; CloseAll(); }
+
         private static bool _refused;
 
         /// <summary>Whether a tint can actually reach the screen: X11 with click-through, a
@@ -75,7 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void Refresh(Visual host)
         {
             var s = CoreSettings.Current;
-            if (!s.PinkFilterEnabled || !ShouldShow()) { CloseAll(); return; }
+            if (VoiceOpacity == null && (!s.PinkFilterEnabled || !ShouldShow())) { CloseAll(); return; }
 
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
@@ -83,7 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             var want = ResolveScreenIndices(s.PinkFilterTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
             var (r, g, b) = EffectiveColor();
-            var opacity = (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;   // a session ramps it without writing it (#471)
+            var opacity = VoiceOpacity ?? (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;   // a session ramps it without writing it (#471)
 
             // Same monitors as last time: repaint the brushes and leave the windows alone. This is
             // the whole reason the slider does not tear down a full-screen window per tick.

@@ -673,3 +673,12 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+
+### FIN4 listening command completion
+
+1. Arm She's Listening with consent and an installed speech model. Say the wake phrase followed by "spiral on", then "spiral off". With the saved spiral flag off, the runtime hold uses the configured asset/opacity, survives a tab refresh, and ends on panic without changing the saved flag. WPF `Services/AutonomyService.VoiceCommandHost.cs` + `Services/Notifications/OverlayService.cs` (ShowOverlaySustained/HideOverlaySustained). Rows: `shell-she-listening`.
+2. Say "go pink" with configured opacity below 40%, then above 40%; the tint uses the 40% floor or the stronger configured value. Release it and repeat with panic; no runtime hold survives. WPF `Services/AutonomyService.VoiceCommandHost.cs` (pink_on/pink_off). Rows: `shell-she-listening`.
+3. With their resources installed, request mind wipe, pop quiz, and bubble count while the main engine is stopped. The existing feature hosts run one action; bubble count uses the forced path and existing interaction guards remain effective. Request "give me a mantra" with spoken mantras enabled; the existing mantra funnel handles it. WPF `Services/AutonomyService.VoiceCommandHost.cs` (wipe_once/quiz_once/count_once/mantra). Rows: `shell-she-listening`.
+4. Say "louder"/"quieter" near volume bounds; volume changes by 15 points and clamps to 0–100. While a companion clip plays, mute twice then unmute: audio cuts immediately, the text stays, whisper/avatar mute flags track the action, the last audible volume returns and attached audio sliders agree. WPF `MainWindow/MainWindow.Patreon.cs` (ApplyVoiceMute/AdjustMasterVolume). Rows: `shell-she-listening`.
+5. Open What you can say and request help: new runnable commands appear, while sherpa calibration and missing service intents are not presented as working. Calibration retains the not-installed notice. WPF `MainWindow/MainWindow.SheListening.cs` + `Services/AutonomyService.VoiceCommandHost.cs`. Rows: `shell-she-listening`.
