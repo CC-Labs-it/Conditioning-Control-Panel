@@ -171,6 +171,31 @@ public sealed class MandatoryVideoOverlayTests
                     o.Step(s.AttentionLifespan + 0.01, 0);
                     Assert.Equal(0, o.LiveTargets);
                     Assert.Equal(1, v.AttentionHits);
+                    // WPF gaze-click uses the same one-hit batch path. Blinks never click video,
+                    // but still clear the dwell and start the 250 ms cooldown (GazeFocusService.cs:453,478).
+                    var oldGaze = s.VideoGazeClickEnabled;
+                    var gazeClock = new SteppedClock();
+                    var gaze = new ConditioningControlPanel.Avalonia.Platform.GazeFocus { CanRun = () => true, DwellMs = 0, Clock = gazeClock };
+                    try
+                    {
+                        s.VideoGazeClickEnabled = true;
+                        o.Spawn(0);
+                        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                        var target = System.Linq.Enumerable.First(o.GazeTargets);
+                        gaze.EvaluateDesiredState();
+                        gaze.HandleGazeMove(target.GazeBounds.Center);
+                        gaze.HandleBlink();
+                        Assert.Equal(1, v.AttentionHits);
+                        gaze.Tick();
+                        Assert.Equal(1, v.AttentionHits); // blink cooldown holds the dwell click
+                        gazeClock.Step(ConditioningControlPanel.Avalonia.Platform.GazeFocus.CooldownMs / 1000.0);
+                        gaze.Tick();
+                        Assert.Equal(2, v.AttentionHits);
+                        Assert.Equal(0, o.LiveTargets);
+                        target.Hit();
+                        Assert.Equal(2, v.AttentionHits);
+                    }
+                    finally { gaze.Stop(); s.VideoGazeClickEnabled = oldGaze; }
                     await Task.Delay(1200);
 
                     // WPF #735 grace pause: the clip's first Esc pauses it behind the card (guards asleep);

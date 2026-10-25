@@ -27,6 +27,8 @@ Views/Controls/Companion/Themes/CompanionTheme.axaml :: <Setter Property="Passwo
 MainWindow.axaml :: ← Back to the app :: arrow inside a sentence, named by the oracle (content (c).4)
 Views/Chaos/ChaosSlotPickerWindow.axaml :: Descend  ↓ :: arrow inside a sentence, named by the oracle (content (c).4)
 Views/Deeper/DeeperEditorWindow.ItemsList.cs :: {trigger} → {action} :: arrow between two user rule parts, typography (content (c).4)
+Views/Controls/AppSettings/DevicesSettingsSection.axaml.cs :: State → {state} :: arrow inside a diagnostics log line, WPF MainWindow.LabTab.cs:666 verbatim (content (c).4)
+Views/Controls/AppSettings/DevicesSettingsSection.axaml.cs :: Gaze → {side} :: arrow inside a diagnostics log line, WPF MainWindow.LabTab.cs:713 verbatim (content (c).4)
 Views/Controls/Companion/MemoryDiaryView.axaml.cs :: used 4× · last :: multiplication sign in a sample sentence (content (c).4)
 Views/Features/VideoFeatureControl.axaml :: min length &#x2192; max length :: arrow inside a tooltip sentence (content (c).4)
 Views/Windows/ModCreatorWindow.axaml.cs :: "COMPLY.mp3\" → companion says :: arrow inside help prose (content (c).4)
