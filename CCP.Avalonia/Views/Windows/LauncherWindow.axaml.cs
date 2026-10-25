@@ -72,6 +72,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public LauncherWindow()
         {
             InitializeComponent();
+            AddHandler(DragDrop.DragOverEvent, Launcher_DragOver);
+            AddHandler(DragDrop.DropEvent, Launcher_Drop);
             GamesColumn.SizeChanged += (_, _) => SeatGrid();
             XpTrack.SizeChanged += (_, _) => RefreshStats();
             _statusTimer.Tick += (_, _) => { RefreshStatus(); RefreshStats(); RefreshSpReadout(); };

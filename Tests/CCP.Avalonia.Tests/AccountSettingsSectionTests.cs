@@ -34,6 +34,7 @@ public sealed class AccountSettingsSectionTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
+                // The production builder includes Inter and AppFonts registration for this headless host.
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
