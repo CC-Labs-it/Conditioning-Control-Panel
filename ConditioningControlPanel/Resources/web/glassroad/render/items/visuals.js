@@ -517,8 +517,14 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     endAll();
   }
 
+  function clear() {
+    timeS = 0;
+    prevAlive.length = turnT.length = confT.length = 0;
+    update(null, 0);
+  }
+
   return {
-    update,
+    update, clear,
     event(name, payload) {
       if (name === 'item-box' && payload) boxOwners.set(payload.box, payload.racer);
       toys.event(name, payload); tethers.event(name, payload);

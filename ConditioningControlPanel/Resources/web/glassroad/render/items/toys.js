@@ -157,7 +157,7 @@ export function createToyProps(root, art, feel, { photosafe = null, palette = ()
       duration: name === 'snap-burst' ? (quiet ? .9 : .6) : quiet ? .8 : .6 });
   }
   function clear() {
-    effects.length = 0; landingStates.clear(); slowAge.fill(0); slowFade.fill(0);
+    time = 0; effects.length = 0; landingStates.clear(); slowAge.fill(0); slowFade.fill(0);
     for (const rows of pools.values()) for (const e of rows) e.carrier.visible = false;
     for (const m of marks) { m.ring.visible = false; m.stars.visible = false; }
     for (const g of [...guards, ...slow]) g.visible = false;

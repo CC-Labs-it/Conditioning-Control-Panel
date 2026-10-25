@@ -16,7 +16,7 @@ test('cached voice chart reproduces the exact slice, opening, gap and closing wi
   assert.throws(() => lockedChart('follow me\nlock', [take()], [88200], { seconds: 100, bpm: 128 }));
 });
 test('private Keep selection preserves explicit chart, disabled music and non-loopback host choices', () => {
-  assert.deepEqual(courseSongs('keep', '', ['/private-audio/pink-road/chart.json']), [KEEP_CHART]);
+  assert.deepEqual(courseSongs('keep', '?chart=' + KEEP_CHART, [KEEP_CHART]), [KEEP_CHART]);
   assert.deepEqual(courseSongs('keep', '?chart=0', []), []);
   assert.deepEqual(courseSongs('keep', '?chart=/mine.json', ['/mine.json']), ['/mine.json']);
   assert.deepEqual(courseSongs('keep', '', ['/other-host.json']), []);

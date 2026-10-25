@@ -8,7 +8,7 @@ export function flashLayout(aspect, params = {}) {
 }
 
 export function createFlashMedia({ parent = document.body, source = () => null, make = () => document.createElement('canvas'),
-  fallback = typeof Image === 'function' ? new Image() : null } = {}) {
+  fallback = typeof Image === 'function' ? new Image() : null, fallbackSource = () => null } = {}) {
   const canvas = make(), ctx = canvas.getContext('2d', { alpha: false });
   canvas.width = 768; canvas.height = 576;
   canvas.setAttribute('aria-hidden', 'true');
@@ -26,7 +26,7 @@ export function createFlashMedia({ parent = document.body, source = () => null, 
       canvas.style.display = 'none'; lastSource = null; return;
     }
     const p = flashParams || screen.params || {}, seed = p.seed || 0;
-    const media = source(seed), picture = media || (fallback?.complete && fallback.naturalWidth ? fallback : null);
+    const media = source(seed), picture = media || fallbackSource(seed) || (fallback?.complete && fallback.naturalWidth ? fallback : null);
     const r = flashLayout(aspect, p);
     Object.assign(canvas.style, { display: 'block', left: r.x * 100 + 'vw', top: r.y * 100 + 'vh',
       width: r.w * 100 + 'vw', height: r.h * 100 + 'vh', opacity: String(Math.min(1, amount)) });
@@ -47,5 +47,5 @@ export function createFlashMedia({ parent = document.body, source = () => null, 
       ctx.fillStyle = '#fff'; ctx.font = '20px system-ui'; ctx.fillText('via Scrolller', 16, 565);
     }
   }
-  return { update, dispose() { disposed = true; clear(); lastSource = null; canvas.remove(); } };
+  return { canvas, update, dispose() { disposed = true; clear(); lastSource = null; canvas.remove(); } };
 }
