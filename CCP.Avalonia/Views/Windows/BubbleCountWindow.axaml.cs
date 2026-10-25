@@ -681,7 +681,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_gameCompleted || _isCleaningUp) return;
             var s = CoreSettings.Current;
             switch (MandatoryVideoScheduler.KeyAction(_strictMode, e.Key.ToString(), e.KeyModifiers.HasFlag(KeyModifiers.Alt),
-                s.PanicKeyEnabled, s.PanicKey, s.PanicKeyEnabled && PanicListenerLive()))
+                s.PanicKeyEnabled, HotkeyNames.Canonical(s.PanicKey), s.PanicKeyEnabled && PanicListenerLive()))
             {
                 case VideoKeyAction.Dismiss:
                     e.Handled = true;

@@ -48,7 +48,7 @@ namespace ConditioningControlPanel.Services.Descent
     /// entry and the fuse chip take, with no WPF in any of it.
     ///
     /// <para><b>Why this is a separate file with every input passed in.</b> Same discipline as
-    /// <see cref="DescentMigrationService.SpiralWithheldFor"/> and
+    /// <see cref="SpiralWithheldFor"/> and
     /// <see cref="DescentFuseCopy"/>: the three surfaces below have to AGREE — a rail entry that is
     /// visible while the tab it points at has nothing to show, or a chip that outlives the ceremony
     /// that gave it a reason to exist, are both bugs you only ever find on the one night the
@@ -65,6 +65,15 @@ namespace ConditioningControlPanel.Services.Descent
         /// <summary>The tab key. One string, spelled once, because it is asserted in five files.</summary>
         public const string TabKey = "spiral";
 
+        /// <summary>WPF DescentMigrationService's withhold rule: an acknowledged migration or a
+        /// valid pending answer wins over every outstanding-offer signal. Null settings hold nothing.</summary>
+        public static bool SpiralWithheldFor(AppSettings? settings, bool offerInHand, bool ceremonyOpen)
+        {
+            if (settings is null || settings.DescentMigrationCompleted) return false;
+            if (DescentMigrationChoices.IsValid(settings.PendingDescentMigrationChoice)) return false;
+            return offerInHand || ceremonyOpen || settings.DescentMigrationOffered;
+        }
+
         // ==================== the fog era ====================
 
         /// <summary>
@@ -75,7 +84,7 @@ namespace ConditioningControlPanel.Services.Descent
         /// <item>THE FUSE IS BURNING (<c>Whisper &lt;= phase &lt; Zero</c>). Something is coming and
         /// has not arrived. Nobody's spiral is open yet, veteran or not.</item>
         /// <item>THE SPIRAL IS WITHHELD (<paramref name="spiralWithheld"/>, from the frozen
-        /// <see cref="DescentMigrationService.SpiralWithheldFor"/>). The question is in the room and
+        /// <see cref="SpiralWithheldFor"/>). The question is in the room and
         /// has not been answered.</item>
         /// <item>THE INSTANT HAS PASSED AND NOTHING WAS ANSWERED. The fuse was armed, zero went by,
         /// and this account has neither an acked migration nor a valid pending choice — which is

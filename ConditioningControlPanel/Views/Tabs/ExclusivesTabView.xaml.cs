@@ -52,6 +52,31 @@ namespace ConditioningControlPanel.Views.Tabs
             // idiom, e.g. Features/BubblePopFeatureControl) so this never outlives the view.
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
+            IsVisibleChanged += (_, _) => RefreshJustSubscribed();
+        }
+
+        /// <summary>The "I just subscribed" row shows while there is still a plan to buy.</summary>
+        private void RefreshJustSubscribed()
+        {
+            if (!IsVisible) return;
+            JustSubscribedRow.Visibility = EntitlementTierSync.EffectiveTierNow() >= 2 ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        private async void JustSubscribed_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                BtnJustSubscribed.IsEnabled = false;
+                TxtJustSubscribed.Text = Loc.Get("plans_just_subscribed_checking");
+                var outcome = await EntitlementTierSync.CheckNowAsync();
+                TxtJustSubscribed.Text = Loc.Get(JustSubscribedRule.LocKey(outcome));
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("Just-subscribed check failed: {E}", ex.Message);
+                TxtJustSubscribed.Text = Loc.Get("plans_just_subscribed_unreachable");
+            }
+            finally { BtnJustSubscribed.IsEnabled = true; }
         }
 
         private void OnLoaded(object sender, RoutedEventArgs e)

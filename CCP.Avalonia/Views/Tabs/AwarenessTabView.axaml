@@ -27,8 +27,7 @@
        x:FieldModifier="internal"     ->  dropped; no host re-publishes these fields on this head,
                                           and the x:Names are kept so the wiring is a one-line change.
        feat:SessionLock.Owned         ->  sessionLock:SessionLock.Owned (Views/Features/SessionLock.cs)
-       feat:AdaptiveSideArt.CollapseBelow -> dropped; the attached behaviour lives in the WPF head. The 3*/2* split with
-                                          MaxWidth="780" is kept verbatim.
+       feat:AdaptiveSideArt.CollapseBelow -> sideart:AdaptiveSideArt (Helpers/AdaptiveSideArt.cs), same threshold as WPF
        hover:HoverPop.IsEnabled       ->  unchanged (Controls/HoverPop.cs)
        pack:// BitmapImage AwarenessArt -> dropped, and with it the ElementName ImageBrush bindings
                                           that fed the hero strip and the side plate. This head
@@ -36,7 +35,7 @@
                                           geometry, mask and scrim and draw the hue wash instead.
                                           ImgAwarenessFeature survives as the same zero-size carrier
                                           so the per-mod art swap is one avares:// line later. -->
-<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:hover="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
@@ -130,8 +129,11 @@
                                     ToolTip.Tip="Walk through the Awareness Engine — sources, cooldowns, presets, and the editor.">
                                 <StackPanel Orientation="Horizontal" Spacing="6"><fx:IconGlyph Kind="HatGraduation" VerticalAlignment="Center"/><TextBlock Text="Tutorial"/></StackPanel>
                             </Button>
-                            <Ellipse x:Name="AwarenessStatusDot" Width="8" Height="8"
-                                     Fill="#606060" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <Grid Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center">
+                                <Border x:Name="AwarenessStatusGlow" CornerRadius="99" IsVisible="False" IsHitTestVisible="False"/>
+                                <Ellipse x:Name="AwarenessStatusDot" Width="8" Height="8"
+                                         Fill="#606060" VerticalAlignment="Center"/>
+                            </Grid>
                             <TextBlock x:Name="TxtAwarenessStatus" Text="Off"
                                        Foreground="{DynamicResource TextMutedBrush}"
                                        FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0"/>
@@ -158,9 +160,9 @@
                      The settings column is capped (3*, MaxWidth 780) so a cooldown slider stops
                      being a ~1200px runway, and the width that buys back becomes one big art
                      card instead of dead margin. On WPF, feat:AdaptiveSideArt collapses the art
-                     column below 1000px so the settings retake the full width; that attached
-                     behaviour is not ported and the column split is unchanged. -->
-                <Grid Grid.Row="1">
+                     column below 1000px so the settings retake the full width; same here
+                     (Helpers/AdaptiveSideArt.cs). -->
+                <Grid sideart:AdaptiveSideArt.CollapseBelow="1000" Grid.Row="1">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="3*" MaxWidth="780"/>
                         <ColumnDefinition Width="2*"/>
@@ -168,6 +170,8 @@
 
                     <StackPanel Grid.Column="0">
 
+                        <!-- WPF :136 + AwarenessTabView.Companion.cs: the collapsed room's privacy card (v2). -->
+                        <ContentControl x:Name="CompanionPrivacyHost" Margin="0,0,0,14"/>
                         <!-- ==================== LIVE PULSE ====================
                              The heartbeat of the tab: amber wash + edge bar so it reads as the
                              one live surface on the page. Rows are built imperatively in
@@ -603,6 +607,10 @@
                              above; this drawer is the authoring surface underneath them. It deliberately
                              re-hosts NO app-scoping UI - CmbAwarenessAppScope in SAFETY above is the one
                              editor for KeywordTriggerAppScope. Internals untouched by round 4. -->
+                        <Expander x:Name="CompanionTuningFold" IsVisible="False" Margin="0,4,0,12" HorizontalAlignment="Stretch">
+                            <Expander.Header><TextBlock Text="{loc:Str companion_workshop_cell_awareness}"/></Expander.Header>
+                            <ContentControl x:Name="CompanionTuningHost"/>
+                        </Expander>
                         <cmp:KeywordTriggersPanel x:Name="KeywordPanel"
                                                   Margin="0,4,0,4"
                                                   AutomationProperties.AutomationId="AwarenessCustomTriggers"/>

@@ -18,6 +18,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using ConditioningControlPanel.Lab.GazeMinigame;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Services;
 using Serilog;
 
@@ -40,9 +41,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
     ///    calibration check, then OnGazeSide / OnFaceLost / OnFaceFound drive the rounds.
     ///    <c>App.Flash</c> suspend/resume -> <c>CoreFlash</c>; <c>App.Haptics</c> -> <c>CoreHaptics</c>.
     ///  - Panic closes the game (PanicSurfaces "gaze-minigame"): panic also closes the camera here.
-    ///  - ponytail: still missing - video rounds (no pane player; not built, see
-    ///    <c>VideoRoundsPlayable</c>), animated GIFs (first frame only), the Flashes / Bubbles /
-    ///    MindWipe / OverlayPulse reward effects, and the reward clip folder (not linked).
+    ///  - Video panes reuse InlineLoopVideo's muted VLC frame sink; GIFs reuse the spiral decoder.
+    ///  - ponytail: still missing - the Flashes / Bubbles / MindWipe / OverlayPulse rewards.
     ///  - <c>MessageBox.Show</c> -> this head's <c>Views/Dialogs/MessageDialog.ConfirmAsync</c>,
     ///    so the mid-run "quit the session?" confirmation is raised again (awaited, hence the
     ///    re-test of <c>_gameRunning</c> after it).
@@ -493,11 +493,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
         /// <summary>The camera engine (WPF App.Webcam). Its OnGazeSide is the game's only input.</summary>
         private static Platform.WebcamTracker Tracker => Platform.WebcamTracker.Instance;
 
-        /// <summary>ponytail: no side-by-side video player on this head yet (the panes would show a
-        /// 🎬 glyph, a round nobody can play), so video rounds are not built and video-only
-        /// selections are refused with the shared-content message. True once the panes play video.</summary>
-        private const bool VideoRoundsPlayable = false;
-
         private void RefreshSetupState()
         {
             var focus = _library.FirstOrDefault(p => RoleOf(p) == GazePackRole.Focus);
@@ -511,7 +506,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
                 // Both buckets must be able to supply at least one shared content
                 // type, or the round builder dead-ends.
                 bool sharedImages = focus.ImageCount > 0 && ignore.Any(p => p.ImageCount > 0);
-                bool sharedVideos = VideoRoundsPlayable && focus.VideoCount > 0 && ignore.Any(p => p.VideoCount > 0);
+                bool sharedVideos = focus.VideoCount > 0 && ignore.Any(p => p.VideoCount > 0);
                 if (!sharedImages && !sharedVideos)
                     reason = "Focus and Ignore don't share a content type — pick sets that both have images, or both have videos.";
             }
@@ -887,7 +882,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
                 throw new InvalidOperationException("Both round counts are 0. Set at least one image or video round in Advanced settings (or pick a difficulty).");
 
             bool imagesViable = correct.ImageCount > 0 && noise.Any(p => p.ImageCount > 0);
-            bool videosViable = VideoRoundsPlayable && correct.VideoCount > 0 && noise.Any(p => p.VideoCount > 0);
+            bool videosViable = correct.VideoCount > 0 && noise.Any(p => p.VideoCount > 0);
             int imageRounds = imagesViable ? _settings.ImageCount : 0;
             int videoRounds = videosViable ? _settings.VideoCount : 0;
 
@@ -965,6 +960,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
 
         private void AdvanceRound()
         {
+            if (_closed) return; // feedback may have been awaiting when panic closed the game
             DisposeCurrentRoundPlayers();
             _currentRoundIdx++;
             if (_currentRoundIdx >= _rounds.Count)
@@ -996,14 +992,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             }
             else
             {
-                // ponytail: video rounds need a player CCP.Avalonia does not have. LibVLCSharp is
-                // not a Core move - it is a package reference this head lacks, and adding one is a
-                // .csproj change. This head's actual video path is the WebHost control (a real
-                // Avalonia WebView playing a file:// page's <video>), which DeeperEditorWindow
-                // proves for ONE pane; two side-by-side WebHosts are untested. A glyph holds the
-                // pane meanwhile; video rounds are not built (VideoRoundsPlayable).
-                var leftView = GlyphBlock(IconKind.Video);
-                var rightView = GlyphBlock(IconKind.Video);
+                // Own IsVisible alone controls InlineLoopVideo's pause; removing the panes below
+                // detaches both players before the feedback screen can hide their ancestor.
+                var leftView = new InlineLoopVideo(leftPath, randomStart: true) { Stretch = Stretch.Uniform };
+                var rightView = new InlineLoopVideo(rightPath, randomStart: true) { Stretch = Stretch.Uniform };
                 _leftPane.Children.Add(leftView);
                 _rightPane.Children.Add(rightView);
                 AnimateAssetIn(leftView);
@@ -1020,36 +1012,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             StartRoundTicker();
         }
 
-        private static Image BuildImageView(string path)
+        private readonly List<GazeRoundImage> _roundImages = new();
+
+        private Image BuildImageView(string path)
         {
-            var img = new Image
-            {
-                Stretch = Stretch.Uniform,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Stretch,
-            };
-            try
-            {
-                // ponytail: WPF used XamlAnimatedGif for .gif (BitmapImage renders only the
-                // first frame). Avalonia's Bitmap is likewise first-frame-only; wire an
-                // animated-GIF decoder when one is available on this head.
-                img.Source = new Bitmap(path);
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "GazeMinigame: failed to load image {Path}", path);
-            }
+            // Decode no larger than the pane (CornerGif's fitLongSide): two GIFs per round.
+            var b = _leftPane.Bounds;
+            var img = new GazeRoundImage(path, (int)Math.Ceiling(Math.Max(b.Width, b.Height) * RenderScaling));
+            _roundImages.Add(img);
             return img;
         }
 
-        /// <summary>
-        /// WPF tore down two LibVLC players here with the hard-won STOP → DETACH → DISPOSE
-        /// ordering and message-pump waits between each step. Nothing to tear down until
-        /// video playback exists on this head.
-        /// ponytail: nothing to restore until this head has a video player at all - see
-        /// AdvanceRound's video branch for what that would be.
-        /// </summary>
-        private void DisposeCurrentRoundPlayers(bool synchronous = false) { }
+        private void DisposeCurrentRoundPlayers()
+        {
+            // InlineLoopVideo detaches synchronously: stop decoder, dispose player, free sink.
+            _leftPane.Children.Clear();
+            _rightPane.Children.Clear();
+            foreach (var image in _roundImages) image.Dispose();
+            _roundImages.Clear();
+        }
 
         private void StartRoundTicker()
         {
@@ -1068,6 +1049,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
         internal void RoundTicker_Tick(object? sender, EventArgs e)
         {
             if (!_gameRunning) return;
+            foreach (var image in _roundImages) image.AdvanceFrame(Clock.GetUtcNow());
             // Round-start grace: pause BOTH gaze accumulation and the duration timeout. The
             // duration is the visible-and-decisional window — the ~1s warm-up shouldn't eat
             // into it.
@@ -1149,8 +1131,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
                         FireRewardEffect(_settings.RewardEffect);
                         if (_settings.VibrationMode == GazeVibrationMode.OnCorrect) FireVibration("reward");
                         DisposeCurrentRoundPlayers();
-                        _leftPane.Children.Clear();
-                        _rightPane.Children.Clear();
                         PlayJingle();
                         await ShowFullscreenFeedbackAsync("GOOD GIRL", Color.FromRgb(0xFF, 0x69, 0xB4));
                         break;
@@ -1158,14 +1138,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
                         if (_settings.VibrationMode == GazeVibrationMode.OnWrong) FireVibration("punish");
                         await ShakeGameplayAsync();
                         DisposeCurrentRoundPlayers();
-                        _leftPane.Children.Clear();
-                        _rightPane.Children.Clear();
                         await ShowFullscreenFeedbackAsync("WRONG", Color.FromRgb(0xFF, 0x40, 0x40));
                         break;
                     case RoundOutcome.Timeout:
                         DisposeCurrentRoundPlayers();
-                        _leftPane.Children.Clear();
-                        _rightPane.Children.Clear();
                         await Task.Delay(500);   // silent buffer
                         break;
                 }
@@ -1183,19 +1159,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
         // ─────────────────────────────────────────────────────────────────────
 
         /// <summary>
-        /// WPF fanned this out to App.Flash.TriggerFlashOnce / App.Bubbles.SpawnOnce ×5 /
-        /// PlayRewardAudio / App.MindWipe.TriggerOnce / App.Overlay.PulseOverlays. Only the audio
-        /// arm has a seam - <c>CoreAudio</c> - so only the audio arm fires here.
-        /// ponytail: the other four need <c>App.Flash</c> (FlashService.TriggerFlashOnce),
-        /// <c>App.Bubbles</c> (BubbleService.SpawnOnce), <c>App.MindWipe</c>
-        /// (MindWipeService.TriggerOnce) and <c>App.Overlay</c> (OverlayService.PulseOverlays),
-        /// all still in the WPF head; each wants a seam of its own.
+        /// ponytail: reward-effects follow-up. Audio is wired; port the other four together:
+        /// CoreFlash.ShowProvider / CoreMindWipe.TriggerOnce exist, but WPF's five one-shot
+        /// bubbles and pulse of all active overlays still need equivalent head service entry points.
         /// </summary>
         private void FireRewardEffect(GazeRewardEffect effect)
         {
             if (effect == GazeRewardEffect.Audio) { PlayRewardAudio(_settings.RewardAudioFile); return; }
             if (effect == GazeRewardEffect.None) return;
-            Log.Debug("GazeMinigame: reward effect {Effect} suppressed (service not on this head)", effect);
+            Log.Debug("GazeMinigame: reward effect {Effect} suppressed (reward-effects follow-up)", effect);
         }
 
         /// <summary>
@@ -1212,10 +1184,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
         /// self-disposing NAudio pair here; <c>CoreAudio.PlayOneShot</c> is that pattern already,
         /// so only the volume curve is carried across - master/100 raised to 1.5, exactly as
         /// <c>PlayTriggerAudio</c> and the other ported one-shots do.
-        /// <para>ponytail: <c>Resources/AwarenessPresets/audio/</c> is not linked into
-        /// <c>CCP.Avalonia.csproj</c> (which ships a ~33 MB subset of the Resources tree), so on
-        /// this head the file is missing and playback logs and returns. Link the folder to hear
-        /// it; the call itself is wired.</para></summary>
+        /// The clips ship through CCP.Avalonia.csproj's existing AwarenessPresets content link.</summary>
         private static void PlayRewardAudio(string fileName)
         {
             try
@@ -1267,9 +1236,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             };
             _feedbackCard.IsVisible = true;
             _feedbackCard.Opacity = 1;
-            await Task.Delay(1400);                     // 100ms fade-in + 1300ms hold
+            await Delay(TimeSpan.FromMilliseconds(1400)); // 100ms fade-in + 1300ms hold
+            if (_closed) return;
             _feedbackCard.Opacity = 0;
-            await Task.Delay(120);                      // fade-out + tiny tail
+            await Delay(TimeSpan.FromMilliseconds(120)); // fade-out + tiny tail
             _feedbackCard.Transitions = null;
             _feedbackCard.Opacity = 0;
             _feedbackCard.IsVisible = false;
@@ -1573,7 +1543,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             _closed = true;
             _gameRunning = false;
             StopRoundTicker();
-            DisposeCurrentRoundPlayers(synchronous: true);
+            DisposeCurrentRoundPlayers();
             UnsubscribeWebcam();
             Open.Remove(this);
 

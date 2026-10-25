@@ -52,9 +52,7 @@ namespace ConditioningControlPanel
             // a dialog; an empty pool or a finished seat just leaves the card as it was.
             if (App.Quests?.GetRemainingDailyRerolls() > 0) return;
 
-            var hasPatreon = App.Patreon?.HasPremiumAccess == true;
-            var msg = Loc.Get(hasPatreon ? "quest_reroll_daily_none_patron" : "quest_reroll_daily_none_free");
-            MessageBox.Show(msg, Loc.Get("quest_reroll_limit_title"), MessageBoxButton.OK, MessageBoxImage.Information);
+            TellRerollsSpent(weekly: false);
         }
 
         internal void BtnRerollWeekly_Click(object sender, RoutedEventArgs e)
@@ -66,10 +64,37 @@ namespace ConditioningControlPanel
             }
             else
             {
-                var hasPatreon = App.Patreon?.HasPremiumAccess == true;
-                var msg = Loc.Get(hasPatreon ? "quest_reroll_weekly_none_patron" : "quest_reroll_weekly_none_free");
-                MessageBox.Show(msg, Loc.Get("quest_reroll_limit_title"), MessageBoxButton.OK, MessageBoxImage.Information);
+                TellRerollsSpent(weekly: true);
             }
+        }
+
+        /// <summary>
+        /// Out of rerolls. A supporter is told when they come back (nothing to sell). A free
+        /// account gets the same line as a toast with one button to the priced Basic card,
+        /// where the old dialog was a dead end.
+        /// </summary>
+        private void TellRerollsSpent(bool weekly)
+        {
+            if (App.Patreon?.HasPremiumAccess == true)
+            {
+                MessageBox.Show(Loc.Get(weekly ? "quest_reroll_weekly_none_patron" : "quest_reroll_daily_none_patron"),
+                    Loc.Get("quest_reroll_limit_title"), MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            App.Notifications?.Show(Loc.Get(weekly ? "quest_reroll_weekly_none_free" : "quest_reroll_daily_none_free"),
+                NotificationType.Info, TimeSpan.FromSeconds(8), Loc.Get("quest_reroll_see_basic"),
+                () => OpenPricedCard("quest_reroll", 1));
+        }
+
+        /// <summary>
+        /// The priced vault card for a moment outside a padlock (a spent pass, a spent reroll).
+        /// Same split as the padlock button: a patron whose grant died on this PC is sent to
+        /// Reconnect, never sold the tier they hold.
+        /// </summary>
+        internal void OpenPricedCard(string featureKey, int tier)
+        {
+            if (TierGate.ReconnectIsTheAnswer()) { StartPatreonReconnectFromGate(); return; }
+            ShowVaultGate(featureKey, tier);
         }
 
 
@@ -792,16 +817,7 @@ namespace ConditioningControlPanel
             }
 
             // Check if there are any missed days
-            var questService = App.Quests;
-            var completedDates = new HashSet<DateTime>(
-                questService?.Progress?.DailyQuestCompletionDates?.Select(d => d.Date)
-                ?? Enumerable.Empty<DateTime>());
-            var today = DateTime.Today;
-            bool hasMissedDays = Enumerable.Range(1, today.Day - 1)
-                .Select(d => new DateTime(today.Year, today.Month, d))
-                .Any(d => !completedDates.Contains(d.Date));
-
-            if (!hasMissedDays)
+            if (!StreakFix.HasMissedDays(App.Quests?.Progress, DateTime.Today))
             {
                 QuestsTab.TxtFixStreakStatus.Text = Loc.Get("label_no_broken_streak_you_re_doing_great_sweetie");
                 QuestsTab.TxtFixStreakStatus.Visibility = Visibility.Visible;
@@ -859,7 +875,7 @@ namespace ConditioningControlPanel
                 // Server-side spend only — charges live on the account. Invariant: under a
                 // Buddhist/Umm al-Qura system calendar the default format writes year 2569
                 // onto the wire and the server records (or refuses) a garbage fixed day.
-                var fixDateStr = fixDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                var fixDateStr = StreakFix.WireDate(fixDate);
                 if (App.ProfileSync == null || string.IsNullOrEmpty(App.Settings?.Current?.UnifiedId))
                 {
                     // No cloud account
@@ -895,21 +911,9 @@ namespace ConditioningControlPanel
                 // XP is deliberately NOT touched here. The fix is free now, so the server's echoed
                 // total is just a snapshot that can be behind this device, and adopting it would
                 // roll the player's XP backwards. ProfileSyncService owns XP reconciliation.
-                settings.StreakFixCharges = credits ?? Math.Max(0, settings.StreakFixCharges - 1);
-                settings.SeasonalStreakRecoveryUsed = true; // back-compat flag, no longer a gate
-
-                // Add the fixed date to completion dates. Deduped: a repeat spend on the same day
-                // must not push a second entry into the streak calendar's source list.
-                var questService = App.Quests;
-                if (questService?.Progress != null &&
-                    !questService.Progress.DailyQuestCompletionDates.Any(d => d.Date == fixDate.Date))
-                {
-                    questService.Progress.DailyQuestCompletionDates.Add(fixDate);
-                    questService.Save();
-                }
-
-                // Recalculate the streak
-                RecalculateDailyQuestStreak();
+                // The fixed date joins the completion dates once (deduped) and the streak is recounted:
+                // Core StreakFix.ApplySpent, shared with the Avalonia head.
+                StreakFix.ApplySpent(settings, App.Quests, fixDate, credits);
 
                 App.Settings?.Save();
                 App.Logger?.Information("Streak fix used on {Date} (server-validated), {Remaining} charge(s) left",
@@ -982,11 +986,6 @@ namespace ConditioningControlPanel
                 try { RefreshQuestUI(); }
                 catch (Exception ex) { App.Logger?.Warning("Quest UI refresh after streak-fix balance change failed: {Error}", ex.Message); }
             });
-        }
-
-        private void RecalculateDailyQuestStreak()
-        {
-            App.Quests?.RecalculateStreak();
         }
         #endregion
     }

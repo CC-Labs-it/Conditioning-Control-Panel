@@ -63,11 +63,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF RefreshFavoritesRail (:121): rebuilds both chip stacks from settings.</summary>
         internal void RefreshFavoritesRail()
         {
+            RefreshDashboardToggleHint();
             var dash = SettingsPage;
             var s = CoreSettings.Current;
             if (dash?.FavoritesList == null || dash.RecentList == null || s == null) return;
             try
             {
+                dash.RefreshClickPreference(); // WPF RefreshDashboardRail also refreshes the gesture caption
                 var byId = SettingsPaletteIndex.All
                     .Where(e => FavoritesRailRule.IsDestination(e.Id))
                     .ToDictionary(e => e.Id, e => e, StringComparer.Ordinal);

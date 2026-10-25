@@ -1248,13 +1248,22 @@ namespace ConditioningControlPanel.Avalonia.Controls
             internal static void RaiseMotionGateChanged() => MotionGateChanged?.Invoke();
 
             /// <summary>
-            /// PerformanceProfile.CurrentTier. Its automatic escalation counts live flash windows
-            /// and ambient bubbles; this head has neither, so HeavyElementCount is 0,
-            /// AutoPerformanceMode can never escalate, and the explicit toggle IS the whole
-            /// decision. Do not "fix" the missing Balanced branch - it is unreachable here.
+            /// PerformanceProfile.CurrentTier through the Core rule. AutoPerformanceMode escalates by
+            /// <see cref="HeavyElementCount"/>; like WPF, read it at spawn/start time, not per frame.
             /// </summary>
-            public static PerformanceTier CurrentTier =>
-                CoreSettings.Current.PerformanceMode ? PerformanceTier.Performance : PerformanceTier.Quality;
+            public static PerformanceTier CurrentTier
+            {
+                get
+                {
+                    var s = CoreSettings.Current;
+                    return global::ConditioningControlPanel.Services.UI.PerformanceTierRule.Resolve(s.PerformanceMode, s.AutoPerformanceMode,
+                        s.PerformanceMode || !s.AutoPerformanceMode ? 0 : HeavyElementCount);
+                }
+            }
+
+            /// <summary>WPF PerformanceProfile.HeavyElementCount: live flash windows + ambient bubbles.</summary>
+            public static int HeavyElementCount =>
+                Views.Overlays.FlashOverlay.Active.Count + Views.Overlays.BubbleOverlay.Field.Bubbles.Count;
 
             /// <summary>PerformanceProfile.MaxAmbientParticles, verbatim.</summary>
             public static int MaxAmbientParticles(PerformanceTier tier) => tier switch
@@ -1275,14 +1284,10 @@ namespace ConditioningControlPanel.Avalonia.Controls
             /// <summary>PerformanceProfile.AllowAmbientMotion, verbatim.</summary>
             public static bool AllowAmbientMotion(PerformanceTier tier) => tier != PerformanceTier.Performance;
 
-            /// <summary>
-            /// MotionFx.Level. WPF caps the user's setting to Reduced when Windows' animation-
-            /// effects flag is off; Avalonia exposes no cross-platform twin, and that cap can only
-            /// ever REMOVE motion, so its absence shows the user exactly what they picked rather
-            /// than more than they asked for.
-            /// ponytail: read the desktop's reduced-motion preference here when Avalonia has one.
-            /// </summary>
-            public static MotionLevel Level => CoreSettings.Current.MotionLevel;
+            /// <summary>WPF MotionFx.Level: the setting capped by Windows and Gentle Visuals.</summary>
+            public static MotionLevel Level => Platform.UiMotionPreference.ResolveLevel(
+                CoreSettings.Current.MotionLevel, Platform.UiMotionPreference.AnimationsEnabled,
+                CoreSettings.Current.GentleVisuals);
 
             /// <summary>MotionFx.AllowAmbientLoops, now the real gate.</summary>
             public static bool AllowAmbientLoops =>
