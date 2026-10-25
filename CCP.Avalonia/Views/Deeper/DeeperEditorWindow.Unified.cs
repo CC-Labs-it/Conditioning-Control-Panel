@@ -1,3 +1,4 @@
+using ConditioningControlPanel.Localization;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -74,6 +75,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             try
             {
                 _rightClickSeconds = MouseToSeconds(e);
+                if (TrySelectItemUnderRightClick(e))
+                {
+                    TimelineCanvas.ContextMenu = CreateItemContextMenu();
+                    return;
+                }
+                TimelineCanvas.ContextMenu = TimelineCtxMenu;
 
                 // Move the playhead to the click point. Most users right-clicking on the timeline
                 // want to drop something there.
@@ -97,6 +104,86 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 Log.Debug("DeeperEditor: ctx menu prep error: {Error}", ex.Message);
             }
+        }
+
+        private object? _ctxItem;
+
+        private bool TrySelectItemUnderRightClick(PointerPressedEventArgs e)
+        {
+            if (e.Source is not Control fe || fe.Tag == null) return false;
+            switch (fe.Tag)
+            {
+                case Region region:
+                    HandleSelectionClick(region, e.KeyModifiers);
+                    var attached = FindRuleByRegionConstraint(region.Id);
+                    if (attached != null) SelectRule(attached); else SelectRegion(region);
+                    _ctxItem = region;
+                    return true;
+                case ValueTuple<HapticTrack, HapticEvent> t:
+                    HandleSelectionClick(t.Item2, e.KeyModifiers);
+                    SelectHaptic(t.Item1, t.Item2);
+                    _ctxItem = t.Item2;
+                    return true;
+                case TimelineItem ti:
+                    HandleSelectionClick(ti, e.KeyModifiers);
+                    SelectEffect(ti);
+                    _ctxItem = ti;
+                    return true;
+                case EnhancementRule rule:
+                    // A plain right-click on a pin replaces any multi-selection, the
+                    // same as the region/haptic/effect cases above, so the menu acts
+                    // on the pin and not on a stale set.
+                    if ((e.KeyModifiers & KeyModifiers.Control) == 0) _selectionSet.Clear();
+                    SelectRule(rule);
+                    _ctxItem = rule;
+                    return true;
+            }
+            return false;
+        }
+
+        // Rules are not clipboard-able (they live outside the selection set),
+        // so Copy / Cut grey out when the pin under the cursor is a rule.
+        private void CtxItemDuplicate_Click(object sender, RoutedEventArgs e) => DuplicateSelection();
+        private void CtxItemCopy_Click(object sender, RoutedEventArgs e) { EnsurePrimaryInSelectionSet(); CopySelection(); }
+        private void CtxItemCut_Click(object sender, RoutedEventArgs e) { EnsurePrimaryInSelectionSet(); CutSelection(); }
+        private void CtxItemDelete_Click(object sender, RoutedEventArgs e) => DeleteCurrentSelection();
+        private void CtxItemJump_Click(object sender, RoutedEventArgs e)
+        {
+            var t = ItemStartSeconds(_ctxItem);
+            if (t.HasValue && _totalSeconds > 0) SeekToFraction(t.Value / _totalSeconds);
+        }
+
+        private double? ItemStartSeconds(object? item)
+        {
+            switch (item)
+            {
+                case Region r: return r.Start;
+                case HapticEvent ev: return ev.Start;
+                case TimelineItem ti: return ti.Start;
+                case EnhancementRule rule:
+                    if (rule.Trigger is TimeReachedTrigger tr) return Math.Max(0, tr.Time);
+                    var band = _enhancement.Regions.FirstOrDefault(x => x != null && x.Id == rule.RegionConstraint);
+                    return band?.Start;
+            }
+            return null;
+        }
+
+        private ContextMenu CreateItemContextMenu()
+        {
+            var menu = new ContextMenu();
+            void Add(string key, EventHandler<RoutedEventArgs> action, bool enabled = true)
+            {
+                var item = new MenuItem { Header = Loc.Get("deeper_editor_ctx_item_" + key), IsEnabled = enabled };
+                item.Click += action;
+                menu.Items.Add(item);
+            }
+            Add("duplicate", CtxItemDuplicate_Click);
+            Add("copy", CtxItemCopy_Click, _ctxItem is not EnhancementRule);
+            Add("cut", CtxItemCut_Click, _ctxItem is not EnhancementRule);
+            Add("delete", CtxItemDelete_Click);
+            menu.Items.Add(new Separator());
+            Add("jump", CtxItemJump_Click);
+            return menu;
         }
 
         private void ApplyAudioModeToContextMenu(ContextMenu? menu)
@@ -533,6 +620,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void UpdateSelectedSidePanelForEffect()
         {
+            ResetInspectorSession();
             HideAllEditors();
             if (_selectedEffect == null)
             {

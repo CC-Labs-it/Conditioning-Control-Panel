@@ -217,6 +217,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
             Loaded += DeeperEditorWindow_Loaded;
             KeyDown += DeeperEditorWindow_KeyDown;
+            SidebarRoot.AddHandler(InputElement.PointerPressedEvent,
+                (_, _) => ArmInspectorSnapshot(true), RoutingStrategies.Tunnel);
+            SidebarRoot.AddHandler(InputElement.KeyDownEvent,
+                (_, _) => ArmInspectorSnapshot(false), RoutingStrategies.Tunnel);
+            SidebarRoot.AddHandler(InputElement.GotFocusEvent,
+                (_, _) => _inspectorSessionSnapshotted = false, RoutingStrategies.Bubble);
             Closing += Window_Closing;
 
             _validationTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(220) };
@@ -319,6 +325,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     ItemsListDelete_Click(b, e);
             }, RoutingStrategies.Bubble);
             SidebarSplitter.DragCompleted += SidebarSplitter_DragCompleted;
+            TimelineSplitter.DragCompleted += TimelineSplitter_DragCompleted;
 
             // -- Metadata fields
             foreach (var tb in new[] { TxtMetaName, TxtMetaCreator, TxtMetaRemixer,
@@ -330,6 +337,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             TxtRegionLabel.TextChanged += RegionField_TextChanged;
             TxtRegionStart.TextChanged += RegionField_TextChanged;
             TxtRegionEnd.TextChanged += RegionField_TextChanged;
+            TxtRegionEnd.LostFocus += TxtRegionEnd_LostFocus;
             TxtRegionColor.TextChanged += RegionField_TextChanged;
             BtnSnapRegionStartPrev.Click += BtnSnapRegionStartPrev_Click;
             BtnSnapRegionEndNext.Click += BtnSnapRegionEndNext_Click;
@@ -1369,7 +1377,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     RebuildHapticVisuals();
                     RebuildEffectVisuals();
                 }
-                if (_selectedRegion == _draggedRegion) UpdateSelectedSidePanel();
+                RefreshInspectorForDraggedRegion();
                 return;
             }
             if (_dragMode == DragMode.ResizeRegionStart && _draggedRegion != null)
@@ -1379,7 +1387,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _draggedRegion.Start = newStart;
                 MarkDirty();
                 RebuildRegionVisuals();
-                if (_selectedRegion == _draggedRegion) UpdateSelectedSidePanel();
+                RefreshInspectorForDraggedRegion();
                 return;
             }
             if (_dragMode == DragMode.ResizeRegionEnd && _draggedRegion != null)
@@ -1389,7 +1397,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _draggedRegion.End = newEnd;
                 MarkDirty();
                 RebuildRegionVisuals();
-                if (_selectedRegion == _draggedRegion) UpdateSelectedSidePanel();
+                RefreshInspectorForDraggedRegion();
                 return;
             }
             if (_dragMode == DragMode.DragEffect && _draggedEffect != null)
@@ -1535,6 +1543,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             SeekToFraction(pt.X / w);
         }
 
+        // A constrained band shows its times in the rule inspector rather than the region editor.
+        private void RefreshInspectorForDraggedRegion()
+        {
+            if (_draggedRegion == null) return;
+            if (_selectedRegion == _draggedRegion) { UpdateSelectedSidePanel(); return; }
+            if (_selectedRule == null || _selectedRule.RegionConstraint != _draggedRegion.Id) return;
+            if (TxtRuleBandStart == null || TxtRuleBandEnd == null) return;
+            _suppressRuleSync = true;
+            try
+            {
+                TxtRuleBandStart.Text = _draggedRegion.Start.ToString("0.##", CultureInfo.InvariantCulture);
+                TxtRuleBandEnd.Text = _draggedRegion.End.ToString("0.##", CultureInfo.InvariantCulture);
+            }
+            finally { ClearWhenEventsDrained(() => _suppressRuleSync = false); }
+        }
+
         // Small m:ss.ff readout that trails the cursor over the timeline (WPF UpdateHoverTimeTip :1793).
         private void UpdateHoverTimeTip(PointerEventArgs e)
         {
@@ -1660,6 +1684,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             RebuildRegionVisuals();
             RebuildHapticVisuals();
             RebuildEffectVisuals();
+            RebuildRuleVisuals();
             RefreshRulesList();
         }
 
@@ -1729,6 +1754,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void UpdateSelectedSidePanel()
         {
+            ResetInspectorSession();
             if (SelectedPlaceholder == null || RegionEditor == null || HapticEventEditor == null || RuleEditor == null) return;
 
             // Always reset the unified-editor groups; the unified path repopulates if needed.
@@ -1788,6 +1814,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             var brush = TryParseBrush(_selectedRegion?.Color ?? "#7B5CFF");
             if (brush != null) RegionColorSwatch.Background = brush;
+        }
+
+        private void TxtRegionEnd_LostFocus(object? sender, RoutedEventArgs e)
+        {
+            if (_selectedRegion == null) return;
+            var minEnd = _selectedRegion.Start + 0.05;
+            if (_selectedRegion.End >= minEnd) return;
+            _selectedRegion.End = _totalSeconds > 0 ? Math.Min(_totalSeconds, minEnd) : minEnd;
+            _suppressDirty = true;
+            try { TxtRegionEnd.Text = _selectedRegion.End.ToString("0.##", CultureInfo.InvariantCulture); }
+            finally { _suppressDirty = false; }
+            MarkDirty();
+            RebuildRegionVisuals();
+            ScheduleValidation();
         }
 
         private void RegionField_TextChanged(object? sender, TextChangedEventArgs e)
@@ -2260,6 +2300,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void MarkDirty()
         {
             if (_suppressDirty) return;
+            CommitPendingInspectorSnapshot();
             if (!_isDirty)
             {
                 _isDirty = true;
@@ -3044,6 +3085,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             // Don't hijack typing inside text fields.
             var inTextBox = FocusManager?.GetFocusedElement() is TextBox;
+            var arrowsOwned = inTextBox || FocusManager?.GetFocusedElement() is Slider or ComboBox or ListBox or ListBoxItem;
             bool ctrl = (e.KeyModifiers & KeyModifiers.Control) == KeyModifiers.Control;
             bool shift = (e.KeyModifiers & KeyModifiers.Shift) == KeyModifiers.Shift;
 
@@ -3069,30 +3111,43 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 CreateHapticEventAtPlayhead();
                 e.Handled = true;
             }
-            else if (e.Key == Key.Delete && !inTextBox && _selectionSet.Count > 1)
+            else if (e.Key == Key.Delete && !inTextBox && HasAnySelection)
             {
-                // Multi-select takes priority - bulk delete everything in the set.
-                DeleteSelection();
+                DeleteCurrentSelection();
                 e.Handled = true;
             }
-            else if (e.Key == Key.Delete && !inTextBox && _selectedRegion != null)
-            {
-                BtnDeleteRegion_Click(this, new RoutedEventArgs());
-                e.Handled = true;
-            }
-            else if (e.Key == Key.Delete && !inTextBox && _selectedHaptic != null)
-            {
-                BtnDeleteHaptic_Click(this, new RoutedEventArgs());
-                e.Handled = true;
-            }
-            else if (e.Key == Key.Delete && !inTextBox && _selectedEffect != null)
-            {
-                BtnDeleteEffect_Click(this, new RoutedEventArgs());
-                e.Handled = true;
-            }
-            else if (e.Key == Key.Escape && !inTextBox && (_selectedRegion != null || _selectedHaptic != null || _selectionSet.Count > 0))
+            else if (e.Key == Key.Escape && !inTextBox && HasAnySelection)
             {
                 SelectNothing();
+                e.Handled = true;
+            }
+            // Left / Right: nudge the selection by 0.1 s (Shift = 1 s), or seek
+            // the playhead by the same step when nothing is selected.
+            else if ((e.Key == Key.Left || e.Key == Key.Right) && !arrowsOwned)
+            {
+                var step = (shift ? 1.0 : 0.1) * (e.Key == Key.Left ? -1 : 1);
+                if (HasAnySelection) NudgeSelection(step);
+                else if (_totalSeconds > 0) SeekToFraction((_currentSeconds + step) / _totalSeconds);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.End && !arrowsOwned)
+            {
+                SeekToFraction(1);
+                e.Handled = true;
+            }
+            else if ((e.Key == Key.OemOpenBrackets || e.Key == Key.OemCloseBrackets) && !inTextBox)
+            {
+                JumpToAdjacentItemStart(forward: e.Key == Key.OemCloseBrackets);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.D && !inTextBox && ctrl && HasAnySelection)
+            {
+                DuplicateSelection();
+                e.Handled = true;
+            }
+            else if ((e.Key == Key.D0 || e.Key == Key.NumPad0) && ctrl)
+            {
+                SetZoom(1.0);
                 e.Handled = true;
             }
             // Ctrl+Z / Ctrl+Shift+Z (or Ctrl+Y) - undo / redo. The !inTextBox guard keeps standard
