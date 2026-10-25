@@ -3195,3 +3195,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-shell-programs-tab: +311
 - Live Programs session clock/bar/sheen driven by the shell tick; Core ProgramSessionProgress shared with WPF.
 - Review fixes: test seam without reflection, parity FX items moved to shell-programs-fx; sheen/hide/panic/percent fail-proven.
+
+## avalonia-port/wire-views-companion-workshop-community-cell: +1
+- Community prompt Workshop cell wired on Core CommunityPromptService; rows and Z4 readout stay in sync on Activate/Remove, Z4 Reset/preset pick and tab show, like WPF.
+- Gate: rgate 39697210905 green except known flakes (RaceTrack, GoonClock P108); consent gate tested.
