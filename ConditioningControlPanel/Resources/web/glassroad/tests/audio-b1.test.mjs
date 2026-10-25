@@ -194,3 +194,19 @@ test('music: a chart plays and loops with its beat; a picked file uses the feel 
   assert.equal(await music.playFile(null), false);
   music.dispose();
 });
+
+test('music: course cancellation preserves playback and one decoded personal File while rejecting late charts',async()=>{
+  const {ctx,log}=fakeCtx();ctx.state='running';let reads=0,decodes=0,finishFetch;
+  const originalDecode=ctx.decodeAudioData;
+  ctx.decodeAudioData=bytes=>{decodes++;return originalDecode(bytes);};
+  const music=createMusic(ctx,ctx.createGain(),createFeel(feelJson),{fetchFn:()=>new Promise(resolve=>{finishFetch=resolve;})});
+  const file={arrayBuffer:async()=>{reads++;return new ArrayBuffer(4);}};
+  assert.equal(await music.playFile(file),true);
+  const late=music.playChart('https://example.test/old-course.json'),started=log.started;
+  music.cancelPending();assert.equal(music.playing,true);assert.equal(ctx.state,'running');
+  finishFetch({ok:true,json:async()=>({bpm:120,sections:[]})});
+  assert.equal(await late,false);assert.equal(log.started,started,'a cancelled chart cannot replace the recording');
+  music.stop();assert.equal(await music.playFile(file,{bpm:140}),true);
+  assert.equal(reads,1);assert.equal(decodes,1);assert.equal(music.beat.bpm,140);
+  music.dispose();
+});

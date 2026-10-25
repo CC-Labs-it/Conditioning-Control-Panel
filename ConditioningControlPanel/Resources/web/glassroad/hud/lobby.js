@@ -77,6 +77,9 @@ const CSS = [
  */
 export function createLobby({ doc = globalThis.document, card, title, note, extra, emit, focusFirst, exit }) {
   const win = doc.defaultView || globalThis;
+  let disposed = false, handedOff = false, transferredRoomId = null;
+  const alive = () => !disposed && !handedOff, deliver = emit;
+  emit = (...args) => { if (alive()) deliver(...args); };
   let local = {};
   const deps = () => ({ ...shared, ...local });
   const ident = () => { const i = deps().identity; return typeof i === 'function' ? i() : i || null; };
@@ -96,7 +99,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
   };
   let ticker = 0, lastCount = '', bellT = 0;
   // the tab coming back is a user action: the poll gap drops to 15 s again
-  const onVis = () => { if (!doc.hidden) st.poll = pollReset(st.poll); };
+  const onVis = () => { if (alive() && !doc.hidden) st.poll = pollReset(st.poll); };
   try { doc.addEventListener?.('visibilitychange', onVis); } catch (e) { /* a page without the event polls as before */ }
   // polish 5 (S4): menu sounds through the hud's `sound` event (hud/sounds.js); refusals say no
   const say = (name) => { if (name) emit('sound', { name }); };
@@ -106,7 +109,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     const s = doc.createElement('style'); s.id = 'gr-lobby-css'; s.textContent = CSS;
     (doc.head || doc.body).appendChild(s);
   }
-  const shown = () => !card.hidden && card.dataset.kind === 'lobby';
+  const shown = () => alive() && !card.hidden && card.dataset.kind === 'lobby';
   const localNow = () => Date.now();
   const srv = () => serverNow(localNow(), st.room, st.welcome, st.seenAt);
   const listNow = () => st.listMs + (localNow() - st.listSeen);
@@ -276,7 +279,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     else paintCount();
     if (!shown() && !st.room && !st.quickOn) stopTicker();
   }
-  const startTicker = () => { if (!ticker) ticker = win.setInterval(tick, 250); };
+  const startTicker = () => { if (alive() && !ticker) ticker = win.setInterval(tick, 250); };
   function stopTicker() { if (ticker) { win.clearInterval(ticker); ticker = 0; } }
 
   // ---- lobby calls ---------------------------------------------------------------------------
@@ -305,6 +308,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     const api = deps().api;
     st.linkBusy = true; paint();
     const r = await call(() => api.makeLink());
+    if (!alive()) return;
     st.linkBusy = false;
     if (!r || typeof r.url !== 'string') { st.linkMsg = st.msg; st.msg = ''; if (st.view === 'room') paint(); return; }
     let copied = false;
@@ -344,6 +348,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     if (!api || st.busy) return;
     st.listAt = localNow();
     const r = await call(() => api.list());
+    if (!alive()) return;
     if (!r) { paint(); return; }
     st.listMs = Number(r.serverMs) || localNow(); st.listSeen = localNow();
     st.poll = pollStep(st.poll, listKey(r));
@@ -381,6 +386,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
   function stopQuick() { st.quickOn = false; if (st.quickT) { win.clearTimeout(st.quickT); st.quickT = 0; } }
 
   async function seat(join, row) {
+    if (!alive()) { late(join); return; }
     if (!join || typeof join.roomId !== 'string') { st.msg = errorCopy('bad'); st.view = 'home'; paint(); return; }
     st.join = join; st.view = 'joining'; st.msg = ''; st.results = null; st.start = null; st.raced = false; st.phase = 'lobby';
     st.sent = new Set(); st.friends = null; st.leaving = false;
@@ -392,7 +398,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     try { room = await connect({ ...join, look: normLook(st.look) }); } catch (e) { room = null; }
     if (!room || st.join !== join) { if (room && st.join !== join) room.close?.(); if (st.join === join) { st.msg = errorCopy('net'); st.view = 'msg'; st.join = null; paint(); } return; }
     st.room = room;
-    const on = (t, fn) => { const off = room.on(t, fn); if (typeof off === 'function') st.offs.push(off); };
+    const on = (t, fn) => { const off = room.on(t, m => { if(alive() && st.room===room)fn(m); }); if (typeof off === 'function') st.offs.push(off); };
     on('welcome', onWelcome); on('seats', (m) => { const was = st.seats; st.seats = applySeats(m.seats, st.seats); seatSay(was); seatsChanged(); });
     on('seat', (m) => { const was = st.seats; st.seats = applySeat(st.seats, m); seatSay(was); seatsChanged(m.seat); });
     on('start', onStart); on('emote', onEmote); on('finish', onFinish); on('abort', onAbort); on('error', onError); on('close', onClose);
@@ -418,7 +424,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
   /** The grid count's bells on server time: each whole second before countAt (the race bells take over after). */
   function armBell() {
     if (bellT) { win.clearTimeout(bellT); bellT = 0; }
-    if (!st.start || st.phase === 'done') return;
+    if (!alive() || !st.start || st.phase === 'done') return;
     const b = nextGridBell(srv(), st.start.countAt);
     if (!b) return;
     bellT = win.setTimeout(() => { bellT = 0; if (!st.start) return; say('lobby-tick'); paintCount(); armBell(); }, b.waitMs);
@@ -488,7 +494,17 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
   }
 
   /** A seat granted after the player cancelled: hand it straight back. */
-  function late(j) { const api = deps().api; if (j && j.roomId && api && api.leave) call(() => api.leave(j.roomId)); }
+  function late(j) { const api = deps().api; if (j && j.roomId && j.roomId !== transferredRoomId && api && api.leave) call(() => api.leave(j.roomId)); }
+
+  /** Transfer the granted seat to another local course without releasing it on the server. */
+  function handoff() {
+    if (!alive()) return null;
+    local = deps(); // Late answers still belong to this course's transport.
+    const join = st.join ? {...st.join,look:normLook(st.look)} : null;
+    transferredRoomId = join?.roomId || null;handedOff = true;st.gen++;
+    stopQuick();stopClaim();dropRoom();stopTicker();
+    return join;
+  }
 
   function send(m) { if (st.room) { try { st.room.send(m); } catch (e) { /* the close handler reports it */ } } }
 
@@ -496,6 +512,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
 
   /** A lobby button: its sound (hud/sounds.js), or a no when the press is refused. */
   function act(el) {
+    if (!alive()) return;
     st.poll = pollReset(st.poll);
     const r = actOn(el);
     say(r === false ? 'menu-deny' : actSound(el.dataset.act));
@@ -574,6 +591,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
 
   /** Escape or pad back: up one view. In a room it moves focus to Leave and never leaves by itself. */
   function back(quiet = false) {
+    if (!alive()) return;
     const v = st.view;
     if (!quiet) say(v === 'room' || v === 'joining' ? 'menu-move' : 'menu-back');
     if (v === 'quick') { stopQuick(); st.view = 'home'; st.msg = ''; paint(); return; }
@@ -586,6 +604,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
 
   /** Pad or arrows from hud/cards.js. True when handled here. */
   function nav(dir) {
+    if (!alive()) return false;
     st.poll = pollReset(st.poll);
     if (dir === 'back') { back(); return true; }
     const cur = doc.activeElement;
@@ -599,11 +618,17 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
   return {
     /** hud/cards.js calls this from show('lobby', data). data.view: 'results' or 'home' to jump there; data.claim: a link token (boot's ?r=). */
     show(data = {}) {
+      if (!alive()) return;
       if(!st.room){const selected=deps().garageLook?.();if(selected)st.look=normLook(selected);}
       injectCss();
-      if (data.roomId && !st.room) {
+      if (data.join && !st.room) {
+        if(data.join.look)st.look=normLook(data.join.look);
+        seat(data.join,null);
+      }
+      else if (data.roomId && !st.room) {
+        const g=++st.gen;
         st.view = 'joining';
-        call(() => deps().api.join(data.roomId, normLook(st.look))).then(j => { if (j) seat(j, null); else { st.view = 'home'; paint(); } });
+        call(() => deps().api.join(data.roomId, normLook(st.look))).then(j => { if(!alive()||g!==st.gen){late(j);return;}if (j) seat(j, null); else { st.view = 'home'; paint(); } });
       }
       else if (data.claim && !st.room) startClaim(data.claim);
       else if (data.view === 'home' && !st.room) { st.view = 'home'; st.msg = ''; }
@@ -612,7 +637,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
       paint();
       if (st.view === 'home' && !st.looksAsked) loadLooks();
     },
-    act, nav, back, leave,
+    act, nav, back, leave, handoff,
     use(d) { local = { ...local, ...(d || {}) }; },
     get view() { return st.view; },
     get phase() { return st.room ? st.phase : null; },
@@ -622,7 +647,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     pose(now = localNow()) { return st.myPose && st.myPose.until > now ? st.myPose.pose : 0; },
     /** Emote from the race (pause card or a pad chord): same rules as the lobby chat. */
     emote(code) { const el = { dataset: { act: 'lb-emote', id: code } }; act(el); },
-    dispose() { stopQuick(); leave(); stopTicker(); try { doc.removeEventListener?.('visibilitychange', onVis); } catch (e) { /* gone */ } },
+    dispose() { if(disposed)return;local=deps();disposed=true;stopQuick(); leave(); stopTicker(); try { doc.removeEventListener?.('visibilitychange', onVis); } catch (e) { /* gone */ } },
   };
 }
 

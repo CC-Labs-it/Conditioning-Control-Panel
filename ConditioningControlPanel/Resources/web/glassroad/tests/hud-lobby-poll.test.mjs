@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { POLL_MS, POLL_MAX_MS, pollEvery, listKey, pollStep, pollReset, pollNow } from '../hud/lobbyMath.js';
-import { createLobby } from '../hud/lobby.js';
+import { createLobby, configureLobby } from '../hud/lobby.js';
 
 const row = (o = {}) => ({ roomId: 'abcdefabcdef', track: 'threshold', host: { name: 'Ana' }, seats: 8, filled: 2, laps: 3, staked: false, friend: false, startsIn: 30, ...o });
 
@@ -75,4 +75,46 @@ test('the lobby card: no poll while hidden, backs off on a quiet list, any press
   await at(15000); assert.equal(calls, 10, 'a changed answer keeps 15 s');
   lobby.dispose();
   assert.equal(d.listeners.visibilitychange, undefined, 'dispose drops the listener');
+});
+
+test('course handoff transfers its existing seat without leave/rejoin or late old-course painting',async()=>{
+  const d=fakeDom(),events=[],leaves=[],joins=[];d.parts.emit=name=>events.push(name);
+  const ticket={roomId:'abcdefabcdef',track:'keep',ticket:'existing-ticket',wsUrl:'ws://local',seat:1};
+  const api={leave:async id=>leaves.push(id),join:async()=>{throw Error('must reuse existing ticket');}};
+  let transfer,old;
+  old=createLobby(d.parts);
+  old.use({api,looks:async()=>({}),connect:async()=>{transfer=old.handoff();throw Object.assign(Error('course handoff'),{handoff:true});}});
+  old.show({join:ticket});await flush();old.dispose();
+  assert.equal(transfer.ticket,ticket.ticket);assert.deepEqual(leaves,[]);assert.deepEqual(events,[]);
+  const next=createLobby(d.parts),callbacks={};
+  next.use({api,track:'keep',looks:async()=>({}),connect:async join=>{
+    joins.push(join);return{on(type,fn){callbacks[type]=fn;return()=>{};},send(){},close(){}};
+  }});
+  next.show({join:transfer});await flush();
+  assert.equal(joins.length,1);assert.equal(joins[0].ticket,ticket.ticket);
+  const markup=d.parts.extra.innerHTML;
+  old.show({view:'home'});assert.equal(d.parts.extra.innerHTML,markup);
+  next.dispose();assert.deepEqual(leaves,[ticket.roomId],'final explicit disposal still releases the owned seat');
+  const afterDispose=d.parts.extra.innerHTML;
+  callbacks.error({code:'host'});callbacks.finish({rows:[]});callbacks.start({countAt:1,startAt:2,seed:3});
+  assert.equal(d.parts.extra.innerHTML,afterDispose);assert.deepEqual(events,[],'queued room callbacks stay silent after disposal');
+});
+
+test('a disposed lobby ignores pending table results and cannot repaint a replacement card',async()=>{
+  const d=fakeDom();let resolveList;
+  const lobby=createLobby(d.parts);
+  lobby.use({identity:{displayName:'Me',tier:2},looks:async()=>({}),api:{list:()=>new Promise(resolve=>{resolveList=resolve;})}});
+  lobby.show({view:'home'});d.tick();await flush();lobby.dispose();
+  d.parts.extra.innerHTML='replacement-course';resolveList({rows:[row()],serverMs:Date.now()});await flush();
+  assert.equal(d.parts.extra.innerHTML,'replacement-course');
+});
+
+test('a late cancelled seat uses its original course transport after the next course reconfigures the lobby',async t=>{
+  const d=fakeDom(),oldLeaves=[],newLeaves=[];let grant;
+  configureLobby({api:{join:()=>new Promise(resolve=>{grant=resolve;}),leave:async id=>oldLeaves.push(id)}});
+  t.after(()=>configureLobby({api:null}));
+  const lobby=createLobby(d.parts);lobby.show({roomId:'abcdefabcdef'});await flush();
+  lobby.dispose();configureLobby({api:{leave:async id=>newLeaves.push(id)}});
+  grant({roomId:'abcdefabcdef',ticket:'late'});await flush();
+  assert.deepEqual(oldLeaves,['abcdefabcdef']);assert.deepEqual(newLeaves,[]);
 });

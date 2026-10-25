@@ -105,6 +105,7 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
   const reactiveOptions = { playing: false, muted: false, paused: false, gentle: false, songS: 0 };
   let src = null, startT = 0, durS = 0, chart = null, song = null, bpm = 96, volume = 1, token = 0;
   let cached = null;   // { url, buffer, chart, song }: the last chart's decode, reused by a restart
+  let cachedFile = null; // One personally selected File, retained across course transitions.
   let analysis = null, analyzed = null;   // a picked file's beat analysis, and the buffer it belongs to
   const g = (k) => mixGet(feel, k);
   const feelBpm = () => { try { return feel.get('clock.bpm'); } catch (e) { return 96; } };
@@ -179,10 +180,12 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
         const r = await fetchFn(chartUrl);
         if (!r || !r.ok) return false;
         const c = await r.json();
-        if (!validChart(c)) return false;
+        if (my !== token || !validChart(c)) return false;
         const a = await fetchFn(chartAudioUrl(chartUrl, c));
         if (!a || !a.ok) return false;
-        const buf = await decode(await a.arrayBuffer());
+        const bytes = await a.arrayBuffer();
+        if (my !== token) return false;
+        const buf = await decode(bytes);
         if (my !== token) return false;           // a later play or stop won
         cached = { url: String(chartUrl), buffer: buf, chart: c, song: normalizeChart(c) };
         return start(buf, c, c.bpm, align);
@@ -193,12 +196,18 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
       const my = ++token;
       try {
         if (!file || typeof file.arrayBuffer !== 'function') return false;
-        const buf = await decode(await file.arrayBuffer());
-        if (my !== token) return false;
         const b = bpm > 0 ? bpm : feelBpm();
+        if (cachedFile?.file === file) return start(cachedFile.buffer, null, b);
+        const bytes = await file.arrayBuffer();
+        if (my !== token) return false;
+        const buf = await decode(bytes);
+        if (my !== token) return false;
+        cachedFile = { file, buffer: buf };
         return start(buf, null, b);
       } catch (e) { console.warn('[music] file', e); return false; }
     },
+    /** Abandon an old course's asynchronous selection without stopping its current recording. */
+    cancelPending() { token++; },
     stop() { token++; stopSrc(g('musicFadeOutS')); chart = null; song = null; },
     setVolume(v) {
       volume = Math.max(0, Math.min(1, Number(v) || 0));
@@ -230,7 +239,7 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
     get sectionIdx() { return chart ? sectionAt(chart, songTime()) : 0; },
     /** A picked file's beat analysis (songShape.analyzeBuffer), null for a chart or nothing playing. */
     get analysis() { return src && !song ? analysis : null; },
-    dispose() { token++; stopSrc(0.05); reactive.dispose(); try { gain.disconnect(); } catch (e) { /* gone */ } if (liveMusic() === api) setLiveMusic(null); },
+    dispose() { token++; cached = cachedFile = analyzed = analysis = null; stopSrc(0.05); reactive.dispose(); try { gain.disconnect(); } catch (e) { /* gone */ } if (liveMusic() === api) setLiveMusic(null); },
   };
   setLiveMusic(api);
   return api;

@@ -65,15 +65,18 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
 
   const listeners = Object.fromEntries(NAMES.map((n) => [n, []]));
   const fns = { start: [], resume: [], restart: [] };
+  let disposed = false;
   /** One door for every action: on() listeners, else the Phase A onStart / onResume / onRestart. */
   function fire(name, payload = {}) {
+    if (disposed) return;
     const list = (listeners[name] || []).length ? listeners[name] : fns[name] || [];
-    for (const fn of list.slice()) { try { fn(payload); } catch (e) { console.warn('[hud]', name, e); } }
+    for (const fn of list.slice()) { if (disposed) break; try { fn(payload); } catch (e) { console.warn('[hud]', name, e); } }
   }
   const cards = createCards(card, { doc, emit: fire, devices, kit });
   let garageNav=null;
   let noteTimer = 0;
   function note(text) {
+    if (disposed) return;
     el.note.textContent = text;
     el.note.classList.add('on');
     clearTimeout(noteTimer);
@@ -250,6 +253,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
   }
 
   function setCard(kind, data = {}) {
+    if (disposed) return;
     if (kind === 'results') data = { ...data, metas };
     if (kind === 'menu') root.dataset.screen = 'menu';
     else if (kind === 'results') root.dataset.screen = 'results';
@@ -265,8 +269,8 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     setReady: (r, n) => cards.setReady(r, n),
     /** The warming card's stage line and bar, p 0..1 (pass 3: boot names each stage). */
     setLoading: (stage, p) => cards.setProgress(stage, p),
-    on(name, fn) { (listeners[name] || (listeners[name] = [])).push(fn); return () => { const l = listeners[name], i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); }; },
-    onStart: (fn) => fns.start.push(fn), onResume: (fn) => fns.resume.push(fn), onRestart: (fn) => fns.restart.push(fn),
+    on(name, fn) { if(disposed)return()=>{};(listeners[name] || (listeners[name] = [])).push(fn); return () => { const l = listeners[name], i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); }; },
+    onStart: (fn) => {if(!disposed)fns.start.push(fn);}, onResume: (fn) => {if(!disposed)fns.resume.push(fn);}, onRestart: (fn) => {if(!disposed)fns.restart.push(fn);},
     setRacers(meta) { metas = meta || null; labels = racerLabels(meta || []); },
     setTrack(t) { map.setTrack(t || {}); },
     /** The host's Gentle switch: the options card shows Gentle preview locked on. */
@@ -281,6 +285,6 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     credit: root.querySelector('.hud-credit'),
     /** A short note at the bottom, on any screen (the controller notes use it). */
     note,
-    dispose() { offs.forEach((off) => off()); offDev(); clearTimeout(noteTimer); kit.dispose(); warm.length = 0; },
+    dispose() { if(disposed)return;disposed=true;for(const list of [...Object.values(listeners),...Object.values(fns)])list.length=0;garageNav=null;cards.dispose(); offs.forEach((off) => off()); offDev(); clearTimeout(noteTimer); kit.dispose(); warm.length = 0; },
   };
 }
