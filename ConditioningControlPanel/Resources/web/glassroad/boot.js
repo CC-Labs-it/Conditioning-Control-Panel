@@ -548,7 +548,7 @@ async function boot(course, options, lifetime, isCurrent) {
   let tapItem = false;                            // touch: a tap on the HUD item slot
   hud.on('item', () => { tapItem = true; });
   const tapSource = { poll(into) { into.item = tapItem; tapItem = false; }, dispose() {} };
-  const actions = createActionMap([createKeyboard({ target: window }), padSource, createTouch({ root: document.body }), tapSource], { items: true, feel });
+  const actions = createActionMap([createKeyboard({ target: window }), padSource, createTouch({ root: document.body }), tapSource], { items: true, camera: true, feel });
   lifetime.defer(() => actions.dispose());
   const hopLatch = createEdgeLatch('hopPressed'), itemLatch = createEdgeLatch('item');
 
@@ -1049,6 +1049,9 @@ async function boot(course, options, lifetime, isCurrent) {
     const { steps, alpha, frameDt, renderTime } = clock.frame(now);
     if (HT) HT.steps = steps;
     const a = actions.sample();                                   // 1. input
+    const cameraToggle = canLook() && a.cameraPressed;
+    const rearView = canLook() && a.rearView;
+    if (cameraToggle) hud.toast(cam.views.toggle() === 'first' ? 'First person' : 'Chase view');
     const nav = gamepad.takeNav();
     const card = hud.card;
     if (card) {                                                   // 0. cards take the pad; Escape only ever pauses
@@ -1143,10 +1146,21 @@ async function boot(course, options, lifetime, isCurrent) {
 
     racers.interpolate(alpha);                                    // 6. camera
     if (online) online.s.drawRemotes();                           //    remote karts at this frame's server time (100 ms back)
+    // Resolve authored cues before camera composition so the mirror and its dolly open together.
+    const music = audio.music, song = inRace && music ? music.song : null;
+    const beatSong = song || (inRace ? music?.analysis : null);
+    const songS = inRace && music?.playing ? music.songS : NaN;
+    const pv = P.view;
+    const cueView = songCues?.update(songS, pv, { paused: frozen, gentle: cueSafety });
     const mode = state === 'menu' ? 'menu' : state === 'results' ? 'results' : 'race';
     const mouseLook = pointerLook.read();
     const lookInput = canLook() ? Math.hypot(mouseLook.x, mouseLook.y) > Math.hypot(gamepad.look.x, gamepad.look.y) ? mouseLook : gamepad.look : null;
-    if (!frozen) cam.update(P.view, fs, track, frameDt, renderer.aspect, mode, lookInput);
+    if (!frozen) cam.update(P.view, fs, track, frameDt, renderer.aspect, mode, lookInput, {
+      active: state === 'race', rearView,
+      manual: cameraToggle || !!(lookInput?.x || lookInput?.y) || paused || !!hud.card,
+      gentle: cueSafety.on, cues: cueView?.live || NO_WORDS, revision: cueView?.revision, songS,
+    });
+    if (DEV || BOT) debug.cameraView = { selected: cam.views.selected, rear: !!rearView, mirror: cam.views.mirrorActive };
     if (state === 'intro') {
       if (!frozen) introElapsed = Math.min(intro.duration, introElapsed + frameDt);
       const gentleIntro = hostGentle || !!feel.get('gentle.on') || !!hud.options.gentlePreview || matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1174,17 +1188,12 @@ async function boot(course, options, lifetime, isCurrent) {
     audio.updateItems(iv.projectiles, itemListener, racers.clockS,
       { active: inRace && race.phase === 'racing', paused: frozen });
     // the song position the player hears (frozen while paused: the context is suspended)
-    const music = audio.music, song = inRace && music ? music.song : null;
-    const beatSong = song || (inRace ? music?.analysis : null);
-    const songS = inRace && music?.playing ? music.songS : NaN;
     reactiveOptions.paused = paused;
     reactiveOptions.gentle = hostGentle || !!feel.get('gentle.on') || !!opts.gentlePreview;
     reactiveOptions.muted = opts.volMaster === 0 || opts.volMusic === 0;
     const audioReactive = music ? music.readReactivity(frameDt, reactiveOptions) : null;
     const sc = scanClock(inRace && !online ? music : null, racers.clockS);
     if (BOT) debug.scan = { hits: scan.hits, ready: scan.ready, timeS: sc.timeS };
-    const pv = P.view;
-    const cueView = songCues?.update(songS, pv, { paused: frozen, gentle: cueSafety });
     if (DEV) debug.songS = songS;
     const cueEpoch = cueView?.revision ?? -1;
     if (cueRunSeen !== songCues || cueRevision !== cueEpoch) {

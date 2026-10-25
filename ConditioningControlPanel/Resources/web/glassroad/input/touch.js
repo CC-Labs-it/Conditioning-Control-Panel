@@ -57,14 +57,33 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
   pauseBtn.setAttribute('aria-label', 'pause');
   pauseBtn.style.cssText = 'position:absolute;top:max(12px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));min-width:48px;min-height:48px';
   layer.appendChild(pauseBtn);
+  const cameraButton = (name, label, offset) => {
+    const b = d.createElement('button'); b.type = 'button'; b.className = 'gr-touch-btn gr-touch-' + name;
+    b.textContent = label; b.setAttribute('aria-label', name === 'view' ? 'Change chase or first person view' : 'Hold to look behind');
+    b.style.cssText = 'position:absolute;bottom:max(12px,env(safe-area-inset-bottom));left:calc(50% + ' + offset + 'px);min-width:52px;min-height:48px;border:2px solid #fff;border-radius:8px;background:#201b29;color:#fff;font:700 13px sans-serif;touch-action:none';
+    layer.appendChild(b); return b;
+  };
+  const viewBtn = cameraButton('view', 'View', -58), rearBtn = cameraButton('rear', 'Rear', 6);
 
   let steerId = -1, steerX0 = 0, steer = 0, actId = -1, touched = false, disposed = false;
-  let hopEdge = false, pauseEdge = false;
+  let hopEdge = false, pauseEdge = false, cameraEdge = false, rearId = -1;
   const onBtn = (t) => !!(t && typeof t.closest === 'function' && t.closest('.gr-touch-btn'));
   const sideOf = (x) => { const r = layer.getBoundingClientRect(); return x - r.left < (r.width || 1) * STEER_SIDE ? 'left' : 'right'; };
 
   const onPause = (e) => { if (e.cancelable) e.preventDefault(); e.stopPropagation(); touched = true; pauseEdge = true; devices.use('touch'); };
   pauseBtn.addEventListener('pointerdown', onPause);
+  const onView = (e) => { if (e.cancelable) e.preventDefault(); e.stopPropagation(); cameraEdge = true; devices.use('touch'); };
+  const onRear = (e) => {
+    if (e.cancelable) e.preventDefault(); e.stopPropagation();
+    if (rearId >= 0) return;
+    rearId = e.pointerId; devices.use('touch');
+    try { rearBtn.setPointerCapture(rearId); } catch (err) { /* window release still clears it */ }
+  };
+  const onViewClick = (e) => { if (e.detail === 0) onView(e); };
+  viewBtn.addEventListener('pointerdown', onView);
+  viewBtn.addEventListener('click', onViewClick);
+  rearBtn.addEventListener('pointerdown', onRear);
+  rearBtn.addEventListener('lostpointercapture', onUp);
 
   function endSteer() { steerId = -1; steer = 0; pad.style.display = 'none'; }
   function onDown(e) {
@@ -93,6 +112,11 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
   }
   function onUp(e) {
     if (disposed) return;
+    if (e.pointerId === rearId) {
+      rearId = -1;
+      try { rearBtn.releasePointerCapture(e.pointerId); } catch (err) { /* already gone */ }
+      return;
+    }
     if (e.pointerId === steerId) endSteer();
     else if (e.pointerId === actId) actId = -1;
     else return;
@@ -101,13 +125,19 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
   function onTouchStart(e) { if (!disposed && !onBtn(e.target) && e.cancelable) e.preventDefault(); }
   function onTouchEnd(e) {
     if (disposed) return;
-    let left = false, right = false;
+    let left = false, right = false, rear = false;
     const rest = e.touches || [];
-    for (let i = 0; i < rest.length; i++) { if (onBtn(rest[i].target)) continue; if (sideOf(rest[i].clientX) === 'left') left = true; else right = true; }
+    for (let i = 0; i < rest.length; i++) {
+      if (rest[i].target === rearBtn) rear = true;
+      if (onBtn(rest[i].target)) continue;
+      if (sideOf(rest[i].clientX) === 'left') left = true; else right = true;
+    }
     if (!left && steerId >= 0) endSteer();
     if (!right) actId = -1;
+    if (!rear) rearId = -1;
   }
   const noMenu = (e) => { if (e.cancelable) e.preventDefault(); };
+  const onBlur = () => { endSteer(); actId = rearId = -1; hopEdge = cameraEdge = false; };
 
   layer.addEventListener('pointerdown', onDown);
   layer.addEventListener('pointermove', onMove);
@@ -120,6 +150,7 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
   if (w && typeof w.addEventListener === 'function') {
     w.addEventListener('pointerup', onUp, true);
     w.addEventListener('pointercancel', onUp, true);
+    w.addEventListener('blur', onBlur);
   }
 
   function poll(into) {
@@ -129,11 +160,18 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
     into.hop = actId >= 0;
     into.hopPressed = hopEdge;
     into.pause = pauseEdge;
-    hopEdge = false; pauseEdge = false;
+    into.cameraPressed = cameraEdge;
+    into.rearView = rearId >= 0;
+    hopEdge = false; pauseEdge = false; cameraEdge = false;
   }
   function dispose() {
     disposed = true;
+    onBlur();
     pauseBtn.removeEventListener('pointerdown', onPause);
+    viewBtn.removeEventListener('pointerdown', onView);
+    viewBtn.removeEventListener('click', onViewClick);
+    rearBtn.removeEventListener('pointerdown', onRear);
+    rearBtn.removeEventListener('lostpointercapture', onUp);
     layer.removeEventListener('pointerdown', onDown);
     layer.removeEventListener('pointermove', onMove);
     layer.removeEventListener('pointerup', onUp);
@@ -145,6 +183,7 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
     if (w && typeof w.removeEventListener === 'function') {
       w.removeEventListener('pointerup', onUp, true);
       w.removeEventListener('pointercancel', onUp, true);
+      w.removeEventListener('blur', onBlur);
     }
     if (layer.parentNode) layer.parentNode.removeChild(layer);
   }

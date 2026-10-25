@@ -11,16 +11,19 @@ const HELD = {
   KeyW: 'throttle', ArrowUp: 'throttle', KeyS: 'brake', ArrowDown: 'brake',
   KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right',
   ShiftLeft: 'hop', ShiftRight: 'hop', Space: 'hop', KeyE: 'item',
+  KeyC: 'camera', KeyV: 'rear',
 };
 const TYPING = /^(INPUT|TEXTAREA|SELECT)$/;
 const CONTROLS = /^(BUTTON|INPUT|SELECT|TEXTAREA|A)$/;
 
 export function createKeyboard({ target = window } = {}) {
   const down = new Set();
-  let hopEdge = false, pauseEdge = false, itemEdge = false;
+  let hopEdge = false, pauseEdge = false, itemEdge = false, cameraEdge = false;
   const held = (what) => { for (const c of down) if (HELD[c] === what) return true; return false; };
 
   function onKey(e) {
+    // Release still counts if focus or a modifier changed while the key was held.
+    if (e.type === 'keyup') { down.delete(e.code || ''); return; }
     if (e.altKey || e.metaKey || e.ctrlKey) return;
     const code = e.code || '', tag = (e.target && e.target.tagName) || '';
     if (TYPING.test(tag)) return;
@@ -33,10 +36,11 @@ export function createKeyboard({ target = window } = {}) {
       if (e.repeat) return;
       if (what === 'hop' && !held('hop')) hopEdge = true;
       if (what === 'item') itemEdge = true;
+      if (what === 'camera' && !held('camera')) cameraEdge = true;
       down.add(code);
     } else if (what) down.delete(code);
   }
-  const onBlur = () => { down.clear(); hopEdge = false; itemEdge = false; };
+  const onBlur = () => { down.clear(); hopEdge = false; itemEdge = false; cameraEdge = false; };
 
   target.addEventListener('keydown', onKey);
   target.addEventListener('keyup', onKey);
@@ -52,7 +56,9 @@ export function createKeyboard({ target = window } = {}) {
     into.pause = pauseEdge;
     into.item = itemEdge;
     into.back = held('brake');
-    hopEdge = false; pauseEdge = false; itemEdge = false;
+    into.cameraPressed = cameraEdge;
+    into.rearView = held('rear');
+    hopEdge = false; pauseEdge = false; itemEdge = false; cameraEdge = false;
   }
   function dispose() {
     target.removeEventListener('keydown', onKey);
