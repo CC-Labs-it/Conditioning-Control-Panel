@@ -24,6 +24,7 @@ import { Q } from './quality.js';
 import { SPIRAL_LOOK, loopS, screenTimes, screenEnvelope, screenRateMul, screenMaskCss } from './spiralMath.js';
 import { screenAmounts } from './items/fxmath.js';
 import { createAtmosphereClock } from './screen-atmosphere.js';
+import { createSpiralBeatClock } from './spiralBeat.js';
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 
@@ -43,7 +44,7 @@ export function createGateScreen(host, { feel = null, photosafe = null, gentle =
 
   let canvas = null, field = null, ctx2d = null, broken = !doc || !host;
   let q = null, strength = 0, age = -1, phase = 0, loop = 1, lastDraw = -1e9, clockMs = 0, shown = false, level = 0;
-  const atmosphere = createAtmosphereClock(), amounts = {};
+  const atmosphere = createAtmosphereClock(), amounts = {}, beat = createSpiralBeatClock();
 
   function mount() {
     if (canvas || broken) return !broken;
@@ -95,6 +96,7 @@ export function createGateScreen(host, { feel = null, photosafe = null, gentle =
   function play(params, str = 1) {
     if (!mount()) return false;
     q = normalizeParams2(params);
+    q.centerpiece.kind = 'none';
     // the gate's handedness (gateParams forces clockwise) survives normalising
     if (params && params.layer && params.layer.direction) q.layer.direction = params.layer.direction;
     if (params && params.layer2 && params.layer2.direction) q.layer2.direction = params.layer2.direction;
@@ -112,7 +114,7 @@ export function createGateScreen(host, { feel = null, photosafe = null, gentle =
   }
 
   /** Advance and draw. Screen atmosphere also obscures this DOM layer above the scene. */
-  function update(dt, paused = false, screen = null) {
+  function update(dt, paused = false, screen = null, view = {}) {
     if (paused || !(dt > 0)) return;
     if (doc && doc.hidden) return;
     const a = screenAmounts(screen, amounts), fog = atmosphere.update(screen, a.pink, dt, a.timeMul);
@@ -123,7 +125,7 @@ export function createGateScreen(host, { feel = null, photosafe = null, gentle =
     age += dt;
     const env = screenEnvelope(age, { gentle: g, riseMs: get('gentle.riseMs', 300), fadeMs: get('gentle.fadeMs', 600) }, look);
     if (env <= 0 && age > times().rise) { stop(); return; }
-    phase = (phase + dt * screenRateMul(q, { gentle: g }, look) / loop) % 1;
+    phase = (phase + dt * screenRateMul(q, { gentle: g, speed: beat.update(dt, view, g) }, look) / loop) % 1;
     level = clamp01(env * strength * S.peak * (g ? S.gentleAlphaMul : 1) * visibleShare);
     if (!shown) { canvas.style.display = 'block'; shown = true; }
     canvas.style.opacity = level.toFixed(3);

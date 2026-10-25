@@ -134,12 +134,12 @@ export function createItemStatus(root, feel, { photosafe = null, cap = 1100, tra
     ring(p, kind, self ? 0.6 : 1);
   }
 
-  function update(view, dt, karts = []) {
+  function update(view, dt, karts = [], musicView = {}) {
     dt = Math.max(0, Math.min(dt || 0, 0.1));
     const soft = gentle(), rate = soft ? 0.5 : 1;
     timeS += dt * rate; frameId++;
     cloud.begin();
-    malusSpirals.update(karts, dt);
+    malusSpirals.update(karts, dt, musicView);
     const riseS = (feel.get('gentle.riseMs') || 300) / 1000;
 
     // status looks on every racer

@@ -75,8 +75,8 @@ export function createPost(three, scene, camera) {
     },
     /** Call after a quality step. */
     retier() { if (builtBloom !== Q.bloom) build(); else if (bloomNode) bloomNode.setResolutionScale(Q.bloomScale); },
-    update(fx, dt = 0, aspect = 16 / 9) {
-      if (screen) screen.update((fx && fx.screen) || NONE, dt, aspect);
+    update(fx, dt = 0, aspect = 16 / 9, view = {}) {
+      if (screen) screen.update((fx && fx.screen) || NONE, dt, aspect, view);
       if (!fx) return;
       u.strength.value = LOOK.bloomStrength * (1 + (fx.bloomBoost || 0) * LOOK.bloomBoostGain);
       u.white.value = fx.whiteFade || 0;

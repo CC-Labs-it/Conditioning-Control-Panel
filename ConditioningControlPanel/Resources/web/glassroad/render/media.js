@@ -19,7 +19,7 @@
 import {
   Group, Mesh, InstancedMesh, PlaneGeometry, CylinderGeometry, BufferGeometry, Float32BufferAttribute,
   InstancedBufferAttribute, CanvasTexture, Texture, SRGBColorSpace, MeshBasicNodeMaterial, AdditiveBlending,
-  DoubleSide, FrontSide, BackSide, Matrix4, Vector3, Color, MirroredRepeatWrapping,
+  DoubleSide, FrontSide, BackSide, Matrix4, Vector3, Color,
 } from 'three/webgpu';
 import {
   texture, uv, vec2, vec3, float, uniform, instancedBufferAttribute, attribute, cos, sin, hue, mix, smoothstep,
@@ -30,7 +30,8 @@ import {
   mediaLook, tierOf, roadSamples, placeBillboard, haloSlots, haloPoseInto, tunnelLayout, spinSafeCrop, fitCover,
   createUploadBudget, urlAllowed, creditText, colourOf, slotColour,
 } from './mediaMath.js';
-import { createPlaceholder, programFor, spinOf, warpOf, releaseLoom, PROGRAMS } from './mediaPlaceholders.js';
+import { createPlaceholder, programFor, spinOf, releaseLoom, PROGRAMS, LOOM_PROGRAMS } from './mediaPlaceholders.js';
+import { createSpiralBeatClock } from './spiralBeat.js';
 import { selectScrolllerSlots } from './mediaSelection.js';
 import { MAX_MEDIA_CLIPS, mediaClipLimit } from './mediaVariety.js';
 import { fitMainframeBillboard, moveMainframePanel } from './mainframeMediaMotion.js';
@@ -211,18 +212,18 @@ export function createMediaSlots(scene, track, opts = {}) {
   const tun = layout.tunnel ? tunnelLayout(layout.tunnel, track, M, T.tunnelStepMul) : null;
   if (tun) for (const sl of tun.slots) slots.push(sl);
   for (const sl of opts.extraSlots || []) slots.push(sl);
-  if (track.id === 'mainframe') slots.forEach((sl, i) => { sl.program = sl.frame === 'boostPad' ? 0 : i % 2 ? 3 : 0; });
+  slots.forEach((sl, i) => { sl.program = i; });
 
   // ---- shared placeholder programs ----
   const P = Math.min(T.programs, PROGRAMS.length), cols = placeholderColours();
   const progs = [];
   for (let p = 0; p < P; p++) {
-    const ph = createPlaceholder(p, PROGRAMS[p].loom ? T.loomPx || T.canvasPx : T.canvasPx, cols, { make: opts.make, animate: T.placeholderFps > 0 });
+    const program = LOOM_PROGRAMS[p % LOOM_PROGRAMS.length];
+    const ph = createPlaceholder(program, T.loomPx || T.canvasPx, cols, { make: opts.make, animate: false });
     const tex = new CanvasTexture(ph.canvas);
     tex.colorSpace = SRGBColorSpace; tex.anisotropy = 4;
-    if (warpOf(p)) { tex.wrapS = tex.wrapT = MirroredRepeatWrapping; }
     ph.draw(0);
-    progs.push({ ph, tex, spin: uniform(spinOf(p)), warp: warpOf(p), slots: [], near: Infinity });
+    progs.push({ ph, tex, spin: uniform(spinOf(program)), warp: 0, slots: [], near: Infinity });
   }
   releaseLoom();
   const budget = createUploadBudget();
@@ -571,6 +572,7 @@ export function createMediaSlots(scene, track, opts = {}) {
 
   // ---- per frame ----
   let clock = 0, uploadClock = 0, uploads = 0, sharedVideoUploads = 0, sharedVideoUploadsTotal = 0;
+  const spiralBeat = createSpiralBeatClock();
   const picks = [];
   const haloSlotsOf = haloSpec ? slots.slice(haloStart, haloStart + haloN) : [];
   const flyingSlots = slots.filter(sl => sl.flight);
@@ -581,7 +583,7 @@ export function createMediaSlots(scene, track, opts = {}) {
     const gentle = view.gentle ?? (feel ? !!feel.get('gentle.on') : false);
     const scroll = view.scrollMul ?? (gentle ? (feel ? feel.get('gentle.scrollMul') : 0.5) : 1);
     const contrast = view.contrastMul ?? (gentle ? (feel ? feel.get('gentle.contrastMul') : 0.5) : 1);
-    clock += dt * scroll;
+    clock += dt * scroll * spiralBeat.update(dt, view, gentle);
     uploadClock += dt; // Gentle slows procedural motion, never video playback or its upload cadence.
     U.time.value = clock;
     U.contrast.value = contrast;

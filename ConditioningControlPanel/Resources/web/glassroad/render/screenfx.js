@@ -41,6 +41,8 @@ import { HIT_LOOK } from './items/look.js';
 import { ITEMS } from '../sim/itemTable.js';
 import { maskLook } from './atlas.js';
 import { ATMOSPHERE as A, tunnelRadius, createAtmosphereClock } from './screen-atmosphere.js';
+import { acquireLoomAtlas, loomAtlasUv } from './loomAtlas.js';
+import { createSpiralBeatClock } from './spiralBeat.js';
 
 const rgb = (hex) => { const c = new Color(hex); return vec3(c.r, c.g, c.b); };
 const hash = (p, a, b) => fract(sin(dot(p, vec2(a, b))).mul(43758.5453));
@@ -70,6 +72,9 @@ export function createScreenFx(three, art = currentArt()) {
   icon.colorSpace = SRGBColorSpace;
   // the badge's icons: the eight screen kinds' art drawn into one 4 x 2 canvas atlas (row 0 on top) as each loads
   const badgeTex = badgeAtlas();
+  const loom = acquireLoomAtlas(), beat = createSpiralBeatClock();
+  const spiralAngle = uniform(0), spiralStyle = uniform(0);
+  let wasSpiral = false, spiralSerial = 0;
   const u = {
     any: uniform(0), blurOn: uniform(0), t: uniform(0), runT: uniform(0), aspect: uniform(16 / 9), blurMul: uniform(1),
     flash: uniform(0), spiral: uniform(0), drain: uniform(0), freeze: uniform(0), black: uniform(0), pink: uniform(0),
@@ -226,8 +231,9 @@ export function createScreenFx(three, art = currentArt()) {
         col.addAssign(vec3(glint).mul(u.freeze));
         // Spiral: a hypnotic two-band spiral over the whole view, opening from the centre (a soft dim under Gentle)
         const reveal = smoothstep(u.spiralR.sub(0.2), u.spiralR.add(0.001), rad).oneMinus().mul(smoothstep(0, L.spiralHole, rad));
-        const arm = sin(atan(c.y, c.x).mul(L.spiralArms).add(log(rad.add(0.02)).mul(L.spiralTwist)).sub(u.t.mul(L.spiralTurnRadps)));
-        const bands = mix(rgb(L.spiralBands[0]), rgb(L.spiralBands[1]), smoothstep(-L.spiralEdge, L.spiralEdge, arm));
+        const ca = cos(spiralAngle), sa = sin(spiralAngle);
+        const spiralUv = vec2(c.x.mul(ca).sub(c.y.mul(sa)), c.x.mul(sa).add(c.y.mul(ca))).mul(.7).add(.5);
+        const bands = texture(loom.texture, loomAtlasUv(spiralUv, spiralStyle)).rgb;
         const spun = mix(col, bands, reveal.mul(u.spiral).mul(keep).mul(L.spiralFullAlpha));
         const dim = col.mul(reveal.mul(u.spiral).mul(keep).mul(L.spiralDim).oneMinus());
         col.assign(mix(spun, dim, u.dimOnly));
@@ -303,8 +309,12 @@ export function createScreenFx(three, art = currentArt()) {
     })();
   }
 
-  function update(screen, dt, aspect) {
+  function update(screen, dt, aspect, view = {}) {
     const a = screenAmounts(screen, amt), m = meterLook(screen);
+    const activeSpiral = a.spiral > 0;
+    if (activeSpiral && !wasSpiral) spiralStyle.value = spiralSerial++ % 6;
+    wasSpiral = activeSpiral;
+    if (!view.paused) spiralAngle.value += Math.max(0, dt || 0) * .45 * a.timeMul * beat.update(dt, view, a.gentle);
     u.fogFill.value = atmosphere.update(screen, a.pink, dt, a.timeMul);
     u.hitK.value = m.hitK; u.meterK.value = m.meterK; u.remain.value = m.remain; u.badgeS.value = m.badgeS;
     if (m.hitK > 0) u.hitRgb.value.set(m.hitHex);
@@ -339,5 +349,5 @@ export function createScreenFx(three, art = currentArt()) {
     u.rx.value = r.cx; u.ry.value = r.cy + L.flashPop * 0.8 * (1 - Math.min(1, a.flash)); u.rw.value = r.hw * pop; u.rh.value = r.hh * pop;
   }
 
-  return { node, update, bloomGate, dispose() { icon.dispose(); badgeTex.dispose(); } };
+  return { node, update, bloomGate, dispose() { icon.dispose(); badgeTex.dispose(); loom.dispose(); } };
 }

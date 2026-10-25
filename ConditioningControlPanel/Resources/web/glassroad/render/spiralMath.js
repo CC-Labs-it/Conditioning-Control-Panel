@@ -138,7 +138,7 @@ export function gateParams(gate, loom, palette = SPIRAL_LOOK.palette) {
     q = field.normalizeParams2(raw);
   }
   // handedness law: both layers turn clockwise on screen and read inward
-  q = { ...q, layer: { ...q.layer, direction: 1 }, layer2: { ...q.layer2, direction: 1 } };
+  q = { ...q, layer: { ...q.layer, direction: 1 }, layer2: { ...q.layer2, direction: 1 }, centerpiece: { ...q.centerpiece, kind: 'none' } };
   return q;
 }
 
@@ -476,9 +476,9 @@ export function bandHz(params, loopSeconds = loopS(params)) {
 }
 
 /** The gate screen's speed multiplier: the Loom's own pace, slowed until no arm sweeps a pixel faster than maxBandHz. */
-export function screenRateMul(params, { gentle = false } = {}, L = SPIRAL_LOOK) {
+export function screenRateMul(params, { gentle = false, speed = 1 } = {}, L = SPIRAL_LOOK) {
   const hz = bandHz(params), S = L.screen;
-  return Math.min(1, S.maxBandHz / Math.max(hz, 1e-6)) * (gentle ? S.gentleSpeedMul : 1);
+  return Math.min(Math.max(0, Math.min(2, speed)), S.maxBandHz / Math.max(hz, 1e-6)) * (gentle ? S.gentleSpeedMul : 1);
 }
 
 /** The gate screen's CSS mask: a radial alpha ramp, light at the centre (over the road), strong at the corners. */

@@ -216,14 +216,14 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
   const kartPos = (k) => V.set(k.st[S.posX], k.st[S.posY], k.st[S.posZ]);
   const kartQuat = (k) => QT.set(k.st[S.quatX], k.st[S.quatY], k.st[S.quatZ], k.st[S.quatW]);
 
-  function update(view, dt, karts = [], camera = null) {
+  function update(view, dt, karts = [], camera = null, musicView = {}) {
     dt = Math.max(0, Math.min(dt || 0, 0.1));
     cam = camera;
     if (cam && cam.matrixWorld) { const e = cam.matrixWorld.elements; camFx = -e[8]; camFy = -e[9]; camFz = -e[10]; }
     const soft = gentle(), rate = soft ? 0.5 : 1;
     timeS += dt * rate;
     bubbles.uniforms.time.value = timeS;
-    status.update(view, dt, karts);
+    status.update(view, dt, karts, musicView);
     if (shells) { shells.uniforms.time.value = timeS; shells.begin(); }
     bubbles.begin(); motes.begin(); puddles.begin(); waves.begin(); copies.begin(); marks.begin(); shadows.begin(); confetti.begin(); drawn = 0;
     shields.begin();

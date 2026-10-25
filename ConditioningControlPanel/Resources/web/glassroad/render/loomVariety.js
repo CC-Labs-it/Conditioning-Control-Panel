@@ -1,6 +1,7 @@
 // Authored variations of the real Loom, shared by landmark discs and gate takeovers.
 import { normalizeParams2, createFieldRenderer, composeFrame, drawFallbackFrame } from '../../arcademy/engine/loom/loomField.js';
 import { loopS, screenRateMul } from './spiralMath.js';
+import { createSpiralBeatClock } from './spiralBeat.js';
 
 export function loomVariation(index) {
   const i = ((index % 6) + 6) % 6;
@@ -19,6 +20,7 @@ export function loomVariation(index) {
 export function createLoomDisplayFrames(make, tier = 'high') {
   const px = tier === 'phone' ? 256 : 512, source = make(px, px);
   let field = null, age = 0;
+  const beat = createSpiralBeatClock();
   try { field = createFieldRenderer(source); } catch { /* Canvas fallback retains the real Loom. */ }
   const rows = [0,1,2].map(i => ({ canvas: make(px, px), params: loomVariation(i), phase: i / 3 }));
   function draw(row) {
@@ -27,10 +29,11 @@ export function createLoomDisplayFrames(make, tier = 'high') {
     else drawFallbackFrame(ctx, row.params, row.phase, px, px);
   }
   rows.forEach(draw);
-  return { rows, update(dt, gentle = false) {
-    if (!(dt > 0)) return false;
+  return { rows, update(dt, gentle = false, view = {}) {
+    if (!(dt > 0) || view.paused) return false;
     age += dt;
-    for (const row of rows) row.phase = (row.phase + dt * screenRateMul(row.params, { gentle }) / loopS(row.params)) % 1;
+    const speed = beat.update(dt, view, gentle);
+    for (const row of rows) row.phase = (row.phase + dt * screenRateMul(row.params, { gentle, speed }) / loopS(row.params)) % 1;
     if (age < 1 / (tier === 'phone' ? 8 : 15)) return false;
     age = 0; rows.forEach(draw); return true;
   }, dispose() {
