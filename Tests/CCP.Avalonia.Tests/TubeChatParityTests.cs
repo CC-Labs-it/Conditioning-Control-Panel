@@ -49,41 +49,37 @@ public sealed class TubeChatParityTests
         CoreSettings.Current.AvatarEnabled = true;
         CoreSettings.Current.CompanionAsksEnabled = true;
 
-        // Keep the ephemeral port bound for the whole test: probe/Stop/HttpListener.Start
-        // had a hand-off race with other processes on the runner.
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var baseUrl = $"http://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}";
+        // HttpListener decodes the chunked body AiService sends (JsonContent has no Content-Length).
+        // The probed port can be taken between probe.Stop and Start on a busy runner: retry on a fresh one.
+        HttpListener listener;
+        string baseUrl;
+        for (var attempt = 1; ; attempt++)
+        {
+            var probe = new TcpListener(IPAddress.Loopback, 0);
+            probe.Start();
+            baseUrl = $"http://127.0.0.1:{((IPEndPoint)probe.LocalEndpoint).Port}";
+            probe.Stop();
+            listener = new HttpListener();
+            listener.Prefixes.Add(baseUrl + "/");
+            try { listener.Start(); break; }
+            catch (HttpListenerException) when (attempt < 10) { listener.Close(); }
+        }
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var received = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var server = Task.Run(async () =>
         {
-            using var client = await listener.AcceptTcpClientAsync();
-            await using var stream = client.GetStream();
-            // HTTP lengths are bytes, including UTF-8 persona text in the prompt.
-            using var headerBytes = new MemoryStream();
-            var one = new byte[1];
-            var end = 0;
-            while (end != 0x0d0a0d0a)
-            {
-                await stream.ReadExactlyAsync(one);
-                headerBytes.WriteByte(one[0]);
-                end = (end << 8) | one[0];
-            }
-            var headersText = Encoding.ASCII.GetString(headerBytes.ToArray());
-            var length = int.Parse(headersText.Split("\r\n")
-                .Single(h => h.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase)).Split(':')[1].Trim());
-            var bytes = new byte[length];
-            await stream.ReadExactlyAsync(bytes);
-            var body = Encoding.UTF8.GetString(bytes);
+            var ctx = await listener.GetContextAsync();
+            string body;
+            using (var r = new StreamReader(ctx.Request.InputStream, Encoding.UTF8)) body = await r.ReadToEndAsync();
             received.SetResult();
             await gate.Task;   // the request has arrived; hold the reply while checking thinking
             var id = System.Text.RegularExpressions.Regex.Match(body, "\"request_id\":\"([^\"]+)\"").Groups[1].Value;
             var json = Encoding.UTF8.GetBytes(
                 "{\"companion_protocol\":2,\"finish_reason\":\"stop\",\"request_id\":\"" + id + "\",\"content\":\"hi sweetie\"}");
-            var headers = Encoding.ASCII.GetBytes($"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {json.Length}\r\nConnection: close\r\n\r\n");
-            await stream.WriteAsync(headers);
-            await stream.WriteAsync(json);
+            ctx.Response.ContentType = "application/json";
+            ctx.Response.ContentLength64 = json.Length;
+            await ctx.Response.OutputStream.WriteAsync(json);
+            ctx.Response.Close();
         });
 
         var dir = Directory.CreateTempSubdirectory("ccp-tube-").FullName;
@@ -147,7 +143,7 @@ public sealed class TubeChatParityTests
             // no games here, so WPF's fallback to a Session card).
             var buttons = tube.FindControl<WrapPanel>("AskButtons")!;
             using (var timeout = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10)))
-                while (!buttons.IsVisible) await Task.Delay(10, timeout.Token);
+                while (!buttons.IsVisible) { await Task.Delay(10, timeout.Token); Dispatcher.UIThread.RunJobs(); }
             Assert.True(buttons.IsVisible);
             Assert.Equal(2, buttons.Children.Count);
             var question = speech.Text;
@@ -172,9 +168,9 @@ public sealed class TubeChatParityTests
             Dispatcher.UIThread.RunJobs();
             try
             {
-                listener.Stop();
+                listener.Close();
                 try { await server.WaitAsync(TimeSpan.FromSeconds(10)); }
-                catch (SocketException) { }
+                catch (HttpListenerException) { }
                 catch (ObjectDisposedException) { }
             }
             finally
