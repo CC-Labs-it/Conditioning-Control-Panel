@@ -1,12 +1,12 @@
 /* render/warmGroups.js - how the boot warm splits the scene into passes (render/renderer.js warmAll). Pure.
  *
- * Firefox links every WebGL program serially, so one warm pass over the whole scene was a ~7 s task with
- * the page frozen. The warm instead shows one group of renderables per pass with a painted frame between,
+ * Firefox can link WebGL programs serially. The warm shows groups of renderables with a painted frame between,
  * each group bringing at most perGroup materials the warm has not met yet (a renderable sharing only known
- * materials rides along free), so the warming card's bar moves and no single task runs long.
+ * materials rides along free). Async shader construction also yields within a group. Larger groups avoid
+ * repeatedly rebuilding receiver, shadow and bloom passes while the loading card still gets updates.
  */
 
-export const WARM = Object.freeze({ perGroup: 6 });
+export const WARM = Object.freeze({ perGroup: 24 });
 
 /** Renderables in scene order, grouped by materials new to the warm. */
 export function warmGroups(items, perGroup = WARM.perGroup) {

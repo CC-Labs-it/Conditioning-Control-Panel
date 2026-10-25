@@ -10,7 +10,7 @@ const hooks = registerHooks({ resolve(specifier, context, next) {
   return files[specifier] ? { url: new URL('../vendor/three/build/' + files[specifier], import.meta.url).href, shortCircuit: true } : next(specifier, context);
 } });
 const { buildBoudoirMirrorRoom, mirrorRoomNear } = await import('../render/boudoirMirrorRoom.js');
-const { Scene, PerspectiveCamera, WebGLCoordinateSystem, Vector3, Raycaster } = await import('three/webgpu'); hooks.deregister();
+const { Scene, PerspectiveCamera, WebGLCoordinateSystem, Vector3, Raycaster, InstancedMesh, BoxGeometry, MeshBasicNodeMaterial } = await import('three/webgpu'); hooks.deregister();
 const track = loadTrack(JSON.parse(readFileSync(new URL('../tracks/boudoir.json', import.meta.url), 'utf8')));
 const hall = getBoudoirLayout(track).landmarks.find(r => r.id === 'drawer-hall');
 function setup() {
@@ -66,7 +66,10 @@ test('native captures exclude every reflective face and restore renderer state w
     } };
   const capture = () => room.reflections.forEach((node, i) => node.reflector.updateBefore({ scene, camera, renderer,
     material: room.group.children.find(m => m.material?.name === 'mirror-live-scene:' + (i ? 1 : -1)).material }));
-  room.update(.1, { camera, raceTimeS: 1 }); capture(); assert.equal(draws, 2);
+  capture(); assert.equal(draws, 0, 'general boot warm cannot make real reflection captures');
+  room.update(.1, { camera, raceTimeS: 1 });
+  renderer._isPreCompiling = true; capture(); assert.equal(draws, 0, 'pipeline compilation cannot recurse into scene captures');
+  renderer._isPreCompiling = false; capture(); assert.equal(draws, 2);
   assert.equal(target, originalTarget); assert.equal(mrt, originalMrt); assert.equal(renderer.autoClear, false);
   capture(); assert.equal(draws, 2, 'same frame never recaptures');
   room.update(.1, { camera, raceTimeS: 1.1, paused: true }); capture(); assert.equal(draws, 2);
@@ -85,15 +88,23 @@ test('near test includes the long hall ends without enabling distant rooms', () 
 
 test('runtime warm captures use the same camera and restore paused capture policy and renderer state', async () => {
   const { room, scene, camera } = setup(), quaternion = camera.quaternion.clone();
+  const geometry = new BoxGeometry(), material = new MeshBasicNodeMaterial();
+  const pooled = new InstancedMesh(geometry, material, 1); pooled.count = 0; pooled.visible = false; material.visible = false; scene.add(pooled);
   const mainTarget = {}, mainMrt = {}; let target = mainTarget, mrt = mainMrt, draws = 0, compiles = 0;
   const raw = { autoClear: false, coordinateSystem: WebGLCoordinateSystem,
     getDrawingBufferSize: out => out.set(1440, 900), getRenderTarget: () => target, getMRT: () => mrt,
-    setRenderTarget: value => { target = value; }, setMRT: value => { mrt = value; }, clear() {}, render() { draws++; } };
+    setRenderTarget: value => { target = value; }, setMRT: value => { mrt = value; }, clear() {}, render() {
+      draws++;
+      assert.equal(pooled.visible, draws <= 2); assert.equal(material.visible, draws <= 2);
+      assert.equal(pooled.count, draws <= 2 ? 1 : 0); assert.equal(pooled.frustumCulled, draws > 2);
+    } };
   const capture = () => room.reflections.forEach((node, i) => node.reflector.updateBefore({ scene, camera, renderer: raw,
     material: room.group.children.find(m => m.material?.name === 'mirror-live-scene:' + (i ? 1 : -1)).material }));
   const renderer = { three: raw, post(s, c) {
     assert.equal(s, scene); assert.equal(c, camera);
-    return { async compileAsync() { compiles++; }, render: capture };
+    return { async compileAsync() { compiles++; raw._isPreCompiling = true;
+      try { capture(); } finally { raw._isPreCompiling = false; }
+    }, render: capture };
   } };
   room.update(.1, { camera, raceTimeS: 7, paused: true });
   capture(); assert.equal(draws, 0);
@@ -101,10 +112,12 @@ test('runtime warm captures use the same camera and restore paused capture polic
   assert.equal(compiles, 3); assert.equal(draws, 6);
   assert.ok(camera.quaternion.angleTo(quaternion) < 1e-7);
   assert.equal(target, mainTarget); assert.equal(mrt, mainMrt); assert.equal(raw.autoClear, false);
+  assert.equal(pooled.visible, false); assert.equal(material.visible, false); assert.equal(pooled.count, 0); assert.equal(pooled.frustumCulled, true);
   capture(); assert.equal(draws, 6, 'warm capture restores the paused runtime policy');
   renderer.post = () => ({ async compileAsync() { throw Error('compile failure'); } });
   await assert.rejects(room.warmCapture(renderer, scene, camera), /compile failure/);
   assert.ok(camera.quaternion.angleTo(quaternion) < 1e-7);
   assert.equal(target, mainTarget); assert.equal(mrt, mainMrt); assert.equal(raw.autoClear, false);
-  capture(); assert.equal(draws, 6); room.dispose();
+  assert.equal(pooled.visible, false); assert.equal(material.visible, false); assert.equal(pooled.count, 0); assert.equal(pooled.frustumCulled, true);
+  capture(); assert.equal(draws, 6); room.dispose(); pooled.dispose(); geometry.dispose(); material.dispose();
 });

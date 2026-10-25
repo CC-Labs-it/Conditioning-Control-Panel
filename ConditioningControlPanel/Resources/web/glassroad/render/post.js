@@ -55,7 +55,19 @@ export function createPost(three, scene, camera) {
     pipe,
     antialias: Q.antialias,
     /** Compile every visible scene object for the scene pass target (no draw). */
-    compileAsync() { return scenePass.compileAsync(three); },
+    async compileAsync() {
+      const target = three.getRenderTarget(), mrt = three.getMRT();
+      try {
+        three.setRenderTarget(scenePass.renderTarget);
+        three.setMRT(scenePass.getMRT());
+        // The pipeline quad renders at depth +1, its scene pass at +2. Match that
+        // cache context without changing the shared recursion counter across awaits.
+        await three.compileAsync(scene, camera, null, null, three._callDepth + 2);
+      } finally {
+        three.setRenderTarget(target);
+        three.setMRT(mrt);
+      }
+    },
     /** Call after a quality step. */
     retier() { if (builtBloom !== Q.bloom) build(); else if (bloomNode) bloomNode.setResolutionScale(Q.bloomScale); },
     update(fx, dt = 0, aspect = 16 / 9) {

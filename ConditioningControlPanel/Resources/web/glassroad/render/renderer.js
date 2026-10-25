@@ -44,6 +44,11 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
 
   const three = new WebGPURenderer({ canvas, antialias: false, forceWebGL: webgl2, powerPreference: 'high-performance', ...(context ? { context } : {}) });
   await three.init();
+  let compiledGraphs;
+  if (qs.get('profileLoad') === '1') {
+    compiledGraphs = 0;
+    three.debug.onNodeBuilderCreated = () => { compiledGraphs++; };
+  }
   three.info.autoReset = false;                    // reset once per frame here, so stats() is one whole frame
   const backend = three.backend.isWebGPUBackend ? 'webgpu' : 'webgl2';
   if (backend === 'webgl2') {
@@ -175,7 +180,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     },
     stats() {
       const r = three.info.render;
-      return { backend, tier: Q.name, drawCalls: r.drawCalls, triangles: r.triangles, perFrame: true,
+      return { backend, tier: Q.name, drawCalls: r.drawCalls, triangles: r.triangles, perFrame: true, compiledGraphs,
         renderScale: Math.round(scale() * 100) / 100, renderFps: meter.fps, displayMs: Math.round(gate.displayMs * 100) / 100, gpu, art: meter.art };
     },
     dispose() { if (ro) ro.disconnect(); if (post) post.dispose(); readout(false); three.dispose(); },
@@ -204,6 +209,10 @@ const paintGap = () => new Promise((r) => (globalThis.requestAnimationFrame ? re
 export async function warmAll(renderer, scene, camera, extras = [], { onProgress = null } = {}) {
   const t0 = performance.now();
   const post = renderer.post(scene, camera);
+  const timing = { compileMs: 0, renderMs: 0, gapMs: 0 };
+  const compile = async () => { const t = performance.now(); await post.compileAsync(); timing.compileMs += performance.now() - t; };
+  const render = () => { const t = performance.now(); post.render(); timing.renderMs += performance.now() - t; };
+  const gap = async () => { const t = performance.now(); await paintGap(); timing.gapMs += performance.now() - t; };
   const temp = new Group(), plane = new PlaneGeometry(0.01, 0.01);
   temp.name = 'warm-extras';
   for (const x of [].concat(extras || [])) {
@@ -236,23 +245,23 @@ export async function warmAll(renderer, scene, camera, extras = [], { onProgress
     groups = warmGroups(casting);
     for (const o of casting) o.visible = false;
     // pass 0: the post chain and the receivers alone (the road's programs are big), then a painted frame
-    await post.compileAsync();
-    post.render();
-    await paintGap();
+    await compile();
+    render();
+    await gap();
     const shown = [];
     for (let g = 0; g < groups.length; g++) {
       for (const o of groups[g]) for (let p = o; p && p !== scene; p = p.parent) if (!p.visible) { p.visible = true; shown.push(p); }
-      await post.compileAsync();
-      post.render();
+      await compile();
+      render();
       for (const p of shown) p.visible = false;
       shown.length = 0;
       if (onProgress) { try { onProgress(g + 1, groups.length + 1); } catch { /* the card only */ } }
-      await paintGap();
+      await gap();
     }
     // the whole scene once: anything only a full frame builds (everything above is cached by now)
     for (const o of items) o.visible = true;
-    await post.compileAsync();
-    post.render();
+    await compile();
+    render();
     if (onProgress) { try { onProgress(groups.length + 1, groups.length + 1); } catch { /* the card only */ } }
   } catch (e) {
     console.warn('[glassroad/renderer] warm: ' + (e && e.message));
@@ -265,6 +274,7 @@ export async function warmAll(renderer, scene, camera, extras = [], { onProgress
     plane.dispose();
     scene.updateMatrixWorld(true);
   }
-  post.render();
-  return { ms: Math.round(performance.now() - t0), objects, groups: groups.length };
+  render();
+  return { ms: Math.round(performance.now() - t0), objects, groups: groups.length,
+    ...Object.fromEntries(Object.entries(timing).map(([key, value]) => [key, Math.round(value)])) };
 }

@@ -67,7 +67,10 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
       renderTarget.setSize(Math.max(1, Math.round(drawSize.x * scale)), Math.max(1, Math.round(drawSize.y * scale)));
     };
     base.updateBefore = frame => {
-      if (disposed || (!warming && started && (!enabled || frozen || elapsed - lastCapture < 1 / (gentleOn ? 12 : MIRROR_ROOM.captureHz)))) return;
+      // Pipeline discovery must never recurse into a real capture. General boot warming also
+      // precedes the first world update; the explicit hall warm owns its reflected variants.
+      if (disposed || frame.renderer._isPreCompiling || (!started && !warming)
+        || (!warming && started && (!enabled || frozen || elapsed - lastCapture < 1 / (gentleOn ? 12 : MIRROR_ROOM.captureHz)))) return;
       const excluded = [...mirrorMaterials, ...shutterMaterials, backingMat], saved = excluded.map(m => m.visible), renderer = frame.renderer;
       const renderTarget = renderer.getRenderTarget(), mrt = renderer.getMRT(), autoClear = renderer.autoClear;
       // Both mirror banks and all shutter glass leave the reflected pass. Frames and racers remain.
@@ -183,11 +186,31 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
       for (const side of [0, -1, 1]) {
         if (side) camera.lookAt(group.localToWorld(look.set(side * MIRROR_ROOM.sideM, 8, -length / 2)));
         camera.updateMatrixWorld(true);
-        await pass.compileAsync();
-        // Reflectors update once per renderer frame. Let its frame advance so render
-        // captures again at the real nested post depth instead of reusing compile's capture.
-        await new Promise(resolve => globalThis.requestAnimationFrame ? requestAnimationFrame(resolve) : setTimeout(resolve, 0));
-        pass.render();
+        const saved = [], hiddenMaterials = new Set();
+        try {
+          // The two targets share the live camera. One unculled real capture discovers hidden,
+          // distant and empty pooled variants in their actual reflected post/shadow context.
+          if (!side) scene.traverse(object => {
+            saved.push([object, object.visible, object.frustumCulled, object.count]);
+            object.visible = true; object.frustumCulled = false;
+            if (object.count === 0 && (object.isInstancedMesh || object.isSprite || object.isBatchedMesh)) object.count = 1;
+            for (const material of [].concat(object.material || [])) if (material?.visible === false) {
+              hiddenMaterials.add(material); material.visible = true;
+            }
+          });
+          scene.updateMatrixWorld(true);
+          await pass.compileAsync();
+          // Reflectors update once per renderer frame. Capture at the real nested post depth.
+          await new Promise(resolve => globalThis.requestAnimationFrame ? requestAnimationFrame(resolve) : setTimeout(resolve, 0));
+          pass.render();
+        } finally {
+          for (const [object, visible, culled, count] of saved) {
+            object.visible = visible; object.frustumCulled = culled; if (object.count !== count) object.count = count;
+          }
+          for (const material of hiddenMaterials) material.visible = false;
+          scene.updateMatrixWorld(true);
+        }
+        // The remaining two captures use normal visibility, clearing warm-only ghosts.
         await new Promise(resolve => setTimeout(resolve, 0));
       }
     } finally {

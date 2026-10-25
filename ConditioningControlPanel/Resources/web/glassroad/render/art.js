@@ -56,6 +56,8 @@ export async function loadArt(renderer, { want = WANT, trackId = 'threshold', on
   if (current) { current.dispose(); current = null; }
   const rows = new Map(), tex = new Map(), models = new Map(), failed = [];
   const materialTier = Q.name;
+  // The terrace is built once with the starting tier, so its other LOD is never drawn.
+  if (trackId === 'threshold') want = want.filter(id => id !== (materialTier === 'phone' ? 'threshold-slot-row-lod0' : 'threshold-slot-row-lod1'));
   if (trackId === 'mainframe') want = want.filter((id) => !/^(chess-|threshold-|card-(drop|lens|orbit|petal)|slot-cabinet|pocket-watch|stone-threshold)/.test(id))
     .concat('spout-mainframe', 'stone-mainframe');
   if (trackId === 'boudoir') want = want.filter((id) => !/^(chess-|threshold-|card-(drop|lens|orbit|petal)|slot-cabinet|pocket-watch|stone-threshold)/.test(id))
@@ -103,6 +105,10 @@ export async function loadArt(renderer, { want = WANT, trackId = 'threshold', on
         const sidecar = manifest.find((x) => x.kind === 'vertex-data' && x.sourceFile === r.file);
         if (!sidecar) models.set(id, await gltf.loadAsync(url));
         else {
+          // Fetch optional detail alongside the model, with failure handled immediately even if
+          // the model itself fails. Parsing and shade validation still run in their original order.
+          const shadeBytes = fetch(new URL(sidecar.file, BASE))
+            .then(shade => shade.ok ? shade.arrayBuffer() : null).catch(() => null);
           const response = await fetch(url);
           if (!response.ok) throw new Error('model HTTP ' + response.status);
           const source = await response.arrayBuffer();
@@ -110,8 +116,8 @@ export async function loadArt(renderer, { want = WANT, trackId = 'threshold', on
           // Optional shading never turns an intact model into a missing asset.
           let applied = false;
           try {
-            const shade = await fetch(new URL(sidecar.file, BASE));
-            if (shade.ok) applied = await attachVertexShade(model, sidecar, source, await shade.arrayBuffer());
+            const bytes = await shadeBytes;
+            if (bytes) applied = await attachVertexShade(model, sidecar, source, bytes);
           } catch { /* missing or incompatible detail keeps the accepted model */ }
           vertexShading[applied ? 'applied' : 'skipped'].push(id);
           models.set(id, model);

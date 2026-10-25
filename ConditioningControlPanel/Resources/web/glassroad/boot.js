@@ -789,6 +789,7 @@ async function boot() {
   showLoading('One last look', 0.97);
   await paintGap();
   gateScreen.warm(world.spirals && world.spirals.gates[0] ? world.spirals.gates[0].params : null);
+  if (qs.get('profileLoad') === '1') debug.readyGraphs = renderer.stats().compiledGraphs;
   showLoading('Ready to roll', 1);
   hud.setReady(true);
   bridge.ready();
