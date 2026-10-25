@@ -213,7 +213,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// probe; the constructor can still fail after it passes, and a caller about to drive the
         /// page through script needs to know about this control, not about the machine.
         /// </summary>
-        public bool HasEngine => _web is not null;
+        public bool HasEngine => _web is not null || ScriptInvoker != null;
+
+        // Native script boundary; tests supply a per-instance page adapter without opening a desktop.
+        internal Func<string, Task<string?>>? ScriptInvoker { get; set; }
+
+        /// <summary>Live pause from the Workshop switch (WebHostMedia.SetPausedAsync). Re-applied mutes honour it, so a
+        /// navigation while paused stays muted, as WPF's engine-level IsMuted does.</summary>
+        internal bool MediaPaused { get; set; }
 
         /// <summary>
         /// Runs JS in the current page and returns its result, or null when there is no engine.
@@ -228,8 +235,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public async Task<string?> InvokeScriptAsync(string javaScript)
         {
-            if (_web is null || string.IsNullOrEmpty(javaScript)) return null;
-            try { return await _web.InvokeScript(javaScript); }
+            if (string.IsNullOrEmpty(javaScript)) return null;
+            try
+            {
+                if (ScriptInvoker != null) return await ScriptInvoker(javaScript);
+                return _web == null ? null : await _web.InvokeScript(javaScript);
+            }
             catch (Exception ex)
             {
                 Log.Debug("WebHost: InvokeScript failed: {Error}", ex.Message);

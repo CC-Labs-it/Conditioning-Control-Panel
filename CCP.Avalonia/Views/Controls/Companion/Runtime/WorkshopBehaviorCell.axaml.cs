@@ -18,8 +18,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
     /// has no equivalent of, so it is folded into <see cref="SyncFromSettings"/>.</para>
     ///
     /// <para>What stays an event: the two shortcut pills (their real editor is MainWindow's
-    /// ChatShortcutCaptureDialog flow, which also re-arms Win32 hotkeys) and the browser pause
-    /// (WebView2). Those are host actions, not settings.</para>
+    /// ChatShortcutCaptureDialog flow, which also re-arms Win32 hotkeys). Browser pause forwards
+    /// to the shell's live Home browser, without changing saved settings.</para>
     /// </summary>
     public partial class WorkshopBehaviorCell : UserControl
     {
@@ -27,9 +27,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
 
         public event EventHandler? ChatShortcutRequested;
         public event EventHandler? CameraShortcutRequested;
-        /// <summary>Raised with the new IsChecked of the browser-pause switch. Not a setting: WPF
-        /// mutes and suspends the WebView2 live and persists nothing.</summary>
-        public event EventHandler<bool>? PauseBrowserChanged;
 
         public WorkshopBehaviorCell()
         {
@@ -48,7 +45,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             ChkVoiceLinesCompanion.IsCheckedChanged += ChkVoiceLines_Changed;
             ChkTubeMidnightGlass.IsCheckedChanged += ChkTubeMidnightGlass_Changed;
             ChkPauseBrowserCompanion.IsCheckedChanged +=
-                (_, _) => { if (!_isLoading) PauseBrowserChanged?.Invoke(this, ChkPauseBrowserCompanion.IsChecked == true); };
+                async (_, _) =>
+                {
+                    if (_isLoading) return;
+                    var paused = ChkPauseBrowserCompanion.IsChecked == true;
+                    if (TopLevel.GetTopLevel(this) is Windows.MainShellWindow shell)
+                        await shell.SetBrowserPausedFromWorkshopAsync(paused);
+                };
 
             SyncFromSettings();
         }
