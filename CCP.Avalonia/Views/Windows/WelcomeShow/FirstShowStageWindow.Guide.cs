@@ -3,6 +3,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Fx;
 using ConditioningControlPanel.Models;
@@ -40,6 +41,7 @@ internal sealed partial class FirstShowStageWindow
     private void BeginWelcome()
     {
         if (_main == null) { Close(); return; }
+        X11Overlay.SetInputRects(this, Array.Empty<PixelRect>(), 0);
         _guiding = true; _ending = false; _logo.Opacity = 0;
         if (_effects != null) { _stage.Children.Remove(_effects); _effects.Dispose(); _effects = null; }
         try

@@ -185,6 +185,24 @@ internal sealed class FirstShowEffects : Control, IDisposable
         }
         a.Frame = a.Media == null || !moving ? 0 : (int)(age / a.Media.Delay) % a.Media.Frames.Count;
     }
+    // Match Pop's circular hit predicate in local physical pixels, like BubbleOverlay's native regions.
+    internal PixelRect[] BubbleInputRects(double scale)
+    {
+        var rects = new List<PixelRect>();
+        if (_disposed || _time >= S.GatherAt) return rects.ToArray();
+        foreach (var a in _actors.Where(a => a.Bubble && !a.Gone))
+        {
+            double r = a.W * .52;
+            for (int y = Math.Max(0, (int)Math.Ceiling((a.Y - r) * scale)); y < Math.Min(H * scale, (a.Y + r) * scale); y++)
+            {
+                double dy = y / scale - a.Y, half = Math.Sqrt(Math.Max(0, r * r - dy * dy));
+                int left = Math.Max(0, (int)Math.Floor((a.X - half) * scale) + 1);
+                int right = Math.Min((int)(W * scale) - 1, (int)Math.Ceiling((a.X + half) * scale) - 1);
+                if (right >= left) rects.Add(new PixelRect(left, y, right - left + 1, 1));
+            }
+        }
+        return rects.ToArray();
+    }
     /// <summary>WPF Pop (:310): a click on a live bubble pops it.</summary>
     public void Pop(double x, double y)
     {

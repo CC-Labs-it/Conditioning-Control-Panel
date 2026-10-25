@@ -2376,6 +2376,8 @@
                         <Border Grid.Row="0" Background="{DynamicResource SurfaceBgBrush}" CornerRadius="10,10,0,0" Padding="20,15">
                             <Grid>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                <Button x:Name="BtnFirstShowReplay" Grid.Row="1" Content="{loc:Str first_show_replay}" Click="BtnFirstShowReplay_Click"
+                                        Theme="{StaticResource SecondaryButton}" HorizontalAlignment="Stretch" Margin="0,8,0,0"/>
                                 <!-- WPF MainWindow.xaml:2683 (nav rework): replay the current What moved card. -->
                                 <Button x:Name="BtnHelpWhatMoved" Grid.Row="2" Content="{loc:Str help_whatmoved}" Click="BtnWhatMovedReplay_Click"
                                         Theme="{StaticResource SecondaryButton}" FontSize="14"

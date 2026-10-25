@@ -66,6 +66,7 @@ public sealed class FirstShowStageTests
     [InlineData(true)]
     public Task PicturesThenWarningThenTheShow(bool bundled) => Run(async stage =>
     {
+        stage.Credit.Transitions = null; // test the target values; native fades are a manual check
         var pics = Enumerable.Range(0, 4).Select(i => ContentLocator.Resolve(Path.Combine("Resources", "web", "backroom", "stations", "slot", "fallback", $"gif{i}.webp"))).ToArray();
         stage.BundledPictures = () => pics;
         stage.FetchFeed = (_, _, _) => Task.FromResult<IReadOnlyList<FypAssetManifest.Entry>>(pics.Select(p => new FypAssetManifest.Entry { Url = p }).ToList());
@@ -78,8 +79,11 @@ public sealed class FirstShowStageTests
         Assert.Equal(Loc.Get("first_show_warning") + S.PanicLabel(CoreSettings.Current.PanicKey) + " " + Loc.Get("first_show_panicHint"), stage.SpeechText);
         stage.ChoiceButtons[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));   // "ready"
         Assert.True(stage.Playing);
+        Assert.Equal(bundled ? 0 : .75, stage.Credit.Opacity);
         t += S.FlashAt + .01; stage.Frame();
-        Assert.True(played.Count(p => p == "chip_pop.mp3") >= 2, string.Join(",", played));   // the beat's cue + a picture flash
+        Assert.True(played.Count(p => p == "chip_pop.mp3") >= 2, string.Join(",", played));
+        t += S.Length; stage.Frame();
+        Assert.Equal(0, stage.Credit.Opacity);   // the beat's cue + a picture flash
     });
 
     [Fact]
@@ -265,6 +269,151 @@ public sealed class FirstShowStageTests
             Dispatcher.UIThread.RunJobs();
             service.SaveImmediate(); CoreSettings.ServiceProvider = old;
         }
+    });
+
+    [Fact]
+    public Task DesktopEscapeStopsWithoutSpeechFocus() => Run(stage =>
+    {
+        stage.ReadDesktopInput = () => (new PixelPoint(0, 0), false, true);
+        stage.Frame();
+        Assert.False(FirstShowService.IsActive);
+        Assert.False(EmiDeskService.Instance.Window!.PresentationActive);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task OnlyLiveBubbleCirclesTakeInputAndAPressPopsThem() => Run(async stage =>
+    {
+        stage.BundledPictures = () => Enumerable.Range(0, 4).Select(i => ContentLocator.Resolve(Path.Combine("Resources", "web", "backroom", "stations", "slot", "fallback", $"gif{i}.webp"))).ToArray();
+        await stage.Bundled();
+        double t = 0; stage.Clock = () => t;
+        stage.Start();
+        stage.Frame();
+        Assert.Empty(stage.InputRects);
+        t = S.BubblesAt; stage.Frame();
+        Assert.NotEmpty(stage.InputRects);
+        var rows = stage.Effects!.BubbleInputRects(1);
+        var center = rows[rows.Length / 2];
+        var cues = new List<string>();
+        CoreSettings.Current.MasterVolume = 50;
+        stage.Audio.Play = (path, _, _) => { cues.Add(Path.GetFileName(path)); return () => { }; };
+        // The native region feeds the same routed press as a real platform window.
+        stage.MouseDown(new Point(center.X + center.Width / 2.0, center.Y), global::Avalonia.Input.MouseButton.Left);
+        stage.MouseUp(new Point(center.X + center.Width / 2.0, center.Y), global::Avalonia.Input.MouseButton.Left);
+        Assert.Empty(stage.InputRects);
+        Assert.Contains("Pop3.mp3", cues);
+        t += S.BubbleEvery; stage.Frame();
+        Assert.NotEmpty(stage.InputRects);
+        t = S.GatherAt; stage.Frame();
+        Assert.Empty(stage.InputRects);
+    });
+
+    [Fact]
+    public Task VoiceWaitsForSettlementAndStopsWithTheShow() => Run(stage =>
+    {
+        var voices = new List<string>(); int stops = 0;
+        CoreSettings.Current.MasterVolume = 50;
+        stage.Audio.Play = (path, volume, tag) =>
+        {
+            if (tag == "first-show-voice") { Assert.Equal(.5f, volume); Assert.True(File.Exists(path)); voices.Add(path); }
+            return () => stops++;
+        };
+        double t = S.GreetAfter + .1; stage.Clock = () => t;
+        stage.Frame();
+        t += .2; stage.Frame();
+        Assert.Single(voices);
+        stage.Frame(); Assert.Single(voices); // one line, not one sound per frame
+        Click(stage, 0); // choose: movement hides speech and delays its voice
+        int count = voices.Count;
+        stage.Frame(); Assert.Equal(count, voices.Count);
+        t += 1; stage.Frame(); t += .2; stage.Frame();
+        Assert.Equal(count + 1, voices.Count);
+        var cache = stage.Audio.VoiceCache;
+        FirstShowService.Stop();
+        Assert.True(stops >= 2);
+        Assert.False(Directory.Exists(cache));
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ReplayDoorsCloseTheirPanelBeforeOpeningTheShow() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var shell = new MainShellWindow();
+        var overlay = shell.FindControl<Border>("MainTutorialOverlay")!;
+        overlay.IsVisible = true;
+        int opened = 0;
+        shell.OpenWelcomeShow = owner => { Assert.Same(shell, owner); Assert.False(overlay.IsVisible); opened++; return true; };
+        shell.FindControl<Button>("BtnFirstShowReplay")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(1, opened);
+        var old = EmiBookWindow.ReplayShow;
+        var book = new EmiBookWindow();
+        try
+        {
+            EmiBookWindow.ReplayShow = () => { Assert.False(book.IsVisible); opened++; };
+            book.Show();
+            book.FindControl<Button>("BtnFirstShow")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(2, opened);
+        }
+        finally { EmiBookWindow.ReplayShow = old; book.Kill(); shell.RequestExit(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task AudioUsesModCuesIndependentVoiceAndHonorsSuppression() => Run(stage =>
+    {
+        var audio = stage.Audio;
+        var oldMod = CoreModArt.AudioOverridePathProvider;
+        var oldSuppressed = CoreAudio.IsOutputSuppressedProvider;
+        var path = Path.GetTempFileName();
+        var played = new List<(string Path, float Volume, string Tag)>();
+        int stopped = 0;
+        try
+        {
+            CoreSettings.Current.MasterVolume = 50;
+            CoreModArt.AudioOverridePathProvider = _ => path;
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            audio.Play = (p, v, tag) => { played.Add((p, v, tag)); return () => stopped++; };
+            audio.Speak("hello", "idle"); audio.Cue("pop");
+            Assert.Equal(0, stopped); // cue must not cut off the voice
+            Assert.Equal((path, .16f, "first-show-cue"), played[1]);
+            audio.Speak("hello", "celebration");
+            Assert.Equal(1, stopped); // replacement stops only the old voice
+            Assert.NotEqual(played[0].Path, played[2].Path); // mood is part of the cache key
+            CoreAudio.IsOutputSuppressedProvider = () => true;
+            audio.Speak("silent"); audio.Cue("pop");
+            Assert.Equal(3, played.Count);
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreSettings.Current.MasterVolume = 0;
+            audio.Speak("silent"); audio.Cue("pop");
+            Assert.Equal(3, played.Count);
+            FirstShowService.Stop();
+            Assert.Equal(3, stopped);
+        }
+        finally { CoreModArt.AudioOverridePathProvider = oldMod; CoreAudio.IsOutputSuppressedProvider = oldSuppressed; File.Delete(path); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task SpeechGesturesDecayInTheRealEmiTransform() => Run(stage =>
+    {
+        var emi = EmiDeskService.Instance.Window!;
+        var transform = (global::Avalonia.Media.TransformGroup)emi.FindControl<Grid>("BodyRoot")!.RenderTransform!;
+        var turn = transform.Children.OfType<global::Avalonia.Media.RotateTransform>().Single();
+        double t = S.GreetAfter + .1, spokeAt = -10;
+        stage.Audio.Play = (_, _, tag) => { if (tag == "first-show-voice") spokeAt = t; return () => { }; };
+        CoreSettings.Current.MasterVolume = 50;
+        stage.Clock = () => t; stage.Frame();
+        t += .2; stage.Frame();
+        Assert.True(spokeAt > 0);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        t += .1; stage.Frame();
+        Assert.Equal(Math.Sin(t * 1.5) * 1.6 + (1 - (t - spokeAt) / 1.4) * Math.Sin(t * 9), turn.Angle, 6);
+        t += 1.5; stage.Frame();
+        Assert.Equal(Math.Sin(t * 1.5) * 1.6, turn.Angle, 6);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        stage.Frame(); Assert.Equal(0, turn.Angle);
+        return Task.CompletedTask;
     });
 
     private static void Click(FirstShowStageWindow stage, int i) => stage.ChoiceButtons[i].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

@@ -8,8 +8,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 /// player's real desk EMI. Door: the first-run wizard's far side (<see cref="MainShellWindow.OfferWelcomeShowAfterFirstRun"/>,
 /// WPF MainWindow.xaml.cs:546-553); panic ("first-show") and the shell's close stop it. New rule: a stage that cannot be
 /// click-through would eat every desktop click (native Wayland), so the show refuses there before EMI is borrowed.
-/// ponytail: WPF's Help replay (MainWindow.xaml.cs:1481), EMI's book replay (EmiBookWindow.xaml.cs:234) and the DEBUG
-/// --first-show-preview launch are not wired yet.</summary>
+/// Help and book replay use this same disposable host. ponytail: the WPF DEBUG preview launch is not ported.</summary>
 internal static class FirstShowService
 {
     private static FirstShowStageWindow? _window;

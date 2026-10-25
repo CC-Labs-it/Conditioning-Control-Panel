@@ -7,6 +7,8 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Animation;
+using ConditioningControlPanel.Services.Safety;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.Primitives;
@@ -35,9 +37,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 /// effects over the primary screen. The stage is transparent and click-through (<see cref="X11Overlay"/>); EMI is
 /// the real <see cref="EmiDeskWindow"/> presenting; her speech card is its own window so its buttons stay
 /// clickable (WPF :30). Timings are <see cref="FirstShowScript"/>'s; the guide after the verdict is the Guide
-/// partial. ponytail: bubble pops need input rects on the click-through stage (WPF's layered canvas took the click).</summary>
+/// partial. Only live bubble circles intercept desktop clicks; the rest of the stage stays passive.</summary>
 internal sealed partial class FirstShowStageWindow : Window
 {
+    private readonly Border _credit = new()
+    {
+        IsHitTestVisible = false, Opacity = 0, CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 2),
+        Background = new SolidColorBrush(Color.FromArgb(0x99, 0x10, 0x10, 0x14)),
+        Child = new TextBlock { Text = "via Scrolller", FontSize = 11, Foreground = Brushes.White }
+    };
+    internal Border Credit => _credit;
     private readonly Canvas _stage = new() { Background = null };
     private EmiDeskWindow? _emi;
     private readonly Border _bubble = new()
@@ -69,8 +78,13 @@ internal sealed partial class FirstShowStageWindow : Window
     private readonly bool _redirected;
     private FirstShowEffects? _effects;
     private CancellationTokenSource? _load;
+    internal Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadDesktopInput = X11Pointer.Read;
+    private bool _speechPending;
+    private string _pendingSpeech = "";
+    internal PixelRect[] InputRects { get; private set; } = Array.Empty<PixelRect>();
+    internal FirstShowEffects? Effects => _effects;
     private bool _closed, _greeted, _centered, _playing, _ending, _serious, _moving, _bundled;
-    private double _last, _moveAt, _showStart = double.NaN, _showFrozen, _settledAt, _x, _y;
+    private double _last, _moveAt, _spokeAt = -10, _showStart = double.NaN, _showFrozen, _settledAt, _x, _y;
     private int _beat = -1;
     private static readonly HttpClient Http = new(UrlSafety.CreateGuardedHandler()) { Timeout = TimeSpan.FromSeconds(20) };
     /// <summary>Seconds since the stage was built. Tests step it (P08).</summary>
@@ -117,6 +131,8 @@ internal sealed partial class FirstShowStageWindow : Window
         catch (Exception ex) { Log.Debug("First show logo: {Error}", ex.Message); }
         _logo.RenderTransformOrigin = new RelativePoint(.5, .5, RelativeUnit.Relative);
         _stage.Children.Add(_logo);
+        _credit.Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(GentleVisuals.FadeMs(200)) } };
+        Canvas.SetLeft(_credit, 16); Canvas.SetBottom(_credit, 12); _stage.Children.Add(_credit);
         _loadingPanel.Children.Add(_loadingBar); _loadingPanel.Children.Add(_loadingStatus);
         _bubbleContent.Children.Add(_speech); _bubbleContent.Children.Add(_loadingPanel); _bubbleContent.Children.Add(_choices);
         // WPF :327-338: a line taller than the screen scrolls; normal lines show no scroll chrome (Auto).
@@ -130,7 +146,9 @@ internal sealed partial class FirstShowStageWindow : Window
         // P51: Tunnel, and only the stop keys, so a focused choice button cannot swallow them.
         AddHandler(KeyDownEvent, OnStopKey, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
         _speechWindow.AddHandler(KeyDownEvent, OnStopKey, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
-        _stage.PointerPressed += (_, e) => { if (_playing && ShowTime < S.GatherAt) _effects?.Pop(e.GetPosition(_stage).X, e.GetPosition(_stage).Y); };
+        _stage.PointerPressed += (_, e) => { if (e.GetCurrentPoint(_stage).Properties.IsLeftButtonPressed && _playing && ShowTime < S.GatherAt) {
+            _effects?.Pop(e.GetPosition(_stage).X, e.GetPosition(_stage).Y); UpdateBubbleInput();
+        } };
     }
     /// <summary>Make the stage input-transparent and passive, then show it. False when the platform refuses.</summary>
     internal bool Launch()
@@ -157,7 +175,7 @@ internal sealed partial class FirstShowStageWindow : Window
     internal void BeginEntrance(EmiDeskWindow emi) { _emi = emi; emi.PresentAt(ToScreen(_x, _y), 0, 0, "idle", "^_^"); emi.RunPresentationEntrance(); }
     private void Say(string text, bool serious = false)
     {
-        _loadingPanel.IsVisible = false; _serious = serious; _speech.Inlines?.Clear(); _speech.Text = text;
+        _pendingSpeech = text; _speechPending = true; _loadingPanel.IsVisible = false; _serious = serious; _speech.Inlines?.Clear(); _speech.Text = text;
         if (_speechWindow.IsVisible) _speechWindow.Hide();
     }
     private void Ask(string text, bool serious = false) { _choices.Children.Clear(); Say(text, serious); }
@@ -290,17 +308,20 @@ internal sealed partial class FirstShowStageWindow : Window
     {
         Ask(Text("warning"), true);
         SetInlines(new Run(Text("warning")), new LineBreak(), new LineBreak(), PanicRun(), new Run(" " + Text("panicHint")));
+        _pendingSpeech = Text("warning") + "\n\n" + S.PanicLabel(_panic) + " " + Text("panicHint");
         AddButton(Text("ready"), Start); AddButton(Text("later"), Close);
     }
     internal void Start()
     {
         _choices.Children.Clear(); _serious = false; _playing = true; _ending = false; _beat = -1;
+        _credit.Opacity = !_bundled && _files.Count > 0 ? .75 : 0;
         _stage.Background = Brushes.Transparent; _showStart = Clock(); AddButton(Text("stop"), Close);
     }
     // WPF Frame :239-318.
     internal void Frame()
     {
         if (_closed) return;
+        if (ReadDesktopInput()?.Escape == true) { Close(); return; }
         var now = Clock(); var dt = Math.Min(.05, now - _last); _last = now;
         bool arriving = _emi?.PresentationArriving ?? true;
         if (!_greeted && now > S.GreetAfter && !arriving) { _greeted = true; Greeting(); }
@@ -308,6 +329,7 @@ internal sealed partial class FirstShowStageWindow : Window
         if (_playing)
         {
             _effects?.Tick(time, dt);
+            UpdateBubbleInput();
             while (_beat + 1 < S.Beats.Length && time >= S.Beats[_beat + 1])
             {
                 _beat++;
@@ -323,7 +345,7 @@ internal sealed partial class FirstShowStageWindow : Window
             if (time >= S.Length)
             {
                 _playing = false; _ending = true; _showFrozen = time; _showStart = double.NaN; _stage.Background = null;
-                AskVerdict();
+                _credit.Opacity = 0; UpdateBubbleInput(); AskVerdict();
             }
         }
         var level = CoreSettings.Current?.MotionLevel ?? MotionLevel.Full;
@@ -354,8 +376,9 @@ internal sealed partial class FirstShowStageWindow : Window
         _moving = arriving || Math.Abs(_x - previous.X) + Math.Abs(_y - previous.Y) > .3 || (_centered && move < 1)
             || (!_guiding && (_playing || _ending) && time >= S.StepAsideAt && time < S.StepAsideAt + S.StepAsideSeconds);
         if (_moving) _settledAt = now;
-        var bob = (Math.Sin(now * 2.5) * 3 + Math.Sin(now * 1.1) * 2) * m;
-        var turn = Math.Sin(now * 1.5) * 1.6 * m;
+        var speech = Math.Max(0, 1 - (now - _spokeAt) / 1.4);
+        var bob = (Math.Sin(now * 2.5) * 3 + Math.Sin(now * 1.1) * 2 + speech * Math.Sin(now * 16) * 2) * m;
+        var turn = (Math.Sin(now * 1.5) * 1.6 + speech * Math.Sin(now * 9)) * m;
         _emi?.PresentAt(ToScreen(_x, _y), bob, turn, S.Pose(_playing, _ending, time, m), S.Face(_serious, m, now));
         if (!_guiding && time >= S.RevealAt && (_playing || _ending))
         {
@@ -364,6 +387,11 @@ internal sealed partial class FirstShowStageWindow : Window
             _logo.RenderTransform = new ScaleTransform(.82 + .18 * reveal, .82 + .18 * reveal);
         }
         Place();
+    }
+    private void UpdateBubbleInput()
+    {
+        InputRects = _playing && _effects != null ? _effects.BubbleInputRects(_scale) : Array.Empty<PixelRect>();
+        X11Overlay.SetInputRects(this, InputRects, InputRects.Length);
     }
     private ShowSize BodySize() => _emi == null ? new ShowSize(0, 0) : new ShowSize(_emi.BodyWidth, _emi.BodyWidth * EmiDeskWindow.BodyAspect);
     private RectD SafeBounds()
@@ -394,6 +422,11 @@ internal sealed partial class FirstShowStageWindow : Window
         Canvas.SetLeft(_logo, logo.Left); Canvas.SetTop(_logo, logo.Top);
         if (!_greeted) return;
         if (_moving || Clock() - _settledAt < .16) { if (_speechWindow.IsVisible) _speechWindow.Hide(); return; }
+        if (_speechPending)
+        {
+            _speechPending = false; _spokeAt = Clock();
+            _audio.Speak(_pendingSpeech, _serious ? "idle" : "celebration");
+        }
         var size = BodySize(); var speech = SpeechSize();
         var body = new RectD(_x - size.Width / 2, _y - size.Height / 2, size.Width, size.Height);
         var rect = FirstShowLayout.Speech(SafeBounds(), speech, body, _guiding ? TargetRect : _logo.Opacity > 0 ? logo : FirstShowLayout.Empty, new Vec2(body.Right + 18, body.Top));
