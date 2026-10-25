@@ -77,7 +77,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void StopForPanic() { VoiceOpacity = null; CloseAll(); }
 
         /// <summary>The painted alpha: the slider through WPF's #722 curve.</summary>
-        internal static double PaintedOpacity => VoiceOpacity ?? SpiralFrames.Paint(CoreSettings.Current.SpiralOpacity / 100.0);
+        internal static double PaintedOpacity => SpiralFrames.Paint(VoiceOpacity ?? CoreSettings.Current.SpiralOpacity / 100.0);
 
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
         public static void Refresh(Visual host)

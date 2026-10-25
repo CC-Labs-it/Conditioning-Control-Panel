@@ -101,13 +101,17 @@ public sealed class VoiceCommandsTests
     {
         var help = shell.VoiceCmds.HelpLine();
         Assert.Contains("take over", help);
-        Assert.DoesNotContain("spiral", help);
-        Assert.DoesNotContain("quiz", help);
+        Assert.Contains("the spiral", help);   // runnable since fin4-shell-she-listening
+        // quiz runs only once App wires the pop-quiz host (process-global), so follow the runnable set.
+        Assert.Equal(shell.VoiceCmds.Available.Any(i => i.Name == "quiz_once"), help.Contains("quiz me"));
+        Assert.DoesNotContain("deeper", help);   // BrainDrain audio not on this head
         shell.ShowTab("shelistening");
         Dispatcher.UIThread.RunJobs();
         var rows = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(shell.SheListeningPage!)
             .OfType<ConditioningControlPanel.Avalonia.Controls.IconLabel>().Where(t => t.Tag is string g && g.StartsWith("voice:")).ToList();
-        Assert.False(rows.Single(t => t.Text!.Contains("Spiral")).IsVisible);
+        Assert.True(rows.Single(t => t.Text!.Contains("Spiral")).IsVisible);
+        Assert.False(rows.Single(t => t.Text!.Contains("Go deeper")).IsVisible);
+        Assert.False(rows.Single(t => t.Text!.Contains("Keyword triggers")).IsVisible);
         Assert.True(rows.Single(t => t.Text!.Contains("Takeover")).IsVisible);
         var toys = rows.Single(t => t.Text!.Contains("Quick toys"));   // freeze runs here only if its seam is seeded
         Assert.Equal(shell.VoiceCmds.Available.Any(i => i.Name == "freeze_once"), toys.IsVisible);

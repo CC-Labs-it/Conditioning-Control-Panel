@@ -91,7 +91,7 @@ public sealed class ListeningIntentTests
             s.SpiralOpacity = 27; s.PinkFilterOpacity = 12;
             var host = shell.VoiceCmds.Host;
             host.ActionFor("spiral_on")!(); host.ActionFor("pink_on")!();
-            Assert.Equal(0.27, SpiralOverlay.PaintedOpacity);
+            Assert.Equal(0.027, SpiralOverlay.PaintedOpacity, 6);   // WPF ApplySpiralOpacityDirect -> SpiralPaint curve (OverlayService.cs:1388)
             Assert.Equal(0.4, PinkFilterOverlay.VoiceOpacity);
             SpiralOverlay.Refresh(shell); PinkFilterOverlay.Refresh(shell);
             Assert.Equal(0.27, SpiralOverlay.VoiceOpacity);
@@ -133,9 +133,14 @@ public sealed class ListeningIntentTests
             shell.Tube!.GigglePriority("A voiced line", playSound: true, aiGenerated: false,
                 phraseAudioPath: clip, barkVoice: true);
             Dispatcher.UIThread.RunJobs();
+            shell.ShowTab("companion"); Dispatcher.UIThread.RunJobs();
+            var hero = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(shell)
+                .OfType<global::ConditioningControlPanel.Avalonia.Views.Controls.Companion.CompanionHeroCard>().Single().ViewModel!;
+            Assert.False(hero.IsMuted);
             var beforeMute = stopped;
             shell.VoiceCmds.Host.ActionFor("mute")!();
             Dispatcher.UIThread.RunJobs();
+            Assert.True(hero.IsMuted);   // the hero's mute chip re-reads AvatarMuted
             Assert.Equal(beforeMute + 1, stopped);
             Assert.True(shell.Tube.IsMuted);
             shell.ShowTab("appsettings"); Dispatcher.UIThread.RunJobs();

@@ -160,6 +160,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             s.AvatarMuted = muted;
             if (muted) _avatarTubeWindow?.StopVoiceLineAudio();
             SetVoiceMasterVolume(muted ? 0 : _voicePreMuteVolume > 0 ? _voicePreMuteVolume : 70);
+            SyncHero();   // WPF SyncQuickControlsUI -> CompanionRoom?.SyncHero() (MainWindow.Patreon.cs:2182)
         }
 
         private void SetVoiceMasterVolume(int value)
