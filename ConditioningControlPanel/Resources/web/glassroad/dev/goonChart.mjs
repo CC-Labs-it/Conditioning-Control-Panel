@@ -4,7 +4,7 @@ export const GOON_AUDIO = '/private-audio/goonworks/remix-v4.mp3';
 export const GOON_SHA256 = '9c78cf118fe098b52fb2b1de1caf49fdc986f9ab31b15f9c5ca12ac45cdeb41f';
 
 const key = text => String(text).toLowerCase().replace(/[^a-z0-9]/g, '');
-export function goonChart(beat, aligned, arrangement, durationS, envelope = {}) {
+export function goonChart(beat, aligned, arrangement, durationS, envelope = {}, events = []) {
   const bpm = Number(arrangement.match(/\bBPM\s*=\s*([\d.]+)/)?.[1]);
   const downbeatS = Number(arrangement.match(/\bBAR0\s*=\s*([\d.]+)/)?.[1]);
   if (!Number.isFinite(durationS) || !(durationS > 0) || !(bpm > 0) || !Number.isFinite(downbeatS)
@@ -37,7 +37,7 @@ export function goonChart(beat, aligned, arrangement, durationS, envelope = {}) 
   const drops = [...new Set([...source.matchAll(/swell\(([\d.]+)\s*,/g)].map(m => Number(m[1])))];
   for (const startS of drops) if (startS > 0 && startS < durationS) triggers.push({ kind: 'drop', startS });
   return { id: 'goonworks-remix-v4', title: 'Keep Watching - remix v4', version: 1, audio: GOON_AUDIO,
-    durationS, bpm, downbeatS, lines, words, triggers: triggers.sort((a, b) => a.startS - b.startS),
+    durationS, bpm, downbeatS, lines, words, events, triggers: triggers.sort((a, b) => a.startS - b.startS),
     sections: [{ id: 'recording', startS: 0, endS: durationS, mood: 'groove', energy: .7, loop: .85 }],
     energy: envelope.energy || {}, hits: envelope.hits || {} };
 }

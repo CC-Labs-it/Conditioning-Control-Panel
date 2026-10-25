@@ -71,7 +71,7 @@ export function boudoirChart(beat, aligned, arrangement, events, durationS, enve
       triggers.push({ kind: 'drop', startS: event.startS });
   }
   return { id: 'boudoir-remix-v5', title: 'Think Pink - remix v5', version: 1, audio: BOUDOIR_AUDIO,
-    durationS, bpm: beat.bpm, downbeatS: beat.beat0, lines, words,
+    durationS, bpm: beat.bpm, downbeatS: beat.beat0, lines, words, events,
     triggers: triggers.sort((a, b) => a.startS - b.startS), sections: sectionsFrom(arrangement, durationS, aligned[0].s),
     energy: envelope.energy || {}, hits: envelope.hits || {} };
 }

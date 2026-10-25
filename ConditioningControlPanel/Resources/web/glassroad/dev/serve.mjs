@@ -11,6 +11,7 @@ import { KEEP_CHART, lockedChunks, lockedChart } from './lockedChart.mjs';
 import { GOON_CHART, GOON_AUDIO, GOON_SHA256, goonChart } from './goonChart.mjs';
 import { BOUDOIR_CHART, BOUDOIR_AUDIO, BOUDOIR_SHA256, boudoirChart, remixEvents } from './boudoirChart.mjs';
 import { verifiedRecording, sendRecording } from './privateRecording.mjs';
+import { withPrivateCues } from './cueFiles.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 // the app serves Resources/web whole, so glassroad's ../../arcademy imports (the Loom) resolve to /arcademy/
@@ -58,14 +59,15 @@ async function readGoonRecording() {
 async function readGoonChart() {
   if (!goonChartBody) goonChartBody = (async () => {
     const recording = await readGoonRecording(), dir = join(PRIVATE, 'tracks-2026-10-24/goon/remix/work');
-    const [beat, words, arrangement] = await Promise.all([
+    const [beat, words, arrangement, events] = await Promise.all([
       readFile(join(dir, 'beat.json'), 'utf8'), readFile(join(dir, 'words.json'), 'utf8'), readFile(join(dir, 'remix.py'), 'utf8'),
+      readFile(join(dir, '../out/keep-watching_remix_v4_events.csv'), 'utf8'),
     ]);
     const { stdout } = await promisify(execFile)('ffmpeg', ['-v', 'error', '-threads', '2',
       '-i', recording.file, '-vn', '-ac', '1', '-ar', '8000', '-threads', '2', '-f', 'f32le', 'pipe:1'],
     { encoding: 'buffer', maxBuffer: 16 * 1024 * 1024, windowsHide: true });
     const pcm = new Float32Array(stdout.buffer.slice(stdout.byteOffset, stdout.byteOffset + stdout.byteLength));
-    return JSON.stringify(goonChart(JSON.parse(beat), JSON.parse(words), arrangement, pcm.length / 8000, mixEnvelope(pcm)));
+    return JSON.stringify(goonChart(JSON.parse(beat), JSON.parse(words), arrangement, pcm.length / 8000, mixEnvelope(pcm), remixEvents(events)));
   })().catch(e => { goonChartBody = null; throw e; });
   return goonChartBody;
 }
@@ -117,12 +119,22 @@ const MIME = {
 const server = createServer(async (req, res) => {
   const head = { 'Cache-Control': 'no-store', 'Cross-Origin-Opener-Policy': 'same-origin' };
   const pathname = new URL(req.url, 'http://local').pathname;
+  if (pathname === '/private-audio/pink-road/chart.json') {
+    if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405, head); res.end(); return; }
+    try {
+      const chart = JSON.parse(await readFile(join(PRIVATE, 'pink-road/chart.json'), 'utf8'));
+      const body = JSON.stringify(await withPrivateCues(PRIVATE, 'threshold', chart));
+      res.writeHead(200, { ...head, 'Content-Type': 'application/json' });
+      res.end(req.method === 'HEAD' ? undefined : body);
+    } catch { res.writeHead(503, head); res.end('Private recording unavailable'); }
+    return;
+  }
   if (pathname === BOUDOIR_CHART || pathname === BOUDOIR_AUDIO) {
     if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405, head); res.end(); return; }
     try {
       if (pathname === BOUDOIR_AUDIO) sendRecording(req, res, (await readBoudoirRecording()).bytes, head);
       else {
-        const body = await readBoudoirChart();
+        const body = JSON.stringify(await withPrivateCues(PRIVATE, 'boudoir', JSON.parse(await readBoudoirChart())));
         res.writeHead(200, { ...head, 'Content-Type': 'application/json' });
         res.end(req.method === 'HEAD' ? undefined : body);
       }
@@ -134,7 +146,7 @@ const server = createServer(async (req, res) => {
     try {
       if (pathname === GOON_AUDIO) sendRecording(req, res, (await readGoonRecording()).bytes, head);
       else {
-        const body = await readGoonChart();
+        const body = JSON.stringify(await withPrivateCues(PRIVATE, 'goonworks', JSON.parse(await readGoonChart())));
         res.writeHead(200, { ...head, 'Content-Type': 'application/json' });
         res.end(req.method === 'HEAD' ? undefined : body);
       }
@@ -150,7 +162,7 @@ const server = createServer(async (req, res) => {
   if (new URL(req.url, 'http://local').pathname === MAINFRAME_CHART) {
     if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405, head); res.end(); return; }
     try {
-      const body = await readMainframeChart();
+      const body = JSON.stringify(await withPrivateCues(PRIVATE, 'mainframe', JSON.parse(await readMainframeChart())));
       res.writeHead(200, { ...head, 'Content-Type': 'application/json' });
       res.end(req.method === 'HEAD' ? undefined : body);
     } catch { res.writeHead(503, head); res.end('Private Mainframe recording unavailable'); }

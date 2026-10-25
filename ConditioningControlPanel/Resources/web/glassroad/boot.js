@@ -65,6 +65,7 @@ import { createHud } from './hud/hud.js';
 import { createDirectionWarning } from './hud/direction.js';
 import { createWordRun } from './sim/words.js';
 import { createAirWordRun, bindAirWords } from './sim/airWords.js';
+import { createSongCueRun } from './sim/songCues.js';
 import { AERIAL_REVISION } from './track/aerial.js';
 import { createWordCount } from './hud/words.js';
 import { openFeelSheet } from './hud/feelSheet.js';
@@ -318,6 +319,8 @@ async function boot(course, options, lifetime, isCurrent) {
   const NO_WORDS = [];
   let words = null;
   let airWords = null, airSong = null;
+  let songCues = null;
+  lifetime.defer(() => songCues?.dispose());
   let state = 'boot', paused = false, finishAt = 0, result = null, rumbleT = 0, rumbleSent = 0, botT = 0;
   let online = null, lobbyUi = null;
   let songToken = 0, pickedSong = shared.pickedSong;
@@ -383,6 +386,8 @@ async function boot(course, options, lifetime, isCurrent) {
   Object.defineProperty(debug, 'cardMedia', { get: () => world.media?.stats() || null });
   Object.defineProperty(debug, 'songGates', { get: () => world.phraseGates.stats });
   Object.defineProperty(debug, 'airWords', { get: () => world.airWords?.stats || null });
+  Object.defineProperty(debug, 'songCues', { get: () => ({ total: songCues?.cues.length || 0,
+    live: songCues?.live.map(r => ({ id: r.id, kind: r.kind, state: r.state, alpha: r.alpha })) || [] }) });
   debug.aerials = track.aerials;
   bus.on('phrase-gate', e => {
     if (!e.song || !words) return;
@@ -583,6 +588,7 @@ async function boot(course, options, lifetime, isCurrent) {
   /** A word run for the playing song (a new song builds one, the same song resets it); none without words. */
   function armWords() {
     const song = audio.music && audio.music.song;
+    songCues?.dispose(); songCues = song ? createSongCueRun(song, track) : null;
     if (online) { airWords?.reset(); airWords = null; bindAirWords(P.st, null); }
     else if (!airWords || airSong !== song) {
       airWords?.reset(); airSong = song;
@@ -637,7 +643,7 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     } finally { if (my === songToken) debug.songLoading = false; }
   }
-  function stopSong() { songToken++; debug.songLoading = false; if (audio.music) audio.music.stop(); words = null; airWords?.reset(); wordCount.show(false); }
+  function stopSong() { songToken++; debug.songLoading = false; if (audio.music) audio.music.stop(); words = null; airWords?.reset(); songCues?.dispose(); songCues = null; wordCount.show(false); }
   // Unlock and decode silently behind the cover. Only the race schedules a music voice.
   async function menuSong() {
     if (!lifetime.alive || !['boot', 'menu'].includes(state) || debug.songLoading) return;
@@ -1117,6 +1123,7 @@ async function boot(course, options, lifetime, isCurrent) {
     const sc = scanClock(inRace && !online ? music : null, racers.clockS);
     if (BOT) debug.scan = { hits: scan.hits, ready: scan.ready, timeS: sc.timeS };
     const pv = P.view;
+    const cueView = songCues?.update(songS, pv, { paused: frozen, gentle });
     const wordLive = words && song ? words.update(songS,
       { s: pv[S.s], lat: pv[S.lateral], speedMps: Math.max(0, pv[S.speedPct]) * feel.get('speed.topMps') }) : NO_WORDS;
     if (words) {
@@ -1146,6 +1153,7 @@ async function boot(course, options, lifetime, isCurrent) {
     world.update({ kart: P.view, karts: kartViews, fx: viewFx, timeS: renderTime, beat: clock.beat,
       raceTimeS: racers.clockS, sectionIdx: viewSection, items: iv, mode, camera: cam.camera, paused, song, songS, audioReactive, words: wordLive, beatSong,
       airWords: inRace && !online ? airWords : null,
+      songCues: cueView?.live || NO_WORDS,
       scanTimeS: sc.timeS, scanBpm: sc.bpm, scanReady: scan.ready, perfumeReady: perfume.ready });
     if (BOT && song && world.musicRoad) {                         //    dev only: the boot check reads the music road
       const m = world.musicRoad.frame;
