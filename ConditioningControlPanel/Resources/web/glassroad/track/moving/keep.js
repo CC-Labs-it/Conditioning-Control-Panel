@@ -8,9 +8,9 @@ export function movingStations(track) {
     ['tower-bridge', 25, 'piston', 1],
     ['east-battlement', 35, 'slider', -1],
     ['crown-walk', 35, 'piston', -1],
-    ['crown-walk', 70, 'slider', 1],
+    ['north-approach', 220, 'slider', 1],
     ['outer-rampart', 35, 'piston', 1],
-    ['outer-rampart', 80, 'slider', -1],
+    ['outer-rampart', 106, 'slider', -1],
   ];
   const traps = stations.map(([name, ds, kind, side], i) => {
     const s = landmark(name).s0 + ds, frame = track.frameAt(s);
