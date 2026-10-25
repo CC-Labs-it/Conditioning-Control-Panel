@@ -163,9 +163,12 @@ namespace ConditioningControlPanel.Avalonia
         }
 
         // WPF App.xaml.cs:3172: false before the avatar exists leaves the phase retryable.
-        internal static Services.Descent.DescentCountdownService CreateDescentCountdown() => new()
+        // findAvatar is a test seam only: Application.ApplicationLifetime cannot be set after init,
+        // so a headless test cannot make AvatarTubeWindow.Live non-null.
+        internal static Services.Descent.DescentCountdownService CreateDescentCountdown(
+            Func<Views.AvatarTube.AvatarTubeWindow?>? findAvatar = null) => new()
         {
-            Speaker = line => SpeakCountdownLine(line, Views.AvatarTube.AvatarTubeWindow.Live),
+            Speaker = line => SpeakCountdownLine(line, (findAvatar ?? (() => Views.AvatarTube.AvatarTubeWindow.Live))()),
         };
 
         internal static bool SpeakCountdownLine(string line, Views.AvatarTube.AvatarTubeWindow? avatar)

@@ -45,8 +45,10 @@ public sealed class StartupServiceWiringTests
             AppBuilder.Configure<App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
-        AvatarTubeWindow? tube = null;
-        using var countdown = App.CreateDescentCountdown();
+        AvatarTubeWindow? tube = null, live = null;
+        // The finder stands in for AvatarTubeWindow.Live: a headless test cannot install a desktop
+        // lifetime (Application.ApplicationLifetime is locked after init), so Live is always null here.
+        using var countdown = App.CreateDescentCountdown(() => live);
         try
         {
             Assert.NotNull(countdown.Speaker);
@@ -54,9 +56,11 @@ public sealed class StartupServiceWiringTests
             tube = new AvatarTubeWindow();
             tube.Show();
             Dispatcher.UIThread.RunJobs();
-            Assert.True(App.SpeakCountdownLine("startup scripted line", tube));
+            live = tube;
+            Assert.True(countdown.Speaker("startup scripted line"));
             Assert.Contains("startup scripted line", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
             tube.Close();
+            live = null;
             Assert.False(countdown.Speaker("gone"));
         }
         finally { tube?.Close(); }
