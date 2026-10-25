@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///
     /// ponytail: not on this head yet - pack cards (the section is hidden in WPF too), video thumbnails (WPF uses the
     /// Windows shell thumbnailer; videos draw the 🎬 placeholder), BtnCreatorDiscord /
-    /// PacksScrollViewer wheel-to-pan and the pack-card sheen (pack cards only).
+    /// PacksScrollViewer wheel-to-pan. Pack-card hover FX is wired on the existing dormant template.
     /// </summary>
     public partial class AssetsTabView : UserControl
     {
@@ -85,6 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Confirm = (title, msg) => MessageDialog.ConfirmAsync((TopLevel.GetTopLevel(this) as Window)!, title, msg);
             Inform = (title, msg) => MessageDialog.ShowAsync((TopLevel.GetTopLevel(this) as Window)!, title, msg);
             IsVisibleChanged(this);
+            InitializePackCardFx();
             BtnPickAssetsFolder.Click += BtnPickAssetsFolder_Click;
             InitializeRemoteMediaPicker();   // AssetsTabView.MediaPicker.cs; re-syncs on every show
         }
@@ -93,7 +94,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             => view.PropertyChanged += (_, e) =>
             {
                 // MainWindow.AssetsFx.cs:OnAssetsTabVisibilityChanged: hidden stops the motion.
-                if (e.Property == IsVisibleProperty && !view.IsVisible) view.StopMediaLogPulse(resetOpacity: true);
+                if (e.Property == IsVisibleProperty && !view.IsVisible)
+                {
+                    view.StopMediaLogPulse(resetOpacity: true);
+                    view.DetachPackCardSheen();
+                }
                 if (e.Property == IsVisibleProperty && view.IsVisible) view.PaintAssetsFolder();
             };
 
@@ -678,12 +683,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private async void BtnDeleteAssetPreset_Click(object? sender, RoutedEventArgs e) => await DeleteAssetPresetAsync();
 
         // ---- FX (MainWindow.AssetsFx.cs) -----------------------------------------------------
-
-        private static bool MotionAllowed()
-        {
-            try { return AmbientFxCanvas.Env.AllowTransitions; }
-            catch { return true; }
-        }
 
         /// <summary>AssetsFx OnAssetTreeRowHover: a 3 px, 130 ms ease-out slide.</summary>
         private void AssetTreeRow_PointerEntered(object? sender, PointerEventArgs e) => NudgeRow(sender as Control, true);

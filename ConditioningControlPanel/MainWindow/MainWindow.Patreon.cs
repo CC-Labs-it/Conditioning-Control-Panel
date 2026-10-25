@@ -2162,20 +2162,9 @@ namespace ConditioningControlPanel
                 var webView = GetBrowserWebView();
                 if (webView?.CoreWebView2 != null)
                 {
-                    if (isPaused)
-                    {
-                        webView.CoreWebView2.IsMuted = true;
-                        await webView.CoreWebView2.ExecuteScriptAsync(@"
-                            document.querySelectorAll('audio, video').forEach(el => el.pause());
-                        ");
-                    }
-                    else
-                    {
-                        webView.CoreWebView2.IsMuted = false;
-                        await webView.CoreWebView2.ExecuteScriptAsync(@"
-                            document.querySelectorAll('audio, video').forEach(el => el.play());
-                        ");
-                    }
+                    webView.CoreWebView2.IsMuted = isPaused;
+                    await webView.CoreWebView2.ExecuteScriptAsync(
+                        Services.BrowserMediaPlaybackScript.ForPaused(isPaused));
                 }
             }
             catch (Exception ex)

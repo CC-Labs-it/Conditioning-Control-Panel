@@ -13,6 +13,7 @@
 using System;
 using System.Linq;
 using Avalonia.Controls;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Models;
@@ -182,6 +183,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeModSelector();
             LoadLogo();   // WPF MainWindow.xaml.cs:3127
             RefreshThemeAwareElements();
+
+            // WPF ApplyActiveModChange: restore only an explicit pick remembered in this mod.
+            // A restore keeps custom prompts intact and does not record a new pick.
+            try { PersonalityService.Shared.RestoreForActiveMod(); }
+            catch (Exception ex) { Log.Warning(ex, "Mod switch: personality restore failed"); }
+            foreach (var personality in this.GetLogicalDescendants().OfType<Controls.Companion.MakeHerYoursView>())
+                personality.ViewModel.Sync();
 
             Log.Information("Mod changed to {ModId}", mods.ActiveModId);
         }

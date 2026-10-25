@@ -83,7 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         public int TeaseTier { get => GetValue(TeaseTierProperty); set => SetValue(TeaseTierProperty, value); }
 
         public event EventHandler<RoutedEventArgs> Click { add => AddHandler(ClickEvent, value); remove => RemoveHandler(ClickEvent, value); }
-        /// <summary>Raised on right-click so the dashboard can quick-toggle the feature without opening its popup.</summary>
+        /// <summary>Raised by the toggle gesture (right-click by default; inverted on dashboard toggle tiles).</summary>
         public event EventHandler<RoutedEventArgs> ToggleRequested { add => AddHandler(ToggleRequestedEvent, value); remove => RemoveHandler(ToggleRequestedEvent, value); }
 
         private readonly Border _rootBorder, _imgIconHost, _glyphHost, _rimLight, _activeBorder, _lockedOverlay, _tierBadgeHost;
