@@ -2,7 +2,7 @@
  * Left stick steer (dead zone rescaled, never inverted), RT throttle, LT brake, A hop and drift,
  * Start pause (and only pause). rumble() is skipped by the caller under Gentle.
  * B1: X item (an edge), stick down past 0.5 or the d-pad down = back (held, drops the item behind).
- * Polish 1: RB is a second item button; LB is unused (there is no look behind). Pads without the
+ * Polish 1: RB is a second item button; LB is unused. R3 changes view, L3 holds rear view. Pads without the
  * standard mapping read through a fallback layout (input/padmap.js). A pad that was being played
  * with and then leaves sets `padLost` once (the action map turns it into a pause edge). The shared
  * `devices` hears which pad is in use and every connect and leave, for the HUD.
@@ -12,7 +12,7 @@ import { readPad, profileFor, padFamily, loadChoices } from './padmap.js';
 import { devices as sharedDevices } from './device.js';
 
 const DEADZONE = 0.16;
-const usedInput = r => r.south || r.east || r.west || r.north || r.lb || r.rb || r.start || r.select ||
+const usedInput = r => r.south || r.east || r.west || r.north || r.lb || r.rb || r.ls || r.rs || r.start || r.select ||
   r.up || r.down || r.left || r.right || r.lt > 0.1 || r.rt > 0.1 ||
   Math.abs(r.x) > DEADZONE || Math.abs(r.y) > DEADZONE || Math.hypot(r.lookX, r.lookY) > DEADZONE;
 
@@ -63,6 +63,7 @@ export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigat
   }
 
   function poll(into) {
+    into.cameraPressed = false; into.rearView = false;
     const hit = scan(true);
     into.padLost = lostEdge; lostEdge = false;
     if (!hit) { sampled = null; was = {}; navWas = null; navEdge = null; look.x = look.y = 0; return; }
@@ -83,6 +84,8 @@ export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigat
     into.pause = r.start && !was.start;
     into.item = (r.west && !was.west) || (r.rb && !was.rb);
     into.back = ay > 0.5 || r.down;
+    into.cameraPressed = r.rs && !was.rs;
+    into.rearView = r.ls;
     // one nav edge per press for the cards (never fed to the sim)
     const dir = r.up || ay < -0.6 ? 'up' : r.down || ay > 0.6 ? 'down'
       : r.left || ax < -0.6 ? 'left' : r.right || ax > 0.6 ? 'right'
@@ -91,7 +94,7 @@ export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigat
     navWas = dir;
     const used = usedInput(r);
     if (used) { active = k; devices.use('pad', infoOf(g)); }
-    was = { south: r.south, start: r.start, west: r.west, rb: r.rb };
+    was = { south: r.south, start: r.start, west: r.west, rb: r.rb, rs: r.rs };
   }
   /** The last card nav edge since the previous call, or null. */
   function takeNav() { const d = navEdge; navEdge = null; return d; }

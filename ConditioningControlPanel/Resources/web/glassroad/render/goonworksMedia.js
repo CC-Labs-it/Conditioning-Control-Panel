@@ -2,7 +2,7 @@
 import { goonworksWorldPlan } from './goonworksWorld.js';
 export function goonworksMediaLayout(track){
   const plan=goonworksWorldPlan(track);if(!plan)return null;
-  return{track:'goonworks',slots:plan.mounts.map((m,i)=>({...m,id:'goonworks-media-'+m.id,mountId:m.id,kind:'landscape',program:Math.floor(i/2)%2?3:0}))};
+  return{track:'goonworks',cabinetStyle:{body:'#661448',rim:'#ede7e6'},slots:plan.mounts.map((m,i)=>({...m,id:'goonworks-media-'+m.id,mountId:m.id,kind:'landscape',program:Math.floor(i/2)%2?3:0}))};
 }
 export function goonworksSpiralLayout(track){
   if(track?.id!=='goonworks')return null;

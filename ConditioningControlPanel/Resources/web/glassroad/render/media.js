@@ -273,9 +273,10 @@ export function createMediaSlots(scene, track, opts = {}) {
   const borders = new InstancedMesh(plane, borderMat, Math.max(1, N));
   const cabinetGeometry = screenBodyGeometry(), rimGeometry = screenBodyGeometry(true);
   owned.push(cabinetGeometry, rimGeometry);
-  const backs = new InstancedMesh(cabinetGeometry, screenBodyMaterial(), Math.max(1, N));
-  const rims = new InstancedMesh(rimGeometry, screenBodyMaterial(true), Math.max(1, N));
-  slots.forEach((sl, i) => rims.setColorAt(i, new Color(...sl.base).lerp(new Color('#dce1e8'), .45)));
+  const cabinetStyle = layout.cabinetStyle;
+  const backs = new InstancedMesh(cabinetGeometry, screenBodyMaterial(false, cabinetStyle?.body ? { color: cabinetStyle.body } : {}), Math.max(1, N));
+  const rims = new InstancedMesh(rimGeometry, screenBodyMaterial(true, cabinetStyle?.rim ? { color: cabinetStyle.rim } : {}), Math.max(1, N));
+  if (!cabinetStyle?.rim) slots.forEach((sl, i) => rims.setColorAt(i, new Color(...sl.base).lerp(new Color('#dce1e8'), .45)));
   const stripMat = mediaDepthLayer(new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: FrontSide }), 2);
   stripMat.colorNode = vec3(...new Color(M.stripColour).toArray());
   stripMat.opacityNode = float(M.stripAlpha);

@@ -10,9 +10,9 @@
  */
 
 export const PROFILES = Object.freeze({
-  standard: { label: 'Standard', south: 0, east: 1, west: 2, north: 3, lb: 4, rb: 5, lt: { b: 6 }, rt: { b: 7 }, select: 8, start: 9, dpad: { b: [12, 13, 14, 15] } },
-  xinput: { label: 'Generic A', south: 0, east: 1, west: 2, north: 3, lb: 4, rb: 5, lt: { axis: 2 }, rt: { axis: 5 }, select: 6, start: 7, dpad: { axes: [6, 7], b: [12, 13, 14, 15] } },
-  dinput: { label: 'Generic B', south: 1, east: 2, west: 0, north: 3, lb: 4, rb: 5, lt: { b: 6 }, rt: { b: 7 }, select: 8, start: 9, dpad: { hat: 9, b: [12, 13, 14, 15] } },
+  standard: { label: 'Standard', south: 0, east: 1, west: 2, north: 3, lb: 4, rb: 5, ls: 10, rs: 11, lt: { b: 6 }, rt: { b: 7 }, select: 8, start: 9, dpad: { b: [12, 13, 14, 15] } },
+  xinput: { label: 'Generic A', south: 0, east: 1, west: 2, north: 3, lb: 4, rb: 5, ls: 9, rs: 10, lt: { axis: 2 }, rt: { axis: 5 }, select: 6, start: 7, dpad: { axes: [6, 7], b: [12, 13, 14, 15] } },
+  dinput: { label: 'Generic B', south: 1, east: 2, west: 0, north: 3, lb: 4, rb: 5, ls: 10, rs: 11, lt: { b: 6 }, rt: { b: 7 }, select: 8, start: 9, dpad: { hat: 9, b: [12, 13, 14, 15] } },
 });
 export const PROFILE_ORDER = ['standard', 'xinput', 'dinput'];
 export const PADMAP_KEY = 'glassroad.padmap.v1';
@@ -116,6 +116,7 @@ export function readPad(g, profile, seen = {}, out = {}) {
   out.lookX = ax(p === PROFILES.xinput ? 3 : 2); out.lookY = ax(p === PROFILES.xinput ? 4 : 3);
   out.south = bv(p.south) > 0.5; out.east = bv(p.east) > 0.5; out.west = bv(p.west) > 0.5; out.north = bv(p.north) > 0.5;
   out.lb = bv(p.lb) > 0.5; out.rb = bv(p.rb) > 0.5; out.select = bv(p.select) > 0.5; out.start = bv(p.start) > 0.5;
+  out.ls = bv(p.ls) > 0.5; out.rs = bv(p.rs) > 0.5;
   out.lt = trig(p.lt); out.rt = trig(p.rt);
   let up = false, down = false, left = false, right = false;
   const d = p.dpad || {};

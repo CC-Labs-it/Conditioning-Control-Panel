@@ -22,32 +22,34 @@ export function createActions() {
   return { steer: 0, throttle: 0, brake: 0, hop: false, hopPressed: false, pause: false };
 }
 
-function zero(a, items) {
+function zero(a, items, camera) {
   a.steer = 0; a.throttle = 0; a.brake = 0; a.hop = false; a.hopPressed = false; a.pause = false;
   if (items) { a.item = false; a.back = false; }
+  if (camera) { a.cameraPressed = false; a.rearView = false; }
   return a;
 }
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
 /**
  * @param {{poll(into: object): void, dispose(): void}[]} sources null entries are skipped
- * @param {{items?: boolean, feel?: object}} [opts] items: also merge `item` (edge) and `back` (held);
+ * @param {{items?: boolean, camera?: boolean, feel?: object}} [opts] items: also merge `item` (edge) and `back` (held);
+ *   camera: merge `cameraPressed` (edge) and `rearView` (held), consumed by the view, never the sim;
  *   feel: the curve numbers (`input.*`)
  * @returns {{sample(opts?: {nowS?: number}): object, dispose(): void}} sample() runs once per frame and returns the same object
  */
-export function createActionMap(sources = [], { items = false, feel = null } = {}) {
+export function createActionMap(sources = [], { items = false, camera = false, feel = null } = {}) {
   const list = sources.filter(Boolean);
   const ramps = list.map(() => createKeyRamp());
-  const out = zero(createActions(), items), tmp = zero(createActions(), items);
+  const out = zero(createActions(), items, camera), tmp = zero(createActions(), items, camera);
   let lastS = -1;
   function sample(opts) {
     const nowS = opts && typeof opts.nowS === 'number' ? opts.nowS : wallS();
     const dtS = lastS < 0 ? 0 : Math.min(0.1, Math.max(0, nowS - lastS));   // a long gap (pause, tab away) never jumps the ramp
     lastS = nowS;
-    zero(out, items);
+    zero(out, items, camera);
     for (let i = 0; i < list.length; i++) {
       const src = list[i];
-      zero(tmp, items);
+      zero(tmp, items, camera);
       tmp.padLost = false; tmp.steerKind = null;
       try { src.poll(tmp); } catch (e) { continue; }
       if (tmp.padLost) out.pause = true;               // the pad in use left mid-race: pause, never resume
@@ -59,6 +61,7 @@ export function createActionMap(sources = [], { items = false, feel = null } = {
       out.hopPressed = out.hopPressed || !!tmp.hopPressed;
       out.pause = out.pause || !!tmp.pause;
       if (items) { out.item = out.item || !!tmp.item; out.back = out.back || !!tmp.back; }
+      if (camera) { out.cameraPressed = out.cameraPressed || !!tmp.cameraPressed; out.rearView = out.rearView || !!tmp.rearView; }
     }
     out.steer = clamp(out.steer, -1, 1);
     out.throttle = clamp(out.throttle, 0, 1);

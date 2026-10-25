@@ -4,6 +4,7 @@ import { acquireLoomAtlas } from './loomAtlas.js';
 import { wordTheme } from './wordTheme.js';
 import { placeOnFrame, fadeSet, labelTexture, ease, easeOut, unit, pop, beatPhase, beatKick } from './cueKit.js';
 import { S } from '../sim/state.js';
+import { mirrorOpening } from './cameraViews.js';
 
 // Course one-offs for the song cues (PROP). Spot props sit on the fixed road spot the transport gives them;
 // zone props stream fixed world dressing around the player for their span (carousel poles, spotlights) or
@@ -125,8 +126,10 @@ export function createCueProps(scene, track, { make = () => document.createEleme
     mirror.visible = !!mr;
     if (mr) {
       placeOnFrame(mirror, mr.frame);
-      const w = Math.min(18, mr.frame.w * .8), h = 14, rise = ease((songS - mr.startS + .2) / .9);
-      const near = unit((24 - along(mr.s, at)) / 12), split = gentle ? near : easeOut(near);
+      const w = Math.min(18, mr.frame.w * .8), h = 14;
+      const reveal = mr.params.cameraCloseUp === true ? mr.leadS : .2;
+      const rise = ease((songS - mr.startS + reveal) / .9);
+      const near = mirrorOpening(mr, at, track.lengthM, songS), split = gentle ? near : easeOut(near);
       for (const g of halves) {
         const { side, pane, rim, shine } = g.userData;
         g.position.set(side * (w / 4 + split * (w / 2 + 4)), -h + rise * (h + .4), 0);

@@ -88,18 +88,24 @@ test('a mouse on a touch laptop cannot latch touch throttle or drift', () => {
   } finally { touch.dispose(); }
 });
 
-test('losing focus releases touch steering, drift and pending edges', () => {
+test('losing focus releases touch steering, drift, rear view and pending edges', () => {
   const { touch, win, pointer, into } = touchSetup();
   try {
     pointer('pointerdown', 200);
     pointer('pointermove', 300);
     pointer('pointerdown', 850, 2);
+    const rear = touch.el.children.find(c => c.className?.includes('gr-touch-rear'));
+    const view = touch.el.children.find(c => c.className?.includes('gr-touch-view'));
+    emit(rear, 'pointerdown', { pointerId: 4 });
+    emit(view, 'pointerdown', { pointerId: 5 });
     emit(win, 'blur');
     touch.poll(into);
     assert.equal(into.steer, 0);
     assert.equal(into.hop, false);
     assert.equal(into.hopPressed, false);
     assert.equal(into.pause, false);
+    assert.equal(into.rearView, false);
+    assert.equal(into.cameraPressed, false);
     pointer('pointerdown', 850, 3);
     touch.poll(into);
     assert.equal(into.hopPressed, true, 'a new finger can take over');
@@ -114,11 +120,14 @@ test('hiding the page without a blur releases touch holds', () => {
     pointer('pointerdown', 200);
     pointer('pointermove', 300);
     pointer('pointerdown', 850, 2);
+    const rear = touch.el.children.find(c => c.className?.includes('gr-touch-rear'));
+    emit(rear, 'pointerdown', { pointerId: 4 });
     doc.hidden = true;
     emit(doc, 'visibilitychange');
     touch.poll(into);
     assert.equal(into.steer, 0);
     assert.equal(into.hop, false);
     assert.equal(into.hopPressed, false);
+    assert.equal(into.rearView, false);
   } finally { touch.dispose(); }
 });

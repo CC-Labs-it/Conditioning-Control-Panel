@@ -10,10 +10,16 @@ import { PerspectiveCamera } from 'three/webgpu';
 import { createCamRig, vFovForAspect } from './cameraMath.js';
 import { S } from '../sim/state.js';
 import { LOOK } from './look.js';
+import { createCameraViews } from './cameraViews.js';
 
 export function createChaseCamera(feel, { bus = null } = {}) {
   const camera = new PerspectiveCamera(feel.get('fov.baseVDeg'), 16 / 9, LOOK.nearM, LOOK.farM);
   const rig = createCamRig(feel);
+  const views = createCameraViews();
+  const applyView = (kart, dt, aspect, options) => {
+    const pose = views.update(rig, kart, dt, options);
+    apply(aspect, pose.eye, pose.look, pose.up, pose.vFov);
+  };
   let lastMode = 'race', orbit = 0, last = null;
   const offs = [];
   function apply(aspect, eye = rig.eye, look = rig.look, up = rig.up, vFov = rig.vFov) {
@@ -51,16 +57,18 @@ export function createChaseCamera(feel, { bus = null } = {}) {
   return {
     camera,
     rig,
+    views,
     attach,
     /** track: its magnet stretches put the rig in road mode (the loop). mode: 'race' (chase), 'menu' (attract orbit), 'results' (chase). */
-    update(kart, fx, track, dt, aspect, mode = 'race', lookInput = null) {
+    update(kart, fx, track, dt, aspect, mode = 'race', lookInput = null, viewOptions = {}) {
       last = kart;
-      if (mode === 'menu') { lastMode = mode; menu(kart, dt, aspect); return; }
-      if (lastMode === 'menu') { lastMode = mode; rig.snap(kart, aspect, null, track); apply(aspect); return; }
+      if (mode === 'menu') { lastMode = mode; views.reset(); menu(kart, dt, aspect); return; }
+      if (lastMode === 'menu') { rig.snap(kart, aspect, null, track); }
       lastMode = mode;
-      rig.update(kart, fx, dt, aspect, track, mode === 'race' ? lookInput : null); apply(aspect);
+      rig.update(kart, fx, dt, aspect, track, mode === 'race' ? lookInput : null);
+      applyView(kart, dt, aspect, { ...viewOptions, track, active: mode === 'race' && viewOptions.active !== false });
     },
-    snap(kart, track, aspect = camera.aspect) { last = kart; rig.snap(kart, aspect, null, track); apply(aspect); },
+    snap(kart, track, aspect = camera.aspect) { last = kart; views.reset(); rig.snap(kart, aspect, null, track); applyView(kart, 0, aspect, { track }); },
     dispose() { for (const off of offs) off(); offs.length = 0; },
   };
 }

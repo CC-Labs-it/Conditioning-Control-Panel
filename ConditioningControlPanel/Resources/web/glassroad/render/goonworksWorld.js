@@ -43,10 +43,10 @@ export function goonworksWorldPlan(track){
   function screen(id,s,side,height=13,w=15,h=11,extra=0){
     const f=track.frameAt(s),normal=norm(add(mul(f.b,-side),mul(f.t,-.4))),basis=axesFrom(normal,f.n);
     const C=point(f,side*(f.w/2+8+extra),height),p=add(C,mul(normal,-1.05));
-    const back=put(id+'-cabinet','wine',p,[w+2.4,h+2.4,2.5],{basis:[basis.X,basis.Y,basis.Z]});if(!back)return;
-    for(const [x,y,sx,sy]of[[0,(h+1)/2,w+2.2,.75],[0,-(h+1)/2,w+2.2,.75],[-(w+1)/2,0,.75,h+1],[(w+1)/2,0,.75,h+1]])
-      put(id+'-white-bezel','white',add(add(C,mul(basis.X,x)),mul(basis.Y,y)),[sx,sy,1.1],{basis:[basis.X,basis.Y,basis.Z],check:false});
-    mounts.push({id,s,C:add(C,mul(normal,.7)),...basis,w,h,frame:'billboard',phone:true,backId:back.id});
+    // Reserve the authored mount, but let media own the complete fitted enclosure.
+    // Enlarged pictures can move or be dropped; scenery must not leave an empty shell.
+    if(!clear({p,size:[w+2.4,h+2.4,2.5],axes:[basis.X,basis.Y,basis.Z]})){rejected++;return;}
+    mounts.push({id,s,C:add(C,mul(normal,.7)),...basis,w,h,frame:'billboard',phone:true});
   }
   function drip(id,f,x,y,z,scale=1){
     local(id+'-stem','white',f,x,y,z,[1.7*scale,6*scale,1.9*scale],{shape:'sphere'});
@@ -253,9 +253,8 @@ export function goonworksWorldPlan(track){
     // Full upper beams and columns carry each hall's identity. Low walls, island bodies,
     // pale eaves and balcony lips retain the common fuchsia and porcelain construction.
     for(const [hall,colours]of Object.entries(hallColours))if(id.startsWith(hall+'-')){
-      if(id===hall+'-roof-beam'||id===hall+'-upright'||id.endsWith('-cabinet')||id===hall+'-entrance-crown'||id===hall+'-exit-crown')row.material=colours.structure;
+      if(id===hall+'-roof-beam'||id===hall+'-upright'||id===hall+'-entrance-crown'||id===hall+'-exit-crown')row.material=colours.structure;
       if(id===hall+'-inset-wall')row.material=colours.secondary;
-      if(id.endsWith('-white-bezel')&&row.size[0]<row.size[1])row.material=colours.secondary;
     }
     if(id==='mill-grand-clock-ring')row.material='gold';
     if(id==='quiz-icing-canopy')row.material=repeat%3===1?'violet':'periwinkle';
@@ -269,16 +268,11 @@ export function goonworksWorldPlan(track){
     // while the fuchsia base rocks and suspended roof still tie the cavern to the factory.
     if(id==='grotto-scalloped-rock')row.material=repeat%4<2?'cobalt':repeat%4===2?'fuchsia':'magenta';
     if(id==='grotto-inner-rock'||id==='grotto-arched-roof')row.material='fuchsia';
-    if(id.startsWith('grotto-')&&id.endsWith('-cabinet'))row.material='cobalt';
-    if(id.startsWith('grotto-')&&id.endsWith('-white-bezel'))row.material=id.startsWith('grotto-high-')?'periwinkle':'ice';
     if(id.startsWith('grotto-stalactite'))row.material=repeat%3===0?'periwinkle':'ice';
     if(id==='grotto-mouth-crown'||id==='grotto-mouth-pier')row.material='cobalt';
 
-    // The rabbit tube skin is shaded separately. Its complete cabinets and long conduits
-    // use the same mint family, rather than relying on a narrow strip around each screen.
+    // The rabbit tube skin is shaded separately; its long conduits use the mint family.
     if(id==='rabbit-ceiling-conduit')row.material='mint';
-    if(id.startsWith('rabbit-screen-')&&id.endsWith('-cabinet'))row.material='teal';
-    if(id.startsWith('rabbit-screen-')&&id.endsWith('-white-bezel'))row.material='mint';
 
     // Outdoor districts use their existing large landmarks and broad orchard bodies.
     if(id==='spiral-cameo-disc'||id==='spiral-cameo-pillar')row.material='coral';

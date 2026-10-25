@@ -46,3 +46,26 @@ test('steering above the dead zone marks a controller active and its removal pau
     assert.equal(map.sample().pause, false);
   } finally { map.dispose(); }
 });
+
+test('camera stick clicks on another controller select it and clear safely on disconnect', () => {
+  for (const button of [10, 11]) {
+    const first = pad(0), second = pad(1), devices = createDevices();
+    let list = [first, second];
+    const input = createGamepad({ nav: { getGamepads: () => list }, devices });
+    const map = createActionMap([input], { camera: true });
+    try {
+      map.sample();
+      second.buttons[button].value = 1;
+      let a = map.sample();
+      assert.equal(devices.pad.id, second.id);
+      assert.equal(a.rearView, button === 10);
+      assert.equal(a.cameraPressed, button === 11);
+      assert.equal(map.sample().cameraPressed, false, 'a held R3 toggles just once');
+      list = [];
+      a = map.sample();
+      assert.equal(a.cameraPressed, false);
+      assert.equal(a.rearView, false);
+      assert.equal(a.pause, true);
+    } finally { map.dispose(); }
+  }
+});

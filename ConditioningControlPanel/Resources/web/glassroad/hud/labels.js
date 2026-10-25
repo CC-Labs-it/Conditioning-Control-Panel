@@ -6,8 +6,8 @@
 import { PROFILES } from '../input/padmap.js';
 
 const NAMED = {
-  xbox: { name: 'Xbox', south: 'A', east: 'B', west: 'X', north: 'Y', lb: 'LB', rb: 'RB', lt: 'LT', rt: 'RT', start: 'Start' },
-  ps: { name: 'PlayStation', south: 'Cross', east: 'Circle', west: 'Square', north: 'Triangle', lb: 'L1', rb: 'R1', lt: 'L2', rt: 'R2', start: 'Options' },
+  xbox: { name: 'Xbox', south: 'A', east: 'B', west: 'X', north: 'Y', lb: 'LB', rb: 'RB', ls: 'Left stick click', rs: 'Right stick click', lt: 'LT', rt: 'RT', start: 'Start' },
+  ps: { name: 'PlayStation', south: 'Cross', east: 'Circle', west: 'Square', north: 'Triangle', lb: 'L1', rb: 'R1', ls: 'L3', rs: 'R3', lt: 'L2', rt: 'R2', start: 'Options' },
 };
 
 /** Button names for a pad family; 'generic' reads 'Button n' (1-based) through the layout. */
@@ -16,7 +16,7 @@ export function padLabels(family = 'xbox', profile = 'standard') {
   const p = PROFILES[profile] || PROFILES.standard;
   const b = (i) => 'Button ' + (i + 1);
   const t = (x) => (x.axis != null ? 'Axis ' + (x.axis + 1) : b(x.b));
-  return { name: 'Pad', south: b(p.south), east: b(p.east), west: b(p.west), north: b(p.north), lb: b(p.lb), rb: b(p.rb), lt: t(p.lt), rt: t(p.rt), start: b(p.start) };
+  return { name: 'Pad', south: b(p.south), east: b(p.east), west: b(p.west), north: b(p.north), lb: b(p.lb), rb: b(p.rb), ls: b(p.ls), rs: b(p.rs), lt: t(p.lt), rt: t(p.rt), start: b(p.start) };
 }
 
 export const KEY_LABELS = Object.freeze({ name: 'Keys', steer: 'A D or arrows', throttle: 'W or Up', brake: 'S or Down', hop: 'Space or Shift, hold', item: 'E', drop: 'Hold S, then E', pause: 'Esc' });
@@ -27,6 +27,8 @@ export function controlRows(family = 'xbox', profile = 'standard') {
   return [
     ['Steer', k.steer, 'Left stick', 'Drag on the left half'],
     ['Look around', 'Hold right mouse and drag', 'Right stick', ''],
+    ['Chase / first person', 'C', p.rs, 'View button'],
+    ['Look behind', 'Hold V', 'Hold ' + p.ls, 'Hold Rear button'],
     ['Throttle', k.throttle, p.rt, 'Automatic'],
     ['Brake', k.brake, p.lt, ''],
     ['Hop and drift', k.hop, p.south + ', hold', 'Hold the right half'],
