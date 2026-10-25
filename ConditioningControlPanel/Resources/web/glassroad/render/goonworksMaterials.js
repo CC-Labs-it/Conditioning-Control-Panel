@@ -2,6 +2,7 @@
 import { MeshBasicNodeMaterial, Color, DoubleSide, BackSide, FrontSide, DataTexture, RGBAFormat, UnsignedByteType, LinearFilter, RepeatWrapping } from 'three/webgpu';
 import { vec2, vec3, float, uv, positionGeometry, positionWorld, normalWorld, cameraPosition, normalize, dot, max, min, abs, pow, mix, smoothstep, fract, fwidth, texture, sin } from 'three/tsl';
 import {getGoonworksLayout} from '../track/goonworks-layout.js';
+import { goonworksMusicFloor } from './materials/goonworksMusicFloor.js';
 
 export const GOONWORKS_PALETTE = Object.freeze({ fuchsia: '#b60870', hot: '#dc4296', wine: '#661448',
   magenta:'#993e91',rose:'#ca6897',plum:'#513751',pink:'#e78eb8',
@@ -127,8 +128,9 @@ export function applyGoonworksRoad(road, art, track) {
   const chevron=float(1).sub(smoothstep(.24,max(fwidth(arrowShape),.04).add(.38),arrowShape)).mul(float(1).sub(smoothstep(3.1,3.5,abs(p.x))));
   colour=mix(colour,rgb(GOONWORKS_PALETTE.ink),dash.mul(top).mul(.78).mul(printable));
   colour=mix(colour,pink,chevron.mul(top).mul(printable));
-  // Preserve the existing song clock as a restrained fuchsia shoulder response.
-  if(road.uniforms?.music){const mu=road.uniforms.music; const pulse=sin(p.y.mul(.13).sub(mu.t.mul(1.8))).mul(.5).add(.5).mul(mu.bassW).mul(.06);colour=colour.add(pink.mul(pulse).mul(gutter));}
+  // This opaque finish replaces the shared road graph, so its visible colour must own the music.
+  if (road.uniforms?.music && road.uniforms?.reactive) colour = goonworksMusicFloor({ p, base: colour,
+    top, edge, half, pink, accent, reactive: road.uniforms.reactive, music: road.uniforms.music });
   road.material.colorNode=colour;road.material.opacityNode=float(1);road.material.opacity=1;
   road.material.transparent=false;road.material.depthWrite=true;road.material.toneMapped=false;
   // The opaque slab already has correctly wound top, bottom and side faces. Rendering its hidden
