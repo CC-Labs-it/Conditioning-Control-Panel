@@ -3179,3 +3179,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-shell-mod-catalogue: +365
 - Avalonia Manage Mods: Share now submits `ccp-mod/v1` metadata through a Core builder that WPF also uses.
 - The second review round added a fail-proven assertion for the auth toast. Gate run 39697561326 is green except a known RaceTrackPlayer flake.
+
+## avalonia-port/wire-views-tab-friends: +161
+- Friends page once-only presence question ported (Core FriendsPresenceAsk shared by WPF + Avalonia).
+- Review fixes: ledger rows no longer list the ask as missing; feed/trails and tables point at lanes friends-feed / friends-open-tables. Gate run 39699624563 green apart from the known RaceTrack flake.
