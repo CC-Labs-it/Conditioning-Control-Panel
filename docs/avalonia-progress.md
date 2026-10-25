@@ -3457,3 +3457,7 @@ Mantra Lab completion close timer is now stopped in Cleanup, so an early-closed 
 ## avalonia-port/fin-shell-companion-fx: +127
 
 All five companion roster cards now repaint their assigned prompt name (mod-aware) and AI-personality tooltip on tab show and mod switch, via Core `InstalledCommunityPrompts.Load`; stale prompts clear. Test: CompanionPromptLabelsTests (fail-proven). Ledger: shell-companion-fx wired.
+
+## avalonia-port/wire-views-tab-assets: +27
+- Restacked on wire-shell-assets (P105 duplicate dropped): panic closes Library previews (pack temp decrypts deleted), pack nodes named like WPF (built-in name, else raw id).
+- Ledger: shell-assets/views-tab-assets rows name the pack tree; duplicate win-mini-player row merged, opener noted.
