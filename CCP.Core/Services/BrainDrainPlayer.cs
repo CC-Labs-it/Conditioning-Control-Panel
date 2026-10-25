@@ -43,6 +43,10 @@ namespace ConditioningControlPanel.Services
             ReloadClips();
         }
 
+        /// <summary>WPF Start/Stop Discord presence (BrainDrainService.cs:240, :270); the head sets these.</summary>
+        public Action? Started { get; init; }
+        public Action? Stopped { get; init; }
+
         public bool IsRunning { get { lock (_lock) return _running; } }
         public int ClipCount { get { lock (_lock) return _clips.Length; } }
         public double Intensity { get { lock (_lock) return _intensity; } set { lock (_lock) _intensity = BrainDrainSchedule.ClampIntensity(value); } }
@@ -92,6 +96,7 @@ namespace ConditioningControlPanel.Services
                 _running = true;
                 _tick = _time.CreateTimer(_ => Tick(), null, _interval, _interval);
             }
+            try { Started?.Invoke(); } catch (Exception ex) { Log.Debug("BrainDrain: start hook failed: {E}", ex.Message); }
             Log.Information("BrainDrain started at intensity {Intensity}%, mode: {Mode}", _intensity,
                 s.BrainDrainHighRefresh ? "High Refresh (500ms)" : "Normal (5s)");
         }
@@ -101,8 +106,10 @@ namespace ConditioningControlPanel.Services
         {
             Voice? voice;
             ITimer? tick;
+            bool wasRunning;
             lock (_lock)
             {
+                wasRunning = _running;
                 _running = false;
                 ++_generation;
                 _building = false;
@@ -111,6 +118,8 @@ namespace ConditioningControlPanel.Services
             }
             try { voice?.Dispose(); }
             finally { tick?.Dispose(); }
+            if (!wasRunning) return;
+            try { Stopped?.Invoke(); } catch (Exception ex) { Log.Debug("BrainDrain: stop hook failed: {E}", ex.Message); }
         }
 
         public void Tick()

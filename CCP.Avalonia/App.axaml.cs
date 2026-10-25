@@ -704,7 +704,11 @@ namespace ConditioningControlPanel.Avalonia
                         var voice = vlc.PlayVoice(path, volume, loop, ended);
                         return voice == null ? null : new Services.BrainDrainPlayer.Voice(
                             voice.Dispose, gain => voice.Volume = gain);
-                    }).Seed();
+                    })
+                    {
+                        Started = () => DiscordRpc?.SetBrainDrainActivity(),   // WPF BrainDrainService.cs:240
+                        Stopped = () => DiscordRpc?.SetIdleActivity(),         // WPF BrainDrainService.cs:270
+                    }.Seed();
                     new Platform.MindWipePlayer(vlc.PlayVoice) { CleanSlate = secs => Achievements?.TrackMindWipeDuration(secs) }.Seed();
                     Console.WriteLine("[Audio] LibVLC seeded CoreAudio");
                 }

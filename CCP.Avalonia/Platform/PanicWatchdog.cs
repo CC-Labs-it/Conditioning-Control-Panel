@@ -3,8 +3,8 @@
 // thread here, so a wedged UI thread can no longer lose the key itself; it can still sit on the queued
 // handler. This watches that handler from a background thread and, if it has not finished inside
 // 2 s, runs the thread-safe part of the stop off the UI thread.
-// ponytail: WPF also stops BrainDrain and the screen OCR here and queues the OCR restart; neither has
-// a twin on this head yet (keyword triggers / OCR are not ported). Add them when they land.
+// ponytail: WPF also stops the screen OCR here and queues the OCR restart; OCR has no twin on this
+// head yet (keyword triggers / OCR are not ported). Add it when it lands.
 
 using System;
 using System.Threading;
@@ -104,7 +104,7 @@ internal static class PanicWatchdog
 
     /// <summary>WPF RunEmergencyPanicTeardown: ONLY thread-safe steps, each guarded on its own. No overlay
     /// hiding: overlays are the UI thread's to drop when it comes back and runs the real handler.</summary>
-    private static void RunEmergencyTeardown()
+    internal static void RunEmergencyTeardown()
     {
         Step("haptics", () => CoreHaptics.Service?.PanicStop());
         Step("remote haptics", RemoteCommands.StopHaptics);
@@ -112,6 +112,7 @@ internal static class PanicWatchdog
         // Conditional, as WPF (#668): with the standalone Audio Layers master on, the bed is the user's.
         Step("audio layers", () => { if (!CoreSettings.Current.AudioLayersEnabled) LayeredAudio.Instance?.Stop(); });
         Step("mind wipe", () => CoreMindWipe.StopProvider?.Invoke());
+        Step("brain drain", CoreBrainDrain.Stop);   // WPF MainWindow.xaml.cs:1122
         Step("unduck", () => LibVlcAudio.Instance?.ForceUnduck());
         Log.Information("PANIC FALLBACK complete");
     }

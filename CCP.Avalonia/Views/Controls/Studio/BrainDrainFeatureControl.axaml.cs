@@ -102,6 +102,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += ReloadSettings;
             LoadKeepClear();
             LoadAudio();
+            // WPF OnLoaded:43: the Studio tab keeps this card alive, so re-scan or the count goes stale.
+            CoreBrainDrain.ReloadClips();
+            RefreshClipCount();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)

@@ -76,7 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (gen != _engineGen || CoreEngine.IsRunning) return;
                 CoreEngine.Start();
-                CoreBrainDrain.Start();
+                if (!CoreSettings.Current.AudioOnlySession) CoreBrainDrain.Start();   // WPF StartEngine :411
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
                 SpiralOverlay.Refresh(this);

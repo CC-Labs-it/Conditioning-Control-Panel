@@ -313,6 +313,7 @@ Set the panic key to Enter for steps 1-4 (Settings -> panic key).
 11. **[SAFETY] developers re-check this before release.** Remote Control tab: share a code, let a controller in, end it from both sides. WPF `MainWindow/MainWindow.RemoteControl.cs:325-480`. Rows: `views-tab-remote-control`.
 12. Blink Trainer, Haptics, Discord, Leaderboard, Deeper, Enhancements, Exclusives, Friends, Leash, Play, Programs, She's Listening, Spiral, Chaster, Subjects, Takeover tabs: open each, use every control. WPF `MainWindow/MainWindow.Presets.cs:118` (Blink Trainer). Rows: `views-tab-*`.
 13. Deeper editor: new enhancement, URL prompt, gaze picker, play one. Rows: `views-deeper-*`.
+14. **[SAFETY] developers re-check this before release.** Brain Drain audio: WPF `ConditioningControlPanel/Services/LockCard/BrainDrainService.cs` and `Views/Controls/Studio/BrainDrainFeatureControl.xaml.cs`: Studio > Brain Drain, open the audio folder, add a WAV/MP3/OGG and Refresh; the count and empty hint update. Enable while stopped, then Start the engine. Confirm clips play through without mid-clip restart, intensity changes cadence, High refresh preserves per-minute probability, master volume changes the playing clip, and Stop/panic silences it (also with the UI frozen: the panic watchdog stops it). An audio-only session does not start it. Repeat panic while a clip is opening and start again; the old clip must not appear. Check a duplicate legacy filename plays only the assets copy. Rows: `views-studio-brain-drain-feature`
 
 ### Rows (general check G)
 - [ ] `views-adorned-avatar` - WPF `Views/Controls/AdornedAvatar.xaml`
@@ -673,6 +674,3 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
-
-
-1. WPF `ConditioningControlPanel/Services/LockCard/BrainDrainService.cs` and `Views/Controls/Studio/BrainDrainFeatureControl.xaml.cs`: Studio > Brain Drain, open the audio folder, add a WAV/MP3/OGG and Refresh; the count and empty hint update. Enable while stopped, then Start the engine. Confirm clips play through without mid-clip restart, intensity changes cadence, High refresh preserves per-minute probability, master volume changes the playing clip, and Stop/panic silences it. Repeat panic while a clip is opening and start again; the old clip must not appear. Check a duplicate legacy filename plays only the assets copy. Rows: `views-studio-brain-drain-feature`

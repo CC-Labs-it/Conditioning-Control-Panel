@@ -136,6 +136,31 @@ public sealed class BrainDrainAudioTests
         await Task.CompletedTask;
     });
 
+    [Fact]
+    public Task PresenceHooksFireOncePerRealStartAndStop() => WithPlayer(async _ =>
+    {
+        var started = 0;
+        var stopped = 0;
+        var player = new BrainDrainPlayer((_, _, _, _) => null, roll: () => 1)
+        {
+            Started = () => started++,
+            Stopped = () => stopped++,
+        };
+        try
+        {
+            player.Stop();                 // never started: WPF returns before SetIdleActivity
+            Assert.Equal(0, stopped);
+            player.Start();
+            player.Start();                // already running
+            Assert.Equal(1, started);
+            player.Stop();
+            player.Stop();
+            Assert.Equal(1, stopped);
+        }
+        finally { player.Stop(); }
+        await Task.CompletedTask;
+    });
+
     private static async Task WithPlayer(Func<Func<Func<string, double, bool, Action, BrainDrainPlayer.Voice?>, BrainDrainPlayer>, Task> test)
     {
         var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
