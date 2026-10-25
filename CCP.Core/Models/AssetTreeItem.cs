@@ -81,6 +81,9 @@ namespace ConditioningControlPanel.Models
         /// </summary>
         public bool IsPackFolder { get; set; }
 
+        /// <summary>The "Content Packs" root (WPF prefixes its name with a package emoji; the Avalonia head draws a box glyph).</summary>
+        public bool IsPackRoot => IsPackFolder && PackId == null;
+
         /// <summary>
         /// The pack ID if this is a pack folder (images or videos subfolder).
         /// </summary>

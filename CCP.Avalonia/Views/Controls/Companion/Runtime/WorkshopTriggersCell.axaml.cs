@@ -1,5 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using Avalonia.VisualTree;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
@@ -11,7 +13,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
     /// the preset store and the avatar trigger timer all hang off <c>App</c>/<c>MainWindow</c> in
     /// the WPF project - so only the two behaviours that are purely local to this cell are wired:
     /// the toggle showing the interval panel (MainWindow.Patreon.cs:1209) and the slider writing
-    /// its own value label (MainWindow.Patreon.cs:1235). Edit Phrases, Manage Phrases and the three
+    /// its own value label (MainWindow.Patreon.cs:1235). Manage Phrases forwards to the shell. Edit Phrases and the three
     /// preset controls stay inert until that runtime crosses; they are not stubbed, so nothing here
     /// pretends to work.</summary>
     public partial class WorkshopTriggersCell : UserControl
@@ -20,6 +22,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
         {
             AvaloniaXamlLoader.Load(this);
             DataContext = new WorkshopTriggersCellViewModel();
+            // WPF forwards the real Phrase Manager action to its owning shell.
+            this.FindControl<Button>("BtnManagePhrases")!.Click += (sender, e) =>
+                this.FindAncestorOfType<MainShellWindow>()?.BtnManagePhrases_Click(sender, e);
 
             var toggle = this.FindControl<CheckBox>("ChkTriggerModeCompanion")!;
             var panel = this.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!;

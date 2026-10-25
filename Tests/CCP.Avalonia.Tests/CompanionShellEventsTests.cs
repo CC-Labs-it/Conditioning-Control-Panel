@@ -44,6 +44,7 @@ public sealed class CompanionShellEventsTests
     {
         var s = CoreSettings.Current;
         s.CompanionPerk = CompanionBonusType.XPDrain;
+        s.MotionLevel = MotionLevel.Off; // the header readout snaps (the WPF odometer would count 23 -> 20 over 0.7s)
         s.PlayerXP = 23;
         s.PlayerLevel = 4;
         shell.UpdateLevelDisplay();

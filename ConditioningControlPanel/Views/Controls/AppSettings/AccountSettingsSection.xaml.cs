@@ -62,6 +62,17 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
         }
 
         /// <summary>
+        /// Signed out, the card says "Sign in", so a click opens the same sign-in dialog as the
+        /// header chip and the bottom bar. Signed in, the card is information only.
+        /// </summary>
+        private void AccountTierCard_MouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (App.IsLoggedIn) return;
+            e.Handled = true;
+            (App.MainWindowRef ?? Window.GetWindow(this) as MainWindow)?.OpenUnifiedLoginDialog();
+        }
+
+        /// <summary>
         /// Repaints the account/tier card. Safe to call at any time from any thread that owns the
         /// dispatcher; never throws.
         /// </summary>
@@ -72,6 +83,9 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
 
             try
             {
+                // Signed out, the card is a Sign in button (AccountTierCard_MouseLeftButtonUp).
+                AccountTierCard.Cursor = App.IsLoggedIn ? null : System.Windows.Input.Cursors.Hand;
+
                 if (!App.IsLoggedIn)
                 {
                     TxtAccountSectionName.Text = Loc.Get("account_chip_sign_in");

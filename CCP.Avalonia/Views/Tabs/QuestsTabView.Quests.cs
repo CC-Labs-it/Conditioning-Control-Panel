@@ -113,7 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // Server-rolled quests have no loc key, so the lookup returns the raw key (WPF :150).
         private static string Localized(string localized, string fallback) =>
-            string.IsNullOrWhiteSpace(localized) || localized.StartsWith("quest_", StringComparison.Ordinal) ? fallback : localized;
+            QuestStampRules.Text(localized, fallback);
 
         private static DailyQuestCardModel BuildDailyCardModel(int slot, ActiveQuest quest, QuestDefinition def, int rerollsLeft, AppSettings s)
         {
@@ -131,9 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 XpText = $"{xp} XP",
                 StreakBonusPct = streakPct,
                 RerollBonusPct = rerollPct,
-                // ponytail: no quest art - GetModeAwareQuestImagePath resolves pack:// resources this
-                // head does not ship; the card draws its icon instead.
-                Art = null,
+                Art = GetQuestArt(def),
                 CanReroll = canReroll,
                 RerollKey = canReroll ? "btn_reroll_with_count" : "btn_reroll_none",
                 RerollCount = rerollsLeft,
@@ -180,6 +178,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var rerollText = TxtWeeklyReroll;
             if (weeklyDef != null && weekly != null)
             {
+                ImgWeeklyQuest.Source = GetQuestArt(weeklyDef);
                 TxtWeeklyQuestIcon.Emoji = weeklyDef.Icon;   // collapsed, as in WPF
                 TxtWeeklyQuestName.Text = CoreMods.MakeModAware(weeklyDef.Name);
                 TxtWeeklyQuestDesc.Text = CoreMods.MakeModAware(weeklyDef.Description);
