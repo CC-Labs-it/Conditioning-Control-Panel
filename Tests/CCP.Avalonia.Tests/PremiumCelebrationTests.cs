@@ -45,6 +45,7 @@ public sealed class PremiumCelebrationTests
             s.SeenFeatureIntros.Remove(TierCelebration.KeyT1);
             s.SeenFeatureIntros.Remove(TierCelebration.KeyT2);
             s.SeenFeatureIntros.Remove(TierCelebration.LegacyKey);
+            s.WhatMovedCardShown = 1;   // the What-moved card is an owned window, so a live rise would count the user busy
             bool premium = premiumAtLaunch, lab = false;
             void Grant(bool p, bool l) { premium = p; lab = l; }
             StartupLadder.ResetForTests();
@@ -194,6 +195,8 @@ public sealed class PremiumCelebrationTests
         var before = list.Items.Cast<object>().ToArray();
         Assert.NotEmpty(before);
         var takeover = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.BambiTakeoverTabView>("BambiTakeoverTab")!;
+        shell.RefreshEntitlementVeils();   // every navigation: WPF never rebuilds Programs here
+        Assert.Same(before[0], list.Items.Cast<object>().First());
         shell.RefreshTierDependentViews();
         Assert.True(takeover.FindControl<Control>("AutonomyLocked")!.IsVisible);
         grant(true, false);

@@ -191,6 +191,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Opened += (_, _) => MaybeShowPremiumCelebration();
             System.EventHandler<Models.PatreonTier> tier = (_, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
+                // WPF OnPatreonTierChanged: Programs rebuilds on a tier change only, not on every navigation.
+                Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshPrograms();
                 RefreshTierDependentViews();
                 RefreshProfileBubble();
                 MaybeShowPremiumCelebration();
@@ -245,8 +247,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Summary = Loc.Get("premium_celebration_inbox_summary"),
                     Open = () => FeatureIntroPopup.ShowCelebrationIfFirstTime(this, key),
                 };
-                if (onRise && !CanCelebrateNow()) Platform.StartupLadder.Inbox.File(item);
-                else Platform.StartupLadder.PresentOrInbox(item);
+                Platform.StartupLadder.PresentOrInbox(item);   // WPF Patreon.cs: a busy rise goes through the presenter too
             }
             catch (System.Exception ex) { Serilog.Log.Warning(ex, "Premium celebration hook failed"); }
         }
@@ -270,13 +271,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void RefreshTierDependentViews()
         {
-            Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshPrograms();
             var takeover = Named<Tabs.BambiTakeoverTabView>("BambiTakeoverTab");
             var unlocked = CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("takeover");
             if (takeover?.FindControl<Control>("AutonomyLocked") is { } locked) locked.IsVisible = !unlocked;
             if (takeover?.FindControl<Control>("AutonomyUnlocked") is { } open) open.IsVisible = unlocked;
-            if (takeover?.FindControl<TextBlock>("TxtAutonomyLockStatus") is { } status) status.Text = Loc.Get("label_patreon_only");
-            if (takeover?.FindControl<TextBlock>("TxtAutonomyLockMessage") is { } message) message.Text = Loc.Get("label_support_on_patreon_to_unlock");
+            // WPF UiUpdates.cs:971-972 re-sets the two lock texts; here the axaml binds the same keys ({loc:Str}/IconLabel Key).
         }
 
         private readonly VoiceAudioState _voiceAudio = new();
