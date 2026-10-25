@@ -427,8 +427,11 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         /// <param name="overlayWasRunningBeforePulse">OverlayService.IsRunning as captured when the pulse began.</param>
         /// <param name="otherPulseActive">True while the sibling pulse (spiral for pink, pink for spiral) still runs.</param>
-        public static bool ShouldStopOverlayAfterPulse(bool overlayWasRunningBeforePulse, bool otherPulseActive)
-            => AutonomyScheduler.ShouldStopOverlayAfterPulse(overlayWasRunningBeforePulse, otherPulseActive);
+        /// <param name="engineRunning">App.IsEngineRunning when the pulse ends. START pressed inside the
+        /// 30 s found the service already up and borrowed it, so the pulse no longer owns it: stopping
+        /// it then took the run's own spiral and pink filter away until the next START.</param>
+        public static bool ShouldStopOverlayAfterPulse(bool overlayWasRunningBeforePulse, bool otherPulseActive, bool engineRunning = false)
+            => AutonomyScheduler.ShouldStopOverlayAfterPulse(overlayWasRunningBeforePulse, otherPulseActive, engineRunning);
 
         /// <summary>
         /// Should an action that was queued behind an announcement still fire? (#1153)
@@ -440,6 +443,16 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public static bool ShouldRunDelayedAction(bool enabled, int generationAtSchedule, int generationNow)
             => AutonomyScheduler.ShouldRunDelayedAction(enabled, generationAtSchedule, generationNow);
+
+        /// <summary>
+        /// May Takeover play a Mind Wipe sting? (ccp-bugs #1458, #1453.) Only when the Takeover box
+        /// allows it AND Mind Wipe itself is switched on. The Takeover box defaults to on, so before
+        /// this a player who switched Mind Wipe off still heard stings from the moment the app
+        /// started ("even disabling it doesn't turn it off"). Checked when picking and again when
+        /// an announced sting finally plays.
+        /// </summary>
+        public static bool MayMindWipe(bool takeoverMayMindWipe, bool mindWipeEnabled)
+            => takeoverMayMindWipe && mindWipeEnabled;
 
         /// <summary>
         /// Cancel all active pulses and restore original settings.
@@ -527,6 +540,42 @@ namespace ConditioningControlPanel.Services
             }
 
             App.Logger?.Information("AutonomyService: All active pulses cancelled");
+        }
+
+        /// <summary>
+        /// A session is about to snapshot the user's settings: hand back the spiral and pink filter
+        /// values a running pulse wrote, and end those pulses (their 30 s restore then skips as
+        /// "no longer active"). Pulses never start during a session, but one started just before
+        /// it put its boosted opacity into that snapshot, and RestoreSettings made it the user's
+        /// for good (+15 pink, +20 spiral each time); its restore also landed mid-session over the
+        /// session's own overlays. Nothing else is touched: no wallpaper, bubbles or overlay stop.
+        /// </summary>
+        public void SettleSettingPulses()
+        {
+            var settings = App.Settings?.Current;
+            if (settings == null) return;
+
+            if (_spiralPulseActive && _originalSpiralEnabled.HasValue)
+            {
+                settings.SpiralEnabled = _originalSpiralEnabled.Value;
+                if (_originalSpiralOpacity.HasValue) settings.SpiralOpacity = _originalSpiralOpacity.Value;
+                App.Logger?.Information("AutonomyService: spiral pulse settled before a session");
+            }
+            _spiralPulseActive = false;
+            _originalSpiralEnabled = null;
+            _originalSpiralOpacity = null;
+            _spiralPulseStartedOverlay = false;
+
+            if (_pinkFilterPulseActive && _originalPinkFilterEnabled.HasValue)
+            {
+                settings.PinkFilterEnabled = _originalPinkFilterEnabled.Value;
+                if (_originalPinkFilterOpacity.HasValue) settings.PinkFilterOpacity = _originalPinkFilterOpacity.Value;
+                App.Logger?.Information("AutonomyService: pink filter pulse settled before a session");
+            }
+            _pinkFilterPulseActive = false;
+            _originalPinkFilterEnabled = null;
+            _originalPinkFilterOpacity = null;
+            _pinkPulseStartedOverlay = false;
         }
 
         /// <summary>
@@ -1022,6 +1071,10 @@ namespace ConditioningControlPanel.Services
                             break;
 
                         case AutonomyActionType.MindWipe:
+                            // Re-checked: the box may have been unticked during the announcement.
+                            if (!MayMindWipe(App.Settings?.Current?.AutonomyCanTriggerMindWipe == true,
+                                    App.Settings?.Current?.MindWipeEnabled == true))
+                                break;
                             App.MindWipe?.TriggerOnce();
                             break;
 
@@ -1416,7 +1469,7 @@ namespace ConditioningControlPanel.Services
                         App.Overlay?.RefreshOverlays();
 
                         // Ownership, not the toggles (#1180).
-                        if (ShouldStopOverlayAfterPulse(overlayWasRunning, _pinkFilterPulseActive))
+                        if (ShouldStopOverlayAfterPulse(overlayWasRunning, _pinkFilterPulseActive, App.IsEngineRunning))
                         {
                             App.Overlay?.Stop();
                             App.Logger?.Information("AutonomyService: Spiral pulse - stopped overlay service");
@@ -1546,7 +1599,7 @@ namespace ConditioningControlPanel.Services
                         // feature toggles here was the bug: with the engine off they say "armed",
                         // not "on screen", so an armed Pink Filter card kept the service alive and
                         // the pink never went away.
-                        if (ShouldStopOverlayAfterPulse(overlayWasRunning, _spiralPulseActive))
+                        if (ShouldStopOverlayAfterPulse(overlayWasRunning, _spiralPulseActive, App.IsEngineRunning))
                         {
                             App.Overlay?.Stop();
                             App.Logger?.Information("AutonomyService: Pink filter pulse - stopped overlay service");
@@ -1592,9 +1645,23 @@ namespace ConditioningControlPanel.Services
         {
             try
             {
+                // The old null-context prompt ("tease them to get attention") made the model cast
+                // the USER as the attention-seeker, and one stateless call with byte-identical input
+                // repeated the same "brat" line minutes apart (beebee, 2026-10-20). With the brain
+                // on, the comment is an ambient event: it sees the chat and its anti-repeat line,
+                // and an ambient call never spends the user's moderation budget.
+                var brain = App.Brain;
+                if (context == null && App.Ai != null && Services.AIService.BrainAdapter.ShouldRouteAmbient(
+                        brain, Services.Companion.Brain.CompanionBrain.IsEnabled, App.Ai.IsAvailable, promptTemplate: null))
+                {
+                    var line = await Services.AIService.BrainAdapter.ReactAsync(brain!, Services.AIService.FrameFormatter.TakeoverCommentEvent());
+                    ShowAICommentLine(line, aiGenerated: true);
+                    return;
+                }
+
                 var prompt = context != null
                     ? $"Make a short teasing comment about {context}. Be playful and flirty."
-                    : "Say something random and teasing to get attention. Be playful.";
+                    : TakeoverCommentPrompt;
 
                 // R2-NEW-H-1: migrate to typed AI API. Refusals are silently dropped
                 // on this autonomy surface (the user did not directly prompt — a
@@ -1602,18 +1669,41 @@ namespace ConditioningControlPanel.Services
                 // logged via ModerationLog). IsAiGenerated now flows through so
                 // canned fallbacks (offline, login-required) no longer wear the AI badge.
                 var result = await App.Ai!.GetBambiReplyExAsync(prompt);
-                if (result.Refusal == null && !string.IsNullOrEmpty(result.Text))
-                {
-                    Application.Current?.Dispatcher?.BeginInvoke(() =>
-                    {
-                        App.AvatarWindow?.GigglePriority(result.Text, false, aiGenerated: result.IsAiGenerated);
-                    });
-                }
+                if (result.Refusal == null)
+                    ShowAICommentLine(result.Text, result.IsAiGenerated);
             }
             catch (Exception ex)
             {
                 App.Logger?.Warning("Autonomy: AI comment failed: {Error}", ex.Message);
             }
+        }
+
+        /// <summary>The stateless fallback (brain off): the user did nothing, the companion teases
+        /// out of nowhere. Never "to get attention", which read as the user being the brat.</summary>
+        internal const string TakeoverCommentPrompt =
+            "Tease the user in one short line, out of nowhere. They are busy in the app and did nothing to ask for it. Be playful.";
+
+        private string? _lastAICommentLine;
+
+        /// <summary>A comment word for word the same as the last one is dropped: a repeat reads as
+        /// a broken record, never as the companion paying attention.</summary>
+        internal static bool IsRepeatComment(string? last, string? next)
+            => !string.IsNullOrWhiteSpace(last) && !string.IsNullOrWhiteSpace(next)
+               && string.Equals(last.Trim(), next.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        private void ShowAICommentLine(string? text, bool aiGenerated)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return;
+            if (IsRepeatComment(_lastAICommentLine, text))
+            {
+                App.Logger?.Information("Autonomy: AI comment dropped (same as the last one)");
+                return;
+            }
+            _lastAICommentLine = text;
+            Application.Current?.Dispatcher?.BeginInvoke(() =>
+            {
+                App.AvatarWindow?.GigglePriority(text, false, aiGenerated: aiGenerated);
+            });
         }
 
         /// <summary>

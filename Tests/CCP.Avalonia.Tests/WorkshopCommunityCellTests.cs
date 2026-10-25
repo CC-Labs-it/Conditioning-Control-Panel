@@ -20,6 +20,9 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion.V2;
 using Newtonsoft.Json;
 using Xunit;
 
@@ -221,7 +224,7 @@ public sealed class WorkshopCommunityCellTests
     });
 
     [Fact]
-    public Task CommunityCellIsReachableThroughTheCompanionWorkshopDrawer() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task CommunityCellIsReachableThroughTheCompanionPersonalityPage() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
@@ -236,9 +239,15 @@ public sealed class WorkshopCommunityCellTests
         var shell = new MainShellWindow();
         try
         {
+            // Companion v2 (WPF CompanionTabView.xaml.cs:36-40) collapses the room; the chat's Settings button
+            // opens Companion > Personality, which hosts the Community cell (WPF PersonalityPage.xaml.cs:47).
             shell.Show(); shell.ShowTab("companion"); Dispatcher.UIThread.RunJobs();
-            shell.GetLogicalDescendants().OfType<WorkshopAccordion>().Single().ExpandAndReveal(); Dispatcher.UIThread.RunJobs();
-            var cell = shell.GetLogicalDescendants().OfType<WorkshopCommunityCell>().Single();
+            shell.Named<CompanionTabView>("CompanionTab")!.FindControl<ConversationPage>("Conversation")!
+                .FindControl<Button>("SettingsButton")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("personality", shell.CurrentTab);
+            var cell = shell.Named<PersonalityPage>("CompanionPersonalityTab")!.GetLogicalDescendants().OfType<WorkshopCommunityCell>().Single();
+            Assert.True(cell.IsEffectivelyVisible);
             Assert.True(cell.IsVisible); Assert.True(cell.FindControl<Button>("BtnBrowsePrompts")!.IsVisible);
 
             // WPF re-reads Z4 straight after Activate/Remove (MainWindow.CompanionTab.cs:184), not on the next tab show.
@@ -258,6 +267,7 @@ public sealed class WorkshopCommunityCellTests
             cell.Service.ActivatePrompt(id);
             shell.ShowTab("settings"); Dispatcher.UIThread.RunJobs();
             shell.ShowTab("companion"); Dispatcher.UIThread.RunJobs();
+            shell.ShowTab("personality"); Dispatcher.UIThread.RunJobs();
             Assert.False(CanActivate());
             cell.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "RemovePrompt").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.NotEqual(active, z4.ActivePersonalityLine);
