@@ -31,6 +31,200 @@ namespace CCP.Avalonia.Tests;
 /// badge, the welcome card and the row hover lift. No server is touched.</summary>
 public sealed class DeeperHubTests
 {
+    [Fact]
+    public Task ImportRevealsDeduplicatesAndSurvivesReload() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var source = Directory.CreateTempSubdirectory("ccp-import-");
+        MainShellWindow? shell = null;
+        string? saved = null;
+        var oldDir = CoreSettings.Current.DeeperLastDirectory;
+        try
+        {
+            var enhancement = new Enhancement { MediaType = MediaTypes.Audio };
+            enhancement.Metadata.Name = "Imported " + Guid.NewGuid().ToString("N");
+            var path = Path.Combine(source.FullName, "input.ccpenh.json");
+            File.WriteAllText(path, EnhancementSerializer.Save(enhancement));
+            File.WriteAllText(Path.Combine(source.FullName, "settings.json"), "{}");
+            shell = new MainShellWindow();
+            shell.Show();
+            shell.ShowTab("deeper");
+            var view = shell.Named<DeeperTabView>("DeeperTab")!;
+            var model = (DeeperTabViewModel)view.DataContext!;
+            shell.ImportEnhancementFiles(new[] { path, Path.Combine(source.FullName, "settings.json") });
+            var row = model.FilteredEntries.Single(r => r.Name == enhancement.Metadata.Name);
+            saved = row.Entry.FilePath;
+            Assert.True(File.Exists(saved));
+            Assert.True(row.IsHighlighted);
+            Assert.Equal(source.FullName, CoreSettings.Current.DeeperLastDirectory);
+            model.ReloadLibrary();
+            Assert.True(model.FilteredEntries.Single(r => r.Entry.FilePath == saved).IsHighlighted);
+            await shell.ImportDroppedFilesAsync(new[] { path });
+            Assert.Single(model.FilteredEntries.Where(r => r.Name == enhancement.Metadata.Name));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains("highlighted", RowBorder(view, saved).Classes);
+            await Task.Delay(1900); // WPF reveal expires after 1800 ms, including after reload.
+            Assert.False(model.FilteredEntries.Single(r => r.Entry.FilePath == saved).IsHighlighted);
+            model.SetSearch("no matching row " + Guid.NewGuid());
+            Assert.Equal(-1, model.Highlight(saved)); // filtered imports never clear the user's filters
+        }
+        finally
+        {
+            shell?.Close();
+            if (saved != null) File.Delete(saved);
+            source.Delete(true);
+            CoreSettings.Current.DeeperLastDirectory = oldDir;
+        }
+    });
+
+    [Fact]
+    public Task DurationBackfillIsLocalDeduplicatedCachedAndSorted() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var media = Path.GetTempFileName();
+        var a = WriteEnhancement("duration-a");
+        var b = WriteEnhancement("duration-b");
+        var old = DeeperTabViewModel.DurationProbe;
+        var calls = 0;
+        var answer = new TaskCompletionSource<double?>();
+        try
+        {
+            foreach (var path in new[] { a, b })
+            {
+                var enhancement = EnhancementSerializer.LoadFromFile(path);
+                enhancement.MediaSource = media;
+                File.WriteAllText(path, EnhancementSerializer.Save(enhancement));
+            }
+            DeeperTabViewModel.DurationProbe = path =>
+            {
+                Assert.Equal(media, path); calls++; return answer.Task;
+            };
+            var model = new DeeperTabViewModel();
+            model.SetSearch("HubTest duration-");
+            model.ReloadLibrary();
+            Assert.All(model.FilteredEntries, row => Assert.False(row.ShowDuration));
+            answer.SetResult(125);
+            // Pump the UI continuation without opening a desktop or audio device.
+            for (var i = 0; i < 20 && model.FilteredEntries.Any(r => !r.ShowDuration); i++)
+                await Task.Delay(10);
+            Assert.Equal(1, calls);
+            Assert.All(model.FilteredEntries, row => Assert.Equal("2:05", row.DurationDisplay));
+            Assert.True(MediaDurationCache.TryGetCached(media, out var seconds));
+            Assert.Equal(125, seconds);
+            model.ReloadLibrary();
+            Assert.All(model.FilteredEntries, row => Assert.True(row.ShowDuration));
+            Assert.Equal(1, calls);
+        }
+        finally { DeeperTabViewModel.DurationProbe = old; File.Delete(a); File.Delete(b); File.Delete(media); }
+    });
+
+    [Fact]
+    public Task WatcherRefreshesTheOpenHubAndStopsOnClose() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var shell = new MainShellWindow();
+        string? path = null;
+        try
+        {
+            shell.Show(); shell.ShowTab("deeper");
+            var model = (DeeperTabViewModel)shell.Named<DeeperTabView>("DeeperTab")!.DataContext!;
+            path = WriteEnhancement("watcher");
+            for (var i = 0; i < 100 && !model.FilteredEntries.Any(r => r.Entry.FilePath == path); i++)
+                await Task.Delay(20);
+            Assert.Contains(model.FilteredEntries, r => r.Entry.FilePath == path);
+            File.Delete(path);
+            for (var i = 0; i < 100 && model.FilteredEntries.Any(r => r.Entry.FilePath == path); i++)
+                await Task.Delay(20);
+            Assert.DoesNotContain(model.FilteredEntries, r => r.Entry.FilePath == path);
+        }
+        finally { shell.Close(); if (path != null) File.Delete(path); }
+    });
+
+    [Fact]
+    public Task ShellSeedsTheBundledWelcomeDemoOnce() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var settings = CoreSettings.Current;
+        var seeded = settings.HasSeededDeeperDemos;
+        var path = Path.Combine(DeeperLocalLibrary.DefaultFolder, "welcome.ccpenh.json");
+        var prior = File.Exists(path) ? File.ReadAllBytes(path) : null;
+        try
+        {
+            File.Delete(path);
+            settings.HasSeededDeeperDemos = false;
+            var shell = new MainShellWindow();
+            try { shell.InitializeDeeperHub(); Assert.True(File.Exists(path)); Assert.True(settings.HasSeededDeeperDemos); }
+            finally { shell.Close(); }
+            File.WriteAllText(path, "user-edited demo");
+            settings.HasSeededDeeperDemos = false;
+            shell = new MainShellWindow();
+            try { shell.InitializeDeeperHub(); Assert.Equal("user-edited demo", File.ReadAllText(path)); }
+            finally { shell.Close(); }
+            File.Delete(path);
+            shell = new MainShellWindow();
+            try { shell.InitializeDeeperHub(); Assert.False(File.Exists(path)); }
+            finally { shell.Close(); }
+        }
+        finally
+        {
+            settings.HasSeededDeeperDemos = seeded;
+            if (prior == null) File.Delete(path); else File.WriteAllBytes(path, prior);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task SearchWaitsForTheWpfDebounceAndShowsMissingMediaTooltip() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var path = WriteEnhancement("search-debounce");
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show(); shell.ShowTab("deeper");
+            var view = shell.Named<DeeperTabView>("DeeperTab")!;
+            var model = (DeeperTabViewModel)view.DataContext!;
+            var row = model.FilteredEntries.Single(r => r.Entry.FilePath == path);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("deeper_hub_tip_media_missing"), row.MediaSourceTooltip);
+            view.FindControl<TextBox>("TxtDeeperSearch")!.Text = "no match " + Guid.NewGuid();
+            Assert.Contains(model.FilteredEntries, r => r.Entry.FilePath == path);
+            await Task.Delay(200);
+            Assert.Empty(model.FilteredEntries);
+        }
+        finally { shell.Close(); File.Delete(path); }
+    });
+
+    [Fact]
+    public Task FailedDurationProbeIsNotRetriedAndRemoteMediaIsNeverProbed() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var media = Path.GetTempFileName();
+        var local = WriteEnhancement("failed-duration");
+        var remote = WriteEnhancement("remote-duration");
+        var old = DeeperTabViewModel.DurationProbe;
+        var calls = 0;
+        try
+        {
+            var enhancement = EnhancementSerializer.LoadFromFile(local);
+            enhancement.MediaSource = media;
+            File.WriteAllText(local, EnhancementSerializer.Save(enhancement));
+            enhancement.MediaSource = "https://example.invalid/media.mp3";
+            File.WriteAllText(remote, EnhancementSerializer.Save(enhancement));
+            DeeperTabViewModel.DurationProbe = path =>
+            {
+                Assert.Equal(media, path); calls++; return Task.FromResult<double?>(null);
+            };
+            var model = new DeeperTabViewModel();
+            model.SetSearch("HubTest");
+            model.ReloadLibrary(); model.ReloadLibrary();
+            Assert.Equal(1, calls);
+            Assert.False(model.FilteredEntries.Single(r => r.Entry.FilePath == local).ShowDuration);
+            Assert.False(model.FilteredEntries.Single(r => r.Entry.FilePath == remote).ShowDuration);
+        }
+        finally { DeeperTabViewModel.DurationProbe = old; File.Delete(local); File.Delete(remote); File.Delete(media); }
+        return Task.CompletedTask;
+    });
+
     private sealed class SteppedClock : TimeProvider
     {
         public long Now;
@@ -70,7 +264,7 @@ public sealed class DeeperHubTests
     private static void Click(Button b) { b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
 
     [Fact]
-    public Task LibraryRowsSelectOpenPlayAndDeleteWithUndo() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task LibraryRowsSelectOpenPlayAndDeleteWithUndo() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var a = WriteEnhancement("a");
@@ -95,6 +289,7 @@ public sealed class DeeperHubTests
             var vm = (DeeperTabViewModel)view.DataContext!;
             view.FindControl<TextBox>("TxtDeeperSearch")!.Text = "HubTest";   // only this test's rows
             Dispatcher.UIThread.RunJobs();
+            await Task.Delay(200); // WPF search debounce is 150 ms.
             Assert.Equal(2, vm.FilteredEntries.Count);
 
             // Ctrl+F focuses the search box; Down selects the first row and paints it.
@@ -156,7 +351,6 @@ public sealed class DeeperHubTests
             File.Delete(b);
             Directory.Delete(trash, true);
         }
-        return Task.CompletedTask;
     });
 
     [Fact]

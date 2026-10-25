@@ -673,3 +673,11 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+
+### Deeper hub completion
+
+1. WPF `MainWindow/MainWindow.DeeperTab.cs` / `MainWindow/MainWindow.DeeperHub.cs` — Import one enhancement, a duplicate, unrelated JSON and malformed enhancement; confirm WPF toast order, no duplicate copy, source-folder memory, scroll and 1.8 s accent flash. Repeat by dropping files. A filtered-out import must preserve filters. Rows: `shell-deeper-hub`
+2. WPF `MainWindow/MainWindow.DeeperHub.cs` — Search waits 150 ms; missing local media explains the warning. Import while visible, then externally save/rename/delete library files: rows refresh after the 300 ms watcher debounce, selection and active flash survive; hidden tab rescans on next entry. Rows: `shell-deeper-hub`
+3. WPF `MainWindow/MainWindow.DeeperHub.cs` — Open a library with unknown local durations, duplicate sources, broken local media and remote URLs. Only local existing files are probed, once per source per session; known durations appear and duration sort updates in batches of five. Revisit to use cache; authored duration wins. Rows: `shell-deeper-hub`
+4. WPF `Services/Deeper/EnhancementLibrary.cs` — Fresh sandbox seeds welcome demo, preserves an edited demo, and never recreates one deleted after seeding. Open welcome demo through the welcome card. Close shell with a watcher active and confirm no later refresh. Existing child windows retain panic registration; no new surface is introduced. Rows: `shell-deeper-hub`

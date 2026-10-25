@@ -28,7 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// <c>if (Window.GetWindow(this) is MainWindow mw) mw.&lt;same name&gt;(...)</c>, plus the
     /// mod-aware feature art and the FX lifecycle hook. Library rows, the welcome card, player,
     /// folder and catalogue relay to MainShellWindow.DeeperHub.cs; the webcam card shares Blink
-    /// Trainer handlers as WPF does. Import and tutorial are still stubs (see docs/avalonia-parity.md). The FEATURE ART is real: Helpers.ModArt.TryLoad plus CoreMods.ModChanged is the same
+    /// Trainer handlers as WPF does. The tutorial is still a stub (see docs/avalonia-parity.md). The FEATURE ART is real: Helpers.ModArt.TryLoad plus CoreMods.ModChanged is the same
     /// answer WPF's ModResourceResolver gives, and Assets/features/deeper.png is linked here.
     /// </summary>
     public partial class DeeperTabView : UserControl
@@ -60,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
+            _searchDebounce?.Stop();
             Platform.WebcamTracker.Instance.StateChanged -= RefreshWebcamStatus;
             CoreMods.ModChanged -= OnModChanged;
             CoreSettings.Current.PropertyChanged -= OnWebcamSettingsChanged;
@@ -148,7 +149,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
         }
 
-        private void ScrollToRow(int index)
+        internal void ScrollToRow(int index)
         {
             if (index >= 0) this.FindControl<ItemsControl>("DeeperLibraryList")?.ContainerFromIndex(index)?.BringIntoView();
         }
@@ -164,8 +165,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void BtnDeeperCatalogue_Click(object? sender, RoutedEventArgs e)
             => _ = Platform.ExternalOpener.OpenAsync(TopLevel.GetTopLevel(this), MainShellWindow.DeeperCatalogueUrl);
-        // ponytail: import needs EnhancementLibrary.FindDuplicateOf/PromoteToLibrary (Core); no head instance yet.
-        private void BtnDeeperImport_Click(object? sender, RoutedEventArgs e) { }
+        // Manual import and window-wide drop share the same shell path.
+        private async void BtnDeeperImport_Click(object? sender, RoutedEventArgs e)
+            { if (Owner is { } shell) await shell.PickDeeperImportsAsync(); }
         private void BtnDeeperNewEnhancement_Click(object? sender, RoutedEventArgs e)
             => Owner?.BtnDeeperNewEnhancement_Click(sender, e);
         private void BtnDeeperOpenLibraryFolder_Click(object? sender, RoutedEventArgs e) => Owner?.OpenDeeperLibraryFolder();
@@ -271,10 +273,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             e.Handled = true;
             _ = shell.SubmitDeeperLibraryEntryAsync(row.Entry);
         }
+        private global::Avalonia.Threading.DispatcherTimer? _searchDebounce;
         private void DeeperSearch_TextChanged(object? sender, TextChangedEventArgs e)
         {
             var text = sender is TextBox box ? box.Text : TxtDeeperSearch?.Text;
-            ViewModel?.SetSearch(text);
+            _searchDebounce ??= new global::Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+            _searchDebounce.Stop();
+            ViewModel?.StageSearch(text);
+            _searchDebounce.Tick -= ApplySearch;
+            _searchDebounce.Tick += ApplySearch;
+            _searchDebounce.Start();
+        }
+
+        private void ApplySearch(object? sender, EventArgs e)
+        {
+            _searchDebounce?.Stop();
+            ViewModel?.Refresh();
         }
 
         private void DeeperSort_SelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -352,6 +366,61 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _allEntries.AddRange(result.Entries.Where(e => !PendingDeletes.ContainsKey(FullPath(e.FilePath))));
             _libraryError = result.HasError;
             ApplyFilter();
+            _ = ProbeDurationsAsync();
+        }
+
+        private bool _probingDurations;
+        private readonly HashSet<string> _durationTried = new(StringComparer.OrdinalIgnoreCase);
+        internal static Func<string, System.Threading.Tasks.Task<double?>> DurationProbe = ProbeLocalDurationAsync;
+
+        private static async System.Threading.Tasks.Task<double?> ProbeLocalDurationAsync(string path)
+        {
+            // ponytail: LibVLC parse-only handles both media types on every OS; no playback/device is opened.
+            return await System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    var vlc = Platform.LibVlcAudio.Shared;
+                    if (vlc == null) return (double?)null;
+                    using var media = new LibVLCSharp.Shared.Media(vlc, path, LibVLCSharp.Shared.FromType.FromPath);
+                    var status = await media.Parse(LibVLCSharp.Shared.MediaParseOptions.ParseLocal, 5000);
+                    return status == LibVLCSharp.Shared.MediaParsedStatus.Done && media.Duration > 0
+                        ? media.Duration / 1000.0 : (double?)null;
+                }
+                catch (Exception ex) { Serilog.Log.Debug(ex, "Deeper duration probe failed"); return null; }
+            });
+        }
+
+        internal async System.Threading.Tasks.Task ProbeDurationsAsync()
+        {
+            if (_probingDurations) return;
+            _probingDurations = true;
+            try
+            {
+                while (true)
+                {
+                    var pending = _allEntries.Where(e => e.DurationSeconds <= 0
+                        && !_durationTried.Contains(e.MediaSource) && MediaDurationCache.IsProbeable(e.MediaSource))
+                        .Select(e => e.MediaSource).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    if (pending.Count == 0) break;
+                    var found = 0;
+                    foreach (var source in pending)
+                    {
+                        _durationTried.Add(source);
+                        double? seconds = MediaDurationCache.TryGetCached(source, out var cached)
+                            ? cached : await DurationProbe(source);
+                        if (seconds is not > 0 || !double.IsFinite(seconds.Value)) continue;
+                        MediaDurationCache.Remember(source, seconds.Value);
+                        foreach (var entry in _allEntries.Where(e => e.DurationSeconds <= 0
+                            && string.Equals(e.MediaSource, source, StringComparison.OrdinalIgnoreCase)))
+                            entry.DurationSeconds = seconds.Value;
+                        if (++found % 5 == 0) ApplyFilter();
+                    }
+                    if (found % 5 != 0) ApplyFilter();
+                }
+            }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "Deeper duration backfill failed"); }
+            finally { _probingDurations = false; }
         }
 
         /// <summary>Full path -> start timestamp of a delete waiting out its undo grace (the shell
@@ -359,6 +428,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal Dictionary<string, long> PendingDeletes { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         private string? _selectedPath;
+        private string? _highlightedPath;
+        internal int Highlight(string path)
+        {
+            var index = FilteredEntries.ToList().FindIndex(r => PathsEqual(r.Entry.FilePath, path));
+            if (index < 0) return -1;
+            _highlightedPath = FullPath(path);
+            foreach (var row in FilteredEntries) row.IsHighlighted = PathsEqual(row.Entry.FilePath, path);
+            return index;
+        }
+        internal void ClearHighlight(string path)
+        {
+            if (PathsEqual(_highlightedPath, path)) _highlightedPath = null;
+            foreach (var row in FilteredEntries)
+                if (PathsEqual(row.Entry.FilePath, path)) row.IsHighlighted = false;
+        }
 
         /// <summary>Rebuilds the rows without a rescan - a submission badge changed.</summary>
         public void Refresh() => ApplyFilter();
@@ -398,9 +482,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             !string.IsNullOrEmpty(a) && !string.IsNullOrEmpty(b)
             && string.Equals(FullPath(a), FullPath(b), StringComparison.OrdinalIgnoreCase);
 
+        internal void StageSearch(string? search) => _search = search ?? "";
+
         public void SetSearch(string? search)
         {
-            _search = search ?? "";
+            StageSearch(search);
             ApplyFilter();
         }
 
@@ -451,6 +537,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 var row = BuildRow(entry);
                 row.IsSelected = PathsEqual(entry.FilePath, _selectedPath);
+                row.IsHighlighted = PathsEqual(entry.FilePath, _highlightedPath);
                 FilteredEntries.Add(row);
             }
             Notify(nameof(LibraryCountText), nameof(ShowLibraryEmpty), nameof(LibraryEmptyText),
@@ -498,8 +585,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ShowCreator = !string.IsNullOrEmpty(entry.Creator),
                 MediaSourceGlyph = source.Glyph,
                 MediaSourceLabel = source.Label,
+                MediaSourceTooltip = source.Glyph == IconKind.Warning ? Loc.Get("deeper_hub_tip_media_missing") : source.Label,
                 MediaSourceBrush = source.Exists ? new SolidColorBrush(Color.FromRgb(0x4A, 0xDE, 0x80)) : Brushes.Gray,
                 ShowMediaSource = !string.IsNullOrEmpty(source.Label),
+                DurationDisplay = entry.DurationSeconds > 0 ? MediaDurationCache.Format(entry.DurationSeconds) : "",
+                ShowDuration = entry.DurationSeconds > 0,
                 TimestampDisplay = FormatRelativeTime(entry.LastModified),
                 ShowTimestamp = entry.LastModified != default,
                 Tags = tags,
@@ -607,6 +697,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
         }
 
+        private bool _isHighlighted;
+        public bool IsHighlighted
+        {
+            get => _isHighlighted;
+            set { if (_isHighlighted == value) return; _isHighlighted = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsHighlighted))); }
+        }
+        public string DurationDisplay { get; init; } = "";
+        public bool ShowDuration { get; init; }
+
         public EnhancementLibraryEntry Entry { get; init; } = new();
         public string Name { get; init; } = "";
         public IconKind MediaTypeIcon { get; init; } = IconKind.Video;
@@ -617,6 +717,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public bool ShowCreator { get; init; }
 
         public string MediaSourceLabel { get; init; } = "";
+        public string MediaSourceTooltip { get; init; } = "";
         public IconKind MediaSourceGlyph { get; init; } = IconKind.Info;
         public IBrush MediaSourceBrush { get; init; } = Brushes.Gray;
         public bool ShowMediaSource { get; init; }

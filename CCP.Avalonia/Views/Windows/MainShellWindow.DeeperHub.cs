@@ -4,10 +4,6 @@
 // card's demo/tour buttons). The index, filter and sort live in DeeperTabViewModel over Core
 // DeeperLocalLibrary; this partial owns the windows, dialogs, timers and files.
 //
-// Still out (see docs/avalonia-parity.md shell-deeper-hub): import (EnhancementLibrary
-// FindDuplicateOf/PromoteToLibrary + RevealDeeperLibraryRow's flash), the bundled-demo seeding, the
-// library FileSystemWatcher (LibraryChanged), the duration probe, and the Deeper tutorial.
-
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -15,6 +11,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using Avalonia.Platform.Storage;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -45,7 +42,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private DeeperTabViewModel? DeeperModel => Named<DeeperTabView>("DeeperTab")?.DataContext as DeeperTabViewModel;
 
         /// <summary>Reloads the local index when the Deeper view is attached or the tab opens.</summary>
-        internal void InitializeDeeperHub() => ReloadDeeperLibraryFromDisk();
+        private EnhancementLibrary? _deeperLibrary;
+        private bool _deeperHubClosed;
+        internal void InitializeDeeperHub()
+        {
+            if (_deeperHubClosed) return;
+            if (_deeperLibrary == null)
+            {
+                _deeperLibrary = new EnhancementLibrary();
+                _deeperLibrary.LibraryChanged += OnDeeperLibraryChanged;
+                Closed += (_, _) =>
+                {
+                    _deeperHubClosed = true;
+                    _deeperLibrary.LibraryChanged -= OnDeeperLibraryChanged;
+                    _deeperLibrary.Dispose();
+                };
+            }
+            ReloadDeeperLibraryFromDisk();
+        }
+
+        private void OnDeeperLibraryChanged(object? sender, EventArgs e)
+            => Dispatcher.UIThread.Post(() => { if (!_deeperHubClosed && Named<DeeperTabView>("DeeperTab") is { IsVisible: true }) ReloadDeeperLibraryFromDisk(); });
 
         private void ReloadDeeperLibraryFromDisk() => DeeperModel?.ReloadLibrary();
 
@@ -146,6 +163,144 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (File.Exists(path)) Platform.ExternalOpener.Open(Path.GetDirectoryName(Path.GetFullPath(path)));
             }
             catch (Exception ex) { Log.Warning(ex, "Deeper: reveal in folder failed"); }
+        }
+
+        internal void ImportEnhancementFiles(System.Collections.Generic.IEnumerable<string> paths)
+        {
+            var sourcePaths = paths.ToArray();
+            InitializeDeeperHub();
+            var lib = _deeperLibrary;
+            if (lib == null)
+            {
+                App.Notifications?.Show(Loc.Get("deeper_import_library_not_ready"),
+                    Helpers.NotificationType.Warning);
+                return;
+            }
+
+            var imported = new System.Collections.Generic.List<string>();
+            var errors = new System.Collections.Generic.List<string>();
+            int skippedNonEnhancement = 0;
+            string? lastImportedPath = null;
+            string? duplicateOfPath = null;
+
+            foreach (var path in sourcePaths)
+            {
+                var fileName = System.IO.Path.GetFileName(path);
+                if (!EnhancementImportRules.IsImportablePath(path))
+                {
+                    errors.Add(string.Format(Loc.Get("deeper_import_err_not_enh_fmt"), fileName));
+                    continue;
+                }
+                try
+                {
+                    // Plain .json that is not an enhancement (settings.json, a
+                    // preset...) is skipped quietly rather than reported as a failure.
+                    if (!ConditioningControlPanel.Services.Deeper.EnhancementImportRules.FileLooksLikeEnhancement(path))
+                    {
+                        skippedNonEnhancement++;
+                        continue;
+                    }
+                    // Same file, or identical content under another name: no
+                    // "Name (2)" copy, just point at the row that is already there.
+                    var existing = lib.FindDuplicateOf(path);
+                    if (existing != null)
+                    {
+                        duplicateOfPath = existing;
+                        continue;
+                    }
+                    // Validate by loading; bad schema / oversized files throw with
+                    // a useful message from the serializer.
+                    var enhancement = ConditioningControlPanel.Services.Deeper.EnhancementSerializer.LoadFromFile(path);
+                    var saved = lib.PromoteToLibrary(enhancement, sourceTag: "import");
+                    if (saved == null)
+                    {
+                        errors.Add(string.Format(Loc.Get("deeper_import_err_write_fmt"), fileName));
+                        continue;
+                    }
+                    lastImportedPath = saved;
+                    imported.Add(System.IO.Path.GetFileName(saved));
+                }
+                catch (ConditioningControlPanel.Services.Deeper.EnhancementLoadException ex)
+                {
+                    errors.Add($"{fileName}: {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "ImportEnhancementFiles: import failed");
+                    errors.Add($"{fileName}: {ex.GetType().Name}");
+                }
+            }
+
+            // Remember the source folder for next manual import so the file dialog
+            // opens where the user picked from.
+            if (lastImportedPath != null)
+            {
+                var src = sourcePaths.FirstOrDefault();
+                if (!string.IsNullOrEmpty(src))
+                {
+                    var dir = System.IO.Path.GetDirectoryName(src);
+                    if (!string.IsNullOrEmpty(dir))
+                    {
+                        CoreSettings.Current.DeeperLastDirectory = dir;
+                        CoreSettings.Save();
+                    }
+                }
+            }
+
+            // Force-refresh the hub list now in addition to the FileSystemWatcher
+            // signal, since the watcher's debounce can lag a fast manual import.
+            try { ReloadDeeperLibraryFromDisk(); } catch (Exception ex) { Diag.Swallowed(ex); }
+
+            // Toasts, like the rest of the tab, instead of stock modals.
+            if (imported.Count > 0)
+            {
+                var msg = imported.Count == 1
+                    ? string.Format(Loc.Get("deeper_import_done_one_fmt"), imported[0])
+                    : string.Format(Loc.Get("deeper_import_done_many_fmt"), imported.Count);
+                App.Notifications?.Show(msg, Helpers.NotificationType.Success);
+            }
+            if (errors.Count > 0)
+            {
+                App.Notifications?.Show(
+                    string.Format(Loc.Get("deeper_import_failed_fmt"), errors.Count) + "\n" + string.Join("\n", errors),
+                    Helpers.NotificationType.Warning, TimeSpan.FromSeconds(10));
+            }
+            else if (imported.Count == 0)
+            {
+                if (duplicateOfPath != null)
+                    App.Notifications?.Show(Loc.Get("deeper_import_already_in_library"), Helpers.NotificationType.Info);
+                else if (skippedNonEnhancement > 0)
+                    App.Notifications?.Show(Loc.Get("deeper_import_skipped_not_enh"), Helpers.NotificationType.Info);
+            }
+
+            var reveal = lastImportedPath ?? duplicateOfPath;
+            if (reveal != null) RevealDeeperLibraryRow(reveal);
+        }
+
+        internal async Task PickDeeperImportsAsync()
+        {
+            InitializeDeeperHub();
+            var files = await StorageProvider.OpenFilePickerAsync(new global::Avalonia.Platform.Storage.FilePickerOpenOptions
+            {
+                Title = Loc.Get("deeper_import_dialog_title"), AllowMultiple = true,
+                SuggestedStartLocation = await StorageProvider.TryGetFolderFromPathAsync(_deeperLibrary!.LastDirectory),
+                FileTypeFilter = new[]
+                {
+                    new global::Avalonia.Platform.Storage.FilePickerFileType("Deeper enhancements") { Patterns = new[] { "*.ccpenh.json" } },
+                    new global::Avalonia.Platform.Storage.FilePickerFileType("JSON files") { Patterns = new[] { "*.json" } },
+                    global::Avalonia.Platform.Storage.FilePickerFileTypes.All,
+                }
+            });
+            ImportEnhancementFiles(files.Select(f => f.TryGetLocalPath()).OfType<string>().ToArray());
+        }
+
+        internal void RevealDeeperLibraryRow(string path)
+        {
+            if (Named<DeeperTabView>("DeeperTab") is not { } view || DeeperModel is not { } model) return;
+            var index = model.Highlight(path);
+            if (index < 0) return;
+            Dispatcher.UIThread.Post(() => view.ScrollToRow(index), DispatcherPriority.Loaded);
+            DispatcherTimer.RunOnce(() => model.ClearHighlight(path), TimeSpan.FromMilliseconds(1800));
         }
 
         // ---- the welcome card (WPF MainWindow.DeeperTab.cs:71-118) ----
