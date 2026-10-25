@@ -71,9 +71,15 @@ public sealed class ChaosHubCoreWireTests
                     ToolTip.GetTip(hub.FindControl<ToggleButton>("SegExtreme")!));
 
                 // A save that never bought the Diary is not offered the tab.
-                ChaosMetaStore.Save(new ChaosMetaState(), 1);
+                ChaosMetaStore.Save(new ChaosMetaState { Gold = ChaosBench.GOLD_DIARY }, 1);
                 bare = new ChaosHubWindow();
                 Assert.False(bare.FindControl<ToggleButton>("TabDiary")!.IsVisible);
+
+                // Buying it on the bench re-applies the gates at once (WPF Bench.cs:223 ApplyReveals).
+                bare.FindControl<StackPanel>("ImprovementsHost")!.GetLogicalDescendants().OfType<Button>()
+                    .First(b => b.Tag as string == BenchIds.Diary)
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.True(bare.FindControl<ToggleButton>("TabDiary")!.IsVisible);
             }
             finally
             {
