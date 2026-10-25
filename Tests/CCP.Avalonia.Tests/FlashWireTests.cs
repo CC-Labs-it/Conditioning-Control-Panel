@@ -42,8 +42,10 @@ public sealed class FlashWireTests
         AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>().UseSkia()
-                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+                AppBuilder.Configure<AvApp>().WithInterFont()
+                    .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                    .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var s = CoreSettings.Current;
             var saved = (s.FlashExitStyle, s.MotionLevel, s.HydraLinkedTiming, s.CorruptionMode, s.HydraLimit,
                 s.FlashGlowEnabled, s.PerformanceMode, s.FlashClickable, s.FlashStayUntilPopped, Skills: s.UnlockedSkills.ToList());

@@ -6,17 +6,18 @@
 // choice and the wizard all go through ActivateMod + ApplyActiveModChange; nothing else switches.
 //
 // ponytail: ApplyActiveModChange repaints what this head has - the selector, the palette. WPF also
-// reloads the logo/takeover/feature art, the achievement grid, skill tree, secret skills, BambiCloud
-// radio + browser URL, the Hypnotube link editor, the tube's quick menu and the per-mod default
-// presets; each joins here when its surface is live on this head. The combo's "Open Mod Manager"
-// footer row (ModManagerEntryId) is not ported; the MOD capsule next to it opens the manager.
+// reloads the takeover art, achievement grid, BambiCloud radio + browser URL, Hypnotube link
+// editor and per-mod defaults; each joins here when its surface is live. Home tile art now follows
+// CoreMods.ModChanged as well as startup; the manager footer is the WPF 7.1.5 action row.
 
 using System;
 using System.Linq;
 using Avalonia.Controls;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Serilog;
 using AvApp = ConditioningControlPanel.Avalonia.App;
@@ -31,6 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // True until InitializeModSelector first runs: the XAML's SelectedIndex="0" on the sample row
         // raises SelectionChanged during load, which must not read as a user switch.
         private bool _suppressModSelectorChange = true;
+        internal const string ModManagerEntryId = "__open_mod_manager__";
 
         /// <summary>The window that hosts the switch (PendingModActivation._window).</summary>
         private static MainShellWindow? _modSwitchHost;
@@ -45,6 +47,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Closed += (_, _) => { if (_modSwitchHost == this) _modSwitchHost = null; };
             InitializeModSelector();
             RefreshThemeAwareElements();
+            LoadFeatureImages();
+            CoreMods.ModChanged += OnModChangedFeatureImages;
+            Closed += (_, _) => CoreMods.ModChanged -= OnModChangedFeatureImages;
             if (_hookedMods != mods)
             {
                 _hookedMods = mods;
@@ -93,6 +98,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (_suppressModSelectorChange) return;
             if ((sender as ComboBox)?.SelectedItem is not ModSelectorItem item) return;
+            if (item.Id == ModManagerEntryId)
+            {
+                // WPF OpenModManagerFromSelector: the action is never the worn mod. Reset before
+                // opening the modal; defer the modal until the combo finishes its selection cycle.
+                _suppressModSelectorChange = true;
+                try
+                {
+                    var combo = (ComboBox)sender!;
+                    combo.SelectedItem = AvailableMods.FirstOrDefault(i => i.Id == AvApp.Mods?.ActiveModId);
+                    combo.IsDropDownOpen = false;
+                }
+                finally { _suppressModSelectorChange = false; }
+                Dispatcher.UIThread.Post(() => BtnManageMods_Click(this, new global::Avalonia.Interactivity.RoutedEventArgs()), DispatcherPriority.Normal);
+                return;
+            }
             if (AvApp.Mods == null || AvApp.Mods.ActiveModId == item.Id) return;
 
             AvApp.Mods.ActivateMod(item.Id);
@@ -164,6 +184,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             LoadLogo();   // WPF MainWindow.xaml.cs:3127
             RefreshThemeAwareElements();
 
+            // WPF ApplyActiveModChange: restore only an explicit pick remembered in this mod.
+            // A restore keeps custom prompts intact and does not record a new pick.
+            try { PersonalityService.Shared.RestoreForActiveMod(); }
+            catch (Exception ex) { Log.Warning(ex, "Mod switch: personality restore failed"); }
+            foreach (var personality in this.GetLogicalDescendants().OfType<Controls.Companion.MakeHerYoursView>())
+                personality.ViewModel.Sync();
+
             Log.Information("Mod changed to {ModId}", mods.ActiveModId);
         }
 
@@ -183,6 +210,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     .Concat(mods.InstalledMods.Values.Where(m => !m.IsBuiltIn)
                         .OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase))
                     .Select(BuildSelectorItem).ToList();
+                rows.Add(new ModSelectorItem(ModManagerEntryId, Loc.Get("label_open_mod_manager"),
+                    Brushes.Transparent, isAction: true));
                 // Rebuild only when the mod set changed. Unlike WPF, clearing an Avalonia ComboBox's
                 // items from inside its own SelectionChanged leaves the closed chip blank.
                 if (!rows.Select(r => (r.Id, r.Name)).SequenceEqual(AvailableMods.Select(r => (r.Id, r.Name))))

@@ -55,6 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             AttachedToVisualTree += (_, _) => { _attached = true; Subscribe(IsVisible); };
             DetachedFromVisualTree += (_, _) => { _attached = false; Subscribe(false); };
             PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) Subscribe(_attached && IsVisible); };
+            InitializeHeroSheen();
             // WPF :102: a long lock name shrinks to the hero's inner width instead of clipping.
             HeroCard.SizeChanged += (_, _) => HeroTitle.FitWidth = Math.Max(0, HeroCard.Bounds.Width - 52);
             LadderInit();
@@ -71,6 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             Refresh();
             LadderOnShown();
+            RefreshHeroSheen();
             // WPF FxOnShown (Fx.cs:159-160): the word lands, then idles.
             HeroTitle.PlayEntry();
             HeroTitle.Start();

@@ -155,6 +155,23 @@
                                 <CheckBox Grid.Column="1" x:Name="ChkStrict"
                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                             </Grid>
+
+                            <!-- Shows as: full screen (default) or a floating window. A strict video
+                                 stays full screen (MandatoryVideoPresentation.ShouldFloat). -->
+                            <Grid Height="36" Background="Transparent" ToolTip.Tip="{loc:Str tooltip_video_appearance}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Str setting_video_appearance}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Column="1" x:Name="CmbAppearance"
+                                          Width="180" VerticalAlignment="Center"
+                                          Theme="{DynamicResource DarkComboBoxStyle}"/>
+                            </Grid>
+                            <TextBlock x:Name="TxtAppearanceNote" Text="{loc:Str video_appearance_strict_note}" FontSize="11"
+                                       Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="0,0,0,4"
+                                       IsVisible="False"/>
                         </StackPanel>
                     </Grid>
                 </Border>
