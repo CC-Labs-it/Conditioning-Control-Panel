@@ -348,7 +348,10 @@ public sealed class AssetsTabTests
         await tab.ThumbnailLoads;
         Dispatcher.UIThread.RunJobs();
         Assert.NotNull(tab.CurrentFolderFiles.Single(f => f.Name == "clip.avi").Thumbnail);
-        Assert.Null(tab.CurrentFolderFiles.Single(f => f.Name == "v.mp4").Thumbnail);
+        // Off Windows the placeholder stays. On Windows it is whatever the shell gives (WPF ShellThumbnailHelper):
+        // the icon fallback on one CI run, null on the next, so there is no stable expectation to assert there.
+        if (!OperatingSystem.IsWindows())
+            Assert.Null(tab.CurrentFolderFiles.Single(f => f.Name == "v.mp4").Thumbnail);
     });
 
     // WPF MainWindow.Assets.cs:801-806: a pack video is decrypted to a temp file for its thumbnail, which is deleted after.

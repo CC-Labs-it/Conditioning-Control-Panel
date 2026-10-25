@@ -69,7 +69,7 @@ public sealed class ShellAssetsCompletionTests
             Assert.Equal("b.wav", rows[1].AudioFileName);
             var cell = new WorkshopTriggersCell();
             cell.UpdatePhraseCountDisplay();
-            int active = CompanionPhraseEditorDialog.LoadPhrases().Count(p => p.IsEnabled);
+            const int active = 1;   // b only: a is disabled, c is removed
             Assert.Equal(Loc.GetF("label_0_active_2", active), cell.FindControl<TextBlock>("TxtPhraseCount")!.Text);
             s.PhrasePresets.Clear();
             cell.AskText = (_, _, _) => Task.FromResult<string?>("Voice preset");
