@@ -58,12 +58,7 @@ namespace ConditioningControlPanel.Views.Controls.Companion
         /// can synthesise, but "list already at the bottom, user scrolls down" is.</para>
         /// </summary>
         public static bool ShouldForward(double scrollableHeight, double verticalOffset, int delta)
-        {
-            if (delta == 0) return false;
-            if (scrollableHeight <= 0.0) return true;                       // nothing to scroll at all
-            if (delta < 0) return verticalOffset >= scrollableHeight - 0.5;  // already at the end
-            return verticalOffset <= 0.5;                                    // already at the top
-        }
+            => CompanionWheelLogic.ShouldForward(scrollableHeight, verticalOffset, delta);
 
         private static void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {

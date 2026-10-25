@@ -1,7 +1,7 @@
 <!-- PORTED from ConditioningControlPanel/Controls/SparkleWallet.xaml. Same 29 x 138 pill, colours and
      order. Deviations, all forced: the hover/focus/press triggers -> template selectors; the gold
-     diamond Path -> a Fluent Diamond glyph (icon rule); EmiFace's pixel glyphs are not ported, so
-     the face is "^_^" in the bundled Press Start 2P on the visor (same rect, SparkleWallet.xaml:42);
+     diamond Path -> a Fluent Diamond glyph (icon rule); the fixed "^_^" face uses WalletEmiFace,
+     the flat path of WPF EmiFace in the same visor rect (SparkleWallet.xaml:42);
      the two popup cards are their own controls (SparkleWalletInviteCard / SparkleWalletHelpCard) so
      the headless render draws them. Motion runs on BeatLoops (P82), see the code-behind. -->
 <UserControl xmlns="https://github.com/avaloniaui"
@@ -47,10 +47,8 @@
                                RenderTransformOrigin="84.8%,67.6%">
                             <Image.RenderTransform><RotateTransform/></Image.RenderTransform>
                         </Image>
-                        <Viewbox HorizontalAlignment="Left" VerticalAlignment="Top" Margin="320,297,0,0" Width="389" Height="349">
-                            <TextBlock x:Name="MascotFace" Text="^_^" Margin="4" Foreground="#FF69B4"
-                                       FontFamily="avares://CCP.Avalonia/Resources/emi/fonts#Press Start 2P"/>
-                        </Viewbox>
+                        <fx:WalletEmiFace x:Name="MascotFace" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                          Margin="320,297,0,0" Width="389" Height="349"/>
                     </Grid>
                 </Viewbox>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="2,0,0,0">

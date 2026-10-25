@@ -45,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             SliderMaxOnScreen.ValueChanged += SliderMaxOnScreen_Changed;
             ChkClickable.IsCheckedChanged += ChkClickable_Changed;
             ChkStayUntilPopped.IsCheckedChanged += ChkStayUntilPopped_Changed;
+            ChkFlashShatter.IsCheckedChanged += ChkFlashShatter_Changed;
             CmbExit.SelectionChanged += CmbExit_Changed;
             ChkCorruption.IsCheckedChanged += ChkCorruption_Changed;
             ChkHydraLinked.IsCheckedChanged += ChkHydraLinked_Changed;
@@ -125,6 +126,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 ChkClickable.IsChecked = s.FlashClickable;
                 ChkStayUntilPopped.IsChecked = s.FlashStayUntilPopped;
                 BuildExitPicker(s.FlashExitStyle);
+                ChkFlashShatter.IsChecked = s.FlashShatterEnabled;
+                RefreshExitRow();
                 ChkCorruption.IsChecked = s.CorruptionMode;
                 ChkHydraLinked.IsChecked = s.HydraLinkedTiming;
                 ChkGlow.IsChecked = s.FlashGlowEnabled;
@@ -158,15 +161,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         /// <summary>WPF RefreshV2Box: the box holds the offer while nothing is owned and collapses once
-        /// no row is left (only the motion row and the Get it row exist here).</summary>
+        /// no motion, Shatter or Get it row is left.</summary>
         private void RefreshV2Box() =>
-            BoxFlashV2.IsVisible = RowMotion.IsVisible || !RowGetFlashesV2.IsRowHidden;
+            BoxFlashV2.IsVisible = RowMotion.IsVisible || RowShatter.IsVisible || !RowGetFlashesV2.IsRowHidden;
 
         /// <summary>Still always, Drift and Bounce with its v2 pill when owned, Mix once anything v2 is
         /// owned. Pendulum is not offered: this head cannot play it yet (it would play Still).</summary>
         private void BuildMotionPicker()
         {
             var drift = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.FlashDriftBounce);
+            RowShatter.IsVisible = Platform.PrizeOwnership.OwnsFlashV2();
             RowMotion.IsVisible = drift;
             RefreshV2Box();
             CmbMotion.Items.Clear();
@@ -187,19 +191,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             var row = new StackPanel { Orientation = global::Avalonia.Layout.Orientation.Horizontal };
             row.Children.Add(new TextBlock { Text = ConditioningControlPanel.Localization.Loc.Get(key), VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center });
-            if (v2)
-                row.Children.Add(new Border
-                {
-                    Margin = new Thickness(8, 0, 0, 0), Padding = new Thickness(6, 2, 7, 3), CornerRadius = new CornerRadius(7),
-                    Background = new SolidColorBrush(Color.FromArgb(0xD9, 0x1A, 0x1A, 0x2E)),
-                    BorderBrush = V2Brush, BorderThickness = new Thickness(1), IsHitTestVisible = false,
-                    VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
-                    Child = new TextBlock { Text = ConditioningControlPanel.Localization.Loc.Get("badge_v2"), Foreground = V2Brush, FontSize = 9, FontWeight = FontWeight.Bold },
-                });
+            if (v2) row.Children.Add(NewV2Badge(new Thickness(8, 0, 0, 0)));
             CmbMotion.Items.Add(new ComboBoxItem { Content = row, Tag = style });
         }
 
         private static readonly IBrush V2Brush = new SolidColorBrush(Color.Parse("#FFE08A"));
+
+        /// <summary>WPF FeatureCard.NewV2Badge: the champagne v2 pill for other surfaces (this
+        /// picker, the Studio rack rows). <paramref name="compact"/> is the rack/rail size.</summary>
+        internal static Border NewV2Badge(Thickness margin, bool compact = false) => new()
+        {
+            Margin = margin,
+            Padding = compact ? new Thickness(3, 0, 4, 1) : new Thickness(6, 2, 7, 3),
+            CornerRadius = new CornerRadius(compact ? 5 : 7),
+            Background = new SolidColorBrush(Color.FromArgb(0xD9, 0x1A, 0x1A, 0x2E)),
+            BorderBrush = V2Brush, BorderThickness = new Thickness(1), IsHitTestVisible = false,
+            VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+            Child = new TextBlock { Text = ConditioningControlPanel.Localization.Loc.Get("badge_v2"), Foreground = V2Brush, FontSize = compact ? 7 : 9, FontWeight = FontWeight.Bold },
+        };
 
         private void CmbMotion_Changed(object? sender, SelectionChangedEventArgs e)
         {
@@ -245,6 +254,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.FlashClickable) ||
                 e.PropertyName == nameof(AppSettings.FlashStayUntilPopped) ||
                 e.PropertyName == nameof(AppSettings.FlashExitStyle) ||
+                e.PropertyName == nameof(AppSettings.FlashShatterEnabled) ||
                 e.PropertyName == nameof(AppSettings.CorruptionMode) ||
                 e.PropertyName == nameof(AppSettings.HydraLinkedTiming) ||
                 e.PropertyName == nameof(AppSettings.FlashGlowEnabled) ||
@@ -377,6 +387,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             CoreSettings.Save();
         }
 
+        private void RefreshExitRow()
+        {
+            var shatter = ConditioningControlPanel.Services.Flash.FlashShatter.DecidesClick(
+                CoreSettings.Current.FlashShatterEnabled, Platform.PrizeOwnership.OwnsFlashV2());
+            CmbExit.IsEnabled = !shatter;
+            TxtExitShatterNote.IsVisible = shatter;
+        }
+
+        private void ChkFlashShatter_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            CoreSettings.Current.FlashShatterEnabled = ChkFlashShatter.IsChecked ?? false;
+            CoreSettings.Save();
+            RefreshExitRow();
+        }
+
         private void ChkStayUntilPopped_Changed(object? sender, RoutedEventArgs e)
         {
             if (_isLoading) return;
@@ -385,8 +411,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         // WPF FlashFeatureControl.xaml.cs:498-539. Rebuilt on every load so a language switch
-        // re-reads the row text (P09). ponytail: WPF greys this picker and shows TxtExitShatterNote
-        // while an owned Shatter decides the leave (#1386); this head plays no Shatter yet.
+        // re-reads the row text (P09). RefreshExitRow explains when owned Shatter decides the leave.
         private static readonly (FlashExitStyle Style, string Key)[] ExitChoices =
         {
             (FlashExitStyle.Mix, "option_flash_exit_mix"),

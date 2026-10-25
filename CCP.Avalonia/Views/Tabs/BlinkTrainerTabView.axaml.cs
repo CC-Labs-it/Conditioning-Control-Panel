@@ -79,6 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 BlinkTrainerSession.StateChanged += OnSessionStateChanged;
                 Platform.WebcamTracker.Instance.StateChanged += OnSessionStateChanged;
+                RefreshWebcamStatus();
             };
             DetachedFromVisualTree += (_, _) =>
             {
@@ -98,6 +99,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             SyncTick();
         }
 
+        internal void RefreshWebcamStatus() => Helpers.WebcamStatusPresentation.Paint(this,
+            "WebcamStatusChipBlinkTrainerDot", "TxtWebcamStatusChipBlinkTrainer", Platform.WebcamTracker.Instance.State);
+
         /// <summary>WPF BlinkTrainerTick runs while a session runs; here only while the page shows too.</summary>
         private void SyncTick()
         {
@@ -114,6 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             try
             {
                 SyncTick();
+                RefreshWebcamStatus();
                 RefreshTrackerButton();
                 RefreshStatusRow();
                 ApplyStageMode();
@@ -416,6 +421,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 BlinkTrainerCalibrationStatus.Text = Loc.GetF("blink_trainer_calibration_calibrated_format", device);
             }
             else BindLoc(BlinkTrainerCalibrationStatus, cal == null ? "blink_trainer_calibration_none" : "blink_trainer_calibration_outdated");
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.Named<DeeperTabView>("DeeperTab")?.RefreshWebcamColumn();
         }
 
         // ---- folder library ----------------------------------------------------------------

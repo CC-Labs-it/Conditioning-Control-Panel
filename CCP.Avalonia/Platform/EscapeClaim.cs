@@ -4,9 +4,10 @@
 // popup) is that surface's, not a panic press. Same Core rule (PanicPolicy.SurfaceTakesEscape).
 // The hook asks from its own thread here, so the "keyboard sits in a marked surface" answer is a
 // snapshot the UI thread keeps fresh on every focus change, never a tree walk off-thread.
-// ponytail: WPF also marks the dashboard's ClickChoiceBody (SettingsTabView.xaml.cs:18); its lane adds
-// `EscapeClaim.Mark(x)` when that surface is ported. Circe's Tab price box is marked
-// (ChasterTabView.PriceEdit.cs); the friends drawer is marked by type below. X11 has no claim yet (X11PanicKey raises no per-key events).
+// The dashboard's ClickChoiceBody is marked (SettingsTabView.ClickChoice.cs, WPF SettingsTabView.xaml.cs:18),
+// as is Circe's Tab price box (ChasterTabView.PriceEdit.cs); both call Taken() in their Escape handler.
+// The friends drawer is marked by type below.
+// X11 has no claim yet (X11PanicKey raises no per-key events).
 
 using System;
 using System.Collections.Generic;
