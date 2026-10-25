@@ -72,7 +72,7 @@ test('large puddle footprint hits its visible shoulder and isolates stacked leve
   const u = setup({ s: 100 }, { s: 95.2, lateral: 3.3, height: 9 });
   u.fire('melt');
   assert.equal(u.events.all('item-hit').length, 0);
-  assert.equal(u.items.view().traps[0].radiusM, 3.6);
+  assert.equal(u.items.view().traps[0].radiusM, u.feel.get('items.meltRadiusM'));
   u.racers[1].st[S.grounded] = 1; u.racers[1].st[S.height] = 0; u.tick();
   assert.equal(u.events.all('item-hit').length, 0, 'upper road grounded flag cannot hit lower trap');
 });

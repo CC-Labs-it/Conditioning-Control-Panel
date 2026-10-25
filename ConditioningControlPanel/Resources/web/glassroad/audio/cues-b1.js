@@ -50,6 +50,8 @@ const HIT = {
     for (let k = 0; k < 5; k++) syn.tone(syn.semis(36 - k * 3), { type: 'sine', dur: 0.12, vol: 0.04, at: 0.05 + k * 0.07 });
   },
 };
+// toys kit: borrowed figures until their own land
+Object.assign(HIT, { pendulum: HIT.spiral, disc: HIT.shatter, tether: HIT.shatter, snap: HIT.freeze, bigSpiral: HIT.blackout });
 
 /** A bed under the local screen effect, keyed 'effect-bed'; replaced on a new hit. */
 const BED = {

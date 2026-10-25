@@ -47,6 +47,18 @@ export const STATUS_LOOK = Object.freeze({
       { shape: SHAPE.puff, n: 1, r: 0, hz: 0, up: 0.15, size: 2.6, alpha: 0.45 } ] },
     shatter: { col: rgb(255, 210, 140), alt: rgb(150, 220, 255), parts: [
       { shape: SHAPE.shard, n: 9, r: 1.5, hz: 1.4, up: 1.0, size: 0.5, bob: 0.35, spin: 2.2, alpha: 1 } ] },
+    // toys kit placeholders (Astra's props replace them)
+    pendulum: { col: rgb(255, 200, 120), alt: rgb(255, 240, 200), parts: [
+      { shape: SHAPE.star, n: 5, r: 1.2, hz: 1.1, up: 1.9, size: 0.38, bob: 0.4, alpha: 0.95 } ] },
+    disc: { col: rgb(120, 220, 255), alt: rgb(255, 255, 255), parts: [
+      { shape: SHAPE.shard, n: 8, r: 1.4, hz: 1.6, up: 1.0, size: 0.45, bob: 0.3, spin: 2.4, alpha: 1 } ] },
+    tether: { col: rgb(255, 110, 170), alt: rgb(255, 220, 235), parts: [
+      { shape: SHAPE.ring, n: 1, r: 0, hz: 0, up: 1.6, size: 1.6, spin: 1.2, alpha: 0.8 },
+      { shape: SHAPE.star, n: 6, r: 1.3, hz: 1.4, up: 1.8, size: 0.34, bob: 0.3, alpha: 0.9 } ] },
+    snap: { col: rgb(240, 240, 255), alt: rgb(255, 200, 235), parts: [
+      { shape: SHAPE.star, n: 4, r: 1.0, hz: 0.6, up: 1.4, size: 0.32, bob: 0.2, alpha: 0.85 } ] },
+    bigSpiral: { col: rgb(190, 120, 255), alt: rgb(255, 150, 220), parts: [
+      { shape: SHAPE.spiral, n: 1, r: 0, hz: 0, up: 2.8, size: 2.4, spin: -1.0, alpha: 1 } ] },
   },
 });
 

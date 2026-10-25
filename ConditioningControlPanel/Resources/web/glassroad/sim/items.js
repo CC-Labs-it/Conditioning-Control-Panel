@@ -12,7 +12,7 @@ import { wrap, damp, lerp, clamp } from '../core/math.js';
 import { grantBoost } from './grant.js';
 import { cancelDrift } from './drift.js';
 import { endBoost } from './boost.js';
-import { ITEMS, bucketOf, rollItem, durationOf, makeRand, BUCKETS } from './itemTable.js';
+import { ITEMS, bucketOf, rollItem, durationOf, makeRand, BUCKETS, SPIN_KINDS } from './itemTable.js';
 
 const GROW_S = 0.4;          // feel gap: a respawned box or bubble grows in over this
 const WAVE_S = 1.2;          // feel gap: a Pink wave stays in the view this long
@@ -95,10 +95,10 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
     return { kind: it.kind, s: it.s, x: it.x, downT: 0, upT: 1e9,
       v: { i, p: point(it.s, it.x, 0), n: f.n.slice(), t: f.t.slice(), b: f.b.slice(), alive: true, k: 1 } };
   });
-  let projectiles = [], traps = [], waves = [], pops = [], R = [];
+  let projectiles = [], traps = [], waves = [], pops = [], R = [], links = [];
   const sinks = [];
   const sink = (i) => (i === 0 ? events : (sinks[i] ||= { emit: (name, p) => events.emit('racer-event', { racer: i, name, p }) }));
-  const rs = (i) => (R[i] ||= { eff: null, viewEndT: -1e9, ledger: [], glass: 0, golden: 0, echo: 0, echoT: 0 });
+  const rs = (i) => (R[i] ||= { eff: null, viewEndT: -1e9, ledger: [], glass: 0, golden: 0, echo: 0, echoT: 0, snapGuard: 0 });
   const racer = (i) => (list[i] && list[i].i === i ? list[i] : list.find((r) => r.i === i));
   const free = (r) => !r.finished && (r.st[S.respawnPhase] === RESPAWN.NONE || r.st[S.respawnPhase] === RESPAWN.GRACE);
   const low = (r) => r.st[S.grounded] || r.st[S.height] <= g('pickHeightM');
@@ -126,7 +126,8 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
   function hit(v, by, kind, how, p) {
     const x = rs(v.i), view = ITEMS[kind].view;
     let verdict = 'hit', d = durationOf(feel, kind);
-    if (x.golden > 0) verdict = 'golden';
+    if (x.snapGuard > 0 && (how === 'throw' || how === 'lob' || how === 'trap')) verdict = 'snapped';
+    else if (x.golden > 0) verdict = 'golden';
     else if (x.glass > 0) { verdict = 'glass'; x.glass = 0; }
     else if ((how === 'throw' || how === 'lob') && x.echo > 0 && rand() < g('echoDecoyChance')) { verdict = 'decoy'; x.echo--; }
     else if (VIEW_KINDS[view]) {
@@ -150,10 +151,10 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
     if (x.eff && VIEW_KINDS[ITEMS[x.eff.kind].view]) x.viewEndT = now;
     x.eff = { kind, t: 0, durS: d, out, by };
     if (mul > 0) { x.ledger.push({ t0: now, t1: now + d, mul }); x.viewEndT = now + d + out; }
-    if (kind === 'shatter') {
+    if (SPIN_KINDS.includes(kind)) {
       const st = v.st;
-      st[S.stalled] = g('shatterS');
-      st[S.engineV] *= g('shatterSpeedKeep');
+      st[S.stalled] = d;
+      st[S.engineV] *= g(kind + 'SpeedKeep');
       cancelDrift(st, 'stall', sink(v.i));
       endBoost(st, feel, sink(v.i));
     }
@@ -185,7 +186,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
 
   function use(r, standings) {
     const id = r.item.id, it = ITEMS[id], st = r.st, s = st[S.s], x = st[S.lateral];
-    let mode = it.use === 'trap' || (r.input.back && (it.use === 'throw' || it.use === 'lob')) ? 'drop' : it.use;
+    let mode = it.use === 'trap' || (r.input.back && (it.use === 'throw' || it.use === 'lob' || it.use === 'bounce')) ? 'drop' : it.use;
     const fork = track.forkAtSeg?.(st[S.seg]), seg = fork ? st[S.seg] : -1;
     const dropped = advance(s, seg, -g('dropBehindM')), dropS = dropped.s;
     if (id === 'shatter' && nearOpenEdge(mode === 'drop' ? dropS : s, g('shatterEdgeSafeM'), mode === 'drop' ? dropped.seg : seg)) {
@@ -201,6 +202,22 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       fired = { id: nextId++, kind: id, mode, by: r.i, target, t: 0, ...advance(s, seg, THROW_LEAD_M), x, h: g('throwHeightM'),
         v: Math.max(0, st[S.speedPct]) * feel.get('speed.topMps') + g('throwExtraMps'), homing: target >= 0 };
       projectiles.push(fired);
+    } else if (mode === 'bounce') {
+      // A Disc never homes: it leaves aimed at where the kart ahead is now (or angled to the steer side
+      // with nobody ahead) and banks off rails, so a dodge makes it miss and come back off the wall.
+      const v = Math.max(0, st[S.speedPct]) * feel.get('speed.topMps') + g('throwExtraMps'), maxVx = g('discLateralMps');
+      const ahead = racer(aheadOf(r, standings, g('throwRangeM')));
+      const vx = ahead ? clamp((ahead.st[S.lateral] - x) * v / Math.max(1, pathGap(s, seg, ahead.st[S.s], ahead.st[S.seg])), -maxVx, maxVx)
+        : (Math.sign(r.input.steer || 0) || (rand() < 0.5 ? -1 : 1)) * maxVx;
+      fired = { id: nextId++, kind: id, mode, by: r.i, target: -1, t: 0, ...advance(s, seg, THROW_LEAD_M), x, h: g('throwHeightM'),
+        v, homing: false, vx, bounces: 0 };
+      projectiles.push(fired);
+    } else if (mode === 'tether') {
+      // Hooks the kart ahead; the link holds until the tower passes it (then it spins), or range / time runs out.
+      target = aheadOf(r, standings, g('tetherRangeM'));
+      if (target < 0 || links.some(l => l.by === r.i || l.target === target)) return;   // nobody close: keep it
+      links.push({ id: nextId++, by: r.i, target, t: 0 });
+      events.emit('tether-hook', { by: r.i, target, p: kartP(racer(target)) });
     } else if (mode === 'lob') {
       target = lobTarget(r.i, standings);
       if (target < 0) return;   // alone on the road: keep it
@@ -234,6 +251,40 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
     } else if (id === 'glass') x.glass = g('glassMaxS');
     else if (id === 'echo') { x.echo = g('echoCopies'); x.echoT = g('echoS'); }
     else if (id === 'golden') x.golden = g('goldenS');
+    else if (id === 'snap') {
+      // A shockwave: nearby karts are shoved aside, a link on you breaks, and for snapGuardS anything that
+      // reaches you pops (verdict 'snapped').
+      x.snapGuard = g('snapGuardS');
+      for (const l of links.filter(l => l.target === r.i)) breakLink(l, 'snap');
+      const me = kartP(r), rad = g('snapRadiusM');
+      for (const o of list) {
+        if (o === r || !free(o) || Math.hypot(...kartP(o).map((v, j) => v - me[j])) > rad) continue;
+        if (nearOpenEdge(o.st[S.s], g('shatterEdgeSafeM'), o.st[S.seg])) continue;   // never shove a kart off an open edge
+        if (hit(o, r.i, 'snap', 'wide', kartP(o)) === 'hit') rs(o.i).eff.side = Math.sign(o.st[S.lateral] - r.st[S.lateral]) || 1;
+      }
+      pop('snap', 'hit', r.st[S.s], r.st[S.lateral], 1, r.st[S.seg]);   // the shockwave reads as an impact burst
+      events.emit('snap-burst', { racer: r.i, p: me });
+    }
+  }
+
+  // ---- tether links ---------------------------------------------------------------------------
+  function breakLink(l, reason) {
+    links = links.filter(k => k !== l);
+    events.emit('tether-break', { by: l.by, target: l.target, reason });
+  }
+
+  function linksTick(dt, standings) {
+    for (const l of links.slice()) {
+      l.t += dt;
+      const tower = racer(l.by), vic = racer(l.target);
+      if (!tower || !vic || !free(tower) || !free(vic)) { breakLink(l, 'out'); continue; }
+      if (standings.progressOf(l.by) > standings.progressOf(l.target)) {
+        breakLink(l, 'pass');
+        // the spin is the one real crash of the kit: like Shatter, never near an open edge
+        if (!nearOpenEdge(vic.st[S.s], g('shatterEdgeSafeM'), vic.st[S.seg])) hit(vic, l.by, 'tether', 'tether', kartP(vic));
+      } else if (l.t >= g('tetherMaxS')) breakLink(l, 'timeout');
+      else if (Math.abs(pathGap(tower.st[S.s], tower.st[S.seg], vic.st[S.s], vic.st[S.seg])) > g('tetherBreakM')) breakLink(l, 'range');
+    }
   }
 
   // ---- per tick -------------------------------------------------------------------------------
@@ -269,6 +320,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
     if (x.glass > 0 && (x.glass -= dt) <= 0) { x.glass = 0; pop('glass', 'glass', r.st[S.s], r.st[S.lateral], 1, r.st[S.seg]); }
     if (x.golden > 0) x.golden = Math.max(0, x.golden - dt);
     if (x.echo > 0 && (x.echoT -= dt) <= 0) x.echo = 0;
+    if (x.snapGuard > 0) x.snapGuard = Math.max(0, x.snapGuard - dt);
   }
 
   function flights(dt) {
@@ -309,9 +361,20 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
         flightPop(pr, verdict === 'mercy' ? 'hit' : verdict);
         return false;
       }
-      if (pr.t >= g('throwLifeS')) { flightPop(pr, 'fizzle'); return false; }
+      if (pr.t >= g(pr.mode === 'bounce' ? 'discLifeS' : 'throwLifeS')) { flightPop(pr, 'fizzle'); return false; }
       let stepM = pr.v * dt;
-      const shatter = pr.kind === 'shatter';
+      const shatter = pr.kind === 'shatter' || pr.kind === 'disc';
+      if (pr.mode === 'bounce') {
+        pr.x += pr.vx * dt;
+        const f = pathFrame(pr.s, pr.seg), half = (Number.isFinite(f.w) ? f.w : 12) / 2 - g('projectileRadiusM'), side = Math.sign(pr.x);
+        if (Math.abs(pr.x) > half) {
+          const flags = f.flags || [];
+          if (!(flags.includes('rail') || flags.includes(side > 0 ? 'railR' : 'railL'))) { flightPop(pr, 'fizzle'); return false; }
+          pr.x = side * half; pr.vx = -pr.vx;
+          if (++pr.bounces > g('discBounces')) { flightPop(pr, 'fizzle'); return false; }
+          events.emit('disc-bounce', { by: pr.by, projectileId: pr.id, p: flightPoint(pr).slice() });
+        }
+      }
       const gap = tg ? pathGap(pr.s, pr.seg, tg.st[S.s], tg.st[S.seg]) : -1;
       pr.homing = !!(tg && free(tg) && gap > 0 && gap <= g('throwRangeM'));
       if (pr.homing) {
@@ -370,7 +433,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       for (const o of list) {
         if ((o.i === tp.layer && tp.t < g('trapArmS')) || !free(o) || !low(o)
           || (track.forks?.length ? !worldNear(o, point(tp.s, tp.x, 0, undefined, tp.seg), pathFrame(tp.s, tp.seg).n, rad) : Math.hypot(sd(o.st[S.s], tp.s), o.st[S.lateral] - tp.x) > rad || !sameLevel(o, tp.s, tp.x, tp.seg))) continue;
-        if (tp.kind === 'shatter' && nearOpenEdge(o.st[S.s], g('shatterEdgeSafeM'), o.st[S.seg])) continue;
+        if (SPIN_KINDS.includes(tp.kind) && nearOpenEdge(o.st[S.s], g('shatterEdgeSafeM'), o.st[S.seg])) continue;
         const verdict = hit(o, tp.layer, tp.kind, 'trap', point(tp.s, tp.x, 0, undefined, tp.seg));
         pop(tp.kind, verdict === 'glass' || verdict === 'golden' ? verdict : 'trap', tp.s, tp.x, 0, tp.seg);
         return false;
@@ -388,15 +451,22 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       if (e.kind === 'spiral') m.steerAdd = g('spiralSteerAmp') * Math.sin(2 * Math.PI * g('spiralSteerHz') * e.t);
       else if (e.kind === 'freeze') m.steerMul = g('freezeSteerMul');
       else if (e.kind === 'melt') { m.gripMul = g('meltGripMul'); m.slideMul = g('meltSlideMul'); }
-      else if (e.kind === 'shatter') {
+      else if (e.kind === 'pendulum') m.steerAdd = g('pendulumSteerAmp') * Math.sin(2 * Math.PI * g('pendulumSteerHz') * e.t);
+      else if (e.kind === 'snap') m.steerAdd = (e.side || 1) * g('snapShoveSteer') * (1 - e.t / e.durS);
+      else if (e.kind === 'bigSpiral') m.capMul = g('bigSpiralCapMul');
+      else if (SPIN_KINDS.includes(e.kind)) {
         const k = e.t / e.durS;
-        fxv.spinRad = Math.round(g('shatterSpinTurns')) * 2 * Math.PI * (1 - (1 - k) * (1 - k));
+        fxv.spinRad = Math.round(g(e.kind + 'SpinTurns')) * 2 * Math.PI * (1 - (1 - k) * (1 - k));
       }
       if (r.meta && r.meta.isBot && ITEMS[e.kind].bot === 'blind') m.blind = 1;
     }
     if (x.golden > 0) m.shoveMul = g('goldenShoveMul');
     fxv.shield = x.golden > 0 ? 'golden' : x.glass > 0 ? 'glass' : null;
     fxv.echo = x.echo;
+    for (const l of links) {
+      if (l.by === r.i) m.capMul *= g('tetherTowCap');
+      else if (l.target === r.i) m.capMul *= g('tetherDragCap');
+    }
   }
 
   function update(dt, racers, standings, race) {
@@ -415,6 +485,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
     }
     flights(dt);
     trapsTick(dt);
+    linksTick(dt, standings);
     for (const w of waves) w.t += dt;
     waves = waves.filter((w) => w.t < WAVE_S);
     for (const p of pops) p.t += dt;
@@ -425,14 +496,15 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
   // ---- view -----------------------------------------------------------------------------------
   // Built at most once per tick (ver moves on update and reset) into pooled rows: the arrays and their
   // row objects are reused, so a reader must not keep a row past the next tick.
-  const V = { boxes: [], bubbles: [], held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [] };
+  const V = { boxes: [], bubbles: [], held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [], tethers: [], guards: [] };
   for (const b of pick) (b.kind === 'box' ? V.boxes : V.bubbles).push(b.v);
-  const POOL = { held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [] };
+  const POOL = { held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [], tethers: [], guards: [] };
   let builtVer = -1;
   /** Next pooled row of V[key] (call after V[key].length = 0). */
   function row(key) {
     const out = V[key], pool = POOL[key], k = out.length;
-    if (k >= pool.length) pool.push(key === 'traps' ? { p: [0, 0, 0], n: [0, 0, 0] } : key === 'held' || key === 'shields' ? {} : { p: [0, 0, 0] });
+    if (k >= pool.length) pool.push(key === 'traps' ? { p: [0, 0, 0], n: [0, 0, 0] } : key === 'tethers' ? { from: [0, 0, 0], to: [0, 0, 0] }
+      : key === 'held' || key === 'shields' || key === 'guards' ? {} : { p: [0, 0, 0] });
     out.push(pool[k]);
     return pool[k];
   }
@@ -474,6 +546,13 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       if (x.glass > 0) shield(r, 'glass', g('glassMaxS') - x.glass, x.glass / g('glassMaxS'), 0);
       if (x.golden > 0) shield(r, 'golden', g('goldenS') - x.golden, x.golden / g('goldenS'), 0);
       if (x.echo > 0) shield(r, 'echo', g('echoS') - x.echoT, Math.max(0, x.echoT / g('echoS')), x.echo);
+      if (x.snapGuard > 0) { const o = row('guards'); o.racer = r.i; o.k = x.snapGuard / g('snapGuardS'); }
+    }
+    for (const l of links) {
+      const a = racer(l.by), b = racer(l.target);
+      if (!a || !b) continue;
+      const o = row('tethers'); o.id = l.id; o.by = l.by; o.target = l.target; o.t = l.t; o.k = Math.min(1, l.t / g('tetherMaxS'));
+      for (let j = 0; j < 3; j++) { o.from[j] = a.st[S.posX + j]; o.to[j] = b.st[S.posX + j]; }
     }
     for (const p of pops) { const o = row('pops'); o.kind = p.kind; o.at = p.at; point(p.s, p.x, p.h, o.p, p.seg); if (p.worldP) for (let j = 0; j < 3; j++) o.p[j] = p.worldP[j]; o.t = p.t; }
     return V;
@@ -485,7 +564,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
 
   function reset() {
     rand = makeRand(seed); now = 0; nextId = 1; ver++;
-    projectiles = []; traps = []; waves = []; pops = []; R = [];
+    projectiles = []; traps = []; waves = []; pops = []; R = []; links = [];
     for (const b of pick) { b.downT = 0; b.upT = 1e9; }
   }
 

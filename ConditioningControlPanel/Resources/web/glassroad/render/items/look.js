@@ -15,6 +15,7 @@ export const MOTE_TINT = {
   flash: '255,236,246', spiral: '120,236,224', brainDrain: '150,255,170', freeze: '190,236,255',
   blackout: '170,140,255', pink: '255,96,190', melt: '255,120,200', shatter: '255,210,140',
   surge: '255,205,90', glass: '220,240,255', echo: '205,195,240', golden: '255,214,110', box: '255,190,235',
+  pendulum: '255,200,120', disc: '120,220,255', tether: '255,110,170', snap: '240,240,255', bigSpiral: '190,120,255',
 };
 
 export const ITEM_LOOK = {

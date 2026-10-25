@@ -214,8 +214,10 @@ export const REACT_DEFAULTS = {
   // polish 4, item hits read at a glance: per kind a style (spin = whole turns with a hop, stomp = pressed
   // flat from above then a turn, flip = a barrel roll on a high hop), a squash on impact, a shocked face then
   // dizzy for the stun (clamped), stars orbiting the head, the rim glowing the kind's hue, an impact burst
-  hitStyle: { flash: 'spin', spiral: 'spin', brainDrain: 'spin', freeze: 'spin', pink: 'spin', melt: 'spin', blackout: 'stomp', shatter: 'flip' },
-  hitTurns: { flash: 1, spiral: 2, brainDrain: 1, freeze: 1, pink: 1, melt: 2, blackout: 1, shatter: 0 },
+  hitStyle: { flash: 'spin', spiral: 'spin', brainDrain: 'spin', freeze: 'spin', pink: 'spin', melt: 'spin', blackout: 'stomp', shatter: 'flip',
+    pendulum: 'spin', disc: 'spin', tether: 'spin', snap: 'spin', bigSpiral: 'stomp' },
+  // disc and tether turn by the sim (fxv.spinRad); the pendulum sway is real steering
+  hitTurns: { flash: 1, spiral: 2, brainDrain: 1, freeze: 1, pink: 1, melt: 2, blackout: 1, shatter: 0, pendulum: 0, disc: 0, tether: 0, snap: 0, bigSpiral: 1 },
   hitSpinS: 0.9, hitHopM: 0.8, hitHopS: 0.5, hitFlipHopM: 1.6, hitFlipS: 0.8, hitSquash: 0.42, hitStompSquash: 0.62,
   hitKnock: 0.35, stunMinS: 1.2, stunMaxS: 3.2, stunInTcS: 0.08, stunOutTcS: 0.25,
   stunStars: 5, stunOrbitM: 0.78, stunOrbitHz: 0.8, stunUpM: 1.55, stunStarM: 0.42, stunTiltRad: 0.35,

@@ -687,8 +687,8 @@ export function createAi(track, feel, { seed = 1, forkChoice = null } = {}) {
     const def = ITEMS[it.id];
     if (!def) return;
     const range = feel.get('ai.itemRangeM'), me = r.progressM;
-    let ahead = false, behind = false, wideAhead = false, leaderAhead = false;
-    const pinkM = feel.get('items.pinkRangeM');
+    let ahead = false, behind = false, wideAhead = false, leaderAhead = false, tetherAhead = false, close = false;
+    const pinkM = feel.get('items.pinkRangeM'), tetherM = feel.get('items.tetherRangeM'), snapM = feel.get('items.snapRadiusM');
     for (const o of ctx.racers || []) {
       if (o === r || o.finished) continue;             // a finished kart is never a target (items skip it too)
       const d = o.progressM - me;
@@ -696,10 +696,14 @@ export function createAi(track, feel, { seed = 1, forkChoice = null } = {}) {
       if (d > 0 && d <= range) ahead = true;
       if (d > 0 && d <= pinkM) wideAhead = true;
       if (d < 0 && -d <= range) behind = true;
+      if (d > 0 && d <= tetherM) tetherAhead = true;
+      if (Math.abs(d) <= snapM) close = true;
     }
     let press = false, back = false;
-    if (def.use === 'self') press = it.id !== 'surge' || r.st[S.boostKind] === BOOST.NONE;
-    else if (def.use === 'throw') {
+    if (it.id === 'snap') press = close;
+    else if (def.use === 'self') press = it.id !== 'surge' || r.st[S.boostKind] === BOOST.NONE;
+    else if (def.use === 'tether') press = tetherAhead;
+    else if (def.use === 'throw' || def.use === 'bounce') {
       if (ahead) press = true;
       else if (behind && b.rand() < feel.get('ai.itemDropChance')) { press = true; back = true; }
     } else if (def.use === 'lob') press = leaderAhead || behind;   // at the leader; leading, at place 2 once close

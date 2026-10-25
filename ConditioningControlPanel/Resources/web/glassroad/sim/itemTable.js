@@ -1,12 +1,21 @@
 /* sim/itemTable.js - the effect bubble table and the weighted draw (CONTRACT-B1.md section 3).
  *
- * Twelve CCP effect bubbles. `use` says how a press fires it, `view` how hard it blocks the victim's
- * screen (full, mild, none) or null for self items, `bot` how a bot victim feels it. Draw weights live in
- * feel.json as items.<id>Weights = [front, middle, back]; the bucket comes from place and the gap to the
- * leader. Three-free, so node --test runs it.
+ * `use` says how a press fires it, `view` how hard it blocks the victim's screen (full, mild, none) or
+ * null for self items, `bot` how a bot victim feels it. Draw weights live in feel.json as
+ * items.<id>Weights = [front, middle, back]; the bucket comes from place and the gap to the leader.
+ * Three-free, so node --test runs it.
+ *
+ * Toys kit (owner pick 2026-10-25): Pendulum, Disc, Tether, Melt (the spiral trap, bigger), Snap, Surge and
+ * Big Spiral. They act on the kart, never cover the screen; the payoff words and flashes play in
+ * fx/payoff.js. The first twelve ids keep their wire order and draw at weight 0. Icons of the new
+ * ids borrow old art until the toys art lands.
  */
 
-export const ITEM_IDS = ['flash', 'spiral', 'brainDrain', 'freeze', 'blackout', 'pink', 'melt', 'shatter', 'surge', 'glass', 'echo', 'golden'];
+export const ITEM_IDS = ['flash', 'spiral', 'brainDrain', 'freeze', 'blackout', 'pink', 'melt', 'shatter', 'surge', 'glass', 'echo', 'golden',
+  'pendulum', 'disc', 'tether', 'snap', 'bigSpiral'];
+
+/** Kinds whose hit stalls and spins the kart (sim/items.js land()). */
+export const SPIN_KINDS = Object.freeze(['shatter', 'disc', 'tether']);
 
 const fx = (file) => 'art/fx/' + file;
 
@@ -17,12 +26,17 @@ export const ITEMS = Object.freeze({
   freeze: { use: 'throw', view: 'mild', bot: 'steer', icon: fx('bambifreeze.png') },
   blackout: { use: 'lob', view: 'full', bot: 'blind', icon: fx('blackout.png') },
   pink: { use: 'wide', view: 'mild', bot: 'blind', icon: fx('pinkfilter.png') },
-  melt: { use: 'trap', view: 'full', bot: 'ice', icon: fx('melt.png') },
+  melt: { use: 'trap', view: 'none', bot: 'ice', icon: fx('melt.png') },
   shatter: { use: 'throw', view: 'none', bot: 'spin', icon: fx('prism.png') },
   surge: { use: 'self', view: null, bot: null, icon: fx('gold_droplet.png') },
   glass: { use: 'self', view: null, bot: null, icon: fx('bubble.png') },
   echo: { use: 'self', view: null, bot: null, icon: fx('glitch.png') },
   golden: { use: 'self', view: null, bot: null, icon: fx('golden.png') },
+  pendulum: { use: 'throw', view: 'none', bot: 'steer', icon: fx('golden.png') },
+  disc: { use: 'bounce', view: 'none', bot: 'spin', icon: fx('prism.png') },
+  tether: { use: 'tether', view: 'none', bot: 'spin', icon: fx('glitch.png') },
+  snap: { use: 'self', view: null, bot: 'steer', icon: fx('bubble.png') },
+  bigSpiral: { use: 'lob', view: 'none', bot: 'steer', icon: fx('spiral.png') },
 });
 
 export const BUCKETS = ['front', 'middle', 'back'];

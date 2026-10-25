@@ -94,6 +94,12 @@ export const FAMILIES = Object.freeze({
   flame: [['disc', 3], ['smoke', 1]],                 // the boost flame's body (glitter sparks ride on top)
   ember: [['glitter', 2], ['glint', 1]],              // drift spark embers that float
   streak: [['spark', 1]],                             // slipstream streaks, turned along their motion
+  // toys kit (placeholder families until the toys art lands)
+  pendulum: [['star', 2], ['glint', 1]],
+  disc: [['shard', 3], ['spark', 1]],
+  tether: [['heart', 2], ['glint', 1]],
+  snap: [['ring', 1], ['spark', 2]],
+  bigSpiral: [['swirl', 3], ['glitter', 1]],
 });
 
 /** Polish 2 particle numbers (move to LOOK.fx2 when the integrator wants them there; LOOK.fx2 wins). */
@@ -141,7 +147,8 @@ export function familyOf(opts, L) {
   return 'box';
 }
 
-const HIT_KINDS = new Set(['freeze', 'golden', 'melt', 'glass', 'decoy', 'flash', 'spiral', 'brainDrain', 'blackout', 'pink', 'shatter', 'surge', 'echo']);
+const HIT_KINDS = new Set(['freeze', 'golden', 'melt', 'glass', 'decoy', 'flash', 'spiral', 'brainDrain', 'blackout', 'pink', 'shatter', 'surge', 'echo',
+  'pendulum', 'disc', 'tether', 'snap', 'bigSpiral']);
 /** The item-hit family for an effect kind or verdict, or null when that hit sprays nothing (mercy, immune). */
 export function hitFamily(kind) {
   return HIT_KINDS.has(kind) ? kind : null;
