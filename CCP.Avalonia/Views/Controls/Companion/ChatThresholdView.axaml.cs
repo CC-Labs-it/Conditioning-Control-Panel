@@ -231,6 +231,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         public ChatThresholdViewModel() : this(live: false) { }
 
+        // WPF MockChatThresholdVm's exhibits. These remain detached from App.Brain even after
+        // the room calls Sync on a visibility edge; sends only append to the in-memory thread.
+        internal static ChatThresholdViewModel CreatePreview(CompanionZoneState state, bool fresh = false)
+        {
+            var vm = new ChatThresholdViewModel { State = state };
+            if (state != CompanionZoneState.Live || fresh)
+            {
+                vm.Turns.Clear();
+                vm.LastHeardCopy = string.Empty;
+            }
+            if (state == CompanionZoneState.Dormant)
+                vm.Turns.Add(new ChatBubble(ChatBubble.BubbleKind.Her, "hi princess~ what are we doing today?"));
+            return vm;
+        }
+
         /// <summary>The live zone (WPF ChatThresholdRuntimeVm): reads App.Brain, sends through brain.ChatAsync.</summary>
         internal static ChatThresholdViewModel CreateLive()
         {
@@ -331,7 +346,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             private set { if (_lastHeardCopy != value) { _lastHeardCopy = value; Raise(); } }
         }
 
-        public string FooterCopy => IsThinking
+        public string FooterCopy => !_live && State != CompanionZoneState.Live ? string.Empty : IsThinking
             ? Loc.Get("companion_chat_footer_picking")
             : Turns.Count == 0
                 ? Loc.Get("companion_chat_footer_first")

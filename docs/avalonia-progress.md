@@ -3090,3 +3090,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-shell-blink-trainer: +205
 - Deeper hub webcam setup buttons relay to the Blink Trainer consent/calibration/Quick Recal/tracker workflows; the card shows live shared state.
 - Review fixes: no real-time test wait, single refresh path, complete follow-up list, tracker-label test, honest parity rows (fail-proven; gate 39702277881 green).
+
+## avalonia-port/wire-views-companion-room-preview: +248
+- Companion room preview strip swaps chat, diary and attention mocks for all six WPF states; zones without mocks are disabled in the harness so it cannot write real settings.
+- Row stays stub; follow-up wire-views-companion-room-preview-b seats hero/personality/awareness/engine/workshop mocks.

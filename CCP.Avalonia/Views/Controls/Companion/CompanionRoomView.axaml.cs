@@ -52,6 +52,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             AttentionZone.ViewModel?.Sync();
         }
 
+        internal void SetPreviewZones(ChatThresholdViewModel chat, MemoryDiaryViewModel memory, AttentionGaugeViewModel attention)
+        {
+            AttentionZone.ViewModel = attention;
+            // The replacement detaches the old live chat VM from its session before seating
+            // the mock. Wire the navigator now: Loaded does not repeat on a state-strip click.
+            chat.OpenEngineRoom = RevealEngineRoom;
+            ChatZone.ViewModel = chat;
+            MemoryZone.ViewModel = memory; // DataContextChanged -> ForgetConfirm.Bind disarms the two-step
+            ChatZone.ScrollThreadToEnd();
+            ChatZone.PlayDormantShimmer();
+            // ponytail: these zones have no preview mocks here yet and write real settings (hero mute,
+            // provider, awareness, presets), so the debug harness shows them inert instead.
+            foreach (var live in new Control[] { HeroZone, PersonalityZone, AwarenessZone, EngineZone, PermissionsZone, WorkshopZone })
+                live.IsEnabled = false;
+        }
+
         // =====================================================================================
         //  effective-visibility watch
         // =====================================================================================
