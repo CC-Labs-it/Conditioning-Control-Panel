@@ -115,16 +115,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // ponytail: the row double-click (profile lookup on the Discord tab) and the per-row Discord chip (a
             // browser hop) are still unhooked.
 
-            // WPF derives this from the viewer's own skills: UpdateTrophyCaseColumns
-            // (MainWindow.Leaderboard.cs:1432) sets it from App.SkillTree.HasSkill("trophy_case")
-            // and re-runs the moment the skill is bought. Core has no skill seam to ask - it
-            // carries AddXP and TrackBubbleCountResult and nothing else - so this head cannot
-            // derive it. Forced ON rather than off on purpose: the Streak column and the
-            // tooltip's Best Session line are then covered by the render proof instead of
-            // sitting invisible, and neither is a gate on anything.
-            // ponytail: needs ConditioningControlPanel/Services/Progression/SkillTreeService.cs
-            // behind a Core seam.
-            ShowTrophyStats = true;
+            RefreshTrophyStats();
+            AttachedToVisualTree += (_, _) =>
+            {
+                CoreSettings.Current.PropertyChanged += OnTrophySettingsChanged;
+                RefreshTrophyStats();
+            };
+            DetachedFromVisualTree += (_, _) => CoreSettings.Current.PropertyChanged -= OnTrophySettingsChanged;
 
             Loaded += OnLeaderboardTabLoaded;
             PropertyChanged += OnLeaderboardTabPropertyChanged;
@@ -132,6 +129,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             RefreshSeasonHeader();
             ApplyModeLabels();
             RebuildLeaderboardView();
+        }
+
+        private void RefreshTrophyStats() => ShowTrophyStats = Models.SkillTreeRules.HasSkill(CoreSettings.Current, "trophy_case");
+
+        private void OnTrophySettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(Models.AppSettings.UnlockedSkills))
+                Dispatcher.UIThread.Post(RefreshTrophyStats);
         }
 
         /// <summary>

@@ -673,3 +673,6 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+1. Enhancements: click a purchasable tree card and a revealed secret card. Cancel must keep the wallet; confirm must disable while waiting, adopt only a successful server receipt, repaint ownership, and show a refusal without spending. Retry after token recovery and a stale server balance; check one sync/retry. WPF `MainWindow/MainWindow.Enhancements.cs:1938` + `Services/Settings/ProfileSyncService.cs:3955`. Rows: `shell-enhancements`.
+2. Buy across a 100-point lifetime-spend boundary with motion on: node and prestige bursts precede repaint, rank increases and Window Shopping unlocks. Buy trophy_case: Streak/Best Session visibility updates immediately. Panic during confirmation must dismiss it without buying. WPF `MainWindow/MainWindow.EventFx.cs:428` + `MainWindow/MainWindow.Leaderboard.cs:1432`. Rows: `shell-enhancements`.

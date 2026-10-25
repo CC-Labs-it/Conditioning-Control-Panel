@@ -47,6 +47,21 @@ namespace ConditioningControlPanel.Services
             return false;
         }
 
+        private int _purchaseSyncSuccesses;
+        internal Func<TimeSpan, Task> PurchaseRetryDelay = Task.Delay;
+
+        /// <summary>WPF SyncBeforeRetryAsync: wait for an in-flight sync and its cooldown once.</summary>
+        public async Task<bool> SyncBeforePurchaseRetryAsync()
+        {
+            var before = _purchaseSyncSuccesses;
+            if (await PushAsync("purchase-retry", waitForGate: true)) return true;
+            if (_purchaseSyncSuccesses != before) return true;
+            var left = LastSyncTime is { } last ? Cooldown - (UtcNow() - last) : TimeSpan.Zero;
+            if (left <= TimeSpan.Zero || left > Cooldown) return false;
+            await PurchaseRetryDelay(left + TimeSpan.FromMilliseconds(250));
+            return await PushAsync("purchase-retry", waitForGate: true);
+        }
+
         public static bool RememberPrivacyChange(AppSettings s, SyncBody.Field field)
         {
             if (field == SyncBody.Field.None || (field & Privacy) != field) throw new ArgumentOutOfRangeException(nameof(field));
@@ -256,6 +271,7 @@ namespace ConditioningControlPanel.Services
                     NoteFailureForBackoff((int)response.StatusCode, tokenUsed);
                     return false;
                 }
+                _purchaseSyncSuccesses++;
                 LastSyncTime = UtcNow();
                 (_backoffFailures, _blockedUntilUtc) = (0, null);
                 // The clear has reached the server; an empty loadout goes back to meaning "no change" (WPF).
