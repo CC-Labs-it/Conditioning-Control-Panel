@@ -75,9 +75,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 n.Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(250) } };
         }
 
-        /// <summary>WPF FindSessionByIdCallback (:1029): an available built-in or custom session by id.</summary>
-        private Session? FindRemoteSession(string id) => Named<PresetsTabView>("PresetsTab")?.FindSession(id)
-            ?? Session.GetAllSessions().FirstOrDefault(s => s.Id == id && s.IsAvailable);
+        /// <summary>WPF FindSessionByIdCallback (:1029): an available built-in session by id first (:1034), then the rack.</summary>
+        private Session? FindRemoteSession(string id) => Session.GetAllSessions().FirstOrDefault(s => s.Id == id && s.IsAvailable)
+            ?? Named<PresetsTabView>("PresetsTab")?.FindSession(id);
 
         /// <summary>WPF _remoteStartedSession: the session object the controller's start_session ran.</summary>
         private Session? _remoteStartedSession;

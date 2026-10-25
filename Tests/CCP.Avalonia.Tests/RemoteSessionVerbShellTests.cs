@@ -28,6 +28,9 @@ public sealed class RemoteSessionVerbShellTests
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 
+            var s = CoreSettings.Current;   // StopEffects writes these (P02): set and restore them
+            var old = (s.StrictLockEnabled, s.PanicKeyEnabled);
+            (s.StrictLockEnabled, s.PanicKeyEnabled) = (false, true);
             var shell = new MainShellWindow();
             shell.Show();
             var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
@@ -87,6 +90,7 @@ public sealed class RemoteSessionVerbShellTests
                 AvApp.Sessions = null;
                 CoreEngine.Stop();
                 shell.Close();
+                (s.StrictLockEnabled, s.PanicKeyEnabled) = old;
             }
             Assert.Null(RemoteCommands.SessionVerb);   // the closed shell takes its seams with it
             Assert.Null(RemoteCommands.StopSessionHook);
