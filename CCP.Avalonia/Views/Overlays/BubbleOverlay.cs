@@ -34,9 +34,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>Chaos runs share the field: ChaosRunHost spawns treat bubbles here (BeginChaos/
     /// SpawnChaos/EndChaos) and gets their pops; they draw tinted and pay no ambient XP.</para>
     ///
-    /// <para>ponytail: FloatUp bubbles only. Not here yet: live chaos bubbles (fuses, defuse,
-    /// detonation), the dashboard's ambient trigger bubbles, Bubbles v2 motions (Rain/Spiral In) and
-    /// Brain Drain/Magnet, Natasha's red bubble, the avatar egg, gaze pops, the lucky gold glow and
+    /// <para>ponytail: Ambient FloatUp/Rain/Spiral In. Not here yet: live chaos bubbles (fuses, defuse,
+    /// detonation), the dashboard's ambient trigger bubbles, Brain Drain/Magnet, Natasha's red bubble, the avatar egg, gaze pops, the lucky gold glow and
     /// sparkles, pop haptics, mod pop-sound overrides, Discord presence, and the achievement
     /// (no AchievementService on this head; quests are credited).</para>
     /// </summary>
@@ -166,7 +165,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // Outside sessions, bubbles are always clickable (no UI toggle exists for the setting).
             var clickable = !CoreSession.IsSessionRunning || s.BubblesClickable;
             var mod = (CoreMods.ActiveModTokenProvider?.Invoke() as ModManifest)?.BubbleScale;
-            Field.Bubbles.Add(AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable));
+            Field.Bubbles.Add(AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable,
+                PrizeOwnership.IsGranted(PrizeOwnership.BubbleRain), PrizeOwnership.IsGranted(PrizeOwnership.BubbleSpiralIn)));
             RequestFrame();
         }
 

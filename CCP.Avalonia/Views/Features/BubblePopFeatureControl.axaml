@@ -15,6 +15,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:ctl="using:ConditioningControlPanel.Avalonia.Views.Controls"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Features.BubblePopFeatureControl">
 
@@ -167,6 +168,24 @@
                                 <CheckBox Grid.Column="1" x:Name="ChkTriggers"
                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                             </Grid>
+                            <Border x:Name="V2Box" Margin="0,8,0,2" CornerRadius="10" Padding="12,8"
+                                    Background="#14FFE08A" BorderBrush="#33FFE08A" BorderThickness="1">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                        <TextBlock Text="{loc:Str label_bubbles_v2_box}" FontSize="12.5" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                        <ContentControl x:Name="V2BoxBadge" Margin="7,0,0,0"/>
+                                    </StackPanel>
+                                    <ctl:V2GetItRow x:Name="RowGetBubblesV2"/>
+                                    <Grid x:Name="MotionRow" Height="36" ColumnDefinitions="*,Auto"
+                                          ToolTip.Tip="{loc:Str tooltip_bubble_motion}">
+                                        <TextBlock Text="{loc:Str setting_bubble_motion}" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                        <ComboBox Grid.Column="1" x:Name="CmbMotion" Width="150"
+                                                  sessionLock:SessionLock.Owned="True" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </Grid>
                 </Border>

@@ -106,6 +106,45 @@ public sealed partial class AccountSeedTests
     }
 
     [Fact]
+    public void Profile_load_and_sync_restore_and_revoke_prizes() => WithFreshInstall(async () =>
+    {
+        var oldSink = ProviderSubscription.PrizesSink;
+        PrizeOwnership.ResetHeld();
+        try
+        {
+            var profile = JObject.Parse(L40Profile("prize-test"));
+            profile["user"]!["prizes"] = JObject.Parse("{\"revision\":2,\"grants\":[\"fx.bubble.rain\"]}");
+            var (wire, sync, _) = SignIn("prize-test", profile.ToString());
+            Assert.True(await AccountSeed.LoadProfileAsync());
+            Assert.True(PrizeOwnership.Held(PrizeOwnership.BubbleRain));
+            // Equal snapshots are quiet; stale snapshots cannot revoke a newer grant.
+            int changes = 0;
+            void Count() => changes++;
+            PrizeOwnership.Changed += Count;
+            try
+            {
+                PrizeOwnership.ApplySnapshot("prize-test", 2, new[] { PrizeOwnership.BubbleRain });
+                PrizeOwnership.ApplySnapshot("prize-test", 1, Array.Empty<string>());
+                Assert.Equal(0, changes);
+            }
+            finally { PrizeOwnership.Changed -= Count; }
+            wire.SyncReply = "{\"success\":true,\"prizes\":{\"revision\":3,\"grants\":[]}}";
+            sync.UtcNow = () => T0.AddMinutes(2);
+            Assert.True(await sync.PushAsync("prize revoke"));
+            Assert.False(PrizeOwnership.Held(PrizeOwnership.BubbleRain));
+            PrizeOwnership.ApplySnapshot("prize-test", 4, new[] { PrizeOwnership.BubbleRain });
+            CoreAccount.UnifiedUserId = null;
+            CoreAccount.UnifiedUserId = "prize-test";
+            Assert.False(PrizeOwnership.Held(PrizeOwnership.BubbleRain));
+        }
+        finally
+        {
+            ProviderSubscription.PrizesSink = oldSink;
+            PrizeOwnership.ResetHeld();
+        }
+    });
+
+    [Fact]
     public void NoPush_BeforeASuccessfulLoad_NorAfterLogout_UntilTheNextLoad() => WithFreshInstall(async () =>
     {
         var (wire, sync, _) = SignIn("u1", profile: null);

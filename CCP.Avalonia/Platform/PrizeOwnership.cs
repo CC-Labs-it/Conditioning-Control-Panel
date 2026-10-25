@@ -7,9 +7,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
 {
     /// <summary>
     /// Back Room prize ownership on this head. WPF asks <c>PrizeGrants.IsGranted</c>, backed by
-    /// OwnershipService snapshots from BackRoomApi. Here only the snapshots a counter reply carries
-    /// (<see cref="ApplySnapshot"/>, fed by <see cref="V2PurchaseHead"/>) are held, for this run;
-    /// the profile-sync feed is parity row svc-prize-ownership. The other source is WPF's DEBUG-only
+    /// OwnershipService snapshots from BackRoomApi. Snapshots from provider validation, profile load, sync and counter replies
+    /// (<see cref="ApplySnapshot"/>, fed by <see cref="V2PurchaseHead"/>) are held in memory, as in WPF. The other source is WPF's DEBUG-only
     /// <c>CCP_PRIZE_GRANTS</c> override (Core OwnershipService.ReadDebugOverride): same variable,
     /// same patterns (exact id, <c>prefix.*</c>, <c>*</c>), and a Release build never reads it.
     /// Parsing is Core's, so an empty id never matches and a pattern holding whitespace or a
@@ -30,13 +29,40 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Test seam: the owned-check every caller uses.</summary>
         internal static Func<string, bool> IsGranted = id => Matches(OverrideSpec, id) || Held(id);
 
+        // WPF GrantsChanged: listeners marshal to their UI thread.
+        internal static event Action? Changed;
+
+        internal static void Seed()
+        {
+            ConditioningControlPanel.Services.ProviderSubscription.PrizesSink = Apply;
+            CoreAccount.UnifiedIdentityChanged -= OnIdentityChanged;
+            CoreAccount.UnifiedIdentityChanged += OnIdentityChanged;
+        }
+
+        private static void OnIdentityChanged(object? sender, EventArgs e)
+        {
+            lock (Gate)
+            {
+                if (_heldAccount == null || _heldAccount == CoreAccount.UnifiedUserId) return;
+                (_heldAccount, _revision, _grants) = (null, 0, new(StringComparer.Ordinal));
+            }
+            RaiseChanged();
+        }
+
+        internal static void Apply(string? requestedFor, string? answeredFor,
+            ConditioningControlPanel.Models.PrizesBlock? prizes, string source)
+        {
+            if (string.IsNullOrEmpty(requestedFor) || requestedFor != answeredFor || prizes?.Grants == null) return;
+            ApplySnapshot(requestedFor, prizes.Revision, prizes.Grants);
+        }
+
         private static readonly object Gate = new();
         private static string? _heldAccount;
         private static long _revision;
         private static HashSet<string> _grants = new(StringComparer.Ordinal);
 
         /// <summary>WPF OwnershipService.IsGranted over the snapshots counter replies carry (row
-        /// feat-backroom-counter-buy). Per run only: no profile-sync feed yet (svc-prize-ownership).</summary>
+        /// feat-backroom-counter-buy). In memory only, refreshed by the server feeds.</summary>
         internal static bool Held(string id)
         {
             var current = FriendsHead.Identity()?.UnifiedId;
@@ -52,9 +78,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
             lock (Gate)
             {
                 if (_heldAccount == accountId && revision < _revision) return;
+                var next = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
+                if (_heldAccount == accountId && _revision == revision && _grants.SetEquals(next)) return;
                 (_heldAccount, _revision) = (accountId, revision);
-                _grants = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
+                _grants = next;
             }
+            RaiseChanged();
+        }
+
+        private static void RaiseChanged()
+        {
+            try { Changed?.Invoke(); }
+            catch (Exception ex) { Serilog.Log.Debug("[Prizes] listener failed: {Error}", ex.Message); }
         }
 
         /// <summary>Test cleanup (P02): forget every held snapshot.</summary>

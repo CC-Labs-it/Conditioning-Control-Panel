@@ -139,8 +139,13 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF Bubble ctor for a plain ambient bubble. <paramref name="area"/> is the screen's
         /// working area in px, <paramref name="scaling"/> its DPI scale.</summary>
+        private BubbleMotionStyle _motion;
+        private double _bottom, _cx, _cy, _radius, _turns, _direction;
+        private AmbientSpiralInPath.State _spiral;
+
         public static AmbientBubble Spawn(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
-            double scaling, AppSettings s, double? modScale, bool clickable)
+            double scaling, AppSettings s, double? modScale, bool clickable,
+            bool rainOwned = false, bool spiralOwned = false)
         {
             var b = new AmbientBubble { Screen = screen, Clickable = clickable };
             b.Size = BubbleSizing.Scale(r.Next(BubbleSizing.BaseMinDip, BubbleSizing.BaseMaxDip), s.BubblesSize, modScale);
@@ -153,7 +158,28 @@ namespace ConditioningControlPanel.Services
             b._top = areaY / scaling - b.Size - 50;
             b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
             b.Y = (areaY + areaH) / scaling;   // start at the bottom
+            b._motion = AmbientBubbleMotionRules.Resolve(s.BubbleMotionStyle, rainOwned, spiralOwned, s.MotionLevel, r.NextDouble());
+            if (b._motion != BubbleMotionStyle.FloatUp) b._speed *= AmbientBubbleMotionRules.SpeedMult(s.MotionLevel);
+            b._bottom = (areaY + areaH) / scaling + 50;
+            if (b._motion == BubbleMotionStyle.Rain) b.Y = areaY / scaling - b.Size;
+            if (b._motion == BubbleMotionStyle.SpiralIn)
+            {
+                b._cx = (areaX + areaW / 2) / scaling;
+                b._cy = (areaY + areaH / 2) / scaling;
+                b._radius = AmbientSpiralInPath.StartRadius(Math.Min(areaW, areaH) / scaling);
+                b._turns = AmbientSpiralInPath.Turns(s.MotionLevel);
+                b._direction = r.Next(2) == 0 ? 1 : -1;
+                b._spiral = AmbientSpiralInPath.Start(b._radius, r.NextDouble() * Math.PI * 2);
+                b.PlaceOnSpiral();
+            }
             return b;
+        }
+
+        private void PlaceOnSpiral()
+        {
+            X = _cx + Math.Cos(_spiral.Angle) * _spiral.Radius - Size / 2;
+            Y = _cy + Math.Sin(_spiral.Angle) * _spiral.Radius - Size / 2;
+            Fade = _spiral.Fade;
         }
 
         /// <summary>WPF Bubble ctor with a Chaos spec, FloatUp only: the spec's size, the chaos
@@ -263,6 +289,18 @@ namespace ConditioningControlPanel.Services
                 case 1: offset = Math.Sin(_timeAlive * 7.5) * 30; Angle = (Angle + 0.14) % 360; break;
                 case 2: offset = Math.Cos(_timeAlive * 5.4) * 25; Angle = (Angle - 0.66) % 360; break;
                 case 3: offset = Math.Sin(_timeAlive * 3) * 30 + Math.Cos(_timeAlive * 6) * 15; Angle = (Angle + 0.54) % 360; break;
+            }
+            if (_motion == BubbleMotionStyle.SpiralIn)
+            {
+                _spiral = AmbientSpiralInPath.Step(_spiral, _radius, _speed * AmbientSpiralInPath.RadialPerSpeed, _turns, _direction, 1);
+                PlaceOnSpiral();
+                return _spiral.Done ? Result.Missed : Result.Alive;
+            }
+            if (_motion == BubbleMotionStyle.Rain)
+            {
+                Y += _speed;
+                X = _startX + offset;
+                return Y > _bottom ? Result.Missed : Result.Alive;
             }
             Y -= _speed;
             X = _startX + offset;

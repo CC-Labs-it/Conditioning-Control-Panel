@@ -96,6 +96,11 @@ public sealed class V2GetItRowTests
                 row.Apply();
                 Assert.False(row.IsVisible);
                 Assert.True(row.IsRowHidden);
+                Assert.True(card.FindControl<Control>("RowMotion")!.IsVisible);
+                PrizeOwnership.IsGranted = _ => false;
+                row.Apply();
+                Assert.False(card.FindControl<Control>("RowMotion")!.IsVisible);
+                Assert.True(row.IsVisible);
             }
             finally
             {
@@ -123,6 +128,7 @@ public sealed class V2GetItRowTests
             var secrets = new System.Collections.Generic.Dictionary<string, string?>();
             CoreSecrets.RetrieveProvider = n => secrets.TryGetValue(n, out var v) ? v : null;
             CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
+            var unifiedBeforeBuy = CoreAccount.UnifiedUserId;
             var h = new FakeProxy();
             Window? host = null;
             try
@@ -139,10 +145,18 @@ public sealed class V2GetItRowTests
                 var toasts = new StackPanel();
                 global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(toasts);
 
+                // The row is already on screen before login: sign-in must start its counter read.
+                (s.UnifiedId, s.AuthToken) = (null, null);
                 var card = new FlashFeatureControl();
                 host = new Window { Content = card };
                 host.Show();
-                await read.Task.WaitAsync(TimeSpan.FromSeconds(10));   // the read the shown row started
+                Assert.Empty(h.Seen);
+                (s.UnifiedId, s.AuthToken) = ("u-buy", "t-buy");
+                CoreAccount.UnifiedUserId = "u-buy";
+                Dispatcher.UIThread.RunJobs();
+                await read.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                // Identity invalidation also raises Changed; await the actual read, not that repaint.
+                await svc.LastBackgroundRead.WaitAsync(TimeSpan.FromSeconds(10));
                 Dispatcher.UIThread.RunJobs();
                 var row = card.FindControl<V2GetItRow>("RowGetFlashesV2")!;
                 var btn = row.FindControl<Button>("BtnGet")!;
@@ -189,10 +203,75 @@ public sealed class V2GetItRowTests
             {
                 host?.Close();
                 V2PurchaseHead.Service = null;
+                CoreAccount.UnifiedUserId = unifiedBeforeBuy;
                 PrizeOwnership.ResetHeld();
                 (s.UnifiedId, s.AuthToken, s.OfflineMode, s.SkillPoints, PrizeOwnership.IsGranted) = (id, token, offline, sp, seam);
                 (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (get, put);
             }
+        });
+    }
+
+    [Fact]
+    public async Task Bubble_card_refreshes_offer_and_owned_picker_from_snapshot_events()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var s = CoreSettings.Current;
+            var (id, token, offline, motion, seam) = (s.UnifiedId, s.AuthToken, s.OfflineMode, s.BubbleMotionStyle, PrizeOwnership.IsGranted);
+            var (get, put) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
+            var secrets = new System.Collections.Generic.Dictionary<string, string?>();
+            CoreSecrets.RetrieveProvider = n => secrets.TryGetValue(n, out var v) ? v : null;
+            CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
+            Window? host = null;
+            try
+            {
+                (s.UnifiedId, s.AuthToken, s.OfflineMode) = ("bubble-test", "test-token", false);
+                s.BubbleMotionStyle = ConditioningControlPanel.Models.BubbleMotionStyle.SpiralIn;
+                PrizeOwnership.ResetHeld();
+                PrizeOwnership.IsGranted = PrizeOwnership.Held;
+                var card = new BubblePopFeatureControl();
+                host = new Window { Content = card };
+                host.Show();
+                var row = card.FindControl<V2GetItRow>("RowGetBubblesV2")!;
+                var picker = card.FindControl<ComboBox>("CmbMotion")!;
+                Assert.Equal(Loc.Get("v2_get_bubble_blurb"), row.FindControl<TextBlock>("TxtBlurb")!.Text);
+                Assert.True(card.FindControl<Border>("V2Box")!.IsVisible);
+                Assert.False(card.FindControl<Control>("MotionRow")!.IsVisible);
+                Assert.Equal(ConditioningControlPanel.Models.BubbleMotionStyle.FloatUp, ((ComboBoxItem)picker.SelectedItem!).Tag);
+                Assert.Equal(ConditioningControlPanel.Models.BubbleMotionStyle.SpiralIn, s.BubbleMotionStyle);
+
+                // Provider validation after restart uses this same sink; a different answer is dropped.
+                var block = new ConditioningControlPanel.Models.PrizesBlock { Revision = 3, Grants = new() { PrizeOwnership.BubbleRain } };
+                PrizeOwnership.Apply("bubble-test", "other-account", block, "test");
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(row.IsVisible);
+                PrizeOwnership.Apply("bubble-test", "bubble-test", block, "test");
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(row.IsRowHidden);
+                Assert.True(card.FindControl<Border>("V2Box")!.IsVisible);
+                Assert.True(card.FindControl<Control>("MotionRow")!.IsVisible);
+                Assert.Equal(new[] { ConditioningControlPanel.Models.BubbleMotionStyle.FloatUp,
+                    ConditioningControlPanel.Models.BubbleMotionStyle.Rain, ConditioningControlPanel.Models.BubbleMotionStyle.Mix },
+                    picker.Items.Cast<ComboBoxItem>().Select(i => (ConditioningControlPanel.Models.BubbleMotionStyle)i.Tag!));
+                picker.SelectedIndex = 1;
+                Assert.Equal(ConditioningControlPanel.Models.BubbleMotionStyle.Rain, s.BubbleMotionStyle);
+
+                // A revocation refreshes the row without a buy, and stale snapshots cannot undo it.
+                PrizeOwnership.ApplySnapshot("bubble-test", 4, Array.Empty<string>());
+                PrizeOwnership.ApplySnapshot("bubble-test", 3, new[] { PrizeOwnership.BubbleRain });
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(row.IsRowHidden);
+                Assert.False(card.FindControl<Control>("MotionRow")!.IsVisible);
+            }
+            finally
+            {
+                host?.Close();
+                PrizeOwnership.ResetHeld();
+                (s.UnifiedId, s.AuthToken, s.OfflineMode, s.BubbleMotionStyle, PrizeOwnership.IsGranted) = (id, token, offline, motion, seam);
+                (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (get, put);
+            }
+            return Task.CompletedTask;
         });
     }
 

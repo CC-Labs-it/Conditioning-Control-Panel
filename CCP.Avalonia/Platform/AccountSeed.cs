@@ -35,6 +35,9 @@ internal static class AccountSeed
     /// <param name="makeDiscord">Tests only: builds the Discord account.</param>
     internal static bool Seed(Func<string, ProviderSubscription>? make = null, Func<ProviderSubscription, DiscordAccount>? makeDiscord = null)
     {
+        PrizeOwnership.Seed();
+        CoreAccount.UnifiedIdentityChanged -= OnUnifiedIdentityChanged;
+        CoreAccount.UnifiedIdentityChanged += OnUnifiedIdentityChanged;
         make ??= prefix => new ProviderSubscription(prefix);
         makeDiscord ??= peer => new DiscordAccount(() => peer);
         ProviderSubscription patreon, substar;
@@ -147,6 +150,8 @@ internal static class AccountSeed
         }
     }
 
+    private static void OnUnifiedIdentityChanged(object? sender, EventArgs e) => V2PurchaseHead.Service?.Invalidate();
+
     /// <summary>The push, seeded by the app at startup only: unseeded (every test that does not set it) nothing is pushed.</summary>
     internal static SyncPush? Sync;
 
@@ -167,6 +172,7 @@ internal static class AccountSeed
             Log.Warning("Profile load: server profile could not be read for {Id}", id);
             return false;
         }
+        PrizeOwnership.Apply(id, user.UnifiedId, user.Prizes, "V2 profile load");
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
         // EntitlementTierSync.SignedInWithV2: a rise only for a V2 account with a token.
         if (!string.IsNullOrEmpty(s.AuthToken))
