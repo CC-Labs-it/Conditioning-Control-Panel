@@ -61,6 +61,16 @@ export function getKeepLayout(track) {
   ];
   const gates = halls.flatMap((hall, h) => hall.gates.map((s, i) => ({ id: hall.id + '-' + (i + 1), s, x: 0, w: 14, offsetS: i + h * .4 })));
   const chains = [40, 76, 112, 148].map((d, i) => ({ id: 'chain-' + (i + 1), s: chain.s0 + d, x: 0, w: 10, offsetS: i * 1.1 }));
+  // Break up the long spiral drives without shortening their climb or crowding a bend.
+  // The narrow ascent keeps a 6 m bypass on the short side of every offset grille.
+  const ascent = find('tower-spiral'), descent = find('north-tower');
+  for (let i = 0; i < 8; i++) gates.push({ id: 'ascent-gate-' + (i + 1),
+    s: ascent.s0 + 120 + i * 190, x: i % 2 ? -2 : 2, w: 10, offsetS: i * .8 });
+  // These stations leave both shortcut launch windows and lower landing stretches clear.
+  for (const [i, d] of [210, 430].entries()) gates.push({ id: 'descent-gate-' + (i + 1),
+    s: descent.s0 + d, x: i % 2 ? 2 : -2, w: 10, offsetS: 1.2 + i * .8 });
+  for (const [i, d] of [880, 1050].entries()) chains.push({ id: 'descent-chain-' + (i + 1),
+    s: descent.s0 + d, x: 0, w: 10, offsetS: i * .8, cycleS: 3.2 });
   const start = walkKeep(KEEP_PIECES).starts[KEEP_PIECES.findIndex((p) => p.id === 'tower-spiral')];
   const towers = [{ x: start.x + 75, z: start.z, radiusM: 59, baseY: -25, topY: 142 }];
   const castleBlocks = [

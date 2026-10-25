@@ -19,12 +19,13 @@ export function pendulumBeatPhase(row, cycleS, beat) {
     liftSpeed: releasing && !safe ? -30 * f * (1 - f) / (releaseBeats * beat.beatS) : 0, safe };
 }
 export function keepChainPhase(row, timeS, beat = null) {
+  const cycleS = row.cycleS || KEEP_CHAIN.cycleS;
   if (beat) {
-    const k = KEEP_CHAIN, p = pendulumBeatPhase(row, k.cycleS, beat), angle = p.swing * k.angleRad;
+    const k = KEEP_CHAIN, p = pendulumBeatPhase(row, cycleS, beat), angle = p.swing * k.angleRad;
     return { angle, x: (row.x || 0) + Math.sin(angle) * k.lengthM, y: k.pivotM + p.lift - Math.cos(angle) * k.lengthM,
       pivotY: k.pivotM + p.lift, warning: p.safe || Math.abs(p.swing) < .7, radiusM: k.radiusM, safe: p.safe };
   }
-  const k = KEEP_CHAIN, phase = (Math.max(0, Number.isFinite(timeS) ? timeS : 0) + (row.offsetS || 0)) * Math.PI * 2 / k.cycleS;
+  const k = KEEP_CHAIN, phase = (Math.max(0, Number.isFinite(timeS) ? timeS : 0) + (row.offsetS || 0)) * Math.PI * 2 / cycleS;
   const angle = Math.sin(phase) * k.angleRad;
   return { angle, x: (row.x || 0) + Math.sin(angle) * k.lengthM, y: k.pivotM - Math.cos(angle) * k.lengthM,
     warning: Math.abs(Math.sin(phase)) < .7, radiusM: k.radiusM };
