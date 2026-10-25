@@ -63,6 +63,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             };
         }
 
+        // MainShellWindow.AchievementSharing repaints the opt-in after the Discord sign-in prompt.
+        internal void RefreshAchievementSharing() => RefreshPrivacy();
+
         private void RefreshPrivacy()
         {
             _paintingLocal = true;

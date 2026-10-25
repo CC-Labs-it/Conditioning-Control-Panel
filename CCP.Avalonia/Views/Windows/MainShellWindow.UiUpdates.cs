@@ -48,11 +48,7 @@
 //     walks named controls across every tab, most of which are unported; it is a pass over the
 //     finished UI, so it lands last, not first.
 //   UpdateUnlockablesVisibility / SetFeatureImageBlur - App.Unlockables plus a WPF BlurEffect.
-//   The Intake Pass tile - RefreshIntakePassTile, SetIntakePassFace, ApplyIntakePassFaceState,
-//     StartIntakePassCtaPulse, StopIntakePassCtaPulse, EnsureIntakePassHelpPopover,
-//     BuildIntakePassHelpContent, CancelIntakePassSpin, StartIntakePassFlipLoop, HoldIntakePassFace,
-//     RunIntakePassSpinPhase, FinishIntakePassSpin, IntakePassFace_MouseLeftButtonDown and their
-//     eleven state flags. App.IntakePass, plus a WPF 3D card flip.
+//   (The Intake Pass tile is ported: MainShellWindow.IntakePassTile.cs.)
 //   ImgLogo_MouseLeftButtonDown / ShowEasterEgg / TriggerStartupVideo - a media window each.
 //   BtnManageAttention_Click, BtnAttentionStyle_Click, BtnSubliminalSettings_Click,
 //     BtnManageMessages_Click, BtnPrevImage_Click, BtnNextImage_Click,

@@ -66,6 +66,11 @@ public sealed class LeashHoldTests
         clock.Now = clock.Now.AddSeconds(5);
     }
 
+    /// <summary>The tests own every hold tick (stepped clock + LeashHoldClockTick). The shell's real 250 ms
+    /// DispatcherTimer would otherwise fire inside a RunJobs under CI load: after the 5 s ask the hold is
+    /// still held, so one wall-clock tick plays a fifth "leash-tick" (gate flake 2026-10-25).</summary>
+    private static readonly TimeSpan Parked = TimeSpan.FromDays(1);
+
     private static void Click(Button b)
     {
         b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -83,7 +88,8 @@ public sealed class LeashHoldTests
         CoreSettings.ServiceProvider = () => settings;
         (CoreSettings.Current.Welcomed, CoreSettings.Current.HasAcceptedAgeVerification, CoreSettings.Current.PanicKeyEnabled) = (true, true, false);
         var (oldSvc, oldTime, oldReleased) = (LeashHead.Service, MainShellWindow.LeashHoldTime, X11PanicKey.PanicReleased);
-        var oldKeyDown = MainShellWindow.LeashHoldKeyDown;
+        var (oldKeyDown, oldInterval) = (MainShellWindow.LeashHoldKeyDown, MainShellWindow.LeashHoldClockInterval);
+        MainShellWindow.LeashHoldClockInterval = Parked;
         bool keyDown = true;
         MainShellWindow.LeashHoldKeyDown = () => keyDown;
         var (oldTargets, oldUi) = (LeashCutSafety.LiveTargets, LeashCutSafety.RunOnUi);
@@ -182,7 +188,7 @@ public sealed class LeashHoldTests
             shell?.Close();
             (LeashHead.Service, MainShellWindow.LeashHoldTime) = (oldSvc, oldTime);
             X11PanicKey.PanicReleased = oldReleased;
-            MainShellWindow.LeashHoldKeyDown = oldKeyDown;
+            (MainShellWindow.LeashHoldKeyDown, MainShellWindow.LeashHoldClockInterval) = (oldKeyDown, oldInterval);
             (LeashCutSafety.LiveTargets, LeashCutSafety.RunOnUi) = (oldTargets, oldUi);
             CoreSettings.ServiceProvider = null;
         }
@@ -199,11 +205,11 @@ public sealed class LeashHoldTests
         CoreSettings.ServiceProvider = () => settings;
         CoreSettings.Current.PanicKeyEnabled = false;
         CoreSettings.Current.MasterVolume = 0;
-        var (oldSvc, oldClock, oldKey) = (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown);
+        var (oldSvc, oldClock, oldKey, oldInterval) = (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown, MainShellWindow.LeashHoldClockInterval);
         var clock = new Clock();
         var svc = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
         svc.ApplyBlock(LeashHeadTests.BlockWithPunishment());
-        (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown) = (svc, clock, () => false);
+        (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown, MainShellWindow.LeashHoldClockInterval) = (svc, clock, () => false, Parked);
         MainShellWindow? shell = null;
         try
         {
@@ -242,7 +248,7 @@ public sealed class LeashHoldTests
             LeashHoldRing.Dismiss();
             shell?.Close();
             PortalPanicShortcut.SetSessionForTests(null, null);
-            (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown) = (oldSvc, oldClock, oldKey);
+            (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown, MainShellWindow.LeashHoldClockInterval) = (oldSvc, oldClock, oldKey, oldInterval);
             CoreSettings.ServiceProvider = oldSettings;
         }
     });
@@ -258,11 +264,11 @@ public sealed class LeashHoldTests
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         (CoreSettings.Current.PanicKeyEnabled, CoreSettings.Current.MasterVolume) = (false, 0);
-        var (oldSvc, oldClock, oldKey) = (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown);
+        var (oldSvc, oldClock, oldKey, oldInterval) = (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown, MainShellWindow.LeashHoldClockInterval);
         var clock = new Clock();
         var svc = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
         svc.ApplyBlock(LeashHeadTests.BlockWithPunishment());
-        (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown) = (svc, clock, key);
+        (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown, MainShellWindow.LeashHoldClockInterval) = (svc, clock, key, Parked);
         MainShellWindow? shell = null;
         try
         {
@@ -279,7 +285,7 @@ public sealed class LeashHoldTests
             shell?.Close();
             Dispatcher.UIThread.RunJobs();
             PortalPanicShortcut.SetSessionForTests(null, null);
-            (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown) = (oldSvc, oldClock, oldKey);
+            (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown, MainShellWindow.LeashHoldClockInterval) = (oldSvc, oldClock, oldKey, oldInterval);
             CoreSettings.ServiceProvider = oldSettings;
         }
     });

@@ -8,9 +8,11 @@
  * registered - so neither side ever races the other's boot.
  * ==========================================================================*/
 
+import { carrier } from '../shared/carrier.js';
+
 export const PROTOCOL = 1;
 
-const webview = window.chrome && window.chrome.webview;
+const webview = carrier(window);
 const handlers = new Map();   // type -> fn
 const preBuffer = [];         // messages that arrived before their handler
 

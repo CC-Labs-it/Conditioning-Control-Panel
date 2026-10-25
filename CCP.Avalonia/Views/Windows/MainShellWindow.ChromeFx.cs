@@ -3,9 +3,8 @@
 // animations), gated by ChromeBannerSheen/Pr4aAmbientAllowed:
 //   1. START sheen and XP gloss - SweepStartSheen, _startSheenTimer, ApplyXpSheen, ParkSheen.
 //   2. breathing glows - ApplyNavGlowBreath, ApplyStartButtonGlow and their Min/Max/Breath constants.
-//   3. tab transition + card stagger - AnimateTabIn, SlideTabIn, FadeOutgoingTab, CollapseOutgoingTab,
-//      StaggerTabCards, StaggerCleanupTimer_Tick, FindStaggerTargets, TabFadeOutMs/TabFadeInMs/TabSlidePx;
-//      caller is ShowTab, which still snaps panels on and off.
+//   3. tab transition + card stagger - PORTED in MainShellWindow.TabTransitions.cs (except the
+//      100 ms FadeOutgoingTab: the leaving tab is cut, see there); caller is ShowTab.
 //   4. nav rail hover/active - NavButton_MouseEnter/Leave, NudgeNavIcon, ApplyNavActiveGlow,
 //      SetNavIndicator, NavIconHoverScale/NavIconHoverMs.
 //   5. XP meter - AnimateXpDisplay, FillXpBarTo, _lastXpShown; caller is the Progression XP refresh.
