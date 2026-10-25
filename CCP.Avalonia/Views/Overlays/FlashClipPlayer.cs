@@ -49,7 +49,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Action<WriteableBitmap> show, double speed, out bool refusedAtCap, bool flash = false, Action? stopped = null)
         {
             refusedAtCap = false;
-            if (string.IsNullOrEmpty(path) || vlc == null || !System.IO.File.Exists(path)) return null;
+            if (string.IsNullOrEmpty(path) || vlc == null) return null;
+            // WPF FlashClipPlayer.cs:52: a deleted temp file would "play" and show nothing while holding a slot.
+            if (!System.IO.File.Exists(path)) { Log.Debug("CLIP clip file missing, poster stays"); return null; }
             if (TearingDown >= MaxTearingDown) { refusedAtCap = true; LogRefused(); return null; }
             FlashClipPlayer? created = null;
             var lease = Budget.TryAcquire(() => created?.Dispose(), out _, reserved: flash);
@@ -64,7 +66,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             catch (Exception ex)
             {
                 lease.Dispose();
-                Log.Debug("Flash clip failed: {Error}", ex.Message);
+                Log.Debug("CLIP start failed, live={Live}/{Max}: {Error}", Budget.Live, MaxPlayers, ex.Message);
                 return null;
             }
         }

@@ -175,6 +175,37 @@ public sealed class FlashClipHostTests
         finally { Directory.Delete(dir, recursive: true); }
     });
 
+    [Fact]
+    public Task OwnedClipLeftByACrashIsTakenByTheStartupSweepAndTheCacheOffSwitch() => WithSource(async () =>
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-clip-sweep-").FullName;
+        try
+        {
+            var cached = Path.Combine(dir, "clip.mp4");
+            var poster = Path.Combine(dir, "poster.jpg");
+            File.WriteAllBytes(cached, new byte[] { 1 });
+            File.WriteAllBytes(poster, new byte[] { 2 });
+            RemoteFlashSource.Download = (url, _, _) => Task.FromResult<string?>(url == Clip.Url ? cached : poster);
+            RemoteFlashSource.EnsurePrefetch();
+            await RemoteFlashSource.Prefetching;
+            var item = RemoteFlashSource.TryTake(new Random(1))!.Value;
+            // WPF RemoteMediaCache.cs:166: directly in the media temp folder, ccp_temp_remote_ named.
+            Assert.Equal(Path.GetFullPath(ConditioningControlPanel.CorePaths.MediaTemp()).TrimEnd(Path.DirectorySeparatorChar),
+                Path.GetDirectoryName(Path.GetFullPath(item.ClipPath)));
+            // A crash leaves the copy; replay it in a private .temp so parallel tests' files stay.
+            var temp = Directory.CreateDirectory(Path.Combine(dir, "assets", ".temp")).FullName;
+            var leftover = Path.Combine(temp, Path.GetFileName(item.ClipPath));
+            File.Copy(item.ClipPath, leftover);
+            Assert.Equal(1, ContentPackStore.SweepStaleTemps(temp)); // App startup sweep
+            Assert.False(File.Exists(leftover));
+            File.Copy(item.ClipPath, leftover);
+            Assert.Equal((1, false), ScrolllerDiskCache.PurgeFolder(Path.Combine(dir, "assets", ScrolllerDiskCache.FolderName)));
+            Assert.False(File.Exists(leftover)); // cache off switch
+            RemoteFlashSource.CleanupCache();
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    });
+
     [Theory]
     [InlineData(0)] // poster failed
     [InlineData(1)] // poster threw cancellation
@@ -184,7 +215,8 @@ public sealed class FlashClipHostTests
         var dir = Directory.CreateTempSubdirectory("ccp-clip-cancel-").FullName;
         try
         {
-            var cached = Path.Combine(dir, "clip.mp4");
+            var ext = ".cancel" + mode; // unique, so parallel tests' temp copies never count
+            var cached = Path.Combine(dir, "clip" + ext);
             File.WriteAllBytes(cached, new byte[] { 1 });
             bool sawClip = false;
             RemoteFlashSource.Download = (url, _, ct) =>
@@ -202,8 +234,8 @@ public sealed class FlashClipHostTests
             await RemoteFlashSource.Prefetching;
             Assert.True(sawClip);
             Assert.Equal(0, RemoteFlashSource.ReadyCount);
-            var owned = Path.Combine(ConditioningControlPanel.CorePaths.MediaTemp(), "flash-clips");
-            Assert.Empty(Directory.Exists(owned) ? Directory.GetFiles(owned) : Array.Empty<string>());
+            var owned = ConditioningControlPanel.CorePaths.MediaTemp();
+            Assert.Empty(Directory.Exists(owned) ? Directory.GetFiles(owned, ScrolllerDiskCache.TempPrefix + "*" + ext) : Array.Empty<string>());
             Assert.True(File.Exists(cached));
         }
         finally { Directory.Delete(dir, recursive: true); }

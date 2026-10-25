@@ -220,11 +220,13 @@ namespace ConditioningControlPanel.Services.Flash
 
         // ponytail: copy only clips after the device-cache consent/allowance gate; its sweep may
         // remove its copy at any time. Posters stay in that cache, matching the WPF still path.
+        // Named like WPF RemoteMediaCache (:166) so the startup sweep (ccp_temp_*) and the cache
+        // off-switch purge (ccp_temp_remote_*) both reclaim copies a crash or kill left behind.
         private static string OwnClip(string source)
         {
-            var folder = Path.Combine(CorePaths.MediaTemp(), "flash-clips");
+            var folder = CorePaths.MediaTemp();
             Directory.CreateDirectory(folder);
-            var path = Path.Combine(folder, Guid.NewGuid().ToString("N") + Path.GetExtension(source));
+            var path = Path.Combine(folder, ScrolllerDiskCache.TempPrefix + Guid.NewGuid().ToString("N") + Path.GetExtension(source));
             try { File.Copy(source, path); return path; }
             catch { ReleaseClip(path); throw; }
         }
