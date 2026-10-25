@@ -2,7 +2,7 @@
 // Services/Leash/LeashServiceApp.cs CreateForApp + AppDayInputs, LeashCutSafetyApp.cs AppTargets and
 // ChasterLeashTab.cs. The service itself is Core (CCP.Core/Services/Leash); this is the head's half.
 // The task runner is Platform/LeashTaskHost (gate card: MainShellWindow.LeashGate).
-// ponytail: the explainer/drawer UI lands with the Drawer unit.
+// ponytail: offer/holder/explainer UI remains unported; the own card lives on Social > Leash.
 using System;
 using System.IO;
 using Avalonia.Threading;
@@ -107,6 +107,11 @@ internal static class LeashHead
     /// <summary>WPF LeashServiceApp.AppDayInputs: R's numbers, read fresh.</summary>
     internal static LeashDayInputs? DayInputs()
     {
+        var local = DateTime.Now;
+        int minutes = 0;
+        try { minutes = App.FeatureDayLog?.ConditioningMinutesOn(local) ?? 0; }
+        catch (Exception ex) { Serilog.Log.Debug("Leash minutes read failed: {E}", ex.Message); }
+
         int done = 0, total = 0;
         try
         {
@@ -142,10 +147,7 @@ internal static class LeashHead
         }
         catch (Exception ex) { Serilog.Log.Debug("Leash chaster read failed: {E}", ex.Message); }
 
-        // ponytail: WPF reads today's conditioning minutes from App.FeatureDayLog; that log is not on
-        // this head, so minutes report 0 and a Minutes assignment cannot complete (LeashAssignRule.Met)
-        // until lane feature-day-log-core moves it to Core writing the same feature_day_log.json.
-        return new LeashDayInputs(DateTime.Now, 0, done, total, streak, linked, ends, hidden, tab);
+        return new LeashDayInputs(local, minutes, done, total, streak, linked, ends, hidden, tab);
     }
 
     /// <summary>WPF ChasterLeashTab: the same NoteSeconds path, literal row ids.</summary>

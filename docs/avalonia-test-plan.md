@@ -673,3 +673,8 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+1. WPF `Controls/Leash/LeashSelfCard.cs`, `Views/Tabs/LeashTabView.xaml`: with a sandbox leashed account, open Social > Leash. Confirm holder/day, Cut first, pending tasks and pardons; change intensity, each DND choice and video cap. Poll an update and sign out: the card updates, then the empty Friends link returns. Cut while offline: the local leash/task goes immediately with no confirmation and stays gone on a stale poll. Rows: `feat-leash`.
+2. WPF `Controls/Leash/LeashSelfCard.cs` WatchButton/StartWatch: assign an open video and click Watch it; verify the runner starts, button says Watching and disables; finish real playback and check next report marks the assignment done. Panic parks playback; Cut cancels it. Rows: `feat-leash`.
+3. WPF `Services/Leash/LeashServiceApp.cs` AppDayInputs: condition for the assigned minutes today, tick FeatureDayLog, poll and confirm minutes/assign_done; yesterday's assignment must not complete. Rows: `feat-leash`.
+4. WPF `MainWindow/MainWindow.Leash.cs` ReadLeashWorld: with a punishment due, open a tutorial or startup dialog and press a launcher game tile. Gate stays down; closing the dialog/tour lets the next two-second check show it. Rows: `feat-leash`.

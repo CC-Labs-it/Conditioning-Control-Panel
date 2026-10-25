@@ -5,8 +5,8 @@
 // (LeashGateRule.ShouldShow, checked every 2 s). The launcher asks LeashBlocksGames before a game tile
 // opens (LauncherHost.cs:360-366). Platform/LeashHead seeds both providers.
 // The gate's action starts the task on the Core LeashTaskRunner (Platform/LeashTaskHost; WPF StartLeashTask,
-// BindLeashRunner, GuardLeashRunner, OnLeashProgress/Completed/Stopped). Not read yet: StartupLadder/Tutorial
-// modals; the LeashFx done/denied sounds (leash fx unit).
+// BindLeashRunner, GuardLeashRunner, OnLeashProgress/Completed/Stopped).
+// ponytail: the LeashFx done/denied sounds remain unported.
 // The browser card hides while the gate is up (WPF airspace, MainWindow.Leash.cs:184-201: NativeWebView
 // is a native host here too, SettingsTabView.axaml:971, and would cover Panic and Cut).
 using System;
@@ -108,7 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             GameUp: PanicSurfaces.AnyOwnsTheScreen(),
             LockCardOpen: LockCardWindow.IsAnyOpen() || BubbleCountWindow.IsAnyOpen(),
             FullscreenEffect: CoreEngine.Video?.IsPlaying == true,
-            ModalUp: LockdownActive || Named<Border>("RemoteControlOverlay")?.IsVisible == true,
+            ModalUp: CoreTutorial.IsActive || IsStartupDialogShowing || AppUpdater.IsUpdateDialogActive || LockdownActive || Named<Border>("RemoteControlOverlay")?.IsVisible == true,
             PanelAway: !IsVisible || WindowState == WindowState.Minimized,
             Watching: _leashRunner?.IsRunning == true || DateTime.UtcNow < _leashSnoozeUntilUtc);
 
