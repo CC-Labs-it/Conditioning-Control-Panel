@@ -51,6 +51,17 @@ public class ShellLoginSyncTests
         Assert.Equal(4, s.CompanionProgressData[0].Level);
         Assert.Equal(30, s.CompanionProgressData[1].TotalXPEarned);
     }
+
+    [Fact]
+    public void MalformedCompanionRecordDoesNotAbortTheAdopt()
+    {
+        var s = new AppSettings { TotalConditioningMinutes = 10, CompanionProgressData = new Dictionary<int, CompanionProgress>() };
+        var sync = new SyncPush(() => null, () => false);
+        var known = sync.AdoptFromResponse(s, JObject.Parse("""{"skill_points":3,"unlocked_skills":[],"total_conditioning_minutes":15,"companion_progress":{"0":{"Level":"not-a-number"}}}"""));
+        Assert.True(known);
+        Assert.Equal(15, s.TotalConditioningMinutes);
+        Assert.False(s.CompanionProgressData.ContainsKey(0));
+    }
     [Fact]
     public void FirstWebClaimNotifiesOnceOnUiThreadWithWpfCopyAndDuration()
     {

@@ -342,29 +342,34 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex) { Log.Debug("AdoptCloudCosmetics skipped: {E}", ex.Message); }
             // WPF ProfileSyncService:2175-2231: time takes higher; a companion's whole record
             // is selected by level, then lifetime XP. Missing fields never arm a defaults push.
-            if (reply["total_conditioning_minutes"] is { Type: JTokenType.Integer or JTokenType.Float } minutes)
+            // Own try like the cosmetics block: a malformed record must not skip ApplySyncResponse/ClaimWebXp.
+            try
             {
-                if (minutes.Value<double>() > s.TotalConditioningMinutes)
+                if (reply["total_conditioning_minutes"] is { Type: JTokenType.Integer or JTokenType.Float } minutes)
                 {
-                    s.TotalConditioningMinutes = minutes.Value<double>();
-                    LifetimeLifted?.Invoke();
+                    if (minutes.Value<double>() > s.TotalConditioningMinutes)
+                    {
+                        s.TotalConditioningMinutes = minutes.Value<double>();
+                        LifetimeLifted?.Invoke();
+                    }
+                    _knownProgress |= SyncBody.Field.TotalConditioningMinutes;
                 }
-                _knownProgress |= SyncBody.Field.TotalConditioningMinutes;
-            }
-            if (reply["companion_progress"] is JObject companions)
-            {
-                foreach (var entry in companions.Properties())
+                if (reply["companion_progress"] is JObject companions)
                 {
-                    if (!int.TryParse(entry.Name, out var id) || entry.Value is not JObject record) continue;
-                    var server = record.ToObject<CompanionProgress>();
-                    if (server == null) continue;
-                    s.CompanionProgressData.TryGetValue(id, out var local);
-                    if (local == null || server.Level > local.Level
-                        || server.Level == local.Level && server.TotalXPEarned > local.TotalXPEarned)
-                        s.CompanionProgressData[id] = server;
+                    foreach (var entry in companions.Properties())
+                    {
+                        if (!int.TryParse(entry.Name, out var id) || entry.Value is not JObject record) continue;
+                        var server = record.ToObject<CompanionProgress>();
+                        if (server == null) continue;
+                        s.CompanionProgressData.TryGetValue(id, out var local);
+                        if (local == null || server.Level > local.Level
+                            || server.Level == local.Level && server.TotalXPEarned > local.TotalXPEarned)
+                            s.CompanionProgressData[id] = server;
+                    }
+                    _knownProgress |= SyncBody.Field.CompanionProgress;
                 }
-                _knownProgress |= SyncBody.Field.CompanionProgress;
             }
+            catch (Exception ex) { Log.Debug("Companion/time merge skipped: {E}", ex.Message); }
             return points != null && skills != null;
         }
 
