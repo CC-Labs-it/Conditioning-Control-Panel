@@ -132,6 +132,62 @@ public sealed class SessionRunnerTests : IDisposable
         Assert.False(CoreEngine.IsRunning);
     }
 
+    private sealed class DisposeThrowsTimer : System.Threading.ITimer
+    {
+        public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+        public void Dispose() => throw new InvalidOperationException("test pop quiz stop failure");
+        public System.Threading.Tasks.ValueTask DisposeAsync() => default;
+    }
+
+    private sealed class DisposeThrowsTime : TimeProvider
+    {
+        public override System.Threading.ITimer CreateTimer(System.Threading.TimerCallback callback, object? state,
+            TimeSpan dueTime, TimeSpan period) => new DisposeThrowsTimer();
+    }
+
+    /// <summary>WPF SessionEngine.cs:360: one first-failure trace per teardown step, not per teardown.</summary>
+    [Fact]
+    public void TwoDifferentStopStepsFailing_AreBothLoggedInFull()
+    {
+        var sink = new SessionSink();
+        var previous = Serilog.Log.Logger;
+        using var logger = new Serilog.LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
+        var settings = CoreSettings.Current;
+        var snapshot = SessionSettingsSnapshot.Capture(settings);
+        var (oldQuiz, oldEnabled) = (CoreEngine.PopQuiz, settings.PopQuizEnabled);
+        CoreEngine.PopQuiz = new PopQuizScheduler(new QuizHost(), new DisposeThrowsTime());
+        settings.PopQuizEnabled = true;
+        settings.FlashFrequency = 13;
+        void Fail(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(settings.FlashFrequency))
+                throw new InvalidOperationException("test restore observer failure");
+        }
+        try
+        {
+            _runner.Start(OneMinute());
+            Assert.True(CoreEngine.PopQuiz.IsRunning);
+            Serilog.Log.Logger = logger;
+            settings.PropertyChanged += Fail;
+            _runner.Stop();
+        }
+        finally
+        {
+            settings.PropertyChanged -= Fail;
+            Serilog.Log.Logger = previous;
+            CoreEngine.PopQuiz = oldQuiz;
+            snapshot.RestoreTo(settings);
+            settings.PopQuizEnabled = oldEnabled;
+        }
+        var failures = sink.Events.Where(e => e.Properties.ContainsKey("SessionStep")).ToList();
+        Assert.Equal(2, failures.Count);
+        Assert.Contains(failures, e => e.Exception!.Message == "test pop quiz stop failure");
+        Assert.Contains(failures, e => e.Exception!.Message == "test restore observer failure");
+        Assert.Equal(new[] { "\"stop:pop-quiz\"", "\"stop:restore-settings\"" },
+            failures.Select(e => e.Properties["SessionStep"].ToString()));
+        Assert.False(_runner.IsRunning);
+    }
+
     [Fact]
     public void RestartForResume_DoesNotCountANewRun_AndPendingFeaturesStayOff()
     {

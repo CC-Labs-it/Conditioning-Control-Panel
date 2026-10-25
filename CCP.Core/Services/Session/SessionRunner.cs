@@ -265,18 +265,18 @@ namespace ConditioningControlPanel.Services
         public void ReassertScheduleAfterEngineStart()
         {
             if (!IsRunning || IsPaused || CurrentSession == null) return;
-            if (_deferred.IsPending("flash")) Step("resume", CoreFlash.Stop);
-            if (_deferred.IsPending("subliminal")) Step("resume", CoreSubliminal.Stop);
-            if (_deferred.IsPending("bouncing text")) Step("resume", CoreBouncingText.Stop);
-            if (_deferred.IsPending("lock cards")) Step("resume", LockCardScheduler.Instance.Stop);
+            if (_deferred.IsPending("flash")) Step("resume:hold-flash", CoreFlash.Stop);
+            if (_deferred.IsPending("subliminal")) Step("resume:hold-subliminal", CoreSubliminal.Stop);
+            if (_deferred.IsPending("bouncing text")) Step("resume:hold-bouncing text", CoreBouncingText.Stop);
+            if (_deferred.IsPending("lock cards")) Step("resume:hold-lock cards", LockCardScheduler.Instance.Stop);
             else if (CurrentSession.Settings.LockCardEnabled)
-                Step("resume", () =>
+                Step("resume:lock-cards", () =>
                 {
                     LockCardScheduler.Instance.Stop();
                     LockCardScheduler.Instance.Start(Remaining.TotalMinutes);
                 });
             // ponytail: no session Mind Wipe host yet; never let the global one leak into a session.
-            Step("resume", CoreMindWipe.Stop);
+            Step("resume:mind-wipe-stop", CoreMindWipe.Stop);
         }
 
         private void StartAt(string name, int minute, Action start, Action stop)
@@ -444,23 +444,23 @@ namespace ConditioningControlPanel.Services
             var session = CurrentSession;
             if (!IsRunning || session == null) return;
             IsRunning = IsPaused = false;
-            Step("stop", () => _custody?.Release());
+            Step("stop:custody-release", () => _custody?.Release());
             _stopwatch.Stop();
             _timer?.Dispose();
             _timer = null;
             _deferred.Clear();
-            Step("stop", () => CoreEngine.PopQuiz?.Stop());   // SessionEngine.cs:372
-            Step("stop", () => CloseCornerGif(handBack: true));   // SessionEngine.cs:356
+            Step("stop:pop-quiz", () => CoreEngine.PopQuiz?.Stop());   // SessionEngine.cs:372
+            Step("stop:corner-gif", () => CloseCornerGif(handBack: true));   // SessionEngine.cs:356
 
             var s = CoreSettings.Current;
-            Step("stop", s.ClearSessionFlashRamp);   // SessionEngine.cs:390, ahead of the restore
+            Step("stop:flash-ramp", s.ClearSessionFlashRamp);   // SessionEngine.cs:390, ahead of the restore
             PinkOpacity = null;
-            Step("stop", () => _snapshot?.RestoreTo(s));
+            Step("stop:restore-settings", () => _snapshot?.RestoreTo(s));
             _snapshot = null;
-            Step("stop", () => _custody?.Restore(s));
+            Step("stop:custody-restore", () => _custody?.Restore(s));
             _custody = null;
-            Step("stop", CoreEngine.Stop);   // MainWindow.Presets.cs:1951
-            Step("stop", () => CoreSettings.Save());   // WPF leaves the restore to the next save; persist it now
+            Step("stop:engine", CoreEngine.Stop);   // MainWindow.Presets.cs:1951
+            Step("stop:save", () => CoreSettings.Save());   // WPF leaves the restore to the next save; persist it now
 
             // XP actually banked: 0 while no head has a progression service (decision log).
             int xp = 0;

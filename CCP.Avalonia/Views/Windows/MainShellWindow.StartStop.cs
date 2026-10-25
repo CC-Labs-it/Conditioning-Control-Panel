@@ -74,11 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF StartEngine, through the portal wrapper so the panic key is bound first.</summary>
-        internal void StartEngineFromUser()
-        {
-            if (RemoteControllerConnected) return;
-            StartEngine(resumeParkedSession: true);
-        }
+        internal void StartEngineFromUser() => StartEngine(resumeParkedSession: true);
 
         internal void StartEngine(bool resumeParkedSession = false)
         {
