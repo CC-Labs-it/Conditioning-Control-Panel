@@ -3467,3 +3467,7 @@ All five companion roster cards now repaint their assigned prompt name (mod-awar
 
 ## avalonia-port/wire-win-descent-fuse: +326
 - Descent Fuse shows retired like WPF (ShowsRetired); only a late zero with no crack owed retries over SyncPush; panic closes any show.
+
+## avalonia-port/wire-views-tab-quests: +835
+- Quests tab: quest art, server season title, Fix day (Core StreakFix rules, use-oopsie spend); row stays stub until the depth pass.
+- Review P3s: localized Yes/No on the fix-day question; fix rings dropped on a zero-width repaint (fail-proven).
