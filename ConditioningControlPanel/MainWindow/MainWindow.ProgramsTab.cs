@@ -2204,6 +2204,7 @@ namespace ConditioningControlPanel
                     _sessionEngine.PhaseChanged += OnSessionPhaseChanged;
                     _sessionEngine.SessionStarted += OnSessionStarted;
                     _sessionEngine.SessionStopped += OnSessionStopped;
+                    WatchSessionClocks(_sessionEngine);
                 }
 
                 // Both attaches detach any previous engine first, so re-attaching is safe.
@@ -2212,7 +2213,9 @@ namespace ConditioningControlPanel
 
                 if (!_isRunning)
                 {
-                    StartEngine();
+                    // "Start today's session" is the user's own START (ends the post-panic quiet).
+                    // No session runs here (refused above), so nothing is resumed.
+                    StartEngineFromUser();
 
                     // StartEngine turns on whatever the saved settings had; the session engine
                     // owns the overlays from here.

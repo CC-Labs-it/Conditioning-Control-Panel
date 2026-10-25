@@ -97,7 +97,7 @@ retrying forever (`:1155`).
 | Frames | frozen `BitmapSource[]` → `SKImage[]` converted **off-thread** (`ShowFrames`, `SpiralLayer.cs:59`) | `Image.Source` swapped each `_gifFrameTimer` tick (`GifFrameTimer_Tick` `:1467`); video loops via `_gifLoopTimer` (`VideoLoopTimer_Tick` `:1486`) |
 | Stepping | engine tick (`Update`, `SpiralLayer.cs:125`), dirty-gated (`#550`) | `DispatcherTimer` at `Render` priority, `_gifFrameDelay` |
 | Fill | `UniformToFill`, center-crop (`Render`, `SpiralLayer.cs:138`) | `Stretch.UniformToFill` on the `Image`/`MediaElement` |
-| Multi-monitor | `ShouldRenderOnScreen => PrimaryOnlyUnlessDualMonitor` (`SpiralLayer.cs:33`) | one window per screen, honoring `DualMonitorEnabled` (`:1181`) |
+| Multi-monitor | `ShouldRenderOnScreen => App.ShouldRenderTargetOnScreen(...)` (`SpiralLayer.cs:36`) | one window per screen, honoring `DualMonitorEnabled` (`:1181`) |
 | Z-order | `CompositorLayers.Spiral = 60`; host reconciled by `ReassertZOrder` (§6c) | window reconciled by `ReassertZOrder` (§6c) |
 
 **`SpiralShowing`** (`:149`) is the truth for "is a spiral up on *either* path" and must cover the

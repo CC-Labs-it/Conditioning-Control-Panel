@@ -42,7 +42,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///    Slider marks them handled, which is what WPF's tunnelling pass got around.
     ///  - DragMove() -> BeginMoveDrag(e), which needs the event args.
     ///
-    /// <para>Opened by the Library asset browser for local files and temporary pack decrypts.</para>
+    /// <para><b>Opener:</b> <c>AssetsTabView.OpenAssetPreview</c> (WPF <c>MainWindow.OpenAssetPreview</c>,
+    /// MainWindow.Assets.cs:1206), from a Library thumbnail double-click or the context-menu Preview:
+    /// <c>LoadFile(path)</c> then <c>Show(owner)</c>. Encrypted-pack files open from a temporary decrypt
+    /// (WPF's temp extraction). <c>--video-check &lt;file&gt;</c> (VideoCheck.cs) also opens it.</para>
     /// </summary>
     public partial class MiniPlayerWindow : Window
     {
@@ -212,8 +215,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _mediaPlayer.LengthChanged += (s, e) => Dispatcher.UIThread.Post(UpdateTimeDisplay);
 
                 _media = new Media(libVLC, filePath, FromType.FromPath);
-                // No audio for preview, as WPF (Services.LibVlcSilence.NoAudioOption).
-                _media.AddOption(":no-audio");
+                // No audio for preview, as WPF.
+                _media.AddOption(ConditioningControlPanel.Services.LibVlcSilence.NoAudioOption);
                 _mediaPlayer.Play(_media);
 
                 _videoControls.IsVisible = true;

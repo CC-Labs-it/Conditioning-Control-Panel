@@ -73,6 +73,7 @@ internal static class X11Overlay
     [DllImport(LibX11)] private static extern int XChangeProperty(IntPtr display, IntPtr window, IntPtr property, IntPtr type, int format, int mode, IntPtr[] data, int count);
     [DllImport(LibX11)] private static extern IntPtr XGetSelectionOwner(IntPtr display, IntPtr selection);
     [DllImport(LibX11)] private static extern int XDefaultScreen(IntPtr display);
+    [DllImport(LibX11)] private static extern int XSetInputFocus(IntPtr display, IntPtr window, int revertTo, nuint time);
     [DllImport(LibX11)] private static extern int XRaiseWindow(IntPtr display, IntPtr window);
     [DllImport(LibX11)] private static extern int XSendEvent(IntPtr display, IntPtr window, bool propagate, long mask, IntPtr sendEvent);
 
@@ -173,6 +174,15 @@ internal static class X11Overlay
             XFlush(_display);
             return true;
         }
+    }
+
+    /// <summary>Exact static input region for a tutorial; null restores the whole window.
+    /// Windows uses a window region, not the cursor-polled bubble helper.</summary>
+    internal static bool SetWindowInputRegion(TopLevel window, PixelRect[]? rects)
+    {
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd))
+            return Win32Overlay.SetWindowInputRegion(window, hwnd, rects);
+        return rects is null ? SetClickThrough(window, false) : SetInputRects(window, rects, rects.Length);
     }
 
     private static IntPtr _rectBuf;   // grown, never freed: one per process, reused every frame
@@ -285,6 +295,28 @@ internal static class X11Overlay
             XRaiseWindow(_display, xid);
             XFlush(_display);
             return true;
+        }
+    }
+
+    /// <summary>Explicit subliminal focus opt-in, after Show. Windows removes NOACTIVATE while
+    /// preserving click-through; X11 override-redirect windows bypass the WM so need a direct
+    /// focus request (PointerRoot on removal, CurrentTime). Headless/native Wayland return false.</summary>
+    internal static bool ActivateClickThrough(Window window)
+    {
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd))
+        {
+            if (!Win32Overlay.AllowFocus(window, hwnd)) return false;
+            window.Activate();
+            return true;
+        }
+        if (!TryGetXid(window, out var xid)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            _xErrored = false;
+            XSetInputFocus(_display, xid, 1 /* RevertToPointerRoot */, 0 /* CurrentTime */);
+            XSync(_display, false); // a still-unmapped/destroyed card is refused, not fatal
+            return !_xErrored;
         }
     }
 
