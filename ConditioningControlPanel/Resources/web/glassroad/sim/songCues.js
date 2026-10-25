@@ -49,7 +49,13 @@ export function songCues(chart) {
 /** Kinds that live in the sky or on the whole course, never at one road spot. */
 export const SKY_KINDS = Object.freeze(['SHIFT', 'BAR']);
 const zoned = row => SKY_KINDS.includes(row.kind) || !!row.params.zone;
-const SPEED_MIN = 12, SPEED_MAX = 60, PASS_M = 30;
+const SPEED_MIN = 12, PASS_M = 30;
+// Hanging screens need enough approach room to fit the whole face above the driving view.
+export function watchStandoff(row, speed) {
+  if (row.kind !== 'MARQUEE') return speed * (row.params.standoffS ?? 1.5);
+  const requested = Number.isFinite(row.params.standoffS) ? row.params.standoffS : 3;
+  return Math.max(60, speed * Math.max(3, Math.min(8, requested)));
+}
 
 /** Cosmetic player-local transport. Never writes kart state, authority clocks, or song playback.
  * CROSS planes track the predicted crossing and lock 0.25 s early. WATCH pieces are placed once, at a fixed
@@ -91,7 +97,7 @@ export function createSongCueRun(chart, track) {
     previous = p; lastT = tS; live.length = 0;
     const tangent = (track.pathFrameAt ? track.pathFrameAt(st[S.s], st[S.seg], f) : track.frameAt(st[S.s], f)).t;
     const speed = st[S.velX] * tangent[0] + st[S.velY] * tangent[1] + st[S.velZ] * tangent[2];
-    const plan = Math.max(SPEED_MIN, Math.min(SPEED_MAX, speed));
+    const plan = Math.max(SPEED_MIN, speed);
     result.playerS = st[S.s]; result.speed = speed;
     const lost = st[S.respawnPhase] || teleported, slow = speed < 2;
     const forkId = track.forkAtSeg?.(st[S.seg])?.id || null;
@@ -107,7 +113,7 @@ export function createSongCueRun(chart, track) {
           // A seek into a hold rebuilds it without replaying its impact; a late spot lands ahead, already down.
           if (prevT !== null || tS >= row.endS || (spot && (lost || slow))) { row.state = 'done'; continue; }
           row.state = 'hit'; row.hitS = row.startS; row.bornS = tS;
-          if (spot && !place(row, st, plan * (row.params.standoffS ?? 1.5))) { row.state = 'done'; continue; }
+          if (spot && !place(row, st, watchStandoff(row, plan))) { row.state = 'done'; continue; }
           row.locked = true;
         } else {
           if (remain < .25) { row.state = 'done'; continue; }
@@ -122,7 +128,7 @@ export function createSongCueRun(chart, track) {
       }
       if (row.state === 'live' && !row.locked && !sky) {
         // CROSS planes follow the predicted crossing until 0.25 s out. WATCH spots settle 1.3 s out and then stay.
-        const ahead = row.mode === 'WATCH' ? plan * (Math.max(0, remain) + (row.params.standoffS ?? 1.5)) : speed * Math.max(0, remain);
+        const ahead = row.mode === 'WATCH' ? plan * Math.max(0, remain) + watchStandoff(row, plan) : speed * Math.max(0, remain);
         if (!place(row, st, ahead)) { row.state = 'done'; continue; }
         row.locked = row.mode === 'CROSS' ? remain <= .25 : remain <= (row.params.lockS ?? 1.3);
       }

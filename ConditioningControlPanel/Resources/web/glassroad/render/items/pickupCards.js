@@ -15,6 +15,14 @@ function roundedPath() {
   s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r);
   s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y); return s;
 }
+export function pickupCardEdgeGeometry() {
+  const geometry = new ExtrudeGeometry(roundedPath(), { depth: .065, bevelEnabled: true, bevelSize: .012, bevelThickness: .012, bevelSegments: 1, steps: 1, curveSegments: 5 });
+  geometry.translate(0, 0, -.0325);
+  // Artwork owns each face. Hidden extrusion caps competed with it at far-camera depth precision.
+  const walls = geometry.groups.find(group => group.materialIndex === 1);
+  geometry.setDrawRange(walls.start, walls.count); geometry.clearGroups();
+  return geometry;
+}
 function cover(g, picture, x, y, w, h) {
   const iw = picture.videoWidth || picture.naturalWidth || picture.width, ih = picture.videoHeight || picture.naturalHeight || picture.height;
   if (!(iw > 0 && ih > 0)) return false;
@@ -50,8 +58,7 @@ export function createPickupCards({ source = () => null, doc = document } = {}) 
   });
   const faceGeo = new ShapeGeometry(roundedPath(), 5), pos = faceGeo.attributes.position, uv = faceGeo.attributes.uv;
   for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) / PICKUP_CARD.width + .5, pos.getY(i) / PICKUP_CARD.height);
-  const edgeGeo = new ExtrudeGeometry(roundedPath(), { depth: .065, bevelEnabled: true, bevelSize: .012, bevelThickness: .012, bevelSegments: 1, steps: 1, curveSegments: 5 });
-  edgeGeo.translate(0, 0, -.0325);
+  const edgeGeo = pickupCardEdgeGeometry();
   const edgeMat = new MeshBasicNodeMaterial({ color: '#f7d7a1' });
   const backMat = new MeshBasicNodeMaterial({ map: backTex, toneMapped: false });
 

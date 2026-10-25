@@ -39,15 +39,15 @@ test('cross planes lock before impact; watch spots settle on the road, stay put 
     }
     passed ||= seen?.state==='passed';
   }
-  // Placed where the kart is 1.5 s after the cue, then left behind once the kart has gone by.
-  assert.ok(Math.abs(spot-(200+30*7.5))<1); assert.ok(passed); assert.equal(watch.live.length,0);
+  // Hanging screens stay three seconds ahead at impact so the full face fits the approach view.
+  assert.ok(Math.abs(spot-(200+30*9))<1); assert.ok(passed); assert.equal(watch.live.length,0);
 });
 test('a re-dropping rig drops a fresh fixed screen on each of its beats', () => {
   const c=song('WATCH'); c.cues[0].params={redrop:true}; c.cues[0].jolts=[{word:'signal',n:2}]; c.cues[0].endAnchor={event:'hit',n:1};
   const run=createSongCueRun(c,track); assert.deepEqual(run.cues.map(x=>[x.id,x.startS]),[['a',6],['a~1',12]]);
   const spots=new Map();
   for(let i=0;i<16*60;i++){const t=i/60;for(const r of run.update(t,kart(200+30*t)).live) if(r.locked) spots.set(r.id,r.s);}
-  assert.ok(Math.abs(spots.get('a')-(200+30*7.5))<1); assert.ok(Math.abs(spots.get('a~1')-(200+30*13.5))<1);
+  assert.ok(Math.abs(spots.get('a')-(200+30*9))<1); assert.ok(Math.abs(spots.get('a~1')-(200+30*15))<1);
 });
 test('sky and zone pieces need no road spot and survive a stopped kart', () => {
   const c=song('WATCH'); c.cues[0].kind='SHIFT'; const run=createSongCueRun(c,track);
@@ -99,4 +99,18 @@ test('seek reconstructs ongoing WATCH holds without firing their impacts', () =>
   const run=createSongCueRun(song('WATCH'),track);run.update(1,kart(230));
   const result=run.update(8,kart(440));assert.equal(result.live.length,1);assert.equal(result.fired.length,0);
   assert.equal(result.live[0].state,'hit');run.update(8.1,kart(443));assert.ok(run.live[0].alpha>0);
+});
+
+test('dropping screens retain readable approach distance at slow and fast pace, including seeks', () => {
+  for (const speed of [14, 30, 65]) {
+    const c = song('WATCH'); c.cues[0].params = { standoffS: .2 };
+    const run = createSongCueRun(c, track);
+    let screen;
+    for (let i = 0; i <= 360; i++) screen = run.update(i / 60, kart(200 + speed * i / 60, speed)).live[0];
+    assert.ok(screen.s - (200 + speed * 6) >= Math.max(60, speed * 3) - 1);
+    const seek = createSongCueRun(c, track);
+    seek.update(1, kart(200, speed));
+    const resumed = seek.update(8, kart(400, speed)).live[0];
+    assert.ok(resumed.s - 400 >= Math.max(60, speed * 3) - 1);
+  }
 });
