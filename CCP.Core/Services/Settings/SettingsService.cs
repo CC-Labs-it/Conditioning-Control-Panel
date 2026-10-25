@@ -278,6 +278,10 @@ namespace ConditioningControlPanel.Services
                         // only; runs before ModService applies any pool.
                         RunCirceNeutralMigration(settings);
 
+                        // A WPF-written file: its account owns the privacy switches it carried (decision 2026-10-22).
+                        try { SyncPush.SeedFromWpfSettings(settings, JObject.Parse(json)); }
+                        catch (Exception ex) { Log.Debug("Privacy ownership seed skipped: {Error}", ex.Message); }
+
                         return settings;
                     }
                 }

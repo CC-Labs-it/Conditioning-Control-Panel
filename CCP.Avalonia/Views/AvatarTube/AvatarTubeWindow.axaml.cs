@@ -1245,6 +1245,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                                 bool barkVoice, bool preset, Action? onSpoken = null)
         {
                 var spokenHandled = false;
+                var clipDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                Action spoken = () => { clipDone.TrySetResult(); onSpoken?.Invoke(); };
                 try
                 {
                     // Only a GENUINE AI reply anchors the bark system's chat-suppression window;
@@ -1262,6 +1264,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                         NoteSpeechEnded(source, text.Length);
                         return;
                     }
+                    // Publish this line BEFORE cutting the last: the cut fires the old clip's onSpoken on the
+                    // thread pool, and a voice waiter woken by it must already see this line in the air.
+                    SpokenAudioDone = clipDone.Task;
                     _stopSpoken();   // WPF ShowGiggle StopSpokenAudio (Speech.cs:474): every new line cuts the last
                     _stopSpoken = static () => { };
 
@@ -1279,7 +1284,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
                     // Mute silences her VOICE and keeps the text (#445) - a muted companion that
                     // also stopped showing bubbles read as completely broken.
-                    if (!IsMuted) { PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, onSpoken); spokenHandled = true; }
+                    if (!IsMuted) { PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken); spokenHandled = true; }
 
                     SyncAskButtonsFor(text);
                     _txtSpeech.Text = text;
@@ -1295,7 +1300,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     Log.Debug("Companion says ({Chars} chars, ai={Ai})", text.Length, aiGenerated);   // never the text
                 }
                 catch (Exception ex) { Log.Warning(ex, "AvatarTube GigglePriority failed"); }
-                finally { if (!spokenHandled) onSpoken?.Invoke(); }
+                finally { if (!spokenHandled) spoken(); }
         }
 
         private DispatcherTimer? _listeningDotsTimer;
@@ -1435,14 +1440,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     }
                     if (!File.Exists(phraseAudioPath)) return;
                     handedOff = true;
-                    // Publish the new clip BEFORE cutting the old one: the cut fires the old line's
-                    // onSpoken, and a voice-host waiter resuming on the pool must already see this clip.
-                    var clipDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                    SpokenAudioDone = clipDone.Task;
                     _stopSpoken();   // WPF PlaySpokenAudio (Speech.cs:1896): cut the previous line, no overlap
                     _stopSpoken = CoreAudio.PlayStoppable(phraseAudioPath!, curved * (barkVoice ? 0.85f : 0.56f),
-                                          barkVoice ? "bark-voice" : "phrase-audio",
-                                          onFinished: () => { clipDone.TrySetResult(); onSpoken?.Invoke(); });
+                                          barkVoice ? "bark-voice" : "phrase-audio", onFinished: onSpoken);
                     return;
                 }
 
