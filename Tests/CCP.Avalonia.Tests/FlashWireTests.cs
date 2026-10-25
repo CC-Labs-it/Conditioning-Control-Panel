@@ -18,6 +18,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Flash;
 using Xunit;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
@@ -129,6 +130,92 @@ public sealed class FlashWireTests
             Assert.Equal(2, xp.Count);
         }
         finally { s.SuppressPerkNotifications = quiet; }
+    });
+
+    [Fact]
+    public Task Sound_playing_flashes_pay_eight_xp_and_lucky_multiplies_it() => OnUi((s, _, xp, _) =>
+    {
+        FlashOverlay.LuckyChime = _ => { };
+        FlashOverlay.Paid("voiced.png", s, 0, 1, soundPlaying: true);
+        FlashOverlay.Paid("lucky-voiced.png", s, 0, 10, soundPlaying: true);
+        Assert.Equal(new[] { (8.0, "Flash"), (80.0, "Flash") }, xp);
+    });
+
+    [Fact]
+    public Task Lucky_glow_pulses_on_the_shared_clock_and_stops_with_the_last_window() => OnUi((s, clock, _, _) =>
+    {
+        var w = ShowOne();
+        w.ApplyGlow(new FlashGlowLook(FlashFxRules.Gold, 18, 0.9, true, false), 1);
+        FlashOverlay.StartFrames(w);
+        Assert.True(FlashOverlay.DriftRunning);
+        w.AdvanceGlow();
+        Assert.Equal(18, w.GlowShadow[0].Blur, 3);
+        clock.Now += TimeSpan.FromMilliseconds(400).Ticks;
+        w.AdvanceGlow();
+        Assert.Equal(28.8, w.GlowShadow[0].Blur, 3);
+        Assert.Equal(255, w.GlowShadow[0].Color.A);
+        clock.Now += TimeSpan.FromMilliseconds(400).Ticks;
+        w.AdvanceGlow();
+        Assert.Equal(18, w.GlowShadow[0].Blur, 3);
+        w.Close();
+        Assert.False(FlashOverlay.DriftRunning);
+    });
+
+    [Fact]
+    public Task Lucky_toast_reuses_refreshes_hides_and_panic_closes() => OnUi((s, clock, _, _) =>
+    {
+        var savedClock = LuckyFlashToast.Clock;
+        var quiet = s.SuppressPerkNotifications;
+        try
+        {
+            s.SuppressPerkNotifications = false;
+            LuckyFlashToast.Clock = clock;
+            LuckyFlashToast.Show();
+            var popup = LuckyFlashToast.Popup!;
+            Assert.True(popup.IsVisible);
+            clock.Now += TimeSpan.FromMilliseconds(3100).Ticks;
+            LuckyFlashToast.Tick();
+            Assert.InRange(popup.Opacity, 0.65, 0.68);
+            LuckyFlashToast.Show();
+            Assert.Same(popup, LuckyFlashToast.Popup);
+            Assert.Equal(1, popup.Opacity);
+            clock.Now += TimeSpan.FromMilliseconds(3300).Ticks;
+            LuckyFlashToast.Tick();
+            Assert.False(popup.IsVisible);
+            LuckyFlashToast.Show();
+            Assert.Same(popup, LuckyFlashToast.Popup);
+            PanicSurfaces.All.Single(x => x.Id == "lucky-flash-toast").Stop(null);
+            Assert.Null(LuckyFlashToast.Popup);
+        }
+        finally
+        {
+            LuckyFlashToast.Close();
+            LuckyFlashToast.Clock = savedClock;
+            s.SuppressPerkNotifications = quiet;
+        }
+    });
+
+    [Fact]
+    public Task Lucky_toast_skips_for_opt_out_or_a_game_surface() => OnUi((s, _, _, _) =>
+    {
+        var surfaces = PanicSurfaces.All;
+        var quiet = s.SuppressPerkNotifications;
+        try
+        {
+            s.SuppressPerkNotifications = true;
+            LuckyFlashToast.Show();
+            Assert.Null(LuckyFlashToast.Popup);
+            s.SuppressPerkNotifications = false;
+            PanicSurfaces.All =
+                new[] { new PanicSurfaces.Surface("test-game", _ => { }, () => true) };
+            LuckyFlashToast.Show();
+            Assert.Null(LuckyFlashToast.Popup);
+        }
+        finally
+        {
+            PanicSurfaces.All = surfaces;
+            s.SuppressPerkNotifications = quiet;
+        }
     });
 
     [Fact]

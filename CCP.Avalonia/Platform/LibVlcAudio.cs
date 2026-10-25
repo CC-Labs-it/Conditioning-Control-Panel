@@ -105,7 +105,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// Returns the clip's stop (WPF handle.Stop): it ends the clip early, and onFinished still fires once.</summary>
         public Action PlayOneShot(string path, float volume, string tag, Action<TimeSpan>? onStarted, Action? onFinished)
         {
-            if (volume <= 0f || string.IsNullOrWhiteSpace(path) || !File.Exists(path)) { Fire(onFinished); return static () => { }; }
+            // Flash voice level 0 keeps audio-linked image timing, as WPF PlaySound.
+            if ((volume <= 0f && tag != "flash-voice") || string.IsNullOrWhiteSpace(path) || !File.Exists(path)) { Fire(onFinished); return static () => { }; }
 
             var media = new Media(_vlc, path, FromType.FromPath);
             media.AddOption(NoVideo);

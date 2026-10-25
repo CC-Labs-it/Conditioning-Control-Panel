@@ -319,8 +319,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF SpawnFlashWindow glow (FlashService.cs:1881-1967; values from FlashFxRules): a
         /// halo round the picture, drawn as a BoxShadow on a sibling Border (P82: no Effect). The window
         /// grows by half the blur on every edge, as WPF pads the glow card; returns that pad in px.</summary>
+        private FlashGlowLook _glowLook;
+        internal bool HasLuckyPulse => _glowLook.HasGlow && _glowLook.LuckyPulse;
+
+        internal void AdvanceGlow()
+        {
+            if (_closed || Exit != null || Shatter != null || !HasLuckyPulse) return;
+            var (blur, opacity) = FlashFxRules.LuckyPulseAt(_glowLook.BlurRadius,
+                FlashOverlay.Clock.GetElapsedTime(SpawnedAt).TotalSeconds);
+            var c = Color.FromArgb((byte)Math.Clamp(opacity * 255, 0, 255),
+                (byte)(_glowLook.Rgb >> 16), (byte)(_glowLook.Rgb >> 8), (byte)_glowLook.Rgb);
+            _glow.BoxShadow = new BoxShadows(new BoxShadow { Blur = blur, Color = c });
+        }
+
         internal int ApplyGlow(FlashGlowLook look, double scaling)
         {
+            _glowLook = look;
             if (!look.HasGlow) return 0;
             var c = Color.FromArgb((byte)Math.Clamp(look.Opacity * 255, 0, 255), (byte)(look.Rgb >> 16), (byte)(look.Rgb >> 8), (byte)look.Rgb);
             _glow.BoxShadow = new BoxShadows(new BoxShadow { Blur = look.BlurRadius, Color = c });
@@ -343,6 +357,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         // Hydra bookkeeping (WPF FlashWindow.HydraGeneration / OriginalLifetimeMs / ExpiresAt / Monitor).
         internal int HydraGeneration { get; set; }
+        internal bool SoundPlaying { get; set; }
         internal bool Ambient { get; set; }
         internal TimeSpan Lifetime { get; set; }
         internal long SpawnedAt { get; set; }

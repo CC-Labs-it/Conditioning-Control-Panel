@@ -92,6 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("speak-cue", _ => Overlays.SpeakCueOverlay.CloseActive()),   // WPF: Deeper stop -> SpeakPromptSession.StopCue -> HideCue
             new("companion-transcript", _ => Controls.Companion.CompanionTranscriptWindow.CloseForPanic()),   // P06; WPF left the History modal up
             new("possession", _ => Possession.PossessionRuntime.UndoAllLive()),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
+            new("lucky-flash-toast", _ => LuckyFlashToast.Close()),
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)
             new("deeper-editor-audio", _ => Deeper.DeeperEditorWindow.PauseAllForPanic()),   // P06; WPF left it playing
             new("knock-cards", _ => Overlays.KnockCard.FoldAll()),   // P06; WPF left them up. Folded as Later: they wait in the Inbox

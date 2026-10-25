@@ -31,8 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>The ambient rhythm is Core <c>CoreFlash</c>, which calls this.</para>
     ///
-    /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length),
-    /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
+    /// <para>ponytail: not here yet, each a later branch - Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
     /// remote pools, gaze pop/linger, solid hosting and avatar pre-announce.</para>
     /// </summary>
     internal static class FlashOverlay
@@ -52,6 +51,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             new(ConditioningControlPanel.Services.ContentPackStore.ImageType);
         private static bool _busy, _warnedUnavailable, _warnedEmpty, _closed;
         private static int _generation;
+        private static readonly FlashVoice Voice = new();
 
         /// <summary>Bumped by every CloseAll; a burst scheduled under an older one never spawns.</summary>
         internal static int Generation => _generation;
@@ -98,7 +98,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 }
 
                 var clickable = s.FlashClickable;
-                var lifetime = Lifetime(s, ambient, durationMs);
+                TimeSpan? soundLength = null;
+                try { soundLength = await Voice.PlayAsync(FlashVoice.Enabled(s) ? Voice.NextPath(s) : null, s); }
+                catch (Exception ex) { Voice.Stop(); Log.Debug("Flash: voice unavailable ({Type})", ex.GetType().Name); }
+                if (generation != _generation || _closed)
+                {
+                    foreach (var f in flashes) f.Picture.Dispose();
+                    return;
+                }
+                var lifetime = FlashVoice.Lifetime(s, ambient, durationMs, soundLength);
                 var cap = Cap(s, ambient);
                 var fade = TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent);
                 var alpha = Math.Clamp(s.FlashOpacity / 100.0, 0, 1);
@@ -106,7 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // WPF waits 1 s after FlashAboutToDisplay so the avatar's line lands first, then
                 // staggers 300 ms per image.
                 Schedule(flashes, 1000, StaggerMs, generation, cap, alpha, fade, lifetime, clickable, ambient, hydraGeneration: 0,
-                    done: () => _busy = false);
+                    done: () => _busy = false, soundPlaying: soundLength.HasValue);
                 scheduled = true;
             }
             catch (Exception ex) { Log.Error(ex, "Flash: burst failed"); }
@@ -118,7 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// A spawn the platform refuses stops the rest; CloseAll (a newer generation) drops them.</summary>
         private static void Schedule(List<(FlashPicture Picture, PixelRect Rect, string Path, Screen Screen)> flashes, int firstMs, int staggerMs,
             int generation, int cap, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, Action? done,
-            FlashMotionStyle? inheritMotion = null)
+            FlashMotionStyle? inheritMotion = null, bool soundPlaying = false)
         {
             var refused = false;
             for (var i = 0; i < flashes.Count; i++)
@@ -130,7 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     try
                     {
                         if (refused || _closed || generation != _generation || Active.Count >= cap) { bmp.Dispose(); return; }
-                        refused = !Show(bmp, rect, path, screen, alpha, fade, lifetime, clickable, ambient, hydraGeneration, inheritMotion);
+                        refused = !Show(bmp, rect, path, screen, alpha, fade, lifetime, clickable, ambient, hydraGeneration, inheritMotion, soundPlaying);
                     }
                     catch (Exception ex) { refused = true; Log.Error(ex, "Flash: spawn failed"); }
                     finally { if (last && generation == _generation) done?.Invoke(); }
@@ -145,7 +153,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             => Show(new FlashPicture(bmp), rect, path, screen, alpha, fade, lifetime, clickable, ambient, hydraGeneration, inheritMotion);
 
         internal static bool Show(FlashPicture picture, PixelRect rect, string path, Screen screen, double alpha, TimeSpan fade,
-            TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, FlashMotionStyle? inheritMotion)
+            TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, FlashMotionStyle? inheritMotion, bool soundPlaying = false)
         {
             var s = CoreSettings.Current;
             var multiplier = FlashFxRules.RollLucky(SkillTreeRules.HasSkill(s, FlashFxRules.LuckySkillId), hydraGeneration, remixMirror: false, Rng);
@@ -153,24 +161,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 multiplier > 1, SkillTreeRules.GetSparkleBoostTier(s), natasha: false);
             var w = new FlashOverlayWindow(picture)
             {
-                HydraGeneration = hydraGeneration, Ambient = ambient, Lifetime = lifetime,
+                HydraGeneration = hydraGeneration, Ambient = ambient, Lifetime = lifetime, SoundPlaying = soundPlaying,
                 SpawnedAt = Clock.GetTimestamp(), SpawnScreen = screen, InheritMotion = inheritMotion,
             };
             if (!Spawn(w, rect, screen.Bounds, screen.Scaling, glow, alpha, fade, lifetime, clickable)) return false;
-            Paid(path, s, hydraGeneration, multiplier);
+            Paid(path, s, hydraGeneration, multiplier, soundPlaying);
             return true;
         }
 
         /// <summary>What a shown flash pays (WPF FlashService.cs:1608, 1834-1877, 2165-2172): session
-        /// log and history, the lucky chime, XP (4: this head plays no flash sound; a hydra child with
+        /// log and history, the lucky chime, XP (8 with flash voice, otherwise 4; a hydra child with
         /// independent timing pays less; x10 lucky), and the achievement + quest tick, which a linked
         /// hydra child skips only when timing is independent.</summary>
-        internal static void Paid(string path, AppSettings s, int hydraGeneration, int multiplier)
+        internal static void Paid(string path, AppSettings s, int hydraGeneration, int multiplier, bool soundPlaying = false)
         {
             App.Sessions?.SessionLog.RecordImages(new[] { path });
             App.MediaHistory?.RecordImages(new[] { path });   // WPF MediaHistoryService.OnFlashDisplayed
-            if (multiplier > 1 && !s.SuppressPerkNotifications) LuckyChime(s);   // WPF :4441 PerkNotificationsSuppressed
-            CoreProgression.AddXP(FlashFxRules.Xp(soundPlaying: false, s.HydraLinkedTiming, hydraGeneration, multiplier), "Flash");
+            if (multiplier > 1 && !s.SuppressPerkNotifications) { LuckyChime(s); Views.Windows.LuckyFlashToast.Show(); }   // WPF :4441 PerkNotificationsSuppressed
+            CoreProgression.AddXP(FlashFxRules.Xp(soundPlaying, s.HydraLinkedTiming, hydraGeneration, multiplier), "Flash");
             if (s.HydraLinkedTiming || hydraGeneration == 0)
             {
                 App.Achievements?.TrackFlashImage();   // WPF AchievementService.cs:388
@@ -251,7 +259,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 rect.Width / scaling, rect.Height / scaling);
             w.Show();
             w.Run(alpha, fade, lifetime);
-            if (w.IsAnimated) StartFrames(w);
+            if (w.IsAnimated || w.HasLuckyPulse) StartFrames(w);
             var motion = BuildMotion(rect, screen, CoreSettings.Current, Rng, w.InheritMotion);
             w.MotionStyle = motion?.Style ?? FlashMotionStyle.Still;
             if (motion != null) StartDrift(w, motion);
@@ -323,7 +331,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             || PrizeOwnership.IsGranted(Services.Prizes.PrizeGrants.FlashPendulum);
 
         private static readonly List<FlashOverlayWindow> Animated = new();
-        private static void StartFrames(FlashOverlayWindow w)
+        internal static void StartFrames(FlashOverlayWindow w)
         {
             Animated.Add(w);
             w.Closed += (_, _) => { Animated.Remove(w); StopClockIfIdle(); };
@@ -355,7 +363,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var now = Clock.GetTimestamp();
             var dt = Clock.GetElapsedTime(_lastDriftTick, now).TotalSeconds;
             _lastDriftTick = now;
-            foreach (var w in Animated) w.AdvanceFrame();
+            foreach (var w in Animated) { w.AdvanceFrame(); w.AdvanceGlow(); }
             foreach (var (w, m) in Drifting)
                 if (w is not FlashOverlayWindow { Exit: not null } && w is not FlashOverlayWindow { Shatter: not null }
                     && FlashMotion.Step(m, dt))   // a leaving flash holds still
@@ -376,6 +384,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void CloseAll(bool final = true)
         {
             _generation++;
+            Voice.Stop();
+            Views.Windows.LuckyFlashToast.Close();
             _busy = false;
             _closed |= final;
             foreach (var (w, _) in Active.ToList()) w.Close();
@@ -484,7 +494,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (generation != _generation) { foreach (var f in flashes) f.Picture.Dispose(); return; }
                 Schedule(flashes, 0, 100, generation, Cap(s, parent.Ambient), Math.Clamp(s.FlashOpacity / 100.0, 0, 1),
                     TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent), lifetime, s.FlashClickable,
-                    parent.Ambient, hydraGeneration, done: null, parent.MotionStyle);
+                    parent.Ambient, hydraGeneration, done: null, parent.MotionStyle, soundPlaying: parent.SoundPlaying);
             }
             catch (Exception ex) { Log.Error(ex, "Flash: hydra spawn failed"); }
         }

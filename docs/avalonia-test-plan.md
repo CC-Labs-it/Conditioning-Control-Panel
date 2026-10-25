@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### fin5 flash voice and lucky glow
+
+1. Enable Flash audio and use a mod with enabled voice clips; fire a Studio Test burst containing several images. Expect one clip, images living clip length + 1 s (including when Voice level is 0), and 8 XP per image before perks. Disable audio, master-mute, avatar-mute, then voiceline-mute in turn: images still appear with authored lifetime and 4 XP. Hiding the avatar alone does not mute flash voice. WPF `Services/Flash/FlashService.cs:1535-1568`, `Services/Flash/FlashService.cs:4663-4720`. Rows: `feat-flash`.
+2. Disable/remove a voice line in the phrase library. Expect it excluded, enabled install/content-pack clips and recursive mod clips to be available, and one shuffled walk before repeats. Enable ducking; expect restoration clip length + 1500 ms after start, or immediately on Stop/panic; a replacement burst must not inherit an older duck lease. Pop a Corruption flash: children have no extra audio and retain the parent's audio XP rate. WPF `Services/Flash/FlashService.cs:4410-4478`, `Services/Flash/FlashService.cs:1535-1560`, `Services/Flash/FlashService.cs:3073`. Rows: `feat-flash`.
+3. With Lucky Flash unlocked and glow enabled, fire bursts until a lucky roll. Expect gold halo blur/opacity to rise for 400 ms and return for 400 ms on the shared clock; Stop/panic closes it and leaves no pulse clock running. The LUCKY! 10x XP toast fades in over 200 ms, holds until 3 s after the last proc, fades out over 300 ms and reuses the same window; it stays down while a game owns the screen or perk notices are suppressed. Panic closes it. WPF `Services/Flash/FlashService.cs:2002-2018`. Rows: `feat-flash`.
