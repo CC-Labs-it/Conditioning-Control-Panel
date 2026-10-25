@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Input;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
@@ -49,7 +50,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal void MakeClickable(Action onPop)
         {
             IsHitTestVisible = true;
-            PointerPressed += (_, e) => { e.Handled = true; onPop(); };
+            FlashMotionState? dragging = null;
+            PointerPressed += (_, e) =>
+            {
+                e.Handled = true;
+                if (e.GetCurrentPoint(this).Properties.PointerUpdateKind == PointerUpdateKind.LeftButtonPressed
+                    && CoreSettings.Current.FlashDraggable && FlashOverlay.OwnsMotion())
+                {
+                    dragging = FlashOverlay.BeginDrag(this, this.PointToScreen(e.GetPosition(this)), Environment.TickCount64);
+                    if (dragging != null) e.Pointer.Capture(this);
+                    return;
+                }
+                onPop();
+            };
+            PointerMoved += (_, e) =>
+            {
+                if (dragging?.Drag is not { Held: true } d) return;
+                var p = this.PointToScreen(e.GetPosition(this));
+                FlashDrag.Sample(d, p.X, p.Y, Environment.TickCount64);
+            };
+            PointerReleased += (_, e) =>
+            {
+                if (dragging == null) return;
+                var m = dragging;
+                dragging = null;
+                FlashOverlay.EndDrag(this, m, this.PointToScreen(e.GetPosition(this)), Environment.TickCount64);
+                e.Pointer.Capture(null);
+                e.Handled = true;
+            };
+            PointerCaptureLost += (_, _) =>
+            {
+                // Lost capture cancels a grab, never pops or throws it.
+                if (dragging != null) { dragging.Drag = null; dragging.Vx = dragging.Vy = 0; dragging = null; }
+            };
         }
 
         /// <summary>Play <paramref name="exit"/> (WPF FlashLayer draws FlashExit.Sample the same way)
@@ -179,6 +212,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _card.Margin = new Thickness(pad);
             return GlowPadPx = (int)Math.Round(pad * (scaling > 0 ? scaling : 1));
         }
+
+        /// <summary>WPF FlashCorners: clip only the picture/whiten, keeping the sibling halo outside.</summary>
+        internal void ApplyCorners(bool rounded, bool ownsMotion, bool hasGlow, double width, double height)
+        {
+            var radius = FlashCorners.Resolve(rounded, ownsMotion, hasGlow, Math.Min(width, height), 1);
+            if (radius <= 0) return;
+            _glow.CornerRadius = new CornerRadius(radius);
+            _image.Clip = new RectangleGeometry(new Rect(0, 0, width, height), radius, radius);
+            _whiten.Clip = new RectangleGeometry(new Rect(0, 0, width, height), radius, radius);
+        }
+
+        internal Geometry? PictureClip => _image.Clip;
 
         /// <summary>Pixels the glow added on each edge of the picture (0 without a glow).</summary>
         internal int GlowPadPx { get; private set; }

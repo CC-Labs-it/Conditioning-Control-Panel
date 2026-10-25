@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Flash v2 interaction completion checks
+
+1. With either motion prize owned, Studio > Flash shows Rounded corners then Draggable below drift speed; without either prize both rows hide. Toggle each and reopen the card; values persist. A purchase/revocation refreshes the attached card without changing the saved motion choice. WPF `Features/FlashFeatureControl.xaml:357-386`, `Features/FlashFeatureControl.xaml.cs:59-107`. Rows: `feat-flash`.
+2. Enable Rounded corners and test a flash. Its picture has rounded corners; its glow remains outside the clip. Turn rounding off: ordinary pictures are square and glowing pictures keep their small glow-card radius. WPF `Services/Flash/FlashService.cs:1838-1849`, `CCP.Core/Services/Flash/FlashCorners.cs`. Rows: `feat-flash`.
+3. Enable clickable flashes and Draggable. A short stationary left press pops on release; right press pops immediately. Drag and pause before release to place; drag and release quickly to fling and bounce inside the release monitor work area. Placement/fling does not multiply hydra. Change motion level to Off: dragging works but release never flings; Reduced halves the throw. Disable Draggable while flashes are up: the next press pops normally. WPF `Services/Flash/FlashService.cs:2653-2797`, `CCP.Core/Services/Flash/FlashDrag.cs`. Rows: `feat-flash`.
+4. While holding or flinging a flash, press panic. All flashes disappear, queued spawns are cancelled, and the shared motion clock stops. WPF `Services/Flash/FlashService.cs:557-575`. Rows: `feat-flash`.
