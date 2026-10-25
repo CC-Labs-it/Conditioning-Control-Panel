@@ -1,9 +1,8 @@
 // PORTED from ConditioningControlPanel/MainWindow/MainWindow.WindowChrome.cs (478 lines).
 //
-// The four title-bar handlers are the ONLY members of this partial that touch nothing but the
-// window, so they are ported for real; everything else in the WPF file reaches App.Lockdown, the
-// avatar tube window or Win32 and is listed below rather than faked. The two bark pings the
-// minimize and close buttons fire DO cross now, through CoreBark.
+// Title-bar actions, window-manager state glyphs, display-change spawn quiescence and session
+// restore before exit are live. OnClosing lives in Tray.cs; attached-avatar minimize custody
+// lives in Companion.cs and shares Core WindowMinimizeRecovery with WPF. Bark uses CoreBark.
 //
 // Win32 -> Avalonia, per the port's mapping table:
 //   DragMove()                         -> BeginMoveDrag(PointerPressedEventArgs)
@@ -16,13 +15,8 @@
 //                                         AvaloniaProperty you observe. See the WorkAreaFit
 //                                         partial, which is where the DPI re-fit actually lives.
 //
-// Members dropped (App.*/avatar-tube/Win32 only):
-//   private void EnsureSessionRestoredForExit(…)
-//   protected override void OnClosing(…)          // tray half ported in MainShellWindow.Tray.cs;
-//                                                  // session save, Bark, Lockdown still missing
-//   protected override void OnDpiChanged(…)       // queues the work-area re-fit; see WorkAreaFit
-//   protected override void OnStateChanged(…)     // avatar re-attach, Bark, taskbar thumbnail
-//   private void HideAvatarTube(…)                // called by BtnMinimize_Click below
+// WorkAreaFit owns scaling/screen fitting. Native modal-move diagnostics remain backend-specific;
+// WPF's nav-pointer sync is now a no-op too, so no flyout or state trigger is invented here.
 
 using System;
 using Avalonia;
@@ -30,11 +24,39 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
+        private void HookWindowChromeState()
+        {
+            ScalingChanged += (_, _) => NotifyChromeScalingChanged();
+            PropertyChanged += (_, e) =>
+            {
+                if (e.Property == WindowStateProperty && WindowState != WindowState.Minimized
+                    && Named<Button>("BtnMaximize") is { } button)
+                    button.Content = WindowState == WindowState.Maximized ? "❐" : "☐";
+            };
+            Closed += (_, _) => _windowClosed = true;
+        }
+
+        private void NotifyChromeScalingChanged()
+            => Services.UI.DisplayChangeCoordinator.NotifyDisplayChange("dpi-changed");
+
+        // WPF WindowChrome.cs:115: restore borrowed session settings before any exit save/Closing observer.
+        private void EnsureSessionRestoredForExit()
+        {
+            if (App.Sessions is not { IsRunning: true } runner) return;
+            try
+            {
+                _suppressNextSessionSummary = true;
+                runner.Stop(completed: false);
+            }
+            catch (Exception ex) { Log.Warning(ex, "Failed to restore session settings on exit"); }
+        }
+
         // WPF: WindowChrome ResizeBorderThickness="5" + ResizeMode=CanResizeWithGrip gave the
         // undecorated window OS resize edges. SystemDecorations="None" on X11 gives none, so the
         // edges are hit-tested here and handed to the window manager via BeginResizeDrag.
@@ -153,17 +175,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // so `BtnMaximize.Content = …` threw a NullReferenceException on the first click of the
             // maximize button - a crash, and one neither --render-view nor --nav-check can see,
             // because neither clicks the chrome. See the header of MainShellWindow.TabNavigation.cs.
-            var maximize = Named<Button>("BtnMaximize");
-            if (WindowState == WindowState.Maximized)
-            {
-                WindowState = WindowState.Normal;
-                if (maximize is not null) maximize.Content = "☐";
-            }
-            else
-            {
-                WindowState = WindowState.Maximized;
-                if (maximize is not null) maximize.Content = "❐";
-            }
+            WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
         }
 
         /// <summary>WPF MainWindow.Launcher.cs BtnBackToLauncher_Click: tuck the panel away, launcher up.</summary>
@@ -173,7 +185,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             CoreBark.NotifyUiAction("close");
             // Close() goes to the tray via OnClosing (MainShellWindow.Tray.cs) when a tray host exists.
-            // ponytail: the WPF handler also runs EnsureSessionRestoredForExit (session service).
             Close();
         }
     }

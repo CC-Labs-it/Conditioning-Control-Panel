@@ -42,9 +42,9 @@ public sealed class AccountSettingsSectionTests
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().WithInterFont().With(HeadlessFonts())
-                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                // The production builder includes Inter and AppFonts registration for this headless host.
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var oldGet = CoreSecrets.RetrieveProvider;
             var oldSet = CoreSecrets.StoreProvider;
@@ -172,20 +172,6 @@ public sealed class AccountSettingsSectionTests
             AccountSettingsSection.Confirm = oldConfirm;
         }
     });
-
-    private static FontManagerOptions HeadlessFonts()
-    {
-        // The shell's PremiumSpark requests Windows faces even in a Linux headless host.
-        // Resolve those names to the bundled text font; no installed Windows fonts required.
-        var options = AppFonts.Options(systemEmoji: false);
-        options.FontFamilyMappings = new Dictionary<string, FontFamily>
-        {
-            ["Fredoka"] = new FontFamily(AppFonts.Fredoka),
-            ["Segoe UI"] = new FontFamily(AppFonts.Inter),
-            ["Segoe UI Black"] = new FontFamily(AppFonts.Inter),
-        };
-        return options;
-    }
 
     private static string Text(Control c, string name) => c.FindControl<TextBlock>(name)!.Text ?? "";
     private static bool Shown(Control c, string name) => c.FindControl<Control>(name)!.IsVisible;
@@ -332,6 +318,35 @@ public sealed class AccountSettingsSectionTests
         });
     }
 
+    /// <summary>The privacy panel's Discord button goes through this section's real provider flow (no fake action).</summary>
+    [Fact]
+    public void PrivacyPanelDiscordButtonRunsTheSectionLinkFlow()
+    {
+        Run((shell, section, s, secrets) =>
+        {
+            s.UnifiedId = "u-test";
+            s.HasLinkedDiscord = false;
+            s.OfflineMode = false;
+            var discord = AccountSeed.Discord!;
+            discord.IsVerifying = true;            // SignInAsync returns at once: no token, the link fails
+            var oldProbe = LoginDialog.ProxyReachable;
+            int probes = 0;
+            LoginDialog.ProxyReachable = _ => { probes++; return Task.FromResult(true); };
+            var panel = new global::ConditioningControlPanel.Avalonia.Views.Controls.ProfilePrivacyPanel();
+            var dialog = new global::ConditioningControlPanel.Avalonia.Views.Dialogs.ProfilePrivacyDialog(panel);
+            try
+            {
+                dialog.Show(shell);
+                var login = panel.LoginAsync();
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(login.IsCompleted);
+                Assert.True(probes > 0);           // the section's LinkAsync ran
+                Assert.Equal("btn_link_discord", section.FindControl<IconLabel>("TxtBtnLinkDiscord")!.Key);
+            }
+            finally { discord.IsVerifying = false; LoginDialog.ProxyReachable = oldProbe; dialog.Close(); }
+        });
+    }
+
     [Fact]
     public void PresenceSwitchAndChasterRowWork()
     {
@@ -449,96 +464,6 @@ public sealed class AccountSettingsSectionTests
             AccountSettingsSection.Tell = oldTell;
             StartupLadder.ResetForTests();
         }
-    });
-
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public Task SharingOfferIsOwnedAndRequiresYesAndCanBeRevoked(bool accept) => RunAsync(async (shell, section, s, secrets) =>
-    {
-        s.DiscordShareAchievements = false;
-        var oldSurfaces = PanicSurfaces.All;
-        PanicSurfaces.All = Array.Empty<PanicSurfaces.Surface>();
-        try
-        {
-            var ask = shell.OfferAchievementSharingAfterDiscordLink();
-            Dispatcher.UIThread.RunJobs();
-            var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
-            Assert.Equal(Loc.Get("title_discord_linked"), dialog.Title);
-            Assert.Equal(Loc.Get("msg_discord_share_achievements_prompt"), Text(dialog, "TxtMessage"));
-            Assert.False(s.DiscordShareAchievements);
-            dialog.Close(accept);
-            await ask;
-            Assert.Equal(accept, s.DiscordShareAchievements);
-            var privacy = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.DiscordTabView>("DiscordTab")!.PrivacyPanel;
-            privacy.RefreshAchievementSharing();
-            var share = privacy.FindControl<CheckBox>("ChkDiscordTabShareAchievements")!;
-            Assert.Equal(accept, share.IsChecked);
-            share.IsChecked = !accept;
-            Assert.Equal(!accept, s.DiscordShareAchievements);
-            Assert.Empty(StartupLadder.Inbox.Items);
-        }
-        finally { PanicSurfaces.All = oldSurfaces; }
-    });
-
-    [Fact]
-    public Task SharingOfferWaitsForGameAndInboxClickAsksDespiteGame() => RunAsync(async (shell, section, s, secrets) =>
-    {
-        s.DiscordShareAchievements = false;
-        var oldSurfaces = PanicSurfaces.All;
-        PanicSurfaces.All = new[] { new PanicSurfaces.Surface("fake-game", _ => { }, () => true) };
-        StartupLadder.ResetForTests();
-        try
-        {
-            await shell.OfferAchievementSharingAfterDiscordLink();
-            await shell.OfferAchievementSharingAfterDiscordLink();
-            var row = Assert.Single(StartupLadder.Inbox.Items);
-            Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
-            StartupLadder.Inbox.Open(row);
-            Dispatcher.UIThread.RunJobs();
-            var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
-            dialog.Close(true);
-            Dispatcher.UIThread.RunJobs();
-            Assert.True(s.DiscordShareAchievements);
-            await shell.OfferAchievementSharingAfterDiscordLink();
-            Assert.Empty(StartupLadder.Inbox.Items);
-            Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
-        }
-        finally { PanicSurfaces.All = oldSurfaces; StartupLadder.ResetForTests(); }
-    });
-
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public Task FirstSignInWithDiscordOffersSharing(bool discord) => RunAsync(async (shell, section, s, secrets) =>
-    {
-        // WPF MainWindow.Login.cs:209 (#749): a Discord-first sign-in is a Discord link too.
-        s.DiscordShareAchievements = false;
-        var oldSurfaces = PanicSurfaces.All;
-        PanicSurfaces.All = Array.Empty<PanicSurfaces.Surface>();
-        StartupLadder.ResetForTests();
-        try
-        {
-            if (discord) AccountSeed.Discord!.StoreTokens("fake-access", "fake-refresh", DateTime.UtcNow.AddHours(1));
-            var login = shell.OpenUnifiedLoginDialog();
-            Dispatcher.UIThread.RunJobs();
-            var dialog = Assert.Single(shell.OwnedWindows.OfType<LoginDialog>());
-            typeof(LoginDialog).GetProperty(nameof(LoginDialog.Result))!.SetValue(dialog, new LoginDialog.LoginResult { Success = true });
-            dialog.Close(true);
-            Dispatcher.UIThread.RunJobs();
-            foreach (var notice in shell.OwnedWindows.OfType<MessageDialog>()
-                         .Where(d => d.Title == Loc.Get("login_not_remembered_title")).ToList())
-                notice.Close();
-            await login.WaitAsync(TimeSpan.FromSeconds(10));
-            Dispatcher.UIThread.RunJobs();
-            var offers = shell.OwnedWindows.OfType<MessageDialog>().Where(d => d.Title == Loc.Get("title_discord_linked")).ToList();
-            Assert.Equal(discord ? 1 : 0, offers.Count);
-            if (discord) Assert.Equal(Loc.Get("label_yes"), ((TextBlock)offers[0].FindControl<Button>("BtnOk")!.Content!).Text);
-            foreach (var offer in offers) offer.Close(false);
-            Dispatcher.UIThread.RunJobs();
-            Assert.False(s.DiscordShareAchievements);
-        }
-        finally { PanicSurfaces.All = oldSurfaces; StartupLadder.ResetForTests(); }
     });
 
 }

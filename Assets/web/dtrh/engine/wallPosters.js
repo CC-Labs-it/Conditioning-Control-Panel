@@ -44,7 +44,7 @@ const TEX_MAX_DIM = Q.tier === 'mobile' ? 256 : 384; // posters are small on scr
 // capped; long gifs loop their opening and extra gifs join as stills.
 const ANIM_MAX = Q.tier === 'mobile' ? 3 : 8;          // animated entries in the pool
 const ANIM_MAX_FRAMES = Q.tier === 'mobile' ? 10 : 20; // frames kept per gif
-const ANIM_UPLOADS_PER_TICK = 2;         // texture redraws per anim tick (~20fps)
+const ANIM_UPLOADS_PER_TICK = Q.tier === 'mobile' ? 2 : 6;         // texture redraws per anim tick (~20fps)
 
 // Slot budget indexed by the 1-based waveIndex setRegion() is called with:
 //   [0] non-region / bare   [1] Region I   [2] Region II   [3] Region III   [4] Region IV
@@ -58,10 +58,19 @@ const REGION_MAX = (Q.tier === 'mobile')
 
 const AHEAD_MIN = 8;    // a recycled slot re-throws this..MAX units ahead of the POV
 const AHEAD_MAX = 78;   // within the fog sightline so it fades in, never pops
+const POSTER_OPACITY = 0.92;   // a settled poster
+const POSTER_FADE_SEC = 1.4;   // a placed poster eases up from the dark over this long
 const BEHIND = 12;      // slots this far behind the camera are recycled
 const WALL_INSET = 0.14;// how far inside RADIUS the poster sits (just off the wall)
 
 const rand = (a, b) => a + Math.random() * (b - a);
+
+// A MOVING PICTURE on the wall (hostMedia.drawLoop): a few frames of the clip are captured
+// once, small, and the decoder is let go, so the poster loops like a gif and a wall of them
+// holds no live video at all.
+const LOOP_FRAMES = Q.tier === 'mobile' ? 8 : 12;
+const LOOP_DIM = 256;
+const LOOP_SPAN_SEC = 4;      // at most this much of the clip is sampled
 
 export function createWallPosters({ scene, layout, media, renderer, camera }) {
   const group = new THREE.Group();
@@ -193,10 +202,72 @@ export function createWallPosters({ scene, layout, media, renderer, camera }) {
     return n;
   }
 
+  const waitFor = (el, type, ms) => new Promise((resolve) => {
+    let t = 0;
+    const ok = () => { clearTimeout(t); el.removeEventListener('error', bad); resolve(true); };
+    const bad = () => { clearTimeout(t); el.removeEventListener(type, ok); resolve(false); };
+    el.addEventListener(type, ok, { once: true });
+    el.addEventListener('error', bad, { once: true });
+    t = setTimeout(() => { el.removeEventListener(type, ok); el.removeEventListener('error', bad); resolve(false); }, ms);
+  });
+
+  // Capture a clip into an ANIMATED pool item. Resolves on the first frame (the wall fills
+  // fast), the rest keep landing; null on any failure.
+  async function decodeLoopFrames(url, name) {
+    if (typeof createImageBitmap !== 'function') return null;
+    const v = document.createElement('video');
+    v.crossOrigin = 'anonymous'; v.muted = true; v.playsInline = true; v.preload = 'auto';
+    const letGo = () => { try { v.removeAttribute('src'); v.load(); } catch (e) { /* ignore */ } };
+    v.src = url;
+    if (!(await waitFor(v, 'loadeddata', 6000)) || !v.videoWidth || !v.videoHeight) { letGo(); return null; }
+    const span = Math.min(LOOP_SPAN_SEC, isFinite(v.duration) && v.duration > 0 ? v.duration : 0);
+    if (!(span > 0.2)) { letGo(); return null; }
+    const shrink = Math.min(1, LOOP_DIM / Math.max(v.videoWidth, v.videoHeight));
+    const w = Math.max(2, Math.round(v.videoWidth * shrink)), h = Math.max(2, Math.round(v.videoHeight * shrink));
+    const durMs = (span * 1000) / LOOP_FRAMES;
+    const grab = async (i) => {
+      if (i > 0) {
+        const seeked = waitFor(v, 'seeked', 1500);
+        try { v.currentTime = (i * span) / LOOP_FRAMES; } catch (e) { return null; }
+        if (!(await seeked)) return null;
+      }
+      try { return await createImageBitmap(v, { resizeWidth: w, resizeHeight: h, resizeQuality: 'medium' }); }
+      catch (e) { return null; }
+    };
+    const first = await grab(0);
+    if (!first) { letGo(); return null; }
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const x = c.getContext('2d');
+    x.drawImage(first, 0, 0);
+    const item = {
+      tex: mkTex(c), aspect: w / h, assetName: name, ctx: x,
+      anim: { frames: [{ bitmap: first, durMs }], i: 0, nextAt: performance.now() + durMs, dead: false },
+    };
+    (async () => {
+      for (let i = 1; i < LOOP_FRAMES; i++) {
+        if (item.anim.dead || disposed) break;
+        const bmp = await grab(i);
+        if (!bmp) break;
+        if (item.anim.dead) { try { bmp.close(); } catch (e) { /* ignore */ } break; }
+        item.anim.frames.push({ bitmap: bmp, durMs });
+      }
+      letGo();
+    })();
+    return item;
+  }
+
   // Decode one user image into a downscaled texture. An animated GIF (within the
   // ANIM_MAX budget) becomes a frame-cycled texture via the worker; everything
   // else is a single first-frame snapshot (near-zero ongoing cost, as before).
   async function decodeOne() {
+    // moving pictures first, and with any at hand the wall takes no still at all
+    const loopEntry = media.drawLoop ? media.drawLoop() : null;
+    if (loopEntry) {
+      const got = await loopEntry.acquire();
+      const moving = got ? await decodeLoopFrames(got.url, loopEntry.name || null) : null;
+      if (moving) return moving;   // a clip that would not open falls back to a still below
+    }
     const entry = media.drawKind ? (media.drawKind('image') || media.draw()) : media.draw();
     if (!entry || entry.kind !== 'image') return null; // stills only (videos stay on cards)
     const acquired = await entry.acquire();
@@ -346,7 +417,8 @@ export function createWallPosters({ scene, layout, media, renderer, camera }) {
     // born mid-Mirror-Moment: wear the favorite (the real map waits underneath)
     if (mirror) { slot.mirrorMap = slot.mat.map; slot.mat.map = mirror.tex; }
     slot.mat.needsUpdate = true;
-    slot.mat.opacity = 0.92;
+    slot.mat.opacity = 0;     // tickFades eases it in (the fog alone left a visible pop)
+    slot.fade = 0;
     slot.melt = null;
     slot.mesh.visible = true;
     return true;
@@ -374,6 +446,17 @@ export function createWallPosters({ scene, layout, media, renderer, camera }) {
       if (slot.melt) n++;
     }
     return n;
+  }
+
+  // ease freshly placed posters in from the dark (smoothstep on the slot's own
+  // clock). A melt or a reset elsewhere owns the opacity once fade reaches 1.
+  function tickFades(dt) {
+    for (const slot of slots) {
+      if (!slot.active || slot.melt || !(slot.fade < 1)) continue;
+      slot.fade = Math.min(1, slot.fade + dt / POSTER_FADE_SEC);
+      const k = slot.fade;
+      slot.mat.opacity = POSTER_OPACITY * k * k * (3 - 2 * k);
+    }
   }
 
   function tickMelts(dt) {
@@ -534,6 +617,7 @@ export function createWallPosters({ scene, layout, media, renderer, camera }) {
   function update(cam, camDepth, dt) {
     if (paused) return;
     tickPool(dt); // advance any animated (gif) poster textures
+    tickFades(dt); // feel pass: placed posters ease in from the dark
     tickMelts(dt); // THE BIOMES: denied holds drooping off the wall
     // ease the live count toward the region ceiling: add posters gradually (in
     // the fog ahead) and retire extras as they pass behind, so a chamber change

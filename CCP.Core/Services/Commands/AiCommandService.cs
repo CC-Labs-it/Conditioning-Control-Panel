@@ -49,6 +49,16 @@ namespace ConditioningControlPanel.Services.Commands
                 return;
             }
 
+            // The post-panic quiet and output moderation of the text the effect would show
+            // (AiCommandAdmission, WPF 61eeb4d0d). Nested getbacktome commands pass the same gate
+            // through Admits.
+            var verdict = Judge(commandData);
+            if (verdict != AiCommandAdmission.Verdict.Run)
+            {
+                Log.Information("AiCommandService: {Cmd} refused ({Verdict})", commandData.Command, verdict);
+                return;
+            }
+
             // Per-batch cap.
             if (Interlocked.Increment(ref _batchCount) > MaxCommandsPerResponse)
             {
@@ -72,7 +82,7 @@ namespace ConditioningControlPanel.Services.Commands
 
             try
             {
-                var command = CommandFactory.CreateCommand(commandData, cts.Token, depth: 0);
+                var command = CommandFactory.CreateCommand(commandData, cts.Token, depth: AiCommandAdmission.FollowUpDepth);
                 if (command == null)
                 {
                     // Unreachable on WPF (the per-effect gate refuses every type the factory lacks);
@@ -101,6 +111,39 @@ namespace ConditioningControlPanel.Services.Commands
             finally
             {
                 RemoveToken(token, cts);
+            }
+        }
+
+        /// <summary>The live verdict for one AI command: current switches, Lab access, the
+        /// post-panic quiet and the output guard.</summary>
+        internal static AiCommandAdmission.Verdict Judge(AiCommandData commandData)
+        {
+            var settings = CoreSettings.Current?.CompanionPrompt;
+            return AiCommandAdmission.Decide(commandData,
+                masterOn: ConditioningControlPanel.Services.Companion.AiEffectControlGate.IsOn(settings, CoreAccount.HasLabAccess),
+                effectAllowed: settings != null && IsEffectAllowed(commandData.Command, settings),
+                panicQuiet: Safety.PanicAftermath.TriggersSilenced(),
+                textBlocked: TextBlocked);
+        }
+
+        /// <summary>TRUE when the command may run now (see <see cref="Judge"/>).</summary>
+        internal static bool Admits(AiCommandData commandData) => Judge(commandData) == AiCommandAdmission.Verdict.Run;
+
+        /// <summary>Output moderation for text inside an effect, the same guard the chat reply
+        /// passes. A guard that throws refuses.</summary>
+        private static bool TextBlocked(string text)
+        {
+            try
+            {
+                var check = CoreModerationLog.Guard.CheckOutput(text);
+                if (check.Allow || !check.Category.HasValue) return false;
+                CoreModerationLog.Record(check.Category.Value, source: "output", modelHint: "effect");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("AiCommandService: effect text check failed ({Type})", ex.GetType().Name);
+                return true;
             }
         }
 
@@ -171,7 +214,7 @@ namespace ConditioningControlPanel.Services.Commands
                 case AICommandType.mantra_lockscreen when d is MantraLockscreen m:
                     var mt = (m.Mantra ?? "").Trim();
                     if (mt.Length > 30) mt = mt.Substring(0, 30) + "…";
-                    return $"🔒 Lock card · \"{mt}\" ×{Math.Clamp(m.Amount, 0, 5)}";
+                    return $"🔒 Lock card · \"{mt}\" ×{MantraLockScreenCommand.Repeats(m.Amount)}";
                 case AICommandType.spiral when d is SpiralPinkFiler sp:
                     return sp.On ? $"🌀 Spiral on ({Math.Clamp(sp.Intensity, 0, 30)}%)" : "🌀 Spiral off";
                 case AICommandType.pink when d is SpiralPinkFiler pp:
@@ -196,17 +239,48 @@ namespace ConditioningControlPanel.Services.Commands
 
         /// <summary>
         /// Follow-up feed line for a command whose executor reported failure, so the panel
-        /// never leaves a request line standing as if the effect happened. Audio names the
-        /// usual cause: there are no files in the assets audio folder (#1120).
+        /// never leaves a request line standing as if the effect happened. Audio says which of
+        /// its two causes it was, and names the folder by its real path (#1120, #1428).
         /// </summary>
         private static string FormatFailedAction(AiCommandData c)
         {
             return c.Command switch
             {
-                AICommandType.audio => "🔇 Audio didn't play - check your assets audio folder",
+                AICommandType.audio => FormatFailedAudio(),
                 AICommandType.video => "🎬 Video didn't play",
                 _ => $"⚠️ {c.Command} didn't fire"
             };
+        }
+
+        private static string FormatFailedAudio()
+        {
+            try
+            {
+                var folder = MediaCommand.AudioFolderUnder(CorePaths.EffectiveAssets);
+                // "Had something to play" covers the recorded mod clips that stand in for an
+                // empty folder, so a clip that did not start never blames the folder.
+                return FormatFailedAudio(folder, MediaCommand.CurrentAudioPool().Pool != MediaCommand.AudioPool.None);
+            }
+            catch
+            {
+                return FormatFailedAudio("", hasFiles: true);
+            }
+        }
+
+        /// <summary>
+        /// The Audio effect plays the player's LOCAL files from one folder, else a recorded clip
+        /// from the active mod (<see cref="MediaCommand.ChooseAudioPool"/>); no online source
+        /// feeds it, whatever the media source is set to. The old line said "check your assets
+        /// audio folder", which no page in the app names, so a player with online media (whose
+        /// folder is the empty one the app creates) could not act on it (ccp-bugs #1428).
+        /// An empty folder gets its full path; files that are there but did not start point at
+        /// the output device instead.
+        /// </summary>
+        internal static string FormatFailedAudio(string audioFolder, bool hasFiles)
+        {
+            if (hasFiles || string.IsNullOrWhiteSpace(audioFolder))
+                return "🔇 Audio didn't play - check the output device in Settings, Audio";
+            return $"🔇 No audio to play - this effect only plays your own files. Put .mp3 or .wav files in {audioFolder}";
         }
 
         private static bool IsEffectAllowed(AICommandType cmd, Models.CompanionPromptSettings s)

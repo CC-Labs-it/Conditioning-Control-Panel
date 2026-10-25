@@ -592,6 +592,16 @@ namespace ConditioningControlPanel
         }
 
         /// <summary>
+        /// ccp-bugs #1468: a held idle line (no sound). Same non-verbal path as a giggle: one reaction
+        /// emote for the line, no talk clips, so the mouth never moves to silence.
+        /// </summary>
+        private void CirceSilentEmote(string? emotionLineId, string? mood)
+        {
+            if (!_circeEmoteMode) return;
+            StartReactionOnly(ResolveReaction(emotionLineId, mood) ?? PickExpressive() ?? PickWeightedIdle(), NonverbalLeadInMs);
+        }
+
+        /// <summary>
         /// Drive [talk clip(s)] then [reaction] timed to the voiceline (length <paramref name="durationSec"/>):
         /// the voice fires immediately, the first talk clip joins <see cref="_talkStartDelayMs"/> into the
         /// line, each next clip is brought in so its mouth is already open as the previous one's talking ends
