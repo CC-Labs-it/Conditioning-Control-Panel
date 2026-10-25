@@ -54,7 +54,7 @@ public sealed class AssetsTabTests
             shell.ShowTab("assets");
             var packs = tab.AssetTree.Single(n => n.IsPackFolder);
             var pack = Assert.Single(packs.Children);
-            Assert.Equal("Test Pack", pack.Name);
+            Assert.Equal("test-pack", pack.Name); // WPF BuildPackTree: not built in -> raw pack id, not the manifest name
             Assert.Equal(new[] { "images", "videos" }, pack.Children.Select(n => n.Name));
             Assert.Equal(Loc.GetF("label_0_images_1_videos_active", 5, 3), tab.TxtAssetCounts.Text);
             var images = pack.Children.Single(n => n.PackFileType == "image");
@@ -106,6 +106,62 @@ public sealed class AssetsTabTests
             Assert.All(tab.CurrentFolderFiles, f => Assert.False(f.IsChecked));
             tab.BtnSelectAllAssets.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(2, ContentPackStore.Current.GetAllActivePackImages().Count);
+
+            // Panic closes an open pack preview and its decrypted temp goes with it (P06; WPF left it open).
+            tab.OpenAssetPreview(tab.CurrentFolderFiles[0]);
+            var panicked = shell.OwnedWindows.OfType<MiniPlayerWindow>().Single(w => w.IsVisible);
+            Assert.Single(Directory.GetFiles(Path.Combine(assets, ".temp")));
+            PanicSurfaces.StopAll("asset-preview-test", shell);
+            Assert.False(panicked.IsVisible);
+            Assert.Empty(Directory.GetFiles(Path.Combine(assets, ".temp")));
+        }
+        finally { ContentPackStore.Current = oldStore; }
+    });
+
+    [Fact]
+    public Task PackFilesSortByNameVideoFolderCheckFeedsThePoolAndDeactivateHidesThePack() => Run(async (shell, tab, s) =>
+    {
+        var oldStore = ContentPackStore.Current;
+        var assets = ConditioningControlPanel.CorePaths.EffectiveAssets;
+        var guid = Guid.NewGuid().ToString("N");
+        var dir = Path.Combine(assets, ".packs", guid);
+        Directory.CreateDirectory(Path.Combine(dir, "content"));
+        File.WriteAllBytes(Path.Combine(dir, "content", "video.enc"), PackEncryptionService.Encrypt(new byte[16]));
+        var manifest = new InstalledPackManifest
+        {
+            PackId = "library-pack", PackGuid = guid, PackName = "Library pack",
+            Files = new List<PackFileEntry>   // manifest order is NOT name order
+            {
+                new() { OriginalName = "v.mp4", ObfuscatedName = "video.enc", FileType = "video", Extension = ".mp4" },
+                new() { OriginalName = "u.mp4", ObfuscatedName = "video.enc", FileType = "video", Extension = ".mp4" }
+            }
+        };
+        PackEncryptionService.SaveEncryptedManifest(JsonConvert.SerializeObject(manifest), Path.Combine(dir, ContentPackStore.ManifestFileName));
+        var store = new ContentPackStore(() => assets, () => s, () => { });
+        ContentPackStore.Current = store;
+        try
+        {
+            tab.OnTabShown();
+            var pack = Assert.Single(tab.AssetTree.Single(n => n.IsPackFolder).Children);
+            pack.IsExpanded = true;
+            var videos = Assert.Single(pack.Children);
+            Assert.Equal(ContentPackStore.VideoType, videos.PackFileType);
+            tab.AssetTreeView.SelectedItem = videos;
+            await tab.ThumbnailLoads;
+            // WPF MainWindow.Assets.cs:724 sorts pack files by OriginalName, not manifest order.
+            Assert.Equal(new[] { "u.mp4", "v.mp4" }, tab.CurrentFolderFiles.Select(f => f.Name));
+            Assert.Equal(2, store.GetAllActivePackVideos().Count);
+            // A real Space on the videos folder's checkbox empties the encrypted video pool.
+            var cb = await Realized(shell, () => tab.AssetTreeView.GetVisualDescendants().OfType<CheckBox>()
+                .FirstOrDefault(c => c.DataContext == videos));
+            PressSpace(shell, cb);
+            Assert.Empty(store.GetAllActivePackVideos());
+            Assert.Contains("pack:library-pack/v.mp4", s.DisabledAssetPaths);
+            // Deactivating hides the pack from the Library but keeps it installed (WPF BuildPackTree reads active ids only).
+            store.DeactivatePack("library-pack");
+            tab.RefreshAssetTree();
+            Assert.DoesNotContain(tab.AssetTree, n => n.IsPackFolder);
+            Assert.True(store.IsPackInstalled("library-pack"));
         }
         finally { ContentPackStore.Current = oldStore; }
     });
