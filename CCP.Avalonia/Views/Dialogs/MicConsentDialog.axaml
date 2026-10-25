@@ -197,7 +197,7 @@
                 <TextBlock Theme="{StaticResource DlgBody}" Margin="0,18,0,0" Foreground="#B8B8C8"
                            Text="Want to verify? The source code for this feature is public."/>
                 <ctl:SafeHyperlinkButton x:Name="LnkSource" Padding="0" Foreground="{StaticResource PinkBrush}"
-                                 NavigateUri="https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF/blob/main/ConditioningControlPanel/Services/Speech/SpeechService.cs">
+                                 NavigateUri="https://github.com/CC-Labs-it/Conditioning-Control-Panel/blob/main/ConditioningControlPanel/Services/Speech/SpeechService.cs">
                     <TextBlock Text="View on GitHub →" FontSize="14"/>
                 </ctl:SafeHyperlinkButton>
             </StackPanel>
