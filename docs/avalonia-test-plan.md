@@ -673,3 +673,5 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+1. Home -> collapse the browser. With a linked October Chaster raffle, select the Locktober card: only real counted dates light; a verify-only count fills the bar without guessing dates. Program cards light days before the current program day. Motion Off leaves a readable still; switching tabs holds the art, returning resumes it; panic parks its clock and closing releases it. WPF `Controls/Billboard/BuiltInArt.cs:74-106,275-387`. Rows: `host-lock-calendar-art`.
