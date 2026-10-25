@@ -3338,3 +3338,6 @@ Header mod selector regains the WPF "Open Mod Manager" footer row, and Home feat
 - Leash hold tick sound (WPF LeashFx.Tick gain/suppression/mod cue), WPF hover colours on the cut confirm, and a portal Activated/Deactivated hold on native Wayland.
 - Portal repeats are dropped only within RepeatGap (panic never goes dead); a portal hold trusts release only after the compositor has sent Deactivated.
 - Row stays stub: holder receipts list and Let go need the feat-leash holder card.
+
+## avalonia-port/fin-views-companion-chat-threshold: +296
+Companion chat threshold (Z2) motion matches WPF: staggered thinking dots on the shared BeatLoop (450ms each way, 0/150/300ms delays, own repeat cycles, parked when hidden/minimised, reset on stop), state-triggered dormant shimmer (0.25s wait, 1.4s CubicEaseInOut, hidden if unloaded mid-sweep), VM detach on unload and re-sync on reload. Ledger views-companion-chat-threshold stays stub (BrowserMedia ownership + autoplay owned by wire-shell-browser-b-next); stale thinking-dots gap removed from views-companion-room. Tests: ChatThresholdMotionTests, HerRoomChatMemoryTests (rcheck 39898672572); rgate 39899074901 green except known P108 GoonClock flake.
