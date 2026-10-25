@@ -1366,6 +1366,43 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             return _sessionManager;
         }
 
+        /// <summary>WPF SyncCustomSessionsFromDisk (MainWindow.SessionIO.cs:1761, #614): when the manager's
+        /// CustomSessions folder holds a .session.json it has never seen (the Graded Intake draft whose
+        /// registration hop failed), reload it, re-point the selection at the fresh instance and rebuild the
+        /// toolbar counts. Raises no SessionAdded, so nothing downstream fires twice. No manager, no disk read.</summary>
+        internal void SyncCustomSessionsFromDisk()
+        {
+            try
+            {
+                if (_sessionManager == null) return;
+                var folder = _sessionManager.CustomSessionsFolder;
+                if (!Directory.Exists(folder)) return;
+
+                var known = new HashSet<string>(
+                    _sessionManager.CustomSessions
+                        .Select(s => s.SourceFilePath)
+                        .Where(p => !string.IsNullOrEmpty(p))
+                        .Select(p => Path.GetFullPath(p!)),
+                    StringComparer.OrdinalIgnoreCase);
+                var onDisk = Directory.GetFiles(folder, "*.session.json");
+                if (onDisk.All(f => known.Contains(Path.GetFullPath(f)))) return;
+
+                var selectedId = _selectedSession?.Id;
+                _sessionManager.LoadAllSessions();
+                _availableSessions = _sessionManager.AllSessions.ToArray();
+                if (!string.IsNullOrEmpty(selectedId) && _sessionManager.GetSession(selectedId) is { } again)
+                    _selectedSession = again;
+                RackSourceChips.Children.Clear();
+                RackDifficultyChips.Children.Clear();
+                SeedRackToolbar();
+
+                Serilog.Log.Information(
+                    "SyncCustomSessionsFromDisk: picked up {N} session file(s) written after startup",
+                    onDisk.Length - known.Count);
+            }
+            catch (Exception ex) { Serilog.Log.Debug("SyncCustomSessionsFromDisk: {E}", ex.Message); }
+        }
+
         private static async System.Threading.Tasks.Task<string?> PickSessionSavePath(Window owner, string titleKey, Session session)
         {
             var folder = await owner.StorageProvider.TryGetFolderFromPathAsync(SessionFileService.CustomSessionsFolder);

@@ -3433,3 +3433,27 @@ Mantra Lab completion close timer is now stopped in Cleanup, so an early-closed 
 - Cloud session, local review + gate.
 - Studio > Bubble Count: For You defer (one replay, 500 ms polls, 90 s deadline), Pause other effects editor + per-round flash/text hold, localized empty-library warning. Row stays stub (shared interaction queue, overlay parking, ghost feed).
 - Review fix: label ellipsis, ledger deviations restored. rcheck BubbleCountQueueTests 5/5; rgate GATE-OK.
+
+## avalonia-port/wire-shell-haptics-device: +200
+- Mock haptics feedback toast in Avalonia matching WPF MockToast, including ALL STOP staying visible after panic.
+- Tested with a stepped clock (no sleeps). Fail-proven (rcheck 39697261650 red / 39697752707 green); render-all exemption covers only the toast.
+
+## avalonia-port/fin-shell-tab-fx-presets-quests-achievements: +1
+- Dependency-only NOOP audit; ledger row stays stub with explicit Missing list (shell-takeaway, shell-chrome-fx).
+- Review ACCEPT; fix: row reference repointed to PR body. Doc-only, no rgate (pushq re-gates).
+
+## avalonia-port/wire-shell-profile-vat: +435
+- DescentService moved to CCP.Core and wired on Avalonia: sign-in, accepted sync, Trainer Card open and logout drive the read; the 60 s poll waits for the drawn jar (lane -b) plus a visible active card and an accepted block.
+- A followed curve epoch repaints the level header; the jar stays hidden and the row stays `stub` until wire-shell-profile-vat-b.
+
+## avalonia-port/flake-leash-hold-panic: +19
+- LeashHoldTests park the shell's real 250 ms hold clock through a new `LeashHoldClockInterval` seam. A stray wall-clock tick after the 5 s ask played a 5th leash-tick. Product interval unchanged.
+- Fail-proved: 1 ms interval, rcheck 40195712417 red. 20x rcheck green before (40195628587) and after (40195831964). rgate 40196883118 GATE-OK.
+
+## avalonia-port/fin-shell-autonomy: +542
+- Takeover countdown bar, diagnostic Test dialogs, event audio, Mind Wipe recheck, Pop Quiz busy guard; ledger row stays `stub`.
+- Review ACCEPT; fixes (068bde1d3): event audio reuses ModCompanionContent.ResolveActive, single Mind Wipe recheck in AutonomyScheduler.Run. rcheck 39921773360 green (fail-proof 39921324849 red), rgate 39922479600 GATE-OK. Not pushed.
+
+## avalonia-port/fin-shell-companion-fx: +127
+
+All five companion roster cards now repaint their assigned prompt name (mod-aware) and AI-personality tooltip on tab show and mod switch, via Core `InstalledCommunityPrompts.Load`; stale prompts clear. Test: CompanionPromptLabelsTests (fail-proven). Ledger: shell-companion-fx wired.
