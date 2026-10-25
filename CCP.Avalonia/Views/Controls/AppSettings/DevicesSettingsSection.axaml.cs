@@ -31,7 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
     /// are read. Without the guard, opening the app would silently write 0.3 over the user's wake
     /// threshold. Same trap the popup had, and Avalonia raises the event exactly as WPF did.</para>
     /// </summary>
-    public partial class DevicesSettingsSection : UserControl
+    public partial class DevicesSettingsSection : UserControl, IAppSettingsSection
     {
         private bool _loading = true;
         private bool _micPopulating;   // Items.Clear()/SelectedItem raise SelectionChanged
@@ -73,16 +73,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
+            Platform.WebcamTracker.Instance.StateChanged += RefreshWebcamStatus;
+            RefreshWebcamStatus();
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
-            // The WPF section implements IAppSettingsSection.OnSectionShown because device lists go
-            // stale the moment someone plugs a headset in. Attach is this head's equivalent reveal
-            // hook, so the mic list is re-enumerated here too.
-            SyncFromSettings();
-            PopulateMicDevices();
-            PopulateWebcamDevices();   // WPF OnSectionShown -> RefreshDeviceSettingsLists
+            OnSectionShown();
             _lockdown = LockdownService.Current;
             if (_lockdown != null) { _lockdown.LockdownActivated += OnLockdownChanged; _lockdown.LockdownDeactivated += OnLockdownChanged; }
             ApplyLockdownHold();
+        }
+
+        /// <summary>WPF's per-open refresh: tabs stay attached when hidden, so attachment alone
+        /// cannot pick up a camera or headset plugged in while another tab was open.</summary>
+        public void OnSectionShown()
+        {
+            SyncFromSettings();
+            PopulateMicDevices();
+            PopulateWebcamDevices();
         }
 
         private LockdownService? _lockdown;
@@ -95,6 +101,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
+            Platform.WebcamTracker.Instance.StateChanged -= RefreshWebcamStatus;
             if (_lockdown != null) { _lockdown.LockdownActivated -= OnLockdownChanged; _lockdown.LockdownDeactivated -= OnLockdownChanged; _lockdown = null; }
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
             base.OnDetachedFromVisualTree(e);
@@ -250,8 +257,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// Quick Recal and Tracker Test are live over the tracker's gaze feed.
         /// The camera picker is live over <see cref="Platform.V4l2Cameras"/>.
         /// <para>ponytail: the monitor combo and the debug cursor stay DISABLED with a
-        /// stated reason: calibration follows its own window's screen and the cursor overlay is not ported. The status pill stays
-        /// at its <c>rf_webcam_stopped</c> literal for the same reason (no OnTrackingStateChanged).</para>
+        /// stated reason: calibration follows its own window's screen and the cursor overlay is not ported.
+        /// The status pill follows the real tracker's state transitions.</para>
         /// </summary>
         private void RefreshWebcamAvailability()
         {
@@ -272,6 +279,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             }
             if (!has)
                 AppendWebcamDebugLog("No webcam tracking engine on this build — camera controls are unavailable.");
+            RefreshWebcamStartLabel();
+            RefreshWebcamStatus();
+        }
+
+        internal void RefreshWebcamStatus()
+        {
+            var state = Platform.WebcamTracker.Instance.State;
+            Helpers.WebcamStatusPresentation.Paint(this, "LabTrackerDot", "TxtWebcamDebugStatus", state);
+            var key = WebcamStatus.IsLive(state) ? "SuccessGreenBrush" : "PanelAccentBrush";
+            if (this.TryFindResource(key, out var value) && value is global::Avalonia.Media.IBrush brush)
+                LabTrackerPill.BorderBrush = brush;
             RefreshWebcamStartLabel();
         }
 

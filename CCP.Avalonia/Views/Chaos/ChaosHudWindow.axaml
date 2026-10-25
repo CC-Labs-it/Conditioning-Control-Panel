@@ -14,7 +14,7 @@
        Style="{StaticResource Hdr}"             -> Theme="{StaticResource Hdr}"
        Style x:Key="BoonTipChrome" (ToolTip)    -> <Style Selector="ToolTip"> in Window.Styles: a
                                                    ControlTheme would blank the tip (trap 4), a
-                                                   plain Style keeps Avalonia's own template
+                                                   plain Style keeps the app ToolTip theme's template
        <Grid.ToolTip><ToolTip Content=... />    -> ToolTip.Tip = a ContentControl carrying the same
                                                    shared ContentTemplate
        Grid.Clip RectangleGeometry RadiusX/Y    -> Border CornerRadius + ClipToBounds="True"

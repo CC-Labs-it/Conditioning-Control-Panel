@@ -215,28 +215,122 @@ namespace ConditioningControlPanel.Services.Commands
             return VideoSurface?.Invoke(null) == true;
         }
 
+        /// <summary>The folder a random AI audio pick draws from first: <c>&lt;assets&gt;\audio</c>.
+        /// It is local files only - no online source feeds it (ccp-bugs #1428). When it is empty
+        /// <see cref="ChooseAudioPool"/> names the recorded mod clips that stand in.</summary>
+        internal static string AudioFolderUnder(string assetsRoot) => Path.Combine(assetsRoot, "audio");
+
+        /// <summary>Every playable audio file under <paramref name="audioRoot"/>, subfolders
+        /// included. Empty when the folder is missing.</summary>
+        internal static string[] AudioFilesIn(string audioRoot)
+        {
+            if (string.IsNullOrWhiteSpace(audioRoot) || !Directory.Exists(audioRoot)) return Array.Empty<string>();
+            return Directory.GetFiles(audioRoot, "*.*", SearchOption.AllDirectories)
+                .Where(f => IsAudio(Path.GetExtension(f).ToLowerInvariant()))
+                .ToArray();
+        }
+
+        /// <summary>Where a random AI audio pick comes from.</summary>
+        internal enum AudioPool { None, Own, ModVoice, SharedClips, NeutralClips }
+
+        /// <summary>
+        /// Pure choice of the pool a random AI audio pick draws from (owner, 2026-10-13). The
+        /// player's own files in the assets audio folder always win. With none, a RECORDED clip
+        /// from the active mod stands in, in the order <see cref="SpokenClipRule"/> gives a spoken
+        /// phrase: the mod's own voice first; then the bundled Bambi-voiced clips, only for a mod
+        /// <see cref="ModAudioPolicy.UsesSharedSubAudio"/> allows; every other mod (CCP Default,
+        /// Locked, an id not known yet) gets the recorded neutral words and nothing else. A pool
+        /// the policy rules out is never even read. No pool means nothing plays: there is no
+        /// synthetic voice behind this.
+        /// </summary>
+        internal static (AudioPool Pool, IReadOnlyList<string> Files) ChooseAudioPool(
+            IReadOnlyList<string>? ownFiles,
+            string? modId,
+            Func<IReadOnlyList<string>?> modVoice,
+            Func<IReadOnlyList<string>?> sharedClips,
+            Func<IReadOnlyList<string>?> neutralClips)
+        {
+            if (ownFiles != null && ownFiles.Count > 0) return (AudioPool.Own, ownFiles);
+
+            // With no mod id the voice-line folder still resolves to the Bambi baseline
+            // (CompanionContentResolver.OwnsBaselineVoiceLines keeps it for boot), so an unknown
+            // mod has no voice of its own here.
+            if (!string.IsNullOrWhiteSpace(modId))
+            {
+                var voice = modVoice();
+                if (voice != null && voice.Count > 0) return (AudioPool.ModVoice, voice);
+            }
+
+            if (ModAudioPolicy.UsesSharedSubAudio(modId))
+            {
+                var shared = sharedClips();
+                return shared != null && shared.Count > 0
+                    ? (AudioPool.SharedClips, shared)
+                    : (AudioPool.None, Array.Empty<string>());
+            }
+
+            var neutral = neutralClips();
+            return neutral != null && neutral.Count > 0
+                ? (AudioPool.NeutralClips, neutral)
+                : (AudioPool.None, Array.Empty<string>());
+        }
+
+        /// <summary>The pool a random AI audio pick would draw from right now. Each mod pool is
+        /// read through the lookup its own feature already uses: the companion's enabled voice
+        /// lines, the trigger clips folder, the neutral words manifest.</summary>
+        internal static (AudioPool Pool, IReadOnlyList<string> Files) CurrentAudioPool()
+        {
+            return ChooseAudioPool(
+                AudioFilesIn(AudioFolderUnder(CorePaths.EffectiveAssets)),
+                CoreMods.ActiveModId,
+                modVoice: ModVoiceLines,
+                sharedClips: () => AudioFilesIn(Path.Combine(AppContext.BaseDirectory, "Resources", "sub_audio")),
+                neutralClips: NeutralWordClips);
+        }
+
+        /// <summary>Head pool: the active mod's voice lines the player left switched on (WPF
+        /// CompanionPhraseService.GetEnabledVoiceLineFiles on the UI thread). Unseeded: none.</summary>
+        public static volatile Func<IReadOnlyList<string>?>? ModVoiceLinesProvider;
+
+        /// <summary>Head pool: every recorded neutral word on disk (WPF BackRoomVoice manifest).
+        /// Unseeded: none.</summary>
+        public static volatile Func<IReadOnlyList<string>?>? NeutralWordClipsProvider;
+
+        private static IReadOnlyList<string> ModVoiceLines()
+        {
+            try { return ModVoiceLinesProvider?.Invoke() ?? Array.Empty<string>(); }
+            catch (Exception ex)
+            {
+                Log.Debug("MediaCommand: mod voice lines unreadable ({Type})", ex.GetType().Name);
+                return Array.Empty<string>();
+            }
+        }
+
+        private static IReadOnlyList<string> NeutralWordClips()
+        {
+            try { return NeutralWordClipsProvider?.Invoke() ?? Array.Empty<string>(); }
+            catch (Exception ex)
+            {
+                Log.Debug("MediaCommand: neutral words unreadable ({Type})", ex.GetType().Name);
+                return Array.Empty<string>();
+            }
+        }
+
         private static async Task<bool> PlayRandomAudio()
         {
             try
             {
-                var assetsRoot = CorePaths.EffectiveAssets;
-                var audioRoot = Path.Combine(assetsRoot, "audio");
-                string[] candidates = Array.Empty<string>();
-                if (Directory.Exists(audioRoot))
-                {
-                    candidates = Directory.GetFiles(audioRoot, "*.*", SearchOption.AllDirectories)
-                        .Where(f => IsAudio(Path.GetExtension(f).ToLowerInvariant()))
-                        .ToArray();
-                }
+                var (pool, candidates) = CurrentAudioPool();
 
-                if (candidates.Length == 0)
+                if (pool == AudioPool.None || candidates.Count == 0)
                 {
-                    Log.Warning("MediaCommand: no audio files under {Root} — cannot fulfill random audio", audioRoot);
+                    Log.Warning("MediaCommand: no audio files under {Root} and no recorded clip for the active mod, cannot fulfill random audio",
+                        AudioFolderUnder(CorePaths.EffectiveAssets));
                     return false;
                 }
 
-                var pick = candidates[new Random().Next(candidates.Length)];
-                Log.Information("MediaCommand: random audio pick {Path}", pick);
+                var pick = candidates[new Random().Next(candidates.Count)];
+                Log.Information("MediaCommand: random audio pick from {Pool}: {Path}", pool, pick);
                 return await PlayFile(pick);
             }
             catch (Exception ex)
@@ -287,9 +381,15 @@ namespace ConditioningControlPanel.Services.Commands
                     ? Path.GetFullPath(path)
                     : Path.GetFullPath(Path.Combine(assetsRoot, path));
 
-                // After normalization the resolved path must still live under assets root.
-                if (!fullPath.StartsWith(assetsRoot, StringComparison.OrdinalIgnoreCase)) return null;
+                // After normalization the resolved path must still live INSIDE the assets root
+                // (a bare prefix test let a sibling folder such as "assets-old" through).
+                if (!AiCommandAdmission.IsUnderRoot(assetsRoot, fullPath)) return null;
                 if (!File.Exists(fullPath)) return null;
+                // A file the user switched off never plays because the AI named it.
+                var settings = CoreSettings.Current;
+                if (AiCommandAdmission.IsSwitchedOff(Path.GetRelativePath(assetsRoot, fullPath),
+                        settings?.DisabledAssetPaths, settings?.DisabledAssetFolders?.ToArray()))
+                    return null;
                 return fullPath;
             }
             catch (Exception ex)

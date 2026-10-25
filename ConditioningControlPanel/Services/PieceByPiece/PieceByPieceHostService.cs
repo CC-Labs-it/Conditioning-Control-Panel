@@ -3,13 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 using ConditioningControlPanel.Services.Chaos;
 using Microsoft.Web.WebView2.Core;
+using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Services.Stakes;
 using Newtonsoft.Json.Linq;
 using ConditioningControlPanel.Models;
@@ -28,7 +27,9 @@ namespace ConditioningControlPanel.Services.PieceByPiece;
 ///
 /// <para>Protocol (the effects ramp codes against these shapes; do not widen them casually):
 /// <list type="bullet">
-/// <item>host -&gt; page, once after boot: <c>{ type: 'pbp:settings', videoHoldSec, reducedMotion, whispers }</c></item>
+/// <item>host -&gt; page, once after boot: <c>{ type: 'pbp:settings', videoHoldSec, reducedMotion, whispers,
+///   letPeopleWatch, watchEffects, watchAmount, mediaAvailable, spectateMatchId? }</c> (the watch
+///   fields: <see cref="PbpWatchRules"/>)</item>
 /// <item>page -&gt; host: <c>{ type: 'pbp:media-request', kinds: ['image','gif','video'], count }</c></item>
 /// <item>host -&gt; page: <c>{ type: 'pbp:media', images: [url...], gifs: [...], videos: [...] }</c></item>
 /// <item>page -&gt; host: <c>{ type: 'pbp:exit' }</c> - close the window</item>
@@ -78,37 +79,14 @@ internal static partial class PieceByPieceHostService
     /// <summary>Display name for the tier gate, the window title and log lines.</summary>
     public const string ProductName = "Piece by Piece";
 
-    /// <summary>Progress-aware boot deadline: 45s since the last sign of life from the page
-    /// (launch, or any message at all). The Arcademy's pattern and for the Arcademy's reason - it
-    /// covers a page that never runs a line of script, where nothing page-side is alive to
-    /// report <c>boot-error</c> itself.</summary>
-    private static readonly TimeSpan BootDeadline = TimeSpan.FromSeconds(45);
-
-    /// <summary>Hard ceiling on one <c>pbp:media-request</c>. The page asks again if it wants
-    /// more; an unbounded count from a hand-edited page would walk a whole library into one JSON
-    /// frame.</summary>
-    private const int MaxMediaPerKind = 64;
-
     /// <summary>Fallback hold for a video tile when the player's mandatory-video duration floor is
     /// unset (0 = "no limit", the shipped default). Inside the 10..30 clamp on purpose.</summary>
-    private const int DefaultVideoHoldSec = 15;
+    private const int DefaultVideoHoldSec = PbpHostRules.DefaultVideoHoldSec;
 
     private static readonly Random Rng = new();
 
     /// <summary>Where <c>/v2/pbp/*</c> lives. The same proxy every other online surface uses.</summary>
-    private const string ProxyBaseUrl = "https://codebambi-proxy.vercel.app";
-
-    /// <summary>
-    /// The ONLY path prefix <see cref="OnNetRequest"/> will forward.
-    ///
-    /// <para>A WHITELIST, NOT A CONVENIENCE. Without it this handler is an open HTTP proxy that
-    /// signs whatever the page asks for with the user's auth token - and this page loads content
-    /// from <c>ccp.assets</c>, so "whatever the page asks for" is not a purely hypothetical
-    /// concern. Anything outside the chess game's own routes fails closed as
-    /// <c>status:0, body:"forbidden_path"</c>, which is the shape a transport failure already
-    /// produces, so the page needs no special case for it.</para>
-    /// </summary>
-    private const string AllowedPathPrefix = "/v2/pbp/";
+    private const string ProxyBaseUrl = PbpHostRules.ProxyBaseUrl;
 
     /// <summary>
     /// One client for the app session; a per-request <see cref="HttpClient"/> exhausts sockets.
@@ -241,6 +219,8 @@ internal static partial class PieceByPieceHostService
             });
 
             _host.Show();
+            // Spectate v2: the local half of mediaAvailable, walked once per boot off the UI thread.
+            StartLocalMediaProbe();
             // Windowed: the user can close it with the title-bar X. Tear down cleanly so the
             // heartbeat watchdog cannot misread the resulting silence as a wedged page.
             if (_host.Window != null) _host.Window.Closed += (_, _) => Close();
@@ -302,9 +282,10 @@ internal static partial class PieceByPieceHostService
             _lastProgressUtc = DateTime.UtcNow;
             _pinged = false;
             _host?.FocusWeb();
+            // The saved pick first: the settings frame's mediaAvailable reads the opt-in.
+            AdoptSavedMediaChoice();
             PostSettings();
             PostIdentity();
-            AdoptSavedMediaChoice();
             PostMediaState();
             StartOnlineMedia();
             PostFriendIntent();
@@ -355,20 +336,22 @@ internal static partial class PieceByPieceHostService
         catch (Exception ex) { App.Logger?.Debug("PieceByPiece: identity post failed: {E}", ex.Message); }
     }
 
-    /// <summary>The one host -&gt; page settings frame, sent once per boot.</summary>
+    /// <summary>The one host -&gt; page settings frame, sent once per boot. <c>letPeopleWatch</c>
+    /// is the "Let people watch my games" switch (<see cref="PbpWatchRules"/>); <c>spectateMatchId</c>
+    /// rides only on a board opened straight into a spectate, and only on that one boot.</summary>
     private static void PostSettings()
     {
         if (_settingsPosted) return;
         _settingsPosted = true;
+        var spectate = TakeSpectateInit();
         try
         {
-            _host?.Post(new
-            {
-                type = "pbp:settings",
-                videoHoldSec = SafeVideoHoldSec(),
-                reducedMotion = SafeReducedMotion(),
-                whispers = SafeWhisperClips(),
-            });
+            // Spectate v2: the stands' effects choice and whether any media source exists ride here
+            // too; the field names live in PbpWatchRules.SettingsFrame (tested).
+            bool mediaAvailable = SafeMediaAvailable();
+            _postedMediaAvailable = mediaAvailable;
+            _host?.Post(PbpWatchRules.SettingsFrame(SafeVideoHoldSec(), SafeReducedMotion(), SafeWhisperClips(),
+                App.Settings?.Current, mediaAvailable, spectate, SafeGentleIntroSpeed()));
         }
         catch (Exception ex) { App.Logger?.Debug("PieceByPiece: settings post failed: {E}", ex.Message); }
     }
@@ -419,6 +402,10 @@ internal static partial class PieceByPieceHostService
                     OnFriendChallenge(o);
                     break;
 
+                case PbpWatchRules.SettingFrame:
+                    OnPageSetting(o);
+                    break;
+
                 case "pbp:exit":
                     // Page-initiated (Esc with no drag in flight). Nothing to wind down, so this
                     // IS the close - marshalled, because tearing a window down is UI-thread work.
@@ -446,95 +433,15 @@ internal static partial class PieceByPieceHostService
     /// </summary>
     private static void OnMediaRequest(JObject o)
     {
-        int count = Math.Clamp((int?)o["count"] ?? 24, 1, MaxMediaPerKind);
-        var kinds = ReadKinds(o["kinds"]);
-        var (images, gifs, videos) = SampleMedia(kinds, count);
-        _host?.Post(new { type = "pbp:media", images, gifs, videos });
+        // Sample relative paths, then build URLs for the kept few only (not the whole library).
+        var pool = DtrhAssetManifest.EnumerateActive().Select(e => (e.Rel, e.Rel, e.IsImage));
+        var rels = PbpHostRules.SampleMedia(pool, PbpHostRules.ReadKinds(o["kinds"]),
+            PbpHostRules.ReadCount(o), Rng);
+        static string[] Urls(string[] r) => Array.ConvertAll(r, DtrhAssetManifest.AssetUrl);
+        var media = (Images: Urls(rels.Images), Gifs: Urls(rels.Gifs), Videos: Urls(rels.Videos));
+        _host?.Post(PbpHostRules.MediaFrame(media));
         App.Logger?.Debug("PieceByPiece: media reply {I} images, {G} gifs, {V} videos",
-            images.Length, gifs.Length, videos.Length);
-    }
-
-    /// <summary>The requested kinds, defaulting to all three when the page leaves the field off or
-    /// sends something that is not a list of strings.</summary>
-    private static HashSet<string> ReadKinds(JToken? token)
-    {
-        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (token is JArray arr)
-        {
-            foreach (var t in arr)
-            {
-                var s = (string?)t;
-                if (!string.IsNullOrWhiteSpace(s)) set.Add(s!.Trim());
-            }
-        }
-        if (set.Count == 0) { set.Add("image"); set.Add("gif"); set.Add("video"); }
-        return set;
-    }
-
-    /// <summary>
-    /// Up to <paramref name="count"/> ccp.assets URLs per kind, sampled uniformly.
-    ///
-    /// <para>The pool is <see cref="DtrhAssetManifest.EnumerateActive"/> - deliberately NOT a
-    /// second scanner. That one enumeration is the single authority on what "the player's active
-    /// pool" means (browser-decodable extensions only, the Assets tree's <c>DisabledAssetPaths</c>
-    /// unchecks honoured, the 50MB/500MB size caps, depth 8, dot-directories skipped), and a copy
-    /// of that filter here would be free to drift from the one the descent and the transfer
-    /// compression planner already share. It is LOCAL DISK ONLY by design, which is also why no
-    /// remote CDN entry can reach this page.</para>
-    ///
-    /// <para>Reservoir sampling, one reservoir per kind: an even draw across a library of any size
-    /// without materialising it and without walking it twice. GIFs are split OUT of images - the
-    /// manifest counts a .gif as an image, but a board tile that loops and one that does not are
-    /// different things to whatever is placing them.</para>
-    /// </summary>
-    private static (string[] Images, string[] Gifs, string[] Videos) SampleMedia(
-        HashSet<string> kinds, int count)
-    {
-        var images = new List<string>(count);
-        var gifs = new List<string>(count);
-        var videos = new List<string>(count);
-        bool wantImages = kinds.Contains("image");
-        bool wantGifs = kinds.Contains("gif");
-        bool wantVideos = kinds.Contains("video");
-        int seenImages = 0, seenGifs = 0, seenVideos = 0;
-
-        try
-        {
-            foreach (var (_, rel, _, isImage) in DtrhAssetManifest.EnumerateActive())
-            {
-                bool isGif = rel.EndsWith(".gif", StringComparison.OrdinalIgnoreCase);
-                if (!isImage)
-                {
-                    if (wantVideos) Offer(videos, ref seenVideos, count, rel);
-                }
-                else if (isGif)
-                {
-                    if (wantGifs) Offer(gifs, ref seenGifs, count, rel);
-                }
-                else if (wantImages)
-                {
-                    Offer(images, ref seenImages, count, rel);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            // Whatever was gathered before the walk fell over is still worth sending.
-            App.Logger?.Debug("PieceByPiece: media scan failed: {E}", ex.Message);
-        }
-
-        return (images.ToArray(), gifs.ToArray(), videos.ToArray());
-    }
-
-    /// <summary>One step of a reservoir: fill to <paramref name="count"/>, then replace with
-    /// probability count/seen, so every file in the pool has the same chance of landing.</summary>
-    private static void Offer(List<string> reservoir, ref int seen, int count, string rel)
-    {
-        seen++;
-        var url = DtrhAssetManifest.AssetUrl(rel);
-        if (reservoir.Count < count) { reservoir.Add(url); return; }
-        int j = Rng.Next(seen);
-        if (j < count) reservoir[j] = url;
+            media.Images.Length, media.Gifs.Length, media.Videos.Length);
     }
 
     // ============================ the net lane ============================
@@ -547,7 +454,7 @@ internal static partial class PieceByPieceHostService
     /// <para>THE PAGE NEVER HOLDS THE TOKEN IN PRACTICE. This is why: every online call comes
     /// back through here, the header is attached on this side, and the page's copy of the token
     /// (which the identity frame does carry, for a future direct-fetch build) is never used while
-    /// <c>viaHost</c> is true. The whitelist on <see cref="AllowedPathPrefix"/> is what keeps that
+    /// <c>viaHost</c> is true. The whitelist on <see cref="PbpHostRules.AllowedPathPrefix"/> is what keeps that
     /// from being an open, authenticated proxy for anything else the page might be talked into
     /// asking for.</para>
     ///
@@ -558,60 +465,26 @@ internal static partial class PieceByPieceHostService
     /// </summary>
     private static void OnNetRequest(JObject o)
     {
-        var id = (string?)o["id"] ?? "";
-        var path = (string?)o["path"] ?? "";
-        var method = ((string?)o["method"] ?? "GET").Trim().ToUpperInvariant();
-        var body = o["body"]?.Type == JTokenType.String
-            ? (string?)o["body"] ?? ""
-            : (o["body"] is null || o["body"]!.Type == JTokenType.Null
-                ? ""
-                : o["body"]!.ToString(Newtonsoft.Json.Formatting.None));
-
-        if (!path.StartsWith(AllowedPathPrefix, StringComparison.Ordinal))
+        var call = PbpHostRules.ReadNet(o);
+        if (call.Refusal != null)
         {
-            App.Logger?.Warning("PieceByPiece: net REJECTED for path '{Path}'", path);
-            ReplyNet(id, 0, "forbidden_path");
+            App.Logger?.Warning("PieceByPiece: net REJECTED ({Why}) for {Method} '{Path}'",
+                call.Refusal, call.Method, call.Path);
+            ReplyNet(call.Id, 0, call.Refusal);
             return;
         }
-        if (method != "GET" && method != "POST")
-        {
-            // The whole surface is GET and POST. Anything else is a page that has been
-            // tampered with, not a route this build has not caught up with yet.
-            App.Logger?.Warning("PieceByPiece: net REJECTED for method '{Method}'", method);
-            ReplyNet(id, 0, "forbidden_method");
-            return;
-        }
-
         _ = Task.Run(async () =>
         {
-            int status = 0;
-            string responseBody = "";
-            try
-            {
-                var verb = method == "POST" ? HttpMethod.Post : HttpMethod.Get;
-                using var request = new HttpRequestMessage(verb, ProxyBaseUrl + path);
-                if (method == "POST")
-                {
-                    request.Content = new StringContent(body, Encoding.UTF8, "application/json");
-                }
-                var token = SafeAuthToken();
-                if (!string.IsNullOrEmpty(token)) request.Headers.Add("X-Auth-Token", token);
-                request.Headers.Add("X-Client-Version", UpdateService.AppVersion);
-
-                using var response = await Http.SendAsync(request, CancellationToken.None).ConfigureAwait(false);
-                status = (int)response.StatusCode;
-                responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                MergedAccountRecovery.TryHandle(status, responseBody);   // contract D
-            }
+            var (status, body) = await PbpHostRules.SendAsync(Http, ProxyBaseUrl, call,
+                SafeAuthToken(), UpdateService.AppVersion).ConfigureAwait(false);
+            try { MergedAccountRecovery.TryHandle(status, body); }   // contract D, kept on the head
             catch (Exception ex)
             {
-                // Timeout, DNS, offline, a cancelled long poll. status 0 is the page's
-                // "never got an answer", which every call site there already branches on.
+                App.Logger?.Debug("PieceByPiece: recovery failed: {E}", ex.Message);
                 status = 0;
-                responseBody = "";
-                App.Logger?.Debug("PieceByPiece: net {Method} {Path} failed: {E}", method, path, ex.Message);
+                body = "";
             }
-            ReplyNet(id, status, responseBody);
+            ReplyNet(call.Id, status, body);
         });
     }
 
@@ -698,9 +571,9 @@ internal static partial class PieceByPieceHostService
         _bootWatch.Tick += (_, _) =>
         {
             if (_host == null || _host.IsReady) { CancelBootDeadline(); return; }
-            if (DateTime.UtcNow - _lastProgressUtc < BootDeadline) return;
+            if (!PbpHostRules.BootTimedOut(_host.IsReady, DateTime.UtcNow - _lastProgressUtc)) return;
             CancelBootDeadline();
-            OnBootError($"boot deadline: no progress for {BootDeadline.TotalSeconds:0}s");
+            OnBootError($"boot deadline: no progress for {PbpHostRules.BootDeadline.TotalSeconds:0}s");
         };
         _bootWatch.Start();
     }
@@ -725,8 +598,10 @@ internal static partial class PieceByPieceHostService
             // sends a heartbeat never reports ready either, so this stays asleep rather than
             // closing a window that is working fine.
             if (_host == null || !_host.IsReady) return;
-            if ((DateTime.UtcNow - _lastHeartbeatUtc).TotalSeconds <= 20) return;
-            if (!_pinged)
+            var step = PbpHostRules.HeartbeatStep(_host.IsReady,
+                (DateTime.UtcNow - _lastHeartbeatUtc).TotalSeconds, _pinged);
+            if (step is PbpHostRules.WatchStep.Idle or PbpHostRules.WatchStep.Ok) return;
+            if (step == PbpHostRules.WatchStep.Ping)
             {
                 _pinged = true;
                 try { _host.Post(new { type = "ping" }); } catch (Exception ex) { Diag.Swallowed(ex); }
@@ -760,7 +635,7 @@ internal static partial class PieceByPieceHostService
         try
         {
             int configured = App.Settings?.Current?.VideoMinDurationSeconds ?? 0;
-            return Math.Clamp(configured > 0 ? configured : DefaultVideoHoldSec, 10, 30);
+            return PbpHostRules.VideoHoldSec(configured);
         }
         catch { return DefaultVideoHoldSec; }
     }
@@ -800,5 +675,21 @@ internal static partial class PieceByPieceHostService
     {
         try { return MotionFx.Level != Models.MotionLevel.Full; }
         catch { return false; }
+    }
+
+    /// <summary>The intros' gentle speed (PbpWatchRules.GentleIntroSpeed): the level the player would
+    /// have without gentle visuals decides whether gentle is the only brake.</summary>
+    private static double SafeGentleIntroSpeed()
+    {
+        try
+        {
+            var s = App.Settings?.Current;
+            if (s == null) return 0;
+            bool osAnim = true;
+            try { osAnim = System.Windows.SystemParameters.ClientAreaAnimation; } catch { }
+            var withoutGentle = MotionFx.ResolveLevel(s.MotionLevel, osAnim, gentleVisuals: false);
+            return PbpWatchRules.GentleIntroSpeed(s.GentleVisuals, withoutGentle, s.GentleSpeed);
+        }
+        catch { return 0; }
     }
 }

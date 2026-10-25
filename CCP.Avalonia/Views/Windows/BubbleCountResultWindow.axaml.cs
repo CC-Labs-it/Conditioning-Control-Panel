@@ -121,11 +121,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Avalonia's Position is in the same physical pixels Screen.Bounds reports, so the
             // conversion - and BubbleCountWindow.GetDpiForScreen with it - disappears. Screens is
             // only populated once the window has a platform impl, hence Opened rather than the ctor.
+            // The primary is placed by ShowOnAllMonitors after Show (same primary/fallback choice).
             Opened += (_, _) =>
             {
-                var target = _screen ?? Screens?.Primary;
-                if (target is not null)
-                    Position = new PixelPoint(target.Bounds.X + 100, target.Bounds.Y + 100);
+                if (!_isPrimary) PositionOnScreen(_screen);
             };
 
             // Focus input on primary
@@ -142,6 +141,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Key handlers
             _btnSubmit.Click += (_, _) => BtnSubmit_Click();
             KeyDown += OnKeyDown;
+            // P51: the panic key wins over the focused answer box and Submit (panic bound to Enter would
+            // otherwise submit the answer first). Tunnel, and only for the panic key.
+            AddHandler(KeyDownEvent, (object? _, KeyEventArgs e) =>
+            {
+                var s = CoreSettings.Current;
+                if (!s.PanicKeyEnabled || !Platform.HotkeyNames.Matches(e.Key, s.PanicKey)) return;
+                OnKeyDown(this, e);
+                e.Handled = true;
+            }, RoutingStrategies.Tunnel);
             _txtAnswer.KeyDown += OnInputKeyDown;
             _txtAnswer.TextChanged += OnTextChanged;
 
@@ -169,11 +177,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _sharedInput = "";
 
             var primaryWindow = new BubbleCountResultWindow(correctAnswer, strictMode, onComplete, null, true);
+            // Some backends report topology only after mapping a TopLevel. Open the typist first,
+            // then place it using the same primary/fallback chosen for the mirror set.
+            primaryWindow.Show();
+            var all = Features.ScreenList.Enumerate(primaryWindow);
+            var primary = all.FirstOrDefault(s => s.IsPrimary) ?? all.FirstOrDefault();
+            primaryWindow.PositionOnScreen(primary);
 
             if (CoreSettings.Current.DualMonitorEnabled)
             {
-                var all = Features.ScreenList.Enumerate(primaryWindow);
-                var primary = all.FirstOrDefault(s => s.IsPrimary) ?? all.FirstOrDefault();
                 foreach (var screen in all.Where(s => s != primary))
                 {
                     var window = new BubbleCountResultWindow(correctAnswer, strictMode, onComplete, screen, false);
@@ -181,8 +193,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
             }
 
-            primaryWindow.Show();
             primaryWindow.Activate();   // WPF SetForegroundWindow equivalent
+        }
+
+        private void PositionOnScreen(Screen? target)
+        {
+            if (target is null) return;
+            // Position is physical pixels (WPF divided these coordinates by per-screen DPI).
+            // Reposition while normal: maximized windows may ignore a monitor move on X11.
+            var state = WindowState;
+            WindowState = WindowState.Normal;
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Position = new PixelPoint(target.Bounds.X + 100, target.Bounds.Y + 100);
+            WindowState = state;
         }
 
         private void OnTextChanged(object? sender, TextChangedEventArgs e)
@@ -220,7 +243,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Same key rules as the game window: strict falls open without a global panic listener.
             var s = CoreSettings.Current;
             switch (Services.MandatoryVideoScheduler.KeyAction(_strictMode, e.Key.ToString(), e.KeyModifiers.HasFlag(KeyModifiers.Alt),
-                s.PanicKeyEnabled, s.PanicKey, s.PanicKeyEnabled && BubbleCountWindow.PanicListenerLive()))
+                s.PanicKeyEnabled, Platform.HotkeyNames.Canonical(s.PanicKey), s.PanicKeyEnabled && BubbleCountWindow.PanicListenerLive()))
             {
                 case Services.VideoKeyAction.Dismiss: e.Handled = true; CompleteAll(false); break;
                 case Services.VideoKeyAction.ForceStop:
