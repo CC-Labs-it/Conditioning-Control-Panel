@@ -51,8 +51,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///   <item><c>SpiralEmbedView</c> now carries the Core ready/state protocol over WebHost;
     ///     native process-loss reporting and a pre-document carrier remain
     ///     unavailable on this seam.</item>
-    ///   <item><c>MotionFx</c> and <c>DescentBarkWatcher</c> are
-    ///     WPF-head services; each is a stub at its call site. <c>HelpPopover</c> is real on
+    ///   <item><c>DescentBarkWatcher</c> still needs the live descent block service.
+    ///     Room SFX and the Windows motion cap are ported. <c>HelpPopover</c> is real on
     ///     this head and carries the shared Core topic.</item>
     /// </list>
     ///
@@ -154,14 +154,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// a field captured once would leave the ember loop running for the rest of the session
         /// after someone turned motion off mid-run.</para>
         ///
-        /// <para>ponytail: the ONE thing WPF has that this head does not is the cap to Reduced
-        /// when Windows' animation-effects flag is off — see AmbientFxCanvas.Env.Level, which owns
-        /// that note. AllowTransitions is spelled out rather than read from Env because Env carries
-        /// only the ambient half; MotionFx.cs:56 is this same comparison.</para>
+        /// <para>Env also applies WPF's Windows animation and Gentle Visuals caps.</para>
         /// </summary>
         private static bool AllowAmbientLoops => AmbientFxCanvas.Env.AllowAmbientLoops;
 
-        private static bool AllowTransitions => CoreSettings.Current.MotionLevel != MotionLevel.Off;
+        private static bool AllowTransitions => AmbientFxCanvas.Env.AllowTransitions;
 
         // Test seams: headless has no browser engine, so the engine-path reveal is driven by faking both.
         internal static Func<bool> EngineAvailable = () => WebHost.IsAvailable;
@@ -201,6 +198,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>True while the splash owns the surface — set the instant the spiral era is
         /// painted, cleared when the embed is revealed, when it fails, or on leaving the tab.</summary>
         private bool _splashUp;
+        // WPF spends these on paint, and rearms only on exit: visibility and OnTabShown both refresh.
         private bool _entrySfxSpent, _splashChimed;
 
         // The head resolves assets; Core owns the cue ladder and mix.
