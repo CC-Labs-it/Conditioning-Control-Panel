@@ -3,6 +3,8 @@
 // manifest), run-started / run-ended with the one-payout latch (:336, :431), the ping-then-close heartbeat
 // watchdog (:595) and the teardown funnel (:686). Shell frames the race shares (boot-error, exit's 1200 ms
 // watchdog, exit-done) stay in GameWindow.HandleMessage, and panic closes it with every other game.
+// ponytail: WPF MainWindow.TryRacePauseOnEscape (:1505) keeps a lone Escape as the race's pause; here the
+// first Escape still panics the race closed (only Piece by Piece is ported, MainShellWindow.PanicKey.cs).
 // ponytail: still missing on this head, each its own unit (parity row game-race): BambiCloud levels
 // (cloud-open/cloud-start, settings.cloud stays false so the page hides the verb), the track player and
 // its decoder seed (own tracks + charting are GameWindow.RaceTracks.cs), sfx / fire-payload (no ChaosSfx bank or payload bridge here), favorites +
@@ -98,15 +100,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try
             {
                 var server = _server;
-                var m = (_library ??= new(() => server == null ? new() : GameMediaManifest.BuildLocal(server))).Value;
-                Post(new
-                {
-                    type = "manifest",
-                    images = System.Linq.Enumerable.Select(m.Images, e => new { name = e.Name, url = e.Url }),
-                    videos = System.Linq.Enumerable.Select(m.Videos, e => new { name = e.Name, url = e.Url }),
-                    skipped = m.Skipped,
-                    truncated = m.Truncated,
-                });
+                var m = (_library ??= new(() => server == null ? new() : GameMediaManifest.BuildLocal(server.AssetUrl))).Value;
+                Post(GameMediaManifest.Frame(m));
             }
             catch (Exception ex) { Log.Warning("CaucusHostService.OnPageReady: {E}", ex.Message); }
         }

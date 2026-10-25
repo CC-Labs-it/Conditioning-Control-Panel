@@ -179,5 +179,32 @@ namespace ConditioningControlPanel.Services
                 CanLoadPreview = false,
             };
         }
+
+        // Heads that are positively a still or a sound, never a clip. Ogg is left out: it can carry Theora video.
+        // An unrecognised head is NOT on this list: a transport stream named .mp4, or an mp4 opening on a
+        // free/wide/mdat atom, sniffs as nothing and LibVLC still plays it.
+        private static readonly System.Collections.Generic.HashSet<string> NotVideo =
+            new(StringComparer.OrdinalIgnoreCase)
+            { ".png", ".jpg", ".gif", ".webp", ".bmp", ".heic", ".avif", ".wav", ".flac", ".mp3", ".m4a" };
+
+        /// <summary>
+        /// True when a local video clearly cannot play: empty, or its bytes say it is an image or audio
+        /// file (<see cref="NotVideo"/>). WPF's MediaElement raises MediaFailed for such a file and the pane
+        /// shows "file not found"; LibVLC (the Avalonia head) raises nothing and paints a blank pane, so that
+        /// head asks first. Anything the sniffer cannot name is left to the player. A missing or unreadable
+        /// file is the plan's case.
+        /// </summary>
+        public static bool VideoLooksBroken(string? path)
+        {
+            try
+            {
+                var info = new System.IO.FileInfo(path ?? "");
+                if (!info.Exists) return false;
+                if (info.Length == 0) return true;
+            }
+            catch (Exception) { return false; }   // swallow: an unreadable path is the plan's "file not found"
+            var sniffed = Helpers.MediaTypeSniffer.FromFileHead(path);
+            return sniffed != null && NotVideo.Contains(sniffed);
+        }
     }
 }
