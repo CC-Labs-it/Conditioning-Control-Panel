@@ -163,6 +163,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (!string.IsNullOrEmpty(body)) WebMessage?.Invoke(body);
         }
 
+        /// <summary>Return keyboard focus to the native page after a title-bar Escape.</summary>
+        public void FocusPage()
+        {
+            if (_web != null) _web.Focus();
+            else Focus();
+        }
+
         /// <summary>
         /// True when THIS instance built an adapter. <see cref="IsAvailable"/> is the process-wide
         /// probe; the constructor can still fail after it passes, and a caller about to drive the

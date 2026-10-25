@@ -64,6 +64,15 @@ public sealed class FriendsBlockList
         catch { return Array.Empty<BlockedEntry>(); }
     }
 
+    /// <summary>The server's list is authoritative, including an empty list. Older servers
+    /// fall back to this account's local blocks. Pure: the local entries are retired only by
+    /// <see cref="MigrateIfDue"/> on the landing tick (WPF FriendsLanding.cs:71).</summary>
+    public IReadOnlyList<BlockedEntry> Rows(string? account, IReadOnlyList<BlockedFriend>? server)
+    {
+        if (server == null) return For(account);
+        return server.Select(b => new BlockedEntry(account ?? "", b.Id, b.Name, DateTimeOffset.MinValue)).ToList();
+    }
+
     // ---- the one-time move to the server's list ----
 
     private static readonly HashSet<string> MovedAccounts = new(StringComparer.Ordinal);
@@ -85,7 +94,7 @@ public sealed class FriendsBlockList
             _moving = true;
             if (await MigrateAsync(svc, Shared, account, server, () => Account() == account)) MovedAccounts.Add(account);
         }
-        catch (Exception ex) { ConditioningControlPanel.App.Logger?.Debug("[Friends] blocked move: {E}", ex.Message); }
+        catch (Exception ex) { Serilog.Log.Debug("[Friends] blocked move: {E}", ex.Message); }
         finally { _moving = false; }
     }
 
@@ -113,7 +122,7 @@ public sealed class FriendsBlockList
         catch { return null; }
     };
 
-    private static string FilePath => Path.Combine(ConditioningControlPanel.App.UserDataPath, "friends_blocked.json");
+    private static string FilePath => Path.Combine(CorePaths.UserData, "friends_blocked.json");
 
     private static IReadOnlyList<BlockedEntry> LoadFile()
     {
@@ -124,7 +133,7 @@ public sealed class FriendsBlockList
         }
         catch (Exception ex)
         {
-            ConditioningControlPanel.App.Logger?.Debug("[Friends] blocked list unreadable: {E}", ex.Message);
+            Serilog.Log.Debug("[Friends] blocked list unreadable: {E}", ex.Message);
             return Array.Empty<BlockedEntry>();
         }
     }
@@ -132,6 +141,6 @@ public sealed class FriendsBlockList
     private static void SaveFile(IReadOnlyList<BlockedEntry> list)
     {
         try { File.WriteAllText(FilePath, JsonConvert.SerializeObject(list)); }
-        catch (Exception ex) { ConditioningControlPanel.App.Logger?.Debug("[Friends] blocked list not saved: {E}", ex.Message); }
+        catch (Exception ex) { Serilog.Log.Debug("[Friends] blocked list not saved: {E}", ex.Message); }
     }
 }
