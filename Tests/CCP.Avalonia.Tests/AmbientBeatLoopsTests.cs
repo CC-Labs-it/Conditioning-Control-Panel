@@ -39,7 +39,6 @@ public sealed class AmbientBeatLoopsTests
     /// a file NOT in this list that gains one fails, and so does a listed file that lost it.</summary>
     private static readonly string[] NotYetMoved =
     {
-        "Views/Controls/Companion/ChatThresholdView.axaml",
         "Views/Controls/Companion/CompanionHeroCard.axaml",
         "Views/Controls/SeasonRecapCard.axaml.cs",
         "Views/Tabs/BlinkTrainerTabView.axaml",

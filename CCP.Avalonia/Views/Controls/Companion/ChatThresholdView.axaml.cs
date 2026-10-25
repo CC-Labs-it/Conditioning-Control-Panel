@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using ConditioningControlPanel.Motion;
+using ConditioningControlPanel.Avalonia.Helpers;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
@@ -27,11 +29,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// Z2 — the chat threshold surface, ported from the WPF head. See the XAML header for the spec.
     ///
     /// <para>The behaviour is deliberately thin: Enter-to-send, keeping the thread pinned to its
-    /// newest line, and the dormant state's one-shot shimmer. The "she's thinking" dot pulse is a
-    /// class-gated Style animation in the XAML, so the two Storyboards the WPF code-behind cloned
-    /// (<c>CmpThinkingDotsStoryboard</c>, <c>CmpShimmerSweepStoryboard</c>) have no counterpart
-    /// here; the shimmer is a <see cref="DoubleTransition"/> exactly as <see cref="MakeHerYoursView"/>
-    /// does it.</para>
+    /// newest line, and the dormant state's one-shot shimmer. Thinking uses the window's shared
+    /// frame source and Core's WPF pulse/stagger rule; no infinite style animation remains.
+    /// The shimmer is a <see cref="DoubleTransition"/>.</para>
     ///
     /// <para>WPF's CompanionWheelRelay is not ported: the thread's ScrollViewer keeps Avalonia's
     /// default IsScrollChainingEnabled, which already hands a spent notch to the page. Live
@@ -46,6 +46,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private INotifyCollectionChanged? _watchedTurns;
         private bool _shimmerPlayed;
         private ChatThresholdViewModel? _vm;
+        private ChatThresholdViewModel? _observed;
+        private BeatLoop? _thinking;
 
         public ChatThresholdView()
         {
@@ -56,10 +58,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 // A replaced viewmodel stops listening to the brain's turn log (WPF Detach on teardown).
                 if (!ReferenceEquals(_vm, DataContext)) _vm?.Detach();
                 _vm = DataContext as ChatThresholdViewModel;
+                ObserveThinking(_vm);
                 WatchTurns(_vm?.Turns);
+                SyncThinking();
             };
             Loaded += OnLoaded;
-            Unloaded += (_, _) => WatchTurns(null);
+            Unloaded += (_, _) => { StopThinking(); ObserveThinking(null); WatchTurns(null); };
         }
 
         /// <summary>Convenience for hosts that hand in a viewmodel rather than setting DataContext.</summary>
@@ -71,6 +75,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         private void OnLoaded(object? sender, RoutedEventArgs e)
         {
+            ObserveThinking(ViewModel);
+            SyncThinking();
             WatchTurns(ViewModel?.Turns);
             ScrollThreadToEnd();
             PlayDormantShimmer();
@@ -84,6 +90,54 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             {
                 vm.OpenEngineRoom = nav.RevealEngineRoom;
             }
+        }
+
+        private void ObserveThinking(ChatThresholdViewModel? vm)
+        {
+            if (ReferenceEquals(_observed, vm)) return;
+            if (_observed != null) _observed.PropertyChanged -= OnThinkingChanged;
+            _observed = vm;
+            if (_observed != null) _observed.PropertyChanged += OnThinkingChanged;
+        }
+
+        private void OnThinkingChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(ChatThresholdViewModel.IsThinking) && !string.IsNullOrEmpty(e.PropertyName)) return;
+            Dispatcher.UIThread.Post(() => { if (ReferenceEquals(sender, _observed)) SyncThinking(); });
+        }
+
+        /// <summary>WPF SyncThinking: re-read on every room show; hidden ancestors park the clock.</summary>
+        public void SyncThinking()
+        {
+            if (IsLoaded && IsEffectivelyVisible && ViewModel?.IsThinking == true)
+            {
+                StartThinking();
+                ScrollThreadToEnd(); // WPF SyncThinking(true)
+            }
+            else StopThinking();
+        }
+
+        public void StartThinking()
+        {
+            if (!IsLoaded || !IsEffectivelyVisible || _thinking?.IsRunning == true) return;
+            // The shared 30 fps beat: parks itself while hidden or minimised, test-clocked (BeatLoop.Time).
+            _thinking ??= new BeatLoop(this, seconds => PaintThinking(seconds * 1000));
+            _thinking.Start();
+        }
+
+        public void StopThinking()
+        {
+            _thinking?.Stop();
+            Dot1.Opacity = Dot2.Opacity = Dot3.Opacity = 1;
+        }
+
+        /// <summary>One beat, stepped explicitly by headless tests.</summary>
+        internal void PaintThinking(double milliseconds)
+        {
+            if (_thinking?.IsRunning != true) return;
+            Dot1.Opacity = CompanionThinkingPulse.Opacity(milliseconds, 0);
+            Dot2.Opacity = CompanionThinkingPulse.Opacity(milliseconds, 1);
+            Dot3.Opacity = CompanionThinkingPulse.Opacity(milliseconds, 2);
         }
 
         /// <summary>Follows a live thread whose collection mutates in place.</summary>
