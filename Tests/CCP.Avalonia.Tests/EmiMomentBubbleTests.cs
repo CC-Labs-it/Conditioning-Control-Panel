@@ -92,6 +92,18 @@ public sealed class EmiMomentBubbleTests
     });
 
     [Fact]
+    public Task BubbleWearsThePixelFontAndATail() => Run(win =>
+    {
+        new Steps(win);
+        win.ShowAsk(Ask());
+        Assert.Contains("Press Start 2P", win.MomentBubbleTextBlock!.FontFamily.ToString());
+        Assert.True(win.MomentBubbleTail is { IsVisible: true, Points.Count: 3 });
+        Assert.Same(win, TopLevel.GetTopLevel(win.MomentBubbleTail));
+        Assert.True(win.MomentBubbleTail.IsEffectivelyVisible);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task ReplyLandsAfterAChip() => Run(win =>
     {
         var clock = new Steps(win);

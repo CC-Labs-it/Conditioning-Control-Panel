@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.Controls.Shapes;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.EmiDesk;
@@ -42,6 +43,11 @@ public partial class EmiDeskWindow
     private LineDraw? _parkedLine;
     public bool AskLive => _ask != null;
     internal string? MomentBubbleText => _speechText?.Text;
+    internal TextBlock? MomentBubbleTextBlock => _speechText;
+    internal Polygon? MomentBubbleTail { get; private set; }
+    /// <summary>WPF EmiFace.PixelFont: the shipped Press Start 2P, system monospace behind it.</summary>
+    private static readonly FontFamily BubbleFont =
+        new("avares://CCP.Avalonia/Resources/emi/fonts#Press Start 2P, Consolas, monospace");
     internal Action<string> RunAskEffect = effect =>
     {
         if (effect == "book:open") EmiDeskService.Instance.Window?.OpenBook();
@@ -51,12 +57,20 @@ public partial class EmiDeskWindow
     {
         if (_speech != null) return;
         _speechText = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 11,
-            Foreground = Brush.Parse("#FF69B4") };
+            FontFamily = BubbleFont, Foreground = Brush.Parse("#FF69B4") };
         _answerChips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
         _speech = new StackPanel { Spacing = 8, Width = 280, IsVisible = false };
-        _speech.Children.Add(new Border { Background = Brush.Parse("#181832"),
-            BorderBrush = Brush.Parse("#FF69B4"), BorderThickness = new Thickness(1),
-            Padding = new Thickness(8), Child = _speechText });
+        // WPF LayoutTail (:478): a 10 DIP wedge off the bubble's lower-left corner, overlapping its edge by 1 px.
+        MomentBubbleTail = new Polygon { Fill = Brush.Parse("#181832"), Stroke = Brush.Parse("#FF69B4"),
+            StrokeThickness = 1, Margin = new Thickness(0, -1, 0, 0), HorizontalAlignment = HorizontalAlignment.Left,
+            Points = new System.Collections.Generic.List<Point> { new(10, 0), new(0, 0), new(0, 10) } };
+        _speech.Children.Add(new StackPanel { Children =
+        {
+            new Border { Background = Brush.Parse("#181832"),
+                BorderBrush = Brush.Parse("#FF69B4"), BorderThickness = new Thickness(1),
+                Padding = new Thickness(8, 8, 10, 8), Child = _speechText },
+            MomentBubbleTail,
+        } });
         _speech.Children.Add(_answerChips);
         BubbleHost.Children.Add(_speech);
         // The transparent canvas has no background: only the chips take input.
