@@ -263,9 +263,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private double _resizeStartWidth;
 
         /// <summary>True while a chain is on screen.</summary>
-        // ponytail: needs the chain player (EmiChainPlayer, WPF head only; the chain data is in
-        // Core as EmiChains), wired when the player moves to Core. Nothing on this head can start a chain, so nothing is ever live.
-        public bool ChainLive => false;
+        // ponytail: the pat faces are the only chain this head plays; the full chain player (EmiChainPlayer, WPF head only;
+        // the chain data is in Core as EmiChains) is wire-win-emi-desk-b.
+        public bool ChainLive => _patFeedback is not null;
 
         /// <summary>True while a summon or dismiss transition is running.</summary>
         public bool Transiting => _transiting;
@@ -905,6 +905,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>Kill the running chain without firing its done hook.</summary>
         public void CancelChain()
         {
+            StopPatFeedback();
             try { OnBubbleTextCore(null); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
         }
@@ -925,10 +926,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>True when something is on screen that an idle beat must not interrupt.</summary>
         private bool Busy()
         {
-            // ChainLive is the WPF gate's `_player.IsLive` and is constant false on this head. It is
-            // in the expression anyway: this is the one place that decides whether an idle beat may
-            // interrupt her, and a gate that has to be REMEMBERED when the chain player lands is a
-            // gate that will be forgotten.
+            // ChainLive is the WPF gate's `_player.IsLive` (here: a pat face is running).
             if (PresentationActive || _transiting || ChainLive || InputLocked) return true;
             bool glass = false;
             try { OnGlassLiveQuery(ref glass); }
@@ -1610,14 +1608,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 PlayPatSfx();   // the hover half of the one gesture - see PetFromClick
 
                 // Inside the cooldown she only winks, so spam cannot loop the show (widget.js pet()).
-                if (DateTime.UtcNow < _petCooldownUntil)
+                if (PatClock.GetUtcNow().UtcDateTime < _petCooldownUntil)
                 {
-                    PlayChain("wink", bodyFrameOverride: "pet");
+                    StartPatFeedback(EmiPatFeedback.Wink);
                 }
                 else
                 {
-                    _petCooldownUntil = DateTime.UtcNow.AddMilliseconds(PetCooldownMs);
-                    PlayChain("pet");
+                    _petCooldownUntil = PatClock.GetUtcNow().UtcDateTime.AddMilliseconds(PetCooldownMs);
+                    StartPatFeedback(EmiPatFeedback.Pet);
                     CountPat();
                 }
                 FireDeskEvent("petted");
@@ -2544,30 +2542,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         // React.cs and Fx.cs are no longer among them: both are real, above.
 
         /// <summary>ponytail: EmiDeskWindow.Alive.cs - the 100 ms gaze/idle poll. Starts with her.</summary>
-        private void StartAlive() { }
+        private void StartAlive() { _patPokes.Reset(); }
 
         /// <summary>ponytail: EmiDeskWindow.Alive.cs - stops the poll when she goes.</summary>
-        private void StopAlive() { }
+        private void StopAlive() { StopPatFeedback(); _patPokes.Reset(); }
 
-        /// <summary>
-        /// The click pat (WPF EmiDeskWindow.React.cs:119): disarms the hover pet so one gesture
-        /// cannot pat twice, plays the pat cue on every touch (EmiSfx's 130 ms floor stops a
-        /// double click machine-gunning it), and past the 6 s cooldown plays the pet chain and
-        /// counts the pat. ponytail: WPF's ChainLive guard, summon-cut, poke ladder (NotePoke /
-        /// PlayPokeFlick / glee streak) and the flick inside the cooldown are not on this head.
-        /// </summary>
+        /// <summary>WPF React.cs:119: the click pat shares the hover cooldown and books each poke.</summary>
         private void PetFromClick()
         {
             try
             {
                 if (_transiting || InputLocked) return;
+                if (ChainLive) return;   // WPF React.cs:132-137: a live chain eats the click (summon-cut is -b)
                 DisarmPet();
                 _petArmed = true;
                 RaiseActivity();
                 PlayPatSfx();
-                if (DateTime.UtcNow < _petCooldownUntil) return;
-                _petCooldownUntil = DateTime.UtcNow.AddMilliseconds(PetCooldownMs);
-                PlayChain("pet");
+                var now = PatClock.GetUtcNow().UtcDateTime;
+                var step = _patPokes.Note(now);
+                if (step == EmiPokeStep.Glee)
+                {
+                    _petCooldownUntil = now.AddMilliseconds(PetCooldownMs);
+                    EmiSfx.Chime();
+                    StartPatFeedback(EmiPatFeedback.Glee);
+                    return;
+                }
+                if (now < _petCooldownUntil)
+                {
+                    StartPatFeedback(step == EmiPokeStep.Rage ? EmiPatFeedback.Rage
+                        : step == EmiPokeStep.Annoyed ? EmiPatFeedback.Annoyed : EmiPatFeedback.Flick);
+                    return;
+                }
+                _petCooldownUntil = now.AddMilliseconds(PetCooldownMs);
+                StartPatFeedback(EmiPatFeedback.Pet);
                 CountPat();
                 FireDeskEvent("petted");
             }
