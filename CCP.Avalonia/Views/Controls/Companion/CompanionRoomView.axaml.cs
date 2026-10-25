@@ -52,8 +52,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             AttentionZone.ViewModel?.Sync();
         }
 
-        internal void SetPreviewZones(ChatThresholdViewModel chat, MemoryDiaryViewModel memory, AttentionGaugeViewModel attention)
+        /// <summary>The preview harness's page state: WPF MockCompanionRoomVm's zone bag plus its
+        /// navigator fan-out (hero pills, chat jump link, awareness fine-tuning).</summary>
+        internal void SetPreviewZones(CompanionRoomPreviewWindow.PreviewPage page)
         {
+            var (chat, memory, attention) = (page.Chat, page.Memory, page.Attention);
+            var hero = CompanionHeroCardViewModel.CreatePreview(page.Hero);
+            hero.Host = this;
+            HeroZone.ViewModel = hero;
+            PersonalityZone.ViewModel = MakeHerYoursViewModel.CreatePreview(PersonalityZone, page.PersonalityLive);
+            AwarenessZone.ViewModel = AwarenessPrivacyViewModel.CreatePreview(
+                () => RevealWorkshop(CompanionRoomAnchors.WorkshopAwarenessCell), page.Awareness);
+            EngineZone.DataContext = EngineRoomVm.CreatePreview(EngineZone, page.Engine);
             AttentionZone.ViewModel = attention;
             // The replacement detaches the old live chat VM from its session before seating
             // the mock. Wire the navigator now: Loaded does not repeat on a state-strip click.
@@ -62,10 +72,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             MemoryZone.ViewModel = memory; // DataContextChanged -> ForgetConfirm.Bind disarms the two-step
             ChatZone.ScrollThreadToEnd();
             ChatZone.PlayDormantShimmer();
-            // ponytail: these zones have no preview mocks here yet and write real settings (hero mute,
-            // provider, awareness, presets), so the debug harness shows them inert instead.
-            foreach (var live in new Control[] { HeroZone, PersonalityZone, AwarenessZone, EngineZone, PermissionsZone, WorkshopZone })
-                live.IsEnabled = false;
+            WorkshopZone.ViewModel = new WorkshopPreviewVm();
+            PermissionsZone.UsePreview();
         }
 
         // =====================================================================================
