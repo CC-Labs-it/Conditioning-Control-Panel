@@ -12,7 +12,7 @@
         Win32Properties.WindowCornerPreference="Round"
         WindowStartupLocation="CenterScreen"
         SystemDecorations="None" CanResize="True"
-        FontFamily="Segoe UI">
+        FontFamily="Segoe UI" DragDrop.AllowDrop="True">
 
     <Window.Resources>
         <ControlTheme x:Key="LauncherCta" TargetType="Button">

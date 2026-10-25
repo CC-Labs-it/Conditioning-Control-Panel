@@ -139,7 +139,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>WPF MenuItemMute_Click: her voice setting (read live by <see cref="IsMuted"/>).</summary>
         internal void OnMenuMute()
         {
-            CoreSettings.Current.AvatarMuted = !CoreSettings.Current.AvatarMuted;
+            // An explicit choice replaces a temporary minimize mute (WPF toggles effective _isMuted).
+            CoreSettings.Current.AvatarMuted = !IsMuted;
+            _windowMuted = false;
             CoreSettings.Save();
             UpdateQuickMenuState();
             QuickShell?.SyncHero();   // WPF SyncQuickControlsUI(muteAvatar)
@@ -207,8 +209,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             var mute = QuickItem("MenuItemMute");
             if (mute != null)
             {
-                mute.Header = MenuLabel(s.AvatarMuted ? "menu_mute_avatar_on" : "menu_mute_avatar_off");
-                mute.Foreground = s.AvatarMuted ? MenuRed : Brushes.White;
+                mute.Header = MenuLabel(IsMuted ? "menu_mute_avatar_on" : "menu_mute_avatar_off");
+                mute.Foreground = IsMuted ? MenuRed : Brushes.White;
             }
             var whispers = QuickItem("MenuItemMuteWhispers");
             if (whispers != null)

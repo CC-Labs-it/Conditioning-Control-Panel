@@ -122,7 +122,6 @@
 // leaving it stubbed meant every one of them landed on whichever module the rack had selected last.
 
 using System;
-using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Models;
 using Serilog;
@@ -269,10 +268,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF's caption on the logo face, refreshed on return, restore and each learned gesture.</summary>
         internal void RefreshDashboardToggleHint()
         {
-            // ponytail: the click-choice popup/inverted routing belongs to the favorites-rail lane.
-            // This head currently uses right-click toggles, so the caption describes that live gesture.
-            if (SettingsPage?.FindControl<global::Avalonia.Controls.TextBlock>("DashToggleHint") is { } hint)
-                hint.IsVisible = Services.DashboardToggleHintRule.ShouldShow(CoreSettings.Current.DashboardToggleHintUses);
+            // Refresh the saved gesture choice as well as the learned-toggle counter, including
+            // after a settings restore replaces the profile or a language change repaints the rail.
+            SettingsPage?.RefreshClickPreference();
         }
 
         /// <summary>WPF RefreshWallActiveStates (MainWindow.Presets.cs:1404): the ring on every wall
