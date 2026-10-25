@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+
+### Shell Play wall completion slice
+
+1. WPF `MainWindow/MainWindow.PlayTab.cs` and `Views/Tabs/PlayTabView.xaml`: open Play; after Piece by Piece, confirm Back Room, Down the Rabbit Hole, the Arcademy, Racing Thoughts, then Web App, with their localized titles, blurbs and art. The eight native-game buttons explain that their hosts are unavailable on this build. Rows: `shell-play-tab`
+2. WPF `MainWindow/MainWindow.PlayTab.cs` RefreshPlayCards/RefreshPlayFreeStamps: free account locks DtRH and Arcademy; a DtRH free day lifts only its band and stamps FREE TODAY. Lab ownership lifts both bands and removes the gift stamp. Change entitlement while Play is open and confirm repaint. Rows: `shell-play-tab`
+3. WPF `MainWindow/MainWindow.PlayTab.cs` OpenPlayWebApp: click Web App; the browser opens the CC Labs app without changing tabs, then the One Account banner beat retires. With no browser handler, the copied-link prompt includes the URL; dismiss it and confirm the beat retires. In automated tests, use only the existing sandbox profile and headless windows. Rows: `shell-play-tab`

@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -18,6 +20,55 @@ namespace CCP.Avalonia.Tests;
 /// zone, the Graded Intake card's four pass states, and the two doors that land on a section.</summary>
 public sealed class PlayWallTests
 {
+    [Fact]
+    public async Task WebAppCardUsesBrowserFallbackThenRetiresBanner()
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<AvApp>().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var seen = CoreSettings.Current.SeenFeatureIntros;
+            bool hadKey = seen.Remove(MainShellWindow.WebBannerSeenKey);
+            var shell = new MainShellWindow();
+            shell.Show();
+            try
+            {
+                shell.ShowTab("play");
+                Dispatcher.UIThread.RunJobs();
+                var play = shell.Named<Control>("PlayTab")!;
+                var button = play.FindControl<Button>("BtnPlayWebApp")!;
+                Assert.True(button.IsEnabled);
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                // The sandbox refuses the public URL: no real browser or desktop is touched.
+                for (int i = 0; i < 50 && !shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>().Any(); i++)
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    await Task.Delay(10);
+                }
+                var prompt = Assert.Single(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>());
+                Assert.Contains("https://app.cclabs.app", prompt.FindControl<TextBlock>("TxtMessage")!.Text);
+                Assert.DoesNotContain(MainShellWindow.WebBannerSeenKey, seen);
+                prompt.Close();
+                for (int i = 0; i < 50 && !seen.Contains(MainShellWindow.WebBannerSeenKey); i++)
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    await Task.Delay(10);
+                }
+                Assert.Contains(MainShellWindow.WebBannerSeenKey, seen);
+                Assert.Equal("play", shell.CurrentTab);
+            }
+            finally
+            {
+                foreach (var window in shell.OwnedWindows.ToArray()) window.Close();
+                shell.Close();
+                if (!hadKey) seen.Remove(MainShellWindow.WebBannerSeenKey);
+                else if (!seen.Contains(MainShellWindow.WebBannerSeenKey)) seen.Add(MainShellWindow.WebBannerSeenKey);
+            }
+        });
+    }
+
     [Fact]
     public void IntakeCardFollowsThePass_GamesAreHonest_DoorsLandOnTheirSection()
     {
@@ -77,14 +128,20 @@ public sealed class PlayWallTests
                 Assert.False(band.IsVisible);
                 Assert.False(line.IsVisible);
 
-                // GAMES: four cards, no host on this head, so the Play button refuses honestly.
-                foreach (var n in new[] { "BtnPlayBreakoutDemo", "BtnPlayBreakout", "BtnPlayGoon", "BtnPlayChess" })
+                // GAMES: eight cards, no host on this head, so the Play button refuses honestly.
+                foreach (var n in new[] { "BtnPlayBreakoutDemo", "BtnPlayBreakout", "BtnPlayGoon", "BtnPlayChess", "BtnPlayBackRoom", "BtnPlayDtrh", "BtnPlayArcademy", "BtnPlayRacingThoughts" })
                 {
                     var b = C<Button>(n);
                     Assert.False(b.IsEnabled, n);
                     Assert.Equal(Loc.Get("exclusives_not_on_this_build"), ToolTip.GetTip(b));
                 }
                 Assert.NotNull(C<Image>("PlayBreakoutArt").Source);
+                var games = (Panel)C<Grid>("SlotBackRoom").Parent!;
+                Assert.Equal(3, ((global::Avalonia.Controls.Primitives.UniformGrid)games).Columns);
+                Assert.Equal(new[] { "SlotBackRoom", "SlotDtrh", "SlotArcademy", "SlotRacingThoughts", "SlotWebApp" },
+                    games.Children.Skip(4).Select(c => c.Name));
+                foreach (var name in new[] { "BackRoom", "Dtrh", "Arcademy", "RacingThoughts", "WebApp" })
+                    Assert.NotNull(C<Border>("Play" + name + "HeroPlate").Background);
 
                 // "Configure in settings" lands on the Devices section (WPF OpenDeviceSettings).
                 C<Button>("BtnOpenDeviceSettings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
