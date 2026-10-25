@@ -1,7 +1,8 @@
 // WPF MainWindow.TabFxTakeoverLabStatus.cs: the four status intents and global ambient gates.
 // Avalonia uses sibling Border.BoxShadow layers on the shared beat; the feature owns the dot's
 // fill, and the dot's opacity is pinned to 1 (only the sibling layer breathes). Lab remains retired, and the Takeover orb owns its own Skia clock.
-// ponytail: Awareness has no live head engine yet; do not pulse merely because a preference is on.
+// Awareness: AwarenessTabView.UpdateStatusIndicator calls SetAwarenessStatusPulse with the master
+// switch, as WPF UpdateAwarenessStatusIndicator(masterOn) does (MainWindow.Awareness.cs:78,375).
 
 using System;
 using System.Collections.Generic;
