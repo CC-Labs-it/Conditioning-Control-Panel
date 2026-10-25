@@ -19,9 +19,12 @@ public sealed class QuestRewardWireTests
     {
         if (global::Avalonia.Application.Current is null)
             AvAppBuilder();
+        var first = AvApp.ShowPerfectWeekBonus(3060, 7);
         var popup = AvApp.ShowPerfectWeekBonus(3060, 7);
         try
         {
+            // WPF stacks bonus popups: a second one does not close the first.
+            Assert.True(first.IsVisible);
             Assert.True(popup.IsVisible);
             Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("skill_perfect_week_name_popup"),
                 popup.FindControl<global::Avalonia.Controls.TextBlock>("TxtName")!.Text);
@@ -30,9 +33,10 @@ public sealed class QuestRewardWireTests
             var surface = Assert.Single(ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All,
                 s => s.Id == "perfect-week-bonus");
             surface.Stop(null);
+            Assert.False(first.IsVisible);
             Assert.False(popup.IsVisible);
         }
-        finally { popup.Close(); }
+        finally { first.Close(); popup.Close(); }
     });
 
     private static void AvAppBuilder() => ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()

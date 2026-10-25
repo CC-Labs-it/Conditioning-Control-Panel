@@ -32,25 +32,25 @@ public partial class App
         };
     }
 
-    private static Views.Windows.AchievementPopup? _perfectWeekPopup;
+    // WPF SkillTreeService.cs:540-546 lets bonus popups stack; panic closes them all.
+    private static readonly System.Collections.Generic.List<Views.Windows.AchievementPopup> _perfectWeekPopups = new();
 
     internal static Views.Windows.AchievementPopup ShowPerfectWeekBonus(int xp, int streak)
     {
-        StopPerfectWeekBonus();
         var popup = new Views.Windows.AchievementPopup(
             Loc.Get("skill_perfect_week_name_popup"),
             Loc.GetF("skill_perfect_week_flavor_popup", streak, xp),
             "skills/perfect_bimbo_week.png");
-        _perfectWeekPopup = popup;
-        popup.Closed += (_, _) => { if (_perfectWeekPopup == popup) _perfectWeekPopup = null; };
+        _perfectWeekPopups.Add(popup);
+        popup.Closed += (_, _) => _perfectWeekPopups.Remove(popup);
         popup.Show();
         return popup;
     }
 
     internal static void StopPerfectWeekBonus()
     {
-        _perfectWeekPopup?.Close();
-        _perfectWeekPopup = null;
+        foreach (var popup in _perfectWeekPopups.ToArray()) popup.Close();
+        _perfectWeekPopups.Clear();
     }
 
 }
