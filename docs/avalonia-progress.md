@@ -3134,3 +3134,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-ctrl-emi-dock: +411
 - EMI rail chip ported (64px layout, EmiFace renderer, Core EmiFaceRules; BoxShadow glow pulse replaces the animated Effect); row stays stub, knock/first-contact flow left to lane -b.
 - Review fixes: knock test asserts pulse timelines instead of sleeps; face test locks the fill and lift numbers; rgate green except the listed RaceTrack race.
+
+## avalonia-port/wire-shell-dashboard-fx: +193
+- Browser frame 2.4 s sweep / 14 s cycle and loading 0.35-1 status pulse on BeatLoop with motion/focus/hidden-tab gates; row stays stub (mystery tile + logo sheen -> wire-shell-dashboard-fx-b).
+- Review fixes: NotEmpty guard (fail-proven), honest fail-proven wording, failed-status gap recorded, loading match via IconText.BareLoc (icon-loc ratchet).; unused Localization using dropped.

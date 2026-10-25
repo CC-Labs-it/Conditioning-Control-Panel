@@ -31,9 +31,10 @@
                                            LogoFlipSkew, LogoDriftScale, LogoSheenSlide,
                                            IntakePassArtBrush, IntakePassCtaScale, MysteryFlipScale,
                                            MysteryFlipSkew, MysteryRevealArtBrush, MysteryBadgeScale,
-                                           VaultCtaScale, MarqueeTransform, BrowserFrameStop* - is
-                                           driven from MainWindow.DashboardFx / .ProgramBanner,
-                                           which is a stub here, so nothing is lost yet.
+                                           VaultCtaScale, MarqueeTransform - is driven from
+                                           MainWindow.DashboardFx / .ProgramBanner; the browser
+                                           frame stops are reached from code
+                                           (MainShellWindow.DashboardFx ApplyBrowserFx).
        Popup StaysOpen="False" + AllowsTransparency -> IsLightDismissEnabled="True"
        CheckBox LayoutTransform        ->  RenderTransform (Avalonia's layout transform needs a
                                            LayoutTransformControl wrapper; the 0.85 scale is
