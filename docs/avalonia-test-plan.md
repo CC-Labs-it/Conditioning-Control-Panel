@@ -673,3 +673,5 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+21. EMI frame sequences: summon from the dock and watch the wake faces after the CRT; dismiss during the smoke and confirm she leaves after the wink, CRT collapse and sparkles without waking again. Hover her head to trigger the pet chain, and drag/drop or fling to exercise landing/dizzy faces. During a sequence press panic and confirm the face clock stops; dismiss/re-summon and confirm it can play again. WPF `Services/EmiDesk/EmiChainPlayer.cs`, `Windows/EmiDesk/EmiDeskWindow.Fx.cs`. Rows: `win-emi-desk`. Bubble/voice, art and body moves remain missing; this step does not certify them.
