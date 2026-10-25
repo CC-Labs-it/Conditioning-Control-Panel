@@ -5,8 +5,8 @@
 // The mic opens only under WPF's conditions: VoiceInputRules.ModesToRun (consent + an armed mode +
 // premium or the "voice" free day + an available engine), re-read at every reconcile.
 // ponytail: no sherpa KWS spotter (the Vosk wake grammar is WPF's fallback path). Intents with no
-// seam here (spiral, pink, mind wipe, quiz, keyword triggers, bubble count, shake, deeper,
-// session pause/resume, volume/mute, video pause/resume) are left out of the grammar.
+// seam here (spiral, pink, keyword triggers, shake, deeper,
+// session pause/resume, video pause/resume) are left out of the grammar.
 
 using System;
 using System.Linq;
@@ -128,13 +128,52 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "subliminals_off" when CoreSubliminal.ShowProvider != null => CoreSubliminal.Stop,
             "bouncing_on" when CoreBouncingText.StartAction != null => CoreBouncingText.Start,
             "bouncing_off" when CoreBouncingText.StopAction != null => CoreBouncingText.Stop,
+            "wipe_once" when CoreMindWipe.TriggerOnceProvider != null => CoreMindWipe.TriggerOnce,
+            "quiz_once" when CoreEngine.PopQuiz != null => () => CoreEngine.PopQuiz?.Show(),
+            "count_once" when CoreEngine.BubbleCount != null => () => CoreEngine.BubbleCount?.Trigger(forceTest: true),
+            "mute" => () => ApplyVoiceMute(true),
+            "unmute" => () => ApplyVoiceMute(false),
+            "louder" => () => AdjustVoiceVolume(15),
+            "quieter" => () => AdjustVoiceVolume(-15),
             "lock_once" when CoreLockCard.ShowHandler != null => () => CoreLockCard.Show(),
             "freeze_once" when CoreSubliminal.BambiFreezeProvider != null => CoreSubliminal.TriggerBambiFreeze,
             "takeover_on" => () => Autonomy.Start(),
             "takeover_off" => () => Autonomy.Stop(),
             "stop_listening" => StopVoiceInput,
+            "mantra" => () => { }, // WPF: the listen funnel, not an action, handles this intent.
             _ => null,
         };
+
+        private int _voicePreMuteVolume;
+
+        // Adapted from parity/trunk VoiceActions and WPF ApplyVoiceMute. This head's tube reads
+        // AvatarMuted live; the existing binder refreshes the audio controls without write-back.
+        internal void ApplyVoiceMute(bool muted)
+        {
+            var s = CoreSettings.Current;
+            if (muted)
+            {
+                if (s.MasterVolume > 0) _voicePreMuteVolume = s.MasterVolume;
+                s.MasterVolume = 0;
+            }
+            else s.MasterVolume = _voicePreMuteVolume > 0 ? _voicePreMuteVolume : 70;
+            s.SubAudioEnabled = !muted;
+            s.AvatarMuted = muted;
+            if (muted) _avatarTubeWindow?.StopVoiceCommandAudio();
+            _avatarTubeWindow?.UpdateQuickMenuState();
+            SyncHero();
+            AdjustVoiceVolume(0);
+        }
+
+        // WPF MainWindow.Patreon.cs AdjustMasterVolume/SetMasterVolume: notify every mirror.
+        private void AdjustVoiceVolume(int delta)
+        {
+            CoreSettings.Current.MasterVolume = Math.Clamp(CoreSettings.Current.MasterVolume + delta, 0, 100);
+            Platform.LayeredAudio.Instance?.SetMasterVolumeLive();
+            MandatoryVideoOverlay.Instance.UpdateVolume();
+            Controls.AppSettings.AudioSettingsBinder.RaiseChanged();
+            CoreSettings.Save();
+        }
 
         /// <summary>WPF TriggerPanicFromRemote: the spoken safe word. Deliberately NOT refused under
         /// Lockdown or a strict lock - it is the intended way out (decisions "Panic ↔ mic").</summary>

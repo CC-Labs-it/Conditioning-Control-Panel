@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## fin4 She's Listening command routing
+
+1. WPF `Services/AutonomyService.VoiceCommandHost.cs` Rows: `views-tab-she-listening`. With a consented, entitled mic, say “Hey Bambi wipe my mind”, “Hey Bambi quiz me”, and “Hey Bambi count the bubbles” with the engine off. Wipe invokes the installed host; quiz obeys interaction deferral and never stacks; count starts standalone even when its feature switch is off. Removing a host removes its intent from grammar/help and the tab.
+2. WPF `MainWindow/MainWindow.Patreon.cs:2228-2310` Rows: `views-tab-she-listening`. Say “Hey Bambi louder” / “quieter”: master changes by 15, clamps at 0/100, updates Settings and dashboard readouts and live video/layer audio. Say “mute” twice, then “unmute”: silence cuts the current voice clip, disables whispers and mutes the avatar; unmute restores the previous positive master (70 if none) and enables voice/whispers. Confirm panic still closes wipe/quiz/count and silences the tube.
+3. WPF `Services/AutonomyService.VoiceCommandHost.cs:107` Rows: `views-tab-she-listening`. Enable spoken mantras; say “Hey Bambi give me a mantra”. The explicit mantra intent is in the command grammar and hands off to the existing mantra prompt instead of executing an inline action.
