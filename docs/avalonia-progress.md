@@ -3227,3 +3227,7 @@ Panel crossfade through launcher doors (WPF 180/260 ms + guard) on the shared Fr
 - Leaderboard podium entrance + gold glow breath on the shared beat, refresh-only rank washes (cap 12), rank-snapshot engine moved to Core and shared by both heads, you-bar rank delta wired; glow blur tier-capped as WPF.
 - Tests: LeaderboardFxTests (2, fail-proven), LeaderboardRankSnapshotTests (2). Ledger: shell-leaderboard-fx wired; shell-leaderboard / views-tab-leaderboard stale delta notes corrected.
 - Limits: gate red only on known flakes (GoonClock P108, RaceTrack); WPF tests compiled not run; no live Keincheck run.
+
+## avalonia-port/wire-shell-login: +397
+
+Post-sign-in Discord achievement-sharing offer (WPF Login.cs:214 / Patreon.cs:836-890): owned Yes/No question, Inbox deferral under games/launcher/hidden panel, working Share Achievements checkbox; review fixes for Yes/No labels, level repaint during the question and no settings-file polling. Row shell-login stays stub (follow-up wire-shell-login-b).
