@@ -2694,7 +2694,12 @@ namespace ConditioningControlPanel
             // Initialize companion leveling system (v5.3) - migrate existing users if needed
             CompanionService.MigrateFromLegacy(Settings.Current);
             Companion = new CompanionService();
-            CommunityPrompts = new CommunityPromptService();
+            CommunityPrompts = new CommunityPromptService(validatorProvider: () => PromptValidator);
+            CommunityPrompts.ValidationAdvisory += (_, count) => Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try { MessageBox.Show(Loc.GetF("community_prompt_warning_body", count), Loc.Get("community_prompt_warning_title"), MessageBoxButton.OK, MessageBoxImage.Warning); }
+                catch (Exception ex) { Logger?.Debug("Community prompt advisory failed: {Error}", ex.Message); }
+            }));
 
             // Initialize personality preset system (v5.5) - migrate from legacy SlutModeEnabled
             Personality = new PersonalityService();
@@ -3161,7 +3166,14 @@ namespace ConditioningControlPanel
             // retired in the Redis bandwidth pass (2026-09-15) - the cross-device XP adopt
             // it fed now reads level/xp off the heartbeat response instead
             // (ProfileSyncService.SendHeartbeatAsync -> TryAdoptFromProfilePoll).
-            Descent = new Services.Descent.DescentService();
+            Descent = new Services.Descent.DescentService
+            {
+                ProgressionReceived = (level, xp, season, epoch) =>
+                {
+                    ProfileSync?.ApplyServerCurveEpoch(epoch, "profile poll");
+                    ProfileSync?.TryAdoptFromProfilePoll(level, xp, season);
+                },
+            };
             // Costs one allocation and issues nothing. See the property doc: it cannot act until
             // a server offer arrives.
             DescentMigration = new Services.Descent.DescentMigrationService();
@@ -3262,6 +3274,7 @@ namespace ConditioningControlPanel
             // The service lives in Core; its 15 s refresh ticks hop back to this UI thread (was a DispatcherTimer).
             DiscordRichPresenceService.PostToUi = a => Dispatcher.BeginInvoke(a);
             DiscordRpc = new DiscordRichPresenceService();
+            CoreDiscord.ServiceProvider = () => DiscordRpc;
             if (Settings.Current.DiscordRichPresenceEnabled && Settings.Current.HasLinkedDiscord)
             {
                 DiscordRpc.IsEnabled = true;

@@ -8,24 +8,17 @@
 //    BtnPrivacyPolicy_Click already exist as that control's own stubs. Restoring them here would
 //    be a second copy nothing routes to. Cloud backup gets wired in THAT file.
 //
-// 2. NOT WIRED BY DECISION (docs/avalonia-decisions.md, 2026-10-09, rows-cloud-remember). The head now
-//    has an identity (CCP.Avalonia/Platform/AccountSeed.cs, SecretStore, V2AuthService), but every body
-//    needs the backup half of ConditioningControlPanel/Services/Settings/ProfileSyncService.cs
-//    (BackupSettingsAsync, GetSettingsBackupInfoAsync, RestoreSettingsFromCloudAsync, ExportDataAsync,
-//    ExcludedBackupProperties, SettingsBackupBudget, PreserveLocalOnlyFields). Wiring it would upload
-//    Linux settings and restore Windows backups here (and the reverse) with no path translation for
-//    CustomAssetsPath / the asset lists, against a server contract still pending owner confirmation.
-//    Needs an oracle-deep design first.
+// 2. Backup now / Restore / the status line are wired there (decision 2026-10-22, cloud settings
+//    backup: Core CloudSettingsBackup, absolute paths machine-local). Export stays
+//    wire-views-settings-account-b-next.
 //
 // Members, so nothing disappears silently:
 //   internal void ReloadSettingsUiAfterRestore()
-//       Re-seeds the Settings door from the swapped AppSettings. Needs LoadSettings() and its
-//       _isLoading guard, which here are spread across Views/Controls/AppSettings/*Section.axaml.cs.
-//       No caller either - only the manual restore and App.CheckCloudSettingsRestoreAsync.
+//       The manual restore repaints through CurrentReplaced + AppSettingsTabView.RefreshSections.
+//       The startup restore prompt (App.CheckCloudSettingsRestoreAsync) is not ported.
 //   internal async void BtnBackupSettingsNow_Click(…) / BtnRestoreSettings_Click(…)
-//       ProfileSyncService, per (2). The restore path's LOCAL-WINS field list (progression,
-//       entitlement windows, OpenRouterApiKey) is settings-model logic that would port unchanged -
-//       there is just no restore to run it after.
+//       Ported to AccountSettingsSection.BackupNowAsync / RestoreAsync (the local-wins list is
+//       CloudSettingsBackup.KeepLocal); the repaint is CurrentReplaced + RefreshSections.
 //   internal async void BtnExportData_Click(…)
 //       ExportDataAsync, then Microsoft.Win32.SaveFileDialog. Avalonia's twin is
 //       StorageProvider.SaveFilePickerAsync on this window; the export it would save is what's missing.

@@ -41,8 +41,7 @@
              view needs it. Setters only, BasedOn the Fluent default: the WPF template hangs a
              ScrollViewer named PART_ContentHost inside a Border and Avalonia's TextBox has no such
              part, so copying the template would leave a box that never draws its text (CLAUDE.md
-             trap 4). FocusGlowTextBox in Theme/Styles.xaml is shaped the same way for the same
-             reason. -->
+             trap 4). -->
         <ControlTheme x:Key="DarkTextBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
             <Setter Property="Background" Value="#252542"/>
             <Setter Property="Foreground" Value="White"/>
