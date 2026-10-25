@@ -22,6 +22,8 @@ Views/Windows/ProgramsIntroPopup.axaml :: Text="●" :: list bullets beside pros
 Views/Dialogs/LoginDialog.axaml :: PasswordChar="●" :: PasswordChar mask, typography (content (c).4)
 
 Views/Windows/FeatureIntroPopup.axaml.cs :: "●" :: bullet marker of the intro card list, typography (decision 2026-10-10: bullets stay)
+Views/Controls/FriendsDrawer.Feed.cs :: "●" :: lit step pip of a send trail, typographic progress dots as WPF FriendsDrawer.Trail.cs (content (c).4)
+Views/Controls/FriendsDrawer.Feed.cs :: "○" :: unlit step pip of a send trail, typographic progress dots as WPF FriendsDrawer.Trail.cs (content (c).4)
 Views/Controls/Companion/Themes/CompanionTheme.axaml :: <Setter Property="PasswordChar" Value="●"/> :: PasswordChar mask, typography (content (c).4)
 MainWindow.axaml :: ← Back to the app :: arrow inside a sentence, named by the oracle (content (c).4)
 Views/Chaos/ChaosSlotPickerWindow.axaml :: Descend  ↓ :: arrow inside a sentence, named by the oracle (content (c).4)

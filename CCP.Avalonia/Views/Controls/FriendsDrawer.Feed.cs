@@ -62,9 +62,15 @@ public sealed partial class FriendsDrawer
         _feedBox.IsVisible = lines.Count > 0;
         if (lines.Count == 0) return;
         int fresh = lines.Count(IsNew);
-        var head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 10, 8, 4) };
+        // WPF FeedHead: one Grid cell, the count right-aligned over the title.
+        var head = new Grid { Margin = new Thickness(8, 10, 8, 4), Tag = "friends-feed-head" };
         head.Children.Add(Label(Loc.Get("friends_feed_title").ToUpperInvariant(), 10, Dim, Mono));
-        if (fresh > 0) head.Children.Add(Tagged(Label(Loc.GetF("friends_feed_new", fresh), 10, Pink, Mono), "friends-feed-count"));
+        if (fresh > 0)
+        {
+            var count = Tagged(Label(Loc.GetF("friends_feed_new", fresh), 10, Pink, Mono), "friends-feed-count");
+            count.HorizontalAlignment = HorizontalAlignment.Right;
+            head.Children.Add(count);
+        }
         _feedBox.Children.Add(head);
         int show = Math.Min(lines.Count, FriendsFeedRules.FoldCount(lines.Count, fresh) + _feedExtra);
         var unread = new List<string>();
@@ -83,7 +89,7 @@ public sealed partial class FriendsDrawer
             ago.Margin = new Thickness(8, 0, 0, 0);
             Grid.SetColumn(ago, 2);
             body.Children.Add(ago);
-            var row = new Border { Child = body, Margin = new Thickness(4, 0), Padding = new Thickness(4, 0), CornerRadius = new CornerRadius(8), Tag = "friends-feed-line:" + entry.Key };
+            var row = new Border { Child = body, Background = Brushes.Transparent, Margin = new Thickness(4, 0), Padding = new Thickness(4, 0), CornerRadius = new CornerRadius(8), Tag = "friends-feed-line:" + entry.Key };
             ToolTip.SetTip(row, string.Concat(text.Inlines!.OfType<Run>().Select(r => r.Text)));
             if (snap.Friends.Any(f => f.Id == entry.Event.FriendId))
             {
@@ -94,10 +100,7 @@ public sealed partial class FriendsDrawer
                     if (e.InitialPressMouseButton != MouseButton.Left) return;
                     e.Handled = true;
                     FriendsLanding.SfxClick();
-                    _openId = entry.Event.FriendId;
-                    _picker = null;
-                    Render();
-                    if (_rows.TryGetValue(entry.Event.FriendId, out var friendRow)) friendRow.BringIntoView();
+                    OpenFromFeed(entry.Event.FriendId);
                 };
             }
             _feedBox.Children.Add(row);
@@ -110,28 +113,43 @@ public sealed partial class FriendsDrawer
             }
         }
         _feedTop = lines[0].Key;
-        var foot = new StackPanel { Orientation = Orientation.Horizontal };
         int hidden = lines.Count - show;
-        if (hidden > 0)
+        if (hidden > 0 || _feedExtra > 0) // WPF adds the foot only when it has a link
         {
-            int hiddenNew = lines.Skip(show).Count(IsNew);
-            var more = Pill(hiddenNew > 0 ? Loc.GetF("friends_feed_more_new", hidden, hiddenNew) : Loc.GetF("friends_feed_more", hidden), Brushes.Transparent, Lilac, "friends-feed-more");
-            more.Click += (_, _) => { FriendsLanding.SfxClick(); _feedExtra += FriendsFeedRules.MoreStep; FillFeed(snap); };
-            foot.Children.Add(more);
+            var foot = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(14, 0, 8, 2) };
+            if (hidden > 0)
+            {
+                int hiddenNew = lines.Skip(show).Count(IsNew);
+                var more = Pill(hiddenNew > 0 ? Loc.GetF("friends_feed_more_new", hidden, hiddenNew) : Loc.GetF("friends_feed_more", hidden), Brushes.Transparent, Lilac, "friends-feed-more");
+                more.Click += (_, _) => { FriendsLanding.SfxClick(); _feedExtra += FriendsFeedRules.MoreStep; FillFeed(snap); };
+                foot.Children.Add(more);
+            }
+            if (_feedExtra > 0)
+            {
+                var less = Pill(Loc.Get("friends_feed_less"), Brushes.Transparent, Lilac, "friends-feed-less");
+                less.Click += (_, _) => { FriendsLanding.SfxClick(); _feedExtra = 0; FillFeed(snap); };
+                foot.Children.Add(less);
+            }
+            _feedBox.Children.Add(foot);
         }
-        if (_feedExtra > 0)
-        {
-            var less = Pill(Loc.Get("friends_feed_less"), Brushes.Transparent, Lilac, "friends-feed-less");
-            less.Click += (_, _) => { FriendsLanding.SfxClick(); _feedExtra = 0; FillFeed(snap); };
-            foot.Children.Add(less);
-        }
-        _feedBox.Children.Add(foot);
         if (_isOpen && feed != null && unread.Count > 0)
         {
             foreach (var k in unread) _feedFresh.Add(k);
             _feedMarking = true;
             try { feed.MarkRead(unread); } finally { _feedMarking = false; }
         }
+    }
+
+    /// <summary>WPF OpenFromFeed: OpenOn (Toggle, so the card reveal plays), then lay the rebuilt list out
+    /// before scrolling to the row (an unmeasured row has no bounds to bring into view).</summary>
+    private void OpenFromFeed(string friendId)
+    {
+        try
+        {
+            if (_openId != friendId) Toggle(friendId);
+            if (_rows.TryGetValue(friendId, out var row)) { _list.UpdateLayout(); row.BringIntoView(); }
+        }
+        catch (Exception ex) { Serilog.Log.Debug("[Friends] feed open failed: {E}", ex.Message); }
     }
 
     internal static void FillFeedLine(TextBlock text, FriendEvent e, IReadOnlyList<Friend> friends, bool isNew)
@@ -160,6 +178,7 @@ public sealed partial class FriendsDrawer
             FriendsDrawerRules.TrailTone.No => Gold, FriendsDrawerRules.TrailTone.Quiet => Dim, _ => Muted,
         };
         var line = Label("", 10.5, Muted);
+        line.Margin = new Thickness(0, 1, 0, 0);
         line.Tag = "friends-trail:" + trail.State;
         line.Inlines!.Add(new Run(Loc.Get(kindKey) + "  "));
         for (int i = 0; i < trail.Steps; i++) line.Inlines.Add(new Run(i < trail.Lit ? "●" : "○") { FontSize = 8, Foreground = i < trail.Lit ? tone : Dim });
