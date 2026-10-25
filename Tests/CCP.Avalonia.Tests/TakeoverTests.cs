@@ -21,18 +21,24 @@ namespace CCP.Avalonia.Tests;
 /// stops it (brief safety rule) without unticking the saved switch.</summary>
 public sealed class TakeoverTests
 {
+    /// <summary>Headless app with the shipped fonts (P45/P48: Skia, real drawing), set up once per testhost.</summary>
+    private static void EnsureApp()
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+    }
+
     [Fact]
     public async Task SwitchArmsItLockdownHoldsItPanicStopsIt()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
-            if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .WithInterFont()
-                    .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
-                    .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+            EnsureApp();
             var s = CoreSettings.Current;
             s.PanicKeyEnabled = true;
             s.PanicKey = "F8";
@@ -108,13 +114,7 @@ public sealed class TakeoverTests
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
-            if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .WithInterFont()
-                    .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
-                    .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+            EnsureApp();
             var s = CoreSettings.Current;
             s.PanicKeyEnabled = true;
             s.PanicKey = "F8";
@@ -191,13 +191,7 @@ public sealed class TakeoverTests
     private static Task WithArmedShell(Action<MainShellWindow, System.Collections.Generic.List<Action>> body) =>
         AvaloniaTestDispatcher.RunAsync(() =>
         {
-            if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .WithInterFont()
-                    .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
-                    .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+            EnsureApp();
             var s = CoreSettings.Current;
             var resume = s.AutonomyResumeOnStartup;
             s.AutonomyConsentGiven = true;
@@ -301,6 +295,49 @@ public sealed class TakeoverTests
         Assert.Contains("Service Enabled: False", body);
     });
 
+    /// <summary>WPF AutonomyService.cs:1758-1770: an announcement voices the active mod's generated
+    /// event_audio clip through the tube; a phrase without one stays text-only.</summary>
+    [Fact]
+    public Task AnnouncementPlaysTheModEventClipThroughTheTube() => WithArmedShell((shell, _) =>
+    {
+        var s = CoreSettings.Current;
+        var (avatar, volume) = (s.AvatarEnabled, s.MasterVolume);
+        var (pkg, id, play) = (CoreMods.ActiveModPackageProvider, CoreMods.ActiveModIdProvider, CoreAudio.PlayStoppableProvider);
+        var dir = System.IO.Directory.CreateTempSubdirectory("ccp-event-audio-").FullName;
+        try
+        {
+            var events = System.IO.Path.Combine(dir, "resources", "sounds", "event_audio");
+            System.IO.Directory.CreateDirectory(events);
+            var clip = System.IO.Path.Combine(events, "time for a surprise.mp3");
+            System.IO.File.WriteAllBytes(clip, new byte[16]);
+            var modId = "event-audio-test-" + Guid.NewGuid().ToString("N");
+            CoreMods.ActiveModIdProvider = () => modId;
+            CoreMods.ActiveModPackageProvider = () => new ConditioningControlPanel.Models.ModPackage(
+                new ConditioningControlPanel.Models.ModManifest { Id = modId }, dir, isBuiltIn: false);
+            string? played = null, tag = null;
+            CoreAudio.PlayStoppableProvider = (path, _, t, _, ended) => { (played, tag) = (path, t); return () => ended?.Invoke(); };
+            s.MasterVolume = 50;
+            shell.SetAvatarEnabled(true);
+            Assert.NotNull(shell.Tube);
+
+            shell.AnnounceAutonomy("Time for a surprise~");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(clip, played);
+            Assert.Equal("phrase-audio", tag);
+
+            played = null;
+            shell.AnnounceAutonomy("No clip for this one");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(played);
+        }
+        finally
+        {
+            (CoreMods.ActiveModPackageProvider, CoreMods.ActiveModIdProvider, CoreAudio.PlayStoppableProvider) = (pkg, id, play);
+            (s.AvatarEnabled, s.MasterVolume) = (avatar, volume);
+            System.IO.Directory.Delete(dir, true);
+        }
+    });
+
     /// <summary>overlay-takeover-announcer: an announced action queues the "TAKEOVER" cue (WPF
     /// AutonomyService.cs:961, #534 silent roll shows none), cues play in turn on the real timings,
     /// the window hides when idle, and panic drops the queue and closes the window.</summary>
@@ -366,13 +403,7 @@ public sealed class TakeoverTests
     [Fact]
     public Task CueReRaisesOnRealTimeAndWritesAlphaOnlyOnChange() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .WithInterFont()
-                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
-                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        EnsureApp();
         var w = new TakeoverAnnouncerWindow(live: true);
         try
         {
@@ -479,13 +510,7 @@ public sealed class TakeoverTests
     [Fact]
     public Task PresetCommentIsWpfGiggle() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .WithInterFont()
-                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
-                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        EnsureApp();
         var tube = new global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow(null);
         try
         {

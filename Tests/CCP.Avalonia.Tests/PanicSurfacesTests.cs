@@ -119,7 +119,6 @@ public sealed class PanicSurfacesTests
         "program-session",
         "remote-haptics",
         "speak-cue",
-        "takeover-diagnostic",
         "takeover",
         "tour",
         "tube-speech",

@@ -509,11 +509,10 @@
                         Width="116" Height="5"
                         CornerRadius="2"
                         Background="#FFF7A8D8"
-                        RenderTransformOrigin="0%,50%">
-                    <Border.Effect>
-                        <DropShadowEffect Color="{StaticResource PinkColor}" BlurRadius="6" OffsetX="0" OffsetY="0" Opacity="0.6"/>
-                    </Border.Effect>
-                </Border>
+                        RenderTransformOrigin="0%,50%"
+                        BoxShadow="0 0 6 0 #99FF69B4"/>
+                <!-- WPF DropShadowEffect (PinkColor, blur 6, 0.6) as a BoxShadow: the fill rescales
+                     every 100 ms and an Effect would re-render offscreen each tick. -->
             </Border>
 
             <!-- THE FUSE's candle (CONTRACT-FUSE-0816 2.2). From twelve hours out, a small flame

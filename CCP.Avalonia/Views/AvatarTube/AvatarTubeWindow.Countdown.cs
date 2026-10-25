@@ -11,6 +11,7 @@ public partial class AvatarTubeWindow
     private DispatcherTimer? _takeoverCountdownTimer;
     private AutonomyScheduler? _countdownAutonomy;
     private readonly ScaleTransform _takeoverScale = new(1, 1);
+    private Border? _countdownBar;
     internal bool CountdownTicking => _takeoverCountdownTimer?.IsEnabled == true;
 
     // WPF AvatarTubeWindow.Avatar.cs:43-126. No new window or animation loop: the existing tube
@@ -47,7 +48,7 @@ public partial class AvatarTubeWindow
     {
         var fraction = CoreSettings.Current.ShowTakeoverCountdownBar
             ? _countdownAutonomy?.NextRandomFireFraction : null;
-        this.FindControl<Border>("TakeoverCountdownBar")!.IsVisible = fraction.HasValue;
+        (_countdownBar ??= this.FindControl<Border>("TakeoverCountdownBar")!).IsVisible = fraction.HasValue;
         _takeoverScale.ScaleX = fraction ?? 0;
     }
 
