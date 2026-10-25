@@ -120,19 +120,19 @@ public sealed class DashboardDecorationTests
     });
 
     [Fact]
-    public Task BrowserFailuresStopLoadingAndSuccessfulRetryRestoresConnected() => WithShell((shell, tab, time) =>
+    public Task BrowserUnavailableShowsFailureAndAnyCompletedNavigationShowsConnected() => WithShell((shell, tab, time) =>
     {
         var status = tab.FindControl<TextBlock>("TxtBrowserStatus")!;
         var host = tab.FindControl<WebHost>("BrowserWebHost")!;
         tab.SyncBrowserPrompt();
         Assert.Equal(Loc.Get(host.FailureStatusKey), status.Text);
         status.Text = Loc.Get("label_loading");
+        // WPF writes Connected for every completed navigation, failures included
+        // (MainWindow.Browser.cs:139-144, BrowserService.cs:1450-1458); that is what stops the pulse.
         host.OnNavigationCompleted(new Uri("https://example.invalid/"), false);
-        Assert.Equal(Loc.Get("label_error_2"), status.Text);
+        Assert.Equal(Loc.Get("label_connected_2"), status.Text);
         Assert.Equal(1, status.Opacity);
         Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == status);
-        host.OnNavigationCompleted(new Uri("https://example.invalid/"));
-        Assert.Equal(Loc.Get("label_connected_2"), status.Text);
         Assert.Equal("label_missing_dll", WebHost.FailureKey(new DllNotFoundException()));
         Assert.Equal("label_com_error", WebHost.FailureKey(new System.Runtime.InteropServices.COMException()));
         Assert.Equal("label_not_installed", WebHost.FailureKey(new InvalidOperationException()));

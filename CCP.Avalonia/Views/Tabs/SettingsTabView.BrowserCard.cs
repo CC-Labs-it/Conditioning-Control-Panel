@@ -31,7 +31,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void HookBrowserCard()
         {
             BrowserWebHost.NavigationCompleted += _ => ApplyBrowserMute();
-            BrowserWebHost.NavigationFinished += (_, success) => { if (!success) SetBrowserFailure("label_error_2"); };
             BrowserWebHost.PropertyChanged += (_, e) => { if (e.Property == WebHost.SourceProperty) SyncBrowserPrompt(); };
             AttachedToVisualTree += (_, _) =>
             {
@@ -178,8 +177,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BrowserLoadingText.IsVisible = prompt;
             // A native web view draws over anything laid on it, so the prompt only shows with the host hidden.
             BrowserWebHost.IsVisible = !prompt;
-            if (!BrowserWebHost.HasEngine) SetBrowserFailure(BrowserWebHost.FailureStatusKey);
+            // Replace only a stuck Loading: Offline/Ready (UpdateOfflineModeUI, whose about:blank park and reload
+            // land here too) own the line, as WPF writes them whether or not the engine is up.
+            if (!BrowserWebHost.HasEngine && BrowserStatusLoading()) SetBrowserFailure(BrowserWebHost.FailureStatusKey);
         }
+
+        private bool BrowserStatusLoading() => string.Equals(IconText.Bare(TxtBrowserStatus.Text).Trim(),
+            IconText.BareLoc("label_loading").Trim(), StringComparison.OrdinalIgnoreCase);
 
         private void SetBrowserFailure(string key)
         {

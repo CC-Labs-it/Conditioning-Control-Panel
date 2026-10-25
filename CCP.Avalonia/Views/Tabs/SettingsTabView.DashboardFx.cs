@@ -21,19 +21,6 @@ public partial class SettingsTabView
 
     private void InitializeDashboardDecoration()
     {
-        // Keep the input host untransformed: faces turn inside it, so an edge-on plate cannot
-        // manufacture PointerExited under a stationary pointer (the WPF phantom-leave case).
-        var plate = new Grid { RenderTransform = MysteryFlipHost.RenderTransform,
-            RenderTransformOrigin = RelativePoint.Center };
-        // ponytail: a separate transparent input host keeps existing click bubbling and layout.
-        // The visual children remain hit-testable; only the transform moves to an inner plate.
-        MysteryFlipHost.RenderTransform = null;
-        var children = MysteryFlipHost.Children.ToArray();
-        MysteryFlipHost.Children.Clear();
-        foreach (var child in children) plate.Children.Add(child);
-        MysteryFlipHost.Children.Add(plate);
-        MysteryFlipHost.Background = Brushes.Transparent;
-        _mysteryPlate = plate;
         MysteryFlipHost.PointerEntered += (_, _) => RequestMysteryFace(true);
         MysteryFlipHost.PointerExited += (_, _) => RequestMysteryFace(false);
         DetachedFromVisualTree += (_, _) => StopDashboardDecoration();
@@ -49,9 +36,8 @@ public partial class SettingsTabView
         };
     }
 
-    private Grid _mysteryPlate = null!;
-    private ScaleTransform PlateScale => (ScaleTransform)((TransformGroup)_mysteryPlate.RenderTransform!).Children[0];
-    private SkewTransform PlateSkew => (SkewTransform)((TransformGroup)_mysteryPlate.RenderTransform!).Children[1];
+    private ScaleTransform PlateScale => (ScaleTransform)((TransformGroup)MysteryPlate.RenderTransform!).Children[0];
+    private SkewTransform PlateSkew => (SkewTransform)((TransformGroup)MysteryPlate.RenderTransform!).Children[1];
 
     internal void ApplyDashboardDecoration(bool ambient, bool transitions)
     {
@@ -144,7 +130,7 @@ public partial class SettingsTabView
         double at = Math.Clamp(PlateScale.ScaleX, 0, 1), skew = PlateSkew.AngleY;
         bool closing = _mysteryShown != reveal;
         double duration = Math.Max(.001, .15 * (closing ? at : 1 - at));
-        _mysteryFlip = new BeatLoop(_mysteryPlate, t =>
+        _mysteryFlip = new BeatLoop(MysteryPlate, t =>
         {
             double p = Math.Clamp(t / duration, 0, 1);
             double eased = closing ? p * p * p : 1 - Math.Pow(1 - p, 3);
