@@ -72,6 +72,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public LauncherWindow()
         {
             InitializeComponent();
+            AddHandler(DragDrop.DragOverEvent, Launcher_DragOver);
+            AddHandler(DragDrop.DropEvent, Launcher_Drop);
             GamesColumn.SizeChanged += (_, _) => SeatGrid();
             XpTrack.SizeChanged += (_, _) => RefreshStats();
             _statusTimer.Tick += (_, _) => { RefreshStatus(); RefreshStats(); RefreshSpReadout(); };
@@ -550,10 +552,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void BuildTiles()
         {
+            StopWanderingSheen();
             GamesGrid.Children.Clear();
             _revealedAtBuild.Clear();
             foreach (var card in VisibleCards) { GamesGrid.Children.Add(CreateTile(card)); _revealedAtBuild[card.Id] = true; }
-            SeatGrid();
+            SeatGrid();   // the wander timer keeps running and picks from the new tiles; the CTA sheen is untouched
         }
 
         /// <summary>WPF GamesColumn_SizeChanged / FitTiles (LauncherWindow.xaml.cs:550): columns and card
