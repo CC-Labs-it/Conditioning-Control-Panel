@@ -37,6 +37,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal static class FlashOverlay
     {
+        internal static event Action? Displayed;
+
         // FlashService.ResolveFlashCap on the default (compositor) path.
         private const int MaxConcurrent = 30;
         private const int StaggerMs = 300;
@@ -158,6 +160,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// hydra child skips only when timing is independent.</summary>
         internal static void Paid(string path, AppSettings s, int hydraGeneration, int multiplier)
         {
+            Displayed?.Invoke();
             App.Sessions?.SessionLog.RecordImages(new[] { path });
             App.MediaHistory?.RecordImages(new[] { path });   // WPF MediaHistoryService.OnFlashDisplayed
             if (multiplier > 1 && !s.SuppressPerkNotifications) LuckyChime(s);   // WPF :4441 PerkNotificationsSuppressed

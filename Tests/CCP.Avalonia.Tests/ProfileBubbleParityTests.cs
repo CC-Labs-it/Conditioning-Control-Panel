@@ -29,6 +29,15 @@ namespace CCP.Avalonia.Tests;
 [Collection(RunsAloneCollection.Name)]
 public sealed class ProfileBubbleParityTests : IDisposable
 {
+    // A filtered run may reach this class before any other test initialized the head.
+    static ProfileBubbleParityTests() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().WithInterFont().With(AppFonts.Options(systemEmoji: false))
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+    });
     private readonly SettingsService _settings = new();
     private readonly Func<SettingsService?>? _settingsBefore = CoreSettings.ServiceProvider;
     private readonly Func<bool>? _labBefore = CoreAccount.HasLabAccessProvider;
@@ -40,11 +49,6 @@ public sealed class ProfileBubbleParityTests : IDisposable
 
     private MainShellWindow Shell(MotionLevel motion = MotionLevel.Off)
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().WithInterFont().With(AppFonts.Options(systemEmoji: false))
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
         CoreSettings.ServiceProvider = () => _settings;
         CoreAccount.HasLabAccessProvider = CoreAccount.HasPremiumAccessProvider = CoreAccount.IsLoggedInProvider = () => true;
         CoreAccount.DisplayNameProvider = () => "Bubble Test";
@@ -71,6 +75,92 @@ public sealed class ProfileBubbleParityTests : IDisposable
         MainShellWindow.OpenProfileLink = _openBefore;
         MainShellWindow.ProfileLinkAllowed = _allowedBefore;
     }
+
+    private sealed class ReactionTime : TimeProvider
+    {
+        private long _ticks;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => _ticks;
+        public override DateTimeOffset GetUtcNow() => DateTimeOffset.UnixEpoch.AddTicks(_ticks);
+        public void Advance(int ms) => _ticks += TimeSpan.FromMilliseconds(ms).Ticks;
+    }
+
+    [Theory]
+    [InlineData(false, 2500, 480, 90, -12)]
+    [InlineData(true, 4000, 600, 300, 0.55)]
+    public Task DisplayReactionsFollowWpfKeysThrottleAndPanic(bool subliminal, int throttle, int duration, int key, double expected) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var before = BeatLoop.Time;
+        var time = new ReactionTime();
+        BeatLoop.Time = time;
+        var shell = Shell(MotionLevel.Full);
+        try
+        {
+            var visual = shell.FindControl<Grid>("ProfileBubbleVisual")!;
+            var tilt = (RotateTransform)((TransformGroup)visual.RenderTransform!).Children[1];
+            double Value() => subliminal ? visual.Opacity : tilt.Angle;
+            void Display()
+            {
+                if (subliminal)
+                {
+                    // Present is the real successful-show path, using a sandbox/headless window.
+                    var card = new Window();
+                    global::ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalOverlay.Present(card);
+                    card.Close();
+                }
+                else global::ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.Paid("fixture.png", _settings.Current, 0, 1);
+                Dispatcher.UIThread.RunJobs();
+            }
+            Display();
+            time.Advance(key);
+            BeatLoop.StepAll();
+            Assert.Equal(expected, Value(), 5);
+            time.Advance(duration - key);
+            BeatLoop.StepAll();
+            Assert.Equal(subliminal ? 1 : 0, Value(), 5);
+            Assert.DoesNotContain(BeatLoop.Running, x => ReferenceEquals(x.Owner, visual));
+            time.Advance(throttle - duration - 1);
+            Display();
+            Assert.DoesNotContain(BeatLoop.Running, x => ReferenceEquals(x.Owner, visual));
+            time.Advance(1);
+            Display();
+            Assert.Contains(BeatLoop.Running, x => ReferenceEquals(x.Owner, visual));
+            time.Advance(key);
+            BeatLoop.StepAll();
+            Assert.Equal(expected, Value(), 5);
+            PanicSurfaces.All.Single(x => x.Id == "profile-bubble-reactions").Stop(shell);
+            Assert.Equal(subliminal ? 1 : 0, Value(), 5);
+            Assert.DoesNotContain(BeatLoop.Running, x => ReferenceEquals(x.Owner, visual));
+            time.Advance(throttle);
+            Display();
+            _settings.Current.MotionLevel = MotionLevel.Off;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.Equal(subliminal ? 1 : 0, Value(), 5);
+            Assert.DoesNotContain(BeatLoop.Running, x => ReferenceEquals(x.Owner, visual));
+            time.Advance(throttle);
+            Display();
+            Assert.DoesNotContain(BeatLoop.Running, x => ReferenceEquals(x.Owner, visual));
+            _settings.Current.MotionLevel = MotionLevel.Full;
+            time.Advance(throttle);
+            shell.Close();
+            Display();
+            Assert.DoesNotContain(BeatLoop.Running, x => ReferenceEquals(x.Owner, visual));
+        }
+        finally { shell.Close(); Dispatcher.UIThread.RunJobs(); BeatLoop.Time = before; }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(0.35)]
+    [InlineData(0.75)]
+    [InlineData(1)]
+    public Task TierHoverUsesWpfAmplitude(double progress) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        double t = 1 - progress;
+        Assert.Equal(1 - (t * t * t - 0.45 * t * Math.Sin(Math.PI * t)), MainShellWindow.ProfileTierHoverEase().Ease(progress), 10);
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public Task EquippedPresetWinsOverInitialsAndInvalidPresetFallsBack() => AvaloniaTestDispatcher.RunAsync(() =>

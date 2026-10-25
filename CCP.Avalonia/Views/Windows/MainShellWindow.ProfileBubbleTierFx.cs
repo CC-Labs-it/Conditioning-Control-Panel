@@ -16,6 +16,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
+        internal static Theme.BackEaseOutAmplitude ProfileTierHoverEase() => new() { Amplitude = 0.45 };
         private BeatLoop? _profileTierBeat;
         internal DispatcherTimer? _profileTierTimer;
         private CancellationTokenSource? _profileTierGrow;
@@ -110,10 +111,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             _profileTierGrow = new CancellationTokenSource();
             // Run on the image: Avalonia's transform animator requires a Visual.
-            // ponytail: BackEaseOut has no WPF Amplitude=0.45 knob; exact curve is in lane-b.
             _ = new Animation
             {
-                Duration = TimeSpan.FromMilliseconds(260), Easing = new BackEaseOut(),
+                Duration = TimeSpan.FromMilliseconds(260), Easing = ProfileTierHoverEase(),
                 Children =
                 {
                     new KeyFrame { Cue = new Cue(0), Setters = { new Setter(ScaleTransform.ScaleXProperty, 0.35), new Setter(ScaleTransform.ScaleYProperty, 0.35) } },

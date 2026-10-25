@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### Profile bubble display reactions
+
+1. With Full motion, show a flash: header bubble tilts 0 → -12 → 9 → -5 → 0 at 0/90/220/340/480 ms. Further displays inside 2500 ms do not restart it; at 2500 ms it can run again. WPF `MainWindow/MainWindow.ProfileBubble.cs:607-620`. Rows: `shell-profile-bubble`.
+2. Show a subliminal: header opacity dips 1 → 0.55 in 300 ms and returns in another 300 ms, with SineEase InOut; displays inside 4000 ms do not restart it. WPF `MainWindow/MainWindow.ProfileBubble.cs:622-632`. Rows: `shell-profile-bubble`.
+3. Turn motion Off during either reaction, press panic, or close the shell: the shared clock stops and opacity/tilt reset; later displays cannot reach a closed shell. Off motion starts neither reaction. WPF `MainWindow/MainWindow.ProfileBubble.cs:110-147`. Rows: `shell-profile-bubble`.
+4. Hover a tier badge at Full motion: its 72px copy grows from 0.35 to 1 over 260 ms with BackEase Out amplitude 0.45. WPF `MainWindow/MainWindow.ProfileBubbleTierFx.cs:111-120`. Rows: `shell-profile-bubble`.
