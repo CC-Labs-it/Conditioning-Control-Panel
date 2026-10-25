@@ -12,7 +12,7 @@ import { buildMeshes } from './mesh.js';
 import { buildCourts, buildFields } from './courts.js';
 import { canalProfile, canalNormal } from './canal.js';
 import { installForks } from './forks.js';
-import { buildAerials, aerialGapAt, aerialBoostAllowed } from './aerial.js';
+import { buildAerials, shapeAerialNodes, aerialGapAt, aerialBoostAllowed } from './aerial.js';
 
 /** @returns {object} Track; throws an Error listing the schema errors */
 export function loadTrack(json, { validate = true, aerials: includeAerials = true } = {}) {
@@ -23,6 +23,7 @@ export function loadTrack(json, { validate = true, aerials: includeAerials = tru
   if (json.loop !== true) throw new Error('track invalid: only closed loops are supported');
   // water wave 1: a stream node's flow ([along, lat] m/s) rides along for the query and the road mesh
   const nodes = json.nodes.map((n) => ({ p: n.p.slice(), roll: n.roll * DEG, w: n.w, flags: n.flags.slice(), speed: n.speed, surface: n.surface, flow: n.flow ? n.flow.slice() : null }));
+  const aerialDrops = includeAerials ? shapeAerialNodes(json.id, nodes) : null;
   const N = nodes.length;
   const sp = createSpline(nodes.map((n) => n.p), nodes.map((n) => n.flags.includes('jump')));
   const refN = buildRefNormals(sp, nodes.map((n) => n.flags.includes('magnet')));
@@ -62,7 +63,7 @@ export function loadTrack(json, { validate = true, aerials: includeAerials = tru
   };
 
   // Offline base-course generators opt out so historical source JSON stays reproducible.
-  const aerials = includeAerials ? buildAerials({ id: json.id, nodeS, lengthM, frameAt }) : [];
+  const aerials = includeAerials ? buildAerials({ id: json.id, nodeS, lengthM, frameAt, aerialDrops }) : [];
   const aerialTrack = { aerials, lengthM };
   // Leave the spline intact, but expose each cut as a real jump to every ground consumer.
   for (let i = 0; i < N; i++) if (aerialGapAt(aerialTrack, (nodeS[i] + nodeS[i + 1]) / 2)) nodes[i].flags = ['jump'];

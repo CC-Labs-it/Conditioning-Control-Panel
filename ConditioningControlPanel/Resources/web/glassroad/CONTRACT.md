@@ -260,6 +260,7 @@ Escape only pauses; the page never sends `exit` on Escape.
 | `boost-start` | `{ kind: 'drift'\|'pad'\|'launch', tier, amount, holdS }` | kart (applyBoost) | fx (fovKick, speedLines, bandSpeedMul, shake boost), audio (low-pass opens) |
 | `boost-end` | `{ kind }` | kart | fx, audio (ease back over boost.tailTcS) |
 | `hop` | `{ speed }` | kart | fx (squash then stretch), audio |
+| `air-word-hop` | `{ id, section, index, s, p }` (one automatic word launch; index starts at 0 per crossing) | scripted solo aerial route | quiet ascending pluck and airy spring on the shared SFX bus; no speech |
 | `airborne` | `{ cause: 'lip'\|'edge' }` | kart | fx (stretch) |
 | `land` | `{ tier: 0..3, airTime }` (0 = under air.lightS) | kart, respawn | fx (squash, dust, shake on 3), audio (cue on 2 and 3) |
 | `edge-enter` | `{ side: -1\|1 }` | kart | fx (edgeGlow), audio (hum) |

@@ -264,6 +264,7 @@ export const FX_CUES = {
   // The gate renderer already owns the crossing pulse and text; do not add a second camera beat.
   'phrase-gate'() {},
   'press-thud'() {},
+  'air-word-hop'() {}, // The scripted trajectory supplies the jump motion; audio adds the contact cue.
   pause(fx, { on = false }) { fx.paused = !!on; },
 };
 

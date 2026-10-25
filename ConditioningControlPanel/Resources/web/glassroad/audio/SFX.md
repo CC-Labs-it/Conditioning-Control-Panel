@@ -37,6 +37,7 @@ so repeats never sound stamped.
 | `drift-release` | `drift-release` | tier 0 silent |
 | `boost-start` | `boost` | drift full; slip 0.7 rate 1.06; bubble 0.35 rate 1.12; Surge 0.85 rate 0.94; pad and launch play their own |
 | `hop` | `hop` | |
+| `air-word-hop` | synth | Rounded pluck, rising spring and air tail; bounded ascending notes per crossing, softer in Gentle. Word contacts suppress the ordinary landing sound. |
 | `land` | `land-light` (tier 1 at 0.55, tier 2), `land-heavy` (tier 3) | tier 0 silent |
 | `wall` | `wall` | level and rate by dv / `wall.cueFullDvMps` |
 | `bump` | `bump` | soft rubbery glass thunk, from `contact.cueMinDvMps`, full at `bumpFullDvMps` |

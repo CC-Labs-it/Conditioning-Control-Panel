@@ -61,7 +61,15 @@ export function keepDetails(track, layout, existingMounts = []) {
     const a = find(id); if (!a) continue;
     const s = a.s0 + (a.s1 - a.s0) * share, f = track.frameAt(s);
     for (const side of [-1, 1]) {
-      const x = side * (f.w / 2 + 4), p = [f.p[0] + f.b[0] * x, f.p[1] + 7, f.p[2] + f.b[2] * x];
+      // The thirteen-metre pier must clear a widening road along its whole length.
+      let shoulder = f.w / 2;
+      for (let ds = -8; ds <= 8; ds++) {
+        const edge = track.frameAt(s + ds);
+        const extent = edge.p.reduce((sum, value, i) => sum +
+          (value + edge.b[i] * side * edge.w / 2 - f.p[i]) * f.b[i] * side, 0);
+        shoulder = Math.max(shoulder, extent);
+      }
+      const x = side * (shoulder + 4), p = [f.p[0] + f.b[0] * x, f.p[1] + 7, f.p[2] + f.b[2] * x];
       const ground = Math.min(-25, ...layout.towers.map((t) => t.baseY));
       put(f, 'stone', 'crossing-tablet-pier', x, (ground + 13 - f.p[1]) / 2, 0, [3.5, f.p[1] + 13 - ground, 13]);
       const normal = f.b.map((v) => -side * v);

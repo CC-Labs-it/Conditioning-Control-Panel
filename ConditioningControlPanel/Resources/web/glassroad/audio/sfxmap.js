@@ -112,6 +112,7 @@ export function sfxPlan(name, p = {}, o = {}) {
   const feel = o.feel || null;
   p = p || {};
   switch (name) {
+    case 'air-word-hop': return null; // Its ascending spring stays on the shared synth even with the bank loaded.
     case 'press-thud': return pressThudGain(p) > .01 ? [one('land-heavy', .06 * pressThudGain(p), .68)] : [];
     case 'countdown': return [one('countdown')];
     case 'go': return [one('go')];
@@ -129,6 +130,7 @@ export function sfxPlan(name, p = {}, o = {}) {
     }
     case 'hop': return [one('hop')];
     case 'land': {
+      if (p.airWord) return []; // The scripted launch carries its own rounded contact note.
       const t = p.tier | 0;
       if (t <= 0) return [];
       return t >= 3 ? [one('land-heavy')] : [one('land-light', t === 1 ? 0.55 : 1)];

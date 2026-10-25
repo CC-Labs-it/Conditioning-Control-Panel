@@ -16,7 +16,7 @@ for (const id of ids) {
   const json = JSON.parse(readFileSync(new URL('../tracks/' + id + '.json', import.meta.url), 'utf8'));
   const track = loadTrack(json);
   test(id + ': two long dry aerial corridors have wide supported approaches and exits', () => {
-    assert.equal(AERIAL_REVISION, 1);
+    assert.equal(AERIAL_REVISION, 2);
     assert.equal(track.aerials.length, 2);
     for (const a of track.aerials) {
       assert.ok(a.gapS1 - a.gapS0 >= 89.9 && a.gapS1 - a.gapS0 <= 130);
@@ -24,7 +24,14 @@ for (const id of ids) {
       assert.ok(a.gapS0 - a.rampS0 >= 20 && a.landingS1 - a.gapS1 >= 35);
       assert.ok(a.widthM >= 28 - 1e-7);
       const launch = track.frameAt(a.gapS0), land = track.frameAt(a.gapS1);
-      assert.ok(dot(launch.t, land.t) > .995, 'launch and exit align within six degrees');
+      const horizontal = v => [v[0], 0, v[2]].map(n => n / Math.hypot(v[0], v[2]));
+      assert.ok(dot(horizontal(launch.t), horizontal(land.t)) > .995, 'launch and exit face the same direction');
+      assert.ok(launch.t[1] > .08, 'real uphill lip supplies launch height');
+      assert.ok(launch.p[1] - land.p[1] >= 3 - 1e-5, 'exit stays below the launch');
+      const launchNode = Array.from(track.nodeS).indexOf(a.gapS0), landNode = Array.from(track.nodeS).indexOf(a.gapS1);
+      const sourceLaunch = json.nodes[launchNode].p[1], sourceLand = json.nodes[landNode].p[1];
+      assert.ok(Math.abs(launch.p[1] - sourceLaunch - 4) < 1e-5, 'launch is raised four metres');
+      assert.ok(Math.abs(land.p[1] - sourceLand + a.landingDropM) < 1e-5, 'landing uses its authored lower height');
       for (const s of [a.rampS0 + 1, a.gapS0 - 1, a.gapS1 + 1, a.landingS1 - 1]) {
         const f = track.frameAt(s), q = track.query(...f.p, f.seg);
         assert.ok(q.onRoad, a.id + ' supported approach/runout ' + s);
@@ -56,9 +63,14 @@ for (const id of ids) {
       for (const x of [-f.w * .4, 0, f.w * .4]) {
         const p = f.p.map((v, k) => v + f.b[k] * x + f.n[k] * .1);
         const q = track.query(...p, f.seg);
-        assert.equal(q.onRoad, false, a.id + ' s ' + s + ' x ' + x);
-        assert.equal(q.railed, false);
-        assert.ok(q.flags.includes('jump'));
+        // A far lateral probe can choose a separate overhead road on the stacked Mainframe.
+        // It cannot catch this kart from more than five metres below its deck.
+        if (q.onRoad) {
+          assert.ok(!aerialGapAt(track, q.s) && q.height < -5, a.id + ' ghost support at ' + s);
+        } else {
+          assert.equal(q.railed, false);
+          assert.ok(q.flags.includes('jump'));
+        }
         const below = track.query.below(...p);
         // A genuine different road below remains legal support on a stacked course.
         assert.ok(!below || !aerialGapAt(track, below.s), a.id + ' ghost support');
