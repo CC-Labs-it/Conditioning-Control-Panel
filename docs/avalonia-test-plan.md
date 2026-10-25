@@ -673,3 +673,7 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+1. WPF `Views/Controls/Companion/V2/ConversationPage.xaml`: open Companion and inspect the pink portrait dust behind the portrait. Switch tabs, minimize and enable reduced motion; the ambient clock must park. Panic cancels an active page send and parks dust. Rows: `views-companion-v2-conversation`.
+2. WPF `Views/Controls/Companion/Pages/PersonalityPage.xaml`: select Personality from the pill and conversation Settings; check the picker, live presets, Advanced editor and community. Return to Chat and verify the same presets remain. Rows: `views-companion-v2-conversation`.
+3. WPF `Views/Controls/Companion/Pages/PermissionsPage.xaml`, `LinksPage.xaml`: Permissions hosts the live permission toggles and its Takeover door works; Links hosts the editable live video pool. Return to Chat and verify edits survive. Knowledge links and room collapse remain missing. Rows: `views-companion-v2-conversation`.

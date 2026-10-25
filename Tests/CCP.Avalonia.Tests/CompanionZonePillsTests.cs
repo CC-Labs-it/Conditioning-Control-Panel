@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using System.Linq;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
@@ -16,11 +17,7 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-/// <summary>
-/// Companion > Personality / Permissions / Links (WPF 5681c132a) on a head with no v2 page: the
-/// three pills draw, land on the Companion tab and scroll the room to the zone WPF's page hosts
-/// (docs/avalonia-decisions.md, sync6-companion-pages).
-/// </summary>
+/// <summary>Companion pills open WPF page hosts containing the original live room controls.</summary>
 public sealed class CompanionZonePillsTests
 {
     [Fact]
@@ -50,32 +47,40 @@ public sealed class CompanionZonePillsTests
                 Assert.Contains("companionlinks", strip.PillKeys);
                 Assert.Equal(0, scroll.Offset.Y);
 
-                // A user click on the pill, as the strip raises it.
+                var permissions = room.FindControl<AiPermissionsGrid>("PermissionsZone")!;
+                var presets = room.FindControl<MakeHerYoursView>("PersonalityZone")!;
+                var library = room.WorkshopParts!.Library;
+                var community = room.WorkshopParts.Community;
                 strip.PillFor("permissions")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Dispatcher.UIThread.RunJobs();
-                w.UpdateLayout();
                 Assert.Equal("permissions", w.CurrentTab);
                 Assert.Equal("permissions", strip.ActivePillKey);
-                Assert.True(w.Named<CompanionTabView>("CompanionTab")!.IsVisible);
-                Assert.True(scroll.Offset.Y > 0, $"room not scrolled to permissions ({scroll.Offset.Y})");
+                Assert.False(w.Named<CompanionTabView>("CompanionTab")!.IsVisible);
+                var permissionsPage = w.Named<PermissionsPage>("CompanionPermissionsTab")!;
+                Assert.True(permissionsPage.IsVisible);
+                Assert.Same(permissions, permissionsPage.PrimaryHost.Content);
 
                 strip.PillFor("companionlinks")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Dispatcher.UIThread.RunJobs();
+                Assert.Same(permissions, room.FindControl<AiPermissionsGrid>("PermissionsZone"));
                 Assert.Equal("companionlinks", w.CurrentTab);
-                Assert.True(room.FindControl<WorkshopAccordion>("WorkshopZone")!.ViewModel!.IsExpanded);
-                // The Library cell itself is on screen, not just the drawer (WPF maps it to companionlinks).
-                w.UpdateLayout();
-                var cell = room.GetVisualDescendants().OfType<WorkshopLibraryCell>().Single();
-                var top = cell.TranslatePoint(new Point(0, 0), scroll)!.Value.Y;
-                Assert.True(top >= 0 && top < scroll.Viewport.Height, $"library cell not in view (top {top}, viewport {scroll.Viewport.Height}, off {scroll.Offset.Y}, extent {scroll.Extent.Height}, cellH {cell.Bounds.Height})");
+                Assert.Same(library, w.Named<LinksPage>("CompanionLinksTab")!.PrimaryHost.Content);
 
-                // Personality sits above: from down there the room scrolls back up to it.
-                w.UpdateLayout();
-                var below = scroll.Offset.Y;
                 strip.PillFor("personality")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal("personality", w.CurrentTab);
-                Assert.True(scroll.Offset.Y < below, $"room not scrolled up to personality ({below} -> {scroll.Offset.Y})");
+                var personality = w.Named<PersonalityPage>("CompanionPersonalityTab")!;
+                Assert.True(personality.IsVisible);
+                Assert.Same(presets, personality.PrimaryHost.Content);
+                Assert.Contains(community, personality.GetVisualDescendants());
+                Assert.NotNull(personality.FindControl<Button>("BtnOpenPromptEditor"));
+                Assert.Single(personality.GetVisualDescendants().OfType<CompanionPickerCard>());
+                w.ShowTab("companion");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Same(presets, room.FindControl<MakeHerYoursView>("PersonalityZone"));
+                Assert.Contains(community, room.GetVisualDescendants());
+                Assert.Contains(library, room.GetVisualDescendants());
+
             }
             finally
             {

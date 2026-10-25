@@ -66,7 +66,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages
             _giveBack.Clear();
         }
 
-        private void Borrow(Control element, ContentControl host)
+        private void Borrow(Control element, ContentControl host) => Borrow(element, host, _giveBack);
+
+        internal static void Borrow(Control element, ContentControl host, List<Action> giveBack)
         {
             if (ReferenceEquals(host.Content, element)) return;
             Action? restore = null;
@@ -89,7 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages
                 restore = () => owner.Content = element;
             }
             host.Content = element;
-            _giveBack.Add(() =>
+            giveBack.Add(() =>
             {
                 if (ReferenceEquals(host.Content, element)) host.Content = null;
                 restore?.Invoke();

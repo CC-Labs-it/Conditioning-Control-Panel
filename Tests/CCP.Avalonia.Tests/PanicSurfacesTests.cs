@@ -101,6 +101,7 @@ public sealed class PanicSurfacesTests
         "chaos-skia-fx",
         "chaos-vibe-trail",
         "companion-transcript",
+        "companion-conversation",
         "corner-gif",
         "deeper-editor-audio",
         "engine",

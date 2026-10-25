@@ -28,6 +28,21 @@ namespace CCP.Avalonia.Tests;
 public sealed class ConversationPageTests
 {
     [Fact]
+    public System.Threading.Tasks.Task PortraitHasWpfDustLayer() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var page = new ConversationPage();
+        var dust = page.FindControl<ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas>("StageDust");
+        Assert.NotNull(dust);
+        Assert.Equal(ConditioningControlPanel.Avalonia.Controls.AmbientFxLayers.DustField, dust.Layers);
+        Assert.False(dust.IsHitTestVisible);
+        Assert.False(dust.IsRunning); // unattached surfaces never tick
+        return System.Threading.Tasks.Task.CompletedTask;
+    });
+
+    [Fact]
     public System.Threading.Tasks.Task CompanionTabSendsShowsAndFollowsTheAccount() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
