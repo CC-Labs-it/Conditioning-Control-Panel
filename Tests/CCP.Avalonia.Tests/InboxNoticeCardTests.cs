@@ -85,8 +85,9 @@ public sealed class InboxNoticeCardTests
             CoreSettings.Current.SeenFeatureIntros.Add(TierCelebration.KeyT2);
             StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
             shell = new MainShellWindow();
-            shell.TierOnNoticePass(true);
-            shell.TierOnNoticePass(true);
+            shell.Show();
+            shell.Activate();   // the user path: Opened (celebration re-check) and the Activated focus hook
+            shell.Activate();
             Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "tier-on:2");
             var flyout = new InboxFlyout();
             host = new Window { Content = flyout };
@@ -103,6 +104,87 @@ public sealed class InboxNoticeCardTests
             CoreAccount.HasPremiumAccessProvider = oldPremium; CoreAccount.HasLabAccessProvider = oldLab;
             CoreSettings.Current.LastKnownEffectiveTier = saved;
             CoreSettings.Current.SeenFeatureIntros.Clear(); CoreSettings.Current.SeenFeatureIntros.AddRange(seen);
+        }
+    });
+
+    [Fact]
+    public void InviteWeekIsNotARiseOnFocus() => Run(() =>
+    {
+        var oldPremium = CoreAccount.HasPremiumAccessProvider;
+        var oldLab = CoreAccount.HasLabAccessProvider;
+        var s = CoreSettings.Current;
+        var saved = s.LastKnownEffectiveTier;
+        var grant = s.InviteGrantUntil;
+        var cached = s.PatreonPremiumValidUntil;
+        var seen = s.SeenFeatureIntros.ToArray();
+        MainShellWindow? shell = null;
+        try
+        {
+            CoreAccount.HasPremiumAccessProvider = () => true;
+            CoreAccount.HasLabAccessProvider = () => false;
+            s.InviteGrantUntil = DateTime.UtcNow.AddDays(5);
+            s.PatreonPremiumValidUntil = null;
+            s.LastKnownEffectiveTier = 0;
+            s.SeenFeatureIntros.Add(TierCelebration.KeyT1);
+            StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+            shell = new MainShellWindow();
+            shell.Show();
+            shell.Activate();
+            Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key.StartsWith("tier-on:"));
+            Assert.Equal(0, s.LastKnownEffectiveTier); // a later real purchase still gets its card
+        }
+        finally
+        {
+            shell?.Close();
+            CoreAccount.HasPremiumAccessProvider = oldPremium; CoreAccount.HasLabAccessProvider = oldLab;
+            s.LastKnownEffectiveTier = saved; s.InviteGrantUntil = grant; s.PatreonPremiumValidUntil = cached;
+            s.SeenFeatureIntros.Clear(); s.SeenFeatureIntros.AddRange(seen);
+        }
+    });
+
+    [Fact]
+    public void FirstTierReadingStaysInMemoryAndAChangeSaves() => Run(() =>
+    {
+        var oldPremium = CoreAccount.HasPremiumAccessProvider;
+        var oldLab = CoreAccount.HasLabAccessProvider;
+        var oldSettings = CoreSettings.ServiceProvider;
+        MainShellWindow? shell = null;
+        Window? other = null;
+        try
+        {
+            CoreAccount.HasPremiumAccessProvider = () => false;
+            CoreAccount.HasLabAccessProvider = () => false;
+            var service = new SettingsService(); // real settings.json in the CCP_USERDATA_DIR sandbox
+            CoreSettings.ServiceProvider = () => service;
+            shell = new MainShellWindow();
+            shell.Show();
+            other = new Window();
+            other.Show();
+            void Refocus()
+            {
+                SettingsService.DisarmAllPendingSaves(); // only this focus pass may arm a save
+                other.Activate();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                shell.Activate(); // the user path: the Activated focus hook
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            }
+            service.Current.LastKnownEffectiveTier = null;
+            Refocus();
+            Assert.Equal(0, service.Current.LastKnownEffectiveTier);
+            Assert.False(service.HasPendingSave); // a first reading must not write settings.json
+            CoreAccount.HasPremiumAccessProvider = () => true; // a known rise 0 -> 2 is saved at once
+            CoreAccount.HasLabAccessProvider = () => true;
+            service.Current.SeenFeatureIntros.Add(TierCelebration.KeyT2);
+            Refocus();
+            Assert.Equal(2, service.Current.LastKnownEffectiveTier);
+            Assert.True(service.HasPendingSave);
+        }
+        finally
+        {
+            other?.Close(); shell?.Close();
+            SettingsService.DisarmAllPendingSaves();
+            CoreSettings.ServiceProvider = oldSettings;
+            CoreAccount.HasPremiumAccessProvider = oldPremium; CoreAccount.HasLabAccessProvider = oldLab;
         }
     });
 }

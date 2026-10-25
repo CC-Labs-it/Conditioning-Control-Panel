@@ -93,13 +93,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 var settings = CoreSettings.Current;
-                var current = CoreAccount.HasLabAccess ? 2 : CoreAccount.HasPremiumAccess ? 1 : 0;
+                // WPF EntitlementTierSync.EffectiveTierNow: an invite week is not a plan.
+                var current = CoreAccount.HasLabAccess ? 2 : CoreAccount.HasPremiumAccess
+                    && !global::ConditioningControlPanel.Services.ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, settings) ? 1 : 0;
                 // ponytail: no authoritative server-answered signal on this head yet. Never record a cached drop.
                 var verdict = Services.TierOnNoticeRule.Decide(settings.LastKnownEffectiveTier, current, mayRecordDrop: false);
                 if (verdict.Record != settings.LastKnownEffectiveTier)
                 {
+                    // Deviation from WPF (docs/avalonia-decisions.md 2026-10-25): a first reading stays in memory
+                    // for the next normal save, because startup must not write settings.json (LanguageSelectorTests).
+                    var known = settings.LastKnownEffectiveTier.HasValue;
                     settings.LastKnownEffectiveTier = verdict.Record;
-                    CoreSettings.Save();
+                    if (known) CoreSettings.Save();
                 }
                 if (!verdict.Owed || !mayShow
                     || Services.TierCelebration.IsOwed(settings.SeenFeatureIntros, current, onRise: true)) return;

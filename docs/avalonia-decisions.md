@@ -1314,3 +1314,14 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Option B: keep scoped sending; record the difference in the `views-profile-privacy-panel` parity row.
 - Choice: B, interim. Advised by the supervisor: never risk revoking a server privacy grant without an owner decision.
   oracle-deep decision pending; follow-up lane wire-views-profile-privacy-panel-b.
+## 2026-10-25: First tier-on reading is not saved at startup (host-inbox-notice-card)
+
+- Question: WPF `TierOnNoticePass` (MainWindow.Patreon.cs:1207-1211) saves settings as soon as it records the first tier
+  reading (`LastKnownEffectiveTier` null -> current). On this head the pass runs on the shell's Opened/Activated hooks, so a
+  first launch would write `settings.json` at startup, which `LanguageSelectorTests` forbids.
+- Option A: keep the first reading in memory (written by the next normal save); save at once only when a known value changes.
+- Option B: keep WPF's save and seed `LastKnownEffectiveTier` in the Language test profile (real first launches still write
+  settings at startup).
+- Choice: A. Advised by the supervisor. Reason: startup must not write settings, protected by `LanguageSelectorTests`.
+  If the app quits before any other save, the next launch reads the tier for the first time again (silently, as before).
+  `InboxNoticeCardTests.FirstTierReadingStaysInMemoryAndAChangeSaves`.

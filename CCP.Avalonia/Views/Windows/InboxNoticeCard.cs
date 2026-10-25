@@ -17,6 +17,9 @@ public sealed class InboxNoticeCard : Window, Services.Startup.IPassiveStartupSu
     internal static InboxNoticeCard? Current { get; private set; }
     internal static void CloseForPanic() => Current?.Close();
 
+    /// <summary>Render constructor (--render-all): both buttons and a body, the card's full layout.</summary>
+    internal InboxNoticeCard() : this("Prime is on", "Everything Prime unlocks is open again.", "Open", null, "Later", null) { }
+
     private InboxNoticeCard(string heading, string body, string? primary, Action? onPrimary,
         string? secondary, Action? onSecondary)
     {
