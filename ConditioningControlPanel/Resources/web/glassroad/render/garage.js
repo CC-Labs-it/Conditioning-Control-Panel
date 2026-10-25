@@ -54,7 +54,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   const arrows=garageArrows(scene),ray=new T.Raycaster(),pointer=new T.Vector2(),particles=[];
   const particleGeo=new T.OctahedronGeometry(.014),particleMaterial=new T.MeshBasicNodeMaterial({color:0xffd4ae});
   for(const arrow of arrows.arrows)style.apply(arrow.root);
-  const ui=garageUi({change,select,customize,trackId,online,changeTrack,action:name=>{if(!moving&&!viewBusy){sound('menu-ok');action(name);}},hover:(dir,on)=>arrows.hover(dir,on)});ui.track(track,laps);
+  const ui=garageUi({change,select,customize,trackId,online,changeTrack:id=>changeTrack?.(id),action:name=>{if(!moving&&!viewBusy){sound('menu-ok');action(name);}},hover:(dir,on)=>arrows.hover(dir,on)});ui.track(track,laps);
   function save(){try{storage?.setItem(STORAGE,JSON.stringify(state));}catch{}}
   function paint(){skin.set(state);ui.paint(state,{custom:custom||view>0,busy:!!moving||viewBusy,locked:LOCKED});save();}
   function change(values,colors=false){if(viewBusy)return;const previous=state.outfit;Object.assign(state,values);if(colors){state.antenna=state.secondary;state.shoes=state.secondary;state.hands='#'+new T.Color(state.primary).lerp(new T.Color('#ffffff'),.24).getHexString();state.face='#'+new T.Color(state.primary).lerp(new T.Color('#ffffff'),.65).getHexString();}
@@ -139,6 +139,12 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   wardrobeBounds={min:allOutfits.min.toArray(),max:allOutfits.max.toArray()};state.outfit=initial;redress();paint();
   return {
     scene,camera,nav,life:{emi:emiLife.metrics,vehicles:vehicleLives.map(l=>l.metrics)},get state(){return {...state};},get yaw(){return yaw;},get custom(){return custom;},get busy(){return !!moving||viewBusy;},get transition(){return {progress:view,busy:viewBusy,framing:customFrame};},get selected(){return KARTS[selected][0];},select,customize,change,
+    setCourse(course){ui.setCourse(course);},
+    setHandlers(next={}){
+      if('action' in next)action=typeof next.action==='function'?next.action:()=>{};
+      if('sound' in next)sound=typeof next.sound==='function'?next.sound:()=>{};
+      if('changeTrack' in next)changeTrack=typeof next.changeTrack==='function'?next.changeTrack:()=>{};
+    },
     setVisible(on){if(on!==visible){visible=on;gesture=null;ui.setVisible(on);if(on)resize();}},
     render(dt,reduced,{gentle=false}={}){update(dt,reduced,gentle);renderer.three.render(scene,camera);},
     dispose(){canvas.style.opacity='';observer.disconnect();document.removeEventListener('keydown',keydown,true);for(const [event,fn]of [['pointerdown',down],['pointermove',move],['pointerup',up],['pointercancel',cancel],['lostpointercapture',cancel]])canvas.removeEventListener(event,fn);contactGeo.dispose();contactMat.dispose();emiLife.dispose();for(const l of vehicleLives)l.dispose();dress?.dispose();style.dispose();skin.dispose();arrows.dispose();ui.dispose();mixer.stopAllAction();environment.dispose();floor.geometry.dispose();floor.material.dispose();particleGeo.dispose();particleMaterial.dispose();for(const m of owned)m.dispose();},

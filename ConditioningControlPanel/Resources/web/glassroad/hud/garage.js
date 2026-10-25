@@ -15,7 +15,7 @@ export function garageUi({change,select,customize,action,hover,trackId='threshol
   root.querySelector('[data-g=online]').hidden=!online;
   document.body.append(root);
   const $=s=>root.querySelector(s);
-  const picker=createTrackPicker({root,courses:COURSES,trackId,change:id=>changeTrack?.(id)});
+  let picker=createTrackPicker({root,courses:COURSES,trackId,change:id=>changeTrack?.(id)});
   $('.g-course-name').textContent=COURSES.find(c=>c.id===trackId)?.name||'Threshold';
   const make=(parent,label,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=fn;$(parent).append(b);return b;};
   for(const [id,label]of OUTFITS)make('.g-outfits',label,()=>change({outfit:id})).dataset.outfit=id;
@@ -47,6 +47,16 @@ export function garageUi({change,select,customize,action,hover,trackId='threshol
       $('.g-announce').textContent=custom?'Customize EMI':KARTS.find(k=>k[0]===s.kart)[1]+' selected';
     },
     track(name,laps){$('.g-track').textContent=name+' · '+laps+' laps';},
+    setCourse(course){
+      trackId=course.trackId;online=course.online!==false;
+      // Replace only the tiny picker. Its previous selection, pending sketches and delayed
+      // navigation belong to the old course, while the wardrobe and carousel stay resident.
+      picker.dispose();picker=createTrackPicker({root,courses:COURSES,trackId,change:id=>changeTrack?.(id)});
+      $('[data-g=online]').hidden=!online;
+      $('.g-course-name').textContent=COURSES.find(c=>c.id===trackId)?.name||course.track||'Threshold';
+      $('.g-track').textContent=course.track+' · '+course.laps+' laps';
+      root.classList.remove('g-course-leaving');
+    },
     setVisible(on){if(root.hidden===!on)return;root.hidden=!on;document.body.classList.toggle('garage-open',on);if(on)$('[data-g=race]').focus({preventScroll:true});},
     customFocus(on){$(on?'[data-g=done]':'[data-g=customize]').focus({preventScroll:true});},
     dispose(){picker.dispose();root.remove();document.body.classList.remove('garage-open');},

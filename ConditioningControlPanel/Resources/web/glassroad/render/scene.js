@@ -94,12 +94,24 @@ const routesMod = await import('./routes.js').catch((e) => { console.warn('[glas
 const mediaMod = await import('./media.js').catch((e) => { console.warn('[glassroad/world] no media slots: ' + (e && e.message)); return null; });
 // Layouts load with the module so every material exists before the renderer warms.
 const SPIRAL_LAYOUTS = new Map();
-if (spiralsMod && globalThis.location) SPIRAL_LAYOUTS.set('threshold', await spiralsMod.fetchSpiralLayout('threshold'));
-if (spiralsMod && globalThis.location?.search?.includes('mainframe')) SPIRAL_LAYOUTS.set('mainframe', await spiralsMod.fetchSpiralLayout('mainframe'));
-const MAINFRAME_MEDIA_LAYOUT = mediaMod && globalThis.location?.search?.includes('mainframe')
-  ? await mediaMod.loadMediaLayout('mainframe') : null;
-const THRESHOLD_MEDIA_LAYOUT = mediaMod && globalThis.location
-  ? await mediaMod.loadMediaLayout('threshold') : null;
+const LAYOUT_LOADS = new Map();
+let MAINFRAME_MEDIA_LAYOUT = null, THRESHOLD_MEDIA_LAYOUT = null;
+/** Internal course changes must prepare layouts independently of the original page URL. */
+export async function prepareWorldLayouts(trackId) {
+  if (!['threshold','mainframe'].includes(trackId)) return;
+  if (!LAYOUT_LOADS.has(trackId)) LAYOUT_LOADS.set(trackId, (async () => {
+    const [spirals,media] = await Promise.all([
+      spiralsMod ? spiralsMod.fetchSpiralLayout(trackId) : null,
+      mediaMod ? mediaMod.loadMediaLayout(trackId) : null,
+    ]);
+    SPIRAL_LAYOUTS.set(trackId,spirals);
+    if (trackId === 'mainframe') MAINFRAME_MEDIA_LAYOUT = media;
+    else THRESHOLD_MEDIA_LAYOUT = media;
+  })());
+  await LAYOUT_LOADS.get(trackId);
+}
+if (globalThis.location) await prepareWorldLayouts('threshold');
+if (globalThis.location?.search?.includes('mainframe')) await prepareWorldLayouts('mainframe');
 
 /** Track MeshData -> Mesh, or null when the data is empty. */
 export function meshFrom(d, material) {
@@ -169,7 +181,7 @@ function props(track) {
  * Polish 2 opts: renderer (createRenderer's wrapper: the shadow map and its tier hook), shadowsOn (the
  * Shadows option), photosafe (fx/photosafe.js, the impact glows ask it). Returns { ..., shadows, colossi }.
  */
-export function buildWorld(track, feel, { art = null, bus = null, seed = 1, count = 8, renderer = null, shadowsOn = true, photosafe = null, spiralLayout = SPIRAL_LAYOUTS.get(track.id), looks = [] } = {}) {
+export function buildWorld(track, feel, { art = null, bus = null, seed = 1, count = 8, renderer = null, shadowsOn = true, photosafe = null, spiralLayout = SPIRAL_LAYOUTS.get(track.id), looks = [], kartPool = null } = {}) {
   const scene = new Scene();
   const isMainframe = track.id === 'mainframe';
   // Fog stays in the warmed shader; its density eases as the kart dives into the coolant reservoir.
@@ -265,13 +277,15 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   if (finish) add(finish.object);
 
   // bot looks from the race seed; online each seat's { outfit, vehicle } (B2: boot calls setLook per seat on the room's start)
-  const karts = buildKarts(art, count, art && art.model('emi-teacup-kart') ? null : kartGeometry(), { seed, looks });
-  for (const k of karts.list) add(k.root);
+  const karts = kartPool?.current || buildKarts(art, count, art && art.model('emi-teacup-kart') ? null : kartGeometry(), { seed, looks });
+  if (kartPool) { if (kartPool.current) karts.rebind({art,seed}); kartPool.current = karts; }
+  for (const k of karts.list) { if (kartPool) scene.add(k.root); else add(k.root); }
   const kartObjs = karts.list.map((k) => k.root);
   const kart = kartObjs[0];
   const ring = createGlowMaterial(LOOK.ringColour);
   const ringMesh = new Mesh(new RingGeometry(LOOK.saucerR * 0.9, LOOK.saucerR * 1.1, 48).rotateX(-Math.PI / 2), ring.material);
   ringMesh.position.y = 0.03; kart.add(ringMesh);
+  if (kartPool) owned.push(ringMesh);
   const tendril = createGlowMaterial(LOOK.tendrilColour);
   const tendrilMesh = add(new Mesh(new CylinderGeometry(0.15, 0.6, 1, 12, 1, true).translate(0, 0.5, 0), tendril.material));
   // water (wave 1): per-metre surface codes so a wake laid on water goes wider and whiter with one table read
@@ -297,7 +311,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const skids = createSkids(feel, count);
   add(skids.object);
   // reactions (REACT lane): bumps, walls, the countdown glance, finishes and the head sprays
-  karts.attach({ bus, particles });
+  const detachKarts = karts.attach({ bus, particles });
   // the lamp's soft shadows: colossi, karts and props onto the road and pads; blobs on the phone tier
   let shadows = null;
   if (renderer) {
@@ -599,9 +613,15 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     phraseGates.update(k, dt, { paused: !!view.paused, mode: view.mode });
   }
 
+  let disposed = false;
   function dispose() {
-    for (const o of owned) o.traverse((m) => { if (m.geometry) m.geometry.dispose(); if (m.material) m.material.dispose(); });
-    particles.dispose(); skids.dispose(); lines.dispose(); wakes.dispose(); motes.dispose(); karts.dispose();
+    if (disposed) return; disposed = true;
+    detachKarts?.();
+    if (kartPool) { ringMesh.removeFromParent(); for (const k of karts.list) if(k.root.parent===scene)scene.remove(k.root); }
+    // r186 Sprite quads are a global singleton shared with retained racer tags and stars.
+    // Disposing a departing particle Sprite's geometry destroys their still-bound GPU buffers.
+    for (const o of owned) o.traverse((m) => { if (m.geometry && !m.isSprite) m.geometry.dispose(); if (m.material) m.material.dispose(); });
+    particles.dispose(); skids.dispose(); lines.dispose(); wakes.dispose(); motes.dispose(); if (!kartPool) karts.dispose();
     if (itemVis) itemVis.dispose();
     if (shadows) shadows.dispose();
     if (colossi && colossi.dispose) colossi.dispose();

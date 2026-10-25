@@ -250,6 +250,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     const art3d = buildKart(art);
     const model = art3d || new Mesh(greyGeo, createKartMaterial(look ? look.cup : [1, 1, 1]).material);
     const mats = [], rims = [];
+    if (!art3d) mats.push(model.material);
     model.traverse((o) => {
       if (!o.isMesh || !o.material || o.material.name !== 'kart_surface') return;
       const surf = createKartSurface(o.material, look, R);
@@ -293,16 +294,33 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
 
   let particles = null;
   const offs = [];
+  let binding = 0, disposed = false;
+  const capSource = a => a?.model?.(a?.theme === 'boudoir' ? 'glide-boudoir-beanie' : 'glide-keep-beanie');
+  let glideSource = capSource(art);
   const queue = (i, kind, a) => {
     if (i === -1) for (const k of list) k.pend.push([kind, { ...a }]);
     else if (list[i]) list[i].pend.push([kind, a]);
   };
   /** Wire the bus reactions and the head sprays (scene.js calls this once after createParticles). */
   function attach({ bus = null, particles: pt = null } = {}) {
-    if (pt) particles = pt;
+    detach();
+    const mine = binding;
+    particles = pt;
     if (bus) for (const name of BUS_EVENTS) offs.push(bus.on(name, (p) => { for (const [i, kind, a] of reactionsFor(name, p)) queue(i, kind, a); }));
     // dev (?bot=1 only): the bus on the page so screenshot scripts can play an item hit or a fire
     if (bus && globalThis.location && /[?&]bot=1(?:&|$)/.test(globalThis.location.search)) { globalThis.__glassroadBus = bus; globalThis.__glassroadKarts = list; globalThis.__glassroadSetLook = setLook; }
+    return () => { if (binding === mine) detach(); };
+  }
+  function detach() { binding++; for (const off of offs.splice(0)) off(); particles = null; }
+  function rebind(next = {}) {
+    art = next.art === undefined ? art : next.art;
+    seed = next.seed === undefined ? seed : next.seed;
+    const source = capSource(art);
+    if (source !== glideSource) {
+      for (const k of list) { k.glideCap?.dispose(); k.glideCap = createGlideCap(art, k.model); }
+      glideSource = source;
+    }
+    resetReactions();
   }
 
   function setName(k, name) {
@@ -494,7 +512,8 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
   }
 
   function dispose() {
-    for (const off of offs) off();
+    if (disposed) return; disposed = true;
+    detach();
     for (const k of list) {
       if (k.tag) { k.tag.material.map.dispose(); k.tag.material.dispose(); }
       for (const m of k.mats) m.dispose();
@@ -512,13 +531,18 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     }
     if (markTex) markTex.dispose();
     auraGeo.dispose();
+    if (!kartGltf) greyGeo?.dispose();
   }
   /** Re-dress seat i (multiplayer: a remote player's { outfit, vehicle } ids; an unknown id gets the default look). */
   function setLook(i, want) {
     const k = list[i];
     if (!k || !k.dress) return null;
-    k.dress.dispose();
     const picked=lookForSeat(i,seed,want);
+    if ((k.dress.outfit || null) === (picked.outfit || null) && (k.dress.vehicle || null) === (picked.vehicle || null)) {
+      if(k.skin)k.skin.set(skinFromWire(want?.skin));
+      return lookOf(k);
+    }
+    k.dress.dispose();
     k.dress = dressKart(art, k.model, i===0&&want?picked:lookForTier(picked,Q.name), { tint: k.look ? k.look.cup : null, tintMix: LOOK.vehicleTintMix });
     k.propeller.fit(art?.model?.(k.dress?.vehicle || 'emi-teacup-kart')?.scene);
     if(k.skin)k.skin.set(skinFromWire(want?.skin));
@@ -527,5 +551,5 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
   }
   const lookOf = (k) => ({ outfit: k.dress ? k.dress.outfit : null, vehicle: k.dress ? k.dress.vehicle : null });
 
-  return { list, pose, hide, attach, resetReactions, setLook, looks: () => list.map(lookOf), dispose };
+  return { list, pose, hide, attach, rebind, resetReactions, setLook, looks: () => list.map(lookOf), dispose };
 }

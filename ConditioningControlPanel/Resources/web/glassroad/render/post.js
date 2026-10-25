@@ -54,6 +54,11 @@ export function createPost(three, scene, camera) {
   return {
     pipe,
     antialias: Q.antialias,
+    /** Reuse the same scene-pass targets, effect nodes and composite pipeline for the next course. */
+    setScene(nextScene,nextCamera){
+      scene=nextScene;camera=nextCamera;scenePass.scene=nextScene;scenePass.camera=nextCamera;
+    },
+    detachScene(){scene=null;camera=null;scenePass.scene=null;scenePass.camera=null;},
     /** Compile every visible scene object for the scene pass target (no draw). */
     async compileAsync() {
       const target = three.getRenderTarget(), mrt = three.getMRT();

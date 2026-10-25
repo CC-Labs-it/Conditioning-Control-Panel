@@ -14,6 +14,7 @@
  */
 import { WebGPURenderer, Group, Mesh, Sprite, PlaneGeometry } from 'three/webgpu';
 import { createPost } from './post.js';
+import { releaseSceneResources, trackSceneResources, disposeSceneResources } from './sceneResources.js';
 import { Q, TIERS, GOVERNOR, setTier, pickTier, createGovernor, createDynRes, dynLines, shortGpu } from './quality.js';
 import { createFrameGate } from '../core/clock.js';
 import { loadOptions, cleanOptions } from '../hud/options.js';
@@ -44,6 +45,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
 
   const three = new WebGPURenderer({ canvas, antialias: false, forceWebGL: webgl2, powerPreference: 'high-performance', ...(context ? { context } : {}) });
   await three.init();
+  trackSceneResources(three);
   let compiledGraphs;
   if (qs.get('profileLoad') === '1') {
     compiledGraphs = 0;
@@ -81,9 +83,11 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   resize();
 
   function postFor(scene, camera) {
-    if (!post || postKey[0] !== scene || postKey[1] !== camera || post.antialias !== Q.antialias) {
+    if (!post || post.antialias !== Q.antialias) {
       if (post) post.dispose();
       post = createPost(three, scene, camera); postKey = [scene, camera];
+    } else if (!postKey || postKey[0] !== scene || postKey[1] !== camera) {
+      post.setScene(scene,camera);postKey=[scene,camera];
     }
     return post;
   }
@@ -152,7 +156,18 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     },
     /** Call first thing in every requestAnimationFrame: false = skip this one (the frame cap). */
     frameDue(now) { gated = true; return gate.due(now); },
+    /** Loading is not a slow gameplay frame. Keep quality/options, but restart their timing grace. */
+    beginCourse(){
+      last=0;gated=false;pending=null;gate.setCap(opts.frameCap);
+      meter.n=0;meter.t=0;meter.fps=0;
+      gov=pinOf()?null:createGovernor({tier:Q.name,ceiling:autoTier,rules:govRules});
+    },
     post: postFor,
+    /** Detach a departing course while retaining reusable post targets and the GPU context. */
+    releaseScene(scene,camera,beforeRetire){
+      if(!post||!postKey||postKey[0]!==scene||(camera&&postKey[1]!==camera))return false;
+      post.detachScene();postKey=null;releaseSceneResources(three,scene,beforeRetire);return true;
+    },
     compile(scene, camera, extras, opts) { return warmAll(api, scene, camera, extras, opts); },
     resize,
     /** dt (frame seconds) reaches post.update for the item screen effect (CONTRACT-B1). */
@@ -183,7 +198,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
       return { backend, tier: Q.name, drawCalls: r.drawCalls, triangles: r.triangles, perFrame: true, compiledGraphs,
         renderScale: Math.round(scale() * 100) / 100, renderFps: meter.fps, displayMs: Math.round(gate.displayMs * 100) / 100, gpu, art: meter.art };
     },
-    dispose() { if (ro) ro.disconnect(); if (post) post.dispose(); readout(false); three.dispose(); },
+    dispose() { if (ro) ro.disconnect(); if (post) post.dispose(); readout(false); disposeSceneResources(three); three.dispose(); },
   };
   return api;
 }
