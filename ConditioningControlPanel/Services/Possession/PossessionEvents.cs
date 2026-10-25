@@ -139,15 +139,9 @@ public sealed class PossessionEvents
         // walked the whole window first, on every setting write of every session (7.1.5 logs).
         if (director == null || !director.IsHaunting) return;
 
-        // The Possession settings themselves are exempt: reacting to "the user just turned the haunt
-        // down" by haunting them is the one joke that reads as the app ignoring consent. The test is
-        // a string compare and safe on any thread, so an exempt setting never pays for a hop.
-        var name = e?.PropertyName ?? "";
-        if (name.StartsWith("LockdownPossession", StringComparison.Ordinal)
-            || name.StartsWith("LockdownPhotosafe", StringComparison.Ordinal)
-            || name.StartsWith("LockdownTripwires", StringComparison.Ordinal)
-            || name.StartsWith("LockdownWarden", StringComparison.Ordinal))
-            return;
+        // The Possession settings themselves are exempt (PossessionReactiveRules.IsConsentSetting):
+        // a string compare, so an exempt setting never pays for a hop.
+        if (PossessionReactiveRules.IsConsentSetting(e?.PropertyName)) return;
 
         // Runs inline when we are already on the UI thread, which is the common case (a user
         // flipping a toggle), so nothing about the timing of a hand-driven change moves.
@@ -165,24 +159,13 @@ public sealed class PossessionEvents
         });
     }
 
-    /// <summary>Name or caption says Start / Stop. Deliberately loose (the label is localized, the
-    /// x:Name is not) - a false positive here costs one dodge on a button that was not the scary one.</summary>
+    /// <summary>Name, caption or possession tag says Start / Stop (PossessionReactiveRules).</summary>
     private static bool LooksLikeStartStop(FrameworkElement el)
     {
         try
         {
-            var name = el.Name ?? "";
-            if (name.IndexOf("Start", StringComparison.OrdinalIgnoreCase) >= 0
-                || name.IndexOf("Stop", StringComparison.OrdinalIgnoreCase) >= 0) return true;
-
-            if (el is ContentControl cc && cc.Content is string s)
-            {
-                if (s.IndexOf("start", StringComparison.OrdinalIgnoreCase) >= 0
-                    || s.IndexOf("stop", StringComparison.OrdinalIgnoreCase) >= 0) return true;
-            }
-            var tag = Possession.GetName(el);
-            return tag.IndexOf("start", StringComparison.OrdinalIgnoreCase) >= 0
-                   || tag.IndexOf("stop", StringComparison.OrdinalIgnoreCase) >= 0;
+            var caption = (el as ContentControl)?.Content as string;
+            return PossessionReactiveRules.LooksLikeStartStop(el.Name, caption, Possession.GetName(el));
         }
         catch { return false; }
     }

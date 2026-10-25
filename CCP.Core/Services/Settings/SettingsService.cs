@@ -703,6 +703,24 @@ namespace ConditioningControlPanel.Services
             Unchanged,
         }
 
+        /// <summary>Bundled preset JSON carries no action ids, so every load minted new ones and
+        /// rewrote settings.json. Keep the stored id where the trigger id and the action's position
+        /// and type match (found by the real-profile migration test).</summary>
+        private static void KeepActionIds(List<KeywordTrigger>? stored, List<KeywordTrigger>? bundled)
+        {
+            if (stored == null || bundled == null) return;
+            foreach (var trigger in bundled)
+            {
+                var old = trigger == null ? null : stored.FirstOrDefault(t => t?.Id == trigger.Id);
+                if (old == null) continue;
+                for (var i = 0; i < Math.Min(old.Actions.Count, trigger!.Actions.Count); i++)
+                {
+                    var (was, now) = (old.Actions[i], trigger.Actions[i]);
+                    if (was != null && now != null && was.Type == now.Type) now.Id = was.Id;
+                }
+            }
+        }
+
         /// <summary>
         /// Merges ONE bundled built-in preset into <paramref name="settings"/>. Pure with respect to
         /// the app spine (no file IO, no <c>App.*</c>), which is what makes the contract testable.
@@ -749,6 +767,7 @@ namespace ConditioningControlPanel.Services
             existing.AvatarPromptTemplate = preset.AvatarPromptTemplate;
             existing.PhrasePools = preset.PhrasePools;
             existing.CannedPhrases = preset.CannedPhrases;
+            KeepActionIds(existing.Triggers, preset.Triggers);
             existing.Triggers = preset.Triggers;
             existing.Version = preset.Version;
 
@@ -876,6 +895,10 @@ namespace ConditioningControlPanel.Services
                 _saveDebounceTimer = null;
                 Armed.TryRemove(this, out _);
             }
+            // A save that passed its seal check before the flag was set may still be writing. Wait
+            // it out here: it re-checks the seal inside this lock, so once this returns no write is
+            // in flight and none can start, and the reset's move and sweep are the last word.
+            lock (_saveLock) { }
             Log.Warning("Settings sealed for factory reset — every further save is a no-op");
         }
 
@@ -930,6 +953,8 @@ namespace ConditioningControlPanel.Services
 
                 lock (_saveLock)
                 {
+                    // Sealed while this snapshot was being serialized: the reset owns the file now.
+                    if (_sealed) return;
                     if (sequence < Interlocked.Read(ref _lastWrittenSaveSequence))
                     {
                         Log.Debug("Settings save #{Sequence} dropped — a newer snapshot already reached disk", sequence);

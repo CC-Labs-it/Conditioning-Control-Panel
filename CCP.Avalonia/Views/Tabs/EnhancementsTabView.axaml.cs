@@ -31,7 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// <c>SkillTreeRules</c>, the same rules WPF SkillTreeService delegates to.
     ///
     /// <para>Not here (see the parity rows): purchasing (SkillCard_Click / PurchaseSkillAsync is a
-    /// server call behind account auth) and the four Ditzy Data PRO analytics expanders.</para>
+    /// server call behind account auth) and purchase FX. PRO analytics live in EnhancementsTabView.Analytics.cs.</para>
     /// </summary>
     public partial class EnhancementsTabView : UserControl
     {
@@ -379,7 +379,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             return _blurredArt[id] = baked;
         }
 
-        /// <summary>CreateSkillTreeHeader, minus the four PRO expanders (AddProSection).</summary>
+        /// <summary>CreateSkillTreeHeader, including the four PRO expanders (AddProSections).</summary>
         private Control Header()
         {
             var settings = CoreSettings.Current;
@@ -451,6 +451,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             if (SkillTreeRules.HasSkill(settings, "ditzy_data"))
                 AddDitzyStats(main, mods?.GetStatsTitle());
+
+            AddProSections(main);
 
             // Stats: XP multiplier (+ rush), conditioning time.
             var xp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
