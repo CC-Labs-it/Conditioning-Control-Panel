@@ -1,4 +1,5 @@
 /* Bounded screen atmosphere. All motion advances on the caller's pause-aware frame delta. */
+import { KEEP_COLOURS } from './keepTheme.js';
 export const ATMOSPHERE = Object.freeze({
   fogFillS: 3.6, fogLayers: 4, fogDepth: 1.3, fogDrift: 0.045,
   fogFar: '#8a246b', fogNear: '#ff9fd3',
@@ -11,7 +12,7 @@ const ease = (v) => { const t = sat(v); return t * t * (3 - 2 * t); };
 /** The old Pink Fog keeps its wire id; the actual mist belongs to the course. */
 export const FOG_PALETTES = Object.freeze({
   threshold: ['#8a246b', '#ff9fd3'], mainframe: ['#123e2c', '#8be5ad'],
-  keep: ['#302547', '#bd9cdb'], boudoir: ['#8d4066', '#ffd0e5'],
+  keep: [KEEP_COLOURS[0], KEEP_COLOURS[1]], boudoir: ['#8d4066', '#ffd0e5'],
   goonworks: ['#650b47', '#f69bdd'],
 });
 export const fogPalette = (theme) => FOG_PALETTES[theme] || FOG_PALETTES.threshold;
