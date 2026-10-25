@@ -3203,3 +3203,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-win-whatmoved-card: +117
 - What moved card: parity tests for the Show me landings, read mode, keys and fresh install. Duplicate tests removed.
 - Row icons are now Fluent glyphs (IconMap, 📑 -> Tabs), not emoji text.
+
+## avalonia-port/wire-ctrl-section-tab-strip: +251
+- Section strip pills: choosing one draws the NavGlow ring (Full/Reduced/Off), and pointer press squishes the pill to 0.97 over 80 ms through Core InteractionPressMotion, which WPF MotionFx shares. Covered by SectionStripChoosePressTests; the row stays stub, with the remaining work in follow-up -b.
+- Review fixes: the NavGlow clock is restored per test, siblings share one bare app builder, and the press Transitions are built once so the 80 ms release ease survives a click (fail-proven). Final rgate 39732875251 was green except the lone RaceTrackPlayer flake (P115).
