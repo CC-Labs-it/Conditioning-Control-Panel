@@ -6418,6 +6418,8 @@
   "tray_show": "ウィンドウを表示",
   "tray_stop_everything": "すべて停止",
   "panic_portal_description": "パニック：すべて停止",
+  "quick_recal_portal_description": "クイック再調整：ウェブカメラのずれを補正",
+  "camera_portal_description": "カメラ：トラッキングの開始/停止",
   "panic_portal_bound": "パニックキー（全ウィンドウ）：{0}",
   "panic_portal_unavailable": "パニックキーはCCPなどのX11ウィンドウにフォーカスがある間だけ効きます。それ以外はトレイの「すべて停止」を使ってください。",
   "panic_key_wayland_hint": "Waylandでは、パニックキーはエフェクト実行中だけデスクトップ全体で捕捉されます。",

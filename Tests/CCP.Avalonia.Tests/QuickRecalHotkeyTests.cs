@@ -323,6 +323,45 @@ public sealed class QuickRecalHotkeyTests
     });
 
     [Fact]
+    public void FreshUser_GetsNoPortalBind_UntilConsentAndCalibration_ThenRebinds() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Init();
+        var s = CoreSettings.Current;
+        var old = (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey, s.WebcamConsentGiven, s.WebcamConsentVersion, s.CompanionPrompt.CameraShortcutGlobal);
+        var tracker = WebcamTracker.Instance;
+        var oldCal = tracker.Calibration;
+        var shell = new MainShellWindow();
+        int quickBinds = 0, cameraBinds = 0;
+        shell.RegisterQuickRecal = (_, _) => { quickBinds++; return new Registration(); };
+        shell.RegisterCameraHotkey = (_, _, _, _) => { cameraBinds++; return new Registration(); };
+        try
+        {
+            (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey, s.WebcamConsentGiven, s.WebcamConsentVersion, s.CompanionPrompt.CameraShortcutGlobal) =
+                (true, true, "Escape", "", false, "", true);
+            tracker.Calibration = null;
+            shell.ApplyQuickRecalHotkey();
+            shell.ApplyCameraHotkey();
+            Assert.False(MainShellWindow.QuickRecalPortalAllowed());   // fresh user: no compositor dialog
+            Assert.False(MainShellWindow.CameraPortalAllowed());
+            (s.WebcamConsentGiven, s.WebcamConsentVersion) = (true, WebcamConsent.ConsentVersion);
+            Assert.True(MainShellWindow.CameraPortalAllowed());
+            Assert.False(MainShellWindow.QuickRecalPortalAllowed());   // consent alone: quick recal still refuses
+            tracker.Calibration = new WebcamCalibrationData();
+            Assert.True(MainShellWindow.QuickRecalPortalAllowed());
+            shell.ApplyQuickRecalHotkey();   // the binding watch re-registers so the portal can be asked now
+            shell.ApplyCameraHotkey();
+            Assert.Equal((2, 2), (quickBinds, cameraBinds));
+        }
+        finally
+        {
+            tracker.Calibration = oldCal;
+            shell.StopQuickRecalHotkey();
+            shell.Close();
+            (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey, s.WebcamConsentGiven, s.WebcamConsentVersion, s.CompanionPrompt.CameraShortcutGlobal) = old;
+        }
+    });
+
+    [Fact]
     public void X11Grabs_MatchKeycodeAndChordModifiers_IgnoringLockKeys()
     {
         Action recal = () => { }, camera = () => { };

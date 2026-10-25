@@ -6418,6 +6418,8 @@
   "tray_show": "Afficher la fenêtre",
   "tray_stop_everything": "Tout arrêter",
   "panic_portal_description": "Panique : tout arrêter",
+  "quick_recal_portal_description": "Quick Recal : corriger la dérive de la webcam",
+  "camera_portal_description": "Caméra : démarrer/arrêter le suivi",
   "panic_portal_bound": "Touche panique dans toutes les fenêtres : {0}",
   "panic_portal_unavailable": "La touche panique ne marche que si une fenêtre CCP ou X11 a le focus. Sinon, utilise « Tout arrêter » dans la zone de notification.",
   "panic_key_wayland_hint": "Sous Wayland, la touche panique n'est capturée sur tout le bureau que pendant les effets.",

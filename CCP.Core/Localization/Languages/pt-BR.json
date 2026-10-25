@@ -6418,6 +6418,8 @@
   "tray_show": "Mostrar a janela",
   "tray_stop_everything": "Parar tudo",
   "panic_portal_description": "Pânico: parar tudo",
+  "quick_recal_portal_description": "Quick Recal: corrigir o desvio da webcam",
+  "camera_portal_description": "Câmera: iniciar/parar rastreamento",
   "panic_portal_bound": "Tecla de pânico em qualquer janela: {0}",
   "panic_portal_unavailable": "A tecla de pânico só funciona enquanto uma janela do CCP ou outra X11 está em foco. Fora disso, use \"Parar tudo\" na bandeja.",
   "panic_key_wayland_hint": "No Wayland a tecla de pânico só é capturada em toda a área de trabalho enquanto há efeitos ativos.",

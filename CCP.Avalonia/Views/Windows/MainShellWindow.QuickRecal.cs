@@ -19,13 +19,16 @@ public partial class MainShellWindow
 {
     private IDisposable? _quickRecalRegistration;
     private DispatcherTimer? _quickRecalBindingWatch;
-    private (bool Enabled, bool PanicOn, string Panic, string Pause)? _quickRecalBinding;
+    private (bool Enabled, bool PanicOn, string Panic, string Pause, bool Portal)? _quickRecalBinding;
     private bool _quickRecalBusy, _quickRecalClosed;
 
     // Native seam: headless tests never register a shortcut on the real desktop.
-    // Linux: native Wayland portal or X11 root grab, owned through pending consent as well.
+    // Linux: X11 root grab; the Wayland portal only once QuickRecalPortalAllowed (decisions.md 2026-10-25).
     internal Func<Window, Action, IDisposable?> RegisterQuickRecal = OperatingSystem.IsWindows() ? Win32QuickRecalHotkey.Register
-        : (_, pressed) => LinuxWebcamShortcut.Register("quick-recal", ChordMods.Ctrl | ChordMods.Alt, "G", "Quick Recalibrate", pressed);
+        : (_, pressed) => LinuxWebcamShortcut.Register("quick-recal", ChordMods.Ctrl | ChordMods.Alt, "G",
+            Loc.Get("quick_recal_portal_description"), pressed, QuickRecalPortalAllowed());
+    /// <summary>No compositor consent dialog for a chord that would refuse anyway: consent and a saved calibration first.</summary>
+    internal static bool QuickRecalPortalAllowed() => WebcamConsent.IsCurrent(CoreSettings.Current) && WebcamTracker.Instance.Calibration != null;
     internal Func<WebcamQuickRecalWindow, Window?, Task> ShowQuickRecal = ShowQuickRecalDialog;
     internal bool QuickRecalPlatformSupported = OperatingSystem.IsWindows() || OperatingSystem.IsLinux();
     internal bool QuickRecalHotkeyArmed => LinuxWebcamShortcut.Armed(_quickRecalRegistration);
@@ -68,7 +71,7 @@ public partial class MainShellWindow
     internal void ApplyQuickRecalHotkey()
     {
         var s = CoreSettings.Current;
-        var binding = (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey);
+        var binding = (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey, QuickRecalPortalAllowed());
         if (_quickRecalBinding == binding) return;
         _quickRecalBinding = binding;
         _quickRecalRegistration?.Dispose();

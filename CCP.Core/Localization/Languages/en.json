@@ -7033,6 +7033,8 @@
   "tray_show": "Show the window",
   "tray_stop_everything": "Stop everything",
   "panic_portal_description": "Panic: stop everything",
+  "quick_recal_portal_description": "Quick Recal: correct webcam drift",
+  "camera_portal_description": "Camera: start/stop tracking",
   "panic_portal_bound": "Panic key in every window: {0}",
   "panic_portal_unavailable": "The panic key works only while an X11 app has focus; use tray › Stop everything.",
   "panic_key_wayland_hint": "On Wayland the panic key is captured desktop-wide only while effects run.",

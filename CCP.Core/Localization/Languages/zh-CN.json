@@ -6927,6 +6927,8 @@
   "tray_show": "显示窗口",
   "tray_stop_everything": "全部停止",
   "panic_portal_description": "紧急：全部停止",
+  "quick_recal_portal_description": "快速重新校准：修正摄像头漂移",
+  "camera_portal_description": "摄像头：开始/停止追踪",
   "panic_portal_bound": "任何窗口中的紧急键：{0}",
   "panic_portal_unavailable": "紧急键仅在 CCP 或其他 X11 窗口获得焦点时有效。其他情况请使用托盘中的“全部停止”。",
   "panic_key_wayland_hint": "在 Wayland 上，紧急键仅在效果运行期间于整个桌面被占用。",

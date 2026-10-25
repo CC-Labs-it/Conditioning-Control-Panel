@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows;
 public partial class MainShellWindow
 {
     private IDisposable? _cameraHotkeyRegistration;
-    private (bool Global, ChordMods Mods, string Key)? _cameraHotkeyBinding;
+    private (bool Global, ChordMods Mods, string Key, bool Portal)? _cameraHotkeyBinding;
     private bool _cameraHotkeyBusy, _cameraKeyHooked;
 
     // Native seam: headless tests never grab a key on the real desktop.
@@ -29,7 +29,10 @@ public partial class MainShellWindow
 
     private static IDisposable? RegisterCameraHotkeyNative(Window owner, ChordMods mods, string key, Action pressed)
         => OperatingSystem.IsWindows() ? Win32QuickRecalHotkey.RegisterCamera(owner, mods, key, pressed)
-            : LinuxWebcamShortcut.Register("camera", mods, key, "Camera start/stop", pressed);
+            : LinuxWebcamShortcut.Register("camera", mods, key, Loc.Get("camera_portal_description"), pressed,
+                CameraPortalAllowed());
+    /// <summary>No compositor consent dialog before webcam consent (decisions.md 2026-10-25).</summary>
+    internal static bool CameraPortalAllowed() => WebcamConsent.IsCurrent(CoreSettings.Current);
 
     /// <summary>WPF ParseModifiers/FormatCameraShortcut: unparseable key falls back to K, no modifier to Ctrl+Alt.</summary>
     internal static (ChordMods Mods, string Key) CameraChord()
@@ -50,7 +53,7 @@ public partial class MainShellWindow
     internal void ApplyCameraHotkey()
     {
         var (mods, key) = CameraChord();
-        var binding = (CoreSettings.Current?.CompanionPrompt?.CameraShortcutGlobal != false, mods, key);
+        var binding = (CoreSettings.Current?.CompanionPrompt?.CameraShortcutGlobal != false, mods, key, CameraPortalAllowed());
         if (_cameraHotkeyBinding == binding) return;
         _cameraHotkeyBinding = binding;
         _cameraHotkeyRegistration?.Dispose();
