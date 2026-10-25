@@ -2,6 +2,8 @@ import { Group, Mesh, InstancedMesh, Object3D, BoxGeometry, PlaneGeometry, Torus
   CanvasTexture, MeshBasicNodeMaterial, Matrix4, Vector3, DoubleSide, SRGBColorSpace } from 'three/webgpu';
 import { acquireLoomAtlas } from './loomAtlas.js';
 import { wordTheme } from './wordTheme.js';
+import { screenBodyGeometry, screenBodyMaterial } from './screenBody.js';
+import { screenBodySize } from './screenBodyMath.js';
 
 const CAPACITY = 12, LINKS = 30, CW = 512, CH = 288;
 const unit = x => Math.max(0, Math.min(1, Number(x) || 0));
@@ -33,7 +35,7 @@ export function marqueePose(row, songS, gentle = false, side = 0, beat = null) {
   const roll = sway + jolt + (!gentle && snap ? direction * away * 1.25 : 0);
   const x = side * ((row.frame?.w || 24) / 2 + w / 2 + 2) + (snap ? direction * away * (w + 18) : 0);
   // Rotation cannot lower any corner into the seven-metre road clearance.
-  const extent = Math.abs(Math.cos(roll)) * (h + .8) / 2 + Math.abs(Math.sin(roll)) * (w + .8) / 2;
+  const extent = Math.abs(Math.cos(roll)) * h * .54 + Math.abs(Math.sin(roll)) * w * .54;
   const y = Math.max(7.2 + extent, 7.8 + h / 2 + fall + bounce - dip + away * (snap ? 14 : 44));
   return { x, y, w, h, roll, yaw: gentle ? 0 : Math.sin(Math.max(0, age) * .7) * .05,
     whip: gentle ? 0 : bounce * .5 + Math.abs(jolt) * 10 + dip * .6 + (age > -FALL_S && age < 0 ? .8 : 0), away, bottom: y - extent,
@@ -107,6 +109,7 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
   make = () => document.createElement('canvas'), acquireAtlas = acquireLoomAtlas, visibility = globalThis.document } = {}) {
   const object = new Group(); object.name = 'song-marquees';
   const theme = wordTheme(track), box = new BoxGeometry(1, 1, 1), plane = new PlaneGeometry(1, 1);
+  const cabinetGeometry = screenBodyGeometry(), bezelGeometry = screenBodyGeometry(true);
   const link = new TorusGeometry(1, .22, 5, 12), slots = [], materials = [];
   let atlas = null;
   try { atlas = acquireAtlas(); } catch { /* The shared Loom can be unavailable; use the procedural canvas. */ }
@@ -117,12 +120,13 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
   for (let i = 0; i < CAPACITY; i++) {
     const root = new Group(), hanger = new Group(), screen = new Group(); root.add(hanger, screen); object.add(root);
     root.name = 'marquee-slot-' + i; root.visible = false;
-    const ink = material({ color: theme.ink }), rim = material({ color: theme.accent });
+    const ink = screenBodyMaterial(false, { color: theme.ink, transparent: true, depthWrite: false });
+    const rim = screenBodyMaterial(true, { color: theme.accent, transparent: true, depthWrite: false }); materials.push(ink, rim);
     const metal = material({ color: '#2a2230' }), cloth = material({ color: theme.accent });
     const surface = createMarqueeSurface(make(), atlas?.texture, i);
     const picture = material({ map: surface.texture, side: DoubleSide });
-    const backing = new Mesh(box, ink), border = new Mesh(box, rim), face = new Mesh(plane, picture);
-    screen.add(backing, border, face); border.position.z = .08; face.position.z = .54;
+    const backing = new Mesh(cabinetGeometry, ink), border = new Mesh(bezelGeometry, rim), face = new Mesh(plane, picture);
+    screen.add(backing, border, face); backing.position.z = border.position.z = .525; face.position.z = .54;
     const chain = new InstancedMesh(link, metal, LINKS * 2), straps = new InstancedMesh(box, cloth, LINKS * 2);
     chain.frustumCulled = straps.frustumCulled = false; hanger.add(chain, straps);
     const anchors = [-1, 1].map(() => { const m = new Mesh(box, ink); hanger.add(m); return m; });
@@ -141,8 +145,9 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
     matrix.makeBasis(xAxis.fromArray(f.b), yAxis.fromArray(f.n), zAxis.fromArray(f.t).negate());
     s.root.quaternion.setFromRotationMatrix(matrix);
     s.screen.position.set(p.x, p.y, 0); s.screen.rotation.set(0, p.yaw, p.roll);
-    s.backing.scale.set(p.w + .8, p.h + .8, .75);
-    s.border.scale.set(p.w + .4, p.h + .4, .88); s.face.scale.set(p.w, p.h, 1);
+    const depth = screenBodySize(p).depth;
+    s.backing.scale.set(p.w, p.h, depth);
+    s.border.scale.set(p.w, p.h, depth); s.face.scale.set(p.w, p.h, 1);
     s.screen.updateMatrix();
     const chains = row.params?.variant === 'chains', cables = row.params?.variant === 'cables';
     s.chain.visible = chains; s.straps.visible = !chains;
@@ -217,6 +222,6 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
       if (disposed) return; clear(); disposed = true; object.removeFromParent();
       visibility?.removeEventListener?.('visibilitychange', hide);
       for (const s of slots) { s.chain.dispose(); s.straps.dispose(); s.surface.dispose(); }
-      materials.forEach(m => m.dispose()); box.dispose(); plane.dispose(); link.dispose(); atlas?.dispose();
+      materials.forEach(m => m.dispose()); box.dispose(); plane.dispose(); cabinetGeometry.dispose(); bezelGeometry.dispose(); link.dispose(); atlas?.dispose();
     } };
 }

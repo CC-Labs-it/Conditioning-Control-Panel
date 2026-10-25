@@ -19,7 +19,7 @@
 import {
   Group, Mesh, InstancedMesh, PlaneGeometry, CylinderGeometry, BufferGeometry, Float32BufferAttribute,
   InstancedBufferAttribute, CanvasTexture, Texture, SRGBColorSpace, MeshBasicNodeMaterial, AdditiveBlending,
-  DoubleSide, FrontSide, BackSide, Matrix4, Vector3, Color,
+  DoubleSide, FrontSide, Matrix4, Vector3, Color,
 } from 'three/webgpu';
 import {
   texture, uv, vec2, vec3, float, uniform, instancedBufferAttribute, attribute, cos, sin, hue, mix, smoothstep,
@@ -36,6 +36,8 @@ import { selectScrolllerSlots } from './mediaSelection.js';
 import { MAX_MEDIA_CLIPS, mediaClipLimit } from './mediaVariety.js';
 import { fitMainframeBillboard, moveMainframePanel } from './mainframeMediaMotion.js';
 import { tunnelArchGeometry, tunnelArchMaterial } from './tunnelArches.js';
+import { screenBodyGeometry, screenBodyMaterial } from './screenBody.js';
+import { screenBodySize } from './screenBodyMath.js';
 
 // the shared colour system (render/spectrum.js); the local ring stays the fallback for a missing hue
 import * as SPECTRUM from './spectrum.js';
@@ -56,7 +58,7 @@ if (globalThis.fetch && globalThis.location) await loadMediaLayout('threshold');
 
 const TAU = Math.PI * 2;
 const M4 = new Matrix4(), VX = new Vector3(), VY = new Vector3(), VZ = new Vector3(), VP = new Vector3(), EYE = new Vector3();
-const SX = new Vector3(), SY = new Vector3();
+const SX = new Vector3(), SY = new Vector3(), SZ = new Vector3();
 const ZERO = new Matrix4().makeScale(0, 0, 0);
 
 // Facing overlays keep depth testing while remaining distinct at long cross-level views.
@@ -162,9 +164,9 @@ export function createMediaPlayback({ target = globalThis.document, now = () => 
 }
 
 /** A slot's matrix: picture axes, w x h scale, pushed along its face by `lift`. */
-function slotMatrix(sl, out, { w = sl.w, h = sl.h, lift = 0, down = 0 } = {}) {
+function slotMatrix(sl, out, { w = sl.w, h = sl.h, depth = 1, lift = 0, down = 0 } = {}) {
   VX.set(sl.X[0], sl.X[1], sl.X[2]); VY.set(sl.Y[0], sl.Y[1], sl.Y[2]); VZ.set(sl.Z[0], sl.Z[1], sl.Z[2]);
-  out.makeBasis(SX.copy(VX).multiplyScalar(w), SY.copy(VY).multiplyScalar(h), VZ);
+  out.makeBasis(SX.copy(VX).multiplyScalar(w), SY.copy(VY).multiplyScalar(h), SZ.copy(VZ).multiplyScalar(depth));
   VP.set(sl.C[0], sl.C[1], sl.C[2]).addScaledVector(VZ, lift).addScaledVector(VY, -down);
   out.setPosition(VP);
   return out;
@@ -262,22 +264,24 @@ export function createMediaSlots(scene, track, opts = {}) {
     return im;
   });
 
-  // borders (additive glow round each picture), back plates, credit strips: one instanced draw each
+  // Every image has a closed cabinet and bevelled rim, two shared draws for the entire world.
   const N = slots.length;
   const bSize = new Float32Array(N * 2), bCol = new Float32Array(N * 4);
   slots.forEach((sl, i) => { bSize.set([sl.w, sl.h], i * 2); bCol.set([...sl.base, sl.hue0], i * 4); });
   const borderMat = borderMaterial(instancedBufferAttribute(new InstancedBufferAttribute(bSize, 2), 'vec2'),
     instancedBufferAttribute(new InstancedBufferAttribute(bCol, 4), 'vec4'), U, M);
   const borders = new InstancedMesh(plane, borderMat, Math.max(1, N));
-  const backMat = new MeshBasicNodeMaterial({ side: BackSide });
-  backMat.colorNode = vec3(...new Color(M.backColour).toArray());
-  const backs = new InstancedMesh(plane, backMat, Math.max(1, N));
+  const cabinetGeometry = screenBodyGeometry(), rimGeometry = screenBodyGeometry(true);
+  owned.push(cabinetGeometry, rimGeometry);
+  const backs = new InstancedMesh(cabinetGeometry, screenBodyMaterial(), Math.max(1, N));
+  const rims = new InstancedMesh(rimGeometry, screenBodyMaterial(true), Math.max(1, N));
+  slots.forEach((sl, i) => rims.setColorAt(i, new Color(...sl.base).lerp(new Color('#dce1e8'), .45)));
   const stripMat = mediaDepthLayer(new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: FrontSide }), 2);
   stripMat.colorNode = vec3(...new Color(M.stripColour).toArray());
   stripMat.opacityNode = float(M.stripAlpha);
   const strips = new InstancedMesh(plane, stripMat, Math.max(1, N));
-  borders.name = 'media-border'; backs.name = 'media-back'; strips.name = 'media-strip';
-  for (const im of [borders, backs, strips]) { im.frustumCulled = false; group.add(im); }
+  borders.name = 'media-border'; backs.name = 'media-back'; rims.name = 'media-bezel'; strips.name = 'media-strip';
+  for (const im of [borders, backs, rims, strips]) { im.frustumCulled = false; group.add(im); if (!N) im.count = 0; }
   borders.renderOrder = 2; strips.renderOrder = 3;
 
   // glass stalks under the billboards
@@ -434,10 +438,11 @@ export function createMediaSlots(scene, track, opts = {}) {
     const im = screenMeshes[sl.p];
     const active = !!o?.ready;
     if (off || active) im.setMatrixAt(sl.k, ZERO); else im.setMatrixAt(sl.k, slotMatrix(sl, M4));
-    if (off) { for (const x of [borders, backs, strips]) x.setMatrixAt(sl.index, ZERO); }
+    if (off) { for (const x of [borders, backs, rims, strips]) x.setMatrixAt(sl.index, ZERO); }
     else {
       borders.setMatrixAt(sl.index, slotMatrix(sl, M4, { w: sl.w + M.borderM * 2, h: sl.h + M.borderM * 2, lift: -0.06 }));
-      backs.setMatrixAt(sl.index, slotMatrix(sl, M4, { lift: -0.03 }));
+      slotMatrix(sl, M4, { depth: screenBodySize(sl).depth });
+      backs.setMatrixAt(sl.index, M4); rims.setMatrixAt(sl.index, M4);
       strips.setMatrixAt(sl.index, slotMatrix(sl, M4, { h: stripH, lift: 0.04, down: sl.h / 2 - stripH / 2 }));
     }
     if (o) {
@@ -458,7 +463,7 @@ export function createMediaSlots(scene, track, opts = {}) {
     mesh.matrix.elements[12] += sl.X[0] * dx; mesh.matrix.elements[13] += sl.X[1] * dx; mesh.matrix.elements[14] += sl.X[2] * dx;
   }
   function flush() {
-    for (const im of [...screenMeshes, borders, backs, strips]) im.instanceMatrix.needsUpdate = true;
+    for (const im of [...screenMeshes, borders, backs, rims, strips]) im.instanceMatrix.needsUpdate = true;
   }
   function placeAll() { for (const sl of slots) placeSlot(sl); flush(); shownTier = Q.name; }
   placeAll();
