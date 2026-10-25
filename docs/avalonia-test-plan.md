@@ -673,3 +673,8 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Companion BYO key transport
+
+1. Open Companion -> Engine Room -> Custom. Enter an endpoint, model and API key, then Test Connection and chat through the companion tube. Confirm both use the configured key and reopening the drawer never reveals it. Clear the key and confirm neither action sends a request. Settings must contain no typed key. WPF `MainWindow/MainWindow.CompanionRoom.cs:312` + `CCP.Core/Services/AIService/OpenAiCompatibleService.cs:198`. Rows: `feat-companion-ai-cloud-chat`.
+2. On Windows, open a copied WPF profile with a legacy DPAPI-protected BYO key: Test Connection and chat still work. On Linux that Windows-encrypted key must fail closed; re-enter it to use the OS store (memory only when unavailable). WPF `Services/Auth/SecureStringHelper.cs:37`. Rows: `feat-companion-ai-cloud-chat`.

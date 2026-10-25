@@ -24,13 +24,7 @@
 //                            this head publishes no Vm, deliberately.
 // RESTORED since (rows-companion-room): SetSlutModeAsync / ActivatePersonalityPresetAsync with the
 //                            acknowledgement gate, called by Z4 (MakeHerYoursView's live viewmodel).
-//   SetCustomApiKey        - Services.Auth.SecureStringHelper.Protect
-//                            (ConditioningControlPanel/Services/Auth/SecureStringHelper.cs).
-//                            CompanionPromptSettings.OpenAiCompatibleApiKey holds a DPAPI blob,
-//                            so writing the typed key there on this head would put a BYO API key
-//                            in settings.json IN THE CLEAR. CoreSecrets is the seam that fixes
-//                            this (CoreSecrets.ApiKey), but nothing READS the key from it yet, so
-//                            half the pair is worse than neither. Blocked on purpose.
+// RESTORED: EngineRoomVm writes BYO keys through Platform.CompanionApiKey; startup seeds the transport reader.
 //   the awareness observer - App.WindowAwareness.Start/Stop
 //                            (ConditioningControlPanel/Services/Awareness/). Dropped from
 //                            SetAwarenessEnabled and EnsureAwarenessV2Consent below: there is no

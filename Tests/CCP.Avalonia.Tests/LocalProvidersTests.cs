@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -76,6 +77,80 @@ public sealed class LocalProvidersTests
         // Explicit, not whatever an earlier test saved to the shared settings.json (off = no session.json).
         CoreSettings.Current.CompanionPrompt.ChatMemoryEnabled = true;
         return service;
+    }
+
+    [Fact]
+    public Task DrawerKeyReachesDiagnosticsAndChatAndClearStopsSending() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        FreshSettings();
+        var oldRead = CoreSecrets.RetrieveProvider;
+        var oldStore = CoreSecrets.StoreProvider;
+        var oldUnprotect = OpenAiCompatibleService.ApiKeyUnprotect;
+        var (listener, baseUrl, hits) = StartFake();
+        try
+        {
+            ConditioningControlPanel.Avalonia.Platform.SecretStore.Seed();
+            ConditioningControlPanel.Avalonia.Platform.CompanionApiKey.Store("sk-existing");
+            var drawer = new EngineRoomDrawer();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("sk-existing", CoreSecrets.Retrieve("companion_openai"));
+            var vm = (EngineRoomVm)drawer.DataContext!;
+            var keyBox = drawer.FindControl<TextBox>("CustomKeyBox")!;
+            Assert.True(string.IsNullOrEmpty(keyBox.Text));
+            vm.CustomEndpoint = baseUrl + "/v1";
+            vm.CustomModel = "fake-gpt";
+            keyBox.Text = "sk-byo-test";
+            Dispatcher.UIThread.RunJobs();
+            var p = CoreSettings.Current.CompanionPrompt;
+            Assert.Equal("secret:companion_openai", p.OpenAiCompatibleApiKey);
+            Assert.DoesNotContain("sk-byo-test", Newtonsoft.Json.JsonConvert.SerializeObject(p));
+            vm.Sync();
+            Assert.Equal("", vm.CustomApiKey);
+            Assert.Equal("sk-byo-test", OpenAiCompatibleService.ApiKeyUnprotect!(p.OpenAiCompatibleApiKey));
+            using var transport = new OpenAiCompatibleService();
+            Assert.True((await transport.TestEndpointAsync()).Success);
+            Assert.True((await transport.SendAsync(new[] { new ChatMessage("user", "hello") }, AiCallOptions.Chat)).IsAiGenerated);
+            lock (hits)
+            {
+                Assert.Equal(2, hits.Count);
+                Assert.All(hits, h => Assert.Equal("Bearer sk-byo-test", h.Auth));
+            }
+            keyBox.Text = "";
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("", p.OpenAiCompatibleApiKey);
+            Assert.Null(CoreSecrets.Retrieve("companion_openai"));
+            Assert.False((await transport.TestEndpointAsync()).Success);
+            Assert.False((await transport.SendAsync(new[] { new ChatMessage("user", "hello") }, AiCallOptions.Chat)).IsAiGenerated);
+            lock (hits) Assert.Equal(2, hits.Count);
+        }
+        finally
+        {
+            CoreSecrets.Store("companion_openai", null);
+            CoreSecrets.RetrieveProvider = oldRead;
+            CoreSecrets.StoreProvider = oldStore;
+            OpenAiCompatibleService.ApiKeyUnprotect = oldUnprotect;
+            listener.Stop();
+            listener.Close();
+            CoreSettings.ServiceProvider = null;
+        }
+    });
+
+    [Fact]
+    public void LegacyKeysKeepWpfFallbackAndUnreadableBlobsFailClosed()
+    {
+        Assert.Equal("sk-legacy", ConditioningControlPanel.Avalonia.Platform.CompanionApiKey.Read("sk-legacy"));
+        Assert.Null(ConditioningControlPanel.Avalonia.Platform.CompanionApiKey.Read(Convert.ToBase64String(new byte[] { 1, 2, 3 })));
+        Assert.Null(ConditioningControlPanel.Avalonia.Platform.CompanionApiKey.Read(""));
+        if (OperatingSystem.IsWindows())
+        {
+            var blob = Convert.ToBase64String(System.Security.Cryptography.ProtectedData.Protect(
+                Encoding.UTF8.GetBytes("sk-wpf-fixture"), null, System.Security.Cryptography.DataProtectionScope.CurrentUser));
+            Assert.Equal("sk-wpf-fixture", ConditioningControlPanel.Avalonia.Platform.CompanionApiKey.Read(blob));
+        }
     }
 
     [Theory]
