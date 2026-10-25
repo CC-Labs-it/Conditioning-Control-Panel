@@ -52,6 +52,9 @@ public sealed class EmiDeskTossTests
             desk = new EmiDeskWindow();
             desk.Show();
             Dispatcher.UIThread.RunJobs();
+            var art = (Image)typeof(EmiDeskWindow).GetField("_bodyImage", Priv)!.GetValue(desk)!;
+            var idleArt = art.Source;
+            Assert.NotNull(idleArt);
             var body = (Control)typeof(EmiDeskWindow).GetField("_bodyRoot", Priv)!.GetValue(desk)!;
             var c = body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), desk)!.Value;
             var toss = typeof(EmiDeskWindow).GetMethod("NoteTossFrame", Priv)!;
@@ -75,6 +78,15 @@ public sealed class EmiDeskTossTests
             var squash = (CancellationTokenSource?)typeof(EmiDeskWindow).GetField("_squashAnim", Priv)!.GetValue(desk);
             Assert.NotNull(squash);                                  // the landing owns the squash slot
 
+            Assert.Equal("@_@", desk.Face);
+            foreach (var face in new[] { "=_=", "@_@", "x_x", "0_0" })
+            {
+                clock.Fire();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(face, desk.Face);
+            }
+            Assert.False(desk.ChainLive);
+
             // A slow drag is a drop: not counted, the bump cue.
             clock.Now += TimeSpan.TicksPerSecond;
             desk.MouseDown(c, MouseButton.Left);
@@ -87,10 +99,26 @@ public sealed class EmiDeskTossTests
 
             // WPF's LandChain: ^_^, then her rest face, not the startled pickup face forever.
             Assert.Equal("^_^", desk.Face);
+            Assert.NotSame(idleArt, art.Source);
+            Assert.NotNull(art.Source);
+            Assert.Equal("celebration", typeof(EmiDeskWindow).GetField("_pose", Priv)!.GetValue(desk));
+            Assert.True(desk.ChainLive);
             Assert.Equal(TimeSpan.FromMilliseconds(EmiDeskWindow.LandFaceMs), clock.Due);
             clock.Fire();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("0_0", desk.Face);
+            Assert.True(desk.ChainLive); // the final rest frame holds for 160 ms
+            clock.Fire();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(desk.ChainLive);
+            Assert.Equal("idle", typeof(EmiDeskWindow).GetField("_pose", Priv)!.GetValue(desk));
+            Assert.Same(idleArt, art.Source);
+            desk.PlayChain("dizzy");
+            desk.CancelChain();
+            clock.Fire();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(desk.ChainLive);
+            Assert.Equal("@_@", desk.Face); // cancellation never runs the next frame or Done
         }
         finally
         {

@@ -12,6 +12,7 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -247,6 +248,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private double _bodyWidth = DefaultBodyWidth;
         private string _pose = "idle";
+        private readonly Dictionary<string, Bitmap> _bodyCache = new();
         private DateTime _petCooldownUntil = DateTime.MinValue;
         private bool _petArmed;
         // Written by the summon / dismiss FX region below, which is the whole of what ever moved
@@ -263,9 +265,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private double _resizeStartWidth;
 
         /// <summary>True while a chain is on screen.</summary>
-        // ponytail: needs the chain player (EmiChainPlayer, WPF head only; the chain data is in
-        // Core as EmiChains), wired when the player moves to Core. Nothing on this head can start a chain, so nothing is ever live.
-        public bool ChainLive => false;
+        private EmiChainPlayback? _player;
+        private EmiChainPlayback Player => _player ??= new EmiChainPlayback(TossClock,
+            action => Dispatcher.UIThread.Post(action));
+        public bool ChainLive => _player?.IsLive == true;
 
         /// <summary>True while a summon or dismiss transition is running.</summary>
         public bool Transiting => _transiting;
@@ -820,19 +823,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         public event EventHandler<string>? FaceChanged;
 
         /// <summary>Swap the body pose PNG. A no-op when that pose is already up (this runs per sway step).</summary>
-        // ponytail: needs EmiChains.FrameKey / EmiChains.BodyPath (Services/EmiDesk/EmiChains.cs) to
-        // resolve a pose name to a file on disk, plus the BitmapImage cache that went with it.
-        // Nothing here can put art on BodyImage, so BodyPlaceholder stays up; the pose name is still
-        // tracked because the outfit overlay keys off it.
         public void SetPose(string? frame)
         {
             try
             {
-                var key = string.IsNullOrWhiteSpace(frame) ? "idle" : frame!.Trim();
-                if (key == _pose) return;
+                var key = EmiChains.FrameKey(frame) ?? "idle";
                 _pose = key;
-                // The stand-in stands down the moment real art lands, whichever road brings it.
-                _bodyPlaceholder.IsVisible = _bodyImage.Source is null;
+                var path = EmiChains.BodyPath(key, _outfit);
+                // WPF keeps the previous art when a sheet is missing.
+                if (path == null) return;
+                if (!_bodyCache.TryGetValue(path, out var image))
+                {
+                    image = new Bitmap(path);
+                    _bodyCache[path] = image;
+                }
+                _bodyImage.Source = image;
+                _bodyPlaceholder.IsVisible = false;
                 PaintOutfitOver();
             }
             catch (Exception ex)
@@ -885,28 +891,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         // ---------------------------------------------------------------- chains
 
-        /// <summary>Play a canon chain by id. Unknown ids are ignored.</summary>
-        // ponytail: needs EmiChainPlayer (WPF head) - the frame clock and the
-        // Draw/Bubble/BodyFrame/Fx/Move hook set. The chain table (EmiChains) is in Core; wired
-        // when the chain player moves to Core.
         public void PlayChain(string chainId, Action? done = null, string? bodyFrameOverride = null)
+            => PlayChain(EmiChains.Get(chainId), done, bodyFrameOverride);
+
+        public void PlayChain(EmiChain? chain, Action? done = null, string? bodyFrameOverride = null)
         {
-            done?.Invoke();
+            if (chain == null || (PresentationActive && !(PresentationArriving && chain.Id == "wake"))) return;
+            StopIdleBeats();
+            Player.Play(chain, new EmiChainHooks
+            {
+                Draw = DrawFace,
+                BodyFrame = SetPose,
+                Bubble = text => OnBubbleTextCore(text),
+                Fx = kind => OnChainFxCore(kind),
+                Move = RunBodyMove,
+                Done = () =>
+                {
+                    SetPose("idle");
+                    DrawFace(EmiChains.RestFace);
+                    RestartIdleBeats();
+                    done?.Invoke();
+                }
+            }, bodyFrameOverride);
         }
 
-        /// <summary>Say a line on the locked . / .. / ... cadence.</summary>
-        // ponytail: EmiChains.MakeSay / SayHoldMs / FrameForFace are in Core now; still needs
-        // EmiChainPlayer (WPF head) to play the result.
         public void Say(string? line, string reactionFace = "^_^", Action? done = null)
-        {
-            done?.Invoke();
-        }
+            => PlayChain(EmiChains.MakeSay(line, reactionFace, EmiChains.SayHoldMs(line)), done);
 
-        /// <summary>Kill the running chain without firing its done hook.</summary>
         public void CancelChain()
         {
-            try { OnBubbleTextCore(null); }
-            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
+            _player?.Cancel();
+            OnBubbleTextCore(null);
         }
 
         // ponytail: the five canon body moves (bounce, thud, nod, droop, shiver) were WPF
@@ -925,7 +940,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>True when something is on screen that an idle beat must not interrupt.</summary>
         private bool Busy()
         {
-            // ChainLive is the WPF gate's `_player.IsLive` and is constant false on this head. It is
+            // ChainLive is the WPF gate's `_player.IsLive`. It is
             // in the expression anyway: this is the one place that decides whether an idle beat may
             // interrupt her, and a gate that has to be REMEMBERED when the chain player lands is a
             // gate that will be forgotten.
@@ -2652,6 +2667,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 _closingForGood = true;
+                _bodyImage.Source = null;
+                foreach (var image in _bodyCache.Values) image.Dispose();
+                _bodyCache.Clear();
                 KillOptionsPanel();
                 CloseBook();
                 StopIdleBeats();

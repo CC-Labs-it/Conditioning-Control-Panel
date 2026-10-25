@@ -673,3 +673,8 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### EMI desk landing chains (fin4)
+1. Summon EMI, gently drag and release her. Expect the celebration body and ^_^ for 600 ms, then rest for 160 ms, then idle. WPF `Windows/EmiDesk/EmiDeskWindow.Toss.cs:42-45`. Rows: `win-emi-desk-extras`.
+2. Drag faster than 1500 DIP/s for 120 ms and release within 150 ms. Expect thud/squash and dizzy faces @_@, =_=, @_@, x_x for 260/260/260/800 ms, then idle/rest. WPF `Windows/EmiDesk/EmiDeskWindow.Toss.cs:127-154`. Rows: `win-emi-desk-extras`.
+3. Panic during either chain; no later frame or completion may run. Repeat summon and presentation to check chains cannot interrupt the welcome stage. WPF `Windows/EmiDesk/EmiDeskWindow.Presentation.cs`. Rows: `win-emi-desk-extras`.

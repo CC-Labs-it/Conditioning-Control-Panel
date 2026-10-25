@@ -122,6 +122,7 @@ public sealed class PanicSurfacesTests
         "takeover",
         "tour",
         "tube-speech",
+        "emi-chain",
         "voice-capture",
     };
 
