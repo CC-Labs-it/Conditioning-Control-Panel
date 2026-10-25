@@ -20,6 +20,7 @@
      remain wire-theme-controls-b. -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
                     xmlns:theme="clr-namespace:ConditioningControlPanel.Avalonia.Theme">
 
   <!-- MainWindow.xaml:525 -->
@@ -588,9 +589,48 @@
     <Setter Property="VerticalAlignment" Value="Center"/>
   </ControlTheme>
 
-  <!-- Inputs.xaml:388. In WPF a thin alias over the implicit TextBox. Avalonia has no implicit
-       theme of ours to alias, so BasedOn the Fluent default - the key exists for its call site. -->
-  <ControlTheme x:Key="FocusGlowTextBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}"/>
+  <!-- Inputs.xaml:314-394. Keep Fluent's editing/IME/scroll parts and replace the chrome.
+       The implicit style is applied in App.axaml; a locally authored Theme still wins. -->
+  <ControlTheme x:Key="InputTextBoxTheme" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+    <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceBgBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource PanelAccentHoverBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="Padding" Value="8,5"/>
+    <Setter Property="MinHeight" Value="0"/>
+    <Setter Property="MinWidth" Value="0"/>
+    <Setter Property="CaretBrush" Value="{DynamicResource PinkBrush}"/>
+    <!-- Avalonia paints SelectionBrush at full strength; WPF applies SelectionOpacity 0.4. -->
+    <Setter Property="SelectionBrush" Value="{DynamicResource SelectionPinkBrush}"/>
+    <Setter Property="DragDrop.AllowDrop" Value="True"/>
+    <Setter Property="fx:InputFx.IsEnabled" Value="True"/>
+    <Setter Property="fx:InputFx.GlowColor" Value="{DynamicResource PinkColor}"/>
+    <Style Selector="^:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    </Style>
+    <Style Selector="^:pointerover /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource InputHoverBorderBrush}"/>
+    </Style>
+    <Style Selector="^:focus-within">
+      <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    </Style>
+    <Style Selector="^:focus-within /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+      <Setter Property="BorderThickness" Value="{Binding BorderThickness, RelativeSource={RelativeSource TemplatedParent}}"/>
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.5"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    </Style>
+    <Style Selector="^:disabled /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}"/>
+      <Setter Property="BorderBrush" Value="{Binding BorderBrush, RelativeSource={RelativeSource TemplatedParent}}"/>
+    </Style>
+  </ControlTheme>
+  <ControlTheme x:Key="FocusGlowTextBox" TargetType="TextBox" BasedOn="{StaticResource InputTextBoxTheme}"/>
 
   <!-- MainWindow.xaml:280. The WPF template replaced wholesale, and so does this one: a
        ControlTheme's Resources are NOT in the DynamicResource lookup path of the templated parts,
