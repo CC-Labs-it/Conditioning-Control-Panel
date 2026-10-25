@@ -52,6 +52,7 @@ Views/Chaos/ChaosRunHost.cs :: 📿 unleashed — the field :: run event-feed se
 Views/Chaos/ChaosRunHost.cs :: 💥 {name} triggered! :: run event-feed sentence, WPF ChaosModeService.cs:2127 verbatim (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: 🔥🔥 STREAK x{combo}! :: run event-feed sentence, WPF ChaosModeService.cs:3079 verbatim (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: 🔥 streak x{combo}! :: run event-feed sentence, WPF ChaosModeService.cs:3090 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: ×{t} :: STREAK ×t announcer text and subtext, WPF ChaosModeService.cs:3082 verbatim, the multiplication sign is typography (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: ⏱ last breath! x :: run event-feed sentence, WPF ChaosModeService.cs:2040 verbatim (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: 🐌 slow burn! x3 :: run event-feed sentence, WPF ChaosModeService.cs:2048 verbatim (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: ✔ snapped {spec :: run event-feed sentence, WPF ChaosModeService.cs:2049 verbatim (content (c).3)

@@ -716,6 +716,43 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    /// <summary>WPF CheckComboMilestone (:3081-3084): crossing ×25 plays streak_milestone, announces
+    /// "STREAK ×25" and fires the big gold pulse once.</summary>
+    [Fact]
+    public async Task Crossing_a_big_combo_threshold_plays_the_cue_and_announces_the_streak()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var log = Juice();
+            var s = CoreSettings.Current;
+            bool was = s.ChaosAnnouncerEnabled;
+            s.ChaosAnnouncerEnabled = true;
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosAnnouncerOverlay.CloseActive();
+                ChaosRunHost.State!.Combo = 24;
+                log.Clear();
+                var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                    { VariantId = "spiral", SizePx = 200, Payload = new FlashPayload() });
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                Assert.Equal(new[] { "sfx:streak_milestone", "pulse:255,230,120@0.55" },
+                    log.SkipWhile(e => e != "sfx:streak_milestone").Take(2));
+                Assert.Equal("STREAK ×25", ChaosAnnouncerOverlay.Active?.Current?.Text);
+            }
+            finally
+            {
+                ChaosAnnouncerOverlay.CloseActive();
+                s.ChaosAnnouncerEnabled = was;
+                Unjuice(); ChaosRunHost.ForceShutdown(); FreshMeta();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     /// <summary>WPF Pulse/Shake (:1672) honour the run's flash and shake toggles; panic clears a live
     /// field without a label, cue or effect (EndChaosMode fires nothing).</summary>
     [Fact]

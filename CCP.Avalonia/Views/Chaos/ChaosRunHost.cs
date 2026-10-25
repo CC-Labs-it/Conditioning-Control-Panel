@@ -365,15 +365,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         // WPF CheckComboMilestone: preserve call order, including the micro/×10 pulse that
         // replaces a big-threshold pulse on the same layer in the same callback.
+        // ponytail: combo barks (WPF :3080/:3090 NotifyChaosComboBig/Milestone) wait on chaos-payout-barks.
+        private static readonly int[] ComboBigThresholds = { 25, 50, 100 };
+
         private static void CheckComboMilestone()
         {
             int combo = _state?.Combo ?? 0;
             if (combo <= 0) return;
-            foreach (int t in new[] { 25, 50, 100 })
+            foreach (int t in ComboBigThresholds)
             {
                 if (combo < t || _lastComboBigFired >= t) continue;
                 _lastComboBigFired = t;
                 _state!.PushEvent($"🔥🔥 STREAK x{combo}!");
+                ChaosOverlayWindow.ChaosSfx.Play("streak_milestone", 0.5f);   // WPF :3081
+                ChaosAnnouncerOverlay.Announce($"STREAK ×{t}", ChaosAnnounceKind.Streak,
+                    artKey: "streak", subText: $"×{t}");                       // WPF :3082
                 Pulse(Color.FromRgb(255, 230, 120), 0.55);
             }
             if (combo % 10 == 0)
