@@ -400,19 +400,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _rimLight.Opacity = on ? RimLightOpacity : 0;
         }
 
+        public bool DashboardDepth { get; set; }
+        public bool DimWhenInactive { get; set; }
+
         private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
         {
             // Swallow clicks that originate inside the help button so the user can hover/click
             // the "?" without also opening the feature popup.
             if (e.Source is Visual src && (src == _btnHelp || _btnHelp.IsVisualAncestorOf(src))) return;
 
-            if (e.InitialPressMouseButton == MouseButton.Left)
+            if (e.InitialPressMouseButton is not (MouseButton.Left or MouseButton.Right)) return;
+            bool right = e.InitialPressMouseButton == MouseButton.Right;
+            bool toggle = Services.UI.DashboardClickRules.IsToggle(right, DashboardDepth, DimWhenInactive, CoreSettings.Current.DashboardInvertClicks);
+            if (!toggle)
             {
+                if (right) e.Handled = true;
                 RaiseEvent(new RoutedEventArgs(ClickEvent, this));
             }
-            else if (e.InitialPressMouseButton == MouseButton.Right)
+            else
             {
-                // Right-click is a quick on/off shortcut. A locked feature can't be toggled on.
+                // A locked feature cannot be enabled by either physical button.
                 if (IsLocked) return;
                 e.Handled = true;
                 RaiseEvent(new RoutedEventArgs(ToggleRequestedEvent, this));

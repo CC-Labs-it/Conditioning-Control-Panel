@@ -1,60 +1,94 @@
-// PORTED-IN-PART from ConditioningControlPanel/MainWindow/MainWindow.ChromeFx.cs (914 lines) -
-// PR-1 of the FX overhaul, the shell's own chrome: tab transitions, the nav rail's glow and icon
-// nudge, the START button sheen and the XP meter.
-//
-// ONE member is live, and it is the one MainShellWindow.axaml actually names:
-// StartSheenHost_SizeChanged. Not decoration - it is the CLIP that keeps the sheen band inside the
-// START button's rounded rect, and without it the band pokes out of the corners the moment
-// anything sweeps it. Fully portable: WPF's RectangleGeometry(rect, 8, 8) is spelled the same in
-// Avalonia 12 (Controls/TierFxBorder.cs:673 makes the same call).
-//
-// NOTHING ELSE IN THIS FILE HAS AN ENTRY POINT ON THIS HEAD - the honest reason the rest is a note
-// and not a shortage of Avalonia. WPF's whole chrome-FX lifecycle hangs off InitializeChromeFx(),
-// called from MainWindow's constructor; the matching hook here is a call from the constructor in
-// MainShellWindow.axaml.cs (as InitializeNavRail does - OnAttachedToVisualTree never fires on a
-// Window). Nobody has added that call for chrome FX yet, so the loops below would be dead code a render cannot disprove - exactly the
-// failure the port has already hit once, where three animations threw into a catch and the badge
-// was inert and silent about it. When a chrome-FX init hook exists, restore in this order
-// (62 members):
-//
-//   1. the gate. ChromeAmbientAllowed is `_chromeFxWindowActive && MotionFx.AllowAmbientLoops`;
-//      Services/MotionFx.cs is not in Core, so the portable half is IsActive && not-minimised -
-//      exactly MainShellWindow.TabFxTakeoverLabStatus.cs's Pr4aAmbientAllowed. Reuse it.
-//   2. the sheens - SweepSheen, SweepStartSheen, SweepBannerSheen, ApplyXpSheen, ParkSheen,
-//      _startSheenTimer, _lastBannerSheenUtc, and the Start/Banner/Xp sheen constants. One-shot
-//      TranslateTransform slides plus an opacity fade: an Avalonia keyframe Animation cancelled
-//      through a CancellationTokenSource, the pattern .DeeperFx.cs already uses. The band, its
-//      SkewTransform and its FxGlowColor stop are already in the axaml.
-//   3. the breathing glows - ApplyNavGlowBreath, ApplyStartButtonGlow and their six
-//      Min/MaxOpacity/BreathSeconds constants. PlaybackDirection.Alternate +
-//      IterationCount.Infinite over the effect's Opacity, per CLAUDE.md.
-//   4. the tab transition and card stagger - AnimateTabIn, SlideTabIn, FadeOutgoingTab,
-//      CollapseOutgoingTab, EnsureTabTranslate, ResetTabSlide, StaggerTabCards,
-//      StaggerCleanupTimer_Tick, CancelStaggerCleanup, FindStaggerTargets, _pendingTabKey,
-//      _activeTabKey, _activeTabElement, _staggerCleanupTimer, _staggeredElements, TabFadeOutMs/
-//      TabFadeInMs/TabSlidePx. Caller is ShowTab, which today snaps panels on and off and says so.
-//   5. the nav rail's hover and active state - NavButtons, NavButton_MouseEnter/MouseLeave,
-//      NudgeNavIcon, EnsureIconScale, NavButtonForTab, ApplyNavActiveGlow, SetNavIndicator,
-//      _navGlowButton/_navGlowDoor/_navActiveBar, NavIconHoverScale/NavIconHoverMs.
-//      .TabNavigation.cs already records that nothing highlights the active rail item;
-//      ApplyNavActiveGlow is that missing piece.
-//   6. the XP meter - AnimateXpDisplay, FillXpBarTo, _lastXpShown, _lastXpLevelShown. A width
-//      tween plus a number roll, portable on its own; its caller is MainWindow.Progression's XP
-//      refresh, which is not on this head.
-//
-// Gone for good, not deferred: _chromeFxWindowActive / OnChromeFxWindowStateish's three
-// subscriptions are re-expressed by Pr4aAmbientAllowed and AmbientFxCanvas.Evaluate().
+// PORTED-IN-PART: WPF MainWindow.ChromeFx.cs. START clipping and banner message sheens are live.
+// ponytail: the rest is wire-shell-chrome-fx-b. Restore in this order, on BeatLoop (no infinite
+// animations), gated by ChromeBannerSheen/Pr4aAmbientAllowed:
+//   1. START sheen and XP gloss - SweepStartSheen, _startSheenTimer, ApplyXpSheen, ParkSheen.
+//   2. breathing glows - ApplyNavGlowBreath, ApplyStartButtonGlow and their Min/Max/Breath constants.
+//   3. tab transition + card stagger - AnimateTabIn, SlideTabIn, FadeOutgoingTab, CollapseOutgoingTab,
+//      StaggerTabCards, StaggerCleanupTimer_Tick, FindStaggerTargets, TabFadeOutMs/TabFadeInMs/TabSlidePx;
+//      caller is ShowTab, which still snaps panels on and off.
+//   4. nav rail hover/active - NavButton_MouseEnter/Leave, NudgeNavIcon, ApplyNavActiveGlow,
+//      SetNavIndicator, NavIconHoverScale/NavIconHoverMs.
+//   5. XP meter - AnimateXpDisplay, FillXpBarTo, _lastXpShown; caller is the Progression XP refresh.
+// Gone for good: _chromeFxWindowActive / OnChromeFxWindowStateish (re-expressed by Pr4aAmbientAllowed).
 
 using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using System.Linq;
+using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.UI;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
+        /// <summary>WPF BannerSheenSeconds (:47) and SweepBannerSheen's peak opacity.</summary>
+        internal const double BannerSheenMs = 750, BannerSheenPeak = 0.22;
+
+        private BeatLoop? _bannerSheenBeat;
+        internal bool BannerSheenSweeping => _bannerSheenBeat?.IsRunning == true;
+        private DateTime _lastBannerSheenUtc = DateTime.MinValue;
+
+        private void InitializeChromeFx()
+        {
+            // A message sheen is finite interaction motion, so Reduced and low performance
+            // retain it as WPF does. No ambient loop or animated Effect is introduced.
+            Deactivated += (_, _) => ParkBannerSheen();
+            Closed += (_, _) => ParkBannerSheen();
+            PropertyChanged += (_, e) =>
+            {
+                if ((e.Property == WindowStateProperty && WindowState == WindowState.Minimized)
+                    || (e.Property == IsVisibleProperty && !IsVisible)) ParkBannerSheen();
+            };
+        }
+
+        /// <summary>WPF SweepBannerSheen: message rotations, announcements and the Home marquee's
+        /// return share one finite sweep and the Core twenty-second throttle (force bypasses it).</summary>
+        internal void SweepBannerSheen(bool force = false)
+        {
+            try
+            {
+                var now = BeatLoop.Time.GetUtcNow().UtcDateTime;
+                if (!ChromeBannerSheen.CanSweep(IsActive && WindowState != WindowState.Minimized,
+                    CoreSettings.Current.MotionLevel, force, now, _lastBannerSheenUtc)) return;
+                var host = this.FindControl<Grid>("BannerSheenHost");
+                var band = this.FindControl<Border>("BannerSheen");
+                var slide = (band?.RenderTransform as TransformGroup)?.Children.OfType<TranslateTransform>().FirstOrDefault();
+                if (host is null || band is null || slide is null || host.Bounds.Width <= 0 || !band.IsEffectivelyVisible) return;
+                _lastBannerSheenUtc = now;
+                ParkBannerSheen();
+                double bandWidth = band.Width;
+                _bannerSheenBeat = new BeatLoop(band, seconds =>
+                {
+                    if (!IsActive || WindowState == WindowState.Minimized || CoreSettings.Current.MotionLevel == Models.MotionLevel.Off)
+                    {
+                        ParkBannerSheen();
+                        return;
+                    }
+                    double progress = Math.Clamp(seconds * 1000 / BannerSheenMs, 0, 1);
+                    double eased = (1 - Math.Cos(Math.PI * progress)) / 2;
+                    slide.X = -bandWidth + (host.Bounds.Width + bandWidth * 1.25) * eased;
+                    band.Opacity = BeatLoop.Keys(progress, new[] { (0.0, 0.0), (0.20, BannerSheenPeak), (0.75, BannerSheenPeak), (1.0, 0.0) });
+                    if (progress >= 1) ParkBannerSheen();
+                }) { OnParked = ParkBannerSheen };
+                _bannerSheenBeat.Start();
+            }
+            catch (Exception ex) { ParkBannerSheen(); Log.Debug("SweepBannerSheen: {E}", ex.Message); }
+        }
+
+        private void ParkBannerSheen()
+        {
+            _bannerSheenBeat?.Stop();
+            _bannerSheenBeat = null;
+            if (this.FindControl<Border>("BannerSheen") is not { } band) return;
+            band.Opacity = 0;
+            if ((band.RenderTransform as TransformGroup)?.Children.OfType<TranslateTransform>().FirstOrDefault() is { } slide)
+                slide.X = 0;
+        }
+
         /// <summary>Corner radius of the START button, and therefore of the sheen host's clip.
         /// Must MATCH the button's own rounding or the band's corners show through.</summary>
         private const double StartSheenCornerRadius = 8;

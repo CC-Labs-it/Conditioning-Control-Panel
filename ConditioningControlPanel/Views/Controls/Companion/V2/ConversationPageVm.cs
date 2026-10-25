@@ -176,7 +176,7 @@ internal sealed class ConversationPageVm : CompanionObservable
         if (dispatcher == null || dispatcher.HasShutdownStarted) return;
         dispatcher.BeginInvoke(Reconcile, DispatcherPriority.Normal);
     }
-    internal static bool Shows(TurnKind kind) => kind is TurnKind.UserChat or TurnKind.AssistantChat;
+    internal static bool Shows(TurnKind kind) => Services.Companion.ConversationRules.Shows(kind);
     private void Reconcile()
     {
         var next = (_session?.Turns ?? Array.Empty<CompanionTurn>()).Where(t => Shows(t.Kind)).ToArray();
@@ -287,6 +287,9 @@ internal sealed class ConversationPageVm : CompanionObservable
             {
                 Notice = Loc.Get(FailureNoticeKey(result.Failure));
                 CanRetry = result.Retryable || result.Failure == AiFailureKind.Cancelled;
+                // The cap's offer is never said here (no upsell inside a conversation): the Inbox
+                // files one row once this page is gone (MainWindow.Inbox.cs).
+                if (result.Failure == AiFailureKind.DailyLimit) Services.Startup.Conversion.ConversionSignals.NoteCompanionCap();
             }
         }
         catch (OperationCanceledException) { Notice = Loc.Get("companion_v2_cancelled"); CanRetry = true; }
@@ -318,18 +321,8 @@ internal sealed class ConversationPageVm : CompanionObservable
         }
         catch (Exception ex) { App.Logger?.Debug("Companion page reply not spoken: {Type}", ex.GetType().Name); }
     }
-    internal static bool ShouldSpeak(string? text, bool avatarEnabled) => avatarEnabled && !string.IsNullOrWhiteSpace(text);
-    internal static string FailureNoticeKey(AiFailureKind? failure) => failure switch
-    {
-        AiFailureKind.SignInRequired => "companion_v2_error_signin",
-        AiFailureKind.DailyLimit => "companion_v2_error_limit",
-        AiFailureKind.BudgetLimit => "companion_v2_error_budget",
-        AiFailureKind.Offline => "companion_v2_error_offline",
-        AiFailureKind.Busy => "companion_v2_busy",
-        AiFailureKind.Cancelled => "companion_v2_cancelled",
-        AiFailureKind.InvalidResponse => "companion_v2_error_invalid",
-        _ => "companion_v2_unavailable"
-    };
+    internal static bool ShouldSpeak(string? text, bool avatarEnabled) => Services.Companion.ConversationRules.ShouldSpeak(text, avatarEnabled);
+    internal static string FailureNoticeKey(AiFailureKind? failure) => Services.Companion.ConversationRules.FailureNoticeKey(failure);
     public void NewChat()
     {
         if (Busy) return;

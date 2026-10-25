@@ -1,25 +1,18 @@
-using System;
-using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Presenters;
-using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages
 {
     /// <summary>
     /// PORTED from ConditioningControlPanel/Views/Controls/Companion/Pages/AiPage.xaml.cs (48f587200,
-    /// 9db154ab6). Companion > AI hosts the room's LIVE EngineRoomDrawer ("EngineZone", expanded), the
-    /// Workshop Behaviour + Triggers cells and MemoryDiaryView ("MemoryZone"), never copies, so every
-    /// handler wired to them keeps meaning the one control on screen (WPF CompanionPageHost.Adopt).
-    /// <para>This head has no Companion V2, so its room is not collapsed: it still shows those zones on
-    /// the Chat page. The page therefore hands each one back when it is hidden (WPF never needs to).</para>
+    /// 9db154ab6). Companion > AI adopts the collapsed room's LIVE EngineRoomDrawer ("EngineZone",
+    /// expanded), the Workshop Behaviour + Triggers cells and MemoryDiaryView ("MemoryZone"), never
+    /// copies, so every handler wired to them keeps meaning the one control on screen
+    /// (<see cref="CompanionPageHost.Adopt"/>).
     /// </summary>
     public partial class AiPage : UserControl
     {
-        private readonly List<Action> _giveBack = new();
-
         public AiPage()
         {
             InitializeComponent();
@@ -28,68 +21,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages
         /// <summary>WPF AiPage.OnShown, through ShowTab("companionai") -> OnTabShown.</summary>
         internal void OnShown(CompanionRoomView? room)
         {
-            if (room is null || _giveBack.Count > 0) return;
-            var workshop = room.FindControl<WorkshopAccordion>("WorkshopZone")?.DataContext as WorkshopRuntimeVm;
+            // WPF AiPage.OnShown: a fresh name editor + recap on every show (the account may have changed).
+            App.Brain?.EnsureCurrentAccount();
+            NameHost.Content = new V2.PreferredNameEditor();
+            RecapHost.Content = new V2.ConversationRecap();
+            if (room is null) return;
+            if (room.FindControl<WorkshopAccordion>("WorkshopZone")?.DataContext is WorkshopRuntimeVm workshop)
+            {
+                CompanionPageHost.Adopt(workshop.Parts.Behavior, BehaviorHost);
+                CompanionPageHost.Adopt(workshop.Parts.Triggers, TriggersHost);
+            }
             if (room.FindControl<EngineRoomDrawer>("EngineZone") is { } engine)
             {
                 // WPF tab.Vm.Sync() re-reads the engine (CompanionRoomRuntimeVm.cs:96) before expanding it.
                 if (engine.DataContext is EngineRoomVm vm) { vm.Sync(); vm.IsExpanded = true; }
-                Borrow(engine, EngineHost);
-            }
-            if (workshop is not null)
-            {
-                Borrow(workshop.Parts.Behavior, BehaviorHost);
-                Borrow(workshop.Parts.Triggers, TriggersHost);
+                CompanionPageHost.Adopt(engine, EngineHost);
             }
             if (room.FindControl<MemoryDiaryView>("MemoryZone") is { } diary)
             {
                 diary.ViewModel?.Sync();   // WPF Brain.EnsureCurrentAccount + the memory half of tab.Vm.Sync
-                Borrow(diary, MemoryHost);
+                CompanionPageHost.Adopt(diary, MemoryHost);
             }
         }
 
-        /// <summary>Hidden: every borrowed control goes back where it came from, in reverse order.
-        /// Leaving the tree disarms the diary's forget confirm (its Unloaded), WPF OnHidden.</summary>
+        /// <summary>WPF AiPage.OnHidden: an armed "forget everything" never survives leaving the page.</summary>
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
-            if (change.Property == IsVisibleProperty && !IsVisible) GiveBack();
-        }
-
-        internal void GiveBack()
-        {
-            for (var i = _giveBack.Count - 1; i >= 0; i--) _giveBack[i]();
-            _giveBack.Clear();
-        }
-
-        private void Borrow(Control element, ContentControl host)
-        {
-            if (ReferenceEquals(host.Content, element)) return;
-            Action? restore = null;
-            if (element.Parent is Panel panel)
-            {
-                var index = panel.Children.IndexOf(element);
-                panel.Children.RemoveAt(index);
-                restore = () => panel.Children.Insert(Math.Min(index, panel.Children.Count), element);
-            }
-            else if (element.GetVisualParent() is ContentPresenter presenter)
-            {
-                // A Workshop cell sits in the accordion's templated presenter.
-                // SetCurrentValue keeps the template's {Binding Content}.
-                presenter.SetCurrentValue(ContentPresenter.ContentProperty, null);
-                restore = () => presenter.SetCurrentValue(ContentPresenter.ContentProperty, element);
-            }
-            else if (element.Parent is ContentControl owner)
-            {
-                owner.Content = null;
-                restore = () => owner.Content = element;
-            }
-            host.Content = element;
-            _giveBack.Add(() =>
-            {
-                if (ReferenceEquals(host.Content, element)) host.Content = null;
-                restore?.Invoke();
-            });
+            if (change.Property == IsVisibleProperty && !IsVisible && MemoryHost.Content is MemoryDiaryView diary)
+                diary.ForgetConfirm.Disarm();
         }
     }
 }
