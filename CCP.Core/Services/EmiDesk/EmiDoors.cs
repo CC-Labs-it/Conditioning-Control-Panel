@@ -132,6 +132,65 @@ public static class EmiDoors
         new("settings", "nav/door_settings.png", 0x9A9AB8, true),
     };
 
+    // ============================================================================
+    // opens that did not come from the ring
+    // ============================================================================
+    //
+    // The suggester ranks doors by how often they are OPENED, not by how often a card is
+    // clicked, so the nav rail, the mosaic, the Ctrl+K palette, a hotkey and a bark link all
+    // have to score too. Rather than scatter NoteOpen through the UI, the two chokepoints every
+    // one of those paths already funnels through (a head's ShowTab and OpenStudioModule) look the
+    // key up here.
+    //
+    // The maps are deliberately partial. A tab with no card in the catalogue scores nothing
+    // (Home, Quests, Achievements, the Studio itself), and three keys are missing on purpose:
+    // "fyp" and "justdrop" never reach the bottom of ShowTab (they are intercepted into their
+    // own launchers, which count there), while "gradedintake" is the quiz LANDING page whose
+    // start button calls IntakeHostService.Launch - counting both would score one sitting twice.
+    // "spiral" as a TAB key is the Spiral Room, a different thing from the spiral OVERLAY card.
+
+    private static readonly Dictionary<string, string> _tabTargets = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["presets"] = "sessions",
+        ["companion"] = "companion",
+        ["awareness"] = "awareness",
+        ["remotecontrol"] = "remote",
+        ["bambitakeover"] = "takeover",
+        ["lockdown"] = "lockdown",
+        // Polish 12 (2026-10-07): "exclusives" redirects before the counter, "premium" is the page.
+        ["premium"] = "vault",
+        ["discord"] = "profile",
+        ["appsettings"] = "settings",
+        ["progression"] = "progression",
+    };
+
+    private static readonly Dictionary<string, string> _rackTargets = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["flash"] = "flashes",
+        ["video"] = "videos",
+        ["subliminal"] = "subliminals",
+        ["bubbles"] = "bubbles",
+        ["spiral"] = "loom",          // the Studio's Spiral module IS the Loom editor
+        ["pinkfilter"] = "pinkfilter",
+        ["braindrain"] = "braindrain",
+        ["mindwipe"] = "mindwipe",
+    };
+
+    /// <summary>Tab key -> the door it scores.</summary>
+    public static readonly IReadOnlyDictionary<string, string> TabTargets = _tabTargets;
+
+    /// <summary>Studio rack key -> the door it scores. Never the Studio itself.</summary>
+    public static readonly IReadOnlyDictionary<string, string> RackTargets = _rackTargets;
+
+    /// <summary>The ring door taught by a tab open, shared by both heads.
+    /// Host launchers count themselves; intake landing and Spiral Room aren't their host cards.</summary>
+    public static string? TargetForTab(string? key) =>
+        key != null && _tabTargets.TryGetValue(key, out var target) ? target : null;
+
+    /// <summary>The Studio module's ring door; opening Studio itself teaches no card.</summary>
+    public static string? TargetForRack(string? key) =>
+        key != null && _rackTargets.TryGetValue(key, out var target) ? target : null;
+
     /// <summary>
     /// The head's catalogue, in table order. <paramref name="wire"/> answers each id with its three
     /// delegates, or null when the door has no surface on that head: a null HIDES the card, the

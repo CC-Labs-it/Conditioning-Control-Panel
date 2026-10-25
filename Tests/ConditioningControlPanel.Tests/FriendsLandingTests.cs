@@ -317,6 +317,9 @@ public class FriendsLandingTests
         var url = LandingRules.HtUrl("109749");
         Assert.NotNull(url);
         Assert.True(ConditioningControlPanel.Helpers.HtUrlHelper.IsEligibleHtUrl(url));
+        // A bare /video/<id> is a 404 on Hypnotube; only /video/<slug>-<id>.html plays.
+        Assert.Equal("https://hypnotube.com/video/video-109749.html", url);
+        Assert.Equal("109749", ConditioningControlPanel.Helpers.HtUrlHelper.TryExtractHtVideoId(url));
         Assert.Null(LandingRules.HtUrl("12a"));
         Assert.Null(LandingRules.HtUrl("123456789"));
         Assert.Null(LandingRules.HtUrl(""));

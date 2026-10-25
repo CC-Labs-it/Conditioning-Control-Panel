@@ -54,16 +54,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static TimeSpan FrameDelay => _delay;
         internal static IReadOnlyList<SpiralOverlayWindow> Shown => Windows;
 
-        /// <summary>WPF GetSpiralPath: the configured file if it exists, else the active mod's spiral,
-        /// else the shipped one. ponytail: SpiralRandomize needs WPF's personal-folder refusal
-        /// (SecurityHelper.IsPersonalFolderRoot, #1053), still head-only, so it is not honoured here
-        /// rather than honoured unsafely; video spirals (.mp4 etc., WPF MediaElement) decode to no
-        /// frames and show nothing.</summary>
+        private static readonly SpiralPool Pool = new();
+        private static string? _sourcePath;
+        private static string? _configuredPath;
+        private static bool? _randomizeAtStart;
+        private static bool _repicked;
+
+        /// <summary>Pick once per run; repainting opacity/monitors never resamples the pool.
+        /// Explicit file changes take effect live. Randomize changes take effect next start.</summary>
         internal static string SourcePath()
         {
-            var p = CoreSettings.Current.SpiralPath;
-            if (!string.IsNullOrEmpty(p) && File.Exists(p)) return p;
-            return CoreModArt.SpiralOverridePath() ?? Path.Combine(AppContext.BaseDirectory, "Resources", "spiral.gif");
+            var settings = CoreSettings.Current;
+            if (_sourcePath != null && _configuredPath == settings.SpiralPath && File.Exists(_sourcePath)) return _sourcePath;
+            _randomizeAtStart ??= settings.SpiralRandomize;
+            _configuredPath = settings.SpiralPath;
+            var configured = !string.IsNullOrEmpty(settings.SpiralPath) && File.Exists(settings.SpiralPath)
+                ? settings.SpiralPath : null;
+            _sourcePath = _randomizeAtStart == true
+                ? Pool.Pick(configured, Path.Combine(CorePaths.UserData, "Spirals")) : null;
+            // ponytail: videos still require a playback surface; the pool deliberately matches WPF's image extensions.
+            return _sourcePath ?? configured ?? CoreModArt.SpiralOverridePath()
+                ?? Path.Combine(AppContext.BaseDirectory, "Resources", "spiral.gif");
         }
 
         /// <summary>The painted alpha: the slider through WPF's #722 curve.</summary>
@@ -78,11 +89,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var path = SourcePath();
             if (_framesKey != path)
             {
-                CloseAll();
+                CloseWindows();
                 BeginDecode(TopLevel.GetTopLevel(host) ?? host, path);
                 return;
             }
-            if (_frames.Count == 0) { CloseAll(); return; }   // undecodable: logged once by the decode
+            if (_frames.Count == 0)   // undecodable: logged once by the decode
+            {
+                // WPF's 500 ms tick re-picks past a broken random file; re-pick once so the run is not blank.
+                if (_sourcePath != null && !_repicked) { _repicked = true; _sourcePath = null; Refresh(host); return; }
+                CloseWindows();
+                return;
+            }
 
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
@@ -96,7 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
 
-            CloseAll();
+            CloseWindows();
             // No compositor = no per-pixel alpha: the spiral would be an opaque screen-sized block.
             if (!SkipPlatformChecksForTests && (_refused || !X11Overlay.IsAvailable || !X11Overlay.IsCompositing))
             {
@@ -147,6 +164,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF StopSpiral: the windows and the clock go; the decoded frames stay cached.</summary>
         public static void CloseAll()
         {
+            _sourcePath = null;
+            _configuredPath = null;
+            _randomizeAtStart = null;
+            _repicked = false;
+            CloseWindows();
+        }
+
+        private static void CloseWindows()
+        {
             _timer?.Stop();
             _timer = null;
             foreach (var w in Windows)
@@ -157,6 +183,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Windows.Clear();
             _shownOn = Array.Empty<int>();
             QuestMinutes.Follow(false);
+            // WPF OverlayService.cs:2094: the fullscreen spiral left, so a session may raise its corner GIF again.
+            App.Sessions?.RefreshCornerGifPolicy();
         }
 
         /// <summary>WPF AchievementService:276 - quest minutes while the spiral is on screen.</summary>
@@ -188,7 +216,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// frames are correct), the kept ones scaled to the <see cref="SpiralFrames.Plan"/> size.</summary>
         /// <param name="fitLongSide">When &gt; 0, frames are scaled further so the long side is at most this many
         /// pixels (the corner GIF decodes to the pixels its overlay occupies, WPF CornerGifMedia).</param>
-        internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int fitLongSide = 0)
+        /// <param name="maxFrames">When &gt; 0, at most this many frames are kept, strided across the whole
+        /// animation (the chaos wash keeps 40, WPF ChaosFlashOverlay.cs:222 after the #476 OOM).</param>
+        internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int fitLongSide = 0, int maxFrames = 0)
         {
             var frames = new List<Bitmap>();
             try
@@ -204,6 +234,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     var k = fitLongSide / (double)Math.Max(plan.Width, plan.Height);
                     plan.Width = Math.Max(1, (int)Math.Round(plan.Width * k));
                     plan.Height = Math.Max(1, (int)Math.Round(plan.Height * k));
+                }
+                if (maxFrames > 0 && plan.Frames > maxFrames)
+                {
+                    var step = (int)Math.Ceiling(count / (double)maxFrames);
+                    plan.DelayMs = plan.DelayMs / plan.Step * step;
+                    (plan.Frames, plan.Step) = (maxFrames, step);
                 }
                 var full = new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
                 using var canvas = new SKBitmap(full);

@@ -12,8 +12,6 @@
 
 using System;
 using System.Threading.Tasks;
-using Avalonia;
-using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Localization;
@@ -29,6 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// press is a rebind, never a panic.</summary>
         internal static bool CapturingPanicKey { get; set; }
 
+        private DateTime? _lastPbpEscapeClaimUtc;
         private int _panicPressCount;
         private DateTime _lastPanicTime = DateTime.MinValue;
 
@@ -41,19 +40,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             EscapeClaim.MarkType(typeof(Views.Controls.FriendsDrawer));
             EscapeClaim.StartTracking();
             if (OperatingSystem.IsWindows()) return Win32Input.Start(() => HandlePanicKeyPress(DateTime.Now));   // WH_KEYBOARD_LL twin
-            return X11PanicKey.Start(() => CoreSettings.Current.PanicKey,
-                () =>
-                {
-                    Serilog.Log.Information("Panic trigger: XInput2 key press");
-                    var s = CoreSettings.Current;
-                    if (!s.PanicKeyEnabled || CapturingPanicKey || LockdownActive || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey)
-                        Dispatcher.UIThread.Post(() => HandlePanicKeyPress(DateTime.Now));
-                    else
-                        PanicWatchdog.QueueWatched(() => HandlePanicKeyPress(DateTime.Now));   // #919b
-                });
+            return X11PanicKey.Start(() => CoreSettings.Current.PanicKey, OnX11PanicPress);
         }
 
-        /// <summary>One press of the configured key (UI thread). Each press stops everything; a second
+        /// <summary>One X11 raw press of the panic key (listener thread): the panic, then the leash hold.</summary>
+        internal void OnX11PanicPress()
+        {
+            Serilog.Log.Information("Panic trigger: XInput2 key press");
+            var s = CoreSettings.Current;
+            if (!s.PanicKeyEnabled || CapturingPanicKey || LockdownActive || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey)
+                Dispatcher.UIThread.Post(() => HandlePanicKeyPress(DateTime.Now));
+            else
+                PanicWatchdog.QueueWatched(() => HandlePanicKeyPress(DateTime.Now));   // #919b
+            Dispatcher.UIThread.Post(LeashHoldPressed);   // after the panic: hold-to-cut (MainShellWindow.LeashHold.cs)
+        }
+
+        /// <summary>One press of the configured key (UI thread). A foreground board or DTRH may keep the first
+        /// Escape as pause; unclaimed presses stop everything. A second
         /// counted press within 2 s exits the app, as WPF does when no engine is running.</summary>
         internal void HandlePanicKeyPress(DateTime now)
         {
@@ -64,8 +67,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.xaml.cs:888: Lockdown ignores every GLOBAL key, whatever LockdownDisablePanicKey
             // says. Only this listener layer: window and TextBox input (the secret phrase) are untouched.
             if (LockdownActive) { Serilog.Log.Information("Panic key ignored under Lockdown"); return; }
+            // WPF MainWindow.xaml.cs:1557: a game's pause, BEFORE everything below: a pause is not a panic.
+            if (TryPbpPauseOnEscape(now.ToUniversalTime()) || TryGamePauseOnEscape(now)) return;
             IntakeHostWindow.StopMicsForPanic();   // every press, before the lock-card stop or the capture abort reads as silence
             CancelPendingAi();   // every press, even one a lock card or the palette consumes
+            // WPF MainWindow.xaml.cs:1567 LeashOnPanicPress, before the lock-card rung: the leash task parks first,
+            // or a Lines task reopens the card the press just dismissed.
+            try { Platform.LeashTaskHost.OnPanicPress(this); } catch (Exception ex) { Serilog.Log.Warning("Leash panic failed: {E}", ex.Message); }
 
             // Same evaluation order as WPF: asking the palette closes it, so never ask with a card up.
             bool lockCardOpen = LockCardWindow.IsAnyOpen();
@@ -107,6 +115,67 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
+        // WPF TryRacePauseOnEscape: keep the first foreground board Escape, but a quick
+        // second press must reach the ordinary stop pass. Never queue a pause during boot.
+        private bool TryPbpPauseOnEscape(DateTime nowUtc)
+        {
+            try
+            {
+                var board = Views.Games.GameWindow.ForegroundPbp();
+                if (!PanicPolicy.GameClaimsEscapeAsPause(CoreSettings.Current.PanicKey,
+                    board != null, CoreEngine.IsRunning, LockCardWindow.IsAnyOpen(),
+                    _lastPbpEscapeClaimUtc, nowUtc))
+                {
+                    _lastPbpEscapeClaimUtc = null;
+                    return false;
+                }
+                _lastPbpEscapeClaimUtc = nowUtc;
+                if (PanicPolicy.KeptEscapeGoesTo(claimed: true,
+                        raceInFront: false, raceReady: false,
+                        boardInFront: true, boardReady: board!.IsReady,
+                        breakoutInFront: false, breakoutReady: false)
+                    == PanicPolicy.KeptEscapePage.Board) board.PostPbpKeptEscape();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "PieceByPiece Escape handoff failed; continuing panic");
+                return false;
+            }
+        }
+
+        private DateTime? _lastGameEscapeClaim;
+
+        /// <summary>WPF TryRacePauseOnEscape (MainWindow.xaml.cs:1505): Escape in front of Down the Rabbit Hole
+        /// is its pause, not a panic (owner, 2026-10-12: Escape only pauses the game). Every condition is Core
+        /// PanicPolicy.GameClaimsEscapeAsPause, including a second Escape within 2 s being a full panic (which
+        /// closes the game through PanicSurfaces "games"). The kept press is handed to the page as well
+        /// (KeptEscapePage.Dtrh), since its own keydown never comes while the web view is out of focus.
+        /// ponytail: race and Breakout keep closing on Escape here until their hosts post kept-escape (board: TryPbpPauseOnEscape).</summary>
+        internal bool TryGamePauseOnEscape(DateTime now)
+        {
+            try
+            {
+                var dtrh = Games.GameWindow.DtrhInFront();
+                bool claim = PanicPolicy.GameClaimsEscapeAsPause(CoreSettings.Current.PanicKey,
+                    gameInFront: dtrh != null, engineRunning: CoreEngine.IsRunning,
+                    lockCardOpen: LockCardWindow.IsAnyOpen(), lastClaimUtc: _lastGameEscapeClaim, nowUtc: now);
+                if (!claim) { _lastGameEscapeClaim = null; return false; }
+                _lastGameEscapeClaim = now;
+                Serilog.Log.Information("Panic: Escape kept by Down the Rabbit Hole as its pause (again within 2 s = full panic)");
+                if (PanicPolicy.KeptEscapeGoesTo(claim, false, false, false, false, false, false,
+                        dtrhInFront: dtrh != null, dtrhReady: dtrh?.DtrhReady == true) == PanicPolicy.KeptEscapePage.Dtrh)
+                    dtrh!.PostKeptEscape();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // A probe that throws must never eat a panic press.
+                Serilog.Log.Warning("Panic: game pause probe failed: {Error}", ex.Message);
+                return false;
+            }
+        }
+
         /// <summary>Decision C (docs/avalonia-decisions.md, panic and the camera; deliberate WPF deviation):
         /// every panic press that is not a palette-claimed Escape closes the camera, after the audio and
         /// overlay teardown. Fire-and-forget: Stop can block up to 5 s on a wedged driver. Consent,
@@ -130,6 +199,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static Task? _portalBind;
         private static bool _portalFailed, _portalAllowed;
         private static DispatcherTimer? _portalWatch;
+
+        // The shell's live hold, not PortalPanicShortcut.IsHeld: that stays true after a lost Deactivated.
+        internal static bool KeepPortalBound => AnyEffectRunning || PortalHoldLive;
 
         private static bool AnyEffectRunning =>
             CoreEngine.IsRunning || CoreFlash.IsRunning || CoreSubliminal.IsRunning || BouncingTextOverlay.IsRunning
@@ -164,10 +236,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 () =>
                 {
                     Serilog.Log.Information("Panic trigger: GlobalShortcuts portal Activated");
-                    Dispatcher.UIThread.Post(() =>
-                    ((Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainShellWindow)
-                        ?.HandlePanicKeyPress(DateTime.Now));
-                });
+                    Dispatcher.UIThread.Post(() => Current?.OnPortalPanicPressed());
+                },
+                () => Dispatcher.UIThread.Post(() => Current?.OnPortalPanicReleased()));
             Dispatcher.UIThread.Post(() =>
             {
                 if (trigger == null)
@@ -185,7 +256,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // ponytail: 2 s poll for "last effect stopped" rather than a hook in every stop path.
                 _portalWatch ??= new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background, (_, _) =>
                 {
-                    if (AnyEffectRunning) return;
+                    if (KeepPortalBound) return;
                     _portalWatch!.Stop();
                     _portalWatch = null;
                     _portalBind = null;

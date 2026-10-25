@@ -8,6 +8,7 @@ using Avalonia.Controls.Documents;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -123,15 +124,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtFixStreakStatus.IsVisible = true;
         }
 
-        /// <summary>A loc line with a leading icon: the IconLabel splits it, so the emoji draws as a Fluent glyph.</summary>
-        private void ShowFixStatusKey(string key, IBrush colour, params object[] args)
-        {
-            ShowFixStatus("", colour);
-            TxtFixStreakStatus.Text = null;
-            TxtFixStreakStatus.Args = args.Length > 0 ? args : null;
-            TxtFixStreakStatus.Key = key;
-        }
-
         /// <summary>Back to the accent colour the XAML gives the line.</summary>
         private void ResetFixStatusColour() => TxtFixStreakStatus.ClearValue(TextElement.ForegroundProperty);
 
@@ -179,7 +171,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 if (string.IsNullOrEmpty(s.UnifiedId))
                 {
-                    ShowFixStatusKey("label_oopsie_insurance_requires_a_cloud_account_ple", FixRed);
+                    ShowFixStatus(IconText.BareLoc("label_oopsie_insurance_requires_a_cloud_account_ple"), FixRed, IconKind.DismissCircle);
                     return;
                 }
 
@@ -200,7 +192,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (stillFixing)
                 {
                     _isStreakFixMode = false;
-                    ShowFixStatusKey("label_streak_fixed_success", FixGreen, fixDate.ToString("MMMM d"));
+                    ShowFixStatus(IconText.BareLoc("label_streak_fixed_success", fixDate.ToString("MMMM d")), FixGreen, IconKind.CheckmarkCircle);
                 }
                 RefreshQuestUI();   // the stats tile and the button caption, not just the calendar
                 if (!stillFixing) return;

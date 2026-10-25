@@ -71,6 +71,14 @@ internal static class AccountSeed
             ? NewV2().ChangeDisplayNameAsync(id, name) : null;
         CoreAccount.DeleteAccountProvider = () => CoreSettings.Current.UnifiedId is { Length: > 0 } id
             ? NewV2().DeleteAccountAsync(id) : null;
+        // WPF ProfileSyncService.HandleUnauthorizedAsync (StartHeartbeat on success) / TryProviderRevalidateAsync.
+        AuthRecovery.Recovered = () => { if (Sync is { Loaded: true } sync) sync.StartHeartbeat(); };
+        AuthRecovery.ProviderRevalidate = async () =>
+        {
+            if (patreon.IsAuthenticated) { await patreon.ValidateSubscriptionAsync(forceRefresh: true); return true; }
+            if (discord.IsAuthenticated) { await discord.ValidateAndRefreshUserAsync(forceRefresh: true); return true; }
+            return false;   // invite-code / email sessions have no provider to mint from
+        };
         // WPF App.xaml.cs:2937: the weekly intake pass re-evaluates (and refunds a pre-premium spend)
         // on either provider's TierChanged. Here, because this is where the providers now exist.
         App.IntakePass.AttachEntitlementSources(
@@ -125,7 +133,12 @@ internal static class AccountSeed
     /// <param name="v2">Tests only.</param>
     internal static async Task<bool> LoadProfileAsync(V2AuthService? v2 = null)
     {
-        try { return await LoadProfileCoreAsync(v2 ?? NewV2()); }
+        try
+        {
+            if (!await LoadProfileCoreAsync(v2 ?? NewV2())) return false;
+            ProfileLoaded?.Invoke();
+            return true;
+        }
         catch (Exception ex)
         {
             // Fire-and-forget from the login dialog and inside an async void Post at startup: never throw.
@@ -136,6 +149,9 @@ internal static class AccountSeed
 
     /// <summary>The push, seeded by the app at startup only: unseeded (every test that does not set it) nothing is pushed.</summary>
     internal static SyncPush? Sync;
+
+    /// <summary>WPF ProfileSyncService.ProfileLoaded: a profile load succeeded (the welcome-back sheet's second look).</summary>
+    internal static event Action? ProfileLoaded;
 
     /// <summary>Tests only: the client every default-path load and restore uses.</summary>
     internal static Func<V2AuthService> NewV2 = () => new V2AuthService();

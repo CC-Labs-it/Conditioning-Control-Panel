@@ -45,7 +45,7 @@ public sealed class QuestsStreakFixTests
         try
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>().UseSkia()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             LocalizationManager.Instance.SetLanguage("en");
@@ -155,6 +155,7 @@ public sealed class QuestsStreakFixTests
             Assert.Equal(2, s.StreakFixCharges);
             Assert.DoesNotContain(quests.Progress.DailyQuestCompletionDates, d => d.Date == missed);
             Assert.Contains("Server says no", status.Source);
+            Assert.Equal(FluentIcons.Common.Symbol.DismissCircle, status.Kind);
             Assert.True(tab.IsStreakFixMode);
 
             // A server yes: its balance, the day stamped once, fix mode over, the stats tile repainted.
@@ -164,7 +165,8 @@ public sealed class QuestsStreakFixTests
             Assert.Equal(1, s.StreakFixCharges);
             Assert.Single(quests.Progress.DailyQuestCompletionDates, d => d.Date == missed);
             Assert.False(tab.IsStreakFixMode);
-            Assert.Equal(Loc.GetF("label_streak_fixed_success", missed.ToString("MMMM d")), status.Source);
+            Assert.Equal(IconText.BareLoc("label_streak_fixed_success", missed.ToString("MMMM d")), status.Source);
+            Assert.Equal(FluentIcons.Common.Symbol.CheckmarkCircle, status.Kind);
             Assert.Equal("1", tab.FindControl<TextBlock>("TxtStreakFixCharges")!.Text);
             Assert.Equal(Loc.GetF("btn_fix_day_with_count", 1), caption.Source);
 

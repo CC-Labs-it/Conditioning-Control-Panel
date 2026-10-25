@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform;
+using ConditioningControlPanel.Services.Fyp.Online;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls
@@ -73,17 +74,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public event Action<Uri>? NavigationCompleted;
 
+        /// <summary>Completion outcome, for decorative embeds that must fall back on a failed load.</summary>
+        public event Action<Uri, bool>? NavigationFinished;
+
         /// <summary>
         /// The seam the engine's NavigationCompleted routes through, internal so a headless test
         /// (which never has an engine) can drive the same path. A completion with no URL raises
         /// nothing: there is nothing live to report.
         /// </summary>
-        internal void OnNavigationCompleted(Uri? url)
+        internal void OnNavigationCompleted(Uri? url, bool success = true)
         {
             if (url is null) return;
             CurrentUrl = url;
             if (InjectCarrier) _ = InvokeScriptAsync(CarrierShim);
             NavigationCompleted?.Invoke(url);
+            NavigationFinished?.Invoke(url, success);
         }
 
         /// <summary>
@@ -91,6 +96,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// JSON-stringifies objects). The stand-in for WPF's <c>CoreWebView2.WebMessageReceived</c>.
         /// </summary>
         public event Action<string>? WebMessage;
+
+        // The native adapter asks at first attachment, before navigation. Keep OS setup in the caller.
+        internal event Action<WebViewEnvironmentRequestedEventArgs>? EnvironmentRequested;
 
         /// <summary>
         /// One extra request header for a url, or null (the usual answer). The stand-in for WPF's
@@ -102,13 +110,57 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>Requests <see cref="RequestHeader"/> actually stamped (the engine accepted the header; never the value).</summary>
         internal int StampedRequests { get; private set; }
 
-        private void StampRequestHeader(WebResourceRequestedEventArgs e)
+        internal void StampRequestHeader(WebResourceRequestedEventArgs e)
         {
             try
             {
-                if (e.Request?.Uri is { } uri) Stamp(uri, e.Request.Headers.TrySet);
+                if (e.Request?.Uri is not { } uri) return;
+                var headers = e.Request.Headers;
+                GateScrolllerRequest(uri, n => headers.TryGetValue(n, out var v) ? v : null, headers.TrySet);
+                Stamp(uri, headers.TrySet);
             }
             catch (Exception ex) { Log.Debug("WebHost: request header not set: {Error}", ex.Message); }
+        }
+
+        /// <summary>
+        /// False for the in-app web browser only: the user's own browsing is not the app fetching
+        /// Scrolller (WPF ScrolllerWebGate leaves MainWindow.Browser untouched). Every other page is gated.
+        /// </summary>
+        public bool GateScrolller { get; set; } = true;
+
+        /// <summary>Scrolller requests that left with the honest user-agent (a headless test's view).</summary>
+        internal int ScrolllerRewrites { get; private set; }
+
+        /// <summary>Navigations and loads refused because the Scrolller licence switch is off.</summary>
+        internal int ScrolllerRefusals { get; private set; }
+
+        /// <summary>
+        /// WPF ScrolllerWebGate.Handle (main c45d58a65), header half: a Scrolller request goes out with
+        /// <see cref="ScrolllerSource.HonestUserAgent"/> and a foreign Referer becomes ours. This engine's
+        /// WebResourceRequested carries no response, so it cannot answer locally (403 when off, the device
+        /// cache, the daily share): ponytail: sync7-scrolller-d-native adds a WebKitGTK content filter and
+        /// the WebView2 filter. Off, top-level loads are refused instead (<see cref="RefusesScrolller"/>).
+        /// </summary>
+        internal bool GateScrolllerRequest(Uri uri, Func<string, string?> get, Func<string, string, bool> trySet)
+        {
+            if (!GateScrolller || ScrolllerWebRules.Decide(Absolute(uri), ScrolllerPolicy.Enabled) != ScrolllerWebDecision.Rewrite)
+                return false;
+            if (!trySet("User-Agent", ScrolllerSource.HonestUserAgent)) return false;
+            if (!ScrolllerWebRules.IsOurReferer(get("Referer"))) trySet("Referer", ScrolllerWebRules.OurReferer);
+            ScrolllerRewrites++;
+            return true;
+        }
+
+        private static string? Absolute(Uri? u) => u is { IsAbsoluteUri: true } ? u.AbsoluteUri : null;
+
+        /// <summary>True (and counted) when <paramref name="target"/> is Scrolller while the licence switch is off.</summary>
+        private bool RefusesScrolller(Uri? target)
+        {
+            if (!GateScrolller || ScrolllerWebRules.Decide(Absolute(target), ScrolllerPolicy.Enabled) != ScrolllerWebDecision.Block)
+                return false;
+            ScrolllerRefusals++;
+            Log.Information("WebHost: Scrolller is switched off, {Host} not loaded", target!.Host);
+            return true;
         }
 
         /// <summary>One request through <see cref="RequestHeader"/>; counts only a header the engine took (tests drive it).</summary>
@@ -152,12 +204,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (!string.IsNullOrEmpty(body)) WebMessage?.Invoke(body);
         }
 
+        /// <summary>Return keyboard focus to the native page after a title-bar Escape.</summary>
+        public void FocusPage()
+        {
+            if (_web != null) _web.Focus();
+            else Focus();
+        }
+
         /// <summary>
         /// True when THIS instance built an adapter. <see cref="IsAvailable"/> is the process-wide
         /// probe; the constructor can still fail after it passes, and a caller about to drive the
         /// page through script needs to know about this control, not about the machine.
         /// </summary>
-        public bool HasEngine => _web is not null;
+        public bool HasEngine => _web is not null || ScriptInvoker != null;
+
+        // Native script boundary; tests supply a per-instance page adapter without opening a desktop.
+        internal Func<string, Task<string?>>? ScriptInvoker { get; set; }
+
+        /// <summary>Live pause from the Workshop switch (WebHostMedia.SetPausedAsync). Re-applied mutes honour it, so a
+        /// navigation while paused stays muted, as WPF's engine-level IsMuted does.</summary>
+        internal bool MediaPaused { get; set; }
 
         /// <summary>
         /// Runs JS in the current page and returns its result, or null when there is no engine.
@@ -172,8 +238,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public async Task<string?> InvokeScriptAsync(string javaScript)
         {
-            if (_web is null || string.IsNullOrEmpty(javaScript)) return null;
-            try { return await _web.InvokeScript(javaScript); }
+            if (string.IsNullOrEmpty(javaScript)) return null;
+            try
+            {
+                if (ScriptInvoker != null) return await ScriptInvoker(javaScript);
+                return _web == null ? null : await _web.InvokeScript(javaScript);
+            }
             catch (Exception ex)
             {
                 Log.Debug("WebHost: InvokeScript failed: {Error}", ex.Message);
@@ -196,7 +266,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         private static readonly Lazy<(string Text, string? Command)?> _linuxHint = new(() =>
             ConditioningControlPanel.Services.LinuxDependencies.Check(
-                ConditioningControlPanel.Services.LinuxDependencies.All.Where(d => d.Need.StartsWith("web views"))));
+                ConditioningControlPanel.Services.LinuxDependencies.WebViews));
 
         private readonly Panel _webSlot;
         private readonly Border _fallback;
@@ -218,8 +288,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 try
                 {
                     _web = new NativeWebView();
-                    // CCP_LINUX_WEBVIEW=gtk: skip WPE, which the package would otherwise pick first.
-                    if (LinuxOptIn == "gtk")
+                    // A native child does not inherit the parent's brush (Spiral's no-white-flash sink).
+                    BindNativeBackground(_web);
+                    // WebKitGTK unless WPE was chosen: the package picks WPE first, and on wpewebkit 2.54+ its adapter
+                    // throws EntryPointNotFoundException in an async void, which takes the whole app down.
+                    if (LinuxChoice != "wpe")
                         _web.EnvironmentRequested += (_, e) =>
                         {
                             if (e is LinuxWpeWebViewEnvironmentRequestedEventArgs wpe) wpe.PreferWebKitGtkInstead = true;
@@ -227,8 +300,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // Subscribed once, here, rather than when a caller sets AllowNavigation: the
                     // gate has to be live for the FIRST navigation too, and a caller that assigns
                     // the predicate and the Source in that order would otherwise race the engine.
+                    _web.EnvironmentRequested += (_, e) => EnvironmentRequested?.Invoke(e);
                     _web.NavigationStarted += OnNavigationStarted;
-                    _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source);
+                    _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source, e.IsSuccess);
                     _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
                     _web.WebResourceRequested += (_, e) => StampRequestHeader(e);
                     _webSlot.Children.Add(_web);
@@ -243,8 +317,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             {
                 // Linux: name the distro's install command (docs/avalonia-linux-install.md) instead of
                 // the adapter's generic "Install webkit2gtk 4.0+ package.", which stays the fallback.
-                var hint = _linuxHint.Value;
-                _txtReason.Text = hint?.Text ?? UnavailableReason!;
+                // CCP_LINUX_WEBVIEW=off: the reason is the user's own choice, not a missing package.
+                var hint = LinuxChoice == "off" ? null : _linuxHint.Value;
+                _txtReason.Text = hint?.Text ?? UnavailableReason!;   // the hint ends with LinuxDependencies.RestartHint
                 if (hint?.Command is { } command)
                 {
                     var copy = this.FindControl<Button>("BtnCopyCommand")!;
@@ -261,9 +336,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             ApplySource();
         }
 
-        private void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
+        internal void BindNativeBackground(NativeWebView native) =>
+            native.Bind(NativeWebView.BackgroundProperty, this.GetObservable(BackgroundProperty));
+
+        internal void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
         {
             var target = e.Request;
+            if (RefusesScrolller(target)) { e.Cancel = true; return; }
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(target)) { e.Cancel = true; return; }
             var gate = AllowNavigation;
@@ -287,6 +366,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
             NavigationRequests++;
+            if (RefusesScrolller(url)) { RefusedNavigations++; return; }
             // A sandbox never loads a real site (as ApplySource): the panel may name it, the engine never gets it.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; return; }
             if (_web is null) return;
@@ -325,7 +405,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // A sandbox never loads a real site (see OnNavigationStarted); the panel may still name it.
             if (_web is not null)
             {
-                if (!_explicitNavigate) _web.Source = ConditioningControlPanel.Services.SandboxNet.Allows(src) ? src! : null!;
+                if (!_explicitNavigate)
+                    _web.Source = ConditioningControlPanel.Services.SandboxNet.Allows(src) && !RefusesScrolller(src) ? src! : null!;
                 return;
             }
             // No engine: the panel at least names the page that was meant to load.
@@ -359,54 +440,91 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // headless session) and --render-all/--smoke (SetupWithoutStarting) have no desktop lifetime, so they
             // always draw the fallback, even on a box with WPE/WebKitGTK installed.
             var headless = Application.Current?.ApplicationLifetime is not global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-            return DecideUnavailableReason(adapters, OperatingSystem.IsLinux(), headless, LinuxOptIn);
+            var linux = OperatingSystem.IsLinux();
+            var sink = AudioSinkReady(linux, headless, () => ConditioningControlPanel.Services.LinuxDependencies.GstPluginPresent("libgstautodetect.so"),
+                Environment.GetEnvironmentVariable("CCP_LINUX_WEBVIEW"));
+            return DecideUnavailableReason(adapters, linux, headless, LinuxChoice, audioSink: sink);
         }
 
+        /// <summary>The audioSink input of <see cref="DecideUnavailableReason"/>: probed only on the real Linux desktop app,
+        /// and an explicit CCP_LINUX_WEBVIEW=gtk overrides a negative probe with one warning.</summary>
+        internal static bool AudioSinkReady(bool linux, bool headless, Func<bool> probe, string? env)
+        {
+            if (!linux || headless || probe()) return true;
+            if (!SkipsAudioSinkCheck(env)) return false;
+            Log.Warning("WebHost: GStreamer autoaudiosink not found, CCP_LINUX_WEBVIEW=gtk overrides the check (a page's first sound may freeze it)");
+            return true;
+        }
+
+        /// <summary>An explicit CCP_LINUX_WEBVIEW=gtk overrides the audio-sink probe, so a false negative (a plugin dir the probe
+        /// does not know) cannot block every web page for good. The unset default stays gated.</summary>
+        internal static bool SkipsAudioSinkCheck(string? env) => env?.Trim().ToLowerInvariant() == "gtk";
+
+        /// <summary>The Linux engine for this process: <see cref="LinuxEngine"/> over CCP_LINUX_WEBVIEW.</summary>
+        internal static string LinuxChoice => _linuxChoice.Value;
+
+        private static readonly Lazy<string> _linuxChoice = new(() =>
+        {
+            var env = Environment.GetEnvironmentVariable("CCP_LINUX_WEBVIEW");
+            var choice = LinuxEngine(env, WpeHasLegacyApi);
+            if (env?.Trim().ToLowerInvariant() == "wpe" && choice != "wpe")
+                Log.Warning("WebHost: CCP_LINUX_WEBVIEW=wpe ignored, libWPEWebKit lacks webkit_web_view_backend_new (wpewebkit 2.54+); using WebKitGTK");
+            return choice;
+        });
+
         /// <summary>
-        /// CCP_LINUX_WEBVIEW = <c>wpe</c> | <c>gtk</c>, else null. Linux web views stay OFF by default: in live runs on
-        /// KDE Wayland + XWayland both 12.1 engines loaded the page but requestAnimationFrame never kept running
-        /// (WPE froze after its first frame, GTK painted nothing), so every rAF-heartbeat host closed itself.
-        /// The opt-in exists to re-check that (docs/avalonia-decisions.md, 2026-10-12 webview-probe-fix).
+        /// CCP_LINUX_WEBVIEW = <c>off</c> -> "off" (fallback panel), <c>wpe</c> -> "wpe" when <paramref name="wpeLegacyApi"/>
+        /// says libWPEWebKit still exports the libwpe API that 12.1's WPE adapter calls, anything else -> "gtk" (the default:
+        /// it draws continuously in the live runs, docs/avalonia-decisions.md 2026-10-13). The earlier "rAF stalls" on both
+        /// engines were WebKitWebProcess aborting without GStreamer's autoaudiosink, not the engines.
         /// </summary>
-        internal static string? LinuxOptIn =>
-            Environment.GetEnvironmentVariable("CCP_LINUX_WEBVIEW")?.Trim().ToLowerInvariant() switch { "wpe" => "wpe", "gtk" => "gtk", _ => null };
+        internal static string LinuxEngine(string? env, Func<bool> wpeLegacyApi) => env?.Trim().ToLowerInvariant() switch
+        {
+            "off" => "off",
+            "wpe" when wpeLegacyApi() => "wpe",
+            _ => "gtk",
+        };
+
+        // wpewebkit 2.54 dropped webkit_web_view_backend_new (the libwpe/fdo API); WpeWebViewAdapter.Initialize calls it.
+        private static bool WpeHasLegacyApi() =>
+            System.Runtime.InteropServices.NativeLibrary.TryLoad("libWPEWebKit-2.0.so.1", out var lib)
+            && System.Runtime.InteropServices.NativeLibrary.TryGetExport(lib, "webkit_web_view_backend_new", out _);
+
+        internal const string LinuxOffReason = "Web views are turned off (CCP_LINUX_WEBVIEW=off).";
+
+        internal const string NoAudioSinkReason = "Web pages need the GStreamer audio sink (autoaudiosink, gst-plugins-good).";
 
         internal const string NoEngineReason = "No native web view on this platform.";
 
-        internal const string LinuxOffReason =
-            "Web views are off on Linux by default (they stall here). Set CCP_LINUX_WEBVIEW=wpe or gtk to try one.";
-
         /// <summary>
-        /// The availability decision. Without a Linux opt-in: an installed adapter offering NativeControlHost
-        /// (WebView2 on Windows, WKWebView on macOS); 12.1 reports none on Linux, so Linux draws the fallback.
-        /// With <paramref name="linuxOptIn"/> it mirrors the package's own choice (WebViewAdapter.CreateFactory):
-        /// <c>wpe</c> = WPE (picked first) or WebKitGTK installed; <c>gtk</c> = WebKitGTK installed (WPE skipped).
+        /// The availability decision. Off Linux: an installed adapter offering NativeControlHost (WebView2 on Windows,
+        /// WKWebView on macOS). On Linux it mirrors the package's own choice (WebViewAdapter.CreateFactory) for
+        /// <paramref name="linuxEngine"/>: <c>gtk</c> = WebKitGTK installed (WPE skipped); <c>wpe</c> = WPE (picked first)
+        /// or WebKitGTK installed; <c>off</c> = never. A hostable Linux engine still needs GStreamer's autoaudiosink
+        /// (<paramref name="audioSink"/>): without it the first sound aborts the web process and the page freezes.
         /// </summary>
-        internal static string? DecideUnavailableReason(IEnumerable<DetailedWebViewAdapterInfo> adapters, bool isLinux, bool headless, string? linuxOptIn = null)
+        internal static string? DecideUnavailableReason(IEnumerable<DetailedWebViewAdapterInfo> adapters, bool isLinux, bool headless,
+            string linuxEngine = "gtk", bool audioSink = true)
         {
+            if (isLinux && linuxEngine == "off") return LinuxOffReason;
             string? firstReason = null;
-            var linuxOff = false;
             foreach (var info in adapters)
             {
                 if (!info.IsSupported || info.Type is WebViewAdapterType.Unknown or WebViewAdapterType.Headless) continue;
-                var hostable = (isLinux, linuxOptIn) switch
+                var hostable = (isLinux, linuxEngine) switch
                 {
                     (true, "wpe") => info.Type is WebViewAdapterType.WpeWebKit or WebViewAdapterType.WebKitGtk,
                     (true, "gtk") => info.Type is WebViewAdapterType.WebKitGtk,
                     _ => info.SupportedScenarios.HasFlag(WebViewEmbeddingScenario.NativeControlHost),
                 };
                 if (info.IsInstalled && hostable && !headless)
-                    return null;
-                // An engine is installed but off by default: say so and name the opt-in, not "no web view".
-                if (isLinux && linuxOptIn is null && !headless && info.IsInstalled
-                    && info.Type is WebViewAdapterType.WpeWebKit or WebViewAdapterType.WebKitGtk)
-                    linuxOff = true;
+                    return isLinux && !audioSink ? NoAudioSinkReason : null;
                 // Prefer the first supported-but-missing engine's message: on Linux that is the
                 // actionable "Install webkit2gtk 4.0+ package", not "not supported on this platform".
                 if (firstReason is null && !string.IsNullOrWhiteSpace(info.UnavailableReason))
                     firstReason = info.UnavailableReason;
             }
-            return linuxOff ? LinuxOffReason : firstReason ?? NoEngineReason;
+            return firstReason ?? NoEngineReason;
         }
     }
 }

@@ -3,15 +3,19 @@
 # pkgver follows Version.props; bump both together (update step: sed -i "s/^pkgver=.*/pkgver=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' ../../Version.props)/" PKGBUILD).
 # Local test: bash packaging/aur/test-local.sh <tarball> (makepkg + the installed launcher's --smoke, no sudo).
 pkgname=conditioning-control-panel-bin
-pkgver=7.1.5
+pkgver=7.1.14
 pkgrel=1
 pkgdesc="A visual conditioning application with gamification features"
 arch=('x86_64')
-url="https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF"
+url="https://github.com/CC-Labs-it/Conditioning-Control-Panel"
 license=('MIT')
-# Web views (GTK3 WebKit + WPE), LibVLC audio/video, libsecret tokens, X11/XInput2 overlays + panic key,
-# parec mic (libpulse), ICU for .NET globalization. .NET itself is self-contained.
-depends=('webkit2gtk-4.1' 'wpewebkit' 'wpebackend-fdo' 'libwpe' 'vlc' 'libsecret' 'libx11' 'libxi' 'libpulse' 'icu')
+# Web views (GTK3 WebKit; gst-plugins-good's autoaudiosink, without which a page's first sound aborts the web process),
+# LibVLC audio/video, libsecret tokens, X11/XInput2 overlays + panic key, parec mic (libpulse), ICU for .NET globalization.
+# .NET itself is self-contained. WPE is an opt-in engine only (CCP_LINUX_WEBVIEW=wpe; docs/avalonia-decisions.md 2026-10-13).
+depends=('webkit2gtk-4.1' 'gst-plugins-good' 'vlc' 'libsecret' 'libx11' 'libxi' 'libpulse' 'icu')
+optdepends=('wpewebkit: opt-in WPE web view engine (CCP_LINUX_WEBVIEW=wpe; needs a wpewebkit that still has the libwpe API)'
+            'wpebackend-fdo: opt-in WPE web view engine'
+            'libwpe: opt-in WPE web view engine')
 provides=('conditioning-control-panel')
 conflicts=('conditioning-control-panel')
 options=('!strip' '!debug')

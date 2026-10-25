@@ -57,16 +57,7 @@ public sealed partial class FriendsDrawer
     /// device), else what this PC remembers (a server that predates the list).</summary>
     internal IReadOnlyList<BlockedEntry> BlockedRows()
     {
-        var server = _last.Blocked;
-        if (server != null)
-        {
-            var account = FriendsBlockList.Account() ?? "";
-            var rows = new List<BlockedEntry>(server.Count);
-            foreach (var b in server) rows.Add(new BlockedEntry(account, b.Id, b.Name, DateTimeOffset.MinValue));
-            return rows;
-        }
-        try { return FriendsBlockList.Shared.For(FriendsBlockList.Account()); }
-        catch { return Array.Empty<BlockedEntry>(); }
+        return FriendsBlockList.Shared.Rows(FriendsBlockList.Account(), _last.Blocked);
     }
 
     /// <summary>A menu's Remove or Block: the card opens on that friend with the question in it.</summary>

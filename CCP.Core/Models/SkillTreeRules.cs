@@ -93,6 +93,34 @@ namespace ConditioningControlPanel.Models
             return breakdown;
         }
 
+        /// <summary>Tooltip for the active XP chips (WPF UiUpdates). Match localized breakdown labels
+        /// and let the active mod override its skill text before applying vocabulary substitution.</summary>
+        public static string? GetBonusChipTooltip(string source, Func<string, string?>? modTooltip = null)
+        {
+            string? skill = null, tip = null;
+            if (source.StartsWith("Streak Power") || source.StartsWith(Loc.Get("skill_mult_streak_power_days").Split('{')[0], StringComparison.Ordinal))
+            {
+                skill = "streak_power";
+                tip = "Skill tree bonus: +0.5% XP per day of consecutive use (max 15%)";
+            }
+            else
+            {
+                var options = new[]
+                {
+                    ("skill_mult_sparkle_boost", "sparkle_boost_1", "Skill tree bonus: +10% XP from Sparkle Boost"),
+                    ("skill_mult_extra_sparkly", "sparkle_boost_2", "Skill tree bonus: +15% XP from Extra Sparkly (stacks with Sparkle Boost)"),
+                    ("skill_mult_maximum_sparkle", "sparkle_boost_3", "Skill tree bonus: +20% XP from Maximum Sparkle (stacks with other Sparkle skills)"),
+                    ("skill_mult_night_shift", "night_shift", "Skill tree bonus: +50% XP for conditioning between 11 PM and 5 AM"),
+                    ("skill_mult_early_bird", "early_bird_bimbo", "Skill tree bonus: +50% XP for conditioning between 5 AM and 8 AM"),
+                    ("skill_mult_pink_rush_active", "pink_rush", "Skill tree bonus: 3x XP multiplier! Random 60-second windows of boosted XP")
+                };
+                foreach (var (key, id, text) in options)
+                    if (source == Loc.Get(key)) { skill = id; tip = text; break; }
+            }
+            if (skill != null && modTooltip?.Invoke(skill) is { } custom) return custom;
+            return tip == null ? null : CoreMods.MakeModAware(tip);
+        }
+
         /// <summary>Total conditioning time as "Xh Ym", or "Xd Yh Zm" from a day up.</summary>
         public static string FormatConditioningTime(AppSettings settings)
         {

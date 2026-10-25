@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using ConditioningControlPanel.Services;
 using NAudio.Wave;
 using Xunit;
@@ -16,13 +17,14 @@ public class WaveOutTeardownTests
 {
     private sealed class FakePlayer : IWavePlayer
     {
-        private readonly bool _reportsOut;
-        public readonly List<string> Calls = new();
+        private readonly List<string> _calls = new();
+        public string[] Calls { get { lock (_calls) return _calls.ToArray(); } }
+        public Action? OnStop;
+        public bool ReportedOut;
         public PlaybackState State = PlaybackState.Playing;
 
-        public FakePlayer(bool reportsOut = true, PlaybackState state = PlaybackState.Playing)
+        public FakePlayer(PlaybackState state = PlaybackState.Playing)
         {
-            _reportsOut = reportsOut;
             State = state;
         }
 
@@ -36,15 +38,19 @@ public class WaveOutTeardownTests
 
         public void Stop()
         {
-            lock (Calls) Calls.Add("stop");
-            var wasRunning = State != PlaybackState.Stopped;
+            lock (_calls) _calls.Add("stop");
             State = PlaybackState.Stopped;
-            // Like WaveOutEvent: the playback thread raises the event a moment later, elsewhere.
-            if (wasRunning && _reportsOut)
-                ThreadPool.QueueUserWorkItem(_ => { Thread.Sleep(20); PlaybackStopped?.Invoke(this, new StoppedEventArgs()); });
+            OnStop?.Invoke();
         }
 
-        public void Dispose() { lock (Calls) Calls.Add("dispose"); }
+        public void ReportOut()
+        {
+            lock (_calls) _calls.Add("report");
+            ReportedOut = true;
+            PlaybackStopped?.Invoke(this, new StoppedEventArgs());
+        }
+
+        public void Dispose() { lock (_calls) _calls.Add("dispose"); }
     }
 
     private sealed class FakeSource : IDisposable
@@ -59,21 +65,44 @@ public class WaveOutTeardownTests
         var player = new FakePlayer();
         var source = new FakeSource();
 
-        var outcome = WaveOutTeardown.Run(player, new IDisposable?[] { source }, waitMs: 2_000, graceMs: 10);
+        bool waited = false;
+        var outcome = WaveOutTeardown.Run(player, new IDisposable?[] { source }, waitMs: 2_000, graceMs: 10,
+            wait: (reported, timeout) =>
+            {
+                waited = true;
+                Assert.Equal(2_000, timeout);
+                Assert.Equal(new[] { "stop" }, player.Calls);
+                Assert.Equal(0, source.Disposed);
+                Assert.False(reported.IsSet);
+                // Deliver the real event at the wait boundary, with no thread-pool race.
+                player.ReportOut();
+                return reported.Wait(0);
+            });
 
+        Assert.True(waited);
         Assert.Equal(WaveOutTeardown.Outcome.Disposed, outcome);
-        Assert.Equal(new[] { "stop", "dispose" }, player.Calls);
+        Assert.Equal(new[] { "stop", "report", "dispose" }, player.Calls);
         Assert.Equal(1, source.Disposed);
     }
 
     [Fact]
     public void DeviceThatNeverReportsOut_IsAbandoned_NotDisposed()
     {
-        var player = new FakePlayer(reportsOut: false);
+        var player = new FakePlayer();
         var source = new FakeSource();
 
-        var outcome = WaveOutTeardown.Run(player, new IDisposable?[] { source }, waitMs: 100, graceMs: 10);
+        bool waited = false;
+        var outcome = WaveOutTeardown.Run(player, new IDisposable?[] { source }, waitMs: 100, graceMs: 10,
+            wait: (reported, timeout) =>
+            {
+                waited = true;
+                Assert.Equal(100, timeout);
+                Assert.Equal(new[] { "stop" }, player.Calls);
+                Assert.False(reported.IsSet);
+                return reported.Wait(0); // deterministically expire the unsignalled wait
+            });
 
+        Assert.True(waited);
         Assert.Equal(WaveOutTeardown.Outcome.Abandoned, outcome);
         Assert.DoesNotContain("dispose", player.Calls);
         Assert.Equal(0, source.Disposed);   // the stuck thread may still be reading it
@@ -84,25 +113,34 @@ public class WaveOutTeardownTests
     {
         var player = new FakePlayer(state: PlaybackState.Stopped);
 
-        var started = DateTime.UtcNow;
-        var outcome = WaveOutTeardown.Run(player, Array.Empty<IDisposable?>(), waitMs: 5_000, graceMs: 10);
+        bool waited = false;
+        var outcome = WaveOutTeardown.Run(player, Array.Empty<IDisposable?>(), waitMs: 5_000, graceMs: 10,
+            wait: (reported, timeout) =>
+            {
+                waited = true;
+                Assert.Equal(10, timeout); // grace, never the playing-device deadline
+                Assert.Equal(new[] { "stop" }, player.Calls);
+                Assert.False(reported.IsSet);
+                return reported.Wait(0);
+            });
 
         Assert.Equal(WaveOutTeardown.Outcome.Disposed, outcome);
         Assert.Contains("dispose", player.Calls);
-        Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(2));
+        Assert.True(waited);
     }
 
     [Fact]
     public void SamePlayer_IsOnlyTornDownOnce()
     {
         var player = new FakePlayer();
+        player.OnStop = player.ReportOut;
 
         var first = WaveOutTeardown.Run(player, Array.Empty<IDisposable?>(), waitMs: 2_000, graceMs: 10);
         var second = WaveOutTeardown.Run(player, Array.Empty<IDisposable?>(), waitMs: 2_000, graceMs: 10);
 
         Assert.Equal(WaveOutTeardown.Outcome.Disposed, first);
         Assert.Equal(WaveOutTeardown.Outcome.Duplicate, second);
-        Assert.Single(player.Calls.FindAll(c => c == "dispose"));
+        Assert.Equal(new[] { "stop", "report", "dispose" }, player.Calls);
     }
 
     [Fact]
@@ -119,15 +157,56 @@ public class WaveOutTeardownTests
     }
 
     [Fact]
-    public void Release_ReturnsAtOnce_EvenWhenTheDeviceNeverReportsOut()
+    public async Task Release_ReturnsAtOnce_BeforeTheDeviceReportsOut()
     {
-        var player = new FakePlayer(reportsOut: false);
+        var player = new FakePlayer();
+        var source = new FakeSource();
+        using var allowStopToReturn = new ManualResetEventSlim(false);
+        var stopEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Thread? teardownThread = null;
+        Thread? callerThread = null;
+        player.OnStop = () =>
+        {
+            teardownThread = Thread.CurrentThread;
+            stopEntered.SetResult();
+            allowStopToReturn.Wait();
+        };
 
-        var started = DateTime.UtcNow;
-        WaveOutTeardown.Release(player, new FakeSource(), "test");
+        // Dedicated caller: neither its start nor the fake device depends on pool availability.
+        var caller = Task.Factory.StartNew(() =>
+        {
+            callerThread = Thread.CurrentThread;
+            WaveOutTeardown.Release(player, source, "test");
+        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
-        // The caller (the UI thread on engine stop) never waits on the driver.
-        Assert.True(DateTime.UtcNow - started < TimeSpan.FromMilliseconds(500));
+        // Watchdog only, not a latency assertion. The closed gate is the proof: Release must
+        // return while Stop is still blocked and PlaybackStopped has NEVER been signalled.
+        var watchdog = TimeSpan.FromSeconds(10);
+        try
+        {
+            await Task.WhenAll(caller, stopEntered.Task).WaitAsync(watchdog);
+            Assert.NotSame(callerThread, teardownThread);
+            Assert.False(allowStopToReturn.IsSet);
+            Assert.False(player.ReportedOut);
+            Assert.Equal(new[] { "stop" }, player.Calls);
+            Assert.Equal(0, source.Disposed);
+        }
+        finally
+        {
+            // Report out only after Release has returned, so the teardown finishes at once
+            // instead of sitting out the real 2,000 ms deadline (no real-time wait in the test).
+            player.ReportOut();
+            allowStopToReturn.Set();
+            await caller.WaitAsync(watchdog);
+            await stopEntered.Task.WaitAsync(watchdog);
+            // Observe the actual teardown exit; do not leave a background thread for the next test.
+            if (teardownThread != null && teardownThread != callerThread)
+                await Task.Factory.StartNew(() => teardownThread.Join(), CancellationToken.None,
+                    TaskCreationOptions.LongRunning, TaskScheduler.Default).WaitAsync(watchdog);
+        }
+
+        Assert.Equal(new[] { "stop", "report", "dispose" }, player.Calls);
+        Assert.Equal(1, source.Disposed);
     }
 
     [Fact]

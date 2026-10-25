@@ -37,7 +37,7 @@ public sealed class LeashGateCardTests
         public bool DropUnpushedLeashBookings() => false;
     }
 
-    private static void Run(bool punished, Action<MainShellWindow, LauncherWindow, LeashService> body) => AvaloniaTestDispatcher.Run(() =>
+    internal static void Run(bool punished, Action<MainShellWindow, LauncherWindow, LeashService> body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -62,6 +62,7 @@ public sealed class LeashGateCardTests
             shell.Show();
             Dispatcher.UIThread.RunJobs();
             Assert.True(LauncherWindow.BackToLauncher(shell));
+            shell.StepLauncherFade(1); // with motion on the door first fades the panel (WPF MainWindow.Launcher.cs)
             Dispatcher.UIThread.RunJobs();
             var launcher = LauncherWindow.Instance!;
             launcher.Hide();                             // off screen: no exit beat to wait out
@@ -77,16 +78,16 @@ public sealed class LeashGateCardTests
         }
     });
 
-    private static void PressTile(LauncherWindow launcher)
+    internal static void PressTile(LauncherWindow launcher)
     {
         launcher.Play(LauncherCards.Find("intake")!);
         Dispatcher.UIThread.RunJobs();
     }
 
-    private static Button Find(MainShellWindow shell, string tag) =>
+    internal static Button Find(MainShellWindow shell, string tag) =>
         shell.LeashGate!.GetLogicalDescendants().OfType<Button>().Single(b => (string?)b.Tag == tag);
 
-    private static void Click(Button b)
+    internal static void Click(Button b)
     {
         Assert.True(b.IsEffectivelyEnabled);
         b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -151,23 +152,23 @@ public sealed class LeashGateCardTests
         finally { (LeashCutSafety.LiveTargets, LeashCutSafety.RunOnUi) = (oldTargets, oldUi); }
     });
 
-    /// <summary>WPF MainWindow.Leash.cs:184-201: the native browser never sits over Panic and Cut. And with no
-    /// task runner on this head, "Not now" stands the gate back so it never pins the panel.</summary>
+    /// <summary>WPF MainWindow.Leash.cs:184-201: the native browser never sits over Panic and Cut, and comes back
+    /// when the gate goes. A playable task carries no "Not now" (WPF: only an unplayable video does).</summary>
     [Fact]
-    public void TheBrowserHidesUnderTheGate_AndNotNowStandsItBack() => Run(punished: true, (shell, launcher, _) =>
+    public void TheBrowserHidesUnderTheGate_AndComesBackWhenItGoes() => Run(punished: true, (shell, launcher, _) =>
     {
         var browser = shell.LeashBrowser!;
         browser.IsVisible = true;
         PressTile(launcher);
         Assert.True(shell.LeashGate!.IsUp);
         Assert.False(browser.IsVisible);
-        Click(Find(shell, "leash-gate-later"));
+        Assert.DoesNotContain(shell.LeashGate.GetLogicalDescendants().OfType<Button>(), b => (string?)b.Tag == "leash-gate-later");
+        var oldSurfaces = PanicSurfaces.All;
+        PanicSurfaces.All = Array.Empty<PanicSurfaces.Surface>();
+        try { Click(Find(shell, "leash-gate-panic")); }
+        finally { PanicSurfaces.All = oldSurfaces; }
         Assert.False(shell.LeashGate.IsUp);
         Assert.True(browser.IsVisible);
-        shell.CheckLeashGate();                         // the 2 s check: still standing back
-        Assert.False(shell.LeashGate.IsUp);
-        PressTile(launcher);                            // a tile press brings it back
-        Assert.True(shell.LeashGate.IsUp);
     });
 
     [Fact]

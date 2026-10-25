@@ -9,7 +9,10 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Helpers;
+using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Quiz;
+using ConditioningControlPanel.Services.PieceByPiece;
+using ConditioningControlPanel.Services;
 using Serilog;
 
 using ConditioningControlPanel;
@@ -37,7 +40,7 @@ public sealed class WebAssetServer : IDisposable
         {
             lock (_sharedLock)
                 return _shared ??= new WebAssetServer(Path.Combine(AppContext.BaseDirectory, "Resources", "web"))
-                    { AssetsRoot = () => CorePaths.EffectiveAssets };
+                    { AssetsRoot = () => CorePaths.EffectiveAssets, ContentRoot = () => ContentLocator.ContentWebRoot };
         }
     }
 
@@ -80,8 +83,26 @@ public sealed class WebAssetServer : IDisposable
 
     /// <summary>The URL a page loads a library file by (WPF DtrhAssetManifest.AssetUrl's https://ccp.assets/&lt;rel&gt;):
     /// same origin as the page, so the token cookie covers it; each path segment escaped.</summary>
-    public string AssetUrl(string rel) =>
-        $"http://127.0.0.1:{Port}/{AssetsPrefix}" + string.Join('/', rel.Replace('\\', '/').Split('/').Select(Uri.EscapeDataString));
+    public string AssetUrl(string rel) => $"http://127.0.0.1:{Port}" + AssetPath(rel);
+
+    /// <summary><see cref="AssetUrl"/> without the origin ("/ccp.assets/images/a.png"): what DtRH's hostMedia.js
+    /// counts as local (its LOCAL_URL_RE knows https://ccp.*/ and root-relative urls, not 127.0.0.1), so the
+    /// page's WebGL layer may draw it.</summary>
+    public static string AssetPath(string rel) =>
+        "/" + AssetsPrefix + string.Join('/', rel.Replace('\\', '/').Split('/').Select(Uri.EscapeDataString));
+
+    /// <summary>WPF's whisper virtual hosts, served behind the same token/cookie as the board.</summary>
+    // ponytail: WPF maps only the install folder (AppContext.BaseDirectory, PieceByPieceHostService.cs:773);
+    // ContentLocator also falls back to the downloaded-content folder when the install copy is missing. Harmless, kept.
+    public Func<string?> SubAudioRoot { get; init; } = () => ContentLocator.ResolveDirectory("Resources/sub_audio");
+    public Func<string?> WordsRoot { get; init; } = () => SubliminalWhisper.WordsRoot();
+
+    /// <summary>Translate the shared whisper selector's virtual URL into this server's origin.</summary>
+    internal string WhisperUrl(string url)
+    {
+        var uri = new Uri(url);
+        return $"http://127.0.0.1:{Port}/{uri.Host}{uri.AbsolutePath}";
+    }
 
     /// <summary>Per-port so two runs on 127.0.0.1 (cookies ignore the port) never overwrite each other.</summary>
     string CookieName => $"ccp_t_{Port}";
@@ -190,12 +211,28 @@ public sealed class WebAssetServer : IDisposable
     /// null = the prefix is not served.</summary>
     public Func<string?>? AssetsRoot { get; init; }
 
+    /// <summary>Downloaded audio-web mirror; read on every request so a pack installed during a run is available.</summary>
+    public Func<string?>? ContentRoot { get; init; }
+
     /// <summary>The file a URL path names, or null if it is missing or lies outside its root, symlinks followed.</summary>
     internal string? ResolveFile(string urlPath)
     {
         var rel = Uri.UnescapeDataString(urlPath).TrimStart('/');
         var root = _root;
         bool asset = rel.StartsWith(AssetsPrefix, StringComparison.Ordinal);
+        bool whisper = rel.StartsWith(PbpWhisperClips.SubAudioHost + "/", StringComparison.Ordinal)
+            || rel.StartsWith(PbpWhisperClips.WordsHost + "/", StringComparison.Ordinal);
+        if (whisper)
+        {
+            int slash = rel.IndexOf('/');
+            string? folder = rel[..slash] == PbpWhisperClips.SubAudioHost ? SubAudioRoot() : WordsRoot();
+            if (string.IsNullOrEmpty(folder)) return null;
+            root = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            rel = rel[(slash + 1)..];
+            // Only the bare audio files selected by PbpWhisperClips, never a manifest or another tree.
+            if (rel.Contains('/') || rel.Contains('\\') || rel.StartsWith('.') || !PbpWhisperClips.IsClip(rel)
+                || HoldsUserData(root)) return null;
+        }
         if (asset)
         {
             if (AssetsRoot?.Invoke() is not { Length: > 0 } assets) return null;
@@ -203,15 +240,36 @@ public sealed class WebAssetServer : IDisposable
             rel = rel[AssetsPrefix.Length..];
             // Media only, never the app's own dot-folders (.temp, .packs), never the profile itself.
             if (!MediaTypeSniffer.MediaExtensions.Contains(Path.GetExtension(rel))
-                || rel.Split('/', '\\').Any(seg => seg.StartsWith('.'))
+                || (rel.Split('/', '\\').Any(seg => seg.StartsWith('.')) && !IsRemoteCopy(rel))
                 || HoldsUserData(root)) return null;
         }
         if (rel.Length == 0 || rel.EndsWith('/')) rel += "index.html";
         if (rel.Contains('\0')) return null;
         var full = Path.GetFullPath(Path.Combine(root, rel));
-        if (!Inside(full, root) || !File.Exists(full) || !LinksStayInside(full, root)) return null;
+        if (!Inside(full, root)) return null;
+        if (!File.Exists(full))
+        {
+            if (asset || whisper || !ContentLocator.IsIntakeWebAudio(rel) || ContentRoot?.Invoke() is not { Length: > 0 } content)
+                return null;
+            root = Path.GetFullPath(content).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            if (HoldsUserData(root)) return null;
+            // ponytail: the page's first audio URL uses its own origin; resolve the pack mirror here
+            // so the same cookie and range handling serve recorded clips, with install-dir priority.
+            full = Path.GetFullPath(Path.Combine(root, rel));
+            if (!Inside(full, root) || !File.Exists(full)) return null;
+        }
+        if (!LinksStayInside(full, root)) return null;
+        // Brain-drain whisper clips pass this too; GameWindow.PbpWhispers leaves unchecked ones out of the offer.
         if (asset && !IntakeRun.IsAssetActive(IntakeRun.DisabledAssetSet(DisabledAssets()), root, full)) return null;
         return full;
+    }
+
+    /// <summary>The one dot-folder file served: DtRH's copy of an online entry, <c>.temp/ccp_temp_remote_*</c>
+    /// (Core DtrhRemoteMedia; WPF's ccp.assets maps the whole folder). Pack decrypts there stay unserved.</summary>
+    static bool IsRemoteCopy(string rel)
+    {
+        var seg = rel.Split('/', '\\');
+        return seg.Length == 2 && seg[0] == ".temp" && DtrhRemoteMedia.IsCopyFile(seg[1]);
     }
 
     /// <summary>The user's unchecked assets (Settings DisabledAssetPaths), never served.</summary>

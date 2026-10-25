@@ -2,92 +2,55 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Avalonia.Media.Imaging;
-using ConditioningControlPanel.Avalonia.Helpers;
+using Avalonia.Platform;
 using ConditioningControlPanel.Models;
-using ConditioningControlPanel.Services;
-using Serilog;
 
-namespace ConditioningControlPanel.Avalonia.Views.Tabs
+namespace ConditioningControlPanel.Avalonia.Views.Tabs;
+
+// Adapted from parity/trunk 7b6f94800e90a90fa443fb47efcfaeedc17eff0e.
+// Quest art, PORTED from WPF MainWindow.QuestsTab.cs GetQuestArt / ClearQuestArtCache and
+// MainWindow.xaml.cs GetModeAwareQuestImagePath + LoadQuestImage: cached remote image first, a mod
+// override next, then the Sissy / CCP Default swaps; bundled pictures ship as avares Resources/quests.
+public partial class QuestsTabView
 {
-    /// <summary>
-    /// Quest art, PORTED from MainWindow.QuestsTab.cs GetQuestArt / ClearQuestArtCache and
-    /// MainWindow.xaml.cs GetModeAwareQuestImagePath + LoadQuestImage. The quest pictures ship on
-    /// this head as avares://CCP.Avalonia/Resources/quests/ (csproj links Assets/quests), so the
-    /// pack:// paths Core persists resolve through <see cref="ModArt.TryLoad"/>: mod override first,
-    /// the shipped copy second, the same order as WPF's ModResourceResolver.
-    /// </summary>
-    public partial class QuestsTabView
+    private const string PackResources = "pack://application:,,,/Resources/";
+    private static readonly Dictionary<string, Bitmap> QuestArtCache = new(StringComparer.OrdinalIgnoreCase);
+    private static string? _questArtModId;
+
+    internal static void ClearQuestArtCache()
     {
-        private const string PackResources = "pack://application:,,,/Resources/";
+        // Images already on screen retain their bitmap until their repaint; do not dispose it here.
+        QuestArtCache.Clear();
+        _questArtModId = CoreMods.ActiveModId;
+    }
 
-        /// <summary>Decoded art keyed by resolved path; WPF keeps the same cache because
-        /// RefreshQuestUI runs on every progress tick while the tab is open.</summary>
-        private static readonly Dictionary<string, Bitmap> QuestArtCache = new(StringComparer.OrdinalIgnoreCase);
-        private static string? _questArtModId;
-
-        /// <summary>WPF GetQuestArt: mode-aware, cached, null when the quest has no usable image.</summary>
-        internal static Bitmap? GetQuestArt(QuestDefinition def)
+    internal static Bitmap? GetQuestArt(QuestDefinition def)
+    {
+        try
         {
-            try
+            if (_questArtModId != CoreMods.ActiveModId) ClearQuestArtCache();
+            var path = def.EffectiveImagePath;
+            if (string.IsNullOrEmpty(path)) return null;
+            if (path.StartsWith(PackResources, StringComparison.Ordinal))
             {
-                // WPF clears the cache on a mod switch (ClearQuestArtCache); the same quest can
-                // resolve to a different file under another mod.
-                var mod = CoreMods.ActiveModId;
-                if (!string.Equals(mod, _questArtModId, StringComparison.OrdinalIgnoreCase))
-                {
-                    QuestArtCache.Clear();
-                    _questArtModId = mod;
-                }
-
-                var path = GetModeAwareQuestImagePath(def);
-                if (string.IsNullOrEmpty(path)) return null;
-                if (QuestArtCache.TryGetValue(path, out var cached)) return cached;
-                var loaded = LoadQuestImage(path);
-                if (loaded == null) return null;
-                QuestArtCache[path] = loaded;
-                return loaded;
+                var resource = path.Substring(PackResources.Length);
+                var replacement = CoreModArt.OverridePath(resource);
+                path = replacement != null && File.Exists(replacement) ? replacement
+                    : PackResources + (QuestStampRules.LegacyImageOverride(resource, CoreSettings.Current.IsSissyMode, CoreMods.IsCCPDefault) ?? resource);
             }
-            catch { return null; }
-        }
-
-        /// <summary>WPF GetModeAwareQuestImagePath: the cached remote image first
-        /// (EffectiveImagePath), a mod override of the bundled picture next (kept as is, ModArt
-        /// loads it), then the Sissy / CCP Default wordmark swaps.</summary>
-        private static string GetModeAwareQuestImagePath(QuestDefinition quest)
-        {
-            var imagePath = quest.EffectiveImagePath;
-            if (string.IsNullOrEmpty(imagePath)) return imagePath;
-            if (imagePath.StartsWith("pack://", StringComparison.Ordinal))
+            if (QuestArtCache.TryGetValue(path, out var cached)) return cached;
+            Bitmap? image = null;
+            if (path.StartsWith(PackResources, StringComparison.Ordinal))
             {
-                if (imagePath.StartsWith(PackResources, StringComparison.Ordinal)
-                    && CoreModArt.OverridePath(imagePath.Substring(PackResources.Length)) is { } over && File.Exists(over))
-                    return imagePath;
-                if (CoreSettings.Current?.IsSissyMode == true)
-                {
-                    if (imagePath.Contains("logo.png")) return PackResources + "logo2.png";
-                    if (imagePath.Contains("bambi takeover.png")) return PackResources + "features/mandatory_videos.png";
-                }
-                if (CoreMods.IsCCPDefault && imagePath.Contains("logo.png"))
-                    return PackResources + "logo2.png";
+                var uri = new Uri("avares://CCP.Avalonia/Resources/" + path.Substring(PackResources.Length));
+                if (!AssetLoader.Exists(uri)) return null;
+                using var stream = AssetLoader.Open(uri);
+                image = Bitmap.DecodeToWidth(stream, 512);
             }
-            return imagePath;
+            else if (File.Exists(path)) image = new Bitmap(path);
+            if (image != null) QuestArtCache[path] = image;
+            return image;
         }
-
-        /// <summary>WPF LoadQuestImage: pack:// becomes this head's Resources name (ModArt does the
-        /// mod override WPF did in GetModeAwareQuestImagePath), a local file is a cached remote
-        /// image, anything else is no art.</summary>
-        private static Bitmap? LoadQuestImage(string imagePath)
-        {
-            if (string.IsNullOrEmpty(imagePath)) return null;
-            try
-            {
-                if (imagePath.StartsWith(PackResources, StringComparison.Ordinal))
-                    return ModArt.TryLoad(imagePath.Substring(PackResources.Length), decodeWidth: 512);
-                if (File.Exists(imagePath))
-                    return new Bitmap(imagePath);
-            }
-            catch (Exception ex) { Log.Debug("[Quests] art {Path} would not load: {E}", imagePath, ex.Message); }
-            return null;
-        }
+        catch { return null; } // WPF's missing-art path is the Fluent quest glyph.
     }
 }
