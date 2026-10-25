@@ -3078,3 +3078,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-views-tab-blink-trainer: +68
 - BlinkTrainer side art rides the shared AdaptiveSideArt (adaptive-side-art lane); duplicate control/Core rule dropped; real-tab resize test fail-proven.
 - rgate: all green except one unrelated Windows-only ProgramTodayCard flake (P94).
+
+## avalonia-port/wire-win-emi-book: +600
+- EMI book: welcome replay, card tours via CoreTutorial, WPF rail art (shared Core painters), bundled pixel fonts.
+- Fix round 2: refused replay restores the book; dead ledger ref removed.
