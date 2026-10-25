@@ -84,7 +84,14 @@ public sealed class WorkshopCommunityCellTests
     private static async Task<T> Opened<T>(Window owner) where T : Window
     {
         var opened = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var sub = Window.WindowOpenedEvent.AddClassHandler<T>((d, _) => { if (d.Owner == owner) opened.TrySetResult(d); });
+        // Avalonia 12.1 Window.ShowCore raises WindowOpenedEvent BEFORE it assigns Owner, so an Owner check
+        // there never matches and a dialog opened after RunJobs (an awaited file write first) was never seen.
+        // The instance Opened event (OnOpened) fires after Owner is set: check the owner there.
+        using var sub = Window.WindowOpenedEvent.AddClassHandler<T>((d, _) =>
+        {
+            void Shown(object? s, EventArgs e) { d.Opened -= Shown; if (d.Owner == owner) opened.TrySetResult(d); }
+            d.Opened += Shown;
+        });
         Dispatcher.UIThread.RunJobs();
         if (owner.OwnedWindows.OfType<T>().FirstOrDefault() is { } open) return open;
         return await opened.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -142,13 +149,17 @@ public sealed class WorkshopCommunityCellTests
         var source = Path.Combine(TestUserDataProfile.Root, "Imported Test Persona.json");
         var output = Path.Combine(TestUserDataProfile.Root, "exported-test-persona.json");
         File.WriteAllText(source, JsonConvert.SerializeObject(new CommunityPrompt { Id = "source", Name = "Original", Author = "Test" }));
-        var cell = new WorkshopCommunityCell { ImportFileForTests = () => Task.FromResult<string?>(source), ExportFileForTests = () => Task.FromResult<string?>(output) };
+        var importPick = new TaskCompletionSource<string?>();
+        var cell = new WorkshopCommunityCell { ImportFileForTests = () => importPick.Task, ExportFileForTests = () => Task.FromResult<string?>(output) };
         var owner = new Window { Width = 440, Height = 350, Content = cell };
         try
         {
             owner.Show(); Dispatcher.UIThread.RunJobs();
             cell.FindControl<Button>("BtnImportPrompt")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            (await Dialog(owner)).Close(true);
+            // The picker answers only once Dialog is already waiting, so this dialog always opens late - the
+            // path the export's awaited file write takes on Windows - and every OS covers the Opened signal.
+            var imported = Dialog(owner); importPick.SetResult(source);
+            (await imported).Close(true);
             Assert.Single(s.InstalledCommunityPromptIds);
             var id = s.InstalledCommunityPromptIds.Single();
             Assert.Equal("Imported Test Persona", cell.Service.GetInstalledPrompt(id)!.Name);
