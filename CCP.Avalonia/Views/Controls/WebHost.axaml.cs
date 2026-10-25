@@ -97,6 +97,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public event Action<string>? WebMessage;
 
+        // The native adapter asks at first attachment, before navigation. Keep OS setup in the caller.
+        internal event Action<WebViewEnvironmentRequestedEventArgs>? EnvironmentRequested;
+
         /// <summary>
         /// One extra request header for a url, or null (the usual answer). The stand-in for WPF's
         /// <c>AddWebResourceRequestedFilter</c> + <c>Request.Headers.SetHeader</c> (JustDropHostService.AttachAuthHeader):
@@ -285,6 +288,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 try
                 {
                     _web = new NativeWebView();
+                    // A native child does not inherit the parent's brush (Spiral's no-white-flash sink).
+                    BindNativeBackground(_web);
                     // WebKitGTK unless WPE was chosen: the package picks WPE first, and on wpewebkit 2.54+ its adapter
                     // throws EntryPointNotFoundException in an async void, which takes the whole app down.
                     if (LinuxChoice != "wpe")
@@ -295,6 +300,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // Subscribed once, here, rather than when a caller sets AllowNavigation: the
                     // gate has to be live for the FIRST navigation too, and a caller that assigns
                     // the predicate and the Source in that order would otherwise race the engine.
+                    _web.EnvironmentRequested += (_, e) => EnvironmentRequested?.Invoke(e);
                     _web.NavigationStarted += OnNavigationStarted;
                     _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source, e.IsSuccess);
                     _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
@@ -329,6 +335,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _fallback.IsVisible = _web is null;
             ApplySource();
         }
+
+        internal void BindNativeBackground(NativeWebView native) =>
+            native.Bind(NativeWebView.BackgroundProperty, this.GetObservable(BackgroundProperty));
 
         internal void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
         {
