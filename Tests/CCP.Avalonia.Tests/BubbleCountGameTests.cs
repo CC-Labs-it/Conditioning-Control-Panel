@@ -67,7 +67,9 @@ public sealed class BubbleCountGameTests
                         b.Trigger(forceTest: true);
                         Assert.True(b.IsBusy);
                         Assert.Empty(BubbleCountWindow.OpenWindows);        // the 800 ms lead-in
-                        for (var i = 0; i < 100 && (BubbleCountWindow.OpenWindows.Count == 0 || (BubbleCountWindow.Sink?.FrameCount ?? 0) < 3); i++) await Task.Delay(50);
+                        // 20 s, not 5: a cold LibVLC on the windows-latest runner (plugin scan, loaded shard) has
+                        // missed 5 s on unrelated lanes; the loop exits as soon as frames arrive.
+                        for (var i = 0; i < 400 && (BubbleCountWindow.OpenWindows.Count == 0 || (BubbleCountWindow.Sink?.FrameCount ?? 0) < 3); i++) await Task.Delay(50);
                         var w = Assert.Single(BubbleCountWindow.OpenWindows);
                         Assert.True(BubbleCountWindow.Sink!.FrameCount >= 3, "frames decoded");
                         Assert.Same(BubbleCountWindow.Sink.Bitmap, w.VideoImage.Source);
@@ -77,7 +79,7 @@ public sealed class BubbleCountGameTests
 
                     // Non-strict: the 2 s clip ends, the answer window asks, the right count wins.
                     await Open(strict: false);
-                    for (var i = 0; i < 100 && BubbleCountResultWindow.OpenWindows.Count == 0; i++) await Task.Delay(50);
+                    for (var i = 0; i < 400 && BubbleCountResultWindow.OpenWindows.Count == 0; i++) await Task.Delay(50);
                     var r = Assert.Single(BubbleCountResultWindow.OpenWindows);
                     Assert.Equal(2, BubbleCountWindow.LastVideoDurationSeconds, 0);   // LengthChanged replaced the 30 s fallback
                     r.FindControl<TextBox>("TxtAnswer")!.Text = r.CorrectAnswer.ToString();
