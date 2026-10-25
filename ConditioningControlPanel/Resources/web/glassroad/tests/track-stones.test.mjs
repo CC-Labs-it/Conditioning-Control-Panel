@@ -70,11 +70,11 @@ test('stones load: Threshold field with fromS/toS, staggered lanes, stones insid
   assert.equal(field.id, 'bridge-stones');
   assert.equal(field.fromS, tr.nodeS[field.from]); assert.equal(field.toS, tr.nodeS[field.to]);
   assert.deepEqual(field.lanes, [-14, 0, 14]);
-  assert.ok(field.toS - field.fromS > 80 && field.toS - field.fromS < 100, 'about 90 m');
+  assert.ok(field.toS - field.fromS > 55 && field.toS - field.fromS < 60, 'about 56 m');
   for (let i = field.from; i < field.to; i++) assert.ok(tr.nodeFlags(i).includes('open'), 'node ' + i + ' open');
   assert.ok(!tr.nodeFlags(field.from - 1).includes('open') && !tr.nodeFlags(field.to).includes('open'), 'the deck before and after keeps its rails');
   const lanes = field.lanes.map(laneStones);
-  for (const l of lanes) assert.ok(l.length >= 3, 'at least three distinct islands a lane');
+  for (const l of lanes) assert.ok(l.length >= 2, 'at least two distinct islands a lane');
   assert.ok(Math.abs(lanes[0][0].s - field.fromS) < 1e-6, 'lane -7 starts at the field start');
   // every lane starts at the deck's edge with a lead stone; the regular stones behind it are staggered by 3 m
   for (const l of lanes) assert.ok(Math.abs(l[0].s - field.fromS) < 0.05, 'a lead stone at the field start');
@@ -89,7 +89,7 @@ test('stones load: Threshold field with fromS/toS, staggered lanes, stones insid
     for (const s of [h.s, h.s + h.len / 2, h.s + h.len]) assert.ok(tr.frameAt(s).w / 2 >= Math.abs(h.x) + h.w / 2 + 0.5, 'spare room at s ' + s);
   }
   assert.ok(Math.abs(tr.frameAt(field.fromS).w - 42) < 0.05 && Math.abs(tr.frameAt(field.toS - 1).w - 42) < 0.1, 'the field is 42 m wide');
-  assert.ok(Math.abs(tr.frameAt(field.fromS - 60).w - 24.5) < 0.05 && Math.abs(tr.frameAt(field.toS + 30).w - 24.5) < 0.05, 'the ordinary road remains 24.5 m well before and after');
+  assert.ok(Math.abs(tr.frameAt(field.fromS - 60).w - 24.5) < 0.05 && Math.abs(tr.frameAt(field.toS + 35).w - 24.5) < 0.05, 'the ordinary road remains 24.5 m well before and after');
   for (let s = field.fromS; s < field.toS - 4.5; s += 0.5) assert.ok(fieldSupport(tr.fields, s, 21).length >= 1, 'never a wall at s ' + s);
   for (const it of tr.items) assert.ok(it.s < field.fromS || it.s >= field.toS, 'no item inside');
   for (const b of tr.boosts) assert.ok(b.s + b.len <= field.fromS || b.s >= field.toS, 'no pad inside');

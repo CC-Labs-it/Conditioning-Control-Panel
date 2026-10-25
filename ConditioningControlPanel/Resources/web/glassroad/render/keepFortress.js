@@ -4,6 +4,7 @@ import { materialColor, positionWorld, positionGeometry, normalWorld, normalLoca
 import { LOOK } from './look.js';
 import { prisonPlan } from './keepPrison.js';
 import { waterSpills } from './waterMath.js';
+import { supportIntervals } from '../track/courts.js';
 import { reliefNormal, reliefFootprint } from './surfaceRelief.js';
 
 export function keepStoneMaterial(hex, art, mortar = true, outline = true, finish = 'stone') {
@@ -107,6 +108,8 @@ export function buildKeepFortress(track, layout, art) {
   const excluded = [...(track.jumps || []).map((j) => [j.s, j.landS]), ...(track.fields || []).map((f) => [f.fromS, f.toS]),
     ...(track.aerials || []).map(a => [a.gapS0, a.gapS1])];
   if (layout.drawbridge) excluded.push([layout.drawbridge.rampS0, layout.drawbridge.gapS1]);
+  const holes = (track.courts || []).flatMap(c => c.holes);
+  const holeNear = (s, margin) => holes.some(h => s + margin >= h.s && s - margin <= h.s + h.len);
   const clearSpan = (s, half = step / 2 + 1.3) => !excluded.some(([a, b]) => s + half >= a && s - half <= b);
   for (let i = 0; i < frames.length; i++) {
     if (!clearSpan(frames[i].s)) continue;
@@ -115,8 +118,10 @@ export function buildKeepFortress(track, layout, art) {
     // Stone supports the actual spline only. The bridge and stepping field retain open water below.
     const broken = (layout.brokenEdges || []).some((a) => f.s >= a.s0 - 5 && f.s <= a.s1 + 5);
     for (let j = 0; j < 4; j++) {
-      const at = track.frameAt(f.s + (j - 1.5) * step / 4);
-      block('deck', at, 0, -2.8, [at.w + (broken ? 0 : 2), 4, step / 4 + .2]);
+      const s = f.s + (j - 1.5) * step / 4, at = track.frameAt(s), halfWidth = at.w / 2 + (broken ? 0 : 1);
+      // Remove structural decking too; a road cut must remain open all the way through the stone.
+      const spans = holeNear(s, 1.2) ? supportIntervals(track.courts, s, halfWidth, 1.2) : [[-halfWidth, halfWidth]];
+      for (const [lo, hi] of spans) block('deck', at, (lo + hi) / 2, -2.8, [hi - lo, 4, step / 4 + .2]);
     }
     for (const side of [-1, 1]) {
       const hasRail = [f.s - step / 2, f.s, f.s + step / 2].every((s) => {
@@ -136,7 +141,7 @@ export function buildKeepFortress(track, layout, art) {
     if (!spiral && i % 5 === 0 && f.p[1] > groundY + 8) {
       const otherBelow = frames.some((o) => Math.abs(o.s - f.s) > 36 && o.p[1] < f.p[1] - 5 &&
         Math.hypot(o.p[0] - f.p[0], o.p[2] - f.p[2]) < (o.w + f.w) / 2 + 3);
-      if (!otherBelow && clearSpan(f.s, 12)) worldBlock('stone', [f.p[0], (groundY + f.p[1] - 4) / 2, f.p[2]], [f.w - 1, f.p[1] - 4 - groundY, 8], Math.atan2(-f.t[0], -f.t[2]));
+      if (!otherBelow && clearSpan(f.s, 12) && !holeNear(f.s, 16)) worldBlock('stone', [f.p[0], (groundY + f.p[1] - 4) / 2, f.p[2]], [f.w - 1, f.p[1] - 4 - groundY, 8], Math.atan2(-f.t[0], -f.t[2]));
     }
   }
   const plan = prisonPlan(track, layout, { phone: art?.tier === 'phone' });

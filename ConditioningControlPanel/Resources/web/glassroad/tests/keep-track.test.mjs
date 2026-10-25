@@ -121,17 +121,17 @@ test('Keep prison blocks clear the road and exposed sections preserve the inner 
     assert.ok(f.w >= 34);
   }
 });
-test('Keep has a real drawbridge and nine doubled landing platforms with real fourteen metre jumps', () => {
+test('Keep has a real drawbridge and six broad landing platforms with reachable jumps', () => {
   const t = keep(), layout = getKeepLayout(t), bridge = layout.drawbridge;
   assert.equal(t.jumps.length, 1);
   assert.ok(t.frameAt(bridge.gapS0 + 1).flags.includes('jump'));
   assert.ok(t.frameAt(bridge.gapS1 + 1).p[1] < t.frameAt(bridge.gapS0).p[1] - 15);
   assert.ok(t.frameAt(bridge.rampS0 + 25).t[1] > .25);
   const field = t.fields[0], stones = field.stones;
-  assert.equal(field.id, 'keep-stones'); assert.equal(stones.length, 9); assert.equal(field.platforming, true);
-  assert.ok(Math.abs(field.toS - field.fromS - 580) < .01);
+  assert.equal(field.id, 'keep-stones'); assert.equal(stones.length, 6); assert.equal(field.platforming, true);
+  assert.ok(Math.abs(field.toS - field.fromS - 380) < .01);
   assert.ok(stones.every((h) => h.w === 56 && h.len === 52));
   assert.ok(Math.abs(stones[0].s - field.fromS) < .01);
   assert.ok(Math.abs(stones.at(-1).s + 52 - field.toS) < .01);
-  for (let i = 1; i < stones.length; i++) assert.ok(Math.abs(stones[i].s - stones[i-1].s - 66) < .01);
+  for (let i = 1; i < stones.length; i++) assert.ok(Math.abs(stones[i].s - stones[i-1].s - 65.6) < .01);
 });

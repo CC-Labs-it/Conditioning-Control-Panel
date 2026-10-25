@@ -228,6 +228,7 @@ export function validate(t) {
         if (!Array.isArray(c.lanes) || !c.lanes.length || !c.lanes.every(isNum) || c.lanes.some((x, k) => k && x <= c.lanes[k - 1])) err(at + '.lanes must be sorted numbers');
         if (!Array.isArray(c.stones)) { err(at + '.stones must be an array'); return; }
         if (c.platforming !== undefined && typeof c.platforming !== 'boolean') err(at + '.platforming must be boolean');
+        if (c.boostClearTo !== undefined && (!isInt(c.boostClearTo) || c.boostClearTo < c.to || c.boostClearTo > N)) err(at + '.boostClearTo must end at or after the field within nodes');
         const stones = new Set();
         for (const h of c.stones) {
           if (!h || !isStr(h.id) || stones.has(h.id)) { err(at + ' stones need unique ids'); continue; }

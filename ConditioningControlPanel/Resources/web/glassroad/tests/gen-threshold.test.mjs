@@ -85,7 +85,7 @@ test('gen: Bambi stepping minigame doubles the islands and reserves genuine jump
   assert.equal(field.platforming, true);
   assert.deepEqual(field.lanes, [-14, 0, 14]);
   const fromS = built.meta[field.from].s, toS = built.meta[field.to].s;
-  assert.ok(toS - fromS >= 80 && toS - fromS <= 100, 'field is twice the original forty-metre run');
+  assert.ok(toS - fromS >= 55 && toS - fromS <= 60, 'shorter field keeps the broad islands');
   for (const x of field.lanes) {
     const lane = field.stones.filter(h => h.x === x).map(h => ({ ...h, s: built.meta[h.node].s + h.ds }));
     assert.equal(lane[0].s, fromS, 'generous lead deck');

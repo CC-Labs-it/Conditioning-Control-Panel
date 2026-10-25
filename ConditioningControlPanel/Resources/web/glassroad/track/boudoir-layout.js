@@ -70,7 +70,7 @@ export function getBoudoirLayout(track) {
   });
   const ramp = find('mirror-ramp'), gap = find('mirror-gap'), landing = find('mirror-landing');
   const mirrorJump = { rampS0: ramp.s0, rampS1: gap.s0, gapS0: gap.s0, gapS1: landing.s0, landingS0: landing.s0, landingS1: landing.s1, widthM: 40, riseM: 14, gapM: 24 };
-  const stoneFields = [{ id: 'boudoir-compacts', s0: find('compacts').s0, s1: find('compacts').s1, lanes: [-9, 0, 9], widthM: 40, platformWidthM: 32, platformLengthM: 26, gapM: 274 / 9 - 26 }];
+  const stoneFields = [{ id: 'boudoir-compacts', s0: find('compacts').s0, s1: track.fields.find(f => f.id === 'boudoir-compacts')?.toS ?? find('compacts').s1, lanes: [-9, 0, 9], widthM: 40, platformWidthM: 32, platformLengthM: 26, gapM: 3 }];
   const bounds = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity, minY: Infinity, maxY: -Infinity };
   for (let s = 0; s < track.lengthM; s += 10) {
     const f = track.frameAt(s), half = f.w / 2;

@@ -70,7 +70,7 @@ function drive({ seed = 1, racer = 1, speed = 30, boost = false }) {
 test('the field is on the bridge, after its pad, with a stone in some lane at every s', () => {
   const pad = TRACK.boosts.find((b) => b.x === -3);
   assert.ok(FIELD.fromS - (pad.s + pad.len) >= 35, 'the enlarged approach leaves room after the pad: ' + JSON.stringify({ pad, fromS: FIELD.fromS }));
-  assert.ok(FIELD.toS - FIELD.fromS >= 80 && FIELD.toS - FIELD.fromS <= 100, 'doubled stepping district');
+  assert.ok(FIELD.toS - FIELD.fromS >= 55 && FIELD.toS - FIELD.fromS <= 60, 'shortened stepping district');
   // the last stones end 2 m before the deck resumes (the brief), so the check stops there
   for (let s = FIELD.fromS; s < FIELD.toS - 2.5; s += 0.5) {
     assert.ok(FIELD.stones.some((st) => s >= st.s && s < st.s + st.len), 'a stone under s ' + s.toFixed(1));
@@ -94,7 +94,7 @@ test('every persona commits to a lane, keeps speed and crosses the stones at 18 
     assert.ok(r.worstLane <= 1.5, 'held the lane: ' + label);
     assert.ok(r.minSpeed >= 12, 'kept speed: ' + label);
     assert.equal(r.drifts, 0, 'no drift in the field: ' + label);
-    assert.ok(r.stones >= 4, 'drove over the stones, not the void: ' + label);
+    assert.ok(r.stones >= 2, 'drove over the stones, not the void: ' + label);
     personas.add(r.persona); lanes.add(r.lane);
   }
   assert.equal(personas.size, PERSONAS.length, 'every persona drove');
