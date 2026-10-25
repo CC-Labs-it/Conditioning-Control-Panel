@@ -44,7 +44,8 @@ export function buildKeepDressing(track, art, pal, samples, { reactive = null, m
   function archFinish(src) {
     if (archMaterials.has(src)) return archMaterials.get(src);
     const seam = /seam|glow/.test(src.name), iron = /iron|metal|blackglass/.test(src.name);
-    const material = keepStoneMaterial(seam ? '#ca8652' : iron ? '#673955' : '#a486ad', art, !seam && !iron, true, iron ? 'iron' : 'stone');
+    // The accepted arch GLBs have no UVs; grain and mortar use their geometry/world positions.
+    const material = keepStoneMaterial(seam ? '#ca8652' : iron ? '#673955' : '#a486ad', art, !seam && !iron, false, iron ? 'iron' : 'stone');
     material.name = 'keep-arch-' + src.name;
     if (music && reactive) {
       const parade = cos(positionWorld.y.mul(.24).sub(music.tileBeat.div(4).mul(Math.PI * 2))).mul(.5).add(.5);

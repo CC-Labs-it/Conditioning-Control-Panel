@@ -25,7 +25,7 @@ export function keepMusicFloor({ p, base, seam, reactive: u, music }) {
   const stepHeight = mod(row, 6).div(10).add(.025);
   const equalizer = smoothstep(stepHeight, stepHeight.add(.18), height);
   const beatFill = procession.mul(u.bass.mul(.9).add(u.mid.mul(.5)));
-  const measured = equalizer.mul(.4).add(beatFill.mul(1.1)).add(u.treble.mul(.12));
+  const measured = equalizer.mul(.18).add(beatFill.mul(1.1)).add(u.treble.mul(.08));
   // Group colours turn slowly through plum, rose and brass. Mortar remains dark and readable.
   const phrase = cos(music.tileBar.div(8).add(bank.div(8)).mul(Math.PI * 2)).mul(.5).add(.5);
   const plum = vec3(.4, .09, .58), rose = vec3(.86, .09, .39), brass = vec3(.9, .49, .18);
