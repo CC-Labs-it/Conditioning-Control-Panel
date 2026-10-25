@@ -2733,7 +2733,10 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 
 - Combined wire-theme-inputs (`b144a765b`) with wire-dialogs-companion-prompt-editor (`6948b6de0`): preserved the TextBox chrome/focus/selection changes and tests, installed prompt badge/shared Core loader, and the complete companion-tip panic registry/tests. No textual merge conflicts.
 - Retained every existing progress entry. The input lane had no separate progress entry; its implementation/evidence remains in the theme-inputs parity row. Consolidated parity IDs using the most advanced status (capped at wired), retained distinct earlier evidence as historical context, and preserved both lanes' evidence.
+## avalonia-port/wire-views-companion-workshop-accordion: cloud merge-fix
 
+- Retain phrase preset select/save/delete and the tab-return refresh alongside the conversation resume/park lifecycle and the shell phrase-manager entry from wire-dialogs-companion-prompt-editor.
+- Preserve both lanes' tests and progress history. Consolidate parity IDs, retain prior evidence as context, and use statuses no higher than wired in this merge.
 ## avalonia-port/wire-dialogs-display-name: +989
 - DisplayNameDialog row: stub -> wired. The welcome mode now has its caller: the shell arms WPF CheckPendingRegistrationAsync on Opened, followed by HandlePostAuthAsync and the name loop over the Core LegacyAccountApi (V1).
 - The 401 recovery is Core `AuthRecovery`, shared by both heads: rename recovers the session without retrying; delete retries once.
@@ -2949,6 +2952,12 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 - Calibration mouth prompts fire from real capture (Core MouthOpenDetector, WPF order) and verify/bubble cursors draw the shared Core GazeCursorTrail comet.
 - Review fixes: frame-run-tagged mouth events, cached trail paints, all 10 new tests fail-proven remotely.
 
+## avalonia-port/wire-views-companion-workshop-accordion: webcam lane merge-fix
+
+- Merge webcam calibration lane `be09ff13f0ea97c92e72c6dfcad763e387ad1aec` into pinned workshop lane `5252d4f0598e96f01d98bc635dd997e29a3ab726`.
+- Retain companion roster identity refresh, phrase-preset select/save/delete and tab-return refresh, conversation resume/park, and prompt-editor entry points.
+- Keep all 37 panic surfaces in parent order, their ordering contracts, and both parents’ tests. Consolidate parity IDs with the more advanced status and distinct evidence; retain both progress histories without claiming live verification.
+
 ## avalonia-port/main-20261024: +5620
 - Main sync #8: WPF main f81ea01fb merged (Oct 22 night bug hunt, 32 commits); delta ledger docs/avalonia-main-sync-20261024.md (2 ported-by-merge, 30 needs-port in 15 sync8-* lanes, 0 n/a). Red by design; gated in -compat.
 
@@ -3052,3 +3061,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-theme-inputs: +291
 - Implicit WPF TextBox chrome + FocusGlowTextBox alias: r8, 8x5 padding, 60% hover border, 45% pink focus glow (200ms), 40% pink selection, 50% disabled.
 - Borderless .transparent boxes keep no halo; 4 deterministic headless tests; row stays stub (ComboBox/CheckBox/menus -> wire-theme-inputs-b).
+
+## avalonia-port/wire-views-companion-workshop-accordion: +274
+- Workshop Triggers cell: phrase preset select/save/delete restored on shared Core `PhrasePreset` (WPF prompt, confirm, log lines); combo re-reads on companion-tab return. 4 headless tests, each fail-proven.
+- Row stays stub; camera/browser/roster/community/phrase-pool work handed to lane `-b`.
