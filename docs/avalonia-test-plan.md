@@ -1,0 +1,3 @@
+# Avalonia tester steps
+
+1. WPF `ConditioningControlPanel/MainWindow/MainWindow.Assets.cs:842-951` Rows: `shell-file-dialogs` — Open Library and visit an installed Content Pack image folder. Switch to another folder and back: thumbnails reuse the same decoded images without decrypting again, with unchanged selection/counts. Browse more than 50 pack files: the least recently used thumbnail reloads while a recently revisited thumbnail remains cached. Successful Windows video thumbnails are cached too; failed thumbnails retry, and platforms without a thumbnailer do not extract pack clips. Cache policy tests additionally exercise the 50 MiB limit and ensure eviction leaves displayed images valid.

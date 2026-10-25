@@ -96,8 +96,10 @@ public sealed class AssetsTabTests
         File.WriteAllText(Path.Combine(packDir, ContentPackStore.ManifestFileName), "fixture");
         foreach (var (name, obfuscated, type) in new[] { ("z.png", "z.enc", "image"), ("a.png", "a.enc", "image"), ("v.mp4", "v.enc", "video") })
             manifest.Files.Add(new PackFileEntry { OriginalName = name, ObfuscatedName = obfuscated, FileType = type, Extension = Path.GetExtension(name) });
+        var decrypts = 0;
         var store = new ContentPackStore(() => root, () => s, () => { },
-            _ => Newtonsoft.Json.JsonConvert.SerializeObject(manifest), File.ReadAllBytes);
+            _ => Newtonsoft.Json.JsonConvert.SerializeObject(manifest), path =>
+            { System.Threading.Interlocked.Increment(ref decrypts); return File.ReadAllBytes(path); });
         ContentPackStore.Current = store;
         try
         {
@@ -114,6 +116,8 @@ public sealed class AssetsTabTests
             Assert.Equal(new[] { "a.png", "z.png" }, tab.CurrentFolderFiles.Select(f => f.Name));
             Assert.All(tab.CurrentFolderFiles, f => Assert.NotNull(f.Thumbnail));
             Assert.False(tab.CurrentFolderFiles[1].IsChecked);
+            var firstThumbnail = tab.CurrentFolderFiles[0].Thumbnail;
+            Assert.Equal(2, decrypts);
             Assert.False(Directory.Exists(Path.Combine(root, ".temp"))); // thumbnails decrypt to streams
 
             // No thumbnailer (Linux): a pack video folder must not decrypt clips to disk.
@@ -130,6 +134,9 @@ public sealed class AssetsTabTests
             };
             tab.SelectFolder(pack.Children[0]);
             await tab.ThumbnailLoads;
+
+            Assert.Equal(2, decrypts); // revisiting must reuse decrypted, decoded thumbnails
+            Assert.Same(firstThumbnail, tab.CurrentFolderFiles[0].Thumbnail);
 
             var cb = await Realized(shell, () => tab.ThumbnailsItemsControl.GetVisualDescendants().OfType<CheckBox>()
                 .FirstOrDefault(c => c.DataContext == tab.CurrentFolderFiles[0]));

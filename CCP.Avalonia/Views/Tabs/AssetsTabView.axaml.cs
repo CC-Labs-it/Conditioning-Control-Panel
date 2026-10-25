@@ -309,24 +309,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     try
                     {
                         if (generation != Volatile.Read(ref _thumbGeneration)) return null;
-                        if (item.IsVideo)
+                        var store = ContentPackStore.Current;
+                        Bitmap? Decode()
                         {
-                            if (Platform.VideoThumbnail.Load is not { } load) return null;
-                            string? temp = null;
-                            var store = ContentPackStore.Current;
-                            try
+                            if (item.IsVideo)
                             {
-                                var path = item.PackFileEntry is { } video
-                                    ? temp = store?.GetPackFileTempPath(item.PackId!, video) : item.FullPath;
-                                return path == null ? null : load(path);
+                                if (Platform.VideoThumbnail.Load is not { } load) return null;
+                                string? temp = null;
+                                try
+                                {
+                                    var path = item.PackFileEntry is { } video
+                                        ? temp = store?.GetPackFileTempPath(item.PackId!, video) : item.FullPath;
+                                    return path == null ? null : load(path);
+                                }
+                                finally { if (temp != null) store?.DeleteTempFile(temp); }
                             }
-                            finally { if (temp != null) store?.DeleteTempFile(temp); }
+                            using Stream? fs = item.PackFileEntry is { } entry
+                                ? store?.GetPackFileStream(item.PackId!, entry)
+                                : File.OpenRead(item.FullPath);
+                            if (fs == null) return null;
+                            return Bitmap.DecodeToWidth(fs, 100);
                         }
-                        using Stream? fs = item.PackFileEntry is { } entry
-                            ? ContentPackStore.Current?.GetPackFileStream(item.PackId!, entry)
-                            : File.OpenRead(item.FullPath);
-                        if (fs == null) return null;
-                        return Bitmap.DecodeToWidth(fs, 100);
+                        return item.PackFileEntry is { } packFile && store is { } packStore
+                            ? PackThumbnailCache.For(packStore).GetOrLoad($"{item.PackId}:{packFile.ObfuscatedName}", Decode)
+                            : Decode();
                     }
                     catch { return null; }   // unreadable/unsupported: no thumbnail, as WPF
                     finally { _thumbGate.Release(); }
