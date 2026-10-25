@@ -91,7 +91,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
   const confetti = confettiCloud(L.confetti.high * 6 + L.hitConfetti.high * 4);
   root.add(confetti.mesh);
   const status = createItemStatus(root, feel, { photosafe, track, waterVolume });
-  const tethers = createTethers(root);
+  const tethers = createTethers(root, art);
   const CONF = L.confettiColours.map(hexRgb);
   const mask = art && art.tex ? art.tex('sky-spiral-open-mask') : null;
   const meltTex = art && art.tex ? art.tex(L.meltMask) : null;
@@ -226,7 +226,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     timeS += dt * rate;
     bubbles.uniforms.time.value = timeS;
     status.update(view, dt, karts, musicView);
-    tethers.update(view, dt * rate);
+    tethers.update(view, dt, karts, soft);
     if (shells) { shells.uniforms.time.value = timeS; shells.begin(); }
     bubbles.begin(); motes.begin(); puddles.begin(); waves.begin(); copies.begin(); marks.begin(); shadows.begin(); confetti.begin(); drawn = 0;
     shields.begin();
@@ -490,6 +490,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
 
   return {
     update,
+    event(name, payload) { tethers.event(name, payload); },
     setMediaSource(fn) { pickupCards.setMediaSource(fn); },
     dispose() {
       scene.remove(root);

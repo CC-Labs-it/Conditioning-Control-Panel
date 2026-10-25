@@ -347,6 +347,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const kartPos = [];
   let itemVis = null;
   try { itemVis = itemsMod ? itemsMod.createItemVisuals(scene, art, feel, { photosafe, track, waterVolume, backend: renderer ? renderer.backend : '' }) : null; } catch (e) { console.warn('[glassroad/world] item visuals failed: ' + (e && e.message)); }
+  if (itemVis && bus) offs.push(bus.on('tether-break', payload => itemVis.event('tether-break', payload)));
   // the music road (handoff-1022/MUSIC-ROAD-BRIEF.md): the road, rails and helix answer the song; the
   // player's own word bubbles ride the road. No song: both rest and the race looks as before
   let musicRoad = null, wordVis = null;
