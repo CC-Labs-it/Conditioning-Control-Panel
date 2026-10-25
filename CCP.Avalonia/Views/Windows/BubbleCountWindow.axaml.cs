@@ -856,7 +856,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Topmost puts the bubble in the keep-above band; it does not order it against the game
             // window, which is topmost too. This pins it directly above its owner - the ordering
             // the original's SetWindowPos(HWND_TOPMOST)-per-bubble was reaching for.
-            X11Overlay.RestackAbove(_window, owner);
+            // Windows: the original's HWND_TOPMOST pin (Raise); RestackAbove has no Win32 half.
+            if (OperatingSystem.IsWindows()) X11Overlay.Raise(_window);
+            else X11Overlay.RestackAbove(_window, owner);
 
             // Lifespan - bubble stays for 1-1.5 seconds then pops. Driven by the owning
             // window's single shared animation timer (see BubbleCountWindow.AnimateAllCountBubbles)

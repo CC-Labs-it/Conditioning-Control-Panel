@@ -12,11 +12,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 /// <summary>Ambient bubble effects only; chaos payout owns the run path.</summary>
 internal static class BubblePayloadHost
 {
-    private static readonly List<DispatcherTimer> Waiting = new();
+    private static readonly List<IDisposable> Waiting = new();
     internal static void Stop()
     {
         BubbleOverlay.Payloads.Stop();
-        foreach (var timer in Waiting) timer.Stop();
+        foreach (var timer in Waiting) timer.Dispose();
         Waiting.Clear();
     }
 
@@ -28,7 +28,7 @@ internal static class BubblePayloadHost
     private static void WaitForRain(Action action)
     {
         var deadline = DateTime.UtcNow.AddSeconds(90);
-        DispatcherTimer? timer = null;
+        IDisposable? timer = null;
         timer = DispatcherTimer.Run(() =>
         {
             if (DateTime.UtcNow >= deadline) { Waiting.Remove(timer!); return false; }

@@ -102,7 +102,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             var want = ResolveScreenIndices(s.PinkFilterTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
             var (r, g, b) = EffectiveColor();
-            var opacity = HasTimedPayload ? _payloadOpacity : (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;   // a session ramps it without writing it (#471)
+            var opacity = (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;   // a session ramps it without writing it (#471)
+            // WPF ResolveAdHocOverlayOpacity: an effect raises a live tint, never lowers it.
+            if (HasTimedPayload) opacity = s.PinkFilterEnabled && ShouldShow() ? Math.Max(opacity, _payloadOpacity) : _payloadOpacity;
 
             // Same monitors as last time: repaint the brushes and leave the windows alone. This is
             // the whole reason the slider does not tear down a full-screen window per tick.
@@ -136,7 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                                                 // BubbleCountWindow uses; there is no XID before Show
                 // A refusal is about the platform, not about this monitor, so drop the whole set
                 // rather than tinting some screens and not others.
-                if (!Accept(w)) { CloseAll(); return; }
+                if (!Accept(w)) { CloseWindows(); return; }   // a refusal is not a stop: the payload timer still ends it
                 Windows.Add(w);
             }
             _shownOn = want;

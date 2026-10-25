@@ -392,6 +392,15 @@ public sealed class TakeoverTests
         Assert.Equal(stopsAfterEngineStop + 1, stops);
     });
 
+    /// <summary>WPF OverlayService.Stop (:531): an engine stop ends a bubble payload's timed pink tint.</summary>
+    [Fact]
+    public Task EngineStopEndsTimedPinkTint() => WithArmedShell((shell, _) =>
+    {
+        global::ConditioningControlPanel.Avalonia.Views.Overlays.PinkFilterOverlay.ShowTimed(shell, 10000, 0.5);
+        shell.OnEngineStopped();
+        Assert.False(global::ConditioningControlPanel.Avalonia.Views.Overlays.PinkFilterOverlay.HasTimedPayload);
+    });
+
     /// <summary>A Takeover preset comment is WPF Giggle (Speech.cs:240): dropped while an AI request
     /// is in flight or an AI bubble shows, kept out of chat history, sound on every fifth.</summary>
     [Fact]

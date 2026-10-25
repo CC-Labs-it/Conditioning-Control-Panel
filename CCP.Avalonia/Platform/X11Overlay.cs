@@ -27,7 +27,8 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 ///
 /// <para><b>Windows goes through the same entry points.</b> A window whose platform handle is an
 /// "HWND" is routed to <see cref="Win32Overlay"/> (<see cref="BackendOf"/>), so no call site
-/// branches on the OS. <c>RestackAbove</c> has no Windows half yet and returns false there.</para>
+/// branches on the OS. <c>RestackAbove</c> has no Windows half and returns false there;
+/// a caller that needs WPF's HWND_TOPMOST pin on Windows calls <see cref="Raise"/> instead.</para>
 ///
 /// <para><b>Everything in here fails silently if written carelessly</b>, which is why each guard
 /// below is explicit rather than defensive habit:</para>
@@ -366,9 +367,6 @@ internal static class X11Overlay
     /// after this call can legitimately still see the old one.</para></summary>
     internal static bool RestackAbove(TopLevel window, TopLevel sibling)
     {
-        // WPF BubbleCount/BubbleService pin overlays with HWND_TOPMOST after the owner shows.
-        if (TryGet(window, OverlayBackend.Win32, out var hwnd))
-            return Win32Overlay.SetOverrideRedirect(window, hwnd);
         if (!TryGetXid(window, out var xid)) return false;
         if (!TryGetXid(sibling, out var siblingXid)) return false;
 

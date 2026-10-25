@@ -71,6 +71,8 @@ public sealed class BubblePayloadHostTests
     [Fact]
     public void PanicCancelsQueuedPayloadAndClearsSharedHost() => AvaloniaTestDispatcher.Run(() =>
     {
+        EnsureApp();
+        PinkFilterOverlay.ShowTimed(new Window(), 10000, 0.5);
         Action? queued = null; var fired = false;
         BubbleOverlay.Payloads.Run(new VideoPayload(), () => true, () => false, () => false,
             a => queued = a, _ => throw new Exception(), _ => fired = true);
@@ -79,5 +81,6 @@ public sealed class BubblePayloadHostTests
         queued!();
         Assert.False(fired);
         Assert.Empty(BubbleOverlay.Field.Bubbles);
+        Assert.False(PinkFilterOverlay.HasTimedPayload);   // panic ends the timed tint (WPF OverlayService.Stop)
     });
 }
