@@ -30,7 +30,7 @@ namespace ConditioningControlPanel
     /// "yes". Failing open here would hand every Linux user the paid tier.</para>
     ///
     /// <para>Deliberately NOT exposed, because no ported view asks for it and each is one line for
-    /// whoever needs it: <c>HasAiAccess</c>, the raw <c>PatreonTier</c>, <c>EntitlementResolved</c>,
+    /// whoever needs it: <c>HasAiAccess</c>, <c>EntitlementResolved</c>,
     /// <c>ExportDataAsync</c>. If <c>EntitlementResolved</c> is ever added, unseeded MUST answer
     /// false - a true there beside a false <see cref="HasLabAccess"/> is #1048, the destructive
     /// entitlement repair that cleared a saved setting on every single launch.</para>
@@ -57,6 +57,13 @@ namespace ConditioningControlPanel
 
         /// <summary>The unified identity changed (sign-in, sign-out, account switch). WPF: <c>App.UnifiedIdentityChanged</c>.</summary>
         public static event EventHandler? UnifiedIdentityChanged;
+
+        /// <summary>Raw Patreon tier for WPF-compatible tier-scoped bark latches.</summary>
+        public static volatile Func<Models.PatreonTier>? CurrentTierProvider;
+        public static Models.PatreonTier CurrentTier
+        {
+            get { try { return CurrentTierProvider?.Invoke() ?? Models.PatreonTier.None; } catch { return Models.PatreonTier.None; } }
+        }
 
         public static volatile Func<bool>? IsLoggedInProvider;
         public static volatile Func<string?>? DisplayNameProvider;

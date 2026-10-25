@@ -7,7 +7,7 @@ using Serilog;
 namespace ConditioningControlPanel.Services.Bark
 {
     /// <summary>A line for the mouth: text, clip or null, preempting (WPF GigglePriority), mood, muted easter egg.</summary>
-    public readonly record struct BarkSpeech(string Text, string? AudioPath, bool Priority, string? Mood, bool SilentEgg);
+    public readonly record struct BarkSpeech(string Text, string? AudioPath, bool Priority, string? Mood, bool SilentEgg, bool Unprompted = false);
 
     /// <summary>
     /// The matcher, gate and rotation of WPF 7.1.5 <c>Services/Companion/BarkService.cs</c>, so every head
@@ -16,8 +16,8 @@ namespace ConditioningControlPanel.Services.Bark
     /// one-shot latches, safety hold, chat suppression, speaking, the 60 s floor and its exemptions,
     /// cooldown, chance), the no-repeat variant rotation persisted in AppSettings (:1793-1941) and the
     /// {0}/{key} substitutions (:2000). The head owns the event subscriptions and the mouth.
-    /// ponytail: DispatchIdle, PickVoiceLine, the awareness arbiter and CCP_BARK_DRYRUN land with a caller;
-    /// the whisper / Chaos-narrator gates with a source; tier latches key on "None" until a tier reaches Core.
+    /// ponytail: PickVoiceLine, the awareness arbiter and CCP_BARK_DRYRUN land with a caller;
+    /// the Chaos-narrator gate requires its narrative host (not yet ported).
     /// </summary>
     public sealed class BarkEngine
     {
@@ -43,10 +43,13 @@ namespace ConditioningControlPanel.Services.Bark
         private readonly HashSet<string> _firedOnceSession = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, HashSet<string>> _usedVariantKeys = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _lastVariantKey = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _usedIdleRules = new(StringComparer.OrdinalIgnoreCase);
+        private string? _lastIdleRuleId;
         private readonly Queue<string> _recentlySpoken = new();
         private readonly HashSet<string> _recentlySpokenSet = new(StringComparer.OrdinalIgnoreCase);
         private DateTime _globalLastFireUtc = DateTime.MinValue;
         private DateTime _safetyHoldUntilUtc = DateTime.MinValue;
+        private DateTime _whisperBusyUntilUtc = DateTime.MinValue;
         private DateTime _lastUserMessageUtc = DateTime.MinValue;
 
         // WPF BarkState's rolling mod-switch and avatar-click windows, the counters a source on this head feeds.
@@ -93,6 +96,8 @@ namespace ConditioningControlPanel.Services.Bark
             lock (_gate)
             {
                 _rules = fresh;
+                _usedIdleRules.Clear();
+                foreach (var id in s.BarkIdleRotation) _usedIdleRules.Add(id);
                 _usedVariantKeys.Clear();
                 foreach (var kv in s.BarkVariantRotation)
                     _usedVariantKeys[kv.Key] = new HashSet<string>(kv.Value ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
@@ -117,6 +122,22 @@ namespace ConditioningControlPanel.Services.Bark
         private BarkRuleSet SafeLoad()
         { try { return _loadRules() ?? BarkRuleSet.Empty; } catch (Exception ex) { Log.Warning(ex, "BarkEngine: rule load failed"); return BarkRuleSet.Empty; } }
 
+        /// <summary>WPF AudioService.MarkWhisperAudio: extend the clip duration plus 250 ms tail.</summary>
+        public void MarkWhisperAudio(double durationSeconds)
+        {
+            if (double.IsNaN(durationSeconds) || durationSeconds <= 0) return;
+            lock (_gate)
+            {
+                var until = Now.AddSeconds(durationSeconds + 0.25);
+                if (until > _whisperBusyUntilUtc) _whisperBusyUntilUtc = until;
+            }
+        }
+
+        private static bool IsTextAttribution(string trigger) => trigger.ToLowerInvariant() is
+            "possessioneffect" or "possessiontripwire" or "possessionwarden" or "possessionrungchanged"
+            or "possessiontimerrestarted" or "possessionremember" or "lockdownconscript"
+            or "emergencyexitopened" or "emergencyexitverdict";
+
         public void NoteUserMessage() { lock (_gate) _lastUserMessageUtc = Now; }   // WPF :806, chat suppression
 
         /// <summary>WPF Raise (:1096): the first passing rule (priority order) wins; the gate decides under the
@@ -140,14 +161,69 @@ namespace ConditioningControlPanel.Services.Bark
                     if (winner == null) { Log.Debug("[BARK] trigger={Trigger} no rule matched conditions", trigger); return false; }
                     pool = ResolvePool(winner);
                     (var fire, idx, var reason) = EvaluateGate(winner, pool, guaranteed);
-                    if (!fire) { Log.Debug("[BARK] blocked trigger={Trigger} rule={Rule} reason={Reason}", trigger, winner.Id, reason); return false; }
-                    Log.Information("[BARK] FIRE trigger={Trigger} rule={Rule} class={Class} variant#={Idx}", trigger, winner.Id, winner.Class, idx);
+                    if (!fire) { LogDecision(trigger, winner, pool, false, idx, reason); return false; }
+                    LogDecision(trigger, winner, pool, true, idx, reason);
                     if (Speak == null) return false;
                     CommitFire(winner, idx, pool);
                 }
                 return SpeakLine(winner, pool[idx], ctx);
             }
             catch (Exception ex) { Log.Warning(ex, "BarkEngine: Raise('{Trigger}') failed", trigger); return false; }
+        }
+
+        /// <summary>WPF DispatchIdle / PickIdleRuleLocked: cadence belongs to the tube.</summary>
+        public bool DispatchIdle()
+        {
+            try
+            {
+                if (CoreSettings.Current.MasterVolume == 0 || Safe(IsSpeaking)) return false;
+                var ctx = new BarkContext("Idle");
+                BarkRule winner;
+                List<BarkVariant> pool;
+                int idx;
+                lock (_gate)
+                {
+                    var eligible = _rules.ForTrigger("Idle").Where(r => ConditionsPass(r, ctx)).ToList();
+                    if (eligible.Count == 0) return false;
+                    var unused = eligible.Where(r => !_usedIdleRules.Contains(r.Id)).ToList();
+                    if (unused.Count == 0)
+                    {
+                        _usedIdleRules.Clear();
+                        if (_lastIdleRuleId != null) _usedIdleRules.Add(_lastIdleRuleId);
+                        PersistIdleRotation();
+                        unused = eligible.Where(r => !_usedIdleRules.Contains(r.Id)).ToList();
+                        if (unused.Count == 0) unused = eligible;
+                    }
+                    var gated = unused.Where(r => r.Conditions is { Count: > 0 }).ToList();
+                    var pick = gated.Count > 0 && _rng.NextDouble() < 0.35 ? gated : unused;
+                    winner = pick[_rng.Next(pick.Count)];
+                    pool = ResolvePool(winner);
+                    (var fire, idx, var reason) = EvaluateGate(winner, pool, false);
+                    LogDecision("Idle", winner, pool, fire, idx, reason);
+                    if (!fire || Speak == null) return false;
+                    CommitFire(winner, idx, pool);
+                }
+                return SpeakLine(winner, pool[idx], ctx);
+            }
+            catch (Exception ex) { Log.Warning(ex, "BarkEngine: DispatchIdle failed"); return false; }
+        }
+
+        private void PersistIdleRotation()
+        {
+            CoreSettings.Current.BarkIdleRotation = new List<string>(_usedIdleRules);
+            CoreSettings.Save(suppressCloudBackup: true);
+        }
+
+        private static void LogDecision(string trigger, BarkRule rule, List<BarkVariant> pool, bool fire, int idx, string reason)
+        {
+            // WPF LogDecision: log length, never companion text.
+            if (fire)
+                Log.Information("[BARK] FIRE trigger={Trigger} rule={Rule} class={Class} mood={Mood} priority={Priority} variant#={Idx} lineChars={Chars}",
+                    trigger, rule.Id, rule.Class, rule.Mood, rule.Priority, idx,
+                    idx >= 0 && idx < pool.Count ? pool[idx].Text?.Length ?? 0 : -1);
+            else
+                Log.Debug("[BARK] blocked trigger={Trigger} rule={Rule} class={Class} priority={Priority} reason={Reason}",
+                    trigger, rule.Id, rule.Class, rule.Priority, reason);
         }
 
         public bool ConditionsPass(BarkRule rule, BarkContext ctx) =>
@@ -259,6 +335,7 @@ namespace ConditioningControlPanel.Services.Bark
             {
                 var now = Now;
                 if (now < _safetyHoldUntilUtc) return (false, -1, "safety-active");
+                if (now < _whisperBusyUntilUtc && !IsTextAttribution(rule.Trigger)) return (false, -1, "whisper-active");
                 int window = s.BarkChatSuppressionMs;
                 if (Safe(() => IsCompanionBusy?.Invoke(window) == true)
                     || (window > 0 && (now - _lastUserMessageUtc).TotalMilliseconds < window))
@@ -293,7 +370,7 @@ namespace ConditioningControlPanel.Services.Bark
             _firedOnceSession.Contains(rule.Id)
             || (rule.Scope != BarkScope.Session && CoreSettings.Current.IsBarkFired(LatchKey(rule)));
 
-        private static string LatchKey(BarkRule rule) => rule.Scope == BarkScope.Tier ? rule.Id + "@None" : rule.Id;
+        private static string LatchKey(BarkRule rule) => rule.Scope == BarkScope.Tier ? rule.Id + "@" + CoreAccount.CurrentTier : rule.Id;
 
         /// <summary>WPF CommitFire (:1793). Caller holds the lock.</summary>
         private void CommitFire(BarkRule rule, int idx, List<BarkVariant> pool)
@@ -314,6 +391,12 @@ namespace ConditioningControlPanel.Services.Bark
             set.Add(key);
             _lastVariantKey[rule.Id] = key;
             PersistVariantRotation(rule.Id);
+            if (string.Equals(rule.Trigger, "Idle", StringComparison.OrdinalIgnoreCase))
+            {
+                _usedIdleRules.Add(rule.Id);
+                _lastIdleRuleId = rule.Id;
+                PersistIdleRotation();
+            }
         }
 
         /// <summary>WPF PickVariant (:1867): an unused line, preferring a clip no rule spoke lately; -1 when all used.</summary>
@@ -352,7 +435,7 @@ namespace ConditioningControlPanel.Services.Bark
                 mouth(new BarkSpeech(line, null, false, mood, SilentEgg: true));
             else
                 mouth(new BarkSpeech(line, SafeResolveAudio(variant.Audio),
-                    rule.Class != BarkClass.Normal || rule.Priority >= PriorityBarkThreshold, mood, SilentEgg: false));
+                    rule.Class != BarkClass.Normal || rule.Priority >= PriorityBarkThreshold, mood, SilentEgg: false, Unprompted: string.Equals(rule.Trigger, "Idle", StringComparison.OrdinalIgnoreCase)));
             try { BarkSpoken?.Invoke(rule, line); }
             catch (Exception ex) { Log.Debug("[BARK] BarkSpoken subscriber error: {Error}", ex.Message); }
             return true;

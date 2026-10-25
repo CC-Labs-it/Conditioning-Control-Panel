@@ -277,7 +277,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // head-side services in ConditioningControlPanel/Services/ with no seam at all, and
             // their handlers live in the Reactions/Speech partials that did not port.
 
-            // ponytail: the WPF ctor also started four timers here - a 2s greeting, the idle-giggle,
+            // ponytail: the WPF ctor also started three timers here - a 2s greeting,
             // the trigger and the random-bubble loops. Deliberately NOT started: every one of them
             // calls into a partial this layer does not have, and --render-all constructs ~180 windows
             // in one process, where a stray timer firing at a closed window is a flaky failure.
@@ -319,6 +319,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // chamber rather than on the stock one.
             RefreshTubeLayout();
 
+            RestartIdleTimer();
             AttachAwareness();   // WPF xaml.cs:317-322 (Reactions.cs)
 
             // ponytail: WPF's OnLoaded also ran StartFloatingAnimation / StartFullscreenDetection
@@ -339,6 +340,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // in one process, and a tick against a torn-down visual tree is exactly the flaky
             // failure the constructor's note refuses to risk.
             LocalizationManager.Instance.LanguageChanged -= OnTubeLanguageChanged;
+            _idleTimer?.Stop();
             _poseTimer.Stop();
             _speechTimer?.Stop();
             ClearSpeechQueue();
@@ -1260,6 +1262,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     _currentSpeechLength = text.Length;
 
                     StartBubbleHideTimer(text);
+                    RestartIdleTimer();
                     Log.Debug("Companion says ({Chars} chars, ai={Ai})", text.Length, aiGenerated);   // never the text
                 }
                 catch (Exception ex) { Log.Warning(ex, "AvatarTube GigglePriority failed"); }

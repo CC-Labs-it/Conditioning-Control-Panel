@@ -91,10 +91,20 @@ internal static class BarkHead
     {
         var tube = Views.AvatarTube.AvatarTubeWindow.Live;
         if (tube == null) return;
+        if (s.Unprompted && HoldIdleVoice())
+        {
+            tube.GigglePriority(s.Text, playSound: false, aiGenerated: false, mood: s.Mood);
+            return;
+        }
         if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) { tube.Giggle(s.Text); return; }
         tube.GigglePriority(s.Text, playSound: s.AudioPath == null, aiGenerated: false,
             phraseAudioPath: s.AudioPath, barkVoice: s.AudioPath != null, mood: s.Mood);
     }
+
+    // WPF CompanionIdleVoice: an idle bubble remains visible while the engine-off voice is held.
+    internal static bool HoldIdleVoice() => !CoreSession.IsEngineRunning
+        && !(CoreSession.IsSessionRunning && App.Sessions?.IsPaused != true)
+        && !CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff;
 
     private static readonly Dictionary<string, PropertyInfo?> SettingProps = new(StringComparer.Ordinal);
 
@@ -102,6 +112,8 @@ internal static class BarkHead
     internal static void OnSettingChanged(BarkEngine e, string? name)
     {
         if (string.IsNullOrEmpty(name)) return;
+        if (name == nameof(AppSettings.IdleGiggleIntervalSeconds))
+            Views.AvatarTube.AvatarTubeWindow.Live?.RestartIdleTimer();
         PropertyInfo? pi;
         lock (SettingProps)
             if (!SettingProps.TryGetValue(name!, out pi)) SettingProps[name!] = pi = typeof(AppSettings).GetProperty(name!);

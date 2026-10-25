@@ -18,6 +18,73 @@ namespace CCP.Avalonia.Tests;
 public sealed class CompanionBarkHeadTests
 {
     [Fact]
+    public void IdleVoiceIsHeldWithTheEngineOffUnlessOptedIn()
+    {
+        var engine = CoreSession.IsEngineRunningProvider;
+        var session = CoreSession.IsSessionRunningProvider;
+        var s = CoreSettings.Current;
+        var opt = s.CompanionSpeaksIdleWhenEngineOff;
+        try
+        {
+            CoreSession.IsEngineRunningProvider = () => false;
+            CoreSession.IsSessionRunningProvider = () => false;
+            s.CompanionSpeaksIdleWhenEngineOff = false;
+            Assert.True(BarkHead.HoldIdleVoice());
+            CoreSession.IsEngineRunningProvider = () => true;
+            Assert.False(BarkHead.HoldIdleVoice());
+            CoreSession.IsEngineRunningProvider = () => false;
+            s.CompanionSpeaksIdleWhenEngineOff = true;
+            Assert.False(BarkHead.HoldIdleVoice());
+        }
+        finally
+        {
+            CoreSession.IsEngineRunningProvider = engine;
+            CoreSession.IsSessionRunningProvider = session;
+            s.CompanionSpeaksIdleWhenEngineOff = opt;
+        }
+    }
+
+    [Fact]
+    public void OpenTubeIdleTickReachesBarksAndPanicAndCloseStopItsTimer() => WithSeamsRestored(s =>
+    {
+        var old = (BarkHead.Engine, s.MasterVolume, s.IdleGiggleIntervalSeconds, s.BarkIdleRotation);
+        var shell = new MainShellWindow();
+        try
+        {
+            s.MasterVolume = 50;
+            s.IdleGiggleIntervalSeconds = 120;
+            s.BarkIdleRotation = new();
+            var e = Seeded(Rule("Idle", "idle hello"), out var spoken);
+            // Keep the headless test's mouth observational, avoiding audio or notifications.
+            e.Speak = _ => { };
+            BarkHead.Engine = e;
+            shell.Show();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var tube = shell.Tube!;
+            Assert.True(tube.IdleTimerRunning);
+            var latch = tube.GetType().GetField("_isGiggling", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            latch.SetValue(tube, true); // a collapsed bubble left the WPF speech latch stranded
+            tube.OnIdleTick();
+            Assert.False(tube.IsSpeaking);
+            Assert.Equal("idle hello", spoken());
+            s.IdleGiggleIntervalSeconds = 60;
+            tube.RestartIdleTimer();
+            Assert.Equal(System.TimeSpan.FromSeconds(60), tube.IdleInterval);
+            tube.PanicSilence();
+            Assert.False(tube.IdleTimerRunning);
+            tube.RestartIdleTimer();
+            Assert.True(tube.IdleTimerRunning);
+            shell.Close();
+            Assert.False(tube.IdleTimerRunning);
+        }
+        finally
+        {
+            shell.Close();
+            (BarkHead.Engine, s.MasterVolume, s.IdleGiggleIntervalSeconds, s.BarkIdleRotation) = old;
+        }
+    });
+
+    [Fact]
     public void AppStartupStartsBothHeadsOnceQuestsExist()
     {
         var src = Regex.Replace(File.ReadAllText(Path.Combine(Root(), "CCP.Avalonia", "App.axaml.cs")),
