@@ -121,7 +121,7 @@ public sealed class ChasterBookedPopTests
         chaster.NoteAt("attention", new ScreenPoint(double.NaN, 400));
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(Bubble, ChasterBookedPop.Live.Single().Origin);
-        var stop = Assert.Single(PanicSurfaces.All.Where(s => s.Id == "chaster-booked-pop"));
+        var stop = Assert.Single(PanicSurfaces.All, s => s.Id == "chaster-booked-pop");
         stop.Stop(shell);
         Assert.Empty(ChasterBookedPop.Live);
         Assert.Equal(0, frames.Count);
