@@ -24,7 +24,7 @@ test('Actual round compact receives a rectangular tray covering every physically
   const ray = new Raycaster(new Vector3(2, 3, 2), new Vector3(0, -1, 0));
   assert.equal(ray.intersectObject(source.scene, true).length, 0, 'the real round asset has no square corner');
   const view = buildStones(track, art), holder = view.group.children[0], row = view.rows[0];
-  assert.equal(view.group.children.length, 10); assert.ok(holder.getObjectByName('boudoir-compact-tray'));
+  assert.equal(view.group.children.length, 7); assert.ok(holder.getObjectByName('boudoir-compact-tray'));
   holder.updateMatrixWorld(true);
   for (const x of [-2.499, -2, -1, 0, 1, 2, 2.499]) for (const z of [-2.499, -2, -1, 0, 1, 2, 2.499]) {
     const origin = holder.localToWorld(new Vector3(x, 3, z)), down = new Vector3(...row.n).negate();

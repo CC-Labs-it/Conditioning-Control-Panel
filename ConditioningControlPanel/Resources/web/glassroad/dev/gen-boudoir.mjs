@@ -49,9 +49,10 @@ export function buildBoudoir() {
       land: { from: node('wardrobe-descent', (angle + 330) / 810), to: node('wardrobe-descent', (angle + 450) / 810) },
       pad: { node: node('wardrobe-descent', (angle + 395) / 810), x: 3 } };
   });
-  const fieldFrom = node('compacts'), fieldTo = node('compacts-exit');
+  const fieldFrom = node('compacts'), fieldTo = node('compacts', 2 / 3);
+  for (let i = fieldTo; i < node('compacts-exit'); i++) nodes[i].flags = ['rail'];
   const fields = [{ id: 'boudoir-compacts', from: fieldFrom, to: fieldTo, lanes: [-9, 0, 9],
-    stones: Array.from({ length: 10 }, (_, i) => ({ id: 'compact-' + (i + 1), node: fieldFrom, ds: round(i * 274 / 9), x: 0, w: 32, len: 26 })) }];
+    stones: Array.from({ length: 7 }, (_, i) => ({ id: 'compact-' + (i + 1), node: fieldFrom, ds: i * 29, x: 0, w: 32, len: 26 })) }];
   const track = { format: 'glassroad-track', version: 1, id: 'boudoir', name: { en: 'Boudoir' }, author: 'ccl', created: '2026-10-24',
     loop: true, laps: 2, units: 'm', nodes, sections: BOUDOIR_PIECES.map(section),
     checkpoints: [0, node('drawer-hall'), node('shelf-climb', .5), node('shelf-gallery'), node('wardrobe-bridge'), node('wardrobe-descent'), node('wardrobe-out'), node('bath-stream'), node('compacts-exit'), node('mirror-approach'), node('home')],

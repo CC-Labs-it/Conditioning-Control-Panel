@@ -78,7 +78,7 @@ export function getGoonworksLayout(track) {
   }
   const range = id => sections.find(s => s.id === id);
   const tube = { ...range('rabbit-hole'), radiusM: 20, blendM: 35, windows: true };
-  const field = { ...byId['leapfrog-field'], id: 'goonworks-leapfrog', lanes: [-8, 0, 8], widthM: 36,
+  const field = { ...byId['leapfrog-field'], s1: track.fields.find(f => f.id === 'goonworks-leapfrog')?.toS ?? byId['leapfrog-field'].s1, id: 'goonworks-leapfrog', lanes: [-8, 0, 8], widthM: 36,
     stones: track.fields.find(f => f.id === 'goonworks-leapfrog')?.stones || [] };
   const launch = { rampS0: byId['pinball-ramp'].s0, rampS1: byId['pinball-gap'].s0,
     gapS0: byId['pinball-gap'].s0, gapS1: byId['pinball-landing'].s0,

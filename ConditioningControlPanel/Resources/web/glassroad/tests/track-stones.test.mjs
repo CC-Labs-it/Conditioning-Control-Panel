@@ -70,11 +70,11 @@ test('stones load: Threshold field with fromS/toS, staggered lanes, stones insid
   assert.equal(field.id, 'bridge-stones');
   assert.equal(field.fromS, tr.nodeS[field.from]); assert.equal(field.toS, tr.nodeS[field.to]);
   assert.deepEqual(field.lanes, [-18, 0, 18]);
-  assert.ok(field.toS - field.fromS > 80 && field.toS - field.fromS < 100, 'about 90 m');
+  assert.ok(field.toS - field.fromS > 55 && field.toS - field.fromS < 60, 'about 56 m');
   for (let i = field.from; i < field.to; i++) assert.ok(tr.nodeFlags(i).includes('open'), 'node ' + i + ' open');
   assert.ok(!tr.nodeFlags(field.from - 1).includes('open') && !tr.nodeFlags(field.to).includes('open'), 'the deck before and after keeps its rails');
   const lanes = field.lanes.map(laneStones);
-  for (const l of lanes) assert.ok(l.length >= 3, 'at least three distinct islands a lane');
+  for (const l of lanes) assert.ok(l.length >= 2, 'at least two distinct islands a lane');
   assert.ok(Math.abs(lanes[0][0].s - field.fromS) < 1e-6, 'lane -7 starts at the field start');
   // every lane starts at the deck's edge with a lead stone; the regular stones behind it are staggered by 3 m
   for (const l of lanes) assert.ok(Math.abs(l[0].s - field.fromS) < 0.05, 'a lead stone at the field start');

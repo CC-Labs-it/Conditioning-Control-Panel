@@ -12,7 +12,8 @@ const distance = (a, b, length) => Math.min(wrap(a - b, length), wrap(b - a, len
 
 export function boostExclusions(track) {
   const spans = [];
-  for (const c of [...(track.courts || []), ...(track.fields || [])]) spans.push([c.fromS - 65, c.toS + 25]);
+  // An authored landing runout can remain clear when its stepping field ends sooner.
+  for (const c of [...(track.courts || []), ...(track.fields || [])]) spans.push([c.fromS - 65, (track.nodeS[c.boostClearTo] ?? c.toS) + 25]);
   for (const j of track.jumps || []) spans.push([j.s - 85, j.landS + 45]);
   for (const route of track.routes || []) spans.push([route.land.fromS - 15, route.land.toS + 25]);
   if (track.id === 'keep') {
