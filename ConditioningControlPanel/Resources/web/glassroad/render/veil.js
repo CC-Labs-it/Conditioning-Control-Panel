@@ -1,11 +1,12 @@
 import { Group, Mesh, PlaneGeometry, MeshBasicNodeMaterial, DoubleSide, Color, Matrix4, Vector3 } from 'three/webgpu';
-import { uniform, uv, sin, mix, smoothstep, float, vec3, positionGeometry } from 'three/tsl';
+import { uniform, uv, sin, cos, mix, smoothstep, float, vec3, positionGeometry } from 'three/tsl';
 
 const sat = x => Math.max(0, Math.min(1, Number.isFinite(x) ? x : 0));
 const smooth = x => { const n = sat(x); return n * n * (3 - 2 * n); };
 export const VEIL_CAPACITY = 8;
 export function veilSize(frame, params = {}) {
-  return { width: Math.max(4, frame?.w || 4) + 4, height: Math.max(3, Math.min(5, params.height || 4)) };
+  // A curtain you drive through: road width plus margin, two to three kart heights tall.
+  return { width: Math.max(4, frame?.w || 4) + 8, height: Math.max(5, Math.min(9, (params.height || 4) * 1.7)) * (params.scale || 1) };
 }
 
 // One shared tessellation, prebuilt shader instances, no collision or per-cue texture work.
@@ -19,11 +20,16 @@ export function createVeils(scene, track, { feel, photosafe, gentle } = {}) {
     const at = uv(), wave = sin(at.x.mul(10).add(u.time)).mul(.12).add(sin(at.y.mul(7).sub(u.time.mul(.7))).mul(.06));
     const stripe = sin(at.x.mul(19).add(at.y.mul(11)).add(wave.mul(5)).sub(u.time)).mul(.5).add(.5);
     const feather = smoothstep(0, .1, at.y).mul(float(1).sub(smoothstep(.86, 1, at.y)));
-    const material = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: DoubleSide });
-    material.colorNode = mix(u.primary, u.accent, stripe.mul(.55).add(.2));
-    material.opacityNode = feather.mul(u.alpha);
+    const material = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: DoubleSide, fog: false });
+    const crest = smoothstep(.82, 1, stripe), rim = smoothstep(.0, .06, at.y).mul(float(1).sub(smoothstep(.06, .14, at.y)))
+      .add(smoothstep(.86, .93, at.y).mul(float(1).sub(smoothstep(.93, 1, at.y))));
+    // Liquid rainbow bands that flow across the curtain, tinted toward the course palette so it belongs there.
+    const hue = stripe.mul(.9).add(at.x.mul(.6)).add(u.time.mul(.08));
+    const rainbow = vec3(cos(hue.mul(6.2832)), cos(hue.mul(6.2832).sub(2.0944)), cos(hue.mul(6.2832).sub(4.1888))).mul(.5).add(.5);
+    material.colorNode = mix(mix(rainbow, mix(u.primary, u.accent, stripe), .3), vec3(1, 1, 1), crest.mul(.5).add(rim.mul(.75)));
+    material.opacityNode = feather.mul(stripe.mul(.35).add(.65)).add(rim.mul(.3)).mul(u.alpha);
     material.positionNode = positionGeometry.add(vec3(0, wave.mul(.15).mul(u.motion),
-      wave.mul(u.bass.mul(.7).add(.25)).mul(u.motion)));
+      wave.mul(u.bass.mul(1.6).add(.6)).mul(u.motion)));
     const mesh = new Mesh(geometry, material); mesh.visible = false; object.add(mesh);
     rows.push({ mesh, u, id: null, born: 0, soft: false });
   }
@@ -53,7 +59,7 @@ export function createVeils(scene, track, { feel, photosafe, gentle } = {}) {
       row.mesh.quaternion.setFromRotationMatrix(matrix);
       row.mesh.position.addScaledVector(ny, size.height / 2 + .12);
       row.mesh.scale.set(size.width, size.height, 1);
-      row.u.alpha.value = sat(cue.alpha) * smooth((clock - row.born) / rise) * (soft ? .32 : .66);
+      row.u.alpha.value = sat(cue.alpha) * smooth((clock - row.born) / rise) * (soft ? .4 : .92);
       row.u.time.value += step * (soft ? .12 : .55 + bassLevel * .3);
       row.u.bass.value = bassLevel; row.u.motion.value = soft ? .2 : 1;
       const palette = view.palette || [];
