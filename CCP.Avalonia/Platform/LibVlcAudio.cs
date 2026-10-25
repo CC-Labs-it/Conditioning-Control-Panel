@@ -55,6 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     internal sealed class LibVlcAudio
     {
         private readonly LibVLC _vlc;
+        private readonly WindowsAudio? _windows;
         private readonly Func<string, string> _pactl = Pactl;
         private readonly TimeProvider _duckClock = TimeProvider.System;
 
@@ -78,6 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             else { if (OperatingSystem.IsLinux()) LibVlcNative.Install(); Core.Initialize(); }
             // No global --no-video: video shares this instance. Audio media opt out per item instead.
             _vlc = new LibVLC(options.Append("--quiet").ToArray());
+            if (OperatingSystem.IsWindows()) _windows = WindowsAudio.Create();
             Shared ??= _vlc;
             _vlc.SetUserAgent("Conditioning Control Panel", "CCP"); // the name pactl shows for our streams
         }
@@ -86,14 +88,17 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal LibVlcAudio(Func<string, string> pactl, TimeProvider? clock = null)
         { _vlc = null!; _pactl = pactl; _duckClock = clock ?? TimeProvider.System; }
 
+        internal LibVlcAudio(WindowsAudio windows, TimeProvider? clock = null)
+        { _vlc = null!; _windows = windows; _duckClock = clock ?? TimeProvider.System; }
+
         public void Seed()
         {
             Instance = this;
+            if (_windows != null) Enqueue(_windows.Recover);
             LayeredAudio.Instance = new LayeredAudio(path => new LayeredAudio.VlcLayerPlayer(_vlc, path));
             CoreAudio.PlayOneShotProvider = (path, volume, tag, started, finished) => PlayOneShot(path, volume, tag, started, finished);
             CoreAudio.PlayStoppableProvider = PlayOneShot;
-            // ponytail: Windows ducking stays unseeded (no-op) until AudioService's WASAPI sweep is ported.
-            if (!OperatingSystem.IsLinux()) return;
+            if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
             CoreAudio.DuckProvider = Duck;
             CoreAudio.UnduckProvider = Unduck;
             CoreAudio.DuckGenerationProvider = () => { lock (_duckLock) return _duckGeneration; };
@@ -282,6 +287,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private bool _pactlWarned;
         private Timer? _duckWatchdog; // WPF's safety net for a leaked duck ref: force-unduck after 5 min
         private ITimer? _duckRescan;
+        private ITimer? _restoreRetry;
+        private DateTimeOffset _restoreDeadline;
         private double _duckKeep;
         private long _duckEpoch; // a disposed timer's queued callback cannot enter the next duck window
 
@@ -290,6 +297,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (CoreSettings.Current?.MasterVolume == 0) return; // as WPF: nothing of ours will play
             lock (_duckLock)
             {
+                _restoreRetry?.Dispose();
+                _restoreRetry = null;
                 _duckCount++;
                 if (_isDucked) return;
                 _isDucked = true;
@@ -338,6 +347,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             lock (_duckLock) { if (_isDucked) ForceUnduck(); }
             Drain();
+            lock (_duckLock) { _restoreRetry?.Dispose(); _restoreRetry = null; }
         }
 
         internal void Drain() => _duckWork.Wait(2000);
@@ -351,7 +361,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 if (_pactlWarned) return;
                 _pactlWarned = true;
-                Log.Warning("[Audio] ducking via pactl unavailable: {E}", ex.Message);
+                Log.Warning("[Audio] ducking unavailable: {E}", ex.Message);
             }
         }, TaskScheduler.Default);
 
@@ -371,6 +381,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
             // WPF ApplyDuckSweep: ExcludeBambiCloudFromDucking (default on) skips the browser's audio.
             // WebKitGTK plays from its own child process, so our-pid does not cover it.
             var excludeWeb = CoreSettings.Current?.ExcludeBambiCloudFromDucking ?? true;
+            if (_windows != null)
+            {
+                _windows.Sweep(keep, rescan, excludeWeb, () =>
+                {
+                    lock (_duckLock) return _isDucked && epoch == _duckEpoch;
+                });
+                return;
+            }
             using var doc = JsonDocument.Parse(_pactl("-f json list sink-inputs"));
             foreach (var si in doc.RootElement.EnumerateArray())
             {
@@ -400,12 +418,43 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         private void Restore()
         {
+            if (_windows != null)
+            {
+                _windows.Restore();
+                lock (_duckLock)
+                {
+                    if (!_isDucked && _windows.HasPendingRestores)
+                    {
+                        _restoreDeadline = _duckClock.GetUtcNow().AddMinutes(3);
+                        _restoreRetry?.Dispose();
+                        _restoreRetry = _duckClock.CreateTimer(_ => RetryRestore(), null,
+                            TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+                    }
+                }
+                return;
+            }
             KeyValuePair<int, string[]>[] saved;
             lock (_duckLock) { saved = _originalVolumes.ToArray(); _originalVolumes.Clear(); }
             foreach (var (index, raw) in saved)
             {
                 try { _pactl($"set-sink-input-volume {index} {string.Join(' ', raw)}"); }
                 catch { } // the stream ended while ducked - nothing to restore
+            }
+        }
+
+        private void RetryRestore()
+        {
+            lock (_duckLock)
+            {
+                if (_isDucked || _duckClock.GetUtcNow() >= _restoreDeadline || !_windows!.HasPendingRestores)
+                { _restoreRetry?.Dispose(); _restoreRetry = null; return; }
+                if (!_duckWork.IsCompleted) return;
+                var epoch = _duckEpoch;
+                Enqueue(() =>
+                {
+                    lock (_duckLock) { if (_isDucked || epoch != _duckEpoch) return; }
+                    _windows.Restore();
+                });
             }
         }
 
@@ -422,6 +471,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static List<OutputDevice> EnumerateOutputDevices(Func<string, string>? pactl = null)
         {
             var list = new List<OutputDevice> { new("", Loc.Get("set2_mic_system_default")) };
+            if (pactl is null && OperatingSystem.IsWindows())
+            {
+                AppendDevices(list, WindowsAudio.EnumerateDevices);
+                return list;
+            }
             if (pactl is null && !OperatingSystem.IsLinux()) return list;
             try
             {
@@ -436,6 +490,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
             catch (Exception ex) { Log.Information("EnumerateOutputDevices: no pactl device list ({Error})", ex.Message); }
             return list;
+        }
+
+        // A partial enumeration still leaves the default and every readable endpoint available.
+        internal static void AppendDevices(List<OutputDevice> list, Action<Action<OutputDevice>> enumerate)
+        {
+            try { enumerate(list.Add); }
+            catch (Exception ex) { Log.Information("EnumerateOutputDevices: {Error}", ex.Message); }
         }
 
         /// <summary>WPF's ApplyPreferredDevice rule: the saved device, only when the live player

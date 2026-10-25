@@ -1,0 +1,5 @@
+# Audio playback tester steps
+
+1. WPF `ConditioningControlPanel/MainWindow/MainWindow.HomeAudio.cs`: On Windows, refresh Settings / Audio and dashboard output lists. Check System default first, then active endpoints in native order. Select a headset and test one-shot, mandatory video and layered audio routing. Check mirrored selection and safe stale-ID fallback. Rows: `shell-audio-playback-devices`.
+2. WPF `ConditioningControlPanel/Services/AudioService.cs`: Play external audio, start CCP ducking, and check own/system/excluded browser audio stays audible. Start another stream after 2.5 seconds. Verify one attenuation only and original gain on normal end, panic and exit. Turn browser exclusion off and repeat. Repeat on Linux. Rows: `shell-audio-playback-devices`.
+3. WPF `ConditioningControlPanel/Services/AudioService.cs`: Restart an external application before unduck; check restoration by name when its session is available. Reconnect an endpoint within three minutes and check deferred restore; terminate the app while ducked and relaunch to check recovery of surviving external sessions. Rows: `shell-audio-playback-devices`.
