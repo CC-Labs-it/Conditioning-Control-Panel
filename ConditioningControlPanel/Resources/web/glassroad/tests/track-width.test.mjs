@@ -56,9 +56,9 @@ test('width: every change eases monotonically between node widths without a sudd
 
 test('width: steering out then counter-steering uses the extra room instead of hitting the old rail', () => {
   const narrow = structuredClone(json);
-  // The home straight grew from 20m to 28m. Rebuild its actual former boundary for comparison.
-  assert.equal(track.frameAt(15).w, 28);
-  for (const node of narrow.nodes) if (node.w === 28) node.w = 20;
+  // The home straight grew from 20m to 36m. Rebuild its actual former boundary for comparison.
+  assert.equal(track.frameAt(15).w, 36);
+  for (const node of narrow.nodes) if (node.w === 36) node.w = 20;
   const oldTrack = loadTrack(narrow), feel = makeFeel();
   const formerEdge = oldTrack.frameAt(15).w / 2, newEdge = track.frameAt(15).w / 2;
   for (const side of [-1, 1]) {

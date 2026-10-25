@@ -154,7 +154,7 @@ const FALLS = [
 // over FIELD_RAMP_M before the field and back after it. Nodes inside carry `open` (no rails: the lips are the edges).
 export const FIELDS = [
   // Start beyond the lower-road crossing so missed jumps never skip ahead in the lap.
-  { id: 'bridge-stones', piece: 'bridge', from: 0.50, to: 0.76, lanes: [-18, 0, 18], stoneM: 10, gapM: 15, staggerM: 8, widthM: 50 },
+  { id: 'bridge-stones', piece: 'bridge', from: 0.50, to: 0.50 + 0.26 * 2 / 3, boostClearTo: 0.76, lanes: [-18, 0, 18], stoneM: 10, gapM: 15, staggerM: 8, widthM: 50 },
 ];
 const FIELD_RAMP_M = 20, FIELD_END_GAP_M = 2, FIELD_SPARE_M = 0.5, FIELD_GAP_M = [14.5, 15.5], FIELD_PAD_LEAD_M = 6;
 /** Lead and closing islands have generous landing room around the regular ten-metre islands. */
@@ -359,7 +359,8 @@ export function build(pieces = PIECES) {
         stones.push({ id: fd.id + '-' + li + '-' + k, node, ds: s - meta[node].s, x, w: fd.stoneM, len: Math.min(b - a, toS - FIELD_END_GAP_M - s) });
       });
     });
-    return { id: fd.id, from, to, lanes: fd.lanes.slice(), platforming: true, stones };
+    const boostClearTo = meta.findIndex(m => m.piece === pi && m.u >= (fd.boostClearTo ?? fd.to));
+    return { id: fd.id, from, to, boostClearTo, lanes: fd.lanes.slice(), platforming: true, stones };
   });
 
   // checkpoints near the quarter marks, never on a jump or inside a loop

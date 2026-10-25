@@ -24,7 +24,7 @@ for (const speed of [0, 8, 18]) for (const lateral of [-11, 0, 11]) for (const h
     assert.ok(st[S.s] >= field.toS + 5, 'crosses whole field');
     assert.equal(ev.all('drop').length, 0, 'no fall');
     assert.equal(ev.all('void').length, 0, 'never sinks below a gap');
-    assert.ok(ev.all('stone').length >= 8, 'lands on broad decks');
+    assert.ok(ev.all('stone').length >= field.stones.length - 1, 'lands on every broad deck after the first');
   });
 }
 const hooks = registerHooks({ resolve(specifier, context, next) {
@@ -41,7 +41,7 @@ function fixture() {
 }
 test('Broad decks render one coherent scaled platform per collision row and fallback agrees', () => {
   const rows = stoneLayout(track), f = fixture(), view = buildStones(track, f.art), fallback = buildStones(track, null);
-  assert.equal(rows.length, 9); assert.equal(view.group.children.length, 9); assert.equal(fallback.group.children[0].count, 9);
+  assert.equal(rows.length, 6); assert.equal(view.group.children.length, 6); assert.equal(fallback.group.children[0].count, 6);
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i], o = view.group.children[i]; assert.equal(r.tiles, 1);
     assert.equal(o.scale.x * 5, 56); assert.equal(o.scale.z * 5, 52);

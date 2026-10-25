@@ -102,7 +102,7 @@ test('Mainframe bots traverse every giant-platform lane at ordinary and boosted 
 test('giant Mainframe blocks gently yaw with shared rendered support and stationary entry and exit rows', () => {
   const tr = loadTrack(JSON.parse(readFileSync(new URL('../tracks/mainframe.json', import.meta.url)))), f = tr.fields[0];
   const moving = f.stones.filter(h=>h.spin);
-  assert.equal(moving.length, 45);
+  assert.equal(moving.length, 30);
   assert.ok(moving.every(h=>!h.id.startsWith('memory-link') && h.swing === 0.14));
   assert.equal(f.stones.filter(h=>!h.id.startsWith('memory-link') && !h.spin).length,10);
   const built = buildStones(tr,null,null), mesh=built.group.getObjectByName('stone-hex-hull'), matrix=new Matrix4(), p=new Vector3();
@@ -175,7 +175,7 @@ test('five Mainframe routes allow slow starts and forgiving manual hops with dis
     }
     const label=JSON.stringify({speed,lane,lead,s:st[S.s],errors:ev.all('void'),drops:ev.all('drop'),hops:ev.all('hop')});
     assert.ok(st[S.s]>=f.toS+5,label);assert.equal(ev.all('drop').length,0,label);assert.equal(ev.all('void').length,0,label);
-    const entered=ev.all('stone');assert.ok(entered.length>=10,label);
+    const entered=ev.all('stone');assert.ok(entered.length>=route.length-1,label);
     for(let i=0;i<entered.length;i++) {const p=entered[i].payload;assert.equal(p.field,f.id);assert.equal(p.p.length,3);assert.ok(p.p.every(Number.isFinite));if(i)assert.notEqual(p.id,entered[i-1].payload.id);}
   }
 });

@@ -93,7 +93,7 @@ test('spirals: gates stand across the road, centred over it, perpendicular to it
     assert.ok(Math.abs(axialOf(gf, road.p)) < 1e-6);
     assert.ok(lateralOf(gf, road.p) <= L.upM + 1e-6, 'road through the eye');
     assert.ok(g.radiusM > road.w / 2 + L.upM, 'disc spans the road');
-    assert.ok(g.radiusM * 2 >= 30 && g.radiusM * 2 <= 50, '30 to 50 m across');
+    assert.ok(g.radiusM * 2 >= 30 && g.radiusM * 2 <= 60, '30 to 60 m across');
     const q = gateParams(g, loom), P = buildParticles(q, g, 500, 5), st = loomState(q, 0.2);
     for (let i = 0; i < P.n; i++) {
       const w = toWorld(gf, particleLocal(P.a0, P.a2, i, q, g, st));
@@ -102,6 +102,22 @@ test('spirals: gates stand across the road, centred over it, perpendicular to it
       assert.ok(lateralOf(gf, w) <= g.radiusM * st.zoom * (1 + (g.taper || 0) * 0.5) + 1e-6);
     }
   });
+});
+
+test('spirals: both widened road edges fit through the narrowest pulsing and tapered gate envelope', () => {
+  const frames = gateFrames(track, layout.gates);
+  for (const [i, gate] of layout.gates.entries()) {
+    const gf = frames[i], params = gateParams(gate, loom), depth = gate.depthM || 0;
+    const minZoom = Math.min(...Array.from({ length: 200 }, (_, phase) => loomState(params, phase / 200).zoom));
+    for (const fraction of [-.5, -.25, 0, .25, .5]) {
+      const road = track.frameAt(gf.s + depth * fraction);
+      for (const side of [-1, 1]) {
+        const edge = road.p.map((v, k) => v + road.b[k] * side * road.w / 2);
+        const taper = depth ? 1 + (gate.taper || 0) * axialOf(gf, edge) / depth : 1;
+        assert.ok(gate.radiusM * minZoom * taper - lateralOf(gf, edge) >= .5, gate.id + ' retains half a metre beyond the road edge');
+      }
+    }
+  }
 });
 
 test('spirals: the curtain parts round a kart, opens ahead, closes behind, never far away', () => {

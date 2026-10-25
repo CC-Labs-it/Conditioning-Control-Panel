@@ -499,7 +499,7 @@ export function checkLayout(layout) {
   if (!layout || !Array.isArray(layout.gates)) return ['no gates'];
   for (const g of layout.gates) {
     if (!(g.f >= 0 && g.f < 1)) errs.push(g.id + ': f');
-    if (!(g.radiusM >= 15 && g.radiusM <= 25)) errs.push(g.id + ': radius ' + g.radiusM);
+    if (!(g.radiusM >= 15 && g.radiusM <= 30)) errs.push(g.id + ': radius ' + g.radiusM);
     if (!(g.loom || g.seed != null)) errs.push(g.id + ': no Loom source');
     if (g.depthM != null && !(g.depthM >= 0 && g.depthM <= 40)) errs.push(g.id + ': depth');
   }

@@ -4,6 +4,7 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import { validate } from '../track/schema.js';
 import { loadTrack } from '../track/load.js';
 import { densifyBoosts } from '../track/boostPlan.js';
+import { keepHoleCourts, filterKeepHoleBoosts } from '../track/keepHoles.js';
 import { KEEP_PIECES, keepPieceLength, keepSegmentCount, walkKeep, getKeepLayout } from '../track/keep-layout.js';
 const smooth = (u) => u * u * (3 - 2 * u), round = (x) => +x.toFixed(3) || 0, RAD = Math.PI / 180;
 export function buildKeep() {
@@ -42,9 +43,11 @@ export function buildKeep() {
   for (const id of ['outer-exit', 'cell-gallery', 'west-approach', 'home']) {
     const n = node(id, .5); nodes[n].flags.push('boost'); boosts.push({ node: n, x: 0, w: 6, len: 7.5 });
   }
-  const fieldStart = node('stones'), fieldEnd = node('stones-exit');
-  const fields = [{ id: 'keep-stones', from: fieldStart, to: fieldEnd, lanes: [-16, 0, 16], platforming: true,
-    stones: Array.from({ length: 9 }, (_, i) => ({ id: 'keep-stones-' + i, node: fieldStart, ds: i * 66, x: 0, w: 56, len: 52 })) }];
+  // Finish the jumping section sooner, then restore the remaining district as a railed deck.
+  const fieldStart = node('stones'), fieldEnd = node('stones', 380 / 580);
+  for (let i = fieldEnd; i < node('stones-exit'); i++) nodes[i].flags = ['rail'];
+  const fields = [{ id: 'keep-stones', from: fieldStart, to: fieldEnd, boostClearTo: node('stones-exit'), lanes: [-16, 0, 16], platforming: true,
+    stones: Array.from({ length: 6 }, (_, i) => ({ id: 'keep-stones-' + i, node: fieldStart, ds: round(i * 328 / 5), x: 0, w: 56, len: 52 })) }];
   const routes = [0, 1].map((i) => {
     const from = node('north-tower', (35 + i * 360) / 810), to = from + 4;
     const landFrom = node('north-tower', (365 + i * 360) / 810), landTo = node('north-tower', (485 + i * 360) / 810);
@@ -66,6 +69,8 @@ export function buildKeep() {
     limits: { fallY: -30, edgeGraceM: 1.2, edgeGraceS: .8 },
   };
   track.boosts = densifyBoosts(track).boosts;
+  track.courts = keepHoleCourts(loadTrack(track));
+  track.boosts = filterKeepHoleBoosts(loadTrack(track), track.boosts);
   const result = validate(track);
   if (!result.ok || result.warnings.length) throw Error(JSON.stringify(result));
   return track;
