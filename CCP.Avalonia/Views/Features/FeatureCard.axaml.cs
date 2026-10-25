@@ -43,14 +43,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         private const double TeaseBorderThickness = 2;
         private const double ContentClipRadius = 11;
 
-        // WPF gesture flags; ponytail: visual dashboard depth remains the card's separate parity lane.
-        public static readonly StyledProperty<bool> DashboardDepthProperty =
-            AvaloniaProperty.Register<FeatureCard, bool>(nameof(DashboardDepth));
-        public bool DashboardDepth { get => GetValue(DashboardDepthProperty); set => SetValue(DashboardDepthProperty, value); }
-        public static readonly StyledProperty<bool> DimWhenInactiveProperty =
-            AvaloniaProperty.Register<FeatureCard, bool>(nameof(DimWhenInactive));
-        public bool DimWhenInactive { get => GetValue(DimWhenInactiveProperty); set => SetValue(DimWhenInactiveProperty, value); }
-
         public static readonly StyledProperty<string> TitleProperty =
             AvaloniaProperty.Register<FeatureCard, string>(nameof(Title), "Feature");
         public static readonly StyledProperty<IImageBrushSource?> IconProperty =
