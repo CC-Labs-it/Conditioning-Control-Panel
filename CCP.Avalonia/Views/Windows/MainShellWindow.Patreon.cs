@@ -42,8 +42,6 @@
 //   internal void BtnSwitchCompanion_Click(…)
 //   (RevealCompanionWorkshopCell + the cell -> page map are ported: MainShellWindow.CompanionFx.cs)
 //   private void OnCompanionProviderSelected(…)
-//   private async Task MaybeOfferLocalAiSetupAsync(…)
-//   internal void BtnSetupLocalAi_Click(…)
 //   internal void BtnLabEffectsSetupLocal_Click(…)
 //   private void LaunchLocalAiSetupWizard(…)
 //   private static void CommitFocusedEdit(…)
