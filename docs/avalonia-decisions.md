@@ -1200,3 +1200,14 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Follow-up: drop the WPE `LinuxDependencies` entry, `linux_dep_wpe_unavailable` and the Flatpak WPE line once WPEPlatform lands or WPE is retired.
 - Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs`, `Tests/CCP.Core.Tests/LinuxDependenciesTests.cs`
   (GstAudioSinkDependencyTests), each new row fail-proven by mutation.
+
+## 2026-10-24: NAudio.Wasapi in the Avalonia head, enumeration only (fin4-shell-audio-playback-devices)
+
+- Question: how does the Windows Avalonia head list playback devices? LibVLC's `AudioOutputDeviceEnum` lists only what the
+  current aout module reports (not WPF's active-endpoint list, and only once a player exists); a hand-written WASAPI COM
+  interop would duplicate a tested wrapper.
+- Choice: reference `NAudio.Wasapi` 2.2.1 (the CoreAudioApi wrapper WPF already ships) and use only `MMDeviceEnumerator`
+  for active render endpoints (`CCP.Avalonia/Platform/WindowsAudioDevices.cs`, WPF `AudioService.EnumerateOutputDevices`).
+  Playback stays LibVLC; this narrows, not reverses, the 2026-09-28 "NAudio stays WPF-only" row: no NAudio playback,
+  mixing or file reading in this head. Linux never loads it (guarded by `OperatingSystem.IsWindows()`).
+- Not measured: never run on Windows here; the windows CI builds it only. Advised by: worker (review fix), pending supervisor.

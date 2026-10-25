@@ -5,11 +5,14 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 
@@ -40,30 +43,44 @@ public sealed class QuizDroneTests
         QuizWindow.PlayDrone = (p, v, l, _) => { calls.Add((p, v, l)); return voice; };
         QuizWindow.ResolveDrone = n => Path.Combine(root, n);
         CoreSettings.Current.MasterVolume = 60;
-        var window = new QuizWindow(false, enabled);
+        var host = new Window { Content = new GradedIntakeTabView() };
+        host.Show();
+        var tab = (GradedIntakeTabView)host.Content!;
+        QuizWindow? window = null;
+        using var sub = Window.WindowOpenedEvent.AddClassHandler(typeof(QuizWindow), (s, _) => window = (QuizWindow?)s);
         try
         {
-            window.Show();
-            Invoke(window, "Window_Loaded");
+            // The user path: Graded Intake's drone checkbox, then Start Quiz (WPF MainWindow.Lab.cs:135).
+            tab.ChkQuizDrone.IsChecked = enabled;
+            CoreAi.IsAvailableProvider = () => true;
+            tab.BtnStartQuiz_Click(null, new RoutedEventArgs());
+            Assert.NotNull(window);
+            Dispatcher.UIThread.RunJobs();   // Loaded is posted, not raised inside Show()
             if (enabled && (neutralExists || legacyExists))
             {
-                Assert.Single(calls); // repeated Loaded cannot start a second loop
+                Assert.Single(calls);        // Loaded fired and started exactly one loop
+                Invoke(window!, "Window_Loaded");
+                Assert.Single(calls);        // a repeated Loaded cannot start a second loop
                 Assert.Equal(neutralExists ? neutral : legacy, calls[0].Path);
                 Assert.True(calls[0].Loop);
                 Assert.Equal(Math.Pow(0.6f * 0.35f, 1.5), calls[0].Volume, 6);
-                Invoke(window, "EnterSurrenderMode");
+                Invoke(window!, "EnterSurrenderMode");
                 Assert.Equal(0, voice.Volume);
-                Invoke(window, "ExitSurrenderMode");
+                Invoke(window!, "ExitSurrenderMode");
                 Assert.Equal(calls[0].Volume, voice.Volume, 6);
             }
             else Assert.Empty(calls);
-            PanicSurfaces.All.Single(s => s.Id == "quiz").Stop(null);
+            var quiz = PanicSurfaces.All.Single(s => s.Id == "quiz");
+            Assert.Null(quiz.OwnsTheScreen);   // WPF: a closing step, never a game (GameSurfaces.cs:56-64)
+            quiz.Stop(null);
             Assert.Equal(enabled && (neutralExists || legacyExists) ? 1 : 0, voice.Disposals);
-            Assert.False(window.IsVisible);
+            Assert.False(window!.IsVisible);
         }
         finally
         {
-            window.Close();
+            CoreAi.IsAvailableProvider = null;
+            window?.Close();
+            host.Close();
             (QuizWindow.PlayDrone, QuizWindow.ResolveDrone, CoreSettings.Current.MasterVolume) = (play, resolve, master);
             Directory.Delete(root, true);
         }
