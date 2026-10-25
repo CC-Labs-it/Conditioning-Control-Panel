@@ -10,6 +10,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -39,7 +40,10 @@ public sealed class FlashWireTests
 
     /// <summary>Settings, clock, seams and App.Achievements restored after every test (P02).</summary>
     private static Task OnUi(Action<AppSettings, SteppedClock, List<(double Xp, string Source)>, AchievementEngine> body) =>
-        AvaloniaTestDispatcher.RunAsync(() =>
+        OnUiAsync((s, clock, xp, engine) => { body(s, clock, xp, engine); return Task.CompletedTask; });
+
+    private static Task OnUiAsync(Func<AppSettings, SteppedClock, List<(double Xp, string Source)>, AchievementEngine, Task> body) =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
                 AppBuilder.Configure<AvApp>().WithInterFont()
@@ -63,7 +67,7 @@ public sealed class FlashWireTests
                 AchievementsProp.SetValue(null, engine);
                 (s.MotionLevel, s.PerformanceMode, s.FlashStayUntilPopped) = (MotionLevel.Full, false, false);
                 s.UnlockedSkills.Clear();
-                body(s, clock, xp, engine);
+                await body(s, clock, xp, engine);
             }
             finally
             {
@@ -79,7 +83,6 @@ public sealed class FlashWireTests
                 s.UnlockedSkills.AddRange(saved.Skills);
                 Directory.Delete(dir, recursive: true);
             }
-            return Task.CompletedTask;
         });
 
     private static Bitmap Picture() => new(AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/features/flash.png")));
@@ -180,6 +183,97 @@ public sealed class FlashWireTests
         s.CorruptionMode = false;
         ShowOne().MouseDown(new Point(50, 50), MouseButton.Left);
         Assert.Single(spawned);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Hydra_loads_real_disk_images_and_CloseAll_drops_queued_spawns(bool stopBeforeSpawn) => OnUiAsync(async (s, _, _, _) =>
+    {
+        var root = Directory.CreateTempSubdirectory("ccp-hydra-");
+        var previous = CorePaths.EffectiveAssetsProvider;
+        try
+        {
+            var images = Directory.CreateDirectory(Path.Combine(root.FullName, "images"));
+            using (var picture = Picture()) picture.Save(Path.Combine(images.FullName, "sample.png"));
+            CorePaths.EffectiveAssetsProvider = () => root.FullName;
+            s.HydraLimit = 10;
+            var parent = ShowOne();
+            await FlashOverlay.SpawnChildren(parent, 2, TimeSpan.FromSeconds(6), 1);
+            if (stopBeforeSpawn) FlashOverlay.CloseAll(final: false);
+            // Let the real 0/100 ms dispatcher timers fire, including refused queued spawns.
+            await Task.Delay(200);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            if (stopBeforeSpawn) Assert.Empty(FlashOverlay.Active);
+            else
+            {
+                var children = FlashOverlay.Active.Where(a => a.Window.HydraGeneration == 1).ToArray();
+                Assert.Equal(2, children.Length);
+                Assert.All(children, child => Assert.Same(parent.SpawnScreen, child.Window.SpawnScreen));
+                Assert.All(children, child => Assert.Equal(TimeSpan.FromSeconds(6), child.Window.Lifetime));
+            }
+        }
+        finally
+        {
+            FlashOverlay.CloseAll(final: false);
+            CorePaths.EffectiveAssetsProvider = previous;
+            root.Delete(recursive: true);
+        }
+    });
+
+    [Fact]
+    public Task A_lucky_bubble_routes_its_mod_label_and_20x_multiplier_to_the_same_toast() => OnUi((_, _, _, _) =>
+    {
+        var previous = FlashOverlay.LuckyProc;
+        try
+        {
+            var calls = new List<(string, int)>();
+            FlashOverlay.LuckyProc = (label, multiplier) => calls.Add((label, multiplier));
+            BubbleOverlay.Field.LuckyProc!(20);
+            Assert.Equal(new[] { (AvApp.Mods?.GetLuckyBubbleLabel()
+                ?? ConditioningControlPanel.Localization.Loc.Get("skill_lucky_bubble"), 20) }, calls);
+        }
+        finally { FlashOverlay.LuckyProc = previous; }
+    });
+
+    [Fact]
+    public Task No_glow_keeps_a_black_backing_even_behind_transparent_image_pixels() => OnUi((s, _, _, _) =>
+    {
+        s.FlashGlowEnabled = false;
+        var w = ShowOne();
+        Assert.Contains(w.GetVisualDescendants().OfType<Border>(), b =>
+            b.Background is ISolidColorBrush brush && brush.Color == Colors.Black);
+    });
+
+    [Fact]
+    public Task Glitch_draws_opposed_tinted_ghosts_beneath_its_seven_slices() => OnUi((s, clock, _, _) =>
+    {
+        s.FlashExitStyle = FlashExitStyle.Glitch;
+        var w = ShowOne();
+        w.Width = 400; w.Height = 300;
+        w.CaptureRenderedFrame();
+        w.UpdateLayout();
+        w.MouseDown(new Point(50, 50), MouseButton.Left);
+        w.CaptureRenderedFrame();
+        w.UpdateLayout();
+        clock.Now += TimeSpan.TicksPerSecond / 10;
+        w.ExitFrame();
+        var images = w.GetVisualDescendants().OfType<Image>().ToArray();
+        var red = Assert.Single(images, i => i.Name == "FlashGlitchRed");
+        var cyan = Assert.Single(images, i => i.Name == "FlashGlitchCyan");
+        var split = FlashExit.Sample(w.Exit!).Glitch * 0.04 * red.Bounds.Width;
+        Assert.True(split > 0.5);
+        Assert.Equal(-split, ((TranslateTransform)red.RenderTransform!).X, 6);
+        Assert.Equal(split, ((TranslateTransform)cyan.RenderTransform!).X, 6);
+        Assert.InRange(red.Opacity, 0.001, 0.5);
+        Assert.NotSame(red.Source, cyan.Source);
+        Assert.Equal(7, w.Slices!.Children.Count);
+        var redFrame = (Bitmap)red.Source!;
+        using var encoded = new MemoryStream();
+        redFrame.Save(encoded);
+        using var pixels = SkiaSharp.SKBitmap.Decode(encoded.ToArray());
+        var pixel = pixels.GetPixel(pixels.Width / 2, pixels.Height / 2);
+        Assert.True(pixel.Red > pixel.Green); // modulation, not two untinted copies
     });
 
     [Fact]

@@ -136,7 +136,12 @@ namespace ConditioningControlPanel.Services
         public const double StepMs = 30.0;
 
         public readonly List<AmbientBubble> Bubbles = new();
-        public readonly Random Random = new();
+        public readonly Random Random;
+
+        public AmbientBubbleField(Random? random = null) => Random = random ?? new Random();
+
+        /// <summary>WPF SkillTreeService.LuckyProc fires at the roll, even when the daily bucket is dry.</summary>
+        public Action<int>? LuckyProc;
 
         public bool CanSpawn(AppSettings s) => Bubbles.Count < Cap(s);
 
@@ -148,6 +153,7 @@ namespace ConditioningControlPanel.Services
             if (b.Popping) return 0;
             b.Popping = true;
             var multiplier = SkillTreeRules.HasSkill(s, "lucky_bubbles") && Random.NextDouble() < 0.05 ? 20 : 1;
+            if (multiplier > 1) LuckyProc?.Invoke(multiplier);
             var paid = AmbientBubbleXp.Take(s, 5 * multiplier);
             b.Lucky = multiplier > 1 && paid > 0;
             return paid;

@@ -407,7 +407,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>Spawns hydra children of a popped flash (tests swap it): parent, count, lifetime, generation.</summary>
-        internal static Action<FlashOverlayWindow, int, TimeSpan, int> Multiply = SpawnChildren;
+        internal static Action<FlashOverlayWindow, int, TimeSpan, int> Multiply = (parent, count, life, generation) =>
+            _ = SpawnChildren(parent, count, life, generation);
 
         /// <summary>WPF TriggerMultiplication + ShowImages: linked timing inherits what the parent had
         /// left (at least 1 s), independent a fresh full lifetime; children of an ambient flash still
@@ -421,7 +422,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF TriggerMultiplication: the children stay on the parent's screen, play no
         /// sound and spawn 100 ms apart; a CloseAll in between drops them.</summary>
-        private static async void SpawnChildren(FlashOverlayWindow parent, int count, TimeSpan lifetime, int hydraGeneration)
+        internal static async Task SpawnChildren(FlashOverlayWindow parent, int count, TimeSpan lifetime, int hydraGeneration)
         {
             if (_closed || parent.SpawnScreen is not { } screen) return;
             var generation = _generation;

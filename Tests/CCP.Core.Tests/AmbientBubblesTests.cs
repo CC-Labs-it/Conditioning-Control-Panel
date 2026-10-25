@@ -11,6 +11,31 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public sealed class AmbientBubblesTests
 {
+    private sealed class LuckyRandom : Random
+    {
+        public override double NextDouble() => 0;
+    }
+
+    [Fact]
+    public void Lucky_proc_fires_once_on_roll_even_when_the_daily_bucket_is_dry()
+    {
+        var s = new AppSettings();
+        s.UnlockedSkills.Add("lucky_bubbles");
+        AmbientBubbleXp.Take(s, 300);
+        var field = new AmbientBubbleField(new LuckyRandom());
+        var procs = 0;
+        field.LuckyProc = multiplier => { Assert.Equal(20, multiplier); procs++; };
+        var b = new AmbientBubble();
+        Assert.Equal(0, field.Pop(b, s));
+        Assert.Equal(1, procs);
+        Assert.False(b.Lucky); // no golden payout flourish for an empty bucket
+        Assert.Equal(0, field.Pop(b, s));
+        Assert.Equal(1, procs);
+        s.UnlockedSkills.Clear();
+        field.Pop(new AmbientBubble(), s);
+        Assert.Equal(1, procs);
+    }
+
     [Fact]
     public void Bucket_pays_up_to_300_a_day_then_the_remainder_then_nothing()
     {
