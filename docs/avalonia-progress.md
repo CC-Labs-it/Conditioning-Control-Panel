@@ -3019,3 +3019,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-shell-awareness-b: +217
 - Awareness status glow breathes behind the steady dot through the shell's one pulse registry, with WPF's full motion/glow/focus gate.
 - Per-tab duplicate pulse removed; status-dot gate gained AllowAmbientLoops/AllowGlow/MaxGlowBlurRadius for all tabs.
+
+## avalonia-port/wire-shell-window-chrome: +330
+- Shell window chrome lifecycle wired: real-exit vs tray, WM maximize glyph, DPI spawn quiescence, attached-avatar minimize custody (Core WindowMinimizeRecovery, both heads).
+- Review fixes: tray-hide closes quiz windows like WPF; DisplayChange quiet window reset between tests.
