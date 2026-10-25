@@ -82,8 +82,8 @@ public sealed class PanicSurfacesTests
     }
 
     /// <summary>Surfaces a panic must never lose: the record independent of the registry, so deleting a
-    /// registry line fails here. One id per line, preserving the lane order. Ordering
-    /// contracts live on the registry entries (<c>After</c>), not here.</summary>
+    /// registry line fails here. One id per line in the registry's stop order. Ordering contracts live on the
+    /// registry entries (<c>After</c>) and in the independent pairs below.</summary>
     private static readonly string[] SafetyCritical =
     {
         "intake",
@@ -98,6 +98,7 @@ public sealed class PanicSurfacesTests
         "mantra",
         "chaos",
         "chaos-intro",
+        "settings-palette",
         "haptics",
         "remote-haptics",
         "takeover",
@@ -108,22 +109,22 @@ public sealed class PanicSurfacesTests
         "tube-speech",
         "lock-cards",
         "possession",
-        "asset-preview",
         "attention-test",
         "deeper-editor-audio",
         "knock-cards",
-        "camera",
+        "asset-preview",
+        "chaos-flash",
+        "gif-cascade",
         "chaos-announcer",
-        "chaos-cursor-glow",
         "chaos-dvd",
+        "chaos-cursor-glow",
+        "chaos-vibe-trail",
         "chaos-estim",
         "chaos-field-fx",
-        "chaos-flash",
         "chaos-skia-fx",
-        "chaos-vibe-trail",
-        "companion-transcript",
-        "gif-cascade",
         "speak-cue",
+        "companion-transcript",
+        "camera",
     };
 
     /// <summary>The order that is contract: (stops first, stops later). WPF refs are
@@ -192,6 +193,9 @@ public sealed class PanicSurfacesTests
                 .Where(f => !(ids.IndexOf(f) is >= 0 and var a && a < i))
                 .Select(f => $"{f} before {s.Id}")).ToList();
         Assert.True(broken.Count == 0, "Panic order broken: " + string.Join("; ", broken));
+        var independentBroken = Before.Where(c => !(ids.IndexOf(c.First) is >= 0 and var a && ids.IndexOf(c.Then) is var b && a < b))
+            .Select(c => $"{c.First} before {c.Then} ({c.Why})").ToList();
+        Assert.True(independentBroken.Count == 0, "Independent panic order broken: " + string.Join("; ", independentBroken));
     }
 
     /// <summary>"first>then" WPF/decision ordering pairs that must stay declared on the registry (cites beside
@@ -239,6 +243,7 @@ public sealed class PanicSurfacesTests
     /// <summary>Types that start something but need no entry of their own, and why.</summary>
     private static readonly Dictionary<string, string> Allowed = new()
     {
+        ["CompanionPageHost"] = "not a host of anything that runs: it re-parents the collapsed room's zones into the Companion pages",
         ["LockCardWindow"] = "phrase mic + cards: the 'lock-cards' surface (StopLockCards) closes every card",
         ["DevicesSettingsSection"] = "camera preview/calibration: the 'camera' surface stops WebcamTracker",
         ["SettingsTabView"] = "the Home browser card's webcam pill: the 'camera' surface stops WebcamTracker",
@@ -256,7 +261,9 @@ public sealed class PanicSurfacesTests
         ["ClipArtView"] = "WPF parity: the showcase card's muted, no-audio loop on Home (holds off screen, freed on shell close); WPF panic leaves the board alone",
         ["InlineLoopVideo"] = "WPF parity: the help card's muted, no-audio clip poster; it lives only while that card is open, and closing the card detaches and frees it",
         ["RaceTrackPlayer"] = "the race window owns it: the 'games' surface closes GameWindow, whose teardown disposes it (Race_TrackPick_ChartsPlaysAndPanicStops)",
+        ["SpiralRailHost"] = "a rail chip, not a surface: no audio, window or device; it only draws the shared glyph (WPF parity)",
         ["MediaHistoryWindow"] = "WPF parity: the Media Log's muted preview of a user-picked row; WPF panic leaves that window alone",
+        ["HelpVideoWindow"] = "WPF parity: the help window's muted tutorial clip (freed on close); WPF panic leaves that window alone",
     };
 
     [Fact]

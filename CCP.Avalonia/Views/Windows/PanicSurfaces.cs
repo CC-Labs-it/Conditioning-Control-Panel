@@ -46,6 +46,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("mantra", _ => MantraWindow.StopForPanic()),                // WPF KillAllAudio -> Mantra?.Dispose()
             new("chaos", _ => Chaos.ChaosRunHost.ForceShutdown(), () => Chaos.ChaosRunHost.IsDescending),
             new("chaos-intro", _ => Chaos.ChaosIntroWindow.CloseForPanic()),   // the modal first-run card (WPF left it up)
+            // WPF :2000: non-Escape panic closes the palette without consuming its Escape rung.
+            new("settings-palette", _ => SettingsPaletteWindow.CloseIfOpen()),
             // WPF PanicStopEverySurface (:2003): the toys go to zero, bypassing throttles and gates.
             new("haptics", _ => CoreHaptics.Service?.PanicStop()),
             new("remote-haptics", _ => RemoteCommands.StopHaptics()),   // decisions 2026-10-08

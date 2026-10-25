@@ -421,6 +421,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 BlinkTrainerCalibrationStatus.Text = Loc.GetF("blink_trainer_calibration_calibrated_format", device);
             }
             else BindLoc(BlinkTrainerCalibrationStatus, cal == null ? "blink_trainer_calibration_none" : "blink_trainer_calibration_outdated");
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.Named<DeeperTabView>("DeeperTab")?.RefreshWebcamColumn();
         }
 
         // ---- folder library ----------------------------------------------------------------
