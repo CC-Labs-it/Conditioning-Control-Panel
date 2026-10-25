@@ -263,6 +263,7 @@ internal sealed class ConversationPageVm : CompanionObservable
             {
                 Notice = Loc.Get(ConversationRules.FailureNoticeKey(result.Failure));
                 CanRetry = result.Retryable || result.Failure == AiFailureKind.Cancelled;
+                if (result.Failure == AiFailureKind.DailyLimit) Windows.MainShellWindow.Current?.NoteCompanionCap();
             }
         }
         catch (OperationCanceledException) { Notice = Loc.Get("companion_v2_cancelled"); CanRetry = true; }

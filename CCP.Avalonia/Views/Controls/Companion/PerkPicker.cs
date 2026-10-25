@@ -50,8 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 choice.IsCheckedChanged += (_, _) =>
                 {
                     if (choice.IsChecked != true || !CompanionPerks.TrySelect(CoreSettings.Current, type)) return;
-                    // ponytail: WPF SetPerk also restarts CompanionService's XP-drain timer; this head
-                    // has no companion XP service yet (MainShellWindow.Companion.cs), so only the choice persists.
+                    // CompanionHead's shared timer re-reads ActivePerk on each drain tick.
                     CoreSettings.Save();
                     window.Close();
                 };

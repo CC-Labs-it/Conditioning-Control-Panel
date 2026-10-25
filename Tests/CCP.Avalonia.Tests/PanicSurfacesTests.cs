@@ -115,6 +115,8 @@ public sealed class PanicSurfacesTests
         "corner-gif",
         "emi-desk-feedback",
         "tube-speech",
+        "personality-studio",
+        "companion-cap-notice",
         "lock-cards",
         "speak-cue",
         "companion-transcript",

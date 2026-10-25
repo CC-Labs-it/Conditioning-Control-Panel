@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
@@ -64,6 +65,15 @@ public sealed class CompanionPagesTests
             Assert.False(room.IsVisible);
             Assert.True(chat.IsEffectivelyVisible);
             Assert.False(room.IsVisualAncestorOf(chat));
+            var dust = chat.FindControl<global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas>("StageDust");
+            Assert.NotNull(dust);
+            Assert.False(dust.IsHitTestVisible);
+            var config = (global::ConditioningControlPanel.Avalonia.Controls.AmbientFxConfig)typeof(global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas)
+                .GetField("_config", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(dust)!;
+            Assert.Equal(global::ConditioningControlPanel.Avalonia.Controls.AmbientFxLayers.DustField, config.Layers);
+            Assert.Equal(0.8, config.Intensity);
+            Assert.Equal(0.65, config.DustDensity);
+            Assert.Equal(global::Avalonia.Media.Color.FromRgb(244, 134, 211), config.Tint);
             Assert.Contains("personality", strip.PillKeys);
             Assert.Contains("permissions", strip.PillKeys);
             Assert.Contains("companionlinks", strip.PillKeys);
@@ -104,9 +114,67 @@ public sealed class CompanionPagesTests
             Dispatcher.UIThread.RunJobs();
             var personality = w.Named<PersonalityPage>("CompanionPersonalityTab")!;
             Assert.Equal("personality", w.CurrentTab);
+            Assert.IsType<CompanionPickerCard>(personality.FindControl<ContentControl>("PickerHost")!.Content);
+            Assert.False(dust.IsRunning); // leaving chat parks the shared ambient clock
             Assert.True(personality.IsVisualAncestorOf(presets));
             Assert.True(personality.IsVisualAncestorOf(workshop.Parts.Community));
             Capture(w, "personality");
+            var picker = (CompanionPickerCard)personality.FindControl<ContentControl>("PickerHost")!.Content!;
+            s.ActivePersonalityPresetId = ConditioningControlPanel.Models.PersonalityPresets.NeutralDefaultId;
+            s.CompanionPrompt.UseCustomPrompt = false;
+            var count = s.UserPersonalityPresets.Count;
+            picker.FindControl<Button>("BtnMorePersonality")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var studio = Assert.Single(w.OwnedWindows.Where(x => x.GetLogicalDescendants().OfType<Button>().Any(b => b.Name == "Save")));
+            var fields = studio.GetLogicalDescendants().OfType<TextBox>().ToList();
+            var name = fields.Single(x => x.Name == "name");
+            var voice = fields.Single(x => x.Name == "voice");
+            name.Text = "";
+            Assert.False(studio.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "Save").IsEnabled);
+            name.Text = "Studio test";
+            voice.Text = "A test voice";
+            fields.Single(x => x.Name == "style").Text = null;
+            fields.Single(x => x.Name == "awareness").Text = "Test awareness";
+            fields.Single(x => x.Name == "samples").Text = "first sample\nsecond sample\nthird sample";
+            studio.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "Save").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(count + 1, s.UserPersonalityPresets.Count);
+            var saved = s.UserPersonalityPresets.Last();
+            Assert.Equal("A test voice", saved.PromptSettings.Personality);
+            Assert.Equal("", saved.PromptSettings.OutputRules);
+            Assert.Equal("Test awareness", saved.PromptSettings.ContextReactions);
+            Assert.Equal(2, saved.SampleLines!.Count);
+            picker.FindControl<Button>("BtnMorePersonality")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            studio = Assert.Single(w.OwnedWindows.Where(x => x.GetLogicalDescendants().OfType<Button>().Any(b => b.Name == "Save")));
+            Assert.NotNull(studio.GetLogicalDescendants().OfType<Button>().SingleOrDefault(b => b.Name == "Delete"));
+            studio.GetLogicalDescendants().OfType<TextBox>().Single(x => x.Name == "name").Text = "Updated test";
+            studio.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "Save").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(count + 1, s.UserPersonalityPresets.Count);
+            Assert.Equal("Updated test", saved.Name);
+            picker.FindControl<Button>("BtnMorePersonality")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            studio = Assert.Single(w.OwnedWindows.Where(x => x.GetLogicalDescendants().OfType<Button>().Any(b => b.Name == "Save")));
+            studio.GetLogicalDescendants().OfType<TextBox>().Single(x => x.Name == "voice").Text = "Discard this";
+            PersonalityStudio.CloseForPanic();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("A test voice", saved.PromptSettings.Personality);
+            Assert.False(studio.IsVisible);
+            picker.FindControl<Button>("BtnMorePersonality")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            studio = Assert.Single(w.OwnedWindows.Where(x => x.GetLogicalDescendants().OfType<Button>().Any(b => b.Name == "Save")));
+            studio.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "Delete").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var confirm = Assert.Single(studio.OwnedWindows.OfType<MessageDialog>());
+            confirm.FindControl<Button>("BtnCancel")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(saved, s.UserPersonalityPresets);
+            studio.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "Delete").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Single(studio.OwnedWindows.OfType<MessageDialog>()).FindControl<Button>("BtnOk")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(saved, s.UserPersonalityPresets);
 
             // The Advanced row's door (WPF BtnOpenPromptEditor) opens the full prompt editor.
             personality.FindControl<Button>("BtnOpenPromptEditor")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -120,6 +188,24 @@ public sealed class CompanionPagesTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(permissions.IsVisualAncestorOf(grid));
             Assert.True(personality.IsVisualAncestorOf(presets));
+
+            // WPF cap watch never interrupts the conversation, then files once after leaving it.
+            var capKey = "conv:" + ConditioningControlPanel.Services.Companion.CompanionCapRules.KeyCompanionCap;
+            var stamps = s.InboxStamps;
+            stamps.Remove(ConditioningControlPanel.Services.Companion.CompanionCapRules.KeyCompanionCap);
+            global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.Inbox.Remove(capKey);
+            w.TryFileCompanionCap();
+            Assert.False(global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.Inbox.Contains(capKey));
+            w.ShowTab("personality");
+            w.TryFileCompanionCap();
+            Assert.True(global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.Inbox.Contains(capKey));
+            var capRow = global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.Inbox.Items.Single(i => i.Key == capKey);
+            w.TryFileCompanionCap();
+            Assert.Same(capRow, global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.Inbox.Items.Single(i => i.Key == capKey));
+            capRow.Open();
+            Dispatcher.UIThread.RunJobs();
+            MainShellWindow.CloseCapNotice();
+            global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.Inbox.Remove(capKey);
 
             // The Workshop cell -> page map (WPF RevealCompanionWorkshopCell, the tours' door).
             w.RevealCompanionWorkshopCell(CompanionRoomAnchors.WorkshopBehaviorCell);

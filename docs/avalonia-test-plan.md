@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### fin5 conversation completion checks
+
+1. Open Companion, then Personality through Settings. Expect the picker before presets, Advanced and Community; change a personality and perk, then return to chat. WPF `Views/Controls/Companion/Pages/PersonalityPage.xaml.cs`, `Views/Controls/Companion/V2/PerkPicker.cs`. Rows: `views-companion-v2-conversation`.
+2. From the picker open More personality options. Blank name or voice disables Save. Cancel leaves the preset unchanged; Save on a stock preset creates a copy; reopen and Save updates that copy without duplicates; Delete asks before removing it. Check awareness reactions and two cleaned sample lines survive saving, and a long existing voice has room for more typing. Press panic while editing: the editor closes without saving. WPF `Services/Companion/PersonalityStudio.cs`. Rows: `views-companion-v2-conversation`.
+3. The chat portrait has sparse pink dust behind it. Switch tabs, minimize, deactivate, and enable reduced motion: its existing ambient clock gates apply. Revisit chat and verify transcript and draft are retained. WPF `Views/Controls/Companion/V2/ConversationPage.xaml.cs`. Rows: `views-companion-v2-conversation`.
+4. Exhaust the daily cloud allowance on a free or Basic account. Stay on Companion for a watch interval: no offer. Leave chat and wait up to ten seconds: one Inbox row, with the appropriate daily caps and upgrade tier. Open it, dismiss it or follow its checkout button; repeat the failure that day: no duplicate. Prime gets no offer. Minimized/hidden chat permits filing. WPF `MainWindow/MainWindow.Inbox.cs:397-456`, `Views/Controls/Companion/V2/ConversationPageVm.cs`. Rows: `views-companion-v2-conversation`.
