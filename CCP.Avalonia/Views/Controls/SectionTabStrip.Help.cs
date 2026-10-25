@@ -180,13 +180,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (open && tab != null) TabRequested?.Invoke(tab);
         }
 
-        private Button ConfirmButton(string text, bool filled) => new()
+        /// <summary>WPF ConfirmButton: own template (a rounded Border that dims to 0.85 on hover), hand
+        /// cursor, text in a TextBlock so a '_' in a translation is never an access key.</summary>
+        private Button ConfirmButton(string text, bool filled)
         {
-            Content = text, FontSize = 13, FontWeight = FontWeight.SemiBold,
-            Padding = new Thickness(14, 5, 14, 6), CornerRadius = new CornerRadius(11),
-            Background = filled ? new SolidColorBrush(_hue) : new SolidColorBrush(Color.FromArgb(0x1F, 255, 255, 255)),
-            Foreground = filled ? new SolidColorBrush(NavStripRules.ActiveTextOn(_hue)) : Brushes.White,
-        };
+            var button = new Button
+            {
+                Background = filled ? new SolidColorBrush(_hue) : new SolidColorBrush(Color.FromArgb(0x1F, 255, 255, 255)),
+                Cursor = new Cursor(StandardCursorType.Hand),
+                Content = new TextBlock
+                {
+                    Text = text, FontSize = 13, FontWeight = FontWeight.SemiBold,
+                    Foreground = filled ? new SolidColorBrush(NavStripRules.ActiveTextOn(_hue)) : Brushes.White,
+                },
+                Template = new global::Avalonia.Controls.Templates.FuncControlTemplate<Button>((b, _) => new Border
+                {
+                    Name = "Bd", CornerRadius = new CornerRadius(11), Padding = new Thickness(14, 5, 14, 6),
+                    [!Border.BackgroundProperty] = b[!BackgroundProperty],
+                    Child = new global::Avalonia.Controls.Presenters.ContentPresenter
+                    {
+                        Name = "PART_ContentPresenter", HorizontalAlignment = HorizontalAlignment.Center,
+                        [!global::Avalonia.Controls.Presenters.ContentPresenter.ContentProperty] = b[!ContentProperty],
+                    },
+                }),
+            };
+            button.PointerEntered += (_, _) => button.Opacity = 0.85;
+            button.PointerExited += (_, _) => button.Opacity = 1;
+            return button;
+        }
 
         // ---- test seams ---------------------------------------------------------------------
 

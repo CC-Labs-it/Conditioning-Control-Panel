@@ -56,6 +56,13 @@ public sealed class SectionStripWindowTests
             else Assert.Equal(TimeSpan.FromMilliseconds(150), Assert.IsType<global::Avalonia.Animation.DoubleTransition>(strip.ConfirmationCard!.Transitions!.Single()).Duration);
             var text = strip.ConfirmationCard!.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text);
             Assert.Contains(Loc.Get("nav_open_window_body"), text);
+            // WPF ConfirmButton: own template whose Border carries the hue fill; text in a TextBlock (no access key).
+            var yes = Answer(strip, true);
+            Assert.IsType<TextBlock>(yes.Content);
+            Assert.NotNull(yes.Template);
+            yes.ApplyTemplate();
+            var bd = Assert.IsType<Border>(Assert.Single(global::Avalonia.VisualTree.VisualExtensions.GetVisualChildren(yes)));
+            Assert.Same(yes.Background, bd.Background);
             Click(Answer(strip, false));
             Assert.Null(strip.ConfirmingKey);
             Assert.Equal(0, requests);
@@ -73,11 +80,17 @@ public sealed class SectionStripWindowTests
     public Task ConfirmationClosesOnEscapeRebuildSectionChangeDetachAndPanic() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         SetUp();
+        var service = new global::ConditioningControlPanel.Services.SettingsService();
+        global::ConditioningControlPanel.CoreSettings.ServiceProvider = () => service;
+        var st = global::ConditioningControlPanel.CoreSettings.Current;
+        (st.Welcomed, st.HasAcceptedAgeVerification, st.WhatMovedCardShown) = (true, true, 1);   // P52/P76: no intro takes focus
         var shell = new MainShellWindow();
         try
         {
             shell.Show();
+            Dispatcher.UIThread.RunJobs();
             shell.ShowTab("presets");
+            Dispatcher.UIThread.RunJobs();
             var strip = shell.PageStrip!;
             Assert.Contains("justdrop", strip.PillKeys);
             Click(strip.PillFor("justdrop")!);
@@ -87,9 +100,13 @@ public sealed class SectionStripWindowTests
             strip.Rebuild();
             Assert.Null(strip.ConfirmingKey);
             // Arrows focus a window without opening; Enter asks, as WPF OnStripKeyDown.
-            strip.PillFor("haptics")!.Focus();
-            strip.PillFor("haptics")!.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Right });
+            // (ramp, not haptics: haptics is a locked premium pill on a free account.)
+            Dispatcher.UIThread.RunJobs();
+            var ramp = strip.PillFor("ramp")!;
+            Assert.True(ramp.Focus(), $"ramp pill takes focus (visible {ramp.IsEffectivelyVisible}, enabled {ramp.IsEffectivelyEnabled}, shell enabled {shell.IsEnabled}, focused {shell.FocusManager?.GetFocusedElement()})");
+            strip.PillFor("ramp")!.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Left });
             Assert.Null(strip.ConfirmingKey);
+            Assert.True(strip.PillFor("justdrop")!.IsFocused, "Left from ramp focuses the Just Drop pill");
             strip.PillFor("justdrop")!.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
             Assert.Equal("justdrop", strip.ConfirmingKey);
             Assert.Equal("presets", shell.CurrentTab);
@@ -103,7 +120,7 @@ public sealed class SectionStripWindowTests
             shell.Close();
             Assert.Null(strip.ConfirmingKey);
         }
-        finally { shell.Close(); }
+        finally { shell.Close(); global::ConditioningControlPanel.CoreSettings.ServiceProvider = null; }
         return Task.CompletedTask;
     });
 
@@ -131,7 +148,7 @@ public sealed class SectionStripWindowTests
     [Theory]
     [InlineData(MotionLevel.Full)]
     [InlineData(MotionLevel.Reduced)]
-    public Task MovedNoteHidesAfterTheFadeTimer(MotionLevel level) => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task MovedNoteHidesAfterTheFadeTimer(MotionLevel level) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         SetUp();
         var strip = new SectionTabStrip { MotionOverride = level };
@@ -143,10 +160,10 @@ public sealed class SectionStripWindowTests
             strip.ShowMovedNote("Moved");
             strip.ExpireMovedNote();
             Assert.True(strip.MovedNoteShown);
-            await Task.Delay(SectionTabStrip.MovedNoteFade + TimeSpan.FromMilliseconds(150));
-            Dispatcher.UIThread.RunJobs();
+            Assert.True(strip.FireMovedNoteFade());
             Assert.False(strip.MovedNoteShown);
         }
         finally { host.Close(); }
+        return Task.CompletedTask;
     });
 }

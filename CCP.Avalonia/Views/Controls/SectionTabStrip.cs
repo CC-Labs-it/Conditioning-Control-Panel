@@ -225,6 +225,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _noteFadeTimer.Start();
         }
 
+        /// <summary>Test seam (P08): fires the pending 300 ms fade timer's tick without waiting.</summary>
+        internal bool FireMovedNoteFade()
+        {
+            if (_noteFadeTimer?.IsEnabled != true) return false;
+            HideNote();
+            return true;
+        }
+
         internal void HideNote()
         {
             _noteFadeTimer?.Stop();
