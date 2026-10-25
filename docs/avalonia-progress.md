@@ -3150,3 +3150,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-ctrl-spiral-rail-host: +271
 - Native spiral rail host + shared Core rail rules; shell mount kept dormant (WPF retired it), row stays stub.
 - Review fixes gated: rgate 39722260221 GATE-OK.
+
+## avalonia-port/wire-theme-main-window: +1
+- Review nits: tab themes reindented, help cursor/rest brushes asserted (fail-proven), ledger cites gate not unbacked counts.
+- rgate 39691420992: only P108 GoonClock red.

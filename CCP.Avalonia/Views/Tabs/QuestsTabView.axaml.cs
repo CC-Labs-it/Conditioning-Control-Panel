@@ -102,7 +102,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private ControlTheme? TabTheme(string key) =>
-            Resources.TryGetResource(key, null, out var value) ? value as ControlTheme : null;
+            this.FindResource(key) as ControlTheme;
 
         // ---- REROLLS (MainWindow.QuestsTab.cs:41/:59) ------------------------------
 
