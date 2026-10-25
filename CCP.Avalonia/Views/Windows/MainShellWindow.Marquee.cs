@@ -24,24 +24,17 @@
 // UpdateBannerWelcomeMessage re-runs on LocalizationManager.LanguageChanged, which is what
 // actually keeps it honest.
 //
-// STILL BLOCKED, each naming what it needs rather than guessing at "when X moves to Core":
-//   ShowOgWelcomePopup / TryPresentSeasonRecap / ShowWhatsNewIfNeeded - App.Achievements,
-//     App.Seasons and the startup dialog queue in ConditioningControlPanel/App.xaml.cs. The
-//     dialogs themselves DO exist here (CCP.Avalonia/Views/Dialogs/WhatsNewDialog.axaml.cs,
-//     Views/Controls/SeasonRecapCard); what is missing is the "has this launch already shown a
-//     modal" arbitration those read from App.
+// Remaining startup gaps: priority-30 What's New modal queue/version stamp and the
+// server-confirmed monthly season snapshot/rollover service + sync caller. Season recaps are
+// silent bookkeeping in WPF now; ShowOgWelcomePopup has no live WPF caller at the pinned base.
 //   (RefreshMarqueeFromSettings / CheckServerUpdateBanner are PORTED: MainShellWindow.ServerBanners.cs over Core
 //     V2AuthService, as CheckServerAnnouncement is in MainShellWindow.Announcement.cs.)
 //   (CheckIntakePassNudge / StartIntakeFromNudge / _serverAnnouncementShownThisLaunch are PORTED:
 //     MainShellWindow.IntakeNudge.cs.)
 //   (BannerWebLink_Click is ported below: the beat's inline SafeHyperlinkButton opens through
-//   ExternalOpener, which has no no-default-browser prompt - WPF BrowserLauncher's fallback.)
-//   LocOr - a Loc.Get with an English literal fallback. Used only by the marquee and takeaway
-//     formatters, neither of which runs here; Loc.Get already returns the key when a string is
-//     missing, so there is nothing to restore in isolation.
+//   ExternalOpener; FailurePurpose enables WPF's clipboard + no-default-browser prompt.)
 //   (StartMarqueeAnimation is PORTED onto the page that carries the strip: SettingsTabView.Marquee.cs.)
-//   SweepBannerSheen - MainShellWindow.ChromeFx.cs, still a stub. The BannerSheen border is in
-//     the XAML and parked at Opacity 0, so its absence costs nothing visible.
+//   Banner FX are now live in MainShellWindow.BannerFx.cs on the shared frame clock.
 
 using System;
 using System.Linq;
@@ -130,6 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _bannerRotationTimer.Start();
             Closed += (_, _) => _bannerRotationTimer.Stop();
             InitializeBannerPool();
+            InitializeBannerFx();
         }
 
         /// <summary>
@@ -165,6 +159,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// </summary>
         private static void EnsureFadeTransition(TextBlock beat)
         {
+            if (!global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowTransitions)
+            {
+                beat.Transitions = null;
+                return;
+            }
             var transitions = beat.Transitions ??= new Transitions();
             foreach (var t in transitions)
                 if (t is DoubleTransition dt && dt.Property == OpacityProperty) return;
@@ -208,11 +207,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             var nextIndex = (_bannerCurrentIndex + 1) % banners.Length;
             ApplyPendingBannerPoolText(banners[_bannerCurrentIndex], banners[nextIndex]);
-            Crossfade(banners[_bannerCurrentIndex], banners[nextIndex]);
+            var outgoing = banners[_bannerCurrentIndex];
+            Crossfade(outgoing, banners[nextIndex]);
             _bannerCurrentIndex = nextIndex;
 
-            // ponytail: WPF also calls SweepBannerSheen() here. MainShellWindow.ChromeFx.cs is
-            // still a stub, so the sheen pass is skipped rather than faked.
+            OnBannerBeatChanged(outgoing, banners[nextIndex]);
         }
 
         /// <summary>
@@ -241,6 +240,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             var secondary = BannerSecondary;
             if (secondary is not null) secondary.Text = message;
+            SweepBannerSheen(force: true);
 
             if (_bannerRotationTimer is { IsEnabled: false }) _bannerRotationTimer.Start();
         }

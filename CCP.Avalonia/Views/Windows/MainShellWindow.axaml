@@ -927,34 +927,40 @@
                          full-width strip whose only job was two rotating one-liners; the row is
                          gone and the banner now rides the header's leftover width, between the
                          version text and the right-hand chrome. Sizing rules that keep that
-                         honest: Height 26 is BELOW the 28px mod capsule already in this row, so
-                         the banner can never grow the header; the host is centred in a star
-                         column that collapses before any Auto column, so the language pill and
-                         update button cannot be pushed out; and both beats trim with an
-                         ellipsis rather than wrap, so a narrow window loses banner text and
-                         nothing else. The third beat (the Platinum Puppets thanks hyperlink) was
-                         retired with the row - see MainWindow.Marquee.cs, where the rotation is
-                         now a two-beat crossfade. -->
+                         WPF fin4 sizing: 31px high, max 744px wide, 14px text. The star
+                         column gives space back to the fixed header controls; beats trim
+                         rather than wrap. -->
                     <Border Grid.Column="3" x:Name="HeaderBannerHost"
                             Background="{DynamicResource SurfaceBgBrush}"
                             BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"
-                            CornerRadius="13" Padding="12,0" Height="26" MaxWidth="620"
+                            CornerRadius="15.5" Padding="12,0" Height="31" MaxWidth="744"
                             Margin="12,0,12,0"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
                         <Grid>
+                            <!-- Sibling shadow: never an Effect below a moving layer. -->
+                            <Border x:Name="BannerGlow" CornerRadius="15.5" Opacity="0.35"
+                                    BoxShadow="0 0 12 0 #FF69B4" IsHitTestVisible="False"/>
+                            <Border x:Name="BannerFlashRing" CornerRadius="15.5" Opacity="0"
+                                    BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1" IsHitTestVisible="False"/>
                             <TextBlock x:Name="TxtBannerPrimary" Foreground="{DynamicResource PinkBrush}"
-                                       FontSize="12" FontStyle="Italic"
+                                       FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
                                        Opacity="1">
                                 <Run Text="{loc:Str label_if_you_love_the_project_please}"/>
                                 <Run Text="{loc:Str label_consider_supporting_it}" FontWeight="Bold"/>
                                 <Run Text=" "/>
-                                <!-- ponytail: WPF Hyperlink/RequestNavigate has no Avalonia inline twin; renders as text. --><Run Text="https://linktr.ee/CodeBambi"/>
+                                <InlineUIContainer BaselineAlignment="Center">
+                                    <fx:SafeHyperlinkButton x:Name="BannerSupportLink" NavigateUri="https://linktr.ee/CodeBambi"
+                                                           Padding="0" Margin="0" BorderThickness="0">
+                                        <TextBlock Text="https://linktr.ee/CodeBambi" FontSize="14" FontStyle="Italic"
+                                                   Foreground="{DynamicResource PinkBrush}" TextDecorations="Underline"/>
+                                    </fx:SafeHyperlinkButton>
+                                </InlineUIContainer>
                                 
                             </TextBlock>
                             <TextBlock x:Name="TxtBannerSecondary" Foreground="{DynamicResource PinkBrush}"
-                                       FontSize="12" FontStyle="Italic"
+                                       FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
                                        Opacity="0" IsHitTestVisible="False"
@@ -970,7 +976,7 @@
                                  button's first measure (4 DIP short), clipping "app" to "ap".
                                  TextAlignment centres the line just the same. -->
                             <TextBlock x:Name="TxtBannerWeb" Foreground="{DynamicResource PinkBrush}"
-                                       FontSize="12" FontStyle="Italic"
+                                       FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
                                        Opacity="0" IsHitTestVisible="False">
@@ -981,8 +987,8 @@
                                 <InlineUIContainer BaselineAlignment="Center">
                                     <fx:SafeHyperlinkButton x:Name="BannerWebLink" Padding="0" Margin="0" BorderThickness="0"
                                                             NavigateUri="https://app.cclabs.app"
-                                                            Click="BannerWebLink_Click">
-                                        <TextBlock Text="{loc:Str label_banner_web_link}" FontWeight="Bold" FontSize="12"
+                                                            FailurePurpose="open the CC Labs web app" Click="BannerWebLink_Click">
+                                        <TextBlock Text="{loc:Str label_banner_web_link}" FontWeight="Bold" FontSize="14"
                                                    FontStyle="Italic" Foreground="{DynamicResource PinkBrush}"
                                                    TextDecorations="Underline"/>
                                     </fx:SafeHyperlinkButton>
@@ -990,10 +996,11 @@
                             </TextBlock>
                             <!-- WPF's optional authored pool beat: no line means no rotation slot. -->
                             <TextBlock x:Name="TxtBannerPool" Foreground="{DynamicResource PinkBrush}"
-                                       FontSize="12" FontStyle="Italic"
+                                       FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
                                        Opacity="0" IsHitTestVisible="False"/>
+                            <Canvas x:Name="BannerSparkleLayer" IsHitTestVisible="False" ClipToBounds="True"/>
                             <!-- Chrome FX (PR-1): one-shot sheen pass over the banner when the
                                  message changes. Its own ClipToBounds host so the band can't
                                  escape the card - deliberately NOT ClipToBounds on the shared

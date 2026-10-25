@@ -1,0 +1,5 @@
+# Avalonia test plan
+
+1. WPF `MainWindow.Marquee.cs`, `MainWindow.BannerFx.cs`: open the shell at Full motion; check the 31px banner, 14px text, clickable support link, 4-second rotation, 500ms drum roll, pop, ring and sheen. Return to support: seven sparkles cross the line. In the headless harness, hold support visible for 12 seconds to observe a repeat; check the slow glow breath. Rows: `shell-marquee`
+2. WPF `MainWindow.BannerFx.cs`, `MainWindow.ChromeFx.cs`: use Reduced (pop/flash/one sparkle run, no drum/breath/repeats), then Off (immediate text swap, no transition). Deactivate, minimize and close: FX park and sprites clear. At Full, ordinary sheen passes are at least 20 seconds apart; support arrivals and announcements force a pass. Rows: `shell-marquee`
+3. WPF `MainWindow.Marquee.cs` BannerWebLink_Click and `Helpers/BrowserLauncher.cs`: with no working browser association, click One Account: URL copies, localized explanation opens, beat retires; panic closes the prompt. Normal association opens the site. Rows: `shell-marquee`
