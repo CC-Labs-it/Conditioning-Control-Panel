@@ -1,5 +1,6 @@
 // PORTED from ConditioningControlPanel/Chaos/ChaosIntroWindow.cs (182 lines, code-only like the original).
 using System;
+using System.IO;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
@@ -25,8 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// (<see cref="ChaosHubWindow"/>, WPF ChaosHubWindow.Reveals.cs:145-153). Copy is WPF's
     /// hard-coded English, verbatim.
     /// <para>Panic closes it (PanicSurfaces "chaos-intro"); WPF had no entry, a modal just sat there.
-    /// ponytail: WPF ChaosArt also looked under the user's assets folder first; only the bundled
-    /// intro.png is read here.</para>
+    /// User art follows WPF ChaosArt roots before the packaged fallback.</para>
     /// </summary>
     public sealed class ChaosIntroWindow : Window
     {
@@ -40,6 +40,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private static Bitmap? LoadHero()
         {
+            // WPF ChaosArt.Roots uses UserData/assets, then app base, and Resolve appends
+            // assets/Chaos. Preserve that doubled user-assets segment for existing overrides.
+            foreach (var root in new[] { Path.Combine(CorePaths.UserData, "assets"), AppContext.BaseDirectory })
+            {
+                try
+                {
+                    var path = Path.Combine(root, "assets", "Chaos", "guide", "intro.png");
+                    if (File.Exists(path)) return new Bitmap(path);
+                }
+                catch { } // Unreadable overrides fall through to the next root, as WPF.
+            }
             try
             {
                 using var s = AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/chaos/guide/intro.png"));
@@ -66,6 +77,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             // ---- hero art, rounded top (WPF :34-55) ----
             var hero = LoadHero();
+            Closed += (_, _) => hero?.Dispose();
             if (hero != null)
             {
                 stack.Children.Add(new Border

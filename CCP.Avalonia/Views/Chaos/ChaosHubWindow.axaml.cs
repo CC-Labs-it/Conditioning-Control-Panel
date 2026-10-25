@@ -39,10 +39,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///    <c>System.Windows.Media.ImageSource</c>, so only its path half can ever move; the hub's
     ///    ChaosSfx cues and lesson/script-locked row dressing are not ported. Unlock cards are
     ///    (<see cref="ChaosUnlockCardLayer"/>).
-    ///  - The four partials the WPF class spans (Bench / Reveals / Lessons / Debug) are NOT in
-    ///    this layer. <c>BuildBench</c> is inlined here over Core <c>ChaosBench</c>; reveal
-    ///    flashes, the lesson panel and the CCP_CHAOS_DEBUG strip are dropped, so pills and
-    ///    headers render in their revealed state.
+    ///  - <c>BuildBench</c> is inlined here over Core <c>ChaosBench</c>; the first-open reveal
+    ///    flashes live in ChaosHubWindow.Reveals.cs. The lesson panel, reveal visibility clamps
+    ///    and the CCP_CHAOS_DEBUG strip remain unported.
     ///  - The whole Skia menu scene (fog, per-frame glint masks, blooms, the crossfading
     ///    flipbook) and the NAudio menu music are gone: no SkiaSharp and no NAudio on this head,
     ///    and a view layer may not add a package. <c>SetupMenuMotion</c>'s breathing/wobble/glow
@@ -115,7 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             _dollhouseView = Part<Grid>("DollhouseView");
             UnlockCards = new ChaosUnlockCardLayer(Part<Grid>("UnlockCardLayer"));
-            Closed += (_, _) => UnlockCards.Stop();
+            Closed += (_, _) => { UnlockCards.Stop(); StopRevealFlashes(); };
             _menuView = Part<Grid>("MenuView");
             _menuLeftCol = Part<Grid>("MenuLeftCol");
             _panelImprove = Part<Grid>("PanelImprove");
@@ -241,9 +240,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF ChaosHubWindow.Reveals.cs:139-153: the first hub open ever shows the intro card
         /// modally BEFORE anything else speaks, then marks <c>SeenIntroGuide</c> and saves - on any
         /// close, panic included, exactly as WPF's ShowDialog returned. A render never opens it.
-        /// ponytail: the rest of that pass (SeenDollhouse + Bark first-open line :156-163, the
-        /// "hub_open" reveal flashes :165) needs RevealService/Bark on this head.</summary>
-        private async System.Threading.Tasks.Task OnHubOpenedReveals()
+        /// Then the first-open bark and hub_open reveal pass run, in WPF order.</summary>
+        internal async System.Threading.Tasks.Task OnHubOpenedReveals()
         {
             if (_dollhouseBeatsFired || RenderProof.Rendering) return;
             _dollhouseBeatsFired = true;
@@ -257,6 +255,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 }
             }
             catch (Exception ex) { Log.Warning("Chaos intro guide failed ({E})", ex.Message); }
+            if (_revealClosed) return; // A closed hub must not start FX after the modal returns.
+            try
+            {
+                if (!ChaosMeta.State.SeenDollhouse)
+                {
+                    ChaosMeta.State.SeenDollhouse = true;
+                    ChaosMeta.Save();
+                    Platform.BarkHead.Engine?.Raise("ChaosDollhouseFirstOpen");
+                }
+            }
+            catch (Exception ex) { Log.Debug("Dollhouse first-open beat: {E}", ex.Message); }
+            RunRevealFlashes();
         }
 
         /// <summary>Stand-in for <c>Services.Chaos.ChaosModeService.StoryModeEnabled</c>, which is
