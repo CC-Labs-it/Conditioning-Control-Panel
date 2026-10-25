@@ -14,7 +14,7 @@ public partial class MainShellWindow
     private DateTime _scheduleReady;
     private void InitializeSchedule()
     {
-        ShellRamp.HealOnLaunch(CoreSettings.Current);
+        if (ShellRamp.HealOnLaunch(CoreSettings.Current)) CoreSettings.Save();   // WPF App.xaml.cs:2540-2541
         _scheduleReady = DateTime.Now.AddSeconds(60);
         _scheduleTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _scheduleTimer.Tick += (_, _) =>

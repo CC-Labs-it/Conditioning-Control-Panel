@@ -84,6 +84,13 @@ compare text, order, layout, sound and timing with the same screen on Windows. R
 ### Tray friends line
 33. Have a friend poke you, hover the tray icon. Expect "Conditioning Control Panel" plus a 1-unread friends line; open and close the friends drawer, hover again: the line is gone. WPF `Services/Friends/FriendsFeedTray.cs:18`. Rows: `shell-tray-icon`, `feat-friends-feed`.
 
+### Notices, scheduler and ramp
+34. WPF `MainWindow/MainWindow.StartStop.cs` — With local media selected, enable flashes with an empty images folder and press Start. Confirm Open Media Manager and Get packs open Library/Assets and the catalogue, and the warning expires after 18 seconds. Repeat with nested mixed-case PNG, online/mixed source, and flashes disabled: no warning. Rows: `shell-notifications-toasts`
+35. WPF `MainWindow/MainWindow.StartStop.cs` — Arm Keep wallpaper with an empty folder. Confirm both actions; a valid custom folder takes precedence, a missing custom folder falls back to wallpapers, and GIF/WebP alone still warn. Rows: `shell-notifications-toasts`
+36. WPF `MainWindow/MainWindow.xaml.cs` and `MainWindow/MainWindow.Companion.cs` — Gain a player level and companion levels 9, 10, 100. Confirm localized player notice, no companion notice at 9, mod-aware milestone at 10, MAX LEVEL at 100. Close shell and confirm no late queued notices. Rows: `shell-notifications-toasts`
+37. WPF `MainWindow/MainWindow.xaml.cs` and `Windows/WebcamCalibrationWindow.xaml.cs` — Load legacy calibration with monitor bounds but no device name. Open shell: one sticky warning with Recalibrate. Accept full calibration: warning clears without persistent dismissal. Named-monitor or missing calibration shows no warning. Existing panic closes calibration. Rows: `shell-notifications-toasts`
+38. WPF `MainWindow/MainWindow.StartStop.cs` — Configure an active schedule. After the 60-second startup grace, confirm start notice and tray minimize; exit the window of time and confirm stop notice. Manually stop inside the window: no restart until a later window. Check overnight/current-day boundaries. Enable a minimum-duration ramp ending the session: confirm Session Complete before stopping and original values restored; a running preset must not end at ramp completion. Rows: `shell-notifications-toasts`
+
 ### Rows (general check G)
 - [ ] `shell-account-shell` - WPF `MainWindow/MainWindow.AccountShell.cs:261`
 - [ ] `shell-achievements-tab` - WPF `MainWindow/MainWindow.AchievementsTab.cs`
@@ -673,10 +680,3 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
-
-
-1. WPF `MainWindow/MainWindow.StartStop.cs` — With local media selected, enable flashes with an empty images folder and press Start. Confirm Open Media Manager and Get packs open Library/Assets and the catalogue, and the warning expires after 18 seconds. Repeat with nested mixed-case PNG, online/mixed source, and flashes disabled: no warning. Rows: `shell-notifications-toasts`
-2. WPF `MainWindow/MainWindow.StartStop.cs` — Arm Keep wallpaper with an empty folder. Confirm both actions; a valid custom folder takes precedence, a missing custom folder falls back to wallpapers, and GIF/WebP alone still warn. Rows: `shell-notifications-toasts`
-3. WPF `MainWindow/MainWindow.xaml.cs` and `MainWindow/MainWindow.Companion.cs` — Gain a player level and companion levels 9, 10, 100. Confirm localized player notice, no companion notice at 9, mod-aware milestone at 10, MAX LEVEL at 100. Close shell and confirm no late queued notices. Rows: `shell-notifications-toasts`
-4. WPF `MainWindow/MainWindow.xaml.cs` and `Windows/WebcamCalibrationWindow.xaml.cs` — Load legacy calibration with monitor bounds but no device name. Open shell: one sticky warning with Recalibrate. Accept full calibration: warning clears without persistent dismissal. Named-monitor or missing calibration shows no warning. Existing panic closes calibration. Rows: `shell-notifications-toasts`
-5. WPF `MainWindow/MainWindow.StartStop.cs` — Configure an active schedule. After the 60-second startup grace, confirm start notice and tray minimize; exit the window of time and confirm stop notice. Manually stop inside the window: no restart until a later window. Check overnight/current-day boundaries. Enable a minimum-duration ramp ending the session: confirm Session Complete before stopping and original values restored; a running preset must not end at ramp completion. Rows: `shell-notifications-toasts`

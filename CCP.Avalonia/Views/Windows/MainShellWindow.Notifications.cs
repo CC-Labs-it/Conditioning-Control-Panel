@@ -76,7 +76,7 @@ public partial class MainShellWindow
         App.Notifications.Show(string.Format(Loc.Get(wallpaper ? "msg_no_wallpaper_images" : "msg_no_flash_images"),
                 Loc.Get("nav_door_library"), Loc.Get("tab_assets")), NotificationType.Warning, TimeSpan.FromSeconds(18),
             Loc.Get("btn_open_media_manager"), () => ShowTab("assets"),
-            Loc.Get("btn_get_packs"), () =>
+            global::ConditioningControlPanel.Avalonia.Controls.IconText.BareLoc("btn_get_packs"), () =>
             {
                 try { ExternalOpener.Open(DiscordLinks.PackCatalogue); }
                 catch (Exception ex) { Log.Debug(ex, "Pack catalogue link failed"); }

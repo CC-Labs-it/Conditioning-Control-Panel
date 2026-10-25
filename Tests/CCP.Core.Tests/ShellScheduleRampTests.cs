@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -60,14 +61,16 @@ public sealed class ShellScheduleRampTests
     public void RampCrashJournalHealsBeforeNextRun()
     {
         var s = new AppSettings { IntensityRampEnabled = true, FlashOpacity = 31, MasterVolume = 42 };
+        Directory.CreateDirectory(CorePaths.UserData);   // a fresh runner has none; the app always does
         var ramp = new ShellRamp();
         ramp.Start(s, DateTime.Now);
         try
         {
             s.FlashOpacity = 99; s.MasterVolume = 1;
-            ShellRamp.HealOnLaunch(s);
+            Assert.True(ShellRamp.HealOnLaunch(s));
             Assert.Equal(31, s.FlashOpacity);
             Assert.Equal(42, s.MasterVolume);
+            Assert.False(ShellRamp.HealOnLaunch(s));   // journal gone: nothing to save
         }
         finally { ramp.Stop(s); }
     }

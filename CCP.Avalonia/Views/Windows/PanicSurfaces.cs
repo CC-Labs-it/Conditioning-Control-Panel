@@ -92,7 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)
             new("deeper-editor-audio", _ => Deeper.DeeperEditorWindow.PauseAllForPanic()),   // P06; WPF left it playing
             new("knock-cards", _ => Overlays.KnockCard.FoldAll()),   // P06; WPF left them up. Folded as Later: they wait in the Inbox
-            new("webcam-calibration", _ => WebcamCalibrationWindow.CloseAllForPanic()),
+            new("webcam-calibration", _ => WebcamCalibrationWindow.CloseAllForPanic()),   // P06; WPF left it up (MainWindow.xaml.cs:2071 GameSurfaces has no calibration). Before camera: it reads the tracker
             new("camera", _ => MainShellWindow.StopCameraForPanic(), After: ["gaze-minigame", "webcam-calibration"]),   // decision C: last, fire-and-forget; gaze reads it
         };
 

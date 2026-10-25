@@ -48,17 +48,20 @@ public sealed class ShellRamp
         _bases.Clear();
         try { File.Delete(Journal); } catch (Exception ex) { Log.Debug(ex, "Could not clear ramp journal"); }
     }
-    public static void HealOnLaunch(AppSettings s)
+    /// <returns>True when a field was put back; the caller saves (WPF App.xaml.cs:2540-2541).</returns>
+    public static bool HealOnLaunch(AppSettings s)
     {
-        if (!File.Exists(Journal)) return;
+        if (!File.Exists(Journal)) return false;
+        var healed = false;
         try
         {
             var fields = JObject.Parse(File.ReadAllText(Journal))["fields"];
             foreach (var name in Fields)
                 if (fields?[name] is { } value)
-                    try { typeof(AppSettings).GetProperty(name)!.SetValue(s, value.ToObject<int>()); } catch { /* WPF skips unreadable fields */ }
+                    try { typeof(AppSettings).GetProperty(name)!.SetValue(s, value.ToObject<int>()); healed = true; } catch { /* WPF skips unreadable fields */ }
         }
         catch (Exception ex) { Log.Warning(ex, "Could not read ramp journal"); }
         finally { try { File.Delete(Journal); } catch { } }
+        return healed;
     }
 }

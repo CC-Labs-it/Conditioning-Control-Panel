@@ -3,8 +3,8 @@
 // UpdateStartButton (:944), for the features Core drives (CoreEngine). The session half of
 // BtnStart_Click (stop-session dialog) is ConfirmStopSession (MainShellWindow.SessionRun.cs).
 // ponytail: still missing, each with no service on this head: the remote-control gate,
-// Relapse/TotalSessions achievements, the bubble/brain-drain/pop-quiz/autonomy/
-// ramp starts, the scheduler, the Presets "running" label and the hero FX.
+// Relapse/TotalSessions achievements, the bubble/brain-drain/pop-quiz/autonomy
+// starts, the Presets "running" label and the hero FX. Ramp and scheduler: MainShellWindow.Schedule.cs.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
 using Avalonia.Controls;
@@ -75,7 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             StartEffect(() =>
             {
                 if (gen != _engineGen || CoreEngine.IsRunning) return;
-                WarnIfFlashLibraryEmpty();
+                if (!CoreSettings.Current.AudioOnlySession) WarnIfFlashLibraryEmpty();   // WPF StartStop.cs:345-351
                 CoreEngine.Start();
                 StartShellRamp();
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()

@@ -218,6 +218,7 @@ public sealed class PanicSurfacesTests
         "remote-haptics>engine",
         "takeover>engine",
         "voice-capture>ai-followups",
+        "webcam-calibration>camera",
     };
 
     [Fact]
