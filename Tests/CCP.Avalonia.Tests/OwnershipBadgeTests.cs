@@ -35,6 +35,8 @@ public sealed class OwnershipBadgeTests
             CoreSettings.Current.RailFavorites.Clear();
             CoreSettings.Current.RailFavorites.Add("door.studio");
             CoreSettings.Current.RailFavorites.Add("door.home");
+            CoreSettings.Current.RailRecent.Clear();
+            CoreSettings.Current.RailRecent.Add("tab.studio");
             shell = new MainShellWindow();
             shell.Show();
             shell.ShowTab("studio");
@@ -64,8 +66,10 @@ public sealed class OwnershipBadgeTests
                     Assert.All(pills, pill => Assert.Equal(key == "flash" ? f : b, pill.IsVisible));
                 }
                 var chips = dash.FindControl<StackPanel>("FavoritesList")!.Children.OfType<Button>();
-                var chipPills = chips.SelectMany(c => c.GetVisualDescendants().OfType<Border>()).Where(x => x.Name == "V2Badge");
+                var chipPills = chips.SelectMany(c => Assert.IsType<Grid>(c.Content).Children.OfType<Border>()).Where(x => x.Name == "V2Badge");
                 Assert.Equal(f || b ? 1 : 0, chipPills.Count());
+                var recentChip = Assert.Single(dash.FindControl<StackPanel>("RecentList")!.Children.OfType<Button>());
+                Assert.Equal(f || b ? 1 : 0, Assert.IsType<Grid>(recentChip.Content).Children.OfType<Border>().Count(x => x.Name == "V2Badge")); // drawer may be collapsed: read content, not visuals
             }
             Apply(); Check(false, false);
             foreach (var grant in new[] { PrizeGrants.FlashDriftBounce, PrizeGrants.FlashPendulum, PrizeGrants.JackpotRemix, PrizeGrants.BubbleRain, PrizeGrants.BubbleSpiralIn })
