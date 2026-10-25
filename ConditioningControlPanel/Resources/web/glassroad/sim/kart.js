@@ -43,6 +43,8 @@ import { fallBeneath, fallLand, resetFall } from './falls.js';
 import { waterAt, waterOut, blendPush, gradeDeg, surfaceKind } from './flow.js';
 import { lipLeave, broadPlatformEdgeKick, platformHopUp, fieldAtS } from './stones.js';
 import { armGlide, glideGravity, resetGlide } from './glide.js';
+import { aerialGapAt } from '../track/aerial.js';
+import { airWordQuery, resetAirWords } from './airWords.js';
 
 export { applyBoost };
 
@@ -62,7 +64,7 @@ export function resetWater(st) { const m = WATER.get(st); if (m) { m.cur[0] = 0;
 const W = waterOut(), WV = v3(), FW = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
 const PUSH_EPS = 1e-3;
 
-const P = v3(), V = v3(), Q = q4(), F = v3(), U = v3(), N = v3(), FP = v3(), RP = v3(), QY = q4();
+const P = v3(), PRE = v3(), V = v3(), Q = q4(), F = v3(), U = v3(), N = v3(), FP = v3(), RP = v3(), QY = q4();
 // out objects pre-shaped: the track fills arrays in place (CONTRACT.md Frame, Query)
 const qOut = () => ({ normal: [0, 0, 0], p: [0, 0, 0] }), fOut = () => ({ p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] });
 const QA = qOut(), QB = qOut(), QR = qOut(), QD = qOut(), FR = fOut(), FL = fOut();
@@ -79,18 +81,19 @@ export function spawn(st, track, feel, slot = 0) {
   st[S.seg] = pose.seg; st[S.latchSeg] = pose.seg; st[S.s] = pose.s; st[S.lateral] = pose.lateral;
   st[S.grounded] = 1; st[S.hopT] = 1e3;          // the last hop was long ago
   st[S.sectionIdx] = track.sectionAt(pose.s);
-  resetRoute(st); resetFall(st); resetWater(st); resetStones(st); resetGlide(st);
+  resetRoute(st); resetFall(st); resetWater(st); resetStones(st); resetGlide(st); resetAirWords(st);
   return st;
 }
 
 /** One fixed tick. Respawn owns the kart during PULL, HOVER and RELEASE. */
 export function step(st, a, track, feel, dt, ev) {
   const ph = st[S.respawnPhase];
-  if (ph === RESPAWN.PULL || ph === RESPAWN.HOVER || ph === RESPAWN.RELEASE) { HOLE_FALL.delete(st); resetGlide(st); return; }
+  if (ph === RESPAWN.PULL || ph === RESPAWN.HOVER || ph === RESPAWN.RELEASE) { HOLE_FALL.delete(st); resetGlide(st); resetAirWords(st); return; }
   const grace = ph === RESPAWN.GRACE;
   const top = feel.get('speed.topMps');
   getPos(P, st); getVel(V, st); getQuat(Q, st);
-  const qa = track.query(P[0], P[1], P[2], st[S.seg] | 0, QA);
+  const qa = airWordQuery(st, P, track.query(P[0], P[1], P[2], st[S.seg] | 0, QA));
+  v3copy(PRE, P);
   const wasGround = st[S.grounded] > 0;
   const wasEdge = !wasGround && !has(qa.flags, 'jump') && (qa.edgeDist < 0 || HOLE_FALL.has(st));
   const prevS = st[S.s], prevLat = st[S.lateral];
@@ -178,10 +181,11 @@ export function step(st, a, track, feel, dt, ev) {
     // just before a drop shortcut's kicker lip the hop sees that lip too (the trick's early window)
     hop(st, feel, ev, V, qa.normal, speed, hopTrack(track, qa, V, speed, feel.get('trick.earlyS')));
     // Large challenge islands give a deliberate jump more hang time; coasting keeps its small lip kick.
-    const platformUp = platformHopUp(track, qa, Math.abs(speed), feel.get('hop.upMps'), feel.get('hop.gravityMps2'));
+    const platformUp = qa.airWord ? Math.max(10.5, feel.get('hop.upMps'))
+      : platformHopUp(track, qa, Math.abs(speed), feel.get('hop.upMps'), feel.get('hop.gravityMps2'));
     v3addScaled(V, V, qa.normal, platformUp - feel.get('hop.upMps'));
     if (st[S.airborne] && (qa.surface === 'stream' || qa.surface === 'pool')) ev.emit('water-hop', { s: qa.s, x: qa.lateral, speed: Math.abs(speed), down: 0, kind: 'hop', p: [...P], normal: [...qa.normal] });
-    armGlide(st, track, qa);
+    armGlide(st, track, qa, V);
     maybeStartDrift(st, a, feel, speed, ev);
   }
   const air = st[S.airborne] > 0;
@@ -192,7 +196,7 @@ export function step(st, a, track, feel, dt, ev) {
 
   // move, then find the ground again
   v3addScaled(P, P, V, dt);
-  let qb = track.query(P[0], P[1], P[2], qa.seg, QB);
+  let qb = airWordQuery(st, P, track.query(P[0], P[1], P[2], qa.seg, QB), PRE);
   const snap = gap(feel, 'kart.snapM');
   // A low hop reaching the edge of a broad Keep platform receives its normal lip kick once.
   if (air) v3addScaled(V, V, qb.normal, broadPlatformEdgeKick(track, qa, qb, v3dot(V, qb.normal), feel.get('stones.kickUpMps')));
@@ -225,7 +229,13 @@ export function step(st, a, track, feel, dt, ev) {
   if (ground) {
     v3addScaled(P, P, n, -qb.height); v3reject(V, V, n);
     const arrive = Math.hypot(V[0], V[1], V[2]);   // ground speed at touch-down (the splash payload)
-    if (air) { land(st, a, feel, ev, V, n, speed, dt, !!qb.stone && !!fieldAtS(track, qb.s)?.platforming); resetGlide(st); }
+    if (air) {
+      land(st, a, feel, ev, V, n, speed, dt, !!qb.airWord || !!qb.stone && !!fieldAtS(track, qb.s)?.platforming);
+      if (qb.airWord) {
+        st[S.airborne] = 0; st[S.grounded] = 1; v3reject(V, V, n);
+        ev.emit('air-word-land', { id: qb.airWord.id, text: qb.airWord.text, s: qb.s });
+      } else resetGlide(st);
+    }
     // wave 1 WATER: a pool catches the kart: no bounce back up, the water takes its share of speed once, splash
     if (air && surfaceKind(qb.surface) === 'pool') {
       if (st[S.airborne]) { st[S.airborne] = 0; st[S.grounded] = 1; v3reject(V, V, n); }
@@ -248,7 +258,11 @@ export function step(st, a, track, feel, dt, ev) {
     if (lip) v3addScaled(V, V, n, Math.min(feel.get('stones.kickUpMps'), feel.get('stones.flightCapM') * feel.get('hop.gravityMps2') / (2 * Math.max(1, speed))));
     else if (kick) v3addScaled(V, V, n, gap(feel, 'route.kickUpMps'));
     takeoff(st, ev, !kick && !lip && road && (qb.edgeDist < 0 || qb.hole) ? 'edge' : 'lip');
-    if (!road) armGlide(st, track, qb);
+    if (!road) {
+      armGlide(st, track, qb);
+      // The authored launch lip supplies lift. The player still holds the cap to glide.
+      if (!qb.forkId && aerialGapAt(track, qb.s) && !qa.airWord && qa.onRoad) V[1] += 14;
+    }
   } else st[S.airTime] += dt;
   // wave 2 STONES: a stone the kart was not on before (a landing or the deck handing over to the first stone)
   if (ground) {
@@ -269,7 +283,7 @@ export function step(st, a, track, feel, dt, ev) {
   // a kart above the rail top, or already beyond the rail line in the air, flies past it (polish 4)
   const overRail = air && (qb.height > gap(feel, 'wall.topM') || ed < 0);
   const soft = feel.get('gentle.on') && edgeKind !== 'kicker';
-  if (road && !overRail && ((qb.railed && edgeKind !== 'kicker') || kerb || soft) && ed < radius && qb.height > -radius) {
+  if (!qb.airWord && road && !overRail && ((qb.railed && edgeKind !== 'kicker') || kerb || soft) && ed < radius && qb.height > -radius) {
     const b = (track.pathFrameAt ? track.pathFrameAt(qb.s, qb.seg, FR) : track.frameAt(qb.s, FR)).b, side = lat >= 0 ? 1 : -1, pen = radius - ed;
     v3addScaled(P, P, b, -side * pen); lat -= side * pen; ed = radius;
     const into = v3dot(V, b) * side;
