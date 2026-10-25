@@ -37,8 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///
     /// The remote media picker is ported in AssetsTabView.MediaPicker.cs.
     ///
-    /// ponytail: not on this head yet - pack cards (the section is hidden in WPF too), video thumbnails (WPF uses the
-    /// Windows shell thumbnailer; videos draw the 🎬 placeholder), BtnCreatorDiscord /
+    /// ponytail: not on this head yet - pack cards (the section is hidden in WPF too), BtnCreatorDiscord /
     /// PacksScrollViewer wheel-to-pan and the pack-card sheen (pack cards only).
     /// </summary>
     public partial class AssetsTabView : UserControl
@@ -299,12 +298,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var rel = Rel(file);
                 var item = new AssetThumbnailViewModel(file, rel) { IsChecked = !S.DisabledAssetPaths.Contains(rel) };
                 _currentFolderFiles.Add(item);
-                if (!item.IsVideo) loads.Add(LoadThumbnailAsync(item, generation));
+                loads.Add(LoadThumbnailAsync(item, generation));
             }
             ThumbnailLoads = Task.WhenAll(loads);
         }
 
-        /// <summary>WPF decodes at DecodePixelWidth 100 off the UI thread; same here, four at a time,
+        internal Func<string, Bitmap?> VideoThumbnail { get; set; } = Platform.ShellThumbnail.Get;
+
+        /// <summary>WPF requests 100 px thumbnails off the UI thread; same here, four at a time,
         /// and a folder switch drops the old folder's queued decodes.</summary>
         private async Task LoadThumbnailAsync(AssetThumbnailViewModel item, int generation)
         {
@@ -318,6 +319,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     try
                     {
                         if (generation != Volatile.Read(ref _thumbGeneration)) return null;
+                        if (item.IsVideo)
+                        {
+                            var path = item.PackFile != null
+                                ? item.PackStore?.GetPackFileTempPath(item.PackId!, item.PackFile)
+                                : item.FullPath;
+                            try { return path == null ? null : VideoThumbnail(path); }
+                            finally
+                            {
+                                if (item.PackFile != null && path != null) item.PackStore?.DeleteTempFile(path);
+                            }
+                        }
                         using Stream? fs = item.PackFile != null
                             ? item.PackStore?.GetPackFileStream(item.PackId!, item.PackFile)
                             : File.OpenRead(item.FullPath);

@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## fin4 Assets video thumbnails
+
+1. Open Library > Assets, select a local videos folder on Windows with a supported video and an unsupported file. Expect a shell thumbnail for the supported video, the Fluent placeholder for the unsupported file, and no stuck loading overlay. Switch folders during loading: the new folder must retain its own thumbnails. WPF `MainWindow/MainWindow.Assets.cs:910-950`. Rows: `views-tab-assets`.
+2. Select an active Content Pack videos folder, leave it and reopen it. Expect cached thumbnails; temporary decrypted videos must be removed after success or failure. Non-Windows retains the placeholder. WPF `MainWindow/MainWindow.Assets.cs:761-855`. Rows: `views-tab-assets`.
+3. Hover the Assets and Asset Browser help buttons and pin/unpin each card; expect their respective help sections. The Content Packs help remains inside the WPF-hidden strip. WPF `MainWindow/MainWindow.Presets.cs:75-77`. Rows: `views-tab-assets`.

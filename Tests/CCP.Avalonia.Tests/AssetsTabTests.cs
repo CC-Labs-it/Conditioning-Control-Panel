@@ -64,6 +64,33 @@ public sealed class AssetsTabTests
             Assert.All(tab.CurrentFolderFiles, f => Assert.NotNull(f.Thumbnail));
             Assert.False(Directory.Exists(Path.Combine(assets, ".temp"))); // thumbnail decrypts stay in memory
             var firstThumbs = tab.CurrentFolderFiles.Select(f => f.Thumbnail).ToList();
+            var videoFolder = pack.Children.Single(n => n.PackFileType == "video");
+            tab.VideoThumbnail = _ => throw new IOException("codec failed");
+            tab.SelectFolder(videoFolder);
+            await tab.ThumbnailLoads;
+            Assert.Null(Assert.Single(tab.CurrentFolderFiles).Thumbnail);
+            Assert.False(Assert.Single(tab.CurrentFolderFiles).IsLoadingThumbnail);
+            Assert.Empty(Directory.GetFiles(Path.Combine(assets, ".temp")));
+            var videoCalls = 0;
+            tab.VideoThumbnail = path =>
+            {
+                videoCalls++;
+                Assert.True(File.Exists(path));
+                Assert.Equal(new byte[16], File.ReadAllBytes(path));
+                return new global::Avalonia.Media.Imaging.Bitmap(Path.Combine(assets, "images", "a.png"));
+            };
+            tab.SelectFolder(videoFolder);
+            await tab.ThumbnailLoads;
+            Assert.NotNull(Assert.Single(tab.CurrentFolderFiles).Thumbnail);
+            Assert.Empty(Directory.GetFiles(Path.Combine(assets, ".temp")));
+            tab.SelectFolder(images);
+            await tab.ThumbnailLoads;
+            tab.SelectFolder(videoFolder);
+            await tab.ThumbnailLoads;
+            Assert.Equal(1, videoCalls); // pack cache includes video thumbnails
+            tab.SelectFolder(images);
+            await tab.ThumbnailLoads;
+
             var packGlyphs = await Realized(shell, () => tab.AssetTreeView.GetVisualDescendants().OfType<IconGlyph>()
                 .Where(g => g.DataContext == packs && g.IsVisible).ToList() is { Count: > 0 } l ? l : null);
             Assert.Equal(IconKind.Box, Assert.Single(packGlyphs).Kind); // WPF names the root with a package emoji
@@ -402,6 +429,54 @@ public sealed class AssetsTabTests
             }
         }
         finally { AssetsTabView.AppInFront = oldInFront; }
+    });
+
+    [Fact]
+    public Task LocalVideosLoadOffThreadAndUnsupportedFilesKeepTheirPlaceholder() => Run(async (shell, tab, s) =>
+    {
+        var uiThread = Environment.CurrentManagedThreadId;
+        var calls = new System.Collections.Concurrent.ConcurrentBag<string>();
+        tab.VideoThumbnail = path =>
+        {
+            Assert.NotEqual(uiThread, Environment.CurrentManagedThreadId);
+            calls.Add(Path.GetFileName(path));
+            return path.EndsWith("v.mp4")
+                ? new global::Avalonia.Media.Imaging.Bitmap(Path.Combine(ConditioningControlPanel.CorePaths.EffectiveAssets, "images", "a.png"))
+                : null;
+        };
+        tab.SelectFolder(tab.AssetTree.Single(n => n.Name == "videos"));
+        await tab.ThumbnailLoads;
+        Assert.Equal(new[] { "v.mp4", "w.mp4" }, calls.OrderBy(x => x));
+        Assert.NotNull(tab.CurrentFolderFiles.Single(f => f.Name == "v.mp4").Thumbnail);
+        Assert.Null(tab.CurrentFolderFiles.Single(f => f.Name == "w.mp4").Thumbnail);
+        Assert.All(tab.CurrentFolderFiles, f => Assert.False(f.IsLoadingThumbnail));
+    });
+
+    [Fact]
+    public Task FolderSwitchDiscardsAnInFlightVideoThumbnail() => Run(async (shell, tab, s) =>
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var release = new System.Threading.ManualResetEventSlim();
+        tab.VideoThumbnail = path =>
+        {
+            started.TrySetResult();
+            if (!release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException();
+            return new global::Avalonia.Media.Imaging.Bitmap(Path.Combine(ConditioningControlPanel.CorePaths.EffectiveAssets, "images", "a.png"));
+        };
+        tab.SelectFolder(tab.AssetTree.Single(n => n.Name == "videos"));
+        var pending = tab.ThumbnailLoads;
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            var oldFiles = tab.CurrentFolderFiles.ToArray();
+            tab.SelectFolder(tab.AssetTree.Single(n => n.Name == "images"));
+            release.Set();
+            await pending;
+            Assert.All(oldFiles, f => Assert.Null(f.Thumbnail));
+            Assert.All(oldFiles, f => Assert.False(f.IsLoadingThumbnail));
+            await tab.ThumbnailLoads;
+        }
+        finally { release.Set(); }
     });
 
     // ---- harness ----------------------------------------------------------------------
