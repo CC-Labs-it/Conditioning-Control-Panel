@@ -33,6 +33,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             InitializeComponent();
             CmbPersonality.SelectionChanged += CmbPersonality_SelectionChanged;
+            CmbAvatar.SelectionChanged += (_, _) =>
+            {
+                if (_syncing || CmbAvatar.SelectedItem is not ComboBoxItem { Tag: int set }) return;
+                if ((Shell?.Tube ?? AvatarTubeWindow.Live)?.SelectAvatarSet(set) == true) Refresh();
+            };
             BtnMorePersonality.Click += BtnMorePersonality_Click;
             BtnTurnOn.Click += (_, _) => { Shell?.SetAvatarEnabled(true); Refresh(); };
             BtnTubeFit.Click += (_, _) => _ = new TubeFitDialog().ShowDialogSafe(TopLevel.GetTopLevel(this) as Window);
@@ -183,7 +188,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private void FillAvatars()
         {
             CmbAvatar.Items.Clear();
-            var tube = AvatarTubeWindow.Live;
+            var tube = Shell?.Tube ?? AvatarTubeWindow.Live;
             BtnTurnOn.IsVisible = tube == null;
             BtnTubeFit.IsVisible = tube != null;
             var set = Math.Max(1, tube?.CurrentAvatarSet ?? CoreSettings.Current.SelectedAvatarSet);
@@ -194,15 +199,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             }
             else
             {
-                // ponytail: WPF lists tube.PickableAvatarSets() and switches through
-                // tube.SelectAvatarSet(set). This head's tube cannot switch sets yet (its
-                // SelectAvatarSet note: the companion coupling, CoreModsHooks.SwitchCompanion, is
-                // unseeded), so the combo shows the set the tube is showing and stays disabled.
-                var item = new ComboBoxItem { Content = AvatarTubeWindow.AvatarSetTitle(set), Tag = set };
-                CmbAvatar.Items.Add(item);
-                CmbAvatar.SelectedItem = item;
-                CmbAvatar.IsEnabled = false;
-                TxtAvatarHint.IsVisible = false;
+                var sets = tube.PickableAvatarSets();
+                foreach (var pick in sets)
+                {
+                    var item = new ComboBoxItem { Content = AvatarTubeWindow.AvatarSetTitle(pick), Tag = pick };
+                    CmbAvatar.Items.Add(item);
+                    if (pick == set) CmbAvatar.SelectedItem = item;
+                }
+                CmbAvatar.IsEnabled = sets.Length > 1;
+                if (sets.Length <= 1) ShowHint(Loc.Get("modmgr_avatar_single_hint"));
+                else TxtAvatarHint.IsVisible = false;
             }
             ShowPortrait(ModArt.TryLoad(set == 1 ? "avatar_pose1.png" : $"avatar{set}_pose1.png", 240));
         }

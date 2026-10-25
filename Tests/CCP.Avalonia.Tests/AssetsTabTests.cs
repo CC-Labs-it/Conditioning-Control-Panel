@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -394,6 +395,130 @@ public sealed class AssetsTabTests
     });
 
     [Fact]
+    public Task PackCardHoverMovesOneSheenAndLeavingStopsItsClock() => Run(async (shell, tab, s) =>
+    {
+        // WPF deliberately ships the pack strip collapsed; expose its existing template for the
+        // dormant hover path, without enabling a product feature or installing any pack.
+        tab.PacksSection.IsVisible = true;
+        var cards = await Realized(shell, () =>
+        {
+            var found = tab.PackCardsItemsControl.GetVisualDescendants().OfType<Border>()
+                .Where(c => c.Classes.Contains("packCard")).ToArray();
+            return found.Length >= 2 ? found : null;
+        });
+        var layer = AdornerLayer.GetAdornerLayer(cards[0])!;
+        HoverPack(shell, cards[0], true);
+        var first = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        Assert.True(first.IsTicking);
+        HoverPack(shell, cards[0], true);
+        Assert.Same(first, Assert.Single(layer.Children.OfType<CardSheenAdorner>()));
+        HoverPack(shell, cards[1], true);
+        var second = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        Assert.NotSame(first, second);
+        Assert.False(first.IsTicking);
+        // A late leave from the previous card must not clear the new card's sheen.
+        HoverPack(shell, cards[0], false);
+        Assert.Same(second, Assert.Single(layer.Children.OfType<CardSheenAdorner>()));
+        HoverPack(shell, cards[1], false);
+        Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
+        Assert.False(second.IsTicking);
+    });
+
+    [Fact]
+    public Task PackCardSheenFollowsARealPointerMove() => Run(async (shell, tab, s) =>
+    {
+        // Same path as above, but through headless mouse input and the shell's hit testing.
+        tab.PacksSection.IsVisible = true;
+        var cards = await Realized(shell, () =>
+        {
+            var found = tab.PackCardsItemsControl.GetVisualDescendants().OfType<Border>()
+                .Where(c => c.Classes.Contains("packCard")).ToArray();
+            return found.Length >= 2 ? found : null;
+        });
+        cards[0].BringIntoView();
+        shell.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        var layer = AdornerLayer.GetAdornerLayer(cards[0])!;
+        Point Centre(Control c) => c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), shell)!.Value;
+        void Move(Point p)
+        {
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();   // hit testing reads the last rendered frame
+            shell.MouseMove(p, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        Move(Centre(cards[0]));
+        var first = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        Assert.Same(cards[0], AdornerLayer.GetAdornedElement(first));
+        Move(Centre(cards[1]));
+        var second = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        Assert.NotSame(first, second);
+        Assert.False(first.IsTicking);
+        Move(new Point(1, 1));
+        Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
+        Assert.False(second.IsTicking);
+    });
+
+    [Fact]
+    public Task PackCardSheenDetachesWhenTheStripOrTabHidesAndMotionOffRefusesIt() => Run(async (shell, tab, s) =>
+    {
+        tab.PacksSection.IsVisible = true;
+        var card = await Realized(shell, () => tab.PackCardsItemsControl.GetVisualDescendants()
+            .OfType<Border>().FirstOrDefault(c => c.Classes.Contains("packCard")));
+        var layer = AdornerLayer.GetAdornerLayer(card)!;
+        HoverPack(shell, card, true);
+        var sheen = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        tab.PacksSection.IsVisible = false;
+        Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
+        Assert.False(sheen.IsTicking);
+        HoverPack(shell, card, true);
+        Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
+        tab.PacksSection.IsVisible = true;
+        s.MotionLevel = MotionLevel.Off;
+        HoverPack(shell, card, true);
+        Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
+        s.MotionLevel = MotionLevel.Full;
+        HoverPack(shell, card, true);
+        sheen = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        tab.IsVisible = false;
+        Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
+        Assert.False(sheen.IsTicking);
+    });
+
+    [Fact]
+    public Task RebuildingPackCardsRemovesTheDetachedCardsSheen() => Run(async (shell, tab, s) =>
+    {
+        tab.PacksSection.IsVisible = true;
+        var card = await Realized(shell, () => tab.PackCardsItemsControl.GetVisualDescendants()
+            .OfType<Border>().FirstOrDefault(c => c.Classes.Contains("packCard")));
+        var layer = AdornerLayer.GetAdornerLayer(card)!;
+        HoverPack(shell, card, true);
+        var sheen = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        tab.PackCardsItemsControl.ItemsSource = Array.Empty<PackCardViewModel>();
+        shell.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
+        Assert.False(sheen.IsTicking);
+    });
+
+    [Fact]
+    public Task UnloadingTheTabStopsThePackCardSheenClock() => Run(async (shell, tab, s) =>
+    {
+        tab.PacksSection.IsVisible = true;
+        var card = await Realized(shell, () => tab.PackCardsItemsControl.GetVisualDescendants()
+            .OfType<Border>().FirstOrDefault(c => c.Classes.Contains("packCard")));
+        var layer = AdornerLayer.GetAdornerLayer(card)!;
+        HoverPack(shell, card, true);
+        var sheen = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        var content = shell.Content;
+        shell.Content = null;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
+        Assert.False(sheen.IsTicking);
+        shell.Content = content;
+    });
+
+    [Fact]
     public Task DoubleClickingAThumbnailOpensItInTheMiniPlayer() => Run(async (shell, tab, s) =>
     {
         var sub = tab.AssetTree.Single(n => n.Name == "images").Children.Single();
@@ -461,6 +586,11 @@ public sealed class AssetsTabTests
     });
 
     // ---- harness ----------------------------------------------------------------------
+
+    private static void HoverPack(Window shell, Control card, bool on) => card.RaiseEvent(
+        new PointerEventArgs(on ? InputElement.PointerEnteredEvent : InputElement.PointerExitedEvent,
+            card, new global::Avalonia.Input.Pointer(1, PointerType.Mouse, true), shell, default,
+            0, PointerPointProperties.None, KeyModifiers.None));
 
     private static Task<Border> Thumbnail(Window shell, AssetsTabView tab) => Realized(shell, () =>
         tab.ThumbnailsItemsControl.GetVisualDescendants().OfType<Border>()
