@@ -3361,3 +3361,7 @@ Windows "Test process did not return valid JSON (non-object)" discovery flake: x
 ## avalonia-port/wire-views-companion-workshop-behavior-cell: +184
 - Workshop Behavior cell's browser-pause switch drives the Home browser (mute + pause/resume media), live state only.
 - Pause survives navigation; resume restores the saved mute preference.
+
+## avalonia-port/wire-shell-assets-fx: +214
+- Pack-card hover sheen is wired: one CardSheenAdorner moves between cards and detaches on leave, hide, card removal or unload. The strip stays hidden, as in WPF. The shell-assets-fx row is now `wired`.
+- Five AssetsTabTests cover it, including one that uses real headless mouse moves. All were fail-proven (runs 39696872030 red, then 39697331663 green).
