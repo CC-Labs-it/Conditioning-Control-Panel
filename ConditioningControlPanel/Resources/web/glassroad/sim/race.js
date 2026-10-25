@@ -40,7 +40,8 @@ export function createRace(track, feel, events) {
       if (t >= goAt - 1e-9) {
         race.phase = 'racing'; race.timeS = Math.max(0, t - goAt); race.lapStartS = 0;
         events.emit('go', {});
-        if (pressT >= 0 && pressT <= goAt + 1e-9 && goAt - pressT <= feel.get('boost.launchWindowS') + 1e-9) {
+        // The beat can fall between fixed steps; keep the actual GO frame eligible.
+        if (pressT >= 0 && pressT <= goAt + dt + 1e-9 && goAt - pressT <= feel.get('boost.launchWindowS') + 1e-9) {
           const tier = feel.get('boost.launchTier');
           applyBoost(st, BOOST.LAUNCH, tier, feel, events);
           events.emit('launch-boost', { tier });

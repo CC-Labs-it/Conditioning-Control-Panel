@@ -76,3 +76,13 @@ test('catching up after GO cannot turn a late throttle press into a launch boost
     assert.equal(ev.filter(e => e[0] === 'launch-boost').length, 0, 'press arrived after GO');
   }
 });
+
+test('a throttle press on the actual GO frame still launches when the beat falls between sim steps', () => {
+  const { race, ev, st, a } = setup();
+  race.start();
+  while (race.goInS > DT) race.update(DT, a, st);
+  a.throttle = 1;
+  race.update(DT, a, st);
+  assert.equal(race.phase, 'racing');
+  assert.equal(ev.filter(e => e[0] === 'launch-boost').length, 1);
+});
