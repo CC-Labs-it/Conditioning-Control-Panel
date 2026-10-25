@@ -7,12 +7,12 @@
 //
 //   CelebrateLevelUp                <- the XP/level path (MainWindow.ProfileBubble.cs)
 //   CelebrateAchievementUnlock      <- MainWindow.AchievementsTab.cs:782 (on-tile reveal + burst: AchievementsTabView.Fx.cs)
-//   CelebrateQuestComplete          <- MainWindow.Quests.cs:77 (on-tab burst: QuestsTabView.Fx.cs)
+//   CelebrateQuestComplete          <- MainWindow.Quests.cs:77 (bars: QuestsTabView.Fx.cs; nav fallback: MainShellWindow.Quests.cs)
 //   CelebrateProgramDayComplete     <- MainWindow.ProgramsTab.cs:1020
 //   CelebrateEnhancementPurchase    <- MainWindow.Enhancements.cs:2059
 //   CelebratePrestige               <- the prestige rank roll
 //
-// Not one of those six sites exists on this head. Restoring the six methods now would add ~200
+// Quest completion is live through its tab and shell nav layer. Restoring the other methods would add ~200
 // lines of overlay plumbing that nothing can call and nothing can prove: the whole file is
 // "when X happens, burst here", and X does not happen yet. It comes back with the progression
 // wiring that fires it, not before - and when it does, EnsureEventBurstLayer is a Panel insert

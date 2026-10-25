@@ -170,6 +170,8 @@
 
                     <StackPanel Grid.Column="0">
 
+                        <!-- WPF :136 + AwarenessTabView.Companion.cs: the collapsed room's privacy card (v2). -->
+                        <ContentControl x:Name="CompanionPrivacyHost" Margin="0,0,0,14"/>
                         <!-- ==================== LIVE PULSE ====================
                              The heartbeat of the tab: amber wash + edge bar so it reads as the
                              one live surface on the page. Rows are built imperatively in
@@ -605,6 +607,10 @@
                              above; this drawer is the authoring surface underneath them. It deliberately
                              re-hosts NO app-scoping UI - CmbAwarenessAppScope in SAFETY above is the one
                              editor for KeywordTriggerAppScope. Internals untouched by round 4. -->
+                        <Expander x:Name="CompanionTuningFold" IsVisible="False" Margin="0,4,0,12" HorizontalAlignment="Stretch">
+                            <Expander.Header><TextBlock Text="{loc:Str companion_workshop_cell_awareness}"/></Expander.Header>
+                            <ContentControl x:Name="CompanionTuningHost"/>
+                        </Expander>
                         <cmp:KeywordTriggersPanel x:Name="KeywordPanel"
                                                   Margin="0,4,0,4"
                                                   AutomationProperties.AutomationId="AwarenessCustomTriggers"/>
