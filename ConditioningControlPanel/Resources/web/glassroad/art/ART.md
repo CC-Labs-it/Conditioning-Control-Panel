@@ -1979,3 +1979,28 @@ motion stills toy spins. Gentle uses a 300 ms rise, no spin and no fast ring exp
 Photosafe grants bright local sparks or leaves a quiet diffuse marker. Payoff words
 and media flashes remain owned by the existing payoff layer. No new audio or speech
 assets were added; the existing item-fire, impact and boost bank remains in use.
+
+
+### Runtime geometry budgets
+
+These source-defined assets are listed as `procedural` manifest rows. Their file is
+the authoring module; the art loader does not request them as external models.
+Bounds below use the effect's local origin and maximum authored scale. Spark tips
+extend beyond the six-metre Snap contact ring; they are decorative. Kart root scale
+applies to the local Surge bound. The leader disc borrows the existing Loom atlas.
+
+| Asset | Triangles | Draws | New texture bytes | Bound radius (m) |
+|---|---:|---:|---:|---:|
+| toy-snap-burst | 224 | 2 | 0 | 6.78 |
+| toy-snap-guard | 96 | 1 | 0 | 1.5255 |
+| toy-landing-marker | 224 | 2 | 0 | 1.8645 |
+| toy-leader-slow | 48 | 1 | 0 | 1.7 |
+| toy-surge-chevrons | 12 | 1 | 0 | 2.8888 |
+
+Surge uses flat gold chevrons behind the kart. The earlier sphere aura is suppressed
+for Surge; its normal boost timing, face and engine/audio behavior remain.
+
+Held Snap, Surge and Melt badges use a separate bare sprite material and one shared
+instance draw, sampling the same 5 x 5 living atlas. Each instance contributes two
+triangles; no new texture is allocated. The legacy glass material is not used for
+these directional frames. Native captures verify their alpha and visibility.

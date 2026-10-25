@@ -346,8 +346,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   if (routes && bus) offs.push(bus.on('route-land', (p) => routes.land(p || {})));
   const kartPos = [];
   let itemVis = null;
-  try { itemVis = itemsMod ? itemsMod.createItemVisuals(scene, art, feel, { photosafe, track, waterVolume, backend: renderer ? renderer.backend : '' }) : null; } catch (e) { console.warn('[glassroad/world] item visuals failed: ' + (e && e.message)); }
-  if (itemVis && bus) offs.push(bus.on('tether-break', payload => itemVis.event('tether-break', payload)));
+  try { itemVis = itemsMod ? itemsMod.createItemVisuals(scene, art, feel, { photosafe, track, waterVolume, palette: () => pal.primaryHex(), backend: renderer ? renderer.backend : '' }) : null; } catch (e) { console.warn('[glassroad/world] item visuals failed: ' + (e && e.message)); }
+  if (itemVis && bus) for (const name of ['item-box', 'disc-bounce', 'tether-hook', 'tether-break', 'snap-burst', 'item-hit'])
+    offs.push(bus.on(name, payload => itemVis.event(name, payload)));
   // the music road (handoff-1022/MUSIC-ROAD-BRIEF.md): the road, rails and helix answer the song; the
   // player's own word bubbles ride the road. No song: both rest and the race looks as before
   let musicRoad = null, wordVis = null;

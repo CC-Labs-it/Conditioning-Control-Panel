@@ -7571,5 +7571,10 @@
   {"id":"toy-pendulum-lod0","file":"toys/toy-pendulum-lod0.glb","kind":"prop","tris":1174,"draws":2,"texBytes":0,"boundRadiusM":0.898,"materialSlots":["toy_enamel","toy_metal"],"palette":"all","sizeM":[0.544,0.897,0.1345]},
   {"id":"toy-pendulum-lod1","file":"toys/toy-pendulum-lod1.glb","kind":"prop","tris":658,"draws":2,"texBytes":0,"boundRadiusM":0.879,"materialSlots":["toy_enamel","toy_metal"],"palette":"all","sizeM":[0.544,0.877661,0.1345]},
   {"id":"toy-tether-cuff","file":"toys/toy-tether-cuff.glb","kind":"prop","tris":594,"draws":2,"texBytes":0,"boundRadiusM":0.539,"materialSlots":["toy_enamel","toy_metal"],"palette":"all","sizeM":[0.5655,0.537218,0.1055]},
-  {"id":"toy-tether-head","file":"toys/toy-tether-head.glb","kind":"prop","tris":628,"draws":2,"texBytes":0,"boundRadiusM":0.717,"materialSlots":["toy_enamel","toy_metal"],"palette":"all","sizeM":[0.361651,0.715548,0.13]}
+  {"id":"toy-tether-head","file":"toys/toy-tether-head.glb","kind":"prop","tris":628,"draws":2,"texBytes":0,"boundRadiusM":0.717,"materialSlots":["toy_enamel","toy_metal"],"palette":"all","sizeM":[0.361651,0.715548,0.13]},
+  {"id":"toy-snap-burst","file":"../render/items/toys.js","kind":"procedural","tris":224,"draws":2,"texBytes":0,"boundRadiusM":6.78,"materialSlots":["toy_runtime"],"palette":"all"},
+  {"id":"toy-snap-guard","file":"../render/items/toys.js","kind":"procedural","tris":96,"draws":1,"texBytes":0,"boundRadiusM":1.5255,"materialSlots":["toy_runtime"],"palette":"all"},
+  {"id":"toy-landing-marker","file":"../render/items/toys.js","kind":"procedural","tris":224,"draws":2,"texBytes":0,"boundRadiusM":1.8645,"materialSlots":["toy_runtime"],"palette":"all"},
+  {"id":"toy-leader-slow","file":"../render/items/toys.js","kind":"procedural","tris":48,"draws":1,"texBytes":0,"boundRadiusM":1.7,"materialSlots":["toy_runtime"],"palette":"all"},
+  {"id":"toy-surge-chevrons","file":"../render/karts.js","kind":"procedural","tris":12,"draws":1,"texBytes":0,"boundRadiusM":2.8888,"materialSlots":["toy_runtime"],"palette":"all"}
 ]
