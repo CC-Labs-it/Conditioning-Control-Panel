@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
     /// MainWindow.CmbMotionLevel_SelectionChanged did. The DND app picker and the guard read
     /// Platform/Win32Windows on Windows and X11 window owners elsewhere; the guard itself is Core DndGuard.
     /// </summary>
-    public partial class PerformanceSettingsSection : UserControl
+    public partial class PerformanceSettingsSection : UserControl, IAppSettingsSection
     {
         private bool _isLoading = true;
 
@@ -78,6 +78,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             if (e.PropertyName == nameof(Models.AppSettings.VideoForceHardwareDecoding))
                 Dispatcher.UIThread.Post(SyncFromSettings);
         }
+
+        // WPF IsVisibleChanged re-seeds on every Settings-door open.
+        public void OnSectionShown() => SyncFromSettings();
 
         internal void SyncFromSettings()
         {

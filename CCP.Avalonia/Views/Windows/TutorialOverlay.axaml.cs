@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using ConditioningControlPanel.Tutorial;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
@@ -26,9 +28,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// title, description and its Skip / Skip step / Previous / Next row.
     ///
     /// Adapted from WPF's TutorialOverlay: card, spotlight and automatic advance subscriptions.
-    /// ponytail: the in-window stage, cross-window retarget, narration and spotlight input hole
-    /// remain in follow-up wire-win-tutorial-overlay-b. The parameterless constructor renders a
-    /// sample and never subscribes to the live tour.
+    /// Click-through input: the spotlight excludes its target rectangle from the native input
+    /// region, and transparent waiting steps retain input only on their card (X11 uses XFixes;
+    /// Windows uses SetWindowRgn, as WPF does).
+    /// ponytail: the in-window stage, cross-window retarget and narration remain in follow-up
+    /// wire-win-tutorial-overlay-b. The parameterless constructor renders a sample and never
+    /// subscribes to the live tour.
     /// </summary>
     public partial class TutorialOverlay : Window
     {
@@ -83,6 +88,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // so consecutive UpdateSpotlight calls can cancel the prior tick (otherwise they pile up
         // and fire stale layouts) and so teardown stops it on close.
         private DispatcherTimer? _spotlightDelayTimer;
+        private Rect? _inputHole;
+        private bool _cardInputOnly;
+        internal PixelRect[]? InputRectangles { get; private set; }
 
         /// <summary>
         /// Render constructor. Sample step data, and NOT connected to the seam: RenderProof needs a
@@ -150,6 +158,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _btnPrevious.Click += (_, _) => PreviousStep();
             _btnNext.Click += (_, _) => NextStep();
 
+            LayoutUpdated += (_, _) => RefreshWindowInputRegion();
             KeyDown += OnKeyDown;
             Focusable = true;
 
@@ -523,16 +532,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Canvas.SetTop(overlay, 0);
             _spotlightCanvas.Children.Add(overlay);
 
-            // ponytail: needs the same rect input region as the spotlight hole (see
-            // ApplyWindowSpotlightRegion). WPF got its pass-through here for free, from alpha-0
-            // pixels on a layered window; X11 does not honour pixel alpha for input, and
-            // X11Overlay.SetClickThrough is whole-window, so handing input away would take the
-            // card's Skip Tutorial / Skip step with it and strand the user with no way out — the
-            // exact failure #443 was about. So the region is cleared in BOTH branches and the
-            // pass-through dim (used while the user works an OS file dialog on top of us) is lost
-            // until X11Overlay gains that entry point. The dim still drops to alpha 0, so the card
-            // alone signals the wait state as it does on Windows.
-            ClearWindowSpotlightRegion();
+            _inputHole = null;
+            _cardInputOnly = !blockClicks;
+            RefreshWindowInputRegion();
         }
 
         private void DrawSpotlightOverlay(Rect highlightBounds, bool clickThroughHole)
@@ -596,37 +598,48 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         // ---- Window-level click-through ---------------------------------------------
 
-        /// <summary>
-        /// WPF punched the spotlight rect out of the window's OS region with
-        /// CreateRectRgn + CombineRgn(RGN_DIFF) + SetWindowRgn, because a layered WPF window
-        /// receives clicks over its whole client area whatever the pixel alpha, so the drawn hole
-        /// alone gave no click-through.
-        ///
-        /// ponytail: needs a rect-region entry point on CCP.Avalonia/Platform/X11Overlay — it
-        /// exposes only SetClickThrough(TopLevel, bool), which is the whole window or nothing, and
-        /// no view layer may edit it. XFixes CAN express this exactly (an input region of
-        /// everything-minus-the-hole; X11Overlay's own doc-comment says a non-empty region would
-        /// be strictly more capable than WS_EX_TRANSPARENT), so this is one small addition to that
-        /// class, not a lost feature. Until it lands: the spotlight hole is VISUAL ONLY — the ring
-        /// and the lit rect draw correctly, but a click inside the hole is eaten by the overlay
-        /// instead of reaching the highlighted control, which strands every auto-advance step that
-        /// waits on the user clicking through. The region is cleared here rather than left
-        /// half-applied so at least the card's own buttons keep working.
-        /// </summary>
         private void ApplyWindowSpotlightRegion(Rect spotlightBoundsDip)
         {
-            _ = spotlightBoundsDip;
-            ClearWindowSpotlightRegion();
+            _cardInputOnly = false;
+            _inputHole = spotlightBoundsDip;
+            RefreshWindowInputRegion();
         }
 
-        /// <summary>The exact analogue of SetWindowRgn(hwnd, IntPtr.Zero, true): give the window
-        /// its whole input area back.</summary>
-        private void ClearWindowSpotlightRegion() => SetWholeWindowClickThrough(false);
+        private void ClearWindowSpotlightRegion()
+        {
+            _cardInputOnly = false;
+            _inputHole = null;
+            RefreshWindowInputRegion();
+        }
 
-        /// <summary>X11Overlay handles X11 and (via Win32Overlay) Windows, and returns false everywhere
-        /// else (native Wayland, the headless render), so it is called unconditionally.</summary>
-        private void SetWholeWindowClickThrough(bool clickThrough)
-            => X11Overlay.SetClickThrough(this, clickThrough);
+        private void RefreshWindowInputRegion()
+        {
+            PixelRect[]? rects = null;
+            double scale = RenderScaling;
+            if (_inputHole is Rect hole)
+            {
+                // An unset Width/Height is NaN, and Math.Max(x, NaN) is NaN: fall back to Bounds.
+                rects = SpotlightInputRegion.Create(Extent(Bounds.Width, Width), Extent(Bounds.Height, Height),
+                    scale, scale, hole.X, hole.Y, hole.Width, hole.Height)
+                    .Select(r => new PixelRect(r.X, r.Y, r.Width, r.Height)).ToArray();
+                // No measurable window yet: keep all input rather than an empty region that would
+                // also swallow the card's Skip buttons.
+                if (rects.Length == 0) rects = null;
+            }
+            else if (_cardInputOnly)
+            {
+                var position = _textPanel.TranslatePoint(default, this);
+                if (position is not Point p || _textPanel.Bounds.Width <= 0 || _textPanel.Bounds.Height <= 0)
+                    return; // Wait for layout; keep the card's exit buttons reachable.
+                rects = new[] { PixelRect.FromRect(new Rect(p, _textPanel.Bounds.Size), scale) };
+            }
+            if (rects is null && InputRectangles is null ||
+                rects is not null && InputRectangles is not null && rects.SequenceEqual(InputRectangles)) return;
+            InputRectangles = rects;
+            X11Overlay.SetWindowInputRegion(this, rects);
+
+            static double Extent(double laidOut, double set) => double.IsNaN(set) ? laidOut : Math.Max(laidOut, set);
+        }
 
         // ---- Card placement ---------------------------------------------------------
 

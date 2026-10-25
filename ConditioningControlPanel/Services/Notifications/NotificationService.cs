@@ -62,8 +62,7 @@ namespace ConditioningControlPanel.Services
         public void ShowSticky(string key, string message, NotificationType type = NotificationType.Info,
             string? actionLabel = null, Action? action = null)
         {
-            if (string.IsNullOrWhiteSpace(key)) return;
-            if (App.Settings?.Current?.DismissedNotificationKeys?.Contains(key) == true) return;
+            if (!NotificationDismissals.CanShow(key, App.Settings?.Current?.DismissedNotificationKeys)) return;
             if (_host == null) { _pending.Add((message, type, null, key, actionLabel, action, null, null)); return; }
             ShowStickyInternal(key, message, type, actionLabel, action);
         }
@@ -228,9 +227,8 @@ namespace ConditioningControlPanel.Services
                 {
                     // Persistent dismissal: remember the key so we don't re-show next session.
                     var s = App.Settings?.Current;
-                    if (s != null && !s.DismissedNotificationKeys.Contains(stickyKey))
+                    if (s != null && NotificationDismissals.Remember(s.DismissedNotificationKeys, stickyKey))
                     {
-                        s.DismissedNotificationKeys.Add(stickyKey);
                         App.Settings?.Save();
                     }
                     _stickyByKey.Remove(stickyKey);

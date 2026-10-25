@@ -97,8 +97,8 @@ public sealed class CompanionRosterSwitchTests
         {
             shell.Show();
             shell.ShowTab("companion");
+            var room = CollapsedRoom.Show(shell);   // v2 collapses the room; the roster lives in its Workshop drawer
             Dispatcher.UIThread.RunJobs();
-            var room = shell.GetVisualDescendants().OfType<CompanionRoomView>().Single();
             var hero = room.GetVisualDescendants().OfType<CompanionHeroCard>().Single();
             var switchButton = hero.GetVisualDescendants().OfType<Button>()
                 .Single(button => ReferenceEquals(button.Command, hero.ViewModel!.SwitchCommand));
