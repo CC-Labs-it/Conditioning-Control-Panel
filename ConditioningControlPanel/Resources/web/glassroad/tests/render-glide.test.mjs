@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
-import { createGlideCap, GLIDE_ASSET } from '../render/glideCap.js';
+import { createGlideCap, GLIDE_ASSET, glideAsset } from '../render/glideCap.js';
 const hooks = registerHooks({ resolve(specifier, context, next) {
   return specifier === 'three/webgpu' ? { url: new URL('../vendor/three/build/three.webgpu.min.js', import.meta.url).href, shortCircuit: true } : next(specifier, context);
 } });
@@ -36,4 +36,15 @@ test('Attachment refuses a mismatched accepted base and missing mount or rotor',
   assert.equal(createGlideCap(art, model()), null);
   assert.equal(createGlideCap({ model: () => source() }, new Group()), null);
   assert.equal(createGlideCap({ model: () => ({ scene: new Group() }) }, model()), null);
+});
+
+test('every course requests its actual preloaded helicopter hat', () => {
+  for (const [theme,id] of Object.entries({threshold:'threshold',keep:'keep',mainframe:'mainframe',boudoir:'boudoir',goonworks:'threshold'})) {
+    const name = `glide-${id}-beanie`, shared = source();
+    assert.equal(glideAsset(theme), name);
+    const cap = createGlideCap({theme,model: key => key === name ? shared : null}, model());
+    assert.ok(cap, theme + ' has a real cap');
+    cap.update(true, .5); assert.ok(cap.cap.visible && cap.spin.scale.x > .95);
+    cap.dispose();
+  }
 });

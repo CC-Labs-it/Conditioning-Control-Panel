@@ -1,7 +1,8 @@
 /* Scripted word flights. Only a locally bound run owns these forgiving aerial crossings. */
 import { S, RESPAWN, setPos, setVel, setQuat } from './state.js';
 import { qlook } from '../core/math.js';
-import { resetGlide } from './glide.js';
+import { resetGlide, setPhraseGlide } from './glide.js';
+import { phraseFlightPoints } from '../core/phraseFlight.js';
 import { cancelDrift } from './drift.js';
 import { boostFloor } from './boost.js';
 const runs = new WeakMap(), held = new WeakMap();
@@ -9,8 +10,8 @@ const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const smooth = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 const frame = () => ({ p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] });
 const dot = (p, row, axis) => p.reduce((v, x, i) => v + (x - row.p[i]) * row[axis][i], 0);
-const FALLBACK = ['FLOAT', 'BREATHE', 'DRIFT', 'RISE'];
-const HOLD_S = .06, APPEAR_S = .42, FADE_S = .5;
+const FALLBACK = ['LET GO', 'DRIFT AWAY', 'BREATHE SLOW', 'FLOAT ON'];
+const HOLD_S = .06, APPEAR_S = .9, FADE_S = .5;
 const LYRIC_WINDOW_S = 1.25;
 export function bindAirWords(st, run) { runs.set(st, run); held.delete(st); }
 export function resetAirWords(value) { const run = runs.get(value) || value; if (run?.reset) run.reset(); held.delete(value); }
@@ -21,17 +22,18 @@ export function stepAirWords(st, action, feel, dt, events) {
 export function createAirWordRun(song, track) {
   let words = [];
   function setSong(nextSong) {
-    words = (nextSong?.words || []).filter(w => typeof w.w === 'string' && w.w.trim() && w.w.length <= 32 && Number.isFinite(w.startS));
+    words = (nextSong?.words || []).filter(w => typeof w.w === 'string' && w.w.trim() && w.w.length <= 64 && Number.isFinite(w.startS))
+      .slice().sort((a, b) => a.startS - b.startS);
   }
   setSong(song);
-  const pool = Array.from({ length: 12 }, (_, i) => ({ id: `air-word-${i}`, text: '', s: 0, ...frame(),
-    widthM: 9, lengthM: 3.2, alpha: 0, solid: false, bornS: Infinity, endS: -1 }));
+  const pool = Array.from({ length: 1 }, (_, i) => ({ id: `air-word-${i}`, text: '', s: 0, ...frame(),
+    widthM: 7, lengthM: 2.6, alpha: 0, solid: false, bornS: Infinity, endS: -1 }));
   const platforms = [], f = frame(), next = frame(), q = [0, 0, 0, 1];
   let clock = 0, songS = 0, rider = null, previous = null, route = null, paused = false, enabled = true;
   const run = { platforms, timeS: 0, activeSection: null, update, reset, step, setSong };
   function reset() {
     platforms.length = 0;
-    if (rider) held.delete(rider);
+    if (rider) { held.delete(rider); setPhraseGlide(rider, false); }
     route = previous = null; run.activeSection = null; clock = run.timeS = 0;
     for (const p of pool) { p.bornS = Infinity; p.endS = -1; p.solid = false; p.alpha = 0; }
   }
@@ -61,29 +63,44 @@ export function createAirWordRun(song, track) {
   }
   function lyric(at, i) {
     if (!words.length) return FALLBACK[i % FALLBACK.length];
-    let best = words[0];
-    for (const w of words) if (Math.abs(w.startS - at) < Math.abs(best.startS - at)) best = w;
-    return Math.abs(best.startS - at) <= LYRIC_WINDOW_S ? best.w.trim() : FALLBACK[i % FALLBACK.length];
+    let best = 0;
+    for (let k = 1; k < words.length; k++) if (Math.abs(words[k].startS - at) < Math.abs(words[best].startS - at)) best = k;
+    const anchor = words[best];
+    if (Math.abs(anchor.startS - at) > LYRIC_WINDOW_S) return FALLBACK[i % FALLBACK.length];
+    const sameLine = w => anchor.line >= 0 ? w.line === anchor.line : !(w.line >= 0);
+    let selected = '', score = Infinity;
+    for (let first = Math.max(0, best - 3); first <= best; first++) {
+      for (let last = best; last < Math.min(words.length, first + 4); last++) {
+        const span = words.slice(first, last + 1);
+        if (!span.every(sameLine) || span.some((w, k) => k > 0 && w.startS - span[k - 1].startS >= .9)) continue;
+        const phrase = span.map(w => w.w.trim()).join(' ').replace(/\s+/g, ' '), count = phrase.split(' ').length;
+        if (count < 2 || count > 4 || phrase.length > 26) continue;
+        const rank = Math.abs(count - 3) + Math.abs((first + last) / 2 - best) * .1;
+        if (rank < score) { selected = phrase; score = rank; }
+      }
+    }
+    return selected || FALLBACK[i % FALLBACK.length];
   }
   function lettering(row, at) {
-    row.text = lyric(at, row.index);
-    row.widthM = Math.min(row.maxWidthM, clamp(row.text.length * 1.12, 4.2, 10));
+    row.text = lyric(at, row.phraseIndex ?? row.index);
+    row.widthM = Math.min(row.maxWidthM, clamp(row.text.length * .8, 3.6, 7));
   }
   function begin(st, zone, events) {
-    const start = track.frameAt(zone.gapS0, frame()), end = track.frameAt(zone.gapS1, frame());
-    const count = Math.min(pool.length, Math.max(2, Math.ceil((zone.gapS1 - zone.gapS0) / 22) - 1));
+    const start = track.frameAt(zone.gapS0, frame());
+    const count = 1, guide = phraseFlightPoints(track, zone);
     const points = [{ s: zone.gapS0, y: start.p[1], row: null }];
     for (let i = 0; i < count; i++) {
-      const u = (i + 1) / (count + 1), s = zone.gapS0 + (zone.gapS1 - zone.gapS0) * u;
+      const s = guide[1].s;
       track.frameAt(s, f);
       const row = pool[i], h = Math.hypot(f.t[0], f.t[2]) || 1;
-      row.s = s; row.p = [f.p[0], start.p[1] + (end.p[1] - start.p[1]) * u - Math.sin(u * Math.PI) * 2, f.p[2]];
+      row.s = s; row.p = [f.p[0], guide[1].y, f.p[2]];
       const yaw = (i % 2 ? 1 : -1) * .085, c = Math.cos(yaw), sn = Math.sin(yaw);
       const tx = f.t[0] / h, tz = f.t[2] / h;
       row.t = [tx * c - tz * sn, 0, tz * c + tx * sn]; row.b = [-row.t[2], 0, row.t[0]]; row.n = [0, 1, 0];
-      row.maxWidthM = Math.min(zone.widthM * .58, 10); row.lengthM = 3.2;
+      row.maxWidthM = Math.min(zone.widthM * .45, 7); row.lengthM = 2.6;
       row.bornS = Infinity; row.endS = Infinity; row.landedS = Infinity; row.catchS = Infinity;
       row.index = i; row.section = zone.id;
+      row.phraseIndex = track.aerials.indexOf(zone) + Math.max(0, st[S.lap] | 0) * 2;
       lettering(row, songS + (s - st[S.s]) / 24);
       points.push({ s, y: row.p[1], row });
     }
@@ -99,7 +116,7 @@ export function createAirWordRun(song, track) {
   function launch(st, events) {
     const r = route, from = r.points[r.leg], to = r.points[r.leg + 1];
     r.stage = 'flight'; r.elapsed = 0;
-    r.duration = clamp((to.s - from.s) / 22, 1.08, 1.3);
+    r.duration = clamp((to.s - from.s) / 23, r.leg === 0 ? 2.2 : 2.8, 7);
     track.frameAt(from.s, f); from.offset ||= f.b.map(v => v * r.lateral);
     track.frameAt(to.s, f); to.defaultOffset = f.b.map(v => v * r.lateral);
     to.offset = [...to.defaultOffset]; to.catchU = null;
@@ -161,7 +178,7 @@ export function createAirWordRun(song, track) {
         (to.offset[i] - to.defaultOffset[i]) * catchBlend + f.b[i] * steering * 1.2 * Math.sin(Math.PI * u));
       r.s = from.s + (to.s - from.s) * u;
       // Zero vertical velocity at either contact avoids the hard down/up reversal.
-      y = from.y + (to.y - from.y) * smooth(u) + (r.leg === 0 ? 5.4 : 3.1) * Math.sin(Math.PI * u) ** 2;
+      y = from.y + (to.y - from.y) * smooth(u) + (r.leg === 0 ? 1.5 : 1.8) * Math.sin(Math.PI * u) ** 2;
       st[S.airTime] += dt;
       if (u >= 1) {
         st[S.airborne] = 0; st[S.grounded] = 1; onGround = true;
@@ -194,6 +211,7 @@ export function createAirWordRun(song, track) {
     boostFloor(st, feel, feel.get('speed.topMps'), dt, events);
     if (onGround) { st[S.grounded] = 1; st[S.airborne] = 0; st[S.latchSeg] = f.seg; }
     else { st[S.grounded] = 0; st[S.airborne] = 1; }
+    setPhraseGlide(st, r.stage === 'flight' && r.leg === 1 && r.elapsed / r.duration >= .2);
     renderRows();
     if (end) { run.activeSection = null; route = null; }
     return true;

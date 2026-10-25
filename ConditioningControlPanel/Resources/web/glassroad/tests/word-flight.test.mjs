@@ -16,7 +16,7 @@ test('an asynchronously loaded or replaced song preserves the active airborne ro
   assert.equal(row.text, original, 'the approaching support keeps its visible lettering');
   for (let i = 0; i < 900 && (st[S.s] < f.zone.gapS1 + 12 || run.activeSection); i++) tick(f);
   assert.ok(st[S.grounded] && st[S.s] >= f.zone.gapS1 + 12);
-  assert.ok(ev.all('air-word-land').some(e => e.payload.text === 'replacement'));
+  assert.deepEqual(ev.all('air-word-land').map(e => e.payload.text), [original], 'the single in-flight phrase is preserved');
   assert.equal(st[S.respawnPhase], RESPAWN.NONE);
 });
 test('late glyph stroke anchors guide the catch smoothly onto real lettering', () => {
@@ -39,7 +39,7 @@ test('late glyph stroke anchors guide the catch smoothly onto real lettering', (
       contacts++;
     }
   }
-  assert.ok(contacts >= 3);
+  assert.equal(contacts, 1);
 });
 test('every landing releases into ordinary driving with retained forward speed', () => {
   for (const tr of tracks) for (const zone of tr.aerials) {
@@ -72,7 +72,7 @@ test('the full approach width enters the automatic route before a narrowing gap'
     f.st.set(place(tr, { s, lateral: side * (tr.frameAt(s).w / 2 - 1), speed: 26 }));
     for (let i = 0; i < 1000 && f.st[S.s] < zone.gapS1 + 12; i++) tick(f, acts({ steer: side, brake: 1 }));
     assert.equal(f.st[S.respawnPhase], RESPAWN.NONE, zone.id);
-    assert.ok(f.st[S.s] >= zone.gapS1 + 12 && f.ev.all('air-word-land').length >= 3, zone.id);
+    assert.ok(f.st[S.s] >= zone.gapS1 + 12 && f.ev.all('air-word-land').length === 1, zone.id);
   }
 });
 
@@ -80,11 +80,11 @@ test('all ten gaps auto-cross with no input, braking and full steering at varied
   for (const tr of tracks) for (const zone of tr.aerials) for (const speed of [0, 14, 26, 44])
     for (const steer of [0, -1, 1]) {
       const f = setup(tr, zone, speed, steer ? song : null), { st, run, ev } = f;
-      let done = false, contacts = 0, previousS = st[S.s], maxSide = 0;
+      let done = false, contacts = 0, previousS = st[S.s], maxSide = 0, rotorTicks = 0;
       for (let i = 0; i < 1000; i++) {
         tick(f, acts({ steer, brake: steer ? 1 : 0 }), steer ? i * DT : NaN);
         assert.equal(st[S.respawnPhase], RESPAWN.NONE);
-        assert.equal(glideActive(st), false);
+        if (glideActive(st)) { assert.equal(contacts, 1, 'rotor only follows the phrase hop'); rotorTicks++; }
         assert.ok(st[S.s] >= previousS - .001, 'script never reverses');
         previousS = st[S.s]; maxSide = Math.max(maxSide, Math.abs(st[S.lateral]));
         const count = ev.all('air-word-land').length;
@@ -96,14 +96,16 @@ test('all ten gaps auto-cross with no input, braking and full steering at varied
         }
         if (st[S.s] > zone.gapS1 + 12 && st[S.grounded]) { done = true; break; }
       }
-      assert.ok(done && contacts >= 3, `${tr.id}/${zone.id} speed${speed} steer${steer} contacts${contacts}`);
+      assert.ok(done && contacts === 1 && rotorTicks > 60, `${tr.id}/${zone.id} speed${speed} steer${steer} contacts${contacts}`);
+      assert.equal(ev.all('airborne').length + ev.all('air-word-hop').length, 2, 'exactly two long airborne legs');
+      assert.equal(glideActive(st), false, 'hat closes after the far-deck catch');
       assert.equal(ev.all('air-word-hop').length, contacts);
       assert.equal(ev.all('hop').length, 0);
       assert.ok(maxSide <= 3.81 && (!steer || maxSide > 1), 'steering works inside the safe corridor');
     }
 });
 
-test('word only assembles during the final descent, and there are enough distinct catches across the gap', () => {
+test('one phrase assembles during descent and sends the kart across the rest of the gap', () => {
   const f = setup(), { run, ev, st } = f;
   let firstSeen = null, firstContact = null, previousHeight = Infinity;
   for (let i = 0; i < 900; i++) {
@@ -116,8 +118,8 @@ test('word only assembles during the final descent, and there are enough distinc
     previousHeight = st[S.posY];
     if (st[S.s] > f.zone.gapS1 + 12) break;
   }
-  assert.ok(firstContact - firstSeen >= .3 && firstContact - firstSeen <= .45);
-  assert.ok(new Set(ev.all('air-word-hop').map(e => e.payload.id)).size >= 3);
+  assert.ok(firstContact - firstSeen >= .8 && firstContact - firstSeen <= .95);
+  assert.equal(ev.all('air-word-hop').length, 1);
 });
 
 test('pause freezes flight and particles, while song seeks or silence cannot remove the catch', () => {
@@ -129,7 +131,7 @@ test('pause freezes flight and particles, while song seeks or silence cannot rem
   assert.deepEqual([...st], state); assert.equal(JSON.stringify(run.platforms), rows); assert.equal(run.timeS, clock);
   for (let i = 0; i < 800 && st[S.s] < f.zone.gapS1 + 12; i++) tick(f, acts(), i < 100 ? 90 : NaN);
   assert.ok(st[S.grounded] && st[S.s] >= f.zone.gapS1 + 12);
-  assert.ok(ev.all('air-word-land').length >= 3);
+  assert.equal(ev.all('air-word-land').length, 1);
 });
 
 test('reset, rescue, inactive race and teleports clear rows and release ownership', () => {
@@ -168,12 +170,12 @@ test('quiet song sections get compact trigger words, with only two supports visi
       tick(f);
       assert.ok(f.run.platforms.length <= 2);
       for (const row of f.run.platforms) {
-        assert.ok(row.widthM <= 10 && row.lengthM <= 3.2, 'letters leave the chase view open');
-        assert.ok(['FLOAT', 'BREATHE', 'DRIFT', 'RISE'].includes(row.text));
+        assert.ok(row.widthM <= 7 && row.lengthM <= 2.6, 'letters leave the chase view open');
+        assert.ok(['LET GO', 'DRIFT AWAY', 'BREATHE SLOW', 'FLOAT ON'].includes(row.text));
         seen.add(row.text);
       }
     }
-    assert.ok(seen.size >= 3);
+    assert.equal(seen.size, 1);
     assert.ok(f.st[S.grounded] && f.st[S.s] >= f.zone.gapS1 + 12);
   }
 });
@@ -188,5 +190,39 @@ test('word catches ease vertical speed instead of reversing a hard fall', () => 
       contacts = count;
     }
   }
-  assert.ok(contacts >= 3);
+  assert.equal(contacts, 1);
+});
+
+test('phrases join nearby words from one lyric line and never borrow an isolated word', () => {
+  const groups = { words: [
+    {w:'follow',startS:1.8,line:2}, {w:'the',startS:2.1,line:2}, {w:'light',startS:2.4,line:2},
+    {w:'another',startS:2.5,line:3}, {w:'line',startS:2.7,line:3},
+  ] };
+  const f = setup(tracks[0], tracks[0].aerials[0], 26, groups);
+  while (!f.run.platforms.length) tick(f, acts(), .3);
+  assert.ok(['follow the light', 'another line'].includes(f.run.platforms[0].text));
+  const isolated = setup(tracks[0], tracks[0].aerials[0], 26, { words: [{w:'alone',startS:2.4,line:1}] });
+  while (!isolated.run.platforms.length) tick(isolated, acts(), .3);
+  assert.equal(isolated.run.platforms[0].text, 'LET GO');
+});
+
+test('automatic rotor survives held brake, freezes on pause and closes on reset', () => {
+  const f = setup();
+  for (let i = 0; i < 1000 && !glideActive(f.st); i++) tick(f, acts({brake:1,steer:1,hop:false}));
+  assert.equal(glideActive(f.st), true);
+  f.run.update(3, f.st, {paused:true});
+  const pose = [...f.st];
+  for (let i = 0; i < 60; i++) step(f.st, acts(), f.tr, f.feel, DT, f.ev);
+  assert.deepEqual([...f.st], pose); assert.equal(glideActive(f.st), true);
+  f.run.reset(); assert.equal(glideActive(f.st), false);
+});
+
+test('long lyric lines choose complete short phrase windows instead of squeezing the whole line', () => {
+  const f = setup(tracks[0], tracks[0].aerials[0], 26, {words:
+    ['follow','the','gentle','light','across','the','water'].map((w,i)=>({w,startS:1.4+i*.25,line:1}))});
+  while (!f.run.platforms.length) tick(f, acts(), .3);
+  const text = f.run.platforms[0].text;
+  assert.ok(text.length <= 26);
+  assert.ok(text.split(' ').length >= 2 && text.split(' ').length <= 4);
+  assert.ok('follow the gentle light across the water'.includes(text));
 });

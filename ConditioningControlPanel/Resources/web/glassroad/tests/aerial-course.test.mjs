@@ -16,7 +16,7 @@ for (const id of ids) {
   const json = JSON.parse(readFileSync(new URL('../tracks/' + id + '.json', import.meta.url), 'utf8'));
   const track = loadTrack(json);
   test(id + ': two long dry aerial corridors have wide supported approaches and exits', () => {
-    assert.equal(AERIAL_REVISION, 2);
+    assert.equal(AERIAL_REVISION, 3);
     assert.equal(track.aerials.length, 2);
     for (const a of track.aerials) {
       assert.ok(a.gapS1 - a.gapS0 >= 89.9 && a.gapS1 - a.gapS0 <= 130);

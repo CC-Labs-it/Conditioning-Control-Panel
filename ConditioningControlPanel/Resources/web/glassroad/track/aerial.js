@@ -1,7 +1,7 @@
 /* Authored long flights. The existing spline remains the physical flight corridor. */
 import { wrap } from '../core/math.js';
 
-export const AERIAL_REVISION = 2;
+export const AERIAL_REVISION = 3;
 // Stable node anchors deliberately avoid each course's existing toys, forks and stepping fields.
 const ANCHORS = Object.freeze({
   threshold: [[140, 150, 'prism-rise'], [232, 242, 'prism-skywalk']],

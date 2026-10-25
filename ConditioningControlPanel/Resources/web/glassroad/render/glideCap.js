@@ -1,7 +1,9 @@
 /* Accepted W4 attachment: the cap stays mounted while only its existing spin child opens and turns. */
 export const GLIDE_ASSET = 'glide-keep-beanie';
+export const glideAsset = theme => 'glide-' + ({threshold:'threshold', mainframe:'mainframe', boudoir:'boudoir',
+  goonworks:'threshold'}[theme] || 'keep') + '-beanie';
 export function createGlideCap(art, model) {
-  const asset = art?.theme === 'boudoir' ? 'glide-boudoir-beanie' : GLIDE_ASSET;
+  const asset = glideAsset(art?.theme);
   const source = art?.model?.(asset), mount = model.getObjectByName('head_attach');
   const row = art?.row?.(asset), base = art?.row?.('emi-teacup-kart');
   if (!source || !mount || (row?.baseSha256 && base?.sha256 && row.baseSha256 !== base.sha256)) return null;

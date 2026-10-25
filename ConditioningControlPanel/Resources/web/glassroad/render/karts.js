@@ -40,7 +40,7 @@ import { LOOK } from './look.js';
 import { KART_VIEW } from './viewMath.js';
 import { Q } from './quality.js';
 import { buildKart } from './dressing.js';
-import { createGlideCap } from './glideCap.js';
+import { createGlideCap, glideAsset } from './glideCap.js';
 import { createSwimPropeller } from './swimPropeller.js';
 import { coolantCaustics } from './mainframeMaterials.js';
 import { createKartMaterial, createKartSurface } from './materials/kart.js';
@@ -310,7 +310,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
   let particles = null;
   const offs = [];
   let binding = 0, disposed = false;
-  const capSource = a => a?.model?.(a?.theme === 'boudoir' ? 'glide-boudoir-beanie' : 'glide-keep-beanie');
+  const capSource = a => a?.model?.(glideAsset(a?.theme));
   let glideSource = capSource(art);
   const queue = (i, kind, a) => {
     if (i === -1) for (const k of list) k.pend.push([kind, { ...a }]);

@@ -49,7 +49,7 @@ for (const id of ['threshold', 'keep', 'boudoir', 'mainframe', 'goonworks']) tes
         assert.ok(ray.intersectObject(letters).length > 0, zone.id + ' caught the actual O stroke');
         contacts++;
       }
-      assert.ok(contacts >= 3); assert.equal(st[S.respawnPhase], 0);
+      assert.equal(contacts, 1); assert.equal(st[S.respawnPhase], 0);
       run.reset(); view.clear();
     }
   } finally { view.dispose(); }

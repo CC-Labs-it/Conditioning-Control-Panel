@@ -71,3 +71,15 @@ test('optional shading downloads during the GLB request and malformed or failed 
     art.dispose();
   }
 });
+
+test('all five course leases preload the same helicopter hat their renderer selects', async t => {
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const ids = ['threshold','keep','mainframe','boudoir'].map(id => `glide-${id}-beanie`);
+  globalThis.fetch = async () => manifest(ids.map(id => ({ id, kind: 'model', file: id + '.glb' })));
+  for (const trackId of ['threshold','keep','mainframe','boudoir','goonworks']) {
+    const art = await loadArt({}, {trackId, want: []});
+    const expected = `glide-${trackId === 'goonworks' ? 'threshold' : trackId}-beanie`;
+    assert.ok(art.model(expected), trackId + ' preloads ' + expected);
+    art.dispose();
+  }
+});

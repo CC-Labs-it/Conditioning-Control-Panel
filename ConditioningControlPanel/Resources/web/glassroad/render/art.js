@@ -60,9 +60,10 @@ export async function loadArt(renderer, options = {}) {
 
 function artPlan(want, trackId, materialTier) {
   // The terrace is built once with the starting tier, so its other LOD is never drawn.
-  if (trackId === 'threshold') want = want.filter(id => id !== (materialTier === 'phone' ? 'threshold-slot-row-lod0' : 'threshold-slot-row-lod1'));
+  if (trackId === 'threshold') want = want.filter(id => id !== (materialTier === 'phone' ? 'threshold-slot-row-lod0' : 'threshold-slot-row-lod1'))
+    .concat('glide-threshold-beanie');
   if (trackId === 'mainframe') want = want.filter((id) => !/^(chess-|threshold-|card-(drop|lens|orbit|petal)|slot-cabinet|pocket-watch|stone-threshold)/.test(id))
-    .concat('spout-mainframe', 'stone-mainframe');
+    .concat('spout-mainframe', 'stone-mainframe', 'glide-mainframe-beanie');
   if (trackId === 'boudoir') want = want.filter((id) => !/^(chess-|threshold-|card-(drop|lens|orbit|petal)|slot-cabinet|pocket-watch|stone-threshold)/.test(id))
     .concat('spout-boudoir', 'stone-boudoir', 'glide-boudoir-beanie');
   if (trackId === 'goonworks') want = want.filter((id) => !/^(chess-|threshold-|card-(drop|lens|orbit|petal)|slot-cabinet|pocket-watch|spiral-disc|stone-threshold|sky-)/.test(id))

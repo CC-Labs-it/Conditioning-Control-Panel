@@ -8,6 +8,12 @@ const flights = new WeakMap(), bridges = new WeakMap();
 export const glideActive = (st) => !!flights.get(st)?.active && st[S.airborne] > 0 &&
   (st[S.respawnPhase] === RESPAWN.NONE || flights.get(st)?.aerial && st[S.respawnPhase] === RESPAWN.GRACE);
 export function resetGlide(st) { flights.delete(st); }
+/** The forgiving phrase ride owns its rotor after the phrase hop, independent of held inputs. */
+export function setPhraseGlide(st, active) {
+  if (active) {
+    if (!flights.get(st)?.scripted) flights.set(st, { active: true, aerial: true, scripted: true });
+  } else if (flights.get(st)?.scripted) flights.delete(st);
+}
 function bridgeFor(track) {
   if (!['keep', 'boudoir', 'goonworks'].includes(track.id)) return null;
   if (!bridges.has(track)) bridges.set(track, track.id === 'goonworks' ? getGoonworksLayout(track).launch

@@ -22,6 +22,7 @@ import { clamp, damp, angleDiff, qrotate, rad, smoothstep } from '../core/math.j
 import { LOOK } from './look.js';
 import { RACER_FRAMING } from './framing.js';
 import { createLookAround } from './lookAround.js';
+import { phraseCameraGuide } from '../core/phraseFlight.js';
 
 // ---- the kick layer (polish 3) ----
 
@@ -198,6 +199,7 @@ export function createCamRig(feel) {
   /** A bus kick (camera.js): kind 'bump' | 'wall', mag = closing m/s, side +1 = the hit came from the right. */
   function hit(kind, mag, side) { return rig.kick.hit(kind, mag, side, !!feel.get('gentle.on')); }
   const q = [0, 0, 0, 1], f = [0, 0, 0], u = [0, 1, 0], d = [0, 0, -1], lastPosition = [0, 0, 0];
+  const guidePoint = {}; let flightGuide = null;
 
   function heading(kart) {
     q[0] = kart[S.quatX]; q[1] = kart[S.quatY]; q[2] = kart[S.quatZ]; q[3] = kart[S.quatW];
@@ -265,9 +267,11 @@ export function createCamRig(feel) {
     // slopes and loops, while rig.up retains the existing smooth horizon. FOV/push are settled first.
     const centre = RACER_FRAMING.centerUpM * RACER_FRAMING.scale, A = rig.anchor;
     A[0] = kart[S.posX] + u[0] * centre; A[1] = kart[S.posY] + u[1] * centre; A[2] = kart[S.posZ] + u[2] * centre;
+    // Keep the horizon on the route's grade. The kart is free to rise above that quiet aim.
+    if (flightGuide) A[1] += (flightGuide.y - kart[S.posY]) * flightGuide.weight * .85;
     const lagUp = (kart[S.posX] - F[0]) * up[0] + (kart[S.posY] - F[1]) * up[1] + (kart[S.posZ] - F[2]) * up[2];
     const anchorDistance = Math.max(0.5, Math.hypot(A[0] - rig.eye[0], A[1] - rig.eye[1], A[2] - rig.eye[2]));
-    const airTo = kart[S.airborne] > 0.5
+    const airTo = kart[S.airborne] > 0.5 && !flightGuide
       ? clamp(-lagUp * 0.65 / (2 * anchorDistance * Math.tan(rig.vFov * DEG / 2)), -RACER_FRAMING.airScreenMax, RACER_FRAMING.airScreenMax) : 0;
     rig.airScreen = damp(rig.airScreen, airTo, kart[S.airborne] > 0.5 ? 0.08 : 0.14, dt);
     aimAtAnchor(rig.look, rig.eye, up, A, rig.vFov, RACER_FRAMING.screenY + rig.airScreen);
@@ -297,6 +301,7 @@ export function createCamRig(feel) {
     const c = (k) => feel.get('camera.' + k);
     const px = kart[S.posX], py = kart[S.posY], pz = kart[S.posZ];
     const F = rig.focus;
+    flightGuide = phraseCameraGuide(track, kart[S.s], guidePoint);
     if (Math.hypot(px - F[0], py - F[1], pz - F[2]) > LOOK.snapM) return snap(kart, aspect, fx, track);
     const speed = Math.abs(kart[S.speedPct]) * feel.get('speed.topMps');
     const lowHop = kart[S.airborne] > 0 && speed < c('lowHopMps');
@@ -317,7 +322,7 @@ export function createCamRig(feel) {
       const tcY = lowHop ? tcH : c('yawFollowTcS');
       rig.yaw += clamp(gap * (1 - Math.exp(-dt / Math.max(1e-4, tcY))), -cap, cap);
     }
-    rig.pitch = damp(rig.pitch, pitchTo(), tcV, dt);
+    rig.pitch = damp(rig.pitch, pitchTo() * (1 - (flightGuide?.weight || 0)), flightGuide ? .55 : tcV, dt);
     // the loop blend and the smoothed kart frame (heading() just read f and u)
     const lt = loopTarget(u[1], magnetAt(kart, track));
     rig.loop = damp(rig.loop, lt, lt > rig.loop ? LOOP_CAM.inTcS : LOOP_CAM.outTcS, dt);
@@ -331,10 +336,14 @@ export function createCamRig(feel) {
     F[2] = damp(F[2] + (rescue ? pz - lastPosition[2] : kart[S.velZ] * dt), pz, tcH, dt);
     // Grounded climbs need the same prediction as X/Z, or the vertical ease sinks the eye into the road.
     const predictY = kart[S.grounded] > 0.5 && kart[S.airborne] < 0.5 ? 1 : rig.loop;
-    F[1] = damp(F[1] + (rescue ? py - lastPosition[1] : kart[S.velY] * dt * predictY), py, tcV, dt);
+    const cameraY = flightGuide ? py + (flightGuide.y - py) * flightGuide.weight * .88 : py;
+    F[1] = damp(F[1] + (rescue ? py - lastPosition[1] : kart[S.velY] * dt * predictY * (1 - (flightGuide?.weight || 0))),
+      cameraY, flightGuide ? .55 : tcV, dt);
     lastPosition[0] = px; lastPosition[1] = py; lastPosition[2] = pz;
     const gentle = !!feel.get('gentle.on');
-    for (const [kind, mag, side] of kickEdges(rig.watch, kart, dt, KL, rig.useVel)) rig.kick.hit(kind, mag, side, gentle);
+    for (const [kind, mag, side] of kickEdges(rig.watch, kart, dt, KL, rig.useVel)) {
+      if (!flightGuide || kind !== 'land') rig.kick.hit(kind, mag, side, gentle);
+    }
     rig.kick.update(dt, gentle);
     glance.update(lookInput, dt, gentle);
     compose(kart, fx, aspect, dt);
@@ -342,6 +351,7 @@ export function createCamRig(feel) {
   }
 
   function snap(kart, aspect = REF_ASPECT, fx = null, track = null) {
+    flightGuide = phraseCameraGuide(track, kart[S.s], guidePoint);
     rig.yaw = heading(kart);
     rig.pitch = pitchTo();
     rig.loop = loopTarget(u[1], magnetAt(kart, track));
@@ -351,6 +361,7 @@ export function createCamRig(feel) {
     glance.reset();
     rig.kick.reset(); rig.watch = {};
     rig.focus[0] = kart[S.posX]; rig.focus[1] = kart[S.posY]; rig.focus[2] = kart[S.posZ];
+    if (flightGuide) rig.focus[1] += (flightGuide.y - kart[S.posY]) * flightGuide.weight * .88;
     lastPosition[0] = kart[S.posX]; lastPosition[1] = kart[S.posY]; lastPosition[2] = kart[S.posZ];
     compose(kart, fx, aspect);
     return rig;
