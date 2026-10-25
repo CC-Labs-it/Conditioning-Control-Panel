@@ -63,12 +63,72 @@ public sealed class EnhancementsPurchaseTests
             var answer = tab.AskPurchase(owner, "Purchase", "Confirm purchase");
             Dispatcher.UIThread.RunJobs();
             Assert.False(answer.IsCompleted);
+            // WPF MessageBoxButton.YesNo: both buttons carry real words, never a raw key.
+            var texts = Assert.Single(EnhancementsTabView.PurchaseDialogs).GetLogicalDescendants()
+                .OfType<TextBlock>().Select(t => t.Text).ToArray();
+            Assert.Contains(Loc.Get("label_yes"), texts);
+            Assert.Contains(Loc.Get("label_no"), texts);
+            Assert.DoesNotContain(texts, t => t is "label_no" or "label_yes");
             var surface = Assert.Single(ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All,
                 x => x.Id == "enhancement-purchase");
             surface.Stop(null);
             Assert.False(await answer);
         }
         finally { owner.Close(); }
+    });
+
+    /// <summary>WPF SkillCard_Click + EventFx.cs:428: a bought node bursts; a spend that crosses a hundred lifetime
+    /// points (prestige rank = 1 + spent / 100) bursts the prestige row too.</summary>
+    [Fact]
+    public Task APurchaseBurstsTheNodeAndARankUpBurstsThePrestigeRow() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var (oldSettings, service) = (CoreSettings.ServiceProvider, new SettingsService());
+        CoreSettings.ServiceProvider = () => service;
+        var property = typeof(global::ConditioningControlPanel.Avalonia.App).GetProperty("Achievements",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var oldEngine = property.GetValue(null);
+        var dir = System.IO.Directory.CreateTempSubdirectory("ccp-burst-").FullName;
+        Window? w = null;
+        try
+        {
+            var engine = new AchievementEngine(new AchievementStore(System.IO.Path.Combine(dir, "achievements.json")));
+            property.SetValue(null, engine);
+            var s = CoreSettings.Current;
+            (s.MotionLevel, s.PerformanceMode, s.SkillPoints, s.UnifiedId) = (MotionLevel.Full, false, 1000, "u_burst");
+            var (http, failures) = (new Fake(), new List<string>());
+            var tab = new EnhancementsTabView
+            {
+                PurchaseService = new SkillPurchase(() => CoreSettings.Current, http) { Save = () => { }, PointsSpent = engine.TrackSkillPointsSpent },
+                AskPurchase = (_, _, _) => Task.FromResult(true),
+                TellFailure = (_, _, m) => { failures.Add(m); return Task.CompletedTask; },
+            };
+            w = new Window { Width = 1400, Height = 700, Content = tab };
+            w.Show();
+            async Task Buy()
+            {
+                s.UnlockedSkills = new List<string> { "sparkle_boost_1" };
+                Dispatcher.UIThread.RunJobs();
+                http.Answer = "{'success':true,'skill_points':985,'unlocked_skills':['sparkle_boost_1','sparkle_boost_2']}";
+                await tab.PurchaseAsync(Nodes(tab)["sparkle_boost_2"], "sparkle_boost_2");
+                Dispatcher.UIThread.RunJobs();
+            }
+            engine.Progress.LifetimeSkillPointsSpent = 0;     // 0 -> 15: same rank, node burst only
+            await Buy();
+            Assert.Equal(1, tab.PurchaseBursts);
+            engine.Progress.LifetimeSkillPointsSpent = 90;    // 90 -> 105: rank 1 -> 2, node + prestige
+            await Buy();
+            Assert.Empty(failures);
+            Assert.Equal(105, engine.Progress.LifetimeSkillPointsSpent);
+            Assert.Equal(3, tab.PurchaseBursts);
+        }
+        finally
+        {
+            w?.Close();
+            property.SetValue(null, oldEngine);
+            service.SaveImmediate();
+            CoreSettings.ServiceProvider = oldSettings;
+        }
     });
 
     [Fact]
@@ -111,7 +171,7 @@ public sealed class EnhancementsPurchaseTests
             Dispatcher.UIThread.RunJobs();
             var asked = Assert.Single(questions);
             Assert.StartsWith(Loc.Get("dialog_purchase_enhancement") + "|", asked);
-            Assert.Contains(Loc.Get("msg_skill_permanent_note"), asked);
+            Assert.Contains(ConditioningControlPanel.Avalonia.Controls.IconText.BareLoc("msg_skill_permanent_note"), asked);
             Assert.Equal(0, http.Calls);
             Assert.Equal(1000, s.SkillPoints);
 

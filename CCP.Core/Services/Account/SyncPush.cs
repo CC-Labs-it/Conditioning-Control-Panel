@@ -105,6 +105,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
         public Descent.DescentCountdownService? Countdown { get; set; }
         public DateTime? LastSyncTime { get; private set; }
+        private int _syncSuccesses;   // syncs that reached the server (WPF ProfileSyncService._syncSuccesses)
+        internal Func<TimeSpan, Task> Delay = t => Task.Delay(t);   // test seam: SyncBeforeRetryAsync's cooldown wait
 
         /// <param name="localAchievements">This install's unlocked achievement ids.</param>
         /// <param name="inSession">The heartbeat's in_session.</param>
@@ -257,6 +259,7 @@ namespace ConditioningControlPanel.Services
                     return false;
                 }
                 LastSyncTime = UtcNow();
+                Interlocked.Increment(ref _syncSuccesses);
                 (_backoffFailures, _blockedUntilUtc) = (0, null);
                 // The clear has reached the server; an empty loadout goes back to meaning "no change" (WPF).
                 if (clearing && cosmetics?.IsEmpty == true) _pendingCosmeticsClear = false;
@@ -291,12 +294,13 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF SyncBeforeRetryAsync: wait for one real push before retrying a balance refusal.</summary>
         public async Task<bool> SyncBeforeRetryAsync()
         {
-            var before = LastSyncTime;
+            // Only syncs that reached the server count: a 429/409 also stamps LastSyncTime (#1300).
+            var landed = Volatile.Read(ref _syncSuccesses);
             if (await PushAsync("purchase-retry", waitForGate: true)) return true;
-            if (LastSyncTime != before) return true;
+            if (Volatile.Read(ref _syncSuccesses) != landed) return true;
             var left = LastSyncTime is { } last ? Cooldown - (UtcNow() - last) : TimeSpan.Zero;
             if (left <= TimeSpan.Zero || left > Cooldown) return false;
-            await Task.Delay(left + TimeSpan.FromMilliseconds(250));
+            await Delay(left + TimeSpan.FromMilliseconds(250));
             return await PushAsync("purchase-retry", waitForGate: true);
         }
 

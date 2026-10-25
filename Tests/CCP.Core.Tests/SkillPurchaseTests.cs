@@ -67,6 +67,7 @@ public class SkillPurchaseTests : IDisposable
     public async Task ADebitedAnswerLowersTheWalletAndUnlocksTheSkill()
     {
         var s = Settings(Skill.Cost + 5);
+        (s.CurrentSeason, s.SeasonStatsSeason) = ("2026-10", null);
         var (service, http, saves) = Make(s);
         int spent = 0; long reconciled = 0; string? unlocked = null;
         service.PointsSpent = c => spent += c;
@@ -82,6 +83,8 @@ public class SkillPurchaseTests : IDisposable
         Assert.Equal(5, s.SkillPoints);
         Assert.Contains(Skill.Id, s.UnlockedSkills);
         Assert.Equal(Skill.Cost, spent);
+        Assert.Equal(Skill.Cost, s.SeasonPointsSpent);
+        Assert.Equal("2026-10", s.SeasonStatsSeason);   // WPF EnsureBucket on the first spend
         Assert.Equal(321, reconciled);
         Assert.Equal(Skill.Id, unlocked);
         Assert.NotEmpty(saves);

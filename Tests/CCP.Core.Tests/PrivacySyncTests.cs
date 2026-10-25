@@ -133,8 +133,49 @@ public sealed class PrivacySyncTests
         }
     }
 
+    /// <summary>WPF SyncBeforeRetryAsync (ProfileSyncService.cs:3964): a 429/409 is not a sync that reached the server (#1300).</summary>
+    [Theory]
+    [InlineData(HttpStatusCode.OK, true)]
+    [InlineData((HttpStatusCode)429, false)]
+    [InlineData(HttpStatusCode.Conflict, false)]
+    public async Task PurchaseRetryCountsOnlyAnInFlightSyncThatReachedTheServer(HttpStatusCode status, bool expected)
+    {
+        var (oldSettings, oldLogin, settings) = (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, new SettingsService());
+        CoreSettings.ServiceProvider = () => settings;
+        CoreAccount.IsLoggedInProvider = () => true;
+        var handler = new FakeSync { Status = status, Hold = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously) };
+        var sync = new SyncPush(() => Array.Empty<string>(), () => false, handler);
+        var waits = 0;
+        sync.Delay = _ => { waits++; return Task.CompletedTask; };
+        try
+        {
+            var s = settings.Current;
+            (s.UnifiedId, s.AuthToken, s.LastConfirmedServerXp, s.OfflineMode) = ("retry-test", "fake", 0, false);
+            var now = DateTime.UtcNow;
+            sync.UtcNow = () => now;
+            sync.MarkLoaded(null);
+            var inFlight = sync.PushAsync("level-up");
+            await handler.Received.Task;
+            var retry = sync.SyncBeforeRetryAsync();
+            handler.Hold!.SetResult(true);
+            Assert.Equal(status == HttpStatusCode.OK, await inFlight);
+            Assert.Equal(expected, await retry);
+            Assert.Single(handler.Bodies);                  // the cooldown stopped every later push
+            Assert.Equal(expected ? 0 : 1, waits);          // a refusal waits out the cooldown once
+        }
+        finally
+        {
+            handler.Hold?.TrySetResult(true);
+            sync.Reset();
+            settings.SaveImmediate();   // flush the push's debounced save now, not into the next test's reload (P54)
+            CoreSettings.ServiceProvider = oldSettings;
+            CoreAccount.IsLoggedInProvider = oldLogin;
+        }
+    }
+
     private sealed class FakeSync : HttpMessageHandler
     {
+        internal HttpStatusCode Status = HttpStatusCode.OK;
         internal readonly List<JObject> Bodies = new();
         internal TaskCompletionSource<bool>? Hold;
         internal readonly TaskCompletionSource<bool> Received = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -145,7 +186,7 @@ public sealed class PrivacySyncTests
             Bodies.Add(JObject.Parse(await request.Content!.ReadAsStringAsync(ct)));
             Received.TrySetResult(true);
             if (Hold != null) await Hold.Task;
-            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
+            return new HttpResponseMessage(Status) { Content = new StringContent("{}") };
         }
     }
 }

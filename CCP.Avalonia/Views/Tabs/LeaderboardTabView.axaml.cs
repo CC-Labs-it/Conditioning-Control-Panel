@@ -298,6 +298,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _sortKey = "rank";
                 RebuildLeaderboardView();
                 status.Text = Loc.GetF("lb_online_and_total", page.OnlineUsers, page.TotalUsers);
+                // WPF Leaderboard.cs:1014 UpdateTrophyCaseColumns on every board load.
+                ShowTrophyStats = Models.SkillTreeRules.HasSkill(CoreSettings.Current, "trophy_case");
             }
             catch (Exception ex)
             {

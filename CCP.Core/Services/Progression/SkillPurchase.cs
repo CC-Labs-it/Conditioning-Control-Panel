@@ -230,6 +230,9 @@ namespace ConditioningControlPanel.Services
                 if (bought != null)
                 {
                     PointsSpent?.Invoke(bought.Cost);
+                    // WPF SeasonRecapService.TrackPointsSpent: EnsureBucket keys the season on the first spend.
+                    if (bought.Cost > 0 && string.IsNullOrEmpty(settings.SeasonStatsSeason))
+                        settings.SeasonStatsSeason = EnhancementAnalytics.CurrentSeasonKey(settings, DateTime.UtcNow);
                     settings.SeasonPointsSpent += bought.Cost;
                 }
                 if (result.LifetimePointsSpent.HasValue) LifetimeSpentReconciled?.Invoke(result.LifetimePointsSpent.Value);

@@ -35,7 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ShowPurchaseDialogAsync(owner, title, message, confirm: false);
         internal SkillPurchase? PurchaseService;
 
-        private static readonly HashSet<Window> PurchaseDialogs = new();
+        internal static readonly HashSet<Window> PurchaseDialogs = new();   // open boxes (panic closes them; test hook)
         private static async Task<bool> ShowPurchaseDialogAsync(Window? owner, string title, string message, bool confirm)
         {
             if (owner == null) return false;
@@ -82,7 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var pointsLabel = (CoreMods.Service?.GetPointsLabel() ?? Loc.Get("label_sparkle_points")).ToLower();
                 var message = Loc.GetF("msg_purchase_skill", SkillText(skill.Name, skill.LocalizedName), skill.Cost, pointsLabel,
                                   SkillText(skill.FlavorText, skill.LocalizedFlavorText), SkillText(skill.Description, skill.LocalizedDescription))
-                              + "\n\n" + Loc.Get("msg_skill_permanent_note");
+                              + "\n\n" + IconText.BareLoc("msg_skill_permanent_note");   // WPF prefixes a star glyph; no emoji icons on this head (IconGuard)
                 if (!await AskPurchase(owner, Loc.Get("dialog_purchase_enhancement"), message)) return;
 
                 card.IsEnabled = false;
