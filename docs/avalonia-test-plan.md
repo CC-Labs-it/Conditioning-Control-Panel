@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Spiral room server feed (fin5)
+
+1. Sign in to an account carrying a server descent block, open Spiral, and allow a successful XP sync. The room opens the map with server values; subsequent blocks update the same embed. WPF `Views/Tabs/SpiralTabView.xaml.cs:308`, `Services/Descent/DescentService.cs:135`. Rows: `shell-spiral-room`.
+2. Fail a profile read: the last map remains. Withdraw the block, or sign out: the map is disposed and the waiting room appears. A reply from the signed-out account must not re-open it. WPF `Services/Descent/DescentService.cs:183`, `Views/Tabs/SpiralTabView.xaml.cs:432`. Rows: `shell-spiral-room`.
+3. Enter waiting/fog, then enter a populated Spiral room twice: the first-open companion line is eligible only in the spiral state, and its existing lifetime rule prevents replay. Hide/detach the tab and deliver another block: no hidden embed is created; returning re-reads current state. WPF `Views/Tabs/SpiralTabView.xaml.cs:341`, `Views/Tabs/SpiralTabView.xaml.cs:361`. Rows: `shell-spiral-room`.

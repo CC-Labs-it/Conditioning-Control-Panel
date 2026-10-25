@@ -95,6 +95,7 @@ public sealed class PanicSurfacesTests
         "ai-followups",
         "blink-trainer",
         "gaze-minigame",
+        "spiral-room",
         "mantra",
         "chaos",
         "chaos-flash",

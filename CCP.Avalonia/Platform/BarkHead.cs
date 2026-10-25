@@ -96,6 +96,13 @@ internal static class BarkHead
             phraseAudioPath: s.AudioPath, barkVoice: s.AudioPath != null, mood: s.Mood);
     }
 
+    // WPF DescentBarkWatcher.NotifySpiralOpened / BarkService.NotifyDescentFirstSpiralOpen.
+    // The rule owns the once-ever persisted lifetime latch; no second local latch.
+    internal static void NotifySpiralOpened(ConditioningControlPanel.Services.Descent.DescentBlock? block) =>
+        Engine?.Raise("DescentFirstSpiralOpen", c => c
+            .Set("stage", (double)(block?.Stage?.N ?? 0))
+            .Set("banked_days", (double)(block?.Stage?.BankedDays ?? block?.DevotionDays ?? 0)));
+
     private static readonly Dictionary<string, PropertyInfo?> SettingProps = new(StringComparer.Ordinal);
 
     /// <summary>WPF NotifySettingChanged (:357) + TryGetSettingNumber (:596).</summary>

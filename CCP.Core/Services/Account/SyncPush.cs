@@ -104,6 +104,7 @@ namespace ConditioningControlPanel.Services
         public bool Loaded { get; private set; }
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
         public Descent.DescentCountdownService? Countdown { get; set; }
+        public Descent.DescentService? DescentReader { get; set; }
         public DateTime? LastSyncTime { get; private set; }
 
         /// <param name="localAchievements">This install's unlocked achievement ids.</param>
@@ -127,6 +128,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>Logout: nothing is pushed until the next load.</summary>
         public void Reset()
         {
+            DescentReader?.Reset();
             StopHeartbeat();
             Loaded = false;
             _serverAchievements = null;
@@ -274,6 +276,7 @@ namespace ConditioningControlPanel.Services
                 if (Countdown != null && Descent.DescentCountdownService.TryReadCeremonyAt(json, out var ceremonyAt))
                     Countdown.ApplyCeremonyAt(ceremonyAt);
                 CoreSettings.Save();
+                if (DescentReader?.HasSeenBlock == true) DescentReader.RequestRefresh("profile synced");
                 return true;
             }
             catch (Exception ex)
@@ -304,6 +307,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF StartHeartbeat: one now, then every 120 s.</summary>
         public void StartHeartbeat()
         {
+            DescentReader?.OnSignedIn();
             if (_heartbeat != null) return;
             _heartbeat = new Timer(_ => _ = HeartbeatAsync(), null, TimeSpan.Zero, HeartbeatInterval);
             Log.Information("Heartbeat started (every {Seconds}s)", HeartbeatInterval.TotalSeconds);

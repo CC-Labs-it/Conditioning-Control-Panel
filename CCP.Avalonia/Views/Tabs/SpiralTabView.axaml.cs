@@ -295,7 +295,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             PropertyChanged += (_, e) =>
             {
                 if (e.Property != IsVisibleProperty) return;
-                if (IsVisible) Refresh();
+                if (IsVisible) { Refresh(); AnnounceEntry(); }
                 else Suspend();
             };
         }
@@ -306,17 +306,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// menu, a first light), so the room is re-read from scratch rather than trusted from
         /// whenever this view was last painted.
         ///
-        /// <para>ponytail: needs <c>DescentBarkWatcher.NotifySpiralOpened()</c> (WPF head), which the
-        /// original calls here and on every entry to let the companion say hello to the room once
-        /// ever. It is decoration and it never blocks the entry it rides on.</para>
         /// </summary>
-        internal void OnTabShown() => Refresh();
+        internal void OnTabShown() { Refresh(); AnnounceEntry(); }
 
-        /// <summary>WPF Wire: the fuse's phase and tick drive the fog. BlockChanged has no twin
-        /// (DescentService is WPF-only).</summary>
+        private void AnnounceEntry()
+        {
+            if (_state != SpiralRoomState.Spiral) return;
+            try { Platform.BarkHead.NotifySpiralOpened(App.Descent?.Current); }
+            catch (Exception ex) { Log.Debug("[Spiral] entry bark failed: {E}", ex.Message); }
+        }
+
+        private DescentService? _wiredDescent;
+        private void OnBlockChanged(object? sender, EventArgs e)
+        {
+            var block = App.Descent?.Current;
+            if (_embed != null && block != null) _embed.PostState(block);
+            if (IsVisible) Refresh();
+        }
+
         private void Wire()
         {
             WireMigrationGate();
+            if (!ReferenceEquals(_wiredDescent, App.Descent))
+            {
+                if (_wiredDescent != null) _wiredDescent.BlockChanged -= OnBlockChanged;
+                _wiredDescent = App.Descent;
+                if (_wiredDescent != null) _wiredDescent.BlockChanged += OnBlockChanged;
+            }
             if (_wiredFuse != null || App.DescentCountdown is not { } fuse) return;
             _wiredFuse = fuse;
             fuse.PhaseChanged += OnPhaseChanged;
@@ -327,6 +343,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void Unwire()
         {
             UnwireMigrationGate();
+            if (_wiredDescent != null) _wiredDescent.BlockChanged -= OnBlockChanged;
+            _wiredDescent = null;
             if (_wiredFuse is not { } fuse) return;
             _wiredFuse = null;
             fuse.PhaseChanged -= OnPhaseChanged;
@@ -349,6 +367,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>Park everything: no clocks, no browser, nothing holding a frame.</summary>
+        internal void StopForPanic() => Suspend();
+
         private void Suspend()
         {
             Unwire();
@@ -381,9 +401,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     fuse?.LastAnnouncedPhase ?? DescentFusePhase.Dark,
                     fuse?.IsArmed == true,
                     // ponytail: the persisted unanswered-offer gate is shared with WPF. Live offers,
-                    // ceremony ownership and server blocks still need the Descent service lane.
+                    // and silent restore ownership still need the migration host.
                     spiralWithheld: SpiralRoom.SpiralWithheldFor(CoreSettings.Current, false, false),
-                    hasBlock: false));
+                    hasBlock: App.Descent?.Current != null));
             }
             catch (Exception ex)
             {
@@ -626,7 +646,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // ============================== the embed ==============================
 
-        // ponytail: bridge wired here; the account descent feed still has no Avalonia publisher.
+        // The server block is authoritative; never derive it from local XP.
         private void EnsureEmbed()
         {
             if (_embedGaveUp) { ShowWaitingUnderSpiral(); return; }
@@ -653,8 +673,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     TeardownEmbed();
                     ShowWaitingUnderSpiral();
                 };
-                // No server block exists on this head yet: never fabricate one from local XP.
-                embed.PostState(null);
+                embed.PostState(App.Descent?.Current);
                 StartEmbed(embed);
             }
             catch (Exception ex)
