@@ -34,3 +34,22 @@ test('landmark Loom canvases have a bounded redraw rate and Gentle halves phase 
   assert.equal(phone.update(0.03), true);
   for (const frames of [normal, gentle, phone]) frames.dispose();
 });
+
+test('unseen displays keep musical phase without redrawing and refresh immediately on reentry', () => {
+  const ctx = new Proxy({}, { get: (o, k) => k in o ? o[k] : /Gradient/.test(k) ? () => ({ addColorStop() {} }) : () => {} });
+  const make = (width, height) => ({ width, height, getContext: kind => kind === '2d' ? ctx : null });
+  const frames = createLoomDisplayFrames(make);
+  assert.equal(frames.update(.07, false, { loomVisible: [false, true, false] }), true);
+  assert.deepEqual(frames.rows.map(r => r.refreshed), [false, true, false]);
+  assert.ok(frames.rows[0].phase > 0 && frames.rows[2].phase > 2 / 3);
+  const phase = frames.rows[0].phase;
+  assert.equal(frames.update(.01, false, { loomVisible: [true, true, false] }), true);
+  assert.deepEqual(frames.rows.map(r => r.refreshed), [true, false, false]);
+  assert.ok(frames.rows[0].phase > phase);
+  assert.equal(frames.update(.1, false, { loomVisible: [false, false, false] }), false);
+  assert.ok(frames.rows.every(r => !r.refreshed));
+  const paused = frames.rows.map(r => r.phase);
+  assert.equal(frames.update(.1, false, { paused: true }), false);
+  assert.deepEqual(frames.rows.map(r => r.phase), paused);
+  frames.dispose();
+});

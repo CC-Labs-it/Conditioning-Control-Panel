@@ -22,7 +22,7 @@ export function createLoomDisplayFrames(make, tier = 'high') {
   let field = null, age = 0;
   const beat = createSpiralBeatClock();
   try { field = createFieldRenderer(source); } catch { /* Canvas fallback retains the real Loom. */ }
-  const rows = [0,1,2].map(i => ({ canvas: make(px, px), params: loomVariation(i), phase: i / 3 }));
+  const rows = [0,1,2].map(i => ({ canvas: make(px, px), params: loomVariation(i), phase: i / 3, refreshed: false, visible: true }));
   function draw(row) {
     const ctx = row.canvas.getContext('2d');
     if (field) composeFrame(ctx, field, row.params, row.phase, px, px);
@@ -30,12 +30,20 @@ export function createLoomDisplayFrames(make, tier = 'high') {
   }
   rows.forEach(draw);
   return { rows, update(dt, gentle = false, view = {}) {
+    for (const row of rows) row.refreshed = false;
     if (!(dt > 0) || view.paused) return false;
     age += dt;
     const speed = beat.update(dt, view, gentle);
     for (const row of rows) row.phase = (row.phase + dt * screenRateMul(row.params, { gentle, speed }) / loopS(row.params)) % 1;
-    if (age < 1 / (tier === 'phone' ? 8 : 15)) return false;
-    age = 0; rows.forEach(draw); return true;
+    const due = age >= 1 / (tier === 'phone' ? 8 : 15);
+    if (due) age = 0;
+    let changed = false;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i], visible = view.loomVisible?.[i] !== false;
+      if (visible && (due || !row.visible)) { draw(row); row.refreshed = true; changed = true; }
+      row.visible = visible;
+    }
+    return changed;
   }, dispose() {
     try { field?.gl?.getExtension('WEBGL_lose_context')?.loseContext(); } catch { /* already lost */ }
     field = null;

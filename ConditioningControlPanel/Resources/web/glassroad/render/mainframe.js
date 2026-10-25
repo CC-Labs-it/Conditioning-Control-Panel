@@ -1,6 +1,6 @@
 /* Mainframe: original server-rack colossi and fixed cable conduits, built before shader warmup.
  * Static instanced architecture and three animated Loom displays. Scan timing comes from the shared sim law. */
-import { Group, Mesh, InstancedMesh, BufferGeometry, Float32BufferAttribute, BoxGeometry, CylinderGeometry, TorusGeometry, SphereGeometry, CircleGeometry, Shape, Path, ShapeGeometry, CanvasTexture, SRGBColorSpace, MeshBasicNodeMaterial, Matrix4, Quaternion, Vector3, DoubleSide } from 'three/webgpu';
+import { Group, Mesh, InstancedMesh, BufferGeometry, Float32BufferAttribute, BoxGeometry, CylinderGeometry, TorusGeometry, SphereGeometry, CircleGeometry, Shape, Path, ShapeGeometry, CanvasTexture, SRGBColorSpace, MeshBasicNodeMaterial, Matrix4, Quaternion, Vector3, Frustum, Sphere, DoubleSide } from 'three/webgpu';
 import { vec3, uniform, mix, texture, positionWorld, float, uv, smoothstep } from 'three/tsl';
 import { scanZones, scanPose } from '../sim/mainframeScan.js';
 import { sampleTrack, bodyClear, WORLD_DEFAULTS } from './colossiMath.js';
@@ -39,6 +39,7 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
   const group = new Group(); group.name = 'mainframe';
   const geometry = new BoxGeometry(1, 1, 1), geometries = [geometry], materials = [], textures = [], rows = { shell: [], slot: [], green: [], cyan: [], floor: [], wall: [], tank: [], rib: [], amber: [] };
   let loomFrames = null;
+  const loomFrustum = new Frustum(), loomProjection = new Matrix4(), loomVisible = [true, true, true];
   const coolantTime = uniform(0), loomContrast = uniform(1), displays = [], landmarks = [];
   const room = reactorRoom(track);
   const reservoir = { waterY: track.reservoir?.waterY ?? 4,
@@ -208,7 +209,7 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
       mat.colorNode = mix(vec3(0.06, 0.24, 0.14), texture(tex).rgb, loomContrast);
       const disc = new Mesh(keepGeo(new CircleGeometry(radius, 64)), mat); disc.name = 'mainframe-loom-display'; holder.add(disc);
       const rim = new Mesh(keepGeo(new TorusGeometry(radius + 0.6, 1, 8, 64)), metal); holder.add(rim);
-      displays.push({ disc, center, radius, frame: f, tex });
+      displays.push({ disc, center, radius, frame: f, tex, bound: new Sphere(new Vector3(...center), radius + 2) });
     }
   }
   // The raised road winds around a reactor sized to the current spiral's inner clearance.
@@ -353,7 +354,17 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
       updateBubbles(dt * (gentle ? 0.5 : 1));
       coolantTime.value += dt * (gentle ? 0.5 : 1);
       loomContrast.value += ((gentle ? 0.5 : 1) - loomContrast.value) * Math.min(1, dt / 0.3);
-      if (loomFrames?.update(dt, gentle, view)) for (const display of displays) display.tex.needsUpdate = true;
+      // Advance every phase, but avoid GPU readback and texture uploads for distant or unseen discs.
+      // The generous near range refreshes a large display before its motion is legible on approach.
+      const camera = view.camera;
+      if (camera) loomFrustum.setFromProjectionMatrix(loomProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse), camera.coordinateSystem);
+      for (let i = 0; i < displays.length; i++) {
+        const display = displays[i];
+        loomVisible[i] = !camera || camera.position.distanceToSquared(display.bound.center) < 700 * 700 && loomFrustum.intersectsSphere(display.bound);
+      }
+      if (loomFrames?.update(dt, gentle, { ...view, loomVisible })) for (let i = 0; i < displays.length; i++) {
+        if (loomFrames.rows[i].refreshed) displays[i].tex.needsUpdate = true;
+      }
       for (const display of displays) display.disc.rotation.z += dt * (gentle ? 0.18 : 0.45);
       for (const scan of scans) {
         const pose = scanPose(scan.zone, view.scanTimeS ?? view.timeS ?? 0, view.scanBpm || 120);
