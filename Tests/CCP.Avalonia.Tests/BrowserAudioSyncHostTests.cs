@@ -14,6 +14,17 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 public sealed class BrowserAudioSyncHostTests
 {
+    internal static async Task<ConditioningControlPanel.Services.HapticService> MockToyAsync()
+    {
+        var settings = new ConditioningControlPanel.Models.HapticSettings { Enabled = true };
+        settings.EnsureV2Migrated();
+        foreach (var provider in new[] { "lovense", "buttplug" }) settings.V2.Provider(provider).Enabled = false;
+        settings.V2.Provider("mock").Enabled = true;
+        var haptics = new ConditioningControlPanel.Services.HapticService(settings);
+        Assert.True(await haptics.ConnectAsync());
+        return haptics;
+    }
+
     [Fact]
     public async Task HomeBridgeUnblocksMissingServiceAndPanicDisarmsIt() => await AvaloniaTestDispatcher.RunAsync(async () =>
     {
@@ -36,21 +47,37 @@ public sealed class BrowserAudioSyncHostTests
     });
 
     [Fact]
-    public async Task NavigationInjectsWithoutPausingTheNewDocument() => await AvaloniaTestDispatcher.RunAsync(() =>
+    public async Task NavigationInjectsOnlyOnHypnoTubeWithSyncOnAndAToyConnected() => await AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        var (old, oldEnabled) = (CoreHaptics.Service, CoreSettings.Current.Haptics.AudioSync.Enabled);
+        using var haptics = await MockToyAsync();
         var scripts = new List<string>();
         var web = new WebHost();
         using var host = new BrowserAudioSyncHost(web, s => { scripts.Add(s); return Task.FromResult<string?>(null); });
-        web.OnNavigationCompleted(new Uri("http://127.0.0.1/"));
-        Assert.Single(scripts);
-        Assert.Contains("audioSyncVideoDetected", scripts[0]);
-        return Task.CompletedTask;
+        try
+        {
+            CoreHaptics.Service = haptics;
+            CoreSettings.Current.Haptics.AudioSync.Enabled = false;
+            web.OnNavigationCompleted(new Uri("https://hypnotube.com/video/1"));
+            CoreSettings.Current.Haptics.AudioSync.Enabled = true;
+            web.OnNavigationCompleted(new Uri("http://127.0.0.1/"));
+            CoreHaptics.Service = null;
+            web.OnNavigationCompleted(new Uri("https://hypnotube.com/video/1"));
+            Assert.Empty(scripts);
+            CoreHaptics.Service = haptics;
+            web.OnNavigationCompleted(new Uri("https://hypnotube.com/video/1"));
+            Assert.Single(scripts);
+            Assert.Contains("audioSyncVideoDetected", scripts[0]);
+        }
+        finally { (CoreHaptics.Service, CoreSettings.Current.Haptics.AudioSync.Enabled) = (old, oldEnabled); }
     });
 
     [Fact]
     public void LinuxDecoderReadsOnlyRequestedRangeAsMono44100()
     {
-        if (!OperatingSystem.IsLinux()) return;
+        // The decoder is the distro's ffmpeg; CI runners without it have nothing to exercise.
+        if (!OperatingSystem.IsLinux() || !(Environment.GetEnvironmentVariable("PATH") ?? "").Split(':')
+                .Any(d => File.Exists(Path.Combine(d, "ffmpeg")))) return;
         var file = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".wav");
         try
         {

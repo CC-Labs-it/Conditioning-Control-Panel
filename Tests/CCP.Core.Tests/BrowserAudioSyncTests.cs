@@ -17,13 +17,13 @@ public sealed class BrowserAudioSyncTests
     [InlineData("{\"duration\":0}", null)]
     [InlineData("{\"duration\":90000}", null)]
     public void DurationUsesWpfBounds(string message, double? expected) =>
-        Assert.Equal(expected, BrowserAudioSyncService.ParseReportedDuration(message)?.TotalSeconds);
+        Assert.Equal(expected, AudioSyncService.ParseReportedDuration(message)?.TotalSeconds);
 
     [Fact]
     public async Task DisabledOrDisconnectedUnblocksVideoWithoutDecoding()
     {
         using var haptics = new HapticService(new HapticSettings());
-        using var sync = new BrowserAudioSyncService(haptics, new AudioSyncSettings { Enabled = true },
+        using var sync = new AudioSyncService(haptics, new AudioSyncSettings { Enabled = true },
             (_, _, _, _) => throw new Exception("Must not decode"));
         var completed = 0;
         sync.ProcessingCompleted += (_, _) => completed++;
@@ -47,7 +47,7 @@ public sealed class BrowserAudioSyncTests
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         using var entered = new ManualResetEventSlim();
         using var release = new ManualResetEventSlim();
-        using var sync = new BrowserAudioSyncService(haptics, settings.AudioSync, (_, _, _, ct) =>
+        using var sync = new AudioSyncService(haptics, settings.AudioSync, (_, _, _, ct) =>
         {
             entered.Set();
             release.Wait(ct);

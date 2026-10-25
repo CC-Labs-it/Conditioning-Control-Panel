@@ -3200,7 +3200,7 @@ namespace ConditioningControlPanel
             HapticService.EmiDeskFire = (moment, ctx) => EmiDesk?.Fire(moment, ctx);
             Haptics = new HapticService(Settings.Current.Haptics);
             CoreHaptics.Service = Haptics;
-            AudioSync = new AudioSyncService(Haptics, Settings.Current.Haptics.AudioSync);
+            AudioSync = new AudioSyncService(Haptics, Settings.Current.Haptics.AudioSync, Services.Audio.MediaFoundationRangeReader.Read);
             KeywordTriggers = new KeywordTriggerService();
             KeywordPresets = new KeywordTriggerPresetService();
 

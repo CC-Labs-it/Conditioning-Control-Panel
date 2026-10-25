@@ -15,9 +15,11 @@ internal sealed class BrowserAudioSyncHost : IDisposable
     private static readonly HashSet<BrowserAudioSyncHost> Live = new();
     private readonly WebHost _web;
     private readonly Func<string, Task<string?>> _script;
-    private BrowserAudioSyncService? _sync;
+    private AudioSyncService? _sync;
     private int _page;
     private bool _stopped;
+    /// <summary>Tests: how many times the sync script was sent to a page.</summary>
+    internal int Injections { get; private set; }
     internal static readonly string Injection = LoadScript();
     private static string LoadScript()
     {
@@ -42,7 +44,14 @@ internal sealed class BrowserAudioSyncHost : IDisposable
     {
         if (e.Property == WebHost.SourceProperty) Stop();
     }
-    private void OnNavigation(Uri url) { _page++; _sync?.Dispose(); _sync = null; _stopped = false; _ = _script(WebHost.CarrierShim + Injection); }
+    private void OnNavigation(Uri url)
+    {
+        _page++; _sync?.Dispose(); _sync = null; _stopped = false;
+        // WPF MainWindow.Browser.cs:148-158: only with sync on, a toy connected, on HypnoTube.
+        if (CoreSettings.Current.Haptics.AudioSync.Enabled && CoreHaptics.Service?.IsConnected == true
+            && url.AbsoluteUri.Contains("hypnotube", StringComparison.OrdinalIgnoreCase))
+        { Injections++; _ = _script(WebHost.CarrierShim + Injection); }
+    }
     private void OnMessage(string body) => _ = HandleAsync(body);
     internal async Task HandleAsync(string body)
     {
@@ -60,7 +69,7 @@ internal sealed class BrowserAudioSyncHost : IDisposable
                     _sync?.Dispose();
                     _sync = null;
                     if (CoreHaptics.Service is { } haptics)
-                        _sync = new BrowserAudioSyncService(haptics, CoreSettings.Current.Haptics.AudioSync, BrowserAudioRangeReader.Read);
+                        _sync = new AudioSyncService(haptics, CoreSettings.Current.Haptics.AudioSync, BrowserAudioRangeReader.Read);
                     if (_sync != null && root.TryGetProperty("url", out var url) && url.ValueKind == JsonValueKind.String)
                     {
                         _sync.ProcessingProgress += (_, e) => Dispatcher.UIThread.Post(() =>
@@ -71,7 +80,7 @@ internal sealed class BrowserAudioSyncHost : IDisposable
                         _sync.ChunkLoadingRequired += (_, _) => Send("window.__hapticShowOverlay?.('Loading haptic data...');document.querySelector('video')?.pause();", page);
                         _sync.ChunkLoadingCompleted += (_, _) => Send("window.__hapticSignalReady?.();", page);
                         var sync = _sync;
-                        await Task.Run(() => sync.OnVideoDetectedAsync(url.GetString()!, BrowserAudioSyncService.ParseReportedDuration(body)));
+                        await Task.Run(() => sync.OnVideoDetectedAsync(url.GetString()!, AudioSyncService.ParseReportedDuration(body)));
                     }
                     Send("window.__hapticSignalReady?.();", page);
                     break;

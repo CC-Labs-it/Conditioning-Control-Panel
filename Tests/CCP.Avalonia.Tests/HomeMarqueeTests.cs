@@ -478,6 +478,24 @@ public sealed class HomeMarqueeTests
         return Task.CompletedTask;
     });
 
+    /// <summary>WPF MainWindow.Browser.cs:148-158: the Home browser card owns the audio-sync bridge, and a
+    /// HypnoTube navigation with sync on and a toy connected injects the sync script into the page.</summary>
+    [Fact]
+    public Task HomeBrowserCardInjectsAudioSyncOnHypnoTube() => WithShell(async (w, dash) =>
+    {
+        var (old, oldEnabled) = (CoreHaptics.Service, CoreSettings.Current.Haptics.AudioSync.Enabled);
+        using var haptics = await BrowserAudioSyncHostTests.MockToyAsync();
+        try
+        {
+            (CoreHaptics.Service, CoreSettings.Current.Haptics.AudioSync.Enabled) = (haptics, true);
+            var host = dash.AudioSyncHost!;
+            var injections = host.Injections;
+            dash.FindControl<WebHost>("BrowserWebHost")!.OnNavigationCompleted(new Uri("https://hypnotube.com/video/1"));
+            Assert.Equal(injections + 1, host.Injections);
+        }
+        finally { (CoreHaptics.Service, CoreSettings.Current.Haptics.AudioSync.Enabled) = (old, oldEnabled); }
+    });
+
     /// <summary>WPF ChkForceShowBambiCloud_Changed (DeeperTab.cs:505) saves; BrowserLoadingText_Click (Browser.cs:280) loads
     /// the selected site, never past the offline gate.</summary>
     [Fact]

@@ -1,7 +1,6 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Audio;
 using Serilog;
@@ -17,6 +16,9 @@ namespace ConditioningControlPanel.Services
     {
         private readonly HapticService _hapticService;
         private readonly AudioSyncSettings _settings;
+        private readonly Func<string, TimeSpan, TimeSpan, CancellationToken, float[]> _read;
+        private CancellationTokenSource? _session;
+        private int _generation;
         private ChunkManager? _chunkManager;
 
         private bool _disposed;
@@ -78,10 +80,12 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public bool IsWaitingForChunk => _isWaitingForChunk;
 
-        public AudioSyncService(HapticService hapticService, AudioSyncSettings settings)
+        public AudioSyncService(HapticService hapticService, AudioSyncSettings settings,
+            Func<string, TimeSpan, TimeSpan, CancellationToken, float[]> read)
         {
             _hapticService = hapticService;
             _settings = settings;
+            _read = read;
         }
 
         /// <summary>
@@ -127,50 +131,51 @@ namespace ConditioningControlPanel.Services
 
             Log.Information("AudioSyncService: Video detected on {Host}, starting processing", Logging.UrlLog.Host(videoUrl));
 
+            // Clean up previous session; Reset/Dispose (navigation, panic) cancels this one and
+            // bumps the generation so its late completion never reaches the next page.
+            Reset();
+            if (_disposed) return;
+            var generation = _generation;
+            using var session = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            _session = session;
             try
             {
                 _isProcessing = true;
                 ProcessingStarted?.Invoke(this, "Preparing haptic sync...");
 
-                // Clean up previous session
-                _chunkManager?.Dispose();
-                _chunkManager = new ChunkManager(_settings, MediaFoundationRangeReader.Read);
-                _chunkManager.ChunkReady += OnChunkReady;
-                _chunkManager.Progress += OnChunkProgress;
-                _chunkManager.Error += OnChunkError;
-                _chunkManager.ChunkLoadingStarted += OnChunkLoadingStarted;
+                var manager = new ChunkManager(_settings, _read);
+                _chunkManager = manager;
+                manager.ChunkReady += OnChunkReady;
+                manager.Progress += (s, e) => { if (generation == _generation) OnChunkProgress(s, e); };
+                manager.Error += OnChunkError;
+                manager.ChunkLoadingStarted += OnChunkLoadingStarted;
 
-                // Initialize and start first chunk
-                _chunkManager.Initialize(videoUrl, duration);
-                await _chunkManager.StartFirstChunkAsync();
+                // Initialize and process the first chunk (2 minute timeout via the session token)
+                manager.Initialize(videoUrl, duration);
+                await manager.StartFirstChunkAsync(session.Token);
 
-                // Wait for first chunk to be ready (with timeout)
-                var timeout = TimeSpan.FromMinutes(2);
-                var startWait = DateTime.UtcNow;
-
-                while (!_chunkManager.IsFirstChunkReady && (DateTime.UtcNow - startWait) < timeout)
-                {
-                    await Task.Delay(100);
-                }
-
-                if (!_chunkManager.IsFirstChunkReady)
+                if (!manager.IsFirstChunkReady && !session.IsCancellationRequested)
                 {
                     throw new AudioSyncException("Timeout waiting for first chunk to process");
                 }
 
-                _isProcessing = false;
-                ProcessingCompleted?.Invoke(this, EventArgs.Empty);
-
                 Log.Information("AudioSyncService: First chunk ready, video can start playing");
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                _isProcessing = false;
                 Log.Error(ex, "AudioSyncService: Failed to process video");
-                Error?.Invoke(this, $"Failed to prepare haptic sync: {ex.Message}");
-
-                // Allow video to play without haptics
-                ProcessingCompleted?.Invoke(this, EventArgs.Empty);
+                if (generation == _generation) Error?.Invoke(this, $"Failed to prepare haptic sync: {ex.Message}");
+            }
+            finally
+            {
+                // Allow video to play (synced or not) - unless a newer session owns the page
+                if (generation == _generation)
+                {
+                    _session = null;
+                    _isProcessing = false;
+                    ProcessingCompleted?.Invoke(this, EventArgs.Empty);
+                }
             }
         }
 
@@ -292,6 +297,8 @@ namespace ConditioningControlPanel.Services
         private async Task LoadChunkForSeekAsync(int chunkIndex)
         {
             if (_chunkManager == null) return;
+            var generation = _generation;
+            var manager = _chunkManager;
 
             // Signal to pause video
             _isWaitingForChunk = true;
@@ -300,7 +307,7 @@ namespace ConditioningControlPanel.Services
             try
             {
                 // Wait for chunk to be ready
-                await _chunkManager.EnsureChunkReadyAsync(chunkIndex);
+                await manager.EnsureChunkReadyAsync(chunkIndex);
 
                 Log.Information("AudioSyncService: Chunk {Index} loaded after seek", chunkIndex);
             }
@@ -311,8 +318,11 @@ namespace ConditioningControlPanel.Services
             }
             finally
             {
-                _isWaitingForChunk = false;
-                ChunkLoadingCompleted?.Invoke(this, EventArgs.Empty);
+                if (generation == _generation)
+                {
+                    _isWaitingForChunk = false;
+                    ChunkLoadingCompleted?.Invoke(this, EventArgs.Empty);
+                }
             }
         }
 
@@ -330,6 +340,9 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public void StopSync()
         {
+            _generation++;
+            _session?.Cancel();
+            _session = null;
             _isPaused = false;
             _isWaitingForChunk = false;
             _ = _hapticService.StopAsync();

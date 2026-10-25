@@ -25,6 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     {
         private bool _browserCardSyncing;
         private BrowserAudioSyncHost? _audioSyncHost;
+        internal BrowserAudioSyncHost? AudioSyncHost => _audioSyncHost;
 
         /// <summary>Tests: how many times the mute script was sent to the page.</summary>
         internal int BrowserMuteApplies { get; private set; }
