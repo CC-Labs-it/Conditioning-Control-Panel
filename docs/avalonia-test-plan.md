@@ -673,3 +673,6 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+
+1. WPF `ConditioningControlPanel/Services/LockCard/BrainDrainService.cs` and `Views/Controls/Studio/BrainDrainFeatureControl.xaml.cs`: Studio > Brain Drain, open the audio folder, add a WAV/MP3/OGG and Refresh; the count and empty hint update. Enable while stopped, then Start the engine. Confirm clips play through without mid-clip restart, intensity changes cadence, High refresh preserves per-minute probability, master volume changes the playing clip, and Stop/panic silences it. Repeat panic while a clip is opening and start again; the old clip must not appear. Check a duplicate legacy filename plays only the assets copy. Rows: `views-studio-brain-drain-feature`

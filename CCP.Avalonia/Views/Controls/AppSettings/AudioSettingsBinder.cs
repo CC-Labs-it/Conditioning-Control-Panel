@@ -55,6 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             master.ValueChanged += (_, e) => Edit(s => s.MasterVolume = (int)e.NewValue, () =>
             {
                 LayeredAudio.Instance?.SetMasterVolumeLive();
+                CoreBrainDrain.RefreshVolume();
                 MandatoryVideoOverlay.Instance.UpdateVolume();
             });
             video.ValueChanged += (_, e) => Edit(s => s.VideoVolume = (int)e.NewValue, MandatoryVideoOverlay.Instance.UpdateVolume);

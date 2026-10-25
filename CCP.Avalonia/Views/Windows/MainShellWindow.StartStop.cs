@@ -3,7 +3,7 @@
 // UpdateStartButton (:944), for the features Core drives (CoreEngine). The session half of
 // BtnStart_Click (stop-session dialog) is ConfirmStopSession (MainShellWindow.SessionRun.cs).
 // ponytail: still missing, each with no service on this head: the remote-control gate,
-// Relapse/TotalSessions achievements, the bubble/brain-drain/pop-quiz/autonomy/
+// Relapse/TotalSessions achievements, the bubble/pop-quiz/autonomy/
 // ramp starts, the scheduler, the Presets "running" label and the hero FX.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
@@ -76,6 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (gen != _engineGen || CoreEngine.IsRunning) return;
                 CoreEngine.Start();
+                CoreBrainDrain.Start();
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
                 SpiralOverlay.Refresh(this);
@@ -89,6 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static void StopEngine()
         {
             _engineGen++;
+            CoreBrainDrain.Stop();
             App.Sessions?.Pause();
             CoreEngine.Stop();
         }
@@ -96,6 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary><see cref="CoreEngine.StoppedHook"/>: the head half of StopEngineCore.</summary>
         internal void OnEngineStopped()
         {
+            CoreBrainDrain.Stop();
             Platform.ProgramEngineBridge.RaiseSessionChanged();   // any session end repaints the Programs row
             // WPF StartStop.cs:485: hand back anything a Takeover pulse borrowed before the overlays go;
             // also retires the pulse timers so an old one cannot end the next run's bubbles.
