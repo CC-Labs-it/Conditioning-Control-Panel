@@ -27,7 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
     /// FX: hover = a 1.02 lift + 150ms rim-light, active = the glow and the ring breathing on one
     /// 3.5s clock. The breath pauses while the tile is not effectively visible (a hidden tab,
     /// via EffectiveVisibility), which WPF does not do.
-    /// ponytail: needs MotionFx/PerformanceProfile/window focus, gate the breath when they move to Core
+    /// Tease livery uses TierFxBorder's shared frame clock; motion/performance gates retain the static rim.
     /// </summary>
     public partial class FeatureCard : UserControl
     {
@@ -93,8 +93,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         private readonly Border _activeGlow;   // the GlowLayer sibling (CardGlow)
         private double _glowBlur = -1;
         private readonly ScaleTransform _rootScale = new(1, 1);
+        private readonly Transitions _hoverTransitions;
+        private readonly Transitions? _rimTransitions;
         private BeatLoop? _breath;
         private IDisposable? _visibilityWatch;
+        private Window? _hostWindow;
         private bool _hovered;
 
         public FeatureCard()
@@ -119,12 +122,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
 
             // Hover lift (WPF: MotionFx.HoverLift) as a transition on the root scale (the art pop is
             // Controls/HoverPop, driven from ApplyHover as WPF does); the 6px margin on RootBorder is the headroom the lift paints into.
-            var hoverTransitions = new Transitions
+            _hoverTransitions = new Transitions
             {
                 new DoubleTransition { Property = ScaleTransform.ScaleXProperty, Duration = TimeSpan.FromMilliseconds(HoverMs), Easing = new QuadraticEaseOut() },
                 new DoubleTransition { Property = ScaleTransform.ScaleYProperty, Duration = TimeSpan.FromMilliseconds(HoverMs), Easing = new QuadraticEaseOut() },
             };
-            _rootScale.Transitions = hoverTransitions;
+            _rimTransitions = _rimLight.Transitions;
+            RefreshHover();
             _rootBorder.RenderTransform = _rootScale;
             _activeGlow.RenderTransform = _rootScale;   // the glow lifts with the tile, as WPF's Effect did
 
@@ -134,6 +138,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             PointerReleased += OnPointerReleased;
             Unloaded += (_, _) =>
             {
+                Env.MotionGateChanged -= RefreshFx;
+                HookWindow(null);
                 _visibilityWatch?.Dispose();
                 _visibilityWatch = null;
                 ApplyActiveBreath(false);
@@ -141,9 +147,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             };
             Loaded += (_, _) =>
             {
+                HookWindow(TopLevel.GetTopLevel(this) as Window);
+                Env.MotionGateChanged -= RefreshFx;
+                Env.MotionGateChanged += RefreshFx;
                 // Improvement over WPF: the breath parks while a hidden tab holds the tile.
-                _visibilityWatch = global::ConditioningControlPanel.Avalonia.Controls.EffectiveVisibility.Watch(this, ApplyActiveState);
-                ApplyActiveState(); // re-arm the breath after a detach/re-attach (tab switch)
+                _visibilityWatch = global::ConditioningControlPanel.Avalonia.Controls.EffectiveVisibility.Watch(this, RefreshFx);
+                RefreshFx(); // re-arm after a detach/re-attach (tab switch)
                 RefreshHelpTooltip();
             };
 
@@ -189,12 +198,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// <summary>
         /// Puts on (or takes off) the tease costume. Reversible: TeaseTier = 0 rebinds the border
         /// and badge brushes to the theme resources instead of freezing them.
-        /// ponytail: TierFxBorder's living-metal rim stays in the head; the tease rim is static here
         /// </summary>
         private void ApplyTeaseState()
         {
             if (TeaseTier <= 0)
             {
+                TierFxBorder.SetTier(_rootBorder, 0);
                 _teaseHost.IsVisible = false;
                 _imgIconHost.Effect = null;
                 _glyphHost.Effect = null;
@@ -220,6 +229,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
 
             _rootBorder[!Border.BorderBrushProperty] = livery;
             _rootBorder.BorderThickness = new Thickness(TeaseBorderThickness);
+            TierFxBorder.SetRimThickness(_rootBorder, TeaseBorderThickness);
+            TierFxBorder.SetTier(_rootBorder, TeaseTier);
             _tierBadgeHost[!Border.BorderBrushProperty] = livery;
             _txtTierBadge[!TextBlock.ForegroundProperty] = livery;
         }
@@ -254,6 +265,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 _contentRoot.Opacity = 1.0;
             }
             ApplyActiveState();
+            RefreshHover();
         }
 
         private void ApplyActiveState()
@@ -266,7 +278,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
 
         /// <summary>WPF FeatureCard.RefreshFx (:613): re-reads the motion/tier/focus gates. Called by
         /// the shell's ApplyDashboardFxLoops on a motion/performance change and window activation.</summary>
-        internal void RefreshFx() => ApplyActiveState();
+        internal void RefreshFx()
+        {
+            ApplyActiveState();
+            RefreshHover();
+            TierFxBorder.Resume(_rootBorder);
+        }
+
+        // WPF FeatureCard.HookWindow: a card also owns its host lifecycle when used outside Home.
+        private void HookWindow(Window? window)
+        {
+            if (ReferenceEquals(_hostWindow, window)) return;
+            if (_hostWindow != null)
+            {
+                _hostWindow.Activated -= OnWindowStateish;
+                _hostWindow.Deactivated -= OnWindowStateish;
+                _hostWindow.PropertyChanged -= OnWindowPropertyChanged;
+            }
+            _hostWindow = window;
+            if (window == null) return;
+            window.Activated += OnWindowStateish;
+            window.Deactivated += OnWindowStateish;
+            window.PropertyChanged += OnWindowPropertyChanged;
+        }
+
+        private void OnWindowStateish(object? sender, EventArgs e) => RefreshFx();
+
+        private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+        {
+            // Avalonia raises Activated BEFORE setting IsActive, so the property notification
+            // must also re-arm a card after focus returns (Deactivated sets it first).
+            if (e.Property == Window.WindowStateProperty || e.Property == WindowBase.IsActiveProperty) RefreshFx();
+        }
 
         /// <summary>WPF SetTutorialPreview (:535): the welcome guide lights the card it points at. Appearance
         /// only; the setting is untouched, and clearing it puts the card back to its truth.</summary>
@@ -340,10 +383,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             if (_hovered == on) return;
             _hovered = on;
+            RefreshHover();
             // A locked tile is not an affordance; lighting it up promises a click that does nothing.
             if (IsLocked) on = false;
-            _rootScale.ScaleX = _rootScale.ScaleY = on ? HoverLiftScale : 1;
             if (on) HoverPop.Enter(_imgIconHost); else HoverPop.Leave(_imgIconHost);
+        }
+
+        private void RefreshHover()
+        {
+            // WPF MotionFx.HoverLift and rim-light: short transitions survive Reduced/Performance,
+            // while Off cancels them before snapping to the requested endpoint.
+            _rootScale.Transitions = Env.AllowTransitions ? _hoverTransitions : null;
+            _rimLight.Transitions = Env.AllowTransitions ? _rimTransitions : null;
+            bool on = _hovered && !IsLocked;
+            _rootScale.ScaleX = _rootScale.ScaleY = on ? HoverLiftScale : 1;
             _rimLight.Opacity = on ? RimLightOpacity : 0;
         }
 

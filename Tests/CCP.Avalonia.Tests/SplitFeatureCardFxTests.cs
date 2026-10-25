@@ -67,6 +67,13 @@ public sealed class SplitFeatureCardFxTests
             Assert.True(F<Button>(card, "_btnHelpA").IsVisible, "MindWipe has help content");
             Assert.True(F<Button>(card, "_btnHelpB").IsVisible, "BrainDrain has help content");
 
+            shell.WindowState = WindowState.Minimized;
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(card.IsBreathing);
+            shell.WindowState = WindowState.Normal;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(card.IsBreathing);
+
             // Reduced: no ambient loop, glow parked at its peak.
             s.MotionLevel = MotionLevel.Reduced;
             Reshow();
@@ -92,6 +99,7 @@ public sealed class SplitFeatureCardFxTests
                 .GetValue(null) as StyledProperty<double>;
             Assert.Equal(0.26, card.GetValue(progress!), 3);
             Assert.True(snaps > 0, "gated: the seam lands with the transition detached");
+            Assert.Equal(0, F<RotateTransform[]>(card, "_tilt")[1].Angle);
             Assert.Equal(0, F<Button>(card, "_btnHelpA").Opacity);
             Assert.Equal(0.62, F<Border>(card, "_halfHostB").Opacity);           // dashboard: hover does not undim
 
@@ -104,6 +112,7 @@ public sealed class SplitFeatureCardFxTests
             shell.MouseMove(inB);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(snapped, snaps);                                     // the sweep keeps its transition
+            Assert.InRange(F<RotateTransform[]>(card, "_tilt")[1].Angle, -1.2, -0.00001);
         }
         finally
         {
