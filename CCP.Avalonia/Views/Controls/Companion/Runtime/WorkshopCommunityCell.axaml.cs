@@ -99,7 +99,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             }
             placeholder.IsVisible = shown == 0;
             // WPF UpdateCommunityPromptsUI (MainWindow.CompanionTab.cs:184) re-reads Z4's readout with the rows.
-            this.FindAncestorOfType<CompanionRoomView>()?.PersonalityZone.ViewModel.Sync();
+            // Under v2 this cell is adopted onto Companion > Personality, outside the collapsed room, so
+            // fall back to the shell's room (its PersonalityZone field is the same, possibly adopted, control).
+            (this.FindAncestorOfType<CompanionRoomView>()
+                ?? (TopLevel.GetTopLevel(this) as global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow)?.RoomView())?.PersonalityZone.ViewModel.Sync();
         }
 
         private async Task ActivateAsync(string id)

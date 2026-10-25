@@ -129,7 +129,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// <summary>The Workshop COMMUNITY rows' active dot follows a reset or preset pick made here.</summary>
         private void RefreshCommunityRows()
         {
-            if (_host != null) global::Avalonia.VisualTree.VisualExtensions.FindAncestorOfType<CompanionRoomView>(_host)?.RefreshCommunity();
+            // Under v2 this zone is adopted onto Companion > Personality, outside the collapsed room: fall
+            // back to the shell's room, which still owns the Community cell's viewmodel.
+            if (_host != null)
+                (global::Avalonia.VisualTree.VisualExtensions.FindAncestorOfType<CompanionRoomView>(_host)
+                    ?? (global::Avalonia.Controls.TopLevel.GetTopLevel(_host) as global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow)?.RoomView())
+                    ?.RefreshCommunity();
         }
 
         internal Windows.MainShellWindow? Shell =>

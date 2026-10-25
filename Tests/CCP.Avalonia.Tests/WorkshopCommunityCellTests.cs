@@ -11,6 +11,7 @@ using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
@@ -221,7 +222,7 @@ public sealed class WorkshopCommunityCellTests
     });
 
     [Fact]
-    public Task CommunityCellIsReachableThroughTheCompanionWorkshopDrawer() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task CommunityCellIsReachableThroughThePersonalityPage() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
@@ -236,10 +237,14 @@ public sealed class WorkshopCommunityCellTests
         var shell = new MainShellWindow();
         try
         {
+            // v2 collapses the room: the Community cell lives on Companion > Personality (WPF
+            // PersonalityPage.OnShown adopts tab.Vm.Shelf.Community; RevealCompanionWorkshopCell routes there).
             shell.Show(); shell.ShowTab("companion"); Dispatcher.UIThread.RunJobs();
-            shell.GetLogicalDescendants().OfType<WorkshopAccordion>().Single().ExpandAndReveal(); Dispatcher.UIThread.RunJobs();
+            shell.RevealCompanionWorkshopCell(CompanionRoomAnchors.WorkshopCommunityCell); Dispatcher.UIThread.RunJobs();
             var cell = shell.GetLogicalDescendants().OfType<WorkshopCommunityCell>().Single();
             Assert.True(cell.IsVisible); Assert.True(cell.FindControl<Button>("BtnBrowsePrompts")!.IsVisible);
+            Assert.True(cell.IsEffectivelyVisible);
+            Assert.NotNull(cell.FindAncestorOfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages.PersonalityPage>());
 
             // WPF re-reads Z4 straight after Activate/Remove (MainWindow.CompanionTab.cs:184), not on the next tab show.
             var z4 = shell.GetLogicalDescendants().OfType<MakeHerYoursView>().Single().ViewModel;

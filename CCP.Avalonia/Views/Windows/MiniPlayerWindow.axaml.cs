@@ -42,14 +42,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///    Slider marks them handled, which is what WPF's tunnelling pass got around.
     ///  - DragMove() -> BeginMoveDrag(e), which needs the event args.
     ///
-    /// <para><b>No opener yet, and the blocker is the CALLER, not this window.</b> Its one WPF call
-    /// site is <c>MainWindow.OpenAssetPreview</c> (MainWindow.Assets.cs:1233), reached from a
-    /// thumbnail click in the Library tab. Nothing on this head raises that click: the asset tree
-    /// and the thumbnail grid are held back in MainShellWindow.Assets.cs because
-    /// the packs tree over <c>ContentPackStore.Current</c> is not built yet, and
-    /// OpenAssetPreview's first branch is a pack-file extraction through that same service. When
-    /// the tree lands, the wiring is <c>LoadFile(path)</c> then <c>Show(owner)</c>. Until then
-    /// <c>--video-check &lt;file&gt;</c> (VideoCheck.cs) opens it on the real desktop.</para>
+    /// <para><b>Opener:</b> <c>AssetsTabView.OpenAssetPreview</c> (WPF <c>MainWindow.OpenAssetPreview</c>,
+    /// MainWindow.Assets.cs:1206), from a Library thumbnail double-click or the context-menu Preview:
+    /// <c>LoadFile(path)</c> then <c>Show(owner)</c>. Pack-file previews (WPF's temp extraction) wait on
+    /// the Content Packs tree. <c>--video-check &lt;file&gt;</c> (VideoCheck.cs) also opens it.</para>
     /// </summary>
     public partial class MiniPlayerWindow : Window
     {
@@ -212,8 +208,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _mediaPlayer.LengthChanged += (s, e) => Dispatcher.UIThread.Post(UpdateTimeDisplay);
 
                 _media = new Media(libVLC, filePath, FromType.FromPath);
-                // No audio for preview, as WPF (Services.LibVlcSilence.NoAudioOption).
-                _media.AddOption(":no-audio");
+                // No audio for preview, as WPF.
+                _media.AddOption(ConditioningControlPanel.Services.LibVlcSilence.NoAudioOption);
                 _mediaPlayer.Play(_media);
 
                 _videoControls.IsVisible = true;

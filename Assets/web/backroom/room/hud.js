@@ -448,9 +448,9 @@ export function createHud(o) {
     },
     /** The floor bell opt-in row (10.16.B): the server's answer, an optimistic tick put back when it refuses. */
     bellOptIn(checked) { paintSwitch(bellOpt.b, checked); },
-    /** Either card counts: this is what main.js's back() reads, so Escape and Back dismiss the
-     * picture picker before they leave the room, exactly as they already did for Options. */
+    /** Either card counts: Escape closes it; Back dismisses it before leaving the room. */
     get optionsOpen() { return !panel.hidden || !media.hidden; },
+    openOptions() { setOptions(true); },
     closeOptions() { setOptions(false); },
     seated(on) {
       document.documentElement.classList.toggle('br-seated', !!on);

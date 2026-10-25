@@ -1,49 +1,33 @@
-// NOT PORTED from ConditioningControlPanel/MainWindow/MainWindow.CompanionTab.cs (471 lines).
-//
-// Sorted member by member: GENUINELY 100% head-side, and blocked TWICE over - once on the service
-// and once on the controls, which is worth stating because the second half is not obvious.
-//
-// THE CONTROLS. Every member here writes CompanionTab.<Name> - forty-odd of the ~110 names the WPF
-// CompanionTabView re-publishes so MainWindow's seven companion partials can keep the accessor path
-// they always had. The ported Views/Tabs/CompanionTabView publishes NONE of them (its own header
-// says why: they are passthroughs into a CompanionRoomRuntimeVm and eight zone viewmodels that have
-// not moved, and writing 110 properties returning null would be a seam in name only). The controls
-// themselves DO exist on this head, but inside the room's cells - SliderTriggerIntervalCompanion
-// lives in Views/Controls/Companion/Runtime/WorkshopTriggersCell, for instance - so a future wiring
-// reaches them through the cell that owns them, not through the tab.
-//
-// THE SERVICE. What each member needs, exactly:
-//   SyncCompanionTabUI      - the settings half IS reachable (CoreSettings.Current carries
-//                             TriggerModeEnabled, TriggerIntervalSeconds, IdleGiggleIntervalSeconds,
-//                             BubbleDurationSeconds), but the rest of the method is
-//                             _avatarTubeWindow.IsDetached (ConditioningControlPanel/AvatarTube/),
-//                             SyncAiBrainUI (MainWindow.AiBrain.cs) and CompanionRoom.Sync - and it
-//                             writes all of it through the tab accessors above. Note also the
-//                             _isLoading guard it wraps everything in: on Avalonia that guard is
-//                             MORE necessary, not less, because CheckBox and ToggleSwitch raise
-//                             IsCheckedChanged on a programmatic set.
-//   UpdateCompanionCardsUI  - App.Companion.ActiveCompanion / GetProgress / IsCompanionUnlocked
-//   CompanionCard_Click       (ConditioningControlPanel/Services/Companion/CompanionService.cs) and
-//                             App.Mods.IsCompanionSupported. Models.CompanionDefinition and
-//                             CompanionProgress ARE in Core (CCP.Core/Models/), and CoreMods answers
-//                             GetAccentColorHex and MakeModAware - so the five cards' names and
-//                             colours are the one part that would resolve. Their level, lock state
-//                             and active ring do not, and a card wearing four right answers and one
-//                             wrong one is worse than a card that waits.
-//   UpdateCommunityPromptsUI- DONE elsewhere: CommunityPromptService is in Core
-//   CreatePromptRow           (CCP.Core/Services/Companion/CommunityPromptService.cs) and the rows,
-//                             consent gate and Z4 re-sync live in the cell that owns the controls,
-//                             Views/Controls/Companion/Runtime/WorkshopCommunityCell.
-//   GetActivePromptDisplayName - reachable now (Core service); not wired: Z4 still shows the prompt id.
-//   BtnCompanionPersonality_Click - DONE elsewhere: Views/Controls/Companion/Runtime/
-//   UpdateCompanionPromptLabels  WorkshopRosterCell owns the picker and labels; CompanionCore
-//                             carries ApplyCompanionPrompt / GetAssignedPromptName.
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Companion;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        // Deliberately empty - see the header. No member of this partial is referenced from
-        // MainShellWindow.axaml.
+        /// <summary>WPF MainWindow.CompanionTab.cs CompanionCard_Click: free switching through
+        /// the shared engine, then refresh the actual room controls.</summary>
+        internal void SwitchCompanionFromRoster(int index, CompanionRoomView room)
+        {
+            if (index is < 0 or > 4) return;
+            var id = (CompanionId)index;
+            if (CoreMods.Service?.IsCompanionSupported(id) == false) return;
+            if (!CompanionCore.SwitchCompanion(id)) return;
+            room.RefreshCompanionIdentity();
+            // WPF MainWindow.CompanionTab.cs:327-361: the tube follows with its 200 ms fade out/in.
+            if (_avatarTubeWindow is { } tube) _ = SwitchTubeAvatarAsync(tube, id);
+        }
+
+        private static async System.Threading.Tasks.Task SwitchTubeAvatarAsync(
+            global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow tube, CompanionId id)
+        {
+            try { await tube.SwitchToCompanionAvatarAsync(id); }
+            catch (System.Exception ex) { Serilog.Log.Warning(ex, "Workshop: companion avatar switch failed"); }
+        }
+
+        // ponytail: the runtime aggregate/compat accessors remain in wire-views-tab-companion-b.
+        // Personality assignment and community prompts live in WorkshopRosterCell /
+        // WorkshopCommunityCell over the Core CommunityPromptService.
     }
 }

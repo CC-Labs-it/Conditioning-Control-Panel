@@ -5,6 +5,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
+using Avalonia.Media.Imaging;
 using Avalonia.Skia;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -166,6 +169,58 @@ public sealed class GameWindowFypTests
         Wait(w.FypLastProbe!);
         Assert.Equal(new[] { "sub-probe", "library" }, sent.Select(o => (string?)o["type"]));
         Assert.Contains("hypnofeed", s.FypOnlineCustomSubs);
+    });
+
+    [Fact]
+    public void FileMenu_LocalClipOpensOrReveals_UnsafeAndMissingIdsAreRefused() => Run((_, lib) =>
+    {
+        CoreEntitlement.HasPremiumProvider = () => true;
+        var video = Directory.CreateDirectory(Path.Combine(lib, "videos")).FullName;
+        var path = Path.Combine(video, "clip.mp4");
+        File.WriteAllBytes(path, new byte[] { 1 });
+        var w = GameWindow.Launch(GameWindow.FypId)!;
+        var targets = new List<string>();
+        var oldShell = ExternalOpener.Shell;
+        ExternalOpener.Shell = target => { targets.Add(target); return true; };
+        try
+        {
+            w.HandleMessage("{\"type\":\"file-menu\",\"id\":\"videos/clip.mp4\"}");
+            Dispatcher.UIThread.RunJobs();
+            var menu = Assert.IsType<ContextMenu>(w.FypFileMenu);
+            var items = menu.Items.Cast<MenuItem>().ToArray();
+            Assert.Equal(new[] { ConditioningControlPanel.Localization.Loc.Get("fyp_menu_open_file"),
+                ConditioningControlPanel.Localization.Loc.Get("fyp_menu_show_in_folder") }, items.Select(x => x.Header));
+            // Optional visual evidence of the real popup, which render-all's default window sample cannot show.
+            if (Environment.GetEnvironmentVariable("CCP_FYP_MENU_RENDER") is { Length: > 0 } proof)
+            {
+                using var bitmap = new RenderTargetBitmap(new PixelSize(
+                    (int)Math.Ceiling(menu.Bounds.Width), (int)Math.Ceiling(menu.Bounds.Height)));
+                bitmap.Render(menu);
+                bitmap.Save(proof);
+            }
+            items[0].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            items[1].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.Equal(new[] { path, video }, targets);
+            File.Delete(path);
+            items[0].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.Equal(2, targets.Count); // deleted between menu creation and click
+            foreach (var id in new[] { "videos/missing.mp4", "videos/run.exe", "../outside.mp4", "scrolller/a/1" })
+            {
+                w.HandleMessage(new JObject { ["type"] = "file-menu", ["id"] = id }.ToString());
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(w.FypFileMenu);
+            }
+            w.HandleMessage("{\"type\":\"file-menu\",\"id\":\"videos/clip.mp4\"}");
+            Assert.Null(w.FypFileMenu);
+            File.WriteAllBytes(path, new byte[] { 1 });
+            w.HandleMessage("{\"type\":\"file-menu\",\"id\":\"videos/clip.mp4\"}");
+            var lastMenu = Assert.IsType<ContextMenu>(w.FypFileMenu);
+            Assert.True(lastMenu.IsOpen);
+            GameWindow.CloseAllForPanic();
+            Assert.False(lastMenu.IsOpen);
+            Assert.Null(w.FypFileMenu);
+        }
+        finally { ExternalOpener.Shell = oldShell; }
     });
 
     private static void Wait(Task t)

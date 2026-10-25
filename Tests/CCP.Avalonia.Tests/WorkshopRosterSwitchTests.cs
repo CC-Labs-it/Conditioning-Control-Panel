@@ -57,6 +57,7 @@ public sealed class WorkshopRosterSwitchTests
         {
             shell.Show();
             shell.ShowTab("companion");
+            CollapsedRoom.Show(shell);   // v2 collapses the room; the roster cell lives only in its Workshop drawer
             Dispatcher.UIThread.RunJobs();
             shell.GetLogicalDescendants().OfType<WorkshopAccordion>().Single().ExpandAndReveal("roster");
             Dispatcher.UIThread.RunJobs();

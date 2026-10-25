@@ -24,9 +24,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     public partial class MainShellWindow
     {
         private bool _companionFxInitialized;
+        /// <summary>WPF restores the drawers at load; here that waits for the first show, so until
+        /// then the room holds defaults and persisting them would overwrite the saved states.</summary>
+        private bool _companionDrawersRestored;
 
         /// <summary>WPF MainWindow.CompanionFx.cs:32, called from CompanionTabView on a real
-        /// visibility edge of the room.</summary>
+        /// visibility edge of the tab (the room itself stays collapsed).</summary>
         internal void OnCompanionTabVisibilityChanged(bool visible, CompanionRoomView room)
         {
             try
@@ -35,9 +38,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!visible)
                 {
                     // Per-toggle would be a settings save on every click of a rarely-opened drawer.
-                    if (map != null) { room.PersistDrawerStates(map); CoreSettings.Save(); }
+                    if (map != null && _companionDrawersRestored) { room.PersistDrawerStates(map); CoreSettings.Save(); }
                 }
-                else if (map != null) room.RestoreDrawerStates(map);
+                else
+                {
+                    if (map != null) room.RestoreDrawerStates(map);
+                    _companionDrawersRestored = true;
+                }
 
                 InitializeCompanionFx(room);
 
@@ -46,12 +53,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Debug("OnCompanionTabVisibilityChanged: {E}", ex.Message); }
         }
 
+        /// <summary>WPF MainWindow.Patreon.cs:1546 RevealCompanionWorkshopCell: under v2 the room is
+        /// collapsed, so each Workshop cell opens the Companion page that hosts it.</summary>
+        internal void RevealCompanionWorkshopCell(string? cellKey)
+        {
+            if (CompanionPageForWorkshopCell(cellKey) is { } page) { ShowTab(page); return; }
+            try { RoomView()?.RevealWorkshop(cellKey); }
+            catch (Exception ex) { Log.Debug("RevealCompanionWorkshopCell: {E}", ex.Message); }
+        }
+
+        /// <summary>WPF MainWindow.Patreon.cs:1561: the page that hosts a Workshop cell (null = none;
+        /// the Awareness cell lives on the Awareness tab).</summary>
+        internal static string? CompanionPageForWorkshopCell(string? cellKey) => cellKey switch
+        {
+            null => "personality",
+            CompanionRoomAnchors.WorkshopRosterCell => "personality",
+            CompanionRoomAnchors.WorkshopBehaviorCell => "companionai",
+            CompanionRoomAnchors.WorkshopTriggersCell => "companionai",
+            CompanionRoomAnchors.WorkshopCommunityCell => "personality",
+            CompanionRoomAnchors.WorkshopLibraryCell => "companionlinks",
+            _ => null,
+        };
+
         /// <summary>WPF WindowChrome.cs:176: quitting while still on the tab is not a hide edge.</summary>
         private void PersistCompanionDrawerStatesOnExit()
         {
             var map = CoreSettings.Current?.CompanionSectionOpen;
             var room = Named<Tabs.CompanionTabView>("CompanionTab")?.FindControl<CompanionRoomView>("Room");
-            if (map == null || room == null) return;
+            if (map == null || room == null || !_companionDrawersRestored) return;
             room.PersistDrawerStates(map);
             CoreSettings.Save();
         }

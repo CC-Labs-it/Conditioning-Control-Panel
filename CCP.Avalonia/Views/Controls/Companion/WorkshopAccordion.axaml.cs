@@ -1,6 +1,4 @@
 using System;
-using ConditioningControlPanel.Models;
-using ConditioningControlPanel.Services.Companion;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
@@ -40,19 +38,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private void WireCellHostActions(WorkshopShelfParts parts)
         {
             parts.Behavior.ChatShortcutRequested += async (_, _) => await RebindChatShortcutAsync();
-            // WPF CompanionCard_Click: the cell supplies the same 0..4 Tag index.
-            parts.Roster.CompanionCardClicked += async (_, index) =>
-            {
-                try
-                {
-                    // The hero follows through its own CompanionCore.Switched hook (WPF SyncHero).
-                    var id = (CompanionId)index;
-                    if (CompanionCore.SwitchCompanion(id) &&
-                        TopLevel.GetTopLevel(this) is Views.Windows.MainShellWindow { Tube: { } tube })
-                        await tube.SwitchToCompanionAvatarAsync(id);
-                }
-                catch (Exception ex) { Log.Warning(ex, "Workshop: companion switch failed"); }
-            };
 
             // Deliberately NOT wired, each for the reason a previous layer already recorded:
             //
@@ -63,6 +48,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             //  · Behavior.PauseBrowserChanged — WPF mutes and suspends the live WebView2
             //    (MainWindow.Patreon.cs); this drawer holds no WebHost to suspend, and a switch
             //    that flips with nothing behind it would report a paused browser that is playing.
+            //  · Roster.CompanionCardClicked — CompanionTabView wires it to the shell's shared-Core
+            //    switch (MainShellWindow.SwitchCompanionFromRoster), which also moves the tube.
             // Community and the roster's personality button own their shared-service actions and
             // native picker presentation (the Core CommunityPromptService).
         }
