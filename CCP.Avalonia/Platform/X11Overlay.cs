@@ -366,6 +366,9 @@ internal static class X11Overlay
     /// after this call can legitimately still see the old one.</para></summary>
     internal static bool RestackAbove(TopLevel window, TopLevel sibling)
     {
+        // WPF BubbleCount/BubbleService pin overlays with HWND_TOPMOST after the owner shows.
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd))
+            return Win32Overlay.SetOverrideRedirect(window, hwnd);
         if (!TryGetXid(window, out var xid)) return false;
         if (!TryGetXid(sibling, out var siblingXid)) return false;
 

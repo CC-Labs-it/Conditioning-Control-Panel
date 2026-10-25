@@ -56,6 +56,36 @@ namespace ConditioningControlPanel.Services
         public int Screen;
         public double X, Y, Size, Angle, Scale = 1, Fade = 1;
         public bool Clickable, Popping, Lucky;
+        public bool AmbientTrigger, Natasha;
+        public bool Resisting { get; private set; }
+        public double ResistProgress { get; private set; }
+        public double AliveSeconds => _timeAlive;
+        private DateTime _resistStart;
+        private double _treatMs;
+
+        public void BeginResist(DateTime now)
+        {
+            if (!Natasha || Popping || Resisting) return;
+            Resisting = true;
+            ResistProgress = 0;
+            _resistStart = now;
+        }
+
+        private Result TickResist(bool held, double x, double y, DateTime now)
+        {
+            var ms = Math.Max(0, (now - _resistStart).TotalMilliseconds);
+            var step = Chaster.NatashasFavourite.StepHold(ms, !held, Contains(x, y));
+            ResistProgress = Chaster.NatashasFavourite.HoldProgress(ms);
+            if (step == Chaster.NatashasFavourite.HoldStep.Holding) return Result.Alive;
+            Resisting = false;
+            ResistProgress = 0;
+            if (step == Chaster.NatashasFavourite.HoldStep.Resisted)
+            {
+                Popping = Deflating = true;
+                return Result.Resisted;
+            }
+            return step == Chaster.NatashasFavourite.HoldStep.Popped ? Result.PlayerPop : Result.Alive;
+        }
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
         private double _startX, _top, _speed, _wobbleOffset, _timeAlive;
@@ -76,7 +106,7 @@ namespace ConditioningControlPanel.Services
         private double _channelMs, _channelStartFuseSec;
         private DateTime _channelStartUtc;
 
-        public enum Result { Alive, Missed, Done, Detonated, Defused }
+        public enum Result { Alive, Missed, Done, Detonated, Defused, PlayerPop, Resisted }
 
         /// <summary>A live threat the player defuses by holding (WPF NeedsHoldDefuse for the plain lives).</summary>
         public bool IsLiveThreat => Spec is { IsLive: true, IsDarter: false, IsFreeze: false };
@@ -85,7 +115,7 @@ namespace ConditioningControlPanel.Services
         public double DefuseJudgeFuseSec => DefusedViaChannel ? _channelStartFuseSec : FuseSecLeft;
         public double FuseFraction => FuseTotalMs > 0 ? Math.Clamp(FuseRemainingMs / FuseTotalMs, 0, 1) : 0;
         /// <summary>WPF _channelScale: the bubble shrinks under the hold.</summary>
-        public double ChannelScale => Channeling
+        public double ChannelScale => Resisting ? 1 - Chaster.NatashasFavourite.HoldShrink * ResistProgress : Channeling
             ? 1.0 - (1.0 - Chaos.ChaosTuning.CHANNEL_MIN_SCALE) * Math.Clamp(_channelMs / Chaos.ChaosTuning.DEFUSE_HOLD_MS, 0, 1)
             : 1.0;
 
@@ -199,12 +229,18 @@ namespace ConditioningControlPanel.Services
                 Angle += 2;
                 return Fade <= 0 ? Result.Done : Result.Alive;
             }
+            if (Resisting) return TickResist(held, cursorX, cursorY, nowUtc);
             if (Channeling) return TickChannel(held, cursorX, cursorY, nowUtc);
             // WPF :4147-4193: the fuse burns 32 ms a step; fuse-out detonates.
             if (Spec is { IsLive: true } && FuseRemainingMs > 0)
             {
                 FuseRemainingMs -= FuseStepMs;
                 if (FuseRemainingMs <= 0) return GoOff(null);
+            }
+            if (AmbientTrigger && Spec is { TreatLifeMs: > 0 })
+            {
+                _treatMs += FuseStepMs;
+                if (_treatMs >= Spec.TreatLifeMs) { Popping = Deflating = true; return Result.Alive; }
             }
             _timeAlive += 0.02;
             double offset = 0;
@@ -252,6 +288,7 @@ namespace ConditioningControlPanel.Services
         public Action<AmbientBubble>? ChaosDetonated;
         /// <summary>A live chaos bubble was snapped (held to the end, or swept).</summary>
         public Action<AmbientBubble>? ChaosDefused;
+        public Action<AmbientBubble>? NatashaPopped, NatashaResisted;
 
         /// <summary>A press on a live bubble (WPF OnPlayerPress): starts its channel, or sets it off.</summary>
         public void PressLive(AmbientBubble b, bool canChannel, double cursorX, double cursorY)
@@ -304,9 +341,11 @@ namespace ConditioningControlPanel.Services
             {
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
-                if (HoldChaos && b.Spec != null && !b.Popping) { b.CancelChannel(); continue; }
+                if (HoldChaos && b.Spec != null && !b.AmbientTrigger && !b.Popping) { b.CancelChannel(); continue; }
                 var r = b.Step(Held, CursorX, CursorY, now);
                 if (r == AmbientBubble.Result.Alive) continue;
+                if (r == AmbientBubble.Result.PlayerPop) { NatashaPopped?.Invoke(b); continue; }
+                if (r == AmbientBubble.Result.Resisted) { NatashaResisted?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Defused) { ChaosDefused?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Missed) missed++;

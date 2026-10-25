@@ -70,15 +70,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static double PaintedOpacity => SpiralFrames.Paint(CoreSettings.Current.SpiralOpacity / 100.0);
 
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
+        private static DateTime _payloadUntil;
+        private static double _payloadOpacity;
+        private static int _payloadGeneration;
+        internal static bool HasTimedPayload => DateTime.UtcNow < _payloadUntil;
+        internal static void ShowTimed(Visual host, int ms, double opacity)
+        {
+            _payloadGeneration++;
+            _payloadUntil = DateTime.UtcNow.AddMilliseconds(Math.Max(1, ms));
+            _payloadOpacity = Math.Clamp(opacity, 0, 1);
+            Refresh(host);
+            var generation = _payloadGeneration;
+            global::Avalonia.Threading.DispatcherTimer.RunOnce(() =>
+            {
+                if (generation != _payloadGeneration) return;
+                _payloadUntil = default;
+                Refresh(host);
+            }, TimeSpan.FromMilliseconds(Math.Max(1, ms)));
+        }
+
         public static void Refresh(Visual host)
         {
             var s = CoreSettings.Current;
-            if (!s.SpiralEnabled || !ShouldShow()) { CloseAll(); return; }
+            if (!HasTimedPayload && (!s.SpiralEnabled || !ShouldShow())) { CloseAll(); return; }
 
             var path = SourcePath();
             if (_framesKey != path)
             {
-                CloseAll();
+                CloseWindows();
                 BeginDecode(TopLevel.GetTopLevel(host) ?? host, path);
                 return;
             }
@@ -88,7 +107,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var primary = -1;
             for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
             var want = PinkFilterOverlay.ResolveScreenIndices(s.SpiralTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
-            var opacity = PaintedOpacity;
+            var opacity = HasTimedPayload ? _payloadOpacity : PaintedOpacity;
 
             if (Windows.Count > 0 && want.SequenceEqual(_shownOn))
             {
@@ -96,7 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
 
-            CloseAll();
+            CloseWindows();
             // No compositor = no per-pixel alpha: the spiral would be an opaque screen-sized block.
             if (!SkipPlatformChecksForTests && (_refused || !X11Overlay.IsAvailable || !X11Overlay.IsCompositing))
             {
@@ -118,7 +137,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     Log.Warning("Spiral: the platform refused a click-through topmost overlay window, so the spiral is not shown");
                     _refused = true;
                     w.Close();
-                    CloseAll();
+                    CloseWindows();
                     return;
                 }
                 w.Show();
@@ -146,6 +165,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF StopSpiral: the windows and the clock go; the decoded frames stay cached.</summary>
         public static void CloseAll()
+        {
+            _payloadUntil = default;
+            _payloadGeneration++;
+            CloseWindows();
+        }
+
+        private static void CloseWindows()
         {
             _timer?.Stop();
             _timer = null;
