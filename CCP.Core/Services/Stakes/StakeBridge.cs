@@ -38,9 +38,11 @@ public sealed class StakeBridge
     private readonly Action _enableLossRow;
     private readonly Func<JObject> _labels;
     private readonly Action<JObject> _post;
+    private readonly Func<TimeSpan, CancellationToken, Task>? _settleDelay;
 
     public StakeBridge(string game, Action<JObject> post, IStakeApi api, StakeSettlement settlement,
-        Func<bool> timeOk, Action enableLossRow, Func<JObject>? labels = null)
+        Func<bool> timeOk, Action enableLossRow, Func<JObject>? labels = null,
+        Func<TimeSpan, CancellationToken, Task>? settleDelay = null)
     {
         _game = game ?? throw new ArgumentNullException(nameof(game));
         _post = post ?? throw new ArgumentNullException(nameof(post));
@@ -49,6 +51,7 @@ public sealed class StakeBridge
         _timeOk = timeOk ?? (() => false);
         _enableLossRow = enableLossRow ?? (() => { });
         _labels = labels ?? StakeText.Labels;
+        _settleDelay = settleDelay;   // the settle watch's wait (null = Task.Delay); tests step it
     }
 
     /// <summary>The head's gates, seeded at startup (WPF: <c>StakeAppHooks</c>). Unseeded: time is
@@ -145,7 +148,7 @@ public sealed class StakeBridge
     {
         var match = Match(msg);
         if (match == null) return;
-        var (reply, outcome) = await _settlement.WatchAsync(_api, _game, match).ConfigureAwait(false);
+        var (reply, outcome) = await _settlement.WatchAsync(_api, _game, match, _settleDelay).ConfigureAwait(false);
         var o = outcome.Result != null && reply != null ? (JObject)reply.DeepClone() : new JObject { ["ok"] = true, ["gave_up"] = true };
         if (outcome.Result != null) o["booked_s"] = outcome.BookedSeconds;
         Post("settled", o, match);

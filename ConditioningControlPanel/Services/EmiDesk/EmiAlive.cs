@@ -36,22 +36,6 @@ public enum EmiFidget
     Screen
 }
 
-/// <summary>What a completed pat on her body means once the poke ladder has looked at it.</summary>
-public enum EmiPokeStep
-{
-    /// <summary>An ordinary pat: whatever the pet path was going to do anyway.</summary>
-    Pat,
-
-    /// <summary>The fourth poke inside the window: the same flick, wearing <c>-_-</c>.</summary>
-    Annoyed,
-
-    /// <summary>The fifth: the rage beat, wordless, and then a truce.</summary>
-    Rage,
-
-    /// <summary>The third: the pet streak. A chime and glee, the campus's three-pets beat.</summary>
-    Glee
-}
-
 /// <summary>
 /// THE PURE HALF OF WAVE A ("making her alive", <c>docs/emi-desk/ALIVE-PLAN.md</c> section 6).
 ///
@@ -332,29 +316,29 @@ public static class EmiAlive
     // ---------------------------------------------------------------- the poke ladder
 
     /// <summary>How long a run of pokes stays a run, in ms. CAMPUS <c>PET_WINDOW_MS</c>.</summary>
-    public const int PokeWindowMs = 4_000;
+    public const int PokeWindowMs = EmiPatFeedback.PokeWindowMs;
 
     /// <summary>The poke inside the window that earns glee: the campus's pet streak (2026-09-25,
     /// owner: the desk was missing the charm the Arcademy has, where three quick pets delight her).</summary>
-    public const int PokeGleeAt = 3;
+    public const int PokeGleeAt = EmiPatFeedback.PokeGleeAt;
 
     /// <summary>The poke inside the window that earns <c>-_-</c>. Pushed past the glee on 2026-09-25.</summary>
-    public const int PokeAnnoyAt = 4;
+    public const int PokeAnnoyAt = EmiPatFeedback.PokeAnnoyAt;
 
     /// <summary>...and the one that earns the rage beat.</summary>
-    public const int PokeRageAt = 5;
+    public const int PokeRageAt = EmiPatFeedback.PokeRageAt;
 
     /// <summary>After the rage, this long of peace: the ladder cannot climb again, in ms.</summary>
-    public const int PokeTruceMs = 60_000;
+    public const int PokeTruceMs = EmiPatFeedback.PokeTruceMs;
 
     /// <summary>How long the wordless glare is held at the end of the rage, in ms.</summary>
-    public const int PokeRageHoldMs = 1_500;
+    public const int PokeRageHoldMs = EmiPatFeedback.PokeRageHoldMs;
 
     /// <summary>The glare. Wordless on purpose: annoyance is funnier silent.</summary>
-    public const string PokeRageFace = ">:(";
+    public const string PokeRageFace = EmiPatFeedback.PokeRageFace;
 
     /// <summary>The second poke's face.</summary>
-    public const string PokeAnnoyFace = "-_-";
+    public const string PokeAnnoyFace = EmiPatFeedback.PokeAnnoyFace;
 
     /// <summary>
     /// THE POKE LADDER. Pats inside <see cref="PokeWindowMs"/> of each other climb: the first two
@@ -368,48 +352,11 @@ public static class EmiAlive
     /// </summary>
     public sealed class PokeLadder
     {
-        private int _count;
-        private DateTime _lastAt = DateTime.MinValue;
-        private DateTime _truceUntil = DateTime.MinValue;
-
-        /// <summary>How many pokes are in the current run.</summary>
-        public int Count => _count;
-
-        /// <summary>True while the post-rage truce is on: the ladder refuses to climb.</summary>
-        public bool InTruce(DateTime nowUtc) => nowUtc < _truceUntil;
-
-        /// <summary>Book one poke and say what it earned.</summary>
-        public EmiPokeStep Note(DateTime nowUtc)
-        {
-            if (nowUtc < _truceUntil)
-            {
-                // A truce is a truce: pats still land, they simply stop climbing.
-                _count = 0;
-                _lastAt = nowUtc;
-                return EmiPokeStep.Pat;
-            }
-
-            if (_lastAt == DateTime.MinValue || (nowUtc - _lastAt).TotalMilliseconds > PokeWindowMs) _count = 0;
-            _lastAt = nowUtc;
-            _count++;
-
-            if (_count >= PokeRageAt)
-            {
-                _count = 0;
-                _truceUntil = nowUtc.AddMilliseconds(PokeTruceMs);
-                return EmiPokeStep.Rage;
-            }
-            return _count == PokeGleeAt ? EmiPokeStep.Glee
-                 : _count == PokeAnnoyAt ? EmiPokeStep.Annoyed
-                 : EmiPokeStep.Pat;
-        }
-
-        /// <summary>Forget the run (she left, or she was dismissed). The truce is NOT forgotten.</summary>
-        public void Reset()
-        {
-            _count = 0;
-            _lastAt = DateTime.MinValue;
-        }
+        private readonly EmiPokeLadder _shared = new();
+        public int Count => _shared.Count;
+        public bool InTruce(DateTime nowUtc) => _shared.InTruce(nowUtc);
+        public EmiPokeStep Note(DateTime nowUtc) => _shared.Note(nowUtc);
+        public void Reset() => _shared.Reset();
     }
 
     // ---------------------------------------------------------------- the yield rule
