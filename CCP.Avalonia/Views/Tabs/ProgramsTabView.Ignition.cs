@@ -29,7 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// rail comet, particles - plus the day / chapter / graduation moments. Ambient loops run only while
     /// the tab is visible and attached, Motion allows them and the shell is not minimised (WPF
     /// ProgramsFx.cs:818; focus loss only parks the particle canvas, which watches IsActive itself) (P01); the rig and generated rail nodes own cancellation groups, stopped on hide and on detach (P65). Display only: nothing is written.
-    /// ponytail: FireBurstAt sparks (task tick, seal, graduation), the banner spring and the live session sheen have no Avalonia twin yet.
+    /// ponytail: FireBurstAt sparks (task tick, seal, graduation) and the banner spring have no Avalonia twin yet. The live session sheen rides BeatLoop.
     /// </summary>
     public partial class ProgramsTabView
     {
@@ -115,6 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// unchanged gate costs one string compare.</summary>
         private void SyncIgnition()
         {
+            RefreshLiveSessionProgress();
             if (!IsVisible || VisualRoot is null) { StopIgnitionLoops(); StopMoments(); return; }
             if (_ignitionEnrollment != null && Find<StackPanel>("ProgramsRunPanel").IsVisible)
                 ApplyIgnition(_ignitionEnrollment);
@@ -209,6 +210,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     panel.BorderBrush = _borderBrush;
                     panel.BorderThickness = new Thickness(2);
                 }
+                RefreshLiveSessionProgress();
                 if (!rearm) { ApplyRailPipFx(); return; }
 
                 // Clocks only exist when ambient motion is allowed; otherwise every surface below is static.
@@ -372,6 +374,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// the signature re-arms it on the next pass.</summary>
         private void StopIgnitionLoops()
         {
+            StopSessionSheen();
             StopRailPipFx();
             _fxSignature = null;
             _cometAttempts = 0;

@@ -150,9 +150,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         private void DepthPress(PillParts p, bool down)
         {
+            PressSquish(p, down);
             if (p.Pressed == down) return;
             p.Pressed = down;
             DepthSettle(p, animate: true);
+        }
+
+        // WPF MotionFx owns the first scale in the ring's transform group; hover keeps a separate
+        // scale. Animate its properties directly: Animation.RunAsync cannot target a Transform.
+        private void PressSquish(PillParts p, bool down)
+        {
+            if (Level == MotionLevel.Off) p.PressScale.Transitions = null;
+            else
+            {
+                var duration = TimeSpan.FromMilliseconds(InteractionPressMotion.DurationMs);
+                // Build once: one click calls this three times (release, Click, capture loss), and
+                // replacing the collection would cancel the running 80 ms release ease.
+                p.PressScale.Transitions ??= new Transitions
+                {
+                    new DoubleTransition { Property = ScaleTransform.ScaleXProperty, Duration = duration, Easing = new QuadraticEaseOut() },
+                    new DoubleTransition { Property = ScaleTransform.ScaleYProperty, Duration = duration, Easing = new QuadraticEaseOut() },
+                };
+            }
+            p.PressScale.ScaleX = p.PressScale.ScaleY = InteractionPressMotion.ScaleFor(down);
         }
 
         private static KeyFrame Frame(double cue, AvaloniaProperty prop, double value) =>
@@ -217,8 +237,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         // ------------------------------------------------------------------ choose (wave 7)
 
-        /// <summary>WPF FxOnChosen: settle the chosen pill's lift, throw a spark burst in the hue.
-        /// ponytail: the NavGlow choose ring waits for the rail-c NavGlow port (sync6-nav-polish-d).</summary>
+        /// <summary>WPF FxOnChosen: settle the chosen pill's lift, ring it once and throw sparks in the hue.</summary>
         private void FxOnChosen(NavTab tab)
         {
             try
@@ -226,6 +245,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 var level = Level;
                 if (level == MotionLevel.Off || Part(tab.Key) is not { } p) return;
                 if (IsActive(tab.Key)) FxSettle(p, 0, 1, NavStripMotion.HoverOutMs, level == MotionLevel.Full);
+                NavGlow.Once(p.Pill, _hue, level, "pill-choose");
                 var b = p.Pill.Bounds;
                 if (b.Width <= 0) return;
                 var centre = p.Pill.TranslatePoint(new Point(b.Width / 2, b.Height / 2), _sparks);

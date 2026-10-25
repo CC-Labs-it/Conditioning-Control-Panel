@@ -133,9 +133,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 try { Services.LockdownService.Current?.NotifyEscapeAttempt(Services.Possession.EscapeKinds.Close); } catch { }
                 return false;
             }
-            panel.Hide();
-            panel.HideAvatarTube();
-            OpenFor(panel);
+            panel.FadeOutForLauncher(() =>
+            {
+                // Lockdown can begin during the fade: keep the panel as the live surface.
+                if (MainShellWindow.LockdownActive) return;
+                panel.Hide();
+                panel.HideAvatarTube();
+                OpenFor(panel);
+            });
             return true;
         }
 
@@ -239,7 +244,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             AfterExitBeat(() =>
             {
                 Hide();
-                panel.ShowFromTray();
+                panel.ShowFromLauncher();
                 try { then?.Invoke(panel); }
                 catch (Exception ex) { Log.Debug(ex, "[Launcher] step after OpenPanel failed"); }
             });
@@ -552,10 +557,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void BuildTiles()
         {
+            StopWanderingSheen();
             GamesGrid.Children.Clear();
             _revealedAtBuild.Clear();
             foreach (var card in VisibleCards) { GamesGrid.Children.Add(CreateTile(card)); _revealedAtBuild[card.Id] = true; }
-            SeatGrid();
+            SeatGrid();   // the wander timer keeps running and picks from the new tiles; the CTA sheen is untouched
         }
 
         /// <summary>WPF GamesColumn_SizeChanged / FitTiles (LauncherWindow.xaml.cs:550): columns and card
