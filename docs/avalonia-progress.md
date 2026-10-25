@@ -3130,3 +3130,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-win-media-history: +475
 - Media Log wired: reveal selects the file (Explorer /select, open -R, FileManager1.ShowItems), Load preview behind consent (redirects by hand, WPF headers), broken-clip plate only for empty/image/audio files.
 - Review fixes 7eaf2bfe9; rgate run 39690948829 green except a known Windows flake (P94).
+
+## avalonia-port/wire-ctrl-emi-dock: +411
+- EMI rail chip ported (64px layout, EmiFace renderer, Core EmiFaceRules; BoxShadow glow pulse replaces the animated Effect); row stays stub, knock/first-contact flow left to lane -b.
+- Review fixes: knock test asserts pulse timelines instead of sleeps; face test locks the fill and lift numbers; rgate green except the listed RaceTrack race.
