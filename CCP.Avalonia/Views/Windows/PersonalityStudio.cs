@@ -90,7 +90,7 @@ internal static class PersonalityStudio
                     okText: Loc.Get("label_yes"), cancelText: Loc.Get("label_no"));
                 Live.Add(confirm);
                 confirm.Closed += (_, _) => Live.Remove(confirm);
-                var asked = await confirm.ShowDialog<bool?>(dialog);
+                var asked = await confirm.ShowDialogSafe<bool?>(dialog);
                 if (asked != true || !dialog.IsVisible || !service.DeletePreset(own.Id)) return;
                 BambiSprite.InvalidateStablePrompt();
                 dialog.Close();
@@ -136,7 +136,7 @@ internal static class PersonalityStudio
             dialog.Close(true);
         };
         dialog.Content = grid;
-        await dialog.ShowDialog<bool?>(owner);
+        await dialog.ShowDialogSafe<bool?>(owner);
     }
 
     private static TextBox Field(Panel panel, string label, string text, int max, double height)

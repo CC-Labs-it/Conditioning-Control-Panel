@@ -37,7 +37,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             BtnTurnOn.Click += (_, _) => { Shell?.SetAvatarEnabled(true); Refresh(); };
             BtnTubeFit.Click += (_, _) => _ = new TubeFitDialog().ShowDialogSafe(TopLevel.GetTopLevel(this) as Window);
             BtnPerkChange.Click += Perk_Click;
-            MorePersonalityOptions = PersonalityStudio.Show;
             Refresh();
             AttachedToVisualTree += (_, _) =>
             {

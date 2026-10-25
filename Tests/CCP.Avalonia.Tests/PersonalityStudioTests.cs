@@ -54,10 +54,7 @@ public sealed class PersonalityStudioTests
         var owner = Boot();
         try
         {
-            // The picker callback is the same door used by the Make Her Yours command.
-            var picker = new CompanionPickerCard();
-            Assert.NotNull(picker.MorePersonalityOptions);
-            var task = picker.MorePersonalityOptions!(owner);
+            var task = PersonalityStudio.Show(owner);
             var dialog = owner.OwnedWindows.Single();
             var name = Field(dialog, L("name"));
             name.Text = " ";
