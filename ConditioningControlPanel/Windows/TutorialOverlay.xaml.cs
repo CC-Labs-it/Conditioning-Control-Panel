@@ -816,8 +816,6 @@ namespace ConditioningControlPanel
         [DllImport("gdi32.dll")]
         private static extern bool DeleteObject(IntPtr hObject);
 
-        private const int RGN_DIFF = 4; // dest = src1 - src2
-
         private void ApplyWindowSpotlightRegion(Rect spotlightBoundsDip)
         {
             try
@@ -846,26 +844,25 @@ namespace ConditioningControlPanel
                 if (double.IsNaN(w) || w <= 0) return;
                 if (double.IsNaN(h) || h <= 0) return;
 
-                int fullW = (int)Math.Round(w * sx);
-                int fullH = (int)Math.Round(h * sy);
-                int holeL = (int)Math.Round(spotlightBoundsDip.X * sx);
-                int holeT = (int)Math.Round(spotlightBoundsDip.Y * sy);
-                int holeR = (int)Math.Round((spotlightBoundsDip.X + spotlightBoundsDip.Width) * sx);
-                int holeB = (int)Math.Round((spotlightBoundsDip.Y + spotlightBoundsDip.Height) * sy);
-
-                IntPtr full = CreateRectRgn(0, 0, fullW, fullH);
-                IntPtr hole = CreateRectRgn(holeL, holeT, holeR, holeB);
+                var rects = ConditioningControlPanel.Tutorial.SpotlightInputRegion.Create(w, h, sx, sy,
+                    spotlightBoundsDip.X, spotlightBoundsDip.Y, spotlightBoundsDip.Width, spotlightBoundsDip.Height);
                 IntPtr result = CreateRectRgn(0, 0, 0, 0);
-                CombineRgn(result, full, hole, RGN_DIFF);
+                if (result == IntPtr.Zero) return;
+                try
+                {
+                    foreach (var rect in rects)
+                    {
+                        IntPtr part = CreateRectRgn(rect.X, rect.Y, rect.X + rect.Width, rect.Y + rect.Height);
+                        if (part == IntPtr.Zero) return;
+                        try { if (CombineRgn(result, result, part, 2 /* RGN_OR */) == 0) return; }
+                        finally { DeleteObject(part); }
+                    }
+                    if (SetWindowRgn(hwnd, result, true) != 0) result = IntPtr.Zero; // OS ownership.
+                    App.Logger?.Debug("TutorialOverlay region: {W}x{H} hole=({X},{Y},{HW},{HH}) parts={N} dpi={D}",
+                        w, h, spotlightBoundsDip.X, spotlightBoundsDip.Y, spotlightBoundsDip.Width, spotlightBoundsDip.Height, rects.Length, sx);
+                }
+                finally { if (result != IntPtr.Zero) DeleteObject(result); }
 
-                // SetWindowRgn takes ownership of the region on success; don't
-                // delete `result`. Always free the temporaries.
-                SetWindowRgn(hwnd, result, true);
-                DeleteObject(full);
-                DeleteObject(hole);
-
-                App.Logger?.Debug("TutorialOverlay region: full={F}x{Fh} hole=({L},{T},{R},{B}) dpi={D}",
-                    fullW, fullH, holeL, holeT, holeR, holeB, sx);
             }
             catch (Exception ex)
             {

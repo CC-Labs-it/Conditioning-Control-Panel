@@ -29,6 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// press is a rebind, never a panic.</summary>
         internal static bool CapturingPanicKey { get; set; }
 
+        private DateTime? _lastPbpEscapeClaimUtc;
         private int _panicPressCount;
         private DateTime _lastPanicTime = DateTime.MinValue;
 
@@ -56,7 +57,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Dispatcher.UIThread.Post(LeashHoldPressed);   // after the panic: hold-to-cut (MainShellWindow.LeashHold.cs)
         }
 
-        /// <summary>One press of the configured key (UI thread). Each press stops everything; a second
+        /// <summary>One press of the configured key (UI thread). A foreground board or DTRH may keep the first
+        /// Escape as pause; unclaimed presses stop everything. A second
         /// counted press within 2 s exits the app, as WPF does when no engine is running.</summary>
         internal void HandlePanicKeyPress(DateTime now)
         {
@@ -68,7 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // says. Only this listener layer: window and TextBox input (the secret phrase) are untouched.
             if (LockdownActive) { Serilog.Log.Information("Panic key ignored under Lockdown"); return; }
             // WPF MainWindow.xaml.cs:1557: a game's pause, BEFORE everything below: a pause is not a panic.
-            if (TryGamePauseOnEscape(now)) return;
+            if (TryPbpPauseOnEscape(now.ToUniversalTime()) || TryGamePauseOnEscape(now)) return;
             IntakeHostWindow.StopMicsForPanic();   // every press, before the lock-card stop or the capture abort reads as silence
             CancelPendingAi();   // every press, even one a lock card or the palette consumes
             // WPF MainWindow.xaml.cs:1567 LeashOnPanicPress, before the lock-card rung: the leash task parks first,
@@ -115,6 +117,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
+        // WPF TryRacePauseOnEscape: keep the first foreground board Escape, but a quick
+        // second press must reach the ordinary stop pass. Never queue a pause during boot.
+        private bool TryPbpPauseOnEscape(DateTime nowUtc)
+        {
+            try
+            {
+                var board = Views.Games.GameWindow.ForegroundPbp();
+                if (!PanicPolicy.GameClaimsEscapeAsPause(CoreSettings.Current.PanicKey,
+                    board != null, CoreEngine.IsRunning, LockCardWindow.IsAnyOpen(),
+                    _lastPbpEscapeClaimUtc, nowUtc))
+                {
+                    _lastPbpEscapeClaimUtc = null;
+                    return false;
+                }
+                _lastPbpEscapeClaimUtc = nowUtc;
+                if (PanicPolicy.KeptEscapeGoesTo(claimed: true,
+                        raceInFront: false, raceReady: false,
+                        boardInFront: true, boardReady: board!.IsReady,
+                        breakoutInFront: false, breakoutReady: false)
+                    == PanicPolicy.KeptEscapePage.Board) board.PostPbpKeptEscape();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "PieceByPiece Escape handoff failed; continuing panic");
+                return false;
+            }
+        }
+
         private DateTime? _lastGameEscapeClaim;
 
         /// <summary>WPF TryRacePauseOnEscape (MainWindow.xaml.cs:1505): Escape in front of Down the Rabbit Hole
@@ -122,7 +153,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// PanicPolicy.GameClaimsEscapeAsPause, including a second Escape within 2 s being a full panic (which
         /// closes the game through PanicSurfaces "games"). The kept press is handed to the page as well
         /// (KeptEscapePage.Dtrh), since its own keydown never comes while the web view is out of focus.
-        /// ponytail: race, board and Breakout keep closing on Escape here until their hosts post kept-escape.</summary>
+        /// ponytail: race and Breakout keep closing on Escape here until their hosts post kept-escape (board: TryPbpPauseOnEscape).</summary>
         internal bool TryGamePauseOnEscape(DateTime now)
         {
             try
