@@ -7,6 +7,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Models;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -172,6 +173,59 @@ public sealed class PremiumGatesTests
                 (CoreEntitlement.HasPremiumProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider) = old;
                 (s.AutonomyModeEnabled, s.KeywordTriggersEnabled) = oldFlags;
                 shell.Close();
+            }
+        });
+    }
+    /// <summary>WPF MainWindow.Patreon.cs:108: a lapsed Takeover entitlement stops the running chant
+    /// loop, not just its flag.</summary>
+    [Fact]
+    public void Lapse_StopsTheRunningMantraChant()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var chant = global::ConditioningControlPanel.Avalonia.App.MantraChant;
+            var old = (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider,
+                CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider,
+                global::ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.Instance);
+            var s = CoreSettings.Current;
+            var oldFlag = s.MantraChantEnabled;
+            // A mod with one voiced mantra, so the loop really runs; no audio device is opened.
+            var id = "lapse-" + Guid.NewGuid().ToString("N");
+            var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-" + id);
+            var dir = System.IO.Path.Combine(root, "resources", "sounds", "companion_audio");
+            System.IO.Directory.CreateDirectory(dir);
+            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "p.mp3"), "audio");
+            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "mantras.json"),
+                "{\"mantras\":[{\"id\":\"a\",\"phrase\":\"Obey\",\"promptAudio\":\"p.mp3\"}]}");
+            var shell = new MainShellWindow();
+            shell.Show();
+            try
+            {
+                global::ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.Instance = null;
+                CoreMods.ActiveModIdProvider = () => id;
+                CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest { Id = id }, root, false);
+                CoreEntitlement.HasPremiumProvider = () => true;
+                s.MantraChantEnabled = true;
+                chant.Start();
+                Assert.True(chant.IsRunning);
+                (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider) = (() => false, null);
+                shell.RefreshEntitlementVeils();
+                Assert.False(s.MantraChantEnabled);
+                Assert.False(chant.IsRunning);
+            }
+            finally
+            {
+                chant.Stop();
+                (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider,
+                    CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider,
+                    global::ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.Instance) = old;
+                s.MantraChantEnabled = oldFlag;
+                shell.Close();
+                try { System.IO.Directory.Delete(root, true); } catch { }
             }
         });
     }

@@ -123,8 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF MainWindow.Patreon.cs:92, over the shared Core flag pass. Skipped while the seam is
         /// unseeded: WPF never runs it before App.Patreon exists, and a head that cannot read the account
-        /// must not wipe a patron's settings. ponytail: this head runs none of the lapsed engines (no
-        /// keyword hook, OCR, autonomy, mantra chant or haptics mixer), so there is nothing to stop yet.</summary>
+        /// must not wipe a patron's settings. The lapse stops the mantra chant and awareness engines below.</summary>
         private bool _lapseUnsaved;   // cleared in memory, not yet written by an entitlement event
 
         private void EnforceEntitlementLapse(bool persist)
