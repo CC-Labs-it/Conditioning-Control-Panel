@@ -64,7 +64,7 @@ public sealed class MiscEvidenceTests
     });
 
     [Fact]
-    public void PinkFilterControlsWriteSettingsAndResetTheRenderedTint() => AvaloniaTestDispatcher.Run(() =>
+    public void PinkFilterControlsWriteSettingsAndTheTintWindowPaintsTheResetColour() => AvaloniaTestDispatcher.Run(() =>
     {
         EnsureApp();
         var s = CoreSettings.Current;
@@ -94,6 +94,7 @@ public sealed class MiscEvidenceTests
             Assert.Equal(rgb, PinkFilterOverlay.EffectiveColor());
             Assert.Equal(Color.FromRgb(rgb.R, rgb.G, rgb.B),
                 Assert.IsType<SolidColorBrush>(panel.FindControl<Border>("ColorSwatch")!.Background).Color);
+            // Refresh's own SetTint call (PinkFilterOverlay.cs:92/115) needs an X11 overlay, which headless lacks.
             tint.SetTint(rgb.R, rgb.G, rgb.B, s.PinkFilterOpacity / 100.0);
             Assert.Equal(Color.FromArgb((byte)(0.42 * 255), rgb.R, rgb.G, rgb.B),
                 Assert.IsType<SolidColorBrush>(Assert.IsType<Border>(tint.Content).Background).Color);
@@ -106,7 +107,7 @@ public sealed class MiscEvidenceTests
     });
 
     [Fact]
-    public Task IntifaceConnectCorrectsTheAddressAndRejectsInvalidInput() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public void IntifaceConnectCorrectsTheAddressAndRejectsInvalidInput() => AvaloniaTestDispatcher.Run(() =>
     {
         EnsureApp();
         CoreEntitlement.HasPremiumProvider = () => true;
@@ -122,14 +123,6 @@ public sealed class MiscEvidenceTests
         try
         {
             host.Show();
-            page.TxtHapticIntifaceUrl.Text = "127.0.0.1.1"; // closed loopback port, never a real device
-            Dispatcher.UIThread.RunJobs(); // TextChanged is deferred, just as between typing and clicking
-            page.BtnHapticConnect.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.Equal("ws://127.0.0.1:1", page.TxtHapticIntifaceUrl.Text);
-            Assert.Equal("ws://127.0.0.1:1", s.ButtplugUrl);
-            for (var i = 0; i < 100 && !page.BtnHapticConnect.IsEnabled; i++) await Task.Delay(50);
-            Assert.True(page.BtnHapticConnect.IsEnabled);
-            Assert.False(service.IsConnected);
             page.TxtHapticIntifaceUrl.Text = "ftp://invalid";
             Dispatcher.UIThread.RunJobs(); // TextChanged is deferred, just as between typing and clicking
             page.BtnHapticConnect.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -140,6 +133,14 @@ public sealed class MiscEvidenceTests
             Assert.True(page.BtnHapticConnect.IsEnabled);
             Assert.False(service.IsConnected);
             warning.Close();
+            // A fixable address is corrected before the connect starts; the connect itself (closed loopback
+            // port, never a real device) is not awaited, so no wall-clock wait (P08).
+            page.TxtHapticIntifaceUrl.Text = "127.0.0.1.1";
+            Dispatcher.UIThread.RunJobs(); // TextChanged is deferred, just as between typing and clicking
+            page.BtnHapticConnect.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal("ws://127.0.0.1:1", page.TxtHapticIntifaceUrl.Text);
+            Assert.Equal("ws://127.0.0.1:1", s.ButtplugUrl);
+            Assert.False(page.BtnHapticConnect.IsEnabled); // connecting
         }
         finally { foreach (var w in host.OwnedWindows.ToArray()) w.Close(); host.Close(); service.PanicStop(); }
     });
@@ -167,13 +168,16 @@ public sealed class MiscEvidenceTests
         var tube = new AvatarTubeWindow(null);
         var findTube = BarkHead.FindTube;
         BarkHead.FindTube = () => tube;
-        var engine = new BarkEngine(() => new BarkRuleSet(new[] { rule }));
-        engine.Speak = BarkHead.Speak;
+        var seams = (CoreModsHooks.ReloadBarkRules, CoreSettingsHooks.SettingChangedSink, CoreBark.UiAction, CoreBark.TabNavigated,
+            CoreBark.FeatureOpened, CoreBark.AvatarClicked, CoreBark.ChaosDraftAutopick, CoreBark.ChaosRankUp, CoreBark.ChaosResultsShown, CoreBark.AllLinesProvider);
+        // The real head wiring (BarkHead.Seed) and the shell's doorbell; the rule's 0.2 chance is pinned to a hit.
+        var engine = new BarkEngine(() => new BarkRuleSet(new[] { rule }), new AlwaysRandom());
+        BarkHead.Seed(engine);
         try
         {
             tube.Show();
             engine.Start();
-            Assert.True(engine.Raise("TabNavigated", c => c.Set("tab", "settings"), guaranteed: true));
+            CoreBark.NotifyTabNavigated("settings");
             Dispatcher.UIThread.RunJobs();
             var installed = Path.Combine(ContentLocator.InstallRoot, "Resources", "sounds", "companion_audio", "mods", "builtin-ccp-default", variant.Audio!);
             Assert.Equal(File.Exists(installed) ? installed : clip, played);
@@ -193,8 +197,15 @@ public sealed class MiscEvidenceTests
             Assert.Null(played);
             Assert.Equal(Assert.Single(egg.VariantPool!).Text, tube.FindControl<TextBlock>("TxtSpeech")!.Text);
         }
-        finally { tube.Close(); BarkHead.FindTube = findTube; File.Delete(clip); }
+        finally
+        {
+            tube.Close(); BarkHead.FindTube = findTube; File.Delete(clip);
+            (CoreModsHooks.ReloadBarkRules, CoreSettingsHooks.SettingChangedSink, CoreBark.UiAction, CoreBark.TabNavigated,
+                CoreBark.FeatureOpened, CoreBark.AvatarClicked, CoreBark.ChaosDraftAutopick, CoreBark.ChaosRankUp, CoreBark.ChaosResultsShown, CoreBark.AllLinesProvider) = seams;
+        }
     });
+
+    private sealed class AlwaysRandom : Random { protected override double Sample() => 0; public override double NextDouble() => 0; }
 
     private static string Root([CallerFilePath] string here = "") => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", ".."));
 }
