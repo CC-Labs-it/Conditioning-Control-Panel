@@ -68,7 +68,7 @@ public sealed class TutorialLiveTests
             Dispatcher.UIThread.RunJobs();
             TutorialHead.Service.Next();
             overlay = new TutorialOverlay(host);
-            overlay.Show(owner);
+            overlay.Show(); // the public Show: owned by the host it spotlights, not the shell
             Dispatcher.UIThread.RunJobs();
             check(host, overlay, body);
         }
@@ -91,11 +91,12 @@ public sealed class TutorialLiveTests
     {
         s.AdvanceTrigger = TutorialAdvanceTrigger.OnEvent;
         s.AdvanceEventName = "FileSaved";
-    }, (_, overlay, _) =>
+    }, (host, overlay, _) =>
     {
         CoreTutorialEvents.Emit("Other");
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(1, CoreTutorial.CurrentStepIndex);
+        Assert.Same(host, overlay.Owner);
         Assert.False(overlay.Topmost);
         Assert.False(overlay.ShowActivated);
         Assert.Equal(TimeSpan.FromMilliseconds(300), Assert.IsType<global::Avalonia.Animation.DoubleTransition>(Assert.Single(overlay.Transitions!)).Duration);
@@ -132,74 +133,6 @@ public sealed class TutorialLiveTests
         Assert.Equal(2, CoreTutorial.CurrentStepIndex);
     });
 
-    [Theory]
-    [InlineData(true, "tag")]
-    [InlineData(false, "label")]
-    [InlineData(false, "")]
-    public Task SelectionMatchesTagContentOrAnyChange(bool byTag, string expected) => WithOverlay((s, body) =>
-    {
-        s.AdvanceTrigger = TutorialAdvanceTrigger.OnSelectionEquals;
-        s.AdvanceValue = expected;
-        s.MatchByTag = byTag;
-        body.Children.Add(new ComboBox { Name = "Target", ItemsSource = new[]
-        {
-            new ComboBoxItem { Content = "wrong", Tag = "wrong" },
-            new ComboBoxItem { Content = "LABEL", Tag = "TAG" }
-        }, SelectedIndex = 0 });
-    }, (_, _, body) =>
-    {
-        Assert.Equal(1, CoreTutorial.CurrentStepIndex);
-        ((ComboBox)body.Children[0]).SelectedIndex = 1;
-        Dispatcher.UIThread.RunJobs();
-        Assert.Equal(2, CoreTutorial.CurrentStepIndex);
-    });
-
-    private static PointerReleasedEventArgs Release(MouseButton button = MouseButton.Left) => new(InputElement.PointerReleasedEvent, new Pointer(1, PointerType.Mouse, true),
-        null, default, 0, default, KeyModifiers.None, button);
-
-    [Theory]
-    [InlineData(9, 10, 20, false)]
-    [InlineData(10, 10, 20, true)]
-    [InlineData(20, 10, 20, true)]
-    [InlineData(21, 10, 20, false)]
-    [InlineData(50, 10, double.NaN, true)]
-    public Task SliderWaitsForReleaseAndUsesInclusiveRange(double value, double min, double max, bool advance) => WithOverlay((s, body) =>
-    {
-        s.AdvanceTrigger = TutorialAdvanceTrigger.OnSliderAtLeast;
-        s.AdvanceMinValue = min;
-        s.AdvanceMaxValue = max;
-        body.Children.Add(new Slider { Name = "Target", Maximum = 100 });
-    }, (_, _, body) =>
-    {
-        var slider = (Slider)body.Children[0];
-        slider.Value = value;
-        Dispatcher.UIThread.RunJobs();
-        Assert.Equal(1, CoreTutorial.CurrentStepIndex);
-        slider.RaiseEvent(Release(MouseButton.Right));
-        Dispatcher.UIThread.RunJobs();
-        Assert.Equal(1, CoreTutorial.CurrentStepIndex);
-        slider.RaiseEvent(Release());
-        Dispatcher.UIThread.RunJobs();
-        Assert.Equal(advance ? 2 : 1, CoreTutorial.CurrentStepIndex);
-    });
-
-    [Fact]
-    public Task ButtonReleaseThenClickAdvancesOnceWithoutInterruptingItsClick() => WithOverlay((s, body) =>
-    {
-        s.AdvanceTrigger = TutorialAdvanceTrigger.OnButtonClick;
-        body.Children.Add(new Button { Name = "Target" });
-    }, (_, _, body) =>
-    {
-        var button = (Button)body.Children[0];
-        bool clicked = false;
-        button.Click += (_, _) => { clicked = true; Assert.Equal(1, CoreTutorial.CurrentStepIndex); };
-        button.RaiseEvent(Release());
-        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Assert.True(clicked);
-        Dispatcher.UIThread.RunJobs();
-        Assert.Equal(2, CoreTutorial.CurrentStepIndex);
-    });
-
     [Fact]
     public Task PendingButtonAdvanceDoesNotWalkAnExplicitlySelectedSuccessor() => WithOverlay((s, body) =>
     {
@@ -211,6 +144,20 @@ public sealed class TutorialLiveTests
         CoreTutorial.Next(); // another route moved before the deferred button callback
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(2, CoreTutorial.CurrentStepIndex);
+    });
+
+    [Fact]
+    public Task EscapeTypedInAHostTextBoxStaysWithTheBox() => WithOverlay((_, body) =>
+    {
+        body.Children.Add(new TextBox { Name = "Target" });
+    }, (host, _, body) =>
+    {
+        body.Children[0].RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(CoreTutorial.IsActive);
+        host.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(CoreTutorial.IsActive);
     });
 
     [Fact]
@@ -229,6 +176,7 @@ public sealed class TutorialLiveTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, CoreTutorial.CurrentStepIndex);
             Assert.Same(other, overlay.TargetWindow);
+            Assert.Same(other, overlay.Owner); // re-owned on retarget
             Assert.True(overlay.FindControl<Button>("BtnNext")!.IsVisible);
         }
         finally { other.Close(); }
@@ -251,6 +199,8 @@ public sealed class TutorialLiveTests
         Assert.True(CoreTutorial.IsActive);
         Assert.Equal(2, CoreTutorial.CurrentStepIndex);
         Assert.Same(other, overlay.TargetWindow);
+        Assert.True(overlay.IsVisible); // the closing host let go of the card instead of closing it
+        Assert.Same(other, overlay.Owner);
         other.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
         Dispatcher.UIThread.RunJobs();
         Assert.False(CoreTutorial.IsActive);

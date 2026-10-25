@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using ConditioningControlPanel.Services;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
@@ -66,12 +67,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void BtnTryHypnoTubeTutorial_Click()
         {
-            // ponytail: WPF prefers the first TikTok entry of
-            // ConditioningControlPanel/AvatarTube/AvatarTubeWindow.Speech.cs KnownVideoLinks and
-            // falls back to this literal; that window is WebView2-hosted and not on this head, so
-            // only the fallback is available - which is the value WPF ships when the lookup misses.
             _rbVideo.IsChecked = true;
-            _txtSource.Text = "https://hypnotube.com/video/bambis-naughty-tiktok-collection-117314.html";
+            try
+            {
+                _txtSource.Text = HypnotubeDefaultLinks.SelectTikTokTutorialVideo(
+                    CoreModsHooks.KnownVideoLinksProvider?.Invoke() ?? HypnotubeDefaultLinks.KnownVideoTitles);
+            }
+            catch
+            {
+                _txtSource.Text = HypnotubeDefaultLinks.SelectTikTokTutorialVideo(null);
+            }
 
             // Mark the flag so a future first-time hint does not double up. Same write WPF makes,
             // and it lands here for the same reason: the user has now seen the walkthrough offer.

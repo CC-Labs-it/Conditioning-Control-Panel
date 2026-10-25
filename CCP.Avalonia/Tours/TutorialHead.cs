@@ -46,6 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
 
         private static bool _seeded;
         private static TutorialOverlay? _shellOverlay;
+        internal static TutorialOverlay? ShellOverlay => _shellOverlay;
         private static readonly ConditionalWeakTable<TutorialStep, CoreTutorial.Step> Projected = new();
 
         /// <summary>Idempotent. Called once at startup (App.axaml.cs) and by tests.</summary>
@@ -103,9 +104,15 @@ namespace ConditioningControlPanel.Avalonia.Tours
             Service.Start(type);
             if (!Service.IsActive) return;
 
+            var browser = shell.Named<Views.Tabs.SettingsTabView>("SettingsTab")?.BrowserContainer;
+            if (browser != null) browser.IsVisible = false;
             var overlay = new TutorialOverlay(shell);
             _shellOverlay = overlay;
-            overlay.Closed += (_, _) => { if (ReferenceEquals(_shellOverlay, overlay)) _shellOverlay = null; };
+            overlay.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_shellOverlay, overlay)) _shellOverlay = null;
+                if (browser != null) browser.IsVisible = true;
+            };
             overlay.Show();
         }
 

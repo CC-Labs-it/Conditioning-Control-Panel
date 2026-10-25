@@ -114,6 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// as WPF does (MainWindow.StartTutorial calls Start then constructs) — the first card is
         /// read on Loaded, and StepChanged carries every card after it.
         ///
+        /// TutorialHead starts shell tours through this constructor.
         /// </summary>
         public TutorialOverlay(Window targetWindow) : this(targetWindow, live: true)
         {
@@ -767,9 +768,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             if (parent is Control fe)
             {
-                // FindControl throws on a tree with no name scope (a window built in code).
-                var found = fe.FindNameScope()?.Find<Control>(name);
-                if (found != null) return found;
+                if (fe.Name == name) return fe;
+                try
+                {
+                    var found = fe.FindControl<Control>(name);
+                    if (found != null) return found;
+                }
+                catch (InvalidOperationException) { /* dynamic controls may have no name scope; walk the visual tree */ }
             }
 
             try

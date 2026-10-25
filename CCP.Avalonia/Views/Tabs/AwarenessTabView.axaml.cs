@@ -24,9 +24,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// capture visibility, ignore-own-focus, the app scope mode and the highlight colour all read
     /// and write <c>AppSettings</c> for real and save.</para>
     ///
-    /// <para>What is NOT restored is the runtime: nothing here starts or stops an engine. The
-    /// Patreon gate (<c>KeywordTriggerService.HasAccess</c>), the keyboard hook, ScreenOcr,
-    /// KeywordHighlight's overlay windows and the recently-seen-app ring are all head-side, and each stub below names the one it wants.</para>
+    /// <para>The master and keyboard switches drive the Windows keyboard/audio runtime.
+    /// ponytail: ScreenOcr, highlight windows, other response actions and recent-app chips remain
+    /// wire-shell-keyword-triggers-b; Linux has no keyword source yet.</para>
     /// </summary>
     public partial class AwarenessTabView : UserControl
     {
@@ -174,8 +174,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtAwarenessStatus.Text = on ? "Live" : "Off";
             TxtAwarenessStatus.Foreground = on ? pink ?? Brushes.HotPink : OffLabel;
 
-            // ponytail: WPF also breathes the dot while the engine is genuinely live
-            // (SetAwarenessStatusPulse). Cosmetic, and it belongs with the engine seam.
+            // WPF UpdateAwarenessStatusIndicator -> SetAwarenessStatusPulse: the shell's one pulse registry.
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.SetAwarenessStatusPulse(on);
         }
 
         // ------------------------------------------------------------------ live editors
@@ -205,8 +205,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 CoreSettings.Current.KeywordTriggersEnabled = on;
 
-                // ponytail: this is where WPF starts/stops App.KeywordTriggers, the keyboard hook
-                // and App.ScreenOcr. All three are Win32 on that head; nothing arms here.
+                Platform.KeywordTriggerHead.Sync();
+                // ponytail: OCR/highlights and non-audio actions remain wire-shell-keyword-triggers-b.
 
                 _isLoading = true;
                 try { if ((ChkAwarenessKeyboard.IsChecked ?? false) != on) ChkAwarenessKeyboard.IsChecked = on; }
@@ -232,8 +232,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (ChkAwarenessKeyboard.IsChecked == true && ChkAwarenessMaster.IsChecked != true)
                 ChkAwarenessMaster.IsChecked = true;   // deliberately outside the guard: routes through the master handler
 
-            // ponytail: turning it OFF drops the keyboard hook on WPF when nothing else needs it
-            // (the panic key, OCR). The hook is Win32 and head-side.
+            if (ChkAwarenessKeyboard.IsChecked == true) Platform.KeywordTriggerHead.Sync();
+            else Platform.KeywordTriggerHead.DetachKeyboard();   // WPF :493: master, engine and clip stay
+            // The shared hook stays available to panic, pause and push-to-talk.
         }
 
         private void ChkAwarenessOcr_Changed(object? sender, RoutedEventArgs e)
@@ -336,17 +337,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void TxtAwarenessAppList_KeyDown(object? sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Enter) CommitAppList();
+            if (e.Key != Key.Enter) return;
+            CommitAppList();
+            // WPF acknowledges Enter by moving focus off the canonicalized box.
+            TopLevel.GetTopLevel(this)?.FocusManager?.Focus(null);
         }
 
         private void CommitAppList()
         {
-            // ponytail: BLOCKED on KeywordTriggerService.ParseAppList, which canonicalises the box
-            // (split on , ; newline, strip a trailing ".exe", de-duplicate case-insensitively).
-            // That is a pure static with no platform dependency and belongs in Core, but the
-            // service is not this layer's file and copying the parse here would give the two heads
-            // two definitions of what "chrome.exe" means. The box is seeded and readable; commit
-            // lands with the service.
+            if (_isLoading) return;
+            try
+            {
+                var settings = CoreSettings.Current;
+                var parsed = AwarenessAppScopeRules.ParseAppList(TxtAwarenessAppList.Text);
+                if (parsed.SequenceEqual(settings.KeywordTriggerApps ?? new(), StringComparer.OrdinalIgnoreCase)) return;
+                settings.KeywordTriggerApps = parsed;
+                CoreSettings.Save();
+                TxtAwarenessAppList.Text = string.Join(", ", parsed);
+                Log.Information("Awareness app scope list set to {Count} app(s) ({Mode})",
+                    parsed.Count, settings.KeywordTriggerAppScope);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Awareness tab: failed to write KeywordTriggerApps");
+            }
         }
 
         // ------------------------------------------------------------------ highlight colour
@@ -423,8 +437,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// skipped) pops the Puppy preset's editor (MainWindow.Settings.cs:689). A start refused
         /// because another tour runs leaves CurrentTourName on that tour, so the guard below returns.
         /// </summary>
-        internal void BtnAwarenessTutorial_Click(object? sender, RoutedEventArgs e)
+        private void BtnAwarenessTutorial_Click(object? sender, RoutedEventArgs e) => StartAwarenessTutorial();
+
+        internal void StartAwarenessTutorial()
         {
+            if (CoreTutorial.IsActive) return;
             CoreTutorial.Start("Awareness");
             if (!CoreTutorial.IsActive || CoreTutorial.CurrentTourName != "Awareness") return;
 

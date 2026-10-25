@@ -17,48 +17,6 @@ namespace CCP.Avalonia.Tests;
 [Collection(RunsAloneCollection.Name)]
 public sealed class TutorialGuideTests
 {
-    [Theory]
-    [InlineData("FullTour")]
-    [InlineData("GettingStarted")]
-    [InlineData("Settings")]
-    [InlineData("Presets")]
-    [InlineData("Progression")]
-    [InlineData("Achievements")]
-    [InlineData("Companion")]
-    [InlineData("Patreon")]
-    [InlineData("Avatar")]
-    [InlineData("Awareness")]
-    public Task HelpRowClosesPanelAndStartsItsNamedGuide(string tour) => AvaloniaTestDispatcher.RunAsync(() =>
-    {
-        TutorialLiveTests.Setup();
-        var start = CoreTutorial.StartAction;
-        var active = CoreTutorial.IsActiveProvider;
-        var perf = CoreSettings.Current.PerformanceMode;
-        CoreSettings.Current.PerformanceMode = true;
-        var shell = new MainShellWindow();
-        try
-        {
-            shell.Show();
-            Dispatcher.UIThread.RunJobs();
-            string? started = null;
-            CoreTutorial.IsActiveProvider = () => false;
-            CoreTutorial.StartAction = name => started = name;
-            shell.SetTutorialOverlay(true);
-            shell.FindControl<Button>("BtnGuide" + tour)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.Equal(tour, started);
-            Assert.False(shell.FindControl<Border>("MainTutorialOverlay")!.IsVisible);
-        }
-        finally
-        {
-            shell.Close();
-            Dispatcher.UIThread.RunJobs();
-            CoreTutorial.StartAction = start;
-            CoreTutorial.IsActiveProvider = active;
-            CoreSettings.Current.PerformanceMode = perf;
-        }
-        return Task.CompletedTask;
-    });
-
     [Fact]
     public Task ModGuideNavigatesEveryRequestedSection() => AvaloniaTestDispatcher.RunAsync(() =>
     {

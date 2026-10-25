@@ -154,6 +154,8 @@ namespace ConditioningControlPanel.Avalonia.Tours
 
         private static void Reveal(Window w, string? cellKey)
         {
+            // WPF TutorialService.cs:47: the window owns the cell-to-page map (v2 collapses the room).
+            if (w is Views.Windows.MainShellWindow shell) { try { shell.RevealCompanionWorkshopCell(cellKey); } catch { } return; }
             try { TutorialHeadHooks.FindDescendant<Views.Controls.Companion.CompanionRoomView>(w)?.RevealWorkshop(cellKey); }
             catch { /* a tour never blocks on UI quirks */ }
         }

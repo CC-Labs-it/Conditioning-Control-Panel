@@ -139,6 +139,171 @@ public sealed class AssetSubmitWireTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task ModManagerShareAsksForTheMegaLinkThenSubmitsTheModEnvelope() => Run(async (shell, fake) =>
+    {
+        // A user-installed mod with tags and a previewImage, installed the way a dropped .ccpmod is.
+        var oldMods = AvApp.Mods;
+        using var coreMods = new CoreModsSnapshot();   // P02: undo StartMods' CoreMods seeding
+        if (AvApp.Mods == null) AvApp.StartMods();
+        var id = "share-mod-" + Guid.NewGuid().ToString("N")[..6];
+        var scratch = Directory.CreateTempSubdirectory("ccp-mod-share-").FullName;
+        var ccpmod = Path.Combine(scratch, "m.ccpmod");
+        using (var zip = System.IO.Compression.ZipFile.Open(ccpmod, System.IO.Compression.ZipArchiveMode.Create))
+        {
+            using (var w = new StreamWriter(zip.CreateEntry("mod.json").Open()))
+                w.Write(Newtonsoft.Json.JsonConvert.SerializeObject(new ModManifest
+                {
+                    Id = id, Name = "Share Mod", Version = "2.0.0", Author = "tests", Description = "d",
+                    Tags = new List<string> { "pink", "soft" }, PreviewImage = "preview.png",
+                }));
+            using var bmp = new SkiaSharp.SKBitmap(640, 360);
+            bmp.Erase(SkiaSharp.SKColors.HotPink);
+            using var png = bmp.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+            using var e = zip.CreateEntry("resources/preview.png").Open();
+            png.SaveTo(e);
+        }
+        var saved = new Dictionary<string, DeeperSubmissionRecord>(CoreSettings.Current.CatalogueModSubmissions);
+        Assert.True((await AvApp.Mods!.InstallModAsync(ccpmod)).Success);
+        try
+        {
+            shell.FindControl<Button>("BtnManageMods")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var manager = shell.OwnedWindows.OfType<ModManagerDialog>().Single();
+            var list = manager.FindControl<ListBox>("ModList")!;
+            var share = manager.FindControl<Button>("BtnShare")!;
+            list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => (string)i.Tag! == BuiltInMods.CCPDefaultId);
+            Assert.False(share.IsVisible);                                  // built-in: no Share
+            list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => (string)i.Tag! == id);
+            Assert.True(share.IsVisible);
+
+            share.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var dialog = manager.OwnedWindows.OfType<AssetSubmitDialog>().Single();
+            Assert.False(share.IsEnabled);                                  // disabled for the upload
+            Assert.True(dialog.FindControl<StackPanel>("PnlDownloadUrl")!.IsVisible);
+            Assert.Equal("pink, soft", dialog.FindControl<TextBox>("TxtTags")!.Text);   // manifest tags
+            var submit = dialog.FindControl<Button>("BtnSubmit")!;
+            dialog.FindControl<TextBox>("TxtCreator")!.Text = "mod-creator";
+            dialog.FindControl<CheckBox>("ChkAffirm")!.IsChecked = true;
+            dialog.FindControl<TextBox>("TxtDownloadUrl")!.Text = "https://example.com/m.ccpmod";
+            Dispatcher.UIThread.RunJobs();                                  // TextChanged is posted
+            Assert.False(submit.IsEnabled);                                 // only a MEGA link
+            dialog.FindControl<TextBox>("TxtDownloadUrl")!.Text = "https://mega.nz/file/abc#key";
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(submit.IsEnabled);
+            submit.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await manager.ShareTask!;
+            Assert.True(share.IsEnabled);
+
+            Assert.Equal(new[] { "/api/auth/token-exchange", "/api/catalogue/mods" }, fake.Paths);
+            var bundle = JObject.Parse(fake.Body!)["bundle"]!;
+            Assert.Equal("ccp-mod/v1", (string?)bundle["$schema"]);
+            Assert.Equal("mod-creator", (string?)bundle["metadata"]!["creator"]);
+            var asset = bundle["asset"]!;
+            Assert.Equal(id, (string?)asset["mod_id"]);
+            Assert.Equal("2.0.0", (string?)asset["version"]);
+            Assert.Equal("mega", (string?)asset["download"]!["provider"]);
+            Assert.Equal("https://mega.nz/file/abc#key", (string?)asset["download"]!["url"]);
+            Assert.True((long)asset["download"]!["installed_size_bytes"]! > 0);
+            using (var thumb = SkiaSharp.SKBitmap.Decode(Convert.FromBase64String((string)asset["preview_thumb_b64"]!)))
+                Assert.Equal(160, thumb.Width);                             // downscaled JPEG
+            Assert.Equal("c1", MainShellWindow.GetCatalogueRecord(MainShellWindow.CatalogueKindMods, id)!.CatalogueId);
+            manager.Close();
+        }
+        finally
+        {
+            AvApp.Mods.UninstallMod(id);
+            typeof(AvApp).GetProperty(nameof(AvApp.Mods), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!
+                .SetValue(null, oldMods);
+            CoreSettings.Current.CatalogueModSubmissions.Clear();
+            foreach (var kv in saved) CoreSettings.Current.CatalogueModSubmissions[kv.Key] = kv.Value;
+            Directory.Delete(scratch, true);
+        }
+    });
+
+    [Fact]
+    public Task ModManagerShareRequiresMegaLinkThenRecordsAndRepaintsTheModBadge() => Run(async (shell, fake) =>
+    {
+        var root = Directory.CreateTempSubdirectory("ccp-mod-share-").FullName;
+        var mod = new ModPackage(new ModManifest { Id = "share-mod", Name = "Share Mod", Tags = new() { "soft" } }, root, false);
+        var builtIn = new ModPackage(new ModManifest { Id = "builtin", Name = "Built In" }, null, true);
+        var noPath = new ModPackage(new ModManifest { Id = "no-path", Name = "No Path" }, null, false);
+        var oldProvider = CoreMods.InstalledModsProvider;
+        CoreMods.InstalledModsProvider = () => new Dictionary<string, ModPackage> { [mod.Id] = mod, [builtIn.Id] = builtIn, [noPath.Id] = noPath };
+        var manager = new ModManagerDialog();
+        manager.Show(shell);
+        try
+        {
+            var list = manager.FindControl<ListBox>("ModList")!;
+            var button = manager.FindControl<Button>("BtnShare")!;
+            list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => Equals(i.Tag, builtIn.Id));
+            Assert.False(button.IsVisible);
+            list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => Equals(i.Tag, noPath.Id));
+            Assert.False(button.IsVisible);   // WPF also needs an InstalledPath
+            list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => Equals(i.Tag, mod.Id));
+            Assert.True(button.IsVisible);
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(button.IsEnabled);
+            var cancelled = manager.OwnedWindows.OfType<AssetSubmitDialog>().Single();
+            cancelled.Close(false);
+            await manager.ShareTask!;
+            Assert.True(button.IsEnabled);
+            Assert.Empty(fake.Paths);
+
+            // RefreshModList follows WPF and may change selection; choose the custom row again.
+            list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => Equals(i.Tag, mod.Id));
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var dialog = manager.OwnedWindows.OfType<AssetSubmitDialog>().Single();
+            dialog.FindControl<TextBox>("TxtCreator")!.Text = "creator";
+            Assert.Equal("soft", dialog.FindControl<TextBox>("TxtTags")!.Text);
+            dialog.FindControl<CheckBox>("ChkAffirm")!.IsChecked = true;
+            var submit = dialog.FindControl<Button>("BtnSubmit")!;
+            dialog.FindControl<TextBox>("TxtDownloadUrl")!.Text = "https://example.com/mod.ccpmod";
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(submit.IsEnabled);
+            Assert.Empty(fake.Paths);
+            dialog.FindControl<TextBox>("TxtDownloadUrl")!.Text = "https://mega.nz/file/test#key";
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(submit.IsEnabled);
+            submit.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await manager.ShareTask!;
+            Assert.True(button.IsEnabled);
+            Assert.Equal(new[] { "/api/auth/token-exchange", "/api/catalogue/mods" }, fake.Paths);
+            var bundle = JObject.Parse(fake.Body!)["bundle"]!;
+            Assert.Equal(ModCatalogueAsset.Schema, (string?)bundle["$schema"]);
+            Assert.Equal(mod.Id, (string?)bundle["asset"]!["mod_id"]);
+            Assert.Equal("https://mega.nz/file/test#key", (string?)bundle["asset"]!["download"]!["url"]);
+            Assert.Equal("c1", MainShellWindow.GetCatalogueRecord(MainShellWindow.CatalogueKindMods, mod.Id)!.CatalogueId);
+            manager.UpdateLayout();
+            var sharedRow = list.Items.OfType<ListBoxItem>().Single(i => Equals(i.Tag, mod.Id));
+            Assert.Contains(sharedRow.GetVisualDescendants().OfType<TextBlock>(),
+                t => t.Text != null && t.Text.Contains(ConditioningControlPanel.Localization.Loc.Get("catalogue_status_pending")));
+        }
+        finally
+        {
+            foreach (var d in manager.OwnedWindows.ToArray()) d.Close();
+            manager.Close();
+            CoreMods.InstalledModsProvider = oldProvider;
+            CoreSettings.Current.CatalogueModSubmissions.Remove(mod.Id);
+            Directory.Delete(root, true);
+        }
+    });
+
+    [Fact]
+    public Task SignedOutModShareOpensNothingAndBuiltInsCannotShare() => Run(async (shell, fake) =>
+    {
+        CoreSettings.Current.AuthToken = null;
+        var mod = new ModPackage(new ModManifest(), "/unused", false);
+        await shell.ShareModToCatalogueAsync(mod);
+        Assert.Empty(shell.OwnedWindows.OfType<AssetSubmitDialog>());
+        Assert.Empty(fake.Paths);
+        await shell.ShareModToCatalogueAsync(new ModPackage(new ModManifest(), null, true));
+        Assert.Empty(fake.Paths);
+    });
+
     private static Task Run(Func<MainShellWindow, Fake, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
