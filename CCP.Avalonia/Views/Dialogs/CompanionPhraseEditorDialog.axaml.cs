@@ -15,6 +15,7 @@ using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Styling;
 using Avalonia.Platform.Storage;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Companion;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Dialogs
@@ -33,8 +34,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     ///  - <c>App.Settings</c> is <see cref="CoreSettings"/>, so every write runs for real: the
     ///    disabled/removed id sets, the custom-phrase list and the audio overrides all persist,
     ///    which is the bookkeeping issue #892 depends on. <c>CompanionPhraseService.GetAllPhrases</c>
-    ///    is still head-side, so <see cref="LoadPhrases"/> rebuilds its mod + custom halves from
-    ///    <see cref="CoreMods.GetPhrases"/>; voice-line files and bark lines stay missing.
+    ///    is head-side; <see cref="LoadPhrases"/> reads Core mod pools, shared voice lines and the
+    ///    active bark engine through <see cref="CoreBark.AllLines"/>.
     ///  - <c>MessageBox.Show</c> becomes <see cref="MessageDialog"/>, this head's replacement, so
     ///    the "no phrases selected" notice and both destructive confirms are kept.
     ///  - <c>OpenFileDialog</c> -> <c>StorageProvider.OpenFilePickerAsync</c>;
@@ -210,12 +211,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         /// The bark rows come through <see cref="CoreBark.AllLines"/>, which is the seam over
         /// <c>BarkService.GetAllBarkLines()</c> - the engine itself cannot move (it subscribes to
         /// some fifty head services), so only the enumeration crosses. Unseeded it answers an
-        /// empty list, so this head shows no bark rows, which is the truth on a head with no bark
-        /// engine rather than a lie about one.
+        /// empty list. The desktop startup seeds this seam from its existing BarkHead engine.
         ///
-        /// ponytail: voice-line files (CompanionPhraseService.ResolveVoiceLineFolder) are still
-        /// head-side, so that row kind is missing here. Collapses into one GetAllPhrases() call
-        /// when the service moves to Core.
+        /// Voice-line folder resolution, enumeration and stable-ID migration are shared with WPF
+        /// through CompanionVoiceLines, including the install/content-pack union.
         /// </summary>
         private static List<CompanionPhrase> LoadPhrases()
         {
@@ -244,6 +243,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                     });
                 }
             }
+
+            result.AddRange(CompanionVoiceLines.GetRows(settings));
 
             foreach (var custom in settings.CustomCompanionPhrases)
             {

@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict';
 import { createHostMedia, onlineChance, HOST_MSG, ONLINE_WARM, ONLINE_LOW_SHARE } from '../ramp/media.js';
 import { isClip, stillOr, clipRoom, MAX_LIVE_CLIPS } from '../ramp/layers/clip.js';
-import { picturesFrame, statusLine } from '../ui/pictures.js';
+import { picturesFrame, statusLine, clickCue } from '../ui/pictures.js';
 import { presentation } from '../game/preferences.js';
 
 let checks = 0;
@@ -144,6 +144,19 @@ eq(presentation().experience, 'distraction', 'nobody saved: Distraction');
   store(JSON.stringify({ volume: 0.3 }));
   eq((await import('../game/preferences.js?volume')).presentation().experience, 'distraction', 'a saved volume alone is Distraction');
   delete globalThis.localStorage;
+}
+
+/* ---- the card's sounds (2026-10-14 polish pass): read after the picker repaints ---- */
+{
+  const el = (pressed) => ({ getAttribute: (k) => (k === 'aria-pressed' ? String(pressed) : null) });
+  const found = (pressed) => (sel) => (sel ? el(pressed) : null);
+  eq(clickCue({ dataset: { niche: 'Bimbos' } }, found(true)), { cue: 'select', pop: '[data-niche="Bimbos"]' }, 'a pill turning on pops with a note');
+  eq(clickCue({ dataset: { niche: 'Bimbos' } }, found(false)), { cue: 'press', pop: null }, 'a pill turning off only knocks');
+  eq(clickCue({ dataset: { pick: 'pink' } }, found(true)), { cue: 'select', pop: '[data-pick="pink"]' }, 'a tab or tile picked pops');
+  eq(clickCue({ dataset: { pick: 'own' } }, found(true)), { cue: 'press', pop: null }, 'No online pictures is a plain press');
+  eq(clickCue({ dataset: { remove: 'x' } }, found(true)), { cue: 'press', pop: null }, 'removing a niche is a plain press');
+  eq(clickCue({ dataset: {} }, found(true)), { cue: null, pop: null }, 'anything else is silent here');
+  eq(clickCue({ dataset: { niche: 'a"b' } }, found(true)).pop, '[data-niche="a\\"b"]', 'a niche name is quoted in the selector');
 }
 
 console.log(`pictures-smoke: ${checks} checks passed`);

@@ -109,8 +109,40 @@ namespace ConditioningControlPanel
             {
                 // User manually starting - clear manual stop flag
                 _manuallyStoppedDuringSchedule = false;
-                StartEngine();
+                StartEngineFromUser();
             }
+        }
+
+        /// <summary>
+        /// ccp-bugs #1464: a START the user pressed. A panic pauses the session and stops the
+        /// engine; START used to bring every effect back over a session still parked, its clock
+        /// frozen on the panic's value for the rest of the run. The user's START picks the session
+        /// back up. Only user paths call this: the scheduler, the Lockdown keeper and a program or
+        /// remote session's own engine start go through StartEngine and never resume a session a
+        /// panic paused. The caller set is pinned (SessionClockRulesTests): a system path must not
+        /// join it silently.
+        /// </summary>
+        internal void StartEngineFromUser()
+        {
+            // Only the user's own START ends the post-panic quiet (PanicAftermath, Trigger Mode):
+            // the scheduler, auto-start and remote or program starts go through StartEngine.
+            Services.Safety.PanicAftermath.EndQuiet();
+            // A resume is not a new run: it must not count as one more session.
+            var resuming = _sessionEngine?.IsRunning == true && _sessionEngine.IsPaused;
+            StartEngine(resumingSession: resuming);
+            var engine = _sessionEngine;
+            if (engine == null || !SessionClockRules.StartResumesParkedSession(_isRunning, engine.IsRunning, engine.IsPaused))
+                return;
+            try
+            {
+                engine.ResumeSession();
+                // StartEngine started features from the global settings: the session's own
+                // schedule (pending starts, lock-card window, its Mind Wipe) goes back on top.
+                engine.ReassertScheduleAfterEngineStart();
+                App.Logger?.Information("Start resumed the paused session");
+            }
+            catch (Exception ex) { App.Logger?.Warning(ex, "Start: resuming the paused session failed"); }
+            RefreshSessionClocks();
         }
 
         // Opens the Start-options menu (Start normally / Jump right in).
@@ -126,7 +158,7 @@ namespace ConditioningControlPanel
 
         private void MenuStartNormal_Click(object sender, RoutedEventArgs e)
         {
-            if (!_isRunning) StartEngine();
+            if (!_isRunning) StartEngineFromUser();
         }
 
         private void MenuJumpRightIn_Click(object sender, RoutedEventArgs e)
@@ -159,7 +191,8 @@ namespace ConditioningControlPanel
                 s.PinkFilterEnabled = rng.Next(2) == 0;
                 App.Settings?.Save();
             }
-            if (!_isRunning) StartEngine();
+            // "Jump right in" is the user's own START (ends the post-panic quiet, PanicAftermath).
+            if (!_isRunning) StartEngineFromUser();
         }
 
         // ==============================================================================
@@ -290,7 +323,7 @@ namespace ConditioningControlPanel
         /// inflate TotalSessions once every four seconds and pop a prompt the user could not act on.
         /// Everything else about the start is identical.
         /// </param>
-        public void StartEngine(bool systemInitiated = false)
+        public void StartEngine(bool systemInitiated = false, bool resumingSession = false)
         {
             SaveSettings();
 
@@ -305,7 +338,7 @@ namespace ConditioningControlPanel
             bool audioOnly = settings.AudioOnlySession;
 
             // Track session count and start skill tree service
-            if (!systemInitiated) settings.TotalSessions++;
+            if (!systemInitiated && !resumingSession) settings.TotalSessions++;
             App.SkillTree?.Start();
             App.SkillTree?.TrackTimeOfDayUsage(); // For secret skill unlocks
 
@@ -406,6 +439,10 @@ namespace ConditioningControlPanel
             App.IsEngineRunning = true;
             UpdateStartButton();
 
+            // ccp-bugs #1399: the user's own corner GIFs run with the engine, like every other
+            // effect. Each show is deferred a dispatcher pass, so this costs the start nothing.
+            try { App.CornerGif?.RefreshOverlays(); } catch (Exception ex) { App.Logger?.Debug("Corner GIF start: {E}", ex.Message); }
+
             // EMI Desk (MOMENTS 4.B). systemInitiated separates a lockdown's own restart from a
             // deliberate press, which is the only thing her lines care about here.
             _emiEngineStartedUtc = DateTime.UtcNow;
@@ -461,6 +498,10 @@ namespace ConditioningControlPanel
         {
             // Stop flash first (safe, no complex cleanup)
             App.Flash.Stop();
+
+            // Stop stops everything (owner, 7.1.8): the audio player with a playlist goes quiet
+            // with the engine. The list stays. StartEngine never touches the player.
+            App.StopAudioPlaylist();
 
             // Tear down any Deeper enhancement engine bound to the playing video.
             // App.Video.Stop() below closes windows via CloseAll, which does NOT
@@ -543,6 +584,9 @@ namespace ConditioningControlPanel
             App.IsEngineRunning = false;
             UpdateStartButton();
 
+            // ccp-bugs #1399: ...and stop with it. StopAll also cancels queued realizations.
+            try { App.CornerGif?.StopAll(); } catch (Exception ex) { App.Logger?.Debug("Corner GIF stop: {E}", ex.Message); }
+
             // EMI Desk (MOMENTS 4.B): how long the run lasted. Zero when nothing was running, and
             // the stamp is cleared so a second stop cannot invent a duration.
             try
@@ -583,6 +627,9 @@ namespace ConditioningControlPanel
             _rampBaseValues["MasterVolume"] = settings.MasterVolume;
             _rampBaseValues["SubAudioVolume"] = settings.SubAudioVolume;
             _rampBaseValues["BrainDrainBlurStrength"] = settings.BrainDrainBlurStrength;
+            // Every tick writes ramped values into the saved settings: keep the bases on disk so a
+            // crash mid-ramp is undone at the next launch (SessionSettingsJournal).
+            Services.SessionSettingsJournal.WriteRamp(App.UserDataPath, Services.SessionSettingsJournal.BuildRamp(_rampBaseValues));
             
             _rampStartTime = DateTime.Now;
             
@@ -644,6 +691,7 @@ namespace ConditioningControlPanel
                 _rampBaseValues.Clear();
                 App.Logger?.Information("Ramp timer stopped - values reset to base");
             }
+            Services.SessionSettingsJournal.ClearRamp(App.UserDataPath);
         }
 
         private void RampTimer_Tick(object? sender, EventArgs e)
@@ -956,10 +1004,8 @@ namespace ConditioningControlPanel
                 };
 
                 // Also update Presets tab button using direct reference
-                if (TxtPresetsStatus != null)
-                {
-                    TxtPresetsStatus.Text = Loc.Get("label_running");
-                }
+                // "Running...", or the session's name and clock while a session runs.
+                RefreshSessionClocks();
             }
             else
             {
@@ -976,11 +1022,9 @@ namespace ConditioningControlPanel
                     }
                 };
 
-                // Also update Presets tab button
-                if (TxtPresetsStatus != null)
-                {
-                    TxtPresetsStatus.Text = "";
-                }
+                // Also update Presets tab button: blank, or a session a panic paused shown as
+                // paused rather than as a clock that stopped moving (ccp-bugs #1464).
+                RefreshSessionClocks();
             }
 
             // Velvet Kit 2 (FX lane B): idle gets the charged gradient + ring exhale, running gets

@@ -80,7 +80,7 @@
                         BorderThickness="0" FontWeight="Bold" FontSize="16"
                         Cursor="Hand" Click="BtnLoginDeviceCode_Click">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Sign in via Web" VerticalAlignment="Center"/>
+                        <TextBlock Text="{loc:Str login_device_title}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
 
@@ -195,15 +195,15 @@
             <!-- SP3: Device-Code Panel -->
             <StackPanel x:Name="DeviceCodePanel" Grid.Row="2" Visibility="Collapsed"
                         VerticalAlignment="Center">
-                <TextBlock Text="Sign in via Web"
+                <TextBlock Text="{loc:Str login_device_title}"
                            FontSize="18" FontWeight="Bold" Foreground="White"
                            HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                <TextBlock Text="We've opened your browser to finish sign-in. Complete it there, then come back to this window. It's okay to leave this open."
+                <TextBlock Text="{loc:Str login_device_body}"
                            FontSize="12" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap"
                            HorizontalAlignment="Center" Margin="0,0,0,15"
                            TextAlignment="Center"/>
 
-                <TextBlock Text="Your code:"
+                <TextBlock Text="{loc:Str login_device_your_code}"
                            FontSize="11" Foreground="{DynamicResource TextMutedBrush}"
                            HorizontalAlignment="Center" Margin="0,0,0,4"/>
                 <Border BorderBrush="#9333EA" BorderThickness="2" CornerRadius="6"
@@ -218,7 +218,7 @@
 
                 <!-- Manual fallback: if Process.Start failed to open the browser, the user
                      can read this URL and open it themselves. Selectable so they can copy. -->
-                <TextBlock Text="Or open this URL manually:"
+                <TextBlock Text="{loc:Str login_device_open_manually}"
                            FontSize="11" Foreground="{DynamicResource TextMutedBrush}"
                            HorizontalAlignment="Center" Margin="0,0,0,4"/>
                 <TextBox x:Name="TxtVerificationUrl"
@@ -229,19 +229,19 @@
                          Cursor="IBeam"/>
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,15">
-                    <Button x:Name="BtnDeviceCodeCopy" Content="Copy code"
+                    <Button x:Name="BtnDeviceCodeCopy" Content="{loc:Str login_device_copy_code}"
                             Padding="14,6" Margin="0,0,8,0"
                             Background="{DynamicResource AccentTintedBgBrush}" Foreground="White"
                             BorderThickness="0" FontSize="12" Cursor="Hand"
                             Click="BtnDeviceCodeCopy_Click"/>
-                    <Button x:Name="BtnDeviceCodeOpenBrowser" Content="Open browser again"
+                    <Button x:Name="BtnDeviceCodeOpenBrowser" Content="{loc:Str login_device_open_again}"
                             Padding="14,6"
                             Background="{DynamicResource AccentTintedBgBrush}" Foreground="White"
                             BorderThickness="0" FontSize="12" Cursor="Hand"
                             Click="BtnDeviceCodeOpenBrowser_Click"/>
                 </StackPanel>
 
-                <TextBlock x:Name="TxtDeviceStatus" Text="Waiting for browser confirmation..."
+                <TextBlock x:Name="TxtDeviceStatus" Text="{loc:Str login_device_waiting}"
                            FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
                            HorizontalAlignment="Center" Margin="0,0,0,8"
                            TextAlignment="Center" TextWrapping="Wrap"/>
@@ -249,7 +249,7 @@
                              Width="200" Height="3" Margin="0,0,0,15"
                              Foreground="#9333EA" Background="{DynamicResource AccentTintedBgBrush}"/>
 
-                <TextBlock Text="Cancel" Margin="0,0,0,0"
+                <TextBlock Text="{loc:Str btn_cancel}" Margin="0,0,0,0"
                            FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
                            HorizontalAlignment="Center" Cursor="Hand"
                            MouseLeftButtonDown="BtnDeviceCodeCancel_Click"/>
