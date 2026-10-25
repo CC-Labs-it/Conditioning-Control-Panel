@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
@@ -162,6 +163,64 @@ public sealed class SparkleWalletTests
             (s.MotionLevel, s.PerformanceMode) = old;
             BeatLoop.Time = TimeProvider.System;
         }
+    });
+
+    [Fact]
+    public void WalletVisorUsesTheEmiGeometryRenderer() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Platform();
+        var wallet = new SparkleWallet();
+        var face = wallet.FindControl<Control>("MascotFace");
+        Assert.NotNull(face);
+        // WPF draws the ink outline in Noto Sans Mono, not a scaled Press Start text label.
+        Assert.IsNotType<TextBlock>(face);
+        Assert.Equal("^_^", Assert.IsType<WalletEmiFace>(face).Face);
+        Assert.Equal(389, face.Width);
+        Assert.Equal(349, face.Height);
+        Assert.Equal(new Thickness(320, 297, 0, 0), face.Margin);
+    });
+
+    [Fact]
+    public void WalletFacePaintsTheFittedPinkInkAndClears() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Platform();
+        var face = new WalletEmiFace { Width = 152, Height = 137 };
+        face.Draw("^_^");
+        var ink = WalletEmiFace.FitInk("^_^", out var geometry);
+        Assert.NotNull(geometry);
+        // WPF EmiFace.Paint: 95% fit box less the 5 px stroke on each side.
+        Assert.InRange(ink.Width, 1, 152 * .95 - 10);
+        Assert.InRange(ink.Height, 1, 137 * .95 - 10);
+        face.Measure(new Size(152, 137));
+        face.Arrange(new Rect(0, 0, 152, 137));
+        using var frame = new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(152, 137));
+        frame.Render(face);
+        var px = new byte[152 * 137 * 4];
+        void Read(global::Avalonia.Media.Imaging.RenderTargetBitmap bitmap)
+        {
+            var handle = System.Runtime.InteropServices.GCHandle.Alloc(px, System.Runtime.InteropServices.GCHandleType.Pinned);
+            try { bitmap.CopyPixels(new PixelRect(new PixelSize(152, 137)), handle.AddrOfPinnedObject(), px.Length, 152 * 4); }
+            finally { handle.Free(); }
+        }
+        Read(frame);
+        int count = 0, left = 152, right = 0, top = 137, bottom = 0;
+        for (int y = 0; y < 137; y++)
+            for (int x = 0; x < 152; x++)
+            {
+                int i = (y * 152 + x) * 4;
+                // Accept BGRA and RGBA: EMI pink has both outer channels above green.
+                if (px[i + 3] < 200 || Math.Min(px[i], px[i + 2]) <= px[i + 1] + 30) continue;
+                count++; left = Math.Min(left, x); right = Math.Max(right, x);
+                top = Math.Min(top, y); bottom = Math.Max(bottom, y);
+            }
+        Assert.True(count > 400, $"expected EMI's pink glyph ink, found {count} pixels");
+        Assert.InRange((left + right) / 2.0, 74, 78);
+        Assert.InRange((top + bottom) / 2.0, 63.5, 67.5); // 137/2 - 137*.02, stroke centred
+        face.Draw(null);
+        using var cleared = new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(152, 137));
+        cleared.Render(face);
+        Read(cleared);
+        Assert.All(px, b => Assert.Equal((byte)0, b));
     });
 
     /// <summary>WPF SparkleWalletRenderTests: the croupier sprite really paints (a missing resource
