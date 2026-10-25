@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+
+### FIN5 receipts and hold completion
+
+1. On a leashed account, hold the panic key: expect the existing panic on first down, ticks at whole seconds 1–4 (master volume/output suppression apply), 5..1 ring, then the question at 5 seconds. With a punishment video open, Yes closes it before cutting. WPF `MainWindow/MainWindow.Leash.cs:308-358`, `Controls/Leash/LeashFx.cs:224`. Rows: `feat-leash-receipts-hold`.
+2. On native Wayland with the portal bound, hold three seconds then release: ring disappears without asking/cutting. Hold five seconds: question appears. Unbind while holding: hold ends. Repeat on X11 and Windows. WPF `MainWindow/MainWindow.Leash.cs:311-350`. Rows: `feat-leash-receipts-hold`.
+3. Open Social > Leash on an account holding a leash; receive receipts through the friends poll. Expect the four newest rows, step dots/word/time and timeline tooltip to refresh; older servers show no steps. Choose Let go: verify name and 24-hour warning, No sends nothing; Yes requests release and reports success/failure, card leaves on the confirming poll. Hover No (purple) and Yes (pink). Panic dismisses the question without releasing. WPF `Controls/Leash/LeashHolderCard.cs:131-225`, `Controls/Leash/LeashHolderCard.cs:311-337`, `Controls/Leash/LeashCutConfirmWindow.cs`. Rows: `feat-leash-receipts-hold`.

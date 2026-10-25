@@ -7,9 +7,6 @@
 // while the key is down (a repeat by LeashHoldToCut.RepeatGap), and each tick ends the hold unless the key
 // is physically down (XQueryKeymap), so a lost key-up never asks. Windows has real repeats and no clock.
 // Like WPF, it works with the panic key switched off and under Lockdown (panic always works on a leash).
-// ponytail: no tick sound (WPF LeashFx.Tick; no leash sfx on this head yet); the GlobalShortcuts portal
-// path reports no key-up, so a native-Wayland-only press cannot hold; the Yes does not close a punish
-// window (WPF LeashPunishWindow.CloseNow; lands with leash-punish).
 using System;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -28,6 +25,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private readonly LeashHoldFlow _leashHold = new();
         private DispatcherTimer? _leashHoldClock;
+        private bool _leashPortalHeld;
+
+        internal void LeashPortalPressed()
+        {
+            _leashPortalHeld = true;
+            LeashHoldPressed();
+        }
+
+        internal void LeashPortalReleased()
+        {
+            _leashPortalHeld = false;
+            LeashHoldReleased();
+        }
 
         private static bool LeashHoldLeashed
         {
@@ -62,7 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The held clock (250 ms): the key is still down. Off the leash, the hold ends (WPF :49-53).</summary>
         internal void LeashHoldClockTick()
         {
-            if (!_leashHold.Held || !LeashHoldLeashed || LeashHoldKeyDown() == false) { LeashHoldReleased(); return; }
+            if (!_leashHold.Held || !LeashHoldLeashed || (!_leashPortalHeld && LeashHoldKeyDown() == false)) { LeashHoldReleased(); return; }
             ApplyLeashHold(_leashHold.Down(LeashHoldTime.GetUtcNow().UtcDateTime, true));
         }
 
@@ -77,6 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (step.Dismiss) LeashHoldRing.Dismiss();
             if (step.Ring is { } held) LeashHoldRing.ShowHeld(held);
+            if (step.Tick != null) LeashSound.Tick();
             if (step.Ask) AskToCutFromHold();
         }
 

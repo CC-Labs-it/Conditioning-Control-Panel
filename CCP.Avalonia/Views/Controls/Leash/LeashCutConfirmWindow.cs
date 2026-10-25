@@ -9,6 +9,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using ConditioningControlPanel.Localization;
 using F = ConditioningControlPanel.Avalonia.Views.Controls.FriendsDrawer;
 
@@ -18,6 +19,7 @@ internal sealed class LeashCutConfirmWindow : Window
 {
     private static LeashCutConfirmWindow? _open;
     internal static LeashCutConfirmWindow? Current => _open;
+    internal static void CloseForPanic() => _open?.Close();
     internal Button YesButton { get; }
     internal Button NoButton { get; }
 
@@ -25,6 +27,9 @@ internal sealed class LeashCutConfirmWindow : Window
         Loc.Get("leash_cut_confirm_title"),
         string.IsNullOrWhiteSpace(holderName) ? Loc.Get("leash_cut_confirm_body_anon") : Loc.GetF("leash_cut_confirm_body", holderName!.Trim()),
         Loc.Get("leash_cut_confirm_yes"), Loc.Get("leash_cut_confirm_no"), "leash-cut-confirm", onYes);
+
+    public static void Confirm(string title, string body, string yes, string no, string tag, Action onYes)
+        => Show(title, body, yes, no, tag, onYes);
 
     private static void Show(string title, string body, string yes, string no, string tag, Action onYes)
     {
@@ -59,9 +64,9 @@ internal sealed class LeashCutConfirmWindow : Window
         (body.TextWrapping, body.TextTrimming, body.TextAlignment) = (TextWrapping.Wrap, TextTrimming.None, TextAlignment.Center);
         body.Margin = new Thickness(0, 8, 0, 16);
 
-        NoButton = Pill(noText, new SolidColorBrush(Color.FromRgb(0x1C, 0x12, 0x33)), F.Text, F.Line2, tag + ":no");
+        NoButton = Pill(noText, new SolidColorBrush(Color.FromRgb(0x1C, 0x12, 0x33)), F.Text, F.Line2, new SolidColorBrush(Color.FromRgb(0x3A, 0x1F, 0x66)), tag + ":no");
         NoButton.Click += (_, _) => Close();
-        YesButton = Pill(yesText, F.Red, new SolidColorBrush(Color.FromRgb(0x0B, 0x07, 0x16)), F.Red, tag + ":yes");
+        YesButton = Pill(yesText, F.Red, new SolidColorBrush(Color.FromRgb(0x0B, 0x07, 0x16)), F.Red, F.Pink, tag + ":yes");
         YesButton.Margin = new Thickness(10, 0, 0, 0);
         YesButton.Click += (_, _) =>
         {
@@ -79,11 +84,18 @@ internal sealed class LeashCutConfirmWindow : Window
         };
     }
 
-    private static Button Pill(string text, IBrush bg, IBrush fg, IBrush border, string tag)
+    private static Button Pill(string text, IBrush bg, IBrush fg, IBrush border, IBrush hover, string tag)
     {
         var b = F.Pill(text, bg, fg, tag, border);
         (b.Padding, b.CornerRadius, b.Focusable) = (new Thickness(18, 7, 18, 7), new CornerRadius(10), false);
         if (b.Content is TextBlock t) t.FontSize = 13;
+        var over = new Style(x => x.OfType<Button>().Class("leash-confirm").Class(":pointerover")
+            .Template().Name("PART_ContentPresenter"));
+        over.Setters.Add(new Setter(BackgroundProperty, hover));
+        over.Setters.Add(new Setter(BorderBrushProperty, border));
+        over.Setters.Add(new Setter(ForegroundProperty, fg));
+        b.Classes.Add("leash-confirm");
+        b.Styles.Add(over);
         return b;
     }
 }

@@ -22,8 +22,9 @@ internal static class PortalPanicShortcut
     private const string Iface = "org.freedesktop.portal.GlobalShortcuts", Id = "panic";
 
     private static string? _session;
-    private static IDisposable? _activated;
+    private static IDisposable? _activated, _deactivated;
     private static DBusConnection? _bus;
+    private static Action? _release;
 
     internal static bool IsBound => !string.IsNullOrEmpty(_session);
 
@@ -31,9 +32,10 @@ internal static class PortalPanicShortcut
     /// "panic" shortcut. <paramref name="onActivated"/> runs on a D-Bus thread. Returns the trigger
     /// the compositor actually assigned (the user may have changed it; "" if it did not say), or
     /// null when the portal is absent, the user refused, or anything failed - never throws.</summary>
-    internal static async Task<string?> BindAsync(string key, string description, Action onActivated)
+    internal static async Task<string?> BindAsync(string key, string description, Action onActivated, Action? onDeactivated = null)
     {
         if (!OperatingSystem.IsLinux() || _session != null) return null;
+        _release = onDeactivated;
         _session = "";   // claimed: a second caller while this one waits gets null, not a second session
         try
         {
@@ -61,6 +63,15 @@ internal static class PortalPanicShortcut
                 (Exception? ex, (string Session, string Id) a, object? _, object? _) =>
                 {
                     if (ex == null && a.Session == session && a.Id == Id) onActivated();
+                },
+                null, null, false, ObserverFlags.None);
+
+            _deactivated = await bus.AddMatchAsync(
+                new MatchRule { Type = MessageType.Signal, Interface = Iface, Member = "Deactivated", Path = DesktopPath },
+                (Message m, object? _) => { var r = m.GetBodyReader(); return (r.ReadObjectPathAsString(), r.ReadString()); },
+                (Exception? ex, (string Session, string Id) a, object? _, object? _) =>
+                {
+                    if (ex == null && a.Session == session && a.Id == Id) onDeactivated?.Invoke();
                 },
                 null, null, false, ObserverFlags.None);
 
@@ -164,10 +175,15 @@ internal static class PortalPanicShortcut
     internal static async Task UnbindAsync()
     {
         var session = _session;
+        var release = _release;
+        _release = null;
+        release?.Invoke();
         _session = null;
         if (session == "") session = null;
         _activated?.Dispose();
         _activated = null;
+        _deactivated?.Dispose();
+        _deactivated = null;
         var bus = _bus;
         _bus = null;
         if (bus == null) return;

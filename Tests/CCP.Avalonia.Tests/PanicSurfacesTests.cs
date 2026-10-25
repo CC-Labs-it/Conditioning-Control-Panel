@@ -111,6 +111,7 @@ public sealed class PanicSurfacesTests
         "haptics",
         "intake",
         "knock-cards",
+        "leash-confirm",
         "leash-task",
         "lock-cards",
         "mantra",

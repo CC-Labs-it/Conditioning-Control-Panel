@@ -6,6 +6,11 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
+using Avalonia.VisualTree;
+using Avalonia.Controls.Presenters;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
+using Newtonsoft.Json.Linq;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -24,6 +29,14 @@ namespace CCP.Avalonia.Tests;
 /// never asks or cuts, five seconds asks, only Yes cuts; the panic itself still fires on the first press.</summary>
 public sealed class LeashHoldTests
 {
+    private static void EnsureApp()
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+    }
+
     private sealed class Clock : TimeProvider
     {
         public DateTimeOffset Now = new(2026, 9, 26, 10, 0, 0, TimeSpan.Zero);
@@ -128,11 +141,16 @@ public sealed class LeashHoldTests
             Assert.Null(LeashCutConfirmWindow.Current);
             Assert.NotNull(svc.Snapshot.Me);
 
-            // Five seconds again: Yes cuts.
+            // Five seconds again: Yes cuts and closes the punishment video through the existing host.
+            var oldWeb = LeashPunishWindow.CreateWeb;
+            LeashPunishWindow.CreateWeb = false;
+            try { Assert.True(LeashPunishWindow.OpenUrl("https://example.invalid/video", "Vex", true)); }
+            finally { LeashPunishWindow.CreateWeb = oldWeb; }
             Hold(shell, clock, 5000);
             Click(LeashCutConfirmWindow.Current!.YesButton);
             Release(clock);
             Assert.Null(svc.Snapshot.Me);
+            Assert.Null(LeashPunishWindow.Current);
 
             // Off the leash a hold shows nothing and asks nothing.
             Hold(shell, clock, 6000);
@@ -143,12 +161,155 @@ public sealed class LeashHoldTests
         {
             LeashCutConfirmWindow.Current?.Close();
             LeashHoldRing.Dismiss();
+            LeashPunishWindow.CloseNow();
             shell.Close();
             (LeashHead.Service, MainShellWindow.LeashHoldTime) = (oldSvc, oldTime);
             X11PanicKey.PanicReleased = oldReleased;
             MainShellWindow.LeashHoldKeyDown = oldKeyDown;
             (LeashCutSafety.LiveTargets, LeashCutSafety.RunOnUi) = (oldTargets, oldUi);
             CoreSettings.ServiceProvider = null;
+        }
+    });
+
+    [Fact]
+    public void PortalHold_UsesReleaseInsteadOfX11Keymap_AndPanicDismissesConfirmation() => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureApp();
+        var oldSvc = LeashHead.Service;
+        var oldTime = MainShellWindow.LeashHoldTime;
+        var oldKey = MainShellWindow.LeashHoldKeyDown;
+        var svc = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+        svc.ApplyBlock(LeashHeadTests.BlockWithPunishment());
+        var clock = new Clock();
+        (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown) = (svc, clock, () => false);
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.LeashPortalPressed();
+            for (int i = 0; i < 8; i++) { clock.Now = clock.Now.AddMilliseconds(250); shell.LeashHoldClockTick(); }
+            Assert.True(LeashHoldRing.IsShown); // X11 cannot see a native Wayland key.
+            Assert.False(MainShellWindow.PortalMayUnbind(shell)); // First panic stopped effects; hold must survive the two-second watcher.
+            shell.LeashPortalReleased();
+            Assert.True(MainShellWindow.PortalMayUnbind(shell));
+            Assert.False(LeashHoldRing.IsShown);
+            clock.Now = clock.Now.AddSeconds(5);
+            shell.LeashPortalPressed();
+            for (int i = 0; i < 20; i++) { clock.Now = clock.Now.AddMilliseconds(250); shell.LeashHoldClockTick(); }
+            var ask = LeashCutConfirmWindow.Current;
+            Assert.NotNull(ask);
+            // The shared surface is registered, and a panic never accepts its Yes.
+            PanicSurfaces.All.Single(x => x.Id == "leash-confirm").Stop(shell);
+            Assert.Null(LeashCutConfirmWindow.Current);
+            Assert.NotNull(svc.Snapshot.Me);
+        }
+        finally
+        {
+            shell.LeashPortalReleased();
+            LeashCutConfirmWindow.Current?.Close();
+            shell.Close();
+            (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown) = (oldSvc, oldTime, oldKey);
+        }
+    });
+
+    private sealed class HolderWire : ILeashApi
+    {
+        internal int Releases;
+        public System.Threading.Tasks.Task<JObject?> CallAsync(string op, JObject body, System.Threading.CancellationToken ct = default)
+        {
+            if (op == "release") Releases++;
+            return System.Threading.Tasks.Task.FromResult<JObject?>(new JObject { ["ok"] = true });
+        }
+    }
+
+    [Fact]
+    public void HolderPage_RefreshesReceipts_ReleaseRequiresYes_AndUsesWpfHoverColors() => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureApp();
+        var wire = new HolderWire();
+        var svc = new LeashService(wire, () => "u_me");
+        var block = LeashHeadTests.BlockWithPunishment();
+        block["me"] = null;
+        block["holding"] = JArray.Parse("""[{"who":{"id":"u_pet","name":"Pet"},"online":true,"intensity":"soft","since":"2026-09-26T00:00:00Z","day":1,"week":[],"pending":[],"punished_today":0}]""");
+        svc.ApplyBlock(block);
+        var page = new LeashTabView();
+        page.BindReceipts(svc);
+        try
+        {
+            Assert.False(page.ShowingEmpty);
+            var card = page.GetLogicalDescendants().OfType<LeashReceiptCard>().Single();
+            Click(card.ReleaseButton);
+            var ask = LeashCutConfirmWindow.Current!;
+            Assert.Equal(Loc.GetF("leash_release_confirm_title", "Pet"), ask.Title);
+            Color Hover(Button button)
+            {
+                ask.UpdateLayout();
+                var point = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), ask);
+                Assert.NotNull(point);
+                ask.MouseMove(point.Value);
+                Dispatcher.UIThread.RunJobs();
+                return ((ISolidColorBrush)button.GetVisualDescendants().OfType<ContentPresenter>()
+                    .First(x => x.Name == "PART_ContentPresenter").Background!).Color;
+            }
+            Assert.Equal(Color.Parse("#3A1F66"), Hover(ask.NoButton));
+            Assert.Equal(Color.Parse("#FF5FB4"), Hover(ask.YesButton));
+            Click(ask.NoButton);
+            Assert.Single(svc.Snapshot.Holding);
+            Assert.Equal(0, wire.Releases);
+            // A send raises ReceiptsChanged and rebuilds the hosted receipt list.
+            svc.ApplyReceipts(new[] { new LeashReceipt("0123456789abcdef", LeashItemKind.Tug, "u_pet", "Pet", LeashStep.Seen, DateTimeOffset.UtcNow) });
+            card = page.GetLogicalDescendants().OfType<LeashReceiptCard>().Single();
+            Assert.Single(card.GetLogicalDescendants().OfType<LeashSentList>());
+            Click(card.ReleaseButton);
+            Click(LeashCutConfirmWindow.Current!.YesButton);
+            Assert.Equal(1, wire.Releases);
+            block["holding"] = new JArray(); // WPF keeps the card until the confirming poll.
+            svc.ApplyBlock(block);
+            Assert.Empty(svc.Snapshot.Holding);
+            Assert.True(page.ShowingEmpty);
+        }
+        finally { page.BindReceipts(null); LeashCutConfirmWindow.Current?.Close(); }
+    });
+
+    [Fact]
+    public void Tick_UsesMasterVolumeAndModCue_AndRespectsSuppressedOutput() => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureApp();
+        var path = System.IO.Path.GetTempFileName();
+        var oldPath = CoreModArt.AudioOverridePathProvider;
+        var oldPlay = CoreAudio.PlayOneShotProvider;
+        var oldSuppressed = CoreAudio.IsOutputSuppressedProvider;
+        var oldVolume = CoreSettings.Current.MasterVolume;
+        var oldClock = LeashSound.Clock;
+        LeashSound.Clock = new Clock();
+        int played = 0;
+        try
+        {
+            CoreSettings.Current.MasterVolume = 50;
+            CoreModArt.AudioOverridePathProvider = rel => { Assert.Equal("chaos/countdown_tick.mp3", rel); return path; };
+            CoreAudio.PlayOneShotProvider = (file, volume, tag, _, _) =>
+            {
+                Assert.Equal(path, file);
+                Assert.Equal(0.05f, volume);
+                Assert.Equal("leash-tick", tag);
+                played++;
+            };
+            CoreAudio.IsOutputSuppressedProvider = () => true;
+            LeashSound.Tick();
+            Assert.Equal(0, played);
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            LeashSound.Tick();
+            Assert.Equal(1, played);
+            LeashSound.Tick(); // WPF global minimum gap.
+            Assert.Equal(1, played);
+        }
+        finally
+        {
+            LeashSound.Clock = oldClock;
+            CoreModArt.AudioOverridePathProvider = oldPath;
+            CoreAudio.PlayOneShotProvider = oldPlay;
+            CoreAudio.IsOutputSuppressedProvider = oldSuppressed;
+            CoreSettings.Current.MasterVolume = oldVolume;
+            System.IO.File.Delete(path);
         }
     });
 
