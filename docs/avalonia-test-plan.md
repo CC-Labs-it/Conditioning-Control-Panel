@@ -673,3 +673,6 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+1. WPF `MainWindow/MainWindow.Enhancements.cs:1938` — signed in with sufficient points, click a purchasable node and a revealed secret card. No leaves points unchanged; Yes shows the permanent note, disables repeat purchase, adopts the receipt and repaints owned. Refusals preserve points except a confirmed balance refusal after sync. Check the trophy columns, Pink Rush checks, unlock bark, purchase burst and prestige burst; repeat with motion Off. Rows: `views-tab-enhancements`
+2. WPF `MainWindow/MainWindow.Enhancements.cs:984` — select a non-English language and a mod with English skill replacements. Compare names and flavour/description tooltips on tree and secret cards; without a mod provider, localized text is used. Rows: `views-tab-enhancements`

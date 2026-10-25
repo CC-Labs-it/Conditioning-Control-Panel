@@ -47,6 +47,22 @@ internal sealed class AchievementEngine
         if (!_store.Write(() => Progress)) _isDirty = true;
     }
 
+    public void TrackSkillPointsSpent(int amount)
+    {
+        if (amount <= 0) return;
+        Progress.LifetimeSkillPointsSpent += amount;
+        _isDirty = true;
+        if (Progress.LifetimeSkillPointsSpent >= AchievementRules.WindowShoppingPointsSpent) TryUnlock("window_shopping");
+    }
+
+    public void ReconcileLifetimePointsSpent(long serverValue)
+    {
+        if (serverValue <= Progress.LifetimeSkillPointsSpent) return;
+        Progress.LifetimeSkillPointsSpent = serverValue;
+        _isDirty = true;
+        if (Progress.LifetimeSkillPointsSpent >= AchievementRules.WindowShoppingPointsSpent) TryUnlock("window_shopping");
+    }
+
     public void Save()
     {
         _isDirty = false;

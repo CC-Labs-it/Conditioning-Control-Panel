@@ -30,8 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// CreateAnimatedSkillTreeBrush. Ownership, purchasability, multiplier and time come from Core
     /// <c>SkillTreeRules</c>, the same rules WPF SkillTreeService delegates to.
     ///
-    /// <para>Not here (see the parity rows): purchasing (SkillCard_Click / PurchaseSkillAsync is a
-    /// server call behind account auth) and purchase FX. PRO analytics live in EnhancementsTabView.Analytics.cs.</para>
+    /// <para>Purchasing lives in EnhancementsTabView.Purchase.cs; PRO analytics in EnhancementsTabView.Analytics.cs.</para>
     /// </summary>
     public partial class EnhancementsTabView : UserControl
     {
@@ -447,6 +446,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             prestige.Children.Add(pInfo);
             var prestigeBox = Box(Rgb(52, 44, 28), new Thickness(15, 6, 15, 6), prestige);
             ToolTip.SetTip(prestigeBox, Loc.Get("tooltip_prestige"));
+            _prestigeRow = prestigeBox;
             main.Children.Add(prestigeBox);
 
             if (SkillTreeRules.HasSkill(settings, "ditzy_data"))
@@ -620,7 +620,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Background = Rgb(30, 28, 45),
                 Child = new TextBlock
                 {
-                    Text = CoreMods.MakeModAware(skill.LocalizedName),
+                    Text = SkillText(skill.Name, skill.LocalizedName),
                     Foreground = Rgb(200, 200, 210),
                     FontSize = 9.5,
                     FontWeight = FontWeight.SemiBold,
@@ -673,12 +673,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             wrapper.Children.Add(node);
 
+            if (canPurchase) MakePurchasable(wrapper, skill.Id);
             wrapper.PointerEntered += (_, _) => ApplyNodeHover(wrapper, true);
             wrapper.PointerExited += (_, _) => ApplyNodeHover(wrapper, false);
 
             var tip = new StackPanel { MaxWidth = 280 };
-            tip.Children.Add(new TextBlock { Text = CoreMods.MakeModAware(skill.LocalizedFlavorText), Foreground = AccentLight, FontStyle = FontStyle.Italic, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
-            tip.Children.Add(new TextBlock { Text = CoreMods.MakeModAware(skill.LocalizedDescription), Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap });
+            tip.Children.Add(new TextBlock { Text = SkillText(skill.FlavorText, skill.LocalizedFlavorText), Foreground = AccentLight, FontStyle = FontStyle.Italic, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
+            tip.Children.Add(new TextBlock { Text = SkillText(skill.Description, skill.LocalizedDescription), Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap });
             if (!string.IsNullOrEmpty(skill.PrerequisiteId) && !SkillTreeRules.HasSkill(settings, skill.PrerequisiteId))
             {
                 var pre = SkillDefinition.All.FirstOrDefault(s => s.Id == skill.PrerequisiteId);
@@ -690,6 +691,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ToolTip.SetTip(wrapper, Tip(tip, Rgb(30, 30, 50), Accent));
             return wrapper;
         }
+
+        // WPF passes English catalogue text to the mod vocabulary layer. With no layer it
+        // uses the localized field; translating first prevents English replacement keys matching.
+        internal static string SkillText(string english, string localized) =>
+            CoreMods.MakeModAwareProvider != null ? CoreMods.MakeModAware(english) : localized;
 
         private static Border Tip(Control content, IBrush bg, IBrush border) => new()
         {
@@ -793,7 +799,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(stack, 1);
-            var name = Text(CoreMods.MakeModAware(skill.LocalizedName), owned ? Rgb(180, 130, 255) : Rgb(153, 50, 204), 11, bold: true);
+            var name = Text(SkillText(skill.Name, skill.LocalizedName), owned ? Rgb(180, 130, 255) : Rgb(153, 50, 204), 11, bold: true);
             name.TextWrapping = TextWrapping.Wrap;
             stack.Children.Add(name);
             // WPF "💎N ✓ OWNED" / "💎 N".
@@ -809,13 +815,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var card = SecretBorder(owned ? Rgb(40, 30, 50) : canPurchase ? Rgb(50, 30, 60) : Rgb(35, 25, 45),
                 owned ? Rgb(180, 100, 255) : canPurchase ? Rgb(153, 50, 204) : Rgb(100, 70, 130), owned ? 2 : 1, body, opacity: 1);
             card.Tag = skill.Id;
+            if (canPurchase) MakePurchasable(card, skill.Id);
             // The card is a Border, so its glow is its own BoxShadow (WPF DropShadowEffect; P82 rule 3).
             if (owned) card.BoxShadow = new BoxShadows(new BoxShadow { Blur = 12, Color = Color.FromArgb(128, Colors.Purple.R, Colors.Purple.G, Colors.Purple.B) });
             else if (canPurchase) card.BoxShadow = new BoxShadows(new BoxShadow { Blur = 10, Color = Color.FromArgb(102, Colors.MediumPurple.R, Colors.MediumPurple.G, Colors.MediumPurple.B) });
 
             var tip = new StackPanel { MaxWidth = 280 };
-            tip.Children.Add(new TextBlock { Text = CoreMods.MakeModAware(skill.LocalizedFlavorText), Foreground = Rgb(200, 150, 255), FontStyle = FontStyle.Italic, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
-            tip.Children.Add(new TextBlock { Text = CoreMods.MakeModAware(skill.LocalizedDescription), Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap });
+            tip.Children.Add(new TextBlock { Text = SkillText(skill.FlavorText, skill.LocalizedFlavorText), Foreground = Rgb(200, 150, 255), FontStyle = FontStyle.Italic, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
+            tip.Children.Add(new TextBlock { Text = SkillText(skill.Description, skill.LocalizedDescription), Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap });
             ToolTip.SetTip(card, Tip(tip, Rgb(40, 25, 55), Rgb(153, 50, 204)));
             return card;
         }

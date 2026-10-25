@@ -11,12 +11,10 @@
 // aggregation is Core EnhancementAnalytics, also called by WPF.
 //
 // ponytail: still missing, each a whole feature:
-//   SkillCard_Click (+ CelebrateEnhancementPurchase, UpdateTrophyCaseColumns) - purchasing is
-//     ProfileSync.PurchaseSkillAsync, a server call with auth recovery and a sync retry, not ported;
-//     purchasable nodes draw their WPF state but do not take a click.
+//   Purchases now live in EnhancementsTabView.Purchase.cs over Core SkillPurchase;
+//     full-window prestige sheen remains unported (the rank-up burst is wired).
 //   OnLuckyProc / EnsureLuckyToast / PlaceLuckyToast / CloseLuckyToast - nothing raises a lucky
 //     proc on this head (RollLuckyFlash/RollLuckyBubble are SkillTreeService, head-side in WPF).
-//   The prestige rank-up burst (_prestigeRowBorder) rides on the purchase above.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
