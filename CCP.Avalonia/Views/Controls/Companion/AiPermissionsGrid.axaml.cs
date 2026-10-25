@@ -28,10 +28,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// head that can read Patreon may repair it.</para>
     ///
     /// <para><see cref="ApplyTierGate"/> and the master toggle's refusal now call the real
-    /// <c>TierGate</c> (CCP.Core/Services/TierGate.cs), not a local stand-in. It still fails
-    /// closed here - this head seeds no <c>CoreEntitlement</c> providers, so there is no account
-    /// to read - but the band copy and the refusal are the shipped ones, and the day a head seeds
-    /// an entitlement this control opens with no further edit.</para>
+    /// <c>TierGate</c> (CCP.Core/Services/TierGate.cs), not a local stand-in, over the providers
+    /// <c>AccountSeed</c> installs. Like WPF (AiPermissionsGrid.xaml.cs:53 IsVisibleChanged,
+    /// MainWindow.UiUpdates.cs:951 on a tier change) the band repaints on becoming visible and on
+    /// either provider's <c>TierChanged</c>, so a mid-session sign-in or upgrade unlocks it.</para>
     ///
     /// <para>Motion budget: zero.</para>
     /// </summary>
@@ -42,10 +42,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         /// <summary>Raised while the seed writes the controls, so an echo is not a user edit.</summary>
         private bool _isLoading = true;
+        private bool _isPreview;
+
+        /// <summary>WPF's preview is not MainWindow: all its permission shims are no-ops and no
+        /// shell seeds the controls. Keep those markup defaults, and local edits across state swaps.</summary>
+        internal void UsePreview()
+        {
+            if (_isPreview) return;
+            _isPreview = true;
+            ChkCapEffects.IsChecked = false;
+            EffectPermsPanel.IsVisible = false;
+            foreach (var box in new[] { ChkAllowFlash, ChkAllowVideo, ChkAllowAudio, ChkAllowBubbles,
+                ChkAllowSubliminal, ChkAllowOverlay, ChkAllowLockCard, ChkAllowBounce, ChkAllowHaptic, ChkAllowGetBackToMe })
+                box.IsChecked = false;
+            SliderMaxHapticIntensity.Value = 0.6;
+            TxtMaxHapticIntensity.Text = "60%";
+            ChkChatMemoryEnabled.IsChecked = true;
+        }
 
         public AiPermissionsGrid()
         {
             InitializeComponent();
+            if (global::ConditioningControlPanel.Services.Companion.CompanionExperience.IsV2Enabled)
+            {
+                // WPF's V2 sheet stacks its two permission groups instead of squeezing columns.
+                PermissionColumns.ColumnDefinitions.Clear();
+                PermissionColumns.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                PermissionColumns.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                Grid.SetColumn(MemoryPane, 0);
+                Grid.SetRow(MemoryPane, 1);
+                MemoryPane.Margin = new global::Avalonia.Thickness(0, 16, 0, 0);
+                PreviewBetaTag.IsVisible = false;
+                HeaderTierTag.IsVisible = false;
+            }
             Helpers.ModArt.BindFeaturePlates(this, "features/lab_aimemory_hero.png", null, LabAiMemoryHeroArt);
             SyncFromSettings();
             Loaded += (_, _) => ApplyTierGate();
@@ -54,13 +83,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         protected override void OnAttachedToVisualTree(global::Avalonia.VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
-            if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
+            if (!_isPreview && CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
+            if (global::ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon is { } p) p.TierChanged += OnTierChanged;
+            if (global::ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar is { } ss) ss.TierChanged += OnTierChanged;
             SyncFromSettings();
+            ApplyTierGate();
         }
+
+        protected override void OnPropertyChanged(global::Avalonia.AvaloniaPropertyChangedEventArgs change)
+        {
+            base.OnPropertyChanged(change);
+            if (change.Property == IsVisibleProperty && IsVisible) ApplyTierGate();
+        }
+
+        // Providers raise this off the UI thread (a poll or a sign-in callback).
+        private void OnTierChanged(object? sender, global::ConditioningControlPanel.Models.PatreonTier tier) => Dispatcher.UIThread.Post(ApplyTierGate);
 
         protected override void OnDetachedFromVisualTree(global::Avalonia.VisualTreeAttachmentEventArgs e)
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
+            if (global::ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon is { } p) p.TierChanged -= OnTierChanged;
+            if (global::ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar is { } ss) ss.TierChanged -= OnTierChanged;
             base.OnDetachedFromVisualTree(e);
         }
 
@@ -74,6 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// </summary>
         internal void SyncFromSettings()
         {
+            if (_isPreview) return;
             _isLoading = true;
             try
             {
@@ -140,14 +184,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             }
         }
 
+        // The retired route refused under Lockdown; WPF's CTA does not, and ShowTab has no Lockdown
+        // check either - a Patreon/account page is not an escape from a lock.
+        /// <remarks>Not a MainWindow-only shim: WPF (AiPermissionsGrid.xaml.cs:104) goes through App.MainWindowRef, so the
+        /// CTA also works in the room preview. Same here: the preview window falls back to the live shell.</remarks>
         private void BtnEffectsLockCta_Click(object? sender, RoutedEventArgs e)
-            => (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.BtnGateUnlock_Click(sender, e);
+            => (TopLevel.GetTopLevel(this) as Windows.MainShellWindow ?? Windows.MainShellWindow.Current)?.ShowTab("patreon");
 
         /// <summary>WPF MainWindow.Patreon.cs BtnClearChatMemory_Click: confirm, then the brain forgets the
-        /// conversation (session.json + live turn log) and the local-provider history is cleared.
-        /// ponytail: no AiLiveActions feed on this head yet, so there is no feed to clear.</summary>
+        /// conversation (session.json + live turn log), local-provider history and live-actions feed are cleared.</summary>
         private async void BtnClearChatMemory_Click(object? sender, RoutedEventArgs e)
         {
+            if (_isPreview) return;
             if (TopLevel.GetTopLevel(this) is not Window owner) return;
             if (!await Dialogs.MessageDialog.ConfirmAsync(owner, Loc.Get("btn_forget_everything"),
                     Loc.Get("dialog_forget_everything_prompt"))) return;
@@ -155,17 +203,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             {
                 App.Brain?.ForgetConversation();
                 (App.Ai as Services.AIService.AiServiceStrategy)?.ClearLocalHistory();
+                App.AiLiveActions.Clear();
                 await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("btn_forget_everything"),
                     Loc.Get("dialog_forget_everything_done"));
             }
             catch (Exception ex) { Log.Warning(ex, "BtnClearChatMemory_Click failed"); }
         }
 
-        /// <summary>WPF BtnLabEffectsSetupLocal_Click (MainWindow.Patreon.cs:1619): reveal the Engine Room,
-        /// then the same local-AI wizard its own "set up local" button runs.</summary>
+        /// <summary>WPF BtnLabEffectsSetupLocal_Click (MainWindow.Patreon.cs:1628): Companion > AI (the
+        /// Engine Room's page under v2), reveal the drawer, then the same local-AI wizard its own
+        /// "set up local" button runs.</summary>
         private void BtnLabEffectsSetupLocal_Click(object? sender, RoutedEventArgs e)
         {
-            var room = this.FindAncestorOfType<CompanionRoomView>();
+            if (_isPreview) return;
+            var shell = TopLevel.GetTopLevel(this) as Windows.MainShellWindow;
+            shell?.ShowTab("companionai");
+            var room = shell?.RoomView() ?? this.FindAncestorOfType<CompanionRoomView>();
             try { room?.RevealEngineRoom(); }
             catch (Exception ex) { Log.Debug("BtnLabEffectsSetupLocal_Click: {E}", ex.Message); }
             (room?.FindControl<EngineRoomDrawer>("EngineZone")?.DataContext as EngineRoomVm)?.SetupLocalCommand.Execute(null);
@@ -174,7 +227,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// <summary>One handler for the ten effect boxes; the Tag names the permission, as on WPF.</summary>
         private void ChkAllowEffect_Changed(object? sender, RoutedEventArgs e)
         {
-            if (_isLoading) return;
+            if (_isLoading || _isPreview) return;
             if (sender is not CheckBox cb) return;
             var p = CoreSettings.Current.CompanionPrompt;
             if (p == null) return;
@@ -198,7 +251,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         private void ChkCapEffects_Changed(object? sender, RoutedEventArgs e)
         {
-            if (_isLoading) return;
+            if (_isLoading || _isPreview) return;
             var on = ChkCapEffects.IsChecked == true;
             // WPF's own guard, verbatim (MainWindow.Patreon.cs:1662). DemandLab both decides and
             // tells; with no entitlement seeded on this head it denies and only logs, which is a
@@ -229,7 +282,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// </summary>
         private void ChkChatMemoryEnabled_Changed(object? sender, RoutedEventArgs e)
         {
-            if (_isLoading) return;
+            if (_isLoading || _isPreview) return;
             var p = CoreSettings.Current.CompanionPrompt;
             if (p == null) return;
             var on = ChkChatMemoryEnabled.IsChecked == true;
@@ -239,10 +292,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             if (on) return;
             try { App.Brain?.ForgetConversation(); }
             catch (Exception ex) { Log.Warning(ex, "ChkChatMemoryEnabled_Changed: brain wipe failed"); }
+            try { (App.Ai as Services.AIService.AiServiceStrategy)?.ClearLocalHistory(); }
+            catch (Exception ex) { Log.Warning(ex, "ChkChatMemoryEnabled_Changed: local wipe failed"); }
         }
 
         private void SliderMaxHapticIntensity_ValueChanged(object? sender, RangeBaseValueChangedEventArgs e)
         {
+            if (_isPreview) return;
             TxtMaxHapticIntensity.Text = $"{(int)(e.NewValue * 100)}%";
             if (_isLoading) return;
             var p = CoreSettings.Current.CompanionPrompt;

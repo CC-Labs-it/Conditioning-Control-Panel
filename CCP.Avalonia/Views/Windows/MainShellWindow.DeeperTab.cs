@@ -20,12 +20,11 @@
 // guards its own programmatic sets. It is not this partial's job any more; a second copy here
 // would be a second writer for one setting.
 //
-// LIBRARY ACTIONS (open, play, delete, folder, demo) are in MainShellWindow.DeeperHub.cs.
+// LIBRARY ACTIONS (open, play, delete, folder, demo, tutorial) are in MainShellWindow.DeeperHub.cs.
+// Import picker/drop and promotion are in MainShellWindow.DeeperImport.cs.
 // STILL OUT, and why:
 //   OpenInDeeperPlayer, OpenDeeperEditorFromPlayer, OpenInDeeperEditorForMedia,
 //   HandlePendingFileOpen (file-association entry points), OnDeeperLibraryChanged (no watcher),
-//   BtnDeeperImport_Click / ImportEnhancementFiles (EnhancementLibrary.FindDuplicateOf /
-//   PromoteToLibrary are in Core now; this head has no EnhancementLibrary instance yet).
 //   The browser half - OnDeeperBrowserBound/Unbound, RefreshBrowserWebcamButton,
 //   BtnWebcamTracking_Click, MaybePromptBrowserWebcamForEnhancement, OnBrowserEnhanceMatchChanged,
 //   ChkForceShowBambiCloud_Changed, ToggleEnhanceIfPossible_Changed. WebView2 plus WebcamTrackingState.
@@ -33,13 +32,9 @@
 //   its unportable half opens or closes the camera, and the same judgement recorded for the two
 //   status pills in MainShellWindow.LabTab.cs holds - a control that reports tracking with no
 //   camera behind it is worse than one that does nothing.
-//   The tutorial - StartDeeperTabTutorial, BtnDeeperTutorial_Click, BtnDeeperWelcomeTour_Click.
-//   StartTutorial(TutorialType.Deeper) is not on this head.
 //   The rail pulse - StartDeeperTabPulse / StopDeeperTabPulse, a WPF storyboard on BtnDeeper.
 //   (Not out any more: the catalogue. The submit half is in MainShellWindow.DeeperSubmissions.cs
 //   (U3); the lookup -> toast -> picker -> download -> player chain is at the bottom of this file.)
-//   IsImportableEnhancementPath is pure and would compile, and is held back with
-//   ImportEnhancementFiles, its only caller.
 //   MaybePromptMandatoryVideoEnhancement (with its "Don't ask again" fold).
 //
 // NOT BLOCKED, RESTORED: BtnDeeperNewEnhancement_Click. It used to be listed on the line above with
@@ -72,8 +67,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>
         /// The rail's Deeper entry. Navigates, then retires the "you have not opened this yet"
-        /// pulse flag exactly where WPF does - on the first open, not on install - so the rail
-        /// stops nagging even though the pulse animation itself is not on this head.
+        /// pulse flag and stops the Play row's pulse exactly where WPF does - on the first open,
+        /// not on install (MainShellWindow.TabTransitions.cs).
         /// </summary>
         private void BtnDeeper_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {

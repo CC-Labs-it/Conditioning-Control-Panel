@@ -47,7 +47,7 @@ public sealed class CatalogueShellTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AppA>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -210,17 +210,73 @@ public sealed class CatalogueShellTests
                 Assert.Contains("✅ " + Loc.Get("catalogue_status_approved"), Texts(pill));
                 var toast = Loc.GetF("catalogue_submission_accepted_toast_fmt", preset.Id);
                 Assert.Single(Texts(host), t => t == toast);
+                // WPF accepted notifications persist until dismissed: no expiry timer.
+                var accepted = host.Children.OfType<Border>().Single(b => Texts(b).Contains(toast));
+                Assert.Null(accepted.Tag);
 
                 // Nothing left open: the next forced poll makes no request and no second toast.
                 var before = fake.Seen.Count;
                 await shell.CheckCatalogueSubmissionStatusesAsync(MainShellWindow.CatalogueKindPresets, force: true);
                 Assert.Equal(before, fake.Seen.Count);
                 Assert.Single(Texts(host), t => t == toast);
+                // WPF acceptance notices stay until answered, beyond this head's old 15-second expiry.
+                var notice = host.Children.OfType<Border>()
+                    .Single(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == toast));
+                Assert.Null(notice.Tag); // sticky: no expiry timer
+                notice.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ToastDismiss")
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Contains("catalogue_submission_accepted_c1", s.DismissedNotificationKeys);
+                Assert.False(notice.IsHitTestVisible); // fading out
+            }
+            finally
+            {
+                AppA.Notifications.Dismiss("catalogue_submission_accepted_c1");
+                s.DismissedNotificationKeys.Remove("catalogue_submission_accepted_c1");
+                shell.Close();
+                s.CataloguePresetSubmissions.Remove(preset.Id);
+                AppA.Notifications.Dismiss("catalogue_submission_accepted_c1");
+                (AppA.Catalogue, CoreSecrets.RetrieveProvider) = (oldClient, oldGet);
+            }
+        });
+    }
+
+    [Fact]
+    public async Task DeeperMinePollToastsTheAcceptanceAsASticky()
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            Setup();
+            var s = CoreSettings.Current;
+            const string key = "deeper-sticky-test/Alpha.deeper";
+            var fake = new Fake
+            {
+                Respond = r => r.RequestUri!.AbsolutePath == "/api/auth/token-exchange"
+                    ? $"{{\"access_token\":\"sb\",\"expires_at\":\"{DateTimeOffset.UtcNow.AddHours(1):O}\"}}"
+                    : "{\"enhancements\":[{\"id\":\"d1\",\"status\":\"approved\"}]}",
+            };
+            var (oldClient, oldGet) = (AppA.Catalogue, CoreSecrets.RetrieveProvider);
+            AppA.Catalogue = new CatalogueClient(() => "tok", () => "uid", "test", fake);
+            s.DeeperSubmissions[key] = new DeeperSubmissionRecord { CatalogueId = "d1", Status = "pending" };
+            var host = new StackPanel();
+            AppA.Notifications.AttachHost(host);
+            var shell = new MainShellWindow();
+            CoreSecrets.RetrieveProvider = _ => null;
+            shell.Show();
+            CoreSecrets.RetrieveProvider = n => n == CoreSecrets.AuthToken ? "tok" : null;
+            try
+            {
+                await shell.CheckDeeperSubmissionStatusesAsync(force: true);
+                Assert.Contains("https://app.cclabs.app/api/enhancements/mine", fake.Seen);
+                var toast = Loc.GetF("deeper_submission_accepted_toast_fmt", "Alpha");
+                // WPF DeeperSubmissions.cs:169 is ShowSticky: no expiry timer.
+                var accepted = host.Children.OfType<Border>().Single(b => Texts(b).Contains(toast));
+                Assert.Null(accepted.Tag);
             }
             finally
             {
                 shell.Close();
-                s.CataloguePresetSubmissions.Remove(preset.Id);
+                s.DeeperSubmissions.Remove(key);
+                AppA.Notifications.Dismiss("deeper_submission_accepted_d1");
                 (AppA.Catalogue, CoreSecrets.RetrieveProvider) = (oldClient, oldGet);
             }
         });

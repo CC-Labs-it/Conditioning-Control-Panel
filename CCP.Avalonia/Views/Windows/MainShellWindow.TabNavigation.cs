@@ -6,9 +6,11 @@
 // is real too, and runs inside ShowTab (MainShellWindow.AmbientFx.cs).
 //
 // What is NOT, on purpose, each named so it is not lost silently:
-//   - The transition choreography (AnimateTabIn, the Stop*Shimmer/Pulse/Motion calls).
-//   - Per-tab side effects on the way in (RefreshPresetsList, StopPolling on leaving Available Subjects,
-//     UpdatePatreonUI, RefreshIntakePassTile, RefreshDashboardRail - its favorites half is restored). Those reach App.* or a service.
+//   - Transition choreography lives in MainShellWindow.TabTransitions.cs. Season shimmer,
+//     skill-tree air and vault motion park with IsVisible. RefreshEntitlementVeils owns the
+//     tab half of UpdatePatreonUI, AccountSettingsSection owns its account half.
+//   - AvailableSubjects StopPolling/LeaveLobbyTab await the unported directory + lobby lifecycle.
+//     (WPF BtnPresets_Click's RefreshPresetsList is dead: no XAML names the handler.)
 //     The FIVE that do not are restored in OnTabShown below:
 //       * StudioTab.OnTabShown() for "studio" and StudioTab.FocusRackEntry("haptics") for the
 //         haptics alias - ported view state on StudioTabView. Without the second, ShowTab("haptics")
@@ -21,8 +23,7 @@
 //       * UpdateProfileSharingSummary() on "discord" - see the case itself for why it lands here
 //         and not in the FX partial WPF reaches it through.
 //       * HasSeenProgramsTab and ProgramsIntroPopup.ShowIfFirstTime on "programs".
-//   - EmiDesk (EmiTargets.NoteTabOpened). The Bark hook is REAL now, through CoreBark, and fires
-//     in the same place WPF fires it - see ShowTab.
+//   - The Bark and EmiDesk open-counter hooks run in ShowTab, as on WPF.
 //   - The keys that are WINDOWS, not tabs, and the one launcher door: "patreon" (Settings · Account,
 //     as WPF ShowAppInfoPopup - wired), "fyp" (OpenFypFeed), "justdrop" (the shop host).
 //     fyp opens the feed (GameWindow.Fyp.cs); justdrop opens its GameWindow (MainShellWindow.JustDrop.cs). The "webapp" door is
@@ -67,8 +68,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal Tabs.AppSettingsTabView? AppSettingsPage => Named<Tabs.AppSettingsTabView>("AppSettingsTab");
         internal Tabs.StudioTabView? StudioRack => Named<Tabs.StudioTabView>("StudioTab");
 
-        /// <summary>The Companion tab's room (the zone pills scroll it).</summary>
-        private Controls.Companion.CompanionRoomView? RoomView() =>
+        /// <summary>The Companion tab's collapsed room, which owns the zones until a page adopts them.</summary>
+        internal Controls.Companion.CompanionRoomView? RoomView() =>
             Named<Tabs.CompanionTabView>("CompanionTab")?.FindControl<Controls.Companion.CompanionRoomView>("Room");
 
         /// <summary>The tab key currently shown, lower-case. "settings" until the first switch,
@@ -99,10 +100,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ["friends"] = "FriendsTab",          ["leash"] = "LeashTab",
             // Nav rework zone pills (WPF MainWindow.TabNavigation.cs:521/572/666): places inside a page.
             ["playeyes"] = "PlayTab", ["playsessions"] = "PlayTab", ["folders"] = "AssetsTab", ["ramp"] = "StudioTab",
-            // WPF 5681c132a gives these three their own pages because v2 collapses the room. This head
-            // has no v2 ConversationPage, so the room is on screen: they are zone pills into it until
-            // the pages land with views-companion-v2-conversation (docs/avalonia-decisions.md).
-            ["personality"] = "CompanionTab", ["permissions"] = "CompanionTab", ["companionlinks"] = "CompanionTab",
+            // WPF 5681c132a: v2 collapses the room, so these three are pages of their own (MainWindow.CompanionTabs.cs).
+            ["personality"] = "CompanionPersonalityTab", ["permissions"] = "CompanionPermissionsTab", ["companionlinks"] = "CompanionLinksTab",
         };
 
         /// <summary>Keys that open a window or a service rather than a tab. ShowTab leaves the
@@ -156,20 +155,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (tab == "justdrop") { OpenJustDrop(); return; }
             if (WindowKeys.Contains(tab)) return;                 // a window, not a tab - see header
 
-            // Bark hook: announce navigation (gated/chanced in the rules so it isn't spammy).
-            // Routed through BarkTabAliases so renamed tabs keep answering to their old bark key.
-            // Placed exactly where WPF places it (MainWindow.TabNavigation.cs:158) - AFTER the
-            // window-key intercepts and BEFORE the panel lookup, so an unknown key announces
-            // itself here too, as it does there.
+            // WPF refuses an unknown key before the bark hook (TabNavigation.cs:274-295).
+            // The head's panel table owns which destinations actually exist here.
+            if (!TabPanels.TryGetValue(tab, out var target))
+            {
+                Serilog.Log.Warning("ShowTab({Tab}) ignored: no such tab", tab);
+                return;
+            }
+
+            // Window launchers have already returned. Real tabs keep their legacy bark aliases.
             CoreBark.NotifyTabNavigated(BarkTabAliases.TryGetValue(tab, out var barkTab) ? barkTab : tab);
 
-            if (!TabPanels.TryGetValue(tab, out var target)) return;
+            EmiDesk.EmiTargets.NoteTabOpened(tab); // WPF counts after the bark hook (TabNavigation.cs:298).
 
             foreach (var name in new HashSet<string>(TabPanels.Values))
             {
                 var panel = this.FindControl<Control>(name);
                 if (panel is not null) panel.IsVisible = name == target;
             }
+            // WPF AnimateTabIn on every arm of the switch (MainShellWindow.TabTransitions.cs).
+            AnimateTabIn(this.FindControl<Control>(target), tab);
             NoteTabHistory(tab); // back/forward (MainShellWindow.TabHistory.cs); unknown keys never reach it
             _tabBefore = CurrentTab;
             CurrentTab = tab;
@@ -198,16 +203,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     // three (MainWindow.TabNavigation.cs:260/476/501): the Dashboard and the rack
                     // both host real dose dials, so a lock that was latched rather than re-derived
                     // could survive a crash, an abort or an out-of-order session event.
-                    case "settings": RefreshFavoritesRail(); RefreshSessionFeatureLock(); MaybeShowFeatureIntro("daily-free", "settings"); break;
+                    case "settings": RefreshFavoritesRail(); RefreshSessionFeatureLock(); RefreshIntakePassTile(); MaybeShowFeatureIntro("daily-free", "settings"); break;
                     case "progression": RefreshFavoritesRail(); break; // WPF TabNavigation.cs:308 (RefreshDashboardRail)
                     case "studio": StudioRack?.OnTabShown(); RefreshSessionFeatureLock(); MaybeShowFeatureIntro("studio-rack", "studio"); break;
                     case "haptics": StudioRack?.FocusRackEntry("haptics"); RefreshSessionFeatureLock(); MaybeShowFeatureIntro("haptics"); break;
                     // WPF :666, the "Scheduler & Ramp" zone pill: the rack's scheduler module.
                     case "ramp": StudioRack?.FocusRackEntry("scheduler"); RefreshSessionFeatureLock(); break;
-                    // The Companion zone pills (see TabPanels): scroll the room to what WPF's page hosts.
-                    case "personality": RoomView()?.RevealPersonality(); break;
-                    case "permissions": RoomView()?.RevealPermissions(); break;
-                    case "companionlinks": RoomView()?.RevealWorkshop(Controls.Companion.CompanionRoomAnchors.WorkshopLibraryCell); break;
+                    // WPF MainWindow.CompanionTabs.cs NavTabHost(..., OnShown): each page adopts the collapsed room's live zones.
+                    case "personality": Named<Controls.Companion.Pages.PersonalityPage>("CompanionPersonalityTab")?.OnShown(RoomView()); break;
+                    case "permissions": Named<Controls.Companion.Pages.PermissionsPage>("CompanionPermissionsTab")?.OnShown(RoomView()); break;
+                    case "companionlinks": Named<Controls.Companion.Pages.LinksPage>("CompanionLinksTab")?.OnShown(RoomView()); break;
 
                     // WPF MainWindow.TabNavigation.cs:420/457/527/534 - the door tour cards (studio-rack: :505, case "studio").
                     case "play": case "lab": case "playeyes": case "playsessions":
@@ -222,13 +227,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         };
                         if (zone != null) Named<Tabs.PlayTabView>("PlayTab")?.ScrollToZone(zone);
                         break;
-                    case "awareness": MaybeShowFeatureIntro("awareness"); break;
+                    // WPF AwarenessTabView.Companion.cs HostCompanionPrivacy: the collapsed room's privacy card.
+                    case "awareness": Named<Tabs.AwarenessTabView>("AwarenessTab")?.HostCompanionPrivacy(RoomView()); MaybeShowFeatureIntro("awareness"); break;
                     // WPF MainWindow.CompanionTabs.cs NavTabHost("companionai", OnShown): borrow the room's live zones.
                     case "companionai":
-                        Named<Controls.Companion.Pages.AiPage>("CompanionAiTab")?.OnShown(Named<Tabs.CompanionTabView>("CompanionTab")?.Room);
+                        Named<Controls.Companion.Pages.AiPage>("CompanionAiTab")?.OnShown(RoomView());
                         break;
                     case "lockdown": MaybeShowFeatureIntro("lockdown"); break;
-                    case "blinktrainer": MaybeShowFeatureIntro("blinktrainer"); break;
+                    case "blinktrainer":
+                        // WPF refreshes on every ShowTab. Coming from another tab the view's own
+                        // IsVisible hook already did; only a re-visit of the visible page needs it.
+                        if (_tabBefore == "blinktrainer") Named<Tabs.BlinkTrainerTabView>("BlinkTrainerTab")?.Refresh();
+                        MaybeShowFeatureIntro("blinktrainer");
+                        break;
                     // WPF :581 - only once the room shows the map (its IsVisible hook re-read the gates).
                     case "spiral":
                         if (Named<Tabs.SpiralTabView>("SpiralTab")?.IsShowingSpiral == true)
@@ -237,11 +248,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
                     // WPF DiscordTabView IsVisibleChanged -> MainWindow.ProfileFx.cs:OnProfileTabVisibilityChanged
                     // (incoming tab): sharing footer, share-button gate, me-first, OG loop + card stagger.
-                    // ponytail: its vat poll half needs MainShellWindow.ProfileVat.cs (DescentService).
+                    // Its vat poll half runs from the page's IsVisible hook (MainShellWindow.ProfileVat.cs).
                     case "discord": UpdateProfileSharingSummary(); RefreshProfileShareButton(); ProfilePage?.EnsureProfileMeFirst(); OnProfileTabShownFx(); MaybeShowFeatureIntro("profile-hub", "discord"); break;
 
                     // WPF MainWindow.TabNavigation.cs:292/367: throttled share-status polls on tab open.
                     case "presets":
+                        RefreshTakeawayShelf();
                         _ = CheckCatalogueSubmissionStatusesAsync(CatalogueKindPresets);
                         _ = CheckCatalogueSubmissionStatusesAsync(CatalogueKindSessions);
                         break;
@@ -252,6 +264,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     case "leaderboard": _ = Named<Tabs.LeaderboardTabView>("LeaderboardTab")?.RefreshLeaderboardAsync(); RefreshSeasonRecapReview(); break;
                     // WPF MainWindow.SocialTabs.cs: subscribe and ask for a fresh list (the page folds itself on hide).
                     case "friends": Named<Tabs.FriendsTabView>("FriendsTab")?.OnShown(); break;
+                    case "leash": Named<Tabs.LeashTabView>("LeashTab")?.OnShown(); break;
 
                     // WPF MainWindow.Exclusives.cs RefreshExclusivesTab "on tab show": gates can move between visits.
                     case "premium": RefreshExclusivesTab(); break;
@@ -271,11 +284,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
                     // WPF MainWindow.TabNavigation.cs:324-337: spend the tab's seen-flag on any
                     // route in, then the one-time explainer on top of the tab just shown.
-                    // ponytail: no rail pulse to stop on this head (StopProgramsTabPulse).
                     case "programs":
                         if (!CoreSettings.Current.HasSeenProgramsTab)
                         {
                             CoreSettings.Current.HasSeenProgramsTab = true;
+                            StopNavDoorHeaderPulse("programs"); // WPF :453 StopProgramsTabPulse
                             CoreSettings.Save();
                         }
                         ProgramsIntroPopup.ShowIfFirstTime(this);
@@ -323,11 +336,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 if (!await Platform.ExternalOpener.OpenAsync(this, url))
-                {
-                    try { if (Clipboard is { } cb) await cb.SetTextAsync(url); } catch { /* clipboard may be unavailable */ }
-                    await Dialogs.MessageDialog.ShowAsync(this, Loc.Get("title_open_link_in_browser"),
-                        Loc.GetF("msg_browser_no_default_for", "open the CC Labs web app") + Loc.GetF("msg_browser_link_copied", url));
-                }
+                    await Dialogs.MessageDialog.ShowLinkCopiedAsync(this, url, "open the CC Labs web app");
                 RetireWebBannerBeat();
             }
             catch (Exception ex) { Serilog.Log.Warning(ex, "DoorWebApp_Click failed"); }

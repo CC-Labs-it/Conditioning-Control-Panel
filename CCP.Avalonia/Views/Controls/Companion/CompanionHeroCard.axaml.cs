@@ -186,7 +186,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 if (set < 1) set = 7;
                 var name = set == 1 ? "avatar_pose1.png" : $"avatar{set}_pose1.png";
 
-                if (ViewModel is { } vm) vm.Portrait = ModArt.TryLoad(name);
+                // The preview exhibit keeps WPF's mock Portrait = null: the gradient placeholder disc.
+                if (ViewModel is { IsPreview: false } vm) vm.Portrait = ModArt.TryLoad(name);
                 CentrePortrait();
             }
             catch (Exception ex)
@@ -323,6 +324,59 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private int _level = 1;
         private double _xpFraction;
         private string _xpLabel = string.Empty, _nextLevelLabel = string.Empty, _chatShortcutHint = string.Empty;
+        private bool _preview;
+
+        /// <summary>
+        /// WPF MockCompanionHeroCardVm's exhibits for the preview harness (Default, FreeTier, Asleep,
+        /// FreshUser): fixed copy that <see cref="Sync"/> never re-reads. Mute and shown toggle locally,
+        /// chat, detach and wake do nothing (WPF NoOp); the navigator links still go through Host.
+        /// </summary>
+        internal static CompanionHeroCardViewModel CreatePreview(string exhibit)
+        {
+            var vm = new CompanionHeroCardViewModel { _preview = true };
+            vm.ChatCommand = vm.DetachCommand = vm.WakeCommand = new RelayCommand(() => { });
+            vm.ToggleMuteCommand = new RelayCommand(() => vm.IsMuted = !vm.IsMuted);
+            vm.ToggleShownCommand = new RelayCommand(() => vm.IsCompanionShown = !vm.IsCompanionShown);
+            vm.Name = "Bambi";
+            vm.ModName = "BAMBI SLEEP";
+            vm.Flavor = "Gains bonus XP from Pink Filter intensity. Currently plotting something.";
+            vm.Portrait = null;
+            vm.IsCompanionEnabled = vm.IsCompanionShown = vm.IsAiLive = vm.IsAwarenessOpen = true;
+            vm.IsAiLocked = vm.IsMuted = false;
+            vm.AiPillText = Loc.Get("companion_hero_pill_ai_cloud");
+            vm.AwarenessPillText = Loc.Get("companion_hero_pill_eyes_broad");
+            vm.Level = 41;
+            vm.XpFraction = 0.62;
+            vm.XpLabel = "341 / 550 XP";
+            vm.NextLevelLabel = "next: Lv 42";
+            vm.ChatShortcutHint = "Ctrl+T";
+            vm.Header!.HasAiAccess = true;
+            switch (exhibit)
+            {
+                case "FreeTier":   // the header plate dims behind the teaser; the hero itself is untouched
+                    vm.Header.HasAiAccess = false;
+                    vm.IsAiLive = false;
+                    vm.IsAiLocked = true;
+                    vm.AiPillText = Loc.Get("companion_hero_pill_ai_locked");
+                    break;
+                case "Asleep":
+                    vm.IsCompanionEnabled = vm.IsAiLive = vm.IsAwarenessOpen = false;
+                    vm.AiPillText = Loc.Get("companion_hero_pill_ai_off");
+                    vm.AwarenessPillText = Loc.Get("companion_hero_pill_eyes_closed");
+                    break;
+                case "FreshUser":
+                    vm.Level = 1;
+                    vm.XpFraction = 0.04;
+                    vm.XpLabel = "8 / 200 XP";
+                    vm.NextLevelLabel = "next: Lv 2";
+                    vm.Flavor = "She just woke up in your machine. Say hi?";
+                    break;
+            }
+            return vm;
+        }
+
+        /// <summary>True for a <see cref="CreatePreview"/> exhibit: nothing reads or writes settings.</summary>
+        internal bool IsPreview => _preview;
 
         public CompanionHeroCardViewModel()
         {
@@ -355,6 +409,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// <see cref="CompanionHeroCard.ApplyAvatarArt"/> owns that).</summary>
         public void Sync()
         {
+            if (_preview) return;
             try
             {
                 var s = CoreSettings.Current;
@@ -444,14 +499,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public bool IsMuted { get => _isMuted; private set => Set(ref _isMuted, value); }
         public bool IsCompanionShown { get => _isCompanionShown; private set => Set(ref _isCompanionShown, value); }
 
-        public ICommand ChatCommand { get; }
+        public ICommand ChatCommand { get; private set; }
         public ICommand SwitchCommand { get; }
-        public ICommand DetachCommand { get; }
-        public ICommand ToggleMuteCommand { get; }
-        public ICommand ToggleShownCommand { get; }
+        public ICommand DetachCommand { get; private set; }
+        public ICommand ToggleMuteCommand { get; private set; }
+        public ICommand ToggleShownCommand { get; private set; }
         public ICommand OpenEngineRoomCommand { get; }
         public ICommand FocusAwarenessCommand { get; }
-        public ICommand WakeCommand { get; }
+        public ICommand WakeCommand { get; private set; }
 
         /// <summary>Z0 band. Null collapses it, for a host that draws its own page header.</summary>
         public CompanionHeaderViewModel? Header { get; }
@@ -476,9 +531,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         public CompanionHeaderViewModel(CompanionHeroCardViewModel hero)
         {
-            // ponytail: the tutorial chip needs the Companion tutorial (WPF BtnCompanionTutorial_Click),
-            // which the shell's TutorialOverlay does not script yet; no-op until it does.
-            TutorialCommand = new RelayCommand(() => { });
+            // WPF BtnCompanionTutorial_Click: StartTutorial(Companion). The seeded seam owns
+            // the existing overlay, navigation, one-tour guard and panic abandonment.
+            TutorialCommand = new RelayCommand(() => CoreTutorial.Start("Companion"));
             OpenPatreonCommand = new RelayCommand(() => hero.Shell?.ShowTab("patreon"));
         }
 
@@ -492,7 +547,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public bool HasAiAccess
         {
             get => _hasAiAccess;
-            private set
+            internal set
             {
                 if (_hasAiAccess == value) return;
                 _hasAiAccess = value;

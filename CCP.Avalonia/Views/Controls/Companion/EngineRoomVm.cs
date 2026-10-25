@@ -21,16 +21,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// MainWindow.Patreon.cs). The mapping and both probes are Core <see cref="Providers"/>, so the two
     /// heads cannot drift; the active transport follows the setting through Core AiServiceStrategy.
     ///
-    /// <para>ponytail: no Live actions feed (AiCommandService.LiveActionSink is unseeded on this head),
-    /// so ShowLiveActions stays false and the placeholder shows. The BYO API key box writes nothing:
-    /// MainShellWindow.CompanionRoom.cs says why (no at-rest store reads it yet). The "offer setup when
-    /// Ollama is unreachable" prompt is not wired yet (OllamaSetupService.DetectAsync is in Core now). Login has
+    /// <para>The live-actions collection is shared with the command sink, and remains observable.
+    /// The BYO API key box writes nothing:
+    /// MainShellWindow.CompanionRoom.cs says why (no at-rest store reads it yet). Login has
     /// no account tab deep link here yet, so LoginCommand stays null.</para>
     /// </summary>
     public sealed class EngineRoomVm : INotifyPropertyChanged
     {
+        // The same OS/service probe as the wizard; headless tests substitute it before selecting Local.
+        internal static Func<string?, Task<Services.AIService.OllamaSetupService.StatusSnapshot>> DetectLocal =
+            model => Services.AIService.OllamaSetupService.DetectAsync(targetModel: model);
         private readonly Control _host;
-        private bool _isExpanded, _isHealthy, _isLoggedIn, _suppressWrite;
+        private bool _isExpanded, _isHealthy, _isLoggedIn, _suppressWrite, _offeringLocalSetup;
         private Mode _provider = Mode.Cloud;
         private string _statusLine = "", _ollamaModel = "", _ollamaHost = "", _customEndpoint = "",
             _customModel = "", _dailyLimitLabel = "";
@@ -40,13 +42,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             _host = host;
             TestConnectionCommand = new RelayCommand(() => _ = TestConnectionAsync());
             SetupLocalCommand = new RelayCommand(() => _ = SetupLocalAsync());
-            SamplerSettingsCommand = new RelayCommand(() => _ = (host as EngineRoomDrawer)?.OpenSamplerSettingsAsync());
+            SamplerSettingsCommand = new RelayCommand(() => { if (!_preview) _ = (host as EngineRoomDrawer)?.OpenSamplerSettingsAsync(); });
             DailyLimitCommand = new RelayCommand(() => _ = DailyLimitAsync());
             ClearConversationCommand = new RelayCommand(() => _ = ClearConversationAsync());
             Sync();
         }
 
-        private MainShellWindow? Window => TopLevel.GetTopLevel(_host) as MainShellWindow;
+        private MainShellWindow? Window => _preview ? null : TopLevel.GetTopLevel(_host) as MainShellWindow;
+
+        private bool _preview;
+
+        /// <summary>
+        /// WPF MockEngineRoomDrawerVm's Collapsed / LoggedOut / Off exhibits for the preview harness,
+        /// resting closed as WPF MockCompanionRoomVm.Closed leaves them. Writes stay suppressed for good,
+        /// <see cref="Sync"/> is a no-op and every button does nothing (WPF NoOp).
+        /// </summary>
+        internal static EngineRoomVm CreatePreview(Control host, string exhibit)
+        {
+            var vm = new EngineRoomVm(host) { _preview = true, _suppressWrite = true };
+            vm.IsExpanded = false;
+            vm.Provider = exhibit == "Off" ? Mode.Off : Mode.Cloud;
+            vm.OllamaModel = "qwen3.5:latest";
+            vm.OllamaHost = "http://localhost:11434/";
+            vm.CustomEndpoint = vm.CustomModel = "";
+            vm.DailyLimitLabel = Loc.GetF("companion_engine_daily_limit_fmt", 200);
+            vm.IsLoggedIn = exhibit != "LoggedOut";
+            vm.ApplyStatus(available: true, remaining: -1);   // off / signed out / connected, as live
+            return vm;
+        }
 
         public bool IsExpanded { get => _isExpanded; set => Set(ref _isExpanded, value); }
 
@@ -63,10 +86,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 s.AiChatEnabled = enabled;
                 if (enabled) s.CompanionPrompt.AiProvider = provider;
                 CoreSettings.Save();
+                if (Providers.ClearsLiveActions(value)) App.AiLiveActions.Clear();
                 Serilog.Log.Information("Companion room: provider set to {Mode}", value);
                 Sync();
+                if (value == Mode.LocalOllama && MaybeOfferLocalSetupAsync() is { IsCompleted: false } offer) LocalOffer = offer;
             }
         }
+
+        /// <summary>The offer still in flight (detect + dialog); tests await it instead of yielding.</summary>
+        internal Task? LocalOffer { get; private set; }
 
         public string DrawerNote => Loc.Get("companion_engine_drawer_note");
         public bool IsLoggedIn { get => _isLoggedIn; private set => Set(ref _isLoggedIn, value); }
@@ -110,8 +138,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         }
 
         public string DailyLimitLabel { get => _dailyLimitLabel; private set => Set(ref _dailyLimitLabel, value); }
-        public bool ShowLiveActions => false;
-        public IReadOnlyList<string> LiveActions { get; } = Array.Empty<string>();
+        public bool ShowLiveActions => _provider is Mode.LocalOllama or Mode.Custom;
+        public IReadOnlyList<string> LiveActions => App.AiLiveActions;
         public string LiveActionsPlaceholder => Loc.Get("companion_engine_live_actions_placeholder");
 
         public ICommand? LoginCommand => null;
@@ -126,6 +154,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// <summary>Re-reads every field from settings. Never writes back (WPF Sync).</summary>
         public void Sync()
         {
+            if (_preview) return;
             _suppressWrite = true;
             try
             {
@@ -141,6 +170,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                     ? Loc.GetF("companion_engine_daily_limit_fmt", limit)
                     : Loc.Get("companion_engine_daily_limit_none");
                 IsLoggedIn = !string.IsNullOrEmpty(CoreAccount.UnifiedUserId);
+                Raise(nameof(ShowLiveActions));
                 RefreshStatus();
             }
             catch (Exception ex) { Serilog.Log.Warning(ex, "EngineRoomVm: sync failed"); }
@@ -149,12 +179,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         public void SetStatus(string text, bool healthy) { StatusLine = text ?? ""; IsHealthy = healthy; }
 
-        private void RefreshStatus()
+        private void RefreshStatus() => ApplyStatus(App.Ai?.IsAvailable == true, App.Ai?.DailyRequestsRemaining ?? -1);
+
+        private void ApplyStatus(bool available, int remaining)
         {
             if (_provider == Mode.Off) { SetStatus(Loc.Get("companion_engine_status_off"), false); return; }
             if (_provider == Mode.Cloud && !IsLoggedIn) { SetStatus(Loc.Get("companion_engine_status_disconnected"), false); return; }
-            bool available = App.Ai?.IsAvailable == true;
-            int remaining = App.Ai?.DailyRequestsRemaining ?? -1;
             SetStatus(!available ? Loc.Get("label_ai_initializing")
                 : remaining >= 0 ? Loc.GetF("companion_engine_status_ready_fmt", remaining)
                 : Loc.Get("companion_engine_status_ready"), available);
@@ -163,6 +193,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// <summary>WPF EngineRoomRuntimeVm.TestConnection and the three handlers it dispatched to.</summary>
         internal async Task TestConnectionAsync()
         {
+            if (_preview) return;
             switch (_provider)
             {
                 case Mode.LocalOllama:
@@ -183,10 +214,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             }
         }
 
+        /// <summary>WPF MainWindow.Patreon.cs:1589: picking Local offers setup when Ollama is not ready.</summary>
+        private async Task MaybeOfferLocalSetupAsync()
+        {
+            if (_offeringLocalSetup || TopLevel.GetTopLevel(_host) is not Window { IsVisible: true } owner) return;
+            _offeringLocalSetup = true;
+            try
+            {
+                var status = await DetectLocal(CoreSettings.Current?.CompanionPrompt?.AiModel);
+                if (status.Status == Services.AIService.OllamaSetupService.InstallStatus.Ready
+                    || Provider != Mode.LocalOllama || !owner.IsVisible) return;
+                if (await Views.Dialogs.MessageDialog.ConfirmAsync(owner,
+                    Loc.Get("dialog_local_ai_setup_offer_title"), Loc.Get("dialog_local_ai_setup_offer_body"),
+                    okText: Loc.Get("label_yes"), cancelText: Loc.Get("btn_cancel")))
+                    await SetupLocalAsync();
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Companion room: detect-on-local-toggle failed"); }
+            finally { _offeringLocalSetup = false; }
+        }
+
         /// <summary>WPF LaunchLocalAiSetupWizard: the wizard saves model + provider; a ready finish selects Local.</summary>
         private async Task SetupLocalAsync()
         {
-            if (Window is not { IsVisible: true } owner) return;
+            if (TopLevel.GetTopLevel(_host) is not Window { IsVisible: true } owner) return;
             var wizard = new Views.Dialogs.LocalAiSetupWizard();
             if (await wizard.ShowDialogSafe<bool>(owner) && wizard.LocalAiReady) Provider = Mode.LocalOllama;
             Sync();

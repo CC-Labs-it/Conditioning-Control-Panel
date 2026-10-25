@@ -1,14 +1,13 @@
 // PORTED from ConditioningControlPanel/Services/PieceByPiece/PieceByPieceHostService.cs (WPF 7.1.5).
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
-// media-flavour / media-more / online-media), whisper clips (needs asset-server routes for ccp.subaudio /
-// ccp.words; the settings frame sends none, which the page reads as "no whispers"), PvP stakes (no Core
-// StakeBridge on this head), friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape),
+// media-flavour / media-more / online-media), friend / Lobby intents (.Friends.cs),
 // MergedAccountRecovery and SeasonRecapService.TrackFeature.
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -18,6 +17,8 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.PieceByPiece;
+using ConditioningControlPanel.Services.Quiz;
+using ConditioningControlPanel.Services.Stakes;
 using Newtonsoft.Json.Linq;
 using Serilog;
 
@@ -33,6 +34,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// </summary>
     internal sealed partial class GameWindow
     {
+        internal static GameWindow? ForegroundPbp()
+        {
+            lock (Open) return Open.FirstOrDefault(w => w.Spec.Id == PbpId && w.IsActive && !w._closing);
+        }
+
+        internal void PostPbpKeptEscape()
+        {
+            if (!IsReady || _closing) return;
+            Post(new { type = "pbp:escape" });
+            Web.FocusPage();
+        }
+
         internal const string PbpId = "piecebypiece";
 
         /// <summary>One client for the app session (WPF :119). 30 s covers the events long poll.</summary>
@@ -56,8 +69,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private static readonly Random PbpRng = new();
 
         private bool _pbpOpen;
-        private bool _pbpSettingsPosted;   // pbp:settings goes out exactly once per boot
-        private bool _pbpIdentityPosted;   // and so does pbp:identity
+        private Task? _pbpBootFrames;   // single-flight: settings always precedes identity, even during an OS query
         private bool _pbpPinged;
         private DateTime _pbpLastBeatUtc = DateTime.UtcNow;
         private DateTime _pbpLastProgressUtc = DateTime.UtcNow;
@@ -103,11 +115,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var type = (string?)o["type"];
             try
             {
+                // PvP stakes (WPF :388): the Core bridge talks to /v2/stakes/* itself and books a lost time
+                // stake once the match settles. Online PvP only; the page never sends these solo or hotseat.
+                if (StakeBridge.Handles(type))
+                {
+                    _pbpStakes ??= PbpStakeBridge("pbp", PostPbpStake);
+                    PbpStakePending = _pbpStakes.Handle(o);
+                    return true;
+                }
                 switch (type)
                 {
                     case "ready":
                         IsReady = true;
-                        OnPbpReady();
+                        PbpPending = OnPbpReady();
                         return true;
                     case "heartbeat":
                     case "pong":
@@ -126,6 +146,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     case "pbp:net":
                         OnPbpNetRequest(o);
                         return true;
+                    case PbpWatchRules.SettingFrame:
+                        if (PbpWatchRules.TryRead(o, out var key, out var value)
+                            && PbpWatchRules.Apply(CoreSettings.Current, key, value))
+                            CoreSettings.Service?.Save();
+                        return true;
                 }
             }
             catch (Exception ex)
@@ -137,24 +162,67 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             return false;
         }
 
-        private void OnPbpReady()
+        /// <summary>The web engine reads the OS motion preference on both platforms. Tests supply the same answer.</summary>
+        internal Func<Task<bool>>? PbpOsAnimations { get; set; }
+
+        private async Task<bool> ReadPbpOsAnimations()
+        {
+            var result = await Web.InvokeScriptAsync("!window.matchMedia('(prefers-reduced-motion: reduce)').matches");
+            // No engine / no answer: WPF's failed OS read also defaults to animations enabled.
+            return !string.Equals(Unwrap(result ?? ""), "false", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private Task OnPbpReady()
         {
             Log.Information("PieceByPieceHost: page ready");
             PbpBootFailedThisSession = false;
             _pbpLastBeatUtc = _pbpLastProgressUtc = DateTime.UtcNow;
             _pbpPinged = false;
             try { Web.Focus(); } catch (Exception ex) { Diag.Swallowed(ex); }
-            if (!_pbpSettingsPosted)
+            return _pbpBootFrames ??= PostPbpBootFrames();
+        }
+
+        private async Task PostPbpBootFrames()
+        {
+            bool osAnimations = true;
+            try { osAnimations = await (PbpOsAnimations?.Invoke() ?? ReadPbpOsAnimations()); }
+            catch (Exception ex) { Diag.Swallowed(ex); }
+            if (_closing) return;
+            var s = CoreSettings.Current;
+            var withoutGentle = s.MotionLevel == MotionLevel.Off ? MotionLevel.Off
+                : !osAnimations ? MotionLevel.Reduced : s.MotionLevel;
+            var frame = PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds,
+                withoutGentle != MotionLevel.Full || s.GentleVisuals, PbpWhispers());
+            frame["letPeopleWatch"] = PbpWatchRules.LetPeopleWatch(s);
+            frame["watchEffects"] = PbpWatchRules.WatchEffects(s);
+            frame["watchAmount"] = PbpWatchRules.WatchAmount(s);
+            frame["gentleIntroSpeed"] = PbpWatchRules.GentleIntroSpeed(s.GentleVisuals, withoutGentle, s.GentleSpeed);
+            Post(frame);
+            Post(PbpHostRules.IdentityFrame(CoreAccount.UnifiedUserId, PbpAuthToken(),
+                s.UserDisplayName, CoreReleaseContent.AppVersion));
+        }
+
+        /// <summary>WPF SafeWhisperClips: own brain drain first, then the mod's permitted fallback.</summary>
+        private IReadOnlyList<string> PbpWhispers()
+        {
+            if (_server == null) return Array.Empty<string>();
+            try
             {
-                _pbpSettingsPosted = true;
-                var s = CoreSettings.Current;
-                Post(PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds, s.MotionLevel != MotionLevel.Full, Array.Empty<string>()));
+                static IEnumerable<string>? Names(string? folder) =>
+                    !string.IsNullOrEmpty(folder) && Directory.Exists(folder)
+                        ? Directory.GetFiles(folder).Select(f => Path.GetFileName(f)) : null;
+                bool shared = CoreSettings.Current.SubAudioAudible && ModAudioPolicy.UsesSharedSubAudio(CoreMods.ActiveModId);
+                // Unchecked own clips are not offered (the server 404s them), so all-unchecked falls back like an empty folder.
+                var assets = CorePaths.EffectiveAssets;
+                var off = IntakeRun.DisabledAssetSet(_server.DisabledAssets());
+                var own = Path.Combine(assets, PbpWhisperClips.BrainDrainFolder);
+                return PbpWhisperClips.Build(Names(own)?.Where(n => IntakeRun.IsAssetActive(off, assets, Path.Combine(own, n))),
+                    shared, Names(_server.SubAudioRoot()), Names(_server.WordsRoot())).Select(_server.WhisperUrl).ToArray();
             }
-            if (!_pbpIdentityPosted)
+            catch (Exception ex)
             {
-                _pbpIdentityPosted = true;
-                Post(PbpHostRules.IdentityFrame(CoreAccount.UnifiedUserId, PbpAuthToken(),
-                    CoreSettings.Current.UserDisplayName, CoreReleaseContent.AppVersion));
+                Log.Debug("PieceByPiece: whisper clips failed: {E}", ex.Message);
+                return Array.Empty<string>();
             }
         }
 
@@ -242,5 +310,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     return "idle";
             }
         }
+
+        // ---- stakes (WPF PieceByPieceHostService :650-660) ----
+
+        /// <summary>One bridge for the life of the app (WPF static <c>_stakes</c>): a settle watch it started keeps
+        /// running (and books) after the board closes, so panic or an exit never strands a settled loss.</summary>
+        private static StakeBridge? _pbpStakes;
+
+        private static Func<string, Action<JObject>, StakeBridge> _pbpStakeBridge = StakeBridge.ForApp;
+
+        /// <summary>Test seam: how the bridge is built (the app's is <see cref="StakeBridge.ForApp"/>). Setting it
+        /// drops the cached bridge.</summary>
+        internal static Func<string, Action<JObject>, StakeBridge> PbpStakeBridge
+        {
+            get => _pbpStakeBridge;
+            set { _pbpStakeBridge = value; _pbpStakes = null; }
+        }
+
+        /// <summary>Test seam: the last stake frame's work (replies are posted on the UI thread when it ends).</summary>
+        internal static Task PbpStakePending { get; private set; } = Task.CompletedTask;
+
+        /// <summary>WPF PostStake: a <c>stake</c> frame to the open board, on the UI thread; a closed board is a quiet no-op.</summary>
+        private static void PostPbpStake(JObject o) => Dispatcher.UIThread.Post(() =>
+        {
+            GameWindow? w;
+            lock (Open) w = Open.FirstOrDefault(x => x.Spec.Id == PbpId && x._pbpOpen);
+            try { w?.Post(o); }
+            catch (Exception ex) { Log.Debug("PieceByPiece: stake post failed: {E}", ex.Message); }
+        });
     }
 }

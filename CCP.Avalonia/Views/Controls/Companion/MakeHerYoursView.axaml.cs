@@ -12,6 +12,7 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -45,11 +46,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             // The spotlight goes through IsInterviewSpotlightShown: a local IsVisible would lose to its binding.
             if (ConditioningControlPanel.Services.Companion.CompanionExperience.IsV2Enabled)
                 this.FindControl<Control>("PreviewTrainTag")!.IsVisible = false;
-            DataContext = ViewModel = new MakeHerYoursViewModel(this);
+            ViewModel = new MakeHerYoursViewModel(this);
             Loaded += OnLoaded;
         }
 
-        public MakeHerYoursViewModel ViewModel { get; }
+        private MakeHerYoursViewModel _viewModel = null!;
+
+        /// <summary>The card's viewmodel; the preview harness swaps in a mock exhibit.</summary>
+        public MakeHerYoursViewModel ViewModel
+        {
+            get => _viewModel;
+            internal set { _viewModel = value; DataContext = value; }
+        }
 
         private void OnLoaded(object? sender, RoutedEventArgs e)
         {
@@ -102,11 +110,63 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     public sealed class MakeHerYoursViewModel : INotifyPropertyChanged
     {
         private readonly global::Avalonia.Visual? _host;
+        // WPF App.CommunityPrompts: one service, owned by the room's Workshop COMMUNITY cell. v2 adopts this view
+        // onto Companion > Personality, outside the collapsed room, so fall back to the shell's room.
+        private Runtime.WorkshopCommunityCell? Community =>
+            ((_host?.FindAncestorOfType<CompanionRoomView>() ?? Shell?.RoomView())?.WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts.Community;
+        private Window? Owner() => _host == null ? null : TopLevel.GetTopLevel(_host) as Window;
         private readonly ObservableCollection<PresetChip> _presets = new();
         private bool _isSpiceOn;
         private string _activeLine = string.Empty;
         private bool _canReset;
         private bool _suppressChipEcho;
+        private bool _preview, _previewLive;
+
+        /// <summary>
+        /// WPF MockMakeHerYoursVm's Live / Dormant exhibits for the preview harness: the seven preset
+        /// chips (sweet bestie active) as a local radio group, two trait gauges, and nothing that
+        /// reads or writes settings - <see cref="Sync"/> is a no-op, reset does nothing, and spice and
+        /// the chips only change this exhibit.
+        /// </summary>
+        internal static MakeHerYoursViewModel CreatePreview(global::Avalonia.Visual? host, bool live)
+        {
+            var vm = new MakeHerYoursViewModel(host) { _preview = true, _previewLive = live };
+            vm._isSpiceOn = false;
+            vm._suppressChipEcho = true;
+            foreach (var stale in vm._presets) stale.PropertyChanged -= vm.OnChipChanged;
+            vm._presets.Clear();
+            string[] ids = { "sweet_bestie", "playful_tease", "strict_domme", "hypno_guide", "bimbo_coach", "drone_handler", "bratty_rival" };
+            for (int i = 0; i < ids.Length; i++)
+            {
+                var chip = new PresetChip(ids[i], Loc.Get($"companion_personality_preset_{ids[i]}"), selected: i == 0);
+                chip.PropertyChanged += vm.OnChipChanged;
+                vm._presets.Add(chip);
+            }
+            vm._suppressChipEcho = false;
+            vm.Traits = new[]
+            {
+                new TraitGauge(Loc.Get("companion_personality_trait_dominance"), 40),
+                new TraitGauge(Loc.Get("companion_personality_trait_tease"), 50)
+            };
+            vm.TraitChips = new[] { "Frame: Bestie", "Quirk: sparkly", "Spicy", "Chatty" };
+            vm.ActivePersonalityLine = live
+                ? Loc.Get("companion_personality_active_traits")
+                : Loc.GetF("companion_personality_active_preset_fmt", Loc.Get("companion_personality_preset_sweet_bestie"));
+            vm.CanResetPersonality = live;
+            return vm;
+        }
+
+        /// <summary>WPF MockMakeHerYoursVm's radio group: one chip stays selected, a second click keeps it.</summary>
+        private void PreviewSelect(PresetChip chip)
+        {
+            _suppressChipEcho = true;
+            try
+            {
+                if (!chip.IsSelected) { if (!_presets.Any(p => p.IsSelected)) chip.IsSelected = true; return; }
+                foreach (var other in _presets) if (!ReferenceEquals(other, chip)) other.IsSelected = false;
+            }
+            finally { _suppressChipEcho = false; }
+        }
 
         public MakeHerYoursViewModel(global::Avalonia.Visual? host = null)
         {
@@ -115,14 +175,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             OpenTraitDashboardCommand = new CompanionRelayCommand(OpenPromptEditor);
             ViewCompiledPromptCommand = new CompanionRelayCommand(OpenPromptEditor);
             ForkPromptCommand = new CompanionRelayCommand(OpenPromptEditor);
+            // WPF BtnBrowsePrompts_Click: same flow as the Workshop cell's Browse; installing never activates.
+            CommunityPromptsCommand = new CompanionRelayCommand(() =>
+            {
+                // WPF UpdateCommunityPromptsUI after an install: the Workshop rows and this readout together.
+                if (Community is { } cell) _ = Runtime.WorkshopCommunityCell.BrowseAsync(Owner, cell.Service, () => { cell.RefreshInstalledPrompts(); Sync(); });
+            });
             ResetPersonalityCommand = new CompanionRelayCommand(() =>
             {
+                if (_preview) return;   // WPF mock: NoOp
                 // WPF BtnDeactivatePrompt_Click -> CommunityPromptService.DeactivatePrompt.
                 PersonalityService.ClearCustomPromptOverride(CoreSettings.Current);
                 CoreSettings.Save();
                 Sync();
+                RefreshCommunityRows();   // WPF MainWindow.Patreon.cs:2249 UpdateCommunityPromptsUI
             });
             Sync();
+        }
+
+        /// <summary>The Workshop COMMUNITY rows' active dot follows a reset or preset pick made here.</summary>
+        private void RefreshCommunityRows()
+        {
+            // Through the shell, not the visual tree: under v2 this zone is adopted by Companion > Personality.
+            Shell?.RoomView()?.RefreshCommunity();
         }
 
         internal Windows.MainShellWindow? Shell =>
@@ -139,7 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public string LocCommunity => Loc.Get("companion_personality_community");
 
         // ---- interview / trait glance: Train 3, dormant (WPF returns false / empty too) ----
-        public bool IsInterviewAvailable => false;
+        public bool IsInterviewAvailable => _previewLive;
         public bool IsInterviewed => false;
         public bool IsInterviewSpotlightShown =>
             !IsInterviewed && !ConditioningControlPanel.Services.Companion.CompanionExperience.IsV2Enabled;
@@ -147,9 +222,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public string InterviewCtaLabel => Loc.Get("companion_personality_interview_cta");
         public string InterviewedLine => string.Empty;
         public string InterviewDormantCopy => Loc.Get("companion_personality_interview_dormant");
-        public bool AreTraitsAvailable => false;
-        public IReadOnlyList<TraitGauge> Traits { get; } = Array.Empty<TraitGauge>();
-        public IReadOnlyList<string> TraitChips { get; } = Array.Empty<string>();
+        public bool AreTraitsAvailable => _previewLive;
+        public IReadOnlyList<TraitGauge> Traits { get; private set; } = Array.Empty<TraitGauge>();
+        public IReadOnlyList<string> TraitChips { get; private set; } = Array.Empty<string>();
 
         public IReadOnlyList<PresetChip> Presets => _presets;
 
@@ -170,6 +245,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         private async Task SetSpiceAsync(bool value)
         {
+            if (_preview) return;
             if (Shell is { } shell) await shell.SetSlutModeAsync(value);
             Sync();
         }
@@ -187,14 +263,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public ICommand ResetPersonalityCommand { get; }
         public ICommand ViewCompiledPromptCommand { get; }
         public ICommand ForkPromptCommand { get; }
-        // ponytail: WPF BtnBrowsePrompts_Click opens the community prompt browser
-        // (App.CommunityPrompts, WPF-head CommunityPromptService); no browser exists on this head, so the
-        // link stays a null command (disabled) rather than a dead button that looks alive.
-        public ICommand? CommunityPromptsCommand => null;
+        public ICommand CommunityPromptsCommand { get; }
 
         /// <summary>Re-reads settings and the personality service (WPF MakeHerYoursRuntimeVm.SyncCore).</summary>
         public void Sync()
         {
+            if (_preview) return;
             try { SyncCore(); }
             catch (Exception ex) { Log.Warning(ex, "Companion room: personality sync failed"); }
         }
@@ -210,9 +284,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             var communityId = settings.ActiveCommunityPromptId;
             if (!string.IsNullOrEmpty(communityId))
             {
-                // ponytail: WPF shows the installed prompt's NAME (CommunityPromptService.GetInstalledPrompt,
-                // head-only); this head has no installed-prompt store yet, so the id stands in.
-                ActivePersonalityLine = Loc.GetF("companion_personality_active_custom_fmt", communityId);
+                // WPF MakeHerYoursRuntimeVm: the installed prompt's NAME, id when the file is missing.
+                ActivePersonalityLine = Loc.GetF("companion_personality_active_custom_fmt", Community?.Service.GetInstalledPrompt(communityId)?.Name ?? communityId);
                 CanResetPersonality = true;
                 return;
             }
@@ -276,6 +349,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             if (_suppressChipEcho || e.PropertyName != nameof(PresetChip.IsSelected)) return;
             if (sender is not PresetChip chip) return;
+            if (_preview) { PreviewSelect(chip); return; }
             if (!chip.IsSelected)
             {
                 // A second click on the active chip would read "no preset"; the compiled personality is unchanged.
@@ -290,10 +364,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             if (Shell is { } shell) await shell.ActivatePersonalityPresetAsync(id);
             // Reads back what happened: a cancelled acknowledgement leaves the old preset active.
             Sync();
+            RefreshCommunityRows();
         }
 
         private async void OpenPromptEditor()
         {
+            if (_preview) return;   // WPF mock: dashboard/view/fork are NoOp
             try
             {
                 if (Shell is { } shell) await shell.OpenCompanionPromptEditorAsync();

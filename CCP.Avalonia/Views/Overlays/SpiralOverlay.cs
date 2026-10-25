@@ -30,7 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// stop/start. A frame tick only swaps <c>Image.Source</c> on each window: no decode, no bitmap
     /// allocation. The timer exists only while windows are up, so nothing ticks while stopped.</para>
     /// </summary>
-    internal static class SpiralOverlay
+    internal static partial class SpiralOverlay
     {
         /// <summary>Headless tests have no X11 window to make click-through; this lets them drive the
         /// real show/animate/close path. Never set outside tests.</summary>
@@ -48,41 +48,69 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>The off-thread decode in flight, if any (tests await it).</summary>
         internal static Task? Decoding { get; private set; }
 
+        /// <summary>Refresh calls so far (tests: the session tick only refreshes on a change).</summary>
+        internal static int Refreshes { get; private set; }
+
         internal static bool IsShowing => Windows.Count > 0;
         internal static bool IsAnimating => _timer is { IsEnabled: true };
         internal static int FrameIndex => _index;
         internal static TimeSpan FrameDelay => _delay;
         internal static IReadOnlyList<SpiralOverlayWindow> Shown => Windows;
 
-        /// <summary>WPF GetSpiralPath: the configured file if it exists, else the active mod's spiral,
-        /// else the shipped one. ponytail: SpiralRandomize needs WPF's personal-folder refusal
-        /// (SecurityHelper.IsPersonalFolderRoot, #1053), still head-only, so it is not honoured here
-        /// rather than honoured unsafely; video spirals (.mp4 etc., WPF MediaElement) decode to no
-        /// frames and show nothing.</summary>
+        private static readonly SpiralPool Pool = new();
+        private static string? _sourcePath;
+        private static string? _configuredPath;
+        private static bool? _randomizeAtStart;
+        private static bool _repicked;
+
+        /// <summary>Pick once per run; repainting opacity/monitors never resamples the pool.
+        /// Explicit file changes take effect live. Randomize changes take effect next start.</summary>
         internal static string SourcePath()
         {
-            var p = CoreSettings.Current.SpiralPath;
-            if (!string.IsNullOrEmpty(p) && File.Exists(p)) return p;
-            return CoreModArt.SpiralOverridePath() ?? Path.Combine(AppContext.BaseDirectory, "Resources", "spiral.gif");
+            var settings = CoreSettings.Current;
+            if (_sourcePath != null && _configuredPath == settings.SpiralPath && File.Exists(_sourcePath)) return _sourcePath;
+            _randomizeAtStart ??= settings.SpiralRandomize;
+            _configuredPath = settings.SpiralPath;
+            var configured = !string.IsNullOrEmpty(settings.SpiralPath) && File.Exists(settings.SpiralPath)
+                ? settings.SpiralPath : null;
+            _sourcePath = _randomizeAtStart == true
+                ? Pool.Pick(configured, Path.Combine(CorePaths.UserData, "Spirals")) : null;
+            return _sourcePath ?? configured ?? CoreModArt.SpiralOverridePath()
+                ?? Path.Combine(AppContext.BaseDirectory, "Resources", "spiral.gif");
         }
 
-        /// <summary>The painted alpha: the slider through WPF's #722 curve.</summary>
-        internal static double PaintedOpacity => SpiralFrames.Paint(CoreSettings.Current.SpiralOpacity / 100.0);
+        /// <summary>The painted alpha: the slider through WPF's #722 curve. A ramping session's value
+        /// holds it instead (WPF _rampSpiralOpacity; SetSustainedOverlayOpacity clamps to 0..1).</summary>
+        internal static double PaintedOpacity => SpiralFrames.Paint(
+            Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
 
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
         public static void Refresh(Visual host)
         {
+            Refreshes++;
             var s = CoreSettings.Current;
             if (!s.SpiralEnabled || !ShouldShow()) { CloseAll(); return; }
 
             var path = SourcePath();
+            var video = IsVideo(path);
             if (_framesKey != path)
             {
-                CloseAll();
-                BeginDecode(TopLevel.GetTopLevel(host) ?? host, path);
+                CloseWindows();
+                if (!video)
+                {
+                    BeginDecode(TopLevel.GetTopLevel(host) ?? host, path);
+                    return;
+                }
+                foreach (var old in _frames) old.Dispose();
+                (_frames, _framesKey, _index) = (new List<Bitmap>(), path, 0);
+            }
+            if (_frames.Count == 0 && !video)   // undecodable: logged once by the decode
+            {
+                // WPF's 500 ms tick re-picks past a broken random file; re-pick once so the run is not blank.
+                if (_sourcePath != null && !_repicked) { _repicked = true; _sourcePath = null; Refresh(host); return; }
+                CloseWindows();
                 return;
             }
-            if (_frames.Count == 0) { CloseAll(); return; }   // undecodable: logged once by the decode
 
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
@@ -96,7 +124,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
 
-            CloseAll();
+            CloseWindows();
             // No compositor = no per-pixel alpha: the spiral would be an opaque screen-sized block.
             if (!SkipPlatformChecksForTests && (_refused || !X11Overlay.IsAvailable || !X11Overlay.IsCompositing))
             {
@@ -107,7 +135,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var i in want)
             {
                 var w = new SpiralOverlayWindow();
-                w.Spiral.Source = _frames[_index % _frames.Count];
+                if (!video) w.Spiral.Source = _frames[_index % _frames.Count];
                 w.Spiral.Opacity = opacity;
                 // Click-through and override-redirect (with the geometry) before Show, the order
                 // FlashOverlay/SubliminalOverlay use: a stale WM replay cannot mis-size it, and a
@@ -126,6 +154,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             _shownOn = want;
             QuestMinutes.Follow(Windows.Count > 0);
+            if (video && Windows.Count > 0)
+            {
+                try { _videoPlayer = VideoStart(path, ShowVideoFrame); }
+                catch (Exception ex) { Log.Warning(ex, "Spiral: video could not start"); }
+                if (_videoPlayer == null) { CloseWindows(); return; }
+            }
             if (_frames.Count > 1 && Windows.Count > 0)
             {
                 _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = _delay };
@@ -147,8 +181,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF StopSpiral: the windows and the clock go; the decoded frames stay cached.</summary>
         public static void CloseAll()
         {
+            _sourcePath = null;
+            _configuredPath = null;
+            _randomizeAtStart = null;
+            _repicked = false;
+            CloseWindows();
+        }
+
+        private static void CloseWindows()
+        {
             _timer?.Stop();
             _timer = null;
+            StopVideo();
             foreach (var w in Windows)
             {
                 try { w.Close(); }
@@ -157,6 +201,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Windows.Clear();
             _shownOn = Array.Empty<int>();
             QuestMinutes.Follow(false);
+            // WPF OverlayService.cs:2094: the fullscreen spiral left, so a session may raise its corner GIF again.
+            App.Sessions?.RefreshCornerGifPolicy();
         }
 
         /// <summary>WPF AchievementService:276 - quest minutes while the spiral is on screen.</summary>

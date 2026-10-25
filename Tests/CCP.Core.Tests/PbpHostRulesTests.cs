@@ -36,6 +36,8 @@ public sealed class PbpHostRulesTests
     [InlineData("/admin/get-key", "POST", "forbidden_path")]
     [InlineData("https://evil.example/v2/pbp/x", "GET", "forbidden_path")]
     [InlineData("/v2/pbpx", "GET", "forbidden_path")]
+    [InlineData("/v2/pbp/../user/me", "GET", "forbidden_path")]
+    [InlineData("/v2/pbp/%2e%2e/user/me", "GET", "forbidden_path")]
     [InlineData("", "GET", "forbidden_path")]
     [InlineData("/v2/pbp/lobby", "DELETE", "forbidden_method")]
     [InlineData("/v2/pbp/lobby", "PUT", "forbidden_method")]
@@ -88,6 +90,18 @@ public sealed class PbpHostRulesTests
     }
 
     [Fact]
+    public async Task Net_APublicSpectateRoute_GoesWithoutTheToken_ASeatRouteKeepsIt()
+    {
+        var h = new Capture();
+        var watch = PbpHostRules.ReadNet(new JObject { ["id"] = "w1", ["path"] = "/v2/pbp/watch/m_0123456789abcdef/chunk/4" });
+        await PbpHostRules.SendAsync(new HttpClient(h), "https://example.test", watch, "tok", "7.1.5");
+        Assert.False(h.Seen!.Headers.Contains("X-Auth-Token"));
+        var seat = PbpHostRules.ReadNet(new JObject { ["id"] = "w2", ["path"] = "/v2/pbp/watch/m_0123456789abcdef" });
+        await PbpHostRules.SendAsync(new HttpClient(h), "https://example.test", seat, "tok", "7.1.5");
+        Assert.Equal("tok", h.Seen!.Headers.GetValues("X-Auth-Token").Single());
+    }
+
+    [Fact]
     public async Task Net_AFaultOrASandboxWithNoServer_IsStatusZero_NeverAThrow()
     {
         var call = PbpHostRules.ReadNet(new JObject { ["id"] = "n3", ["path"] = "/v2/pbp/lobby" });
@@ -97,6 +111,37 @@ public sealed class PbpHostRulesTests
         var sandbox = await PbpHostRules.SendAsync(new HttpClient(h), null, call, "tok", "7.1.5");
         Assert.Equal((0, ""), sandbox);
         Assert.Null(h.Seen);
+    }
+
+    [Theory]
+    [InlineData("/v2/pbp/../user/me")]
+    [InlineData("/v2/pbp/%2e%2e/user/me")]
+    [InlineData("/v2/pbp/lobby?x=/../../user/me")]
+    [InlineData("/v2/pbp/lobby%00")]
+    public async Task Net_ParsedEscapesNeverReachTransport(string path)
+    {
+        var h = new Capture();
+        using var http = new HttpClient(h);
+        var call = PbpHostRules.ReadNet(new JObject { ["path"] = path });
+        Assert.Equal((0, "forbidden_path"), await PbpHostRules.SendAsync(http, "https://example.test", call, "tok", "7"));
+        Assert.Null(h.Seen);
+    }
+
+    [Theory]
+    [InlineData("GET", "/v2/pbp/watch/m_0123456789abcdef/chunk/0", false)]
+    [InlineData("GET", "/v2/pbp/watch/m_0123456789abcdef/UPTO/1/?after=0", false)]
+    [InlineData("GET", "/v2/pbp/watch/m_0123456789abcdef/reactions/0", false)]
+    [InlineData("GET", "/v2/pbp/watch/m_0123456789abcdef", true)]
+    [InlineData("POST", "/v2/pbp/watch/m_0123456789abcdef/reactions/0", true)]
+    public async Task Net_PublicWatchOmitsToken_PrivateRoutesKeepIt(string method, string path, bool token)
+    {
+        var h = new Capture();
+        using var http = new HttpClient(h);
+        var call = PbpHostRules.ReadNet(new JObject { ["method"] = method, ["path"] = path });
+        Assert.Equal(200, (await PbpHostRules.SendAsync(http, "https://example.test/", call, "tok", "7")).Status);
+        Assert.Equal(token, h.Seen!.Headers.Contains("X-Auth-Token"));
+        Assert.Equal("/v2/pbp/", h.Seen.RequestUri!.AbsolutePath[..8]);
+        Assert.Equal("7", h.Seen.Headers.GetValues("X-Client-Version").Single());
     }
 
     [Fact]

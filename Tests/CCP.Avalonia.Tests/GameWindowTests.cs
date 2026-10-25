@@ -25,7 +25,7 @@ namespace CCP.Avalonia.Tests;
 /// <summary>The shared game host (WPF LauncherHost.LaunchGame -> BreakoutHostService.LaunchDemo ->
 /// ChaosWebViewHost): the launcher's Play opens it after the leash check, the page protocol answers
 /// ready with init and media-request with a deal, exit-done closes it, and the panic registry closes it.</summary>
-public sealed class GameWindowTests
+public sealed partial class GameWindowTests
 {
     private static void Run(Action<MainShellWindow, LauncherWindow> body)
     {
@@ -33,6 +33,7 @@ public sealed class GameWindowTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -55,6 +56,7 @@ public sealed class GameWindowTests
                 shell.Show();
                 Dispatcher.UIThread.RunJobs();
                 Assert.True(LauncherWindow.BackToLauncher(shell));
+                shell.StepLauncherFade(1); // with motion on the door first fades the panel (WPF MainWindow.Launcher.cs)
                 Dispatcher.UIThread.RunJobs();
                 body(shell, LauncherWindow.Instance!);
             }
@@ -284,6 +286,18 @@ public sealed class GameWindowTests
             Assert.Equal("http://pbp.test/v2/pbp/lobby", fake.Seen!.RequestUri!.ToString());
             Assert.Equal("tok", fake.Seen.Headers.GetValues("X-Auth-Token").Single());
 
+            w.Web.OnWebMessage(new JObject { ["type"] = "pbp:net", ["id"] = "escape",
+                ["path"] = "/v2/pbp/../user/me" }.ToString());
+            Assert.Equal("forbidden_path", (string?)sent.Last()["body"]);
+            var beforeWatch = fake.Seen;
+            w.Web.OnWebMessage(new JObject { ["type"] = "pbp:net", ["id"] = "watch",
+                ["path"] = "/v2/pbp/watch/m_0123456789abcdef/chunk/0" }.ToString());
+            Assert.True(w.PbpPending.Wait(TimeSpan.FromSeconds(10)));
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotSame(beforeWatch, fake.Seen);
+            Assert.False(fake.Seen!.Headers.Contains("X-Auth-Token"));
+            Assert.Equal(200, (int)sent.Single(o => (string?)o["id"] == "watch")["status"]!);
+
             var now = DateTime.UtcNow;
             Assert.Equal("ok", w.CheckPbpWatch(now));
             Assert.Equal("ping", w.CheckPbpWatch(now.AddSeconds(25)));
@@ -308,6 +322,293 @@ public sealed class GameWindowTests
             CoreSecrets.RetrieveProvider = oldSecret;
             Environment.SetEnvironmentVariable(FriendsHead.EnvVar, oldLoopback);
             Directory.Delete(lib, true);
+        }
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PieceByPiece_FirstEscapePauses_SecondEscapeCloses(bool overrideAll) => Run((shell, launcher) =>
+    {
+        CoreSettings.Current.PanicKey = "Escape";
+        CoreSettings.Current.PanicOverridesAll = overrideAll;
+        launcher.Hide();
+        var board = GameWindow.Launch("piecebypiece")!;
+        board.Activate();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(board.IsActive);
+        var sent = new List<JObject>();
+        board.Posted += json => sent.Add(JObject.Parse(json));
+        board.Web.OnNavigationCompleted(board.PageUrl!);
+        board.Web.OnWebMessage("{\"type\":\"ready\"}");
+        var now = DateTime.Now;
+        shell.HandlePanicKeyPress(now);
+        Assert.True(board.IsVisible);
+        Assert.Single(sent, x => (string?)x["type"] == "pbp:escape");
+        shell.HandlePanicKeyPress(now.AddSeconds(1));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.Single(sent, x => (string?)x["type"] == "pbp:escape");
+    });
+
+    [Fact]
+    public void PieceByPiece_EscapeDuringBoot_DoesNotQueueAPause() => Run((shell, launcher) =>
+    {
+        CoreSettings.Current.PanicKey = "Escape";
+        launcher.Hide();
+        var board = GameWindow.Launch("piecebypiece")!;
+        board.Activate();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(board.IsActive);
+        var sent = new List<JObject>();
+        board.Posted += json => sent.Add(JObject.Parse(json));
+        shell.HandlePanicKeyPress(DateTime.Now);
+        Assert.True(board.IsVisible);
+        Assert.Empty(sent);
+        board.Web.OnNavigationCompleted(board.PageUrl!);
+        board.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.DoesNotContain(sent, x => (string?)x["type"] == "pbp:escape");
+        PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+        Assert.False(GameWindow.IsAnyOpen());
+    });
+
+    [Theory]
+    [InlineData("F9", true)]
+    [InlineData("Escape", false)]
+    public void PieceByPiece_ReboundOrBackgroundPanic_ClosesImmediately(string key, bool foreground) => Run((shell, launcher) =>
+    {
+        CoreSettings.Current.PanicKey = key;
+        launcher.Hide();
+        var board = GameWindow.Launch("piecebypiece")!;
+        var sent = new List<JObject>();
+        board.Posted += json => sent.Add(JObject.Parse(json));
+        board.Web.OnNavigationCompleted(board.PageUrl!);
+        board.Web.OnWebMessage("{\"type\":\"ready\"}");
+        if (foreground) board.Activate();
+        else { shell.Show(); shell.Activate(); }
+        Dispatcher.UIThread.RunJobs();
+        if (!foreground)
+        {
+            // Headless Activate does not deactivate the previous window; deliver the native
+            // notification after queued activation work, as a compositor does on focus loss.
+            var deactivated = typeof(global::Avalonia.Platform.IWindowBaseImpl).GetProperty("Deactivated",
+                global::System.Reflection.BindingFlags.Instance | global::System.Reflection.BindingFlags.Public
+                | global::System.Reflection.BindingFlags.NonPublic)!;
+            Assert.IsType<Action>(deactivated.GetValue(board.PlatformImpl))();
+        }
+        Assert.Equal(foreground, board.IsActive);
+        shell.HandlePanicKeyPress(DateTime.Now);
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.DoesNotContain(sent, x => (string?)x["type"] == "pbp:escape");
+    });
+
+    [Theory]
+    [InlineData(0, true, false, false, 0)]
+    [InlineData(0, false, false, true, 0)]
+    [InlineData(0, true, true, true, 0.5)]
+    [InlineData(0, false, true, true, 0)]
+    [InlineData(1, true, true, true, 0)]
+    [InlineData(2, true, true, true, 0)]
+    public void PieceByPiece_MotionCapsAndGentleIntro(int level, bool osAnimations, bool gentle, bool reduced, double speed)
+        => RunBoard(() =>
+    {
+        var s = CoreSettings.Current;
+        s.MotionLevel = (global::ConditioningControlPanel.Models.MotionLevel)level;
+        s.GentleVisuals = gentle;
+        s.GentleSpeed = 0.2;
+        var w = GameWindow.Launch(GameWindow.PbpId)!;
+        w.PbpOsAnimations = () => Task.FromResult(osAnimations);
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"ready\"}");
+        w.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Equal(new[] { "pbp:settings", "pbp:identity" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal(reduced, (bool)sent[0]["reducedMotion"]!);
+        Assert.Equal(speed, (double)sent[0]["gentleIntroSpeed"]!);
+    });
+
+    [Fact]
+    public void PieceByPiece_WatchPreferencesValidatePersistAndReachNextBoot() => RunBoard(() =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.PbpLetPeopleWatch, s.PbpWatchEffects, s.PbpWatchAmount);
+        try
+        {
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            void Setting(string key, JToken value) => w.HandleMessage(new JObject
+                { ["type"] = "pbp:setting", ["key"] = key, ["value"] = value }.ToString());
+            var panicEnabled = s.PanicKeyEnabled;
+            Setting("letPeopleWatch", false);
+            Setting("watchEffects", false);
+            Setting("watchAmount", "more");
+            Setting("watchEffects", "true");   // typed whitelist, no coercion
+            Setting("watchAmount", "huge");
+            Setting("PanicKeyEnabled", false);   // the page cannot change an arbitrary preference
+            Assert.Equal(panicEnabled, s.PanicKeyEnabled);
+            Assert.Equal((false, false, "more"), (s.PbpLetPeopleWatch, s.PbpWatchEffects, s.PbpWatchAmount));
+            Assert.True(CoreSettings.Service!.HasPendingSave);   // asked to persist; Save() debounces 500 ms
+            CoreSettings.Service.SaveImmediate();
+            var persisted = new SettingsService().Current;
+            Assert.Equal((false, false, "more"),
+                (persisted.PbpLetPeopleWatch, persisted.PbpWatchEffects, persisted.PbpWatchAmount));
+            w.Close();
+            var next = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>();
+            next.Posted += json => sent.Add(JObject.Parse(json));
+            next.HandleMessage("{\"type\":\"ready\"}");
+            var frame = sent.Single(o => (string?)o["type"] == "pbp:settings");
+            Assert.False((bool)frame["letPeopleWatch"]!);
+            Assert.False((bool)frame["watchEffects"]!);
+            Assert.Equal("more", (string?)frame["watchAmount"]);
+        }
+        finally
+        {
+            (s.PbpLetPeopleWatch, s.PbpWatchEffects, s.PbpWatchAmount) = old;
+            CoreSettings.Service?.Save();
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PieceByPiece_SlowOsQueryKeepsBootOrder_AndClosedBoardPostsNothing(bool close) => RunBoard(() =>
+    {
+        var answer = new TaskCompletionSource<bool>();
+        var w = GameWindow.Launch(GameWindow.PbpId)!;
+        int queries = 0;
+        w.PbpOsAnimations = () => { queries++; return answer.Task; };
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"ready\"}");
+        w.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Empty(sent);
+        Assert.Equal(1, queries);
+        if (close) w.Close();
+        answer.SetResult(false);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(w.PbpPending.IsCompletedSuccessfully);
+        if (close) Assert.Empty(sent);
+        else Assert.Equal(new[] { "pbp:settings", "pbp:identity" }, sent.Select(o => (string?)o["type"]));
+    });
+
+    // These tests exercise the real board and settings bridge, without the unrelated main shell FX.
+    private static void RunBoard(Action body) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        var (oldSettings, oldServer) = (CoreSettings.ServiceProvider, GameWindow.Server);
+        var root = Directory.CreateTempSubdirectory("pbp-settings-").FullName;
+        using var server = new WebAssetServer(root);
+        CoreSettings.ServiceProvider = () => service;
+        GameWindow.Server = () => server;
+        try { body(); }
+        finally
+        {
+            GameWindow.CloseAllForPanic();
+            (CoreSettings.ServiceProvider, GameWindow.Server) = (oldSettings, oldServer);
+            Directory.Delete(root, true);
+        }
+    });
+
+    [Fact]
+    public void PieceByPiece_SettingsWhisperOwnClips_AndPostOnlyOnce() => RunBoard(() =>
+    {
+        var lib = Directory.CreateTempSubdirectory("pbp-whispers-").FullName;
+        var oldAssets = CorePaths.EffectiveAssetsProvider;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(lib, "braindrain"));
+            File.WriteAllBytes(Path.Combine(lib, "braindrain", "a one.wav"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(lib, "braindrain", "ignored.txt"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(lib, "braindrain", "off.wav"), new byte[] { 1 });
+            CoreSettings.Current.DisabledAssetPaths.Add("braindrain/off.wav");   // unchecked: never offered
+            CorePaths.EffectiveAssetsProvider = () => lib;
+            using var server = new WebAssetServer(lib) { AssetsRoot = () => lib };
+            GameWindow.Server = () => server;
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            var settings = sent.Single(o => (string?)o["type"] == "pbp:settings");
+            var url = (string)settings["whispers"]!.Single()!;
+            Assert.Equal(w.PageUrl!.Authority, new Uri(url).Authority);
+            Assert.EndsWith("/ccp.assets/braindrain/a%20one.wav", url);
+            using var http = new System.Net.Http.HttpClient();   // the offered clip is actually served
+            using var got = http.GetAsync(url + "?ccp_t=" + server.Token).GetAwaiter().GetResult();
+            Assert.Equal(System.Net.HttpStatusCode.OK, got.StatusCode);
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.Single(sent.Where(o => (string?)o["type"] == "pbp:settings"));
+        }
+        finally
+        {
+            CorePaths.EffectiveAssetsProvider = oldAssets;
+            Directory.Delete(lib, true);
+        }
+    });
+
+    [Fact]
+    public void PieceByPiece_SettingsWhispers_AllOwnClipsUnchecked_FallBackToWords() => RunBoard(() =>
+    {
+        var dir = Directory.CreateTempSubdirectory("pbp-off-").FullName;
+        var oldAssets = CorePaths.EffectiveAssetsProvider;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(dir, "braindrain"));
+            File.WriteAllBytes(Path.Combine(dir, "braindrain", "off.wav"), new byte[] { 1 });
+            var words = Directory.CreateDirectory(Path.Combine(dir, "words")).FullName;
+            File.WriteAllBytes(Path.Combine(words, "drop.mp3"), new byte[] { 1 });
+            CoreSettings.Current.DisabledAssetPaths.Add("braindrain/off.wav");
+            CorePaths.EffectiveAssetsProvider = () => dir;
+            using var server = new WebAssetServer(dir) { SubAudioRoot = () => null, WordsRoot = () => words };
+            GameWindow.Server = () => server;
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.EndsWith("/ccp.words/drop.mp3", (string?)sent.Single(o => (string?)o["type"] == "pbp:settings")["whispers"]!.Single());
+        }
+        finally
+        {
+            CorePaths.EffectiveAssetsProvider = oldAssets;
+            Directory.Delete(dir, true);
+        }
+    });
+
+    [Theory]
+    [InlineData(false, ConditioningControlPanel.Models.BuiltInMods.BambiSleepId, "ccp.words/drop.mp3")]
+    [InlineData(true, ConditioningControlPanel.Models.BuiltInMods.BambiSleepId, "ccp.subaudio/BAMBI%20FREEZE.mp3")]
+    [InlineData(true, ConditioningControlPanel.Models.BuiltInMods.CCPDefaultId, "ccp.words/drop.mp3")]
+    public void PieceByPiece_SettingsWhisperFallback_RespectsSharedAudioPermission(bool audible, string modId, string expected)
+        => RunBoard(() =>
+    {
+        var dir = Directory.CreateTempSubdirectory("pbp-fallback-").FullName;
+        var (oldAssets, oldServer, oldMod) = (CorePaths.EffectiveAssetsProvider, GameWindow.Server, CoreMods.ActiveModIdProvider);
+        try
+        {
+            var sub = Directory.CreateDirectory(Path.Combine(dir, "sub")).FullName;
+            var words = Directory.CreateDirectory(Path.Combine(dir, "words")).FullName;
+            File.WriteAllBytes(Path.Combine(sub, "BAMBI FREEZE.mp3"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(words, "drop.mp3"), new byte[] { 1 });
+            CorePaths.EffectiveAssetsProvider = () => dir;
+            CoreMods.ActiveModIdProvider = () => modId;
+            CoreSettings.Current.SubAudioEnabled = true;
+            CoreSettings.Current.SubAudioMuted = !audible;
+            using var server = new WebAssetServer(dir) { SubAudioRoot = () => sub, WordsRoot = () => words };
+            GameWindow.Server = () => server;
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.EndsWith("/" + expected, (string?)sent.Single(o => (string?)o["type"] == "pbp:settings")["whispers"]!.Single());
+        }
+        finally
+        {
+            (CorePaths.EffectiveAssetsProvider, GameWindow.Server, CoreMods.ActiveModIdProvider) = (oldAssets, oldServer, oldMod);
+            Directory.Delete(dir, true);
         }
     });
 

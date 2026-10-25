@@ -5,6 +5,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Webcam;
+using Avalonia.Controls;
 using OpenCvSharp;
 using Xunit;
 
@@ -74,9 +75,12 @@ public sealed class WebcamTrackerTests
         WithConsent(false, () =>
         {
             WebcamTracker.SourceFactory = () => src;
+            WebcamTracker.Instance.SetTrackingState(WebcamTrackingState.Stopped);
             Assert.False(WebcamTracker.Instance.Start());
             Assert.Equal(0, src.Opens);
             Assert.NotNull(WebcamTracker.Instance.LastError);
+            // WPF refuses before any state change: the chips keep saying Stopped, not Error.
+            Assert.Equal(WebcamTrackingState.Stopped, WebcamTracker.Instance.State);
         });
     }
 
@@ -90,6 +94,7 @@ public sealed class WebcamTrackerTests
             Assert.False(WebcamTracker.Instance.Start());
             Assert.False(WebcamTracker.Instance.IsRunning);
             Assert.StartsWith("No camera could be opened", WebcamTracker.Instance.LastError);
+            Assert.Equal(WebcamTrackingState.CameraDenied, WebcamTracker.Instance.State);
             Assert.True(src.Disposed);
         });
     }
@@ -104,11 +109,59 @@ public sealed class WebcamTrackerTests
             WebcamTracker.Instance.FrameErrors = 0;
             Assert.True(WebcamTracker.Instance.Start(), WebcamTracker.Instance.LastError);
             Assert.True(WebcamTracker.Instance.IsRunning);
+            Assert.True(WebcamStatus.IsLive(WebcamTracker.Instance.State));
+            WebcamTracker.Instance.SetTrackingState(WebcamTrackingState.Error); // an old session's failure cannot hide a live capture
+            Assert.True(WebcamStatus.IsLive(WebcamTracker.Instance.State));
             WaitFor(() => Volatile.Read(ref src.Reads) >= 5);
             Assert.Equal(0, WebcamTracker.Instance.FrameErrors); // the loop swallows; nothing may have thrown
             WebcamTracker.Instance.Stop();
             Assert.False(WebcamTracker.Instance.IsRunning);
+            Assert.Equal(WebcamTrackingState.Stopped, WebcamTracker.Instance.State);
             Assert.True(src.Disposed);
+        });
+    }
+
+    [Fact]
+    public void RealStartStopAndFailedOpen_DriveTheTrackingState()
+    {
+        var src = new FakeSource();
+        WithConsent(true, () =>
+        {
+            var t = WebcamTracker.Instance;
+            WebcamTracker.SourceFactory = () => src;
+            Assert.True(t.Start(), t.LastError);
+            Assert.Equal(WebcamTrackingState.Tracking, t.State); // black frames: never found, never lost
+            t.Stop();
+            Assert.Equal(WebcamTrackingState.Stopped, t.State);
+            WebcamTracker.SourceFactory = () => new FakeSource { OpenResult = false };
+            Assert.False(t.Start());
+            Assert.Equal(WebcamTrackingState.CameraDenied, t.State); // WPF: Open false on every backend
+        });
+    }
+
+    [Fact]
+    public void LiveCapture_LightsThePlayEyeCards()
+    {
+        var src = new FakeSource();
+        WithConsent(true, () =>
+        {
+            LabWebcamStatusTests.Setup();
+            WebcamTracker.SourceFactory = () => src;
+            var play = new ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView();
+            var host = new global::Avalonia.Controls.Window { Content = play };
+            try
+            {
+                host.Show();
+                Assert.True(WebcamTracker.Instance.Start(), WebcamTracker.Instance.LastError);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.Equal(1.0, play.FindControl<Control>("PlayGazeCard")!.Opacity);
+                Assert.Equal(1.0, play.FindControl<Control>("PlayFocusCard")!.Opacity);
+                Assert.False(play.FindControl<Control>("PlayGazeNeedsTracker")!.IsVisible);
+                Assert.False(play.FindControl<Control>("PlayFocusNeedsTracker")!.IsVisible);
+                Assert.True(play.TryFindResource("SuccessGreenBrush", out var green));
+                Assert.Same(green, play.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("WebcamStatusChipPlayDot")!.Fill);
+            }
+            finally { host.Close(); }
         });
     }
 

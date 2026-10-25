@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
@@ -23,12 +22,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// ON edge goes through <see cref="MainShellWindow.SetAwarenessEnabled"/> (entitlement, then the
     /// consent dialog). Nothing widens because a segment was pressed.
     ///
-    /// <para><b>The v2 observer and ledger are not on this head</b>, so WPF's own rule
+    /// <para><b>The v2 observer is not on this head</b>, so WPF's own rule
     /// (<c>IsLegacyPipeline = on &amp;&amp; !AwarenessObserver.IsEnabled</c>) reads as "legacy whenever
     /// on": the warning band shows, the wire says "not reported" and the JSON stays empty. That band
     /// over-warns here (the head's poll does enforce the deny list and incognito drop), which is the
-    /// safe direction (docs/avalonia-decisions.md, 2026-10-08). No ledger also means no known-apps
-    /// row; the seen-apps row is the window in front right now (no keyword-trigger ring here).</para>
+    /// safe direction (docs/avalonia-decisions.md, 2026-10-08). The shared ledger supplies retained known-apps and erasure; the seen-apps row is the window in front right now (no keyword-trigger ring here).</para>
     /// </summary>
     public sealed class AwarenessPrivacyViewModel : INotifyPropertyChanged
     {
@@ -39,23 +37,70 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private readonly ObservableCollection<AwarenessChip> _deny = new();
         private readonly ObservableCollection<AwarenessChip> _allow = new();
         private readonly ObservableCollection<AwarenessChip> _seen = new();
-        private readonly List<string> _denyKeys = new(), _allowKeys = new(), _seenKeys = new();
+        private readonly ObservableCollection<AwarenessChip> _known = new();
+        private readonly List<string> _denyKeys = new(), _allowKeys = new(), _seenKeys = new(), _knownKeys = new();
 
         private AwarenessIntensity _intensity = AwarenessIntensity.Off;
         private bool _isJsonExpanded, _isPaused, _isLegacyPipeline;
         private string _wireLine = string.Empty;
         private int _retentionDays = 30;
+        private bool _preview, _previewDormant, _previewWireLive, _previewEverything = true, _previewAllowTitles;
+        private string _previewJson = string.Empty;
+
+        /// <summary>
+        /// WPF MockAwarenessPrivacyVm's Live / Dormant / EyesClosed exhibits for the preview harness:
+        /// sample wire, JSON and chip rows; the dial, page-titles switch, retention and JSON toggle
+        /// change only this exhibit, and add/allow/pause/wipe/consent do nothing (WPF NoOp). Fine-tuning
+        /// still reaches the Workshop through <paramref name="revealFineTuning"/>.
+        /// </summary>
+        internal static AwarenessPrivacyViewModel CreatePreview(Action? revealFineTuning, string exhibit)
+        {
+            var vm = new AwarenessPrivacyViewModel(() => null, revealFineTuning) { _preview = true };
+            vm._isLegacyPipeline = vm._isPaused = false;
+            vm._retentionDays = 30;
+            vm._intensity = AwarenessIntensity.BroadStrokes;
+            vm._previewWireLive = true;
+            vm.WireLine = "[ fun · Chrome · 22m ]";
+            vm._previewJson = "{\n  \"v\": 1,\n  \"cluster\": \"site_video\",\n  \"app\": \"YouTube\",\n" +
+                "  \"visits_today\": 4,\n  \"minutes_today\": 45,\n  \"dwell\": \"15-30m\"\n}";
+            var none = new RelayCommand(() => { });
+            void Fill(ObservableCollection<AwarenessChip> row, string tipKey, params string[] labels)
+            {
+                row.Clear();
+                foreach (var label in labels) row.Add(new AwarenessChip(label, none, tipKey.Length > 0 ? Loc.Get(tipKey) : ""));
+            }
+            Fill(vm._deny, "", Loc.Get("companion_awareness_deny_passwords"), Loc.Get("companion_awareness_deny_banking"), Loc.Get("companion_awareness_deny_email"));
+            Fill(vm._allow, "");
+            Fill(vm._seen, "companion_awareness_seen_tip", "Chrome", "Discord", "Steam");
+            Fill(vm._known, "companion_awareness_forget_tip", "YouTube", "Discord");
+            switch (exhibit)
+            {
+                case "Dormant":
+                    vm._previewEverything = vm._previewWireLive = false;
+                    vm._previewDormant = true;
+                    vm.WireLine = "[ her eyes are closed ]";
+                    vm._previewJson = string.Empty;
+                    break;
+                case "EyesClosed":
+                    vm._previewWireLive = false;
+                    vm.WireLine = Loc.Get("companion_awareness_wire_closed");
+                    vm._previewJson = string.Empty;
+                    vm._intensity = AwarenessIntensity.Off;
+                    break;
+            }
+            return vm;
+        }
 
         public AwarenessPrivacyViewModel(Func<MainShellWindow?> window, Action? revealFineTuning = null)
         {
             _window = window;
             _revealFineTuning = revealFineTuning;
-            ReviewConsentCommand = new RelayCommand(() => _ = ReviewV2ConsentAsync());
-            AddDenyCommand = new RelayCommand(() => _ = EditDenyListAsync());
-            AllowPerAppCommand = new RelayCommand(() => _ = EditTitleAllowListAsync());
+            ReviewConsentCommand = new RelayCommand(() => { if (!_preview) _ = ReviewV2ConsentAsync(); });
+            AddDenyCommand = new RelayCommand(() => { if (!_preview) _ = EditDenyListAsync(); });
+            AllowPerAppCommand = new RelayCommand(() => { if (!_preview) _ = EditTitleAllowListAsync(); });
             ToggleJsonCommand = new RelayCommand(() => IsJsonExpanded = !IsJsonExpanded);
-            PauseCommand = new RelayCommand(TogglePause);
-            WipeCommand = new RelayCommand(Wipe);
+            PauseCommand = new RelayCommand(() => { if (!_preview) TogglePause(); });
+            WipeCommand = new RelayCommand(() => { if (!_preview) Wipe(); });
             FineTuningCommand = new RelayCommand(() => _revealFineTuning?.Invoke());
             Sync();
         }
@@ -71,6 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             set
             {
                 if (_intensity == value) return;
+                if (_preview) { _intensity = value; Raise(); Raise(nameof(DialHint)); return; }
                 Pending = ApplyIntensityAsync(value);
             }
         }
@@ -95,7 +141,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             Sync();   // snaps the dial to what is actually true
         }
 
-        public bool IsEverythingAvailable => true;
+        public bool IsEverythingAvailable => _previewEverything;
         public string? EverythingLockedTip => null;
         public string DialHint => _intensity switch
         {
@@ -103,7 +149,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             AwarenessIntensity.BroadStrokes => Loc.Get("companion_awareness_dial_hint_broad"),
             _ => Loc.Get("companion_awareness_dial_hint_everything")
         };
-        public bool IsDormant => false;
+        public bool IsDormant => _previewDormant;
         public string DormantCopy => Loc.Get("companion_awareness_dormant_copy");
 
         public bool IsLegacyPipeline => _isLegacyPipeline;
@@ -121,12 +167,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         public string WireLine { get => _wireLine; private set => Set(ref _wireLine, value); }
         /// <summary>Never live here: the legacy pipeline writes no frame (WPF Sync's rule).</summary>
-        public bool IsWireLive => false;
+        public bool IsWireLive => _previewWireLive;
         public string WireCaption => Loc.Get(_isLegacyPipeline
             ? "companion_awareness_wire_caption_legacy" : "companion_awareness_wire_caption");
         /// <summary>Empty: no projected frame exists on this head, and a reconstruction is not the wire.</summary>
-        public string WireJson => string.Empty;
-        public bool HasWireJson => false;
+        public string WireJson => _previewJson;
+        public bool HasWireJson => !string.IsNullOrWhiteSpace(_previewJson);
         public string WireJsonEmptyCopy => Loc.Get("companion_awareness_wire_json_empty");
 
         public bool IsJsonExpanded
@@ -147,18 +193,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public IReadOnlyList<AwarenessChip> SeenApps => _seen;
         public bool HasSeenApps => _seen.Count > 0;
         public string SeenAppsLabel => Loc.Get("companion_awareness_seen_label");
-        /// <summary>Empty: no activity ledger on this head, and the row is not invented.</summary>
-        public IReadOnlyList<AwarenessChip> KnownApps { get; } = Array.Empty<AwarenessChip>();
-        public bool HasKnownApps => false;
+        /// <summary>WPF: retained ledger ids plus unaccrued transitions, most recent first.</summary>
+        public IReadOnlyList<AwarenessChip> KnownApps => _known;
+        public bool HasKnownApps => _known.Count > 0;
         public string KnownAppsLabel => Loc.Get("companion_awareness_known_label");
 
         /// <summary>True when an app is title-allow-listed; on asks which app, off empties the list.</summary>
         public bool AllowPageTitles
         {
-            get => (CoreSettings.Current.AwarenessTitleAllowList?.Count ?? 0) > 0;
+            get => _preview ? _previewAllowTitles : (CoreSettings.Current.AwarenessTitleAllowList?.Count ?? 0) > 0;
             set
             {
                 if (value == AllowPageTitles) return;
+                if (_preview) { _previewAllowTitles = value; Raise(); return; }
                 if (value) { Pending = EditTitleAllowListAsync(); return; }
                 ClearTitleAllowList();
                 Sync();
@@ -169,7 +216,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             get
             {
-                int count = CoreSettings.Current.AwarenessTitleAllowList?.Count ?? 0;
+                int count = _preview ? 0 : CoreSettings.Current.AwarenessTitleAllowList?.Count ?? 0;
                 return count == 0
                     ? Loc.Get("companion_awareness_page_titles_hidden")
                     : Loc.GetF("companion_awareness_page_titles_allowed_fmt", count);
@@ -184,8 +231,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             set
             {
                 if (_retentionDays == value) return;
+                if (_preview) { _retentionDays = value; Raise(); Raise(nameof(RetentionLabel)); return; }
                 CoreSettings.Current.AwarenessRetentionDays = value;   // setter clamps to 7..90
                 CoreSettings.Save();
+                AwarenessLive.Ledger?.PruneRetention(DateTime.Now);
+                AwarenessLive.Ledger?.PruneOnDisk();
                 Log.Information("Awareness: retention set to {Days}d", CoreSettings.Current.AwarenessRetentionDays);
                 Sync();
             }
@@ -212,6 +262,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// <summary>Re-reads everything the card shows (room show + the view's 1.5 s visible-only tick).</summary>
         public void Sync()
         {
+            if (_preview) return;
             try
             {
                 var s = CoreSettings.Current;
@@ -230,7 +281,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 foreach (var n in new[] { nameof(IsPaused), nameof(PauseLabel), nameof(IsLegacyPipeline),
                              nameof(IncognitoCopy), nameof(WireCaption), nameof(RetentionDays), nameof(RetentionLabel),
                              nameof(Intensity), nameof(DialHint), nameof(AllowPageTitles), nameof(PageTitlesLabel),
-                             nameof(HasTitleAllowList), nameof(HasSeenApps) })
+                             nameof(HasTitleAllowList), nameof(HasSeenApps), nameof(HasKnownApps) })
                     Raise(n);
             }
             catch (Exception ex) { Log.Debug("Awareness panel sync failed: {E}", ex.Message); }
@@ -263,6 +314,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 next.Add((current + "\u0001" + clean + "\u0001" + tip, () => new AwarenessChip(current, new RelayCommand(() => AddToDeny(clean)), tip)));
             }
             RefillIfChanged(_seen, _seenKeys, next);
+
+            next = new();
+            if (AwarenessLive.Ledger is { } ledger)
+                foreach (var id in ledger.KnownAppIds.Concat(ledger.RecentTransitions.Select(t => t.AppId))
+                    .Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.OrdinalIgnoreCase).Take(MaxAppChips))
+                {
+                    var appId = id;
+                    var tip = Loc.Get("companion_awareness_forget_tip");
+                    next.Add((appId + "\u0001" + tip, () => new AwarenessChip(appId,
+                        new RelayCommand(() => { AwarenessLive.Forget(appId); Sync(); }), tip)));
+                }
+            RefillIfChanged(_known, _knownKeys, next);
         }
 
         /// <summary>Refills a row only when its keys changed (WPF #1323: refilling every tick stalled the UI).</summary>
@@ -385,21 +448,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             Sync();
         }
 
-        /// <summary>
-        /// Erases what this head stores about awareness: the activity-ledger file and its .tmp
-        /// sibling (WPF <c>AwarenessLive.WipeFilesDirectly</c>; this head writes no ledger, so they exist
-        /// only in a copied profile). The legacy poll keeps no history beyond the window in front, and
-        /// there is no projected frame or awareness memory here to clear. The two-step confirm ran first.
-        /// </summary>
+        /// <summary>WPF's full erasure pipeline, after the existing two-step confirmation.</summary>
         private void Wipe()
         {
-            var path = Path.Combine(CorePaths.UserData, "awareness_ledger.json");
-            foreach (var file in new[] { path, path + ".tmp" })
-            {
-                try { if (File.Exists(file)) File.Delete(file); }
-                catch (Exception ex) { Log.Warning(ex, "Awareness: failed to delete {File}", file); }
-            }
-            Log.Information("Awareness: everything she noticed has been erased");
+            AwarenessLive.WipeEverything();
             Sync();
         }
 

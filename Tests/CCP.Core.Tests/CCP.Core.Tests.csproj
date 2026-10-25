@@ -20,6 +20,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The ledger is now shared Core logic: run its existing WPF-source boundary tests on Linux too. -->
+    <Compile Include="..\ConditioningControlPanel.Tests\AwarenessLedgerTests.cs" Link="AwarenessLedgerTests.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
     <PackageReference Include="xunit.v3" Version="3.2.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
@@ -32,12 +37,18 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\CCP.Core\CCP.Core.csproj" />
+    <Compile Include="..\ConditioningControlPanel.Tests\HostNetPathRuleTests.cs" Link="HostNetPathRuleTests.cs" />
     <Compile Include="..\Shared\BackRoomBridgeRig.cs" Link="BackRoomBridgeRig.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\AchievementSharePromptRuleTests.cs" Link="AchievementSharePromptRuleTests.cs" />
+    <!-- Existing pure first-light timeline specs also run on Linux against the shared Core engine. -->
+    <Compile Include="..\ConditioningControlPanel.Tests\SpiralFirstLightTimelineTests.cs" Link="SpiralFirstLightTimelineTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- The wardrobe registry at the heads' path, for WardrobeCatalogTests (art not needed). -->
     <Content Include="..\..\Assets\cosmetics\registry.json" Link="Resources\cosmetics\registry.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The heads' shipped Spirals folder, so SessionRunnerTests run a default-path spiral like an install. -->
+    <Content Include="..\..\Assets\spiral.gif" Link="Spirals\spiral.gif" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

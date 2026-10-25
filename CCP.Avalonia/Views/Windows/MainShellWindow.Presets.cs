@@ -140,13 +140,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// it as a plain module would land on the right panel while silently saying nothing.
         /// ShowTab("haptics") selects the same row itself, so the landing is identical.</para>
         ///
-        /// <para>ponytail: WPF opens with <c>Services.EmiDesk.EmiTargets.NoteRackOpened(rackKey)</c>,
-        /// so opening Flashes scores Flashes rather than the Studio. The rack map is in Core now
-        /// (<c>EmiDoors.RackTargets</c>); the call that scores through it is the one thing still
-        /// missing here.</para>
+        /// <para>Like WPF, every rack route teaches EMI's ring through NoteRackOpened;
+        /// opening Flashes scores Flashes rather than the Studio through Core EmiDoors.TargetForRack.</para>
         /// </summary>
         internal void OpenStudioModule(string rackKey)
         {
+            EmiDesk.EmiTargets.NoteRackOpened(rackKey);
+
             if (string.Equals(rackKey, "haptics", StringComparison.OrdinalIgnoreCase))
             {
                 ShowTab("haptics");
@@ -189,7 +189,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // the Studio rack's right-click QuickToggle. The rings repaint from HookWallRings.
         //
         // ponytail: RefreshMosaicTierBadges, RefreshMysteryTile and SetTierBadge still need
-        // App.Patreon's tier state; NoteDashboardToggleUsed's caption counter is not ported.
+        // App.Patreon's tier state. The caption counter uses Core DashboardToggleHintRule below.
 
         /// <summary>The persisted flag behind a wall key. Unknown key = false.</summary>
         internal static bool IsWallFeatureOn(string key)
@@ -240,6 +240,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
                 CoreSettings.Save();
                 CoreEngine.ApplyLive(key, on);
+                if (key == "spiral") Overlays.SpiralOverlay.Refresh(this);   // WPF RefreshOverlays is unconditional
                 if (key == "pinkfilter") Overlays.PinkFilterOverlay.Refresh(this);   // WPF Presets.cs:1360 RefreshOverlays
             }
             catch (Exception ex)
@@ -253,6 +254,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (RefuseIfSessionFeatureLocked($"card:{key}")) return;
             SetWallFeature(key, !IsWallFeatureOn(key));
+            NoteDashboardToggleUsed();
+        }
+
+        /// <summary>WPF NoteDashboardToggleUsed: three successful quick-toggles retire the caption.</summary>
+        internal void NoteDashboardToggleUsed()
+        {
+            if (!Services.DashboardToggleHintRule.NoteUse(CoreSettings.Current)) return;
+            CoreSettings.Save();
+            RefreshDashboardToggleHint();
+        }
+
+        /// <summary>WPF's caption on the logo face, refreshed on return, restore and each learned gesture.</summary>
+        internal void RefreshDashboardToggleHint()
+        {
+            // Refresh the saved gesture choice as well as the learned-toggle counter, including
+            // after a settings restore replaces the profile or a language change repaints the rail.
+            SettingsPage?.RefreshClickPreference();
         }
 
         /// <summary>WPF RefreshWallActiveStates (MainWindow.Presets.cs:1404): the ring on every wall
@@ -286,6 +304,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 hooked = CoreSettings.Current;
                 hooked.PropertyChanged += OnFlag;
                 RefreshWallActiveStates();
+                RefreshDashboardToggleHint();
             }
             void OnFlag(object? _, System.ComponentModel.PropertyChangedEventArgs e)
             {

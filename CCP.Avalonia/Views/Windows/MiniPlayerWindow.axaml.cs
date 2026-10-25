@@ -42,14 +42,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///    Slider marks them handled, which is what WPF's tunnelling pass got around.
     ///  - DragMove() -> BeginMoveDrag(e), which needs the event args.
     ///
-    /// <para><b>No opener yet, and the blocker is the CALLER, not this window.</b> Its one WPF call
-    /// site is <c>MainWindow.OpenAssetPreview</c> (MainWindow.Assets.cs:1233), reached from a
-    /// thumbnail click in the Library tab. Nothing on this head raises that click: the asset tree
-    /// and the thumbnail grid are held back in MainShellWindow.Assets.cs because
-    /// the packs tree over <c>ContentPackStore.Current</c> is not built yet, and
-    /// OpenAssetPreview's first branch is a pack-file extraction through that same service. When
-    /// the tree lands, the wiring is <c>LoadFile(path)</c> then <c>Show(owner)</c>. Until then
-    /// <c>--video-check &lt;file&gt;</c> (VideoCheck.cs) opens it on the real desktop.</para>
+    /// <para><b>Opener:</b> <c>AssetsTabView.OpenAssetPreview</c> (WPF <c>MainWindow.OpenAssetPreview</c>,
+    /// MainWindow.Assets.cs:1206), from a Library thumbnail double-click or the context-menu Preview:
+    /// <c>LoadFile(path)</c> then <c>Show(owner)</c>. Encrypted-pack files open from a temporary decrypt
+    /// (WPF's temp extraction). <c>--video-check &lt;file&gt;</c> (VideoCheck.cs) also opens it. Panic closes all open previews.</para>
     /// </summary>
     public partial class MiniPlayerWindow : Window
     {
@@ -91,6 +87,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal WriteableBitmap? VideoFrame => _frames?.Bitmap;
         internal bool FrameBufferFreed => _frames?.Freed ?? true;
 
+        private static readonly HashSet<MiniPlayerWindow> OpenPlayers = new();
+        internal static void CloseAllForPanic()
+        {
+            foreach (var player in new List<MiniPlayerWindow>(OpenPlayers)) player.Close();
+        }
+
         public MiniPlayerWindow()
         {
             AvaloniaXamlLoader.Load(this);
@@ -120,7 +122,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _seekSlider.AddHandler(RangeBase.ValueChangedEvent, SeekSlider_ValueChanged);
             PointerPressed += Window_PointerPressed;
             KeyDown += Window_KeyDown;
-            Opened += (_, _) => _ = ShowNoticeAndClose();
+            Opened += (_, _) => { OpenPlayers.Add(this); _ = ShowNoticeAndClose(); };
+            Closed += (_, _) => OpenPlayers.Remove(this);
 
             // Render-proof state only: --render-all builds this window without LoadFile, and an
             // all-collapsed window renders as a black rectangle that proves nothing. This is the

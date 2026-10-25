@@ -129,9 +129,11 @@ namespace ConditioningControlPanel.Controls
         {
             try
             {
-                bool allowed = FlagEnabled
-                               && App.Descent?.Current is not null
-                               && App.DescentMigration?.SpiralWithheld != true;
+                // Preserve the disabled/blockless short circuits before reading head services.
+                bool enabled = FlagEnabled;
+                bool hasBlock = enabled && App.Descent?.Current is not null;
+                bool withheld = hasBlock && App.DescentMigration?.SpiralWithheld == true;
+                bool allowed = SpiralRailState.Visible(enabled, hasBlock, withheld);
                 if (!allowed)
                 {
                     Visibility = Visibility.Collapsed;
@@ -200,18 +202,7 @@ namespace ConditioningControlPanel.Controls
         /// into here for the numeral it draws, so the rail chip, the Trainer Card plate and
         /// the account menu row cannot drift apart.</para>
         /// </summary>
-        internal static string StageNumeral(int n) => n switch
-        {
-            1 => "I",
-            2 => "II",
-            3 => "III",
-            4 => "IV",
-            5 => "V",
-            6 => "VI",
-            7 => "VII",
-            8 => "VIII",
-            _ => n > 8 ? n.ToString(System.Globalization.CultureInfo.InvariantCulture) : "·",
-        };
+        internal static string StageNumeral(int n) => SpiralRailState.StageNumeral(n);
 
         /// <summary>
         /// Click-to-expand: the shared canvas at ?mode=map, in the SPIRAL ROOM.

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
@@ -86,16 +87,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     /// <see cref="GigglePriority"/> (Speech.cs), which <b>does</b> speak now that
     /// <c>CoreAudio.PlayOneShot</c> exists - see its own remarks for the four things it drops.</para>
     ///
-    /// <para><b>ponytail: the eight partials still did not come.</b> This layer ports the .xaml.cs
-    /// plus the members named above. The 60fps float loop (Avatar.cs), the speech QUEUE and the bark
-    /// engine (Speech.cs), chat and the AI pipeline (ChatInput.cs), Circe emotes (CirceEmotes.cs),
-    /// reactions (Reactions.cs), the candle (DescentFuse.cs) and ALL of the
-    /// attach/detach/scale/position/fullscreen windowing (Windowing.cs) stay in the WPF head.
-    /// The whole <c>App.*</c> service-subscription block (Video, BubbleCount, Flash, Subliminal,
-    /// Bubbles, Achievements, Progression, Companion, WindowAwareness, MindWipe, BrainDrain,
-    /// ModerationCounter, Mods) is still one stub. Twelve of those have no seam at all; the two
-    /// that do are no help to it - <c>CoreMods</c> raises ModChanged but not the avatar events
-    /// these handlers wanted, and <c>CoreProgression</c> is write-only (AddXP, no level event).</para>
+    /// <para>Windowing, speech queue, chat/brain, awareness and look selection live in the adjacent
+    /// partials. Remaining WPF parity work is tracked in docs/avalonia-parity.md.</para>
     ///
     /// <para><b>The tube does not track a face.</b> Nothing here reads a camera. The webcam face
     /// tracker that drives the avatar's gaze on the WPF head is a device, so it stays in a head;
@@ -123,7 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         // actually loaded never starts the timer, which is the WPF rule verbatim.
         private readonly DispatcherTimer _poseTimer;
         private int _currentPoseIndex;
-        private readonly int _currentAvatarSet = Math.Max(1, CoreSettings.Current.SelectedAvatarSet);
+        private int _currentAvatarSet;
         private Bitmap?[] _avatarPoses = new Bitmap?[4];
 
         // The bubble's auto-hide. One timer, replaced per bubble; the hover hold re-arms it at 1s.
@@ -242,8 +235,14 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             WireContentPolicyWarning();   // the warning half (AvatarTubeWindow.ContentGates.cs)
 
             _avatarBorder.PointerPressed += OnAvatarPointerPressed;
-            this.FindControl<Border>("BtnPrevAvatar")!.PointerPressed += (_, _) => SelectAvatarSet(-1);
-            this.FindControl<Border>("BtnNextAvatar")!.PointerPressed += (_, _) => SelectAvatarSet(+1);
+            this.FindControl<Border>("BtnPrevAvatar")!.PointerPressed += (_, e) =>
+            {
+                if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) StepAvatarSet(-1);
+            };
+            this.FindControl<Border>("BtnNextAvatar")!.PointerPressed += (_, e) =>
+            {
+                if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) StepAvatarSet(+1);
+            };
             this.FindControl<ContextMenu>("AvatarContextMenu")!.Opened += (_, _) => { UpdateQuickMenuState(); PopulatePersonalityMenu(); };
 
             // Pose switching for static avatars. ApplyAvatarSet below starts it only when more than
@@ -258,24 +257,16 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             SetTubeStyle(!_isAttached);
             InitWindowing();
             WireQuickMenu();   // the right-click menu's handlers (AvatarTubeWindow.QuickMenu.cs)
+            _currentAvatarSet = ResolveStartAvatarSet();
             ApplyAvatarSet();
+            UpdateNavigationArrows();
+            CoreMods.ModChanged += OnTubeModChanged;
             // The caption is Loc-driven and set from code (a persona name has no static key), so it
             // has to be re-run rather than bound - see the porting note about {loc:Str} and .Text.
             LocalizationManager.Instance.LanguageChanged += OnTubeLanguageChanged;
 
-            // ponytail: still needs AvatarTubeWindow.Avatar.cs for the ANIMATED avatar (level 20+
-            // GIF sets, which need an Avalonia GIF decoder) and the emotive-portrait crossfade. The
-            // set ARROWS are blocked on the companion coupling, NOT on the set list - see
-            // SelectAvatarSet. The static four-pose path below is the one every set-1 user is on.
-
-            // ponytail: the ~14 App.* services the WPF constructor subscribed to (Video, BubbleCount,
-            // Flash, Subliminal, Bubbles, Achievements, Progression, Companion, WindowAwareness,
-            // MindWipe, BrainDrain, ModerationCounter, Mods, MainWindow.EngineStopped). Two of those
-            // names DO have seams and still do not help: CoreMods raises ModChanged but none of the
-            // avatar-set handlers hang off it, and CoreProgression is write-only (AddXP, no level
-            // event), so the caption cannot re-read itself when she levels. The other twelve are
-            // head-side services in ConditioningControlPanel/Services/ with no seam at all, and
-            // their handlers live in the Reactions/Speech partials that did not port.
+            // ponytail: GIF/emote/portrait playback and non-awareness service reactions remain
+            // in the WPF reference. Look selection and ModChanged repaint use AvatarSets.cs.
 
             // ponytail: the WPF ctor also started four timers here - a 2s greeting, the idle-giggle,
             // the trigger and the random-bubble loops. Deliberately NOT started: every one of them
@@ -297,6 +288,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
             // WPF OnLoaded: CalculateScaleFactor, then UpdatePosition (attached) or
             // RestoreSavedPlacement (detached). Topmost follows the mode (ApplyModeChrome).
+            _makeRoom.Rearm();
             FitToScreen();
             UpdatePosition();
             RestoreSavedPlacement();
@@ -321,8 +313,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
             AttachAwareness();   // WPF xaml.cs:317-322 (Reactions.cs)
 
-            // ponytail: WPF's OnLoaded also ran StartFloatingAnimation / StartFullscreenDetection
-            // and InitTakeoverCountdownBar; none has ported.
+            InitTakeoverCountdownBar();
+            // ponytail: WPF's OnLoaded also ran StartFloatingAnimation / StartFullscreenDetection;
+            // neither has ported.
         }
 
         protected override void OnClosed(EventArgs e)
@@ -331,6 +324,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // target and method, which is what makes "is the sink still MINE?" answerable at all;
             // ReferenceEquals would be false every time because the conversion allocates.
             if (OpenChatSink == (Action)OpenChatInput) OpenChatSink = null;
+            _avatarSetsClosed = true;
+            CoreMods.ModChanged -= OnTubeModChanged;
+            CancelAvatarSwitch();
             ReleaseWindowing();
             DetachAwareness();
             UnwireContentPolicyWarning();
@@ -565,6 +561,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// caption (UpdateTitleDisplay) upper-cases the companion branch of this.</summary>
         internal static string AvatarSetTitle(int setNumber)
         {
+            if (CoreMods.ActiveModPackage?.Manifest.CustomAvatarSets?.FirstOrDefault(c => c.SetNumber == setNumber) is { } custom
+                && !string.IsNullOrWhiteSpace(custom.Label)) // WPF Avatar.cs:938 falls through
+                return CoreMods.MakeModAware(custom.Label);
             if (CompanionForAvatarSet(setNumber) is { } companionId)
                 return CoreMods.MakeModAware(CompanionDefinition.GetById(companionId)
                     .GetDisplayName(CoreSettings.Current.SlutModeEnabled));
@@ -1035,6 +1034,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// more than one pose to rotate between.</summary>
         private void ApplyAvatarSet()
         {
+            _poseTimer.Stop();
             _avatarPoses = LoadAvatarPoses(_currentAvatarSet);
             _currentPoseIndex = 0;
             for (int i = 0; i < _avatarPoses.Length; i++)
@@ -1133,6 +1133,31 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             "avatar_title_bambi_cow",             // Set 7
         };
 
+        /// <summary>WPF SwitchToCompanionAvatar (AvatarTubeWindow.Avatar.cs:819) + the static branch of
+        /// SwitchToAvatarSet (:395): a roster switch puts the companion's set on the tube and saves it,
+        /// globally and per mod. The companion itself is already switched by the caller, so the
+        /// set->companion coupling is not re-fired. All sets are unlocked (WPF IsAvatarSetUnlocked).
+        /// ponytail: WPF's single-emote-mod pin has nothing to pin here - emote mode did not port.</summary>
+        public void SwitchToCompanionAvatar(CompanionId companionId) => RunOnAvatar(() =>
+        {
+            // WPF GetAvatarSetForCompanion (:525) is the inverse of CompanionForAvatarSet; derive it
+            // so the mapping lives once. No set -> set 1 (BambiSprite's default).
+            int set = 1;
+            for (int n = 3; n <= 7; n++)
+                if (CompanionForAvatarSet(n) == companionId) { set = n; break; }
+            if (_avatarSetsClosed) return;
+            // A look-picker fade still pending would re-couple its own companion over this one.
+            CancelAvatarSwitch();
+            _currentAvatarSet = set;
+            var s = CoreSettings.Current;
+            s.SelectedAvatarSet = set;
+            ConditioningControlPanel.Services.Companion.ModAvatarLooks.Store(s.ModAvatarSet, CoreMods.ActiveModId, set);
+            CoreSettings.Save();
+            _poseTimer.Stop();
+            ApplyAvatarSet();
+            UpdateNavigationArrows();
+        });
+
         /// <summary>The persona an avatar set belongs to; null for sets 1-2, which are generic
         /// sprites with no companion behind them. From AvatarTubeWindow.Avatar.cs.</summary>
         private static CompanionId? CompanionForAvatarSet(int setNumber) => setNumber switch
@@ -1221,6 +1246,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                                 bool barkVoice, bool preset, Action? onSpoken = null)
         {
                 var spokenHandled = false;
+                var clipDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                Action spoken = () => { clipDone.TrySetResult(); onSpoken?.Invoke(); };
                 try
                 {
                     // Only a GENUINE AI reply anchors the bark system's chat-suppression window;
@@ -1238,6 +1265,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                         NoteSpeechEnded(source, text.Length);
                         return;
                     }
+                    // Publish this line BEFORE cutting the last: the cut fires the old clip's onSpoken on the
+                    // thread pool, and a voice waiter woken by it must already see this line in the air.
+                    SpokenAudioDone = clipDone.Task;
                     _stopSpoken();   // WPF ShowGiggle StopSpokenAudio (Speech.cs:474): every new line cuts the last
                     _stopSpoken = static () => { };
 
@@ -1255,7 +1285,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
                     // Mute silences her VOICE and keeps the text (#445) - a muted companion that
                     // also stopped showing bubbles read as completely broken.
-                    if (!IsMuted) { PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, onSpoken); spokenHandled = true; }
+                    if (!IsMuted) { PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken); spokenHandled = true; }
 
                     SyncAskButtonsFor(text);
                     _txtSpeech.Text = text;
@@ -1271,7 +1301,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     Log.Debug("Companion says ({Chars} chars, ai={Ai})", text.Length, aiGenerated);   // never the text
                 }
                 catch (Exception ex) { Log.Warning(ex, "AvatarTube GigglePriority failed"); }
-                finally { if (!spokenHandled) onSpoken?.Invoke(); }
+                finally { if (!spokenHandled) spoken(); }
         }
 
         private DispatcherTimer? _listeningDotsTimer;
@@ -1345,9 +1375,15 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             return windowMs > 0 && (DateTime.UtcNow - _lastAiBubbleUtc).TotalMilliseconds < windowMs;
         }
 
-        /// <summary>The user's avatar mute. WPF mirrors this setting into a field the quick menu
-        /// flips; reading the setting itself is the same answer with nothing to keep in sync.</summary>
-        public bool IsMuted => CoreSettings.Current.AvatarMuted;
+        private bool _windowMuted;
+        /// <summary>Saved voice mute plus the shell's temporary attached-minimize mute.</summary>
+        public bool IsMuted => CoreSettings.Current.AvatarMuted || _windowMuted;
+
+        internal void SetWindowMute(bool muted)
+        {
+            _windowMuted = muted;
+            UpdateQuickMenuState();
+        }
 
         /// <summary>
         /// Auto-hide, at the user's Bubble Duration (1-10s). A long line gets an ESL-friendly
@@ -1383,6 +1419,10 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// through on WPF. The cue is the giggle; WPF's PlayFallbackBubbleSound picks between the
         /// giggles and the "um" set, and that coin flip lives in Reactions.cs.</para>
         /// </summary>
+        /// <summary>WPF IsSpeakingAudio as a task: completes when her LATEST voiced clip ends (cut or
+        /// finished). The voice host waits on it so a bark that cut her confirmation still holds the mic.</summary>
+        internal Task SpokenAudioDone { get; private set; } = Task.CompletedTask;
+
         private void PlaySpeechAudio(bool playSound, string? phraseAudioPath, bool barkVoice, Action? onSpoken = null)
         {
             var handedOff = false;
@@ -1674,24 +1714,5 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             return all.Length == 0 ? "*giggles*" : all[Random.Shared.Next(all.Length)];
         }
 
-        /// <summary>Step through the unlocked avatar sets with the title-box arrows.</summary>
-        private void SelectAvatarSet(int delta)
-        {
-            // The old note here named App.Mods.IsAvatarSetSupported / GetCustomAvatarSets as the
-            // blocker. That is STALE: both are one-liners over ModManifest.SupportedAvatarSets and
-            // .CustomAvatarSets (ModService.cs:1268/1289), and the whole manifest is in Core -
-            // CoreMods.InstalledMods[ActiveModId].Manifest answers both today. The list of sets is
-            // not what is missing.
-            //
-            // ponytail: what is missing is the COMPANION COUPLING. WPF's SwitchToAvatarSet
-            // (AvatarTubeWindow.Avatar.cs:395) persists SelectedAvatarSet and switches the active
-            // companion in the same beat for sets 4+, because the tube's caption reads the persona
-            // behind the SET. CoreModsHooks.SwitchCompanion is the seam and no head seeds it, so an
-            // arrow here would write a shared setting and leave the app's active companion pointing
-            // somewhere else - a second writer for one setting, which is the trap this port keeps
-            // hitting. Both arrows are IsVisible=False in the XAML (WPF's UpdateNavigationArrows is
-            // what reveals them), so nothing reaches this today: the tube shows
-            // CoreSettings.Current.SelectedAvatarSet and stays on it.
-        }
     }
 }

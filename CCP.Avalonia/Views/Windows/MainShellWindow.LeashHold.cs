@@ -7,9 +7,11 @@
 // while the key is down (a repeat by LeashHoldToCut.RepeatGap), and each tick ends the hold unless the key
 // is physically down (XQueryKeymap), so a lost key-up never asks. Windows has real repeats and no clock.
 // Like WPF, it works with the panic key switched off and under Lockdown (panic always works on a leash).
-// ponytail: no tick sound (WPF LeashFx.Tick; no leash sfx on this head yet); the GlobalShortcuts portal
-// path reports no key-up, so a native-Wayland-only press cannot hold; the Yes does not close a punish
-// window (WPF LeashPunishWindow.CloseNow; lands with leash-punish).
+// The portal supplies Activated/Deactivated instead of physical X11 key state. Its existing effects-only
+// binding policy stays intact; a hold that started while bound keeps the session until release. A portal
+// hold skips the X11 key check only once that compositor has proven it sends Deactivated; until then a
+// portal hold needs the X11 key proven down on every tick: up OR unknown (no X11 listener) ends it, so a
+// portal that never reports release never asks. Only a live portal hold keeps the grab (KeepPortalBound).
 using System;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -26,8 +28,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Test seam: is the panic key physically down? False ends the hold; null = unknown.</summary>
         internal static Func<bool?> LeashHoldKeyDown = X11PanicKey.IsPanicKeyDown;
 
+        /// <summary>Test seam: the real hold clock's period. Tests that step <see cref="LeashHoldTime"/> and call
+        /// <see cref="LeashHoldClockTick"/> themselves park it, or a wall-clock tick lands between their steps.</summary>
+        internal static TimeSpan LeashHoldClockInterval = TimeSpan.FromMilliseconds(250);
+
         private readonly LeashHoldFlow _leashHold = new();
         private DispatcherTimer? _leashHoldClock;
+        private bool _leashHoldFromPortal, _leashHoldPortalUnproven;
+        private static bool _portalHoldLive;
+
+        /// <summary>A portal hold is being timed on the leash clock: the portal stays bound until it ends.</summary>
+        internal static bool PortalHoldLive => _portalHoldLive;
 
         private static bool LeashHoldLeashed
         {
@@ -36,9 +47,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void InitializeLeashHold()
         {
-            _leashHoldClock = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+            _leashHoldClock = new DispatcherTimer { Interval = LeashHoldClockInterval };
             _leashHoldClock.Tick += (_, _) => LeashHoldClockTick();
-            Action released = () => Dispatcher.UIThread.Post(LeashHoldReleased);
+            // XWayland synthesizes releases when native Wayland focus takes over. Only the portal's
+            // Deactivated can end a portal hold; its compositor may also have rebound the key.
+            Action released = () => Dispatcher.UIThread.Post(() => { if (!_leashHoldFromPortal) LeashHoldReleased(); });
             X11PanicKey.PanicReleased = released;
             Action<int, string?> winDown = (vk, _) => { if (vk != 0 && vk == Win32PanicKey.BoundVirtualKey) Dispatcher.UIThread.Post(LeashHoldPressed); };
             Action<int, string?> winUp = (vk, _) => { if (vk != 0 && vk == Win32PanicKey.BoundVirtualKey) released(); };
@@ -62,21 +75,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The held clock (250 ms): the key is still down. Off the leash, the hold ends (WPF :49-53).</summary>
         internal void LeashHoldClockTick()
         {
-            if (!_leashHold.Held || !LeashHoldLeashed || LeashHoldKeyDown() == false) { LeashHoldReleased(); return; }
+            var key = _leashHoldFromPortal ? true : LeashHoldKeyDown();
+            if (!_leashHold.Held || !LeashHoldLeashed || key == false || (key == null && _leashHoldPortalUnproven)) { LeashHoldReleased(); return; }
             ApplyLeashHold(_leashHold.Down(LeashHoldTime.GetUtcNow().UtcDateTime, true));
         }
 
         /// <summary>The panic key came up: the hold ends, the ring goes, nothing is asked or cut.</summary>
         internal void LeashHoldReleased()
         {
+            _leashHoldFromPortal = _leashHoldPortalUnproven = _portalHoldLive = false;
             _leashHoldClock?.Stop();
             ApplyLeashHold(_leashHold.Up());
         }
+
+        /// <summary>A new portal press (PortalPanicShortcut.Route already dropped repeats): always a panic.
+        /// A hold still running here lost its Deactivated, so it ends before the new one starts.</summary>
+        internal void OnPortalPanicPressed()
+        {
+            if (_leashHold.Held) LeashHoldReleased();
+            HandlePanicKeyPress(DateTime.Now);
+            _leashHoldFromPortal = PortalPanicShortcut.ReportsRelease;
+            _leashHoldPortalUnproven = !_leashHoldFromPortal;
+            LeashHoldPressed();
+            _portalHoldLive = _leashHoldClock?.IsEnabled == true;
+        }
+
+        internal void OnPortalPanicReleased() => LeashHoldReleased();
 
         private void ApplyLeashHold(LeashHoldStep step)
         {
             if (step.Dismiss) LeashHoldRing.Dismiss();
             if (step.Ring is { } held) LeashHoldRing.ShowHeld(held);
+            if (step.Tick != null) LeashSound.Tick(LeashHoldTime.GetUtcNow().UtcDateTime);
             if (step.Ask) AskToCutFromHold();
         }
 
@@ -86,7 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             string? holder = null;
             try { holder = LeashHead.Service?.Snapshot.Me?.Holder.Name; } catch { }
             Serilog.Log.Information("Leash: panic key held 5 s, asking to cut");
-            LeashCutConfirmWindow.Ask(holder, () => _ = CutLeashAsync());   // the gate's cut path (leash-punish renamed CutFromLeashGateAsync)
+            LeashCutConfirmWindow.Ask(holder, () => _ = CutLeashAsync());   // EndTask closes the punish window before the cut
         }
     }
 }

@@ -7,6 +7,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.JustDrop;
 using ConditioningControlPanel.Services.Chaos;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -48,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             // WPF PieceByPieceHostService.cs:221 StartUrl; free for everyone since 2026-09-27 (:188), no gate.
             [PbpId] = new(PbpId, "launcher_game_piecebypiece_title", "piecebypiece/index.html"),
             // WPF CaucusHostService.Launch: dtrh/race.html behind the racing-purchase door (GameWindow.Race.cs).
+            ["loom"] = new("loom", "billboard_loom_title", "dtrh/loom.html"), // WPF LoomHostService: free
             ["race"] = new("race", "launcher_game_race_title", "dtrh/race.html", RaceGate),
             // WPF DtrhHostService.cs:196 StartUrl behind the Lab door (GameWindow.Dtrh.cs).
             [DtrhId] = new(DtrhId, "launcher_game_dtrh_title", "dtrh/index.html", DtrhGate),
@@ -87,7 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             Spec = spec;
             Web = new WebHost();
-            Title = Loc.Get(spec.TitleKey);
+            Title = spec.Id == "loom" ? "The Loom" : Loc.Get(spec.TitleKey);
             Width = 1280;
             Height = 800;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -99,6 +101,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Closing += (_, _) => _closing = true;
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); };
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
+            if (spec.Id == JustDropId) Closed += (_, _) =>
+            {
+                JustDropOrdersService.Invalidate();
+                Windows.MainShellWindow.Current?.RefreshTakeawayShelf();
+            };
         }
 
         private WebAssetServer? _server;
@@ -108,6 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (Spec.Id == JustDropId) { LoadJustDrop(); return; }
             _server = server;
+            if (Spec.Id == "loom") DirectoryForLoom();
             PageUrl = new Uri(server.Url(Spec.Page, Spec.Query));
             Web.Navigate(PageUrl);
         }
@@ -128,6 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             JObject o;
             try { o = JObject.Parse(Unwrap(json)); }
             catch (Exception ex) { Log.Debug("[Game] {Id}: unreadable page message: {E}", Spec.Id, ex.Message); return; }
+            if (Spec.Id == "loom") { HandleLoom(o); return; } // only the Loom bridge subset
             if (Spec.Id == FypId && HandleFyp(o)) return;
             if (Spec.Id == JustDropId) { HandleJustDrop(o); return; }   // the remote site never gets the games' frames
             if (Spec.Id == PbpId && HandlePbp(o)) return;

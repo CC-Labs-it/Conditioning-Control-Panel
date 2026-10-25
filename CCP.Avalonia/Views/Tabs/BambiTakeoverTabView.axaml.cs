@@ -56,7 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BtnAutonomyStartStop.Click += BtnAutonomyStartStop_Click;
             // ponytail: Force Start is a hidden debug button on WPF too (bypasses every gate); not ported.
             BtnGateUnlock.Click += (s, e) => Shell?.BtnGateUnlock_Click(s, e);
-            BtnTestAutonomy.Click += (_, _) => Shell?.TestAutonomy();
+            BtnTestAutonomy.Click += (_, _) => _ = Shell?.TestAutonomy();
             BtnTestVoice.Click += (_, _) => Shell?.TestSpokenMantra();   // WPF TestVoiceCommand
             BtnOpenDeviceSettings.Click += (_, _) => Shell?.OpenDeviceSettings();   // Settings -> Devices
             BtnAutonomyOpenModels.Click += (_, _) => Shell?.OpenSpeechModelFolder();
@@ -467,6 +467,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private Windows.MainShellWindow? Shell => TopLevel.GetTopLevel(this) as Windows.MainShellWindow;
+
+        /// <summary>WPF OpenCompanionPermissions_Click (5681c132a): the one-line link to the companion's one permissions list.</summary>
+        private void OpenCompanionPermissions_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => Shell?.ShowTab("permissions");
 
         /// <summary>WPF BtnAutonomyStartStop_Click: its own consent text (MainWindow.Autonomy.cs:143), then the toggle.</summary>
         private async void BtnAutonomyStartStop_Click(object? sender, RoutedEventArgs e)

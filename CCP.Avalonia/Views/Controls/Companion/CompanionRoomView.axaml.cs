@@ -14,10 +14,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     ///
     /// <para>PORTED from ConditioningControlPanel/Views/Controls/Companion/CompanionRoomView.xaml.cs.
     /// All three page-level behaviours the WPF view owns now cross: the navigator, the shelf
-    /// collapse and the clock parking. What is still missing is the viewmodel half - ICompanionRoomVm
-    /// and its eight zone interfaces are in the WPF head, so ViewModel/Claim and the compat-seam
-    /// passthroughs (TxtDetachStatusCompanion, the sixteen AiPermissionsGrid names, ...) have no
-    /// source to read; every zone seeds itself from CoreSettings instead.</para>
+    /// collapse and the clock parking, plus the claim/teardown (<see cref="Claim"/>). ICompanionRoomVm
+    /// and its eight zone interfaces stay in the WPF head: this view composes the zones itself, so
+    /// there is no ViewModel property and no compat-seam passthroughs (nothing on this head writes
+    /// to the room by name); every zone seeds itself from CoreSettings.</para>
     /// </summary>
     public partial class CompanionRoomView : UserControl, ICompanionRoomNavigator
     {
@@ -52,6 +52,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             AttentionZone.ViewModel?.Sync();
         }
 
+        /// <summary>The preview harness's page state: WPF MockCompanionRoomVm's zone bag plus its
+        /// navigator fan-out (hero pills, chat jump link, awareness fine-tuning).</summary>
+        internal void SetPreviewZones(CompanionRoomPreviewWindow.PreviewPage page)
+        {
+            var (chat, memory, attention) = (page.Chat, page.Memory, page.Attention);
+            var hero = CompanionHeroCardViewModel.CreatePreview(page.Hero);
+            hero.Host = this;
+            HeroZone.ViewModel = hero;
+            PersonalityZone.ViewModel = MakeHerYoursViewModel.CreatePreview(PersonalityZone, page.PersonalityLive);
+            AwarenessZone.ViewModel = AwarenessPrivacyViewModel.CreatePreview(
+                () => RevealWorkshop(CompanionRoomAnchors.WorkshopAwarenessCell), page.Awareness);
+            EngineZone.DataContext = EngineRoomVm.CreatePreview(EngineZone, page.Engine);
+            AttentionZone.ViewModel = attention;
+            // The replacement detaches the old live chat VM from its session before seating
+            // the mock. Wire the navigator now: Loaded does not repeat on a state-strip click.
+            chat.OpenEngineRoom = RevealEngineRoom;
+            ChatZone.ViewModel = chat;
+            MemoryZone.ViewModel = memory; // DataContextChanged -> ForgetConfirm.Bind disarms the two-step
+            ChatZone.ScrollThreadToEnd();
+            ChatZone.PlayDormantShimmer();
+            WorkshopZone.ViewModel = new WorkshopPreviewVm();
+            PermissionsZone.UsePreview();
+        }
+
         // =====================================================================================
         //  effective-visibility watch
         // =====================================================================================
@@ -69,10 +93,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// watches the chain by hand: our own flag plus every visual ancestor's, re-reading
         /// <see cref="Visual.IsEffectivelyVisible"/> on any of them. Rebuilt on attach because the
         /// chain does not exist before it and can differ after a re-parent.
+        /// <para>Under v2 the tab collapses the room (CompanionTabView), so these clocks stay parked
+        /// as in WPF; the tab, not the room, raises the shell's visibility edge.</para>
         /// </summary>
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
+            Claim(true);
 
             foreach (var v in this.GetSelfAndVisualAncestors())
                 _visibilityWatch.Add(v.GetObservable(IsVisibleProperty).Subscribe(new VisibilityObserver(this)));
@@ -82,7 +109,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             foreach (var d in _visibilityWatch) d.Dispose();
             _visibilityWatch.Clear();
+            // WPF OnUnloaded: Claim(null) + ParkClocks.
+            Claim(false);
+            ParkClocks();
             base.OnDetachedFromVisualTree(e);
+        }
+
+        /// <summary>
+        /// WPF CompanionRoomView.Claim / CompanionRoomRuntimeVm.Navigator: a torn-down page is never
+        /// reachable from a live zone (a deep link from a stale navigator would scroll a dead tree),
+        /// and letting go is Z2's teardown signal - the chat stops listening to the brain's turn log
+        /// (ChatVm.Detach). Nothing re-attaches the chat here: the next Sync does, as in WPF.
+        /// </summary>
+        private void Claim(bool claim)
+        {
+            if (HeroZone.ViewModel is { } hero)
+            {
+                if (claim) hero.Host = this;
+                else if (ReferenceEquals(hero.Host, this)) hero.Host = null;
+            }
+            if (!claim) ChatZone.ViewModel?.Detach();
         }
 
         /// <summary>One subscription per link in the chain, all answering the same question.</summary>
@@ -97,17 +143,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 bool shown = _owner.IsEffectivelyVisible;
                 if (shown) _owner.ResumeClocks();
                 else _owner.ParkClocks();
-                // WPF CompanionTabView.IsVisibleChanged -> MainWindow.OnCompanionTabVisibilityChanged:
-                // raised on a real edge only (the chain reports every ancestor on subscribe).
-                if (shown != _owner._shown) { _owner._shown = shown; _owner.TabVisibilityChanged?.Invoke(_owner, shown); }
             }
         }
-
-        private bool _shown;
-
-        /// <summary>The page's effective visibility flipped (tab switch, tray hide). The tab
-        /// forwards it to the shell, as WPF's tab forwards IsVisibleChanged.</summary>
-        internal event EventHandler<bool>? TabVisibilityChanged;
 
         /// <summary>WPF MainWindow.Patreon.cs:1344 RestoreCompanionSectionStates: the two drawers'
         /// remembered open/closed state (keys "EngineRoom" / "Workshop"; both default closed).</summary>
@@ -129,11 +166,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         internal const string EngineDrawerKey = "EngineRoom", WorkshopDrawerKey = "Workshop";
 
         /// <summary>WPF OnCompanionFxModChanged's UpdateCompanionCardsUI half: the roster's names,
-        /// accent ring and supported set follow a mod switch made while the tab is open.</summary>
-        internal void RefreshRoster() => (WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts.Roster.Refresh();
+        /// accent ring, supported set and assigned-prompt
+        /// labels/tooltips follow a mod switch made while the tab is open.</summary>
+        internal Runtime.WorkshopShelfParts? WorkshopParts => (WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts;
 
-        // ponytail: ICompanionRoomVm (zone interfaces) lives in the WPF head; hero, chat and memory are
-        // live, the other zones seed their own viewmodels until their runtime crosses.
+        internal void RefreshRoster() => WorkshopParts?.Roster.Refresh();
+
+        /// <summary>WPF UpdateCompanionCardsUI also refreshes the visible room after switching.</summary>
+        internal void RefreshCompanionIdentity()
+        {
+            HeroZone.ApplyAvatarArt();
+            HeroZone.RefreshAmbientState();
+            RefreshRoster();
+        }
+
+        /// <summary>WPF UpdateCommunityPromptsUI on tab show (MainWindow.CompanionTab.cs:147) and after a
+        /// deactivate (MainWindow.Patreon.cs:2249): the rows' active dot follows the setting. Skipped while
+        /// the cell is detached - it rebuilds on attach, and a detached read would leak a service.</summary>
+        internal void RefreshCommunity()
+        {
+            if ((WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts.Community is { } cell
+                && global::Avalonia.VisualTree.VisualExtensions.IsAttachedToVisualTree(cell))
+                cell.RefreshInstalledPrompts();
+        }
 
         /// <summary>
         /// True while the shelf is one column. Exposed for the tests and the preview harness — the
@@ -162,20 +217,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 // The zone re-reads its own state rather than being told what to do: it may well
                 // have changed while the tab was hidden, and a resume that restored the state at
                 // park time would be a lie.
-                AwarenessZone.StartRefresh();   // WPF IsVisibleChanged -> StartRefresh (re-reads first)
-                AwarenessZone.SyncCursorBlink();
                 ChatZone.ViewModel?.Sync();
+                ChatZone.SyncThinking();
                 MemoryZone.ViewModel?.Sync();
+                (EngineZone.DataContext as EngineRoomVm)?.Sync();   // WPF CompanionRoomRuntimeVm.Sync -> EngineVm.Sync
                 PersonalityZone.ViewModel.Sync();   // WPF CompanionRoomRuntimeVm.Sync -> PersonalityVm.Sync
                 AttentionZone.ViewModel?.Sync();
                 // The constellation's one-shot dormant sweep waits for the first time the tab is seen.
                 HeroZone.GetLogicalDescendants().OfType<RelationshipConstellation>().FirstOrDefault()?.PlayIntro();
                 // WPF UpdateCompanionCardsUI runs on the same show: the roster's levels and ring.
                 (WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts.Roster.Refresh();
-                // ponytail: WPF also calls ChatZone.SyncThinking() here. This head's
-                // ChatThresholdView has no thinking clock to sync - WPF's dots are three
-                // RepeatBehavior=Forever Storyboards (CmpThinkingDotsStoryboard) and the port
-                // draws the dots static. Add the call when that animation exists here.
+                RefreshCommunity();
             }
             catch (InvalidOperationException)
             {
@@ -188,8 +240,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             try
             {
                 HeroZone.StopAmbientLoop();
-                AwarenessZone.StopCursorBlink();
-                AwarenessZone.StopRefresh();
+                ChatZone.StopThinking();
+                // The privacy card parks itself off its own visibility (AwarenessPrivacyView): under v2 it
+                // lives on the Awareness tab, where the room's edges are not its edges.
             }
             catch (InvalidOperationException) { /* already torn down */ }
         }
@@ -243,18 +296,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public void RevealEngineRoom() => EngineZone.ExpandAndReveal();
 
         /// <inheritdoc/>
-        public void RevealWorkshop(string? cellTitle = null) => WorkshopZone.ExpandAndReveal(cellTitle);
-
-        /// <summary>The Companion > Personality / Permissions zone pills (shell TabPanels): scroll
-        /// the room to the zone WPF's page hosts. Laid out first: the tab was hidden a moment ago.</summary>
-        internal void RevealPersonality() => RevealZone(PersonalityZone);
-        internal void RevealPermissions() => RevealZone(PermissionsZone);
-
-        private static void RevealZone(Control zone) => Dispatcher.UIThread.Post(() =>
+        public void RevealWorkshop(string? cellTitle = null)
         {
-            try { zone.UpdateLayout(); zone.BringIntoView(); }
-            catch (InvalidOperationException) { /* torn down mid-scroll */ }
-        }, DispatcherPriority.Normal);
+            // WPF CompanionRoomView.xaml.cs:274: under v2 the Awareness cell is on the Awareness tab.
+            if (cellTitle == CompanionRoomAnchors.WorkshopAwarenessCell && TopLevel.GetTopLevel(this) is Windows.MainShellWindow shell)
+            {
+                shell.ShowTab("awareness");
+                shell.Named<Tabs.AwarenessTabView>("AwarenessTab")?.RevealCompanionTuning(this);
+                return;
+            }
+            WorkshopZone.ExpandAndReveal(cellTitle);
+        }
 
         /// <inheritdoc/>
         /// <remarks>Scroll first, focus second, both deferred one turn at Normal priority — Loaded

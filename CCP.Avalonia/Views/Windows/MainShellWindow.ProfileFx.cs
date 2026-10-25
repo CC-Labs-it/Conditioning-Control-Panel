@@ -7,8 +7,10 @@
 // shows, the Profile tab is visible, ambient loops are allowed and the window is active and not
 // minimised (WPF ApplyOgBorderLoop's gate, P01). Every input to that gate re-runs it.
 //
-// ponytail: the vat poll half of OnProfileTabVisibilityChanged / OnProfileFxWindowStateish
-// (EvaluateVatPoll, OnProfileVatVisibilityChanged) needs DescentService - row shell-profile-vat.
+// The vat poll half of OnProfileTabVisibilityChanged / OnProfileFxWindowStateish lives in
+// MainShellWindow.ProfileVat.cs (InitializeProfileVat hooks the page's IsVisible and window state).
+// ponytail: WPF's ProfileLoaded repaint (MainWindow/MainWindow.xaml.cs:704 OnProfileLoaded) is not
+// ported; only the curve-epoch reprice repaints the level header (App.axaml.cs).
 
 using System;
 using System.Linq;

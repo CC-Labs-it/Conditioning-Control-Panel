@@ -3,10 +3,11 @@
 // offline, blocked), a friend's card with the menu (squelch, remove and block after a confirm,
 // report), request answers, add by code and your own code. Driven only by IFriendsService.
 // The send pickers (poke / invite / watch) are in FriendsDrawer.Pickers.cs.
+// Open goon tables are in FriendsDrawer.Tables.cs.
 // The "What happened" feed and the send trails are in FriendsDrawer.Feed.cs.
-// ponytail: no
-// open tables or leash section, no lock-day chip, no once-only presence ask, no juice (.Juice.cs), no bell (the corner notices are not on this
-// head), no per-PC block list (the server's list only). A word WPF throws outside the drawer
+// The blocked fallback and once-only presence ask share Core rules with WPF.
+// ponytail: no leash section, no lock-day chip, no juice (.Juice.cs), no bell
+// (the corner notices are not on this head). A word WPF throws outside the drawer
 // (FriendsLanding.Tell) is a FloatingWord over the rail chip's window (OwnerWindow).
 using System;
 using System.Collections.Generic;
@@ -55,6 +56,7 @@ public sealed partial class FriendsDrawer : Border
     private (string Id, string What)? _confirm;
     private readonly Dictionary<string, (string Text, bool Good)> _results = new();
     private readonly Border _head = new(), _addBox = new(), _foot = new();
+    private readonly Border _ask = new() { Tag = "friends-presence-ask", Margin = new Thickness(10, 8, 10, 0) };
     private readonly StackPanel _list = new();
     private readonly TextBox _codeBox = new();
     private readonly Button _addGo;
@@ -83,15 +85,16 @@ public sealed partial class FriendsDrawer : Border
             GradientStops = { new GradientStop(Color.FromRgb(0x24, 0x17, 0x42), 0), new GradientStop(Color.FromRgb(0x1C, 0x12, 0x33), 1) },
         };
         (BorderBrush, BorderThickness, Focusable) = (Line2, new Thickness(1), true);
-        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto") };
+        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto") };
         var (scroll, top, line) = (new ScrollViewer { Content = _list, Padding = new Thickness(6, 4, 6, 8), MinHeight = 120 }, new Thickness(0, 1, 0, 0), Line);
         (_head.Background, _head.CornerRadius, _head.BorderBrush, _head.BorderThickness, _head.Padding) = (Raised, new CornerRadius(15, 15, 0, 0), line, new Thickness(0, 0, 0, 1), new Thickness(12, 12, 12, 10));
         (_addBox.IsVisible, _addBox.Padding, _addBox.BorderBrush, _addBox.BorderThickness) = (false, new Thickness(10, 8, 10, 8), line, top);
         (_foot.Background, _foot.BorderBrush, _foot.BorderThickness, _foot.CornerRadius, _foot.Padding) = (Foot, line, top, new CornerRadius(0, 0, 15, 15), new Thickness(8));
-        Grid.SetRow(scroll, 1);
-        Grid.SetRow(_addBox, 2);
-        Grid.SetRow(_foot, 3);
-        root.Children.AddRange(new Control[] { _head, scroll, _addBox, _foot });
+        Grid.SetRow(_ask, 1);
+        Grid.SetRow(scroll, 2);
+        Grid.SetRow(_addBox, 3);
+        Grid.SetRow(_foot, 4);
+        root.Children.AddRange(new Control[] { _head, _ask, scroll, _addBox, _foot });
         Child = root;
         // The add box (WPF BuildAddBox): CCP- and five letters from the code alphabet.
         (_codeBox.MaxLength, _codeBox.FontFamily, _codeBox.Tag) = (9, Mono, "friends-code-box");
@@ -146,13 +149,14 @@ public sealed partial class FriendsDrawer : Border
         Rebind();
         try { _svc?.SetDrawerOpen(true); } catch { }
         if (_svc?.Available == true) _ = SafeRefreshAsync();
+        try { if (_svc?.Available == true) StartTables(); } catch { }
         Render();
         Dispatcher.UIThread.Post(() => Focus());
     }
     public void OnClosed()
     {
         try { _svc?.SetDrawerOpen(false); } catch { }
-        Unsubscribe(); // a folded drawer redraws nothing (OnOpened re-subscribes)
+        Unsubscribe(); // a folded drawer redraws nothing (OnOpened re-subscribes); also stops the tables poll
         FeedFolded();
         (_isOpen, _openId, _confirm, _picker, _addBox.IsVisible) = (false, null, null, null, false);
     }
@@ -169,6 +173,7 @@ public sealed partial class FriendsDrawer : Border
     {
         if (_subscribed && _svc != null) { _svc.SnapshotChanged -= OnSnapshot; _svc.SentTrailsChanged -= OnTrailsChanged; }
         _subscribed = false;
+        StopTables();
     }
     private void OnSnapshot(FriendsSnapshot _) => Render();
     private async Task SafeRefreshAsync()
@@ -181,6 +186,7 @@ public sealed partial class FriendsDrawer : Border
         var snap = FriendsSnapshot.Empty;
         try { if (_svc?.Available == true) snap = _svc.Snapshot ?? FriendsSnapshot.Empty; } catch { }
         RenderHead();
+        RenderAsk();
         RenderList(snap);
         RenderFoot(snap);
     }
@@ -194,7 +200,7 @@ public sealed partial class FriendsDrawer : Border
         var who = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         who.Children.Add(Label(name, 16, Text, Display, FontWeight.SemiBold));
         if (_svc?.Available != true)
-            who.Children.Add(Tagged(Label(Loc.Get("friends_signed_out"), 12, Muted), "friends-me-status"));
+            who.Children.Add(Tagged(Label(Loc.Get("friends_me_signed_out"), 12, Muted), "friends-me-status"));
         else
         {
             // The status line IS the presence switch (WPF FriendsDrawer.Presence.cs).
@@ -213,6 +219,43 @@ public sealed partial class FriendsDrawer : Border
         g.Children.Add(avatar);
         g.Children.Add(who);
         _head.Child = g;
+    }
+
+    /// <summary>WPF FriendsDrawer.RenderAsk: choosing No is an answer, never a request to ask again.</summary>
+    private void RenderAsk()
+    {
+        _ask.Child = null;
+        _ask.IsVisible = false;
+        if (!FriendsPresenceAsk.ShouldAsk(_svc?.Available == true, Shared(), PresenceAsk.Asked())) return;
+        var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        words.Children.Add(Wrap(Label(Loc.Get("friends_presence_ask"), 12.5, Text, null, FontWeight.SemiBold)));
+        var sub = Wrap(Label(Loc.Get("friends_presence_ask_sub"), 11, Muted));
+        sub.Margin = new Thickness(0, 2, 0, 0);
+        words.Children.Add(sub);
+        var yes = Pill(Loc.Get("friends_presence_yes"), Mint, MintInk, "friends-presence-yes", Mint);
+        var no = Pill(Loc.Get("friends_presence_no"), Raised, Text, "friends-presence-no", Line2);
+        foreach (var b in new[] { yes, no }) { b.FontSize = 12; b.CornerRadius = new CornerRadius(8); b.Padding = new Thickness(9, 3, 9, 3); }
+        no.Margin = new Thickness(6, 0, 0, 0);
+        yes.Click += (_, _) => AnswerPresence(true);
+        no.Click += (_, _) => AnswerPresence(false);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 0, 0), Children = { yes, no } };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { words, buttons } };
+        Grid.SetColumn(buttons, 1);
+        _ask.Child = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(0x1F, 0x5F, 0xFF, 0xD0)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x66, 0x5F, 0xFF, 0xD0)),
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(10, 6, 6, 6), Child = grid,
+        };
+        _ask.IsVisible = true;
+    }
+
+    private void AnswerPresence(bool shared)
+    {
+        if (shared) FriendsPresenceSetting.Write(true, _svc, _ => { }, PresenceAsk.MarkAsked);
+        else PresenceAsk.MarkAsked();
+        Render();
     }
 
     internal void TogglePresence()
@@ -241,6 +284,7 @@ public sealed partial class FriendsDrawer : Border
         }
         AddFeed();
         var (online, offline) = FriendsDrawerRules.Split(snap);
+        (online, offline) = FriendsDrawerRules.HostingFirst(online, offline, f => TableFor(f) != null);
         if (_openId != null && !Contains(snap, _openId)) (_openId, _picker) = (null, null);
         if (_confirm is { } c && !Contains(snap, c.Id)) _confirm = null;
         if (online.Count > 0)
@@ -263,7 +307,7 @@ public sealed partial class FriendsDrawer : Border
         }
         if (online.Count + offline.Count + req == 0 && !_showBlocked) _list.Children.Add(AsPage ? PageEmptyBlock() : EmptyLine(Loc.Get("friends_empty")));
         if (!_showBlocked) return;
-        var blocked = snap.Blocked ?? Array.Empty<BlockedFriend>();
+        var blocked = FriendsBlockList.Shared.Rows(FriendsBlockList.Account(), snap.Blocked);   // WPF reads it only while shown
         Section("friends_section_blocked", blocked.Count);
         if (blocked.Count == 0)
             _list.Children.Add(Tagged(Wrap(Label(Loc.Get(snap.Blocked != null ? "friends_blocked_none" : "friends_blocked_empty"), 11.5, Muted)), "friends-blocked-empty"));
@@ -288,9 +332,10 @@ public sealed partial class FriendsDrawer : Border
     private Control FriendRow(Friend f)
     {
         bool open = _openId == f.Id;
-        var top = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*") };
-        var avatar = Avatar(f.Name, 38, f.Online);
-        if (!f.Online) avatar.Opacity = 0.55;
+        var table = TableFor(f);
+        var top = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto") };
+        var avatar = Avatar(f.Name, 38, f.Online || table != null);
+        if (!f.Online && table == null) avatar.Opacity = 0.55;
         var mid = new StackPanel { Margin = new Thickness(10, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
         var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
         nameLine.Children.Add(Label(f.Name, 14, f.Online ? Text : Muted, Display, FontWeight.Medium));
@@ -301,12 +346,18 @@ public sealed partial class FriendsDrawer : Border
             nameLine.Children.Add(sq);
         }
         mid.Children.Add(nameLine);
-        mid.Children.Add(ActivityLine(f));
+        mid.Children.Add(table != null ? HostingLine() : ActivityLine(f));
         // What you last sent them and how far it got (sent, arrived, seen, answered).
         if (TrailLine(f) is { } trail) mid.Children.Add(trail);
         Grid.SetColumn(mid, 1);
         top.Children.Add(avatar);
         top.Children.Add(mid);
+        if (table != null)
+        {
+            var join = TableJoinButton(f, table);
+            Grid.SetColumn(join, 2);
+            top.Children.Add(join);
+        }
         var outer = new StackPanel { Children = { top } };
         if (open) outer.Children.Add(Card(f));
         if (_results.TryGetValue(f.Id, out var res))
@@ -321,6 +372,7 @@ public sealed partial class FriendsDrawer : Border
             Background = open ? Raised : Brushes.Transparent, Cursor = Hand(),
             Tag = "friends-row:" + f.Id, Child = outer, ContextMenu = Menu(f),
         };
+        if (table != null && !open) DressHostingRow(row);
         // A click on the row (not inside the open card) opens or folds its card.
         top.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) { Toggle(f.Id); e.Handled = true; } };
         return row;
@@ -451,6 +503,7 @@ public sealed partial class FriendsDrawer : Border
         catch { r = ActResult.TryLater; }
         if (r == ActResult.Done)
         {
+            if (what == "block") RememberBlock(id, name);
             if (_openId == id) _openId = null;
             // The row is gone after the refresh, so the word goes where the player is looking.
             Say(Loc.GetF(what == "block" ? "friends_blocked_done" : "friends_removed_done", name), true);
@@ -493,12 +546,42 @@ public sealed partial class FriendsDrawer : Border
         }
         Grid.SetColumn(mid, 1);
         Grid.SetColumn(buttons, 2);
+        ContextMenu? menu = null;
+        if (incoming)   // WPF FriendsDrawer.cs:785-818 builds the menu for incoming requests only
+        {
+            var block = MenuItem("block");
+            block.Click += async (_, _) => await BlockRequesterAsync(r);
+            menu = new ContextMenu { ItemsSource = new[] { block } };
+        }
         return new Border
         {
+            ContextMenu = menu,
             CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 1),
             Tag = (incoming ? "friends-request-in:" : "friends-request-out:") + r.Id,
             Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto"), Children = { Avatar(r.Name, 38, null), mid, buttons } },
         };
+    }
+
+    private void RememberBlock(string id, string name)
+    {
+        if (_svc?.Snapshot.Blocked == null)
+            FriendsBlockList.Shared.Add(FriendsBlockList.Account(), id, name, DateTimeOffset.UtcNow);
+    }
+
+    internal async Task<ActResult> BlockRequesterAsync(FriendRequest request)
+    {
+        if (_svc == null) return ActResult.TryLater;
+        ActResult result;
+        try { result = await _svc.BlockAsync(request.Id); } catch { result = ActResult.TryLater; }
+        if (result == ActResult.Done)
+        {
+            RememberBlock(request.Id, request.Name);
+            Say(Loc.GetF("friends_blocked_done", request.Name), true);
+        }
+        else ShowTimed("in:" + request.Id, Loc.Get(FriendsDrawerRules.ActResultKey(result)), false);
+        await SafeRefreshAsync();
+        Render();
+        return result;
     }
 
     internal async Task<ActResult> AnswerRequestAsync(FriendRequest r, string what)
@@ -521,7 +604,7 @@ public sealed partial class FriendsDrawer : Border
         await SafeRefreshAsync();
         return res;
     }
-    private Control BlockedRow(BlockedFriend b)
+    private Control BlockedRow(BlockedEntry b)
     {
         var avatar = Avatar(b.Name, 30, null);
         avatar.Opacity = 0.5;
@@ -538,12 +621,21 @@ public sealed partial class FriendsDrawer : Border
             Child = new Grid { ColumnDefinitions = new ColumnDefinitions("30,*,Auto"), Children = { avatar, mid, unblock } },
         };
     }
-    internal async Task<ActResult> UnblockAsync(BlockedFriend b)
+    internal Task<ActResult> UnblockAsync(BlockedFriend b) =>
+        UnblockAsync(new BlockedEntry(FriendsBlockList.Account() ?? "", b.Id, b.Name, DateTimeOffset.MinValue));
+
+    internal async Task<ActResult> UnblockAsync(BlockedEntry b)
     {
         if (_svc == null) return ActResult.TryLater;
         ActResult r;
         try { r = await _svc.UnblockAsync(b.Id); } catch { r = ActResult.TryLater; }
-        if (r == ActResult.Done) { Say(Loc.GetF("friends_unblocked_done", b.Name), true); await SafeRefreshAsync(); Render(); }
+        if (r == ActResult.Done)
+        {
+            FriendsBlockList.Shared.Remove(b.Account, b.Id);
+            Say(Loc.GetF("friends_unblocked_done", b.Name), true);
+            await SafeRefreshAsync();
+            Render();
+        }
         else ShowTimed("blocked:" + b.Id, Loc.Get(FriendsDrawerRules.ActResultKey(r)), false);
         return r;
     }
@@ -710,11 +802,9 @@ public sealed partial class FriendsDrawer : Border
     }
 }
 
-/// <summary>WPF PresenceAsk: the once-only presence question's marker, beside the settings. The ask
-/// strip itself is not on this head yet; the switch still marks it, so it never nags once it is.</summary>
+/// <summary>The heads' shared marker rule, with replaceable delegates for sandboxed UI tests.</summary>
 internal static class PresenceAsk
 {
-    internal static Func<bool> Asked { get; set; } = () => { try { return System.IO.File.Exists(MarkerPath); } catch { return false; } };
-    internal static Action MarkAsked { get; set; } = () => { try { System.IO.File.WriteAllText(MarkerPath, DateTime.UtcNow.ToString("o")); } catch { } };
-    private static string MarkerPath => System.IO.Path.Combine(CorePaths.UserData, "friends_presence_asked.flag");
+    internal static Func<bool> Asked { get; set; } = () => FriendsPresenceAsk.Asked(CorePaths.UserData);
+    internal static Action MarkAsked { get; set; } = () => FriendsPresenceAsk.MarkAsked(CorePaths.UserData);
 }

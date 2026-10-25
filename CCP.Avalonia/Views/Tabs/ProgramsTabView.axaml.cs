@@ -48,6 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CoreMods.ModChanged -= OnModChanged;
             Platform.ProgramEngineBridge.SessionChanged -= OnProgramSessionChanged;
             UnsubscribePrograms();
+            StopSessionSheen();
             UnhookIgnition();
             base.OnDetachedFromVisualTree(e);
         }
@@ -269,17 +270,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public bool IsCurrent { get; set; }
 
         /// <summary>
-        /// Today's node AND motion allowed. On WPF a DataTrigger read this once to start the
-        /// breathing-glow storyboard; the storyboards are dropped on this head, so nothing reads it
-        /// yet - kept so the carrier still matches the original one for one.
+        /// Today's node AND the Warm+ heat/motion gate. The shared-beat rail effect reads this
+        /// instead of WPF's template storyboard.
         /// </summary>
         public bool Breathe { get; set; }
         public IBrush GlowBrush { get; set; } = Brushes.Transparent;
         public bool GlowVisible { get; set; }
 
         /// <summary>
-        /// One-shot: this day just flipped to complete, so its node flares. Same story as
-        /// <see cref="Breathe"/> - the flare Ellipse is still in the template, unanimated.
+        /// One-shot: this day just flipped to complete. Consumed once per generated carrier;
+        /// Reduced keeps the moment, while Off consumes it without a flash.
         /// </summary>
         public bool Ignite { get; set; }
 

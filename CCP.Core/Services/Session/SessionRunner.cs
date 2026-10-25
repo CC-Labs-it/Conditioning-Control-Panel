@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Threading;
 using ConditioningControlPanel.Helpers;
 using ConditioningControlPanel.Models;
@@ -18,9 +19,12 @@ namespace ConditioningControlPanel.Services
     /// Pop quiz follows WPF: the user-level AppSettings toggle, not the per-session PopQuiz* fields
     /// (dead in WPF too, BuiltInPrograms.cs:430).
     ///
+    /// The session-scoped corner GIF too: admission, start/end minute, pause hide, stop handback and
+    /// the #474 live edits; the head draws it through <see cref="CoreCornerGif.SessionShowHandler"/>.
+    ///
     /// ponytail: not driven here - video, bubbles, bubble count, mind wipe, brain drain, spiral,
-    /// corner GIF, ducking, phase events,
-    /// EMI Desk, Discord, friends, season recap and achievement tracking. No settings are written for them,
+    /// ducking, phase events,
+    /// EMI Desk, friends, season recap and achievement tracking. No settings are written for them,
     /// so the snapshot restore writes their own values back; each arrives with its Core service.
     /// </summary>
     public sealed class SessionRunner
@@ -32,7 +36,7 @@ namespace ConditioningControlPanel.Services
         private PhrasePoolCustody? _custody;
         private DateTime _startTime;
         private TimeSpan _lastElapsed;
-        private TimeSpan _pausedElapsed;
+        internal TimeSpan _pausedElapsed; // internal: tests step the paused clock (ProgramsSessionProgressTests)
         private readonly Random _random = new();
 
         public SessionLogService SessionLog { get; }
@@ -49,6 +53,24 @@ namespace ConditioningControlPanel.Services
         /// <summary>The ramped pink tint in percent once it has started, else null. WPF drives the overlay
         /// with it directly (SetSustainedOverlayOpacity) and never writes PinkFilterOpacity (#471).</summary>
         public double? PinkOpacity { get; private set; }
+
+        /// <summary>The exe's Spirals folder the delayed-start guard reads (WPF SessionEngine.cs:827); tests repoint it.</summary>
+        internal static string SpiralsFolder { get; set; } = Path.Combine(AppContext.BaseDirectory, "Spirals");
+
+        /// <summary>SessionEngine._randomizedSpiralStartMinute: the preset's start ±3 min.</summary>
+        public double SpiralStartMinute { get; private set; }
+
+        /// <summary>The ramped spiral opacity in percent while a RAMPING session drives it, else null.
+        /// WPF drives the overlay with it (SetSustainedOverlayOpacity("spiral")) and never writes
+        /// SpiralOpacity; a constant session writes it once instead (#897, SessionEngine.cs:731-844).</summary>
+        public double? SpiralOpacity { get; private set; }
+
+        /// <summary>The session corner GIF is on screen (WPF _cornerGifWindow != null).</summary>
+        public bool CornerGifShown { get; private set; }
+
+        /// <summary>WPF _cornerHandbackOwed: we took the corner, so the first terminal close
+        /// re-queues the standalone slots. A hide-only close (pause, live edit) keeps the debt.</summary>
+        private bool _cornerHandbackOwed;
 
         /// <summary>After every live tick: WPF's ProgressUpdated, for the head's clock labels.</summary>
         public event Action? Ticked;
@@ -90,9 +112,10 @@ namespace ConditioningControlPanel.Services
             CurrentPhaseIndex = 0;
             IsPaused = false;
             PauseCount = 0;
-            PinkOpacity = null;
+            PinkOpacity = SpiralOpacity = null;
             _pausedElapsed = _lastElapsed = TimeSpan.Zero;
             PinkStartMinute = RandomizedStart(session.Settings.PinkFilterEnabled, session.Settings.PinkFilterStartMinute, _random);
+            SpiralStartMinute = RandomizedStart(session.Settings.SpiralEnabled, session.Settings.SpiralStartMinute, _random);
             _startTime = DateTime.Now;
             _stopwatch.Restart();
 
@@ -105,8 +128,13 @@ namespace ConditioningControlPanel.Services
             _custody = PhrasePoolCustody.Begin(s, session.Settings, CoreMods.ActiveModId, session);
             Apply(session.Settings, s);
 
+            // SessionEngine.cs:198: raised at start whenever admitted (WPF does not read the start
+            // minute here either; the Tick re-raise below is the delayed-start path).
+            if (CanRaiseCornerGif(session.Settings)) ShowCornerGif(session.Settings);
+
             _timer = new Timer(_ => CoreDispatch.Post(() => Tick(Elapsed)), null, 1000, 1000);
             SessionLog.BeginSession(session);
+            CoreDiscord.Service?.SetSessionActivity(session.Name); // WPF SessionEngine:260, after feature starts
             Log.Information("Session started: {Name}", session.Name);
         }
 
@@ -179,6 +207,10 @@ namespace ConditioningControlPanel.Services
             // SessionEngine.cs:1479: a delayed tint stays off until its randomised minute (Tick).
             s.PinkFilterEnabled = ss.PinkFilterEnabled && ss.PinkFilterStartMinute == 0;
             if (s.PinkFilterEnabled) s.PinkFilterOpacity = ss.PinkFilterStartOpacity;
+
+            // SessionEngine.cs:1384: a delayed spiral stays off until its randomised minute (Tick).
+            s.SpiralEnabled = ss.SpiralEnabled && ss.SpiralStartMinute == 0;
+            if (s.SpiralEnabled) s.SpiralOpacity = ss.SpiralOpacity;
         }
 
         /// <summary>SessionEngine.RandomizeStartTimes (SessionEngine.cs:966): a delayed start moves by up to 3 min either way.
@@ -202,6 +234,7 @@ namespace ConditioningControlPanel.Services
             LockCardScheduler.Instance.Stop();
             CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:527, closes an open quiz
             CoreBouncingText.Stop();
+            CloseCornerGif(handBack: false);   // SessionEngine.cs:531: hide only, the claim survives
             Log.Information("Session paused (pause #{Count}, -100 XP penalty)", PauseCount);
         }
 
@@ -220,6 +253,11 @@ namespace ConditioningControlPanel.Services
             if (ss.LockCardEnabled && !_deferred.IsPending("lock cards")) LockCardScheduler.Instance.Start(Remaining.TotalMinutes);
             if (ss.BouncingTextEnabled && !_deferred.IsPending("bouncing text")) CoreBouncingText.Start();
             if (CoreSettings.Current.PopQuizEnabled) CoreEngine.PopQuiz?.Start();   // SessionEngine.cs:574
+            // SessionEngine.cs:575: the pause closed it; admission is asked afresh.
+            var minutes = Elapsed.TotalMinutes;
+            if (!CornerGifShown && CanRaiseCornerGif(ss) && minutes >= ss.CornerGifStartMinute
+                && (ss.CornerGifEndMinute <= 0 || minutes < ss.CornerGifEndMinute))
+                ShowCornerGif(ss);
             Log.Information("Session resumed");
         }
 
@@ -256,6 +294,26 @@ namespace ConditioningControlPanel.Services
                 s.PinkFilterEnabled = true;
                 Log.Information("Pink filter activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, PinkStartMinute);
             }
+            // Spiral delayed start (SessionEngine.cs:823-851). A non-ramping session never drives the
+            // overlay, so its opacity lands in settings here the way an immediate start does.
+            if (session.Settings.SpiralEnabled && !s.SpiralEnabled)
+            {
+                // WPF SessionEngine.cs:826-838: a custom file or a gif in the exe's Spirals folder, which
+                // every head ships (spiral.gif) - so on a default install this guard passes.
+                var folder = SpiralsFolder;
+                if (!File.Exists(s.SpiralPath) && !(Directory.Exists(folder) && Directory.GetFiles(folder, "*.gif").Length > 0))
+                {
+                    session.Settings.SpiralEnabled = false;
+                    Log.Warning("Spiral enabled in session but no spiral files found - skipping");
+                }
+                else if (minutes >= SpiralStartMinute)
+                {
+                    if (session.Settings.SpiralOpacity == session.Settings.SpiralOpacityEnd) s.SpiralOpacity = session.Settings.SpiralOpacity;
+                    s.SpiralEnabled = true;
+                    Log.Information("Spiral activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, SpiralStartMinute);
+                }
+            }
+            TickCornerGif(session.Settings, minutes);
             Ticked?.Invoke();
         }
 
@@ -281,6 +339,106 @@ namespace ConditioningControlPanel.Services
                 var pink = RampCurves.ApplyCurve((minutes - PinkStartMinute) / (total - PinkStartMinute), curve);
                 PinkOpacity = Lerp(ss.PinkFilterStartOpacity, ss.PinkFilterEndOpacity, pink);
             }
+
+            // SessionEngine.cs:731: only when the session actually ramps, so a constant one leaves the
+            // user's slider live (#897).
+            if (ss.SpiralEnabled && ss.SpiralOpacity != ss.SpiralOpacityEnd && minutes >= SpiralStartMinute)
+            {
+                var spiral = RampCurves.ApplyCurve((minutes - SpiralStartMinute) / (total - SpiralStartMinute), curve);
+                SpiralOpacity = Lerp(ss.SpiralOpacity, ss.SpiralOpacityEnd, spiral);
+            }
+        }
+
+        // ---- the session corner GIF (WPF SessionEngine.cs:862-896, 1731-1797, 2126-2320) ----
+
+        /// <summary>WPF CanRaiseCornerGif over Core <see cref="CornerGifPlanner.AllowSessionCornerGif"/>.
+        /// The user's spiral master is the pre-session snapshot, as WPF UserSpiralAllowed
+        /// (SessionEngine.cs:1786): Apply overrides SpiralEnabled with the session's own value.</summary>
+        private bool CanRaiseCornerGif(SessionSettings ss)
+        {
+            var s = CoreSettings.Current;
+            return CornerGifPlanner.AllowSessionCornerGif(ss.CornerGifEnabled, s.SessionCornerGifAllowed,
+                CoreCornerGif.StandaloneActive, CornerGifPlanner.SessionCornerArtIsSpiral(ss.CornerGifPath),
+                _snapshot?.SpiralEnabled ?? s.SpiralEnabled, CoreCornerGif.SpiralOverlayActive);
+        }
+
+        /// <summary>The per-second admission recheck, delayed start and delayed end.</summary>
+        private void TickCornerGif(SessionSettings ss, double minutes)
+        {
+            if (CornerGifShown && !CanRaiseCornerGif(ss))
+            {
+                CloseCornerGif(handBack: true);
+                Log.Information("Corner GIF hidden mid-session (user master, a standalone corner overlay, or the fullscreen spiral now owns the corner)");
+            }
+            // ponytail: the end-minute guard is ours. WPF re-raises a delayed start after its end
+            // minute closed it, so it flickers open and shut every tick from then on.
+            if (!CornerGifShown && ss.CornerGifStartMinute > 0 && minutes >= ss.CornerGifStartMinute
+                && (ss.CornerGifEndMinute <= 0 || minutes < ss.CornerGifEndMinute) && CanRaiseCornerGif(ss))
+            {
+                ShowCornerGif(ss);
+                Log.Information("Corner GIF activated at {Minutes:F1} minutes (target was {Target})", minutes, ss.CornerGifStartMinute);
+            }
+            if (ss.CornerGifEnabled && CornerGifShown && ss.CornerGifEndMinute > 0 && minutes >= ss.CornerGifEndMinute)
+            {
+                CloseCornerGif(handBack: true);
+                Log.Information("Corner GIF deactivated at {Minutes:F1} minutes (target was {Target})", minutes, ss.CornerGifEndMinute);
+            }
+        }
+
+        private void ShowCornerGif(SessionSettings ss)
+        {
+            if (!CanRaiseCornerGif(ss) || CoreCornerGif.SessionShowHandler is not { } show) return;
+            show(new CornerGifOverlaySetting
+            {
+                Enabled = true,
+                GifPath = ss.CornerGifPath,
+                Position = ss.CornerGifPosition,
+                Size = ss.CornerGifSize > 0 ? ss.CornerGifSize : CornerGifPlanner.DefaultSize,
+                Opacity = ss.CornerGifOpacity,
+            });
+            CornerGifShown = true;
+            _cornerHandbackOwed = true;
+        }
+
+        private void CloseCornerGif(bool handBack)
+        {
+            bool giveBack = handBack && _cornerHandbackOwed;
+            if (handBack) _cornerHandbackOwed = false;
+            if (!CornerGifShown && !giveBack) return;
+            CornerGifShown = false;
+            try { CoreCornerGif.SessionCloseHandler?.Invoke(giveBack); }
+            catch (Exception ex) { Log.Warning(ex, "Corner GIF close failed"); }
+        }
+
+        private bool _refreshingCornerGifPolicy;
+
+        /// <summary>WPF RefreshCornerGifPolicy (SessionEngine.cs:1759): admission re-asked now, for
+        /// the Spiral card's session switch, a standalone slot change and the fullscreen spiral
+        /// leaving. Takes it down when refused; brings a minute-0 one back when allowed again.</summary>
+        public void RefreshCornerGifPolicy()
+        {
+            if (_refreshingCornerGifPolicy || CurrentSession is not { } session) return;
+            _refreshingCornerGifPolicy = true;   // the handback re-enters through the head's refresh
+            try
+            {
+                var ss = session.Settings;
+                if (CornerGifShown && !CanRaiseCornerGif(ss)) { CloseCornerGif(handBack: true); return; }
+                if (!CornerGifShown && IsRunning && !IsPaused && CanRaiseCornerGif(ss) && ss.CornerGifStartMinute == 0
+                    && (ss.CornerGifEndMinute <= 0 || Elapsed.TotalMinutes < ss.CornerGifEndMinute))
+                    ShowCornerGif(ss);
+            }
+            finally { _refreshingCornerGifPolicy = false; }
+        }
+
+        /// <summary>WPF UpdateCornerGifPath/Size/Position/Opacity (#474): the session's own
+        /// settings take the edit, and a shown overlay is re-shown with it (hide-only close).</summary>
+        public void UpdateCornerGif(Action<SessionSettings> edit)
+        {
+            if (CurrentSession is not { } session) return;
+            edit(session.Settings);
+            if (!CornerGifShown) return;
+            CloseCornerGif(handBack: false);
+            ShowCornerGif(session.Settings);
         }
 
         private static double Lerp(double a, double b, double t) => a + (b - a) * Math.Clamp(t, 0, 1);
@@ -299,10 +457,11 @@ namespace ConditioningControlPanel.Services
             _timer = null;
             _deferred.Clear();
             CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:372
+            CloseCornerGif(handBack: true);   // SessionEngine.cs:356
 
             var s = CoreSettings.Current;
             s.ClearSessionFlashRamp();   // SessionEngine.cs:390, ahead of the restore
-            PinkOpacity = null;
+            PinkOpacity = SpiralOpacity = null;   // WPF ReleaseOpacityRampHolds
             _snapshot?.RestoreTo(s);
             _snapshot = null;
             _custody?.Restore(s);
@@ -326,6 +485,9 @@ namespace ConditioningControlPanel.Services
 
             try { SessionLog.EndSession(completed, elapsed, xp); }
             catch (Exception ex) { Log.Error(ex, "SessionLog.EndSession failed"); }
+            // WPF SessionEngine:390 sits between SessionStopped (386) and SessionCompleted (429); Stopped fuses
+            // both, so idle goes first: after it, a completion handler starting the next session would be clobbered.
+            CoreDiscord.Service?.SetIdleActivity();
             CurrentSession = null;
             // WPF SessionEngine.SessionStopped + SessionCompleted, as one call (ProgramEngineBridge).
             try { Stopped?.Invoke(session, completed); }

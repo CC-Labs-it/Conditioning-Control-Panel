@@ -19,6 +19,9 @@ namespace ConditioningControlPanel.Services
         {
             Recognize = (grammar, opts) => App.Speech?.RecognizeOneOfAsync(grammar, opts) ?? Task.FromResult(PhraseResult.NotAvailable),
             ActionFor = VoiceAction,
+            // The panic reaches exactly as far as the panic key and reports whether it ran (769373c28):
+            // refused, nothing is confirmed.
+            RunFor = name => name == "panic" ? () => App.MainWindowRef?.TriggerPanicFromRemote() == true : null,
             IsBlocked = g => g == VoiceGuard.Lockdown ? App.Lockdown?.IsActive == true : StopLocked(),
             OnRefused = () => App.Lockdown?.NotifyEscapeAttempt(Possession.EscapeKinds.Stop),
             ShowListening = line => OnUi(() => App.AvatarWindow?.ShowListeningBubble(line)),

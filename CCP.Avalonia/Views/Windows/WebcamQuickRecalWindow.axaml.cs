@@ -30,7 +30,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private const int FinishHoldMs = 350;
 
         private readonly List<(double X, double Y)> _samples = new();
-        private bool _collecting, _cancelled, _completedOk;
+        private bool _collecting, _cancelled, _completedOk, _offsetParked;
+        private static readonly HashSet<WebcamQuickRecalWindow> Active = new();
+
+        internal static void CloseAllForPanic()
+        {
+            foreach (var window in new List<WebcamQuickRecalWindow>(Active)) window.Close(false);
+        }
         private RuntimeOffsetData? _savedOffset;
         private static WebcamTracker Tracker => WebcamTracker.Instance;
 
@@ -48,19 +54,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _txtErrorDetail = this.FindControl<TextBlock>("TxtErrorDetail")!;
             _errorPanel = this.FindControl<Border>("ErrorPanel")!;
 
-            // Discoverability: this window is the one place every user of Quick Recal provably
-            // reaches, so it is where the global chord gets taught. The real line quotes the
-            // user's own (rebindable) camera shortcut alongside it.
-            // The tip is HIDDEN on this head rather than worded, and the old note named the wrong
-            // blocker. MainWindow.QuickRecalHotkeyHint (MainWindow/MainWindow.xaml.cs:1263) is just
-            // Loc.GetF("webcam_quick_recal_hotkey_hint", QuickRecalHotkeyChord, CameraShortcutChord),
-            // the key is in CCP.Core/Localization/Languages/*.json, and both chords are derivable
-            // here (the quick-recal one is a constant, the camera one reads
-            // CoreSettings.Current.CompanionPrompt.CameraShortcut*). So it is writable today.
-            // What stops it is that BOTH chords are Win32 RegisterHotKey registrations in
-            // ConditioningControlPanel/Services/Input/GlobalHotkeyService.cs, and this head installs no
-            // global hotkey of any kind - "runs from anywhere with Ctrl+Alt+G" would be teaching a
-            // key that does nothing. An empty hint is a gap; a taught dead key is a lie.
+            // ponytail: the full localized hint also teaches the camera start/stop chord, which
+            // is not ported. Keep it hidden until both shortcuts work on this head; Windows Quick
+            // Recal is now armed by MainShellWindow.QuickRecal, but Linux/Wayland still need a lane.
             _txtHotkeyHint.IsVisible = false;
             // WPF openers call App.ApplyCalibrationScreenPlacement: the dot must sit on the calibrated monitor.
             WebcamCalibrationWindow.PlaceOnCalibratedScreen(this);
@@ -72,6 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         protected override async void OnOpened(EventArgs e)
         {
             base.OnOpened(e);
+            Active.Add(this);
             if (!Tracker.IsRunning)
             {
                 ShowError("Webcam tracking is not running. Start tracking before quick-recalibrating.");
@@ -84,6 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             // Sample the raw projection: park the old offset, restore it unless we finish.
             _savedOffset = Tracker.Calibration.RuntimeOffset;
+            _offsetParked = true;
             Tracker.SetRuntimeOffset(null, persist: false);
             Tracker.OnGazeMove += OnGazeMove;
             Tracker.StateChanged += OnTrackerStateChanged;
@@ -97,10 +95,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         protected override void OnClosed(EventArgs e)
         {
+            _cancelled = true;
+            _collecting = false;
+            Active.Remove(this);
             base.OnClosed(e);
             Tracker.OnGazeMove -= OnGazeMove;
             Tracker.StateChanged -= OnTrackerStateChanged;
-            if (!_completedOk && _savedOffset != null) Tracker.SetRuntimeOffset(_savedOffset, persist: false);
+            if (!_completedOk && _offsetParked) Tracker.SetRuntimeOffset(_savedOffset, persist: false);
         }
 
         private void OnTrackerStateChanged()

@@ -13,6 +13,9 @@ namespace ConditioningControlPanel.Services
     public class SessionManager
     {
         private readonly SessionFileService _fileService;
+
+        /// <summary>The folder this manager loads custom sessions from (the per-instance override when set).</summary>
+        internal string CustomSessionsFolder => _fileService.CustomSessionsPath;
         private readonly List<Session> _sessions = new();
 
         /// <summary>

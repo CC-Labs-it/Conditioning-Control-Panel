@@ -362,9 +362,9 @@
                         <!-- Emote MenuItems replace the 5 items above (Engine, TriggerMode, BambiTakeover,
                              Personality, Mute) whenever a remote controller is connected. On WPF their
                              headers are filled in AvatarContextMenu_Opened from RemoteEmotePresets.
-                             They stay IsVisible="False" on this head: the presets are in Core, but the
-                             swap is driven by App.RemoteControl.ControllerConnected and each item sends
-                             through MainWindow.SendEmoteAndReportAsync, both head-side. -->
+                             They stay IsVisible="False" on this head: the swap is not ported yet, though
+                             every piece now exists here (RemoteControlTabView.Relay.ControllerConnected,
+                             CoreSettings RemoteEmotePresets, RemoteControlTabView.SendEmoteAndReportAsync). -->
                         <MenuItem x:Name="MenuItemEmote1" Header="" IsVisible="False"/>
                         <MenuItem x:Name="MenuItemEmote2" Header="" IsVisible="False"/>
                         <MenuItem x:Name="MenuItemEmote3" Header="" IsVisible="False"/>
@@ -491,9 +491,7 @@
 
             <!-- Takeover countdown bar - thin pink bar under the avatar, drains toward the next
                  random Takeover action. Shown only while Takeover is running (driven in code-behind).
-                 ponytail: the WPF fill was horizontally scaled by the x:Named TakeoverCountdownScale
-                 (1.0 full -> 0 about to fire) from InitTakeoverCountdownBar, which lives in a partial
-                 this layer does not port. The transform is dropped, so the bar renders full. -->
+                 The fill scales from full to empty on the 100 ms Takeover ticker. -->
             <Border x:Name="TakeoverCountdownBar"
                     ZIndex="5"
                     HorizontalAlignment="Center"
