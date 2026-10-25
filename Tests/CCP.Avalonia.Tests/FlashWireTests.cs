@@ -19,6 +19,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Flash;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
+using LuckyToast = ConditioningControlPanel.Avalonia.Views.Windows.LuckyToast;
 
 namespace CCP.Avalonia.Tests;
 
@@ -127,6 +128,41 @@ public sealed class FlashWireTests
             Assert.Equal(2, xp.Count);
         }
         finally { s.SuppressPerkNotifications = quiet; }
+    });
+
+    private sealed class FixedRoll(double roll) : Random { public override double NextDouble() => roll; }
+
+    /// <summary>WPF RollLuckyFlash raises LuckyProc as it rolls (FlashService.cs:1851) and MainWindow.OnLuckyProc
+    /// shows the toast: the real show path must raise LuckyToast, and a miss must not.</summary>
+    [Fact]
+    public Task A_lucky_roll_in_the_show_path_raises_the_lucky_toast() => OnUi((s, _, xp, _) =>
+    {
+        var (rngWas, gameWas, quiet) = (FlashOverlay.LuckyRng, LuckyToast.GameOwnsScreen, s.SuppressPerkNotifications);
+        try
+        {
+            FlashOverlay.LuckyChime = _ => { };
+            LuckyToast.GameOwnsScreen = () => false;
+            s.SuppressPerkNotifications = false;
+            s.UnlockedSkills.Add(FlashFxRules.LuckySkillId);
+            LuckyToast.Close();
+
+            FlashOverlay.LuckyRng = new FixedRoll(0.99);           // a miss: no toast, plain XP
+            ShowOne();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();   // Proc posts the toast
+            Assert.Null(LuckyToast.Popup);
+
+            FlashOverlay.LuckyRng = new FixedRoll(0);              // a hit: the toast is up and holding
+            ShowOne();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.NotNull(LuckyToast.Popup);
+            Assert.True(LuckyToast.Holding);
+            Assert.Equal(40.0, xp[^1].Xp);
+        }
+        finally
+        {
+            LuckyToast.Close();
+            (FlashOverlay.LuckyRng, LuckyToast.GameOwnsScreen, s.SuppressPerkNotifications) = (rngWas, gameWas, quiet);
+        }
     });
 
     [Fact]

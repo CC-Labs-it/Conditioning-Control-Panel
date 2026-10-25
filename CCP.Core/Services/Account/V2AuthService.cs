@@ -806,9 +806,6 @@ namespace ConditioningControlPanel.Services
             }
         }
 
-        /// <summary>
-        /// Adds the X-Auth-Token header to a V2 API request if an auth token is available.
-        /// </summary>
         /// <summary>WPF ProfileSyncService.PurchaseSkillResponse.</summary>
         public class PurchaseSkillResponse
         {
@@ -860,6 +857,9 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        /// <summary>
+        /// Adds the X-Auth-Token header to a V2 API request if an auth token is available.
+        /// </summary>
         private void AddAuthHeader(HttpRequestMessage request)
         {
             var token = _settings()?.AuthToken;

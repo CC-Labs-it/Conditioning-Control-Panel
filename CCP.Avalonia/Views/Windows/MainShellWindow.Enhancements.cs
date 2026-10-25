@@ -13,8 +13,9 @@
 // SkillCard_Click + the purchase/prestige bursts: EnhancementsTabView.Purchase.cs over Core SkillPurchase;
 // UpdateTrophyCaseColumns: MainShellWindow.Leaderboard.cs. OnLuckyProc/EnsureLuckyToast/PlaceLuckyToast/
 // CloseLuckyToast: LuckyToast.cs, raised by FlashOverlay's roll.
-// ponytail: still missing - CelebratePrestige's full-window sheen (needs ChromeFx SweepSheen, a stub), the
-//   401 token recovery + retry before a purchase fails, and the lucky-bubble proc (no bubble roll on this head).
+// CelebratePrestige's full-window sheen: EnhancementsTabView.Purchase.cs SweepPrestigeSheen.
+// ponytail: still missing - the 401 token recovery + retry before a purchase fails, and the lucky-bubble
+//   proc (no bubble roll on this head).
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
