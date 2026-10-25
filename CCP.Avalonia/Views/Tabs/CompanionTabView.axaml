@@ -11,6 +11,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:cmp="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion"
+             xmlns:v2="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion.V2"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.CompanionTabView"
              mc:Ignorable="d"
              d:DesignHeight="900" d:DesignWidth="1240">
@@ -32,15 +33,19 @@
            3. tell MainWindow when it becomes visible, which is what
               drives the tab-transition choreography.
 
-         Jobs 1 and 3 are stubbed on this head — see the code-behind for
-         what they wait on.
+         The room owns live zone viewmodels; visibility and roster card
+         actions reach the shell. The aggregate runtime/compat seam and
+         WPF v2 page mount remain in wire-views-tab-companion-b.
 
          The tab's own header is gone on purpose: Z0 draws it, from the
          hero's viewmodel, so there is one title and not two.
          ================================================================ -->
 
-    <Grid>
-        <cmp:CompanionRoomView x:Name="Room"
+    <!-- WPF CompanionTabView.xaml.cs:36-40 (v2 on for everyone): the room is collapsed and the
+         ConversationPage is added to PageHost after it. The room keeps owning the zones until the
+         Companion pages adopt them (Pages/CompanionPageHost.cs). -->
+    <Grid x:Name="PageHost">
+        <cmp:CompanionRoomView x:Name="Room" IsVisible="False"
                                AutomationProperties.AutomationId="CompanionTabRoom"/>
 
         <!-- COMPAT SEAM. MainWindow.Presets.cs hangs the AI help popup on this button by name.
@@ -50,5 +55,7 @@
              SetHelpContent keeps working and nothing renders. -->
         <Button x:Name="HelpBtnAiChat"
                 Tag="AiChat" IsVisible="False" IsHitTestVisible="False"/>
+        <v2:ConversationPage x:Name="Conversation"
+                             AutomationProperties.AutomationId="CompanionConversationPage"/>
     </Grid>
 </UserControl>

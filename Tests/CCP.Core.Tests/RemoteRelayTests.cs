@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Remote;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -35,10 +36,10 @@ public sealed class RemoteRelayTests
     private static HttpResponseMessage Json(HttpStatusCode s, string body) => new(s) { Content = new StringContent(body) };
 
     private readonly List<string> _ran = new();
-    private readonly List<bool> _stops = new();
+    private readonly List<RemoteEndCause> _stops = new();
 
     private RemoteRelay Relay(FakeRelay f) => new(() => "tok", () => "uid-1", "9.9.9",
-        (a, _) => { _ran.Add(a); return null; }, force => _stops.Add(force), f) { AutoPoll = false };
+        (a, _) => { _ran.Add(a); return null; }, _stops.Add, f) { AutoPoll = false };
 
     private static void Poll(FakeRelay f, string json) =>
         f.Answer = path => path == "/v2/remote/poll" ? Json(HttpStatusCode.OK, json) : Json(HttpStatusCode.OK, "{}");
@@ -111,13 +112,13 @@ public sealed class RemoteRelayTests
             Assert.True(s.StrictLockEnabled);
             Assert.False(s.PanicKeyEnabled);
             Assert.Null(RemoteCommands.Execute("trigger_panic", null));
-            Assert.True(s.PanicKeyEnabled);       // WPF StopAllRemoteEffects, Lockdown or not
-            Assert.False(s.StrictLockEnabled);
+            Assert.False(s.PanicKeyEnabled);      // WPF ReleaseRemoteSafetyState: a running Lockdown keeps its switches
+            Assert.True(s.StrictLockEnabled);
             (s.StrictLockEnabled, s.PanicKeyEnabled) = (true, false);
             Assert.Null(RemoteCommands.Execute("enable_panic", null));
-            Assert.Null(RemoteCommands.Execute("disable_strict_lock", null));
+            Assert.Equal("the Lockdown holds the strict lock", RemoteCommands.Execute("disable_strict_lock", null));
             Assert.True(s.PanicKeyEnabled);
-            Assert.False(s.StrictLockEnabled);
+            Assert.True(s.StrictLockEnabled);
             Assert.True(ld.IsActive);             // the timer was not ended
             Assert.Equal(0, ld.RestartCount);     // nor restarted
             s.PanicKeyEnabled = false;            // whatever the controller left behind...
@@ -152,7 +153,7 @@ public sealed class RemoteRelayTests
         Assert.False(r.IsActive);
         Assert.Null(r.SessionCode);
         Assert.Equal(1, ended);
-        Assert.Equal(new[] { false }, _stops);   // the subject's own run survives (#878)
+        Assert.Equal(new[] { RemoteEndCause.SessionEnded }, _stops);   // the subject's own run survives (#878)
     }
 
     [Fact]
@@ -180,7 +181,7 @@ public sealed class RemoteRelayTests
     }
 
     [Fact]
-    public void Panic_stop_restores_the_panic_key_and_drops_strict_lock()
+    public void Panic_stop_restores_the_panic_key_and_keeps_the_wearers_strict_lock()
     {
         var s = CoreSettings.Current;
         var (strict, panic) = (s.StrictLockEnabled, s.PanicKeyEnabled);
@@ -188,7 +189,7 @@ public sealed class RemoteRelayTests
         {
             (s.StrictLockEnabled, s.PanicKeyEnabled) = (true, false);
             Assert.Null(RemoteCommands.Execute("trigger_panic", null));
-            Assert.False(s.StrictLockEnabled);
+            Assert.True(s.StrictLockEnabled);    // WPF: only a strict lock the controller switched on goes
             Assert.True(s.PanicKeyEnabled);
             Assert.Equal(RemoteCommands.NotOnThisBuild, RemoteCommands.Execute("play_hypnotube", null));
         }
@@ -226,104 +227,138 @@ public sealed class RemoteRelayTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task RemoteEnd_LeavesTheLocalEngineFeaturesAndOwnStrictLockAlone(bool stopOnDisconnect)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Remote_end_preserves_lockdown_and_corrects_its_record(bool stopEffects, bool sessionEnd)
     {
         var s = CoreSettings.Current;
-        var saved = (s.StrictLockEnabled, s.PanicKeyEnabled, s.FlashEnabled, s.StopEffectsOnRemoteDisconnect);
+        var saved = (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect,
+            s.LockdownForceStrictLock, s.LockdownDisablePanicKey);
+        var previous = LockdownService.Current;
+        using var ld = LockdownService.Current = new LockdownService();
         try
         {
-            s.FlashEnabled = true;
-            s.StopEffectsOnRemoteDisconnect = stopOnDisconnect;
-            CoreEngine.Start();
-            s.StrictLockEnabled = true; // locally set, never owned by the controller
-            s.PanicKeyEnabled = false;
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect,
+                s.LockdownForceStrictLock, s.LockdownDisablePanicKey) = (false, true, stopEffects, true, true);
             var f = new FakeRelay();
-            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute,
-                RemoteCommands.StopEffects, f, stopEffectsByCause: RemoteCommands.StopEffects) { AutoPoll = false };
+            using var r = new RemoteRelay(() => "tok", () => "uid", "test",
+                RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
             await r.StartAsync("full");
-            Poll(f, "{\"controller_connected\":true}");
+            Poll(f, Cmd("1", "enable_strict_lock"));
             await r.PollOnceAsync();
-            Poll(f, "{\"controller_connected\":false}");
-            await r.PollOnceAsync();
-            Assert.True(CoreEngine.IsRunning && CoreFlash.IsRunning);
-            await r.StopAsync();
-            Assert.True(CoreEngine.IsRunning && CoreFlash.IsRunning);
-            Assert.True(s.StrictLockEnabled && s.PanicKeyEnabled && s.FlashEnabled);
-            Assert.Null(RemoteCommands.Execute("trigger_panic", null));
-            Assert.False(CoreEngine.IsRunning || CoreFlash.IsRunning || s.StrictLockEnabled);
+            ld.Activate(TimeSpan.FromMinutes(30));
+            Assert.True(ld.RecordedStrictLock);
+            if (sessionEnd) await r.StopAsync();
+            else { Poll(f, "{\"controller_connected\":false}"); await r.PollOnceAsync(); }
+            Assert.True(ld.IsActive);
+            Assert.True(s.StrictLockEnabled);
+            Assert.False(s.PanicKeyEnabled);
+            Assert.False(ld.RecordedStrictLock);
+            ld.Deactivate();
+            Assert.False(s.StrictLockEnabled);
+            Assert.True(s.PanicKeyEnabled);
         }
-        finally { CoreEngine.Stop(); (s.StrictLockEnabled, s.PanicKeyEnabled, s.FlashEnabled, s.StopEffectsOnRemoteDisconnect) = saved; }
+        finally
+        {
+            ld.Deactivate();
+            LockdownService.Current = previous;
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect,
+                s.LockdownForceStrictLock, s.LockdownDisablePanicKey) = saved;
+        }
     }
 
+    // Review P1: WPF trigger_panic = StopAllRemoteEffects + ReleaseRemoteSafetyState
+    // (RemoteControlService.cs:1034-1038): a running Lockdown keeps its forced strict lock and panic-key-off,
+    // and its record of the wearer's strict lock is corrected for its own end.
     [Fact]
-    public async Task RemoteEnd_ReleasesOnlyTheControllersStrictLock_WhileTheLocalRunContinues()
+    public async Task Trigger_panic_keeps_a_running_Lockdown_and_hands_back_the_controllers_strict_lock()
     {
         var s = CoreSettings.Current;
-        var saved = (s.StrictLockEnabled, s.PanicKeyEnabled);
+        var saved = (s.StrictLockEnabled, s.PanicKeyEnabled, s.LockdownForceStrictLock, s.LockdownDisablePanicKey);
+        var previous = LockdownService.Current;
+        using var ld = LockdownService.Current = new LockdownService();
         try
         {
-            s.StrictLockEnabled = false;
-            CoreEngine.Start();
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.LockdownForceStrictLock, s.LockdownDisablePanicKey) = (false, true, true, true);
             var f = new FakeRelay();
-            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute,
-                RemoteCommands.StopEffects, f, stopEffectsByCause: RemoteCommands.StopEffects) { AutoPoll = false };
+            using var r = new RemoteRelay(() => "tok", () => "uid", "test",
+                RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
             await r.StartAsync("full");
-            Poll(f, "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"enable_strict_lock\"}]}");
+            Poll(f, Cmd("1", "enable_strict_lock"));
+            await r.PollOnceAsync();
+            ld.Activate(TimeSpan.FromMinutes(30));
+            Assert.True(ld.RecordedStrictLock);
+            Poll(f, Cmd("2", "trigger_panic"));
+            await r.PollOnceAsync();
+            Assert.True(ld.IsActive);
+            Assert.True(s.StrictLockEnabled);
+            Assert.False(s.PanicKeyEnabled);
+            Assert.False(ld.RecordedStrictLock);
+            ld.Deactivate();
+            Assert.False(s.StrictLockEnabled);
+            Assert.True(s.PanicKeyEnabled);
+        }
+        finally
+        {
+            ld.Deactivate();
+            LockdownService.Current = previous;
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.LockdownForceStrictLock, s.LockdownDisablePanicKey) = saved;
+        }
+    }
+
+    // Review P2 / P29: the start-of-session snapshot timing out (posted, not yet run) must not lose the
+    // hand-back of a strict lock the controller switches on.
+    [Fact]
+    public async Task A_stalled_start_snapshot_still_hands_back_the_controllers_strict_lock()
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect, CoreDispatch.InvokeProvider, CoreDispatch.PostProvider);
+        var posted = new List<Action>();
+        try
+        {
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect) = (false, true, false);
+            var stalled = true;
+            CoreDispatch.InvokeProvider = (fn, _) => { if (stalled) { stalled = false; return (false, null); } return (true, fn()); };
+            CoreDispatch.PostProvider = posted.Add;
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid", "test", RemoteCommands.Execute, _ => { }, f) { AutoPoll = false };
+            await r.StartAsync("full");
+            Assert.Single(posted);                // the snapshot was posted after the timeout
+            Poll(f, Cmd("1", "enable_strict_lock"));
             await r.PollOnceAsync();
             Assert.True(s.StrictLockEnabled);
-            await r.StopAsync();
-            Assert.True(CoreEngine.IsRunning);
+            foreach (var a in posted.ToArray()) a();   // the late snapshot must not take the controller's value as own
+            Poll(f, "{\"controller_connected\":false}");
+            await r.PollOnceAsync();
             Assert.False(s.StrictLockEnabled);
         }
-        finally { CoreEngine.Stop(); (s.StrictLockEnabled, s.PanicKeyEnabled) = saved; }
+        finally { (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect, CoreDispatch.InvokeProvider, CoreDispatch.PostProvider) = saved; }
     }
 
-    [Fact]
-    public async Task Relay_LegacyBoolCallback_LeashCutForcesAndNormalEndDoesNot()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Disconnect_returns_the_wearers_strict_lock(bool controllerWrites)
     {
-        var forced = new List<bool>();
-        var f = new FakeRelay();
-        var sent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var answer = f.Answer;
-        f.Answer = path =>
+        var s = CoreSettings.Current;
+        var saved = (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect);
+        try
         {
-            if (path == "/v2/remote/stop") sent.TrySetResult();
-            return answer(path);
-        };
-        using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, forced.Add, f) { AutoPoll = false };
-        await r.StartAsync("full");
-        r.EndSessionNow();
-        Assert.True(Assert.Single(forced));   // LeashCut: everything stops, never the SessionEnded rule
-        await sent.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        await r.StartAsync("full");
-        await r.StopAsync();
-        Assert.False(forced[1]);
-    }
-
-    [Fact]
-    public async Task Relay_PreservesLeashCutAndNormalEndAsDistinctCauses()
-    {
-        var causes = new List<ConditioningControlPanel.Services.Remote.RemoteEndCause>();
-        var f = new FakeRelay();
-        var sent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var answer = f.Answer;
-        f.Answer = path =>
-        {
-            if (path == "/v2/remote/stop") sent.TrySetResult();
-            return answer(path);
-        };
-        using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute,
-            _ => throw new InvalidOperationException("legacy callback should not run"), f,
-            stopEffectsByCause: causes.Add) { AutoPoll = false };
-        await r.StartAsync("full");
-        r.EndSessionNow();
-        Assert.Equal(ConditioningControlPanel.Services.Remote.RemoteEndCause.LeashCut, Assert.Single(causes));
-        await sent.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        await r.StartAsync("full");
-        await r.StopAsync();
-        Assert.Equal(ConditioningControlPanel.Services.Remote.RemoteEndCause.SessionEnded, causes[1]);
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect) = (true, true, true);
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid", "test",
+                RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
+            await r.StartAsync("full");
+            Poll(f, controllerWrites ? Cmd("1", "disable_strict_lock") : "{\"controller_connected\":true}");
+            await r.PollOnceAsync();
+            Assert.Equal(!controllerWrites, s.StrictLockEnabled);
+            Poll(f, "{\"controller_connected\":false}");
+            await r.PollOnceAsync();
+            Assert.True(s.StrictLockEnabled);
+        }
+        finally { (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect) = saved; }
     }
 
     // main 7b22ece8c (ccp-bugs #1065): no toy -> refused, never a silent "ok".
@@ -515,7 +550,66 @@ public sealed class RemoteRelayTests
         Assert.Equal(1, sent.StopsThen);
         Assert.Equal("uid-1", (string?)sent.Body["unified_id"]);
         r.EndSessionNow();                       // safe with no session
-        Assert.Single(_stops);
+        Assert.Equal(RemoteEndCause.LeashCut, Assert.Single(_stops));   // WPF RemoteControlService.cs:344
+    }
+
+    // main 28078c756 (ccp-bugs #1405): a remote session end leaves the subject's own run alone, the
+    // controller's strict lock still goes; a panic still stops everything, session included.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Remote_end_leaves_the_local_engine_and_its_features_running(bool stopOnDisconnect)
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.StrictLockEnabled, s.PanicKeyEnabled, s.FlashEnabled, s.StopEffectsOnRemoteDisconnect);
+        var sessionStops = 0;
+        try
+        {
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.FlashEnabled, s.StopEffectsOnRemoteDisconnect) = (false, true, true, stopOnDisconnect);
+            s.AudioOnlySession = false;
+            CoreEngine.Start();
+            CoreSession.StopSessionFromRemote = () => sessionStops++;
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
+            await r.StartAsync("full");
+            Poll(f, "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"enable_strict_lock\"}]}");
+            await r.PollOnceAsync();
+            Assert.True(s.StrictLockEnabled);
+            Poll(f, "{\"controller_connected\":false}");
+            await r.PollOnceAsync();
+            Assert.True(CoreEngine.IsRunning && CoreFlash.IsRunning);
+            await r.StopAsync();
+            Assert.True(CoreEngine.IsRunning && CoreFlash.IsRunning && s.FlashEnabled);
+            Assert.False(s.StrictLockEnabled);   // the controller's, handed back
+            Assert.Equal(0, sessionStops);
+
+            Assert.Null(RemoteCommands.Execute("trigger_panic", null));
+            Assert.False(CoreEngine.IsRunning || CoreFlash.IsRunning);
+            Assert.Equal(1, sessionStops);       // WPF RemoteControlService.cs:1026
+        }
+        finally
+        {
+            CoreSession.StopSessionFromRemote = null;
+            CoreEngine.Stop();
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.FlashEnabled, s.StopEffectsOnRemoteDisconnect) = saved;
+        }
+    }
+
+    // WPF RemoteControlService.cs:957: a leash cut is not a panic. The services stop, the engine stays up.
+    [Fact]
+    public void Leash_cut_stops_the_services_and_keeps_the_engine()
+    {
+        var s = CoreSettings.Current;
+        var flash = s.FlashEnabled;
+        try
+        {
+            (s.FlashEnabled, s.AudioOnlySession) = (true, false);
+            CoreEngine.Start();
+            RemoteCommands.StopEffects(RemoteEndCause.LeashCut);
+            Assert.True(CoreEngine.IsRunning);
+            Assert.False(CoreFlash.IsRunning);
+        }
+        finally { CoreEngine.Stop(); s.FlashEnabled = flash; }
     }
 
     // main d39969827: 1 s polls while a connected controller is busy; a 429 still backs off from 5 s.

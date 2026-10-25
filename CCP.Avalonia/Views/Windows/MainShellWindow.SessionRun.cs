@@ -5,7 +5,7 @@
 // The head owns one Core SessionRunner (App.Sessions), which runs only the ported subset - flash,
 // subliminal, bouncing text, lock cards (docs/avalonia-decisions.md).
 // BtnPauseSession_Click (:2021) too.
-// ponytail: dropped, each with no service on this head: corner-GIF options, remote gates, program/punch-card/Bark/profile-sync hooks, the takeaway-shelf refresh, the
+// ponytail: dropped, each with no service on this head: remote gates, program/punch-card/Bark/profile-sync hooks, the
 // Withdraw summary suppression and the video-teardown wait before the recap (no video service yet).
 // ponytail: both confirms use MessageDialog, so the buttons read OK/Cancel rather than WPF's
 // "▶ Start Session"/"Not yet" and "Yes, stop"/"Keep going"; the text above them is WPF's.
@@ -54,6 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (gen != _engineGen || App.Sessions is not { IsRunning: false } runner) return;
                 try
                 {
+                    Named<Tabs.PresetsTabView>("PresetsTab")?.ApplyCornerGifOption(session);   // WPF StartSession :1588
                     runner.Start(session);
                     Platform.ProgramEngineBridge.RaiseSessionChanged();   // the Programs session row (WPF OnSessionStarted)
                     PinkRushHost.Start();          // WPF: a session starts through StartEngine -> SkillTree.Start()
@@ -107,7 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             if (runner.IsPaused)
             {
-                if (SessionClockRules.ResumeStartsEngine(CoreEngine.IsRunning, RemoteControllerConnected))
+                if (!CoreEngine.IsRunning && !RemoteControllerConnected)
                 {
                     StartEngineFromUser();
                     return;
@@ -131,7 +132,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Stop()
             SpiralOverlay.Refresh(this);
             SetPauseButton(true);
-            OnSessionTick();
         }
 
         /// <summary>WPF TxtPauseIcon + BtnPauseSession.ToolTip: "\u25B6" + resume while paused, else "\u23F8" + the count.</summary>
@@ -140,6 +140,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Named<Button>("BtnPauseSession") is not { } b) return;
             b.IsVisible = true;
             if (Named<TextBlock>("TxtPauseIcon") is { } icon) icon.Text = paused ? "\u25B6" : "\u23F8";
+            Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshLiveSessionProgress();
             var count = App.Sessions?.PauseCount ?? 0;
             b.Bind(ToolTip.TipProperty, paused || count == 0
                 ? (Binding)new StrExtension(paused ? "tooltip_resume_session" : "tooltip_pause_session_100_xp_penalty_per_pause").ProvideValue(null!)
@@ -151,16 +152,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void OnSessionTick()
         {
             RefreshSessionFeatureLock(force: false);
+            Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshLiveSessionProgress();
             if (App.Sessions is not { IsRunning: true, CurrentSession: { } session } runner) return;
             PinkFilterOverlay.Refresh(this);   // the delayed start and the ramp (SessionRunner.PinkOpacity)
-            SetPauseButton(runner.IsPaused);   // WPF OnSessionStarted
+            if (Named<Button>("BtnPauseSession") is { IsVisible: false }) SetPauseButton(false);   // WPF OnSessionStarted
             var remaining = runner.Remaining;
             var showCountdown = CoreSettings.Current.ShowSessionCountdown != false;
-            var pauseMark = SessionClockRules.PauseMark(runner.IsPaused, Loc.Get("label_paused"));
+            var pauseMark = SessionClockRules.PauseMark(runner.IsPaused, Loc.Get("label_paused"));   // WPF RefreshSessionClocks
             Named<Tabs.PresetsTabView>("PresetsTab")?.SetSessionButtonLabel(SessionClockLabel.StopButton(
                 remaining, showCountdown, Loc.Get("btn_stop_session_0_1"), Loc.Get("btn_stop_session_2"), pauseMark));
 
             if (!CoreEngine.IsRunning) return;   // WPF RefreshSessionClocks never paints BtnStart; UpdateStartButton does
+
             var mName = session.GetModeAwareName();
             var nameMax = showCountdown ? 14 : 22;
             var name = mName.Length > nameMax ? mName.Substring(0, nameMax - 3) + "..." : mName;
@@ -182,10 +185,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void OnSessionLogReady(object? sender, SessionLogReadyEventArgs e)
         {
+            if (_windowClosed || _exitRequested) return;
             if (_suppressNextSessionSummary) { _suppressNextSessionSummary = false; return; }
             var log = e.Log;
             Dispatcher.UIThread.Post(() =>
             {
+                if (_windowClosed || _exitRequested) return;
+                // WPF MainWindow.Presets.cs:1709: the run that just ended is a receipt now; after the
+                // suppressed-summary return above, so a quiet stop stays quiet.
+                RefreshTakeawayShelf();
                 try
                 {
                     var dialog = new SessionCompleteWindow(log);

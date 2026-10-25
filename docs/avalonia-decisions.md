@@ -1110,14 +1110,15 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   `MainShellWindow.UiUpdates.cs`. With B, every day CCP was open would read 0 minutes and be charged as idle on the
   user's real lock, which WPF never does. Switch to B in the same lane that ports the tracker.
 - Test: `ChasterMinutesTests.IdleDayIsNeverCharged_WhileTheDayLogHasNoMinutesSource` (fail-proven: wiring B turns it red).
+
 ## 2026-10-13: Hybrid remote gate: Windows jobs on GitHub, Linux half local (avalonia-port/ci-hybrid-gate)
 - Question: every rgate run took ~15 GitHub jobs (5 Linux + 5 Windows Avalonia shards, core-linux, core-guards, coverage),
   so two lanes gating at once exhausted the Free plan's 20-job pool. How do lane gates free that pool?
 - Options: (A) keep every gate fully remote; (B) gate fully locally again; (C) hybrid: GitHub runs only what Linux cannot
   (the Windows jobs) and the Linux half runs locally (`bin/gate`, already the CI-equivalent Linux gate) in parallel.
 - Choice: C (advised by: user + main session). `build.yml` gains a `workflow_dispatch` input `scope` (all | windows, default
-  all). With `scope=windows` every ubuntu job (core-guards, core-linux, avalonia-linux, the Linux coverage entry) is skipped;
-  `windows`, `avalonia-windows` and the Windows coverage entry always run (coverage keeps `!cancelled()`, so a skipped
+  all). With `scope=windows` every Linux-side job (core-guards, core-linux, avalonia-linux, the Linux coverage entry) is
+  skipped; `windows`, `avalonia-windows` and the Windows coverage entry (itself on `ubuntu-latest`) always run (coverage keeps `!cancelled()`, so a skipped
   avalonia-linux does not skip it). Push and pull_request runs have no inputs, so they stay full. `bin/rgate` dispatches
   `scope=windows` when it sees the input; `RGATE_FULL=1` forces the old all-remote run.
 - Choice (chaster-minutes): A, because the input WPF relies on was missing here: the day log's minutes come from
@@ -1200,3 +1201,182 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Follow-up: drop the WPE `LinuxDependencies` entry, `linux_dep_wpe_unavailable` and the Flatpak WPE line once WPEPlatform lands or WPE is retired.
 - Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs`, `Tests/CCP.Core.Tests/LinuxDependenciesTests.cs`
   (GstAudioSinkDependencyTests), each new row fail-proven by mutation.
+
+## 2026-10-14: Companion v2 room collapse and the Companion pages (avalonia-port/companion-v2-pages-b)
+- Supersedes the 2026-10-10 choice B above: the v2 ConversationPage is mounted now, so the head follows WPF
+  (CompanionTabView.xaml.cs:36-40): the room is collapsed, and Personality / Permissions / Links are pages that adopt the
+  live zones (`CompanionPageHost.Adopt`, no give-back; AiPage changed to match).
+- The tab owns the visibility edge (`CompanionTabView`, EffectiveVisibility); the collapsed room's own clocks stay parked,
+  as in WPF. The Awareness tab adopts the room's privacy card + Workshop Awareness cell (WPF HostCompanionPrivacy) on
+  ShowTab("awareness") rather than at Loaded; the card follows its own effective visibility (WPF IsVisibleChanged).
+- Zone tests for surfaces v2 leaves only in the room (hero, attention, roster, drawer) show the room via
+  `Tests/CCP.Avalonia.Tests/CollapsedRoom.cs`; the v2 layout itself is `CompanionPagesTests`.
+## 2026-10-13: push-triggered port workflows skip cloud-* and gate-* branches (avalonia-port/ci-skip-cloud)
+- Question: the GitHub Free plan shares 20 concurrent jobs between rgate (build.yml dispatched on `avalonia-port/gate-*`),
+  PR CI and push-triggered workflows. Each push of a throwaway `avalonia-port/cloud-*` (Claude cloud session) branch
+  also starts distro-check, reference-render (3 jobs) and snapshot-lock, ~5 jobs nobody reads. rgate's `gate-*` snapshot
+  commits already carry `[skip ci]`, so for them the exclusion is only a second safeguard.
+  Should those workflows keep running on them?
+- Options: (A) keep `branches: ['avalonia-port/**']`; (B) exclude both prefixes with negative patterns in the same list;
+  (C) drop the push trigger and run them only by hand.
+- Choice: B: `['avalonia-port/**', '!avalonia-port/cloud-**', '!avalonia-port/gate-**']` in distro-check.yml,
+  reference-render.yml and snapshot-lock.yml. `workflow_dispatch` stays. Cloud branches are reviewed locally and re-pushed
+  as normal `avalonia-port/<slug>` PR branches, which still get the full push CI. rgate only dispatches build.yml
+  (`gh workflow run build.yml --ref avalonia-port/gate-...`) and never waits on these push runs.
+- Constraint: `cloud-` and `gate-` are reserved prefixes. A real lane slug must not start with either, or its pushes
+  silently lose distro-check, reference-render and snapshot-lock.
+- Advised: main session.
+## 2026-10-22: One Core bark engine: main's BarkEngine + BarkHead, companion-barks' second engine dropped (main-sync #7 merge)
+- Question: the main-sync #7 tip (`avalonia-port/main-20261015-compat`) already carries a Core `BarkEngine` hosted by
+  `CCP.Avalonia/Platform/BarkHead.cs` (companion lane, b0aa1083e/8485a6665/661745d7a). Lane companion-barks added a different,
+  API-incompatible `BarkEngine` at the same path plus `Views/AvatarTube/BarkHost.cs`, also started from App startup: two engines
+  would double-fire every bark.
+- Options: A) keep main's engine + BarkHead, drop ours, re-point our callers; B) keep ours, delete main's (breaks CompanionCore,
+  CoreBark, CompanionBarkHeadTests); C) merge both engines in one sync (too large for a merge).
+- Choice: A, advised by the supervisor. The bouncing-text triggers now raise on `BarkHead.Engine`; the panic `barks` surface
+  (a P06 floor hold WPF does not have) is dropped, main's ladder-mode `Raise("Panic")` stays; `BarkRuleLoader` stays in the WPF head.
+- Behaviour WPF has and this engine lacks goes to follow-up lane companion-barks-b (listed with WPF lines in the parity row
+  `feat-companion-barks`): idle chatter + gated-idle bias, whisper/narrator floors, tier latch key, DryRun, ordinary voiced
+  barks queued through Giggle. Lane barks-wpf gets the same rule.
+## 2026-10-14: final verification moves to alpha/beta testers; proposed goal-text replacement
+- Question (user decision, 2026-10-14): final verification is done by alpha/beta testers. Done means the Avalonia app
+  runs and looks/works the same as WPF or better. Do the goal's phase 4 and done criteria still fit?
+- Finding: no. Two parts assume we verify every row ourselves:
+  - Phase 4 ends with "one side-by-side verification pass at the end, area by area" (Keincheck run + WPF side-by-side
+    per row), and its live batches cover all native surfaces (web views, games, overlays, tray, hotkeys, audio/video).
+  - Done criterion 1 needs every ledger row "verified" or "improved" with linked evidence. Our standing rule is that
+    agents never mark rows verified, so this criterion can only be met by testers, and the goal cannot end on our side.
+- Options: (A) keep the text, run the full agent side-by-side pass anyway (weeks of live runs, duplicates the testers);
+  (B) agents bring every row to "wired" or better with test/render evidence, testers set "verified"; agent live checks
+  stay only for safety surfaces; (C) drop live checks entirely (rejected: user said keep panic/lockdown).
+- Choice: B (advised by: user decision; supervisor drafted the text). Until the goal text is changed, lanes prioritise
+  stub -> wired and the release phases (settings migration test, Linux package, installer switch, WPF retirement) over
+  live-check batches. Live panic/lockdown/stop/lock checks continue, batched by area. Live-queue files
+  (`~/ccp-port/evidence/live-queue/<area>.md`) become the tester checklist.
+- Proposed replacement for "### 4. Verify on Linux" (whole section):
+  > ### 4. Verify
+  > Verification policy:
+  > - Per branch: build, tests and the headless render-all check only. No per-branch live Keincheck run.
+  > - Agent live Keincheck checks only for safety surfaces (panic, lockdown, stop and lock paths), batched by area.
+  >   They must pass before the shipping switch.
+  > - Final verification is done by alpha/beta testers. For each area the agents keep a tester checklist
+  >   (docs/avalonia-test-plan.md, built from the live-queue files and ledger rows: what to open, what to click, what
+  >   WPF does) and turn tester reports into ledger fixes. Only tester reports (or the safety checks above) move a row
+  >   to "verified".
+  > - Where performance matters, add a repeatable measurement: startup to the first interactive window, tab-switch
+  >   latency, memory after warm-up.
+- Proposed replacement for "## Done criteria (all required)", first bullet:
+  > - Every ledger row is "wired", "verified" or "improved", with linked evidence (tests, headless render, or a WPF
+  >   side-by-side render for visual rows). No "missing", "stub" or "blocked" rows remain. "Verified" comes from
+  >   tester reports, not from agents.
+- Proposed new done-criterion bullets (added after the first):
+  > - The live safety checks (panic, lockdown, stop and lock paths) pass on the Linux build that ships.
+  > - docs/avalonia-test-plan.md lists every area with tester steps and the WPF behaviour to compare against.
+- Unchanged: performance, settings-migration test, Linux package, Windows installer ships Avalonia only, WPF kept as
+  compiling reference, CI green, stack PR rules, decisions log.
+## 2026-10-14: The user's max video length also ends app-started web videos (avalonia-port/video-max-cap-links)
+- Bug BUG-7NAKK79CZ2 (= WPF ccp-bugs #1438): a 25-minute web video played under a 20m 3s "Duration filter" max. Every
+  mandatory-video path already armed the cap; the uncapped path was the browser web-video takeover (autonomy WebVideo, AI
+  effect, chaos HT link, remote `play_hypnotube`), whose hard stop was only clip length + 15 s (max 1 h).
+- WPF main fixed the takeover itself (#1438, `Services/Video/VideoLengthCap.cs`): the cut counts PLAYED time from the
+  takeover's first playback (`BrowserMediaService.OnMediaProgress` playedSeconds), never for User/AvatarLink or a video the
+  player asked for in chat, also when the page reports no length. The 2026-10-15 main sync took that over this branch's
+  wall-clock `VideoMaxCap.TakeoverStopAfter`, which was deleted (two cuts would let pauses eat the allowance, which #1438 forbids).
+- Kept from this branch (advised by: supervisor): a replay of the same mandatory clip (vout heal, browser->LibVLC fallback)
+  continues the clip's cap instead of restarting it - WPF carries the played milliseconds into the next
+  `StartMaxLengthCapTimer` (`CarryMaxLenCap`, read before the teardown drops the clock); Avalonia's
+  `MandatoryVideoScheduler.Guard` adds `capSpentBefore` via Core `VideoMaxCap.CapLeft`.
+- Avalonia has no web-video takeover yet; when it is ported it must follow WPF `VideoLengthCap.BrowserTakeoverSeconds`.
+- Tests: `Tests/CCP.Core.Tests/VideoMaxCapTests.cs`, `Tests/CCP.Avalonia.Tests/MandatoryVideoOverlayTests.cs` (heal replay
+  ends at the cap), each fail-proven. Live tester step: ~/ccp-port/evidence/live-queue/media.md.
+## 2026-10-14: Settings migration test input = local only (avalonia-port/settings-migration-test)
+- Question: the settings-migration test needs a real WPF-release settings file. Found the user's WPF 7.x profile on the
+  mounted Windows drive (settings.json 768 keys, 2026-10-04). Repo is public.
+- Options: scrub+commit; local-only (env var, CI skips, commit only aggregate results); don't use.
+- Choice (advised by: user): LOCAL ONLY, nothing from the profile committed. Test reads CCP_MIGRATION_PROFILE (a dir),
+  copies it to a temp dir, never touches the original (read-only use), skips when unset. Evidence committed: key counts
+  + pass/fail only, no values. Never copy auth_token.dat / chaster_auth.dat / browser_data*.
+- Shape: own testhost `Tests/CCP.Avalonia.Migration.Tests` (CorePaths.UserData is immutable per process and Avalonia
+  sets up once per process, so it cannot share CCP.Avalonia.Tests' profile). Optional CCP_MIGRATION_ROAMING copies only
+  `achievements.json` (WPF keeps it in AppData\Roaming). CI runs a synthetic variant through the same assertions.
+- What the first real run found (3 keys, 34 files), fixed in this lane: (A) quitting without opening the Companion tab
+  reset `CompanionSectionOpen` (Avalonia only; `MainShellWindow.CompanionFx.cs` persists only after a restore);
+  (B) built-in Awareness presets minted new action ids on every load (`SettingsService.KeepActionIds`, Core: WPF benefits
+  too); (D) REAL REGRESSION: a profile moved to Linux re-extracts builtin-locked (archive path changed) and this head
+  shipped no `LockedMod/overrides`, so the 25 gender-neutral voice lines were deleted, the old gendered ones restored and
+  PNGs reverted; the overrides now ship in output and publish (tarball) like WPF's copy targets.
+- Named expected transforms (approved by the supervisor; each asserted precisely, nothing broader):
+  `patreon-tier-cleared-without-tokens` (PatreonTier, only to 0: Windows DPAPI secrets are not portable; Linux users sign
+  in again - tester plan note), `pack-stamp-new-root` (builtin_mods/*/pack.json differs only in sourcePath+extractedUtc),
+  `circe-override-of-this-release` (a builtin-locked file byte-identical to this release's shipped override),
+  `quest-roll` (quests.json differs only in daily/weekly roll keys, only when that roll is due), `exit-flush-same-content`
+  (media_history/feature_day_log/quests/achievements rewritten with LF, JSON-equal). Settings backups rotate by design.
+## 2026-10-13: Privacy sync sends only owned fields (interim; wire-views-profile-privacy-panel)
+
+- Question: WPF sends all six privacy fields (`allow_discord_dm`, `show_online_status`, `share_profile_picture`,
+  `public_share_avatar`, `goon_share_avatar`, `goon_share_dm`) on every `/v2/user/sync` (ProfileSyncService.cs:1710) and never
+  reads them back from `GET /v2/user/profile`. Avalonia's `SyncPush.ConsentFields` sends only the fields toggled on this head
+  while signed in. A fresh install, or a toggle made signed out, can therefore show a switch off while an earlier server grant
+  (avatar, DM) stays in force.
+- Option A (WPF parity): send all six after load. A fresh Avalonia install would revoke earlier server grants down to local
+  defaults (all off, ShowOnlineStatus on), a user-visible payload change (P44).
+- Option B: keep scoped sending; record the difference in the `views-profile-privacy-panel` parity row.
+- Choice: B, interim. Advised by the supervisor: never risk revoking a server privacy grant without an owner decision.
+  oracle-deep decision pending; follow-up lane wire-views-profile-privacy-panel-b.
+## 2026-10-22: Scrolller web gate on Avalonia: headers + navigation guard; refusing sub-resources is a follow-up (avalonia-port/sync7-scrolller-d)
+- Question: WPF ScrolllerWebGate (main c45d58a65, f7102be55, 92fdebaa4) answers Scrolller requests inside WebView2 pages:
+  a local 403 while the licence switch is off, the device cache (200/206/416), whole fetches charged to the daily share. Licence
+  compliance: with the switch off the app must not fetch Scrolller.
+- Finding: Avalonia.Controls.WebView 12.1.0's `WebResourceRequestedEventArgs` carries only `Request` (Uri, Method, Headers with
+  TrySet/TryRemove): no response, no deferral, no cancel. On Linux it is raised from WebKitGTK `resource-load-started`.
+- Options: (A) rules into Core, WebHost rewrites the headers it can; (B) native interop per engine (WebKitGTK user content
+  filter, WebView2 COM filter via `TryGetPlatformHandle`).
+- Answer (advised by: supervisor; oracle-deep review pending): interim A plus a navigation guard. Core `ScrolllerWebRules` holds
+  the gate's pure rules (WPF forwards, one copy). `WebHost` gives every hosted page's Scrolller requests the honest user-agent and
+  replaces a foreign Referer; while `ScrolllerPolicy.Enabled` is off it cancels top-level navigations to Scrolller and refuses
+  `Navigate`/`Source` to it. The in-app browser (`GateScrolller="False"`) is the user's own browsing and stays untouched, as in WPF.
+- Gap: Scrolller sub-resources embedded in a page cannot be refused, served from the device cache or charged on this engine.
+  Follow-up unit `sync7-scrolller-d-native`: WebKitGTK user content filter (Linux, tested) + WebView2 AddWebResourceRequestedFilter
+  (Windows, compiled-not-run).
+- Tests: `Tests/CCP.Avalonia.Tests/WebHostScrolllerGateTests.cs`, `Tests/CCP.Core.Tests/ScrolllerWebRulesTests.cs`.
+
+## 2026-10-22: The installer stall copy lives twice: WPF keeps its own, Avalonia uses Core (avalonia-port/updater-stall-timeout)
+- Question: Core `ReleaseFeed.CopyWithStallTimeoutAsync` (port of WPF ddc9dd047) is a second copy of WPF
+  `UpdateService.CopyWithStallTimeoutAsync` (`ConditioningControlPanel/Services/Update/UpdateService.cs:657`). CLAUDE.md forbids
+  a second copy of logic.
+- Options: A) delegate: WPF calls Core, as `UpdateService.IsTransientNetworkError` (`:1483`) already does; B) keep: WPF keeps
+  its own copy, only the Avalonia `AppUpdater` uses Core.
+- Choice: B (keep), advised by the reviewer and the supervisor.
+- Reason: the WPF head is frozen, and the last WPF release's updater is what hands users over to this release, so its behaviour
+  must stay byte-identical. The two copies are equal today; Core tests (`ReleaseFeedTests`, `AppUpdaterTests`) cover the Core one.
+- Follow-up 2026-10-22 (advised by: oracle-deep, option C; lane migration-privacy-seed): `SyncPush.ConsentFields` stays
+  scoped. Loading a WPF-written settings.json (no `consentOwnedFields` key, so no consent-aware build saved it) with a
+  non-empty `UnifiedId` and all six privacy switches as JSON bools sets `ConsentOwnedAccount` = that id and
+  `ConsentOwnedFields` = all six (`SyncPush.SeedFromWpfSettings`, called from `SettingsService.Load`). WPF sent all six on
+  every sync, so re-sending them changes nothing on the wire. A partial file (any of the six missing or not a bool), a
+  fresh install, a missing/corrupt file, a backup restore or no `UnifiedId` seeds nothing and stays scoped (B); another
+  account sends none. Accepted risk (WPF parity): a privacy change made on web or
+  mobile after the last WPF sync is reverted by the first Avalonia sync. Tests: `Tests/CCP.Core.Tests/PrivacyMigrationSeedTests.cs`.
+
+## 2026-10-14: Settings migration test input = local only (avalonia-port/settings-migration-test)
+- Question: the settings-migration test needs a real WPF-release settings file. Found the user's WPF 7.x profile on the
+  mounted Windows drive (settings.json 768 keys, 2026-10-04). Repo is public.
+- Options: scrub+commit; local-only (env var, CI skips, commit only aggregate results); don't use.
+- Choice (advised by: user): LOCAL ONLY, nothing from the profile committed. Test reads CCP_MIGRATION_PROFILE (a dir),
+  copies it to a temp dir, never touches the original (read-only use), skips when unset. Evidence committed: key counts
+  + pass/fail only, no values. Never copy auth_token.dat / chaster_auth.dat / browser_data*.
+- Shape: own testhost `Tests/CCP.Avalonia.Migration.Tests` (CorePaths.UserData is immutable per process and Avalonia
+  sets up once per process, so it cannot share CCP.Avalonia.Tests' profile). Optional CCP_MIGRATION_ROAMING copies only
+  `achievements.json` (WPF keeps it in AppData\Roaming). CI runs a synthetic variant through the same assertions.
+- What the first real run found (3 keys, 34 files), fixed in this lane: (A) quitting without opening the Companion tab
+  reset `CompanionSectionOpen` (Avalonia only; `MainShellWindow.CompanionFx.cs` persists only after a restore);
+  (B) built-in Awareness presets minted new action ids on every load (`SettingsService.KeepActionIds`, Core: WPF benefits
+  too); (D) REAL REGRESSION: a profile moved to Linux re-extracts builtin-locked (archive path changed) and this head
+  shipped no `LockedMod/overrides`, so the 25 gender-neutral voice lines were deleted, the old gendered ones restored and
+  PNGs reverted; the overrides now ship in output and publish (tarball) like WPF's copy targets.
+- Named expected transforms (approved by the supervisor; each asserted precisely, nothing broader):
+  `patreon-tier-cleared-without-tokens` (PatreonTier, only to 0: Windows DPAPI secrets are not portable; Linux users sign
+  in again - tester plan note), `pack-stamp-new-root` (builtin_mods/*/pack.json differs only in sourcePath+extractedUtc),
+  `circe-override-of-this-release` (a builtin-locked file byte-identical to this release's shipped override),
+  `quest-roll` (quests.json differs only in daily/weekly roll keys, only when that roll is due), `exit-flush-same-content`
+  (media_history/feature_day_log/quests/achievements rewritten with LF, JSON-equal). Settings backups rotate by design.

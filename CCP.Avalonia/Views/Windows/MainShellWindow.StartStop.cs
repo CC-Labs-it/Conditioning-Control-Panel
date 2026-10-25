@@ -12,7 +12,6 @@ using Avalonia.Data;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Localization;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
-using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -30,7 +29,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private async void BtnStart_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
             if (RemoteControllerConnected) return;   // WPF StartStop.cs:43: a controller drives
-            if (!CoreEngine.IsRunning) { StartEngineFromUser(); return; }
+            if (!CoreEngine.IsRunning && App.Sessions is { IsRunning: true, IsPaused: true })
+            {
+                StartEngineFromUser();
+                return;
+            }
             if ((CoreEngine.IsRunning || App.Sessions?.IsRunning == true) && RefuseStopUnderLockdown()) return;
             // WPF MainWindow.StartStop.cs:58: a running session asks first; declining keeps everything on.
             if (App.Sessions?.IsRunning == true)
@@ -62,7 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             s.SpiralEnabled = rng.Next(2) == 0;
             s.PinkFilterEnabled = rng.Next(2) == 0;
             CoreSettings.Save();
-            if (!CoreEngine.IsRunning) StartEngineFromUser();
+            if (!CoreEngine.IsRunning) StartEngine();
         }
 
         private void MenuStartNormal_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
@@ -70,29 +73,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!CoreEngine.IsRunning) StartEngineFromUser();
         }
 
-        /// <summary>Only explicit user START paths resume a session parked by panic.</summary>
-        internal void StartEngineFromUser() => StartEngine(fromUser: true);   // WPF gates only BtnStart (:43)
-
         /// <summary>WPF StartEngine, through the portal wrapper so the panic key is bound first.</summary>
-        internal void StartEngine(bool fromUser = false)
+        internal void StartEngineFromUser() => StartEngine(resumeParkedSession: true);
+
+        internal void StartEngine(bool resumeParkedSession = false)
         {
             var gen = ++_engineGen;
             StartEffect(() =>
             {
                 if (gen != _engineGen || CoreEngine.IsRunning) return;
-                var resuming = fromUser && App.Sessions is { IsRunning: true, IsPaused: true };
+                var runner = App.Sessions;
+                var resuming = resumeParkedSession && runner is { IsRunning: true, IsPaused: true };
                 CoreEngine.Start(resumingSession: resuming);
-                if (fromUser && App.Sessions is { } runner &&
-                    SessionClockRules.StartResumesParkedSession(CoreEngine.IsRunning, runner.IsRunning, runner.IsPaused))
+                if (resuming)
                 {
-                    runner.Resume();
+                    runner!.Resume();
                     runner.ReassertScheduleAfterEngineStart();
+                    SetPauseButton(false);
                 }
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
                 SpiralOverlay.Refresh(this);
                 StartConditioningTimeTracker();    // WPF StartEngine :423
                 UpdateStartButton();
+                if (resuming) OnSessionTick();
             });
         }
 
@@ -131,10 +135,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void UpdateStartButton(bool force = false)
         {
             if (!force && RemoteControllerConnected) return;   // WPF :941 keeps the remote label
-            OnSessionTick();
-            // WPF StartStop.cs:1006-1023: the session clock rides BtnStart only while the engine runs;
-            // a panic-parked session gets the plain ▶ Start back, its clock stays on BtnStartSession.
-            if (CoreEngine.IsRunning && App.Sessions is { IsRunning: true }) return;
             var running = CoreEngine.IsRunning;
             if (Named<Button>("BtnStart") is { } b)
             {

@@ -28,12 +28,15 @@ public sealed class SessionRunWireTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                global::ConditioningControlPanel.Avalonia.RenderProof.EnsureSetUp();
+                AppBuilder.Configure<AvApp>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
 
             var shell = new MainShellWindow();
             shell.Show();
             var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
             runner.SessionLog.LogReady += shell.OnSessionLogReady;
+            runner.Ticked += shell.OnSessionTick;   // App.axaml.cs wires the same
             try
             {
                 CoreEngine.StoppedHook = shell.OnEngineStopped;
@@ -53,39 +56,33 @@ public sealed class SessionRunWireTests
                 Assert.True(runner.IsRunning && runner.IsPaused);
                 Assert.Equal(1, runner.PauseCount);
                 Assert.False(CoreEngine.IsRunning || CoreFlash.IsRunning);
-                // WPF StartStop.cs:1006-1023: the stopped engine gets the plain ▶ Start back (pressing it
-                // resumes); the paused clock lives only on BtnStartSession, and a late tick keeps it so.
-                shell.OnSessionTick();
+                // WPF MainWindow.Presets.cs:1943 + UpdateStartButton: the stopped engine gets the plain
+                // ▶ Start back; the held session clock says it is paused (the pause's own tick paints it).
+                var paused = "[" + Loc.Get("label_paused") + "]";
                 Assert.Equal(Loc.Get("label_start"), shell.Named<TextBlock>("TxtStartLabel")!.Text);
                 Assert.Equal("\u25B6", shell.Named<TextBlock>("TxtStartIcon")!.Text);
-                Assert.Contains("[" + Loc.Get("label_paused") + "]", Assert.IsType<TextBlock>(presets.BtnStartSession.Content).Text!);
+                Assert.EndsWith(paused, Assert.IsType<TextBlock>(presets.BtnStartSession.Content).Text!);
                 Assert.True(shell.IsSessionFeatureLockActive);
                 var pause = shell.Named<Button>("BtnPauseSession")!;
                 Assert.True(pause.IsVisible);
                 Assert.Equal("\u25B6", shell.Named<TextBlock>("TxtPauseIcon")!.Text);
                 Assert.Equal(Loc.Get("tooltip_resume_session"), ToolTip.GetTip(pause));
 
-                Dispatcher.UIThread.RunJobs();
-                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-                Dispatcher.UIThread.RunJobs();
-                using (var frame = shell.CaptureRenderedFrame())
-                {
-                    Assert.NotNull(frame);
-                    frame.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-sync7-session-safety-paused.png"));
-                }
-
+                var runsBeforeResume = CoreSettings.Current.TotalSessions;
                 pause.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));   // Resume
                 Assert.False(runner.IsPaused);
                 Assert.True(CoreEngine.IsRunning);
+                Assert.Equal(runsBeforeResume, CoreSettings.Current.TotalSessions);
                 Assert.Equal("\u23F8", shell.Named<TextBlock>("TxtPauseIcon")!.Text);
                 Assert.Equal(Loc.GetF("tooltip_pause_session_100_xp_penalty_per_pause_npause", 1), ToolTip.GetTip(pause));
 
                 MainShellWindow.StopEverything();
-                var count = CoreSettings.Current.TotalSessions;
                 shell.Named<Button>("BtnStart")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-                Assert.True(CoreEngine.IsRunning && runner.IsRunning && !runner.IsPaused);
-                Assert.Equal(count, CoreSettings.Current.TotalSessions);
-                Assert.DoesNotContain("[" + Loc.Get("label_paused") + "]", shell.Named<TextBlock>("TxtStartLabel")!.Text!);
+                Assert.True(CoreEngine.IsRunning);
+                Assert.False(runner.IsPaused);
+                Assert.Equal(runsBeforeResume, CoreSettings.Current.TotalSessions);
+                Assert.DoesNotContain(paused, shell.Named<TextBlock>("TxtStartLabel")!.Text!);
+                Assert.DoesNotContain(paused, Assert.IsType<TextBlock>(presets.BtnStartSession.Content).Text!);
 
                 runner.Stop(completed: false);   // the stop-session confirm's OK
                 Assert.False(runner.IsRunning || CoreEngine.IsRunning || pause.IsVisible);

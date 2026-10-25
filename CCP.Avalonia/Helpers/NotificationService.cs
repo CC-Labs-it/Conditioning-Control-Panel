@@ -8,6 +8,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Services;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Helpers
@@ -19,27 +20,42 @@ namespace ConditioningControlPanel.Avalonia.Helpers
     /// NotificationService.cs: same colours, sizes, 5 s default, action button and × dismiss,
     /// newest stacked below in MainShellWindow's NotificationHost. Toasts fired before the host
     /// attaches are replayed on attach, as WPF does.
-    /// ponytail: WPF's ShowSticky/Dismiss(key) are not ported - nothing on this head calls them yet.
+    /// Sticky notices survive until dismissed and remember user dismissal in shared settings.
     /// </summary>
     public sealed class NotificationService
     {
         private Panel? _host;
-        private readonly List<(string message, NotificationType type, TimeSpan? duration, string? actionLabel, Action? action)> _pending = new();
+        private readonly List<(string message, NotificationType type, TimeSpan? duration, string? key,
+            string? actionLabel, Action? action, string? secondaryLabel, Action? secondaryAction)> _pending = new();
+        private readonly Dictionary<string, Border> _stickyByKey = new();
+        // Test seam: runs the post-fade removal; tests pass (a, _) => a() instead of waiting 220 ms.
+        internal Action<Action, TimeSpan> RemoveLater
+        {
+            get => ScheduleRemoval;
+            set => ScheduleRemoval = value;
+        }
+        // Both lanes use the same scheduler; the app still performs a real one-shot fade.
+        internal Action<Action, TimeSpan> ScheduleRemoval = (remove, delay) => DispatcherTimer.RunOnce(remove, delay);
 
         public void AttachHost(Panel host)
         {
             _host = host;
             var queue = _pending.ToArray();
             _pending.Clear();
-            foreach (var (msg, type, dur, label, action) in queue) Show(msg, type, dur, label, action);
+            foreach (var (msg, type, dur, key, label, action, secondaryLabel, secondaryAction) in queue)
+            {
+                if (key != null) ShowSticky(key, msg, type, label, action);
+                else Show(msg, type, dur, label, action, secondaryLabel, secondaryAction);
+            }
         }
 
         public void Show(string message, NotificationType type = NotificationType.Info, TimeSpan? duration = null,
-            string? actionLabel = null, Action? action = null)
+            string? actionLabel = null, Action? action = null,
+            string? secondaryActionLabel = null, Action? secondaryAction = null)
         {
-            if (_host == null) { _pending.Add((message, type, duration, actionLabel, action)); return; }
+            if (_host == null) { _pending.Add((message, type, duration, null, actionLabel, action, secondaryActionLabel, secondaryAction)); return; }
 
-            var border = BuildToast(message, type, actionLabel, action);
+            var border = BuildToast(message, type, null, actionLabel, action, secondaryActionLabel, secondaryAction);
             _host.Children.Add(border);
             border.Opacity = 1; // fades in through the Opacity transition (WPF AnimateIn, 180 ms)
 
@@ -49,7 +65,34 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             timer.Start();
         }
 
-        private Border BuildToast(string message, NotificationType type, string? actionLabel, Action? action)
+        /// <summary>WPF ShowSticky: no expiry, session deduplication and persistent manual dismissal.</summary>
+        public void ShowSticky(string key, string message, NotificationType type = NotificationType.Info,
+            string? actionLabel = null, Action? action = null)
+        {
+            if (!NotificationDismissals.CanShow(key, CoreSettings.Current.DismissedNotificationKeys)) return;
+            if (_host == null) { _pending.Add((message, type, null, key, actionLabel, action, null, null)); return; }
+            ShowStickyInternal(key, message, type, actionLabel, action);
+        }
+
+        /// <summary>Programmatic dismissal leaves the key eligible to appear again.</summary>
+        public void Dismiss(string key)
+        {
+            if (string.IsNullOrWhiteSpace(key)) return;
+            if (_stickyByKey.Remove(key, out var border)) FadeOutAndRemove(border);
+            _pending.RemoveAll(p => p.key == key);
+        }
+
+        private void ShowStickyInternal(string key, string message, NotificationType type, string? label, Action? action)
+        {
+            if (_stickyByKey.ContainsKey(key)) return;
+            var border = BuildToast(message, type, key, label, action);
+            _stickyByKey.Add(key, border);
+            _host!.Children.Add(border);
+            border.Opacity = 1;
+        }
+
+        private Border BuildToast(string message, NotificationType type, string? stickyKey,
+            string? actionLabel, Action? action, string? secondaryActionLabel = null, Action? secondaryAction = null)
         {
             var accent = new SolidColorBrush(Color.Parse(type switch
             {
@@ -76,42 +119,63 @@ namespace ConditioningControlPanel.Avalonia.Helpers
                 },
             };
 
-            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            // ponytail: no product caller passes a secondary action yet; WPF's WarnIfFlashLibraryEmpty /
+            // WarnIfWallpaperLibraryEmpty (MainWindow.StartStop.cs:236-274) are not on this head (wire-shell-notifications-toasts-b).
+            bool hasSecondary = !string.IsNullOrWhiteSpace(secondaryActionLabel) && secondaryAction != null;
+            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+                RowDefinitions = new RowDefinitions(hasSecondary ? "Auto,Auto" : "Auto") };
             grid.Children.Add(new TextBlock
             {
                 Text = message,
                 Foreground = Brushes.White,
-                FontSize = 12,
+                FontSize = 13,
+                LineHeight = 20,
                 TextWrapping = TextWrapping.Wrap,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 8, 0),
             });
 
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
-            Grid.SetColumn(buttons, 1);
+            Panel buttons = hasSecondary
+                ? new WrapPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top }
+                : new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
+            if (hasSecondary)
+            {
+                Grid.SetRow(buttons, 1);
+                Grid.SetColumnSpan(buttons, 2);
+                buttons.Margin = new Thickness(0, 12, 0, 0);
+            }
+            else Grid.SetColumn(buttons, 1);
             grid.Children.Add(buttons);
 
-            if (!string.IsNullOrWhiteSpace(actionLabel) && action != null)
+            void AddAction(string? label, Action? callback, bool primary)
             {
+                if (string.IsNullOrWhiteSpace(label) || callback == null) return;
                 // TextBlock content: Avalonia's Button would read '_' in a label as an access key.
                 var actionBtn = new Button
                 {
-                    Name = "ToastAction",
-                    Content = new TextBlock { Text = actionLabel, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = Brushes.White },
+                    Name = primary ? "ToastAction" : "ToastSecondaryAction",
+                    Content = new TextBlock { Text = label, FontSize = 12, FontWeight = FontWeight.SemiBold,
+                        Foreground = primary ? Brushes.Black : Brushes.White },
                     Padding = new Thickness(10, 4),
                     Margin = new Thickness(0, 0, 6, 0),
-                    Background = accent,
-                    BorderThickness = new Thickness(0),
+                    Background = primary ? accent : Brushes.Transparent,
+                    BorderBrush = accent,
+                    BorderThickness = new Thickness(1),
                     Cursor = new Cursor(StandardCursorType.Hand),
                 };
                 actionBtn.Click += (_, _) =>
                 {
-                    try { action(); }
+                    (border.Tag as DispatcherTimer)?.Stop();
+                    try { callback(); }
                     catch (Exception ex) { Log.Warning(ex, "NotificationService: action button handler failed"); }
+                    if (stickyKey != null) _stickyByKey.Remove(stickyKey);
                     FadeOutAndRemove(border);
                 };
                 buttons.Children.Add(actionBtn);
             }
+
+            AddAction(actionLabel, action, primary: true);
+            AddAction(secondaryActionLabel, secondaryAction, primary: false);
 
             var dismissBtn = new Button
             {
@@ -128,8 +192,22 @@ namespace ConditioningControlPanel.Avalonia.Helpers
                 VerticalAlignment = VerticalAlignment.Top,
             };
             global::Avalonia.Automation.AutomationProperties.SetName(dismissBtn, ConditioningControlPanel.Localization.Loc.Get("btn_close"));   // icon-only: name it
-            dismissBtn.Click += (_, _) => FadeOutAndRemove(border);
-            buttons.Children.Add(dismissBtn);
+            dismissBtn.Click += (_, _) =>
+            {
+                if (stickyKey != null)
+                {
+                    if (NotificationDismissals.Remember(CoreSettings.Current.DismissedNotificationKeys, stickyKey))
+                        CoreSettings.Save();
+                    _stickyByKey.Remove(stickyKey);
+                }
+                FadeOutAndRemove(border);
+            };
+            if (hasSecondary)
+            {
+                Grid.SetColumn(dismissBtn, 1);
+                grid.Children.Add(dismissBtn);
+            }
+            else buttons.Children.Add(dismissBtn);
 
             border.Child = grid;
             return border;
@@ -137,6 +215,7 @@ namespace ConditioningControlPanel.Avalonia.Helpers
 
         private void FadeOutAndRemove(Border border)
         {
+            if (!border.IsHitTestVisible) return; // a fading toast cannot run its action twice
             (border.Tag as DispatcherTimer)?.Stop();
             border.IsHitTestVisible = false;
             // WPF FadeOutAndRemove: 220 ms ease-in (the fade-in transition is 180 ms ease-out).
@@ -145,7 +224,8 @@ namespace ConditioningControlPanel.Avalonia.Helpers
                 new DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(220), Easing = new QuadraticEaseIn() },
             };
             border.Opacity = 0;
-            DispatcherTimer.RunOnce(() => _host?.Children.Remove(border), TimeSpan.FromMilliseconds(220));
+            var host = border.Parent as Panel;
+            RemoveLater(() => host?.Children.Remove(border), TimeSpan.FromMilliseconds(220));
         }
     }
 }

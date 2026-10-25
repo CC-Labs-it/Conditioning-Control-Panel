@@ -24,6 +24,10 @@ namespace ConditioningControlPanel.Avalonia
                     rollingInterval: Serilog.RollingInterval.Day, retainedFileCountLimit: 14,
                     fileSizeLimitBytes: 10_000_000, rollOnFileSizeLimit: true,
                     flushToDiskInterval: TimeSpan.FromSeconds(1))
+                .WriteTo.Logger(session => session
+                    .Filter.ByIncludingOnly(e => e.Properties.ContainsKey("SessionStep"))
+                    .WriteTo.File(System.IO.Path.Combine(ConditioningControlPanel.CorePaths.UserData, "logs", "crash.log"),
+                        fileSizeLimitBytes: 10_000_000, rollOnFileSizeLimit: true, retainedFileCountLimit: 14))
                 .CreateLogger();
             // The session's hold on the phrase pools (#906); WPF seeds the same three in App.xaml.cs:324.
             ConditioningControlPanel.Services.PhrasePoolCustody.Seed();

@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Data;
@@ -10,6 +12,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs
@@ -36,11 +39,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             LstEmotePresets.ItemsSource = s.RemoteEmotePresets;
             ChkStopEffectsOnRemoteDisconnect.IsChecked = s.StopEffectsOnRemoteDisconnect;
             ChkRemoteShareAvatar.IsChecked = s.RemoteShareAvatar;
+            ChkRemoteShareMediaSources.IsChecked = s.RemoteShareMediaSources;
             _isLoading = false;
 
             LstRemoteCommandLog.ItemsSource = _log;
             var r = Relay.Value;
-            EventHandler connected = (_, _) => Dispatcher.UIThread.Post(() => UpdateRemoteStatus(r.ControllerConnected));
+            EventHandler connected = (_, _) => Dispatcher.UIThread.Post(() => { UpdateRemoteStatus(r.ControllerConnected); UpdateDirectoryListingStatus(); });
             EventHandler<string> received = (_, a) => Dispatcher.UIThread.Post(() => AppendRemoteCommandLog(a));
             EventHandler ended = (_, _) => Dispatcher.UIThread.Post(() => ShowSession(null));
             // The relay outlives windows. Hidden tabs stay attached, closed tabs must unsubscribe.
@@ -51,12 +55,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 r.SessionEnded += ended;
                 ShowSession(r.SessionCode);
                 UpdateRemoteStatus(r.ControllerConnected, idle: !r.IsActive);
+                CoreMods.ModChanged += OnModChanged;
+                ApplyFeatureArt();
             };
             DetachedFromVisualTree += (_, _) =>
             {
                 r.ControllerConnectedChanged -= connected;
                 r.CommandReceived -= received;
                 r.SessionEnded -= ended;
+                CoreMods.ModChanged -= OnModChanged;
             };
             RefreshTierCardHighlight();
         }
@@ -65,8 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// Tests swap in a fake-relay client before opening the shell.</summary>
         internal static Lazy<RemoteRelay> Relay = new(() => new RemoteRelay(
             () => CoreSettings.Current.AuthToken, () => CoreAccount.UnifiedUserId, CoreReleaseContent.AppVersion,
-            RemoteCommands.Execute, RemoteCommands.StopEffects,
-            stopEffectsByCause: RemoteCommands.StopEffects));
+            RemoteCommands.Execute, RemoteCommands.StopEffects));
 
         private readonly ObservableCollection<string> _log = new();
 
@@ -82,8 +88,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private string SelectedTier => CmbRemoteTier.SelectedIndex switch { 1 => "standard", 2 => "full", _ => "light" };
 
-        /// <summary>WPF ShowRemoteControlWaiver, minus "Disable panic button": on this head a controller cannot
-        /// (RemoteCommandGate), so the waiver does not ask the subject to agree to it.</summary>
+        /// <summary>WPF 7.1.5 ShowRemoteControlWaiver, word for word: no strict lock or panic-off line on any tier
+        /// (the server refuses both since Remote v2), and the panic sentence says so.</summary>
         internal static string Waiver(string tier)
         {
             var a = new System.Text.StringBuilder();
@@ -101,14 +107,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 a.AppendLine("  - Start/stop autonomy mode");
                 a.AppendLine("  - Start/pause/stop sessions");
-                a.AppendLine("  - Enable strict lock (videos cannot be skipped)");
             }
             return "You are about to allow another person to remotely control parts of your app.\n\n" +
                    $"The Controller will be able to:\n{a}\n" +
+                   "Your panic key always works. A controller cannot switch it off or turn Strict Lock on.\n" +
                    "All media content shown comes from YOUR local files and settings.\n" +
                    "You assume full responsibility for this interaction.\n" +
                    "You can stop the session at ANY time by clicking \"Stop Session\" or closing the app.\n" +
-                   "A controller can never turn your panic key off.\n" +
                    "The session stays active as long as the app is running. If the app closes without stopping the session, it expires within 4 hours.";
         }
 
@@ -133,7 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             await StartAsync(owner, tier);
         }
 
-        private async Task StartAsync(Window owner, string tier)
+        internal async Task StartAsync(Window owner, string tier)
         {
             var r = Relay.Value;
             var code = await r.StartAsync(tier);
@@ -147,7 +152,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 return;
             }
             ShowSession(code);
+            OptInChain = RunOptInChainAsync();
         }
+
+        /// <summary>The opt-in chain the last session start kicked off (fire-and-forget; a test seam).</summary>
+        internal Task? OptInChain;
 
         /// <summary>The session panels on (a code) or off (null): WPF's enable path and StopRemoteControl/OnRemoteSessionEnded.</summary>
         private void ShowSession(string? code)
@@ -164,6 +173,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             OptInSectionPanel.Opacity = on ? 0.5 : 1.0;
             if (!on) { ChkOptIntoDirectory.IsChecked = false; OptInFormPanel.IsVisible = false; _log.Clear(); }
             UpdateRemoteStatus(false, idle: !on);
+            UpdateDirectoryListingStatus();
             ImgRemoteQrCode.Source = on ? QrCode(RemoteRelay.PairingUrl(code!, pin)) : null;
         }
 
@@ -278,7 +288,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             await Relay.Value.PushStatusNowAsync();
         }
 
-        // View half of MainWindow.RemoteControl.cs:647 - reveal the opt-in form, then pre-populate.
+        // Remote v2 (WPF RemoteControlTabView.xaml.cs:122): whether the controller's preview names the
+        // Scrolller niches. Saved, then pushed at once like Share avatar.
+        private async void ChkRemoteShareMediaSources_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var want = ChkRemoteShareMediaSources.IsChecked ?? false;
+            if (CoreSettings.Current.RemoteShareMediaSources == want) return;
+            CoreSettings.Current.RemoteShareMediaSources = want;
+            CoreSettings.Save();
+            await Relay.Value.PushStatusNowAsync();
+        }
+
+        // ---- Directory opt-in: WPF MainWindow.RemoteControl.cs:515-738 (ported from parity/trunk 61daf0358) ----
+        // The opt-in tick never persists (re-opt every session). Tags and the status line persist only
+        // when "Remember" is ticked at the moment the listing succeeds.
+        internal const int OptInMaxTags = 5;
+
+        private CheckBox[] OptInTagCheckBoxes() => new[]
+        {
+            ChkTagBimbo, ChkTagDrone, ChkTagTrance, ChkTagFeminization, ChkTagSubmission,
+            ChkTagDegradation, ChkTagAudioOk, ChkTagSoftOnly, ChkTagLockdownOk, ChkTagChastity,
+        };
+
         private void ChkOptIntoDirectory_Changed(object? sender, RoutedEventArgs e)
         {
             var checkedNow = ChkOptIntoDirectory.IsChecked == true;
@@ -286,19 +318,100 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (checkedNow) PopulateOptInFormFromSavedSettings();
         }
 
-        // Mirrors MainWindow.RemoteControl.cs:660. SavedDirectoryTags is on AppSettings, in Core.
         private void PopulateOptInFormFromSavedSettings()
         {
-            var saved = CoreSettings.Current.SavedDirectoryTags;
-            if (saved == null) return;
-            foreach (var cb in new[]
+            var s = CoreSettings.Current;
+            var saved = new HashSet<string>(s.SavedDirectoryTags ?? new List<string>());
+            foreach (var cb in OptInTagCheckBoxes()) cb.IsChecked = cb.Tag is string tag && saved.Contains(tag);
+            TxtOptInStatus.Text = s.SavedDirectoryStatusText ?? "";
+            UpdateOptInStatusCharCount();
+            ChkRememberOptInDetails.IsChecked = s.RememberDirectoryDetails;
+        }
+
+        private void TxtOptInStatus_TextChanged(object? sender, TextChangedEventArgs e) => UpdateOptInStatusCharCount();
+
+        private void UpdateOptInStatusCharCount()
+        {
+            if (TxtOptInStatusCount != null && TxtOptInStatus != null) TxtOptInStatusCount.Text = $"{(TxtOptInStatus.Text ?? "").Length}/80";
+        }
+
+        /// <summary>Soft cap of five tags: the sixth tick is undone and says why for 2.5 s.</summary>
+        private void ChkOptInTag_Click(object? sender, RoutedEventArgs e)
+        {
+            if (sender is not CheckBox { IsChecked: true } cb) return;
+            if (OptInTagCheckBoxes().Count(c => c.IsChecked == true) <= OptInMaxTags) return;
+            cb.IsChecked = false;
+            ShowOptInFeedback(Loc.Get("msg_optin_directory_max_tags"), 2500);
+        }
+
+        private List<string> GetSelectedDirectoryTags() =>
+            OptInTagCheckBoxes().Where(cb => cb.IsChecked == true && cb.Tag is string { Length: > 0 })
+                .Select(cb => (string)cb.Tag!).ToList();
+
+        private DispatcherTimer? _optInFeedbackTimer;
+        private void ShowOptInFeedback(string message, int persistMs)
+        {
+            TxtOptInFeedback.Text = message;
+            TxtOptInFeedback.IsVisible = true;
+            _optInFeedbackTimer?.Stop();
+            _optInFeedbackTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(persistMs) };
+            _optInFeedbackTimer.Tick += (_, _) =>
             {
-                ChkTagBimbo, ChkTagDrone, ChkTagTrance, ChkTagFeminization, ChkTagSubmission,
-                ChkTagDegradation, ChkTagAudioOk, ChkTagSoftOnly, ChkTagLockdownOk, ChkTagChastity,
-            })
+                _optInFeedbackTimer?.Stop();
+                TxtOptInFeedback.Text = "";
+                TxtOptInFeedback.IsVisible = false;
+            };
+            _optInFeedbackTimer.Start();
+        }
+
+        /// <summary>WPF RunOptInChainAsync: after a session starts, list it if the box is ticked. Best-effort,
+        /// the session is already running; a failure is one inline line for 4 s.</summary>
+        internal async Task RunOptInChainAsync()
+        {
+            if (ChkOptIntoDirectory.IsChecked != true) return;
+            var tags = GetSelectedDirectoryTags();
+            var statusText = TxtOptInStatus.Text ?? "";
+            if (tags.Count > OptInMaxTags) tags = tags.GetRange(0, OptInMaxTags);
+            if (statusText.Length > 80) statusText = statusText.Substring(0, 80);
+
+            if (!await Relay.Value.OptInToDirectoryAsync(tags, statusText))
             {
-                cb.IsChecked = cb.Tag is string tag && saved.Contains(tag);
+                ShowOptInFeedback(Loc.Get("msg_optin_directory_failed"), 4000);
+                return;
             }
+            UpdateDirectoryListingStatus();
+
+            var s = CoreSettings.Current;
+            if (ChkRememberOptInDetails.IsChecked == true)
+            {
+                (s.RememberDirectoryDetails, s.SavedDirectoryTags, s.SavedDirectoryStatusText) = (true, tags, statusText);
+                CoreSettings.Save();
+            }
+            else if (s.RememberDirectoryDetails)
+            {
+                // Remember was on, now off: the saved details go.
+                (s.RememberDirectoryDetails, s.SavedDirectoryTags, s.SavedDirectoryStatusText) = (false, new List<string>(), "");
+                CoreSettings.Save();
+            }
+        }
+
+        /// <summary>WPF UpdateDirectoryListingStatus: the "you're listed" banner under the code and the
+        /// shell's title-bar pill (Private only / Listed / Claimed).</summary>
+        private void UpdateDirectoryListingStatus()
+        {
+            var r = Relay.Value;
+            ListedConfirmationPanel.IsVisible = r.IsActive && r.DirectoryOptedIn;
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.UpdateDirectoryListingStatus(r.IsActive, r.DirectoryOptedIn, r.ControllerConnected);
+        }
+
+        private void OnModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(ApplyFeatureArt);
+
+        /// <summary>WPF ApplyFeatureArt: features/remote_control.png (a mod's own first) into the hero plate.
+        /// A null answer leaves the bare plate, as WPF's resolver does.</summary>
+        private void ApplyFeatureArt()
+        {
+            if (Helpers.ModArt.TryLoad("features/remote_control.png") is not { } art) return;
+            HeroArtPlate.Background = new ImageBrush(art) { Stretch = Stretch.UniformToFill, AlignmentX = AlignmentX.Right };
         }
 
         // ---- Emotes: WPF MainWindow.RemoteControl.cs:325-480. The shell's big picker shares these. ----
@@ -330,10 +443,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             box.Watermark = trimmed;   // WPF EmoteHelper.SetLastSentEmoteHint
         }
 
-        /// <summary>WPF SendEmoteAndReportAsync: "Sent" green, debounce silent, else the salmon reason.</summary>
+        /// <summary>WPF SendEmoteAndReportAsync: "Sent" green, debounce silent, else the salmon reason. The tube's
+        /// bubble says "Sending..." first (only when the send will really go out) and "Sent: ..." on success.</summary>
         internal static async Task<bool> SendEmoteAndReportAsync(string text, string icon, string kind, TextBlock? status)
         {
-            var (ok, error, retry) = await Relay.Value.SendEmoteAsync(text, icon, kind);
+            var r = Relay.Value;
+            if (r.IsActive && !r.IsWithinDebounceWindow) AvatarTube.AvatarTubeWindow.Live?.ShowEmoteFeedback(text, isPending: true);
+            var (ok, error, retry) = await r.SendEmoteAsync(text, icon, kind);
+            if (ok) AvatarTube.AvatarTubeWindow.Live?.ShowEmoteFeedback(text, isPending: false);
             if (error == "debounced" || status == null) return ok;
             status.Foreground = ok ? Sent : Failed;
             status.Text = ok ? Loc.Get("status_emote_sent")
@@ -373,10 +490,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void BtnEditEmoteCancel_Click(object? sender, RoutedEventArgs e) { EmoteEditPopup.IsOpen = false; _editingPreset = null; }
 
-        // ponytail: the directory opt-in chain (/v2/directory/opt-in) and the listing pill are not ported;
-        // the opt-in form stays a local form that publishes nothing.
         private void BtnGateUnlock_Click(object? sender, RoutedEventArgs e) => (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.BtnGateUnlock_Click(sender, e);
-        private void ChkOptInTag_Click(object? sender, RoutedEventArgs e) { }
-        private void TxtOptInStatus_TextChanged(object? sender, TextChangedEventArgs e) { }
     }
 }

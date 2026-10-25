@@ -24,7 +24,7 @@ namespace ConditioningControlPanel.Controls.NavRail
         // Idle ring 80% (polish wave 9, was 72%): the owner asked for the hue around the icons to
         // be more noticeable and the ring thicker. Still under the active ring, which is solid
         // AND lifted toward white (RingActiveLift).
-        internal const byte RingIdleAlpha = 0xCC, RingHoverAlpha = 0xF2, RingActiveAlpha = 0xFF;
+        internal const byte RingIdleAlpha = NavRailPaintRules.RingIdleAlpha, RingHoverAlpha = NavRailPaintRules.RingHoverAlpha, RingActiveAlpha = NavRailPaintRules.RingActiveAlpha;
 
         /// <summary>How far the active ring is mixed toward white (25%): brighter in the hue, so
         /// the lit row reads at a glance without a second colour.</summary>
@@ -32,7 +32,7 @@ namespace ConditioningControlPanel.Controls.NavRail
 
         /// <summary>Ring thickness: 3 px at rest and on hover, 3.5 px on the lit row. The ring is
         /// its own Border drawn OVER the art (Tag "navring"), so the thickness eats no art.</summary>
-        internal const double RingIdleThickness = 3.0, RingActiveThickness = 3.5;
+        internal const double RingIdleThickness = NavRailPaintRules.RingIdleThickness, RingActiveThickness = NavRailPaintRules.RingActiveThickness;
 
         /// <summary>The hue wash over the medallion art (Tag "navtint"). Polish wave 11: the owner
         /// read the rail as pastel, and a pastel hue laid over dark ink art lifts and greys it, so
@@ -46,65 +46,30 @@ namespace ConditioningControlPanel.Controls.NavRail
         // neon lightness instead, and wears the lamp: bright top-left, deep bottom-right.
 
         /// <summary>The ring's lightness (HSL) and its saturation floor.</summary>
-        internal const double VividLightness = 0.58, VividSaturation = 0.80;
+        internal const double VividLightness = NavRailPaintRules.VividLightness, VividSaturation = NavRailPaintRules.VividSaturation;
 
         /// <summary>How far the ring's lit corner mixes toward white, and its shaded corner toward black.</summary>
-        internal const double RingBevelLight = 0.35, RingBevelShade = 0.50;
+        internal const double RingBevelLight = NavRailPaintRules.RingBevelLight, RingBevelShade = NavRailPaintRules.RingBevelShade;
 
         /// <summary>The section hue at neon strength: same angle, lightness pulled down to
         /// <see cref="VividLightness"/>, saturation raised to at least <see cref="VividSaturation"/>.
         /// A hue already deeper than that keeps its own lightness.</summary>
         internal static System.Windows.Media.Color Vivid(System.Windows.Media.Color hue)
-        {
-            var (h, s, l) = ToHsl(hue);
-            return FromHsl(h, Math.Max(s, VividSaturation), Math.Min(l, VividLightness), hue.A);
-        }
+            => FromCoreColor(NavRailPaintRules.Vivid(ToCoreColor(hue)));
 
-        /// <summary>HSL of a colour: hue in degrees 0..360, saturation and lightness 0..1.</summary>
         internal static (double H, double S, double L) ToHsl(System.Windows.Media.Color c)
-        {
-            double r = c.R / 255.0, g = c.G / 255.0, b = c.B / 255.0;
-            double max = Math.Max(r, Math.Max(g, b)), min = Math.Min(r, Math.Min(g, b));
-            double l = (max + min) / 2, d = max - min;
-            if (d < 1e-9) return (0, 0, l);
-            double s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-            double h = max == r ? (g - b) / d + (g < b ? 6 : 0) : max == g ? (b - r) / d + 2 : (r - g) / d + 4;
-            return (h * 60, s, l);
-        }
+            => NavStripPaint.ToHsl(ToCoreColor(c));
 
         internal static System.Windows.Media.Color FromHsl(double h, double s, double l, byte a = 0xFF)
-        {
-            double q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q, k = h / 360.0;
-            static double Ch(double p, double q, double t)
-            {
-                if (t < 0) t += 1;
-                if (t > 1) t -= 1;
-                if (t < 1 / 6.0) return p + (q - p) * 6 * t;
-                if (t < 0.5) return q;
-                if (t < 2 / 3.0) return p + (q - p) * (2 / 3.0 - t) * 6;
-                return p;
-            }
-            byte B(double v) => (byte)Math.Round(Math.Clamp(v, 0, 1) * 255);
-            return System.Windows.Media.Color.FromArgb(a, B(Ch(p, q, k + 1 / 3.0)), B(Ch(p, q, k)), B(Ch(p, q, k - 1 / 3.0)));
-        }
+            => FromCoreColor(NavStripPaint.WithAlphaByte(NavStripPaint.FromHsl(h, s, l), a));
 
-        /// <summary>
-        /// The ring as a diagonal gradient (StartPoint 0,0 to 1,1). Raised (idle, hover): the lamp
-        /// catches the top-left (vivid mixed toward white), the vivid hue runs through the middle,
-        /// the bottom-right falls into shade. ON IS PRESSED IN: a lit row's ring is the lip of a
-        /// socket, so the light flips (shaded top-left, lit bottom-right) and it is solid.
-        /// </summary>
         internal static (System.Windows.Media.Color Color, double Offset)[] RingStops(System.Windows.Media.Color hue, bool active, bool hover)
-        {
-            var v = Vivid(hue);
-            byte a = RingAlpha(active, hover);
-            var light = WithAlpha(NavStripRules.Mix(v, System.Windows.Media.Colors.White, RingBevelLight), a);
-            var mid = WithAlpha(v, a);
-            var shade = WithAlpha(NavStripRules.Mix(v, System.Windows.Media.Colors.Black, RingBevelShade), a);
-            return active
-                ? new[] { (shade, 0.0), (mid, 0.5), (light, 1.0) }
-                : new[] { (light, 0.0), (mid, 0.42), (shade, 1.0) };
-        }
+            => NavRailPaintRules.RingStops(ToCoreColor(hue), active, hover)
+                .Select(stop => (FromCoreColor(stop.Color), stop.Offset)).ToArray();
+
+        private static uint ToCoreColor(System.Windows.Media.Color c) => NavStripPaint.Argb(c.A, c.R, c.G, c.B);
+        private static System.Windows.Media.Color FromCoreColor(uint c)
+            => System.Windows.Media.Color.FromArgb(NavStripPaint.A(c), NavStripPaint.R(c), NavStripPaint.G(c), NavStripPaint.B(c));
 
         // ============================== coin glass (polish wave 11) ==============================
 
@@ -135,7 +100,7 @@ namespace ConditioningControlPanel.Controls.NavRail
 
         /// <summary>The ring alpha for a row: solid when active, brighter on hover, else 80%.</summary>
         internal static byte RingAlpha(bool active, bool hover) =>
-            active ? RingActiveAlpha : hover ? RingHoverAlpha : RingIdleAlpha;
+            NavRailPaintRules.RingAlpha(active, hover);
 
         /// <summary>The ring's flat colour (wave 9; polish wave 11 paints <see cref="RingStops"/>
         /// instead and keeps this as the colour a flat consumer would use): the plain hue at
@@ -146,7 +111,7 @@ namespace ConditioningControlPanel.Controls.NavRail
                 : WithAlpha(hue, RingAlpha(false, hover));
 
         /// <summary>The ring thickness for a row.</summary>
-        internal static double RingThickness(bool active) => active ? RingActiveThickness : RingIdleThickness;
+        internal static double RingThickness(bool active) => NavRailPaintRules.RingThickness(active);
 
         /// <summary>The art wash alpha for a row.</summary>
         internal static byte ArtTintAlpha(bool active) => active ? ArtTintActiveAlpha : ArtTintIdleAlpha;

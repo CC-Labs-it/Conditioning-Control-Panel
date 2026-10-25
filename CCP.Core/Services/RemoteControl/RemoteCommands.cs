@@ -99,24 +99,24 @@ namespace ConditioningControlPanel.Services
                 case "duck_audio": CoreAudio.Duck(80); return null;
                 case "unduck_audio": CoreAudio.Unduck(); return null;
                 case "enable_strict_lock": s.StrictLockEnabled = true; CoreSettings.Save(); return null;
-                case "disable_strict_lock": s.StrictLockEnabled = false; CoreSettings.Save(); return null;
+                case "disable_strict_lock":
+                    if (RemoteControl.RemoteHoldings.RefusesStrictOff(LockdownService.Current?.IsActive == true,
+                        LockdownService.Current?.ForcedStrictLock == true)) return "the Lockdown holds the strict lock";
+                    s.StrictLockEnabled = false; CoreSettings.Save(); return null;
                 case "enable_panic": s.PanicKeyEnabled = true; CoreSettings.Save(); SyncPanicUi(); return null;
-                case "trigger_panic": StopEffects(force: true); return null;
+                case "trigger_panic": StopEffects(Remote.RemoteEndCause.Panic); return null;
                 default: return NotOnThisBuild;
             }
         }
 
-        /// <summary>WPF StopAllRemoteEffects: everything a controller could start stops; strict off, panic
-        /// key on. Only <paramref name="force"/> (trigger_panic) takes the subject's own engine down (#878).</summary>
-        public static void StopEffects(bool force) =>
-            StopEffects(force ? Remote.RemoteEndCause.Panic : Remote.RemoteEndCause.SessionEnded);
-
+        /// <summary>WPF StopAllRemoteEffects(cause): everything a controller could start stops. Only Panic
+        /// (trigger_panic) takes the subject's engine and session down (#878); a leash cut stops the services
+        /// and keeps the engine up; a plain session end leaves a run the subject started alone (main 28078c756).</summary>
         public static void StopEffects(Remote.RemoteEndCause cause)
         {
             var force = cause == Remote.RemoteEndCause.Panic;
             // Session verbs are unavailable on this head: every running engine is locally started.
-            if (Remote.RemoteEndRule.LeavesLocalRun(cause,
-                    CoreEngine.IsRunning, sessionRemoteStarted: false))
+            if (Remote.RemoteEndRule.LeavesLocalRun(cause, CoreEngine.IsRunning, sessionRemoteStarted: false))
             {
                 RemoteHaptics.Stop();
                 return;
@@ -127,7 +127,7 @@ namespace ConditioningControlPanel.Services
             CoreAudio.Unduck();
             if (force)
             {
-                CoreSession.StopSessionFromRemote?.Invoke();
+                CoreSession.StopSessionFromRemote?.Invoke();   // WPF RemoteControlService.cs:1026
                 CoreEngine.Stop();
             }
             else
@@ -135,12 +135,14 @@ namespace ConditioningControlPanel.Services
                 CoreFlash.Stop(); CoreSubliminal.Stop(); CoreBubbles.Stop(); CoreBouncingText.Stop();
                 CoreEngine.Video?.Stop(); CoreEngine.BubbleCount?.Stop(); LockCardScheduler.Instance.Stop();
             }
-            // As WPF, Lockdown or not: this only reduces restraint, and LockdownService.Deactivate restores
-            // the pre-lockdown values when the timer ends.
+            // WPF ReleaseRemoteSafetyState after a remote panic: the panic key comes back on unless a
+            // running Lockdown holds it off. The strict lock is never forced off here: RemoteRelay hands
+            // back only the one the controller switched on (RemoteHoldings.HandBackStrict).
             var s = CoreSettings.Current;
-            if (s.StrictLockEnabled || !s.PanicKeyEnabled)
+            var ld = LockdownService.Current;
+            if (force && RemoteControl.RemoteHoldings.TurnsPanicBackOn(s.PanicKeyEnabled, false,
+                    ld?.IsActive == true, ld?.DisabledPanicKey == true))
             {
-                s.StrictLockEnabled = false;
                 s.PanicKeyEnabled = true;
                 CoreSettings.Save();
                 SyncPanicUi();

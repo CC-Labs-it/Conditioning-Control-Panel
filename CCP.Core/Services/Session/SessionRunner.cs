@@ -1,5 +1,7 @@
 using System;
 using System.Diagnostics;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using ConditioningControlPanel.Helpers;
 using ConditioningControlPanel.Models;
@@ -18,9 +20,12 @@ namespace ConditioningControlPanel.Services
     /// Pop quiz follows WPF: the user-level AppSettings toggle, not the per-session PopQuiz* fields
     /// (dead in WPF too, BuiltInPrograms.cs:430).
     ///
+    /// The session-scoped corner GIF too: admission, start/end minute, pause hide, stop handback and
+    /// the #474 live edits; the head draws it through <see cref="CoreCornerGif.SessionShowHandler"/>.
+    ///
     /// ponytail: not driven here - video, bubbles, bubble count, mind wipe, brain drain, spiral,
-    /// corner GIF, ducking, phase events,
-    /// EMI Desk, Discord, friends, season recap and achievement tracking. No settings are written for them,
+    /// ducking, phase events,
+    /// EMI Desk, friends, season recap and achievement tracking. No settings are written for them,
     /// so the snapshot restore writes their own values back; each arrives with its Core service.
     /// </summary>
     public sealed class SessionRunner
@@ -32,9 +37,23 @@ namespace ConditioningControlPanel.Services
         private PhrasePoolCustody? _custody;
         private DateTime _startTime;
         private TimeSpan _lastElapsed;
-        private TimeSpan _pausedElapsed;
+        internal TimeSpan _pausedElapsed; // internal: tests step the paused clock (ProgramsSessionProgressTests)
         private readonly Random _random = new();
-        internal readonly SessionClockRules.StepFailures StepFailures = new();
+        private readonly SortedDictionary<string, int> _stepFailures = new(StringComparer.Ordinal);
+
+        // WPF 293a89197: first failure in full, repeats counted, one summary at stop.
+        private void Step(string name, Action action)
+        {
+            try { action(); }
+            catch (Exception ex)
+            {
+                _stepFailures.TryGetValue(name, out var count);
+                _stepFailures[name] = count + 1;
+                if (count != 0) return;
+                try { Log.ForContext("SessionStep", name).Error(ex, "SESSION {Step} failed", name); }
+                catch { /* Diagnostics must never interrupt the clock or teardown. */ }
+            }
+        }
 
         public SessionLogService SessionLog { get; }
         public Session? CurrentSession { get; private set; }
@@ -50,6 +69,13 @@ namespace ConditioningControlPanel.Services
         /// <summary>The ramped pink tint in percent once it has started, else null. WPF drives the overlay
         /// with it directly (SetSustainedOverlayOpacity) and never writes PinkFilterOpacity (#471).</summary>
         public double? PinkOpacity { get; private set; }
+
+        /// <summary>The session corner GIF is on screen (WPF _cornerGifWindow != null).</summary>
+        public bool CornerGifShown { get; private set; }
+
+        /// <summary>WPF _cornerHandbackOwed: we took the corner, so the first terminal close
+        /// re-queues the standalone slots. A hide-only close (pause, live edit) keeps the debt.</summary>
+        private bool _cornerHandbackOwed;
 
         /// <summary>After every live tick: WPF's ProgressUpdated, for the head's clock labels.</summary>
         public event Action? Ticked;
@@ -87,12 +113,12 @@ namespace ConditioningControlPanel.Services
             CoreMindWipe.Stop();
 
             var s = CoreSettings.Current;
+            _stepFailures.Clear();
             CurrentSession = session;
             IsRunning = true;
             CurrentPhaseIndex = 0;
             IsPaused = false;
             PauseCount = 0;
-            StepFailures.Clear();
             PinkOpacity = null;
             _pausedElapsed = _lastElapsed = TimeSpan.Zero;
             PinkStartMinute = RandomizedStart(session.Settings.PinkFilterEnabled, session.Settings.PinkFilterStartMinute, _random);
@@ -108,8 +134,13 @@ namespace ConditioningControlPanel.Services
             _custody = PhrasePoolCustody.Begin(s, session.Settings, CoreMods.ActiveModId, session);
             Apply(session.Settings, s);
 
+            // SessionEngine.cs:198: raised at start whenever admitted (WPF does not read the start
+            // minute here either; the Tick re-raise below is the delayed-start path).
+            if (CanRaiseCornerGif(session.Settings)) ShowCornerGif(session.Settings);
+
             _timer = new Timer(_ => CoreDispatch.Post(() => Tick(Elapsed)), null, 1000, 1000);
             SessionLog.BeginSession(session);
+            CoreDiscord.Service?.SetSessionActivity(session.Name); // WPF SessionEngine:260, after feature starts
             Log.Information("Session started: {Name}", session.Name);
         }
 
@@ -205,8 +236,9 @@ namespace ConditioningControlPanel.Services
             LockCardScheduler.Instance.Stop();
             CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:527, closes an open quiz
             CoreBouncingText.Stop();
+            CloseCornerGif(handBack: false);   // SessionEngine.cs:531: hide only, the claim survives
             Log.Information("Session paused (pause #{Count}, -100 XP penalty)", PauseCount);
-            Step("pause:progress", () => Ticked?.Invoke());
+            Step("pause:progress", () => Ticked?.Invoke());   // the timer is held: one tick paints the pause mark
         }
 
         /// <summary>SessionEngine.ResumeSession (SessionEngine.cs:554): restart only what has reached its
@@ -224,43 +256,30 @@ namespace ConditioningControlPanel.Services
             if (ss.LockCardEnabled && !_deferred.IsPending("lock cards")) LockCardScheduler.Instance.Start(Remaining.TotalMinutes);
             if (ss.BouncingTextEnabled && !_deferred.IsPending("bouncing text")) CoreBouncingText.Start();
             if (CoreSettings.Current.PopQuizEnabled) CoreEngine.PopQuiz?.Start();   // SessionEngine.cs:574
+            // SessionEngine.cs:575: the pause closed it; admission is asked afresh.
+            var minutes = Elapsed.TotalMinutes;
+            if (!CornerGifShown && CanRaiseCornerGif(ss) && minutes >= ss.CornerGifStartMinute
+                && (ss.CornerGifEndMinute <= 0 || minutes < ss.CornerGifEndMinute))
+                ShowCornerGif(ss);
             Log.Information("Session resumed");
-            Step("resume:progress", () => Ticked?.Invoke());
         }
 
-        /// <summary>A user START has restarted the plain engine; restore the session's delayed starts.</summary>
+        /// <summary>WPF 293a89197: a user engine restart must not override the parked timeline.</summary>
         public void ReassertScheduleAfterEngineStart()
         {
-            if (!IsRunning || IsPaused || CurrentSession is not { } session) return;
-            foreach (var name in _deferred.PendingNames)
-            {
-                Action? stop = name switch
-                {
-                    "flash" => CoreFlash.Stop,
-                    "subliminal" => CoreSubliminal.Stop,
-                    "bouncing text" => CoreBouncingText.Stop,
-                    "lock cards" => LockCardScheduler.Instance.Stop,
-                    _ => null,
-                };
-                if (stop != null) Step("resume:hold-" + name, stop);
-            }
-            if (session.Settings.LockCardEnabled && !_deferred.IsPending("lock cards"))
+            if (!IsRunning || IsPaused || CurrentSession == null) return;
+            if (_deferred.IsPending("flash")) Step("resume:hold-flash", CoreFlash.Stop);
+            if (_deferred.IsPending("subliminal")) Step("resume:hold-subliminal", CoreSubliminal.Stop);
+            if (_deferred.IsPending("bouncing text")) Step("resume:hold-bouncing text", CoreBouncingText.Stop);
+            if (_deferred.IsPending("lock cards")) Step("resume:hold-lock cards", LockCardScheduler.Instance.Stop);
+            else if (CurrentSession.Settings.LockCardEnabled)
                 Step("resume:lock-cards", () =>
                 {
                     LockCardScheduler.Instance.Stop();
                     LockCardScheduler.Instance.Start(Remaining.TotalMinutes);
                 });
-            // ponytail: the session's own Mind Wipe is not ported; keep the global one off.
+            // ponytail: no session Mind Wipe host yet; never let the global one leak into a session.
             Step("resume:mind-wipe-stop", CoreMindWipe.Stop);
-        }
-
-        private void Step(string name, Action action) =>
-            SessionClockRules.RunStep(action, ex => ReportStepFailure(name, ex));
-
-        private void ReportStepFailure(string name, Exception error)
-        {
-            // ponytail: this head uses its daily Serilog file; crash.log mirroring is a follow-up.
-            if (StepFailures.Note(name)) Log.Error(error, "Session step failed: {Step}", name);
         }
 
         private void StartAt(string name, int minute, Action start, Action stop)
@@ -293,15 +312,13 @@ namespace ConditioningControlPanel.Services
             Step("tick:delayed-features", () => _deferred.FireDue(minutes));
 
             // Pink delayed start at its randomised minute (SessionEngine.cs:849); the head shows it.
-            Step("tick:pink", () =>
+            var s = CoreSettings.Current;
+            if (session.Settings.PinkFilterEnabled && !s.PinkFilterEnabled && minutes >= PinkStartMinute)
             {
-                var s = CoreSettings.Current;
-                if (session.Settings.PinkFilterEnabled && !s.PinkFilterEnabled && minutes >= PinkStartMinute)
-                {
-                    s.PinkFilterEnabled = true;
-                    Log.Information("Pink filter activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, PinkStartMinute);
-                }
-            });
+                s.PinkFilterEnabled = true;
+                Log.Information("Pink filter activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, PinkStartMinute);
+            }
+            Step("tick:corner-gif", () => TickCornerGif(session.Settings, minutes));
             Step("tick:progress", () => Ticked?.Invoke());
         }
 
@@ -329,6 +346,97 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        // ---- the session corner GIF (WPF SessionEngine.cs:862-896, 1731-1797, 2126-2320) ----
+
+        /// <summary>WPF CanRaiseCornerGif over Core <see cref="CornerGifPlanner.AllowSessionCornerGif"/>.
+        /// The user's spiral master is read live: unlike WPF, this runner never writes SpiralEnabled.</summary>
+        private static bool CanRaiseCornerGif(SessionSettings ss)
+        {
+            var s = CoreSettings.Current;
+            return CornerGifPlanner.AllowSessionCornerGif(ss.CornerGifEnabled, s.SessionCornerGifAllowed,
+                CoreCornerGif.StandaloneActive, CornerGifPlanner.SessionCornerArtIsSpiral(ss.CornerGifPath),
+                s.SpiralEnabled, CoreCornerGif.SpiralOverlayActive);
+        }
+
+        /// <summary>The per-second admission recheck, delayed start and delayed end.</summary>
+        private void TickCornerGif(SessionSettings ss, double minutes)
+        {
+            if (CornerGifShown && !CanRaiseCornerGif(ss))
+            {
+                CloseCornerGif(handBack: true);
+                Log.Information("Corner GIF hidden mid-session (user master, a standalone corner overlay, or the fullscreen spiral now owns the corner)");
+            }
+            // ponytail: the end-minute guard is ours. WPF re-raises a delayed start after its end
+            // minute closed it, so it flickers open and shut every tick from then on.
+            if (!CornerGifShown && ss.CornerGifStartMinute > 0 && minutes >= ss.CornerGifStartMinute
+                && (ss.CornerGifEndMinute <= 0 || minutes < ss.CornerGifEndMinute) && CanRaiseCornerGif(ss))
+            {
+                ShowCornerGif(ss);
+                Log.Information("Corner GIF activated at {Minutes:F1} minutes (target was {Target})", minutes, ss.CornerGifStartMinute);
+            }
+            if (ss.CornerGifEnabled && CornerGifShown && ss.CornerGifEndMinute > 0 && minutes >= ss.CornerGifEndMinute)
+            {
+                CloseCornerGif(handBack: true);
+                Log.Information("Corner GIF deactivated at {Minutes:F1} minutes (target was {Target})", minutes, ss.CornerGifEndMinute);
+            }
+        }
+
+        private void ShowCornerGif(SessionSettings ss)
+        {
+            if (!CanRaiseCornerGif(ss) || CoreCornerGif.SessionShowHandler is not { } show) return;
+            show(new CornerGifOverlaySetting
+            {
+                Enabled = true,
+                GifPath = ss.CornerGifPath,
+                Position = ss.CornerGifPosition,
+                Size = ss.CornerGifSize > 0 ? ss.CornerGifSize : CornerGifPlanner.DefaultSize,
+                Opacity = ss.CornerGifOpacity,
+            });
+            CornerGifShown = true;
+            _cornerHandbackOwed = true;
+        }
+
+        private void CloseCornerGif(bool handBack)
+        {
+            bool giveBack = handBack && _cornerHandbackOwed;
+            if (handBack) _cornerHandbackOwed = false;
+            if (!CornerGifShown && !giveBack) return;
+            CornerGifShown = false;
+            try { CoreCornerGif.SessionCloseHandler?.Invoke(giveBack); }
+            catch (Exception ex) { Log.Warning(ex, "Corner GIF close failed"); }
+        }
+
+        private bool _refreshingCornerGifPolicy;
+
+        /// <summary>WPF RefreshCornerGifPolicy (SessionEngine.cs:1759): admission re-asked now, for
+        /// the Spiral card's session switch, a standalone slot change and the fullscreen spiral
+        /// leaving. Takes it down when refused; brings a minute-0 one back when allowed again.</summary>
+        public void RefreshCornerGifPolicy()
+        {
+            if (_refreshingCornerGifPolicy || CurrentSession is not { } session) return;
+            _refreshingCornerGifPolicy = true;   // the handback re-enters through the head's refresh
+            try
+            {
+                var ss = session.Settings;
+                if (CornerGifShown && !CanRaiseCornerGif(ss)) { CloseCornerGif(handBack: true); return; }
+                if (!CornerGifShown && IsRunning && !IsPaused && CanRaiseCornerGif(ss) && ss.CornerGifStartMinute == 0
+                    && (ss.CornerGifEndMinute <= 0 || Elapsed.TotalMinutes < ss.CornerGifEndMinute))
+                    ShowCornerGif(ss);
+            }
+            finally { _refreshingCornerGifPolicy = false; }
+        }
+
+        /// <summary>WPF UpdateCornerGifPath/Size/Position/Opacity (#474): the session's own
+        /// settings take the edit, and a shown overlay is re-shown with it (hide-only close).</summary>
+        public void UpdateCornerGif(Action<SessionSettings> edit)
+        {
+            if (CurrentSession is not { } session) return;
+            edit(session.Settings);
+            if (!CornerGifShown) return;
+            CloseCornerGif(handBack: false);
+            ShowCornerGif(session.Settings);
+        }
+
         private static double Lerp(double a, double b, double t) => a + (b - a) * Math.Clamp(t, 0, 1);
 
         public void Stop(bool completed = false) => Stop(completed, Elapsed);
@@ -339,22 +447,23 @@ namespace ConditioningControlPanel.Services
             var session = CurrentSession;
             if (!IsRunning || session == null) return;
             IsRunning = IsPaused = false;
-            Step("stop:release-pools", () => _custody?.Release());
+            Step("stop:custody-release", () => _custody?.Release());
             _stopwatch.Stop();
-            Step("stop:timer", () => _timer?.Dispose());
+            _timer?.Dispose();
             _timer = null;
             _deferred.Clear();
             Step("stop:pop-quiz", () => CoreEngine.PopQuiz?.Stop());   // SessionEngine.cs:372
+            Step("stop:corner-gif", () => CloseCornerGif(handBack: true));   // SessionEngine.cs:356
 
             var s = CoreSettings.Current;
-            Step("stop:flash-ramp", s.ClearSessionFlashRamp);   // ahead of the restore
+            Step("stop:flash-ramp", s.ClearSessionFlashRamp);   // SessionEngine.cs:390, ahead of the restore
             PinkOpacity = null;
             Step("stop:restore-settings", () => _snapshot?.RestoreTo(s));
             _snapshot = null;
-            Step("stop:restore-pools", () => _custody?.Restore(s));
+            Step("stop:custody-restore", () => _custody?.Restore(s));
             _custody = null;
             Step("stop:engine", CoreEngine.Stop);   // MainWindow.Presets.cs:1951
-            Step("stop:save", () => CoreSettings.Save());   // persist the restored settings
+            Step("stop:save", () => CoreSettings.Save());   // WPF leaves the restore to the next save; persist it now
 
             // XP actually banked: 0 while no head has a progression service (decision log).
             int xp = 0;
@@ -363,7 +472,7 @@ namespace ConditioningControlPanel.Services
                 var award = SessionXp.Compute(session.BonusXP, PauseCount, s.PlayerLevel, elapsed);
                 // Banked = what the ledger actually gained (a head's gate may refuse it, e.g. signed out).
                 var before = ProfileAdopt.TotalXp(s);
-                Step("stop:xp", () => CoreProgression.AddXP(award, "Session"));
+                CoreProgression.AddXP(award, "Session");
                 xp = (int)Math.Round(ProfileAdopt.TotalXp(s) - before);
                 Log.Information("Session completed: {Name}, XP: {XP} (banked {Banked}, paused {PauseCount}x, penalty: -{Penalty})",
                     session.Name, award, xp, PauseCount, XPPenalty);
@@ -372,11 +481,16 @@ namespace ConditioningControlPanel.Services
 
             try { SessionLog.EndSession(completed, elapsed, xp); }
             catch (Exception ex) { Log.Error(ex, "SessionLog.EndSession failed"); }
+            if (_stepFailures.Count > 0)
+                Log.Warning("Session steps failed this session (first of each in crash.log): {Counts}",
+                    string.Join(", ", _stepFailures.Select(p => p.Key + " x" + p.Value)));
+            // WPF SessionEngine:390 sits between SessionStopped (386) and SessionCompleted (429); Stopped fuses
+            // both, so idle goes first: after it, a completion handler starting the next session would be clobbered.
+            CoreDiscord.Service?.SetIdleActivity();
             CurrentSession = null;
             // WPF SessionEngine.SessionStopped + SessionCompleted, as one call (ProgramEngineBridge).
             try { Stopped?.Invoke(session, completed); }
-            catch (Exception ex) { ReportStepFailure("stop:stopped", ex); }
-            if (StepFailures.Any) Log.Warning("Session guarded-step failures: {Failures}", StepFailures.Summary());
+            catch (Exception ex) { Log.Warning(ex, "SessionRunner.Stopped handler failed"); }
         }
     }
 }

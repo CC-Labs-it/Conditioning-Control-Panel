@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -11,6 +12,7 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls.HelpLoops;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -21,7 +23,8 @@ namespace CCP.Avalonia.Tests;
 
 /// <summary>HelpVideoWindow hosts the topic's drawn help loop like WPF TryShowLoop (help-loops-d):
 /// the Session Editor's ? opens it with the SessionEditor loop playing; a topic without a loop
-/// keeps WPF's caption fallback.</summary>
+/// keeps WPF's caption fallback; a topic with a clip plays it muted and
+/// looping through the head's LibVLC frame sink.</summary>
 public sealed class HelpVideoWindowTests
 {
     [Fact]
@@ -87,10 +90,66 @@ public sealed class HelpVideoWindowTests
         finally { win.Close(); }
     });
 
+    [Fact]
+    public async Task ClipTopicPlaysTheClipMutedAndLoopingAndFreesItOnClose()
+    {
+        // No shipped topic sets ClipFile any more (release/6.11.3), so the test lays one down where
+        // WPF looks: <base>/Resources/tutorial_videos/<ClipFile>.
+        var dir = Path.Combine(AppContext.BaseDirectory, "Resources", "tutorial_videos");
+        Directory.CreateDirectory(dir);
+        var clip = Path.Combine(dir, "help-test-clip.mp4");
+        // bubblecount-2s.mp4 plus a silent AAC track, so the mute assert has an audio track to drop.
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "Assets", "help-clip-audio-2s.mp4"), clip, overwrite: true);
+        try
+        {
+            try { _ = new LibVlcAudio("--aout=dummy"); }
+            catch (Exception e)
+            {
+                // core-linux installs libvlc (build.yml), so a missing one there is a broken job, not a skip.
+                if (OperatingSystem.IsLinux() && Environment.GetEnvironmentVariable("CI") == "true") throw;
+                Assert.Skip("libvlc not installed (apt install libvlc-dev vlc-plugin-base): " + e.Message);
+            }
+            await RunAsync(async () =>
+            {
+                var content = new HelpContent { SectionId = "HelpClipTest", Title = "Clip", ClipFile = "help-test-clip.mp4", WhatItDoes = "blurb" };
+                Assert.False(HelpLoopRegistry.Has(content.SectionId));
+                // WPF starts the clip on Loaded: a window that is never shown never starts a player.
+                var unshown = new HelpVideoWindow(content);
+                Assert.Null(unshown.Player);
+                unshown.Close();
+                HelpVideoWindow.Show(content, null);
+                var win = Current()!;
+                try
+                {
+                    var container = win.FindControl<Border>("VideoContainer")!;
+                    Assert.True(container.IsVisible);
+                    Assert.False(win.FindControl<TextBlock>("TxtCaption")!.IsVisible);   // a playing clip needs no blurb
+                    var sink = win.Sink!;
+                    // The 2 s, 24-frame clip runs past its end: frames keep coming (WPF EndReached -> Play loop;
+                    // without it one pass stops below 50 displays). Event-driven wait, no sleep (P08).
+                    var looped = new TaskCompletionSource();
+                    win.FrameShown += () => { if (sink.FrameCount >= 70) looped.TrySetResult(); };
+                    try { await looped.Task.WaitAsync(TimeSpan.FromSeconds(10)); } catch (TimeoutException) { }
+                    Assert.True(sink.FrameCount >= 70, $"looped past the 2 s end ({sink.FrameCount} frames)");
+                    Assert.Same(sink.Bitmap, Assert.IsType<Image>(container.Child).Source);
+                    Assert.Equal(-1, win.Player!.AudioTrack);   // muted tutorial loop: the clip's audio track is never selected
+                    win.Close();
+                    Assert.Null(Current());
+                    Assert.Null(win.Player);
+                    Assert.True(sink.Freed);
+                }
+                finally { Current()?.Close(); }
+            });
+        }
+        finally { File.Delete(clip); }
+    }
+
     private static HelpVideoWindow? Current() =>
         (HelpVideoWindow?)typeof(HelpVideoWindow).GetField("_current", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null);
 
-    private static Task Run(Action body) => AvaloniaTestDispatcher.RunAsync(() =>
+    private static Task Run(Action body) => RunAsync(() => { body(); return Task.CompletedTask; });
+
+    private static Task RunAsync(Func<Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -102,12 +161,11 @@ public sealed class HelpVideoWindowTests
         CoreSettings.ServiceProvider = () => service;
         CoreSettings.Current.MotionLevel = MotionLevel.Full;
         HelpLoopView.RequestAnimationFrame = (_, _) => { };   // no real frame clock in tests
-        try { body(); }
+        try { await body(); }
         finally
         {
             HelpLoopView.RequestAnimationFrame = (top, cb) => top.RequestAnimationFrame(cb);
             CoreSettings.ServiceProvider = oldSettings;
         }
-        return Task.CompletedTask;
     });
 }
