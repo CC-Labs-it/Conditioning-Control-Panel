@@ -12,12 +12,16 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using IconKind = FluentIcons.Common.Symbol;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Controls;
+using ScrolllerCreditLine = ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditLine;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using Newtonsoft.Json;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -26,6 +30,85 @@ namespace CCP.Avalonia.Tests;
 /// Avalonia Assets tab, entered through the shell's Library door like a user.</summary>
 public sealed class AssetsTabTests
 {
+    [Fact]
+    public Task ActivePackFoldersExposeEncryptedImagesAndPersistSelection() => Run(async (shell, tab, s) =>
+    {
+        var oldStore = ContentPackStore.Current;
+        var assets = ConditioningControlPanel.CorePaths.EffectiveAssets;
+        var dir = Path.Combine(assets, ".packs", "test-guid");
+        Directory.CreateDirectory(Path.Combine(dir, "content"));
+        var manifest = new InstalledPackManifest { PackId = "test-pack", PackGuid = "test-guid", PackName = "Test Pack" };
+        foreach (var (name, type) in new[] { ("a.png", "image"), ("b.png", "image"), ("clip.mp4", "video") })
+        {
+            var obfuscated = name + ".enc";
+            manifest.Files.Add(new PackFileEntry { OriginalName = name, ObfuscatedName = obfuscated, FileType = type, Extension = Path.GetExtension(name) });
+            var bytes = type == "image" ? File.ReadAllBytes(Path.Combine(assets, "images", "a.png")) : new byte[16];
+            File.WriteAllBytes(Path.Combine(dir, "content", obfuscated), PackEncryptionService.Encrypt(bytes));
+        }
+        PackEncryptionService.SaveEncryptedManifest(JsonConvert.SerializeObject(manifest), Path.Combine(dir, ContentPackStore.ManifestFileName));
+        ContentPackStore.Current = new ContentPackStore(() => assets, () => s, () => { });
+        try
+        {
+            shell.ShowTab("settings");
+            shell.ShowTab("assets");
+            var packs = tab.AssetTree.Single(n => n.IsPackFolder);
+            var pack = Assert.Single(packs.Children);
+            Assert.Equal("Test Pack", pack.Name);
+            Assert.Equal(new[] { "images", "videos" }, pack.Children.Select(n => n.Name));
+            Assert.Equal(Loc.GetF("label_0_images_1_videos_active", 5, 3), tab.TxtAssetCounts.Text);
+            var images = pack.Children.Single(n => n.PackFileType == "image");
+            tab.AssetTreeView.SelectedItem = images;
+            await tab.ThumbnailLoads;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "a.png", "b.png" }, tab.CurrentFolderFiles.Select(f => f.Name));
+            Assert.All(tab.CurrentFolderFiles, f => Assert.NotNull(f.Thumbnail));
+            Assert.False(Directory.Exists(Path.Combine(assets, ".temp"))); // thumbnail decrypts stay in memory
+            var firstThumbs = tab.CurrentFolderFiles.Select(f => f.Thumbnail).ToList();
+            var packGlyphs = await Realized(shell, () => tab.AssetTreeView.GetVisualDescendants().OfType<IconGlyph>()
+                .Where(g => g.DataContext == packs && g.IsVisible).ToList() is { Count: > 0 } l ? l : null);
+            Assert.Equal(IconKind.Box, Assert.Single(packGlyphs).Kind); // WPF names the root with a package emoji
+            tab.OpenAssetPreview(tab.CurrentFolderFiles[0]);
+            var preview = Assert.Single(shell.OwnedWindows.OfType<MiniPlayerWindow>());
+            var extracted = Assert.Single(Directory.GetFiles(Path.Combine(assets, ".temp")));
+            Assert.EndsWith(".png", extracted);
+            preview.Close();
+            Assert.False(File.Exists(extracted));
+            var create = tab.CreateAssetPreview;
+            tab.CreateAssetPreview = () => throw new InvalidOperationException("preview constructor failed");
+            try
+            {
+                tab.OpenAssetPreview(tab.CurrentFolderFiles[0]);
+                Assert.Empty(Directory.GetFiles(Path.Combine(assets, ".temp")));
+            }
+            finally { tab.CreateAssetPreview = create; }
+            var cb = await Realized(shell, () => tab.ThumbnailsItemsControl.GetVisualDescendants().OfType<CheckBox>().FirstOrDefault());
+            PressSpace(shell, cb);
+            Assert.Contains("pack:test-pack/a.png", s.DisabledAssetPaths);
+            Assert.Single(ContentPackStore.Current.GetAllActivePackImages());
+            tab.BtnDeselectAllAssets.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Empty(ContentPackStore.Current.GetAllActivePackImages());
+            Assert.DoesNotContain("", s.DisabledAssetFolders);
+            Assert.Equal(Loc.GetF("label_0_images_1_videos_active", 3, 3), tab.TxtAssetCounts.Text);
+            tab.AskText = (_, _, _) => Task.FromResult<string?>("Pack selection");
+            tab.Inform = (_, _) => Task.CompletedTask;
+            tab.BtnSaveAssetPreset.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Pump(() => s.AssetPresets.Any(p => p.Name == "Pack selection"));
+            tab.InitializeAssetPresets();
+            var preset = s.AssetPresets.Single(p => p.Name == "Pack selection");
+            Assert.Equal(3, preset.EnabledImageCount);
+            Assert.Equal(3, preset.EnabledVideoCount);
+            tab.RefreshAssetTree();
+            Assert.Equal("image", ((AssetTreeItem)tab.AssetTreeView.SelectedItem!).PackFileType);
+            await tab.ThumbnailLoads;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(firstThumbs, tab.CurrentFolderFiles.Select(f => f.Thumbnail)); // WPF LRU cache: no second decrypt
+            Assert.All(tab.CurrentFolderFiles, f => Assert.False(f.IsChecked));
+            tab.BtnSelectAllAssets.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(2, ContentPackStore.Current.GetAllActivePackImages().Count);
+        }
+        finally { ContentPackStore.Current = oldStore; }
+    });
+
     [Fact]
     public Task DoorBuildsTreeAndSpaceOnAFolderCheckboxDisablesItsFiles() => Run(async (shell, tab, s) =>
     {
@@ -228,6 +311,30 @@ public sealed class AssetsTabTests
         Assert.Contains("images/sub/c.png", s.DisabledAssetPaths);
         Assert.DoesNotContain("images/a.png", s.DisabledAssetPaths);
         await tab.ThumbnailLoads;
+    });
+
+    /// <summary>WPF AssetsTabView.xaml:454-461 + ScrolllerCredit.OpenHome: the online source's credit line links
+    /// scrolller.com, and the link is refused under Strict Lock.</summary>
+    [Fact]
+    public Task ScrolllerCreditLineLinksScrolllerOutsideEveryLock() => Run((shell, tab, s) =>
+    {
+        var line = tab.FindControl<ScrolllerCreditLine>("TxtScrolllerCredit")!;
+        Assert.Equal("Media from Scrolller", ((TextBlock)line.Link.Content!).Text);
+        Assert.Contains(Loc.Get("label_online_media_credit"), line.Inlines!.OfType<global::Avalonia.Controls.Documents.Run>().Select(r => r.Text));
+        var opened = new List<string>();
+        var old = ScrolllerCreditLine.Opener;
+        ScrolllerCreditLine.Opener = url => { opened.Add(url); return true; };
+        try
+        {
+            s.StrictLockEnabled = true;
+            line.Link.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Empty(opened);                                  // a browser over Strict Lock is a way out
+            s.StrictLockEnabled = false;
+            line.Link.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(new[] { "https://scrolller.com" }, opened);
+        }
+        finally { ScrolllerCreditLine.Opener = old; s.StrictLockEnabled = false; }
+        return Task.CompletedTask;
     });
 
     [Fact]
