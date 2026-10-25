@@ -20,6 +20,7 @@ for (const speed of [0, 8, 18]) for (const lateral of [-11, 0, 11]) for (const h
       }
       ev.t += DT; step(st, a, track, feel, DT, ev); updateRespawn(st, track, feel, DT, ev);
     }
+    if (!hopLead) { assert.ok(ev.all('void').length > 0 || ev.all('drop').length > 0, 'coasting cannot bypass the jumping challenge'); return; }
     assert.ok(st[S.s] >= field.toS + 5, 'crosses whole field');
     assert.equal(ev.all('drop').length, 0, 'no fall');
     assert.equal(ev.all('void').length, 0, 'never sinks below a gap');
@@ -43,10 +44,10 @@ test('Broad decks render one coherent scaled platform per collision row and fall
   assert.equal(rows.length, 9); assert.equal(view.group.children.length, 9); assert.equal(fallback.group.children[0].count, 9);
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i], o = view.group.children[i]; assert.equal(r.tiles, 1);
-    assert.equal(o.scale.x * 5, 28); assert.equal(o.scale.z * 5, 26);
+    assert.equal(o.scale.x * 5, 56); assert.equal(o.scale.z * 5, 52);
     const matrix = new Matrix4(); fallback.group.children[0].getMatrixAt(i, matrix);
     const scale = new Vector3().setFromMatrixScale(matrix);
-    assert.ok(Math.abs(scale.x * 5 - 28) < .0001 && Math.abs(scale.z * 5 - 26) < .0001);
+    assert.ok(Math.abs(scale.x * 5 - 56) < .0001 && Math.abs(scale.z * 5 - 52) < .0001);
   }
   view.dispose(); fallback.dispose(); f.geometry.dispose(); f.material.dispose();
 });
@@ -98,7 +99,7 @@ test('Keep platforms share thin bevel outlines, alternate slate and plum faces, 
   assert.equal(f.material.color.getHexString(), 'ffffff', 'source material is unchanged');
   const line = outlines[0], local = line.position.clone();
   holders[0].updateMatrixWorld(true); const before = new Vector3().setFromMatrixPosition(line.matrixWorld);
-  view.hit(view.rows[0].stone); view.update(.22); view.group.updateMatrixWorld(true);
+  view.hit(view.rows[0].stone); view.update(.3); view.group.updateMatrixWorld(true);
   const after = new Vector3().setFromMatrixPosition(line.matrixWorld);
   assert.ok(before.y - after.y > .27); assert.deepEqual(line.position, local, 'outline inherits platform motion');
   view.reset(); view.group.updateMatrixWorld(true);

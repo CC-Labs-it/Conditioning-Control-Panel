@@ -47,11 +47,22 @@ test('Mainframe optional descent cuts physically land and credit the skipped tur
 
 test('Mainframe crossings have real vertical clearance for the full road width', () => {
   const frames = Array.from({ length: Math.floor(track.lengthM / 8) }, (_, i) => ({ s: i * 8, f: track.frameAt(i * 8) }));
+  const footprint = f => [[-1,-1],[-1,1],[1,1],[1,-1]].map(([side,along])=>[f.p[0]+f.b[0]*side*f.w/2+f.t[0]*along*4,f.p[2]+f.b[2]*side*f.w/2+f.t[2]*along*4]);
+  const intersects = (a,b) => {
+    for (const poly of [a,b]) for(let i=0;i<4;i++) {
+      const p=poly[i],q=poly[(i+1)%4],axis=[p[1]-q[1],q[0]-p[0]];
+      const A=a.map(v=>v[0]*axis[0]+v[1]*axis[1]),B=b.map(v=>v[0]*axis[0]+v[1]*axis[1]);
+      if(Math.max(...A)<Math.min(...B)||Math.max(...B)<Math.min(...A))return false;
+    }
+    return true;
+  };
   const clashes = [], crossings = [];
   for (let i = 0; i < frames.length; i++) for (let j = i + 20; j < frames.length; j++) {
     const a = frames[i], b = frames[j];
     if (track.lengthM - b.s + a.s < 160) continue;
     if (Math.hypot(a.f.p[0] - b.f.p[0], a.f.p[2] - b.f.p[2]) > (a.f.w + b.f.w) / 2) continue;
+    // Broad straight ribbons have overlapping bounding circles but distinct along-road footprints.
+    if (!intersects(footprint(a.f),footprint(b.f))) continue;
     const height = Math.abs(a.f.p[1] - b.f.p[1]);
     const bank = Math.abs(a.f.b[1]) * a.f.w / 2 + Math.abs(b.f.b[1]) * b.f.w / 2;
     if (height - bank < 9) clashes.push([a.s, b.s, +(height - bank).toFixed(1)]);

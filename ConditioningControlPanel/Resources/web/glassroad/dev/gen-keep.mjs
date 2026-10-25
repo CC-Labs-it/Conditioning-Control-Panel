@@ -25,7 +25,7 @@ export function buildKeep() {
       const flags = p.jump ? ['jump', 'open'] : p.field ? ['open'] : p.edge && d >= 20 && d < len - 20 ? ['rail' + (p.edge === 'L' ? 'R' : 'L')] : ['rail'];
       if (!nodes.length) flags.unshift('start');
       nodes.push({ p: [round(x), round(y0 + (p.y - y0) * (p.kick ? u * u : p.linear ? u : smooth(u))), round(z)],
-        roll: round(bank), w: p.widenTo ? round(p.w + (p.widenTo - p.w) * smooth(Math.max(0, Math.min(1, (d - 10) / 35)))) : p.id === 'north-tower' ? 26 + 7 * Math.min(2, Math.floor(u * 810 / 360)) : p.w, flags, speed: 1, surface: p.surface || 'glass', ...(p.flow ? { flow: p.flow } : {}) });
+        roll: round(bank), w: p.widenTo ? round(p.w + (p.widenTo - p.w) * smooth(Math.max(0, Math.min(1, (d - 10) / (p.taperM || 35))))) : p.id === 'north-tower' ? 26 + 7 * Math.min(2, Math.floor(u * 810 / 360)) : p.w, flags, speed: 1, surface: p.surface || 'glass', ...(p.flow ? { flow: p.flow } : {}) });
     }
     y0 = p.y;
   });
@@ -43,8 +43,8 @@ export function buildKeep() {
     const n = node(id, .5); nodes[n].flags.push('boost'); boosts.push({ node: n, x: 0, w: 4, len: 6 });
   }
   const fieldStart = node('stones'), fieldEnd = node('stones-exit');
-  const fields = [{ id: 'keep-stones', from: fieldStart, to: fieldEnd, lanes: [-8, 0, 8],
-    stones: Array.from({ length: 9 }, (_, i) => ({ id: 'keep-stones-' + i, node: fieldStart, ds: i * 30.5, x: 0, w: 28, len: 26 })) }];
+  const fields = [{ id: 'keep-stones', from: fieldStart, to: fieldEnd, lanes: [-16, 0, 16], platforming: true,
+    stones: Array.from({ length: 9 }, (_, i) => ({ id: 'keep-stones-' + i, node: fieldStart, ds: i * 66, x: 0, w: 56, len: 52 })) }];
   const routes = [0, 1].map((i) => {
     const from = node('north-tower', (35 + i * 360) / 810), to = from + 4;
     const landFrom = node('north-tower', (365 + i * 360) / 810), landTo = node('north-tower', (485 + i * 360) / 810);

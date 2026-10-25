@@ -9,7 +9,7 @@
  *           centre with a small cut to the inside of a bend) eases in over assist.autoEaseS.
  *   CRUISE  no input at all for assist.cruiseAfterS: a soft cruise throttle (assist.cruisePct of top speed, lifted
  *           and gently braked for a bend ahead the same way the bots plan one), so a tranced player keeps rolling
- *           with the song. It never boosts, never hops or drifts, never fires an item.
+ *           with the song. It never boosts, only hops at challenge lips during established autopilot, never drifts or fires an item.
  *   EASE    (polish 6) the throttle held into a bend the kart cannot take at its speed: the throttle lifts and the
  *           brake gets a light dab (Strong a firmer one) so the kart holds its line. Never under a boost, on a
  *           jump lip, in a drift, or while the player brakes or steers for a shortcut's opening.
@@ -26,6 +26,8 @@ import { clamp, wrap } from '../core/math.js';
 import { bendSpeed, yawParams, calmOf } from './steer.js';
 import { gap } from './gaps.js';
 import { createCourtPaths } from './court-paths.js';
+import { fieldAtS } from './stones.js';
+import { stoneIn, stoneLaneSpan } from '../track/courts.js';
 
 /** The option values in the order the Options card cycles them (the first is the default). */
 export const ASSIST_MODES = Object.freeze(['light', 'strong', 'off']);
@@ -170,6 +172,15 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
 
     // steering help only on the ground, rolling forward, out of a drift
     if (backwards || st[S.grounded] <= 0 || st[S.driftDir] !== 0 || speed < 2) return out;
+    // Established hands-off autopilot jumps the challenge islands through the ordinary input.
+    // Steering, braking, or disabled assist gives every jump back to the player immediately.
+    const field = !fork && view.auto > .6 && view.cruise > .6 && !steerIn && a.brake <= dead && fieldAtS(track, s);
+    if (field?.platforming && !a.hop && !a.hopPressed) {
+      const stone = stoneIn(field, s, lat), span = stone && stoneLaneSpan(stone, lat);
+      if (span && span[1] - s >= 0 && span[1] - s <= clamp(speed * .1, 1.5, 4.5) && span[1] < field.toS - 2) {
+        out.hop = true; out.hopPressed = true;
+      }
+    }
     // the player steering for a drop shortcut's opening (stick toward it, or the nose already turned out that way
     // with the stick not held the other way: polish 6, an opening on the OUTSIDE of a turn sees every kart's nose
     // point out while it turns in, and the lip holds a kart turning away, sim/routes.js turnsAway)

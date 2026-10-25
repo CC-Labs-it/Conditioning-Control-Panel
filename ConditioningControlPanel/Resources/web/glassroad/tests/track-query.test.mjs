@@ -71,7 +71,7 @@ test('query: past the edge, open sides and rails', () => {
     assert.equal(q.onRoad, true); assert.equal(q.railed, true);
     q = tr.query(...place(railS, side * (w / 2 + 1), 0.3).P, 20);
     assert.equal(q.onRoad, false); assert.ok(Math.abs(q.edgeDist + 1) < 1e-3); assert.equal(q.railed, true);
-    q = tr.query(...place(openS, side * (w / 2 + 1), -2).P, OPEN);
+    q = tr.query(...place(openS, side * (tr.frameAt(openS).w / 2 + 1), -2).P, OPEN);
     assert.equal(q.onRoad, false); assert.equal(q.railed, false); assert.ok(q.height < -1.9);
     q = tr.query(...place(openS, 0, 0.2).P, OPEN);
     assert.equal(q.onRoad, true); assert.equal(q.railed, false);

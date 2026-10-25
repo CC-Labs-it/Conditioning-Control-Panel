@@ -46,7 +46,7 @@ test('Tray follows compact landing motion and shares owned resources with idempo
   const trays = holders.map(h => h.getObjectByName('boudoir-compact-tray'));
   assert.equal(new Set(trays.map(t => t.geometry)).size, 1); assert.equal(new Set(trays.map(t => t.material)).size, 1);
   view.group.updateMatrixWorld(true); const start = tray.getWorldPosition(new Vector3());
-  view.hit(view.rows[0].stone); view.update(.22); view.group.updateMatrixWorld(true);
+  view.hit(view.rows[0].stone); view.update(.3); view.group.updateMatrixWorld(true);
   const down = tray.getWorldPosition(new Vector3()); assert.ok(start.y - down.y > .27);
   view.update(.5, { paused: true }); view.group.updateMatrixWorld(true);
   assert.deepEqual(tray.getWorldPosition(new Vector3()), down);

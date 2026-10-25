@@ -201,7 +201,8 @@ test('Threshold: a rescue inside the bridge field anchors before it (shimmed fie
 test('Threshold: 8 m/s down lane 0 of the bridge field drops below the deck: void, then the fall or the hole drop', () => {
   const track = thresholdWithField(), feel = makeFeel(), rec = recorder(), f = track.fields[0];
   // lane 0 opens with a lead stone (0..8 m): start 2 m before its end so the coast steps off it into the first gap
-  const st = place(track, { s: f.fromS + 6, lateral: 0, speed: 8 });
+  const lead = f.stones.find(h => h.x === 0);
+  const st = place(track, { s: lead.s + lead.len - 2, lateral: 0, speed: 8 });
   run(st, track, feel, acts(), 5, rec, () => !!(rec.first('drop') || rec.first('fall-land')));
   const v = rec.first('void');
   assert.ok(v, 'void fired: ' + rec.names().join(','));

@@ -14,7 +14,7 @@ const track = loadTrack(json);
 test('Mainframe is reproducible, closed, spacious and has three distinct acts', () => {
   assert.deepEqual(json, built.track);
   assert.deepEqual(validate(json), { ok: true, errors: [], warnings: [] });
-  assert.ok(track.lengthM >= 7500 && track.lengthM <= 7650);
+  assert.ok(track.lengthM >= 8220 && track.lengthM <= 8370);
   assert.equal(new Set(track.sections.map(section => section.act)).size, 3);
   assert.ok(json.nodes.every(n => n.w >= 24));
   assert.ok(Math.max(...json.nodes.map(n => n.p[1])) >= 86);
@@ -51,17 +51,18 @@ test('Mainframe reactor is a full physical helix with a clear raised crossing', 
 });
 test('Mainframe memory tiles start supported in every lane and meet the exit deck', () => {
   const field = track.fields[0];
-  assert.ok(field.toS - field.fromS >= 350);
+  assert.ok(field.toS - field.fromS >= 700);
+  assert.equal(field.platforming, true);
   assert.equal(field.lanes.length, 5);
-  assert.ok(field.stones.every(stone => stone.shape === 'hex' && stone.w >= (stone.id.startsWith('memory-link') ? 8 : 18)));
-  assert.ok(track.frameAt(field.fromS).w >= 100);
+  assert.ok(field.stones.every(stone => stone.shape === 'hex' && stone.w >= (stone.id.startsWith('memory-link') ? 16 : 36)));
+  assert.ok(track.frameAt(field.fromS).w >= 216);
   for (const x of field.lanes) {
     assert.ok(stoneIn(field, field.fromS + 0.1, x));
     const lane = field.stones.filter(stone => stone.x === x).sort((a, b) => a.s - b.s);
     assert.ok(Math.abs(field.toS - (lane.at(-1).s + lane.at(-1).len)) <= 0.01);
     for (let i = 1; i < lane.length; i++) {
       const gap = lane[i].s - lane[i - 1].s - lane[i - 1].len;
-      assert.ok(gap >= .99 && gap <= 1.01, 'visible but forgiving one-metre gaps');
+      assert.ok(gap >= 13.99 && gap <= 14.01, 'real jumps separate individual memory blocks');
     }
   }
 });
@@ -74,11 +75,26 @@ test('Mainframe islands expose void between lanes instead of overlapping into a 
     assert.equal(stoneIn(field, field.fromS + first[i].len / 2, x), null);
     assert.ok(first[i].x - first[i - 1].x - (first[i].w + first[i - 1].w) / 2 >= 2);
   }
-  assert.equal(field.stones.filter(stone => stone.id.startsWith('memory-link')).length, 26);
+  assert.equal(field.stones.filter(stone => stone.id.startsWith('memory-link')).length, 20);
+});
+test('Mainframe jumps retain their physical gallery path above both landings and the void', () => {
+  const field = track.fields[0];
+  for (const x of field.lanes) {
+    const lane = field.stones.filter(stone => stone.x === x).sort((a, b) => a.s - b.s);
+    for (const stone of lane.slice(0,-1)) for (const s of [stone.s + stone.len / 2, stone.s + stone.len + 7]) {
+      const frame = track.frameAt(s);
+      for (const height of [0.2, 2, 6]) {
+        const p = frame.p.map((v,k)=>v+frame.b[k]*x+frame.n[k]*height);
+        const q = track.query(...p,frame.seg);
+        assert.ok(Math.abs(q.s-s)<0.01,`lane ${x}, height ${height}, gallery ${s} became ${q.s}`);
+        assert.equal(q.onRoad,!!stoneIn(field,s,x),'void remains void at every jump height');
+      }
+    }
+  }
 });
 for (const seed of [1, 241023, 20261024]) test('Mainframe full starting grid finishes all three laps, seed ' + seed, () => {
   const run = makeRace({ track, seed });
-  run.run(1200, () => run.racers.list.every(racer => racer.finished));
+  run.run(1400, () => run.racers.list.every(racer => racer.finished));
   assert.ok(run.racers.list.every(racer => racer.finished && racer.st[S.lap] === 3), JSON.stringify(run.racers.list.map(r => ({ i: r.i, s: r.st[S.s], lap: r.st[S.lap], falls: r.falls }))));
   assert.ok(run.racers.list.every(r => r.falls === 0), 'no rescues needed by the starting grid');
 });

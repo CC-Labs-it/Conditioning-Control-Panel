@@ -8,6 +8,7 @@
  * The numbers: clearSpeed() is the design check (a test pins kick vs gap vs gravity vs snap), fieldRescueNode()
  * moves a rescue anchor (and its release point aheadNodes later) before the field, lipLeave() is the one lip test kart.js asks each tick.
  */
+import { stoneLaneSpan } from '../track/courts.js';
 
 /**
  * The minimum forward speed that carries a kart kicked up by kickUpMps across gapM metres of void back onto a deck
@@ -77,4 +78,23 @@ export function broadPlatformEdgeKick(track, prevQ, q, normalSpeed, kickUpMps) {
   if (!Number.isFinite(end) || !Number.isFinite(prevQ.s) || !Number.isFinite(q.s) || !Number.isFinite(q.lateral) ||
       prevQ.s > end || q.s < end || q.s <= prevQ.s || Math.abs(q.lateral - stone.x) > stone.w / (stone.shape === 'hex' ? 4 : 2)) return 0;
   return Math.max(0, Math.max(0, kickUpMps) - normalSpeed);
+}
+
+/** Aim a deliberate challenge hop just inside the next real landing, across the actual void.
+ * Slow approaches get a longer arc, fast approaches keep the ordinary hop to avoid skipping a tile.
+ */
+export function platformHopUp(track, q, speed, baseUp, gravity) {
+  const field = q.stone && fieldAtS(track, q.s);
+  if (!field?.platforming || speed < 8) return baseUp;
+  const current = stoneLaneSpan(q.stone, q.lateral);
+  if (!current) return baseUp;
+  let next = null;
+  for (const stone of field.stones) {
+    const span = stoneLaneSpan(stone, q.lateral, .25);
+    if (span && span[0] > current[1] + .5 && (!next || span[0] < next[0])) next = span;
+  }
+  if (!next) return baseUp;
+  const landing = next[0] + Math.min(4, (next[1] - next[0]) / 3);
+  const flightS = (landing - q.s) / speed;
+  return Math.max(baseUp, Math.min(14.4, gravity * flightS / 2));
 }

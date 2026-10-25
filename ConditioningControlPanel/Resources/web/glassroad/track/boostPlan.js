@@ -21,6 +21,9 @@ export function boostExclusions(track) {
     for (const c of layout.chains) spans.push([c.s - 65, c.s + 20]);
   }
   if (track.id === 'mainframe') {
+    const reactor = track.sections.find(section => section.id === 'spiral-core');
+    // Leave the last address weave and reactor entry clear for braking and the bank handoff.
+    if (reactor) spans.push([reactor.fromS - 140, reactor.fromS + 60]);
     for (const zone of scanZones(track)) spans.push([zone.s - 65, zone.s + zone.len + 20]);
     for (const zone of industryZones(track)) spans.push([zone.s - zone.len / 2 - 65, zone.s + zone.len / 2 + 20]);
   }

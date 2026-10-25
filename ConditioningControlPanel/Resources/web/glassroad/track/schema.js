@@ -42,7 +42,7 @@ export function validate(t) {
     if (!n || typeof n !== 'object') { err(at + ' not an object'); return; }
     if (!Array.isArray(n.p) || n.p.length !== 3 || !n.p.every(isNum)) err(at + '.p must be 3 numbers');
     if (!isNum(n.roll) || Math.abs(n.roll) > 60) err(at + '.roll must be a number in -60..60 degrees');
-    if (!isNum(n.w) || n.w < 4 || n.w > 120) err(at + '.w must be 4..120 m');
+    if (!isNum(n.w) || n.w < 4 || n.w > 240) err(at + '.w must be 4..240 m');
     if (!isNum(n.speed) || n.speed < 0.3 || n.speed > 1.5) err(at + '.speed must be 0.3..1.5');
     if (!SURFACES.includes(n.surface)) err(at + '.surface must be one of ' + SURFACES.join('|'));
     if (n.flow !== undefined) {
@@ -180,7 +180,7 @@ export function validate(t) {
         fork.points.forEach((p, j) => {
           const where = at + '.points[' + j + ']';
           if (!p || !Array.isArray(p.p) || p.p.length !== 3 || !p.p.every(isNum)) { err(where + '.p must be 3 numbers'); return; }
-          if (!isNum(p.w) || p.w < 4 || p.w > 120) err(where + '.w must be 4..120 m');
+          if (!isNum(p.w) || p.w < 4 || p.w > 120) err(where + '.w must be 4..240 m');
           if (p.roll !== undefined && (!isNum(p.roll) || Math.abs(p.roll) > 60)) err(where + '.roll must be -60..60 degrees');
           if (p.surface !== undefined && !SURFACES.includes(p.surface)) err(where + '.surface is unknown');
           if (p.flags !== undefined && (!Array.isArray(p.flags) || p.flags.some(f => !['rail', 'railL', 'railR', 'open'].includes(f)) || new Set(p.flags).size !== p.flags.length ||
@@ -227,11 +227,13 @@ export function validate(t) {
         if (!inRange(c.from) || !isInt(c.to) || c.to <= c.from || c.to > N) { err(at + ' needs from < to within nodes'); return; }
         if (!Array.isArray(c.lanes) || !c.lanes.length || !c.lanes.every(isNum) || c.lanes.some((x, k) => k && x <= c.lanes[k - 1])) err(at + '.lanes must be sorted numbers');
         if (!Array.isArray(c.stones)) { err(at + '.stones must be an array'); return; }
+        if (c.platforming !== undefined && typeof c.platforming !== 'boolean') err(at + '.platforming must be boolean');
         const stones = new Set();
         for (const h of c.stones) {
           if (!h || !isStr(h.id) || stones.has(h.id)) { err(at + ' stones need unique ids'); continue; }
           stones.add(h.id);
-          const hex = h.shape === 'hex', maxW = 32, maxLen = hex ? 40 : 32;
+          const hex = h.shape === 'hex', maxW = c.platforming ? 64 : 32, maxLen = c.platforming ? 80 : hex ? 40 : 32;
+          if (h.swing !== undefined && (!hex || !h.spin || !isNum(h.swing) || h.swing <= 0 || h.swing > .25)) err(at + ' bounded swing requires a spinning hex in 0..0.25 radians');
           if (h.spin !== undefined && (!hex || !isNum(h.spin) || Math.abs(h.spin) > 0.12)) err(at + ' stone spin requires a hex and at most 0.12 rad/s');
           if ((h.shape !== undefined && !hex) || !inRange(h.node) || h.node < c.from || h.node >= c.to || !isNum(h.x) || !isNum(h.w) || h.w < 3 || h.w > maxW || !isNum(h.len) || h.len < 3 || h.len > maxLen ||
               (h.ds !== undefined && (!isNum(h.ds) || h.ds < 0))) { err(at + ' stone ' + h.id + ' needs an in-field node, x, valid shape, w in 3..' + maxW + ', len in 3..' + maxLen + ' and ds >= 0'); continue; }

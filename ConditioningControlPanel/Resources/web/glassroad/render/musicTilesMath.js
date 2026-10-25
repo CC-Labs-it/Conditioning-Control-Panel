@@ -2,8 +2,8 @@
 import { hexRgb, roadLevel } from './spectrum.js';
 import { smoothstep, aaLine } from './roadAaMath.js';
 
-// Shared by width texture encode/decode. 48 m full width leaves room beyond the 34 m court.
-export const ROAD_HALF_WIDTH_RANGE = 24;
+// Shared by width texture encode/decode, including the broad platform approaches.
+export const ROAD_HALF_WIDTH_RANGE = 120;
 export const encodeRoadHalfWidth = (half) => Math.round(Math.max(0, Math.min(1, half / ROAD_HALF_WIDTH_RANGE)) * 255);
 
 export const MUSIC_TILES = Object.freeze({

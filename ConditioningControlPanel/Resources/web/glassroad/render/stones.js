@@ -1,4 +1,4 @@
-/* Field platforms share the authored stone model. Threshold keeps its 5m tiles; Keep scales one
+/* Field platforms share the authored stone model. Challenge fields use coherent islands; other fields retain tiles. Scale one
  * coherent model to each broad collision deck, including its outer lip. Positions remain tied to
  * the static physics surface. Landing motion only changes render transforms, respects pause and
  * Gentle, and returns every platform to its starting pose on restart.
@@ -20,7 +20,7 @@ export function stoneLayout(track, deckM = STONE_KIT.deckM) {
   const tileM = STONE_KIT.slab[2];
   for (const field of track?.fields || []) {
     for (const st of field.stones || []) {
-      const broad = (track.id === 'keep' || track.id === 'boudoir') && st.w > 8;
+      const broad = !!field.platforming || (track.id === 'keep' || track.id === 'boudoir') && st.w > 8;
       const hex = st.shape === 'hex', tiles = (hex || broad) ? 1 : Math.max(1, Math.round(st.len / tileM)), len = st.len / tiles;
       for (let k = 0; k < tiles; k++) {
         const s = st.s + len * (k + 0.5), f = track.frameAt(s);
@@ -53,7 +53,9 @@ function hexGeometry(kind) {
   };
   if (kind === 'hull') {
     const rings = [ring(1, 0), ring(1, -0.45), ring(0.94, -2.6), ring(0.82, -3.2)];
-    face(rings[0]);
+    // Opaque deck and rim occupy their own footprints, avoiding distant depth ties.
+    face(rings[0], ring(.985, 0));
+    face(ring(.955, 0), ring(.89, 0));
     for (let k = 1; k < rings.length; k++) for (let i = 0; i < 6; i++) {
       const j = (i + 1) % 6, a = rings[k - 1], b = rings[k];
       tri(a[i], a[j], b[j]); tri(a[i], b[j], b[i]);
@@ -229,39 +231,44 @@ export function buildStones(track, art, pal) {
     if (m.object) { m.object.position.copy(motionP); m.object.quaternion.copy(motionQ); }
     else { motionM.compose(motionP, motionQ, m.scale); m.mesh.setMatrixAt(m.index, motionM); m.mesh.instanceMatrix.needsUpdate = true; }
   }
+  let hoverTime = 0;
   function update(dt, view = {}) {
     if (view.paused || disposed) return;
-    const gentle = !!view.gentle;
-      hexes.forEach((r,i) => {
-        if (!r.source.spin) return;
-        basis.makeBasis(x.fromArray(r.b), y.fromArray(r.n), z.fromArray(r.t).negate());
-        rotation.setFromRotationMatrix(basis).multiply(spin.setFromAxisAngle(up,r.source.angle || 0));
-        matrix.compose(position.fromArray(r.p),rotation,scale.set(r.w,1,r.len));
-        for (const mesh of hexMeshes) mesh.setMatrixAt(i,matrix);
-      });
-      for (const mesh of hexMeshes) if (hexes.some(r=>r.source.spin)) mesh.instanceMatrix.needsUpdate = true;
-      hexes.forEach((r,i)=> {
-        if(!Number.isFinite(hexAges[i])) return;
-        const age=hexAges[i]+=Math.max(0,dt), rise=gentle?.45:.3;
-        const u=age<rise?age/rise:Math.max(0,1-(age-rise)/1.5), glow=u*u*(3-2*u);
-        if(age>=rise+1.5) hexAges[i]=Infinity;
-        for(const mesh of hexMeshes) {
-          const gain=mesh.name==='stone-hex-rim'?1.8:mesh.name==='stone-hex-deck'?1.5:.45;
-          lightColor.setRGB(1+glow*gain*.55,1+glow*gain,1+glow*gain*.9);
-          mesh.setColorAt(i,lightColor); mesh.instanceColor.needsUpdate=true;
-        }
-      });
-      hover?.update(dt, gentle);
-
     const quiet = !!(view.gentle || view.reducedMotion);
+    hoverTime += Math.max(0, dt) * (quiet ? .5 : 1);
+    hexes.forEach((r, i) => {
+      let glow = 0;
+      if (Number.isFinite(hexAges[i])) {
+        const age = hexAges[i] += Math.max(0, dt), rise = quiet ? .45 : .3;
+        const u = age < rise ? age / rise : Math.max(0, 1 - (age - rise) / 1.5);
+        glow = u * u * (3 - 2 * u);
+        if (age >= rise + 1.5) hexAges[i] = Infinity;
+      }
+      const depth = (quiet ? .03 : .22) * glow;
+      const rock = quiet ? 0 : (.0015 * Math.sin(hoverTime * .6 + i) + .001 * glow * Math.sin(hoverTime * 7));
+      basis.makeBasis(x.fromArray(r.b), y.fromArray(r.n), z.fromArray(r.t).negate());
+      rotation.setFromRotationMatrix(basis).multiply(spin.setFromAxisAngle(up, r.source.angle || 0))
+        .multiply(rockQ.setFromAxisAngle(motionAxis, rock));
+      position.fromArray(r.p).addScaledVector(motionN.fromArray(r.n), -depth);
+      matrix.compose(position, rotation, scale.set(r.w, 1, r.len));
+      for (const mesh of hexMeshes) {
+        mesh.setMatrixAt(i, matrix);
+        const gain = mesh.name === 'stone-hex-rim' ? 1.8 : mesh.name === 'stone-hex-deck' ? 1.5 : .45;
+        lightColor.setRGB(1 + glow * gain * .55, 1 + glow * gain, 1 + glow * gain * .9);
+        mesh.setColorAt(i, lightColor);
+      }
+    });
+    for (const mesh of hexMeshes) { mesh.instanceMatrix.needsUpdate = true; mesh.instanceColor.needsUpdate = true; }
+    hover?.update(dt, quiet);
     for (const m of moving) {
       if (!Number.isFinite(m.age)) continue;
       m.age += Math.max(0, dt);
       if (m.age >= 1.5) { m.age = Infinity; applyMotion(m); continue; }
-      const u = m.age < .22 ? m.age / .22 : 1 - (m.age - .22) / 1.28;
+      const rise = quiet ? .45 : .3;
+      const u = m.age < rise ? m.age / rise : 1 - (m.age - rise) / (1.5 - rise);
       const shape = u * u * (3 - 2 * u), depth = (quiet ? .04 : .28) * shape;
       const safeRock = Math.max(0, Math.min(.012, depth / (m.row.len / 2 + 1), (.3 - depth) / (m.row.len / 2 + 1)));
-      applyMotion(m, depth, quiet ? 0 : safeRock * Math.sin(m.age * 17));
+      applyMotion(m, depth, quiet ? 0 : safeRock * Math.sin(m.age * 9));
     }
   }
   function hit(event) {
@@ -274,7 +281,7 @@ export function buildStones(track, art, pal) {
   }
   function reset() {
     for (const m of moving) { m.age = Infinity; applyMotion(m); }
-    hexAges.fill(Infinity);
+    hoverTime = 0; hexAges.fill(Infinity);
     for(const mesh of hexMeshes) { hexes.forEach((_,i)=>mesh.setColorAt(i,lightColor.setRGB(1,1,1))); mesh.instanceColor.needsUpdate=true; }
   }
   let disposed = false;
