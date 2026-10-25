@@ -7,8 +7,11 @@ export function selectTrack(search = '') {
 
 export function allowsOnline(trackId) { return trackId === 'threshold'; }
 
-// Mainframe stays silent until it has its own song or the player explicitly chooses one.
+// Loopback previews have a private Mainframe recording. Other hosts need their own chart.
 export function courseSongs(trackId, search, charts) {
   const chart = new URLSearchParams(search).get('chart');
+  if (trackId === 'mainframe' && !chart?.trim() && charts.includes('/private-audio/pink-road/chart.json')) {
+    return ['/private-audio/tracks-2026-10-24/mainframe/out/v3/race-chart.json'];
+  }
   return ['mainframe', 'goonworks'].includes(trackId) && !chart?.trim() ? [] : charts;
 }

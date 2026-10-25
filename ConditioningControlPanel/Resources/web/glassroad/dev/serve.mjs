@@ -4,6 +4,9 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { MAINFRAME_CHART, verseChart, mixEnvelope } from './verseChart.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 // the app serves Resources/web whole, so glassroad's ../../arcademy imports (the Loom) resolve to /arcademy/
@@ -14,6 +17,19 @@ const ARCADEMY = resolve(ROOT, '..', 'arcademy');
 const PRIVATE = resolve(process.env.GLASSROAD_AUDIO_DIR || 'C:/Projects/glassroad-audio');
 const MOUNTS = [['/arcademy/', ARCADEMY], ['/private-audio/', PRIVATE]];
 const PORT = Number(process.argv[2] || process.env.PORT || 8790);
+let mainframeChart;
+async function readMainframeChart() {
+  if (!mainframeChart) mainframeChart = (async () => {
+    const dir = join(PRIVATE, 'tracks-2026-10-24/mainframe/out/v3');
+    const raw = JSON.parse(await readFile(join(dir, 'chart.json'), 'utf8'));
+    const { stdout } = await promisify(execFile)('ffmpeg', ['-v', 'error', '-threads', '2',
+      '-i', join(dir, 'mainframe_phone.mp3'), '-vn', '-ac', '1', '-ar', '8000',
+      '-threads', '2', '-f', 'f32le', 'pipe:1'], { encoding: 'buffer', maxBuffer: 16 * 1024 * 1024, windowsHide: true });
+    const pcm = new Float32Array(stdout.buffer.slice(stdout.byteOffset, stdout.byteOffset + stdout.byteLength));
+    return JSON.stringify(verseChart(raw, mixEnvelope(pcm)));
+  })().catch(e => { mainframeChart = null; throw e; });
+  return mainframeChart;
+}
 // A developer may attach a private local provider. Its settings and receipts stay outside this tree.
 const providerModule = process.env.GLASSROAD_PREVIEW_PROVIDER;
 const liveCards = providerModule
@@ -27,6 +43,15 @@ const MIME = {
 
 const server = createServer(async (req, res) => {
   const head = { 'Cache-Control': 'no-store', 'Cross-Origin-Opener-Policy': 'same-origin' };
+  if (new URL(req.url, 'http://local').pathname === MAINFRAME_CHART) {
+    if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405, head); res.end(); return; }
+    try {
+      const body = await readMainframeChart();
+      res.writeHead(200, { ...head, 'Content-Type': 'application/json' });
+      res.end(req.method === 'HEAD' ? undefined : body);
+    } catch { res.writeHead(503, head); res.end('Private Mainframe recording unavailable'); }
+    return;
+  }
   if (liveCards && new URL(req.url, 'http://local').pathname.startsWith('/__card-media/')) {
     const path = new URL(req.url, 'http://local').pathname;
     if (path === '/__card-media/start') {

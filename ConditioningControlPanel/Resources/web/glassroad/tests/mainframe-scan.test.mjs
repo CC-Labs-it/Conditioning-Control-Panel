@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { scanPose, scanClock, scanZones, createMainframeScan } from '../sim/mainframeScan.js';
 import { selectTrack, allowsOnline, courseSongs } from '../track/selection.js';
 import { songCharts } from '../host/bridge.js';
+import { MAINFRAME_CHART } from '../dev/verseChart.mjs';
 import { createState, S, RESPAWN, BOOST } from '../sim/state.js';
 import { readFileSync } from 'node:fs';
 import { loadTrack } from '../track/load.js';
@@ -19,13 +20,14 @@ test('course selection is bundled, with no Mainframe online admission before a s
   assert.equal(allowsOnline('mainframe'), false); assert.equal(allowsOnline('threshold'), true);
 });
 
-test('Mainframe never inherits dev or host songs through an absent or blank chart choice', () => {
+test('Mainframe replaces the dev fallback with its own mix and never inherits unrelated host songs', () => {
   const songs = ['/host/bambi/chart.json'];
   for (const devHost of [false, true]) {
     for (const search of ['?track=mainframe', '?track=mainframe&chart', '?track=mainframe&chart=', '?track=mainframe&chart=%20%09']) {
       const charts = songCharts({ search, devHost, songs });
       assert.ok(charts.length > 0, 'the real song selector would otherwise supply defaults or whitespace');
-      assert.deepEqual(courseSongs('mainframe', search, charts), [], search);
+      const own = charts.includes('/private-audio/pink-road/chart.json') ? [MAINFRAME_CHART] : [];
+      assert.deepEqual(courseSongs('mainframe', search, charts), own, search);
       assert.deepEqual(courseSongs('threshold', search, charts), charts, 'Threshold keeps its songs');
     }
   }
