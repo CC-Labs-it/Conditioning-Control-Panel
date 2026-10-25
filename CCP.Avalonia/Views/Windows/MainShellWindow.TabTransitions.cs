@@ -1,17 +1,8 @@
 // PORTED from ConditioningControlPanel/MainWindow/MainWindow.ChromeFx.cs:186-260 (AnimateTabIn, the
-// crossfade half) and MainWindow.TabNavigation.cs:822-875 (the first-visit door-header pulse), with
+// entrance and outgoing fade) and MainWindow.TabNavigation.cs:822-875 (the first-visit door-header pulse), with
 // the deferred startup that arms it (MainWindow.xaml.cs:3795-3830). ShowTab calls AnimateTabIn for
 // every real tab. Durations, easings and the Off / Reduced split are WPF's, verbatim.
 //
-// NOT YET, named in the parity row as wire-shell-tab-navigation-b-next:
-//   * Full motion's 12 px directional slide (SlideTabIn, ChromeFxNav.EntranceOffset) and the card
-//     stagger (StaggerTabCards / FindStaggerTargets). Both MOVE hit geometry for 200-460 ms after a
-//     ShowTab; a first port broke every headless test that clicks or hovers right after navigating
-//     (AssetsTabTests hover, CompanionPersonalityZoneTests chips; gate run 39812584919). They need a
-//     test seam that settles entrances first. Until then Full gets WPF's Reduced entrance (crossfade).
-//   * The 100 ms outgoing fade (FadeOutgoingTab): it re-shows the tab just left, and on this head
-//     every tab's timers, refreshes and FX follow IsVisible (P01), so the leaving tab is cut instead.
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,12 +22,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        private const int TabFadeInMs = 200;      // WPF ChromeFx.cs:38
-
-        /// <summary>The entrance in flight; the next navigation cancels it, so a half-faded tab
-        /// never keeps an animated value after the user has moved on.</summary>
-        private CancellationTokenSource? _tabEntrance;
-
         /// <summary>The tab the last entrance animated (test seam).</summary>
         internal Control? EnteringTab { get; private set; }
 
@@ -46,32 +31,132 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// </summary>
         private void AnimateTabIn(Control? tab)
         {
-            _tabEntrance?.Cancel();
-            _tabEntrance = null;
-            EnteringTab = null;
+            ResetEntranceParts();
             if (tab == null) return;
+            if (!AmbientFxCanvas.Env.AllowTransitions) { ClearLeavingFrame(); return; }
+            EnteringTab = tab;
+            _entranceWatch.Restart();
+            _entranceParts.Add((tab, TranslateForEntrance(tab), 0, 0, 0, 200));
+            if (AmbientFxCanvas.Env.Level == MotionLevel.Full && !Services.UI.ChromeFxNav.IsAirspaceTab(_incomingTabKey))
+            {
+                var offset = Services.UI.ChromeFxNav.EntranceOffset(CurrentTab, _incomingTabKey, 12);
+                var first = _entranceParts[0];
+                _entranceParts[0] = first with { X = offset.X, Y = offset.Y };
+                int i = 0;
+                foreach (var card in FindEntranceCards(tab))
+                    _entranceParts.Add((card, TranslateForEntrance(card), 0, 10, 40 * Math.Min(i++, 6), 260));
+            }
+            AdvanceTabEntrance(TimeSpan.Zero);
+            _entranceTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render,
+                (_, _) => AdvanceTabEntrance(_entranceWatch.Elapsed));
+            _entranceTimer.Start();
+        }
+
+        private readonly System.Diagnostics.Stopwatch _entranceWatch = new();
+        private DispatcherTimer? _entranceTimer;
+        private string? _incomingTabKey;
+        private readonly List<(Control Item, global::Avalonia.Media.TranslateTransform? Slide, double X, double Y, double Delay, double Duration)> _entranceParts = new();
+        private global::Avalonia.Controls.Image? _leavingFrame;
+        private global::Avalonia.Media.Imaging.RenderTargetBitmap? _leavingBitmap;
+        internal bool HasLeavingTabFrame => _leavingFrame != null;
+        internal int EntranceCardCount => Math.Max(0, _entranceParts.Count - 1);
+
+        // WPF FadeOutgoingTab, adapted: fade a frozen frame rather than re-showing a live tab.
+        // Re-showing fires IsVisible hooks here and restarts the departing page's services.
+        // ponytail: a tab not measured yet has no frame to fade; cut it, as for native airspace.
+        private void CaptureLeavingTab(string incomingKey)
+        {
+            ClearLeavingFrame();
+            _incomingTabKey = incomingKey;
+            if (!AmbientFxCanvas.Env.AllowTransitions || Services.UI.ChromeFxNav.IsAirspaceTab(CurrentTab)) return;
+            if (!TabPanels.TryGetValue(CurrentTab, out var oldName) || !TabPanels.TryGetValue(incomingKey, out var newName)
+                || oldName == newName || Named<Control>(oldName) is not { IsVisible: true } old
+                || old.Parent is not Grid host || old.Bounds.Width <= 0 || old.Bounds.Height <= 0) return;
             try
             {
-                if (!AmbientFxCanvas.Env.AllowTransitions) { tab.Opacity = 1; return; }
-                var run = new CancellationTokenSource();
-                _tabEntrance = run;
-                EnteringTab = tab;
-                _ = new Animation
-                {
-                    Duration = TimeSpan.FromMilliseconds(TabFadeInMs),
-                    Easing = new QuadraticEaseOut(),
-                    Children =
-                    {
-                        new KeyFrame { Cue = new Cue(0), Setters = { new Setter(Visual.OpacityProperty, 0.0) } },
-                        new KeyFrame { Cue = new Cue(1), Setters = { new Setter(Visual.OpacityProperty, 1.0) } },
-                    },
-                }.RunAsync(tab, run.Token);
+                _leavingBitmap = new global::Avalonia.Media.Imaging.RenderTargetBitmap(
+                    new PixelSize((int)Math.Ceiling(old.Bounds.Width), (int)Math.Ceiling(old.Bounds.Height)));
+                _leavingBitmap.Render(old);
+                _leavingFrame = new global::Avalonia.Controls.Image { Source = _leavingBitmap, IsHitTestVisible = false,
+                    Margin = old.Margin, Stretch = global::Avalonia.Media.Stretch.Fill };
+                host.Children.Add(_leavingFrame);
             }
-            catch (Exception ex)
+            catch (Exception ex) { Log.Debug("Tab snapshot: {E}", ex.Message); ClearLeavingFrame(); }
+        }
+
+        private void ClearLeavingFrame()
+        {
+            if (_leavingFrame?.Parent is Panel host) host.Children.Remove(_leavingFrame);
+            _leavingFrame = null;
+            _leavingBitmap?.Dispose();
+            _leavingBitmap = null;
+        }
+
+        // Explicit elapsed-time seam lets pointer tests settle geometry without sleeping or
+        // disabling Full motion. The same finite clock drives production and the tests.
+        internal void AdvanceTabEntrance(TimeSpan elapsed)
+        {
+            double ms = elapsed.TotalMilliseconds;
+            if (_leavingFrame != null)
             {
-                Log.Debug("AnimateTabIn: {E}", ex.Message);
-                try { tab.Opacity = 1; } catch { }
+                _leavingFrame.Opacity = Math.Clamp(1 - ms / 100, 0, 1);
+                if (ms >= 100) ClearLeavingFrame();
             }
+            foreach (var part in _entranceParts)
+            {
+                double t = Math.Clamp((ms - part.Delay) / part.Duration, 0, 1);
+                double eased = 1 - (1 - t) * (1 - t);
+                // WPF card fade is 220ms, rise 260ms; the tab fade/slide is 200ms.
+                double fadeT = Math.Clamp((ms - part.Delay) / (part.Duration == 260 ? 220 : 200), 0, 1);
+                part.Item.Opacity = 1 - (1 - fadeT) * (1 - fadeT);
+                if (part.Slide != null) { part.Slide.X = part.X * (1 - eased); part.Slide.Y = part.Y * (1 - eased); }
+            }
+            if (ms >= 620) SettleTabEntrance();
+        }
+
+        internal void SettleTabEntrance()
+        {
+            ResetEntranceParts();
+            ClearLeavingFrame();
+        }
+
+        private void ResetEntranceParts()
+        {
+            _entranceTimer?.Stop();
+            foreach (var part in _entranceParts)
+            {
+                part.Item.Opacity = 1;
+                if (part.Slide != null) part.Slide.X = part.Slide.Y = 0;
+            }
+            _entranceParts.Clear();
+            EnteringTab = null;
+        }
+
+        private static global::Avalonia.Media.TranslateTransform? TranslateForEntrance(Control item)
+        {
+            if (item.RenderTransform is global::Avalonia.Media.TranslateTransform t) return t;
+            if (item.RenderTransform != null) return null; // preserve authored transforms
+            var slide = new global::Avalonia.Media.TranslateTransform();
+            item.RenderTransform = slide;
+            return slide;
+        }
+
+        internal static IReadOnlyList<Control> FindEntranceCards(Control? node)
+        {
+            for (int depth = 0; depth < 8 && node != null; depth++)
+            {
+                switch (node)
+                {
+                    case ContentControl cc when cc.Content is Control inner: node = inner; break;
+                    case Decorator dec when dec.Child != null: node = dec.Child; break;
+                    case Panel panel:
+                        var children = panel.Children.Where(c => c.IsVisible && c.Opacity > 0.99).ToList();
+                        if (children.Count == 1) { node = children[0]; break; }
+                        return children.Take(8).ToList();
+                    default: return Array.Empty<Control>();
+                }
+            }
+            return Array.Empty<Control>();
         }
 
         // ============================== first-visit door pulse ==============================
@@ -104,8 +189,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 delay?.Dispose();
                 foreach (var key in _navHeaderPulses.Keys.ToList()) StopNavDoorHeaderPulse(key);
-                _tabEntrance?.Cancel();
-                _tabEntrance = null;
+                SettleTabEntrance();
+                ClearLeavingFrame();
                 EnteringTab = null;
             };
         }

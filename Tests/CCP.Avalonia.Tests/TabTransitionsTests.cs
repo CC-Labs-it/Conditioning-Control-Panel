@@ -54,6 +54,73 @@ public sealed class TabTransitionsTests
     });
 
     [Fact]
+    public Task FullEntranceMovesInRailOrderAndSettlesOnInterruption() => Run(shell =>
+    {
+        shell.ShowTab("quests");
+        shell.SettleTabEntrance();
+        shell.ShowTab("achievements");
+        var page = shell.Named<Control>("AchievementsTab")!;
+        var slide = Assert.IsType<global::Avalonia.Media.TranslateTransform>(page.RenderTransform);
+        var expected = global::ConditioningControlPanel.Services.UI.ChromeFxNav.EntranceOffset("quests", "achievements", 12);
+        Assert.Equal(expected.X, slide.X);
+        Assert.Equal(expected.Y, slide.Y);
+        Assert.Equal(0, page.Opacity);
+        shell.AdvanceTabEntrance(TimeSpan.FromMilliseconds(100));
+        Assert.Equal(0.75, page.Opacity, 3);
+        Assert.Equal(expected.X / 4, slide.X, 3);
+        shell.ShowTab("quests");
+        Assert.Equal(0, slide.X);
+        Assert.Equal(0, slide.Y);
+        Assert.Equal(1, page.Opacity);
+        shell.AdvanceTabEntrance(TimeSpan.FromMilliseconds(620));
+        Assert.Null(shell.EnteringTab);
+    });
+
+    [Fact]
+    public Task ReducedAndAirspacePagesOnlyCrossfadeAndOutgoingFrameExpires() => Run(shell =>
+    {
+        shell.ShowTab("quests");
+        shell.SettleTabEntrance();
+        shell.UpdateLayout();
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        shell.ShowTab("achievements");
+        Assert.Equal(0, shell.EntranceCardCount);
+        Assert.True(shell.HasLeavingTabFrame);
+        shell.AdvanceTabEntrance(TimeSpan.FromMilliseconds(100));
+        Assert.False(shell.HasLeavingTabFrame);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        shell.ShowTab("settings");
+        Assert.Equal(0, shell.EntranceCardCount);
+        shell.ShowTab("quests");
+        Assert.False(shell.HasLeavingTabFrame); // leaving native airspace is always a cut
+        shell.SettleTabEntrance();
+        shell.ShowTab("achievements");
+        Assert.True(shell.HasLeavingTabFrame);
+        shell.SettleTabEntrance();
+        Assert.False(shell.HasLeavingTabFrame);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        shell.ShowTab("achievements");
+        Assert.Null(shell.EnteringTab);
+        Assert.False(shell.HasLeavingTabFrame);
+    });
+
+    [Fact]
+    public Task CardSelectionDescendsWrappersCapsEightAndSkipsDimmedCards() => Run(shell =>
+    {
+        var panel = new StackPanel();
+        for (int i = 0; i < 10; i++) panel.Children.Add(new Border());
+        panel.Children.Insert(0, new Border { Opacity = 0.6 });
+        panel.Children.Insert(0, new Border { IsVisible = false });
+        var cards = MainShellWindow.FindEntranceCards(new UserControl { Content = new Border { Child = panel } });
+        Assert.Equal(8, cards.Count);
+        Assert.Same(panel.Children[2], cards[0]);
+        shell.ShowTab("quests");
+        Assert.True(shell.EntranceCardCount > 0);
+        shell.SettleTabEntrance();
+        Assert.Equal(0, shell.EntranceCardCount);
+    });
+
+    [Fact]
     public Task ShowTabFadesTheIncomingTabInUnlessMotionIsOff() => Run(shell =>
     {
         shell.ShowTab("settings");

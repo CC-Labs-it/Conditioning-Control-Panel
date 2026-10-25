@@ -6,8 +6,8 @@
 // is real too, and runs inside ShowTab (MainShellWindow.AmbientFx.cs).
 //
 // What is NOT, on purpose, each named so it is not lost silently:
-//   - The transition choreography is REAL in part (AnimateTabIn's crossfade, the first-visit door
-//     pulse: MainShellWindow.TabTransitions.cs); the slide, stagger and outgoing fade are not - see that file.
+//   - The transition choreography is REAL (crossfade, slide, stagger, frozen outgoing fade and
+//     first-visit door pulse: MainShellWindow.TabTransitions.cs).
 //     Of WPF's Stop* calls, StopLockdownPulse runs here; the season shimmer, skill-tree air and
 //     vault motion park themselves with their tab's IsVisible (QuestsTabView.Fx, AmbientFxCanvas, BeatLoop).
 //   - UpdatePatreonUI on bambitakeover/studio/haptics/ramp: its tab half is RefreshEntitlementVeils,
@@ -176,6 +176,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF :306: the Lockdown plate's breath stops on every navigation; its case restarts it.
             StopLockdownPulse();
 
+            SettleTabEntrance();
+            CaptureLeavingTab(tab);
             foreach (var name in new HashSet<string>(TabPanels.Values))
             {
                 var panel = this.FindControl<Control>(name);
