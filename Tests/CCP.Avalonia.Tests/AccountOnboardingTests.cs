@@ -1,15 +1,9 @@
 using System;
 using System.Linq;
-using System.Collections.Generic;
-using System.Net;
-using System.Net.Http;
-using System.Threading;
-using System.Threading.Tasks;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
-using ConditioningControlPanel.Services.Friends;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -62,98 +56,37 @@ public sealed class AccountOnboardingTests
     });
 
     [Fact]
-    public Task RequiredNameKeepsRefusalInlineThenAcceptsOurOwnName() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public void SandboxWhitelistedTierCardStaysInert() => AvaloniaTestDispatcher.Run(() =>
     {
         EnsureApp();
-        var s = CoreSettings.Current;
-        var oldId = s.UnifiedId;
-        var oldName = s.UserDisplayName;
-        var oldV2 = AccountSeed.NewV2;
-        var oldWorld = FriendsLanding.World;
+        var old = CoreAccount.IsLoggedInProvider;
+        var whitelisted = typeof(AccountSeed).GetProperty(nameof(AccountSeed.SandboxWhitelisted),
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)!;
+        var oldWhitelisted = AccountSeed.SandboxWhitelisted;
         MainShellWindow? shell = null;
         try
         {
-            s.UnifiedId = "name-test";
-            s.UserDisplayName = "";
-            var wire = new NameServer();
-            AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
-            FriendsLanding.World = () => new LandingWorld(false, false, false, true, false, false);
+            CoreAccount.IsLoggedInProvider = () => false;
+            whitelisted.SetValue(null, true); // Debug-only in the app; tests run Release, so set it directly
             shell = new MainShellWindow();
             shell.Show();
-            shell.ProfilePage!.DisplayOwnProfile();
-            Assert.Equal(Loc.Get("account_name_not_set"), shell.ProfilePage.FindControl<TextBlock>("TxtProfileViewerName")!.Text);
-            var ask = shell.AskDisplayNameAfterSignInAsync(shell, "", null);
+            shell.OpenAppSettingsSection("account");
             Dispatcher.UIThread.RunJobs();
-            var dialog = Assert.Single(shell.OwnedWindows.OfType<DisplayNameDialog>());
-            Assert.False(dialog.FindControl<Button>("BtnCancel")!.IsVisible);
-            Assert.True(dialog.FindControl<Button>("BtnClose")!.IsVisible);
-            var input = dialog.FindControl<TextBox>("TxtDisplayName")!;
-            var confirm = dialog.FindControl<Button>("BtnConfirm")!;
-            input.Text = "ab";
+            var section = shell.AppSettingsPage!.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.AccountSettingsSection>("SectionAccount")!;
+            section.RefreshTierBadge();
+            var card = section.FindControl<Border>("AccountTierCard")!;
+            Assert.Null(card.Cursor);
+            var point = card.TranslatePoint(new Point(10, 10), shell)!.Value;
+            shell.MouseDown(point, MouseButton.Left);
+            shell.MouseUp(point, MouseButton.Left);
             Dispatcher.UIThread.RunJobs();
-            Assert.False(confirm.IsEnabled);
-            input.Text = "bad!name";
-            Dispatcher.UIThread.RunJobs();
-            Assert.False(confirm.IsEnabled);
-            Assert.Equal(Loc.Get("name_ask_bad_chars"), dialog.FindControl<TextBlock>("TxtStatus")!.Text);
-            input.Text = "Taken";
-            Dispatcher.UIThread.RunJobs();
-            confirm.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await PumpUntil(() => input.IsEnabled);
-            Assert.Equal(new[] { "/v2/user/change-display-name", "/v2/auth/check-name" }, wire.Paths);
-            Assert.True(dialog.IsVisible);
-            Assert.Equal(Loc.GetF("login_name_already_taken", "Taken"), dialog.FindControl<TextBlock>("TxtStatus")!.Text);
-            wire.Accept = true;
-            input.Text = "OwnName";
-            Dispatcher.UIThread.RunJobs();
-            confirm.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await PumpUntil(() => ask.IsCompleted);
-            Assert.Equal("OwnName", s.UserDisplayName);
-            Assert.Equal(3, wire.Paths.Count); // availability never runs before the accepted own-name change
-            Assert.False(dialog.IsVisible);
-            Assert.Equal("OwnName", shell.ProfilePage.FindControl<TextBlock>("TxtProfileViewerName")!.Text);
+            Assert.Empty(shell.OwnedWindows.OfType<LoginDialog>());
         }
         finally
         {
             shell?.Close(); Dispatcher.UIThread.RunJobs();
-            (s.UnifiedId, s.UserDisplayName) = (oldId, oldName);
-            CoreSettings.Save();
-            AccountSeed.NewV2 = oldV2;
-            FriendsLanding.World = oldWorld;
-        }
-    });
-
-    [Fact]
-    public Task StartupAskWaitsForAQuietProfileLoadAndIsOncePerAccount() => AvaloniaTestDispatcher.RunAsync(async () =>
-    {
-        EnsureApp();
-        var s = CoreSettings.Current;
-        var oldId = s.UnifiedId;
-        var oldName = s.UserDisplayName;
-        var oldWorld = FriendsLanding.World;
-        MainShellWindow? shell = null;
-        try
-        {
-            s.UnifiedId = "startup-name-test"; s.UserDisplayName = "";
-            FriendsLanding.World = () => new LandingWorld(false, false, false, true, false, false, true);
-            shell = new MainShellWindow(); shell.Show();
-            shell.QueueDisplayNameAskIfNeeded();
-            Dispatcher.UIThread.RunJobs();
-            Assert.Empty(shell.OwnedWindows.OfType<DisplayNameDialog>());
-            FriendsLanding.World = () => new LandingWorld(false, false, false, true, false, false);
-            shell.QueueDisplayNameAskIfNeeded();
-            await PumpUntil(() => shell.OwnedWindows.OfType<DisplayNameDialog>().Any());
-            Assert.Single(shell.OwnedWindows.OfType<DisplayNameDialog>()).Close(false);
-            Dispatcher.UIThread.RunJobs();
-            shell.QueueDisplayNameAskIfNeeded();
-            Dispatcher.UIThread.RunJobs();
-            Assert.Empty(shell.OwnedWindows.OfType<DisplayNameDialog>());
-        }
-        finally
-        {
-            shell?.Close(); Dispatcher.UIThread.RunJobs();
-            (s.UnifiedId, s.UserDisplayName) = (oldId, oldName);
-            FriendsLanding.World = oldWorld;
+            whitelisted.SetValue(null, oldWhitelisted);
+            CoreAccount.IsLoggedInProvider = old;
         }
     });
 
@@ -184,28 +117,5 @@ public sealed class AccountOnboardingTests
                 .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
-    }
-
-    private static async Task PumpUntil(Func<bool> done)
-    {
-        var sw = System.Diagnostics.Stopwatch.StartNew(); // bounded by time, not turns (P73)
-        while (!done() && sw.Elapsed < TimeSpan.FromSeconds(10)) { await Task.Yield(); Dispatcher.UIThread.RunJobs(); }
-        Assert.True(done());
-    }
-
-    private sealed class NameServer : HttpMessageHandler
-    {
-        public readonly List<string> Paths = new();
-        public bool Accept;
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
-        {
-            var path = request.RequestUri!.AbsolutePath;
-            Paths.Add(path);
-            return Task.FromResult(new HttpResponseMessage(path.EndsWith("check-name") || Accept ? HttpStatusCode.OK : HttpStatusCode.Conflict)
-            {
-                Content = new StringContent(path.EndsWith("check-name") ? "{\"available\":false}"
-                    : Accept ? "{\"new_display_name\":\"OwnName\"}" : "{\"error\":\"Taken\"}")
-            });
-        }
     }
 }

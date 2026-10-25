@@ -164,9 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var progress = App.Achievements?.Progress;
             ShowCard(s.IsSeason0Og);
             ApplyIdentityBadges(false, null, CoreAccount.IsWhitelisted);
-            TxtProfileViewerName.Text = ConditioningControlPanel.Services.NeedsDisplayNameRule.FirstName(
-                s.UserDisplayName, Platform.AccountSeed.Discord?.CustomDisplayName, Platform.AccountSeed.Patreon?.DisplayName)
-                ?? (string.IsNullOrEmpty(s.UnifiedId) ? "You" : Loc.Get("account_name_not_set"));
+            TxtProfileViewerName.Text = s.UserDisplayName ?? "You";
             ShowOwnActions(true);
             SetOnline(true, Loc.Get("label_online"));
             TxtProfileViewerLevel.Text = s.PlayerLevel.ToString();

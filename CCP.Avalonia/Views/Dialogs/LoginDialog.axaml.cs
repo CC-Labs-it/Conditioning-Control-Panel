@@ -141,7 +141,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             public string? DisplayName { get; set; }
             public string? Provider { get; set; }
             public string? LinkedProvider { get; set; }
-            public bool? ServerNeedsDisplayName { get; set; }
         }
 
         public LoginDialog()
@@ -783,7 +782,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 ShouldShowOgWelcome = legacy && CoreSettings.Current.HasShownOgWelcome != true,
                 UnifiedId = user.UnifiedId,
                 DisplayName = user.DisplayName,
-                ServerNeedsDisplayName = user.NeedsDisplayName,
                 Provider = provider,
             };
             Close(true);
@@ -969,7 +967,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             // The full user when the server sent it (SP3 fix): the same adopt + load as every other sign-in.
             if (result.User != null)
             {
-                result.User.NeedsDisplayName = result.NeedsDisplayName ?? result.User.NeedsDisplayName;
                 Succeed(result.User, result.AuthToken, "device_code", legacy: false);
                 return;
             }
@@ -989,7 +986,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 ShouldShowOgWelcome = false,
                 UnifiedId = result.UnifiedId,
                 DisplayName = s.UserDisplayName,
-                ServerNeedsDisplayName = result.NeedsDisplayName,
                 Provider = "device_code",
             };
             Close(true);

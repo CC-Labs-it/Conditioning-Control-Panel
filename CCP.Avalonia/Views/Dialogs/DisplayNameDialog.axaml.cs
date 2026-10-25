@@ -1,7 +1,4 @@
-using System;
-using System.Threading.Tasks;
 using Avalonia.Controls;
-using ConditioningControlPanel.Services;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
@@ -31,9 +28,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         private readonly Button _btnConfirm;
         private readonly TextBlock _txtCharCount;
         private bool _isDeleteMode;
-        private Func<string, Task<string?>>? _save;
-        private bool _closed;
-
 
         public string DisplayName { get; private set; } = "";
 
@@ -49,8 +43,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             _txtDisplayName.KeyDown += TxtDisplayName_KeyDown;
             this.FindControl<Button>("BtnCancel")!.Click += (_, _) => Close(false);
             _btnConfirm.Click += (_, _) => Accept();
-            this.FindControl<Button>("BtnClose")!.Click += (_, _) => Close(false);
-            Closed += (_, _) => _closed = true;
 
             Loaded += (_, _) => _txtDisplayName.Focus();
         }
@@ -68,19 +60,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                     _txtDisplayName.SelectAll();
                 }
             }
-        }
-
-        public DisplayNameDialog(string? suggestion, Func<string, Task<string?>> save) : this()
-        {
-            _save = save;
-            this.FindControl<TextBlock>("TxtTitle")!.Text = Loc.Get("label_choose_your_display_name");
-            this.FindControl<TextBlock>("TxtPrompt")!.Text = Loc.Get("name_ask_body");
-            this.FindControl<Border>("WarningPanel")!.IsVisible = false;
-            this.FindControl<Button>("BtnCancel")!.IsVisible = false;
-            this.FindControl<Button>("BtnClose")!.IsVisible = true;
-            _txtDisplayName.Text = suggestion ?? "";
-            _txtDisplayName.SelectAll();
-            OnTextChanged();
         }
 
         public DisplayNameDialog(string confirmationMode) : this()
@@ -119,47 +98,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             {
                 _btnConfirm.IsEnabled = text == "DELETE";
             }
-            else if (_save != null)
-            {
-                var shape = NeedsDisplayNameRule.Check(text);
-                _txtCharCount.Text = Loc.GetF("label_char_count_of_max", text.Length, NeedsDisplayNameRule.MaxLength);
-                _btnConfirm.IsEnabled = shape == DisplayNameShape.Ok;
-                ShowStatus(shape == DisplayNameShape.BadChars ? Loc.Get("name_ask_bad_chars") : null);
-            }
             else
             {
                 var length = text.Length;
                 _txtCharCount.Text = Loc.GetF("label_char_count_of_max", length, 20);
                 _btnConfirm.IsEnabled = length >= 2 && length <= 20;
             }
-        }
-
-        private void ShowStatus(string? line)
-        {
-            var status = this.FindControl<TextBlock>("TxtStatus")!;
-            status.Text = line ?? "";
-            status.IsVisible = !string.IsNullOrEmpty(line);
-        }
-
-        private async Task SaveRequiredAsync(string name)
-        {
-            if (!_txtDisplayName.IsEnabled) return;
-            _btnConfirm.IsEnabled = false;
-            _txtDisplayName.IsEnabled = false;
-            ShowStatus(Loc.Get("login_checking"));
-            string? error;
-            try { error = await _save!(name); }
-            catch (Exception ex)
-            {
-                Serilog.Log.Warning(ex, "Display name save failed");
-                error = Loc.Get("msg_failed_to_change_display_name");
-            }
-            if (_closed) return;
-            if (error == null) { DisplayName = name; Close(true); return; }
-            _txtDisplayName.IsEnabled = true;
-            _btnConfirm.IsEnabled = NeedsDisplayNameRule.Check(_txtDisplayName.Text) == DisplayNameShape.Ok;
-            ShowStatus(error);
-            _txtDisplayName.Focus();
         }
 
         private void TxtDisplayName_KeyDown(object? sender, KeyEventArgs e)
@@ -179,12 +123,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 if (name != "DELETE") return;
                 DisplayName = name;
                 Close(true);
-                return;
-            }
-
-            if (_save != null)
-            {
-                if (NeedsDisplayNameRule.Check(name) == DisplayNameShape.Ok) _ = SaveRequiredAsync(name);
                 return;
             }
 
