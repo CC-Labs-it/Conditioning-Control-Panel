@@ -155,14 +155,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// HypnoTube and, on a user change, the page follows (WPF SyncSiteRadiosToActiveMod(navigateIfChanged: true)).</summary>
         private void ApplyBambiCloudVisibility(bool navigateIfHidden)
         {
-            bool modWants = true;
-            try { modWants = App.Mods?.ShowBambiCloudOption() ?? true; }
-            catch (Exception ex) { Log.Debug("ShowBambiCloudOption: {E}", ex.Message); }
-            bool show = modWants || CoreSettings.Current.ForceShowBambiCloud;
-            RbBambiCloud.IsVisible = show;
-            if (show || RbBambiCloud.IsChecked != true) return;
-            RbHypnoTube.IsChecked = true;
-            if (navigateIfHidden) Shell?.BrowserSiteToggle_Click(RbHypnoTube, new RoutedEventArgs());
+            var modWants = App.Mods?.ShowBambiCloudOption() ?? true;
+            RbBambiCloud.IsVisible = modWants || CoreSettings.Current.ForceShowBambiCloud;
+            SyncBrowserSite(modWants, App.Mods?.GetDefaultBrowserUrl() ?? "https://bambicloud.com/", navigateIfHidden);
+        }
+
+        // WPF SyncSiteRadiosToActiveMod: visibility is not the site's default. In particular,
+        // revealing BambiCloud with the override must not change a HypnoTube mod's default.
+        internal void SyncBrowserSite(bool modWantsBambiCloud, string defaultUrl, bool navigateIfChanged)
+        {
+            var current = BrowserWebHost.CurrentUrl?.AbsoluteUri;
+            var known = current != null && (current.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase)
+                || current.Contains("hypnotube.com", StringComparison.OrdinalIgnoreCase));
+            if (modWantsBambiCloud && known) return;
+            var onBambi = modWantsBambiCloud && defaultUrl.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase);
+            var target = onBambi ? RbBambiCloud : RbHypnoTube;
+            var moved = target.IsChecked != true;
+            target.IsChecked = true;
+            if (moved && navigateIfChanged && !CoreSettings.Current.OfflineMode)
+                Shell?.BrowserSiteToggle_Click(target, new RoutedEventArgs());
         }
 
         // ------------------------------------------------------------------ the load prompt

@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### Shell web hosts follow-up
+
+1. Hide the panel to tray, then follow a speech-bubble browser link; repeat with the panel minimized. Expect the panel restored, Home selected and the browser card revealed. WPF `MainWindow/MainWindow.Browser.cs:330-386`. Rows: `shell-webview2-hosts`.
+2. With the native engine unavailable, follow an HTTPS browser link. Expect the system browser to open it; HTTP and non-web schemes must not launch externally. Enable offline mode and repeat from a companion watch chip: no navigation or external launch. WPF `MainWindow/MainWindow.Browser.cs:458-498`. Rows: `shell-webview2-hosts`.
+3. Switch to a mod whose default is HypnoTube while the browser has no known page; reveal BambiCloud using the override. Expect HypnoTube selected. With a known live site, a sync on a mod offering BambiCloud must preserve selection. Hiding BambiCloud must select HypnoTube; offline mode must prevent navigation. WPF `MainWindow/MainWindow.Browser.cs:548-582`. Rows: `shell-webview2-hosts`.
