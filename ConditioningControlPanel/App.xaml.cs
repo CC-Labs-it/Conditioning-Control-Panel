@@ -3267,6 +3267,7 @@ namespace ConditioningControlPanel
             // The service lives in Core; its 15 s refresh ticks hop back to this UI thread (was a DispatcherTimer).
             DiscordRichPresenceService.PostToUi = a => Dispatcher.BeginInvoke(a);
             DiscordRpc = new DiscordRichPresenceService();
+            CoreDiscord.ServiceProvider = () => DiscordRpc;
             if (Settings.Current.DiscordRichPresenceEnabled && Settings.Current.HasLinkedDiscord)
             {
                 DiscordRpc.IsEnabled = true;
