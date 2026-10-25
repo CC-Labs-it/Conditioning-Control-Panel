@@ -65,6 +65,20 @@ public class RemoteEndRuleTests
         Assert.Contains("ReleaseRemoteSafetyState()", release);
     }
 
+    [Fact]
+    public void StopEffectsOnDisconnect_NeverSwitchesOffTheWearersOwnStrictLock()
+    {
+        // ccp-bugs #1340: only the controller's own strict lock is released (ReleaseRemoteSafetyState,
+        // which runs first). The opt-in "stop effects on disconnect" path used to switch every strict
+        // lock off and save it.
+        var src = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services",
+            "RemoteControlService.cs"));
+        Assert.DoesNotContain("StrictLockEnabled = false", Body(src, "private void StopRemoteTriggeredEffects()"));
+        var cleanup = Body(src, "private void HandleControllerDisconnectCleanup()");
+        Assert.True(cleanup.IndexOf("ReleaseRemoteSafetyState();", StringComparison.Ordinal)
+                    < cleanup.IndexOf("StopRemoteTriggeredEffects();", StringComparison.Ordinal));
+    }
+
     /// <summary>The text of one method: from its signature to the next member's doc comment.</summary>
     private static string Body(string src, string signature)
     {

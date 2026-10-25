@@ -34,10 +34,14 @@ public class CompanionIdleVoiceTests
     [Theory]
     [InlineData("Idle", true)]
     [InlineData("idle", true)]
-    [InlineData("IdleStateChanged", false)]   // the player went away or came back
-    [InlineData("FaceFound", false)]
-    [InlineData("FaceLost", false)]
-    [InlineData("Blink", false)]
+    [InlineData("IdleStateChanged", true)]    // the player went away or came back (#1490)
+    [InlineData("FaceFound", true)]         // webcam sensing (#1490 #1491)
+    [InlineData("FaceLost", true)]
+    [InlineData("Blink", true)]
+    [InlineData("TrackingStateChanged", true)]
+    [InlineData("ActivityChanged", true)]   // window awareness
+    [InlineData("StillOnActivity", true)]
+    [InlineData("TongueOut", false)]        // a gesture made at the companion
     [InlineData("LongStare", false)]
     [InlineData("LevelUp", false)]
     [InlineData("SessionCompleted", false)]
@@ -47,7 +51,7 @@ public class CompanionIdleVoiceTests
     [InlineData("SessionSetupReady", false)]
     [InlineData("", false)]
     [InlineData(null, false)]
-    public void Only_the_idle_timer_trigger_is_unprompted(string? trigger, bool unprompted)
+    public void Only_the_sensing_triggers_are_unprompted(string? trigger, bool unprompted)
     {
         Assert.Equal(unprompted, CompanionIdleVoice.IsUnprompted(trigger));
     }
@@ -63,7 +67,7 @@ public class CompanionIdleVoiceTests
     [InlineData("builtin-bambisleep")]
     [InlineData("builtin-locked")]
     [InlineData("builtin-sissyhypno")]
-    public void The_logged_idle_clips_ride_the_Idle_trigger_and_the_webcam_reactions_do_not(string pack)
+    public void The_logged_idle_and_webcam_clips_are_unprompted_and_the_answers_are_not(string pack)
     {
         var path = Path.Combine(RepoRoot(), "Assets", "sounds", "companion_audio",   // art and audio live in /Assets
             "mods", pack, "bark_rules.json");
@@ -78,10 +82,11 @@ public class CompanionIdleVoiceTests
 
         // The clip families from the wobberjockey trace (stings-engine-off-audio.txt).
         foreach (var held in new[] { "idle_quip_", "idle_hum_", "idle_possessive_", "idle_observe_",
-                                     "idle_tease_", "idle_soft_", "idle_affirm_", "mobile_idle_phone_" })
-            Assert.True(CompanionIdleVoice.IsUnprompted(TriggerOf(held)), $"{pack}: {held} should be an Idle line");
+                                     "idle_tease_", "idle_soft_", "idle_affirm_", "mobile_idle_phone_",
+                                     "face_found_", "attention_lost_", "blink_t" })
+            Assert.True(CompanionIdleVoice.IsUnprompted(TriggerOf(held)), $"{pack}: {held} should be unprompted");
 
-        foreach (var spoken in new[] { "face_found_", "attention_lost_", "blink_t", "hold_success_",
+        foreach (var spoken in new[] { "hold_success_",
                                        "set_hydra_on_", "setup_ready_regular_" })
         {
             var trigger = TriggerOf(spoken);
@@ -111,6 +116,18 @@ public class CompanionIdleVoiceTests
         Assert.True(Count(speech, "unprompted: unprompted") >= 3, "a route into ShowGiggle lost the unprompted flag");
         // The no-barks fallback on the idle tick is unprompted too.
         Assert.Contains("GetRandomBambiPhrase(), unprompted: true", speech);
+    }
+
+    [Fact]
+    public void The_tubes_awareness_reactions_are_unprompted()
+    {
+        // #1490 #1491: the window-awareness lines (v1 activity + still-on, v2 SpeakAwarenessLine)
+        // fire while the player is busy elsewhere; every one of their five speak calls is marked.
+        var reactions = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "AvatarTube",
+            "AvatarTubeWindow.Reactions.cs"));
+        Assert.Equal(2, Count(reactions, "GigglePriority(reaction, unprompted: true)"));
+        Assert.Equal(2, Count(reactions, "Giggle(reaction, unprompted: true)"));
+        Assert.Contains("GigglePriority(text, aiGenerated: true, unprompted: true)", reactions);
     }
 
     private static int Count(string haystack, string needle)
