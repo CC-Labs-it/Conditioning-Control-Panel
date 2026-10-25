@@ -20,7 +20,8 @@
        CmpNodePulseStoryboard         ->  NOT ported: it plays only when IsLive, and WPF's runtime
                                           vm is always dormant (Train 4), so it never runs there.
        implicit ToolTip Style         ->  <Style Selector="ToolTip"> in UserControl.Styles; the
-                                          template is left to Fluent, only the colours are set. -->
+                                          template is the app ToolTip theme's (Theme/Styles.xaml),
+                                          which binds CornerRadius; only colours and radius are set. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"

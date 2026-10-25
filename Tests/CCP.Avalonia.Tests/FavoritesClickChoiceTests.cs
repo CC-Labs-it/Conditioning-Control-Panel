@@ -53,11 +53,11 @@ public sealed class FavoritesClickChoiceTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(popup.IsOpen);
             Assert.False(popup.IsLightDismissEnabled); // hovering must not capture the pointer
-            dash.ClickChoiceCloseElapsed();
+            dash.CloseClickChoiceAfterDelay();
             Assert.True(popup.IsOpen);                 // still on the anchor
             shell.MouseMove(new Point(1, 1));
             Dispatcher.UIThread.RunJobs();
-            dash.ClickChoiceCloseElapsed();
+            dash.CloseClickChoiceAfterDelay();
             Assert.False(popup.IsOpen);
             anchor.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();

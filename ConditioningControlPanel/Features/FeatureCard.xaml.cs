@@ -811,8 +811,8 @@ namespace ConditioningControlPanel.Features
         private void RouteClick(MouseButtonEventArgs e, bool right)
         {
             if (e.OriginalSource is DependencyObject src && IsDescendantOf(src, BtnHelp)) return;
-            bool toggle = Services.DashboardClickRule.ShouldToggle(right,
-                App.Settings?.Current?.DashboardInvertClicks == true, DashboardDepth, DimWhenInactive);
+            bool toggle = Services.UI.DashboardClickRules.IsToggle(right, DashboardDepth, DimWhenInactive,
+                App.Settings?.Current?.DashboardInvertClicks == true);
             if (toggle && IsLocked) return;
             if (right || toggle) e.Handled = true;
             RaiseEvent(new RoutedEventArgs(toggle ? ToggleRequestedEvent : ClickEvent, this));

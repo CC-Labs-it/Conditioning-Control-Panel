@@ -355,6 +355,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _rimLight.Opacity = on ? RimLightOpacity : 0;
         }
 
+        public bool DashboardDepth { get; set; }
+        public bool DimWhenInactive { get; set; }
+
         private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
         {
             // Swallow clicks that originate inside the help button so the user can hover/click
@@ -363,11 +366,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
 
             if (e.InitialPressMouseButton is not (MouseButton.Left or MouseButton.Right)) return;
             bool right = e.InitialPressMouseButton == MouseButton.Right;
-            bool toggle = DashboardClickRule.ShouldToggle(right, CoreSettings.Current.DashboardInvertClicks,
-                DashboardDepth, DimWhenInactive);
-            if (toggle && IsLocked) return;
-            if (right || toggle) e.Handled = true;
-            RaiseEvent(new RoutedEventArgs(toggle ? ToggleRequestedEvent : ClickEvent, this));
+            bool toggle = Services.UI.DashboardClickRules.IsToggle(right, DashboardDepth, DimWhenInactive, CoreSettings.Current.DashboardInvertClicks);
+            if (!toggle)
+            {
+                if (right) e.Handled = true;
+                RaiseEvent(new RoutedEventArgs(ClickEvent, this));
+            }
+            else
+            {
+                // A locked feature cannot be enabled by either physical button.
+                if (IsLocked) return;
+                e.Handled = true;
+                RaiseEvent(new RoutedEventArgs(ToggleRequestedEvent, this));
+            }
         }
     }
 }

@@ -1,5 +1,5 @@
 using System;
-using Avalonia.Controls;
+using Avalonia;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -10,18 +10,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 
 public partial class SettingsTabView
 {
-    private readonly DispatcherTimer _clickChoiceClose = new() { Interval = TimeSpan.FromMilliseconds(450) };
+    private readonly DispatcherTimer _clickChoiceClose = new() { Interval = TimeSpan.FromMilliseconds(Services.UI.DashboardClickRules.HoverCloseMilliseconds) };
     private bool _refreshingClickChoice, _clickChoicePinned;
 
-    private void InitClickChoice()
+    private void InitializeClickChoice()
     {
         EscapeClaim.Mark(ClickChoiceBody);
-        _clickChoiceClose.Tick += (_, _) => ClickChoiceCloseElapsed();
+        _clickChoiceClose.Tick += (_, _) => CloseClickChoiceAfterDelay();
+        ClickChoiceAnchor.PointerEntered += (_, _) => OpenClickChoice(pinned: false);
+        ClickChoiceAnchor.PointerExited += (_, _) => ScheduleClickChoiceClose();
+        ClickChoiceAnchor.Click += (_, _) => OpenClickChoice(pinned: true);
+        ClickChoiceBody.PointerEntered += (_, _) => _clickChoiceClose.Stop();
+        ClickChoiceBody.PointerExited += (_, _) => ScheduleClickChoiceClose();
+        ClickChoiceBody.AddHandler(KeyDownEvent, ClickChoiceKeyDown, RoutingStrategies.Tunnel);
+        ClickChoicePopup.Closed += (_, _) => { _clickChoiceClose.Stop(); _clickChoicePinned = false; ClickChoicePopup.IsLightDismissEnabled = false; };
+        InvertDashboardClicks.IsCheckedChanged += (_, _) =>
+        {
+            if (_refreshingClickChoice) return;
+            _clickChoicePinned = true;
+            _clickChoiceClose.Stop();
+            ClickChoicePopup.IsLightDismissEnabled = true;
+            CoreSettings.Current.DashboardInvertClicks = InvertDashboardClicks.IsChecked == true;
+            CoreSettings.Save();
+            RefreshClickPreference();
+        };
         AttachedToVisualTree += (_, _) => RefreshClickPreference();
         DetachedFromVisualTree += (_, _) => CloseClickChoice();
         PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !IsVisible) CloseClickChoice(); };
-        ClickChoiceBody.AddHandler(KeyDownEvent, ClickChoiceKeyDown, RoutingStrategies.Tunnel);
-        InvertDashboardClicks.IsCheckedChanged += ClickChoiceChanged;
+        RefreshClickPreference();
     }
 
     internal void RefreshClickPreference()
@@ -29,60 +45,40 @@ public partial class SettingsTabView
         _refreshingClickChoice = true;
         try
         {
-            bool invert = CoreSettings.Current.DashboardInvertClicks;
+            var invert = CoreSettings.Current.DashboardInvertClicks;
             InvertDashboardClicks.IsChecked = invert;
             ClickChoiceDescription.Text = Loc.Get(invert ? "dash_click_swapped" : "dash_click_default");
+            DashToggleHint.Text = Loc.Get(invert ? "dash_click_swapped" : "dash_toggle_hint");
+            DashToggleHint.IsVisible = Services.DashboardToggleHintRule.ShouldShow(CoreSettings.Current.DashboardToggleHintUses);
         }
         finally { _refreshingClickChoice = false; }
     }
 
-    private void HoverClickChoice(object? sender, PointerEventArgs e)
+    internal void OpenClickChoice(bool pinned)
     {
         _clickChoiceClose.Stop();
-        if (ClickChoicePopup.IsOpen) return;
+        if (!pinned && ClickChoicePopup.IsOpen) return;
         RefreshClickPreference();
-        ClickChoicePopup.IsLightDismissEnabled = false; // hover never takes capture from the anchor
+        if (pinned) _clickChoicePinned = true;
+        ClickChoicePopup.IsLightDismissEnabled = _clickChoicePinned;
         ClickChoicePopup.IsOpen = true;
+        if (pinned) InvertDashboardClicks.Focus();
     }
 
-    private void OpenClickChoice(object? sender, RoutedEventArgs e)
-    {
-        _clickChoiceClose.Stop();
-        RefreshClickPreference();
-        _clickChoicePinned = true;
-        ClickChoicePopup.IsLightDismissEnabled = true;
-        ClickChoicePopup.IsOpen = true;
-        InvertDashboardClicks.Focus();
-    }
-
-    private void ClickChoiceClosed(object? sender, EventArgs e)
-    {
-        _clickChoiceClose.Stop();
-        _clickChoicePinned = false;
-        ClickChoicePopup.IsLightDismissEnabled = false;
-    }
-
-    private void KeepClickChoiceOpen(object? sender, PointerEventArgs e) => _clickChoiceClose.Stop();
-    private void ScheduleClickChoiceClose(object? sender, PointerEventArgs e)
+    private void ScheduleClickChoiceClose()
     {
         _clickChoiceClose.Stop();
         if (!_clickChoicePinned) _clickChoiceClose.Start();
     }
 
-    internal void ClickChoiceCloseElapsed()
+    internal void CloseClickChoiceAfterDelay()
     {
         _clickChoiceClose.Stop();
-        if (!_clickChoicePinned && !ClickChoiceAnchor.IsPointerOver && !ClickChoiceBody.IsPointerOver && !ClickChoiceBody.IsKeyboardFocusWithin)
-            ClickChoicePopup.IsOpen = false;
+        if (Services.UI.DashboardClickRules.ShouldClose(_clickChoicePinned, ClickChoiceAnchor.IsPointerOver,
+            ClickChoiceBody.IsPointerOver, ClickChoiceBody.IsKeyboardFocusWithin)) ClickChoicePopup.IsOpen = false;
     }
 
-    internal void CloseClickChoice()
-    {
-        _clickChoiceClose.Stop();
-        ClickChoicePopup.IsOpen = false;
-    }
-
-    private void ClickChoiceKeyDown(object? sender, KeyEventArgs e)
+    internal void ClickChoiceKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key != Key.Escape) return;
         EscapeClaim.Taken();
@@ -91,14 +87,9 @@ public partial class SettingsTabView
         ClickChoiceAnchor.Focus();
     }
 
-    private void ClickChoiceChanged(object? sender, RoutedEventArgs e)
+    private void CloseClickChoice()
     {
-        if (_refreshingClickChoice) return;
-        _clickChoicePinned = true;
         _clickChoiceClose.Stop();
-        ClickChoicePopup.IsLightDismissEnabled = true;
-        CoreSettings.Current.DashboardInvertClicks = InvertDashboardClicks.IsChecked == true;
-        CoreSettings.Save();
-        RefreshClickPreference();
+        ClickChoicePopup.IsOpen = false;
     }
 }

@@ -442,8 +442,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             bool halfA = IsInHalfA(e.GetPosition(_contentRoot));
             if (e.InitialPressMouseButton is not (MouseButton.Left or MouseButton.Right)) return;
             bool right = e.InitialPressMouseButton == MouseButton.Right;
-            bool toggle = DashboardClickRule.ShouldToggle(right, CoreSettings.Current.DashboardInvertClicks,
-                DashboardDepth);
+            bool toggle = Services.UI.DashboardClickRules.IsToggle(right, DashboardDepth, true, CoreSettings.Current.DashboardInvertClicks);
             if (right || toggle) e.Handled = true;
             RaiseEvent(new RoutedEventArgs(toggle ? (halfA ? ToggleAEvent : ToggleBEvent) : (halfA ? ClickAEvent : ClickBEvent), this));
         }
