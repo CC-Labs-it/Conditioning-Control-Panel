@@ -74,8 +74,10 @@ public sealed class CompanionHeroTutorialTests
             Assert.Equal("comp_intro", CoreTutorial.CurrentStep!.Id);
             var overlay = TutorialHead.ShellOverlay;
             Assert.NotNull(overlay);
-            Assert.True(overlay!.IsVisible);
-            Assert.Contains(overlay.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "TxtTitle" && t.Text == "Meet Your Companion");
+            // A live card is never a shown window: it sits in the shell's OverlayLayer.
+            Assert.True(overlay!.IsOnStage);
+            Assert.Same(shell, overlay.StageWindow);
+            Assert.Contains(overlay.StageRoot!.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "TxtTitle" && t.Text == "Meet Your Companion");
 
             CoreTutorial.Next();
             Dispatcher.UIThread.RunJobs();

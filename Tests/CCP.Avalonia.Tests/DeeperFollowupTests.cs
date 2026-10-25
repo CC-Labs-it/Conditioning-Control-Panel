@@ -68,11 +68,13 @@ public sealed class DeeperFollowupTests
                 }
                 var overlay = (TutorialOverlay?)typeof(TutorialHead).GetField("_shellOverlay", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null);
                 Assert.NotNull(overlay);
-                Assert.True(overlay!.IsVisible);
+                // A live card is never a shown window: it sits in the shell's OverlayLayer.
+                Assert.True(overlay!.IsOnStage);
+                Assert.Same(shell, overlay.StageWindow);
                 PanicSurfaces.All.Single(s => s.Id == "tour").Stop(shell);
                 Dispatcher.UIThread.RunJobs();
                 Assert.False(CoreTutorial.IsActive);
-                Assert.False(overlay.IsVisible);
+                Assert.False(overlay.IsOnStage);
             }
         }
         finally

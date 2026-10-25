@@ -2730,6 +2730,8 @@
   "label_session_saved": "Sessão salva!",
   "label_do_you_surrender_completely": "Você se rende completamente?",
   "label_yes": "SIM",
+  "dialog_yes": "Sim",
+  "dialog_no": "Não",
   "dialog_confirm_photo": "Confirmar Foto",
   "label_text_9": "📷",
   "label_does_this_photo_show_you_completing": "Esta foto mostra você completando:",

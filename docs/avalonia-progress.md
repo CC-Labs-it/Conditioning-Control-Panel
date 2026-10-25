@@ -3433,3 +3433,60 @@ Mantra Lab completion close timer is now stopped in Cleanup, so an early-closed 
 - Cloud session, local review + gate.
 - Studio > Bubble Count: For You defer (one replay, 500 ms polls, 90 s deadline), Pause other effects editor + per-round flash/text hold, localized empty-library warning. Row stays stub (shared interaction queue, overlay parking, ghost feed).
 - Review fix: label ellipsis, ledger deviations restored. rcheck BubbleCountQueueTests 5/5; rgate GATE-OK.
+
+## avalonia-port/wire-shell-haptics-device: +200
+- Mock haptics feedback toast in Avalonia matching WPF MockToast, including ALL STOP staying visible after panic.
+- Tested with a stepped clock (no sleeps). Fail-proven (rcheck 39697261650 red / 39697752707 green); render-all exemption covers only the toast.
+
+## avalonia-port/fin-shell-tab-fx-presets-quests-achievements: +1
+- Dependency-only NOOP audit; ledger row stays stub with explicit Missing list (shell-takeaway, shell-chrome-fx).
+- Review ACCEPT; fix: row reference repointed to PR body. Doc-only, no rgate (pushq re-gates).
+
+## avalonia-port/wire-shell-profile-vat: +435
+- DescentService moved to CCP.Core and wired on Avalonia: sign-in, accepted sync, Trainer Card open and logout drive the read; the 60 s poll waits for the drawn jar (lane -b) plus a visible active card and an accepted block.
+- A followed curve epoch repaints the level header; the jar stays hidden and the row stays `stub` until wire-shell-profile-vat-b.
+
+## avalonia-port/flake-leash-hold-panic: +19
+- LeashHoldTests park the shell's real 250 ms hold clock through a new `LeashHoldClockInterval` seam. A stray wall-clock tick after the 5 s ask played a 5th leash-tick. Product interval unchanged.
+- Fail-proved: 1 ms interval, rcheck 40195712417 red. 20x rcheck green before (40195628587) and after (40195831964). rgate 40196883118 GATE-OK.
+
+## avalonia-port/fin-shell-autonomy: +542
+- Takeover countdown bar, diagnostic Test dialogs, event audio, Mind Wipe recheck, Pop Quiz busy guard; ledger row stays `stub`.
+- Review ACCEPT; fixes (068bde1d3): event audio reuses ModCompanionContent.ResolveActive, single Mind Wipe recheck in AutonomyScheduler.Run. rcheck 39921773360 green (fail-proof 39921324849 red), rgate 39922479600 GATE-OK. Not pushed.
+
+## avalonia-port/fin-shell-companion-fx: +127
+
+All five companion roster cards now repaint their assigned prompt name (mod-aware) and AI-personality tooltip on tab show and mod switch, via Core `InstalledCommunityPrompts.Load`; stale prompts clear. Test: CompanionPromptLabelsTests (fail-proven). Ledger: shell-companion-fx wired.
+
+## avalonia-port/wire-views-tab-assets: +27
+- Restacked on wire-shell-assets (P105 duplicate dropped): panic closes Library previews (pack temp decrypts deleted), pack nodes named like WPF (built-in name, else raw id).
+- Ledger: shell-assets/views-tab-assets rows name the pack tree; duplicate win-mini-player row merged, opener noted.
+
+## avalonia-port/flake-workshop-community-win: +14
+- WorkshopCommunityCellTests Windows timeouts root-caused: Avalonia raises WindowOpenedEvent before ShowDialog sets Owner, so the helper's owner check never matched a late dialog (export/browse await a file write first). Helper now checks Owner on the instance Opened event; the import dialog is made late on purpose so every OS covers it. Fail-proof rcheck 40188504621 (red), Windows 20x green 40188453349, rgate 40199015916 GATE-OK.
+
+## avalonia-port/wire-win-descent-fuse: +326
+- Descent Fuse shows retired like WPF (ShowsRetired); only a late zero with no crack owed retries over SyncPush; panic closes any show.
+
+## avalonia-port/wire-views-tab-quests: +835
+- Quests tab: quest art, server season title, Fix day (Core StreakFix rules, use-oopsie spend); row stays stub until the depth pass.
+- Review P3s: localized Yes/No on the fix-day question; fix rings dropped on a zero-width repaint (fail-proven).
+
+## avalonia-port/wire-win-tutorial-overlay-b: +528
+- Tutorial card lives in the host OverlayLayer with a real pointer hole, resize remeasure, single teardown on Escape/close/panic (Escape in a host TextBox stays with the box); host close defers on any named target window as in WPF.
+- Row stays stub; follow-up wire-win-tutorial-overlay-c.
+
+## avalonia-port/fin-shell-lab-tab: +622
+Lab tab Focus Gaze now covers flash images and video attention targets. Flash pop and linger have their own switches, separate from mouse clicks: 600 ms dwell, 1.10 inflate, and a 250 ms linger throttle and cooldown. Gaze can take only the first hydra step off an original flash (WPF FlashService.cs:2955), and linked children inherit the boosted lifetime. A blink on video clicks nothing, but it clears the dwell and cools down. Settings → Devices gets a monitor picker with primary fallback, face/blink/gaze counters, and a 12-line diagnostics log. A failed camera open now shows CameraDenied.
+Row shell-lab-tab stays stub. Still missing: GazeRefineOverlay, gaze-lock/cursor, drift correction, the Quick Recal hotkey, and the capture probe.
+Tests: ShellLabTabTests (fail-proven x3), MandatoryVideoOverlayTests, WebcamTrackerTests, WebcamCalibrationTests. rgate 39900942341 is red only on known flakes (GoonClock P108, RaceTrack).
+
+## avalonia-port/fin-feat-spiral: +702
+- Spiral video picks play looped and silent on the overlay; THE LOOM opens via GameWindow (games panic surface) with save/overwrite/delete/reveal on Core DtrhLoomStore; mod-aware art, 700px collapse, Select GIF confirmation.
+- Delayed session spiral guard ported (WPF SessionEngine.cs:826-838); the Avalonia head now ships Spirals/spiral.gif like WPF (csproj :708) so default installs pass it.
+- Tests: SessionRunnerTests.Spiral_DelayedStart*, SpiralFinishTests (default-path, Loom, native video bounded poll), PanicSurfaces allowlist. Fail-proofs: rcheck 39921591384, 39922349918 (red), 39927322722 (green). Gate 39928158450: known flakes only.
+- feat-spiral stays stub (session corner GIF policy, Deeper holds, Spiral embed bridge, WebHost profile/failure seams).
+
+## avalonia-port/fin-views-companion-room: +113
+
+Restores the late Dormant shimmer in ChatThresholdView (WPF State -> PlayDormantShimmer at Normal priority; 250 ms delay, 1.4 s CubicEase InOut, once per view). CompanionRoomShimmerTests: the `false` case is fail-proven (rcheck 39921325857 red, 39922233760 green 6/6). views-companion-room stays stub. rgate: flake-only (RaceTrackPlayer), runs 39927190050 and 39930580281.

@@ -45,7 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// <para><b>Opener:</b> <c>AssetsTabView.OpenAssetPreview</c> (WPF <c>MainWindow.OpenAssetPreview</c>,
     /// MainWindow.Assets.cs:1206), from a Library thumbnail double-click or the context-menu Preview:
     /// <c>LoadFile(path)</c> then <c>Show(owner)</c>. Encrypted-pack files open from a temporary decrypt
-    /// (WPF's temp extraction). <c>--video-check &lt;file&gt;</c> (VideoCheck.cs) also opens it.</para>
+    /// (WPF's temp extraction). <c>--video-check &lt;file&gt;</c> (VideoCheck.cs) also opens it. Panic closes all open previews.</para>
     /// </summary>
     public partial class MiniPlayerWindow : Window
     {
