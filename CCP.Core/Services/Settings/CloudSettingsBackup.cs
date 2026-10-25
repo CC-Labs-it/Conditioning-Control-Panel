@@ -243,7 +243,8 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.StartupVideoPath), nameof(AppSettings.SpiralPath), nameof(AppSettings.MindWipeAudioPath),
             nameof(AppSettings.WallpaperSourceFolder), nameof(AppSettings.WallpaperOriginalPath), nameof(AppSettings.DeeperLastDirectory),
             nameof(AppSettings.BlinkTrainerFolders), nameof(AppSettings.DeeperRecentFiles),
-            "CornerGifOverlays.GifPath", "AudioLayers.Path", "KeywordTriggers.AudioFilePath",
+            "CornerGifOverlays.GifPath", "AudioLayers.Path", "KeywordTriggers.AudioFilePath", "KeywordTriggers.Actions.FilePath",
+            "KeywordTriggerPresets.Triggers.AudioFilePath", "KeywordTriggerPresets.Triggers.Actions.FilePath",
         };
 
         // Relative to the assets folder: passed through with '\' turned into '/'.
@@ -262,12 +263,24 @@ namespace ConditioningControlPanel.Services
         {
             var kept = new List<string>();
             if (current == null || restored == null) return kept;
-            static bool Here(string? p) => string.IsNullOrEmpty(p) || File.Exists(p) || Directory.Exists(p);
+            static bool Exists(string? p) => !string.IsNullOrEmpty(p) && (File.Exists(p) || Directory.Exists(p));
+            static bool Here(string? p) => string.IsNullOrEmpty(p) || Exists(p);
+            // An empty backup value (feature never set up there) never clears a working local path.
             string? One(string name, string? local, string? theirs)
             {
-                if (Here(theirs) || theirs == local) return theirs;
+                if (theirs == local || Exists(theirs) || (string.IsNullOrEmpty(theirs) && !Exists(local))) return theirs;
                 kept.Add(name);
                 return local;
+            }
+            void Triggers(string name, List<KeywordTrigger>? local, List<KeywordTrigger>? theirs)
+            {
+                foreach (var t in theirs ?? new())   // by Id: a trigger new to this machine gets no file
+                {
+                    var mine = local?.FirstOrDefault(l => l.Id == t.Id);
+                    t.AudioFilePath = One(name, mine?.AudioFilePath, t.AudioFilePath);
+                    foreach (var a in t.Actions.OfType<PlayAudioAction>())   // what dispatch actually plays
+                        a.FilePath = One(name, mine?.Actions.OfType<PlayAudioAction>().FirstOrDefault(m => m.Id == a.Id)?.FilePath, a.FilePath);
+                }
             }
             List<T> Many<T>(string name, List<T> local, List<T> theirs, Func<T, string?> path)
             {
@@ -289,9 +302,15 @@ namespace ConditioningControlPanel.Services
             for (var i = 0; i < restored.CornerGifOverlays.Count; i++)   // positional slots: slot i keeps local slot i
                 restored.CornerGifOverlays[i].GifPath = One(nameof(AppSettings.CornerGifOverlays),
                     i < current.CornerGifOverlays.Count ? current.CornerGifOverlays[i].GifPath : "", restored.CornerGifOverlays[i].GifPath) ?? "";
-            foreach (var t in restored.KeywordTriggers)   // by Id: a trigger new to this machine gets no file
-                t.AudioFilePath = One(nameof(AppSettings.KeywordTriggers),
-                    current.KeywordTriggers.FirstOrDefault(l => l.Id == t.Id)?.AudioFilePath, t.AudioFilePath);
+            for (var i = restored.CornerGifOverlays.Count; i < current.CornerGifOverlays.Count; i++)   // local slots past the backup's
+                if (Exists(current.CornerGifOverlays[i].GifPath))
+                {
+                    restored.CornerGifOverlays.Add(current.CornerGifOverlays[i]);
+                    kept.Add(nameof(AppSettings.CornerGifOverlays));
+                }
+            Triggers(nameof(AppSettings.KeywordTriggers), current.KeywordTriggers, restored.KeywordTriggers);
+            foreach (var p in restored.KeywordTriggerPresets)
+                Triggers(nameof(AppSettings.KeywordTriggerPresets), current.KeywordTriggerPresets.FirstOrDefault(l => l.Id == p.Id)?.Triggers, p.Triggers);
 
             static HashSet<string> Slash(HashSet<string> set) => new(set.Select(p => p.Replace('\\', '/')), set.Comparer);
             restored.ActiveAssetPaths = Slash(restored.ActiveAssetPaths);

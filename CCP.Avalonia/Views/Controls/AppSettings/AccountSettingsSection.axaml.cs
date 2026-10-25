@@ -22,7 +22,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
     /// <summary>
     /// SETTINGS · ACCOUNT, ported from the WPF head.
     ///
-    /// <para>Every card is live except GDPR export (hidden until its transport reaches Core). Providers come from <c>AccountSeed</c>; the tier card asks
+    /// <para>Every card is live except cloud backup/restore and GDPR export (hidden until
+    /// ProfileSync's calls reach Core). Providers come from <c>AccountSeed</c>; the tier card asks
     /// <c>CoreAccount</c> exactly what WPF asks (<c>HasLabAccess</c> then <c>HasPremiumAccess</c>).</para>
     /// </summary>
     public partial class AccountSettingsSection : UserControl, IAppSettingsSection
@@ -73,7 +74,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 if (AccountSeed.SubscribeStar is { } ss) ss.TierChanged += tier;
                 if ((chaster = ChasterHead.Service) is { } c) { c.ProfileChanged += chasterChanged; c.LinkChanged += chasterChanged; c.LockChanged += chasterChanged; }
                 Refresh();
-                _ = UpdateBackupStatusAsync();
             };
             DetachedFromVisualTree += (_, _) =>
             {
@@ -90,11 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// Host seam: the Settings door repaints the tier card every time it opens, so a login that
         /// happened behind another door is never shown stale.
         /// </summary>
-        public void OnSectionShown()
-        {
-            Refresh();
-            _ = UpdateBackupStatusAsync();
-        }
+        public void OnSectionShown() => Refresh();
 
         private void Post() => global::Avalonia.Threading.Dispatcher.UIThread.Post(Refresh);
 
@@ -254,8 +250,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             linkDiscord.IsVisible = hasUnifiedId && !hasLinkedDiscord;
             // WPF BtnLinkDiscord_Click finally: the label comes back after a failed/cancelled link.
             if (linkDiscord.IsEnabled) Find<IconLabel>("TxtBtnLinkDiscord").Key = "btn_link_discord";
-            // ponytail: GDPR export remains hidden until its transport is ported.
-            Find<Border>("CloudSettingsBackupSection").IsVisible = hasUnifiedId;
+            // ponytail: CloudSettingsBackupSection stays hidden and BtnExportData collapsed until
+            // ProfileSync's backup/restore/export calls reach this head (MainShellWindow.CloudBackup.cs).
             Find<Border>("DataPrivacySection").IsVisible = hasUnifiedId;
         }
 
@@ -472,6 +468,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 on => { CoreSettings.Current.FriendsPresenceShared = on; CoreSettings.Save(); },
                 PresenceAsk.MarkAsked);
         }
+
+        // ponytail: cloud settings backup - ProfileSyncService.BackupSettingsAsync /
+        // GetSettingsBackupInfoAsync / RestoreSettingsFromCloudAsync, all still in the WPF head.
+        // CloudSettingsBackupSection stays hidden until they land (MainShellWindow.CloudBackup.cs).
+        private void BtnBackupSettingsNow_Click(object? sender, RoutedEventArgs e) { }
+        private void BtnRestoreSettings_Click(object? sender, RoutedEventArgs e) { }
 
         // ponytail: GDPR export - ProfileSyncService.ExportDataAsync plus a save-file picker; the
         // button stays collapsed until that transport reaches Core.

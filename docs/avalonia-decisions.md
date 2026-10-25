@@ -1327,10 +1327,13 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   the local value of each absolute path the backup names but this machine lacks: StartupVideoPath, SpiralPath,
   MindWipeAudioPath, WallpaperSourceFolder, WallpaperOriginalPath, DeeperLastDirectory; per entry BlinkTrainerFolders,
   DeeperRecentFiles and AudioLayers (missing entries dropped, every local entry kept), CornerGifOverlays[i].GifPath (slot i),
-  KeywordTriggers[].AudioFilePath (by Id; CustomCompanionPhrases store a bare file name, no folder). The kept fields are listed in the
-  "restored" dialog (`msg_restore_kept_local_paths_0`). Relative asset lists (ActiveAssetPaths, DisabledAssetPaths,
+  KeywordTriggers[] and KeywordTriggerPresets[].Triggers[] AudioFilePath plus each PlayAudioAction.FilePath (by trigger/action Id;
+  CustomCompanionPhrases store a bare file name, no folder). An empty backup value never clears a working local path, and local
+  corner-GIF slots past the backup's count stay. The kept fields are listed, by feature name, in the "restored" dialog
+  (`msg_restore_kept_local_paths_0`). Relative asset lists (ActiveAssetPaths, DisabledAssetPaths,
   DisabledAssetFolders) and AssetPresets (which store relative paths only) pass through with '\' turned into '/'.
-  `CloudRestorePathGuardTests` fails when a new path-like setting is neither guarded nor allowlisted with a reason.
+  `CloudRestorePathGuardTests` walks List<T> items (and their subclasses) and fails when a new path-like setting is neither
+  guarded nor allowlisted with a reason; every listed top-level field is driven through the guard, so listing alone cannot pass.
 - Residual risks: GDPR export, the startup welcome-back restore and automatic/exit backup are still missing on this head;
   cross-OS asset presets and asset lists are only slash-normalized, not re-rooted (a relative path that names a file
   absent on this machine stays as is); path values inside dictionaries (e.g. PhraseAudioOverrides) are not scanned.

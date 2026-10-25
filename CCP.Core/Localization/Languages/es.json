@@ -3327,7 +3327,6 @@
   "msg_no_cloud_backup_found_or_restore_failed": "No se encontró respaldo en la nube o la restauración falló.",
   "title_restore_failed": "Restauración Fallida",
   "msg_settings_restored_from_cloud": "¡Ajustes restaurados desde la nube! Algunos cambios pueden requerir un reinicio para tomar efecto completo.",
-  "msg_restore_kept_local_paths_0": "Estas rutas no existen en este equipo, así que se mantuvo tu elección local: {0}",
   "title_settings_restored": "Ajustes Restaurados",
   "msg_restore_failed_0": "Error de restauración: {0}",
   "title_restore_error": "Error de Restauración",

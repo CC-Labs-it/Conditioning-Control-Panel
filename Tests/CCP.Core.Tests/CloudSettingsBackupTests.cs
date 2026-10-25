@@ -218,7 +218,6 @@ public sealed class CloudSettingsBackupTests
         evil["BubbleCountStrictLock"] = true;
         evil["PanicKeyEnabled"] = false;
         evil["ScreenOcrEnabled"] = true;
-        evil["ScreenOcrEnabled"] = true;
         evil["UnifiedId"] = "someone-else";
         evil["CustomAssetsPath"] = "Z:/planted";
         evil["DiscordWebhookUrl"] = "https://evil.example/hook";
@@ -232,7 +231,6 @@ public sealed class CloudSettingsBackupTests
         current.BubbleCountStrictLock = false;
         current.PanicKeyEnabled = true;
         current.ScreenOcrEnabled = false;
-        current.ScreenOcrEnabled = false;
         current.ChasterTabEnabled = false;
         var limit = current.ChasterDailyLimitMinutes;
 
@@ -242,7 +240,6 @@ public sealed class CloudSettingsBackupTests
         Assert.False(restored.StrictLockEnabled);
         Assert.False(restored.BubbleCountStrictLock);
         Assert.True(restored.PanicKeyEnabled);
-        Assert.False(restored.ScreenOcrEnabled);
         Assert.False(restored.ScreenOcrEnabled);
         Assert.Equal("u-1", restored.UnifiedId);
         Assert.Equal(current.CustomAssetsPath, restored.CustomAssetsPath);
@@ -264,7 +261,7 @@ public sealed class CloudSettingsBackupTests
         CloudSettingsBackup.HoldSafetyFloor(current, restored);
         Assert.False(restored.StrictLockEnabled);
         Assert.True(restored.PanicKeyEnabled);
-        Assert.True(restored.ScreenOcrEnabled);   // no panic switched it off here: the backup's value stands
+        Assert.True(restored.ScreenOcrEnabled);   // on here too: the backup's value stands
 
         var both = new AppSettings { PanicKeyEnabled = false };
         CloudSettingsBackup.HoldSafetyFloor(current, both);

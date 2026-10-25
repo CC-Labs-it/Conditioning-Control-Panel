@@ -72,6 +72,67 @@ public sealed class CloudRestorePathGuardTests : IDisposable
     }
 
     [Fact]
+    public void AnEmptyBackupValue_OrFewerCornerSlots_NeverClearAWorkingLocalPath()
+    {
+        var local = new AppSettings
+        {
+            SpiralPath = Here("spiral.gif"), StartupVideoPath = Here("intro.mp4"), WallpaperSourceFolder = "/nowhere/walls",
+            CornerGifOverlays = new() { new() { GifPath = Here("c0.gif") }, new() { GifPath = Here("c1.gif") } },
+        };
+        var restored = new AppSettings
+        {
+            SpiralPath = "", StartupVideoPath = null, WallpaperSourceFolder = "",
+            CornerGifOverlays = new() { new() { GifPath = "" } },
+        };
+
+        var kept = CloudSettingsBackup.KeepLocalMissingPaths(local, restored);
+
+        Assert.Equal(new[] { "StartupVideoPath", "SpiralPath", "CornerGifOverlays" }, kept);
+        Assert.Equal((local.SpiralPath, local.StartupVideoPath), (restored.SpiralPath, restored.StartupVideoPath));
+        Assert.Equal("", restored.WallpaperSourceFolder);   // the local one is broken too: nothing kept, nothing listed
+        Assert.Equal(local.CornerGifOverlays.Select(c => c.GifPath), restored.CornerGifOverlays.Select(c => c.GifPath));
+        Assert.Empty(CloudSettingsBackup.KeepLocalMissingPaths(local, restored));   // nothing left to keep: nothing listed
+    }
+
+    [Fact]
+    public void KeywordTriggerAudioActions_AndPresetTriggers_KeepTheLocalFile_ByActionId()
+    {
+        var local = new AppSettings
+        {
+            KeywordTriggers = new() { new() { Id = "k1", Actions =
+            {
+                new PlayAudioAction { Id = "a1", FilePath = Here("a1.mp3") }, new PlayAudioAction { Id = "a2", FilePath = Here("a2.mp3") },
+            } } },
+            KeywordTriggerPresets = new() { new() { Id = "p", Triggers = { new() { Id = "pk", AudioFilePath = Here("pk.mp3"),
+                Actions = { new PlayAudioAction { Id = "pa", FilePath = Here("pa.mp3") } } } } } },
+        };
+        var theirA2 = Here("their-a2.mp3");
+        const string win = @"C:\Users\bambi\";
+        var restored = new AppSettings
+        {
+            KeywordTriggers = new() { new() { Id = "k1", Actions =
+            {
+                new PlayAudioAction { Id = "a1", FilePath = win + "a1.mp3" }, new PlayAudioAction { Id = "a2", FilePath = theirA2 },
+                new PlayAudioAction { Id = "a3", FilePath = win + "a3.mp3" },
+            } } },
+            KeywordTriggerPresets = new() { new() { Id = "p", Triggers = { new() { Id = "pk", AudioFilePath = win + "pk.mp3",
+                Actions = { new PlayAudioAction { Id = "pa", FilePath = "" } } } } } },
+        };
+
+        var kept = CloudSettingsBackup.KeepLocalMissingPaths(local, restored);
+
+        Assert.Equal(new[] { "KeywordTriggers", "KeywordTriggerPresets" }, kept);
+        Assert.Equal(new[] { ((PlayAudioAction)local.KeywordTriggers[0].Actions[0]).FilePath, theirA2, null },
+            restored.KeywordTriggers[0].Actions.OfType<PlayAudioAction>().Select(a => a.FilePath));
+        var preset = restored.KeywordTriggerPresets[0].Triggers[0];
+        Assert.Equal(local.KeywordTriggerPresets[0].Triggers[0].AudioFilePath, preset.AudioFilePath);
+        Assert.Equal(((PlayAudioAction)local.KeywordTriggerPresets[0].Triggers[0].Actions[0]).FilePath,
+            ((PlayAudioAction)preset.Actions[0]).FilePath);
+
+        Assert.Empty(CloudSettingsBackup.KeepLocalMissingPaths(local, restored));   // nothing left to keep: nothing listed
+    }
+
+    [Fact]
     public void RelativeAssetLists_PassThrough_WithForwardSlashes()
     {
         var restored = new AppSettings
@@ -108,22 +169,55 @@ public sealed class CloudRestorePathGuardTests : IDisposable
 
     private static bool Stringy(Type t) => t == typeof(string) || typeof(IEnumerable<string>).IsAssignableFrom(t);
 
+    // Walks List<T> items (and every concrete subclass of T in its assembly) down to KeywordTriggerPresets.Triggers.Actions.
+    private static IEnumerable<string> PathLikeFields(Type type, string prefix, int depth)
+    {
+        foreach (var p in type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(Settable))
+        {
+            if (Stringy(p.PropertyType) && PathLike.IsMatch(p.Name)) yield return prefix + p.Name;
+            if (depth < 3 && p.PropertyType.IsGenericType && p.PropertyType.GetGenericTypeDefinition() == typeof(List<>)
+                && p.PropertyType.GetGenericArguments()[0] is { IsClass: true } item && item != typeof(string))
+                foreach (var sub in item.Assembly.GetTypes().Where(t => !t.IsAbstract && item.IsAssignableFrom(t)))
+                    foreach (var f in PathLikeFields(sub, prefix + p.Name + ".", depth + 1)) yield return f;
+        }
+    }
+
     [Fact]
     public void EveryPathLikeSetting_IsGuarded_RelativeOrExplicitlyAllowed()
     {
-        var found = new List<string>();
-        foreach (var p in typeof(AppSettings).GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(Settable))
-        {
-            if (Stringy(p.PropertyType) && PathLike.IsMatch(p.Name)) found.Add(p.Name);
-            if (p.PropertyType.IsGenericType && p.PropertyType.GetGenericTypeDefinition() == typeof(List<>)
-                && p.PropertyType.GetGenericArguments()[0] is { IsClass: true } item && item != typeof(string))
-                found.AddRange(item.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                    .Where(q => Settable(q) && Stringy(q.PropertyType) && PathLike.IsMatch(q.Name))
-                    .Select(q => p.Name + "." + q.Name));
-        }
+        var found = PathLikeFields(typeof(AppSettings), "", 0).Distinct().ToList();
 
         var known = CloudSettingsBackup.GuardedPathFields.Concat(CloudSettingsBackup.RelativePathFields).Concat(NotGuarded.Keys).ToList();
         Assert.Empty(found.Except(known));   // a new path-like setting: guard it or list it in NotGuarded with a reason
         Assert.Empty(known.Except(found));   // a listed name that no longer exists
+    }
+
+    // Listing a top-level field is not enough: each one must really keep the local path.
+    [Fact]
+    public void EachListedTopLevelField_KeepsTheLocalPath()
+    {
+        var mine = Here("mine.bin");
+        foreach (var name in CloudSettingsBackup.GuardedPathFields.Where(n => !n.Contains('.')))
+        {
+            var p = typeof(AppSettings).GetProperty(name)!;
+            foreach (var theirs in new[] { @"C:\Users\bambi\missing.bin", "" })
+            {
+                var (local, restored) = (new AppSettings(), new AppSettings());
+                if (p.PropertyType == typeof(string)) { p.SetValue(local, mine); p.SetValue(restored, theirs); }
+                else if (p.PropertyType == typeof(List<string>))
+                {
+                    if (theirs == "") continue;
+                    p.SetValue(local, new List<string> { mine });
+                    p.SetValue(restored, new List<string> { theirs });
+                }
+                else Assert.Fail(name + ": not a string or List<string>");
+
+                var kept = CloudSettingsBackup.KeepLocalMissingPaths(local, restored);
+
+                Assert.Contains(name, kept);
+                if (p.GetValue(restored) is List<string> list) Assert.Equal(new[] { mine }, list);
+                else Assert.Equal(mine, p.GetValue(restored));
+            }
+        }
     }
 }

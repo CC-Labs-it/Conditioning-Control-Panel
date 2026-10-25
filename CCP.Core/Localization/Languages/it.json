@@ -4311,7 +4311,6 @@
   "msg_no_cloud_backup_found_or_restore_failed": "Nessun backup nel cloud o ripristino non riuscito.",
   "title_restore_failed": "Ripristino non riuscito",
   "msg_settings_restored_from_cloud": "Impostazioni ripristinate dal cloud! Per alcune modifiche potrebbe servire un riavvio.",
-  "msg_restore_kept_local_paths_0": "Questi percorsi non esistono su questo computer, quindi è stata mantenuta la scelta locale: {0}",
   "title_settings_restored": "Impostazioni ripristinate",
   "msg_restore_failed_0": "Ripristino non riuscito: {0}",
   "title_restore_error": "Errore di ripristino",

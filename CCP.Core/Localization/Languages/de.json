@@ -3327,7 +3327,6 @@
   "msg_no_cloud_backup_found_or_restore_failed": "Kein Cloud-Backup gefunden oder Wiederherstellung fehlgeschlagen.",
   "title_restore_failed": "Wiederherstellung fehlgeschlagen",
   "msg_settings_restored_from_cloud": "Einstellungen aus der Cloud wiederhergestellt! Einige Änderungen erfordern möglicherweise einen Neustart, um vollständig wirksam zu werden.",
-  "msg_restore_kept_local_paths_0": "Diese Pfade gibt es auf diesem Computer nicht, deine lokale Auswahl wurde behalten: {0}",
   "title_settings_restored": "Einstellungen wiederhergestellt",
   "msg_restore_failed_0": "Wiederherstellung fehlgeschlagen: {0}",
   "title_restore_error": "Wiederherstellungsfehler",
