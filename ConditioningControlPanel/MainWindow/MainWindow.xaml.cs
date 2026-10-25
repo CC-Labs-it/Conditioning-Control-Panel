@@ -162,10 +162,7 @@ namespace ConditioningControlPanel
         private bool _avatarWasAttachedBeforeBrowserFullscreen = false;
 
         // Auto-pause state when minimized with attached avatar
-        private bool _autonomyWasPausedOnMinimize = false;
-        private bool _avatarWasMutedOnMinimize = false;
-        private bool _wasAutonomyRunningBeforeMinimize = false;
-        private bool _wasAvatarUnmutedBeforeMinimize = false;
+        private readonly Services.WindowMinimizeRecovery _windowMinimizeRecovery = new();
 
         // Achievement tracking
         private Dictionary<string, Image> _achievementImages = new();
