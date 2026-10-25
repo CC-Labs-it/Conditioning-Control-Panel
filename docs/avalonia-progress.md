@@ -3289,3 +3289,9 @@ Test-only reliability fix for the tube chat, takeover cue, She Listening pill an
 ## avalonia-port/wire-shell-main-window: +217
 
 Header mod selector regains the WPF "Open Mod Manager" footer row, and Home feature-card art follows the active mod via CoreMods.ModChanged. The Mystery/Vault filename fallback (ModTileArt) moves to Core and both heads use it. Ledger row shell-main-window stays stub; follow-up wire-shell-main-window-b.
+
+## avalonia-port/repo-urls: +7 -7 (vs lock-title)
+- WIP from the dead worker was backed up (refs/backup/2026-10-22/repo-urls-wip) and committed as `wip: repo-urls (pre-merge)`, then lock-title was merged in with no conflicts. 19 files that main #2447 had already changed now match the tip exactly.
+- What remains: AppUpdater.GitHubApi, the 2 Avalonia consent links, PKGBUILD url and the metainfo homepage. The app id and handoff identities are unchanged.
+- rcheck: RCHECK-OK. rgate run 39790204255: GATE-OK.
+- Review fixes (c3c07cca6, docs/comment only, no gate per P116): ledger row 149 ticked in this lane; AppUpdater comment cites UpdateService.cs:270-271.
