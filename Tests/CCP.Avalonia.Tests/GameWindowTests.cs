@@ -336,6 +336,34 @@ public sealed class GameWindowTests
     });
 
     [Fact]
+    public void PieceByPiece_LobbyIntentsFollowIdentityAndFreshSpectateUsesSettings() => RunBoard(() =>
+    {
+        Assert.Null(GameWindow.OpenChessLobby("join", "invalid"));
+        Assert.Null(GameWindow.OpenChessLobby("spectate", "invalid"));
+        var window = GameWindow.OpenChessLobby("host")!;
+        var sent = new List<JObject>();
+        window.Posted += json => sent.Add(JObject.Parse(json));
+        Assert.Empty(sent);
+        window.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:friend" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal("host", (string?)sent.Last()["mode"]);
+        Assert.Same(window, GameWindow.OpenChessLobby("join", "p_table"));
+        Assert.Equal("p_table", (string?)sent.Last()["target"]);
+        GameWindow.OpenChessLobby("spectate", "m_0123456789abcdef");
+        Assert.Equal("spectate", (string?)sent.Last()["mode"]);
+        Assert.Equal("m_0123456789abcdef", (string?)sent.Last()["matchId"]);
+        window.Close();
+        window = GameWindow.OpenChessLobby("spectate", "m_fedcba9876543210")!;
+        sent.Clear(); window.Posted += json => sent.Add(JObject.Parse(json));
+        window.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Equal("m_fedcba9876543210", (string?)sent.First()["spectateMatchId"]);
+        Assert.Equal(2, sent.Count);
+        window.HandleMessage("{\"type\":\"ready\"}"); Assert.Equal(2, sent.Count);
+        GameWindow.CloseAllForPanic();
+        Assert.Empty(GameWindow.OpenWindowsForTests());
+    });
+
+    [Fact]
     public void PieceByPiece_SettingsWhisperOwnClips_AndPostOnlyOnce() => RunBoard(() =>
     {
         var lib = Directory.CreateTempSubdirectory("pbp-whispers-").FullName;

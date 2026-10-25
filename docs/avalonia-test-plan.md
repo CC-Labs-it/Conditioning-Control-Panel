@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Lobby discovery completion slice
+
+1. Sign in and open Social → Lobby. Compare Open, Playing and Friends against Windows, including friend presence without a joinable table. Leave and reopen: discovery resumes immediately; it does not browse by entering a Chess table. Disconnect the proxy: the error appears only when both Chess and Remote fail; polling backs off 20/40/60 seconds and resets to 10 after success. The last successful Remote directory remains. WPF `Services/Lobby/LobbyService.cs`, `Services/AvailableSubjectsService.cs`. Rows: `views-tab-available-subjects`.
+2. From Lobby, Host Chess (also the empty-state button), Join a Chess table and Watch a public match. Fresh boards send settings then identity then the host/join intent; fresh spectators enter directly through settings. An existing board is reused. Sign out: Chess and Remote host ask for login, rows clear, and no list requests are sent. Panic closes the Chess board through its existing registration. WPF `MainWindow/MainWindow.Lobby.cs`, `Services/PieceByPiece/PieceByPieceHostService.Friends.cs`. Rows: `views-tab-available-subjects`.
+3. Change account tier or the Remote free day while Lobby is open: Chess/Goon/Remote host locks and opacity repaint, including Remote's locked subtitle. Goon host and Goon/Remote row actions remain disabled in this slice. WPF `MainWindow/MainWindow.Lobby.cs` (PaintLobbyHostBar, RefreshBecomeASubjectCta). Rows: `views-tab-available-subjects`.

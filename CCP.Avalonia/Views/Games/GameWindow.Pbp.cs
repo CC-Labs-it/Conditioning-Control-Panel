@@ -2,7 +2,7 @@
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
 // media-flavour / media-more / online-media), PvP stakes (Core StakeBridge.ForApp
-// is not routed here yet: stakes-host), friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape),
+// is not routed here yet: stakes-host), friend challenge intents (.Friends.cs), the kept Escape (pbp:escape),
 // MergedAccountRecovery and SeasonRecapService.TrackFeature.
 
 using System;
@@ -149,7 +149,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 _pbpSettingsPosted = true;
                 var s = CoreSettings.Current;
-                Post(PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds, s.MotionLevel != MotionLevel.Full, PbpWhispers()));
+                var settings = PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds, s.MotionLevel != MotionLevel.Full, PbpWhispers());
+                if (_spectateInit != null) settings["spectateMatchId"] = _spectateInit;
+                _spectateInit = null;
+                Post(settings);
             }
             if (!_pbpIdentityPosted)
             {
@@ -157,6 +160,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Post(PbpHostRules.IdentityFrame(CoreAccount.UnifiedUserId, PbpAuthToken(),
                     CoreSettings.Current.UserDisplayName, CoreReleaseContent.AppVersion));
             }
+            PostLobbyIntent();
         }
 
         /// <summary>WPF SafeWhisperClips: own brain drain first, then the mod's permitted fallback.</summary>
