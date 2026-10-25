@@ -73,6 +73,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
+            Platform.WebcamTracker.Instance.StateChanged += RefreshWebcamStatus;
+            RefreshWebcamStatus();
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
             OnSectionShown();
             _lockdown = LockdownService.Current;
@@ -99,6 +101,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
+            Platform.WebcamTracker.Instance.StateChanged -= RefreshWebcamStatus;
             if (_lockdown != null) { _lockdown.LockdownActivated -= OnLockdownChanged; _lockdown.LockdownDeactivated -= OnLockdownChanged; _lockdown = null; }
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
             base.OnDetachedFromVisualTree(e);
@@ -254,8 +257,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// Quick Recal and Tracker Test are live over the tracker's gaze feed.
         /// The camera picker is live over <see cref="Platform.V4l2Cameras"/>.
         /// <para>ponytail: the monitor combo and the debug cursor stay DISABLED with a
-        /// stated reason: calibration follows its own window's screen and the cursor overlay is not ported. The status pill stays
-        /// at its <c>rf_webcam_stopped</c> literal for the same reason (no OnTrackingStateChanged).</para>
+        /// stated reason: calibration follows its own window's screen and the cursor overlay is not ported.
+        /// The status pill follows the real tracker's state transitions.</para>
         /// </summary>
         private void RefreshWebcamAvailability()
         {
@@ -276,6 +279,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             }
             if (!has)
                 AppendWebcamDebugLog("No webcam tracking engine on this build — camera controls are unavailable.");
+            RefreshWebcamStartLabel();
+            RefreshWebcamStatus();
+        }
+
+        internal void RefreshWebcamStatus()
+        {
+            var state = Platform.WebcamTracker.Instance.State;
+            Helpers.WebcamStatusPresentation.Paint(this, "LabTrackerDot", "TxtWebcamDebugStatus", state);
+            var key = WebcamStatus.IsLive(state) ? "SuccessGreenBrush" : "PanelAccentBrush";
+            if (this.TryFindResource(key, out var value) && value is global::Avalonia.Media.IBrush brush)
+                LabTrackerPill.BorderBrush = brush;
             RefreshWebcamStartLabel();
         }
 
