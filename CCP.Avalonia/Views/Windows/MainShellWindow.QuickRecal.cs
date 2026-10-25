@@ -23,12 +23,12 @@ public partial class MainShellWindow
     private bool _quickRecalBusy, _quickRecalClosed;
 
     // Native seam: headless tests never register a shortcut on the real desktop.
-    // Linux: an X11 root grab (reach: while an X11/XWayland client has focus), like the EMI summon chord.
+    // Linux: native Wayland portal or X11 root grab, owned through pending consent as well.
     internal Func<Window, Action, IDisposable?> RegisterQuickRecal = OperatingSystem.IsWindows() ? Win32QuickRecalHotkey.Register
-        : (_, pressed) => X11SummonChord.Register("quick-recal", ChordMods.Ctrl | ChordMods.Alt, "G", pressed);
+        : (_, pressed) => LinuxWebcamShortcut.Register("quick-recal", ChordMods.Ctrl | ChordMods.Alt, "G", "Quick Recalibrate", pressed);
     internal Func<WebcamQuickRecalWindow, Window?, Task> ShowQuickRecal = ShowQuickRecalDialog;
     internal bool QuickRecalPlatformSupported = OperatingSystem.IsWindows() || OperatingSystem.IsLinux();
-    internal bool QuickRecalHotkeyArmed => _quickRecalRegistration != null;
+    internal bool QuickRecalHotkeyArmed => LinuxWebcamShortcut.Armed(_quickRecalRegistration);
 
     /// <summary>WPF MainWindow.xaml.cs:1455-1459: a hidden or minimized shell must not own the dialog.
     /// No owner means a plain Show(), not ShowDialogSafe(null), which would adopt any visible window,
@@ -50,8 +50,13 @@ public partial class MainShellWindow
         ApplyQuickRecalHotkey();
         ApplyCameraHotkey();
         // WPF QuickRecalHotkeyHint names both chords; taught only while both actually fire here.
-        WebcamQuickRecalWindow.HotkeyHint = () => QuickRecalHotkeyArmed && CameraHotkeyArmed
-            ? Loc.GetF("webcam_quick_recal_hotkey_hint", "Ctrl+Alt+G", CameraShortcutChord) : null;
+        WebcamQuickRecalWindow.HotkeyHint = () =>
+        {
+            var quick = LinuxWebcamShortcut.Hint(_quickRecalRegistration, "Ctrl+Alt+G");
+            var camera = LinuxWebcamShortcut.Hint(_cameraHotkeyRegistration, CameraShortcutChord);
+            return QuickRecalHotkeyArmed && CameraHotkeyArmed && quick.Length > 0 && camera.Length > 0
+                ? Loc.GetF("webcam_quick_recal_hotkey_hint", quick, camera) : null;
+        };
         // ponytail: observe preset/remote binding changes on one slow timer instead of adding
         // callbacks to every setting writer. Invocation rechecks immediately, including during this gap.
         _quickRecalBindingWatch = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background,

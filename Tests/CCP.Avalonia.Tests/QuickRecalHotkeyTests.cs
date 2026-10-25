@@ -446,4 +446,45 @@ public sealed class QuickRecalHotkeyTests
             (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = old;
         }
     });
+    [Fact]
+    public Task WaylandHint_WaitsForConsent_UsesAssignedChords_AndShellCloseReleasesBoth() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Init();
+        var s = CoreSettings.Current;
+        var old = (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey, s.CompanionPrompt.CameraShortcutGlobal);
+        var shell = new MainShellWindow();
+        var answer = new TaskCompletionSource<string?>();
+        int closes = 0;
+        var quick = new LinuxWebcamShortcut("CTRL+ALT+g", "Quick Recalibrate", () => { },
+            (_, _, _) => answer.Task, () => { closes++; return Task.CompletedTask; });
+        var camera = new LinuxWebcamShortcut("CTRL+ALT+k", "Camera start/stop", () => { },
+            (_, _, _) => Task.FromResult<string?>("Meta+K"), () => { closes++; return Task.CompletedTask; });
+        shell.RegisterQuickRecal = (_, _) => quick;
+        shell.RegisterCameraHotkey = (_, _, _, _) => camera;
+        try
+        {
+            (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey, s.CompanionPrompt.CameraShortcutGlobal) =
+                (true, true, "Escape", "", true);
+            shell.QuickRecalPlatformSupported = true;
+            shell.StartQuickRecalHotkey();
+            Assert.Null(WebcamQuickRecalWindow.HotkeyHint());
+            answer.SetResult("Meta+G");
+            await quick.Ready;
+            var hint = WebcamQuickRecalWindow.HotkeyHint();
+            Assert.Contains("Meta+G", hint);
+            Assert.Contains("Meta+K", hint);
+            shell.StopQuickRecalHotkey();
+            Assert.Equal(2, closes);
+            Assert.False(quick.IsBound);
+            Assert.False(camera.IsBound);
+            Assert.Null(WebcamQuickRecalWindow.HotkeyHint());
+        }
+        finally
+        {
+            shell.StopQuickRecalHotkey();
+            shell.Close();
+            (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey, s.CompanionPrompt.CameraShortcutGlobal) = old;
+        }
+    });
+
 }

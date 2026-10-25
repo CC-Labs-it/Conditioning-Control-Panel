@@ -7,33 +7,35 @@ using Tmds.DBus.Protocol;
 namespace ConditioningControlPanel.Avalonia.Platform;
 
 /// <summary>
-/// The panic key for NATIVE Wayland windows: org.freedesktop.portal.GlobalShortcuts (CreateSession,
+/// A shortcut for native Wayland windows: org.freedesktop.portal.GlobalShortcuts (CreateSession,
 /// BindShortcuts, Activated), raw over Tmds.DBus.Protocol like the tray probe. X11 focus is
-/// <see cref="X11PanicKey"/>'s job; this covers the rest.
+/// the X11 backends' job; this covers the rest.
 ///
 /// <para><b>Unlike the X11 listener this CONSUMES the key desktop-wide</b> - it is a compositor
 /// grab, and the compositor (KDE: kglobalaccel) may show the user a confirmation dialog and lets
 /// them rebind or refuse it. WHEN to bind is therefore the caller's policy
 /// (docs/avalonia-decisions.md, panic key row); this class only binds and unbinds.</para>
 /// </summary>
-internal static class PortalPanicShortcut
+internal sealed class PortalShortcut
 {
     private const string Portal = "org.freedesktop.portal.Desktop", DesktopPath = "/org/freedesktop/portal/desktop";
-    private const string Iface = "org.freedesktop.portal.GlobalShortcuts", Id = "panic";
+    private const string Iface = "org.freedesktop.portal.GlobalShortcuts";
+    private readonly string Id;
+    private volatile bool _disposed, _bound, _ended;
+    internal PortalShortcut(string id) => Id = id;
 
-    private static string? _session;
-    private static IDisposable? _activated;
-    private static DBusConnection? _bus;
+    private string? _session;
+    private IDisposable? _activated, _closed;
+    private DBusConnection? _bus;
 
-    internal static bool IsBound => !string.IsNullOrEmpty(_session);
+    internal bool IsBound => _bound && !_disposed && !_ended;
 
-    /// <summary>Opens a portal session and binds <paramref name="key"/> (a stored Key name) as the
-    /// "panic" shortcut. <paramref name="onActivated"/> runs on a D-Bus thread. Returns the trigger
+    /// <summary>Opens a portal session and binds <paramref name="key"/> (an XKB trigger) under this session's id. <paramref name="onActivated"/> runs on a D-Bus thread. Returns the trigger
     /// the compositor actually assigned (the user may have changed it; "" if it did not say), or
     /// null when the portal is absent, the user refused, or anything failed - never throws.</summary>
-    internal static async Task<string?> BindAsync(string key, string description, Action onActivated)
+    internal async Task<string?> BindAsync(string key, string description, Action onActivated)
     {
-        if (!OperatingSystem.IsLinux() || _session != null) return null;
+        if (!OperatingSystem.IsLinux() || _session != null || _disposed) return null;
         _session = "";   // claimed: a second caller while this one waits gets null, not a second session
         try
         {
@@ -43,24 +45,33 @@ internal static class PortalPanicShortcut
             var bus = _bus = new DBusConnection(DBusAddress.Session!);
             await bus.ConnectAsync();
             await RegisterAsync(bus);
+            if (_disposed) return null;
 
             var (code, results) = await RequestAsync(bus, "CreateSession", "a{sv}", (ref MessageWriter w, string token) =>
                 w.WriteDictionary(new Dictionary<string, VariantValue>
                 {
                     ["handle_token"] = token,
-                    ["session_handle_token"] = "ccp_panic",
+                    ["session_handle_token"] = "ccp" + Guid.NewGuid().ToString("N"),
                 }));
+            if (_disposed) return null;
             if (code != 0 || !results.TryGetValue("session_handle", out var handle)) { await UnbindAsync(); return Fail($"CreateSession answered {code}"); }
             // The spec types session_handle as a string holding an object path; read either.
             var session = handle.Type == VariantValueType.ObjectPath ? handle.GetObjectPathAsString() : handle.GetString();
             _session = session;   // from here on every failure path closes it
+
+            _closed = await bus.AddMatchAsync(
+                new MatchRule { Type = MessageType.Signal, Interface = "org.freedesktop.portal.Session", Member = "Closed", Path = session },
+                (Message m, object? _) => true,
+                (Exception? ex, bool value, object? _, object? _) => { _ended = true; _bound = false; },
+                null, null, false, ObserverFlags.None);
+            if (_disposed) { _closed.Dispose(); return null; }
 
             _activated = await bus.AddMatchAsync(
                 new MatchRule { Type = MessageType.Signal, Interface = Iface, Member = "Activated", Path = DesktopPath },
                 (Message m, object? _) => { var r = m.GetBodyReader(); return (r.ReadObjectPathAsString(), r.ReadString()); },
                 (Exception? ex, (string Session, string Id) a, object? _, object? _) =>
                 {
-                    if (ex == null && a.Session == session && a.Id == Id) onActivated();
+                    if (ex == null && IsBound && Matches(session, Id, a.Session, a.Id)) onActivated();
                 },
                 null, null, false, ObserverFlags.None);
 
@@ -73,15 +84,18 @@ internal static class PortalPanicShortcut
                 w.WriteDictionary(new Dictionary<string, VariantValue>
                 {
                     ["description"] = description,
-                    ["preferred_trigger"] = X11PanicKey.XKeyName(key),
+                    ["preferred_trigger"] = key,
                 });
                 w.WriteArrayEnd(shortcuts);
                 w.WriteString("");   // parent_window: none
                 w.WriteDictionary(new Dictionary<string, VariantValue> { ["handle_token"] = token });
             });
+            if (_disposed) return null;
             if (code != 0) { await UnbindAsync(); return Fail($"BindShortcuts answered {code} (refused or cancelled)"); }
-            var trigger = TriggerOf(results);
-            Log.Information("Panic key: bound '{Key}' through the GlobalShortcuts portal, trigger '{Trigger}'", key, trigger);
+            if (_ended) { await UnbindAsync(); return null; }
+            _bound = true;
+            var trigger = TriggerOf(results, Id);
+            Log.Information("Portal shortcut: bound '{Key}' through the GlobalShortcuts portal, trigger '{Trigger}'", key, trigger);
             return trigger;
         }
         catch (Exception ex)
@@ -92,7 +106,7 @@ internal static class PortalPanicShortcut
 
         static string? Fail(string why)
         {
-            Log.Warning("Panic key: GlobalShortcuts portal unavailable ({Why}); native Wayland windows rely on the tray", why);
+            Log.Warning("Portal shortcut: GlobalShortcuts portal unavailable ({Why})", why);
             return null;
         }
     }
@@ -140,14 +154,17 @@ internal static class PortalPanicShortcut
         }
     }
 
+    internal static bool Matches(string session, string id, string receivedSession, string receivedId)
+        => session == receivedSession && id == receivedId;
+
     /// <summary>trigger_description of our shortcut in a BindShortcuts result (a(sa{sv})).</summary>
-    private static string TriggerOf(Dictionary<string, VariantValue> results)
+    internal static string TriggerOf(Dictionary<string, VariantValue> results, string id)
     {
         if (!results.TryGetValue("shortcuts", out var list)) return "";
         for (var i = 0; i < list.Count; i++)
         {
             var shortcut = list.GetItem(i);
-            if (shortcut.GetItem(0).GetString() != Id) continue;
+            if (shortcut.GetItem(0).GetString() != id) continue;
             var props = shortcut.GetItem(1);
             for (var j = 0; j < props.Count; j++)
             {
@@ -161,11 +178,15 @@ internal static class PortalPanicShortcut
     }
 
     /// <summary>Closes the portal session, which releases the compositor grab.</summary>
-    internal static async Task UnbindAsync()
+    internal async Task UnbindAsync()
     {
+        _disposed = true;
+        _bound = false;
         var session = _session;
         _session = null;
         if (session == "") session = null;
+        _closed?.Dispose();
+        _closed = null;
         _activated?.Dispose();
         _activated = null;
         var bus = _bus;
@@ -176,7 +197,7 @@ internal static class PortalPanicShortcut
             if (session != null)
                 await bus.CallMethodAsync(CallHeader(bus, session, "org.freedesktop.portal.Session", "Close", null));
         }
-        catch (Exception ex) { Log.Warning(ex, "Panic key: closing the portal session failed"); }
+        catch (Exception ex) { Log.Warning(ex, "Portal shortcut: closing the portal session failed"); }
         bus.Dispose();
     }
 
@@ -218,4 +239,31 @@ internal static class PortalPanicShortcut
         body?.Invoke(ref w);
         return w.CreateMessage();
     }
+}
+
+// Keep the panic caller's API and key-name conversion unchanged; each binding owns its bus/session.
+internal static class PortalPanicShortcut
+{
+    private static PortalShortcut? _binding;
+    internal static bool IsBound => _binding?.IsBound == true;
+    internal static Task<string?> BindAsync(string key, string description, Action activated)
+    {
+        if (_binding != null) return Task.FromResult<string?>(null);
+        _binding = new PortalShortcut("panic");
+        return BindCoreAsync(key, description, activated);
+    }
+    private static async Task<string?> BindCoreAsync(string key, string description, Action activated)
+    {
+        var binding = _binding!;
+        var result = await binding.BindAsync(X11PanicKey.XKeyName(key), description, activated);
+        if (result == null && ReferenceEquals(_binding, binding)) _binding = null;
+        return result;
+    }
+    internal static async Task UnbindAsync()
+    {
+        var binding = _binding;
+        _binding = null;
+        if (binding != null) await binding.UnbindAsync();
+    }
+    internal static Task<int> CheckAsync() => PortalShortcut.CheckAsync();
 }

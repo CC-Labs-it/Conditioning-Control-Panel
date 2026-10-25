@@ -25,11 +25,11 @@ public partial class MainShellWindow
     // Native seam: headless tests never grab a key on the real desktop.
     internal Func<Window, ChordMods, string, Action, IDisposable?> RegisterCameraHotkey = RegisterCameraHotkeyNative;
     internal Func<Window, Task> ShowCameraConsent = owner => new WebcamConsentDialog().ShowDialogSafe(owner);
-    internal bool CameraHotkeyArmed => _cameraHotkeyRegistration != null;
+    internal bool CameraHotkeyArmed => LinuxWebcamShortcut.Armed(_cameraHotkeyRegistration);
 
     private static IDisposable? RegisterCameraHotkeyNative(Window owner, ChordMods mods, string key, Action pressed)
         => OperatingSystem.IsWindows() ? Win32QuickRecalHotkey.RegisterCamera(owner, mods, key, pressed)
-            : X11SummonChord.Register("camera", mods, key, pressed);
+            : LinuxWebcamShortcut.Register("camera", mods, key, "Camera start/stop", pressed);
 
     /// <summary>WPF ParseModifiers/FormatCameraShortcut: unparseable key falls back to K, no modifier to Ctrl+Alt.</summary>
     internal static (ChordMods Mods, string Key) CameraChord()
