@@ -25,6 +25,7 @@ public partial class AvailableSubjectsTabView : UserControl
     {
         InitializeComponent();
         Repaint();
+        InitializeSubjectsMotion();
         SizeChanged += (_, e) => SetNarrow(LobbyPageRules.IsNarrowWidth(e.NewSize.Width));
         // The shell hides tabs with IsVisible, so Loaded fires once; WPF redraws on every open
         // (MainWindow.Lobby.cs:84), which picks up sign-in, Remote gate and language changes.
