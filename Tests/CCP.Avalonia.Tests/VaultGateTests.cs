@@ -242,7 +242,7 @@ public sealed class VaultGateTests
         var opened = new System.Collections.Generic.List<string>();
         var previous = VaultGateDialog.Launch;
         VaultGateDialog.Launch = t => { opened.Add(t); return true; };   // never a real URL
-        string Url(string plan) => string.Format(VaultGateDialog.CardUrlFormat, plan);
+        string Url(string plan) => $"https://app.cclabs.app/subscribe?plan={plan}&from=panel";
         try
         {
             var card = VaultGateDialog.ShowOffer(null, null, 2, () => { });   // Lab card -> prime
@@ -312,10 +312,16 @@ public sealed class VaultGateTests
     public async Task CardCountsShowAndTheRailActuallyOpened()
     {
         var events = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        var four = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var previous = VaultGateDialog.Launch;
         var oldBase = ConditioningControlPanel.Services.Funnel.PanelFunnelBeacon.BaseUrlOverride;
         ConditioningControlPanel.Services.Funnel.PanelFunnelBeacon.BaseUrlOverride = "https://proxy.test";
-        ConditioningControlPanel.Services.Funnel.PanelFunnelBeacon.SendOverride = (_, body) => { events.Enqueue(body); return Task.CompletedTask; };
+        ConditioningControlPanel.Services.Funnel.PanelFunnelBeacon.SendOverride = (_, body) =>
+        {
+            events.Enqueue(body);
+            if (events.Count >= 4) four.TrySetResult();
+            return Task.CompletedTask;
+        };
         VaultGateDialog.Launch = _ => true;
         try
         {
@@ -328,7 +334,7 @@ public sealed class VaultGateTests
                 Click(card, Loc.Get("vaultgate_or_card"));
                 return Task.CompletedTask;
             });
-            for (var i = 0; i < 100 && events.Count < 4; i++) await Task.Delay(20);
+            await four.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Contains("gate_shown|panel|remotecontrol|prime", events);
             Assert.Contains("cta_clicked|panel|remotecontrol|patreon", events);
             Assert.Contains("gate_shown|panel|invite_ending|basic", events);

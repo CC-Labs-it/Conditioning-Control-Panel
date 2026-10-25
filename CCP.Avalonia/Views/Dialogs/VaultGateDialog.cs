@@ -34,11 +34,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs;
 /// </summary>
 public sealed class VaultGateDialog : Window
 {
-    public const string PatreonUrl = "https://www.patreon.com/CodeBambi";
-
-    /// <summary>The site's own checkout (card or PayPal, monthly). {0} is basic or prime. WPF 750e76812.</summary>
-    public const string CardUrlFormat = "https://app.cclabs.app/subscribe?plan={0}&from=panel";
-
     /// <summary>Test seam: every pay link leaves through ExternalOpener (sandbox-aware); tests swap it so no URL ever opens.</summary>
     internal static Func<string, bool> Launch = ExternalOpener.Open;
 
@@ -480,7 +475,7 @@ public sealed class VaultGateDialog : Window
         if (_currency == PriceCurrency.Usd)
         {
             var eur = VaultOffer.PriceFor(tier, PriceCurrency.Eur, _plans);
-            slot.Children.Add(Para(Loc.GetF("vaultgate_price_eur", VaultOffer.Money(eur.MonthlyCents, PriceCurrency.Eur)), Dim, 12));
+            slot.Children.Add(Para(Loc.GetF("vaultgate_price_eur", VaultOffer.Money(eur.MonthlyCents, PriceCurrency.Eur)), Dim, 12, new Thickness(0)));
         }
         var off = PlanCatalog.YearlyOffPercent(_plans.For(tier));
         if (off > 0)

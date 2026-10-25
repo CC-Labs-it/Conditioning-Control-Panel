@@ -60,10 +60,9 @@ public class FunnelBeaconTests
         try
         {
             FunnelBeacon.Post("gate_shown", "blinktrainer", "basic");
-            var done = await Task.WhenAny(got.Task, Task.Delay(5000));
-            Assert.Same(got.Task, done);
-            Assert.Equal("https://proxy.test/v2/public/funnel", got.Task.Result.Url);
-            Assert.Equal("gate_shown|panel|blinktrainer|basic", got.Task.Result.Body);
+            var (url, body) = await got.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal("https://proxy.test/v2/public/funnel", url);
+            Assert.Equal("gate_shown|panel|blinktrainer|basic", body);
         }
         finally { FunnelBeacon.BaseUrlOverride = null; FunnelBeacon.SendOverride = null; }
     }
@@ -72,15 +71,18 @@ public class FunnelBeaconTests
     public async Task QuietWithoutAProxyAndNeverThrows()
     {
         var sent = 0;
-        FunnelBeacon.SendOverride = (_, _) => { Interlocked.Increment(ref sent); throw new InvalidOperationException("boom"); };
+        var thrown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        FunnelBeacon.SendOverride = (_, _) => { Interlocked.Increment(ref sent); thrown.TrySetResult(); throw new InvalidOperationException("boom"); };
         try
         {
+            // The refused paths return before Task.Run, so the count is final the moment Post returns.
             FunnelBeacon.BaseUrlOverride = "";
             FunnelBeacon.Post("gate_shown", "a", "basic");
             FunnelBeacon.BaseUrlOverride = "https://proxy.test";
             FunnelBeacon.Post("not_an_event");
+            Assert.Equal(0, Volatile.Read(ref sent));
             FunnelBeacon.Post("cta_clicked", "a", "web");   // the sender throws: swallowed
-            await Task.Delay(300);
+            await thrown.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(1, Volatile.Read(ref sent));
         }
         finally { FunnelBeacon.BaseUrlOverride = null; FunnelBeacon.SendOverride = null; }
@@ -95,7 +97,13 @@ public class FunnelBeaconTests
         CoreSettings.ServiceProvider = () => service;
         var sent = 0;
         FunnelBeacon.BaseUrlOverride = "https://proxy.test";
-        FunnelBeacon.SendOverride = (_, _) => { Interlocked.Increment(ref sent); return Task.CompletedTask; };
+        var sentinel = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        FunnelBeacon.SendOverride = (_, body) =>
+        {
+            Interlocked.Increment(ref sent);
+            if (body.StartsWith("ref|")) sentinel.TrySetResult(body);
+            return Task.CompletedTask;
+        };
         ConditioningControlPanel.Services.Vault.PlanCatalog.Reset();
         ConditioningControlPanel.Services.Vault.PlanCatalog.FetchOverride = _ =>
         {
@@ -106,8 +114,13 @@ public class FunnelBeaconTests
         {
             FunnelBeacon.Post("gate_shown", "vault", "basic");
             await ConditioningControlPanel.Services.Vault.PlanCatalog.GetAsync("https://proxy.test");
-            await Task.Delay(300);
+            // Both refusals are synchronous (before Task.Run / before the fetch), so the count is final now.
             Assert.Equal(0, Volatile.Read(ref sent));
+            // A sentinel sent after Offline Mode ends: a leaked send queued before it would show up too.
+            service.Current.OfflineMode = false;
+            FunnelBeacon.Post("ref", "sentinel");
+            Assert.Equal("ref|panel|sentinel", await sentinel.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Equal(1, Volatile.Read(ref sent));
         }
         finally
         {
