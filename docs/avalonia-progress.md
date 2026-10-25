@@ -3138,3 +3138,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-shell-dashboard-fx: +193
 - Browser frame 2.4 s sweep / 14 s cycle and loading 0.35-1 status pulse on BeatLoop with motion/focus/hidden-tab gates; row stays stub (mystery tile + logo sheen -> wire-shell-dashboard-fx-b).
 - Review fixes: NotEmpty guard (fail-proven), honest fail-proven wording, failed-status gap recorded, loading match via IconText.BareLoc (icon-loc ratchet).; unused Localization using dropped.
+
+## avalonia-port/wire-shell-preset-io: +141
+- File dropped on the launcher opens the panel and imports through its existing preset path.
+- Headless test covers drag-over effect, drop and import; fail-proven 3 ways with saved logs.
