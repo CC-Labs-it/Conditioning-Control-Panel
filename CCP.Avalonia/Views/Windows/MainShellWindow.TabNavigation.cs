@@ -6,7 +6,7 @@
 // is real too, and runs inside ShowTab (MainShellWindow.AmbientFx.cs).
 //
 // What is NOT, on purpose, each named so it is not lost silently:
-//   - The transition choreography (AnimateTabIn, the Stop*Shimmer/Pulse/Motion calls).
+//   - The per-tab Stop*Shimmer/Pulse/Motion calls (chrome choreography is live in TabChromeFx).
 //   - Per-tab side effects on the way in (RefreshPresetsList, StopPolling on leaving Available Subjects,
 //     UpdatePatreonUI, RefreshIntakePassTile, RefreshDashboardRail - its favorites half is restored). Those reach App.* or a service.
 //     The FIVE that do not are restored in OnTabShown below:
@@ -165,11 +165,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             if (!TabPanels.TryGetValue(tab, out var target)) return;
 
+            var outgoing = TabPanels.TryGetValue(CurrentTab, out var oldPanel) ? Named<Control>(oldPanel) : null;
+            var fromKey = CurrentTab;
+            FinishTabChoreography();
             foreach (var name in new HashSet<string>(TabPanels.Values))
             {
                 var panel = this.FindControl<Control>(name);
                 if (panel is not null) panel.IsVisible = name == target;
             }
+            if (Named<Control>(target) is { } incoming) AnimateChromeTab(incoming, outgoing, fromKey, tab);
             NoteTabHistory(tab); // back/forward (MainShellWindow.TabHistory.cs); unknown keys never reach it
             _tabBefore = CurrentTab;
             CurrentTab = tab;

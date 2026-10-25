@@ -2,12 +2,8 @@
 // Animation): the START glow breath and 8 s START sheen, the XP gloss (all gated by ChromeAmbientAllowed =
 // focus + not minimised + Env.AllowAmbientLoops, re-applied on Activated/Deactivated/WindowState/
 // MotionGateChanged), the banner message sheen, the START sheen clip; the XP odometer is in HeroFx.
-// ponytail: still wire-shell-chrome-fx-b-next:
-//   1. tab transition + card stagger - AnimateTabIn, SlideTabIn, FadeOutgoingTab, CollapseOutgoingTab,
-//      StaggerTabCards, StaggerCleanupTimer_Tick, FindStaggerTargets, TabFadeOutMs/TabFadeInMs/TabSlidePx;
-//      caller is ShowTab, which still snaps panels on and off.
-//   2. THE BANK's hold on the XP readout (TryHoldXpDisplay, MainWindow.BankFx.cs) and the remaining
-//      banner attention/read callers.
+// Tab fade/slide/stagger is live in TabChromeFx on ShowTab.
+// ponytail: THE BANK's staged XP delivery and the banner attention/read hosts remain unported.
 // Nav rail hover/active state and the XP meniscus are owned by NavRail / HeroFx.
 // Gone for good: _chromeFxWindowActive / OnChromeFxWindowStateish (re-expressed by ChromeAmbientAllowed).
 
@@ -56,6 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // A message sheen is finite interaction motion, so Reduced and low performance
             // retain it as WPF does. The ambient loops re-evaluate on every focus/state change
             // (WPF OnChromeFxWindowStateish) and on the motion/performance picker (RefreshChromeFx).
+            Closed += (_, _) => FinishTabChoreography();
             Activated += (_, _) => ApplyChromeFxLoops();
             Deactivated += (_, _) => { ParkBannerSheen(); ApplyChromeFxLoops(); };
             // A static event: subscribe while open, never root a closed shell (P41).
