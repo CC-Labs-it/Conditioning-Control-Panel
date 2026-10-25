@@ -214,6 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private bool _awaitingFirstBlock;
         private double _revealLastAt;
         private BeatLoop? _revealFrames;
+        private DispatcherTimer? _blockWait;
 
         /// <summary>The fuse subscriptions are held only while the tab is on screen (P01).</summary>
         private DescentCountdownService? _wiredFuse;
@@ -489,8 +490,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         ///
         /// <para>ponytail: DescentService (the block and its BlockChanged) is WPF-head only, so on
         /// this head the block is never in hand: the reveal always holds at the bloom and the
-        /// timeout hands back. The timeout is measured on the reveal's own BeatLoop clock, so a
-        /// minimised window (parked loop) fires it on restore rather than on the dot.</para>
+        /// timeout hands back. As in WPF, an independent dispatcher timer ends the wait even
+        /// while the visual clock is parked by a minimised window.</para>
         /// </summary>
         internal void BeginFirstLight()
         {
@@ -525,6 +526,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 StopReveal();
                 _revealFrames = new BeatLoop(visual, RevealFrame);
                 _revealFrames.Start();
+                _blockWait = new DispatcherTimer { Interval = FirstLightBlockTimeout };
+                _blockWait.Tick += OnBlockWaitElapsed;
+                _blockWait.Start();
 
                 Log.Information("[Spiral] first light opened in the room ({Motion}, block {State}).",
                     _firstLightReduced ? "reduced motion" : "full motion",
@@ -537,7 +541,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
         }
 
-        /// <summary>WPF PaintFrame's first-light half plus OnBlockWaitElapsed: the intro runs freely
+        /// <summary>WPF PaintFrame's first-light half: the intro runs freely
         /// up to the hand-off fade, which waits for the block; the deadline ends the wait.</summary>
         private void RevealFrame(double now)
         {
@@ -546,14 +550,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 var dt = Math.Max(0, now - _revealLastAt);
                 _revealLastAt = now;
-
-                if (_awaitingFirstBlock && now >= FirstLightBlockTimeout.TotalSeconds)
-                {
-                    Log.Information("[Spiral] first light: no descent block within {Seconds}s - handing the room back quietly.",
-                        (int)FirstLightBlockTimeout.TotalSeconds);
-                    FinishFirstLight();
-                    return;
-                }
 
                 // THE HOLD at the hand-off fade. Clamped rather than WPF's "stop adding once past":
                 // WPF steps every 20 ms, but a parked loop (minimised) resumes with one large dt
@@ -585,8 +581,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Refresh();
         }
 
+        private void OnBlockWaitElapsed(object? sender, EventArgs e)
+        {
+            if (!_firstLight || !_awaitingFirstBlock) return;
+            Log.Information("[Spiral] first light: no descent block within {Seconds}s - handing the room back quietly.",
+                (int)FirstLightBlockTimeout.TotalSeconds);
+            FinishFirstLight();
+        }
+
         private void StopReveal()
         {
+            if (_blockWait != null)
+            {
+                _blockWait.Stop();
+                _blockWait.Tick -= OnBlockWaitElapsed;
+                _blockWait = null;
+            }
             _revealFrames?.Stop();
             _revealFrames = null;
         }

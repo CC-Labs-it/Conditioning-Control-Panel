@@ -85,7 +85,7 @@ public sealed class SpiralRoomShellTests
     /// holds at the hand-off fade with no block, hands back to the waiting room at the 12 s timeout,
     /// and leaving the tab mid-reveal ends it.</summary>
     [Fact]
-    public Task FirstLightHoldsForTheBlockThenTimesOutToTheWaitingRoom() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task FirstLightHoldsForTheBlockThenTimesOutToTheWaitingRoom() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -133,12 +133,18 @@ public sealed class SpiralRoomShellTests
             Assert.True(fog.IsVisible);
             Assert.False(waiting.IsVisible);
 
-            time.Advance(TimeSpan.FromSeconds(0.5));   // 12 s: no block came
-            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            // The visual clock parks while minimised. WPF's independent dispatcher deadline
+            // must still hand back, without a paint or restore to trigger it.
+            shell.WindowState = WindowState.Minimized;
+            Dispatcher.UIThread.RunJobs();
+            await Task.Delay(TimeSpan.FromSeconds(12.5));
+            Dispatcher.UIThread.RunJobs();
             Assert.False(fog.IsVisible);
             Assert.True(waiting.IsVisible);
             Assert.True(help.IsVisible);
             Assert.DoesNotContain(global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Running, l => l.Owner == visual);
+
+            shell.WindowState = WindowState.Normal;
 
             // Leaving the tab mid-reveal ends it; coming back is the ordinary room.
             shell.BeginSpiralFirstLight();
@@ -161,6 +167,5 @@ public sealed class SpiralRoomShellTests
             service.SaveImmediate();
             CoreSettings.ServiceProvider = null;
         }
-        return Task.CompletedTask;
     });
 }
