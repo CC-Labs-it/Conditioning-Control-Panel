@@ -673,3 +673,5 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+1. WPF `AvatarTubeWindow.Speech.cs:1571-1633`, `BarkService.cs:1178-1230`: open the companion tube, set the idle interval, wait for distinct idle lines. With engine and session off, toggle idle speech: text remains; audio follows the opt-in. Pause a session and panic: idle sound is suppressed; panic stops the timer and queued ticks. Start a DtRH run and play a voiced bark; the local run totals count it, then reset on a new run. Rows: `host-tube-idle-dispatch`

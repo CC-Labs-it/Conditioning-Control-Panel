@@ -7,7 +7,7 @@ using Serilog;
 namespace ConditioningControlPanel.Services.Bark
 {
     /// <summary>A line for the mouth: text, clip or null, preempting (WPF GigglePriority), mood, muted easter egg.</summary>
-    public readonly record struct BarkSpeech(string Text, string? AudioPath, bool Priority, string? Mood, bool SilentEgg);
+    public readonly record struct BarkSpeech(string Text, string? AudioPath, bool Priority, string? Mood, bool SilentEgg, bool Unprompted = false);
 
     /// <summary>
     /// The matcher, gate and rotation of WPF 7.1.5 <c>Services/Companion/BarkService.cs</c>, so every head
@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Services.Bark
     /// one-shot latches, safety hold, chat suppression, speaking, the 60 s floor and its exemptions,
     /// cooldown, chance), the no-repeat variant rotation persisted in AppSettings (:1793-1941) and the
     /// {0}/{key} substitutions (:2000). The head owns the event subscriptions and the mouth.
-    /// ponytail: DispatchIdle, the awareness arbiter and CCP_BARK_DRYRUN land with a caller;
+    /// ponytail: the awareness arbiter and CCP_BARK_DRYRUN land with a caller;
     /// the whisper / Chaos-narrator gates with a source; tier latches key on "None" until a tier reaches Core.
     /// </summary>
     public sealed class BarkEngine
@@ -83,6 +83,51 @@ namespace ConditioningControlPanel.Services.Bark
             _rng = rng ?? new Random();
         }
 
+        private readonly HashSet<string> _usedIdleRules = new(StringComparer.OrdinalIgnoreCase);
+        private string? _lastIdleRuleId;
+
+        /// <summary>WPF DispatchIdle: select before gating; blocked winners do not spend rotation.</summary>
+        public bool DispatchIdle()
+        {
+            try
+            {
+                if (CoreSettings.Current.MasterVolume == 0 || IsSpeaking?.Invoke() == true) return false;
+                var ctx = new BarkContext("Idle");
+                BarkRule winner;
+                List<BarkVariant> pool;
+                int idx;
+                lock (_gate)
+                {
+                    var eligible = _rules.ForTrigger("Idle").Where(r => ConditionsPass(r, ctx)).ToList();
+                    if (eligible.Count == 0) return false;
+                    var unused = eligible.Where(r => !_usedIdleRules.Contains(r.Id)).ToList();
+                    if (unused.Count == 0)
+                    {
+                        _usedIdleRules.Clear();
+                        if (_lastIdleRuleId != null) _usedIdleRules.Add(_lastIdleRuleId);
+                        PersistIdleRotation();
+                        unused = eligible.Where(r => !_usedIdleRules.Contains(r.Id)).ToList();
+                        if (unused.Count == 0) unused = eligible;
+                    }
+                    var gated = unused.Where(r => r.Conditions is { Count: > 0 }).ToList();
+                    var choices = gated.Count > 0 && _rng.NextDouble() < 0.35 ? gated : unused;
+                    winner = choices[_rng.Next(choices.Count)];
+                    pool = ResolvePool(winner);
+                    (var fire, idx, _) = EvaluateGate(winner, pool, false);
+                    if (!fire || Speak == null) return false;
+                    CommitFire(winner, idx, pool);
+                }
+                return SpeakLine(winner, pool[idx], ctx);
+            }
+            catch (Exception ex) { Log.Warning(ex, "BarkEngine: DispatchIdle failed"); return false; }
+        }
+
+        private void PersistIdleRotation()
+        {
+            CoreSettings.Current.BarkIdleRotation = new List<string>(_usedIdleRules);
+            CoreSettings.Save(suppressCloudBackup: true);
+        }
+
         private VoiceLinePicker? _voiceLines;
 
         /// <summary>Inline wake/command confirmations use the current manifest without spending a bark gate.</summary>
@@ -102,6 +147,8 @@ namespace ConditioningControlPanel.Services.Bark
             lock (_gate)
             {
                 _rules = fresh;
+                _usedIdleRules.Clear();
+                foreach (var id in s.BarkIdleRotation) _usedIdleRules.Add(id);
                 _usedVariantKeys.Clear();
                 foreach (var kv in s.BarkVariantRotation)
                     _usedVariantKeys[kv.Key] = new HashSet<string>(kv.Value ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
@@ -307,6 +354,12 @@ namespace ConditioningControlPanel.Services.Bark
         /// <summary>WPF CommitFire (:1793). Caller holds the lock.</summary>
         private void CommitFire(BarkRule rule, int idx, List<BarkVariant> pool)
         {
+            if (string.Equals(rule.Trigger, "Idle", StringComparison.OrdinalIgnoreCase))
+            {
+                _usedIdleRules.Add(rule.Id);
+                _lastIdleRuleId = rule.Id;
+                PersistIdleRotation();
+            }
             var now = Now;
             _lastFiredUtc[rule.Id] = now;
             _globalLastFireUtc = now;
@@ -361,7 +414,7 @@ namespace ConditioningControlPanel.Services.Bark
                 mouth(new BarkSpeech(line, null, false, mood, SilentEgg: true));
             else
                 mouth(new BarkSpeech(line, SafeResolveAudio(variant.Audio),
-                    rule.Class != BarkClass.Normal || rule.Priority >= PriorityBarkThreshold, mood, SilentEgg: false));
+                    rule.Class != BarkClass.Normal || rule.Priority >= PriorityBarkThreshold, mood, SilentEgg: false, Unprompted: CompanionIdleVoiceRule.IsUnprompted(rule.Trigger)));
             try { BarkSpoken?.Invoke(rule, line); }
             catch (Exception ex) { Log.Debug("[BARK] BarkSpoken subscriber error: {Error}", ex.Message); }
             return true;

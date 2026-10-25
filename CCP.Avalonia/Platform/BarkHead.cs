@@ -90,7 +90,19 @@ internal static class BarkHead
     internal static void Speak(BarkSpeech s)
     {
         var tube = Views.AvatarTube.AvatarTubeWindow.Live;
-        if (tube == null) return;
+        if (tube != null) Speak(tube, s);
+    }
+
+    internal static void Speak(Views.AvatarTube.AvatarTubeWindow tube, BarkSpeech s)
+    {
+        if (s.Unprompted && !ConditioningControlPanel.Services.Companion.CompanionIdleVoiceRule.ShouldVoice(true,
+            CoreSession.IsEngineRunning, CoreSession.IsSessionRunning, App.Sessions?.IsPaused == true,
+            CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff,
+            ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()))
+        {
+            tube.GigglePriority(s.Text, playSound: false, aiGenerated: false);
+            return;
+        }
         if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) { tube.Giggle(s.Text); return; }
         tube.GigglePriority(s.Text, playSound: s.AudioPath == null, aiGenerated: false,
             phraseAudioPath: s.AudioPath, barkVoice: s.AudioPath != null, mood: s.Mood);
@@ -102,6 +114,8 @@ internal static class BarkHead
     internal static void OnSettingChanged(BarkEngine e, string? name)
     {
         if (string.IsNullOrEmpty(name)) return;
+        if (name == nameof(AppSettings.IdleGiggleIntervalSeconds))
+            Views.AvatarTube.AvatarTubeWindow.Live?.RestartIdleTimer();
         PropertyInfo? pi;
         lock (SettingProps)
             if (!SettingProps.TryGetValue(name!, out pi)) SettingProps[name!] = pi = typeof(AppSettings).GetProperty(name!);

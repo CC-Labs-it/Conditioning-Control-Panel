@@ -28,6 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private const double PerCharDelaySeconds = 0.02;
 
         /// <summary>Cancels the pending post-line gap (WPF _speechDelayTimer.Stop). Never null.</summary>
+        private bool _speechDelayPending;
         private Action _cancelSpeechDelay = static () => { };
 
         /// <summary>Runs <c>fire</c> once after the delay and returns its cancel. A DispatcherTimer, as
@@ -70,14 +71,19 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             if (_speechQueue.Count == 0) { _isGiggling = false; return; }
             var next = _speechQueue.Dequeue();
             var remaining = SecondsUntilSpeechReady();
+            _speechDelayPending = false;
             _cancelSpeechDelay();
             _cancelSpeechDelay = static () => { };
             if (remaining > 0)
+            {
+                _speechDelayPending = true;
                 _cancelSpeechDelay = SpeechDelayScheduler(TimeSpan.FromSeconds(remaining), () =>
                 {
                     _cancelSpeechDelay = static () => { };
+                    _speechDelayPending = false;
                     ShowQueuedPreset(next);
                 });
+            }
             else
                 ShowQueuedPreset(next);
         }
@@ -90,6 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void ClearSpeechQueue()
         {
             _speechQueue.Clear();
+            _speechDelayPending = false;
             _cancelSpeechDelay();
             _cancelSpeechDelay = static () => { };
         }

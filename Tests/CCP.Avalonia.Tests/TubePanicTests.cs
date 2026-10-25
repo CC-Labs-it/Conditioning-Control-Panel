@@ -40,6 +40,7 @@ public sealed class TubePanicTests
             Dispatcher.UIThread.RunJobs();
             var tube = shell.Tube;
             Assert.NotNull(tube);
+            Assert.True(tube!.IdleTimerRunning);
             var panic = PanicSurfaces.All.Single(x => x.Id == "tube-speech");
             var bubble = tube!.FindControl<Border>("SpeechBubble")!;
 
@@ -55,6 +56,9 @@ public sealed class TubePanicTests
             Assert.False(tube.HasBubbleUp);
             Assert.False(bubble.IsVisible);
             Assert.False(tube.IsSpeaking);
+            Assert.False(tube.IdleTimerRunning);
+            tube.DispatchIdleTick();
+            Assert.False(tube.HasBubbleUp);
 
             // Two voiced lines close together: the second cuts the first (WPF Speech.cs:1896), so the
             // panic leaves neither playing.

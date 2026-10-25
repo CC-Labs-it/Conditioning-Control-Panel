@@ -320,6 +320,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // chamber rather than on the stock one.
             RefreshTubeLayout();
 
+            RestartIdleTimer();
             AttachAwareness();   // WPF xaml.cs:317-322 (Reactions.cs)
 
             // ponytail: WPF's OnLoaded also ran StartFloatingAnimation / StartFullscreenDetection
@@ -340,6 +341,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // in one process, and a tick against a torn-down visual tree is exactly the flaky
             // failure the constructor's note refuses to risk.
             LocalizationManager.Instance.LanguageChanged -= OnTubeLanguageChanged;
+            StopIdleTimer();
             _poseTimer.Stop();
             _speechTimer?.Stop();
             ClearSpeechQueue();
@@ -1280,6 +1282,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     if (!IsMuted) { PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, onSpoken); spokenHandled = true; }
 
                     SyncAskButtonsFor(text);
+                    RestartIdleTimer();
                     _txtSpeech.Text = text;
                     _speechBubble.MaxWidth = 380;
                     ApplySpeechBubblePlacement();
@@ -1430,8 +1433,10 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     _stopSpoken();   // WPF PlaySpokenAudio (Speech.cs:1896): cut the previous line, no overlap
                     var clipDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                     SpokenAudioDone = clipDone.Task;
+                    var noteVoice = barkVoice ? Games.GameWindow.CaptureVoicelineReporter() : null;
                     _stopSpoken = CoreAudio.PlayStoppable(phraseAudioPath!, curved * (barkVoice ? 0.85f : 0.56f),
                                           barkVoice ? "bark-voice" : "phrase-audio",
+                                          onStarted: duration => RunOnAvatar(() => noteVoice?.Invoke(duration.TotalSeconds)),
                                           onFinished: () => { clipDone.TrySetResult(); onSpoken?.Invoke(); });
                     return;
                 }

@@ -17,6 +17,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// </summary>
         public void PanicSilence() => RunOnAvatar(() =>
         {
+            StopIdleTimer();
             try { _stopSpoken(); } catch { }
             _stopSpoken = static () => { };
             try { StopThinkingAnimation(); } catch { }

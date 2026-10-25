@@ -29,6 +29,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 {
     internal sealed partial class GameWindow
     {
+        private readonly DtrhVoiceTelemetry _dtrhVoice = new();
+
+        // Capture the run before playback: a delayed LibVLC start must not count into a later run.
+        internal static Action<double> CaptureVoicelineReporter()
+        {
+            GameWindow? window;
+            lock (Open) window = Open.Find(w => w.IsDtrh && w._dtrhRunActive);
+            if (window == null) return _ => { };
+            var run = window._dtrhVoice.RunNumber;
+            return sec =>
+            {
+                if (window._dtrhVoice.RunNumber == run) window._dtrhVoice.NoteVoicelineHeard(sec);
+            };
+        }
+
         internal const string DtrhId = "dtrh";
 
         /// <summary>WPF LauncherCatalogue.cs:241: Lab tier, or the server's daily-free DtRH drop; refused with
@@ -94,6 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     return true;
                 case "run-started":
                     _dtrhRunActive = true;
+                    _dtrhVoice.StartRun();
                     _dtrhLastProgress = null;
                     _dtrhRunStartedUtc = DtrhUtcNow();
                     Log.Information("DtrhHost: run started (diff={D}, mode={M})", (string?)o["difficulty"] ?? "Gentle", (string?)o["mode"]);
@@ -180,6 +196,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             bool wasActive = _dtrhRunActive;
             double? hostElapsed = _dtrhRunStartedUtc == DateTime.MinValue ? null : (DtrhUtcNow() - _dtrhRunStartedUtc).TotalSeconds;
             _dtrhRunActive = false;
+            _dtrhVoice.EndRun();
             _dtrhLastProgress = null;
             _dtrhRunStartedUtc = DateTime.MinValue;
             if (!DtrhRunCloseRule.ShouldPayBooking(wasActive))
@@ -194,6 +211,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 double finalXp = booking.BaseXp * skillMult;
                 long previousBest = ChaosMeta.State.BestScore;
                 int sparksEarned = DtrhBankSparks(booking.RewardInput(o), booking.Payout.CountsAsRun);
+                try
+                {
+                    var stats = (o["sessionStats"] as JObject)?.DeepClone() as JObject ?? new JObject();
+                    stats["voicelinesHeard"] = _dtrhVoice.VoicelinesHeard;
+                    stats["voiceoverSec"] = _dtrhVoice.VoiceoverSec;
+                    stats["sparksEarned"] = sparksEarned;
+                    stats["xpEarned"] = finalXp;
+                    DtrhSessionStatsStore.Record(stats, booking.Difficulty);
+                }
+                catch (Exception ex) { Log.Debug(ex, "DtrhHost: local voice metrics failed"); }
                 CoreProgression.AddXP(booking.BaseXp, "Chaos");   // WPF AddXP(baseXp, XPSource.Chaos)
                 ChaosRank? rankUp = null;
                 var nowRank = ChaosRanks.For(ChaosMeta.State.RunsCompleted);
@@ -223,6 +250,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 OnDtrhRunEnded(snapshot, fromTeardown: true);
             }
             _dtrhRunActive = false;
+            _dtrhVoice.EndRun();
             _dtrhExiting = false;
             Log.Information("DtrhHostService: closed");
         }
