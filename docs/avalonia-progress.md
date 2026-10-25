@@ -3028,3 +3028,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-shell-window-chrome: +330
 - Shell window chrome lifecycle wired: real-exit vs tray, WM maximize glyph, DPI spawn quiescence, attached-avatar minimize custody (Core WindowMinimizeRecovery, both heads).
 - Review fixes: tray-hide closes quiz windows like WPF; DisplayChange quiet window reset between tests.
+
+## avalonia-port/wire-views-companion-room: +231
+- Her Room Z2 thinking dots: shared BeatLoop (parks when hidden, minimised or detached) with Core CompanionThinkingPulse (WPF stagger); WPF untouched.
+- Minimise park fail-proven (rcheck 39711293690 red, 39711782427 green); rgate 39712264692 green except known RaceTrack flake.
