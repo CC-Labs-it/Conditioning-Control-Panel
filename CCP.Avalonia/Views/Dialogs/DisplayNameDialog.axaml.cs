@@ -1,3 +1,6 @@
+using System;
+using System.Threading.Tasks;
+using ConditioningControlPanel.Services;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
@@ -28,6 +31,45 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         private readonly Button _btnConfirm;
         private readonly TextBlock _txtCharCount;
         private bool _isDeleteMode;
+        private Func<string, Task<string?>>? _save;
+        private bool _closed;
+        private bool _saving;
+
+        public DisplayNameDialog(string? suggestion, Func<string, Task<string?>> save) : this()
+        {
+            _save = save;
+            Height = 300; // ponytail: room for the wrapped required-name copy and server refusal.
+            this.FindControl<TextBlock>("TxtPrompt")!.TextWrapping = TextWrapping.Wrap;
+            Closed += (_, _) => _closed = true;
+            this.FindControl<TextBlock>("TxtTitle")!.Text = Loc.Get("label_choose_your_display_name");
+            this.FindControl<TextBlock>("TxtPrompt")!.Text = Loc.Get("name_ask_body");
+            this.FindControl<Border>("WarningPanel")!.IsVisible = false;
+            this.FindControl<Button>("BtnCancel")!.IsVisible = false;
+            this.FindControl<Button>("BtnClose")!.IsVisible = true;
+            _txtDisplayName.Text = suggestion ?? "";
+            _txtDisplayName.SelectAll();
+            OnTextChanged();
+        }
+
+        private async Task SaveRequiredAsync(string name)
+        {
+            _saving = true;
+            _btnConfirm.IsEnabled = false;
+            _txtDisplayName.IsEnabled = false;
+            var status = this.FindControl<TextBlock>("TxtStatus")!;
+            status.Text = Loc.Get("login_checking");
+            status.IsVisible = true;
+            string? error;
+            try { error = await _save!(name); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Display name save failed"); error = Loc.Get("msg_failed_to_change_display_name"); }
+            if (_closed) return;
+            _saving = false;
+            if (error == null) { DisplayName = name; Close(true); return; }
+            status.Text = error;
+            _txtDisplayName.IsEnabled = true;
+            OnTextChanged();
+            _txtDisplayName.Focus();
+        }
 
         public string DisplayName { get; private set; } = "";
 
@@ -44,6 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             this.FindControl<Button>("BtnCancel")!.Click += (_, _) => Close(false);
             _btnConfirm.Click += (_, _) => Accept();
 
+            this.FindControl<Button>("BtnClose")!.Click += (_, _) => Close(false);
             Loaded += (_, _) => _txtDisplayName.Focus();
         }
 
@@ -94,7 +137,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         private void OnTextChanged()
         {
             var text = (_txtDisplayName.Text ?? "").Trim();
-            if (_isDeleteMode)
+            if (_save != null)
+            {
+                _btnConfirm.IsEnabled = !_saving && NeedsDisplayNameRule.Check(text) == DisplayNameShape.Ok;
+                _txtCharCount.Text = Loc.GetF("label_char_count_of_max", text.Length, 20);
+            }
+            else if (_isDeleteMode)
             {
                 _btnConfirm.IsEnabled = text == "DELETE";
             }
@@ -123,6 +171,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 if (name != "DELETE") return;
                 DisplayName = name;
                 Close(true);
+                return;
+            }
+
+            if (_save != null)
+            {
+                if (!_saving && NeedsDisplayNameRule.Check(name) == DisplayNameShape.Ok) _ = SaveRequiredAsync(name);
                 return;
             }
 

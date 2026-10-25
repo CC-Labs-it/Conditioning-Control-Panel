@@ -69,8 +69,13 @@
                        Foreground="{DynamicResource TextMutedBrush}" FontSize="11" Margin="0,5,0,0"
                        HorizontalAlignment="Right" VerticalAlignment="Top"/>
 
+            <TextBlock x:Name="TxtStatus" Grid.Row="4" Foreground="#FF7777" FontSize="11"
+                       TextWrapping="Wrap" MaxLines="2" IsVisible="False" Margin="0,22,0,0"/>
             <!-- Buttons -->
             <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
+                <Button x:Name="BtnClose" IsVisible="False" Padding="10" Margin="0,0,10,0">
+                    <TextBlock Text="{loc:Str btn_close}"/>
+                </Button>
                 <Button x:Name="BtnCancel" Width="90" Padding="10,10" Margin="0,0,10,0"
                         Background="{DynamicResource PanelAccentBrush}" Foreground="White" BorderThickness="0"
                         Cursor="Hand" FontSize="13">

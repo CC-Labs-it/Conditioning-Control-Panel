@@ -596,6 +596,8 @@ namespace ConditioningControlPanel.Avalonia
                     {
                         if (amount > 0 && Sessions?.IsRunning != true) sync.Nudge($"xp:{source}");
                     };
+                    var requiredName = new Platform.RequiredNameAsk();
+                    Platform.AccountSeed.ProfileLoaded += requiredName.ProfileLoaded;
                     Platform.AccountSeed.RestoreSession();
                     // WPF CheckCloudSettingsRestoreAsync: a fresh settings file arms the welcome-back sheet.
                     Platform.WelcomeBackOffer.Arm(CoreSettings.Service?.WasSettingsFileMissing == true, CorePaths.UserData);

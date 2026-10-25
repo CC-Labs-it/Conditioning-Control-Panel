@@ -673,3 +673,8 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Startup modal host (part-a)
+
+1. Restore a signed-in sandbox account whose successful profile load has no display name. Wait for the panel to appear: the required-name ask should open once. Enter two characters, then a valid name; only the latter enables Confirm. A server refusal must leave the sheet open with its reason; success saves the name. Close and reload the profile: no second ask this launch; restart still asks if no name was saved. WPF `MainWindow/MainWindow.DisplayNameAsk.cs` + `Dialogs/DisplayNameDialog.xaml.cs`. Rows: `host-modal-triggers`
+2. While the prompt is open, press panic: it closes and pending startup modals cannot reopen it. A passive offer queued before the ladder decides waits for the ladder to drain. Check a hidden panel/game does not receive a modal; return to the panel and it gets its turn. WPF `Services/Startup/StartupPresenter.cs`. Rows: `host-modal-triggers`
