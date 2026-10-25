@@ -52,9 +52,9 @@ public sealed class CompanionPromptLabelsTests
         try
         {
             shell.Show();
+            var room = CollapsedRoom.Show(shell);   // v2 collapses the room; the roster lives in its Workshop drawer
             shell.ShowTab("companion");
             Dispatcher.UIThread.RunJobs();
-            var room = shell.GetLogicalDescendants().OfType<CompanionRoomView>().Single();
             var workshop = (WorkshopRuntimeVm)room.FindControl<WorkshopAccordion>("WorkshopZone")!.DataContext!;
             var roster = workshop.Parts.Roster;
             void AssertLabels(string prefix)

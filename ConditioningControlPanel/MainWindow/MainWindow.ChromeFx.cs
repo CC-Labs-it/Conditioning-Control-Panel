@@ -45,9 +45,6 @@ namespace ConditioningControlPanel
         private const double StartSheenSeconds = 0.85;
         private const int StartSheenIntervalSeconds = 8;
         private const double BannerSheenSeconds = 0.75;
-        /// <summary>Banner messages rotate every 4s; a sheen on every rotation would be an
-        /// ambient strobe rather than a "something changed" cue, so passes are spaced out.</summary>
-        private const int BannerSheenMinGapSeconds = 20;
         private const double XpSheenSeconds = 6.0;
 
         // Nav order, slide direction and the WebView2 airspace list are pure decisions and live in
@@ -770,10 +767,10 @@ namespace ConditioningControlPanel
         {
             try
             {
-                if (!_chromeFxInitialized || !_chromeFxWindowActive) return;
-                if (!MotionFx.AllowTransitions) return;
+                if (!_chromeFxInitialized) return;
                 var now = DateTime.UtcNow;
-                if (!force && (now - _lastBannerSheenUtc).TotalSeconds < BannerSheenMinGapSeconds) return;
+                if (!Services.UI.ChromeBannerSheen.CanSweep(_chromeFxWindowActive, MotionFx.Level, force,
+                    now, _lastBannerSheenUtc)) return;
                 _lastBannerSheenUtc = now;
                 SweepSheen(BannerSheenHost, BannerSheen, BannerSheenSlide, BannerSheenSeconds, 0.22);
             }

@@ -163,6 +163,14 @@ jobs:
       # Drop the flag if the solution ever builds clean without it.
       - name: Build solution (hard gate)
         run: dotnet build ConditioningControlPanel.sln -c Release -p:ValidateExecutableReferencesMatchSelfContained=false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check shared Loom renderer exports
+        run: node --test Assets/web/dtrh/tests/loom-renderer-exports.test.mjs
+
       # HARD GATE. This started advisory - the suite is 254 files including WpfRenderHarness.cs
       # and PlayDoorRenderTests.cs, which do real WPF rendering, and nobody had confirmed it
       # green on a headless runner. The first CI run settled it: 4924 passed, 0 failed, in 45s,
