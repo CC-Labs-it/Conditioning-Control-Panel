@@ -27,6 +27,8 @@ namespace ConditioningControlPanel.Helpers
         public static bool TryOpenUrl(string? url)
         {
             if (string.IsNullOrWhiteSpace(url)) return false;
+            // A checkout: watch for the purchase when the user comes back (EntitlementTierSync).
+            Services.CheckoutWatch.NoteOpened(url);
 
             // 1. Default shell association — works on the vast majority of machines.
             try
