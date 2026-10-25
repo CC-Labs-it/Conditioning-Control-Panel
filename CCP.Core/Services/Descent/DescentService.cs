@@ -1,8 +1,6 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Threading;
 using Newtonsoft.Json.Linq;
 using Serilog;
 
@@ -51,6 +49,16 @@ namespace ConditioningControlPanel.Services.Descent
         /// the gate, which remembers every want made in the meantime.
         /// </summary>
         private int _deferredArmed;
+        private readonly Func<string, Task<JObject?>> _fetch;
+        private readonly TimeProvider _time;
+        public DescentService(Func<string, Task<JObject?>>? fetch = null, TimeProvider? time = null)
+        {
+            _fetch = fetch ?? (id => new V2AuthService().GetUserProfileNodeAsync(id));
+            _time = time ?? TimeProvider.System;
+        }
+
+        /// <summary>Head-owned progression adoption; WPF preserves curve-before-level ordering.</summary>
+        public Action<int, double, string?, int?>? ProgressionReceived { get; set; }
 
         /// <summary>The last well-formed block, or null. See the tri-state note above.</summary>
         public DescentBlock? Current { get; private set; }
@@ -129,7 +137,7 @@ namespace ConditioningControlPanel.Services.Descent
             // SendHeartbeatAsync): a user who turned the app's networking off must
             // not be able to see a request leave for a decorative meter. The gate
             // answers it with Skip and, unlike the other skips, does not remember it.
-            var settings = App.Settings?.Current;
+            var settings = CoreSettings.Current;
             bool offline = settings?.OfflineMode == true;
             string? unifiedId = settings?.UnifiedId;
             string? authToken = settings?.AuthToken;
@@ -140,7 +148,7 @@ namespace ConditioningControlPanel.Services.Descent
                 DescentRefreshVerdict verdict;
                 TimeSpan retryIn;
                 lock (_refreshGate)
-                    verdict = _refreshGate.Ask(DateTime.UtcNow, unifiedId, authToken, offline, inFlight: !haveGate, force, reason, out retryIn);
+                    verdict = _refreshGate.Ask(_time.GetUtcNow().UtcDateTime, unifiedId, authToken, offline, inFlight: !haveGate, force, reason, out retryIn);
 
                 switch (verdict)
                 {
@@ -155,9 +163,9 @@ namespace ConditioningControlPanel.Services.Descent
                 }
 
                 int generation = Volatile.Read(ref _generation);
-                lock (_refreshGate) _refreshGate.BeginFetch(DateTime.UtcNow, unifiedId!, authToken!);
+                lock (_refreshGate) _refreshGate.BeginFetch(_time.GetUtcNow().UtcDateTime, unifiedId!, authToken!);
 
-                var userNode = await new V2AuthService().GetUserProfileNodeAsync(unifiedId!).ConfigureAwait(false);
+                var userNode = await _fetch(unifiedId!).ConfigureAwait(false);
 
                 if (generation != Volatile.Read(ref _generation))
                 {
@@ -224,7 +232,7 @@ namespace ConditioningControlPanel.Services.Descent
             {
                 try
                 {
-                    await Task.Delay(delay).ConfigureAwait(false);
+                    await Task.Delay(delay, _time).ConfigureAwait(false);
                     Interlocked.Exchange(ref _deferredArmed, 0);
 
                     string? wanted;
@@ -246,7 +254,7 @@ namespace ConditioningControlPanel.Services.Descent
         /// <see cref="ProfileSyncService.TryAdoptFromProfilePoll"/>. Absent or
         /// malformed fields mean no offer — never a guess.
         /// </summary>
-        private static void TryHandOffProgression(JObject userNode)
+        private void TryHandOffProgression(JObject userNode)
         {
             try
             {
@@ -259,8 +267,7 @@ namespace ConditioningControlPanel.Services.Descent
                     : null;
 
                 // The curve before the level: an adopt prices the server's total on OUR curve.
-                App.ProfileSync?.ApplyServerCurveEpoch(ProfileSyncService.ParseCurveEpoch(userNode["curve_epoch"]), "profile poll");
-                App.ProfileSync?.TryAdoptFromProfilePoll(level, xp.Value, season);
+                ProgressionReceived?.Invoke(level, xp.Value, season, ProfileAdopt.ParseCurveEpoch(userNode["curve_epoch"]));
             }
             catch (Exception ex)
             {
@@ -324,29 +331,21 @@ namespace ConditioningControlPanel.Services.Descent
         }
 
         /// <summary>
-        /// Marshal to the UI thread the way the rest of the app does: bail out
-        /// entirely if the dispatcher is gone or shutting down (CLAUDE.md async
-        /// rules 6/8 — a fire-and-forget callback on a dead dispatcher is a crash
-        /// report nobody can read).
+        /// Marshal to the UI thread through CoreDispatch. Unlike the old WPF-only
+        /// code, which dropped the raise once the dispatcher was shutting down,
+        /// the WPF CoreDispatch provider (App.xaml.cs PostProvider) runs it inline
+        /// then; every handler is wrapped below, so a late raise logs instead of
+        /// crashing (CLAUDE.md async rules 6/8).
         /// </summary>
         private void RaiseBlockChanged()
         {
             try
             {
-                var dispatcher = Application.Current?.Dispatcher;
-                if (dispatcher is null || dispatcher.HasShutdownStarted) return;
-
-                if (dispatcher.CheckAccess())
-                {
-                    BlockChanged?.Invoke(this, EventArgs.Empty);
-                    return;
-                }
-
-                dispatcher.BeginInvoke(new Action(() =>
+                CoreDispatch.Post(() =>
                 {
                     try { BlockChanged?.Invoke(this, EventArgs.Empty); }
                     catch (Exception ex) { Log.Debug("[Descent] BlockChanged handler threw: {Error}", ex.Message); }
-                }));
+                });
             }
             catch (Exception ex)
             {

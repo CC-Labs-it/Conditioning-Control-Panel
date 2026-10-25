@@ -28,6 +28,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Test seam: is the panic key physically down? False ends the hold; null = unknown.</summary>
         internal static Func<bool?> LeashHoldKeyDown = X11PanicKey.IsPanicKeyDown;
 
+        /// <summary>Test seam: the real hold clock's period. Tests that step <see cref="LeashHoldTime"/> and call
+        /// <see cref="LeashHoldClockTick"/> themselves park it, or a wall-clock tick lands between their steps.</summary>
+        internal static TimeSpan LeashHoldClockInterval = TimeSpan.FromMilliseconds(250);
+
         private readonly LeashHoldFlow _leashHold = new();
         private DispatcherTimer? _leashHoldClock;
         private bool _leashHoldFromPortal, _leashHoldPortalUnproven;
@@ -43,7 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void InitializeLeashHold()
         {
-            _leashHoldClock = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+            _leashHoldClock = new DispatcherTimer { Interval = LeashHoldClockInterval };
             _leashHoldClock.Tick += (_, _) => LeashHoldClockTick();
             // XWayland synthesizes releases when native Wayland focus takes over. Only the portal's
             // Deactivated can end a portal hold; its compositor may also have rebound the key.

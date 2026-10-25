@@ -109,6 +109,9 @@ public partial class TutorialOverlay
         var step = _step;
         Dispatcher.UIThread.Post(() =>
         {
+            if (_closed) return;
+            if (name.StartsWith("WindowLoaded:", StringComparison.Ordinal))
+                OnWindowLoadedEvent(name["WindowLoaded:".Length..]);
             if (!_closed && ReferenceEquals(_step, step) && _subscribedStep is { } current &&
                 current.AdvanceTrigger == HeadTrigger.OnEvent && current.AdvanceEventName == name) Advance();
         });
