@@ -3,6 +3,7 @@ import { Group, Mesh, BoxGeometry, PlaneGeometry, MeshBasicNodeMaterial, Matrix4
 import { texture, uv, uniform, vec3, normalWorld, normalize, dot, clamp } from 'three/tsl';
 import { keepGatePhase, createKeepGates } from '../sim/keepGates.js';
 import { LOOK } from './look.js';
+import { machineryBeatAt } from '../track/machineryBeat.js';
 
 export function createKeepGateView(scene, track, art, { gates = track.keepGates || [] } = {}) {
   const group = new Group(); group.name = 'keep-portcullises'; scene.add(group);
@@ -61,7 +62,7 @@ export function createKeepGateView(scene, track, art, { gates = track.keepGates 
   }
   function update(timeS) {
     for (const e of entries) {
-      keepGatePhase(e.g,timeS,phase);e.move.position.y=e.restY+phase.liftM;e.alpha.value=phase.opacity;
+      keepGatePhase(e.g,timeS,phase,machineryBeatAt(track,timeS));e.move.position.y=e.restY+phase.liftM;e.alpha.value=phase.opacity;
     }
   }
   update(0);

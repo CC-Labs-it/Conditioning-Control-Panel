@@ -2,8 +2,28 @@
 import { S, BOOST, RESPAWN } from './state.js';
 import { clamp, wrap } from '../core/math.js';
 import { gateSweep, createKeepGates } from './keepGates.js';
+import { machineryBeatAt, beatCycle, machineryRearming } from '../track/machineryBeat.js';
 export const KEEP_CHAIN = Object.freeze({ cycleS: 6.4, pivotM: 15, lengthM: 12, angleRad: .72, radiusM: 2.5, stallS: .45 });
-export function keepChainPhase(row, timeS) {
+// Whole four-beat cycles put both turning points on beats and never exceed authored peak speed.
+export function pendulumBeatPhase(row, cycleS, beat) {
+  const period = Math.max(4, Math.ceil(cycleS / beat.beatS / 4) * 4);
+  const offset = Math.round((row.offsetS || 0) / beat.beatS), safe = machineryRearming(beat, offset, period);
+  const u = beatCycle(beat.beat + offset, period), rate = Math.PI * 2 / (period * beat.beatS);
+  const elapsed = beat.beat - beatCycle(-offset, period), releaseBeats = Math.max(2, Math.ceil(3 / beat.beatS));
+  const releasing = beat.rearming && elapsed >= 0 && elapsed < releaseBeats;
+  // The initial pickup already follows the swing. Only a seek parks and lifts it.
+  const parked = safe && beat.rearming;
+  const f = clamp(elapsed / releaseBeats, 0, 1), lift = parked ? 5 : releasing ? 5 * (1 - f * f * (3 - 2 * f)) : 0;
+  return { swing: parked ? 1 : Math.cos(u * Math.PI * 2 / period),
+    speed: parked ? 0 : -Math.sin(u * Math.PI * 2 / period) * rate, lift,
+    liftSpeed: releasing && !safe ? -30 * f * (1 - f) / (releaseBeats * beat.beatS) : 0, safe };
+}
+export function keepChainPhase(row, timeS, beat = null) {
+  if (beat) {
+    const k = KEEP_CHAIN, p = pendulumBeatPhase(row, k.cycleS, beat), angle = p.swing * k.angleRad;
+    return { angle, x: (row.x || 0) + Math.sin(angle) * k.lengthM, y: k.pivotM + p.lift - Math.cos(angle) * k.lengthM,
+      pivotY: k.pivotM + p.lift, warning: p.safe || Math.abs(p.swing) < .7, radiusM: k.radiusM, safe: p.safe };
+  }
   const k = KEEP_CHAIN, phase = (Math.max(0, Number.isFinite(timeS) ? timeS : 0) + (row.offsetS || 0)) * Math.PI * 2 / k.cycleS;
   const angle = Math.sin(phase) * k.angleRad;
   return { angle, x: (row.x || 0) + Math.sin(angle) * k.lengthM, y: k.pivotM - Math.cos(angle) * k.lengthM,
@@ -32,7 +52,8 @@ export function createKeepChains(track, { chains = [] } = {}) {
       const ds = wrap(previous[S.s] - row.s + track.lengthM / 2, track.lengthM) - track.lengthM / 2;
       if (Math.abs(ds) > distance + K.radiusM + 3) continue;
       const a = local(previous, row.frame), b = local(st, row.frame);
-      const pa = keepChainPhase(row, old.timeS), pb = keepChainPhase(row, timeS);
+      const pa = keepChainPhase(row, old.timeS, machineryBeatAt(track, old.timeS)), pb = keepChainPhase(row, timeS, machineryBeatAt(track, timeS));
+      if (pa.safe || pb.safe) continue;
       const t = gateSweep([a[0] - pa.x, a[1]], [b[0] - pb.x, b[1]], K.radiusM + .65, K.radiusM + .65);
       if (t === null) continue;
       const h = a[2] + (b[2] - a[2]) * t, y = pa.y + (pb.y - pa.y) * t;
@@ -48,5 +69,5 @@ export function createKeepChains(track, { chains = [] } = {}) {
     return null;
   }
   return { rows, apply, steer: lanes.steer, reset() { memory = new WeakMap(); hits = 0; lanes.reset(); },
-    inspect(timeS = 0) { return { hits, chains: rows.map(r => ({ id: r.id, s: r.s, ...keepChainPhase(r, timeS) })) }; } };
+    inspect(timeS = 0) { return { hits, chains: rows.map(r => ({ id: r.id, s: r.s, ...keepChainPhase(r, timeS, machineryBeatAt(track,timeS)) })) }; } };
 }

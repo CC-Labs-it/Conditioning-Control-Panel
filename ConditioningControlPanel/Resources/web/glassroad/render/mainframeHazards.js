@@ -1,6 +1,7 @@
 import { Group, Mesh, BoxGeometry, CylinderGeometry, TorusGeometry, Matrix4, Vector3 } from 'three/webgpu';
 import { industryZones, industryPose } from '../sim/mainframeIndustry.js';
 import { createMachineMaterial } from './mainframeMaterials.js';
+import { machineryBeatAt } from '../track/machineryBeat.js';
 
 export function buildMainframeHazards(track, art) {
   const group = new Group(); group.name = 'mainframe-industry';
@@ -20,11 +21,18 @@ export function buildMainframeHazards(track, art) {
     if(z.kind==='piston') {
       const piston=new Group(); piston.name='press-head'; piston.position.x=z.x; root.add(piston);
       part(piston,box,metal,[0,1,0],[z.w,2,z.len]);
+      part(piston,box,dark,[0,1.65,0],[z.w+.2,.3,z.len+.2]);
       for(let j=0;j<5;j++) part(piston,box,j%2?dark:amber,[0,.08,-z.len/2+.45+j*1.35],[z.w,.16,.5]);
-      part(piston,cylinder,metal,[0,6.5,0],[.55,10,.55]);
+      const shaft=part(root,cylinder,metal,[z.x,7,0],[.55,10,.55]); shaft.name='telescopic-press-shaft';
       part(root,box,dark,[z.x,13.5,0],[z.w+1,2.2,z.len+1]);
-      for(const side of [-1,1]) part(root,cylinder,metal,[z.x+side*(z.w/2+.45),7,0],[.2,13,.2]);
-      entries.push({z,piston,lamps,moving});
+      for(const side of [-1,1]) {
+        const x=z.x+side*(z.w/2+.45);
+        part(root,cylinder,metal,[x,6.8,0],[.2,13,.2]);
+        part(root,box,dark,[x,.28,0],[.8,.5,1.3]);
+        part(piston,cylinder,dark,[side*(z.w/2+.45),1,0],[.38,1.2,.38]);
+        for(const end of [-1,1]) part(piston,cylinder,metal,[side*(z.w/2-.55),2.04,end*(z.len/2-.55)],[.18,.13,.18]);
+      }
+      entries.push({z,piston,shaft,lamps,moving});
     } else if(z.kind==='belt') {
       part(root,box,metal,[z.x,.09,0],[z.w,.12,z.len]);
       for(let j=0;j<8;j++) moving.push(part(root,box,cyan,[z.x,.18,-z.len/2+j*z.len/8],[z.w-.7,.05,.3]));
@@ -42,8 +50,12 @@ export function buildMainframeHazards(track, art) {
   function update(dt,{timeS=0,paused=false,gentle=false}={}) {
     if(paused) return;
     for(const e of entries) {
-      const pose=industryPose(e.z,timeS);
-      if(e.piston) e.piston.position.y=pose.lift;
+      const pose=industryPose(e.z,timeS,machineryBeatAt(track,timeS));
+      if(e.piston) {
+        e.piston.position.y=pose.lift;
+        const bottom=pose.lift+2, top=12.4;
+        e.shaft.position.y=(bottom+top)/2; e.shaft.scale.y=top-bottom;
+      }
       // Warning grows over 1.8 seconds, never flashes. Gentle retains identical collision timing.
       for(const lamp of e.lamps) {
         const target=pose.warning?.25:pose.active?.14:.06;

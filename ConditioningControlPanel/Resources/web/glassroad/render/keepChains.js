@@ -2,6 +2,7 @@ import { Group, Mesh, InstancedMesh, Object3D, BoxGeometry, TorusGeometry, Icosa
   MeshBasicNodeMaterial, Matrix4, Vector3, Color, DoubleSide } from 'three/webgpu';
 import { vec3, normalWorld, dot, normalize, clamp, uniform } from 'three/tsl';
 import { KEEP_CHAIN, keepChainPhase } from '../sim/keepChains.js';
+import { machineryBeatAt } from '../track/machineryBeat.js';
 import { LOOK } from './look.js';
 export function createKeepChainView(scene, track, { chains = [] } = {}) {
   const group = new Group(); group.name = 'keep-chain-gauntlet'; scene.add(group);
@@ -53,7 +54,8 @@ export function createKeepChainView(scene, track, { chains = [] } = {}) {
     const floor = new Mesh(floorGeo, warning); floor.rotation.x = -Math.PI / 2; floor.position.y = .08; holder.add(floor);
     entries.push({ row, pivot, alpha });
   }
-  function update(timeS) { for (const e of entries) { const p = keepChainPhase(e.row, timeS); e.pivot.rotation.z = p.angle; e.alpha.value = p.warning ? .24 : .08; } }
+  function update(timeS) { for (const e of entries) { const p = keepChainPhase(e.row, timeS, machineryBeatAt(track,timeS));
+    e.pivot.rotation.z = p.angle; e.pivot.position.y = p.pivotY ?? K.pivotM; e.alpha.value = p.warning ? .24 : .08; } }
   update(0);
   return { group, update, inspect: () => ({ count: entries.length }), dispose() { group.removeFromParent(); group.traverse(o => { if (o.isInstancedMesh) o.dispose(); }); geometries.forEach(g => g.dispose()); owned.forEach(m => m.dispose()); } };
 }

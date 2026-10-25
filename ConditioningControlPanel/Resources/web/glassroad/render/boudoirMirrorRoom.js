@@ -5,6 +5,7 @@ import { reflector, vec3, uv, fract, abs, smoothstep, mix } from 'three/tsl';
 import { getBoudoirLayout } from '../track/boudoir-layout.js';
 import { getBoudoirSetpieces, mirrorGatePhase, BOUDOIR_HAZARD } from '../track/boudoir-setpieces.js';
 import { Q } from './quality.js';
+import { machineryBeatAt } from '../track/machineryBeat.js';
 
 export const MIRROR_ROOM = Object.freeze({ sideM: 19.5, heightM: 20, facetWidthM: 15.5, facetHeightM: 15,
   nearM: 95, maxTexturePx: 512, maxPasses: 2, captureHz: 15 });
@@ -133,7 +134,7 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
     elapsed += Math.max(0, Math.min(.1, dt || 0));
     const timeS = view.raceTimeS ?? view.timeS ?? 0;
     for (const gate of gates) {
-      const phase = mirrorGatePhase(gate.row, timeS); gate.holder.position.y = phase.liftM + BOUDOIR_HAZARD.mirrorHeightM / 2;
+      const phase = mirrorGatePhase(gate.row, timeS, machineryBeatAt(track,timeS)); gate.holder.position.y = phase.liftM + BOUDOIR_HAZARD.mirrorHeightM / 2;
       gateColor.set(phase.liftM >= 6.8 ? '#76d7b4' : phase.phase === 'warn' ? '#e6b563' : '#9b4177');
       gate.lampMat.color.lerp(gateColor, Math.min(1, (dt || 0) / .35));
     }

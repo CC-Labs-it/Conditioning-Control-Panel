@@ -4,10 +4,12 @@ import { Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry, Shape, Path
 import { vec3, normalWorld, normalize, dot, clamp, floor } from 'three/tsl';
 import { goonworksSetpieces, goonworksPose } from '../track/goonworks-setpieces.js';
 import { GOONWORKS_PALETTE, GOONWORKS_DISTRICT_PALETTES } from './goonworksMaterials.js';
+import { machineryBeatAt } from '../track/machineryBeat.js';
+import { createGearSpiralPaint } from './gearSpirals.js';
 
 export function createGoonworksHazardView(scene, track, layout) {
   const group = new Group(); group.name = 'goonworks-toys'; scene.add(group);
-  const rows = goonworksSetpieces(track, layout), geometries = [], materials = [], entries = [];
+  const rows = goonworksSetpieces(track, layout), geometries = [], materials = [], entries = [], spiralPaint = [];
   const own = geometry => { geometries.push(geometry); return geometry; };
   const box = own(new BoxGeometry()), cylinder = own(new CylinderGeometry(1, 1, 1, 24));
   const sphere = own(new SphereGeometry(1, 12, 8));
@@ -72,6 +74,8 @@ export function createGoonworksHazardView(scene, track, layout) {
     }));
   }
   function wheelSurface(rotor, row, { white, pink }) {
+    const painted=white.clone(); materials.push(painted);
+    spiralPaint.push(createGearSpiralPaint(painted,row.radius,Number(row.id.at(-1))));
     const body = sectorShape(row.radius, row.gap);
     // The small inner boundary is hidden by the hub. Keeping it inside the body makes a proper
     // enclosed hole, rather than two face contours touching at the sector's centre vertex.
@@ -90,7 +94,7 @@ export function createGoonworksHazardView(scene, track, layout) {
     }
     // One surface at each depth: the ink, enamel and arrow triangles tile the face without
     // overlapping. Millimetre-separated closed discs z-fight at the rear wheel and at overlooks.
-    for (const [name, shapes, mat] of [['ink', inkShapes, ink], ['white', [light], white], ['pink', pinkShapes, pink]]) {
+    for (const [name, shapes, mat] of [['ink', inkShapes, ink], ['white', [light], painted], ['pink', pinkShapes, pink]]) {
       const front = own(new ShapeGeometry(shapes, 64)), back = own(front.clone());
       const index = back.index.array, normals = back.getAttribute('normal');
       for (let i = 0; i < index.length; i += 3) [index[i + 1], index[i + 2]] = [index[i + 2], index[i + 1]];
@@ -174,7 +178,7 @@ export function createGoonworksHazardView(scene, track, layout) {
   }
   function update(timeS = 0) {
     for (const e of entries) {
-      const p = goonworksPose(e.row, timeS);
+      const p = goonworksPose(e.row, timeS,machineryBeatAt(track,timeS));
       if (e.rotor) e.rotor.rotation.z = p.angle;
       if (e.screen) e.screen.position.x = p.x;
       if (e.block) { e.block.scale.y = Math.max(.035, p.height); e.crown.position.y = p.height + .16; }
@@ -184,5 +188,5 @@ export function createGoonworksHazardView(scene, track, layout) {
   }
   update(0); let disposed = false;
   return { group, update, reset: () => update(0), inspect: () => ({ count: entries.length, wheels: entries.filter(e => e.rotor).length }),
-    dispose() { if (disposed) return; disposed = true; group.removeFromParent(); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); } };
+    dispose() { if (disposed) return; disposed = true; group.removeFromParent(); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); spiralPaint.forEach(p=>p.dispose()); } };
 }

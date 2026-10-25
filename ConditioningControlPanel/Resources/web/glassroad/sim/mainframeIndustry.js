@@ -3,6 +3,7 @@ import { S, BOOST, RESPAWN } from './state.js';
 import { applyBoost, boostHoldLeftS } from './boost.js';
 import { clamp } from '../core/math.js';
 import { yawParams, calmOf } from './steer.js';
+import { machineryBeatAt, beatCycle, machineryRearming } from '../track/machineryBeat.js';
 
 export function industryZones(track) {
   if (track.id !== 'mainframe') return [];
@@ -27,7 +28,15 @@ export function industryZones(track) {
   return zones;
 }
 const ease = v => { v = clamp(v, 0, 1); return v * v * (3 - 2 * v); };
-export function industryPose(zone, timeS) {
+export function industryPose(zone, timeS, beat = null) {
+  if (beat && zone.kind === 'piston') {
+    const offset = Math.round(zone.offsetS / beat.beatS), safe = machineryRearming(beat, offset);
+    const t = beatCycle(beat.beat + offset, 16);
+    const phase = safe ? 'warn' : t < 4 ? 'clear' : t < 7 ? 'warn' : t < 8 ? 'lower' : t < 10 ? 'hold' : t < 13 ? 'rise' : 'clear';
+    const lift = phase === 'lower' ? 7 * (1 - ease(t - 7)) : phase === 'hold' ? 0 : phase === 'rise' ? 7 * ease((t - 10) / 3) : 7;
+    return { phase, lift, active: lift < 1.6, warning: phase === 'warn', travel: t / 16,
+      impactIndex: safe ? null : Math.floor((beat.beat + offset - 8) / 16) };
+  }
   const t = ((Math.max(0, timeS) + zone.offsetS) % 9 + 9) % 9;
   if (zone.kind !== 'piston') return { phase: 'running', lift: 0, active: true, warning: false, travel: t / 9 };
   const phase = t < 2.4 ? 'clear' : t < 4.2 ? 'warn' : t < 5.2 ? 'lower' : t < 6.4 ? 'hold' : t < 7.8 ? 'rise' : 'clear';
@@ -56,7 +65,7 @@ export function createMainframeIndustry(track, events) {
         const near = Math.abs(st[S.s] - z.s) < z.len / 2 + 2 && Math.abs(along) < z.len / 2 + .6
           && Math.abs(x - z.x) < z.w / 2 + .6 && h >= -.4 && h < (z.kind === 'piston' ? 1.6 : .55);
         if (!near) { memory.delete(key); continue; }
-        if (!industryPose(z,timeS).active) continue;
+        if (!industryPose(z,timeS,machineryBeatAt(track,timeS)).active) continue;
         if (z.kind === 'tar') {
           // Sticky drag is bounded and hop-clearable; it never locks steering or stops a kart.
           const v = st[S.engineV];
