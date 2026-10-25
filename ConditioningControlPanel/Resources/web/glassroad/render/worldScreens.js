@@ -23,8 +23,8 @@ export function worldScreenExistingSlots(track, layout, { tier = 'high', samples
   if (!layout) return [];
   const M = mediaLook(), T = tierOf(tier, M), road = samples || roadSamples(track, 4);
   const fit = track.id === 'mainframe' ? fitMainframeBillboard : placeBillboard;
-  const slots = [...(layout.slots || []), ...(layout.billboards || []).map(b => fit(b, track, road, M)).filter(Boolean)
-    .map(b => b.flight ? motionEnvelope(b, M) : b)];
+  const slots = [...(layout.slots || []), ...(layout.billboards || []).map(b => fit(b, track, road, M)).filter(Boolean)]
+    .map(b => b.flight ? motionEnvelope(b, M) : b);
   if (layout.halo) {
     const frame = track.frameAt((layout.halo.f || 0) * track.lengthM);
     const halo = haloSlots(layout.halo, frame, Math.max(3, Math.round((layout.halo.count || 12) * T.haloShare)), 0, M);
@@ -34,7 +34,7 @@ export function worldScreenExistingSlots(track, layout, { tier = 'high', samples
       halfHeight: Math.hypot(halo[0].w, halo[0].h) / 2 + M.borderM };
     slots.push(...halo);
   }
-  if (layout.tunnel) slots.push(...tunnelLayout(layout.tunnel, track, M, T.tunnelStepMul).slots);
+  if (layout.tunnel) slots.push(...(layout.tunnelSlots || tunnelLayout(layout.tunnel, track, M, T.tunnelStepMul).slots));
   return tierSlots(slots, tier, M);
 }
 
@@ -122,7 +122,8 @@ export function worldScreenLayout(track, { tier = 'high', samples = null, solids
   const maxSlots = Math.max(0, Math.min(T.max, T.totalMax - existingSlots.length));
   const road = samples || roadSamples(track, 4), slots = [];
   const blockers = [...worldScreenBlockers(track), ...solids].map(prepare);
-  const corridors = road.map(f => prepare({ p: local(f, 0, 3), size: [f.w + 6, 18, (road.stepM || 4) + 2], axes: [f.b, f.n, f.t] }));
+  const corridors = [...road, ...(track.forks || []).flatMap(f => f.samples(4))]
+    .map(f => prepare({ p: local(f, 0, 3), size: [f.w + 6, 18, (road.stepM || 4) + 2], axes: [f.b, f.n, f.t] }));
   const sightBlockers = [...blockers, ...road.filter(f => !(track.nodeFlags?.(track.frameAt(f.s).seg) || []).includes('jump'))
     .map(f => prepare({ p: local(f, 0, -.5), size: [f.w, 1, (road.stepM || 4) + 1], axes: [f.b, f.n, f.t] }))];
   const count = Math.min(T.stations, Math.max(0, Math.floor(maxSlots / 2)), Math.max(20, Math.ceil(track.lengthM / T.spacingM)));
@@ -147,7 +148,8 @@ export function worldScreenLayout(track, { tier = 'high', samples = null, solids
       ? [[11, 6.2, 7.7, 3.7], [8, 4.5, 6.8, 3.4]]
       : portrait ? [[7.5, 12, 9.5, 7], [6, 9.5, 8, 4.5], [8, 5, 6.5, 3.8]]
         : [[17, 9.5, 8.5, 7], [13, 7.3, 7.5, 4.5], [8, 5, 6.5, 3.8]];
-    for (const [w, h, y, gap] of variants) for (const yaw of elevated ? [0] : [tight ? 1.2 : .82, 1.35]) {
+    for (const [baseW, baseH, baseY, gap] of variants) for (const yaw of elevated ? [0] : [tight ? 1.2 : .82, 1.35]) {
+      const w = baseW * 1.85, h = baseH * 1.85, y = baseY + (h - baseH) / 2;
       const Z = elevated ? norm(add(mul(f.t, -1), mul(f.n, -.18))) : norm(add(mul(f.t, -Math.cos(yaw)), mul(f.b, -side * Math.sin(yaw))));
       const axes = axesFrom(Z, f.n);
       const offset = elevated ? side * (f.w * .24) : side * (f.w / 2 + gap + w / 2 * Math.abs(dot(axes.X, f.b)));

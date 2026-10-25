@@ -7,6 +7,7 @@ import { roadSamples, rectPoints, tubeClash, haloSlots, V3, mediaLook } from '..
 import { selectScrolllerSlots } from '../render/mediaSelection.js';
 import { keepMediaLayout } from '../render/keepMedia.js';
 import { boudoirMediaLayout, boudoirBoxesIntersect } from '../render/boudoirMedia.js';
+import { largeMediaLayout } from '../render/worldMediaScale.js';
 import { worldScreenLayout, worldScreenExistingSlots, worldScreenBlockers, worldScreenSolids, worldScreenSightlines, WORLD_SCREEN_TIERS } from '../render/worldScreens.js';
 
 const read = id => JSON.parse(readFileSync(new URL('../tracks/' + id + '.json', import.meta.url), 'utf8'));
@@ -86,10 +87,11 @@ test('actual transformed opaque instances become correctly positioned visibility
 test('Mainframe supplements clear actual machine instances and retain every district', t => {
   const track = tracks.mainframe, layout = authored(track), machine = buildMainframe(track, null, { mediaLayout: layout });
   t.after(() => machine.dispose());
-  const solids = worldScreenSolids(machine.group), existingSlots = worldScreenExistingSlots(track, layout);
+  const solids = worldScreenSolids(machine.group), enlarged = largeMediaLayout(track, layout, { solids }), existingSlots = worldScreenExistingSlots(track, enlarged);
   assert.ok(solids.length > 1000, 'test uses real authored machine geometry');
   const p = worldScreenLayout(track, { solids, existingSlots });
-  assert.ok(p.slots.length >= 90);
+  console.log('Mainframe actual enlarged', JSON.stringify({authored:existingSlots.length,supplemental:p.slots.length}));
+  assert.ok(p.slots.length >= 90, 'larger pictures retain dense coverage: '+p.slots.length);
   assert.ok(p.slots.length + existingSlots.length <= WORLD_SCREEN_TIERS.high.totalMax);
   const districts = new Set(p.slots.map(s => track.sections[track.sectionAt(s.s)].id));
   for (const id of ['boot-hall', 'core-approach', 'spiral-core', 'upper-bus', 'lower-bus', 'submerged', 'emerge']) assert.ok(districts.has(id), id);

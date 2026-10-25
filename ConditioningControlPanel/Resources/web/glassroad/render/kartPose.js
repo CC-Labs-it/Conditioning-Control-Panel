@@ -17,6 +17,22 @@ export function createPose() {
 
 const ease = (v, to, tc, dt) => v + (to - v) * (1 - Math.exp(-dt / Math.max(tc, 1e-4)));
 
+/** The phrase catch has a short compress, a spring stretch and one separated-stack recoil. */
+export function phraseReboundPose(timeS, gentle = false, out = {}) {
+  out.squash = out.cupM = out.riderM = out.saucerM = 0;
+  if (!Number.isFinite(timeS) || timeS < -.16 || timeS > 1.05) return out;
+  const gain = gentle ? .3 : 1;
+  if (timeS < 0) out.squash = .10 * Math.sin(Math.PI * (timeS + .16) / .32) * gain;
+  else {
+    const compress = timeS < .12 ? .24 * Math.sin(Math.PI * (timeS + .04) / .16) : 0;
+    const stretch = timeS >= .12 && timeS < .48 ? .20 * Math.sin(Math.PI * (timeS - .12) / .36) : 0;
+    out.squash = (compress - stretch) * gain;
+    const u = clamp((timeS - .10) / .95, 0, 1), split = Math.sin(Math.PI * u) ** 2 * gain;
+    out.cupM = .10 * split; out.riderM = .37 * split; out.saucerM = -.08 * split;
+  }
+  return out;
+}
+
 /** Lean target in radians about the kart's +Z (back) axis: turning right (yawRate +) rolls the right side down. */
 export function leanTarget(yawRate, speedPct, driftDir, L) {
   const turn = clamp(-yawRate * clamp(speedPct, 0, 1) * L.leanPerRadps, -L.leanMaxRad, L.leanMaxRad);

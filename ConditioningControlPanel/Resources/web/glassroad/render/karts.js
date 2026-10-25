@@ -36,7 +36,8 @@ import {
 } from 'three/tsl';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { S, RESPAWN } from '../sim/state.js';
-import { phraseBounceActive } from '../sim/airWords.js';
+import { phraseBouncePhase } from '../sim/airWords.js';
+import { createPhrasePieces } from './phrasePieces.js';
 import { LOOK } from './look.js';
 import { KART_VIEW } from './viewMath.js';
 import { Q } from './quality.js';
@@ -46,7 +47,7 @@ import { createSwimPropeller } from './swimPropeller.js';
 import { coolantCaustics } from './mainframeMaterials.js';
 import { createKartMaterial, createKartSurface } from './materials/kart.js';
 import {
-  createPose, stepPose, tagAlpha, rivalLook, rivalNumbers, createReact, reactNumbers, observeKart, reactTo, stepReact, reactionsFor,
+  createPose, stepPose, tagAlpha, rivalLook, rivalNumbers, createReact, reactNumbers, observeKart, reactTo, stepReact, reactionsFor, phraseReboundPose,
   hitRimRgb, stunStar, kindHex, holdFace, rigTable, rigNumbers, createDirector, directorEvent, directorStep,
 } from './kartPose.js';
 import { dressKart, lookForSeat } from './wardrobe.js';
@@ -302,7 +303,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     const surge = { mesh: surgeMesh, material: surgeMaterial, alpha: 0, time: 0 };
     list.push({
       i, root, body, model, mats, bones, look, accessory, face, head, tint: look ? look.cup : [1, 1, 1], tagHex: look ? look.hex : '#fff4fa',
-      dress, skin, rig, glideCap, propeller, caustics, underwater:0, life: art3d ? createEmiLife(model, {seed:i}) : null, lifeSignals:{}, lifeAir:0, dir: createDirector(),
+      dress, skin, rig, glideCap, propeller, caustics, phrasePieces: art3d ? createPhrasePieces(model) : null, phrasePose: {}, underwater:0, life: art3d ? createEmiLife(model, {seed:i}) : null, lifeSignals:{}, lifeAir:0, dir: createDirector(),
       tag: null, tagName: '', pose: createPose(), react: Object.assign(createReact(i), { rig: !!rig }), pend: [], mem: {}, ghost: 0, mark,
       rims, rimBase: look ? look.rimLin.slice() : [0, 0, 0], rimSet: false, stars, aura, surge,
     });
@@ -386,6 +387,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     k.underwater=underwater;
     if(!paused){k.caustics.time.value+=dt*(gentle?.5:1);k.caustics.amount.value+=(underwater*(gentle?.5:1)-k.caustics.amount.value)*Math.min(1,dt/.35);}
     const { root, body, pose: p, react: r } = k;
+    k.phrasePieces?.beforePose();
     k.life?.beforePose();
     root.visible = true;
     k.propeller.update(st[S.respawnPhase] === RESPAWN.NONE ? underwater : 0, dt, {gentle,paused});
@@ -412,8 +414,10 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     body.position.set(0, o.lift, 0);
     body.quaternion.setFromAxisAngle(UPY, p.yawAdd + o.yaw)
       .multiply(QX.setFromAxisAngle(FZ, p.roll * o.stiff * (rig ? rig.bank : 1) + o.roll)).multiply(QX.setFromAxisAngle(RX, (rig ? 0 : p.pitch) + o.pitch));
-    // Phrase squash acts on the whole kart, preserving clip ownership of every joint.
-    const phraseSq = rig && phraseBounceActive(st) ? Math.max(-.2, Math.min(.24, squash || 0)) : 0;
+    const motionOff = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const bounce = phraseReboundPose(motionOff ? null : phraseBouncePhase(st), gentle, k.phrasePose);
+    // The brief body spring reads on every vehicle; only the accepted cup stack separates.
+    const phraseSq = bounce.squash;
     const bodySq = phraseSq ? Math.max(-.25, Math.min(.35, o.sq + phraseSq)) : o.sq;
     body.scale.set(1 + bodySq / 2, 1 - bodySq, 1 + bodySq / 2);
     const near = k.i === 0 || distM <= Q.kartLodM;
@@ -432,6 +436,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     signals.hit=o.stunK||0; signals.gentle=gentle; signals.motionOff=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
     signals.near=near; signals.clip=k.dir.cur; signals.outfit=k.dress?.outfit||''; k.lifeAir=signals.air;
     k.life?.update(dt,signals); k.dress?.life?.update(dt,signals);
+    k.phrasePieces?.update(bounce, !k.dress?.vehicle && !motionOff);
     if (r.sprays.length) {
       if (particles && near) for (const [kind, n, item] of r.sprays) spray(k, kind, n, gentle, item);
       r.sprays.length = 0;
@@ -529,6 +534,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
   /** A fresh reaction state on every kart (Again, Restart, Menu): no cheer, sulk or daze carries over. */
   function resetReactions() {
     for (const k of list) {
+      k.phrasePieces?.beforePose();
       k.react = Object.assign(createReact(k.i), { rig: !!k.rig }); k.pend.length = 0; k.dir = createDirector();
       if (k.glideCap) k.glideCap.reset();
       k.propeller.reset();
@@ -542,6 +548,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     if (disposed) return; disposed = true;
     detach();
     for (const k of list) {
+      k.phrasePieces?.beforePose();
       if (k.tag) { k.tag.material.map.dispose(); k.tag.material.dispose(); }
       for (const m of k.mats) m.dispose();
       if (k.face) k.face.dispose();
@@ -566,6 +573,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
   function setLook(i, want) {
     const k = list[i];
     if (!k || !k.dress) return null;
+    k.phrasePieces?.beforePose();
     const picked=lookForSeat(i,seed,want);
     if ((k.dress.outfit || null) === (picked.outfit || null) && (k.dress.vehicle || null) === (picked.vehicle || null)) {
       if(k.skin)k.skin.set(skinFromWire(want?.skin));

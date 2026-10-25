@@ -74,19 +74,28 @@ export function createContact(track, feel, events) {
   function move(r, sx, sy, sz) { r.st[S.posX] += sx; r.st[S.posY] += sy; r.st[S.posZ] += sz; }
   function push(r, sx, sy, sz) { r.st[S.velX] += sx; r.st[S.velY] += sy; r.st[S.velZ] += sz; }
 
+  function seat(r, q) {
+    const st = r.st;
+    if (!st[S.grounded] || st[S.airborne] || !q.onRoad || Math.abs(q.height) > feel.get('contact.radiusM') * 2) return;
+    st[S.posX] = q.p[0]; st[S.posY] = q.p[1]; st[S.posZ] = q.p[2];
+    st[S.height] = 0; st[S.lateral] = q.lateral;
+  }
+
   /** A push never carries a kart through a rail; under Gentle or assist the open sides hold too (soft rails). */
   function holdInside(r) {
     const st = r.st;
     const q = track.query(st[S.posX], st[S.posY], st[S.posZ], st[S.seg] | 0, QO);
     if (q.flags && q.flags.indexOf('jump') >= 0) return;
-    if (!q.railed && !r.feel.get('gentle.on')) return;
+    if (!q.railed && !r.feel.get('gentle.on')) { seat(r, q); return; }
     const rad = gap(r.feel, 'kart.radiusM');
-    if (q.edgeDist >= rad) return;
+    if (q.edgeDist >= rad) { seat(r, q); return; }
     const b = (track.pathFrameAt ? track.pathFrameAt(q.s, q.seg, FR) : track.frameAt(q.s, FR)).b, side = q.lateral >= 0 ? 1 : -1, pen = rad - q.edgeDist;
     move(r, -b[0] * side * pen, -b[1] * side * pen, -b[2] * side * pen);
     const out = (st[S.velX] * b[0] + st[S.velY] * b[1] + st[S.velZ] * b[2]) * side;
     if (out > 0) push(r, -b[0] * side * out, -b[1] * side * out, -b[2] * side * out);
     st[S.lateral] = q.lateral - side * pen;
+    track.query(st[S.posX], st[S.posY], st[S.posZ], st[S.seg] | 0, QO);
+    seat(r, q);
   }
 
   function update(dt, racers, race) {

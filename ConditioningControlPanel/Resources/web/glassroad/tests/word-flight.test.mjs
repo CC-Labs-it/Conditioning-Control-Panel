@@ -5,6 +5,7 @@ import { loadTrack } from '../track/load.js';
 import { S, RESPAWN } from '../sim/state.js';
 import { step, spawn } from '../sim/kart.js';
 import { glideActive } from '../sim/glide.js';
+import { phraseFlightPoints, phraseEase } from '../core/phraseFlight.js';
 import { createAirWordRun, bindAirWords, airWordQuery, phraseBounceActive } from '../sim/airWords.js';
 import { DT, place, makeFeel, recorder, acts } from './sim-fake.mjs';
 
@@ -115,7 +116,7 @@ test('all ten gaps auto-cross with no input, braking and full steering at varied
     }
 });
 
-test('one phrase arrives early enough to read and sends the kart across the rest of the gap', () => {
+test('one phrase rescues a fast visible fall and sends the kart across the rest of the gap', () => {
   const f = setup(), { run, ev, st } = f;
   let firstSeen = null, firstContact = null;
   for (let i = 0; i < 900; i++) {
@@ -123,12 +124,48 @@ test('one phrase arrives early enough to read and sends the kart across the rest
     if (run.platforms.length && firstSeen === null) {
       firstSeen = ev.t;
       assert.ok(st[S.airborne], 'the phrase arrives while approaching the catch');
+      assert.ok(st[S.velY] < -2, 'the kart is already falling fast before the phrase reveals');
     }
     if (firstContact === null && ev.all('air-word-land').length) firstContact = ev.t;
     if (st[S.s] > f.zone.gapS1 + 12) break;
   }
-  assert.ok(firstContact - firstSeen >= 1.3 && firstContact - firstSeen <= 1.45);
+  assert.ok(firstContact - firstSeen >= .60 && firstContact - firstSeen <= .67);
   assert.equal(ev.all('air-word-hop').length, 1);
+});
+
+test('the first arc remains within 2.2 metres of the steady camera grade on every gap', () => {
+  for (const tr of tracks) for (const zone of tr.aerials) {
+    const f = setup(tr, zone), [start, catchPoint] = phraseFlightPoints(tr, zone);
+    let peak = 0;
+    while (!f.ev.all('air-word-land').length) {
+      tick(f);
+      if (f.st[S.s] <= start.s) continue;
+      const u = Math.min(1, (f.st[S.s] - start.s) / (catchPoint.s - start.s));
+      const baseline = start.y + (catchPoint.y - start.y) * phraseEase(u);
+      const above = f.st[S.posY] - baseline;
+      assert.ok(above <= 2.201, tr.id + ': first jump left the stable framing envelope');
+      peak = Math.max(peak, above);
+    }
+    assert.ok(peak > 2.15, tr.id + ': first arc still has a visible jump');
+  }
+});
+
+test('the rebound leaves room for the separated rider within the steady camera view on every gap', () => {
+  for (const tr of tracks) for (const zone of tr.aerials) {
+    const f = setup(tr, zone), [, start, end] = phraseFlightPoints(tr, zone);
+    while (!f.ev.all('air-word-land').length) tick(f);
+    let peak = 0;
+    while (f.st[S.s] < end.s) {
+      tick(f);
+      const u = Math.min(1, (f.st[S.s] - start.s) / (end.s - start.s));
+      const baseline = start.y + (end.y - start.y) * phraseEase(u);
+      const above = f.st[S.posY] - baseline;
+      assert.ok(above <= 1.801, tr.id + ': rebound left its stable framing envelope');
+      peak = Math.max(peak, above);
+    }
+    assert.ok(peak > 1.75, tr.id + ': rebound still has a visible spring');
+    assert.ok(peak + .37 * .78 < 2.2, 'separated rider fits within the verified first-jump height');
+  }
 });
 
 test('contact springs without stopping forward travel and opens the hat only after the rebound apex', () => {
@@ -221,13 +258,16 @@ test('quiet song sections get compact trigger words, with only two supports visi
   }
 });
 
-test('word catches ease vertical speed instead of reversing a hard fall', () => {
+test('word catches retain falling momentum until the immediate spring reversal', () => {
   const f = setup(); let contacts = 0;
   for (let i = 0; i < 1000 && f.st[S.s] < f.zone.gapS1 + 12; i++) {
     tick(f);
     const count = f.ev.all('air-word-land').length;
     if (count > contacts) {
-      assert.ok(Math.abs(f.st[S.velY]) < 2, 'touchdown has a soft vertical approach');
+      assert.ok(f.st[S.velY] < -3, 'touchdown retains visible falling speed without a pre-contact hover');
+      const s = f.st[S.s]; tick(f);
+      assert.ok(f.st[S.velY] > 3, 'the phrase springs upward on the next step');
+      assert.ok(f.st[S.s] > s, 'the rebound keeps forward motion');
       contacts = count;
     }
   }
