@@ -38,6 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private void WireCellHostActions(WorkshopShelfParts parts)
         {
             parts.Behavior.ChatShortcutRequested += async (_, _) => await RebindChatShortcutAsync();
+            WirePhrasePresets(parts);
 
             // Deliberately NOT wired, each for the reason a previous layer already recorded:
             //

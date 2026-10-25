@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.Shapes;
@@ -36,6 +38,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             base.OnAttachedToVisualTree(e);
             UpdateAmbient(attached: true);
+            CoreMods.ModChanged += OnJournalModChanged;
+            ApplyBimboJournalModVisibility();
             if (App.Quests is not { } quests) return;
             quests.QuestCompleted += OnQuestCompleted;
             quests.QuestProgressChanged += OnQuestProgressChanged;
@@ -48,6 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             base.OnDetachedFromVisualTree(e);
             UpdateAmbient(attached: false);
+            CoreMods.ModChanged -= OnJournalModChanged;
             if (App.Quests is not { } quests) return;
             quests.QuestCompleted -= OnQuestCompleted;
             quests.QuestProgressChanged -= OnQuestProgressChanged;
@@ -55,7 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             WeeklyProgressTrack.SizeChanged -= OnWeeklyTrackSizeChanged;
         }
 
-        private void OnWeeklyTrackSizeChanged(object? sender, SizeChangedEventArgs e) => ApplyWeeklyBar();
+        private void OnWeeklyTrackSizeChanged(object? sender, SizeChangedEventArgs e) => ApplyWeeklyBar(animate: false);
 
         // ShowTab calls RefreshQuestUI on every entry in WPF; IsVisible flipping true is that entry.
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -236,10 +241,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             PaintStreakCalendar();
         }
 
-        private void ApplyWeeklyBar()
+        private void ApplyWeeklyBar(bool animate = true)
         {
             var width = WeeklyProgressTrack.Bounds.Width;
-            if (width > 0) WeeklyProgressFill.Width = width * _weeklyFraction;
+            if (width <= 0) return;
+            var target = width * _weeklyFraction;
+            var current = WeeklyProgressFill.Width;
+            if (animate && Math.Abs(target - current) < 0.5) return;
+            // WPF SetQuestProgress / MotionFx.BarFill: progress takes 0.6 s QuadraticEaseOut;
+            // a resize is layout, so it cancels the tween and seats the stored fraction now.
+            WeeklyProgressFill.Transitions = null;
+            WeeklyProgressFill.Width = double.IsNaN(current) ? 0 : current;
+            WeeklyProgressFill.Transitions = animate && AmbientFxCanvas.Env.AllowTransitions
+                ? new Transitions { new DoubleTransition { Property = WidthProperty,
+                    Duration = TimeSpan.FromSeconds(0.6), Easing = new QuadraticEaseOut() } }
+                : null;
+            WeeklyProgressFill.Width = target;
         }
 
         private void PaintMonth(QuestService quests)

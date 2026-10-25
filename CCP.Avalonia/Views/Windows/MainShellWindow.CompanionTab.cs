@@ -18,10 +18,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _avatarTubeWindow?.SwitchToCompanionAvatar(id);   // WPF MainWindow.CompanionTab.cs:327-361
         }
 
-        // Community browsing/import/export/refresh and activation use the Core service owned
-        // by WorkshopCommunityCell; MakeHerYoursViewModel shares it for browsing and installed
-        // prompt names, and both views re-sync after changes.
-        // The runtime aggregate/compat accessors and per-companion personality prompt assignment
-        // remain in wire-views-tab-companion-b. Core owns the switching rules.
+        // ponytail: the runtime aggregate/compat accessors, personality prompt assignment and
+        // prompt labels remain in wire-views-tab-companion-b. Community browsing/import/export/
+        // refresh lives in Views/Controls/Companion/Runtime/WorkshopCommunityCell. The existing Core engine is the only switching rule.
     }
 }

@@ -1,3 +1,4 @@
+using System;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.VisualTree;
@@ -8,20 +9,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
 {
     /// <summary>Z8 · TRIGGERS &amp; PHRASES. See the XAML header.
     ///
-    /// The WPF code-behind is pure forwarding: every handler walks up to MainWindow and calls the
-    /// matching internal method there. That target does not exist on this head - the phrase editor,
-    /// the preset store and the avatar trigger timer all hang off <c>App</c>/<c>MainWindow</c> in
-    /// the WPF project - so only the two behaviours that are purely local to this cell are wired:
-    /// the toggle showing the interval panel (MainWindow.Patreon.cs:1209) and the slider writing
-    /// its own value label (MainWindow.Patreon.cs:1235). Manage Phrases forwards to the shell. Edit Phrases and the three
-    /// preset controls stay inert until that runtime crosses; they are not stubbed, so nothing here
-    /// pretends to work.</summary>
+    /// WPF forwards the controls to MainWindow. This head keeps the toggle's local visibility
+    /// and interval label here, and hoists phrase-preset selection/save/delete to the Workshop host.
+    /// Manage Phrases forwards to the owning shell. Edit Phrases and the live avatar trigger timer
+    /// still await their runtime.
+    /// </summary>
     public partial class WorkshopTriggersCell : UserControl
     {
+        public event EventHandler? PhrasePresetSelectionChanged;
+        public event EventHandler? SavePhrasePresetRequested;
+        public event EventHandler? DeletePhrasePresetRequested;
+
         public WorkshopTriggersCell()
         {
             AvaloniaXamlLoader.Load(this);
             DataContext = new WorkshopTriggersCellViewModel();
+            this.FindControl<ComboBox>("CmbPhrasePresets")!.SelectionChanged += (_, _) => PhrasePresetSelectionChanged?.Invoke(this, EventArgs.Empty);
+            this.FindControl<Button>("BtnSavePhrasePreset")!.Click += (_, _) => SavePhrasePresetRequested?.Invoke(this, EventArgs.Empty);
+            this.FindControl<Button>("BtnDeletePhrasePreset")!.Click += (_, _) => DeletePhrasePresetRequested?.Invoke(this, EventArgs.Empty);
             // WPF forwards the real Phrase Manager action to its owning shell.
             this.FindControl<Button>("BtnManagePhrases")!.Click += (sender, e) =>
                 this.FindAncestorOfType<MainShellWindow>()?.BtnManagePhrases_Click(sender, e);

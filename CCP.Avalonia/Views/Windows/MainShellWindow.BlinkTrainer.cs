@@ -13,14 +13,17 @@
 // through a VlcFrameSink, muted looping video), consent manage/revoke (WebcamTracker.RevokeConsent,
 // the seeded CoreWebcam verb), Quick Recal over the gaze feed, the 16-point calibration
 // (WebcamCalibrationWindow), the help popover, and the status pulse (the page calls
-// SetBlinkTrainerStatusPulse in MainShellWindow.TabFxTakeoverLabStatus.cs). STILL REFUSED, each needing
-// a missing surface: ToggleWebcamFromHotkey (global hotkey), the loading splash and the Deeper hub's
-// webcam twins.
+// SetBlinkTrainerStatusPulse in MainShellWindow.TabFxTakeoverLabStatus.cs). STILL MISSING:
+// ToggleWebcamFromHotkey (global hotkey), GIF/animated webp animation (first frame only), the
+// explicit tracking-monitor pick, the SeasonRecap credit and the Deeper status chip repaint (WPF
+// UpdateWebcamStatusChips, MainWindow.LabTab.cs:356). The loading splash is live in
+// MainShellWindow.WebcamSplash.cs; the Deeper hub webcam twins now relay to the same Blink Trainer
+// actions and refresh consent/calibration/tracker state on both cards.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        // Nothing is restored - see the header. Those refusals are decisions, not a to-do list.
+        // The camera actions are shared by the two page launchers; see the header.
     }
 }

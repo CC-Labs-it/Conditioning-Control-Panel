@@ -225,8 +225,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>WPF UpdateProgramSessionRow :1451-1585, button and glyph states. Repainted on every
-        /// refresh and on a session start/end (ProgramEngineBridge.SessionChanged), never per tick (P07).
-        /// ponytail: the live clock, progress bar and sheen while our session runs are programs slice 5.</summary>
+        /// refresh and on a session start/end (ProgramEngineBridge.SessionChanged). The separate
+        /// live clock/bar update never rebuilds these buttons or the task list on a tick (P07).</summary>
         private void UpdateSessionRow(ProgramService svc, ProgramEnrollment enrollment, ProgramDayRecord record,
                                       IBrush accent, IBrush muted)
         {
@@ -247,6 +247,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // P09: choose the key in code and bind it, so a language switch keeps the state's text.
             Find<TextBlock>("TxtStartTodaySession").Bind(TextBlock.TextProperty,
                 (global::Avalonia.Data.Binding)new Localization.StrExtension(key).ProvideValue(null!));
+            RefreshLiveSessionProgress();
         }
 
         // ---- reward track (WPF BuildProgramDayStrip :794-939) ----

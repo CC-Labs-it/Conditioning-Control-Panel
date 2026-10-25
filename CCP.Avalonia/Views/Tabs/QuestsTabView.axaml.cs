@@ -63,6 +63,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // ---- SUB-TABS (view-only, ported for real) --------------------------------
 
+        private void OnJournalModChanged(object? sender, Models.ModPackage mod) =>
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(ApplyBimboJournalModVisibility);
+
+        internal void ApplyBimboJournalModVisibility()
+        {
+            BtnQuestSubRoadmap.IsVisible = Models.BuiltInMods.SupportsBimboJournal(CoreMods.ActiveModId);
+            if (!BtnQuestSubRoadmap.IsVisible && RoadmapPanel.IsVisible) ShowDailyWeekly();
+        }
+
         private void ShowDailyWeekly()
         {
             DailyWeeklyPanel.IsVisible = true;
@@ -102,7 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private ControlTheme? TabTheme(string key) =>
-            Resources.TryGetResource(key, null, out var value) ? value as ControlTheme : null;
+            this.FindResource(key) as ControlTheme;
 
         // ---- REROLLS (MainWindow.QuestsTab.cs:41/:59) ------------------------------
 

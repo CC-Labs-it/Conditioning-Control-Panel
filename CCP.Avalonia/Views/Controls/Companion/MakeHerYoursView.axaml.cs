@@ -133,8 +133,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 PersonalityService.ClearCustomPromptOverride(CoreSettings.Current);
                 CoreSettings.Save();
                 Sync();
+                RefreshCommunityRows();   // WPF MainWindow.Patreon.cs:2249 UpdateCommunityPromptsUI
             });
             Sync();
+        }
+
+        /// <summary>The Workshop COMMUNITY rows' active dot follows a reset or preset pick made here.</summary>
+        private void RefreshCommunityRows()
+        {
+            // Through the shell, not the visual tree: under v2 this zone is adopted by Companion > Personality.
+            Shell?.RoomView()?.RefreshCommunity();
         }
 
         internal Windows.MainShellWindow? Shell =>
@@ -298,6 +306,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             if (Shell is { } shell) await shell.ActivatePersonalityPresetAsync(id);
             // Reads back what happened: a cancelled acknowledgement leaves the old preset active.
             Sync();
+            RefreshCommunityRows();
         }
 
         private async void OpenPromptEditor()
