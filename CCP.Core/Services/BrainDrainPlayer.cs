@@ -1,4 +1,6 @@
 using System;
+using System.ComponentModel;
+using ConditioningControlPanel.Models;
 using System.Threading;
 using Serilog;
 
@@ -27,6 +29,8 @@ namespace ConditioningControlPanel.Services
         private readonly object _lock = new();
         private string[] _clips = Array.Empty<string>();
         private ITimer? _tick;
+        private AppSettings? _volumeSettings;
+        private SettingsService? _volumeService;
         private Voice? _voice;
         private bool _running;
         private long _generation;
@@ -74,6 +78,34 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex) { Log.Debug("BrainDrain: volume refresh failed: {E}", ex.Message); }
         }
 
+        // Adapted from f601b7917 MasterVolumeWatch: observe the setting itself, including
+        // replacement, so hotkeys/presets/remotes reach the live sample just like the slider.
+        // ponytail: this player owns its subscriptions; no app-wide watch for one consumer.
+        private void WatchVolumeSettings()
+        {
+            var current = CoreSettings.Current;
+            if (ReferenceEquals(current, _volumeSettings)) return;
+            if (_volumeSettings != null) _volumeSettings.PropertyChanged -= OnVolumeChanged;
+            _volumeSettings = current;
+            current.PropertyChanged += OnVolumeChanged;
+        }
+
+        private void OnVolumeChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName is nameof(AppSettings.MasterVolume) or nameof(AppSettings.BrainDrainVolume))
+                RefreshVolume();
+        }
+
+        private void OnSettingsReplaced()
+        {
+            lock (_lock)
+            {
+                if (!_running) return;
+                WatchVolumeSettings();
+                RefreshVolume();
+            }
+        }
+
         public void ReloadClips()
         {
             var clips = BrainDrainSchedule.DiscoverClips();
@@ -94,6 +126,9 @@ namespace ConditioningControlPanel.Services
                 _intensity = BrainDrainSchedule.ClampIntensity(s.BrainDrainIntensity);   // WPF UpdateSettings
                 _interval = BrainDrainSchedule.TickInterval(s.BrainDrainHighRefresh);
                 _running = true;
+                _volumeService = CoreSettings.Service;
+                if (_volumeService != null) _volumeService.CurrentReplaced += OnSettingsReplaced;
+                WatchVolumeSettings();
                 _tick = _time.CreateTimer(_ => Tick(), null, _interval, _interval);
             }
             try { Started?.Invoke(); } catch (Exception ex) { Log.Debug("BrainDrain: start hook failed: {E}", ex.Message); }
@@ -111,6 +146,10 @@ namespace ConditioningControlPanel.Services
             {
                 wasRunning = _running;
                 _running = false;
+                if (_volumeService != null) _volumeService.CurrentReplaced -= OnSettingsReplaced;
+                if (_volumeSettings != null) _volumeSettings.PropertyChanged -= OnVolumeChanged;
+                _volumeService = null;
+                _volumeSettings = null;
                 ++_generation;
                 _building = false;
                 voice = _voice; _voice = null;

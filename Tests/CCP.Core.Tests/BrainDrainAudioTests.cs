@@ -161,6 +161,73 @@ public sealed class BrainDrainAudioTests
         await Task.CompletedTask;
     });
 
+    [Fact]
+    public Task SettingsWritesChangeThePlayingClipWithoutASliderHandler() => WithPlayer(async make =>
+    {
+        double gain = -1;
+        var plays = 0;
+        var player = make((_, initial, _, _) =>
+        {
+            plays++;
+            gain = initial;
+            return new BrainDrainPlayer.Voice(() => { }, v => gain = v);
+        });
+        var s = CoreSettings.Current;
+        s.MasterVolume = 80;
+        s.BrainDrainVolume = 40;
+        player.Start();
+        player.Tick();
+        Assert.Equal((double)BrainDrainSchedule.EffectiveVolume(80, 40), gain);
+        s.MasterVolume = 0; // hotkey/preset/remote write, no AudioSettingsBinder
+        Assert.Equal(0, gain);
+        s.MasterVolume = 50;
+        Assert.Equal((double).2f, gain);
+        s.BrainDrainVolume = 20;
+        Assert.Equal((double).1f, gain);
+        Assert.Equal(1, plays);
+        player.Stop();
+        s.MasterVolume = 100;
+        Assert.Equal((double).1f, gain); // stopped voices are no longer subscribed
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public async Task ReplacedSettingsRefreshTheClipAndDetachTheOldObject()
+    {
+        var oldProvider = CoreSettings.ServiceProvider;
+        var service = new SettingsService(); // assembly-owned CCP_USERDATA_DIR sandbox
+        CoreSettings.ServiceProvider = () => service;
+        try
+        {
+            await WithPlayer(async make =>
+            {
+                double gain = -1;
+                var player = make((_, _, _, _) => new BrainDrainPlayer.Voice(() => { }, v => gain = v));
+                var before = service.Current;
+                before.MasterVolume = 100;
+                before.BrainDrainVolume = 100;
+                player.Start();
+                player.Tick();
+                service.RestoreFrom(new ConditioningControlPanel.Models.AppSettings
+                {
+                    MasterVolume = 50, BrainDrainVolume = 40, BrainDrainEnabled = true,
+                });
+                Assert.Equal((double).2f, gain);
+                before.MasterVolume = 0;
+                Assert.Equal((double).2f, gain);
+                service.Current.MasterVolume = 0;
+                Assert.Equal(0, gain);
+                player.Stop();
+                player.Start();
+                player.Tick();
+                service.Current.MasterVolume = 50;
+                Assert.Equal((double).2f, gain);
+                await Task.CompletedTask;
+            });
+        }
+        finally { CoreSettings.ServiceProvider = oldProvider; }
+    }
+
     private static async Task WithPlayer(Func<Func<Func<string, double, bool, Action, BrainDrainPlayer.Voice?>, BrainDrainPlayer>, Task> test)
     {
         var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
