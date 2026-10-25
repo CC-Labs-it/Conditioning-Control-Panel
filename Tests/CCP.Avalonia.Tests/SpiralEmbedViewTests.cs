@@ -1,5 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Runtime.CompilerServices;
+using Avalonia.Platform;
+using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -94,6 +99,99 @@ public sealed class SpiralEmbedViewTests
         Assert.Null(view.Host);
         Assert.False(view.IsReady);
         Assert.Equal("https://app.cclabs.app/embed/spiral?mode=map", view.Url);
+        return Task.CompletedTask;
+    });
+
+    // WPF catches host callback failures: the canvas remains decorative even when its host throws.
+    [Theory]
+    [InlineData("ready")]
+    [InlineData("navigated")]
+    [InlineData("failed")]
+    [InlineData("send")]
+    public Task HostCallbackFailure_DoesNotEscapeOrResurrectDisposedView(string callback) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        using var view = new SpiralEmbedView("mini");
+        Action action;
+        switch (callback)
+        {
+            case "ready":
+                view.Ready += (_, _) => throw new InvalidOperationException("test callback");
+                action = () => view.Receive("{\"type\":\"spiral:ready\"}");
+                break;
+            case "navigated":
+                view.Navigated += (_, _) => throw new InvalidOperationException("test callback");
+                action = () => view.OnNavigated(new Uri(view.Url), true);
+                break;
+            case "failed":
+                view.Failed += (_, _) => throw new InvalidOperationException("test callback");
+                action = () => view.OnNavigated(new Uri(view.Url), false);
+                break;
+            default:
+                view.SendJson = _ => throw new InvalidOperationException("test transport");
+                view.PostState(new DescentBlock { DevotionDays = 3 });
+                action = () => view.Receive("{\"type\":\"spiral:ready\"}");
+                break;
+        }
+        Assert.Null(Record.Exception(action));
+        Assert.Equal(callback == "failed", view.HasFailed);
+        if (callback is "ready" or "send") Assert.True(view.IsReady);
+        view.Dispose();
+        Assert.Null(Record.Exception(() => view.Receive("{\"type\":\"spiral:ready\"}")));
+        Assert.False(view.IsReady);
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData("windows")]
+    [InlineData("gtk")]
+    [InlineData("wpe")]
+    public void NativeEnvironment_UsesSharedSpiralProfileAndDisablesDevTools(string engine)
+    {
+        // These are property bags with an internal DeferralManager constructor. No native adapter
+        // is created: exercising the actual callback's setup must never attach to a desktop.
+        var type = engine switch
+        {
+            "windows" => typeof(WindowsWebView2EnvironmentRequestedEventArgs),
+            "gtk" => typeof(GtkWebViewEnvironmentRequestedEventArgs),
+            _ => typeof(LinuxWpeWebViewEnvironmentRequestedEventArgs),
+        };
+        var args = (WebViewEnvironmentRequestedEventArgs)RuntimeHelpers.GetUninitializedObject(type);
+        args.EnableDevTools = true;
+        SpiralEmbedView.ConfigureEnvironment(args);
+        var folder = Path.Combine(CorePaths.UserData, "browser_data_spiral");
+        Assert.True(Directory.Exists(folder));
+        Assert.False(args.EnableDevTools);
+        switch (args)
+        {
+            case WindowsWebView2EnvironmentRequestedEventArgs win:
+                Assert.Equal(folder, win.UserDataFolder);
+                Assert.Equal("--disable-direct-composition-video-overlays " +
+                    "--disable-features=CalculateNativeWinOcclusion " +
+                    "--disable-backgrounding-occluded-windows", win.AdditionalBrowserArguments);
+                break;
+            case GtkWebViewEnvironmentRequestedEventArgs gtk:
+                Assert.Equal(folder, gtk.BaseDataDirectory);
+                Assert.Equal(Path.Combine(folder, "cache"), gtk.BaseCacheDirectory);
+                break;
+            case LinuxWpeWebViewEnvironmentRequestedEventArgs wpe:
+                Assert.Equal(folder, wpe.DataDirectory);
+                Assert.Equal(Path.Combine(folder, "cache"), wpe.CacheDirectory);
+                break;
+        }
+    }
+
+    [Fact]
+    public Task NativeChildSharesTheHostsDarkSinkBeforeAttachment() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        using var view = new SpiralEmbedView("map");
+        var host = new WebHost { Background = view.Background };
+        var native = new NativeWebView(); // never added to a visual tree or attached to a desktop
+        host.BindNativeBackground(native);
+        Assert.Equal(Color.FromRgb(0x1C, 0x1C, 0x36), Assert.IsType<SolidColorBrush>(native.Background).Color);
+        host.Background = Brushes.Black;
+        Assert.Same(Brushes.Black, native.Background);
         return Task.CompletedTask;
     });
 

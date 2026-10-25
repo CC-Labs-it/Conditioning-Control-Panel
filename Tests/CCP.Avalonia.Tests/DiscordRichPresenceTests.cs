@@ -146,6 +146,36 @@ public sealed class DiscordRichPresenceTests
     }
 
     [Fact]
+    public async Task StartupSeedsCoreActivitiesWithoutEnablingTheRpc()
+    {
+        await WithRuntimeDir(_ => AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var service = new SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            (service.Current.DiscordRichPresenceEnabled, service.Current.HasLinkedDiscord) = (false, false);
+            var (oldRpc, oldPost, oldBridge) = (AvApp.DiscordRpc, DiscordRichPresenceService.PostToUi, CoreDiscord.ServiceProvider);
+            try
+            {
+                AvApp.StartRichPresence();
+                Assert.Same(AvApp.DiscordRpc, CoreDiscord.Service);
+                CoreFlash.Start();
+                Assert.Equal("Conditioning", AvApp.DiscordRpc!.CurrentState);
+                CoreFlash.Stop();
+                Assert.Equal("Browsing", AvApp.DiscordRpc.CurrentState);
+                Assert.False(AvApp.DiscordRpc.IsEnabled || AvApp.DiscordRpc.IsConnected);
+            }
+            finally
+            {
+                CoreFlash.Stop();
+                AvApp.DiscordRpc?.Dispose();
+                (AvApp.DiscordRpc, DiscordRichPresenceService.PostToUi, CoreDiscord.ServiceProvider) = (oldRpc, oldPost, oldBridge);
+            }
+            return Task.CompletedTask;
+        }));
+    }
+
+    [Fact]
     public void MindWipeOwnsThePresenceWhileItRuns()
     {
         // WPF MindWipeService.cs:179/230: Start shows the mind-wipe activity, Stop of a running service goes back

@@ -4,8 +4,6 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
-using Serilog;
-using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Services.JustDrop
 {
@@ -44,12 +42,14 @@ namespace ConditioningControlPanel.Services.JustDrop
         private static readonly TimeSpan CacheFor = TimeSpan.FromSeconds(90);
 
         private static readonly SemaphoreSlim _gate = new(1, 1);
-        private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(12) };
+        private static readonly HttpClient DefaultHttp = new() { Timeout = TimeSpan.FromSeconds(12) };
+        /// <summary>Test seam. Only the real client is held to the sandbox network gate.</summary>
+        internal static HttpClient Http = DefaultHttp;
 
         private static IReadOnlyList<Order> _cached = Array.Empty<Order>();
-        private static string? _cachedAccount;
-        internal static HttpClient? HttpOverride;
         private static DateTimeOffset _cachedAt = DateTimeOffset.MinValue;
+        private static string _cachedFor = "";
+        private static string _cachedToken = "";
 
         /// <summary>One filed receipt, in the server's own shape (justdrop.js cleanOrder).</summary>
         internal sealed class Order
@@ -67,17 +67,6 @@ namespace ConditioningControlPanel.Services.JustDrop
             /// re-order. The desktop's XP equivalent is <see cref="CreditedOrders"/>; the two are
             /// deliberately separate ledgers for two separate currencies.</summary>
             public bool PaidOut { get; init; }
-
-            public string DisplayName => string.IsNullOrWhiteSpace(Name) ? Loc.Get("sd_takeaway_order_fallback") : Name;
-            public string DateLabel => At.ToString("MMM d").ToUpperInvariant();
-            public string Meta => Minutes > 0 ? Loc.GetF("sd_takeaway_meta", Minutes, DateLabel) : DateLabel;
-            public string MinutesLabel => Minutes > 0 ? Loc.GetF("takeaway_row_min", Minutes) : "";
-            public string AgeLabel(DateTimeOffset now)
-            {
-                int days = (int)Math.Floor((now - At).TotalDays);
-                return days <= 0 ? Loc.Get("takeaway_today")
-                    : Loc.GetF(days == 1 ? "takeaway_day_ago" : "takeaway_days_ago", days);
-            }
 
             /// <summary>Session length in minutes, from the size. The order does not carry a
             /// duration - the size IS the duration, and the table lives in the web app's
@@ -106,7 +95,7 @@ namespace ConditioningControlPanel.Services.JustDrop
             var token = SafeAuthToken();
             var unifiedId = SafeUnifiedId();
             if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(unifiedId)
-                || (HttpOverride == null && !SandboxNet.Allows(new Uri(ProxyBaseUrl))))
+                || (ReferenceEquals(Http, DefaultHttp) && !SandboxNet.Allows(new Uri(ProxyBaseUrl))))
             {
                 // Signed out is not an error - it is a user with no drawer.
                 return Array.Empty<Order>();
@@ -115,9 +104,9 @@ namespace ConditioningControlPanel.Services.JustDrop
             await _gate.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                // Re-check inside the gate: a caller may have refreshed while we queued.
-                if (_cachedAccount == unifiedId && _cachedAt > DateTimeOffset.UtcNow - CacheFor) return _cached;
-
+                // Re-check inside the gate: identity may change while a request queues.
+                if (SafeUnifiedId() != unifiedId || SafeAuthToken() != token) return Array.Empty<Order>();
+                if (_cachedFor == unifiedId && _cachedToken == token && _cachedAt > DateTimeOffset.UtcNow - CacheFor) return _cached;
                 var url = $"{ProxyBaseUrl}/v2/justdrop/orders?unified_id={Uri.EscapeDataString(unifiedId)}";
                 using var request = new HttpRequestMessage(HttpMethod.Get, url);
                 // The device door, NOT Authorization: Bearer. resolveCaller() picks the JWT door
@@ -126,26 +115,29 @@ namespace ConditioningControlPanel.Services.JustDrop
                 request.Headers.Add("X-Auth-Token", token);
                 request.Headers.Add("Accept", "application/json");
 
-                using var response = await (HttpOverride ?? _http).SendAsync(request, ct).ConfigureAwait(false);
+                using var response = await Http.SendAsync(request, ct).ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode)
                 {
                     await MergedAccountRecovery.TryHandleAsync(response).ConfigureAwait(false);   // contract D
-                    Log.Debug("JustDrop orders: {Status}; shelf stays empty", (int)response.StatusCode);
+                    Serilog.Log.Debug("JustDrop orders: {Status}; shelf stays empty", (int)response.StatusCode);
                     return Array.Empty<Order>();
                 }
 
                 var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
                 var parsed = Parse(body);
-                _cachedAccount = unifiedId;
+                // Never publish an old account's drawer after sign-out or account switch.
+                if (SafeUnifiedId() != unifiedId || SafeAuthToken() != token) return Array.Empty<Order>();
+                _cachedFor = unifiedId;
+                _cachedToken = token;
                 _cached = parsed;
                 _cachedAt = DateTimeOffset.UtcNow;
-                Log.Information("JustDrop orders: {Count} in the drawer", parsed.Count);
+                Serilog.Log.Information("JustDrop orders: {Count} in the drawer", parsed.Count);
                 return parsed;
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                Log.Debug("JustDrop orders: fetch failed ({Error})", ex.Message);
+                Serilog.Log.Debug("JustDrop orders: fetch failed ({Error})", ex.Message);
                 return Array.Empty<Order>();
             }
             finally { _gate.Release(); }
@@ -183,7 +175,7 @@ namespace ConditioningControlPanel.Services.JustDrop
             }
             catch (Exception ex)
             {
-                Log.Debug("JustDrop orders: unparseable body ({Error})", ex.Message);
+                Serilog.Log.Debug("JustDrop orders: unparseable body ({Error})", ex.Message);
                 return Array.Empty<Order>();
             }
             return list;

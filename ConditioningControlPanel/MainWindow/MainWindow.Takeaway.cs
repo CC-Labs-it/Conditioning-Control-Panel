@@ -211,7 +211,7 @@ namespace ConditioningControlPanel
         /// <summary>"+7 more ▾" / "+7 more ▴". The caret is appended rather than localized: it is a
         /// state glyph, not a word.</summary>
         private static string TakeawayMoreText(int count, bool open)
-            => string.Format(LocOr("sd_takeaway_more", "+{0} more"), count) + (open ? "  ▴" : "  ▾");
+            => TakeawayText.More(count, open);
 
         /// <summary>
         /// One pinned order chip: 📦 name, its meta, and the copy element. Geometry and colour come
@@ -533,11 +533,11 @@ namespace ConditioningControlPanel
         /// is scanned down a strip rather than read. A size the app does not know yet yields 0
         /// minutes, and the date carries the chip on its own rather than printing "0 MIN".
         /// </summary>
-        private static string FormatTakeawayMeta(JustDropOrdersService.Order order) => order.Meta;
-        private static string FormatTakeawayDate(JustDropOrdersService.Order order) => order.DateLabel;
-        private static string FormatTakeawayMinutes(JustDropOrdersService.Order order) => order.MinutesLabel;
-        private static string FormatTakeawayAge(JustDropOrdersService.Order order) => order.AgeLabel(DateTimeOffset.UtcNow);
-        private static string SafeOrderName(JustDropOrdersService.Order order) => order.DisplayName;
+        private static string FormatTakeawayMeta(JustDropOrdersService.Order order) => TakeawayText.Meta(order);
+        private static string FormatTakeawayDate(JustDropOrdersService.Order order) => TakeawayText.Date(order);
+        private static string FormatTakeawayMinutes(JustDropOrdersService.Order order) => TakeawayText.Minutes(order);
+        private static string FormatTakeawayAge(JustDropOrdersService.Order order) => TakeawayText.Age(order, DateTimeOffset.UtcNow);
+        private static string SafeOrderName(JustDropOrdersService.Order order) => TakeawayText.Name(order);
 
         /// <summary>Replay the order in the Just Drop window. Free - see the class remarks.</summary>
         private void TakeawayCard_Click(object sender, RoutedEventArgs e)

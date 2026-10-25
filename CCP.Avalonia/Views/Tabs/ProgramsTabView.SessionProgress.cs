@@ -14,6 +14,7 @@ public partial class ProgramsTabView
 {
     private BeatLoop? _sessionSheen;
     private double _sessionSheenSeconds;
+    internal bool SessionSheenRunning => _sessionSheen?.IsRunning == true;
 
     /// <summary>WPF UpdateProgramSessionRow: repaint only the live clock/bar on the engine's tick.
     /// The task list and ignition scenery retain their instances while the seconds advance.</summary>

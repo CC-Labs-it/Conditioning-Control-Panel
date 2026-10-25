@@ -33,7 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// (WPF MainWindow.Presets.cs:515-636, applied at start :1586 and live during a run, #474), and
     /// so are the focal tab FX in PresetsTabView.Fx.cs (selected-card sheen, entrances, press scale;
     /// WPF MainWindow.TabFxPresetsQuestsAchievements.cs, OnPresetsTabVisibilityChanged / RefreshCardSheen).
-    /// The Takeaway shelf reads Core JustDropOrdersService and opens receipts through the shell.
+    /// ponytail: the Takeaway shelf needs JustDropOrdersService (row shell-takeaway).
     /// </summary>
     public partial class PresetsTabView : UserControl
     {
@@ -88,12 +88,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             InitializeFocalFx();
             SeedRailRackAndTakeaway();
             WireCornerGifOption();
-            AttachedToVisualTree += (_, _) => _ = RefreshTakeawayAsync();
-            // Tab show refreshes receipts; the sheen clock follows visibility in PresetsTabView.Fx.cs.
-            PropertyChanged += (_, e) =>
-            {
-                if (e.Property == IsVisibleProperty && IsVisible && VisualRoot != null) _ = RefreshTakeawayAsync();
-            };
         }
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -330,7 +324,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // ---- Takeaway empty state + Core-backed session rack --------------------
         //
-        // The Takeaway strip reads the Core order drawer after attach. The preset rail and
+        // The Takeaway strip paints WPF's empty state until the order drawer moves. The preset rail and
         // the session rack read Core (Preset, AppSettings.UserPresets, Session).
 
         private void SeedRailRackAndTakeaway()
@@ -1386,7 +1380,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             return file?.TryGetLocalPath();
         }
 
-        /// <summary>Empty state before the asynchronous order drawer arrives; never sample orders.</summary>
+        /// <summary>WPF PaintTakeawayShelf (MainWindow.Takeaway.cs:107) with an empty drawer and the
+        /// door withheld: no chips, no tray rows, no count, the shelf collapsed and the empty sentence
+        /// shown. This head has neither JustDropOrdersService (the device-token order drawer) nor
+        /// JustDropService.DoorAvailable, so that is exactly what WPF paints for it - never sample
+        /// orders. The Community Catalogue chip and Export stay live on the same line.</summary>
         private void SeedTakeaway()
         {
             TakeawayShelf.Children.Clear();

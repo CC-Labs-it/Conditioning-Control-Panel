@@ -24,7 +24,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
     {
         // The existing Core service is shared with WPF; only presentation and native pickers live here.
         private CommunityPromptService? _service;
-        internal CommunityPromptService Service => _service ??= CreateService();
+        internal CommunityPromptService Service { get => _service ??= CreateService(); set => _service = value; }
         internal Func<Task<string?>>? ImportFileForTests { get; set; }
         internal Func<Task<string?>>? ExportFileForTests { get; set; }
         private Window? Owner => TopLevel.GetTopLevel(this) as Window;
@@ -133,22 +133,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             if (Owner is { } owner) await MessageDialog.ShowAsync(owner, Loc.Get(title), body);
         }
 
-        private async Task BrowseAsync()
+        private Task BrowseAsync() => BrowseAsync(() => Owner, Service, RefreshInstalledPrompts);
+
+        /// <summary>WPF BtnBrowsePrompts_Click (MainWindow.Patreon.cs:2252), shared by this cell and Z4's Community link.</summary>
+        internal static async Task BrowseAsync(Func<Window?> ownerOf, CommunityPromptService service, Action installed)
         {
+            async Task TellAsync(string title, string body)
+            {
+                if (ownerOf() is { } owner) await MessageDialog.ShowAsync(owner, Loc.Get(title), body);
+            }
             try
             {
-                var available = await Service.GetAvailablePromptsAsync();
+                var available = await service.GetAvailablePromptsAsync();
                 if (available.Count == 0) { await TellAsync("title_community_prompts", Loc.Get("msg_no_community_prompts")); return; }
-                var choices = available.Where(p => !Service.InstalledPromptIds.Contains(p.Id)).ToList();
+                var choices = available.Where(p => !service.InstalledPromptIds.Contains(p.Id)).ToList();
                 if (choices.Count == 0) { await TellAsync("title_community_prompts", Loc.Get("msg_all_prompts_installed")); return; }
                 string body = Loc.Get("label_available_prompts");
                 foreach (var p in choices.Take(5)) body += $"• {p.Name} by {p.Author}\n  {p.Description}\n\n";
                 if (choices.Count > 5) body += Loc.GetF("label_and_more_prompts", choices.Count - 5);
                 body += Loc.Get("label_install_first_one");
-                if (Owner is { } owner && await MessageDialog.ConfirmAsync(owner, Loc.Get("title_browse_community_prompts"), body, okText: Loc.Get("btn_install"), cancelText: Loc.Get("btn_cancel")))
+                if (ownerOf() is { } owner && await MessageDialog.ConfirmAsync(owner, Loc.Get("title_browse_community_prompts"), body, okText: Loc.Get("btn_install"), cancelText: Loc.Get("btn_cancel")))
                 {
-                    var prompt = await Service.InstallPromptAsync(choices[0].Id);
-                    if (prompt != null) { await TellAsync("title_installed", Loc.GetF("msg_prompt_installed", prompt.Name)); RefreshInstalledPrompts(); }
+                    var prompt = await service.InstallPromptAsync(choices[0].Id);
+                    if (prompt != null) { await TellAsync("title_installed", Loc.GetF("msg_prompt_installed", prompt.Name)); installed(); }
                 }
             }
             catch (Exception ex) { await TellAsync("title_error", Loc.GetF("msg_failed_to_browse_prompts", ex.Message)); }

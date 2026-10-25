@@ -86,11 +86,11 @@ public sealed class JustDropWindowTests
         }
     }
 
-    /// <summary>P04: the user path, not PaintTakeaway - showing the Session door fetches the drawer and draws it.</summary>
+    /// <summary>P04: the user path, not PaintTakeawayShelf - showing the Session door fetches the drawer and draws it.</summary>
     [Fact]
     public Task ShowingThePresetsTabLoadsTheDrawerAndDrawsItsReceipts() => RunAsync(async shell =>
     {
-        var previous = (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, JustDropOrdersService.HttpOverride);
+        var previous = (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, JustDropOrdersService.Http);
         var handler = new OrdersHandler();
         using var client = new System.Net.Http.HttpClient(handler);
         try
@@ -98,7 +98,7 @@ public sealed class JustDropWindowTests
             JustDropService.SetServerEnabledForTests(false);
             CoreAccount.UnifiedUserId = "u-tab";
             CoreSecrets.RetrieveProvider = key => key == CoreSecrets.AuthToken ? "t" : null;
-            JustDropOrdersService.HttpOverride = client;
+            JustDropOrdersService.Http = client;
             JustDropOrdersService.Invalidate();
             shell.ShowTab("studio");
             shell.ShowTab("presets");
@@ -112,7 +112,7 @@ public sealed class JustDropWindowTests
         }
         finally
         {
-            (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, JustDropOrdersService.HttpOverride) = previous;
+            (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, JustDropOrdersService.Http) = previous;
             JustDropOrdersService.Invalidate();
         }
     });
@@ -189,7 +189,7 @@ public sealed class JustDropWindowTests
         JustDropService.SetServerEnabledForTests(false); // kept receipts outlive the shop flag
         shell.ShowTab("presets");
         var tab = shell.FindControl<PresetsTabView>("PresetsTab")!;
-        tab.PaintTakeaway(new[] { new JustDropOrdersService.Order { Code = "A B", Name = "My drop", SizeId = "S" } });
+        shell.PaintTakeawayShelf(new[] { new JustDropOrdersService.Order { Code = "A B", Name = "My drop", SizeId = "S" } });
         var shelf = tab.FindControl<StackPanel>("TakeawayShelf")!;
         var receipt = Assert.IsType<Border>(Assert.Single(shelf.Children));
         receipt.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
@@ -229,19 +229,19 @@ public sealed class JustDropWindowTests
         shell.ShowTab("presets");
         var tab = shell.FindControl<PresetsTabView>("PresetsTab")!;
         var orders = Enumerable.Range(1, 5).Select(i => new JustDropOrdersService.Order { Code = "JD-" + i }).ToArray();
-        tab.PaintTakeaway(orders);
+        shell.PaintTakeawayShelf(orders);
         var shelf = tab.FindControl<StackPanel>("TakeawayShelf")!;
         Assert.Equal(5, shelf.Children.Count); // three receipts, overflow, shop
         Assert.Equal("JD-1", Assert.IsType<JustDropOrdersService.Order>(((Border)shelf.Children[0]).Tag).Code);
-        Assert.Equal("TakeawayShop", shelf.Children[4].Name);
+        Assert.Equal("TakeawayDoor", shelf.Children[4].Name);
         var tray = tab.FindControl<StackPanel>("TakeawayTray")!;
         Assert.Equal(5, tray.Children.Count);
         shelf.Children[3].RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
         Assert.True(tab.FindControl<Border>("TakeawayTrayHost")!.IsVisible);
-        tab.PaintTakeaway(orders);
+        shell.PaintTakeawayShelf(orders);
         Assert.False(tab.FindControl<Border>("TakeawayTrayHost")!.IsVisible);
         JustDropService.SetServerEnabledForTests(false);
-        tab.PaintTakeaway(Array.Empty<JustDropOrdersService.Order>());
+        shell.PaintTakeawayShelf(Array.Empty<JustDropOrdersService.Order>());
         Assert.False(shelf.IsVisible);
         Assert.True(tab.FindControl<TextBlock>("TxtTakeawayEmpty")!.IsVisible);
     });
@@ -251,7 +251,7 @@ public sealed class JustDropWindowTests
     {
         shell.ShowTab("presets");
         var tab = shell.FindControl<PresetsTabView>("PresetsTab")!;
-        tab.PaintTakeaway(new[] { new JustDropOrdersService.Order { Code = "JD-COPY" } });
+        shell.PaintTakeawayShelf(new[] { new JustDropOrdersService.Order { Code = "JD-COPY" } });
         var receipt = Assert.IsType<Border>(tab.FindControl<StackPanel>("TakeawayShelf")!.Children[0]);
         var line = Assert.IsType<StackPanel>(receipt.Child);
         var copy = Assert.IsType<Border>(line.Children.Last());

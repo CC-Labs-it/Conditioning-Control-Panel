@@ -7,7 +7,6 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.EmiDesk;
-using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.JustDrop;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -22,7 +21,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// Nothing is served from disk; navigation stays on the site's https origin (WPF PrimaryHost); every
     /// page message goes to Core <see cref="JustDropService"/>; a panic closes it with every other game
     /// window (PanicSurfaces "games", WPF GameSurfaces.cs:57).
-    /// <para>ponytail: native document-start/fullscreen hooks still need a WebHost engine seam; the host strip remains reachable without an engine.</para>
+    /// <para>Takeaway replay uses the bare player (<see cref="Game.Query"/>), fullscreen, the host strip and
+    /// panel duck/restore. ponytail: native document-start/fullscreen hooks still need a WebHost engine seam;
+    /// Chromium no-throttle flags apply on WebView2 only (WebKitGTK has no equivalent).</para>
     /// </summary>
     internal sealed partial class GameWindow
     {
@@ -31,7 +32,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal const string JustDropBrowserArguments = "--autoplay-policy=no-user-gesture-required "
             + "--disable-background-timer-throttling --disable-backgrounding-occluded-windows";
 
-        private string _justDropPath = JustDropHandoff.ShopPath;
         private Button? _justDropFullscreen;
         private WindowState _justDropWindowedState;
         private Window? _justDropDuckedOwner;
@@ -44,7 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => w.Spec.Id == JustDropId);
             if (live != null) { live.Activate(); return live; }
-            var window = new GameWindow(Games[JustDropId]) { _justDropPath = JustDropHandoff.ReplayPath(orderCode) };
+            var window = new GameWindow(Games[JustDropId] with { Query = JustDropHandoff.ReplayPath(orderCode) });
             window.Load(Server());
             window.Show(owner);
             window.SetJustDropFullscreen(true);
@@ -111,8 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     owner.WindowState = _justDropOwnerState == WindowState.Maximized ? WindowState.Maximized : WindowState.Normal;
                     owner.Activate();
                 }
-                JustDropOrdersService.Invalidate();
-                if (Owner is MainShellWindow shell) shell.RefreshTakeawayShelf();
+                // the drawer invalidate + shelf refresh live in GameWindow's ctor (one Closed for both doors)
             };
             UpdateJustDropToggle();
         }
@@ -160,7 +159,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF Launch(ShopPath) (:75-158): windowed, the panel stays where it is (this is browsing).</summary>
         private void LoadJustDrop()
         {
-            PageUrl = new Uri(JustDropHandoff.BuildStartUrl(_justDropPath, JustDropHandoff.UnifiedId(), JustDropHandoff.AuthToken()));
+            PageUrl = new Uri(JustDropHandoff.BuildStartUrl(Spec.Query ?? JustDropHandoff.ShopPath, JustDropHandoff.UnifiedId(), JustDropHandoff.AuthToken()));
             Web.WindowsBrowserArguments = JustDropBrowserArguments;
             Web.WindowsUserDataFolder = System.IO.Path.Combine(CorePaths.UserData, "browser_data_justdrop");
             Web.AllowNavigation = JustDropHandoff.IsSite;
