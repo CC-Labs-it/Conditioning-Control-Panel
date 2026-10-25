@@ -20,7 +20,7 @@ public partial class MainShellWindow
     private sealed record Stamp(string Key, string Label, ActiveQuest? Quest, QuestDefinition? Definition, bool Weekly);
     private readonly Dictionary<string, Stamp> _stamps = new();
     private readonly Dictionary<string, bool> _stampDone = new();
-    private readonly Dictionary<Grid, IDisposable> _stampTweens = new();
+    private readonly Dictionary<Grid, Helpers.BeatLoop> _stampTweens = new();
     private static bool StampMotion => CoreSettings.Current.MotionLevel != MotionLevel.Off;
     private static readonly double[] StampAngles = { -4, 3, -2, 5 };
     private Popup? _stampPopup;
@@ -28,11 +28,24 @@ public partial class MainShellWindow
     internal Popup? QuestStampDetails => _stampPopup;
     private bool _stampsClosed;
     private readonly Dictionary<string, global::Avalonia.Media.Imaging.Bitmap?> _stampArt = new();
+    private bool _questStampsWired, _stampRepaintPending;
+    // AvaloniaXamlLoader.Load leaves the x:Name field null on this window (TabNavigation.cs header).
+    private Grid StampHost => Named<Grid>("QuestStampHost")!;
 
     private void InitializeQuestStamps()
     {
+        // WPF MainWindow.QuestStamps.cs:188: Opened fires again on every tray restore.
+        if (_questStampsWired) return;
+        _questStampsWired = true;
         var quests = App.Quests;
-        void Repaint() => Dispatcher.UIThread.Post(() => { if (!_stampsClosed) RefreshQuestStamps(); });
+        // One completion raises Progress + Completed (+ Refreshed): coalesce them into ONE rebuild, or the
+        // second rebuild disposes the first one's pop tween (P07).
+        void Repaint()
+        {
+            if (_stampRepaintPending) return;
+            _stampRepaintPending = true;
+            Dispatcher.UIThread.Post(() => { _stampRepaintPending = false; if (!_stampsClosed) RefreshQuestStamps(); });
+        }
         void Completed(object? sender, QuestCompletedEventArgs e) => Repaint();
         void Progress(object? sender, QuestProgressEventArgs e) => Repaint();
         void Refreshed(object? sender, EventArgs e) => Repaint();
@@ -52,7 +65,7 @@ public partial class MainShellWindow
         Closed += (_, _) =>
         {
             _stampsClosed = true;
-            foreach (var timer in _stampTweens.Values) timer.Dispose();
+            foreach (var tween in _stampTweens.Values) tween.Stop();
             _stampTweens.Clear();
             HideStampPopup();
             if (quests != null)
@@ -70,20 +83,20 @@ public partial class MainShellWindow
 
     internal void RefreshQuestStamps()
     {
-        foreach (var timer in _stampTweens.Values) timer.Dispose();
+        foreach (var tween in _stampTweens.Values) tween.Stop();
         _stampTweens.Clear();
-        QuestStampHost.Children.Clear();
+        StampHost.Children.Clear();
         _stamps.Clear();
-        QuestStampHost.IsVisible = App.Quests != null;
+        StampHost.IsVisible = App.Quests != null;
         if (App.Quests is not { } quests) { HideStampPopup(); return; }
         var board = quests.GetDailySlots();
         for (int i = 0; i < 3; i++)
             AddQuestStamp(new Stamp("d" + i, $"{Loc.Get("quest_daily")} {i + 1}",
                 i < board.Count ? board[i].Quest : null, i < board.Count ? board[i].Definition : null, false), i);
         AddQuestStamp(new Stamp("w", Loc.Get("quest_weekly"), quests.Progress.WeeklyQuest, quests.GetCurrentWeeklyDefinition(), true), 3);
-        if (_hoveredStamp != null && QuestStampHost.IsPointerOver && _stamps.TryGetValue(_hoveredStamp, out var stamp))
+        if (_hoveredStamp != null && StampHost.IsPointerOver && _stamps.TryGetValue(_hoveredStamp, out var stamp))
             ShowStampPopup(stamp);
-        else { _hoveredStamp = null; LiftStampHost(false); foreach (var child in QuestStampHost.Children) if (child is Grid cell) ZoomStamp(cell, false); HideStampPopup(); }
+        else { _hoveredStamp = null; LiftStampHost(false); HideStampPopup(); } // new cells are already at rest; unzooming them would cancel the completion pop
     }
 
     private static double StampFraction(Stamp stamp) => stamp.Quest?.IsCompleted == true ? 1 :
@@ -131,7 +144,7 @@ public partial class MainShellWindow
         }
         cell.PointerEntered += (_, _) =>
         {
-            foreach (var child in QuestStampHost.Children)
+            foreach (var child in StampHost.Children)
                 if (child is Grid previous && previous != cell) ZoomStamp(previous, false);
             HoverQuestStamp(stamp.Key);
         };
@@ -141,7 +154,7 @@ public partial class MainShellWindow
             if (_hoveredStamp == stamp.Key) _hoveredStamp = null;
             Dispatcher.UIThread.Post(() => { if (_hoveredStamp == null) HideStampPopup(); }, DispatcherPriority.Input);
         };
-        QuestStampHost.Children.Add(cell);
+        StampHost.Children.Add(cell);
         bool known = _stampDone.TryGetValue(stamp.Key, out var wasDone);
         _stampDone[stamp.Key] = done;
         if (done && known && !wasDone && StampMotion)
@@ -154,14 +167,14 @@ public partial class MainShellWindow
             TweenStamp(cell, 420, t => t < .6 ? .7 + .65 * (1 - Math.Pow(1 - t / .6, 3))
                 : 1.35 - .35 * ((t - .6) / .4), _ => StampAngles[index]);
         }
-        if (_hoveredStamp == stamp.Key && QuestStampHost.IsPointerOver) ZoomStamp(cell, true);
+        if (_hoveredStamp == stamp.Key && StampHost.IsPointerOver) ZoomStamp(cell, true);
     }
 
     internal void HoverQuestStamp(string key)
     {
         if (!_stamps.TryGetValue(key, out var stamp)) return;
         _hoveredStamp = key;
-        foreach (var child in QuestStampHost.Children)
+        foreach (var child in StampHost.Children)
             if (child is Grid cell) ZoomStamp(cell, cell.Tag as string == key);
         ShowStampPopup(stamp);
     }
@@ -198,7 +211,8 @@ public partial class MainShellWindow
 
     private void ShowStampPopup(Stamp stamp)
     {
-        _stampPopup ??= new Popup { PlacementTarget = QuestStampHost, Placement = PlacementMode.Bottom,
+        _stampPopup ??= new Popup { PlacementTarget = StampHost, Placement = PlacementMode.Bottom,
+            VerticalOffset = 10, HorizontalOffset = -6, // WPF MainWindow.QuestStamps.cs:818-819
             IsLightDismissEnabled = false, IsHitTestVisible = false };
         var content = new StackPanel { Spacing = 6 };
         void Text(string text, double size = 12) => content.Children.Add(new TextBlock
@@ -228,9 +242,10 @@ public partial class MainShellWindow
             Text(StampText(def.LocalizedDescription, def.Description));
             var (xp, streak, reroll) = QuestsTabView.ComputeQuestXpDisplay(def, CoreSettings.Current);
             Text($"{xp} XP" + (streak > 0 ? $" +{streak}%" : "") + (reroll > 0 ? $" +{reroll}%" : ""));
-            var track = new Grid { Width = 272, Height = 5, Background = Brushes.DimGray };
-            track.Children.Add(new Border { Width = 272 * StampFraction(stamp), Background = Brushes.Gold,
-                HorizontalAlignment = HorizontalAlignment.Left });
+            // WPF MainWindow.QuestStamps.cs:736-743: 10 px rounded track.
+            var track = new Border { Width = 272, Height = 10, CornerRadius = new CornerRadius(4), Background = Brushes.DimGray,
+                HorizontalAlignment = HorizontalAlignment.Left, Child = new Border { Width = 272 * StampFraction(stamp),
+                    Background = Brushes.Gold, CornerRadius = new CornerRadius(4), HorizontalAlignment = HorizontalAlignment.Left } };
             content.Children.Add(track);
             Text($"{(q.IsCompleted ? Math.Max(q.CurrentProgress, def.TargetValue) : q.CurrentProgress)} / {def.TargetValue}");
             int left = Math.Max(0, def.TargetValue - q.CurrentProgress);
@@ -258,24 +273,26 @@ public partial class MainShellWindow
         }
     }
 
-    // Finite UI-thread tweens: never Animation.RunAsync on a Transform, and no resident loop/effect.
+    // Finite tweens on the shared beat (BeatLoop, stopped at t=1): never Animation.RunAsync on a
+    // Transform, no per-view frame timer, no resident loop/effect.
     private void TweenStamp(Grid cell, int milliseconds, Func<double, double> scaleAt, Func<double, double> angleAt)
     {
-        if (_stampTweens.Remove(cell, out var old)) old.Dispose();
+        if (_stampTweens.Remove(cell, out var old)) old.Stop();
         var group = (TransformGroup)cell.RenderTransform!;
         var scale = (ScaleTransform)group.Children[0];
         var rotate = (RotateTransform)group.Children[1];
-        void Apply(double t) { scale.ScaleX = scale.ScaleY = scaleAt(t); rotate.Angle = angleAt(t); }
-        Apply(0);
-        var clock = System.Diagnostics.Stopwatch.StartNew();
-        _stampTweens[cell] = DispatcherTimer.Run(() =>
+        Helpers.BeatLoop? loop = null;
+        loop = new Helpers.BeatLoop(cell, seconds =>
         {
-            double t = Math.Min(1, clock.Elapsed.TotalMilliseconds / milliseconds);
-            Apply(t);
-            if (t < 1 && !_stampsClosed) return true;
-            _stampTweens.Remove(cell);
-            return false;
-        }, TimeSpan.FromMilliseconds(16));
+            double t = Math.Min(1, TimeSpan.FromSeconds(seconds).TotalMilliseconds / milliseconds);
+            scale.ScaleX = scale.ScaleY = scaleAt(t);
+            rotate.Angle = angleAt(t);
+            if (t < 1 && !_stampsClosed) return;
+            loop?.Stop();
+            if (loop != null && _stampTweens.TryGetValue(cell, out var current) && current == loop) _stampTweens.Remove(cell);
+        });
+        _stampTweens[cell] = loop;
+        loop.Start();
     }
 
     private void ZoomStamp(Grid cell, bool on)
@@ -287,6 +304,8 @@ public partial class MainShellWindow
         int index = cell.Tag as string == "w" ? 3 : int.Parse(((string)cell.Tag!)[1..]);
         double target = on ? 1.5 : 1, angle = on ? StampAngles[index] * .25 : StampAngles[index];
         cell.ZIndex = on ? 20 : 0;
+        // At rest with no tween running: nothing to do, so no timer (P07) and no cancelled pop.
+        if (!_stampTweens.ContainsKey(cell) && scale.ScaleX == target && rotate.Angle == angle) return;
         if (!StampMotion) { scale.ScaleX = scale.ScaleY = target; rotate.Angle = angle; return; }
         TweenStamp(cell, on ? 170 : 200, t => startScale + (target - startScale) * (1 - Math.Pow(1 - t, 3)),
             t => startAngle + (angle - startAngle) * (1 - Math.Pow(1 - t, 3)));
@@ -303,8 +322,8 @@ public partial class MainShellWindow
     }
     private void LiftStampHost(bool on)
     {
-        if (QuestStampHost.RenderTransform is not ScaleTransform scale)
-            QuestStampHost.RenderTransform = scale = new ScaleTransform(1, 1);
+        if (StampHost.RenderTransform is not ScaleTransform scale)
+            StampHost.RenderTransform = scale = new ScaleTransform(1, 1);
         scale.Transitions = StampMotion ? new global::Avalonia.Animation.Transitions
         {
             new global::Avalonia.Animation.DoubleTransition { Property = ScaleTransform.ScaleXProperty, Duration = TimeSpan.FromMilliseconds(150) },
@@ -314,5 +333,5 @@ public partial class MainShellWindow
     }
     private void QuestStamps_MouseEnter(object? sender, PointerEventArgs e)
     { LiftStampHost(true); }
-    private void QuestStamps_MouseLeave(object? sender, PointerEventArgs e) { _hoveredStamp = null; LiftStampHost(false); foreach (var child in QuestStampHost.Children) if (child is Grid cell) ZoomStamp(cell, false); HideStampPopup(); }
+    private void QuestStamps_MouseLeave(object? sender, PointerEventArgs e) { _hoveredStamp = null; LiftStampHost(false); foreach (var child in StampHost.Children) if (child is Grid cell) ZoomStamp(cell, false); HideStampPopup(); }
 }

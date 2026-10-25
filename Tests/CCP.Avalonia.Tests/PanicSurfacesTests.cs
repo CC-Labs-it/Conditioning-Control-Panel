@@ -81,6 +81,7 @@ public sealed class PanicSurfacesTests
     {
         "intake", "leash-task", "tour", "games", "first-show", "voice-capture", "ai-followups", "blink-trainer", "gaze-minigame", "mantra", "chaos", "chaos-intro", "haptics",
         "remote-haptics", "takeover", "program-session", "engine", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "possession", "attention-test", "deeper-editor-audio", "knock-cards", "camera",
+        "quest-voice",
     };
 
     /// <summary>The order that is contract: (stops first, stops later). WPF refs are
@@ -102,6 +103,8 @@ public sealed class PanicSurfacesTests
         ("chaos", "engine", "WPF GameSurfaces.cs:50 'chaos' closes before the tail"),
         // WPF :1808 KillAllAudio (App.xaml.cs:1780 Mantra.Dispose) runs before StopEngine (:1827).
         ("mantra", "engine", "audio killed before the engine stop"),
+        // WPF :1819 KillAllAudio -> App.xaml.cs:1756 Flash.Stop() (the quest voice line) runs before StopEngine (:1838).
+        ("quest-voice", "engine", "quest voice killed before the engine stop"),
         // WPF :1786 remote haptics and :1992 haptics PanicStop come before StopEngine (:1827).
         ("haptics", "engine", "toys to zero before the engine stop"),
         ("remote-haptics", "engine", "toys to zero before the engine stop"),

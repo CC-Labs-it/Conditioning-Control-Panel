@@ -166,6 +166,43 @@ public sealed class QuestShellCompletionTests
 
     private static string? CoreNavSection(Button button) => button.Tag as string;
 
+    private static double StampScale(MainShellWindow shell, int index) => ((ScaleTransform)((TransformGroup)
+        ((Grid)shell.Named<Grid>("QuestStampHost")!.Children[index]).RenderTransform!).Children[0]).ScaleX;
+
+    [Fact]
+    public void CompletionPopOvershootsAndSurvivesTheRepaints() => Run((shell, quests) =>
+    {
+        var time = new SteppedTime(); // P08: the stamp tweens run on BeatLoop's stepped clock
+        var oldTime = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
+        global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = time;
+        try
+        {
+            quests.TrackBubblesPopped(10_000);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0.7, StampScale(shell, 0), 3);
+            time.Advance(TimeSpan.FromMilliseconds(252)); // t = 0.6: the WPF 1.35 overshoot
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            Assert.Equal(1.35, StampScale(shell, 0), 3);
+            time.Advance(TimeSpan.FromMilliseconds(200));
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            Assert.Equal(1.0, StampScale(shell, 0), 3);
+        }
+        finally { global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = oldTime; }
+    });
+
+    [Fact]
+    public void ReopeningTheShellDoesNotResubscribeTheStamps() => Run((shell, quests) =>
+    {
+        int Handlers() => (typeof(QuestService).GetField("QuestProgressChanged",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(quests) as Delegate)?.GetInvocationList().Length ?? 0;
+        var before = Handlers();
+        shell.Hide();
+        shell.Show();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(before, Handlers());
+    });
+
     [Fact]
     public void VisibleBarsKeepTheirBurstAndRoadmapUsesTheNavFallback() => Run((shell, quests) =>
     {
