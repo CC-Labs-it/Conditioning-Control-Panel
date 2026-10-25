@@ -113,6 +113,50 @@ public sealed class InlineLoopVideoTests
         });
     }
 
+    [Fact]
+    public async Task HelpWindowClipPlaysLoopsAndPanicReleasesIt()
+    {
+        await WithClip(async clip =>
+        {
+            var baseline = InlineLoopVideo.LivePlayers;
+            var content = new HelpContent { SectionId = "ShellVideoTest", Title = "Tutorial", ClipFile = clip };
+            var win = new ConditioningControlPanel.Avalonia.Views.Windows.HelpVideoWindow(content);
+            win.Show();
+            Dispatcher.UIThread.RunJobs();
+            try
+            {
+                var container = win.FindControl<Border>("VideoContainer")!;
+                Assert.True(container.IsVisible);
+                var video = Assert.IsType<InlineLoopVideo>(container.Child);
+                Assert.Equal(global::Avalonia.Media.Stretch.Uniform, video.Stretch);
+                Assert.True(await OnFrames(video, () => video.FrameCount > 0, 5000), "tutorial never drew a frame");
+                long peak = 0;
+                Assert.True(await OnFrames(video, () =>
+                {
+                    var t = video.Time;
+                    var wrapped = peak > 500 && t >= 0 && t < peak;
+                    peak = Math.Max(peak, t);
+                    return wrapped;
+                }, 4000), "tutorial did not loop");
+                // Use Show's singleton path for the panic route (also closes the first player).
+                win.Close();
+                ConditioningControlPanel.Avalonia.Views.Windows.HelpVideoWindow.Show(content, null);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(baseline + 1, InlineLoopVideo.LivePlayers);
+                var surface = ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(s => s.Id == "help-video");
+                surface.Stop(null);
+                surface.Stop(null);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(baseline, InlineLoopVideo.LivePlayers);
+            }
+            finally
+            {
+                win.Close();
+                ConditioningControlPanel.Avalonia.Views.Windows.HelpVideoWindow.CloseCurrent();
+            }
+        });
+    }
+
     private static async Task WithClip(Func<string, Task> body)
     {
         var dir = Directory.CreateTempSubdirectory("ccp-inline-video-").FullName;
@@ -135,6 +179,9 @@ public sealed class InlineLoopVideoTests
                 if (Application.Current is null)
                     AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                         .UseSkia()
+                .WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                         .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 await body(clip);

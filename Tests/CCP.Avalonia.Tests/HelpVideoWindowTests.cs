@@ -87,6 +87,32 @@ public sealed class HelpVideoWindowTests
         finally { win.Close(); }
     });
 
+    [Fact]
+    public Task MissingClipKeepsTextAndLinkWithoutCreatingAPlayer() => Run(() =>
+    {
+        var baseline = ConditioningControlPanel.Avalonia.Views.Controls.InlineLoopVideo.LivePlayers;
+        HelpVideoWindow.Show(new HelpContent
+        {
+            SectionId = "MissingShellVideo", Title = "Tutorial", WhatItDoes = "Tutorial description",
+            ClipFile = "missing-shell-video.mp4", FullTutorialUrl = "https://example.invalid/tutorial"
+        }, null);
+        Dispatcher.UIThread.RunJobs();
+        var win = Current()!;
+        try
+        {
+            Assert.False(win.FindControl<Border>("VideoContainer")!.IsVisible);
+            Assert.Equal("Tutorial description", win.FindControl<TextBlock>("TxtCaption")!.Text);
+            Assert.True(win.FindControl<Button>("BtnFullTutorial")!.IsVisible);
+            Assert.Equal(baseline, ConditioningControlPanel.Avalonia.Views.Controls.InlineLoopVideo.LivePlayers);
+            var panic = PanicSurfaces.All.Single(s => s.Id == "help-video");
+            panic.Stop(null);
+            panic.Stop(null);
+            Assert.Null(Current());
+            Assert.False(win.IsVisible);
+        }
+        finally { win.Close(); }
+    });
+
     private static HelpVideoWindow? Current() =>
         (HelpVideoWindow?)typeof(HelpVideoWindow).GetField("_current", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null);
 
@@ -94,7 +120,10 @@ public sealed class HelpVideoWindowTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia()
+                .WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         var oldSettings = CoreSettings.ServiceProvider;

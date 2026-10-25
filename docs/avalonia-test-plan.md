@@ -673,3 +673,8 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## FIN5 shell video playback
+
+1. Open a tutorial topic without a registered drawn loop and with a local ClipFile supplied by the help content. Expect a muted, letterboxed looping clip; close and reopen, then press panic. Expect the help window and its decoder to close; a second panic while idle is safe. WPF `Windows/HelpVideoWindow.xaml.cs:170`. Rows: `shell-video-playback`.
+2. Open a topic with a missing clip and no caption key. Expect its description and optional full-tutorial link, with no black video pane. Open a registered drawn-loop topic: the drawn loop and steps still win over ClipFile. WPF `Windows/HelpVideoWindow.xaml.cs:134`. Rows: `shell-video-playback`.
