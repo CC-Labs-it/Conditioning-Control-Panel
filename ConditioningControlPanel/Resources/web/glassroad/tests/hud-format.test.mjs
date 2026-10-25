@@ -37,6 +37,8 @@ test('racer labels: You, own names kept, shared names get our short names by tin
 });
 
 test('items: every id has a name and an icon file on disk', () => {
+  assert.equal(itemName('glass'), 'Bubble Shield');
+  assert.equal(itemName('pink'), 'Fog');
   for (const id of Object.keys(ITEM_NAMES)) {
     assert.ok(itemName(id).length > 0);
     assert.ok(existsSync(G + iconOf(id)), iconOf(id));

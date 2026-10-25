@@ -23,6 +23,7 @@ export function barValue(rows, songS, variant) {
 }
 
 export function createCueBar(scene, track, { make = () => document.createElement('canvas') } = {}) {
+  const size = track.id === 'mainframe' ? .65 : 1;
   const object = new Group(); object.name = 'cue-bar'; object.visible = false; scene.add(object);
   const box = new BoxGeometry(1, 1, 1), plane = new PlaneGeometry(1, 1), set = fadeSet();
   const shell = new Mesh(box, set.make({ color: '#061309' })), rim = new Mesh(box, set.make({ color: '#52e256' }));
@@ -61,7 +62,7 @@ export function createCueBar(scene, track, { make = () => document.createElement
     fill.scale.set(Math.max(.01, WIDTH_M - 4) * value, HEIGHT_M - 4, 1.1);
     fill.position.set(-(WIDTH_M - 4) / 2 + (WIDTH_M - 4) * value / 2, 0, .4);
     fillMat.color.copy(lit).lerp(hot, kick);
-    object.scale.setScalar(1 + kick * .02);
+    object.scale.setScalar(size * (1 + kick * .02));
     shown = Math.round(value * 100);
     const name = span?.params?.label || (variant === 'reboot' ? 'REBOOT' : 'INSTALLING');
     label.paint(name + shown, (ctx, w, h) => {

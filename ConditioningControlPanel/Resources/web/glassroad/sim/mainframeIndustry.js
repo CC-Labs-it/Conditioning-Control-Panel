@@ -32,6 +32,7 @@ export function industryZones(track) {
 }
 const ease = v => { v = clamp(v, 0, 1); return v * v * (3 - 2 * v); };
 export function industryPose(zone, timeS, beat = null) {
+  if (beat?.fallback) { timeS *= beat.pace; beat = null; }
   if (zone.kind === 'piston') {
     // Silent races use the same brisk 120 BPM grid on the shared race clock.
     beat ||= { beat: Math.max(0, timeS) * 2, beatS: .5, safe: false, rearming: false };

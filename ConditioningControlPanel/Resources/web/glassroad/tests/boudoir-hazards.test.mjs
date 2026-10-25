@@ -162,6 +162,26 @@ test('A mirror bump visibly opens every lane long enough to accelerate through w
   assert.ok(h.inspect(7).mirrorGates.some(row => row.liftM < 1.6), 'escape opening expires');
   h.reset(); assert.ok(h.inspect(3).mirrorGates.some(row => row.liftM < 1.6));
 });
+
+test('one cracked mirror per station breaks once and stays open for every racer until race reset', () => {
+  const authored = getBoudoirSetpieces(course).mirrorGates;
+  for (let station = 0; station < 3; station++) assert.equal(authored.filter(row => row.station === station && row.breakable).length, 1);
+  const rows = [0,1,2].map(lane => ({ ...mirror(lane), breakable: lane === 1 }));
+  const h = createBoudoirHazards(track, plan({ mirrorGates: rows })), first = racer(115,0);
+  assert.equal(h.apply(first, place(track, { s:105, speed:40 }), 3), rows[1].id);
+  assert.equal(first.events.all('boudoir-mirror-break').length, 1);
+  assert.ok(first.st[S.s] > 110 && first.st[S.engineV] > 20, 'First racer shatters and drives through');
+  for (const time of [3, 25, 120]) assert.equal(h.inspect(time).mirrorGates[1].broken, true);
+  const following = racer(115,0); following.i = 7; following.kind = 'bot';
+  assert.equal(h.apply(following, place(track, { s:105, speed:40 }), 25), null);
+  assert.equal(following.events.all('boudoir-mirror-break').length, 0);
+  h.apply(first, cloneState(first.st), 100); h.apply(first, cloneState(first.st), 1);
+  assert.equal(h.inspect(1).mirrorGates[1].broken, true, 'Clock interruption cannot repair another racer\'s mirror');
+  h.reset(); assert.equal(h.inspect(3).mirrorGates[1].broken, undefined);
+  const replay = racer(115,0); assert.equal(h.apply(replay, place(track,{s:105,speed:40}),3), rows[1].id);
+  assert.equal(replay.events.all('boudoir-mirror-break').length,1, 'A new race restores the cracked pane');
+  h.reset();
+});
 test('Conveyor centre accelerates or brakes actual velocity while its stable outside lane stays unchanged', () => {
   for (const [time, x, sign] of [[1, 0, 1], [9, 0, -1], [1, 10, 0], [9, 10, 0]]) {
     const h = createBoudoirHazards(track, plan({ conveyors: [ribbon] })), r = racer(110, x, 0, 28), previous = cloneState(r.st), start = r.st[S.engineV];

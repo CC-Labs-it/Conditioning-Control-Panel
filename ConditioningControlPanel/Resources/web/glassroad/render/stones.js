@@ -11,6 +11,7 @@ import { createStoneHover } from './stoneHover.js';
 import { machineSurface } from './mainframeMaterials.js';
 import { desiredPlatformDepth, platformBodyGeometry } from './platformDepth.js';
 import { visualClearanceSamples, capVisualDepth } from '../track/visualDepth.js';
+import { THRESHOLD_PINKS, thresholdStoneColour } from './thresholdAtmosphere.js';
 
 export const STONE_KIT = Object.freeze({ modelId: 'stone-threshold', deckM: 0.55, slab: Object.freeze([5, 0.8, 5]),
   rim: '#f3e2ce', brass: '#cda15f' });
@@ -133,7 +134,17 @@ export function buildStones(track, art, pal) {
   if (tiled.length && model && model.scene) {
     mode = 'model';
     // the lip tint is one shared material: every clone swaps its lip meshes to it (shared geometry, one program)
-    const slots = slotMaterials(model.scene), lipSrc = slots.get('lip'), keepPaint = new Map();
+    const slots = slotMaterials(model.scene), lipSrc = slots.get('lip'), keepPaint = new Map(), pinkPaint = new Map();
+    if (track.id === 'threshold') for (const tint of THRESHOLD_PINKS) {
+      const paints = new Map();
+      for (const [name, source] of slots) {
+        const paint = source.clone();
+        paint.color?.set(name === 'surface' ? tint : name === 'underside' ? '#a7136c' : '#ff57b7');
+        paint.vertexColors = false;
+        paints.set(name, paint); owned.push(paint);
+      }
+      pinkPaint.set(tint, paints);
+    }
     if (track.id === 'keep') for (const [name, source] of slots) {
       const tint = source.clone();
       tint.color?.set(({ surface: '#617faf', lip: '#ff2a9d', underside: '#11121b', detail: '#d4bdd8' })[name] || '#617faf');
@@ -173,7 +184,9 @@ export function buildStones(track, art, pal) {
       body.traverse((o) => {
         if (!o.isMesh) return;
         o.castShadow = true;
-        if (faceAlt && index % 2 && o.material?.name === 'surface') o.material = faceAlt;
+        const pink = pinkPaint.get(thresholdStoneColour(track, r));
+        if (pink?.has(o.material?.name) && o.material.name !== 'lip') o.material = pink.get(o.material.name);
+        else if (faceAlt && index % 2 && o.material?.name === 'surface') o.material = faceAlt;
         else if (keepPaint.has(o.material?.name)) o.material = keepPaint.get(o.material.name);
         else if (lip && o.material && o.material.name === 'lip') o.material = lip;
       });
@@ -195,7 +208,7 @@ export function buildStones(track, art, pal) {
   } else if (tiled.length) {
     mode = 'slab';
     const geometry = new BoxGeometry(...STONE_KIT.slab); geometries.push(geometry);
-    const c = new Color(track.id === 'keep' ? '#617faf' : STONE_KIT.rim), base = vec3(c.r, c.g, c.b), material = new MeshBasicNodeMaterial();
+    const c = new Color(track.id === 'threshold' ? '#ffffff' : track.id === 'keep' ? '#617faf' : STONE_KIT.rim), base = vec3(c.r, c.g, c.b), material = new MeshBasicNodeMaterial();
     const shade = clamp(dot(normalize(normalWorld), normalize(vec3(...LOOK.lightDir))).mul(0.38).add(0.62), 0.24, 1);
     material.name = 'stone-slab';
     material.colorNode = mix(base, pal?.col ? pal.col(1) : base, 0.015).mul(shade);
@@ -211,6 +224,7 @@ export function buildStones(track, art, pal) {
       position.set(r.p[0] + r.n[0] * centre, r.p[1] + r.n[1] * centre, r.p[2] + r.n[2] * centre);
       scale.set(r.scaleX || 1, (STONE_KIT.slab[1] + r.depthM) / STONE_KIT.slab[1], r.scaleT || 1);
       matrix.compose(position, rotation, scale); mesh.setMatrixAt(i, matrix);
+      if (track.id === 'threshold') mesh.setColorAt(i, new Color(thresholdStoneColour(track, r)));
       if (r.broad) moving.push({ row: r, mesh, index: i, p: position.clone(), q: rotation.clone(), scale: scale.clone(), age: Infinity });
     });
     mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere(); mesh.castShadow = true;

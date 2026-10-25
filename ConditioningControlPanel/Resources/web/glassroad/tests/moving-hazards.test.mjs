@@ -76,8 +76,10 @@ test('a high-speed swept piston hit pays one bounded spin, and reset clears it',
   assert.equal(moving.inspect(.5).hits, 1);
   r.st = place(track, { s: 130, speed: 10 });
   moving.apply(r, r.st, .6);
+  r.fxv.spinRad = 0; // Item modifiers write their own spin before trap decoration.
+  moving.decorate([r], .6);
   assert.ok(Math.abs(r.fxv.spinRad) > .1 && Math.abs(r.fxv.spinRad) < Math.PI * 2);
-  moving.reset(); r.fxv.spinRad = 0; moving.apply(r, r.st, .7);
+  moving.reset(); r.fxv.spinRad = 0; moving.apply(r, r.st, .7); moving.decorate([r], .7);
   assert.equal(r.fxv.spinRad, 0); assert.equal(moving.inspect(.7).hits, 0);
 });
 

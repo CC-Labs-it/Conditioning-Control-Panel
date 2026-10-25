@@ -6,13 +6,15 @@ import { screenBodySize, screenBodyBox } from '../render/screenBodyMath.js';
 import { axesFrom } from '../render/mediaMath.js';
 import { loadTrack } from '../track/load.js';
 import { goonworksMediaLayout } from '../render/goonworksMedia.js';
+import { boudoirMediaLayout, boudoirBoxesIntersect } from '../render/boudoirMedia.js';
 import { largeMediaLayout } from '../render/worldMediaScale.js';
 import { worldScreenSolids, worldScreenLayout, worldScreenExistingSlots } from '../render/worldScreens.js';
 import { goonworksBoxesIntersect } from '../render/goonworksWorld.js';
 import { goonworksScreenVisibility } from '../render/goonworksVisibility.js';
 
 const hooks = registerHooks({ resolve(specifier, context, next) {
-  const files = { 'three/webgpu': 'three.webgpu.min.js', 'three/tsl': 'three.tsl.min.js' };
+  const files = { three: 'three.webgpu.min.js', 'three/webgpu': 'three.webgpu.min.js', 'three/tsl': 'three.tsl.min.js' };
+  if (specifier.startsWith('three/addons/')) return { url: new URL('../vendor/three/addons/' + specifier.slice(13), import.meta.url).href, shortCircuit: true };
   return files[specifier] ? { url: new URL('../vendor/three/build/' + files[specifier], import.meta.url).href, shortCircuit: true } : next(specifier, context);
 } });
 const { Mesh, Matrix4, Vector3, Raycaster, Scene } = await import('three/webgpu');
@@ -21,6 +23,8 @@ const { createMediaSlots } = await import('../render/media.js');
 const { createMarquees } = await import('../render/marquee.js');
 const { createCueWindows } = await import('../render/cueWindows.js');
 const { buildGoonworks } = await import('../render/goonworks.js');
+const { buildBoudoirDressing } = await import('../render/boudoirDressing.js');
+const { createPalette } = await import('../render/materials/palette.js');
 hooks.deregister();
 
 test('cabinet is closed from front, sides and rear while the inset bezel exposes the full image', t => {
@@ -138,5 +142,32 @@ test('fitted GOONWORKS screens carry one white and wine enclosure without leavin
       assert.ok(new Vector3().setFromMatrixPosition(matrix).distanceTo(target) < .001, 'Complete casing follows the fitted picture');
     }
     assert.equal(centers.filter(center => center.distanceTo(target) < .02).length, 1, 'One visible image occupies each enclosure');
+  }
+});
+
+test('Boudoir gold frames stay with enlarged pictures through actual furniture clearance', t => {
+  const track = loadTrack(JSON.parse(readFileSync(new URL('../tracks/boudoir.json', import.meta.url), 'utf8')));
+  const world = buildBoudoirDressing(track, null, createPalette());
+  t.after(() => world.dispose());
+  const authored = boudoirMediaLayout(track), solids = worldScreenSolids([world.group]);
+  const layout = largeMediaLayout(track, authored, { solids });
+  assert.ok(layout.slots.length >= authored.slots.length * .65, 'Actual furniture retains most authored pictures');
+  assert.ok(!world.plan.rows.some(row => row.name.startsWith('mounted-mirror-')), 'Rejected or moved pictures leave no grey plates');
+  const original = new Map(authored.slots.map(slot => [slot.id, slot]));
+  assert.ok(layout.slots.some(slot => Math.hypot(...slot.C.map((v, i) => v - original.get(slot.id).C[i])) > 2), 'Exercises relocated displays');
+  for (const slot of layout.slots)
+    assert.ok(!solids.some(row => boudoirBoxesIntersect(screenBodyBox(slot), row)), slot.id + ' clears rendered furniture');
+  const gradient = { addColorStop() {} }, context = new Proxy({}, { get: (o, k) => k in o ? o[k] : /Gradient/.test(k) ? () => gradient : () => {} });
+  const make = (width, height) => ({ width, height, getContext: () => context });
+  const media = createMediaSlots(null, track, { layout, samples: [], make });
+  t.after(() => media.dispose());
+  const back = media.object.getObjectByName('media-back'), rim = media.object.getObjectByName('media-bezel'), matrix = new Matrix4();
+  assert.equal(back.count, layout.slots.length); assert.equal(rim.count, layout.slots.length);
+  assert.equal(back.material.color.getHexString(), '79628f');
+  assert.equal(rim.material.color.getHexString(), 'dfb56a');
+  for (let i = 0; i < layout.slots.length; i++) for (const mesh of [back, rim]) {
+    mesh.getMatrixAt(i, matrix);
+    assert.ok(new Vector3().setFromMatrixPosition(matrix).distanceTo(new Vector3(...layout.slots[i].C)) < .001,
+      'Gold rim and lavender cabinet follow the fitted face');
   }
 });

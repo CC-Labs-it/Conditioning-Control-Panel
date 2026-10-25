@@ -20,11 +20,6 @@ export function createMovingHazards(track) {
     if (old?.timeS === timeS) return null;
     memory.set(r, { timeS, until: old?.until ?? -1 });
     if (timeS < t0 || timeS - t0 > .25 || st[S.respawnPhase] !== RESPAWN.NONE) { spins.delete(r); return null; }
-    const spin = spins.get(r);
-    if (spin && timeS - spin.start < .8 && r.fxv) {
-      const u = Math.max(0, (timeS - spin.start) / .8);
-      r.fxv.spinRad += spin.side * Math.PI * 2 * (1 - (1 - u) ** 2);
-    } else spins.delete(r);
     if (timeS < (old?.until ?? -1) || track.forkAtSeg?.(st[S.seg])) return null;
     const distance = Math.hypot(...[0, 1, 2].map(j => st[S.posX + j] - previous[S.posX + j]));
     if (distance > 25) return null;
@@ -59,7 +54,8 @@ export function createMovingHazards(track) {
     const st = r.st, speed = Math.hypot(st[S.velX], st[S.velY], st[S.velZ]);
     const f = track.frameAt(st[S.s] + Math.max(12, Math.min(20, speed * .65))), here = track.frameAt(st[S.s]);
     const sideV = dot([st[S.velX], st[S.velY], st[S.velZ]], here.b);
-    const target = -row.side * (row.roadWidth / 2 - 3) - Math.max(-1.3, Math.min(1.3, sideV * .45));
+    const halfWidth = Math.min(row.roadWidth, here.w, f.w) / 2;
+    const target = -row.side * Math.max(0, halfWidth - 3.5) - Math.max(-1, Math.min(1, sideV * .45));
     const d = f.p.map((v, j) => v + f.b[j] * target - st[S.posX + j]);
     const x = st[S.quatX], y = st[S.quatY], z = st[S.quatZ], w = st[S.quatW];
     const right = [1 - 2 * (y * y + z * z), 2 * (x * y + w * z), 2 * (x * z - w * y)];
@@ -72,7 +68,17 @@ export function createMovingHazards(track) {
     actions.throttle = speed < cap ? 1 : 0; actions.brake = speed > cap + 3 ? .6 : 0;
     return true;
   }
-  return { apply, steer, reset() { memory = new WeakMap(); spins = new WeakMap(); hits = 0; }, inspect(timeS = 0) {
+  // Item modifiers rebuild spinRad every step. Compose the trap spin afterward.
+  function decorate(racers, timeS) {
+    for (const r of racers) {
+      const spin = spins.get(r);
+      if (!spin) continue;
+      if (r.kind === 'remote' || r.st[S.respawnPhase] !== RESPAWN.NONE || timeS < spin.start || timeS - spin.start >= .8) { spins.delete(r); continue; }
+      const u = (timeS - spin.start) / .8;
+      if (r.fxv) r.fxv.spinRad += spin.side * Math.PI * 2 * (1 - (1 - u) ** 2);
+    }
+  }
+  return { apply, steer, decorate, reset() { memory = new WeakMap(); spins = new WeakMap(); hits = 0; }, inspect(timeS = 0) {
     return { hits, traps: rows.map(row => ({ id: row.id, s: row.s, ...movingPoseAt(track, row, timeS) })),
       bridge: track.moving?.bridge };
   } };

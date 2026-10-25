@@ -34,11 +34,11 @@ export function scanPose(zone, timeS, bpm = 120) {
 }
 
 // Both rendering and contact use this position, including the chart's downbeat offset.
-export function scanClock(music, raceTimeS) {
-  const song = music && music.song;
+export function scanClock(music, raceTimeS, pace = 1) {
+  const song = music?.playing === false ? null : music && (music.song || music.analysis);
   return song && Number.isFinite(music.songS)
-    ? { timeS: music.songS - (song.downbeatS || 0), bpm: song.bpm || 120 }
-    : { timeS: raceTimeS, bpm: 120 };
+    ? { timeS: music.songS - (song.downbeatS ?? song.downbeats?.[0] ?? 0), bpm: (song.bpm || 120) * pace }
+    : { timeS: raceTimeS, bpm: 120 * pace };
 }
 
 export function createMainframeScan(track, events) {

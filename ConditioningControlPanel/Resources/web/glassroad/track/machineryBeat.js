@@ -1,14 +1,18 @@
 // Solo machinery follows the heard recording; online callers leave this adapter disabled.
 const clocks = new WeakMap();
 const finite = Number.isFinite;
+export const MACHINERY_PACE = 2;
+export const machineryDuration = (seconds, frame) => seconds / (frame?.pace || 1);
 export function setMachineryBeat(track, frame) {
+  if (frame?.enabled && frame.fallback && finite(frame.raceS))
+    frame = { ...frame, songS: frame.raceS, bpm: 96, offsetS: 0 };
   if (!frame?.enabled || !finite(frame.songS) || !finite(frame.raceS) || !(frame.bpm >= 40 && frame.bpm <= 240)) {
     clocks.delete(track); return;
   }
   const old = clocks.get(track), beatS = 60 / frame.bpm, offsetS = frame.offsetS || 0;
   const beat = (frame.songS - offsetS) / beatS;
   const predicted = old ? old.songS + (old.playing ? frame.raceS - old.raceS : 0) : frame.songS;
-  const jumped = old ? (frame.raceS < old.raceS || Math.abs(frame.songS - predicted) > .18 || old.bpm !== frame.bpm) : frame.raceS > .5;
+  const jumped = old ? (frame.raceS < old.raceS || Math.abs(frame.songS - predicted) > .18 || old.bpm !== frame.bpm || !!old.fallback !== !!frame.fallback) : frame.raceS > .5;
   // A seek or wrapped recording visibly opens the machinery, then grants four warning beats.
   const epochBeat = jumped ? Math.ceil(beat) + 4 : old?.epochBeat || 0;
   clocks.set(track, { ...frame, playing: frame.playing !== false, beatS, offsetS, epochBeat,
@@ -18,11 +22,16 @@ export function machineryBeatAt(track, raceS) {
   const c = clocks.get(track); if (!c) return null;
   const songS = c.songS + (c.playing && finite(raceS) ? raceS - c.raceS : 0);
   const beat = (songS - c.offsetS) / c.beatS - c.epochBeat;
-  return { beat, beatS: c.beatS, safe: beat < 0, rearming: c.rearming };
+  // Two machinery subdivisions per heard beat. Seek grace remains four real beats.
+  return { beat: beat * MACHINERY_PACE, beatS: c.beatS / MACHINERY_PACE,
+    pace: MACHINERY_PACE, fallback: !!c.fallback, safe: beat < 0, rearming: c.rearming };
 }
 // A missing recording still gives every physical trap the same deterministic musical grid.
 export function hazardBeatAt(track, raceS) {
-  return machineryBeatAt(track, raceS) || { beat: Math.max(0, raceS || 0) * 2, beatS: .5, safe: false, rearming: false };
+  const frame = machineryBeatAt(track, raceS);
+  // New side pistons author explicit heard beats, independent of legacy machinery subdivisions.
+  return frame ? { ...frame, beat: frame.beat / (frame.pace || 1), beatS: frame.beatS * (frame.pace || 1), pace: 1 }
+    : { beat: Math.max(0, raceS || 0) * 2, beatS: .5, safe: false, rearming: false };
 }
 export const beatCycle = (beat, period) => ((beat % period) + period) % period;
 export function machineryRearming(frame, offset = 0, period = 16) {

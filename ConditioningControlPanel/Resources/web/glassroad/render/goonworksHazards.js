@@ -142,8 +142,9 @@ export function createGoonworksHazardView(scene, track, layout) {
       const hub = mesh(root, cylinder, ink, [row.x, row.centerY, 0], [1.65, row.depth + .45, 1.65]); hub.rotation.x = Math.PI / 2;
       const cap = mesh(root, cylinder, candy, [row.x, row.centerY, row.depth / 2 + .35], [1.35, .25, 1.35]); cap.name = 'wheel-hub-cap'; cap.rotation.x = Math.PI / 2;
       cube(root, pink, [row.x, row.centerY + row.radius + 2.2, 0], [row.roadWidth + 4, 1.3, 3]);
+      const supportTop = row.centerY + row.radius + 3.5;
       for (const side of [-1, 1]) {
-        cube(root, white, [side * (row.roadWidth / 2 + 3), 16, 0], [1.8, 31, 3]);
+        cube(root, white, [side * (row.roadWidth / 2 + 3), (supportTop + .5) / 2, 0], [1.8, supportTop - .5, 3]).name = 'wheel-support';
         mesh(root, sphere, candy, [side * row.bypass, .24, row.depth / 2 + 6], [.48, .16, .8]);
       }
     } else if (row.kind === 'shutter') {

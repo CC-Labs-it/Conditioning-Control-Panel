@@ -44,7 +44,7 @@ test('GOONWORKS bridge cuts the final U-turn while the longer main road stays su
   assert.ok(!track.aerials.some(row => fork.fromS < row.landingS1 && fork.toS > row.rampS0));
 });
 
-test('GOONWORKS wheels pass one opening every beat and shutters traverse in four beats', () => {
+test('GOONWORKS wheels pass one opening per machinery pulse and shutters traverse in four pulses', () => {
   const beat = b => ({ beat: b, beatS: 60 / 96.75, safe: b < 0, rearming: false });
   assert.equal(GOONWORKS_TOYS.wheelRadiansPerBeat, Math.PI / 2);
   for (const row of old.filter(row => row.kind === 'wheel')) {
@@ -56,7 +56,7 @@ test('GOONWORKS wheels pass one opening every beat and shutters traverse in four
   assert.ok(goonworksPose(shutter, 0, beat(3)).x < shutter.x - shutter.travel + .001);
 });
 
-test('GOONWORKS blocks and flippers warn, strike whole beats and clear inside two beats', () => {
+test('GOONWORKS blocks and flippers warn, strike whole machinery pulses and clear inside two pulses', () => {
   const beat = b => ({ beat: b, beatS: .5, safe: false, rearming: false });
   for (const kind of ['block', 'flipper']) {
     const row = { ...old.find(row => row.kind === kind), offsetS: 0 };
