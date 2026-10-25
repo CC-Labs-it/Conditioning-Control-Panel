@@ -28,6 +28,7 @@ namespace ConditioningControlPanel
         /// <summary>The head's half of StopEngineCore: close what is on screen (overlays, lock
         /// cards, the pink tint). Runs after every Stop, running or not.</summary>
         public static volatile Action? StoppedHook;
+        public static Action? StartBrainDrain, StopBrainDrain;
 
         /// <summary>The head's pop-quiz scheduler (it owns the <see cref="IPopQuizHost"/>); null
         /// on a head with no pop-quiz window.</summary>
@@ -51,6 +52,7 @@ namespace ConditioningControlPanel
             // ponytail: WPF also starts the layered audio bed (LayeredAudio.Start(ignoreMasterToggle: true));
             // no head here has it in Core yet - add it with the audio-layers port.
             bool audioOnly = s.AudioOnlySession;
+            if (!audioOnly && s.BrainDrainEnabled) StartBrainDrain?.Invoke();
             if (!audioOnly) CoreFlash.Start();   // it checks FlashEnabled itself
             if (!audioOnly && s.SubliminalEnabled) CoreSubliminal.Start();
             if (!audioOnly && s.MandatoryVideosEnabled) Video?.Start();   // WPF StartStop.cs:320
@@ -89,6 +91,7 @@ namespace ConditioningControlPanel
                 CoreSubliminal.Stop();
                 LockCardScheduler.Instance.Stop();
                 PopQuiz?.Stop();   // closes an open quiz (WPF StartStop.cs:492)
+                StopBrainDrain?.Invoke();
                 CoreMindWipe.Stop();   // WPF StartStop.cs:489, also ends the loop
                 _running = false;
                 StartedUtc = null;
@@ -111,6 +114,7 @@ namespace ConditioningControlPanel
             if (!s.BubblesEnabled) ApplyLive("bubbles", false);
             if (!s.MandatoryVideosEnabled) ApplyLive("video", false);
             if (!s.BubbleCountEnabled) ApplyLive("bubblecount", false);   // WPF Presets.cs:2261
+            if (!s.BrainDrainEnabled) ApplyLive("braindrain", false);
             CoreMindWipe.ApplyRunRule();   // WPF Presets.cs:2265 (#1304)
         }
 
@@ -123,6 +127,7 @@ namespace ConditioningControlPanel
             if (!_running) return;
             switch (key)
             {
+                case "braindrain": if (on) StartBrainDrain?.Invoke(); else StopBrainDrain?.Invoke(); break;
                 case "flash": if (on) CoreFlash.Start(); else CoreFlash.Stop(); break;
                 case "subliminal": if (on) CoreSubliminal.Start(); else CoreSubliminal.Stop(); break;
                 case "lockcard": if (on) LockCardScheduler.Instance.Start(); else LockCardScheduler.Instance.Stop(); break;

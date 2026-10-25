@@ -673,3 +673,11 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+
+## Brain Drain Studio completion
+
+1. Open Studio > Brain Drain. Change enable, rate, blur (including 0), melt, keep-clear, high refresh and capture visibility; revisit and restart the app. Settings must persist; external settings restore must repaint. The visual rework notice remains visible. WPF `ConditioningControlPanel/Views/Controls/Studio/BrainDrainFeatureControl.xaml.cs` Rows: `views-studio-brain-drain-feature`
+2. Set Brain Drain volume below 100, revisit the card, and confirm More options opens and shows the saved percent. With a clip playing, adjust master and Brain Drain volume; both gains apply immediately. WPF `ConditioningControlPanel/Views/Controls/Studio/BrainDrainFeatureControl.xaml.cs` Rows: `views-studio-brain-drain-feature`
+3. Use both Open folder buttons on an empty library. Drop MP3/WAV/OGG clips in the assets folder and press Refresh; count and empty banner update. A duplicate legacy filename counts once with assets winning; legacy-only clips show the legacy note. No files are migrated. WPF `ConditioningControlPanel/Services/LockCard/BrainDrainService.cs` Rows: `views-studio-brain-drain-feature`
+4. Enable Brain Drain and start the engine with installed clips. Audio follows the 5 s / high-refresh 500 ms rolls; clips finish without restarting mid-track. Disable, stop engine, or panic: audio stops and no pending playback survives. Switch mods and confirm both art plates repaint. Desktop blur/melt remains unported. WPF `ConditioningControlPanel/Services/LockCard/BrainDrainService.cs` Rows: `views-studio-brain-drain-feature`

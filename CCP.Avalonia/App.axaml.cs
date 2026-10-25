@@ -699,6 +699,9 @@ namespace ConditioningControlPanel.Avalonia
                     var vlc = new Platform.LibVlcAudio();
                     vlc.Seed();
                     // Mind wipe plays through the same LibVLC (WPF App.MindWipe, App.xaml.cs:385).
+                    Platform.BrainDrainPlayer.Instance = new Platform.BrainDrainPlayer(vlc.PlayVoice);
+                    CoreEngine.StartBrainDrain = Platform.BrainDrainPlayer.Instance.Start;
+                    CoreEngine.StopBrainDrain = Platform.BrainDrainPlayer.Instance.Stop;
                     new Platform.MindWipePlayer(vlc.PlayVoice) { CleanSlate = secs => Achievements?.TrackMindWipeDuration(secs) }.Seed();
                     Console.WriteLine("[Audio] LibVLC seeded CoreAudio");
                 }

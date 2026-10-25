@@ -89,6 +89,7 @@ public sealed class PanicSurfacesTests
         "ai-followups",
         "attention-test",
         "blink-trainer",
+        "brain-drain",
         "camera",
         "chaos",
         "chaos-announcer",
