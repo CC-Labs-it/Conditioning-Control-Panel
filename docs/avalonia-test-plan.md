@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### Ownership badge consumers
+
+1. WPF `Views/Tabs/SettingsTabView.xaml.cs:60`, `MainWindow/MainWindow.Presets.cs:1147`: validate an account owning each of Drift & Bounce, Pendulum, Jackpot Remix, Rain, and Spiral In in turn. Flashes wears v2 for the first three; Bubble Pop for the last two. Revoke all and confirm both pills disappear. Rows: `svc-prize-ownership`
+2. WPF `Views/Tabs/StudioTabView.xaml.cs:1505`: repeat grants/revokes in Studio; both resting and selected flash/bubbles rows update. Select a badged row and confirm its caption clears the pill and dot; revoke and confirm the caption regains its width. Rows: `svc-prize-ownership`
+3. WPF `MainWindow/MainWindow.FavoritesRail.cs:256`: pin Studio, then repeat grants/revokes. The favorites and recent Studio chips wear v2 for either family, unrelated chips do not. A locked chip places v2 left and its lock right. Navigate away/back and confirm current ownership is painted. Rows: `svc-prize-ownership`

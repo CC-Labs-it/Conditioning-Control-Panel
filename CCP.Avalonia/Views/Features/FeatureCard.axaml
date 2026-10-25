@@ -131,9 +131,11 @@
             <!-- Tier badge (top-left). A price tag, NOT the LockedOverlay veil above: the art
                  stays bright and the badge names the price. IsHitTestVisible=False on purpose,
                  so a locked click still lands on the real handler. -->
+            <StackPanel x:Name="BadgeColumn" HorizontalAlignment="Left" VerticalAlignment="Top"
+                        Margin="8,8,0,0" ZIndex="11" IsHitTestVisible="False">
             <Border x:Name="TierBadgeHost"
                     HorizontalAlignment="Left" VerticalAlignment="Top"
-                    Margin="8,8,0,0" Padding="6,2,7,3"
+                    Margin="0,0,0,4" Padding="6,2,7,3"
                     CornerRadius="7"
                     Background="#D91A1A2E"
                     BorderBrush="{DynamicResource PinkBrush}"
@@ -147,6 +149,8 @@
                            FontSize="9"
                            FontWeight="Bold"/>
             </Border>
+
+            </StackPanel>
 
             <!-- Help icon overlay (top-right corner) -->
             <Button x:Name="BtnHelp"

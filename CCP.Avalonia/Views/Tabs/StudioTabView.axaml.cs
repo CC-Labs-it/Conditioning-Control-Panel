@@ -154,6 +154,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             /// Both states are built once and swapped by IsVisible — see
             /// <see cref="ApplyRowState"/>.</summary>
             public Grid? Tile;
+            public Border? V2Pill, TileV2Pill;
             public TextBlock? TileLabel;
             public Ellipse? TileDot;
 
@@ -839,6 +840,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 grid.Children.Add(newPill);
             }
 
+            if (e.Key is "flash" or "bubbles")
+            {
+                grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+                e.V2Pill = Features.FeatureCard.NewV2Badge(new Thickness(6, 0, 0, 0), compact: true);
+                e.V2Pill.IsVisible = false;
+                Grid.SetColumn(e.V2Pill, grid.ColumnDefinitions.Count - 2);
+                grid.Children.Add(e.V2Pill);
+            }
             if (e.Dot != null)
             {
                 e.DotShape = new Ellipse
@@ -914,6 +923,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Margin = new Thickness(12, 0, 26, 0),
             };
             tile.Children.Add(e.TileLabel);
+            if (e.Key is "flash" or "bubbles")
+            {
+                e.TileV2Pill = Features.FeatureCard.NewV2Badge(new Thickness(0, 0, 24, 0), compact: true);
+                e.TileV2Pill.HorizontalAlignment = HorizontalAlignment.Right;
+                e.TileV2Pill.IsVisible = false;
+                tile.Children.Add(e.TileV2Pill);
+            }
 
             if (e.Dot != null)
             {
@@ -1357,6 +1373,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
         }
 
+        private void RefreshV2Pills()
+        {
+            foreach (var e in _entries)
+            {
+                if (e.V2Pill == null) continue;
+                bool worn = e.Key == "flash"
+                    ? ConditioningControlPanel.Services.Prizes.V2Badges.FlashOwned()
+                    : ConditioningControlPanel.Services.Prizes.V2Badges.BubbleOwned();
+                e.V2Pill.IsVisible = worn;
+                if (e.TileV2Pill == null || e.TileLabel == null) continue;
+                e.TileV2Pill.IsVisible = worn;
+                double inset = 26;
+                if (worn)
+                {
+                    e.TileV2Pill.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    inset = 24 + e.TileV2Pill.DesiredSize.Width + 8;
+                }
+                e.TileLabel.Margin = new Thickness(12, 0, inset, 0);
+            }
+        }
+
+        private void OnOwnershipChanged() => Dispatcher.UIThread.Post(RefreshV2Pills);
+
         private void OnLoaded(object? sender, RoutedEventArgs e)
         {
             RefreshRackLabels();
@@ -1399,6 +1438,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged += OnOwnershipChanged;
+            RefreshV2Pills();
 
             // A cloud restore or a factory Reset SWAPS the settings instance out from under a rack
             // that lives for the whole session; without this the rack shows - and writes back to -
@@ -1421,6 +1462,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (_modHooked) CoreMods.ModChanged -= OnModChanged;
             _modHooked = false;
 
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged -= OnOwnershipChanged;
             base.OnDetachedFromVisualTree(e);
         }
 

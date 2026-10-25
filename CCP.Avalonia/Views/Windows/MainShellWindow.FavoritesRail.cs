@@ -7,9 +7,7 @@
 // AppSettings.RailFavorites / RailRecent. Lock truth is IsNavEntryLocked (NavPremiumTags.cs), so the
 // chip's padlock and the rail's gold star cannot disagree.
 //
-// ponytail: not on this head yet - the champagne v2 pill (Core V2Badges is not consumed here; PrizeGrants
-// is attached by Platform/PrizeOwnership.cs) and a mod's own art framing (WPF ActiveModFraming); mod art
-// is centre-cropped instead.
+// ponytail: a mod's own art framing (WPF ActiveModFraming) is not here; mod art is centre-cropped.
 
 using System;
 using System.Collections.Generic;
@@ -52,6 +50,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!_favoritesRailHooked)
             {
                 _favoritesRailHooked = true;
+                Action onGrants = () => global::Avalonia.Threading.Dispatcher.UIThread.Post(RefreshFavoritesRail);
+                ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged += onGrants;
+                Closed += (_, _) => ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged -= onGrants;
                 WireFavoritePinMenus();
                 EventHandler onLanguage = (_, _) => RefreshFavoritesRail();
                 LocalizationManager.Instance.LanguageChanged += onLanguage;
@@ -119,6 +120,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 });
             }
 
+            if (ConditioningControlPanel.Services.Prizes.V2Badges.ChipWearsV2Pill(entry.Id))
+            {
+                var pill = Features.FeatureCard.NewV2Badge(
+                    locked ? new Thickness(3, 2, 0, 0) : new Thickness(0, 2, 3, 0), compact: true);
+                pill.HorizontalAlignment = locked ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+                pill.VerticalAlignment = VerticalAlignment.Top;
+                grid.Children.Add(pill);
+            }
             var chip = new Button { Content = grid, Tag = entry.Id };
             if (dash.FavoritesRail.TryFindResource("RailChipStyle", out var theme) && theme is global::Avalonia.Styling.ControlTheme ct)
                 chip.Theme = ct;

@@ -43,6 +43,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         private const double TeaseBorderThickness = 2;
         private const double ContentClipRadius = 11;
 
+        public static readonly StyledProperty<bool> ShowV2BadgeProperty =
+            AvaloniaProperty.Register<FeatureCard, bool>(nameof(ShowV2Badge));
+        public bool ShowV2Badge { get => GetValue(ShowV2BadgeProperty); set => SetValue(ShowV2BadgeProperty, value); }
+
+        // WPF FeatureCard.NewV2Badge: shared champagne pill for cards, rack and rail.
+        internal static Border NewV2Badge(Thickness margin, bool compact = false)
+        {
+            var metal = new SolidColorBrush(Color.FromRgb(0xFF, 0xE0, 0x8A));
+            return new Border
+            {
+                Name = "V2Badge", Margin = margin,
+                Padding = compact ? new Thickness(3, 0, 4, 1) : new Thickness(6, 2, 7, 3),
+                CornerRadius = new CornerRadius(compact ? 5 : 7),
+                Background = new SolidColorBrush(Color.FromArgb(0xD9, 0x1A, 0x1A, 0x2E)),
+                BorderBrush = metal, BorderThickness = new Thickness(1),
+                VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center, IsHitTestVisible = false,
+                Child = new TextBlock
+                {
+                    Text = ConditioningControlPanel.Localization.Loc.Get("badge_v2"),
+                    Foreground = metal, FontSize = compact ? 7 : 9, FontWeight = FontWeight.Bold,
+                },
+            };
+        }
+
         public static readonly StyledProperty<string> TitleProperty =
             AvaloniaProperty.Register<FeatureCard, string>(nameof(Title), "Feature");
         public static readonly StyledProperty<IImageBrushSource?> IconProperty =
@@ -86,6 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// <summary>Raised on right-click so the dashboard can quick-toggle the feature without opening its popup.</summary>
         public event EventHandler<RoutedEventArgs> ToggleRequested { add => AddHandler(ToggleRequestedEvent, value); remove => RemoveHandler(ToggleRequestedEvent, value); }
 
+        private readonly Border _v2Badge;
         private readonly Border _rootBorder, _imgIconHost, _glyphHost, _rimLight, _activeBorder, _lockedOverlay, _tierBadgeHost;
         private readonly Grid _contentRoot, _teaseHost;
         private readonly TextBlock _txtTitle, _txtGlyph, _txtTeaseGlyph, _txtLockLabel, _txtTierBadge;
@@ -128,6 +153,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _rootBorder.RenderTransform = _rootScale;
             _activeGlow.RenderTransform = _rootScale;   // the glow lifts with the tile, as WPF's Effect did
 
+            _v2Badge = NewV2Badge(default);
+            _v2Badge.HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left;
+            _v2Badge.VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Top;
+            _v2Badge.IsVisible = ShowV2Badge;
+            this.FindControl<StackPanel>("BadgeColumn")!.Children.Add(_v2Badge);
+
             _contentRoot.SizeChanged += (_, _) => UpdateRoundedClip();
             PointerEntered += (_, _) => ApplyHover(true);
             PointerExited += (_, _) => ApplyHover(false);
@@ -155,7 +186,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             base.OnPropertyChanged(change);
             if (_rootBorder is null) return; // fired before the XAML loaded
-            if (change.Property == TitleProperty) _txtTitle.Text = Title ?? "";
+            if (change.Property == ShowV2BadgeProperty) _v2Badge.IsVisible = ShowV2Badge;
+            else if (change.Property == TitleProperty) _txtTitle.Text = Title ?? "";
             else if (change.Property == IconProperty || change.Property == GlyphProperty) ApplyArt();
             else if (change.Property == LockLevelProperty || change.Property == IsLockedProperty) ApplyLockState();
             else if (change.Property == IsActiveProperty) ApplyActiveState();

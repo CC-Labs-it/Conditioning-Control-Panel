@@ -63,6 +63,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             AttachedToVisualTree += (_, _) => NotifyShellVisibility();
             PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) { NotifyShellVisibility(); SyncFoldArrowBreath(); } };
 
+            AttachedToVisualTree += (_, _) =>
+            {
+                ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged += RefreshV2Badges;
+                RefreshV2Badges();
+            };
+            DetachedFromVisualTree += (_, _) => ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged -= RefreshV2Badges;
+
             WireStubs();
             InitFavoritesDrawer();
             InitProgramTodayCard();   // the Training Programs "Today" card (SettingsTabView.ProgramToday.cs)
@@ -72,6 +79,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // ------------------------------------------------------------------------------
         // The real ports.
         // ------------------------------------------------------------------------------
+
+        private void RefreshV2Badges()
+        {
+            void Apply()
+            {
+                CardFlash.ShowV2Badge = ConditioningControlPanel.Services.Prizes.V2Badges.FlashOwned();
+                CardBubblePop.ShowV2Badge = ConditioningControlPanel.Services.Prizes.V2Badges.BubbleOwned();
+            }
+            if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) Apply();
+            else global::Avalonia.Threading.Dispatcher.UIThread.Post(Apply);
+        }
 
         private void NotifyShellVisibility()
         {
