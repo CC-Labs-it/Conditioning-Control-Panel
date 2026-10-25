@@ -100,9 +100,15 @@ namespace ConditioningControlPanel.Avalonia.Tours
             Service.Start(type);
             if (!Service.IsActive) return;
 
+            var browser = shell.Named<Views.Tabs.SettingsTabView>("SettingsTab")?.BrowserContainer;
+            if (browser != null) browser.IsVisible = false;
             var overlay = new TutorialOverlay(shell);
             _shellOverlay = overlay;
-            overlay.Closed += (_, _) => { if (ReferenceEquals(_shellOverlay, overlay)) _shellOverlay = null; };
+            overlay.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_shellOverlay, overlay)) _shellOverlay = null;
+                if (browser != null) browser.IsVisible = true;
+            };
             overlay.Show();
         }
 

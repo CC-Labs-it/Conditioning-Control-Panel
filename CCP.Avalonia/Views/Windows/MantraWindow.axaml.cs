@@ -37,6 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly MantraService _service = App.Mantra;
         private DispatcherTimer? _floatTimer;
         private DispatcherTimer? _idleTimer;
+        private DispatcherTimer? _closeTimer;
         private long _startTime;
 
         /// <summary>The animation clock (float drift, storyboards). Tests step it.</summary>
@@ -393,13 +394,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PlayTone(523, 400);
 
             // Auto-close after 5 seconds
-            var closeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-            closeTimer.Tick += (_, _) =>
+            _closeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _closeTimer.Tick += (_, _) =>
             {
-                closeTimer.Stop();
+                _closeTimer.Stop();
                 CleanupAndClose();
             };
-            closeTimer.Start();
+            _closeTimer.Start();
         }
 
         private void UpdateVisualIntensity(int streak)
@@ -528,6 +529,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_open == this) _open = null;
             _floatTimer?.Stop();
             _idleTimer?.Stop();
+            // A completed window may close early (Esc / owner close). Its delayed callback
+            // must not later end the singleton service's next session.
+            _closeTimer?.Stop();
             StopDrone();
 
             _service.StreakChanged -= OnStreakChanged;

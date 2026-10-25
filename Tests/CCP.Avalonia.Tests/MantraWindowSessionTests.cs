@@ -269,6 +269,71 @@ public sealed class MantraWindowSessionTests
         }
     });
 
+    /// <summary>A completed lab closed early must cancel its delayed close. Otherwise its stale
+    /// callback ends App.Mantra's NEW session when the next Programs task door opens (shard 2).</summary>
+    [Fact]
+    public Task ClosingCompletedLabDoesNotEndTheNextProgramTaskSession() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+
+        var (opener, play) = (MantraWindow.DroneOpener, CoreAudio.PlayOneShotProvider);
+        MantraWindow.DroneOpener = _ => new FakeDrone();
+        CoreAudio.PlayOneShotProvider = (_, _, _, _, done) => done?.Invoke();
+        MainShellWindow? shell = null;
+        MantraWindow? completed = null;
+        DispatcherTimer? closeTimer = null;
+        try
+        {
+            AvApp.Mantra.StartSession(1);
+            completed = new MantraWindow();
+            completed.Show();
+            Dispatcher.UIThread.RunJobs();
+            var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+            // Drive completion presentation directly: this test covers window lifetime,
+            // not MantraService's anti-cheat floor (covered by TypedMantraCompletesTheSession).
+            AvApp.Mantra.EndSession();
+            typeof(MantraWindow).GetMethod("OnSessionComplete", flags)!
+                .Invoke(completed, new object[] { 1, 1 });
+            Assert.True(completed.FindControl<Border>("CompletionOverlay")!.IsVisible);
+            closeTimer = (DispatcherTimer)typeof(MantraWindow).GetField("_closeTimer", flags)!.GetValue(completed)!;
+            Assert.Equal(TimeSpan.FromSeconds(5), closeTimer.Interval);
+            Assert.True(closeTimer.IsEnabled);
+            // Make the REAL timer due without sleeping. Do not pump until the old window is
+            // closed and the new session is running: this is the failing shard's ordering.
+            closeTimer.Interval = TimeSpan.Zero;
+            completed.Close();
+
+            shell = new MainShellWindow();
+            shell.Show();
+            var tab = shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.ProgramsTabView>("ProgramsTab")!;
+            tab.BtnProgramOpenMantras_Click(new Button { Tag = 4 }, new global::Avalonia.Interactivity.RoutedEventArgs());
+            // Executing a job promotes due DispatcherTimers; RunJobs then drains their callbacks.
+            Dispatcher.UIThread.Post(() => { });
+            Dispatcher.UIThread.RunJobs();
+
+            var lab = Assert.Single(shell.OwnedWindows.OfType<MantraWindow>());
+            Assert.True(lab.IsVisible);
+            Assert.True(AvApp.Mantra.IsActive);
+            Assert.Equal(4, AvApp.Mantra.TargetCount);
+            Assert.Equal("/4", lab.FindControl<TextBlock>("TxtTarget")!.Text);
+            Assert.False(closeTimer.IsEnabled);
+            lab.Close();
+            Assert.False(AvApp.Mantra.IsActive);
+        }
+        finally
+        {
+            closeTimer?.Stop();
+            completed?.Close();
+            foreach (var w in shell?.OwnedWindows.ToArray() ?? Array.Empty<Window>()) w.Close();
+            shell?.Close();
+            (MantraWindow.DroneOpener, CoreAudio.PlayOneShotProvider) = (opener, play);
+        }
+        return Task.CompletedTask;
+    });
+
     /// <summary>Panic (PanicSurfaces "mantra", WPF KillAllAudio -> Mantra?.Dispose()): the session ends,
     /// the open window goes inert and its drone stops.</summary>
     [Fact]

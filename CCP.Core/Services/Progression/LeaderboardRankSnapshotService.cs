@@ -34,6 +34,13 @@ public static class LeaderboardRankSnapshotService
 
     private static readonly object _gate = new();
 
+    internal static Func<DateTime> UtcNow = () => DateTime.UtcNow;
+
+    internal static void ResetForTests()
+    {
+        lock (_gate) { _cache = null; _loaded = false; }
+    }
+
     private static SnapshotFile? _cache;
     private static bool _loaded;
 
@@ -62,7 +69,7 @@ public static class LeaderboardRankSnapshotService
         }
         catch (Exception ex)
         {
-            App.Logger?.Warning(ex, "LeaderboardRankSnapshot: GetPreviousRank failed for {Mode}", mode);
+            Serilog.Log.Warning(ex, "LeaderboardRankSnapshot: GetPreviousRank failed for {Mode}", mode);
             return null;
         }
     }
@@ -71,7 +78,7 @@ public static class LeaderboardRankSnapshotService
     /// Persist the current board as the new baseline, but only if the stored snapshot for this
     /// mode is missing or at least <see cref="MinSnapshotAge"/> old. No-op otherwise.
     /// </summary>
-    public static void RecordIfDue(string mode, IEnumerable<LeaderboardEntry> entries)
+    public static void RecordIfDue(string mode, IEnumerable<LeaderboardEntryData> entries)
     {
         try
         {
@@ -85,13 +92,13 @@ public static class LeaderboardRankSnapshotService
 
                 if (file.Modes.TryGetValue(key, out var existing) && existing != null)
                 {
-                    var age = DateTime.UtcNow - ToUtc(existing.CapturedAtUtc);
+                    var age = UtcNow() - ToUtc(existing.CapturedAtUtc);
                     // A negative age means a clock change (or a hand-edited future timestamp)
                     // parked the baseline in the future — treat that as due rather than freezing
                     // deltas until the wall clock catches up.
                     if (age >= TimeSpan.Zero && age < MinSnapshotAge)
                     {
-                        App.Logger?.Debug(
+                        Serilog.Log.Debug(
                             "LeaderboardRankSnapshot: {Mode} snapshot is {Hours:F1}h old, not due yet",
                             key, age.TotalHours);
                         return;
@@ -102,26 +109,26 @@ public static class LeaderboardRankSnapshotService
                 if (ranks.Count == 0)
                 {
                     // Empty/failed fetch: keep the old baseline rather than blanking it.
-                    App.Logger?.Debug("LeaderboardRankSnapshot: {Mode} produced no usable rows, keeping baseline", key);
+                    Serilog.Log.Debug("LeaderboardRankSnapshot: {Mode} produced no usable rows, keeping baseline", key);
                     return;
                 }
 
                 file.Modes[key] = new ModeSnapshot
                 {
-                    CapturedAtUtc = DateTime.UtcNow,
+                    CapturedAtUtc = UtcNow(),
                     Ranks = ranks
                 };
 
                 if (Save(file))
                 {
                     _cache = file;
-                    App.Logger?.Debug("LeaderboardRankSnapshot: recorded {Count} ranks for {Mode}", ranks.Count, key);
+                    Serilog.Log.Debug("LeaderboardRankSnapshot: recorded {Count} ranks for {Mode}", ranks.Count, key);
                 }
             }
         }
         catch (Exception ex)
         {
-            App.Logger?.Warning(ex, "LeaderboardRankSnapshot: RecordIfDue failed for {Mode}", mode);
+            Serilog.Log.Warning(ex, "LeaderboardRankSnapshot: RecordIfDue failed for {Mode}", mode);
         }
     }
 
@@ -148,7 +155,7 @@ public static class LeaderboardRankSnapshotService
     /// unified id are dropped (they can never be matched again), as are non-positive ranks
     /// (a "previous rank" of 0 carries no delta). First occurrence of a duplicate id wins.
     /// </summary>
-    private static Dictionary<string, int> BuildRankMap(IEnumerable<LeaderboardEntry> entries)
+    private static Dictionary<string, int> BuildRankMap(IEnumerable<LeaderboardEntryData> entries)
     {
         var map = new Dictionary<string, int>();
 
@@ -192,7 +199,7 @@ public static class LeaderboardRankSnapshotService
             var parsed = JsonConvert.DeserializeObject<SnapshotFile>(json);
             if (parsed == null)
             {
-                App.Logger?.Warning("LeaderboardRankSnapshot: snapshot file parsed to null, treating as absent");
+                Serilog.Log.Warning("LeaderboardRankSnapshot: snapshot file parsed to null, treating as absent");
                 _cache = null;
                 return null;
             }
@@ -216,7 +223,7 @@ public static class LeaderboardRankSnapshotService
         catch (Exception ex)
         {
             // Corrupt, truncated, locked or hand-edited: degrade to "no previous rank known".
-            App.Logger?.Warning(ex, "LeaderboardRankSnapshot: failed to load snapshot, deltas disabled until next write");
+            Serilog.Log.Warning(ex, "LeaderboardRankSnapshot: failed to load snapshot, deltas disabled until next write");
             _cache = null;
             return null;
         }
@@ -240,7 +247,7 @@ public static class LeaderboardRankSnapshotService
         }
         catch (Exception ex)
         {
-            App.Logger?.Warning(ex, "LeaderboardRankSnapshot: failed to save snapshot");
+            Serilog.Log.Warning(ex, "LeaderboardRankSnapshot: failed to save snapshot");
             try
             {
                 if (File.Exists(temp)) File.Delete(temp);
