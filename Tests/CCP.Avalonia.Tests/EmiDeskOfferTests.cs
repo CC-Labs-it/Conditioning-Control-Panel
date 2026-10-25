@@ -147,4 +147,56 @@ public sealed class EmiDeskOfferTests
         Assert.Equal(".", window.BubbleText); // she says the pat line instead
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public Task PinOfferMovesTheTargetFirstAndRefusesAlreadyPinnedOrUnknown() => InDesk((desk, window) =>
+    {
+        var pins = EmiState.Current.Pins.ToArray();
+        try
+        {
+            EmiState.Current.Pins.Clear();
+            EmiState.Current.Pins.AddRange(new[] { "loom", "sessions", "flashes", "codex", "videos", "subliminals" });
+            Assert.True(EmiOffers.EffectFeasible("pinTop:vault"));
+            Assert.False(EmiOffers.EffectFeasible("pinTop:missing"));
+            window.ToggleRing();
+            desk.LineEngine = EmiLineEngine.FromJson(Lines.Replace("\"effect\":\"shrink\"", "\"effect\":\"pinTop:vault\""));
+            ShowQuestion(desk, window);
+            window.AskChips[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(window.RingOpen);
+            var ring = (EmiRingWindow)typeof(EmiDeskWindow).GetField("_ring", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window)!;
+            Assert.Equal("vault", ((EmiRingCard)ring.Cards[0].Tag!).Id);
+            Assert.True(ring.Cards[0].IsVisible);
+            Assert.Equal(new[] { "vault", "loom", "sessions", "flashes", "codex", "videos" }, EmiState.Current.Pins);
+            Assert.False(EmiOffers.EffectFeasible("pinTop:vault"));
+            EmiOffers.Run("pinTop:missing", fromAsk: true);
+            Assert.Equal("vault", EmiState.Current.Pins[0]);
+        }
+        finally { EmiState.Current.Pins.Clear(); EmiState.Current.Pins.AddRange(pins); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task BedtimeOfferPersistsQuietGateWithoutDismissingHer() => InDesk((desk, window) =>
+    {
+        var previous = EmiState.Current.BedtimeUntil;
+        try
+        {
+            EmiState.Current.BedtimeUntil = DateTime.MinValue;
+            Assert.True(EmiOffers.EffectFeasible("bedtime"));
+            var before = DateTime.Now;
+            desk.LineEngine = EmiLineEngine.FromJson(Lines.Replace("\"effect\":\"shrink\"", "\"effect\":\"bedtime\""));
+            ShowQuestion(desk, window);
+            window.AskChips[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var until = EmiState.Current.BedtimeUntil;
+            Assert.Equal(DateTimeKind.Utc, until.Kind);
+            Assert.Equal(6, until.ToLocalTime().Hour);
+            Assert.True(until.ToLocalTime() > before);
+            Assert.True(until.ToLocalTime() <= DateTime.Now.AddDays(1));
+            Assert.True(EmiLineEngine.BedtimeSet);
+            Assert.False(EmiOffers.EffectFeasible("bedtime"));
+            Assert.True(desk.IsOut);
+        }
+        finally { EmiState.Current.BedtimeUntil = previous; }
+        return Task.CompletedTask;
+    });
 }

@@ -4,6 +4,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services.EmiDesk;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Serilog;
 
@@ -13,7 +14,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// The effects an offer chip fires on this head: WPF ConditioningControlPanel/Services/EmiDesk/EmiOffers.cs.
     /// Feasibility is checked at DRAW time and fails silently (LINES-SCHEMA 4): an effect this head
     /// cannot run refuses here, so the engine never puts that ask on the glass. No dead chips.
-    /// <para>ponytail: spiral, video, rain, tour:, book:, pinTop:, bedtime, packs and assets refuse
+    /// <para>ponytail: spiral, video, rain, tour:, book:, packs and assets refuse
     /// until wire-views-settings-emidesk-b-next ports their host; WPF :42-87 lists them.</para>
     /// </summary>
     internal static class EmiOffers
@@ -29,9 +30,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 var e = effect.Trim();
                 if (e.StartsWith("open:", StringComparison.OrdinalIgnoreCase))
                     return EmiTargets.Find(e.Substring(5)) is { Available: true, Locked: false };
+                if (e.StartsWith("pinTop:", StringComparison.OrdinalIgnoreCase))
+                    return EmiTargets.Find(e.Substring(7)) is { Available: true, Locked: false } target
+                        && !EmiState.Current.Pins.Contains(target.Id, StringComparer.OrdinalIgnoreCase);
                 return e.ToLowerInvariant() switch
                 {
                     "none" => true,
+                    "bedtime" => !EmiLineEngine.BedtimeSet,
                     "burst" => X11Overlay.IsAvailable && HasImages(),
                     "shrink" => EmiDeskService.Instance.Window is { } w && w.BodyWidth > EmiDeskWindow.MinBodyWidth + 1,
                     _ => false
@@ -60,9 +65,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     t.Open();
                     return;
                 }
+                if (e.StartsWith("pinTop:", StringComparison.OrdinalIgnoreCase))
+                {
+                    // WPF EmiDeskService.PinTop: catalogue guard, bounded front insertion,
+                    // recompose an open fan, then one reaction through the normal moment bus.
+                    if (EmiTargets.Find(e.Substring(7)) is not { } target) return;
+                    EmiSuggester.PinToTop(target.Id);
+                    EmiDeskService.Instance.Window?.RebuildRing();
+                    EmiDeskService.Instance.Fire("pinAdded", new { target = target.Id });
+                    return;
+                }
                 switch (e.ToLowerInvariant())
                 {
                     case "none": return;
+                    case "bedtime":
+                        EmiState.Current.BedtimeUntil = EmiBedtime.UntilUtc(DateTime.Now);
+                        EmiState.SaveSoon();
+                        EmiDeskService.Instance.Fire("bedtimeSet", new { fromAsk });
+                        return;
                     case "burst": FireBurst(fromAsk); return;
                     case "shrink": FireShrink(); return;
                     default: Log.Debug("[EmiDesk] unknown effect {Effect}, ignored", e); return;
