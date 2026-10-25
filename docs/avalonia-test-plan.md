@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Dashboard decoration completion
+
+1. Home: with Full motion, focus and normal performance, an unopened ? box breathes gold (900 ms each way, badge 1–1.12). First hover hides NEW TODAY and stops the breath, including after a restart; tomorrow it re-arms. WPF `MainWindow/MainWindow.DashboardFx.cs:268-733`. Rows: `shell-dashboard-fx`.
+2. Hover the ? box in/out rapidly, before and after the face swap: it must reverse without snapping or sticking edge-on. The reveal names and pictures today's feature and its free tier stamp; click either face to navigate. Motion Off swaps immediately; hiding Home resets the ? face without spending an unopened gift. WPF `MainWindow/MainWindow.DashboardFx.cs:443-669`. Rows: `shell-dashboard-fx`.
+3. With a custom still logo, watch the 1–1.04 drift (40 seconds each way) and occasional sheen (25–40-second gaps, 1.1-second pass). Built-in animated artwork gets neither. Reduced/Off motion, low performance, lost focus, minimization and hidden logo/tab park the effects. WPF `MainWindow/MainWindow.DashboardFx.cs:739-819`. Rows: `shell-dashboard-fx`.
+4. Without a web engine, Home shows a localized failure status at full opacity; a failed navigation also stops Loading's pulse, and a successful retry restores Connected. Test Windows runtime missing/COM/DLL failures separately. WPF `MainWindow/MainWindow.Browser.cs:204-270`. Rows: `shell-dashboard-fx`.

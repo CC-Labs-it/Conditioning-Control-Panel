@@ -31,6 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void HookBrowserCard()
         {
             BrowserWebHost.NavigationCompleted += _ => ApplyBrowserMute();
+            BrowserWebHost.NavigationFinished += (_, success) => { if (!success) SetBrowserFailure("label_error_2"); };
             BrowserWebHost.PropertyChanged += (_, e) => { if (e.Property == WebHost.SourceProperty) SyncBrowserPrompt(); };
             AttachedToVisualTree += (_, _) =>
             {
@@ -177,6 +178,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BrowserLoadingText.IsVisible = prompt;
             // A native web view draws over anything laid on it, so the prompt only shows with the host hidden.
             BrowserWebHost.IsVisible = !prompt;
+            if (!BrowserWebHost.HasEngine) SetBrowserFailure(BrowserWebHost.FailureStatusKey);
+        }
+
+        private void SetBrowserFailure(string key)
+        {
+            TxtBrowserStatus.Bind(TextBlock.TextProperty, LocBinding(key));
+            TxtBrowserStatus.Foreground = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.FromRgb(255, 107, 107));
         }
 
         /// <summary>WPF BrowserLoadingText_Click: load the selected site. The shell's reload is exactly that, behind the

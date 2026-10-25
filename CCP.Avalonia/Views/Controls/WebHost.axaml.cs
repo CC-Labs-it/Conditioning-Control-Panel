@@ -170,6 +170,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public bool HasEngine => _web is not null;
 
+        // WPF init exception categories; the host's fallback panel keeps the actionable detail.
+        internal string FailureStatusKey { get; private set; } = "label_not_installed";
+        internal static string FailureKey(Exception error) => error switch
+        {
+            DllNotFoundException => "label_missing_dll",
+            System.Runtime.InteropServices.COMException => "label_com_error",
+            InvalidOperationException => "label_not_installed",
+            _ => "label_error_2",
+        };
+
         /// <summary>
         /// Runs JS in the current page and returns its result, or null when there is no engine.
         /// The stand-in for <c>CoreWebView2.ExecuteScriptAsync</c>.
@@ -248,6 +258,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 catch (Exception ex)
                 {
                     _web = null;
+                    FailureStatusKey = FailureKey(ex);
                     _txtReason.Text = ex.Message;
                 }
             }
