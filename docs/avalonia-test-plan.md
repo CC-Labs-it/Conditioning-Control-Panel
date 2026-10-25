@@ -674,7 +674,9 @@ area sections above; report against the commit row only when no screen row fits.
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
 
-### Sync 7 Breakout friend-invite route
+### Sync 7 friend invites (race, breakout) and platform marks
 
 1. Receive a web Breakout invite on an account without Lab access. Expect the card and Inbox summary to say “Breakout”; Join opens the existing three-level demo, and panic closes it. WPF `Services/Friends/FriendsLanding.cs` (`0375913ba`). Rows: `feat-friends-landing`, `win-knock-card`.
 2. Receive the same invite with Lab access. Until the full Breakout host is ported, expect no Join button and no Joined receipt; Not now and Answer later retain their existing behavior. WPF `Services/Friends/FriendsLanding.cs` (`0375913ba`, full-game route blocked by host). Rows: `feat-friends-landing`, `win-knock-card`.
+3. Receive a web race invite. Expect the card and Inbox summary to say “Racing Thoughts”; Join opens app.cclabs.app/race in the browser (no browser: the link is copied and a dialog says so). WPF `Services/Friends/FriendsLanding.cs` (`0375913ba`). Rows: `feat-friends-landing`, `win-knock-card`.
+4. Open the friends drawer with a friend online on their phone and the web. Expect small desktop/phone/globe marks after the name in that order, each with its tooltip (“On their phone”); an offline friend has none. WPF `Controls/Friends/FriendsDrawer.Platforms.cs` (`0375913ba`). Rows: `feat-friends-landing`.

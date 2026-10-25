@@ -410,6 +410,25 @@ public sealed class FriendsDrawerTests
         Tagged<Button>(d, "friends-invite-link")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(1, asked);
     });
+    /// <summary>WPF FriendsDrawer.Platforms + :558: an online row wears one mark per platform, desktop / phone / web
+    /// order whatever the wire said, each with its tooltip; an offline row wears none.</summary>
+    [Fact]
+    public Task AnOnlineRowWearsItsPlatformMarksWithTooltips() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, wire) = Service();
+        wire.StateBody = State.Replace("\"squelched\":false}", "\"squelched\":false,\"platforms\":[\"web\",\"desktop\"]}");
+        var d = new FriendsDrawer(svc);
+        await svc.RefreshAsync();
+        d.Render();
+        var marks = Tagged<StackPanel>(Tagged<Border>(d, "friends-row:u_on")!, "friends-platforms")!;
+        Assert.Equal(new[] { "friends-platform:desktop", "friends-platform:web" }, marks.Children.Select(c => c.Tag as string));
+        Assert.Equal(new[] { IconKind.Desktop, IconKind.Globe },
+            marks.Children.Select(c => c.GetLogicalDescendants().OfType<IconGlyph>().Single().Kind));
+        Assert.Equal(new object?[] { Loc.Get("friends_platform_desktop"), Loc.Get("friends_platform_web") },
+            marks.Children.Select(c => ToolTip.GetTip(c)));
+        Assert.Null(Tagged<StackPanel>(Tagged<Border>(d, "friends-row:u_off")!, "friends-platforms"));
+    });
+
     // ---- open goon tables (WPF FriendsDrawer.Tables.cs; ConditioningControlPanel.Tests/FriendsDrawerTablesTests) ----
 
     private static global::ConditioningControlPanel.Services.GoonGame.OpenTablesReply ZedHosting() =>

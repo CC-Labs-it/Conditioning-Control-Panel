@@ -305,6 +305,7 @@ public sealed partial class FriendsDrawer : Border
             sq.Margin = new Thickness(6, 1, 0, 0);
             nameLine.Children.Add(sq);
         }
+        AddPlatformMarks(nameLine, f);
         mid.Children.Add(nameLine);
         mid.Children.Add(table != null ? HostingLine() : ActivityLine(f));
         // What you last sent them and how far it got (sent, arrived, seen, answered).

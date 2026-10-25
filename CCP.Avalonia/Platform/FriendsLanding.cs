@@ -143,6 +143,7 @@ internal static class FriendsLanding
         InviteDestination.Goon => Str("friends_land_dest_goon", "the Goon Game"),
         InviteDestination.Ramp => Str("friends_land_dest_ramp", "a Ramp link"),
         InviteDestination.Chess => Str("friends_land_dest_chess", "a game of chess"),
+        InviteDestination.Race => Str("friends_land_dest_race", "Racing Thoughts"),
         InviteDestination.Breakout => Str("friends_land_dest_breakout", "Breakout"),
         _ => Str("friends_land_dest_backroom", "the Back Room"),
     };
@@ -262,14 +263,18 @@ internal static class FriendsLanding
     }
 
     /// <summary>Destinations this head can open. ponytail: Back Room / Goon / chess hosts are not on this head
-    /// so their cards carry Not now and the x only. Breakout can join its demo; full access waits for its host.</summary>
+    /// so their cards carry Not now and the x only. Race is the web page; Breakout can join its demo; full access waits for its host.</summary>
     internal static bool CanJoin(InboxItem item) => item.Destination == InviteDestination.Ramp
+        || item.Destination == InviteDestination.Race
         || item.Destination == InviteDestination.Breakout && (!BreakoutFullAllowed || GameWindow.Games.ContainsKey("breakout"));
 
     private static bool BreakoutFullAllowed => TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed;
 
     /// <summary>Use the existing game host, including its single-window and panic lifecycle; tests replace it.</summary>
     internal static Action<string> LaunchGame { get; set; } = id => GameWindow.Launch(id);
+
+    /// <summary>The browser door (sandbox-gated); tests replace it.</summary>
+    internal static Func<string, bool> OpenLink { get; set; } = ExternalOpener.Open;
 
     /// <summary>WPF LauncherHost.OpenPanelTab: the panel up (it may be hidden behind the launcher), then the tab.
     /// Tests replace it.</summary>
@@ -280,11 +285,16 @@ internal static class FriendsLanding
         mw.ShowTab(tab);
     };
 
-    /// <summary>WPF Join :522: Ramp opens Studio; Breakout uses the station’s full/demo door.</summary>
+    /// <summary>WPF Join :522: Ramp opens Studio; Race opens the web race; Breakout uses the station’s full/demo door.</summary>
     internal static void Join(InboxItem item)
     {
         Log.Information("[Friends] joining {Dest} from a knock", item.Destination);
         if (item.Destination == InviteDestination.Ramp) OpenPanelTab("studio");
+        // WPF :557: a web race (no code); the friend is on app.cclabs.app/race, so is the join.
+        // No browser: WPF OpenUrlOrPrompt copies the link and says so.
+        if (item.Destination == InviteDestination.Race && !OpenLink(InviteDestination.RaceWebUrl) && Anchor() is { } owner)
+            _ = Views.Dialogs.MessageDialog.ShowLinkCopiedAsync(owner, InviteDestination.RaceWebUrl,
+                DestinationName(InviteDestination.Race));
         if (item.Destination == InviteDestination.Breakout && CanJoin(item))
         {
             // ponytail: the full Breakout host is not registered on this head yet. Keep its Join
