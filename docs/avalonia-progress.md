@@ -3142,3 +3142,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-shell-preset-io: +141
 - File dropped on the launcher opens the panel and imports through its existing preset path.
 - Headless test covers drag-over effect, drop and import; fail-proven 3 ways with saved logs.
+
+## avalonia-port/wire-shell-quests: +148
+- Off-tab quest completion bursts 85 sparks from the centre of the owning Quests nav row. Fallbacks (the track, the nav row) fire from their centre, as in WPF FireBurstAtFirstVisible; only the filled bar keeps RightEdge.
+- The shell-quests row stays stub and is reworded to "Added".
