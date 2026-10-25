@@ -49,6 +49,7 @@ public sealed class CompanionTabVisibilityTests
         try
         {
             shell.Show();
+            CollapsedRoom.Show(shell);   // the roster repaint below reads the room's own cell
             Dispatcher.UIThread.RunJobs();
             Assert.Empty(shell.OwnedWindows.OfType<AwarenessConsentDialog>());   // not before the tab
 
