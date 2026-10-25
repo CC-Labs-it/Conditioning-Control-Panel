@@ -3094,3 +3094,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-views-companion-room-preview: +248
 - Companion room preview strip swaps chat, diary and attention mocks for all six WPF states; zones without mocks are disabled in the harness so it cannot write real settings.
 - Row stays stub; follow-up wire-views-companion-room-preview-b seats hero/personality/awareness/engine/workshop mocks.
+
+## avalonia-port/wire-views-tab-app-settings: +170
+- Settings re-open refreshes General (startup registration/video), Devices (mic/camera re-enumeration), Performance and Notifications repaint; AppSettingsRefreshTests (General startup-video repaint fail-proven, other hooks asserted). Row stays stub.
+- Remaining lane -b: embed existing ExclusivesTabView in an Account PlansMode and wire vault-motion follow/park.
