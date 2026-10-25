@@ -3428,3 +3428,8 @@ Mantra Lab completion close timer is now stopped in Cleanup, so an early-closed 
 ## avalonia-port/fin-feat-brain-drain-keep-clear: +1
 
 - Dependency-only NOOP: keep-clear effect needs the unported Brain Drain blur overlay (`views-studio-brain-drain-feature`); row stays `stub`. Corrected the row's WPF line refs (OverlayService.cs:3251,3264,3811). rgate GATE-OK (run 39921269080).
+
+## avalonia-port/fin-feat-bubble-count: +460
+- Cloud session, local review + gate.
+- Studio > Bubble Count: For You defer (one replay, 500 ms polls, 90 s deadline), Pause other effects editor + per-round flash/text hold, localized empty-library warning. Row stays stub (shared interaction queue, overlay parking, ghost feed).
+- Review fix: label ellipsis, ledger deviations restored. rcheck BubbleCountQueueTests 5/5; rgate GATE-OK.
