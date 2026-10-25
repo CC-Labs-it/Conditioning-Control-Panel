@@ -230,6 +230,7 @@ Set the panic key to Enter for steps 1-4 (Settings -> panic key).
 18. Help -> Report a bug: fill and send to a test address. WPF `Windows/BugReportWindow.xaml.cs:87-101`. Rows: `win-bug-report`, `win-my-reports`.
 19. Webcam: calibrate, quick recalibrate, gaze tracker. WPF `MainWindow/MainWindow.LabTab.cs:1094`, `MainWindow/MainWindow.xaml.cs:3631`. Rows: `win-webcam-calibration`, `win-webcam-quick-recal`, `win-webcam-gaze-tracker`, `win-webcam-loading-splash`.
 20. Emi desk: open it, its options, ring and book; mute prompt. WPF `AvatarTube/AvatarTubeWindow.Speech.cs:461`. Rows: `win-emi-desk`, `win-emi-options`, `win-emi-ring`, `win-emi-book`, `win-emi-codex`, `win-emi-mute-prompt`.
+20a. EMI frame sequences: summon from the dock and watch the wake faces after the CRT; dismiss during the smoke and confirm she leaves after the wink, CRT collapse and sparkles without waking again. Hover her head to trigger the pet chain, and drag/drop or fling to exercise landing/dizzy faces. During a sequence press panic and confirm the face clock stops; press panic during the dismiss wink and confirm she still leaves; click-pat her during the wake faces (the entrance ends, she reacts) and during a line (the line is not cut); dismiss/re-summon and confirm it can play again. WPF `Services/EmiDesk/EmiChainPlayer.cs`, `Windows/EmiDesk/EmiDeskWindow.Fx.cs`. Rows: `win-emi-desk`. Bubble/voice, art and body moves remain missing; this step does not certify them.
 21. Settings palette shortcut opens the command palette. WPF `MainWindow/MainWindow.xaml.cs:280-283`. Rows: `win-settings-palette`.
 
 ### Down the Rabbit Hole game
@@ -673,5 +674,3 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
-
-21. EMI frame sequences: summon from the dock and watch the wake faces after the CRT; dismiss during the smoke and confirm she leaves after the wink, CRT collapse and sparkles without waking again. Hover her head to trigger the pet chain, and drag/drop or fling to exercise landing/dizzy faces. During a sequence press panic and confirm the face clock stops; dismiss/re-summon and confirm it can play again. WPF `Services/EmiDesk/EmiChainPlayer.cs`, `Windows/EmiDesk/EmiDeskWindow.Fx.cs`. Rows: `win-emi-desk`. Bubble/voice, art and body moves remain missing; this step does not certify them.

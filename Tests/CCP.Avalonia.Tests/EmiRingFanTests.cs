@@ -112,6 +112,8 @@ public sealed class EmiRingFanTests
             Assert.Equal(pets + 1, st.PetsTotal);
 
             clock.Now += TimeSpan.TicksPerSecond;   // past the sfx floor, inside the 6 s pet cooldown
+            desk.ChainPlayer.ElapsePendingHold();   // ...and past the 900 ms pet chain (a live chain consumes a pat, WPF React.cs:134)
+            Assert.False(desk.ChainLive);
             pat.Invoke(desk, null);
             Assert.Equal(2, played.Count);
             Assert.Equal(pets + 1, st.PetsTotal);

@@ -252,8 +252,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private PixelPoint _resizeStartScreen;
         private double _resizeStartWidth;
 
-        /// <summary>True while a chain is on screen.</summary>
         private readonly EmiChainPlayer _player = new(Dispatcher.UIThread);
+
+        /// <summary>Test seam (P08): step the frame clock by hand.</summary>
+        internal EmiChainPlayer ChainPlayer => _player;
+
+        /// <summary>True while a chain is on screen.</summary>
         public bool ChainLive => _player.IsLive;
 
         /// <summary>True while a summon or dismiss transition is running.</summary>
@@ -916,6 +920,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>P06: also invalidate an intro that has not reached its wake chain yet.</summary>
         internal void StopChainForPanic()
         {
+            if (_dismissPending)
+            {
+                // Panic must not strand her mid-goodbye: the wink is cut, the dismiss still lands.
+                CancelChain();
+                StopIdleBeats();
+                FinishPendingDismiss();
+                return;
+            }
             ++_summonEpoch;
             FinishSummon();
             CancelChain();
@@ -2263,6 +2275,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     done?.Invoke();
                     return;
                 }
+                _dismissPending = true;
+                _dismissDone = done;
 
                 _transiting = true;
                 InputLocked = true;
@@ -2276,21 +2290,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
                 PlayChain("wink", () =>
                 {
-                    if (_closingForGood) { FinishDismiss(done); return; }
+                    if (_closingForGood) { FinishPendingDismiss(); return; }
                     CrtOff();
                     After(CrtOffMs, () =>
                     {
+                        if (!_dismissPending) return; // panic already finished it
                         _bodyRoot.IsVisible = false;
                         Burst(spark: true);
-                        After(FxLifeMs, () => FinishDismiss(done));
+                        After(FxLifeMs, FinishPendingDismiss);
                     });
                 });
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "[EmiDesk] dismiss FX failed, hiding her plain");
-                FinishDismiss(done);
+                if (_dismissPending) FinishPendingDismiss(); else FinishDismiss(done);
             }
+        }
+
+        private bool _dismissPending;
+        private Action? _dismissDone;
+
+        /// <summary>Finish the running dismiss exactly once (its FX tail or panic, whichever is first).</summary>
+        private void FinishPendingDismiss()
+        {
+            if (!_dismissPending) return;
+            _dismissPending = false;
+            var done = _dismissDone;
+            _dismissDone = null;
+            FinishDismiss(done);
         }
 
         private void FinishDismiss(Action? done)
@@ -2524,11 +2552,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <c>Application.Current.Dispatcher.HasShutdownStarted</c>, and <c>_closingForGood</c> is
         /// this head's twin of it - ShutDown and the Closed handler both set it.
         /// </summary>
+        /// <summary>Test seam (P08): when set, deferred FX steps are handed here instead of a timer.</summary>
+        internal Action<int, Action>? AfterScheduler;
+
         private void After(int ms, Action act)
         {
             try
             {
-                DispatcherTimer.RunOnce(() =>
+                Action step = () =>
                 {
                     try
                     {
@@ -2539,7 +2570,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     {
                         Log.Debug(ex, "[EmiDesk] deferred FX step failed");
                     }
-                }, TimeSpan.FromMilliseconds(Math.Max(1, ms)), DispatcherPriority.Background);
+                };
+                if (AfterScheduler != null) { AfterScheduler(ms, step); return; }
+                DispatcherTimer.RunOnce(step, TimeSpan.FromMilliseconds(Math.Max(1, ms)), DispatcherPriority.Background);
             }
             catch (Exception ex)
             {
@@ -2564,14 +2597,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// The click pat (WPF EmiDeskWindow.React.cs:119): disarms the hover pet so one gesture
         /// cannot pat twice, plays the pat cue on every touch (EmiSfx's 130 ms floor stops a
         /// double click machine-gunning it), and past the 6 s cooldown plays the pet chain and
-        /// counts the pat. ponytail: WPF's ChainLive guard, summon-cut, poke ladder (NotePoke /
-        /// PlayPokeFlick / glee streak) and the flick inside the cooldown are not on this head.
+        /// counts the pat. A live line is never cut; her entrance is (WPF React.cs:134-139).
+        /// ponytail: poke ladder (NotePoke / PlayPokeFlick / glee streak) and the flick inside
+        /// the cooldown are not on this head.
         /// </summary>
-        private void PetFromClick()
+        internal void PetFromClick()
         {
             try
             {
                 if (_transiting || InputLocked) return;
+                if (ChainLive)
+                {
+                    if (!_summonChainLive) return;
+                    FinishSummon();
+                    CancelChain();
+                }
                 DisarmPet();
                 _petArmed = true;
                 RaiseActivity();

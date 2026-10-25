@@ -133,6 +133,15 @@ internal sealed class EmiChainPlayer : IDisposable
         }
     }
 
+    /// <summary>Test seam (P08): the pending frame's hold, or null when no frame is pending.</summary>
+    internal TimeSpan? PendingHold => _timer?.Interval;
+
+    /// <summary>Test seam (P08): end the pending hold now instead of waiting for the timer.</summary>
+    internal void ElapsePendingHold()
+    {
+        if (_timer != null) OnTick(_timer, EventArgs.Empty);
+    }
+
     /// <summary>Kill the running chain. Done is NOT called.</summary>
     public void Cancel()
     {
