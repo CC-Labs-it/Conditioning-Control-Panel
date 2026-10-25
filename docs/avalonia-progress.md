@@ -3114,3 +3114,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-shell-webcam: +437
 - Calibration Verify gains the WPF four-bubble accuracy check (Core CalibrationBubbleProbe) and GazeLock/LongStare feed in WPF order; headless tests.
 - Row stays stub; near-miss auto-trim, mouth MAR and long-stare consumers go to wire-shell-webcam-b.
+
+## avalonia-port/wire-views-tab-leash: +596
+- Leash page: own card (holder/day, Cut, tasks/pardons, strictness, DND, video cap, Watch), repaint on show and stop listening when hidden; Core PendingGateCount shared with WPF. Row stays stub; follow-up -b.
+- Review fixes: named fail-proofs (x2), renders moved to durable evidence, feat-leash row refreshed.
