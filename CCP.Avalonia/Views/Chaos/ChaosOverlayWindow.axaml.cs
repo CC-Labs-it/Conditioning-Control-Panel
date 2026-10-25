@@ -49,7 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///   <item><c>SetForegroundWindow</c>-style raising -> <c>Topmost</c> toggle + <c>Activate()</c>,
     ///         unchanged from the original's own fallback path.</item>
     ///   <item><c>SetWindowsHookEx(WH_MOUSE_LL)</c> + <c>Services.GlobalKeyboardHook</c> ->
-    ///         <b>stubbed, and the behaviour is lost.</b> See
+    ///         the existing platform listeners for the countdown lifetime. See
     ///         <see cref="InstallCountdownSkipHooks"/>.</item>
     ///   <item><c>GetModuleHandle</c> / <c>Process.MainModule</c> -> dropped; they only existed
     ///         to feed the hook install.</item>
@@ -291,32 +291,44 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             cb?.Invoke();
         }
 
-        /// <summary>
-        /// <b>Stubbed, and this is a real loss, not a formality.</b> WPF installed a low-level
-        /// <c>WH_MOUSE_LL</c> hook plus <c>Services.GlobalKeyboardHook</c> for the length of the
-        /// countdown, because the countdown window is deliberately click-through and therefore
-        /// cannot receive input itself. That made ANY click or keypress anywhere on the desktop
-        /// skip straight to "SINK".
-        ///
-        /// <para>ponytail: this is the ONE thing in this window that needs a capability
-        /// <see cref="X11Overlay"/> does not have - it exposes <c>SetClickThrough</c> and
-        /// <c>RestackAbove</c> and nothing else. Naming the missing member so a later layer does
-        /// not have to rediscover it: <c>X11Overlay.WatchRawInput(Action onAnyPress) : IDisposable</c>,
-        /// an <c>XISelectEvents</c> for <c>XI_RawButtonPress | XI_RawKeyPress</c> on the root
-        /// window of its OWN display connection, posting to the UI thread. That is its own layer -
-        /// a raw-input listener cannot be proved by a render, and it must be exercised inside a
-        /// nested compositor, never against the live session. It is also X11-only by construction:
-        /// Wayland has no equivalent at all, so on that session the countdown stays unskippable
-        /// whatever gets built.</para>
-        ///
-        /// <para><b>Until then the countdown cannot be skipped and always runs its full
-        /// 3·2·1·SINK duration.</b> Nothing else about it changes: the timer, the steps, the
-        /// completion callback and now the per-step pop and fade are all live.</para>
-        /// </summary>
-        private void InstallCountdownSkipHooks() { }
+        // WPF watches any key and left/right presses without consuming them. Reuse the existing
+        // head listeners; ponytail: native Wayland windows cannot publish global input to XInput2.
+        internal static Func<Action, IDisposable?> WatchCountdownInput = WatchCountdownInputDefault;
+        private IDisposable? _countdownInput;
+        private int _countdownInputGeneration;
 
-        /// <summary>Paired with <see cref="InstallCountdownSkipHooks"/>; nothing to unhook.</summary>
-        private void RemoveCountdownSkipHooks() { }
+        private static IDisposable? WatchCountdownInputDefault(Action press)
+        {
+            // Tests/render jobs must never install a native hook on the real desktop.
+            if (SandboxMarker.Active) return null;
+            if (OperatingSystem.IsWindows())
+                return Win32OptionsDismiss.Start((_, _) => press(), anyKey: true);
+            X11PanicKey.CountdownPress += press;
+            return new CountdownSubscription(press);
+        }
+
+        private sealed class CountdownSubscription(Action press) : IDisposable
+        {
+            public void Dispose() => X11PanicKey.CountdownPress -= press;
+        }
+
+        private void InstallCountdownSkipHooks()
+        {
+            RemoveCountdownSkipHooks();
+            int generation = _countdownInputGeneration;
+            _countdownInput = WatchCountdownInput(() => Dispatcher.UIThread.Post(() =>
+            {
+                // A queued press from a closed/replaced countdown must never complete its successor.
+                if (!_closed && generation == _countdownInputGeneration) FinishCountdown();
+            }));
+        }
+
+        private void RemoveCountdownSkipHooks()
+        {
+            ++_countdownInputGeneration;
+            _countdownInput?.Dispose();
+            _countdownInput = null;
+        }
 
         private void ShowCountdownStep(string text)
         {

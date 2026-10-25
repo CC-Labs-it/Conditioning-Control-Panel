@@ -26,6 +26,7 @@ internal sealed class Win32OptionsDismiss : IDisposable
     private readonly Action<PixelPoint?, bool> _onPress;
     private IntPtr _mouse, _keys;
     private bool _disposed;
+    private bool _anyKey;
 
     private Win32OptionsDismiss(Action<PixelPoint?, bool> onPress)
     {
@@ -34,10 +35,10 @@ internal sealed class Win32OptionsDismiss : IDisposable
         _keyProc = OnKey;
     }
 
-    internal static IDisposable? Start(Action<PixelPoint?, bool> onPress)
+    internal static IDisposable? Start(Action<PixelPoint?, bool> onPress, bool anyKey = false)
     {
         if (!OperatingSystem.IsWindows()) return null;
-        var listener = new Win32OptionsDismiss(onPress);
+        var listener = new Win32OptionsDismiss(onPress) { _anyKey = anyKey };
         try
         {
             var module = GetModuleHandle(null);
@@ -67,12 +68,14 @@ internal sealed class Win32OptionsDismiss : IDisposable
     {
         try
         {
-            if (!_disposed && code >= 0 && (int)message is KeyDown or SysKeyDown && Marshal.ReadInt32(data) == 0x1b)
+            if (!_disposed && code >= 0 && (int)message is KeyDown or SysKeyDown && AcceptKey(_anyKey, Marshal.ReadInt32(data)))
                 _onPress(null, true);
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] options key hook callback failed"); }
         return CallNextHookEx(IntPtr.Zero, code, message, data);
     }
+
+    internal static bool AcceptKey(bool anyKey, int key) => anyKey || key == 0x1b;
 
     public void Dispose()
     {

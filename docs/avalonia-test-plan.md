@@ -673,3 +673,5 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+1. In an isolated test desktop, start the full countdown, restart flash, and ready countdown; any key or left/right press completes exactly once. Middle/wheel/release must not skip; close/panic detaches input and queued old presses cannot complete a successor. WPF `Chaos/ChaosOverlayWindow.xaml.cs` Rows: `chaos-overlay-window`. Native Wayland uses timed completion.
