@@ -1104,10 +1104,12 @@ namespace ConditioningControlPanel.Avalonia
                 if (Interlocked.Exchange(ref _warnedMissingCustomAssetsPath, 1) == 0)
                     Serilog.Log.Warning("CustomAssetsPath '{Path}' does not exist — falling back to default assets folder. Imports/extractions will go to the default location.", customPath);
             }
-            return _defaultAssetsPath ??= DefaultAssetsPath(OperatingSystem.IsLinux(),
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), CorePaths.UserData,
-                sandboxed: !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
+            return DefaultAssetsRoot;
         }
+
+        internal string DefaultAssetsRoot => _defaultAssetsPath ??= DefaultAssetsPath(OperatingSystem.IsLinux(),
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), CorePaths.UserData,
+            sandboxed: !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
 
         private string? _defaultAssetsPath;
 

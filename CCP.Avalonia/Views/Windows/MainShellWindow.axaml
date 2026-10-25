@@ -2447,7 +2447,7 @@
                                             <TextBlock Text="{loc:Str label_getting_started}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_quick_overview_of_the_basics_start_button_add}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialGettingStarted_Click"
+                                        <Button x:Name="BtnTutorialGettingStarted" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialGettingStarted_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2465,7 +2465,7 @@
                                             <TextBlock Text="{loc:Str label_settings_tab}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_flash_images_videos_subliminals_overlays_audi}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialSettings_Click"
+                                        <Button x:Name="BtnTutorialSettings" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialSettings_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2483,7 +2483,7 @@
                                             <TextBlock Text="{loc:Str label_presets_sessions}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_save_configurations_run_timed_sessions_create}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialPresets_Click"
+                                        <Button x:Name="BtnTutorialPresets" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialPresets_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2501,7 +2501,7 @@
                                             <TextBlock Text="{loc:Str tab_progression}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_xp_system_level_unlocks_scheduler_and_intensi}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialProgression_Click"
+                                        <Button x:Name="BtnTutorialProgression" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialProgression_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2519,7 +2519,7 @@
                                             <TextBlock Text="{loc:Str tab_achievements}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_unlock_achievements_by_reaching_milestones_an}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialAchievements_Click"
+                                        <Button x:Name="BtnTutorialAchievements" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialAchievements_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2537,7 +2537,7 @@
                                             <TextBlock Text="{loc:Str label_companion_settings_2}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_speech_bubbles_trigger_messages_and_ai_person}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialCompanion_Click"
+                                        <Button x:Name="BtnTutorialCompanion" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialCompanion_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2555,7 +2555,7 @@
                                             <TextBlock Text="{loc:Str label_patreon_exclusives}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_ai_chat_window_awareness_slut_mode_and_premiu}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialPatreon_Click"
+                                        <Button x:Name="BtnTutorialPatreon" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialPatreon_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2573,7 +2573,7 @@
                                             <TextBlock Text="{loc:Str label_awareness_engine}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_awareness_engine_desc}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialAwareness_Click"
+                                        <Button x:Name="BtnTutorialAwareness" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialAwareness_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2591,7 +2591,7 @@
                                             <TextBlock Text="{loc:Str label_avatar_companion}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_interacting_detaching_resizing_evolution_stag}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialAvatar_Click"
+                                        <Button x:Name="BtnTutorialAvatar" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialAvatar_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2609,7 +2609,7 @@
                                             <TextBlock Text="{loc:Str label_modding_guide}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_opens_the_mod_creator_with_a_step_by_step_wal}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialModding_Click"
+                                        <Button x:Name="BtnTutorialModding" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialModding_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2656,7 +2656,7 @@
                         <!-- Footer -->
                         <Border Grid.Row="2" Background="{DynamicResource SurfaceBgBrush}" CornerRadius="0,0,10,10" Padding="20,15">
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                <Button Content="{loc:Str btn_start_interactive_tutorial}" Click="BtnStartTutorial_Click" Margin="0,0,15,0"
+                                <Button x:Name="BtnStartTutorial" Content="{loc:Str btn_start_interactive_tutorial}" Click="BtnStartTutorial_Click" Margin="0,0,15,0"
                                         Background="Transparent" Foreground="{DynamicResource PinkBrush}" BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"
                                         Padding="20,10" FontWeight="SemiBold" Cursor="Hand">
                                     <Button.Template>
