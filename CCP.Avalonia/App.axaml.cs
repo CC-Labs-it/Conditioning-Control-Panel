@@ -1195,10 +1195,15 @@ namespace ConditioningControlPanel.Avalonia
             // Flush while the dispatcher is still usable. In particular, a serialize retry from a
             // background save must not see the shutdown-safe drop provider below.
             var shell = (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as Views.Windows.MainShellWindow;
+            // WPF WindowChrome.cs:412: a failed release must not skip the exit save below.
             if (Views.Tabs.RemoteControlTabView.Relay.IsValueCreated)
             {
-                Views.Tabs.RemoteControlTabView.Relay.Value.ReleaseHoldingsForExit();
-                Views.Tabs.RemoteControlTabView.Relay.Value.Dispose();
+                try
+                {
+                    Views.Tabs.RemoteControlTabView.Relay.Value.ReleaseHoldingsForExit();
+                    Views.Tabs.RemoteControlTabView.Relay.Value.Dispose();
+                }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] exit release failed"); }
             }
             SaveSettingsOnExit(shell, () => Settings?.SaveImmediate());
 

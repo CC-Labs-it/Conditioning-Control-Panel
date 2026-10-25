@@ -133,7 +133,11 @@ namespace ConditioningControlPanel.Services
                 if (string.IsNullOrEmpty(code)) return null;
                 (SessionCode, ConnectPin, Tier, IsActive) = (code, pin, tier, true);
                 (_consecutiveFailures, PollInterval, _lastStatusPush, _statusBackoffUntil) = (0, PollIntervalSeconds, DateTime.MinValue, DateTime.MinValue);
-                CoreDispatch.Invoke(() => { TakeWearerSnapshot(); return 0; }, TimeSpan.FromSeconds(10));
+                // P29: a stalled UI must not leave the session without its snapshot. Idempotent, and a
+                // late post never lands in a later session.
+                var snapGen = Volatile.Read(ref _sessionGeneration);
+                if (!CoreDispatch.Invoke(() => { TakeWearerSnapshot(); return 0; }, TimeSpan.FromSeconds(10)).Completed)
+                    CoreDispatch.Post(() => { if (snapGen == Volatile.Read(ref _sessionGeneration)) TakeWearerSnapshot(); });
                 if (AutoPoll) StartLoop();
                 Log.Information("[RemoteControl] Session started: {Code}, tier: {Tier}", code, tier);
                 return code;
@@ -321,6 +325,7 @@ namespace ConditioningControlPanel.Services
 
         private void TakeWearerSnapshot()
         {
+            if (_holdings != null) return;
             _holdings = RemoteHoldings.Take(f => f == RemoteHeld.StrictLock
                 ? StrictBefore() : RemoteHoldings.Read(CoreSettings.Current, f), DateTime.UtcNow.Ticks);
             RemoteHoldings.Save(CorePaths.UserData, _holdings);
@@ -331,8 +336,8 @@ namespace ConditioningControlPanel.Services
 
         private void NoteStrictWrite(bool on)
         {
-            if (_holdings == null) return;
-            _holdings.NoteWrite(RemoteHeld.StrictLock, StrictBefore(), on ? 1 : 0);
+            TakeWearerSnapshot();   // the start-of-session snapshot may not have landed yet
+            _holdings!.NoteWrite(RemoteHeld.StrictLock, StrictBefore(), on ? 1 : 0);
             RemoteHoldings.Save(CorePaths.UserData, _holdings);
         }
 
@@ -387,6 +392,10 @@ namespace ConditioningControlPanel.Services
                     try
                     {
                         var refusal = _execute(action, parameters);
+                        // WPF trigger_panic: StopAllRemoteEffects, then ReleaseRemoteSafetyState
+                        // (RemoteControlService.cs:1034-1038): the wearer's own strict lock, and a
+                        // running Lockdown's switches stay.
+                        if (refusal == null && action == "trigger_panic") ReleaseRemoteSafetyState();
                         return refusal;
                     }
                     catch (Exception ex) { Log.Error(ex, "[RemoteControl] Error executing command: {Action}", action); return "error"; }

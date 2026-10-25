@@ -111,8 +111,8 @@ public sealed class RemoteRelayTests
             Assert.True(s.StrictLockEnabled);
             Assert.False(s.PanicKeyEnabled);
             Assert.Null(RemoteCommands.Execute("trigger_panic", null));
-            Assert.True(s.PanicKeyEnabled);       // WPF StopAllRemoteEffects, Lockdown or not
-            Assert.False(s.StrictLockEnabled);
+            Assert.False(s.PanicKeyEnabled);      // WPF ReleaseRemoteSafetyState: a running Lockdown keeps its switches
+            Assert.True(s.StrictLockEnabled);
             (s.StrictLockEnabled, s.PanicKeyEnabled) = (true, false);
             Assert.Null(RemoteCommands.Execute("enable_panic", null));
             Assert.Equal("the Lockdown holds the strict lock", RemoteCommands.Execute("disable_strict_lock", null));
@@ -180,7 +180,7 @@ public sealed class RemoteRelayTests
     }
 
     [Fact]
-    public void Panic_stop_restores_the_panic_key_and_drops_strict_lock()
+    public void Panic_stop_restores_the_panic_key_and_keeps_the_wearers_strict_lock()
     {
         var s = CoreSettings.Current;
         var (strict, panic) = (s.StrictLockEnabled, s.PanicKeyEnabled);
@@ -188,7 +188,7 @@ public sealed class RemoteRelayTests
         {
             (s.StrictLockEnabled, s.PanicKeyEnabled) = (true, false);
             Assert.Null(RemoteCommands.Execute("trigger_panic", null));
-            Assert.False(s.StrictLockEnabled);
+            Assert.True(s.StrictLockEnabled);    // WPF: only a strict lock the controller switched on goes
             Assert.True(s.PanicKeyEnabled);
             Assert.Equal(RemoteCommands.NotOnThisBuild, RemoteCommands.Execute("play_hypnotube", null));
         }
@@ -266,6 +266,74 @@ public sealed class RemoteRelayTests
             (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect,
                 s.LockdownForceStrictLock, s.LockdownDisablePanicKey) = saved;
         }
+    }
+
+    // Review P1: WPF trigger_panic = StopAllRemoteEffects + ReleaseRemoteSafetyState
+    // (RemoteControlService.cs:1034-1038): a running Lockdown keeps its forced strict lock and panic-key-off,
+    // and its record of the wearer's strict lock is corrected for its own end.
+    [Fact]
+    public async Task Trigger_panic_keeps_a_running_Lockdown_and_hands_back_the_controllers_strict_lock()
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.StrictLockEnabled, s.PanicKeyEnabled, s.LockdownForceStrictLock, s.LockdownDisablePanicKey);
+        var previous = LockdownService.Current;
+        using var ld = LockdownService.Current = new LockdownService();
+        try
+        {
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.LockdownForceStrictLock, s.LockdownDisablePanicKey) = (false, true, true, true);
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid", "test",
+                RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
+            await r.StartAsync("full");
+            Poll(f, Cmd("1", "enable_strict_lock"));
+            await r.PollOnceAsync();
+            ld.Activate(TimeSpan.FromMinutes(30));
+            Assert.True(ld.RecordedStrictLock);
+            Poll(f, Cmd("2", "trigger_panic"));
+            await r.PollOnceAsync();
+            Assert.True(ld.IsActive);
+            Assert.True(s.StrictLockEnabled);
+            Assert.False(s.PanicKeyEnabled);
+            Assert.False(ld.RecordedStrictLock);
+            ld.Deactivate();
+            Assert.False(s.StrictLockEnabled);
+            Assert.True(s.PanicKeyEnabled);
+        }
+        finally
+        {
+            ld.Deactivate();
+            LockdownService.Current = previous;
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.LockdownForceStrictLock, s.LockdownDisablePanicKey) = saved;
+        }
+    }
+
+    // Review P2 / P29: the start-of-session snapshot timing out (posted, not yet run) must not lose the
+    // hand-back of a strict lock the controller switches on.
+    [Fact]
+    public async Task A_stalled_start_snapshot_still_hands_back_the_controllers_strict_lock()
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect, CoreDispatch.InvokeProvider, CoreDispatch.PostProvider);
+        var posted = new List<Action>();
+        try
+        {
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect) = (false, true, false);
+            var stalled = true;
+            CoreDispatch.InvokeProvider = (fn, _) => { if (stalled) { stalled = false; return (false, null); } return (true, fn()); };
+            CoreDispatch.PostProvider = posted.Add;
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid", "test", RemoteCommands.Execute, _ => { }, f) { AutoPoll = false };
+            await r.StartAsync("full");
+            Assert.Single(posted);                // the snapshot was posted after the timeout
+            Poll(f, Cmd("1", "enable_strict_lock"));
+            await r.PollOnceAsync();
+            Assert.True(s.StrictLockEnabled);
+            foreach (var a in posted.ToArray()) a();   // the late snapshot must not take the controller's value as own
+            Poll(f, "{\"controller_connected\":false}");
+            await r.PollOnceAsync();
+            Assert.False(s.StrictLockEnabled);
+        }
+        finally { (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect, CoreDispatch.InvokeProvider, CoreDispatch.PostProvider) = saved; }
     }
 
     [Theory]

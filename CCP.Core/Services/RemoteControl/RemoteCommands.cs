@@ -109,8 +109,7 @@ namespace ConditioningControlPanel.Services
             }
         }
 
-        /// <summary>WPF StopAllRemoteEffects: everything a controller could start stops; strict off, panic
-        /// key on. Only <paramref name="force"/> (trigger_panic) takes the subject's own engine down (#878).</summary>
+        /// <summary>WPF StopAllRemoteEffects: everything a controller could start stops. Only <paramref name="force"/> (trigger_panic) takes the subject's own engine down (#878).</summary>
         public static void StopEffects(bool force)
         {
             if (force) Commands.AiCommandService.CancelAll();   // a remote panic cancels pending AI follow-ups too
@@ -123,12 +122,14 @@ namespace ConditioningControlPanel.Services
                 CoreFlash.Stop(); CoreSubliminal.Stop(); CoreBubbles.Stop(); CoreBouncingText.Stop();
                 CoreEngine.Video?.Stop(); CoreEngine.BubbleCount?.Stop(); LockCardScheduler.Instance.Stop();
             }
-            // ponytail: explicit panic retains the head's emergency escape behavior. Remote endings hand back
-            // their holdings in RemoteRelay; stopping effects must not overwrite those settings.
+            // WPF ReleaseRemoteSafetyState after a remote panic: the panic key comes back on unless a
+            // running Lockdown holds it off. The strict lock is never forced off here: RemoteRelay hands
+            // back only the one the controller switched on (RemoteHoldings.HandBackStrict).
             var s = CoreSettings.Current;
-            if (force && (s.StrictLockEnabled || !s.PanicKeyEnabled))
+            var ld = LockdownService.Current;
+            if (force && RemoteControl.RemoteHoldings.TurnsPanicBackOn(s.PanicKeyEnabled, false,
+                    ld?.IsActive == true, ld?.DisabledPanicKey == true))
             {
-                s.StrictLockEnabled = false;
                 s.PanicKeyEnabled = true;
                 CoreSettings.Save();
                 SyncPanicUi();
