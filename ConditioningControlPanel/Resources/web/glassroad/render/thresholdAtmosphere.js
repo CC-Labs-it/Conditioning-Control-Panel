@@ -1,6 +1,7 @@
 /* Cotton-candy banks and soap bubbles stay fixed in the world, with close parallax.
  * Four shared instanced draws need no extra texture or decoder. */
-import { Group, InstancedMesh, SphereGeometry, MeshStandardNodeMaterial, Object3D, Color } from 'three/webgpu';
+import { Group, InstancedMesh, SphereGeometry, MeshBasicNodeMaterial, Object3D, Color } from 'three/webgpu';
+import { vec3, normalize, normalWorld, normalView, positionView, dot, clamp, mix } from 'three/tsl';
 
 export const THRESHOLD_PINKS = Object.freeze(['#ff91cc', '#fff5fc', '#e60087']);
 export function thresholdStoneColour(track, row) {
@@ -48,10 +49,15 @@ export function thresholdAtmosphereLayout(track, { phone = false } = {}) {
 export function createThresholdAtmosphere(track, options = {}) {
   const layout = thresholdAtmosphereLayout(track, options), object = new Group(); object.name = 'threshold-pink-atmosphere';
   const geometry = new SphereGeometry(1, 16, 10), pose = new Object3D(), colour = new Color(), white = new Color('#fff5fc');
-  const clouds = new MeshStandardNodeMaterial({ color: '#ffffff', roughness: .96, metalness: 0 });
-  const soap = new MeshStandardNodeMaterial({ color: '#ffb2dd', roughness: .16, metalness: .28, transparent: true, opacity: .22, depthWrite: false });
-  const glint = new MeshStandardNodeMaterial({ color: '#fff7fe', roughness: .18, emissive: '#ffb0db', emissiveIntensity: .2 });
-  const mistPaint = new MeshStandardNodeMaterial({ color: '#f586c9', roughness: 1, transparent: true, opacity: .13, depthWrite: false });
+  const clouds = new MeshBasicNodeMaterial({ color: '#ffffff' });
+  clouds.colorNode = vec3(1).mul(clamp(dot(normalize(normalWorld), normalize(vec3(-.4, .85, .35))).mul(.2).add(.8), .55, 1));
+  const soap = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
+  const rim = dot(normalize(normalView), normalize(positionView.negate())).abs().oneMinus();
+  const pink = new Color('#ffb2dd'), pearl = new Color('#fff7fe');
+  soap.colorNode = mix(vec3(pink.r, pink.g, pink.b), vec3(pearl.r, pearl.g, pearl.b), rim.pow(3));
+  soap.opacityNode = rim.pow(2).mul(.45).add(.035);
+  const glint = new MeshBasicNodeMaterial({ color: '#fff7fe', transparent: true, opacity: .72, depthWrite: false });
+  const mistPaint = new MeshBasicNodeMaterial({ color: '#f586c9', transparent: true, opacity: .13, depthWrite: false });
   const cloudMesh = new InstancedMesh(geometry, clouds, layout.clouds.length);
   const bubbleMesh = new InstancedMesh(geometry, soap, layout.bubbles.length);
   const glints = new InstancedMesh(geometry, glint, layout.bubbles.length);
