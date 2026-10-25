@@ -335,6 +335,22 @@ export function createAi(track, feel, { seed = 1, forkChoice = null } = {}) {
       b.driftT = -1; b.reverseT = 0; b.stuckT = 0; out.throttle = 1; return;
     }
     if (forkDrive(r, b, ctx, dt, out)) return;
+    // The long authored launches use the same finite cap as a player, without lyric support.
+    const aerial = (track.aerials || []).find(a => st[S.s] >= a.rampS0 && st[S.s] <= a.landingS1);
+    if (aerial && !track.forkAtSeg?.(st[S.seg])) {
+      const speed = Math.hypot(st[S.velX], st[S.velZ]), f = track.frameAt(st[S.s] + Math.max(12, speed * .6), FR);
+      const dx = f.p[0] - st[S.posX], dy = f.p[1] - st[S.posY], dz = f.p[2] - st[S.posZ];
+      const qx = st[S.quatX], qy = st[S.quatY], qz = st[S.quatZ], qw = st[S.quatW];
+      const x = dx * (1 - 2 * (qy * qy + qz * qz)) + dy * 2 * (qx * qy + qw * qz) + dz * 2 * (qx * qz - qw * qy);
+      const z = -dx * 2 * (qx * qz + qw * qy) - dy * 2 * (qy * qz - qw * qx) - dz * (1 - 2 * (qx * qx + qy * qy));
+      out.throttle = 1; out.hop = !!st[S.airborne];
+      yawParams(r.feel, YP);
+      const soft = Math.max(.2, calmOf(speed, YP) * YP.user);
+      out.steer = st[S.airborne] ? 0 : clamp(Math.atan2(x, Math.max(.1, z)) * feel.get('ai.steerGain') / soft, -1, 1);
+      b.driftT = -1; b.reverseT = 0; b.stuckT = 0;
+      if (r.item) itemLogic(r, b, ctx, dt, out);
+      return;
+    }
 
     // launch at go, by chance (the player's launch is race.js's)
     if (!b.launched && r.meta && r.meta.isBot) {
@@ -385,7 +401,8 @@ export function createAi(track, feel, { seed = 1, forkChoice = null } = {}) {
       const slide = clamp((b.latV || 0) * 0.6, -3, 3), commitS = fp.fromS - fg(feel, 'ai.stones.commitM');
       if (!b.field || b.field.plan !== fp) b.field = { plan: fp, lane: pickLane(fp, lat + slide, p), t: 0, committed: false };
       else b.field.t += dt;
-      if (!b.field.committed && s >= commitS) { b.field.lane = pickLane(fp, lat + slide, p); b.field.committed = true; b.field.t = 0; }
+      // At commitment the real footprint wins over projected drift, which can request an unreachable late weave.
+      if (!b.field.committed && s >= commitS) { b.field.lane = pickLane(fp, lat, p); b.field.committed = true; b.field.t = 0; }
       else if (!b.field.committed && b.field.t >= fg(feel, 'ai.stones.laneHoldS') && Math.abs(lat - b.field.lane) > 2) {
         b.field.lane = pickLane(fp, lat + slide, p); b.field.t = 0;
       }
