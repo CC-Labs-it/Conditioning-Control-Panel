@@ -225,21 +225,21 @@ public sealed class EmiDeskSummonTests
         var host = new Window { Width = 200, Height = 200, Content = dock };
         host.Show();
         Dispatcher.UIThread.RunJobs();
-        var mini = dock.FindControl<TextBlock>("MiniFace")!;
+        var mini = dock.FindControl<EmiFace>("MiniFace")!;
         try
         {
             dock.FindControl<Button>("BtnChip")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Pump(100);
             Assert.True(svc.IsOut);
             svc.Window!.DrawFace(">_<");
-            Assert.Equal(">_<", mini.Text);
+            Assert.Equal(">_<", mini.Face);
 
             svc.Dismiss();
             await Pump(2000);
             Assert.False(svc.IsOut);
-            Assert.Equal("0_0", mini.Text);
+            Assert.Equal("0_0", mini.Face);
             svc.Window!.DrawFace("^_^");
-            Assert.Equal("0_0", mini.Text);
+            Assert.Equal("0_0", mini.Face);
         }
         finally { host.Close(); }
     });

@@ -48,6 +48,61 @@ namespace ConditioningControlPanel.Avalonia.Platform
             catch (Exception ex) { Log.Warning("Could not open {Target}: {Error}", Path.IsPathRooted(target!) ? target : "link", ex.Message); return false; }
         }
 
+        /// <summary>Test seam for the select-the-file half of <see cref="Reveal"/>: gets a full path to an existing
+        /// file, true when the file manager took it.</summary>
+        internal static Func<string, bool> SelectInFileManager = SelectNative;
+
+        /// <summary>
+        /// WPF ExplorerLauncher.RevealInExplorer: the file manager with <paramref name="path"/> selected; a folder
+        /// opens as itself; a file that is gone (deleted, drive detached) settles for its folder (#998). A desktop
+        /// that cannot select (no FileManager1 service) also gets the folder. False when nothing opened. Never throws.
+        /// </summary>
+        public static bool Reveal(string? path)
+        {
+            if (!Allowed(path)) return false;
+            try
+            {
+                if (File.Exists(path))
+                {
+                    var full = Path.GetFullPath(path!);
+                    return SelectInFileManager(full) || Open(Path.GetDirectoryName(full));
+                }
+                if (Directory.Exists(path)) return Open(Path.GetFullPath(path!));
+                var dir = Path.GetDirectoryName(path);
+                return Directory.Exists(dir) && Open(dir);
+            }
+            catch (Exception ex) { Log.Warning("[Reveal] failed: {Error}", ex.Message); return false; }
+        }
+
+        /// <summary>Explorer <c>/select</c> on Windows (compiled here, not run on Linux CI), Finder <c>open -R</c> on
+        /// macOS, the freedesktop FileManager1.ShowItems call elsewhere. The argument strings live in
+        /// <see cref="ConditioningControlPanel.Helpers.RevealArguments"/>.</summary>
+        private static bool SelectNative(string full)
+        {
+            var psi = new ProcessStartInfo { UseShellExecute = false, CreateNoWindow = true };
+            if (OperatingSystem.IsWindows())
+            {
+                // A pre-built command line, so Arguments rather than ArgumentList (see RevealArguments).
+                psi.FileName = "explorer.exe";
+                psi.Arguments = ConditioningControlPanel.Helpers.RevealArguments.ExplorerSelect(full);
+                if (psi.Arguments == null) return false;
+                using var _ = Process.Start(psi);
+                return true;
+            }
+            psi.FileName = OperatingSystem.IsMacOS() ? "open" : "dbus-send";
+            foreach (var a in OperatingSystem.IsMacOS() ? new[] { "-R", full } : ConditioningControlPanel.Helpers.RevealArguments.FreedesktopShowItems(full))
+                psi.ArgumentList.Add(a);
+            psi.RedirectStandardOutput = psi.RedirectStandardError = true;
+            try
+            {
+                using var p = Process.Start(psi);
+                // dbus-send --print-reply answers at once; a missing service is a non-zero exit, so the folder opens instead.
+                // A file manager still starting after the wait counts as taken: falling back would open a second window.
+                return p != null && (!p.WaitForExit(3000) || p.ExitCode == 0);
+            }
+            catch (System.ComponentModel.Win32Exception) { return false; }   // swallow: no dbus-send / open here, the folder opens instead
+        }
+
         /// <summary>Open through the window's platform launcher (portal-aware), else the shell. False when refused or failed.</summary>
         public static async Task<bool> OpenAsync(TopLevel? top, string? target)
         {
