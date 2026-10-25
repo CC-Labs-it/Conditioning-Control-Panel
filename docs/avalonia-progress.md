@@ -3393,3 +3393,7 @@ Windows "Test process did not return valid JSON (non-object)" discovery flake: x
 ## avalonia-port/sync7-leash-b: +811
 - Leash "?" ink slips (main 325115b21): Core LeashHelpCatalog + LeashLevelGuide (pure git mv), Avalonia LeashHelpSlip card and reusable LeashHelpButton; host lands with sync7-leash-c.
 - Tests LeashHelpSlipTests (5, fail-proven) + LeashHelpCatalogTests (4); gate red only on the RaceTrack P115 flake; render-all 226/226 incl. LeashHelpSlip.png.
+
+## avalonia-port/flake-mantra-task-door: +72
+
+Mantra Lab completion close timer is now stopped in Cleanup, so an early-closed completed lab can no longer end the next Programs task-door session (shard-2 flake root cause). Regression test fail-proven remotely; gate green.
