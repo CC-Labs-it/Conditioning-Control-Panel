@@ -21,6 +21,22 @@ namespace CCP.Avalonia.Tests;
 /// Slate at 60 s, untick stops everything, and the engine stop (panic) stops a stopped-service clip.</summary>
 public sealed class MindWipeTests
 {
+    [Fact]
+    public void PlayedClipFeedsMemoryButFailedPlaybackDoesNot() => Run((player, voices, clock) =>
+    {
+        var uses = new List<string>();
+        global::ConditioningControlPanel.Avalonia.App.FeatureUsed += uses.Add;
+        try
+        {
+            player.TriggerOnce();
+            Assert.Equal(new[] { "mindwipe" }, uses);
+            var failed = new MindWipePlayer((path, volume, loop, ended) => null);
+            failed.TriggerOnce();
+            Assert.Single(uses);
+        }
+        finally { global::ConditioningControlPanel.Avalonia.App.FeatureUsed -= uses.Add; }
+    });
+
     private sealed class Voice : MindWipePlayer.IVoice
     {
         public bool Loop, Disposed;

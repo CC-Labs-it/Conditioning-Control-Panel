@@ -200,9 +200,7 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>
         /// WPF App.xaml.cs SeedAskSeams + NoticeSurface: the asks service and the oversize-prompt toast.
-        /// ponytail: SessionOptions/StartSession stay unseeded (no session launcher on this head, so no
-        /// Session cards), Busy knows a session, video, lockdown, lock card, bubble count and pop quiz (not grace pause, Mantra, a connected remote controller or the startup ladder, which WPF also counts), and a Watch link opens in the external
-        /// browser - WPF's own fallback when its embedded browser cannot take it.
+        /// Session offers use the Sessions page's confirmation path; busy gates are re-read at offer time.
         /// </summary>
         internal static void SeedCompanionTubeSeams()
         {
@@ -212,7 +210,12 @@ namespace ConditioningControlPanel.Avalonia
                     try { Notifications.Show(message, Helpers.NotificationType.Warning, TimeSpan.FromSeconds(12)); }
                     catch (Exception ex) { Serilog.Log.Debug("PromptAssembler: oversize notice failed to show: {Error}", ex.Message); }
                 });
-            // Only when a card can really follow here (no session launcher: Session cards never build).
+            ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.SessionOptions = () =>
+                Views.Windows.MainShellWindow.Current?.CompanionSessionOptions()
+                ?? Array.Empty<ConditioningControlPanel.Services.Companion.Asks.AskOption>();
+            ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.StartSession = id =>
+                Views.Windows.MainShellWindow.Current?.StartSessionFromBillboard(id) == true;
+            // Only suppress the model's invitation when a card can really follow here.
             ConditioningControlPanel.Services.Companion.ConversationDelivery.AskCardsShown =
                 ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.Instance.CanOfferFor;
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.BrainProvider = () => Brain;
@@ -221,6 +224,9 @@ namespace ConditioningControlPanel.Avalonia
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.SaySurface = text =>
                 Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() => Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(text, aiGenerated: false));
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.BusyProvider = () => CoreSession.IsSessionRunning
+                || Sessions?.IsRunning == true || Platform.StartupLadder.IsQuiet || Mantra.IsActive
+                || (Views.Tabs.RemoteControlTabView.Relay.IsValueCreated && Views.Tabs.RemoteControlTabView.Relay.Value.ControllerConnected)
+                || Views.Overlays.MandatoryVideoOverlay.Instance.GracePaused
                 || CoreEngine.Video?.IsPlaying == true || Views.Windows.LockCardWindow.IsAnyOpen()
                 || Views.Windows.BubbleCountWindow.IsAnyOpen() || Views.Windows.PopQuizWindow.IsAnyOpen()
                 || ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true;   // WPF App.xaml.cs:696
@@ -232,7 +238,25 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>WPF CompanionService.UserMessageSent (the "user just talked to her" signal).</summary>
         internal static event Action? UserMessageSent;
-        internal static void NotifyUserMessageSent() => UserMessageSent?.Invoke();
+        internal static void NotifyUserMessageSent()
+        {
+            UserMessageSent?.Invoke();
+            // WPF GamificationBridge.OnCompanionMessageSent: marshal only the achievement leg.
+            void Credit() => Achievements?.TrackCompanionMessage();
+            if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) Credit();
+            else global::Avalonia.Threading.Dispatcher.UIThread.Post(Credit);
+        }
+
+        internal static void SeedCompanionRecall()
+        {
+            ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled =
+                ConditioningControlPanel.Services.AIService.LocalAiService.SignalPersistentMemoryRecalled;
+            ConditioningControlPanel.Services.AIService.LocalAiService.PersistentMemoryRecalled -= OnCompanionMemoryRecalled;
+            ConditioningControlPanel.Services.AIService.LocalAiService.PersistentMemoryRecalled += OnCompanionMemoryRecalled;
+        }
+
+        private static void OnCompanionMemoryRecalled(object? sender, EventArgs e) =>
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(() => Achievements?.TryUnlockExclusive("she_remembers"));
 
         /// <summary>WPF FlashDisplayed / SubliminalDisplayed / OnBubblePopped, as a MemorySignalWriter feature id.</summary>
         internal static event Action<string>? FeatureUsed;
@@ -242,7 +266,7 @@ namespace ConditioningControlPanel.Avalonia
         /// WPF App.xaml.cs SignalMirrorFactory + WireMemorySignalSources: the brain's memory profile gets
         /// level, streak, sessions, archetype (CoreSettings), level-ups, favourite features and per-mod
         /// chat turns and mantra reps (WPF's DeferredSourcesHook; App.Mantra exists from the start here).
-        /// ponytail: no brain drain / mind wipe on this head, so those two favourites never count.
+        /// ponytail: brain-drain playback is absent; mind-wipe one-shots emit through FeatureUsed.
         /// </summary>
         internal static void SeedMemorySignals()
         {
@@ -732,7 +756,7 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:2690: built unconditionally, UseCompanionBrain decides per send. The bark
                 // echo is attached by Platform.BarkHead.Start below; command executor and
                 // activities are CompanionEffects (seeded below). SeedMemorySignals seeds UserMessageSent for the memory
-                // chat counter only; no companion-chat achievement listens to it on this head yet.
+                // chat counter; NotifyUserMessageSent also credits the companion-chat achievements.
                 SeedMemorySignals();
                 try { if (Ai != null) Brain = new ConditioningControlPanel.Services.Companion.Brain.CompanionBrain(Ai); }
                 catch (Exception ex) { Brain = null; Serilog.Log.Error(ex, "CompanionBrain: initialization failed, falling back to the stateless AI path"); }
@@ -766,6 +790,7 @@ namespace ConditioningControlPanel.Avalonia
                 // caller's thread; the popup hops to the UI thread as WPF's DispatcherHelper does.
                 Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
                 WireAchievementUnlocks(Achievements);
+                SeedCompanionRecall();
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
                 // WPF App.xaml.cs:2662: the Spiral rail day log, once Achievements and Settings are up.
                 // Its loss must not cost the launch.

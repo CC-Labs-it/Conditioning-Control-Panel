@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### Companion brain host completion slice
+
+1. WPF `MainWindow/MainWindow.CompanionAsks.cs`: ask for a session in tube chat. Rows: `feat-companion-brain`. Confirm a currently available session is offered, clicking opens the normal start confirmation, cancellation starts nothing, and an unavailable/deleted session cannot start. Run `CompanionBrainHostTests` and `TubeChatParityTests`.
+2. WPF `App.xaml.cs` `SeedAskSeams`: with mantra active, startup quiet, a connected controller, or video grace pause, request an activity; no ask card interrupts it. Rows: `feat-companion-brain`. Run `CompanionBrainHostTests`.
+3. WPF `Services/GamificationBridge.cs` `OnCompanionMessageSent` / `OnPersistentMemoryRecalled`: send one message, then reach the pillow-talk threshold; check the message achievements. Restore a saved conversation and check the entitled recall achievement. Rows: `feat-companion-brain`. Run `AchievementEngineTests` and `TubeChatBrainTests`.
+4. WPF `Services/LockCard/MindWipeService.cs` `PlayAudioNow`: play a mind-wipe clip and inspect companion memory favourite usage; a missing clip must add nothing, repeated clips respect the existing memory cooldown. Rows: `feat-companion-brain`. Run `MindWipeTests` and `MemorySignalSeedTests`.

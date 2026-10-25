@@ -170,6 +170,15 @@ internal sealed class AchievementEngine
         if (Progress.TotalFlashImages >= AchievementRules.RetinalBurnFlashImages) TryUnlock("retinal_burn");
     }
 
+    /// <summary>WPF GamificationBridge.OnCompanionMessageSent: count every send, then check milestones.</summary>
+    public void TrackCompanionMessage()
+    {
+        Progress.CompanionMessages++;
+        IsDirty = true;
+        TryUnlock("pleased_to_meet_you");
+        if (Progress.CompanionMessages >= AchievementRules.PillowTalkMessages) TryUnlock("pillow_talk");
+    }
+
     /// <summary>WPF AchievementService.TrackMindWipeDuration: clean_slate at 60 s of continuous loop.</summary>
     public void TrackMindWipeDuration(double seconds)
     {

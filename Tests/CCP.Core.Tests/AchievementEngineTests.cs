@@ -30,6 +30,23 @@ public sealed class AchievementEngineTests : IDisposable
         new AchievementStore(path).Load().IsUnlocked(id);
 
     [Fact]
+    public void CompanionMessagesUnlockAtWpfThresholdAndKeepCounting()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        engine.TrackCompanionMessage();
+        Assert.Equal(1, engine.Progress.CompanionMessages);
+        Assert.True(engine.Progress.IsUnlocked("pleased_to_meet_you"));
+        Assert.False(engine.Progress.IsUnlocked("pillow_talk"));
+        engine.Progress.CompanionMessages = AchievementRules.PillowTalkMessages - 1;
+        engine.TrackCompanionMessage();
+        Assert.True(engine.Progress.IsUnlocked("pillow_talk"));
+        engine.IsDirty = false;
+        engine.TrackCompanionMessage();
+        Assert.Equal(AchievementRules.PillowTalkMessages + 1, engine.Progress.CompanionMessages);
+        Assert.True(engine.IsDirty);
+    }
+
+    [Fact]
     public void AttentionTrackersCountAndUnlockAtWpfThresholds()
     {
         var engine = new AchievementEngine(new AchievementStore(MainPath));
