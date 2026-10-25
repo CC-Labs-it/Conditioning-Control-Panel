@@ -3166,3 +3166,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/stakes-host: +359
 - Piece by Piece board routes PvP stake frames to Core StakeBridge and posts replies back; StakeHead seeds the Chaster gate, loss row and wallet adoption (WPF StakeAppHooks).
 - feat-stakes stays stub: no Goon host on Avalonia; live /v2/stakes steps queued in live-queue/prizes.md.
+
+## avalonia-port/wire-shell-awareness: +180
+- Awareness app-scope list commits on Enter/blur through Core AwarenessAppScopeRules (shared with WPF), logged and guarded.
+- Review fixes: parser name aligned with the views-tab lane; ledger citation fixed.
