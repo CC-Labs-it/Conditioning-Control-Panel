@@ -187,7 +187,7 @@ export function createAirWordRun(song, track) {
       if (!to.row) to.offset = [...offset];
       r.s = from.s + (to.s - from.s) * u;
       // A real descending arc meets the late phrase with momentum. The next leg springs at once.
-      const arc = (r.leg === 0 ? 2.2 : 2.6) * 4 * u * (1 - u);
+      const arc = 2.2 * 4 * u * (1 - u);
       y = from.y + (to.y - from.y) * smooth(u) + arc;
       st[S.airTime] += dt;
       if (u >= 1) {
@@ -224,7 +224,7 @@ export function createAirWordRun(song, track) {
     boostFloor(st, feel, feel.get('speed.topMps'), dt, events);
     if (onGround) { st[S.grounded] = 1; st[S.airborne] = 0; st[S.latchSeg] = f.seg; }
     else { st[S.grounded] = 0; st[S.airborne] = 1; }
-    if (r.stage === 'flight' && r.leg === 1 && r.elapsed / r.duration >= .44 && v[1] <= 0) r.reboundedApex = true;
+    if (r.stage === 'flight' && r.leg === 1 && r.elapsed / r.duration >= .64 && v[1] <= 0) r.reboundedApex = true;
     setPhraseGlide(st, r.stage === 'flight' && r.leg === 1 && r.reboundedApex);
     renderRows();
     if (end) { run.activeSection = null; route = null; }

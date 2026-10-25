@@ -70,7 +70,10 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
   const onBtn = (t) => !!(t && typeof t.closest === 'function' && t.closest('.gr-touch-btn'));
   const sideOf = (x) => { const r = layer.getBoundingClientRect(); return x - r.left < (r.width || 1) * STEER_SIDE ? 'left' : 'right'; };
 
-  const onPause = (e) => { if (e.cancelable) e.preventDefault(); e.stopPropagation(); touched = true; pauseEdge = true; devices.use('touch'); };
+  const onPause = (e) => {
+    if (e.cancelable) e.preventDefault(); e.stopPropagation(); pauseEdge = true;
+    if (e.pointerType !== 'mouse') { touched = true; devices.use('touch'); }
+  };
   pauseBtn.addEventListener('pointerdown', onPause);
   const onView = (e) => { if (e.cancelable) e.preventDefault(); e.stopPropagation(); cameraEdge = true; devices.use('touch'); };
   const onRear = (e) => {
@@ -86,8 +89,15 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
   rearBtn.addEventListener('lostpointercapture', onUp);
 
   function endSteer() { steerId = -1; steer = 0; pad.style.display = 'none'; }
+  function onBlur() {
+    const id = steerId, rear = rearId;
+    endSteer(); actId = rearId = -1; hopEdge = pauseEdge = cameraEdge = false;
+    try { if (id >= 0) layer.releasePointerCapture(id); } catch (err) { /* already gone */ }
+    try { if (rear >= 0) rearBtn.releasePointerCapture(rear); } catch (err) { /* already gone */ }
+  }
+  const onVisibility = () => { if (d.hidden) onBlur(); };
   function onDown(e) {
-    if (disposed || onBtn(e.target)) return;
+    if (disposed || e.pointerType === 'mouse' || onBtn(e.target)) return;
     touched = true;
     devices.use('touch');
     if (sideOf(e.clientX) === 'left') {
@@ -137,7 +147,6 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
     if (!rear) rearId = -1;
   }
   const noMenu = (e) => { if (e.cancelable) e.preventDefault(); };
-  const onBlur = () => { endSteer(); actId = rearId = -1; hopEdge = cameraEdge = false; };
 
   layer.addEventListener('pointerdown', onDown);
   layer.addEventListener('pointermove', onMove);
@@ -147,10 +156,11 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
   layer.addEventListener('touchstart', onTouchStart, { passive: false });
   layer.addEventListener('touchend', onTouchEnd, { passive: false });
   layer.addEventListener('touchcancel', onTouchEnd, { passive: false });
+  d.addEventListener?.('visibilitychange', onVisibility);
   if (w && typeof w.addEventListener === 'function') {
+    w.addEventListener('blur', onBlur);
     w.addEventListener('pointerup', onUp, true);
     w.addEventListener('pointercancel', onUp, true);
-    w.addEventListener('blur', onBlur);
   }
 
   function poll(into) {
@@ -180,10 +190,11 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
     layer.removeEventListener('touchstart', onTouchStart);
     layer.removeEventListener('touchend', onTouchEnd);
     layer.removeEventListener('touchcancel', onTouchEnd);
+    d.removeEventListener?.('visibilitychange', onVisibility);
     if (w && typeof w.removeEventListener === 'function') {
+      w.removeEventListener('blur', onBlur);
       w.removeEventListener('pointerup', onUp, true);
       w.removeEventListener('pointercancel', onUp, true);
-      w.removeEventListener('blur', onBlur);
     }
     if (layer.parentNode) layer.parentNode.removeChild(layer);
   }

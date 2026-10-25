@@ -89,6 +89,24 @@ test('box pickup: slot rolls rollS then shows; a full slot drives through', () =
   assert.equal(items.view().held.length, 2);
 });
 
+test('falling below the road cannot collect boxes or bubbles through its underside', () => {
+  const { list, rec, f } = setup({ karts: [{ s: 100, height: -5, airborne: true }] });
+  // A separate pickup system puts one box and bubble at the same road position.
+  const track = fakeTrack();
+  track.items = [{ kind: 'box', s: 100, x: 0 }, { kind: 'bubble', s: 100, x: 0 }];
+  const pickups = createItems(track, f, rec);
+  const std = standings(list);
+  pickups.update(DT, list, std, RACE);
+  assert.equal(list[0].item.id, null);
+  assert.equal(rec.all('bubble-pop').length, 0);
+  assert.ok(pickups.view().boxes[0].alive);
+  assert.ok(pickups.view().bubbles[0].alive);
+  list[0].st[S.height] = 0;
+  pickups.update(DT, list, std, RACE);
+  assert.equal(rec.all('item-box').length, 1, 'touching road height still collects');
+  assert.equal(rec.all('bubble-pop').length, 1);
+});
+
 test('pickup bubble pops for a small boost; bot events go out as racer-event', () => {
   const tr = fakeTrack();
   tr.items = [{ kind: 'bubble', node: 30, x: 1, ds: 0, s: 300 }, { kind: 'bubble', node: 60, x: 0, ds: 0, s: 600 }];
