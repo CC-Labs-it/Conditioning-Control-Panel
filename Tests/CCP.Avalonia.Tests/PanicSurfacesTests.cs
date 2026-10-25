@@ -121,8 +121,7 @@ public sealed class PanicSurfacesTests
         "speak-cue",
         "takeover",
         "tour",
-        "tube-speech", // also owns the idle timer
-
+        "tube-speech",
         "voice-capture",
     };
 

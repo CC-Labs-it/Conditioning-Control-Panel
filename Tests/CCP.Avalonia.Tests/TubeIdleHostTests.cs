@@ -14,14 +14,14 @@ namespace CCP.Avalonia.Tests;
 public sealed class TubeIdleHostTests
 {
     [Fact]
-    public Task TimerDispatchesAndOptInControlsVoiceThenPanicStopsTicks() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task TimerDispatchesAndOptInControlsVoiceThenPanicKeepsTimer() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
         var old = (s.AvatarEnabled, s.MasterVolume, s.AvatarMuted, s.CompanionSpeaksIdleWhenEngineOff, s.CompanionVoiceLinesMuted);
-        var engine = BarkHead.Engine; var audio = CoreAudio.PlayStoppableProvider;
+        var rotation = s.BarkIdleRotation; var engine = BarkHead.Engine; var audio = CoreAudio.PlayStoppableProvider;
         var engineProvider = CoreSession.IsEngineRunningProvider;
         var sessionProvider = CoreSession.IsSessionRunningProvider;
         var clip = Path.GetTempFileName();
@@ -39,8 +39,7 @@ public sealed class TubeIdleHostTests
             BarkHead.Engine.Start();
             tube.DispatchIdleTick(); Dispatcher.UIThread.RunJobs();
             Assert.True(tube.HasBubbleUp); Assert.Equal(0, played);
-            tube.PanicSilence(); Dispatcher.UIThread.RunJobs(); Assert.False(tube.IdleTimerRunning);
-            tube.DispatchIdleTick(); Assert.False(tube.HasBubbleUp);
+            tube.PanicSilence(); Dispatcher.UIThread.RunJobs(); Assert.True(tube.IdleTimerRunning); // WPF keeps it
             s.CompanionSpeaksIdleWhenEngineOff = true;
             // Direct mouth path isolates the audio gate from the normal 60-second bark floor.
             BarkHead.Speak(tube, new BarkSpeech("opted in", clip, false, null, false, true));
@@ -48,7 +47,7 @@ public sealed class TubeIdleHostTests
         }
         finally
         {
-            tube?.Close(); File.Delete(clip); BarkHead.Engine = engine; CoreAudio.PlayStoppableProvider = audio;
+            s.BarkIdleRotation = rotation; tube?.Close(); File.Delete(clip); BarkHead.Engine = engine; CoreAudio.PlayStoppableProvider = audio;
             CoreSession.IsEngineRunningProvider = engineProvider; CoreSession.IsSessionRunningProvider = sessionProvider;
             (s.AvatarEnabled, s.MasterVolume, s.AvatarMuted, s.CompanionSpeaksIdleWhenEngineOff, s.CompanionVoiceLinesMuted) = old;
         }

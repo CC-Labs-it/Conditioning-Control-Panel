@@ -100,7 +100,8 @@ internal static class BarkHead
             CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff,
             ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()))
         {
-            tube.GigglePriority(s.Text, playSound: false, aiGenerated: false);
+            if (s.Priority) tube.GigglePriority(s.Text, playSound: false, aiGenerated: false);
+            else tube.Giggle(s.Text);   // WPF BarkService.cs:1973: ordinary lines queue
             return;
         }
         if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) { tube.Giggle(s.Text); return; }

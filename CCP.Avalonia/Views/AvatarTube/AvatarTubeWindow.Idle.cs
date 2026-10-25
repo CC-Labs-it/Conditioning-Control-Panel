@@ -30,7 +30,7 @@ public partial class AvatarTubeWindow
 
     internal void DispatchIdleTick()
     {
-        if (!IdleTimerRunning) return; // panic/close also rejects an already queued tick
+        if (!IdleTimerRunning) return; // close also rejects an already queued tick; panic keeps it running (WPF PanicSilence)
         _idleTimer!.Interval = TimeSpan.FromSeconds(CoreSettings.Current.IdleGiggleIntervalSeconds);
         if (ConditioningControlPanel.Services.Companion.SpeechLatchRule.IsLatchStale(
             _isGiggling, _speechBubble.IsVisible, _isWaitingForAi, _speechQueue.Count == 0,

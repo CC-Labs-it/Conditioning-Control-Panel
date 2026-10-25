@@ -18,7 +18,7 @@ public sealed class CompanionIdleHostTests
     public void IdleRotationAndGates()
     {
         var s = CoreSettings.Current;
-        var old = (s.AvatarEnabled, s.MasterVolume, s.BarkChatSuppressionMs);
+        var old = (s.AvatarEnabled, s.MasterVolume, s.BarkChatSuppressionMs); var rotation = s.BarkIdleRotation;
         try
         {
             (s.AvatarEnabled, s.MasterVolume, s.BarkChatSuppressionMs) = (true, 50, 0);
@@ -42,7 +42,7 @@ public sealed class CompanionIdleHostTests
             Assert.True(e.DispatchIdle()); Assert.NotEqual(last, said.Last().Text);
             s.MasterVolume = 0; clock.Utc += TimeSpan.FromSeconds(61); Assert.False(e.DispatchIdle());
         }
-        finally { (s.AvatarEnabled, s.MasterVolume, s.BarkChatSuppressionMs) = old; }
+        finally { (s.AvatarEnabled, s.MasterVolume, s.BarkChatSuppressionMs) = old; s.BarkIdleRotation = rotation; }
     }
     [Theory]
     [InlineData(true, false, false, false, false, false, false)]

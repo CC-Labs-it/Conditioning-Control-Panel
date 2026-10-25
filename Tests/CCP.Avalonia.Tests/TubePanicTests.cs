@@ -56,9 +56,7 @@ public sealed class TubePanicTests
             Assert.False(tube.HasBubbleUp);
             Assert.False(bubble.IsVisible);
             Assert.False(tube.IsSpeaking);
-            Assert.False(tube.IdleTimerRunning);
-            tube.DispatchIdleTick();
-            Assert.False(tube.HasBubbleUp);
+            Assert.True(tube.IdleTimerRunning);   // WPF PanicSilence leaves the idle timer running
 
             // Two voiced lines close together: the second cuts the first (WPF Speech.cs:1896), so the
             // panic leaves neither playing.

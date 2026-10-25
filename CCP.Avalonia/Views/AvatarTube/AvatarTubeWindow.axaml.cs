@@ -1342,6 +1342,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 };
                 _listeningDotsTimer = timer;
                 timer.Start();
+                RestartIdleTimer();   // WPF Speech.cs:789
             });
         }
 

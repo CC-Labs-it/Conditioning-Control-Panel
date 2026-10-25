@@ -81,7 +81,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("corner-gif", _ => Overlays.CornerGifOverlay.StopAll(), After: ["engine"]),
             // WPF :1981-1982 "tube speech"/"avatar voice": cut her line, drop the queue/animations and the bubble.
             // WPF :1978-1981: after the corner GIFs.
-            // Includes the tube idle source: queued ticks cannot speak after PanicSilence.
             new("tube-speech", sh => (sh?.Tube ?? AvatarTube.AvatarTubeWindow.Live)?.PanicSilence(), After: ["corner-gif"]),
             // WPF LockCardService.Stop(dismissOpenCards: true); :2041 StopAdHocEffects closes lock cards after the engine/media stop.
             new("lock-cards", _ => MainShellWindow.StopLockCards(), After: ["engine", "leash-task"]),
