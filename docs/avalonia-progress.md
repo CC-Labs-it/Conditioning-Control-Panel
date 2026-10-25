@@ -3499,3 +3499,7 @@ Restores the late Dormant shimmer in ChatThresholdView (WPF State -> PlayDormant
 ## avalonia-port/wire-win-webcam-quick-recal: +535
 - Windows Ctrl+Alt+G quick recal wired with panic/consent/clash safety and panic-registry close.
 - Hidden/minimized shell never owns the dialog; startup Opened wire pinned by a scan test.
+
+## avalonia-port/wire-views-settings-account: +334
+- Discord link and a Discord-first sign-in (#749) offer achievement sharing via Core AchievementSharePromptDecision (Ask on panel / Inbox while a game or hidden panel). The privacy-panel share toggle is wired.
+- Review fix: #749 sign-in path, localized Yes, merged duplicate ledger rows. rgate 39750547417 green apart from the RaceTrack flake (P115).
