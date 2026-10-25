@@ -3327,6 +3327,7 @@
   "msg_no_cloud_backup_found_or_restore_failed": "Nenhum backup na nuvem encontrado ou restauração falhou.",
   "title_restore_failed": "Restauração Falhou",
   "msg_settings_restored_from_cloud": "Configurações restauradas da nuvem! Algumas alterações podem precisar de uma reinicialização para ter efeito total.",
+  "msg_restore_kept_local_paths_0": "Esses caminhos não existem neste computador, então sua escolha local foi mantida: {0}",
   "title_settings_restored": "Configurações Restauradas",
   "msg_restore_failed_0": "Restauração falhou: {0}",
   "title_restore_error": "Erro de Restauração",

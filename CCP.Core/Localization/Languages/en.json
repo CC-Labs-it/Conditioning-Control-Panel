@@ -4487,6 +4487,7 @@
   "msg_no_cloud_backup_found_or_restore_failed": "No cloud backup found or restore failed.",
   "title_restore_failed": "Restore Failed",
   "msg_settings_restored_from_cloud": "Settings restored from cloud! Some changes may require a restart to take full effect.",
+  "msg_restore_kept_local_paths_0": "These paths don't exist on this computer, so your local choice was kept: {0}",
   "title_settings_restored": "Settings Restored",
   "msg_restore_failed_0": "Restore failed: {0}",
   "title_restore_error": "Restore Error",

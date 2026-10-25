@@ -4106,6 +4106,7 @@
   "msg_no_cloud_backup_found_or_restore_failed": "未找到云端备份或恢复失败。",
   "title_restore_failed": "恢复失败",
   "msg_settings_restored_from_cloud": "设置已从云端恢复！某些更改可能需要重启才能完全生效。",
+  "msg_restore_kept_local_paths_0": "这些路径在此电脑上不存在，因此保留了本地设置：{0}",
   "title_settings_restored": "设置已恢复",
   "msg_restore_failed_0": "恢复失败：{0}",
   "title_restore_error": "恢复错误",

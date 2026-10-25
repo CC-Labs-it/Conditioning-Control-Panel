@@ -237,6 +237,74 @@ namespace ConditioningControlPanel.Services
             HoldSafetyFloor(current, restored);
         }
 
+        // Absolute paths KeepLocalMissingPaths guards; "X.Y" = property Y of each entry of list X.
+        internal static readonly string[] GuardedPathFields =
+        {
+            nameof(AppSettings.StartupVideoPath), nameof(AppSettings.SpiralPath), nameof(AppSettings.MindWipeAudioPath),
+            nameof(AppSettings.WallpaperSourceFolder), nameof(AppSettings.WallpaperOriginalPath), nameof(AppSettings.DeeperLastDirectory),
+            nameof(AppSettings.BlinkTrainerFolders), nameof(AppSettings.DeeperRecentFiles),
+            "CornerGifOverlays.GifPath", "AudioLayers.Path", "KeywordTriggers.AudioFilePath",
+        };
+
+        // Relative to the assets folder: passed through with '\' turned into '/'.
+        internal static readonly string[] RelativePathFields =
+        {
+            nameof(AppSettings.ActiveAssetPaths), nameof(AppSettings.DisabledAssetPaths), nameof(AppSettings.DisabledAssetFolders),
+            "AssetPresets.DisabledAssetPaths", "AssetPresets.DisabledAssetFolders",
+        };
+
+        /// <summary>
+        /// Avalonia manual restore only (decision 2026-10-25): a backup from another machine (or OS) carries
+        /// absolute paths that do not exist here, so each such field keeps the local value instead. WPF never
+        /// calls this. Returns the fields that kept their local value, for the "restored" dialog.
+        /// </summary>
+        public static List<string> KeepLocalMissingPaths(AppSettings? current, AppSettings? restored)
+        {
+            var kept = new List<string>();
+            if (current == null || restored == null) return kept;
+            static bool Here(string? p) => string.IsNullOrEmpty(p) || File.Exists(p) || Directory.Exists(p);
+            string? One(string name, string? local, string? theirs)
+            {
+                if (Here(theirs) || theirs == local) return theirs;
+                kept.Add(name);
+                return local;
+            }
+            List<T> Many<T>(string name, List<T> local, List<T> theirs, Func<T, string?> path)
+            {
+                var keep = theirs.Where(t => Here(path(t))).ToList();
+                if (keep.Count < theirs.Count) kept.Add(name);
+                keep.AddRange(local.Where(l => !keep.Any(k => path(k) == path(l))));   // never drop a local entry
+                return keep;
+            }
+
+            restored.StartupVideoPath = One(nameof(AppSettings.StartupVideoPath), current.StartupVideoPath, restored.StartupVideoPath);
+            restored.SpiralPath = One(nameof(AppSettings.SpiralPath), current.SpiralPath, restored.SpiralPath)!;
+            restored.MindWipeAudioPath = One(nameof(AppSettings.MindWipeAudioPath), current.MindWipeAudioPath, restored.MindWipeAudioPath)!;
+            restored.WallpaperSourceFolder = One(nameof(AppSettings.WallpaperSourceFolder), current.WallpaperSourceFolder, restored.WallpaperSourceFolder)!;
+            restored.WallpaperOriginalPath = One(nameof(AppSettings.WallpaperOriginalPath), current.WallpaperOriginalPath, restored.WallpaperOriginalPath)!;
+            restored.DeeperLastDirectory = One(nameof(AppSettings.DeeperLastDirectory), current.DeeperLastDirectory, restored.DeeperLastDirectory)!;
+            restored.BlinkTrainerFolders = Many(nameof(AppSettings.BlinkTrainerFolders), current.BlinkTrainerFolders, restored.BlinkTrainerFolders, p => p);
+            restored.DeeperRecentFiles = Many(nameof(AppSettings.DeeperRecentFiles), current.DeeperRecentFiles, restored.DeeperRecentFiles, p => p);
+            restored.AudioLayers = Many(nameof(AppSettings.AudioLayers), current.AudioLayers, restored.AudioLayers, l => l.Path);
+            for (var i = 0; i < restored.CornerGifOverlays.Count; i++)   // positional slots: slot i keeps local slot i
+                restored.CornerGifOverlays[i].GifPath = One(nameof(AppSettings.CornerGifOverlays),
+                    i < current.CornerGifOverlays.Count ? current.CornerGifOverlays[i].GifPath : "", restored.CornerGifOverlays[i].GifPath) ?? "";
+            foreach (var t in restored.KeywordTriggers)   // by Id: a trigger new to this machine gets no file
+                t.AudioFilePath = One(nameof(AppSettings.KeywordTriggers),
+                    current.KeywordTriggers.FirstOrDefault(l => l.Id == t.Id)?.AudioFilePath, t.AudioFilePath);
+
+            static HashSet<string> Slash(HashSet<string> set) => new(set.Select(p => p.Replace('\\', '/')), set.Comparer);
+            restored.ActiveAssetPaths = Slash(restored.ActiveAssetPaths);
+            restored.DisabledAssetPaths = Slash(restored.DisabledAssetPaths);
+            restored.DisabledAssetFolders = Slash(restored.DisabledAssetFolders);
+            foreach (var preset in restored.AssetPresets)
+            {
+                preset.DisabledAssetPaths = Slash(preset.DisabledAssetPaths);
+                preset.DisabledAssetFolders = Slash(preset.DisabledAssetFolders);
+            }
+            return kept.Distinct().ToList();
+        }
+
 
         private static readonly Lazy<HttpClient> Shared = new(() => new HttpClient { Timeout = TimeSpan.FromSeconds(30) });
         private readonly HttpClient _http;

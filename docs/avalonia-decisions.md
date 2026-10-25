@@ -1314,3 +1314,24 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Option B: keep scoped sending; record the difference in the `views-profile-privacy-panel` parity row.
 - Choice: B, interim. Advised by the supervisor: never risk revoking a server privacy grant without an owner decision.
   oracle-deep decision pending; follow-up lane wire-views-profile-privacy-panel-b.
+
+## 2026-10-25 Cloud settings backup: manual backup/restore on Avalonia (supersedes P44 2026-10-09 for the manual path)
+- Question: the manual Backup now / Restore from cloud buttons (WPF `MainWindow.CloudBackup.cs`) are wired on this head
+  (fin4-shell-cloud-backup). A backup made on Windows carries absolute Windows paths; restored onto Linux (or another
+  machine) they point nowhere and would silently replace working local choices.
+- Option A: ship the manual path as is (silent overwrite of every path).
+- Option B: ship it with a keep-local guard for paths that do not exist on this machine, listing what was skipped.
+- Option C: backup only, no restore, until path translation is designed.
+- Option D: keep it unwired (P44, decision 2026-10-09).
+- Choice: B. Core `CloudSettingsBackup.KeepLocalMissingPaths`, called only by the Avalonia restore (WPF unchanged), keeps
+  the local value of each absolute path the backup names but this machine lacks: StartupVideoPath, SpiralPath,
+  MindWipeAudioPath, WallpaperSourceFolder, WallpaperOriginalPath, DeeperLastDirectory; per entry BlinkTrainerFolders,
+  DeeperRecentFiles and AudioLayers (missing entries dropped, every local entry kept), CornerGifOverlays[i].GifPath (slot i),
+  KeywordTriggers[].AudioFilePath (by Id; CustomCompanionPhrases store a bare file name, no folder). The kept fields are listed in the
+  "restored" dialog (`msg_restore_kept_local_paths_0`). Relative asset lists (ActiveAssetPaths, DisabledAssetPaths,
+  DisabledAssetFolders) and AssetPresets (which store relative paths only) pass through with '\' turned into '/'.
+  `CloudRestorePathGuardTests` fails when a new path-like setting is neither guarded nor allowlisted with a reason.
+- Residual risks: GDPR export, the startup welcome-back restore and automatic/exit backup are still missing on this head;
+  cross-OS asset presets and asset lists are only slash-normalized, not re-rooted (a relative path that names a file
+  absent on this machine stays as is); path values inside dictionaries (e.g. PhraseAudioOverrides) are not scanned.
+- Advisor: oracle-deep.

@@ -78,19 +78,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             try
             {
                 var restored = await client.DownloadAsync();
-                // A session may have started while the dialog or the download was up.
-                if (restored == null || CoreSession.IsSessionRunning || CoreSettings.Service is not { } service)
+                // A session may have started while the dialog or the download was up: say so, not "no backup".
+                if (CoreSession.IsSessionRunning)
+                {
+                    if (Shell?.RefuseActionIfSessionLocked("cloud-restore-settings") != true && owner != null)
+                        await MessageDialog.ShowAsync(owner, Loc.Get("session_lock_action_title"),
+                            Loc.GetF("session_lock_action_body", Loc.Get("session_lock_reason")));
+                    return;
+                }
+                if (restored == null || CoreSettings.Service is not { } service)
                 {
                     if (owner != null)
                         await MessageDialog.ShowAsync(owner, Loc.Get("title_restore_failed"), Loc.Get("msg_no_cloud_backup_found_or_restore_failed"));
                     return;
                 }
                 CloudSettingsBackup.ApplyLocalWins(service.Current, restored);
+                var kept = CloudSettingsBackup.KeepLocalMissingPaths(service.Current, restored);
                 service.RestoreFrom(restored);   // raises CurrentReplaced: every page re-seeds from it
                 this.FindAncestorOfType<Tabs.AppSettingsTabView>()?.RefreshSections();
                 Refresh();
                 if (owner != null)
-                    await MessageDialog.ShowAsync(owner, Loc.Get("title_settings_restored"), Loc.Get("msg_settings_restored_from_cloud"));
+                    await MessageDialog.ShowAsync(owner, Loc.Get("title_settings_restored"), Loc.Get("msg_settings_restored_from_cloud")
+                        + (kept.Count == 0 ? "" : "\n\n" + Loc.GetF("msg_restore_kept_local_paths_0", string.Join(", ", kept))));
             }
             catch (Exception ex)
             {

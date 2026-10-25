@@ -3327,6 +3327,7 @@
   "msg_no_cloud_backup_found_or_restore_failed": "クラウドバックアップが見つからないか、復元に失敗しました。",
   "title_restore_failed": "復元失敗",
   "msg_settings_restored_from_cloud": "クラウドから設定を復元しました！一部の変更は完全に適用するために再起動が必要な場合があります。",
+  "msg_restore_kept_local_paths_0": "これらのパスはこのコンピューターに存在しないため、ローカルの設定を残しました: {0}",
   "title_settings_restored": "設定を復元",
   "msg_restore_failed_0": "復元失敗：{0}",
   "title_restore_error": "復元エラー",
