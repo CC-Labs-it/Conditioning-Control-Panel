@@ -36,6 +36,17 @@ public sealed class LeashSelfCard : Border
         Render();
     }
 
+    /// <summary>--render-view sample (internal: no production caller can ship it).</summary>
+    internal LeashSelfCard() : this(Sample(DateTimeOffset.UtcNow), () => null) { }
+
+    private static MyLeash Sample(DateTimeOffset now)
+    {
+        var vex = new LeashPerson("vex", "Vex", null);
+        return new MyLeash(vex, LeashIntensity.Standard, now.AddDays(-3), 4, null, LeashRemoteMode.Ask,
+            new[] { new Punishment("p1", PunishKind.Lines, 5, null, vex, now.AddMinutes(-9), now.AddHours(20)) },
+            null, 1, new[] { new Sticker("good-girl", vex, now.AddHours(-2)) });
+    }
+
     public void Update(MyLeash me) { _me = me; Render(); }
 
     private void Line(string text, string tag)
@@ -128,14 +139,8 @@ public sealed class LeashSelfCard : Border
         // ponytail: the read-only holder preview needs the unported holder card.
     }
 
-    internal async Task CutAsync()
-    {
-        // Same one-click safety as the gate. Never wait for the server to stop the task/window.
-        LeashTaskHost.EndTask("cut");
-        App.Notifications.Show(Loc.Get("leash_cut_done"), Helpers.NotificationType.Success);
-        try { if (_service() is { } s) await s.CutAsync(); }
-        catch (Exception ex) { Serilog.Log.Debug(ex, "Leash cut failed (service retries)"); }
-    }
+    /// <summary>Same one-click cut as the gate (WPF LeashSurfaces.Cut).</summary>
+    internal Task CutAsync() => LeashHead.CutAsync(_service(), TopLevel.GetTopLevel(this) as MainShellWindow);
 
     internal bool StartWatch(Assignment a)
     {

@@ -16,7 +16,25 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal static class LeashHead
 {
     /// <summary>WPF App.Leash. Null until startup built it and after exit.</summary>
-    internal static ILeashService? Service { get; set; }
+    internal static ILeashService? Service
+    {
+        get => _service;
+        set { if (ReferenceEquals(_service, value)) return; _service = value; ServiceChanged?.Invoke(); }
+    }
+    private static ILeashService? _service;
+
+    /// <summary>Raised when the service is built or dropped, so an open Leash page rebinds in place.</summary>
+    internal static event Action? ServiceChanged;
+
+    /// <summary>WPF LeashSurfaces.Cut, shared by the gate card and the own card: the task goes, the cut is
+    /// said, and the Core cut runs (its LeashCutSafety steps first, whatever the network does).</summary>
+    internal static async System.Threading.Tasks.Task CutAsync(ILeashService? svc, Views.Windows.MainShellWindow? shell = null)
+    {
+        LeashTaskHost.EndTask("cut", shell);   // WPF LeashSurfaces.CutDone -> EndLeashTask
+        App.Notifications.Show(ConditioningControlPanel.Localization.Loc.Get("leash_cut_done"), Helpers.NotificationType.Success);
+        try { if (svc != null) await svc.CutAsync(); }
+        catch (Exception ex) { Serilog.Log.Debug("[Leash] cut failed (service retries): {E}", ex.Message); }
+    }
 
     /// <summary>WPF App.LeashedChanged: the account went on or off a leash.</summary>
     internal static event Action<bool>? LeashedChanged;

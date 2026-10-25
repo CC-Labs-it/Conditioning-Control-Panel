@@ -267,12 +267,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF CutRequested -> LeashSurfaces.Cut: the gate goes, the cut is said, and the Core
         /// cut runs (its LeashCutSafety steps first, whatever the network does).</summary>
-        internal async System.Threading.Tasks.Task CutLeashAsync()
-        {
-            LeashTaskHost.EndTask("cut", this);   // WPF LeashSurfaces.CutDone -> EndLeashTask
-            App.Notifications.Show(Loc.Get("leash_cut_done"), Helpers.NotificationType.Success);
-            try { if (LeashHead.Service is { } s) await s.CutAsync(); }
-            catch (Exception ex) { Serilog.Log.Debug("[Leash] cut failed (service retries): {E}", ex.Message); }
-        }
+        internal System.Threading.Tasks.Task CutLeashAsync() => LeashHead.CutAsync(LeashHead.Service, this);
     }
 }

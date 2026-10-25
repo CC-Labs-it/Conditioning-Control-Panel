@@ -42,13 +42,15 @@ public sealed class LeashSelfCardTests
     }
 
     [Fact]
-    public void PageTracksPollsAndSignOut_AndCutsWithoutConfirmation() => LeashGateCardTests.Run(true, (shell, _, _) =>
+    public void PageRebindsWhenServiceArrives_AndCutsWithoutConfirmation_StalePollCannotRestore() => LeashGateCardTests.Run(true, (shell, _, _) =>
     {
-        var svc = new LeashService(new Api { Offline = true }, () => "u_me");
-        svc.ApplyBlock(LeashHeadTests.BlockWithPunishment());
-        LeashHead.Service = svc;
+        LeashHead.Service = null;
         shell.ShowTab("leash");
         var page = shell.FindControl<LeashTabView>("LeashTab")!;
+        Assert.True(page.ShowingEmpty);
+        var svc = new LeashService(new Api { Offline = true }, () => "u_me");
+        svc.ApplyBlock(LeashHeadTests.BlockWithPunishment());
+        LeashHead.Service = svc;                      // built while the page is already showing
         Assert.False(page.ShowingEmpty);
         var card = page.GetLogicalDescendants().OfType<LeashSelfCard>().Single();
         var cut = card.GetLogicalDescendants().OfType<Button>().Single(b => (string?)b.Tag == "leash-cut");

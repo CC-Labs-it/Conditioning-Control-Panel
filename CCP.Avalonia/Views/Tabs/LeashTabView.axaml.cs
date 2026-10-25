@@ -16,8 +16,8 @@ public partial class LeashTabView : UserControl
     {
         InitializeComponent();
         EmptyButton.Click += (_, _) => (TopLevel.GetTopLevel(this) as MainShellWindow)?.ShowTab("friends");
-        AttachedToVisualTree += (_, _) => Bind();
-        DetachedFromVisualTree += (_, _) => Unbind();
+        AttachedToVisualTree += (_, _) => { LeashHead.ServiceChanged += OnServiceChanged; Bind(); };
+        DetachedFromVisualTree += (_, _) => { LeashHead.ServiceChanged -= OnServiceChanged; Unbind(); };
         PropertyChanged += (_, e) =>
         {
             if (e.Property == IsVisibleProperty && IsVisible) Bind();
@@ -39,6 +39,12 @@ public partial class LeashTabView : UserControl
     }
 
     private void OnSnapshot(LeashSnapshot _) => Refresh();
+    // The service can be built after the page is already showing (startup) or dropped on exit.
+    private void OnServiceChanged()
+    {
+        if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) Bind();
+        else global::Avalonia.Threading.Dispatcher.UIThread.Post(Bind);
+    }
     private void Refresh()
     {
         var me = _service?.Available == true ? _service.Snapshot.Me : null;
