@@ -87,9 +87,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             AvaloniaXamlLoader.Load(this);
             InitializeLanguageSelector();
+            InitializeQuestStamps(); // WPF header quest roster; releases service events on Closed.
 
             // WPF put these on the Window element itself; Avalonia routes them as attached events.
             HookResizeEdges();
+            HookWindowChromeState();
             // handledEventsToo: a drop the Sessions tab already imported must still clear the overlay.
             AddHandler(DragDrop.DropEvent, Window_Drop, RoutingStrategies.Bubble, handledEventsToo: true);
             AddHandler(DragDrop.DragEnterEvent, Window_DragEnter);
@@ -104,6 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // The rail's setup pass. Here, not in OnAttachedToVisualTree: a Window IS the visual
             // root, so that override never fires on it and the rail never opened.
             InitializeNavRail();
+            InitializeChromeFx(); // WPF chrome message cue lifecycle
             InitFavoritesRail(); // MainShellWindow.FavoritesRail.cs (WPF MainWindow.xaml.cs:3501)
             ApplyEnableDeeper(); // MainShellWindow.DeeperTab.cs (WPF LoadSettings: rail door follows EnableDeeper)
             InitializeTabHistoryInput(); // MainShellWindow.TabHistory.cs (WPF MainWindow ctor)
@@ -148,6 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             App.CatalogueLookup.SetOpener(OpenCatalogueEnhancement);
             Closed += (_, _) =>
             {
+                StopLockdownPulse();
                 App.CatalogueLookup.ClearOpener(OpenCatalogueEnhancement);
                 if (Platform.X11PanicKey.PushToTalk == OnPushToTalkKey)
                     Platform.X11PanicKey.PushToTalk = null;

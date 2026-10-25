@@ -41,6 +41,17 @@ Views/Chaos/ChaosRunHost.cs :: ☠ RELAPSE — one more loop :: WPF ChaosModeSer
 Views/Chaos/ChaosRunHost.cs :: ⏳ ten seconds. make them count. :: WPF ChaosModeService.cs:1073 run event-feed sentence (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: 🔮 prism! 10x :: run event-feed sentence, WPF ChaosModeService.cs:1837 verbatim (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: 🪨 heavy drop! x3 :: run event-feed sentence, WPF ChaosModeService.cs:1870 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: ✋ no focus — it triggers :: run event-feed sentence, WPF ChaosModeService.cs:1958 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: 💥 a tap isn't a hold :: run event-feed sentence, WPF ChaosModeService.cs:1966 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: 💥 you let go :: run event-feed sentence, WPF ChaosModeService.cs:1974 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: ⛓ snap chain holds :: run event-feed sentence, WPF ChaosModeService.cs:2081 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: ♥ resistance crumbles :: run event-feed sentence, WPF ChaosModeService.cs:2092 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: 📿 the collar holds :: run event-feed sentence, WPF ChaosModeService.cs:2106 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: 📿 unleashed — the field :: run event-feed sentence, WPF ChaosModeService.cs:2115 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: 💥 {name} triggered! :: run event-feed sentence, WPF ChaosModeService.cs:2127 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: ⏱ last breath! x :: run event-feed sentence, WPF ChaosModeService.cs:2040 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: 🐌 slow burn! x3 :: run event-feed sentence, WPF ChaosModeService.cs:2048 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: ✔ snapped {spec :: run event-feed sentence, WPF ChaosModeService.cs:2049 verbatim (content (c).3)
 
 # --- art, D6 "keep as art": whole files that are illustration, not icons ---
 Controls/HelpLoops/ :: * :: path: D6 art - help-loop scene illustrations

@@ -40,7 +40,7 @@
 //   internal void SliderAwarenessCooldown_ValueChanged(…)
 //   internal void SliderAwarenessCooldownMax_ValueChanged(…)
 //   internal void BtnSwitchCompanion_Click(…)
-//   internal void RevealCompanionWorkshopCell(…)
+//   (RevealCompanionWorkshopCell + the cell -> page map are ported: MainShellWindow.CompanionFx.cs)
 //   private void OnCompanionProviderSelected(…)
 //   private async Task MaybeOfferLocalAiSetupAsync(…)
 //   internal void BtnSetupLocalAi_Click(…)
