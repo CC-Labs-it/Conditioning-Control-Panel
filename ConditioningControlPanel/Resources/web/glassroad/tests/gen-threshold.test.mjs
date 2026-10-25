@@ -29,8 +29,8 @@ test('gen: everyday lanes give slides room while the nested loops retain clearan
   const widths = id => built.track.nodes.filter((_, i) => PIECES[built.meta[i].piece].id === id).map(n => n.w);
   for (const id of ['sweepA', 'hairpin', 'sweepD', 'sweepE', 'sweepF']) assert.ok(Math.min(...widths(id)) >= 32, id);
   for (const id of ['start', 'home']) assert.ok(Math.min(...widths(id)) >= 36, id);
-  assert.ok(Math.min(...widths('prism-run')) >= 34);
-  assert.ok(Math.min(...widths('lens-gallery')) >= 38);
+  assert.ok(Math.min(...widths('prism-run')) >= 40);
+  assert.ok(Math.min(...widths('lens-gallery')) >= 48);
   for (const id of ['wheel', 'hoop', 'c1', 'c2']) assert.ok(Math.max(...widths(id)) <= 14, id + ' keeps its air gap');
 });
 

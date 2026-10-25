@@ -40,13 +40,13 @@ export const PIECES = [
   // the returning ground road by ten metres while the open field sits beyond that crossing.
   { id: 'bridge', len: 324, y: 18, sec: 0, pad: { at: 0.35, x: -3 } },
   // A long excursion leaves the compact induction stack before returning above it.
-  { id: 'prism-approach', len: 160, y: 48, w: 34, sec: 3 },
-  { id: 'tidal-in', turn: 90, r: 90, roll: 16, y: 28, w: 34, sec: 3 },
-  { id: 'tidal-gallery', len: 450, y: 28, w: 38, sec: 3, surface: 'stream', flow: [4, 0] },
+  { id: 'prism-approach', len: 160, y: 48, w: 40, sec: 3 },
+  { id: 'tidal-in', turn: 90, r: 90, roll: 16, y: 34, w: 34, sec: 3 },
+  { id: 'tidal-gallery', len: 450, y: 34, w: 48, sec: 3, surface: 'stream', flow: [4, 0] },
   { id: 'tidal-out', turn: 90, r: 90, roll: 18, y: 38, w: 34, sec: 3 },
-  { id: 'prism-run', len: 300, y: 48, w: 34, sec: 4 },
+  { id: 'prism-run', len: 300, y: 48, w: 40, sec: 4 },
   { id: 'observatory-spiral', turn: -360, r: 110, roll: 22, y: 84, ease: 'lin', w: 34, sec: 4 },
-  { id: 'lens-gallery', len: 400, y: 84, w: 38, sec: 4 },
+  { id: 'lens-gallery', len: 400, y: 84, w: 48, sec: 4 },
   { id: 'lens-out', turn: 90, r: 90, roll: 16, y: 84, w: 34, sec: 5 },
   { id: 'cascade-descent', len: 350, y: -16, w: 34, surface: 'stream', flow: [5, 0], sec: 5 },
   { id: 'cascade-return', turn: 90, r: 90, roll: 18, y: -16, w: 34, sec: 5 },
