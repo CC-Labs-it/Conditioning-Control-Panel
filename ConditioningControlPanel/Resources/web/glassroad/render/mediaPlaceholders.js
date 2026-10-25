@@ -179,7 +179,7 @@ function loomField(w, h) {
 }
 /** Release the shared Loom resources after the static frames have been copied. */
 export function releaseLoom() {
-  field?.dispose();
+  field?.dispose?.();
   field = null; fieldTried = false;
 }
 
