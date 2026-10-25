@@ -482,10 +482,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
         private int _backupStatusGen;
 
-        /// <summary>Tests only: the client the backup status line and the export ask (WPF App.ProfileSync). Its own
-        /// seam, not AccountSeed.NewV2: the status refreshes on every repaint, link flows included.</summary>
-        // One client across repaints so recovery cooldowns survive repeated clicks.
-        private static readonly V2AuthService CloudClient = new()
+        // One client across repaints so recovery cooldowns survive repeated clicks (WPF ProfileSyncService:4788-4828).
+        internal static readonly V2AuthService CloudClient = new()
         {
             RevalidateCloudProvider = async () =>
             {
@@ -496,6 +494,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             },
             CloudSessionRecovered = () => AccountSeed.Sync?.StartHeartbeat(),
         };
+        /// <summary>Tests only: the client the backup status line and the export ask (WPF App.ProfileSync). Its own
+        /// seam, not AccountSeed.NewV2: the status refreshes on every repaint, link flows included.</summary>
         internal static Func<V2AuthService> CloudData = () => CloudClient;
 
         /// <summary>WPF MainWindow.CloudBackup.cs UpdateBackupStatus (:261): the last backup's date and version,

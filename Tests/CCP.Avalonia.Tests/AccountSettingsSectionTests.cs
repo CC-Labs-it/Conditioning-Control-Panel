@@ -291,6 +291,49 @@ public sealed class AccountSettingsSectionTests
             }
         });
     }
+    /// <summary>The head's cloud recovery hooks (WPF ProfileSyncService:4788-4828): Patreon first, else Discord;
+    /// a recovered session restarts the sync heartbeat.</summary>
+    [Fact]
+    public Task CloudRecoveryRevalidatesPatreonThenDiscordAndRestartsHeartbeat() => RunAsync(async (shell, section, s, secrets) =>
+    {
+        using var server = new PathServer();
+        SignInPatreon(secrets, s);
+        secrets["discord_auth"] = JsonConvert.SerializeObject(new DiscordTokenData
+        { AccessToken = "d", RefreshToken = "r", ExpiresAt = DateTime.UtcNow.AddDays(10) });
+        Assert.True(AccountSeed.Seed(p => new ProviderSubscription(p, () => s, server), p => new DiscordAccount(() => p, () => s, server)));
+        var client = AccountSettingsSection.CloudClient;
+
+        await client.RevalidateCloudProvider!();
+        Assert.Contains("/patreon/validate", server.Paths);
+        Assert.DoesNotContain("/discord/validate", server.Paths);
+
+        secrets.Remove("patreon_auth");
+        server.Paths.Clear();
+        await client.RevalidateCloudProvider!();
+        Assert.Contains("/discord/validate", server.Paths);
+        Assert.DoesNotContain("/patreon/validate", server.Paths);
+
+        var oldSync = AccountSeed.Sync;
+        var sync = new SyncPush(() => null, () => false, new OfflineServer());
+        AccountSeed.Sync = sync;
+        try
+        {
+            client.CloudSessionRecovered!();
+            Assert.True(sync.HeartbeatRunning);
+        }
+        finally { sync.StopHeartbeat(); AccountSeed.Sync = oldSync; }
+    });
+
+    private sealed class PathServer : HttpMessageHandler
+    {
+        public readonly List<string> Paths = new();
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            lock (Paths) Paths.Add(request.RequestUri!.AbsolutePath);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }
+    }
+
     private sealed class OfflineServer : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>

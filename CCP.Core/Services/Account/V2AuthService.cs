@@ -876,8 +876,8 @@ namespace ConditioningControlPanel.Services
                             request.Content = new StringContent(JsonConvert.SerializeObject(new
                             { unified_id = settings.UnifiedId, client_version = CoreReleaseContent.AppVersion }), Encoding.UTF8, "application/json");
                             using var response = await _http.SendAsync(request);
-                            if (await TryHandleMergedAsync(response)) return false;
-                            if (response.IsSuccessStatusCode)
+                            // WPF :4433 fails only this step on a merge tombstone; provider validation still runs.
+                            if (!await TryHandleMergedAsync(response) && response.IsSuccessStatusCode)
                             {
                                 var obj = JObject.Parse(await response.Content.ReadAsStringAsync());
                                 if (obj["auth_token"]?.ToString() is { Length: > 0 } token)

@@ -137,6 +137,23 @@ public sealed class V2AuthServiceWireTests : IDisposable
         Assert.Equal(2, validations);
     }
 
+    [Fact]
+    public async Task MergedRestoreSessionStillFallsThroughToProviderValidation()
+    {
+        // WPF ProfileSyncService:4433: a merge tombstone fails only the restore step.
+        using var handler = new ExportRecoveryHandler();
+        V2AuthService.MergedRecovery = (_, _) => Task.FromResult(handler.Paths[^1] == "/v2/auth/restore-session");
+        var validations = 0;
+        var client = new V2AuthService(() => _settings, handler)
+        {
+            RevalidateCloudProvider = () => { validations++; _settings.AuthToken = "renewed"; return Task.CompletedTask; },
+        };
+        var result = await client.ExportDataAsync(_settings.UnifiedId);
+        Assert.True(result.success, result.error);
+        Assert.Equal(1, validations);
+        Assert.Equal("renewed", handler.ExportTokens[1]);
+    }
+
     [Theory]
     [InlineData(HttpStatusCode.Forbidden, 1)]
     [InlineData(HttpStatusCode.Unauthorized, 2)]

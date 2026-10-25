@@ -1,5 +1,0 @@
-# Avalonia tester steps
-
-1. WPF `ConditioningControlPanel/MainWindow/MainWindow.CloudBackup.cs:191` and `ConditioningControlPanel/Services/Settings/ProfileSyncService.cs:4241`: open Settings > Account with a cloud identity and select Export my data. With a fake server returning 401, confirm restore-session runs first; if refused, provider validation runs. A confirmed session or changed provider token permits exactly one export retry and restarts the heartbeat. Failed recovery retains the token, reports failure, and resets the button. Repeat within 30 seconds: no restore retry; provider validation waits two minutes. Non-401 errors never attempt recovery. A refused backup-status check uses the same recovery cooldowns, shows no metadata, and does not retry the metadata request. Cancel the save picker to leave no file. Rows: `views-settings-account`
-
-   Automated: `V2AuthServiceWireTests` and `AccountSettingsSectionTests`. Backup now and Restore from cloud remain hidden pending the cross-OS backup contract.
