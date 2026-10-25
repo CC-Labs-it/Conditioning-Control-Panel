@@ -124,6 +124,7 @@ public sealed class PanicSurfacesTests
         "descent-fuse",
         "deeper-editor-audio",
         "knock-cards",
+        "quick-recal",
         "asset-preview",
         "camera",
     };
