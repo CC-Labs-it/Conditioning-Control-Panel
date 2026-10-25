@@ -103,8 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// <para><b>What is stubbed, and why.</b> Three families, each marked <c>ponytail:</c> at the
     /// call site:</para>
     /// <list type="bullet">
-    ///   <item><b>Services.</b> WebcamTracking
-    ///         still lives in the WPF head, so every handler that reached it is a stub.
+    ///   <item><b>Services.</b> Webcam controls reuse this head's portable tracker and Core consent contract.
     ///         EnhancementLibrary is in Core but this head does not construct one yet. EnhancementHostService and DeeperFetcher no longer block anything: the host's
     ///         load path is EnhancementSerializer + EnhancementValidator, both public in Core, and
     ///         App.DeeperFetcher IS Core's <c>EnhancementFetcher</c>. Both are wired below. What
@@ -333,6 +332,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _uiTimer.Tick += UiTimer_Tick;
             _uiTimer.Start();
             AudioWindows.Add(this);
+            InitializeWebcamControls();
             Closing += (_, _) => Window_Closing();
 
             if (enhancement != null)
@@ -760,8 +760,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// glyph, the status line, the pill and the playhead all describe something that is
         /// actually happening.
         ///
-        /// Local audio uses the editor's portable transport. Webcam consent and the rule-engine
-        /// binding remain a separate coherent lane; audio playback never opens a camera.
+        /// Local audio uses the editor's portable transport. Webcam starts require current consent
+        /// and an explicit enable action; playback proceeds independently.
         /// Note that even in video mode the enhancement's RULES do not fire: that needs
         /// EnhancementHostService.Bind and the engine, both still in the WPF head.
         /// </summary>
@@ -771,7 +771,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 if (_localAudio != null)
                 {
-                    if (_isPlaying) _localAudio.Pause(); else _localAudio.Play();
+                    if (_isPlaying) _localAudio.Pause(); else { MaybePromptForWebcamBeforePlay(); _localAudio.Play(); }
                     _isPlaying = !_isPlaying;
                     _txtPlayPauseGlyph.Kind = _isPlaying ? IconKind.Pause : IconKind.Play;
                     _txtStatus.Text = Loc.Get(_isPlaying ? "deeper_player_status_playing" : "deeper_player_status_stopped");
@@ -799,6 +799,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // letting the poll correct it would show ⏸ / LIVE / "Playing" in the meantime, and on
             // a page that never grows a video element it would never be corrected at all.
             var want = !_isPlaying;
+            if (want) MaybePromptForWebcamBeforePlay();
             if (DeeperPreview.Unquote(await _videoBrowser.InvokeScriptAsync(
                     DeeperPreview.Invoke(want ? "l.play();" : "l.pause();"))) != "ok")
                 return;
@@ -820,26 +821,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             UpdatePlayhead(0);
             _txtStatus.Text = Loc.Get("deeper_player_status_stopped");
             UpdateStatusPill();
-        }
-
-        private void BtnEyeTracking_Click()
-        {
-            // ponytail: needs WebcamTrackingService (start/stop, IsConsentCurrent), which is
-            // head-only at ConditioningControlPanel/Services/Webcam/WebcamTrackingService.cs.
-            // Left whole rather than half-restored ON PURPOSE: the portable half of this button is
-            // the label and the pill, and a button that reads "eye tracking: on" with no camera
-            // open is worse than a button that does nothing. Restore the consent gate and the
-            // camera together or not at all.
-            //
-            // ONE HALF OF THE OLD REASON IS NOW WRONG and is corrected rather than deleted, because
-            // it is the kind of claim that gets copied: "the first-time consent prompt this head
-            // has no MessageBox for". Views/Dialogs/MessageDialog exists and ConfirmAsync is
-            // exactly that prompt. The prompt is not the blocker; the tracker is. Note also that
-            // the gate must be AWAITED - a straight transcription of the WPF prompt flips the
-            // toggle before the answer lands, which turns a consent gate into a no-op.
-            // Keys the WPF prompts use: deeper_player_eye_tracking_unavailable / _first_time /
-            // _confirm_start / _start_failed_fmt.
-            Log.Debug("EnhancementPlayer(Avalonia): eye tracking toggle is a stub");
         }
 
         private void AdjustVideoZoom(double delta)
@@ -1042,6 +1023,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void UpdateHostUi(Enhancement? enh, string? path)
         {
             _loadedEnhancement = enh;
+            ResetWebcamPrompt();
             _loadedFilePath = path;
 
             if (enh == null)
@@ -1695,6 +1677,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void Window_Closing()
         {
             _isClosing = true;
+            CloseWebcamControls();
             AudioWindows.Remove(this);
             DisposeLocalAudio();
             CancelEscHold();
@@ -1709,8 +1692,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _pollDisabled = true;
             try { _fetcher?.Dispose(); } catch { }
             _fetcher = null;
-            // ponytail: the WPF teardown also unsubscribed the player/webcam singletons, stopped a
-            // webcam this session had started, disposed the video time source and force-closed the
+            // ponytail: the WPF teardown also unsubscribed the player singleton, disposed the video time source and force-closed the
             // borderless fullscreen host. Those are the head services' and WebView2's; none of them
             // exist here. The web view itself is disposed with the visual tree.
         }

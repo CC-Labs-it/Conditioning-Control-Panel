@@ -1,0 +1,6 @@
+
+# Deeper player FIN4 tester steps
+
+1. Play a video enhancement with blink/gaze rules, including timeline-only rules. The webcam offer must not delay media; dismiss it, then pause/resume: no repeat offer. Load another enhancement: offer rearms. Files without webcam rules hide the toolbar button. WPF `ConditioningControlPanel/Views/Deeper/EnhancementPlayerWindow.xaml.cs` Rows: `views-deeper-enhancement-player`
+2. Without current consent, banner enable and toolbar start direct to first-time setup without capture. After consenting in Lab, decline toolbar confirmation: camera stays off. Accept: camera starts; banner enable needs no second confirmation. Failures stay visible; labels follow startup/running/stopped state. WPF `ConditioningControlPanel/Views/Deeper/EnhancementPlayerWindow.xaml.cs` Rows: `views-deeper-enhancement-player`
+3. Fake capture only: delay startup, close/panic, then complete startup: capture releases. Closing an owned camera stops it; closing a player using a pre-existing camera preserves it. Automated: `DeeperPlayerWebcamTests`, sandbox profile and fake camera verbs. WPF `ConditioningControlPanel/Views/Deeper/EnhancementPlayerWindow.xaml.cs` Rows: `views-deeper-enhancement-player`

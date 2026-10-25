@@ -95,6 +95,7 @@ public partial class EnhancementPlayerWindow
             _txtStatus.Text = Loc.Get("deeper_player_status_stopped");
         });
         _durationSec = audio.DurationSeconds;
+        MaybePromptForWebcamBeforePlay();
         audio.Play();
         _isPlaying = true;
         _txtPlayPauseGlyph.Kind = IconKind.Pause;
@@ -145,7 +146,10 @@ public partial class EnhancementPlayerWindow
     {
         // Pending loads are included: stopping only an already-playing clip races its parse.
         foreach (var window in AudioWindows.ToArray())
+        {
+            window.StopPlayerWebcam();
             if (!window._isVideoMode) window.BtnStop_Click();
             else window._audioGeneration++; // an audio load may still be awaiting video teardown
+        }
     }
 }
