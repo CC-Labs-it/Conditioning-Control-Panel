@@ -4,8 +4,8 @@
 // Services/Launcher/LauncherSfx.cs (the cues; the melody is Core's LauncherMelody).
 // WPF runs one storyboard per tween; here ONE frame clock steps every tween, and only while the launcher is shown
 // and not minimised (P01) and something is moving. It stops the moment nothing is. No allocation per frame.
-// ponytail: not ported (docs/avalonia-parity.md win-launcher): cursor parallax, Ken-Burns art drift, sparkle trail,
-// perimeter comets, card/wordmark sheens, wordmark drift, running-dot breath, title tint, embers layer.
+// ponytail: not ported (docs/avalonia-parity.md win-launcher): sparkle trail,
+// perimeter comets, card/wordmark sheens, running-dot breath, embers layer.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -75,11 +75,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             public Border Tile = null!;
             public ScaleTransform Scale = new(1, 1);
             public RotateTransform Tilt = new();
-            public DropShadowEffect? Glow;
+            public Border? Glow;
+            public SolidColorBrush? Title;
+            public Color TitleRest;
+            public TranslateTransform? ArtSlide;
+            public Tween ArtX, ArtY, Tint;
             public Color Hue;
             public Tween Lift, Lean, Shine, Dim;
             public double PopT = -1, PopPeak;
-            public bool Busy => Lift.On || Lean.On || Shine.On || Dim.On || PopT >= 0;
+            public bool Busy => ArtX.On || ArtY.On || Tint.On || Lift.On || Lean.On || Shine.On || Dim.On || PopT >= 0;
         }
 
         private readonly DispatcherTimer _fxClock = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(1000.0 / 30) };
@@ -120,8 +124,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _fxLast = now;
                 StepFx(dt);
             };
-            SpiralLayer.RenderTransform = SpiralTurn;
-            SpiralSmall.RenderTransform = SpiralSmallTurn;
+            HookDepth();
+            SpiralLayer.RenderTransform = new TransformGroup { Children = { SpiralTurn, _depth[3].Shift } };
+            SpiralSmall.RenderTransform = new TransformGroup { Children = { SpiralSmallTurn, _depth[4].Shift } };
             ContentRoot.RenderTransform = ShakeSlide;
             if (EdgeGlint.BorderBrush is LinearGradientBrush glint) glint.Transform = EdgeGlintRel;
             _cardFx = new TileFx { Tile = PanelCard };
@@ -216,6 +221,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ShakeSlide.X = ShakeSlide.Y = 0;
                 foreach (var r in _rings) r.Opacity = 0;
                 foreach (var t in _tileFx) SettleTile(t);
+                ParkDepth();
                 _fade.On = false;
                 RootGrid.Opacity = 1;
                 FinishExit();
@@ -251,6 +257,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         SpiralSmallTurn.Angle = _spiralSmall;
                     }
                 }
+                busy |= StepDepth(dt);
                 if (Env.AllowTransitions) { busy = true; StepEdge(dt); }
                 if (_fade.On) { busy = true; RootGrid.Opacity = _fade.Step(dt); if (!_fade.On) FinishFade(); }
                 if (_glow.On) { busy = true; GlowLayer.Opacity = _glow.Step(dt); }
@@ -319,6 +326,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             _fxActive = active;
             if (active) { EnsureFxClock(); OnEdgeActivated(); }
+            else ParkDepth();
         }
 
         /// <summary>WPF OnEdgeActivated: focus coming back runs the shimmer and the glint, at most every 4 s.</summary>
@@ -365,18 +373,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF CreateTile's hover rig (Tiles.cs:72-88, 228-244): lift, tilt toward the pointer, glow, the
         /// hover note, and the hue bleeding into the backdrop (Choreo.cs ChoreoTileHover).</summary>
-        private void DecorateTileFx(Border tile, Color hue)
+        private void DecorateTileFx(Border tile, Color hue, Border shadow, SolidColorBrush title, TranslateTransform artSlide, Image? art)
         {
             _tileFx.RemoveAll(t => t.Tile.Parent == null);   // BuildTiles cleared the grid
-            var fx = new TileFx { Tile = tile, Hue = hue };
+            var fx = new TileFx { Tile = tile, Hue = hue, Title = title, TitleRest = title.Color, ArtSlide = artSlide };
+            if (art != null) DecorateArt(art);
             tile.RenderTransformOrigin = RelativePoint.Center;
             tile.RenderTransform = new TransformGroup { Children = { fx.Scale, fx.Tilt } };
             if (Env.AllowGlow(Env.CurrentTier))
-                tile.Effect = fx.Glow = new DropShadowEffect
-                {
-                    Color = hue, OffsetX = 0, OffsetY = 0, Opacity = TileGlowRest,
-                    BlurRadius = Math.Min(20, Env.MaxGlowBlurRadius(Env.CurrentTier)),
-                };
+            {
+                fx.Glow = shadow;
+                fx.Shine.Go(TileGlowRest, TileGlowRest, 0);
+                PaintTileShadow(fx, TileGlowRest);
+            }
             _tileFx.Add(fx);
             tile.PointerEntered += (_, _) => TileHover(fx, true);
             tile.PointerExited += (_, _) => TileHover(fx, false);
@@ -395,8 +404,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (on) LauncherSfx.Hover();
                 bool anim = Env.AllowTransitions;
                 t.Lift.Go(t.Scale.ScaleX, on ? HoverLiftScale : 1, anim ? HoverLiftSeconds : 0);
-                t.Shine.Go(t.Glow?.Opacity ?? 0, on ? TileGlowHover : TileGlowRest, anim ? TileHoverSeconds : 0, Ease.Linear);   // TintTile: no easing
-                if (!on) t.Lean.Go(t.Tilt.Angle, 0, anim ? TileHoverSeconds : 0);
+                t.Shine.Go(t.Shine.Step(0), on ? TileGlowHover : TileGlowRest, anim ? TileHoverSeconds : 0, Ease.Linear);   // TintTile: no easing
+                t.Tint.Go(t.Tint.Step(0), on ? 1 : 0, anim ? TileHoverSeconds : 0, Ease.Linear);
+                if (!on)
+                {
+                    t.Lean.Go(t.Tilt.Angle, 0, anim ? TileHoverSeconds : 0);
+                    t.ArtX.Go(t.ArtSlide?.X ?? 0, 0, anim ? TileHoverSeconds : 0);
+                    t.ArtY.Go(t.ArtSlide?.Y ?? 0, 0, anim ? TileHoverSeconds : 0);
+                }
                 if (!anim) StepTile(t, 0);
                 if (on) BleedGlow(t.Hue); else RestoreGlow();
                 EnsureFxClock();
@@ -410,7 +425,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var b = t.Tile.Bounds;
             if (!TiltAllowed || b.Width <= 0 || b.Height <= 0) return;
             double nx = Math.Clamp(at.X / b.Width * 2 - 1, -1, 1), ny = Math.Clamp(at.Y / b.Height * 2 - 1, -1, 1);
-            t.Lean.Go(t.Tilt.Angle, nx * -ny * TileTiltDegrees, TileTiltSeconds, Ease.Linear);   // TiltToward: no easing
+            t.Lean.Go(t.Tilt.Angle, nx * -ny * TileTiltDegrees, TileTiltSeconds, Ease.Linear);
+            t.ArtX.Go(t.ArtSlide?.X ?? 0, -nx * 7, TileTiltSeconds, Ease.Linear);
+            t.ArtY.Go(t.ArtSlide?.Y ?? 0, -ny * 7, TileTiltSeconds, Ease.Linear);   // TiltToward: no easing
             EnsureFxClock();
         }
 
@@ -418,7 +435,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (t.Lift.On || dt == 0) t.Scale.ScaleX = t.Scale.ScaleY = t.Lift.Step(dt);
             if (t.Lean.On || dt == 0) t.Tilt.Angle = t.Lean.Step(dt);
-            if (t.Glow != null && (t.Shine.On || dt == 0)) t.Glow.Opacity = t.Shine.Step(dt);
+            if (t.Glow != null && (t.Shine.On || dt == 0)) PaintTileShadow(t, t.Shine.Step(dt));
+            if (t.ArtSlide != null)
+            {
+                if (t.ArtX.On || dt == 0) t.ArtSlide.X = t.ArtX.Step(dt);
+                if (t.ArtY.On || dt == 0) t.ArtSlide.Y = t.ArtY.Step(dt);
+            }
+            if (t.Title != null && (t.Tint.On || dt == 0))
+            {
+                double u = t.Tint.Step(dt);
+                var to = Lighten(t.Hue, 0.35);
+                t.Title.Color = Color.FromRgb((byte)(t.TitleRest.R + (to.R - t.TitleRest.R) * u),
+                    (byte)(t.TitleRest.G + (to.G - t.TitleRest.G) * u), (byte)(t.TitleRest.B + (to.B - t.TitleRest.B) * u));
+            }
             if (t.Dim.On) t.Tile.Opacity = t.Dim.Step(dt);
             if (t.PopT >= 0)
             {
@@ -432,10 +461,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
+        private static void PaintTileShadow(TileFx t, double opacity)
+        {
+            if (t.Glow == null) return;
+            t.Glow.BoxShadow = new BoxShadows(new BoxShadow
+            {
+                Color = Color.FromArgb((byte)(255 * Math.Clamp(opacity, 0, 1)), t.Hue.R, t.Hue.G, t.Hue.B),
+                Blur = Math.Min(20, Env.MaxGlowBlurRadius(Env.CurrentTier)),
+            });
+        }
+
         private static void SettleTile(TileFx t)
         {
             t.Lift.Go(1, 1, 0); t.Lean.Go(0, 0, 0); t.Shine.Go(TileGlowRest, TileGlowRest, 0);
             t.PopT = -1;
+            t.ArtX.Go(0, 0, 0); t.ArtY.Go(0, 0, 0); t.Tint.Go(0, 0, 0);
             StepTile(t, 0);
         }
 

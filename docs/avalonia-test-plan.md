@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### fin4 launcher depth and grants
+
+1. Open the launcher with Full motion. Sweep the pointer from centre to an outer corner: glow/pool follow, spirals move against it; leaving settles depth. WPF `Windows/Launcher/LauncherWindow.Backdrop.cs:213-280`. Rows: `win-launcher`.
+2. Hover a game tile: title warms over 160 ms, art moves up to 7 px against the pointer and pops on art hover. Leave: title/slide return home. Check rounded art corners and soft glow without clipping. WPF `Windows/Launcher/LauncherWindow.Tiles.cs:230-260`. Rows: `win-launcher`.
+3. Watch art zoom for 14 s and the wordmark for 40 s per leg; art pauses on hover. Hide/minimize/deactivate: depth parks; return resumes art. Reduced/Off disable ambient drift; Performance disables art drift/parallax. WPF `Windows/Launcher/LauncherWindow.Backdrop.cs:286-356`, `Windows/Launcher/LauncherWindow.Fx.cs:404-436`. Rows: `win-launcher`.
+4. While visible, grant a racing track then revoke it: race appears then disappears; repeat an unchanged sync and other tiles keep their identity. Reopen after a hidden sync to see fresh cards. WPF `Windows/Launcher/LauncherWindow.xaml.cs:257-260`. Rows: `win-launcher`.

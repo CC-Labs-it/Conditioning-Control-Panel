@@ -135,13 +135,134 @@ public sealed class LauncherFxTests
         Assert.Contains("launcher-hover", cues);
         Step(launcher, 0.5);
         Assert.Equal(1.02, scale.ScaleX, 3);
-        Assert.Equal(0.7, ((DropShadowEffect)tile.Effect!).Opacity, 3);
+        Assert.Null(tile.Effect);
+        var shadow = ((Panel)tile.Child!).Children.OfType<Border>().Single();
+        Assert.InRange(shadow.BoxShadow[0].Color.A, (byte)177, (byte)179);
         Assert.Equal(0.45, glow.Opacity, 3);
 
         launcher.TileHover(tile, false);
         Step(launcher, 0.5);
         Assert.Equal(1, scale.ScaleX, 3);
         Assert.Equal(0.28, glow.Opacity, 3);
+    });
+
+    [Fact]
+    public void PointerDepth_FollowsWpfDistances_AndSettlesOnLeave() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        w.OnFxActivated(true);
+        var clock = new SteppedUtc();
+        LauncherWindow.LauncherSfx.Clock = clock;
+        try
+        {
+            w.MouseMove(new Point(w.Bounds.Width - 1, w.Bounds.Height - 1));
+            Step(w, 0.3);
+            var glow = (TranslateTransform)w.FindControl<Border>("GlowLayer")!.RenderTransform!;
+            Assert.InRange(glow.X, 17, 18);
+            Assert.InRange(glow.Y, 17, 18);
+            var spiral = ((TransformGroup)w.FindControl<Panel>("SpiralLayer")!.RenderTransform!).Children.OfType<TranslateTransform>().Single();
+            Assert.InRange(spiral.X, -12, -11);
+            w.OnFxActivated(false);
+            Assert.Equal(0, glow.X);
+            Assert.Equal(0, spiral.X);
+            w.OnFxActivated(true);
+            clock.Now += TimeSpan.FromSeconds(1);
+            w.MouseMove(new Point(w.Bounds.Width / 2, w.Bounds.Height / 2));
+            Step(w, 0.3);
+            Assert.Equal(0, glow.X, 2);
+        }
+        finally { LauncherWindow.LauncherSfx.Clock = TimeProvider.System; }
+    });
+
+    [Fact]
+    public void TileDepth_SlidesArtAgainstPointer_TintsTitle_AndReturnsHome() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        var tile = Tile(w);
+        var title = tile.GetVisualDescendants().OfType<TextBlock>().Single(t => t.FontSize == 19);
+        var brush = (SolidColorBrush)title.Foreground!;
+        var rest = brush.Color;
+        var artHost = tile.GetVisualDescendants().OfType<Panel>().Single(p => p.RenderTransform is TranslateTransform);
+        var shift = (TranslateTransform)artHost.RenderTransform!;
+        var at = tile.TranslatePoint(new Point(tile.Bounds.Width * 0.9, tile.Bounds.Height * 0.9), w)!.Value;
+        w.MouseMove(at);
+        Step(w, 0.3);
+        Assert.InRange(shift.X, -5.7, -5.5);
+        Assert.InRange(shift.Y, -5.7, -5.5);
+        Assert.NotEqual(rest, brush.Color);
+        w.MouseMove(new Point(2, 2));
+        Step(w, 0.3);
+        Assert.Equal(0, shift.X, 3);
+        Assert.Equal(0, shift.Y, 3);
+        Assert.Equal(rest, brush.Color);
+    });
+
+    [Theory]
+    [InlineData(MotionLevel.Off)]
+    [InlineData(MotionLevel.Reduced)]
+    public void ArtDrift_RespectsAmbientMotionSetting(MotionLevel motion) => Run(motion, (_, w, _) =>
+    {
+        var image = new Image();
+        ((Panel)((Border)Tile(w)).Child!).Children.Add(image);
+        w.DecorateArt(image);
+        var scale = (ScaleTransform)image.RenderTransform!;
+        double before = scale.ScaleX;
+        Step(w, 2);
+        Assert.Equal(before, scale.ScaleX);
+    });
+
+    [Fact]
+    public void ArtDrift_FollowsFourteenSecondSineLeg_AndParksOnDeactivation() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        var image = new Image();
+        ((Panel)Tile(w).Child!).Children.Add(image);
+        w.DecorateArt(image);
+        Assert.True(ConditioningControlPanel.Avalonia.Controls.HoverPop.GetIsEnabled(image));
+        var scale = (ScaleTransform)image.RenderTransform!;
+        w.OnFxActivated(true);
+        Step(w, 14.1);
+        Assert.InRange(scale.ScaleX, 1.069, 1.071);
+        w.OnFxActivated(false);
+        double parked = scale.ScaleX;
+        Step(w, 2);
+        Assert.Equal(parked, scale.ScaleX);
+        w.OnFxActivated(true);
+        Step(w, 14.1);
+        Assert.InRange(scale.ScaleX, 1, 1.001);
+    });
+
+    [Fact]
+    public void WordmarkDrift_HasFortySecondLeg_AndResetsWhenHidden() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        var wordmark = w.FindControl<StackPanel>("Wordmark")!;
+        var scale = (ScaleTransform)wordmark.RenderTransform!;
+        w.Hide(); w.Show();
+        w.OnFxActivated(true);
+        Step(w, 40.1);
+        Assert.InRange(scale.ScaleX, 1.039, 1.041);
+        w.Hide();
+        Assert.Equal(1, scale.ScaleX);
+    });
+
+    [Fact]
+    public void GrantChanges_RevealAndRevokeRace_WithoutRestagingUnchangedTiles() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        var old = ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider;
+        bool owns = false;
+        ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = _ => owns;
+        try
+        {
+            w.BuildTiles();
+            var grid = w.FindControl<UniformGrid>("GamesGrid")!;
+            var first = grid.Children[0];
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+            Assert.Same(first, grid.Children[0]);
+            owns = true;
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+            Assert.Contains(grid.Children.OfType<Border>(), b => Equals(b.Tag, "race"));
+            owns = false;
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+            Assert.DoesNotContain(grid.Children.OfType<Border>(), b => Equals(b.Tag, "race"));
+        }
+        finally { ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = old; }
     });
 
     [Fact]
