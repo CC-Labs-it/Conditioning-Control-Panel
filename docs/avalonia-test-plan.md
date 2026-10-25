@@ -305,6 +305,8 @@ Set the panic key to Enter for steps 1-4 (Settings -> panic key).
 3. **[SAFETY] developers re-check this before release.** Lockdown on: press Pause in a session. Expect it refused. WPF `MainWindow/MainWindow.Presets.cs:2033`. Rows: `views-tab-lockdown`, `views-tab-presets`.
 4. **[SAFETY] developers re-check this before release.** Her Room -> chat History link opens "Chat history"; press panic. Expect it to close; a second press does nothing odd. WPF `Views/Controls/Companion/Runtime/CompanionTranscriptWindow.cs:121`. Rows: `views-companion-transcript-window`.
 5. Companion pages: Engine room, Memory diary, Constellation, Workshop cells, Make her yours, keyword triggers, chat threshold. WPF `MainWindow/MainWindow.CompanionTab.cs:85`, `MainWindow/MainWindow.xaml.cs:3164-3383`. Rows: `views-companion-*`.
+   - Open Companion → AI (or expand the Workshop triggers cell). Restore trigger mode enabled with interval 123; revisit and check the toggle, panel and `123s` label without changing settings. Disable it, then change interval to 137: mode saves and interval updates (WPF does not save on each interval tick). WPF `MainWindow/MainWindow.Patreon.cs:1490-1526`. Rows: `views-companion-workshop-accordion`.
+   - In that cell, Edit phrases with blank and duplicate case variants; check one row per phrase. Disable a row, add a unique phrase and Save; only enabled rows persist and new user phrases retain provenance. Reopen an empty pool and Cancel: no defaults appear. Panic with pending edits closes the editor without a save prompt or settings change. WPF `MainWindow/MainWindow.Patreon.cs:1528-1599`. Rows: `views-companion-workshop-accordion`.
 6. Studio: Ramp and Scheduler racks, Brain Drain card. WPF `Views/Tabs/StudioTabView.xaml.cs:1231`. Rows: `views-tab-studio`, `views-studio-*`.
 7. Achievements: filters, reward band, tile effects. WPF `MainWindow/MainWindow.AchievementsTab.cs:886`. Rows: `views-tab-achievements`.
 8. Quests: daily cards, reroll, stamps. WPF `MainWindow/MainWindow.Animations.cs:35`. Rows: `views-tab-quests`, `views-daily-quest-card`.
@@ -673,7 +675,3 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
-
-
-1. Open Companion → AI (or expand the Workshop triggers cell). Restore trigger mode enabled with interval 123; revisit and check the toggle, panel and `123s` label without changing settings. Disable it, then change interval to 137: mode saves and interval updates (WPF does not save on each interval tick). WPF `MainWindow/MainWindow.Patreon.cs:1490-1526`. Rows: `views-companion-workshop-accordion`.
-2. In that cell, Edit phrases with blank and duplicate case variants; check one row per phrase. Disable a row, add a unique phrase and Save; only enabled rows persist and new user phrases retain provenance. Reopen an empty pool and Cancel: no defaults appear. Panic with pending edits closes the editor without a save prompt or settings change. WPF `MainWindow/MainWindow.Patreon.cs:1528-1599`. Rows: `views-companion-workshop-accordion`.

@@ -39,8 +39,11 @@ public sealed class WorkshopPhrasePresetTests
     [Fact]
     public Task TriggerSettingsRestoreWithoutWritingAndUserChangesReachSettings() => Run((drawer, parts, owner, s) =>
     {
+        var service = CoreSettings.Service!;
+        Assert.False(service.HasPendingSave);
         s.TriggerModeEnabled = true; s.TriggerIntervalSeconds = 123;
         owner.Content = null; owner.Content = drawer;
+        Assert.False(service.HasPendingSave); // restoring flips the toggle but must not ask to persist
         var cell = parts.Triggers;
         var toggle = cell.FindControl<CheckBox>("ChkTriggerModeCompanion")!;
         var slider = cell.FindControl<Slider>("SliderTriggerIntervalCompanion")!;
@@ -49,6 +52,7 @@ public sealed class WorkshopPhrasePresetTests
         Assert.Equal("123s", cell.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!.Text);
         toggle.IsChecked = false;
         Assert.False(s.TriggerModeEnabled);
+        Assert.True(service.HasPendingSave);
         Assert.False(cell.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!.IsVisible);
         slider.Value = 137.8;
         Assert.Equal(137, s.TriggerIntervalSeconds);
