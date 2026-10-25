@@ -69,14 +69,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             InitializeComponent();
             PrivacyPanel = new ProfilePrivacyPanel();
+            PrivacyPanel.PrivacyChanged += RefreshPrivacyActions;
+            AttachedToVisualTree += (_, _) => RefreshPrivacyActions();
         }
 
         // ------------------------------------------------------------------
         // The card (read-only): WPF MainWindow.Browser.cs BtnViewMyProfile_Click, SearchAndDisplayProfile,
         // DisplayOwnProfile, DisplayProfileEntry and RefreshProfileViewerAsync, on the tab itself.
         // ponytail: no avatar picture (no Discord avatar URL or remote image load on this head), no Patreon
-        // badge/banner art, no edit-name/delete/Discord-DM buttons (writes, unit 7), no cosmetics, no staff
-        // flag for your own card (no Discord service): each stays hidden rather than drawn wrong.
+        // badge/banner art, no staff
+        // flag for your own card: each stays hidden rather than drawn wrong.
         // ------------------------------------------------------------------
 
         private LeaderboardPage<LeaderboardRow>? _board;
@@ -199,6 +201,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ApplyIdentityBadges(false, null, isOwn && CoreAccount.IsWhitelisted);
             TxtProfileViewerName.Text = entry.DisplayName;
             ShowOwnActions(isOwn);
+            if (!isOwn) ShowDiscordAction(entry.DiscordId, entry.DisplayName);
             SetOnline(entry.IsOnline, entry.IsOnline ? "Online" : "Offline"); // WPF's literals
             TxtProfileViewerLevel.Text = entry.Level.ToString();
             TxtProfileViewerRank.Text = TrainerCardText.Rank(entry.Rank);
@@ -339,18 +342,43 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// with a unified id to act on.</summary>
         private void ShowOwnActions(bool own)
         {
+            _viewingOwn = own;
+            ShowDiscordAction(null, null);
+            RefreshPrivacyActions();
             var show = own && !string.IsNullOrEmpty(CoreSettings.Current.UnifiedId);
             BtnChangeDisplayName.IsVisible = show;
             BtnDeleteProfile.IsVisible = show;
         }
-        private void BtnProfileDiscord_Click(object? sender, RoutedEventArgs e) { }
+        private void BtnProfileDiscord_Click(object? sender, RoutedEventArgs e)
+        {
+            if (BtnProfileDiscord.Tag is string { Length: > 0 } id)
+                _ = OpenDiscordProfile($"https://discord.com/users/{id}");
+        }
+
+        internal Func<string, Task<bool>> OpenDiscordProfile = url => Platform.ExternalOpener.OpenAsync(null, url);
+        private bool _viewingOwn;
+
+        internal void RefreshPrivacyActions()
+        {
+            ProfileLinkNotice.IsVisible = !CoreSettings.Current.HasLinkedDiscord;
+            if (_viewingOwn)
+                ShowDiscordAction(CoreSettings.Current.AllowDiscordDm ? Platform.AccountSeed.Discord?.UserId : null,
+                    CoreSettings.Current.UserDisplayName ?? Platform.AccountSeed.Discord?.CustomDisplayName);
+        }
+
+        private void ShowDiscordAction(string? id, string? label)
+        {
+            BtnProfileDiscord.IsVisible = !string.IsNullOrEmpty(id);
+            BtnProfileDiscord.Tag = id;
+            TxtProfileDiscordId.Text = label ?? id ?? "";
+        }
 
         private void BtnProfileSearch_Click(object? sender, RoutedEventArgs e) => _ = SearchAsync(TxtProfileSearch.Text);
         private void BtnViewMyProfile_Click(object? sender, RoutedEventArgs e) => _ = ViewMyProfileAsync();
 
         /// <summary>The link-notice button reuses the Privacy panel's login/link flow verbatim on
         /// WPF — that handler drives BtnDiscordTabLogin on the long-lived panel instance.</summary>
-        private void BtnDiscordTabLogin_Click(object? sender, RoutedEventArgs e) { }
+        private async void BtnDiscordTabLogin_Click(object? sender, RoutedEventArgs e) => await PrivacyPanel.LoginAsync(Host);
 
         /// <summary>Opens the relocated sharing controls, exactly as the WPF handler does
         /// (<c>mw.OpenProfilePrivacyDialog()</c>). The dialog borrows <see cref="PrivacyPanel"/>,

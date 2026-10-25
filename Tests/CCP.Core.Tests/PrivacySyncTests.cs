@@ -17,24 +17,41 @@ namespace CCP.Core.Tests;
 public sealed class PrivacySyncTests
 {
     [Fact]
-    public void OnlyChosenFieldsBelongToTheAccountAndUnrelatedDefaultsStayUnknown()
+    public void FreshInstallAndSignedOutChangesAreSentAfterLoginWithoutAnOwnedFieldMask()
+    {
+        var s = new AppSettings { UnifiedId = "fresh", AllowDiscordDm = false,
+            ShareProfilePicture = false, PublicShareRealAvatar = false,
+            ShowOnlineStatus = true, GoonShareAvatar = false, GoonShareDiscordDm = false };
+        var body = JObject.Parse(JsonConvert.SerializeObject(SyncPush.Body(s, null, consent: SyncPush.ConsentFields(s))));
+        foreach (var key in new[] { "allow_discord_dm", "share_profile_picture", "public_share_avatar",
+            "goon_share_avatar", "goon_share_dm" })
+        {
+            Assert.Equal(JTokenType.Boolean, body[key]?.Type);
+            Assert.False(body.Value<bool>(key));
+        }
+        Assert.True(body.Value<bool>("show_online_status"));
+        Assert.Null(body["achievements"]);
+    }
+
+    [Fact]
+    public void AllPrivacyValuesAreSentForEachAccountAndSignedOutNeverPushes()
     {
         var s = new AppSettings { UnifiedId = "first", PublicShareRealAvatar = false, GoonShareAvatar = true };
-        Assert.Equal(SyncBody.Field.None, SyncPush.ConsentFields(s));
+        Assert.Equal(SyncPush.Privacy, SyncPush.ConsentFields(s));
         Assert.True(SyncPush.RememberPrivacyChange(s, SyncBody.Field.PublicShareAvatar));
         var body = JObject.Parse(JsonConvert.SerializeObject(SyncPush.Body(s, null, consent: SyncPush.ConsentFields(s))));
         Assert.Equal(JTokenType.Boolean, body["public_share_avatar"]!.Type);
         Assert.False(body.Value<bool>("public_share_avatar"));
-        Assert.Null(body["goon_share_avatar"]);
-        Assert.Null(body["allow_discord_dm"]);
-        Assert.Null(body["show_online_status"]);
+        Assert.True(body.Value<bool>("goon_share_avatar"));
+        Assert.False(body.Value<bool>("allow_discord_dm"));
+        Assert.True(body.Value<bool>("show_online_status"));
         Assert.Null(body["achievements"]);
         Assert.True(SyncPush.RememberPrivacyChange(s, SyncBody.Field.GoonShareAvatar));
-        Assert.Equal(SyncBody.Field.PublicShareAvatar | SyncBody.Field.GoonShareAvatar, SyncPush.ConsentFields(s));
+        Assert.Equal(SyncPush.Privacy, SyncPush.ConsentFields(s));
         s.UnifiedId = "second";
-        Assert.Equal(SyncBody.Field.None, SyncPush.ConsentFields(s));
+        Assert.Equal(SyncPush.Privacy, SyncPush.ConsentFields(s));
         Assert.True(SyncPush.RememberPrivacyChange(s, SyncBody.Field.AllowDiscordDm));
-        Assert.Equal(SyncBody.Field.AllowDiscordDm, SyncPush.ConsentFields(s));
+        Assert.Equal(SyncPush.Privacy, SyncPush.ConsentFields(s));
         Assert.Throws<ArgumentOutOfRangeException>(() => SyncPush.RememberPrivacyChange(s, SyncBody.Field.Xp));
         s.UnifiedId = null;
         Assert.False(SyncPush.RememberPrivacyChange(s, SyncBody.Field.PublicShareAvatar));
@@ -64,7 +81,7 @@ public sealed class PrivacySyncTests
             settings.SaveImmediate();
             settings = new SettingsService();
             s = settings.Current;
-            Assert.Equal(SyncBody.Field.PublicShareAvatar, SyncPush.ConsentFields(s));
+            Assert.Equal(SyncPush.Privacy, SyncPush.ConsentFields(s));
             s.OfflineMode = false;
             var now = DateTime.UtcNow;
             sync.UtcNow = () => now;
@@ -72,7 +89,7 @@ public sealed class PrivacySyncTests
             Assert.True(await sync.PushAsync("after load"));
             Assert.Equal(JTokenType.Boolean, handler.Bodies[0]["public_share_avatar"]!.Type);
             Assert.False(handler.Bodies[0].Value<bool>("public_share_avatar"));
-            Assert.Null(handler.Bodies[0]["goon_share_avatar"]);
+            Assert.Equal(s.GoonShareAvatar, handler.Bodies[0].Value<bool>("goon_share_avatar"));
             s.GoonShareDiscordDm = false;
             Assert.False(await sync.PushPrivacyAsync(SyncBody.Field.GoonShareDm));
             Assert.Single(handler.Bodies);
@@ -80,7 +97,7 @@ public sealed class PrivacySyncTests
             Assert.True(await sync.PushAsync("after cooldown"));
             Assert.Equal(JTokenType.Boolean, handler.Bodies[1]["goon_share_dm"]!.Type);
             Assert.False(handler.Bodies[1].Value<bool>("goon_share_dm"));
-            Assert.Null(handler.Bodies[1]["share_profile_picture"]);
+            Assert.Equal(s.ShareProfilePicture, handler.Bodies[1].Value<bool>("share_profile_picture"));
         }
         finally
         {

@@ -373,6 +373,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 else
                     await Tell(Owner, Loc.Get("account_linked_title"), Loc.GetF("account_linked_success", provider));
                 Shell?.UpdateQuickLoginUI();
+                if (provider == "discord" && Shell is { } shell) await shell.OfferAchievementSharingAfterDiscordLinkAsync();
             }
             catch (OperationCanceledException) { }
             // Core ends a cancelled browser wait as a timeout; here that is the page going away, not a failure.

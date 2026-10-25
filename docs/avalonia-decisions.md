@@ -1314,3 +1314,9 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Option B: keep scoped sending; record the difference in the `views-profile-privacy-panel` parity row.
 - Choice: B, interim. Advised by the supervisor: never risk revoking a server privacy grant without an owner decision.
   oracle-deep decision pending; follow-up lane wire-views-profile-privacy-panel-b.
+
+## 2026-10-25: FIN4 restores WPF privacy payload parity
+
+- Supersedes the interim 2026-10-13 owned-fields policy above. This unit's instruction is to finish the remaining WPF behavior; no separate confirmation is required by that instruction.
+- Every eligible sync sends all six saved privacy values, as WPF does. Fresh-install defaults and changes made signed out therefore replace earlier server grants after login/load. Existing offline, authentication, load, watermark, cooldown and retry gates remain.
+- The regression test first failed on an omitted boolean, then checks the complete payload. The existing cooldown/restart/in-flight-revoke tests retain their delivery assertions and now assert the WPF all-fields contract.

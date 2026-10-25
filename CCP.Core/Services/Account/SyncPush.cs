@@ -28,14 +28,12 @@ namespace ConditioningControlPanel.Services
             | SyncBody.Field.ShareProfilePicture | SyncBody.Field.PublicShareAvatar
             | SyncBody.Field.GoonShareAvatar | SyncBody.Field.GoonShareDm;
 
-        /// <summary>Only audiences explicitly chosen here for this account are known; unrelated defaults never leave.</summary>
+        /// <summary>WPF ProfileSyncService sends all six saved privacy values on every sync.
+        /// Signed-out changes and fresh-install defaults must also replace earlier server grants.</summary>
         public static SyncBody.Field ConsentFields(AppSettings s) =>
-            !string.IsNullOrEmpty(s.UnifiedId) && string.Equals(s.ConsentOwnedAccount, s.UnifiedId, StringComparison.Ordinal)
-                ? (SyncBody.Field)s.ConsentOwnedFields & Privacy : SyncBody.Field.None;
+            string.IsNullOrEmpty(s.UnifiedId) ? SyncBody.Field.None : Privacy;
 
-        /// <summary>WPF's push-on-change privacy handlers. The owned fields are saved even offline and every later
-        /// push (the after-load push included) carries them, so no separate retry flag is needed. Adapted from parity/trunk 4f739180ca68a1e45f62c70a78d2bfbd0f1afcc0, owning each field
-        /// individually so changing one switch does not overwrite other audiences with fresh-install defaults.</summary>
+        /// <summary>Push-on-change, subject to the normal load, login, cooldown and retry gates.</summary>
         public async Task<bool> PushPrivacyAsync(SyncBody.Field field)
         {
             var s = CoreSettings.Current;

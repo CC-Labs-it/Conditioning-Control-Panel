@@ -7,7 +7,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 {
     /// <summary>
     /// WPF ProfilePrivacyPanel: presence, local sharing and push-on-change audience consent.
-    /// Only explicitly chosen consent fields are sent, scoped to the account that chose them.
+    /// All six saved audience consent values are sent on sync, as on WPF.
     /// </summary>
     public partial class ProfilePrivacyPanel : UserControl
     {
@@ -43,6 +43,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             catch (System.Exception ex) { Serilog.Log.Warning(ex, "Privacy switch: immediate sync push failed"); }
         }
 
+        internal event System.Action? PrivacyChanged;
+
         private bool _paintingLocal;
 
         // Adapted from parity/trunk 4f739180ca68a1e45f62c70a78d2bfbd0f1afcc0.
@@ -59,11 +61,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 if (read(s) == on) return;
                 write(s, on);
                 CoreSettings.Save();
+                PrivacyChanged?.Invoke();
                 if (consent != SyncBody.Field.None) _ = PushSafe(consent);
             };
         }
 
-        private void RefreshPrivacy()
+        internal void RefreshPrivacy()
         {
             _paintingLocal = true;
             try
@@ -104,12 +107,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             shell.AppSettingsPage?.FindControl<AppSettings.AccountSettingsSection>("SectionAccount")?.DiscordFromProfileAsync()
                 ?? System.Threading.Tasks.Task.CompletedTask;
 
-        internal async System.Threading.Tasks.Task LoginAsync()
+        internal async System.Threading.Tasks.Task LoginAsync(Views.Windows.MainShellWindow? parent = null)
         {
             try
             {
                 var host = TopLevel.GetTopLevel(this) as Window;
-                var shell = host as Views.Windows.MainShellWindow ?? host?.Owner as Views.Windows.MainShellWindow;
+                var shell = parent ?? host as Views.Windows.MainShellWindow ?? host?.Owner as Views.Windows.MainShellWindow;
                 if (shell == null || CoreSettings.Current.OfflineMode) return;
                 if (Platform.AccountSeed.Discord?.IsAuthenticated != true && host is Dialogs.ProfilePrivacyDialog dialog)
                     dialog.Close();

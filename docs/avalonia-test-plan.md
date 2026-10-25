@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## FIN4 profile privacy completion
+
+1. Open Profile without a linked Discord account. Expect the link notice; click its CTA and follow the existing Login/Link Discord flow. Cancel/failure keeps the notice; a successful link hides it. Offline mode must not launch login. WPF `MainWindow/MainWindow.Browser.cs:1430`, `:1532`. Rows: `views-profile-privacy-panel`.
+2. Link Discord with achievement sharing off. A visible panel asks Yes/No; Yes enables and repaints Share Achievements, No leaves it off. With a game up or the panel hidden/minimized, expect one Inbox offer instead; clicking it asks even if the game remains up. Already sharing must never ask. Panic closes the offer without granting consent. WPF `MainWindow/MainWindow.Patreon.cs:843`. Rows: `views-profile-privacy-panel`.
+3. Show your card, then toggle Allow DMs in Privacy. With a Discord id, expect the button to appear/disappear immediately; clicking opens the stored Discord profile URL. No id hides it; changing your consent while viewing another card must not attach your own DM action to it. WPF `MainWindow/MainWindow.Patreon.cs:913`, `MainWindow/MainWindow.Browser.cs:1689`, `:2020`. Rows: `views-profile-privacy-panel`.
+4. Change all six audience toggles, including while signed out/offline; sign in and allow the profile load/sync gates to finish. Inspect a test server payload: all six saved booleans must be present, including false revokes on a fresh install, on every eligible sync. Reopen Privacy to confirm persistence; local achievement/level/Goon Presence switches must not change other audiences. WPF `Services/ProfileSyncService.cs:1710`, `Views/Controls/ProfilePrivacyPanel.xaml`. Rows: `views-profile-privacy-panel`.
