@@ -30,7 +30,8 @@ export function reactorRoom(track) {
   const z = (a * (cx - bx) + b * (ax - cx) + c * (bx - ax)) / d;
   const all = Array.from({ length: 25 }, (_, i) => track.frameAt(section.fromS + (section.toS - section.fromS) * i / 24));
   const low = Math.min(...all.map(f => f.p[1])), high = Math.max(...all.map(f => f.p[1]));
-  const radius = Math.min(...all.map(f => Math.hypot(f.p[0] - x, f.p[2] - z) - f.w / 2 - 11));
+  // Keep the reactor rings behind wide screen edges on the reshaped course approaches.
+  const radius = Math.min(...all.map(f => Math.hypot(f.p[0] - x, f.p[2] - z) - f.w / 2 - 13));
   return { center: [x, (low + high) / 2, z], radius: Math.max(1, radius), height: high - low + 60 };
 }
 
