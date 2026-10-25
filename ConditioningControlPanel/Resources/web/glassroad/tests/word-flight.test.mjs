@@ -11,7 +11,7 @@ test('an asynchronously loaded or replaced song preserves the active airborne ro
   const f = setup(), { run, st, ev } = f;
   while (!run.platforms.some(r => r.alpha > .1)) tick(f);
   const row = run.platforms[0], original = row.text, section = run.activeSection;
-  run.setSong({ words: [{ w: 'replacement', startS: 0 }] });
+  run.setSong({ words: Array.from({ length: 30 }, (_, i) => ({ w: 'replacement', startS: i * .8 })) });
   assert.equal(run.activeSection, section);
   assert.equal(row.text, original, 'the approaching support keeps its visible lettering');
   for (let i = 0; i < 900 && (st[S.s] < f.zone.gapS1 + 12 || run.activeSection); i++) tick(f);
@@ -158,4 +158,35 @@ test('ordinary contacts still reject word undersides, faded and distant crossing
   row.solid = false; assert.equal(airWordQuery(st, below, query(), above).airWord, null);
   row.solid = true;
   assert.equal(airWordQuery(st, below, query(), above.map((v, i) => v + row.n[i] * 30)).airWord, null);
+});
+
+test('quiet song sections get compact trigger words, with only two supports visible', () => {
+  for (const music of [null, { words: [{ w: 'far-away-lyric', startS: 1000 }] }]) {
+    const f = setup(tracks[0], tracks[0].aerials[0], 26, music);
+    const seen = new Set();
+    for (let i = 0; i < 1000 && f.st[S.s] < f.zone.gapS1 + 12; i++) {
+      tick(f);
+      assert.ok(f.run.platforms.length <= 2);
+      for (const row of f.run.platforms) {
+        assert.ok(row.widthM <= 10 && row.lengthM <= 3.2, 'letters leave the chase view open');
+        assert.ok(['FLOAT', 'BREATHE', 'DRIFT', 'RISE'].includes(row.text));
+        seen.add(row.text);
+      }
+    }
+    assert.ok(seen.size >= 3);
+    assert.ok(f.st[S.grounded] && f.st[S.s] >= f.zone.gapS1 + 12);
+  }
+});
+
+test('word catches ease vertical speed instead of reversing a hard fall', () => {
+  const f = setup(); let contacts = 0;
+  for (let i = 0; i < 1000 && f.st[S.s] < f.zone.gapS1 + 12; i++) {
+    tick(f);
+    const count = f.ev.all('air-word-land').length;
+    if (count > contacts) {
+      assert.ok(Math.abs(f.st[S.velY]) < 2, 'touchdown has a soft vertical approach');
+      contacts = count;
+    }
+  }
+  assert.ok(contacts >= 3);
 });

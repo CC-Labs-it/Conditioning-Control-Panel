@@ -6,7 +6,7 @@ const hooks = registerHooks({ resolve(s, c, next) {
   const files = { 'three/tsl': 'three.tsl.min.js', 'three/webgpu': 'three.webgpu.min.js' };
   return files[s] ? { url: new URL('../vendor/three/build/' + files[s], import.meta.url).href, shortCircuit: true } : next(s, c);
 } });
-const { createAirWords, AIR_WORD_CAPACITY, airWordBit } = await import('../render/airWords.js');
+const { createAirWords, AIR_WORD_CAPACITY, airWordBit, airWordPose } = await import('../render/airWords.js');
 const { letterContours, extrudeLetters, letterCatchPoints } = await import('../render/wordSolid.js');
 const { Scene, Box3, Mesh, MeshBasicMaterial, Raycaster, Vector3 } = await import('three/webgpu');
 hooks.deregister();
@@ -156,4 +156,19 @@ test('Gentle and refused brightness budgets retain readable words with calmer pa
     assert.ok(Math.abs(v.x) <= 6 && Math.abs(v.z) <= 9 && v.size >= 0 && v.size <= .075);
     if (!alpha) assert.equal(v.size, 0);
   }
+});
+
+test('HD letters float and tilt into view, settle for the catch and compress on contact', () => {
+  const { view, doc } = fixture();
+  assert.equal(doc.canvases[0].width, 1024);
+  assert.equal(doc.canvases[0].height, 256);
+  const p = platform({ catchS: 4, landedS: 4, index: 1 });
+  const before = airWordPose(p, 3.6), contact = airWordPose(p, 4), bounced = airWordPose(p, 4.18);
+  assert.ok(Math.abs(before.y) > .001 && Math.abs(before.tilt) > .001);
+  assert.equal(contact.y, 0); assert.equal(contact.tilt, 0); assert.equal(contact.depth, 1);
+  assert.ok(bounced.depth < .8 && bounced.y === 0, 'compression leaves the support top planted');
+  assert.ok(airWordPose(p, 4.18, true).depth > bounced.depth);
+  const run = { timeS: 3.6, platforms: [p, platform({ id: 'air-word-1' }), platform({ id: 'air-word-2' })] };
+  view.update(run, .1); assert.equal(view.stats.visible, 2);
+  view.dispose();
 });
