@@ -52,8 +52,7 @@ namespace ConditioningControlPanel
             CoreSettings.Save();
 
             // #668 Audio-Only Hypno (WPF :304): the visual features sit the session out.
-            // ponytail: WPF also starts the layered audio bed (LayeredAudio.Start(ignoreMasterToggle: true));
-            // no head here has it in Core yet - add it with the audio-layers port.
+            // The head starts the audio-only bed through StartedHook (it owns the audio player).
             bool audioOnly = s.AudioOnlySession;
             if (!audioOnly) CoreFlash.Start();   // it checks FlashEnabled itself
             if (!audioOnly && s.SubliminalEnabled) CoreSubliminal.Start();

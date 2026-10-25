@@ -4,8 +4,7 @@
 // BtnStart_Click (stop-session dialog) is ConfirmStopSession (MainShellWindow.SessionRun.cs).
 // Relapse (TrackPanicPressed/CheckRelapse), the Takeover start/stop rule and the scheduler's manual-stop
 // flag are here; ramp in Core CoreIntensityRamp, scheduler in MainShellWindow.Scheduler.cs.
-// ponytail: brain-drain start (no BrainDrain service on this head) and the Start hero FX
-// (MainWindow.HeroFx.cs) remain: row shell-start-stop names wire-shell-start-stop-b-next.
+// ponytail: Brain Drain and wallpaper hosts remain unported; see row shell-start-stop.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
 using System;
@@ -32,6 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private async void BtnStart_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
+            FlashStartIgnition(); // WPF: pure decoration, before the remote/lockdown refusals
             if (RemoteControllerConnected) return;   // WPF StartStop.cs:43: a controller drives
             if ((CoreEngine.IsRunning || App.Sessions?.IsRunning == true) && RefuseStopUnderLockdown()) return;
             // WPF MainWindow.StartStop.cs:58: a running session asks first; declining keeps everything on.
@@ -63,6 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void OnEngineStarted()
         {
             App.Achievements?.CheckRelapse();
+            if (CoreSettings.Current.AudioOnlySession) Platform.LayeredAudio.Instance?.Start(ignoreMasterToggle: true);
             Autonomy.Start();   // starts only when AutonomyScheduler.CanStart (entitled, enabled, consented)
         }
 
@@ -145,6 +146,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CancelAutonomyPulses();
             // WPF StartStop.cs:451: Takeover the user armed outlives the engine; anything else stops.
             if (!AutonomyScheduler.CanStart(CoreSettings.Current)) Autonomy.Stop();
+            if (!CoreSettings.Current.AudioLayersEnabled) Platform.LayeredAudio.Instance?.Stop();
+            Platform.LibVlcAudio.Instance?.ForceUnduck();
             PinkRushHost.Stop();                   // WPF StartStop.cs:505 App.SkillTree?.Stop()
             StopConditioningTimeTracker();         // WPF StartStop.cs:540
             App.StopDesktopOverlays(final: false);
@@ -178,6 +181,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (running) status.Bind(TextBlock.TextProperty, (Binding)new StrExtension("label_running").ProvideValue(null!));
                 else status.Text = "";
             }
+            ApplyStartHeroState();
         }
     }
 }
