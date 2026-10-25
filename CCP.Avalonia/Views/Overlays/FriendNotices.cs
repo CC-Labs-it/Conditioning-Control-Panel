@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
@@ -29,9 +31,9 @@ internal sealed class FriendNotices : Window
     private readonly Dictionary<FriendNotice, NoticeLook> _looks = new();
     private readonly Dictionary<FriendNotice, (ScaleTransform Bar, TextBlock Ago)> _drawn = new();
     private readonly StackPanel _column = new();
-    private readonly DispatcherTimer _timer;
+    private readonly BeatLoop _beat;
     private Window? _anchor;
-    private DateTime _last = DateTime.UtcNow;
+    private double _lastT;
 
     internal FriendNotices()
     {
@@ -47,16 +49,16 @@ internal sealed class FriendNotices : Window
         WindowStartupLocation = WindowStartupLocation.Manual;
         Content = _column;
         PointerEntered += (_, _) => Stack.Paused = true;
-        PointerExited += (_, _) => { Stack.Paused = false; _last = DateTime.UtcNow; };
+        PointerExited += (_, _) => Stack.Paused = false;
         SizeChanged += (_, _) => Place();
         Opened += (_, _) =>
         {
             if (TryGetPlatformHandle() is { } handle)
                 Win32Overlay.SetOverrideRedirect(this, handle.Handle, passive: true);
         };
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
-        _timer.Tick += (_, _) => { var now = DateTime.UtcNow; Advance((now - _last).TotalMilliseconds); _last = now; };
-        Closed += (_, _) => { _timer.Stop(); if (ReferenceEquals(Current, this)) Current = null; };
+        // Lifetimes count real elapsed time on the window's shared beat (P40, AmbientBeatLoopsTests).
+        _beat = new BeatLoop(this, t => { Advance((t - _lastT) * 1000); _lastT = t; });
+        Closed += (_, _) => { _beat.Stop(); if (ReferenceEquals(Current, this)) Current = null; };
     }
 
     internal static void Present(Window? anchor, FriendNotice notice, NoticeLook look)
@@ -69,7 +71,7 @@ internal sealed class FriendNotices : Window
             foreach (var evicted in w.Stack.TakeEvicted()) w.Leave(evicted, false, true);
             w._looks[up] = look;
             w.Rebuild();
-            if (!w.IsVisible) { w.Show(); w._last = DateTime.UtcNow; w._timer.Start(); }
+            if (!w.IsVisible) { w.Show(); w._beat.Start(); }
             w.Place();
         }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Friend notice presentation failed"); }
@@ -167,6 +169,7 @@ internal sealed class FriendNotices : Window
             close.Focusable = false;
             close.VerticalAlignment = VerticalAlignment.Top;
             ToolTip.SetTip(close, Loc.Get("friends_notice_close"));
+            AutomationProperties.SetName(close, Loc.Get("friends_notice_close"));
             close.Click += (_, e) => { e.Handled = true; Dismiss(n, false); };
             Grid.SetColumn(close, 2);
             grid.Children.Add(close);
@@ -180,7 +183,11 @@ internal sealed class FriendNotices : Window
                 Margin = new Thickness(0, 0, 0, 8), Background = new SolidColorBrush(Color.Parse("#F2221641")),
                 BorderBrush = FriendsDrawer.Line2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12),
                 Child = body };
-            card.PointerReleased += (_, e) => { if (!e.Handled) Dismiss(n, false, true); };
+            // WPF card.MouseLeftButtonUp (FriendNotices.cs:386): left button only.
+            card.PointerReleased += (_, e) =>
+            {
+                if (!e.Handled && e.InitialPressMouseButton == MouseButton.Left) Dismiss(n, false, true);
+            };
             _column.Children.Add(card);
             _drawn[n] = (bar, ago);
         }

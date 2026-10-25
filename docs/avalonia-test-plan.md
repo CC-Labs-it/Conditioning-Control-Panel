@@ -220,6 +220,11 @@ Set the panic key to Enter for steps 1-4 (Settings -> panic key).
 10. Start a session with a card up. Expect it to fold into the Inbox within 3 s; new invites wait until the session ends. WPF `Windows/Friends/KnockCard.cs`. Rows: `win-knock-card`.
 11. A Ramp invite: with the panel hidden behind the launcher, press Join. Expect the panel on the Studio tab. WPF `Windows/Friends/KnockCard.cs`. Rows: `win-knock-card`, `feat-friends-landing`.
 
+### Friend corner notices
+1. WPF `Windows/Friends/FriendNotices.cs`, `Services/Friends/FriendsLanding.cs`: with two test accounts and notices enabled, receive a poke; confirm the bottom-right non-activating card, the pop sound, Poke back (click sound; a refusal plays the denied sound), a left click on the body opening the named friend (a right click does nothing), repeat folding, three visible cards and +N more, hover pausing, missed-poke Inbox fallback and reopening. Close/body clicks must not file a missed poke. Start a hold or panic while a card is up: it closes and the unseen poke waits in Inbox. Rows: `feat-friends-open-tables`
+2. WPF `Services/Friends/FriendsLanding.cs`: receive a request; the request sound plays, Accept sends once (click, then unlock or denied sound), body opens the drawer. Existing requests produce the singular/plural waiting notice with the request sound; bell off files rows silently. Check shutdown closes all notices. Known stub: Goon Join, launcher tables/lobby and exact avatar/motion parity. Rows: `feat-friends-open-tables`
+3. WPF `Services/Friends/FriendsLanding.cs:280,622`: receive a watch of each kind. Expect Emi's "a present", a corner notice "sends you a watch" (Watch) or "sends you a flavour" (Try it). Watch on a HypnoTube watch opens the panel's browser on the video; on a catalogue watch it plays your local Deeper file with that catalogue id, else opens the Deeper tab. Try it switches the media niches, keeps a local-only source local unless you already consented to online media, and floats "flavour on". Let a notice time out: the Inbox row reopens it; once expired, opening the row makes Emi say "that one already left". Rows: `feat-friends-open-tables`
+
 ### Other windows
 12. First start on a fresh profile: the first-run wizard walks every page, Back and Next work. WPF `Windows/FirstRunWizard.xaml.cs:913-969`. Rows: `win-first-run-wizard`, `win-splash-screen`.
 13. **[SAFETY] developers re-check this before release.** Lock card: start one, type the phrase wrong, then right. Expect it to stay until the right phrase; panic closes it. WPF `Windows/LockCardWindow.xaml.cs:763`. Rows: `win-lock-card`.
@@ -673,6 +678,3 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
-
-1. WPF `Windows/Friends/FriendNotices.cs`, `Services/Friends/FriendsLanding.cs`: with two test accounts and notices enabled, receive a poke; confirm the bottom-right non-activating card, Poke back, body opening the named friend, repeat folding, three visible cards and +N more, hover pausing, missed-poke Inbox fallback and reopening. Close/body clicks must not file a missed poke. Start a hold or panic while a card is up: it closes and the unseen poke waits in Inbox. Rows: `feat-friends-open-tables`
-2. WPF `Services/Friends/FriendsLanding.cs`: receive a request; Accept sends once, body opens the drawer. Existing requests produce the singular/plural waiting notice; bell off files rows silently. Check shutdown closes all notices. Known stub: Goon Join, launcher tables/lobby, watch actions and exact avatar/motion/SFX parity. Rows: `feat-friends-open-tables`

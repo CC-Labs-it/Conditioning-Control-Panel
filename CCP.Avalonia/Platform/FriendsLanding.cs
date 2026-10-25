@@ -158,13 +158,13 @@ internal static partial class FriendsLanding
     private sealed class Sink : ILandingSink
     {
         /// <summary>WPF Sink.Poke :229: Emi says it and the word floats over the panel, pink for a tease.
-        /// Bell off, over a game, or nothing on screen: the Inbox row (the corner toast is not on this head).</summary>
+        /// Bell off: the Inbox row and nothing else.</summary>
         public void Poke(InboxItem item, bool inGame)
         {
             var game = inGame ? ActiveGameWindow() : null;
             var anchor = Anchor();
             if (!NoticesOn) { Inbox(item); return; }
-            ShowPoke(item, game ?? anchor);
+            ShowPoke(item, game ?? anchor, inGame);
             FriendsSeen.Shared.Seen(Service(), item.Id);
             if (game != null) return;
             var word = Str("friends_poke_" + item.PokeId, LandingRules.PokeFallback(item.PokeId));
@@ -177,11 +177,14 @@ internal static partial class FriendsLanding
         {
             var anchor = inGame ? ActiveGameWindow() ?? Anchor() : Anchor();   // WPF :262
             // The bell off, or nothing of ours on screen: the Inbox row and nothing else (WPF :263-264).
-            if (anchor == null || !NoticesOn || item.Kind != SendKind.Invite) { Inbox(item); return; }
+            if (anchor == null || !NoticesOn) { Inbox(item); return; }
             Sfx("chaos/dling.mp3", 0.18f, "friends-knock", incoming: true);   // WPF FriendsSfx.Knock
-            if (!inGame) EmiSays(Str("friends_land_emi_knock", "someone wants you"), "o_o");   // WPF :266-270
-            // An invite knocks with a card that counts down to its own expiry (WPF :251-258).
-            ShowCard(anchor, item);
+            if (!inGame)   // WPF :266-270
+                EmiSays(item.Kind == SendKind.Invite ? Str("friends_land_emi_knock", "someone wants you") : Str("friends_land_emi_present", "a present"),
+                    item.Kind == SendKind.Invite ? "o_o" : "^_~");
+            // An invite knocks with a card that counts down to its own expiry (WPF :251-258); a watch is a corner notice (:280).
+            if (item.Kind == SendKind.Invite) ShowCard(anchor, item);
+            else ShowWatch(anchor, item);
         }
 
         public void Inbox(InboxItem item)
@@ -220,16 +223,16 @@ internal static partial class FriendsLanding
 
     /// <summary>An Inbox row opened later: the card again while it is still answerable (WPF Reopen :465).
     /// Opened by hand, so it comes up whatever the bell says.</summary>
-    private static void Reopen(InboxItem item)
+    internal static void Reopen(InboxItem item)
     {
-        if (item.IsExpired(KnockCard.Clock())) return;
-        if (item.Kind == SendKind.Invite)
+        if (item.IsExpired(KnockCard.Clock()))
         {
-            if (Anchor() is { } anchor) ShowCard(anchor, item);
-            else TheSink.Inbox(item);   // WPF :478 Knock -> no anchor -> the row again
+            EmiSays(Str("friends_land_too_late", "that one already left"), ";_;");   // WPF :477-481
+            return;
         }
         if (item.Kind == SendKind.Poke) TheSink.Poke(item, false);
-        // ponytail: watch playback/receipt host remains unported; keep watch rows answerable in Inbox.
+        else if (item.Kind == SendKind.Invite && Anchor() is { } anchor) ShowCard(anchor, item);
+        else TheSink.Knock(item, false);   // a watch, or an invite with nothing up: Knock files the row again (WPF :490)
     }
 
     /// <summary>How a card ended (WPF OnKnockDone :487).</summary>
@@ -251,7 +254,12 @@ internal static partial class FriendsLanding
                 Sfx("chaos/sink.mp3", 0.10f, "friends-sink");   // WPF FriendsSfx.Dismiss
                 return;
         }
-        if (item.Kind != SendKind.Invite) { StartupLadder.Inbox.Remove("friends:" + item.Id); return; }
+        if (item.Kind != SendKind.Invite)
+        {
+            StartupLadder.Inbox.Remove("friends:" + item.Id);
+            if (item.Watch != null) Watch(item.Watch);   // WPF :531
+            return;
+        }
         if (!CanJoin(item)) { OnKnockDone(item, KnockOutcome.Later); return; }   // never a Joined receipt for nothing
         StartupLadder.Inbox.Remove("friends:" + item.Id);
         FriendsSeen.Shared.Report(Service(), ReceiptReport.Item(item.Id, ReceiptState.Joined));
