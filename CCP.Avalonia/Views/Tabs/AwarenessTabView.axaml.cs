@@ -174,8 +174,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtAwarenessStatus.Text = on ? "Live" : "Off";
             TxtAwarenessStatus.Foreground = on ? pink ?? Brushes.HotPink : OffLabel;
 
-            // ponytail: WPF also breathes the dot while the engine is genuinely live
-            // (SetAwarenessStatusPulse). Cosmetic, and it belongs with the engine seam.
+            // WPF UpdateAwarenessStatusIndicator -> SetAwarenessStatusPulse: the shell's one pulse registry.
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.SetAwarenessStatusPulse(on);
         }
 
         // ------------------------------------------------------------------ live editors

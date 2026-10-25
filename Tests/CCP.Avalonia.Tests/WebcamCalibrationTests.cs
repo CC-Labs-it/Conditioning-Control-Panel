@@ -18,7 +18,6 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Webcam;
 using OpenCvSharp;
 using Xunit;
-using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
@@ -203,11 +202,12 @@ public sealed class WebcamCalibrationTests
     private static void WithTracker(bool start, Action<WebcamTracker, WebcamCalibrationData> body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
-        var old = (s.WebcamConsentGiven, s.WebcamConsentVersion, s.WebcamCalibrated, s.WebcamCalibrationMode, WebcamTracker.SourceFactory);
+        var old = (s.WebcamConsentGiven, s.WebcamConsentVersion, s.WebcamCalibrated, s.WebcamCalibrationMode, WebcamTracker.SourceFactory,
+            s.MasterVolume, CoreAudio.PlayOneShotProvider);
         var tracker = WebcamTracker.Instance;
         var oldCal = tracker.Calibration;
         var sentinel = new WebcamCalibrationData { Mode = "Sentinel" };
@@ -226,9 +226,11 @@ public sealed class WebcamCalibrationTests
         {
             WebcamCalibrationWindow.Time = TimeProvider.System;
             tracker.Stop();
+            Dispatcher.UIThread.RunJobs(); // close windows even when a body assertion throws
             WebcamCalibrationData.DeleteIfExists();
             tracker.Calibration = oldCal;
-            (s.WebcamConsentGiven, s.WebcamConsentVersion, s.WebcamCalibrated, s.WebcamCalibrationMode, WebcamTracker.SourceFactory) = old;
+            (s.WebcamConsentGiven, s.WebcamConsentVersion, s.WebcamCalibrated, s.WebcamCalibrationMode, WebcamTracker.SourceFactory,
+                s.MasterVolume, CoreAudio.PlayOneShotProvider) = old;
         }
     });
 
@@ -397,6 +399,61 @@ public sealed class WebcamCalibrationTests
         win.FindControl<Button>("BtnVerifyDone")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BubbleTest_PopsFourTargetsAndReleasesLockOnCloseOrCameraStop(bool stop) => WithTracker(start: true, (tracker, _) =>
+    {
+        var win = OpenAndContinue();
+        var verify = win.FindControl<Border>("VerifyPanel")!;
+        Assert.True(Gaze(win, () => verify.IsVisible));
+        var popSounds = new List<(string Path, float Volume)>();
+        CoreSettings.Current.MasterVolume = 100;
+        CoreAudio.PlayOneShotProvider = (path, volume, _, _, _) => popSounds.Add((path, volume));
+        var bubble = win.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("TestBubble")!;
+        var status = win.FindControl<TextBlock>("TxtBubbleTestStatus")!;
+        var summary = win.FindControl<TextBlock>("TxtVerifyStatus")!;
+        win.FindControl<Button>("BtnVerifyBubbleTest")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal("Bubble 1 / 4 — pop it with your eyes.", status.Text);
+        if (Environment.GetEnvironmentVariable("CCP_WEBCAM_BUBBLE_RENDER") is { Length: > 0 } proof)
+        {
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            using var frame = win.CaptureRenderedFrame();
+            frame!.Save(proof);
+        }
+        var gazeField = typeof(WebcamTracker).GetField("OnGazeMove", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        void Feed(global::Avalonia.Point point) => ((Action<global::Avalonia.Point>)gazeField.GetValue(tracker)!)(point);
+        for (int i = 0; i < 500 && !verify.IsVisible; i++)
+        {
+            double x = Canvas.GetLeft(bubble) + bubble.Width / 2;
+            double y = Canvas.GetTop(bubble) + bubble.Height / 2;
+            Feed(new global::Avalonia.Point(x, y));
+            Dispatcher.UIThread.RunJobs();
+            Clock.Advance(33); Dispatcher.UIThread.RunJobs();
+        }
+        Assert.True(verify.IsVisible);
+        Assert.StartsWith("Popped 4 / 4 · average accuracy ", summary.Text);
+        Assert.Equal(4, popSounds.Count);
+        Assert.All(popSounds, sound =>
+        {
+            Assert.EndsWith("/bubbles/Pop.mp3", sound.Path.Replace('\\', '/'));
+            Assert.Equal((float)Math.Pow(0.5, 1.5), sound.Volume, 6); // WPF BubblePop, distinct from RingFull
+        });
+        Assert.False(bubble.IsVisible);
+        Assert.False(win.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("VerifyCursor")!.IsVisible);
+
+        win.FindControl<Button>("BtnVerifyBubbleTest")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        double tx = Canvas.GetLeft(bubble) + bubble.Width / 2;
+        double ty = Canvas.GetTop(bubble) + bubble.Height / 2;
+        if (stop) tracker.Stop(); // the existing camera panic surface stops this tracker
+        else win.Close();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(win.IsVisible);
+        var lockField = typeof(WebcamTracker).GetField("_gazeLock", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var cleared = (GazeLock)lockField.GetValue(tracker)!;
+        Assert.Equal((tx + 20, ty), cleared.Apply(tx + 20, ty));
+    });
+
     private sealed class ClosedSource : IFrameSource
     {
         public bool Open() => false;
@@ -495,7 +552,7 @@ public sealed class WebcamCalibrationTests
     /// <summary>The tracker's current gaze attractor (Core GazeLock's private target), null when cleared.</summary>
     private static object? Attractor(WebcamTracker tracker)
     {
-        var lk = typeof(WebcamTracker).GetField("_lock", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(tracker)!;
+        var lk = typeof(WebcamTracker).GetField("_gazeLock", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(tracker)!;
         return typeof(GazeLock).GetField("_target", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(lk);
     }
 
