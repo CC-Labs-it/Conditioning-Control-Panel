@@ -30,6 +30,102 @@ public sealed class SpiralEmbedViewTests
     }
 
     [Fact]
+    public Task EmbedStateHonorsOsAnimationPreference() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var oldProbe = ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe;
+        var oldMotion = CoreSettings.Current.MotionLevel;
+        try
+        {
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = () => false;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+            string? sent = null;
+            using var view = new SpiralEmbedView("map") { SendJson = json => { sent = json; return Task.CompletedTask; } };
+            view.Receive("{\"type\":\"spiral:ready\"}");
+            view.PostState(null);
+            Assert.True((bool)JObject.Parse(sent!)["reduced_motion"]!);
+        }
+        finally
+        {
+            CoreSettings.Current.MotionLevel = oldMotion;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = oldProbe;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task TabUsesCurrentBlock_UpdatesWithoutRebuilding_AndWithdraws() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var oldDescent = ConditioningControlPanel.Avalonia.App.Descent;
+        var oldFuse = ConditioningControlPanel.Avalonia.App.DescentCountdown;
+        var oldProvider = CoreSettings.ServiceProvider;
+        var oldEngine = ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView.EngineAvailable;
+        var oldStart = ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView.StartEmbed;
+        var service = new DescentService();
+        var settings = new ConditioningControlPanel.Services.SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.DescentMigrationCompleted = true;
+        settings.Current.MotionLevel = MotionLevel.Off;
+        ConditioningControlPanel.Avalonia.App.Descent = service;
+        ConditioningControlPanel.Avalonia.App.DescentCountdown = null;
+        ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView.EngineAvailable = () => true;
+        var sent = new List<string>();
+        ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView.StartEmbed = e =>
+        {
+            e.SendJson = json => { sent.Add(json); return Task.CompletedTask; };
+            e.Receive("{\"type\":\"spiral:ready\"}");
+        };
+        // Feed the service's accepted snapshot without network or credentials; events use the real publisher.
+        void Block(int days)
+        {
+            typeof(DescentService).GetProperty(nameof(DescentService.Current))!.SetValue(service,
+                new DescentBlock { DevotionDays = days });
+            service.NotifySurfaces("test snapshot");
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        }
+        Block(3);
+        var tab = new ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView();
+        var window = new Window { Content = tab };
+        try
+        {
+            window.Show();
+            var host = tab.FindControl<Grid>("EmbedHost")!;
+            var embed = Assert.IsType<SpiralEmbedView>(Assert.Single(host.Children));
+            Assert.Equal(3, (int)JObject.Parse(Assert.Single(sent))["devotion_days"]!);
+            Block(8);
+            Assert.Same(embed, Assert.Single(host.Children));
+            Assert.Equal(8, (int)JObject.Parse(sent[^1])["devotion_days"]!);
+            service.Reset();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Empty(host.Children);
+            Assert.True(tab.FindControl<Border>("WaitingPanel")!.IsVisible);
+            tab.IsVisible = false;
+            Block(9);
+            Assert.Empty(host.Children);
+            tab.IsVisible = true;
+            Assert.Single(host.Children);
+            tab.StopForPanic();
+            Assert.False(tab.IsVisible);
+            Assert.Empty(host.Children);
+            Block(10);
+            Assert.Empty(host.Children); // panic cannot be undone by a late account callback
+        }
+        finally
+        {
+            window.Close();
+            ConditioningControlPanel.Avalonia.App.Descent = oldDescent;
+            ConditioningControlPanel.Avalonia.App.DescentCountdown = oldFuse;
+            CoreSettings.ServiceProvider = oldProvider;
+            ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView.EngineAvailable = oldEngine;
+            ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView.StartEmbed = oldStart;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task PageHandshakeSendsLatestState_ThenLiveUpdates_DisposeStopsMessages() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();

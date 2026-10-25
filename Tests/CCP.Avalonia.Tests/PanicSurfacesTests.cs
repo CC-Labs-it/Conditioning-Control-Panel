@@ -121,6 +121,7 @@ public sealed class PanicSurfacesTests
         "companion-transcript",
         "possession",
         "attention-test",
+        "spiral-embed",
         "descent-fuse",
         "deeper-editor-audio",
         "knock-cards",

@@ -673,3 +673,7 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+1. With a server descent block and completed migration, open the Spiral tab through the fuse entry before it retires. Confirm the map gets the current server day count; a later accepted block updates the same canvas. Sign out or withdraw the server block: the waiting panel replaces the browser. Hide the tab, update the block, and return: the latest block is used. WPF `Controls/SpiralEmbedView.cs`, `Views/Tabs/SpiralTabView.xaml.cs` Rows: `ctrl-spiral-embed-view`
+2. Disable Windows client-area animations while app motion is Full; reopen the Spiral and confirm its state requests reduced motion. Also test the existing Reduced/Off and Gentle Visuals settings. WPF `Controls/SpiralEmbedView.cs` Rows: `ctrl-spiral-embed-view`
+3. Trigger panic while the Spiral embed is loading or visible. Confirm native airspace disappears and later block callbacks cannot restart it; explicitly navigate back to reopen. WPF `Controls/SpiralEmbedView.cs` Rows: `ctrl-spiral-embed-view`
