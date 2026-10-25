@@ -30,6 +30,9 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// <summary>Opt-in WPF BrowserLauncher fallback for links whose failure needs an explanation.</summary>
         public string? FailurePurpose { get; set; }
         private static readonly HashSet<Window> Prompts = new();
+        /// <summary>True when the sandbox (not the browser) refused the link: no clipboard write, no prompt.
+        /// Test seam: a test sets it false to reach the WPF no-browser fallback.</summary>
+        internal static Func<string, bool> Refused = url => !ExternalOpener.Allowed(url);
         internal static void CloseBrowserPrompts()
         {
             foreach (var prompt in Prompts.ToArray()) prompt.Close();
@@ -40,9 +43,9 @@ namespace ConditioningControlPanel.Avalonia.Controls
             // IsVisited as the base sets it: only once the link actually opened.
             if (await ExternalOpener.OpenAsync(TopLevel.GetTopLevel(this), uri.IsAbsoluteUri ? uri.AbsoluteUri : uri.OriginalString))
                 SetCurrentValue(IsVisitedProperty, true);
-            else if (FailurePurpose is { } purpose && TopLevel.GetTopLevel(this) is Window owner)
+            else if (FailurePurpose is { } purpose && TopLevel.GetTopLevel(this) is Window owner
+                     && (uri.IsAbsoluteUri ? uri.AbsoluteUri : uri.OriginalString) is var url && !Refused(url))
             {
-                var url = uri.IsAbsoluteUri ? uri.AbsoluteUri : uri.OriginalString;
                 try { if (owner.Clipboard is { } clipboard) await clipboard.SetTextAsync(url); } catch { }
                 var prompt = new Views.Dialogs.MessageDialog(
                     ConditioningControlPanel.Localization.Loc.Get("title_open_link_in_browser"),

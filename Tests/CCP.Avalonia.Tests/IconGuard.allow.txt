@@ -60,6 +60,7 @@ Views/Deeper/EnhancementPlayerWindow.axaml :: <Path x:Name="WaveformPath" :: pat
 Views/Tabs/BlinkTrainerTabView.axaml :: <Path Stroke="{DynamicResource PinkBrush}" StrokeThickness="2.6" :: path: D6 art - illustrative blink eye, open outline
 Views/Tabs/BlinkTrainerTabView.axaml :: <Path Stroke="{DynamicResource PinkBrush}" StrokeThickness="2.6" :: path: D6 art - illustrative blink eye, closed arc
 Views/Tabs/BlinkTrainerTabView.axaml :: <Path Stroke="{DynamicResource PinkBrush}" StrokeThickness="1.6" :: path: D6 art - illustrative blink eye, lashes
+Views/Windows/MainShellWindow.BannerFx.cs :: Data = Geometry.Parse("M 0.5,0 C .55,.4 :: path: D6 art - WPF MainWindow.BannerFx.cs four-point sparkle star particle, decorative
 Views/Tabs/ChasterTabView.axaml :: <Path Fill="#FFF3EAD9" Stretch="Fill" Height="9" :: path: D6 art - Chaster torn paper edge, top card
 Views/Tabs/ChasterTabView.axaml :: <Path Fill="#FFF3EAD9" Stretch="Fill" Height="9" :: path: D6 art - Chaster torn paper edge, second card
 Views/Tabs/DiscordTabView.axaml :: <Path HorizontalAlignment="Left" VerticalAlignment="Top" :: path: D6 art - faucet spout

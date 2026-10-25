@@ -930,6 +930,14 @@
                          WPF fin4 sizing: 31px high, max 744px wide, 14px text. The star
                          column gives space back to the fixed header controls; beats trim
                          rather than wrap. -->
+                    <!-- WPF MainWindow.xaml:1060 HeaderBannerGlowHost: the halo is a sibling BEHIND the
+                         pill (outside its 12px padding), never an Effect below a moving layer. -->
+                    <Border Grid.Column="3" x:Name="BannerGlow"
+                            Background="{DynamicResource SurfaceBgBrush}"
+                            CornerRadius="15.5" Height="31" Margin="12,0,12,0" Opacity="0.35"
+                            Width="{Binding #HeaderBannerHost.Bounds.Width}"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            BoxShadow="0 0 12 0 #FF69B4" IsHitTestVisible="False"/>
                     <Border Grid.Column="3" x:Name="HeaderBannerHost"
                             Background="{DynamicResource SurfaceBgBrush}"
                             BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"
@@ -937,9 +945,6 @@
                             Margin="12,0,12,0"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
                         <Grid>
-                            <!-- Sibling shadow: never an Effect below a moving layer. -->
-                            <Border x:Name="BannerGlow" CornerRadius="15.5" Opacity="0.35"
-                                    BoxShadow="0 0 12 0 #FF69B4" IsHitTestVisible="False"/>
                             <Border x:Name="BannerFlashRing" CornerRadius="15.5" Opacity="0"
                                     BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1" IsHitTestVisible="False"/>
                             <TextBlock x:Name="TxtBannerPrimary" Foreground="{DynamicResource PinkBrush}"

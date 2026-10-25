@@ -18,6 +18,7 @@ public partial class MainShellWindow
     private DateTimeOffset? _lastBannerSheenUtc;
     private double _bannerSparklesAt = -100;
     private double _bannerNextSparkles = 12;
+    private double _bannerGlowBlur = double.NaN;   // first frame always paints the theme colour
     private TextBlock? _bannerOutgoing, _bannerIncoming;
     private bool _bannerRolled, _bannerFxClosed, _bannerFxStarting;
     private int _bannerSparkleSeed = Environment.TickCount;
@@ -161,7 +162,13 @@ public partial class MainShellWindow
             glow.Opacity = BannerAmbient ? .25 + .35 * BeatLoop.Breath(seconds, 3.2) : .35;
             var flare = elapsed <= .09 ? Math.Clamp(elapsed / .09, 0, 1)
                 : Math.Pow(1 - Math.Clamp((elapsed - .09) / .31, 0, 1), 2);
-            glow.BoxShadow = new BoxShadows(new BoxShadow { Blur = 12 + 10 * flare, Color = Pr4aGlowColor });
+            // Only during the 0.4 s flare: a new BoxShadows every ambient frame is pure allocation.
+            var blur = 12 + 10 * flare;
+            if (blur != _bannerGlowBlur)
+            {
+                _bannerGlowBlur = blur;
+                glow.BoxShadow = new BoxShadows(new BoxShadow { Blur = blur, Color = Pr4aGlowColor });
+            }
         }
         var sheenTime = (seconds - _bannerSheenAt) / .75;
         if (Named<Border>("BannerSheen") is { } sheen && Named<Grid>("BannerSheenHost") is { } host)
