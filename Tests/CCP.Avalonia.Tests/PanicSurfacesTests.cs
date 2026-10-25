@@ -21,7 +21,12 @@ public sealed class PanicSurfacesTests
     public void EachPanicRouteCallsStopAllExactlyOnce() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
+            // Shipped font setup: whichever class boots the process-wide app first decides fonts,
+            // and the subliminal card (closed by panic) fails to resolve its face on a bare bootstrap.
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
@@ -76,11 +81,49 @@ public sealed class PanicSurfacesTests
         finally { PanicSurfaces.All = prev; }
     }
 
-    /// <summary>Surfaces a panic must never lose. Dropping one fails here; a new surface needs no edit.</summary>
+    /// <summary>Surfaces a panic must never lose: the record independent of the registry, so deleting a
+    /// registry line fails here. One id per line in the established stop order. Registry <c>After</c> rules and the independent
+    /// ordering pairs below retain both lanes' safety contracts.</summary>
     private static readonly string[] SafetyCritical =
     {
-        "intake", "tour", "games", "first-show", "voice-capture", "ai-followups", "blink-trainer", "gaze-minigame", "mantra", "chaos", "chaos-intro", "haptics",
-        "remote-haptics", "takeover", "program-session", "engine", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "possession", "attention-test", "deeper-editor-audio", "knock-cards", "camera",
+        "intake",
+        "leash-task",
+        "tour",
+        "games",
+        "first-show",
+        "voice-capture",
+        "ai-followups",
+        "blink-trainer",
+        "gaze-minigame",
+        "mantra",
+        "chaos",
+        "chaos-flash",
+        "gif-cascade",
+        "chaos-announcer",
+        "chaos-dvd",
+        "chaos-cursor-glow",
+        "chaos-vibe-trail",
+        "chaos-estim",
+        "chaos-field-fx",
+        "chaos-skia-fx",
+        "chaos-intro",
+        "settings-palette",
+        "haptics",
+        "remote-haptics",
+        "takeover",
+        "program-session",
+        "engine",
+        "pink-rush",
+        "corner-gif",
+        "tube-speech",
+        "lock-cards",
+        "speak-cue",
+        "companion-transcript",
+        "possession",
+        "attention-test",
+        "deeper-editor-audio",
+        "knock-cards",
+        "camera",
     };
 
     /// <summary>The order that is contract: (stops first, stops later). WPF refs are
@@ -115,6 +158,10 @@ public sealed class PanicSurfacesTests
         ("corner-gif", "tube-speech", "tube after corner GIFs"),
         // WPF :2030 StopAdHocEffects closes lock cards after the media stops; engine before lock cards.
         ("engine", "lock-cards", "engine before lock cards"),
+        // WPF MainWindow.Leash.cs LeashOnPanicPress is the first thing a panic press does: the task parks before
+        // the tail's StopEngine and lock-card close, so nothing it drives comes back by itself.
+        ("leash-task", "engine", "leash task parks before the engine stop"),
+        ("leash-task", "lock-cards", "leash task parks before its lock card closes"),
         // gaze minigame ends before the camera it reads (PanicSurfaces.cs comment).
         ("gaze-minigame", "camera", "gaze ends before the camera stops"),
     };
@@ -130,16 +177,54 @@ public sealed class PanicSurfacesTests
     }
 
     /// <summary>Reordering two constrained lines fails here. Intake first and camera last (decision C:
-    /// fire-and-forget, nothing after it may wait on it) are exact.</summary>
+    /// fire-and-forget, nothing after it may wait on it) are exact; every <c>After</c> rule on an entry
+    /// (WPF cite beside it in PanicSurfaces.cs) must name a registered surface that stops earlier.</summary>
     [Fact]
     public void TheOrderingConstraintsHold()
     {
         var ids = PanicSurfaces.All.Select(x => x.Id).ToList();
         Assert.Equal("intake", ids[0]);
         Assert.Equal("camera", ids[^1]);
-        var broken = Before.Where(c => !(ids.IndexOf(c.First) is >= 0 and var a && ids.IndexOf(c.Then) is var b && a < b))
-            .Select(c => $"{c.First} before {c.Then} ({c.Why})").ToList();
+        var broken = PanicSurfaces.All.SelectMany((s, i) => (s.After ?? Array.Empty<string>())
+                .Where(f => !(ids.IndexOf(f) is >= 0 and var a && a < i))
+                .Select(f => $"{f} before {s.Id}")).ToList();
         Assert.True(broken.Count == 0, "Panic order broken: " + string.Join("; ", broken));
+        var independentBroken = Before.Where(c => !(ids.IndexOf(c.First) is >= 0 and var a && ids.IndexOf(c.Then) is var b && a < b))
+            .Select(c => $"{c.First} before {c.Then} ({c.Why})").ToList();
+        Assert.True(independentBroken.Count == 0, "Independent panic order broken: " + string.Join("; ", independentBroken));
+    }
+
+    /// <summary>"first>then" WPF/decision ordering pairs that must stay declared on the registry (cites beside
+    /// each <c>After</c> in PanicSurfaces.cs): the record independent of the registry, so retargeting or deleting a
+    /// rule fails here. One pair per line, sorted; new rules on entries need no edit here.</summary>
+    private static readonly string[] PinnedOrder =
+    {
+        "ai-followups>engine",
+        "blink-trainer>engine",
+        "chaos>engine",
+        "corner-gif>tube-speech",
+        "engine>corner-gif",
+        "engine>lock-cards",
+        "engine>pink-rush",
+        "first-show>ai-followups",
+        "gaze-minigame>camera",
+        "gaze-minigame>engine",
+        "haptics>engine",
+        "intake>voice-capture",
+        "leash-task>engine",
+        "leash-task>lock-cards",
+        "mantra>engine",
+        "remote-haptics>engine",
+        "takeover>engine",
+        "voice-capture>ai-followups",
+    };
+
+    [Fact]
+    public void TheWpfOrderingRulesStayDeclared()
+    {
+        var rules = PanicSurfaces.All.SelectMany(s => (s.After ?? Array.Empty<string>()).Select(f => $"{f}>{s.Id}")).ToHashSet();
+        var lost = PinnedOrder.Where(p => !rules.Contains(p)).ToList();
+        Assert.True(lost.Count == 0, "Ordering rules no longer declared on PanicSurfaces.All: " + string.Join(", ", lost));
     }
 
     /// <summary>P23: comments and string literals never count as code.</summary>
@@ -154,6 +239,7 @@ public sealed class PanicSurfacesTests
     /// <summary>Types that start something but need no entry of their own, and why.</summary>
     private static readonly Dictionary<string, string> Allowed = new()
     {
+        ["CompanionPageHost"] = "not a host of anything that runs: it re-parents the collapsed room's zones into the Companion pages",
         ["LockCardWindow"] = "phrase mic + cards: the 'lock-cards' surface (StopLockCards) closes every card",
         ["DevicesSettingsSection"] = "camera preview/calibration: the 'camera' surface stops WebcamTracker",
         ["SettingsTabView"] = "the Home browser card's webcam pill: the 'camera' surface stops WebcamTracker",
@@ -170,8 +256,10 @@ public sealed class PanicSurfacesTests
         ["DeeperLocalAudio"] = "the Deeper editor's transport: the 'deeper-editor-audio' surface pauses every open editor",
         ["BillboardCardHost"] = "the Home Tonight Board deck: no audio (WPF c0c67ff47), no window; its hold stops off screen",
         ["ClipArtView"] = "WPF parity: the showcase card's muted, no-audio loop on Home (holds off screen, freed on shell close); WPF panic leaves the board alone",
+        ["InlineLoopVideo"] = "WPF parity: the help card's muted, no-audio clip poster; it lives only while that card is open, and closing the card detaches and frees it",
         ["RaceTrackPlayer"] = "the race window owns it: the 'games' surface closes GameWindow, whose teardown disposes it (Race_TrackPick_ChartsPlaysAndPanicStops)",
         ["MediaHistoryWindow"] = "WPF parity: the Media Log's muted preview of a user-picked row; WPF panic leaves that window alone",
+        ["HelpVideoWindow"] = "WPF parity: the help window's muted tutorial clip (freed on close); WPF panic leaves that window alone",
     };
 
     [Fact]

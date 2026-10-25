@@ -47,7 +47,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private static double QuadOut(double t) => 1 - (1 - t) * (1 - t);
 
         // WPF BackEase EaseOut, Amplitude 0.5: 1 - f(1 - t), f(x) = x^3 - x * A * sin(pi x).
-        private static double BackOut(double t) { double x = 1 - t; return 1 - (x * x * x - x * 0.5 * Math.Sin(Math.PI * x)); }
+        private static readonly global::ConditioningControlPanel.Avalonia.Theme.BackEaseOutAmplitude BackEase = new() { Amplitude = 0.5 };
+        private static double BackOut(double t) => BackEase.Ease(t);
 
         /// <summary>Animates one property; a new tween on the same target replaces the old one from where it stands.
         /// At MotionLevel Off it snaps to the end value, as WPF's MotionFx does.</summary>
