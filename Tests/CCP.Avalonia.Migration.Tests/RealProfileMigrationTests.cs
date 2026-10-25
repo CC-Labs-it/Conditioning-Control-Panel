@@ -77,7 +77,7 @@ public sealed class RealProfileMigrationTests
     }
 
     [Fact]
-    public async Task SyntheticWpfProfileSurvivesAvaloniaStartupAndShutdown()
+    public async Task SyntheticWpfProfilePreservesSettingsAndUserFilesOnStartupAndShutdown()
     {
         if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ProfileVariable)))
             Assert.Skip("One desktop startup per process: the real profile run owns this testhost.");
@@ -92,6 +92,10 @@ public sealed class RealProfileMigrationTests
         settings["PersonaIdentityFenceUtc"] = "2026-10-01T12:00:00Z";
         // Open drawers on a tab the run never shows (the exit write used to reset them).
         settings["CompanionSectionOpen"] = new JObject { ["EngineRoom"] = true, ["Workshop"] = true };
+        settings["MasterVolume"] = 17;
+        settings["VideoVolume"] = 63;
+        // Unrecognized user-owned files must survive the real startup/exit unchanged.
+        File.WriteAllBytes(Path.Combine(fixture, "mods", "premove", "custom.bin"), new byte[] { 0, 255, 13, 10, 42 });
         File.WriteAllText(Path.Combine(fixture, "settings.json"), settings.ToString());
         File.Copy(Fixture("mod_manifest_premove.json"), Path.Combine(fixture, "mods", "premove", "manifest.json"));
         File.Copy(Fixture("session_log_premove.json"), Path.Combine(fixture, "session_logs", "premove.json"));

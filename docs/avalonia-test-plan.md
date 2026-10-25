@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### Release evidence regression checks
+
+1. Run `ReleaseEvidenceTests.LinuxTarballPlacesModelWhereSpeechEngineResolvesIt` on Linux. The extracted model must resolve at the shipped Resources path with identical fixture bytes. WPF `ConditioningControlPanel/ConditioningControlPanel.csproj:694` bundles Models under Resources. Rows: `linux-package-vosk-model`.
+2. Run `ReleaseEvidenceTests.ContentPackKeepsInstallPathsAndExactDeletionNames` with PowerShell 7 on PATH. Audio comes from Assets, mod archives stay project-relative, zip/deletion paths retain case and exclude the in-box manifest. WPF `ConditioningControlPanel/Scripts/build-content-packs.ps1:254` and `:293` define source and archive mapping; `:596` emits exact deletion names. Rows: `release-content-pack-script`.
+3. Run `RealProfileMigrationTests.SyntheticWpfProfilePreservesSettingsAndUserFilesOnStartupAndShutdown` in its own testhost. After real startup/exit, compare every original settings key and non-settings file; volumes, untouched drawer states and custom bytes must survive. WPF `ConditioningControlPanel/MainWindow/MainWindow.WindowChrome.cs:176` preserves drawer state on exit. Rows: `settings-migration-test`.
