@@ -3490,3 +3490,8 @@ Tests: ShellLabTabTests (fail-proven x3), MandatoryVideoOverlayTests, WebcamTrac
 ## avalonia-port/fin-views-companion-room: +113
 
 Restores the late Dormant shimmer in ChatThresholdView (WPF State -> PlayDormantShimmer at Normal priority; 250 ms delay, 1.4 s CubicEase InOut, once per view). CompanionRoomShimmerTests: the `false` case is fail-proven (rcheck 39921325857 red, 39922233760 green 6/6). views-companion-room stays stub. rgate: flake-only (RaceTrackPlayer), runs 39927190050 and 39930580281.
+
+## avalonia-port/fin-views-companion-room-preview: +228
+- Companion room preview: all six states seat a fresh, collapsed WPF Workshop exhibit (6 cells, 25 rows, sliders, caption, inert commands). The permissions exhibit is enabled with the WPF defaults, and edits stay local. The lock CTA reaches the live shell, as in WPF.
+- Ledger row views-companion-room-preview is `wired` under P122. The pinned no-caller grep is inlined. WpfDeadSurfaceTests is still open (dead-in-wpf lane).
+- rgate GATE-OK run 39921331914.
