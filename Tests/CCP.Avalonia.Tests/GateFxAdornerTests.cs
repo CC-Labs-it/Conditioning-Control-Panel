@@ -155,6 +155,63 @@ public sealed class GateFxAdornerTests
         finally { host.Close(); }
     });
 
+    [Fact]
+    public Task SelectedPresetSheenMovesToSessionAndParksOnHideAndMotionGate() => Run(shell =>
+    {
+        shell.ShowTab("presets"); Settle(shell);
+        var tab = shell.Named<PresetsTabView>("PresetsTab")!;
+        var preset = tab.FindControl<WrapPanel>("PresetCardsPanel")!.Children.OfType<Border>().First(c => c.Tag is string);
+        var point = preset.TranslatePoint(new Point(preset.Bounds.Width / 2, preset.Bounds.Height / 2), shell)!.Value;
+        shell.MouseMove(point); shell.MouseDown(point, global::Avalonia.Input.MouseButton.Left); shell.MouseUp(point, global::Avalonia.Input.MouseButton.Left);
+        Settle(shell);
+        Assert.Equal(preset.Tag, tab.SelectedSheenHost?.Tag);
+        var first = Assert.IsType<CardSheenAdorner>(tab.SelectedCardSheen);
+        Assert.True(first.IsTicking);
+        Clock.Now += TimeSpan.FromSeconds(0.65).Ticks; first.Tick();
+        Assert.True(first.BandOffset > 0.5);
+
+        var session = tab.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
+        point = session.TranslatePoint(new Point(session.Bounds.Width / 2, session.Bounds.Height / 2), shell)!.Value;
+        shell.MouseMove(point); shell.MouseDown(point, global::Avalonia.Input.MouseButton.Left); shell.MouseUp(point, global::Avalonia.Input.MouseButton.Left);
+        Settle(shell);
+        Assert.Same(session, tab.SelectedSheenHost);
+        Assert.False(first.IsTicking);
+        var second = Assert.IsType<CardSheenAdorner>(tab.SelectedCardSheen);
+        shell.ShowTab("awareness"); Settle(shell);
+        Assert.Null(tab.SelectedCardSheen); Assert.False(second.IsTicking);
+        shell.ShowTab("presets"); Settle(shell);
+        Assert.NotNull(tab.SelectedCardSheen);
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.Null(tab.SelectedCardSheen);
+    });
+
+    [Fact]
+    public Task ChasterHeroSheenTravelsAndParksOnHideDetachAndMotionGate() => Run(shell =>
+    {
+        shell.ShowTab("chaster"); Settle(shell);
+        var tab = shell.Named<ChasterTabView>("ChasterTab")!;
+        var hero = tab.FindControl<Border>("HeroCard")!;
+        var layer = global::Avalonia.Controls.Primitives.AdornerLayer.GetAdornerLayer(hero);
+        Assert.True(tab.HeroSheen != null, $"tab visible={tab.IsVisible}, effective={tab.IsEffectivelyVisible}, gate={AmbientFxCanvas.Env.AllowAmbientLoops}, hero={hero.IsEffectivelyVisible}, layer={layer}");
+        var sheen = Assert.IsType<CardSheenAdorner>(tab.HeroSheen);
+        Assert.True(sheen.IsTicking);
+        Clock.Now += TimeSpan.FromSeconds(0.65).Ticks; sheen.Tick();
+        Assert.True(sheen.BandOffset > 0.5);
+        shell.ShowTab("presets"); Settle(shell);
+        Assert.Null(tab.HeroSheen); Assert.False(sheen.IsTicking);
+        shell.ShowTab("chaster"); Settle(shell);
+        Assert.NotNull(tab.HeroSheen);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.Null(tab.HeroSheen);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        sheen = Assert.IsType<CardSheenAdorner>(tab.HeroSheen);
+        ((Panel)tab.Parent!).Children.Remove(tab); Settle(shell);
+        Assert.Null(tab.HeroSheen); Assert.False(sheen.IsTicking);
+    });
+
     private static readonly SteppedClock Clock = new();
 
     private static void Settle(Window w) { Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs(); }
@@ -162,7 +219,7 @@ public sealed class GateFxAdornerTests
     private static Task Run(Action<MainShellWindow> body) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;

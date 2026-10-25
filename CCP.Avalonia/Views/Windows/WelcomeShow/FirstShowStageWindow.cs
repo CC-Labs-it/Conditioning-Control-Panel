@@ -15,6 +15,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
@@ -39,6 +40,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 internal sealed partial class FirstShowStageWindow : Window
 {
     private readonly Canvas _stage = new() { Background = null };
+    /// <summary>WPF FirstShowDesktopWindow.cs:50: "via Scrolller" during a show of fetched (Scrolller) pictures.</summary>
+    internal readonly ScrolllerCreditBadge Credit = new() { HorizontalAlignment = HorizontalAlignment.Left };
     private EmiDeskWindow? _emi;
     private readonly Border _bubble = new()
     {
@@ -117,6 +120,7 @@ internal sealed partial class FirstShowStageWindow : Window
         catch (Exception ex) { Log.Debug("First show logo: {Error}", ex.Message); }
         _logo.RenderTransformOrigin = new RelativePoint(.5, .5, RelativeUnit.Relative);
         _stage.Children.Add(_logo);
+        Canvas.SetLeft(Credit, 16); Canvas.SetBottom(Credit, 12); _stage.Children.Add(Credit);   // WPF :90
         _loadingPanel.Children.Add(_loadingBar); _loadingPanel.Children.Add(_loadingStatus);
         _bubbleContent.Children.Add(_speech); _bubbleContent.Children.Add(_loadingPanel); _bubbleContent.Children.Add(_choices);
         // WPF :327-338: a line taller than the screen scrolls; normal lines show no scroll chrome (Auto).
@@ -296,6 +300,9 @@ internal sealed partial class FirstShowStageWindow : Window
     {
         _choices.Children.Clear(); _serious = false; _playing = true; _ending = false; _beat = -1;
         _stage.Background = Brushes.Transparent; _showStart = Clock(); AddButton(Text("stop"), Close);
+        // WPF :236 asks IsScrolllerMedia of each file; this head's show keeps its own temp names, and every
+        // non-bundled picture came from the Scrolller feed (DefaultFetch).
+        Credit.SetShown(!_bundled && _files.Count > 0);
     }
     // WPF Frame :239-318.
     internal void Frame()
@@ -323,6 +330,7 @@ internal sealed partial class FirstShowStageWindow : Window
             if (time >= S.Length)
             {
                 _playing = false; _ending = true; _showFrozen = time; _showStart = double.NaN; _stage.Background = null;
+                Credit.SetShown(false);   // WPF :264
                 AskVerdict();
             }
         }

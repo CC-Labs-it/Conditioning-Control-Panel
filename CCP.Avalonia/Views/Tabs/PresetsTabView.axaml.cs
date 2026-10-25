@@ -390,6 +390,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BtnSharePreset.IsEnabled = !preset.IsDefault;
             UpdatePresetShareStatusBadge(preset);
             RefreshSessionRackSelection();
+            RefreshCardSheen();
         }
 
         /// <summary>WPF UpdatePresetShareStatusBadge (MainWindow.PresetIO.cs:332).</summary>
@@ -839,6 +840,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             UpdateRackCount(shown.Count);
             RefreshSessionRackSelection();
+            RefreshCardSheen();
         }
 
         private Border RackRow(Session session)
@@ -1098,6 +1100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtSessionTimeline.Text = session.GetSpoilerTimeline();
 
             RefreshSessionRackSelection();
+            RefreshCardSheen();
         }
 
         /// <summary>WPF GenerateSessionTimelineDescription (MainWindow.SessionIO.cs:984), localized.</summary>
