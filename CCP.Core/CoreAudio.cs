@@ -16,6 +16,12 @@ namespace ConditioningControlPanel
     /// </summary>
     public static class CoreAudio
     {
+        /// <summary>WPF AudioService's cadence for catching sessions born during a duck window.</summary>
+        public const int DuckRescanIntervalMs = 2_500;
+
+        /// <summary>Do not recapture an already-silent session as its original volume on a rescan.</summary>
+        public static bool IsSilentForDuckRescan(float volume) => volume <= 0.001f;
+
         public static volatile Action<string, float, string, Action<TimeSpan>?, Action?>? PlayOneShotProvider;
         public static volatile Action<int>? DuckProvider;
         public static volatile Action<long>? UnduckProvider;

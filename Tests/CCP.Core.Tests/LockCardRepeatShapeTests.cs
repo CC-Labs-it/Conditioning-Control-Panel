@@ -148,4 +148,12 @@ public class LockCardRepeatShapeTests
         Assert.Equal(3, ResolveRepeats(-1, phrase, false, 1, 3, true, 120, 20, 0.5));
         Assert.InRange(ResolveRepeats(-1, phrase, true, 2, 5, true, 120, 20, 0.5), 2, 5);
     }
+
+    [Theory]
+    [InlineData(0, 1)]    // a missing "amount" reads as 0: that card read "0 / 0" and never closed (#1444)
+    [InlineData(-3, 1)]
+    [InlineData(3, 3)]
+    [InlineData(99, 5)]
+    public void AiLockCardAlwaysAsksForAtLeastOneRepeat(int amount, int expected)
+        => Assert.Equal(expected, ConditioningControlPanel.Services.Commands.MantraLockScreenCommand.Repeats(amount));
 }

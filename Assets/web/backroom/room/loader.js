@@ -22,6 +22,7 @@
 import * as bridge from '../bridge.js';
 import { flashesBusy } from '../shared/hypno/flash-interaction.js';
 import { createRenderBudget } from './render-budget.js';
+import { sourceCredit } from '../shared/source-credit.js';
 
 /* The same board test the render budget makes, so the room's echo and a station's echo can never disagree
  * about the device they are both running on. It is hardware, so it is asked once. */
@@ -78,6 +79,24 @@ export function createLoader(room) {
     return root;
   }
 
+  /** The sit-down holds the room's one "via Scrolller" mark while its latest deal carries a Scrolller
+   *  picture; standing up (dropSubs) lets it go. A deal that lands after stand-up credits nothing.
+   *  The last deal is kept per station because a station may keep its deal across visits (the slot's
+   *  sessionMedia): the next sit-down re-credits from it without asking the host again. */
+  const lastDeal = new Map();
+  function creditSeat(station, subs, rep) {
+    try {
+      if (!subs || subs.closed) return;
+      const key = 'seat:' + station.id;
+      if (rep && !rep.timeout) lastDeal.set(station.id, rep);
+      sourceCredit.follow(key, rep === undefined ? lastDeal.get(station.id) : rep);
+      if (!subs.creditStop) {
+        subs.creditStop = () => { subs.delete(subs.creditStop); sourceCredit.drop(key); };
+        subs.add(subs.creditStop);
+      }
+    } catch (e) { /* the credit never breaks a deal */ }
+  }
+
   function buildCtx(station, root, variant, subs, stage) {
     const s = room.state;
     return {
@@ -126,7 +145,8 @@ export function createLoader(room) {
         const count = opts && opts.count;
         if (Number.isInteger(count) && count >= 1 && count <= MEDIA_COUNT_MAX) msg.count = count;
         return bridge.request(msg, 'media',
-          (m) => m.reqId === reqId, REQUEST_TIMEOUT_MS, { reqId, seed: 0, gifs: [], words: [], timeout: true });
+          (m) => m.reqId === reqId, REQUEST_TIMEOUT_MS, { reqId, seed: 0, gifs: [], words: [], timeout: true })
+          .then((rep) => { creditSeat(station, subs, rep); return rep; });
       },
       sp: () => s.sp,
       onSp: (fn) => room.onSp(fn),
@@ -203,6 +223,7 @@ export function createLoader(room) {
       if(!stage&&mod.roomBehind===true)root.classList.add('br-through');
       const handle = await mod.mount(buildCtx(station, root, extra && extra.variant, subs, stage));
       if (my !== seq) { dropSubs(subs); try { handle && handle.destroy && handle.destroy(); } catch (e) { /* noop */ } return 'superseded'; }
+      if (lastDeal.has(station.id)) creditSeat(station, subs);   // a station that keeps its deal across visits
       current.handle = handle;
       bridge.send({ type: 'station-open', station: station.id });
       await (handle && typeof handle.open === 'function' ? handle.open() : null);

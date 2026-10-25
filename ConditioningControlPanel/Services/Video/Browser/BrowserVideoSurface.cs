@@ -101,6 +101,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
                 }
 
                 var core = _web.CoreWebView2;
+                global::ConditioningControlPanel.Services.Fyp.Online.ScrolllerWebGate.Attach(core);
                 var s = core.Settings;
                 s.AreDevToolsEnabled = false;
                 s.AreDefaultContextMenusEnabled = false;

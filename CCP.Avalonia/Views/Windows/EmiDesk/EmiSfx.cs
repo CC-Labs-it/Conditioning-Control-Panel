@@ -15,14 +15,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// and AudioService does not exist here, so only master volume 0 mutes.
     /// Files resolve through ContentLocator only: WPF's ModResourceResolver.ResolveAudioPath (a
     /// mod's replacement cue, the .wav/.mp3 swap) has no Core sounds seam yet, so a mod cannot
-    /// re-voice these here; a stock install sounds right.
-    /// The toss cues (Lift/Bump/Thud/Chime) come with the toss port (row win-emi-desk-extras).</para>
+    /// re-voice these here; a stock install sounds right.</para>
     /// </summary>
     internal static class EmiSfx
     {
         private const float PatScale = 0.12f;
         private const float OpenScale = 0.17f;
         private const float CloseScale = 0.13f;
+        private const float LiftScale = 0.10f;
+        private const float BumpScale = 0.14f;
+        private const float ThudScale = 0.17f;
         private const int MinGapMs = 130;
 
         /// <summary>The throttle's clock; tests step it.</summary>
@@ -30,12 +32,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private static readonly object Gate = new();
         private static DateTimeOffset _lastPat = DateTimeOffset.MinValue;
+        private static DateTimeOffset _lastChime = DateTimeOffset.MinValue;
         private static DateTimeOffset _lastRing = DateTimeOffset.MinValue;
+        private static DateTimeOffset _lastToss = DateTimeOffset.MinValue;
+        private static DateTimeOffset _lastLand = DateTimeOffset.MinValue;
 
         public static void Pat()
         {
             if (Throttle(ref _lastPat))
                 Play(new[] { "emi/pat.mp3", "chaos/chip_pop.mp3", "bubbles/Pop3.mp3" }, PatScale, "emi-sfx-pat");
+        }
+
+        public static void Chime()
+        {
+            if (Throttle(ref _lastChime))
+                Play(new[] { "emi/chime.mp3", "chaos/reveal_chime.mp3", "chime1.mp3" }, 0.15f, "emi-sfx-chime");
         }
 
         public static void RingOpen()
@@ -48,6 +59,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             if (Throttle(ref _lastRing))
                 Play(new[] { "emi/ring_close.mp3", "chaos/ui_unequip.mp3", "chaos/sink.mp3" }, CloseScale, "emi-sfx-ring");
+        }
+
+        /// <summary>Picked up.</summary>
+        public static void Lift()
+        {
+            if (Throttle(ref _lastToss))
+                Play(new[] { "emi/lift.mp3", "chaos/ui_equip.mp3", "chaos/cards_in.mp3" }, LiftScale, "emi-sfx-toss");
+        }
+
+        /// <summary>Put down.</summary>
+        public static void Bump()
+        {
+            if (Throttle(ref _lastLand))
+                Play(new[] { "emi/bump.mp3", "chaos/shield_thunk.mp3", "chaos/thud.mp3" }, BumpScale, "emi-sfx-toss");
+        }
+
+        /// <summary>Thrown, and landed.</summary>
+        public static void Thud()
+        {
+            if (Throttle(ref _lastLand))
+                Play(new[] { "emi/thud.mp3", "chaos/thud.mp3" }, ThudScale, "emi-sfx-toss");
         }
 
         private static bool Throttle(ref DateTimeOffset slot)
