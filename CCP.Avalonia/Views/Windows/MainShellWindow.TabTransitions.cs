@@ -3,15 +3,6 @@
 // the deferred startup that arms it (MainWindow.xaml.cs:3795-3830). ShowTab calls AnimateTabIn for
 // every real tab. Durations, easings and the Off / Reduced split are WPF's, verbatim.
 //
-// NOT YET, named in the parity row as wire-shell-tab-navigation-b-next:
-//   * Full motion's 12 px directional slide (SlideTabIn, ChromeFxNav.EntranceOffset) and the card
-//     stagger (StaggerTabCards / FindStaggerTargets). Both MOVE hit geometry for 200-460 ms after a
-//     ShowTab; a first port broke every headless test that clicks or hovers right after navigating
-//     (AssetsTabTests hover, CompanionPersonalityZoneTests chips; gate run 39812584919). They need a
-//     test seam that settles entrances first. Until then Full gets WPF's Reduced entrance (crossfade).
-//   * The 100 ms outgoing fade (FadeOutgoingTab): it re-shows the tab just left, and on this head
-//     every tab's timers, refreshes and FX follow IsVisible (P01), so the leaving tab is cut instead.
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -21,6 +12,10 @@ using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Media.Transformation;
+using ConditioningControlPanel.Services;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -31,6 +26,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
+        private readonly List<Control> _staggeredTabCards = new();
+        private readonly List<(Control Target, ITransform? Original)> _entranceTransforms = new();
+        internal IReadOnlyList<Control> StaggeredTabCards => _staggeredTabCards;
+
+        // Explicit settle seam: gesture tests can wait for the entrance without wall-clock sleeps.
+        internal void SettleTabEntrance()
+        {
+            var entrance = _tabEntrance;
+            _tabEntrance = null;
+            entrance?.Cancel();
+            entrance?.Dispose();
+            foreach (var (target, original) in _entranceTransforms) target.RenderTransform = original;
+            foreach (var card in _staggeredTabCards) card.Opacity = 1;
+            _entranceTransforms.Clear();
+            _staggeredTabCards.Clear();
+            if (EnteringTab is { } tab) tab.Opacity = 1;
+            EnteringTab = null;
+            ClearOutgoingTab();
+        }
+
         private const int TabFadeInMs = 200;      // WPF ChromeFx.cs:38
 
         /// <summary>The entrance in flight; the next navigation cancels it, so a half-faded tab
@@ -44,11 +59,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// WPF AnimateTabIn (ChromeFx.cs:204): Off -> instant swap, no clocks; otherwise the
         /// incoming tab fades in over 200 ms, QuadraticEaseOut. Never throws.
         /// </summary>
-        private void AnimateTabIn(Control? tab)
+        private void AnimateTabIn(Control? tab, string fromKey, string key)
         {
-            _tabEntrance?.Cancel();
-            _tabEntrance = null;
-            EnteringTab = null;
+            // Outgoing snapshot belongs to this navigation, not the previous entrance.
+            var outgoing = _outgoingTab;
+            _outgoingTab = null;
+            SettleTabEntrance();
+            _outgoingTab = outgoing;
             if (tab == null) return;
             try
             {
@@ -56,7 +73,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var run = new CancellationTokenSource();
                 _tabEntrance = run;
                 EnteringTab = tab;
-                _ = new Animation
+                _ = RunEntrance(tab, run, fromKey, key);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("AnimateTabIn: {E}", ex.Message);
+                SettleTabEntrance();
+                tab.Opacity = 1;
+            }
+        }
+
+        private async Task RunEntrance(Control tab, CancellationTokenSource run, string fromKey, string key)
+        {
+            try
+            {
+                var tasks = new List<Task>();
+                tasks.Add(new Animation
                 {
                     Duration = TimeSpan.FromMilliseconds(TabFadeInMs),
                     Easing = new QuadraticEaseOut(),
@@ -65,13 +97,137 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         new KeyFrame { Cue = new Cue(0), Setters = { new Setter(Visual.OpacityProperty, 0.0) } },
                         new KeyFrame { Cue = new Cue(1), Setters = { new Setter(Visual.OpacityProperty, 1.0) } },
                     },
-                }.RunAsync(tab, run.Token);
+                }.RunAsync(tab, run.Token));
+                if (AmbientFxCanvas.Env.Level == MotionLevel.Full && !TabEntranceRule.IsAirspaceTab(key))
+                {
+                    var (x, y) = TabEntranceRule.EntranceOffset(fromKey, key, 12);
+                    tasks.Add(SlideEntrance(tab, x, y, 200, 0, run.Token));
+                    var cards = FindStaggerTargets(tab);
+                    _staggeredTabCards.AddRange(cards);
+                    for (int i = 0; i < cards.Count; i++)
+                    {
+                        int delay = 40 * Math.Min(i, 6);
+                        tasks.Add(SlideEntrance(cards[i], 0, 10, 260, delay, run.Token));
+                        tasks.Add(new Animation
+                        {
+                            Delay = TimeSpan.FromMilliseconds(delay),
+                            Duration = TimeSpan.FromMilliseconds(220),
+                            FillMode = FillMode.Backward,
+                            Easing = new QuadraticEaseOut(),
+                            Children =
+                            {
+                                new KeyFrame { Cue = new Cue(0), Setters = { new Setter(Visual.OpacityProperty, 0.0) } },
+                                new KeyFrame { Cue = new Cue(1), Setters = { new Setter(Visual.OpacityProperty, 1.0) } },
+                            },
+                        }.RunAsync(cards[i], run.Token));
+                    }
+                }
+                await Task.WhenAll(tasks);
             }
-            catch (Exception ex)
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { Log.Debug("Tab entrance: {E}", ex.Message); }
+            finally { if (_tabEntrance == run) SettleTabEntrance(); }
+        }
+
+        private Task SlideEntrance(Control target, double x, double y, int ms, int delay, CancellationToken token)
+        {
+            // Authored transforms belong to the page. Animate the Visual, never a Transform.
+            if (target.RenderTransform is { } transform && !transform.Value.IsIdentity) return Task.CompletedTask;
+            if (target.RenderTransform is TransformGroup or ScaleTransform or RotateTransform or SkewTransform)
+                return Task.CompletedTask;
+            _entranceTransforms.Add((target, target.RenderTransform));
+            var from = TransformOperations.Parse(FormattableString.Invariant($"translate({x}px, {y}px)"));
+            target.RenderTransform = from;
+            return new Animation
             {
-                Log.Debug("AnimateTabIn: {E}", ex.Message);
-                try { tab.Opacity = 1; } catch { }
+                Delay = TimeSpan.FromMilliseconds(delay),
+                Duration = TimeSpan.FromMilliseconds(ms),
+                FillMode = FillMode.Both,
+                Easing = new QuadraticEaseOut(),
+                Children =
+                {
+                    new KeyFrame { Cue = new Cue(0), Setters = { new Setter(Visual.RenderTransformProperty, from) } },
+                    new KeyFrame { Cue = new Cue(1), Setters = { new Setter(Visual.RenderTransformProperty, TransformOperations.Parse("translate(0px, 0px)")) } },
+                },
+            }.RunAsync(target, token);
+        }
+
+        internal static List<Control> FindStaggerTargets(Control? node)
+        {
+            for (int depth = 0; depth < 8 && node != null; depth++)
+            {
+                switch (node)
+                {
+                    case ContentControl { Content: Control content }: node = content; continue;
+                    case Decorator { Child: { } child }: node = child; continue;
+                    case Panel panel:
+                        var children = panel.Children.Where(c => c.IsVisible && c.Opacity > 0.99).ToList();
+                        if (children.Count == 1) { node = children[0]; continue; }
+                        return children.Take(8).ToList();
+                    default: return new();
+                }
             }
+            return new();
+        }
+
+        // ponytail: fade a snapshot instead of re-showing the live page: IsVisible owns its timers.
+        private (Panel Parent, Image Image, RenderTargetBitmap Bitmap, CancellationTokenSource Run)? _outgoingTab;
+        private void PrepareOutgoingTab(Control? outgoing, Control? incoming, string fromKey)
+        {
+            SettleTabEntrance();
+            if (!AmbientFxCanvas.Env.AllowTransitions || TabEntranceRule.IsAirspaceTab(fromKey)
+                || outgoing == null || ReferenceEquals(outgoing, incoming)
+                || outgoing.Parent is not Panel parent || outgoing.Bounds.Width < 1 || outgoing.Bounds.Height < 1) return;
+            RenderTargetBitmap? bitmap = null;
+            try
+            {
+                var bounds = outgoing.Bounds;
+                bitmap = new RenderTargetBitmap(new PixelSize((int)Math.Ceiling(bounds.Width), (int)Math.Ceiling(bounds.Height)));
+                bitmap.Render(outgoing);
+                var image = new Image
+                {
+                    Source = bitmap, Width = bounds.Width, Height = bounds.Height,
+                    HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left,
+                    VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Top,
+                    Margin = new Thickness(bounds.X, bounds.Y, 0, 0), IsHitTestVisible = false,
+                };
+                var run = new CancellationTokenSource();
+                parent.Children.Add(image);
+                _outgoingTab = (parent, image, bitmap, run);
+                _ = FadeOutgoingSnapshot(image, run);
+            }
+            catch (Exception ex) { bitmap?.Dispose(); Log.Debug("Outgoing tab snapshot: {E}", ex.Message); }
+        }
+
+        private async Task FadeOutgoingSnapshot(Image image, CancellationTokenSource run)
+        {
+            try
+            {
+                await new Animation
+                {
+                    Duration = TimeSpan.FromMilliseconds(100),
+                    Children =
+                    {
+                        new KeyFrame { Cue = new Cue(0), Setters = { new Setter(Visual.OpacityProperty, 1.0) } },
+                        new KeyFrame { Cue = new Cue(1), Setters = { new Setter(Visual.OpacityProperty, 0.0) } },
+                    },
+                }.RunAsync(image, run.Token);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { Log.Debug("Outgoing tab fade: {E}", ex.Message); }
+            finally { if (_outgoingTab?.Run == run) ClearOutgoingTab(); }
+        }
+
+        private void ClearOutgoingTab()
+        {
+            var outgoing = _outgoingTab;
+            _outgoingTab = null;
+            if (outgoing is not { } item) return;
+            item.Run.Cancel();
+            item.Parent.Children.Remove(item.Image);
+            item.Image.Source = null;
+            item.Bitmap.Dispose();
+            item.Run.Dispose();
         }
 
         // ============================== first-visit door pulse ==============================
@@ -104,9 +260,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 delay?.Dispose();
                 foreach (var key in _navHeaderPulses.Keys.ToList()) StopNavDoorHeaderPulse(key);
-                _tabEntrance?.Cancel();
-                _tabEntrance = null;
-                EnteringTab = null;
+                SettleTabEntrance();
             };
         }
 

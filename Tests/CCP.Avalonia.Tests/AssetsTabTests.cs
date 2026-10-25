@@ -156,6 +156,7 @@ public sealed class AssetsTabTests
         {
             shell.ShowTab("settings");
             shell.ShowTab("assets");
+            shell.SettleTabEntrance();
             Assert.False(tab.MediaLogPulsing);                  // nothing logged since last opened
 
             history.RecordImages(new[] { "/x/a.png" });
@@ -164,6 +165,7 @@ public sealed class AssetsTabTests
             // pulse the whole real-time gap since its last tick as one frame).
             global::Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             shell.ShowTab("assets");
+            shell.SettleTabEntrance();
             Dispatcher.UIThread.RunJobs();
             Assert.True(tab.MediaLogPulsing);
 

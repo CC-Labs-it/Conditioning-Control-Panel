@@ -145,5 +145,81 @@ public sealed class TabTransitionsTests
         });
     }
 
+    [Fact]
+    public Task FullEntranceSlidesAndStaggersThenSettlesWithoutChangingAuthoredTransforms() => Run(shell =>
+    {
+        shell.ShowTab("settings");
+        shell.ShowTab("quests");
+        var tab = shell.Named<Control>("QuestsTab")!;
+        Assert.NotNull(tab.RenderTransform);
+        Assert.NotEmpty(shell.StaggeredTabCards);
+        var cards = shell.StaggeredTabCards.ToArray();
+        shell.SettleTabEntrance();
+        Assert.Null(tab.RenderTransform);
+        Assert.All(cards, card => Assert.Equal(1, card.Opacity));
+        Assert.Empty(shell.StaggeredTabCards);
+        Assert.Null(shell.EnteringTab);
+
+        // WPF: Reduced and browser airspace tabs keep only the fade.
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        shell.ShowTab("achievements");
+        Assert.Empty(shell.StaggeredTabCards);
+        Assert.Null(shell.Named<Control>("AchievementsTab")!.RenderTransform);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        shell.ShowTab("settings");
+        Assert.Empty(shell.StaggeredTabCards);
+
+        var authored = new global::Avalonia.Media.ScaleTransform(1.1, 1.1);
+        var achievements = shell.Named<Control>("AchievementsTab")!;
+        achievements.RenderTransform = authored;
+        shell.ShowTab("achievements");
+        Assert.Same(authored, achievements.RenderTransform);
+        shell.SettleTabEntrance();
+        Assert.Same(authored, achievements.RenderTransform);
+    });
+
+    [Fact]
+    public Task OutgoingFadeNeverReshowsTheLivePageAndRapidReturnRestoresHitTesting() => Run(shell =>
+    {
+        shell.ShowTab("achievements");
+        shell.SettleTabEntrance();
+        shell.UpdateLayout();
+        var outgoing = shell.Named<Control>("AchievementsTab")!;
+        var parent = Assert.IsAssignableFrom<Panel>(outgoing.Parent);
+        int shownAgain = 0;
+        outgoing.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == Control.IsVisibleProperty && outgoing.IsVisible) shownAgain++;
+        };
+        shell.ShowTab("quests");
+        Assert.False(outgoing.IsVisible);
+        Assert.Equal(0, shownAgain);
+        var snapshot = Assert.Single(parent.Children.OfType<Image>());
+        Assert.False(snapshot.IsHitTestVisible);
+        shell.ShowTab("achievements");
+        Assert.True(outgoing.IsVisible);
+        Assert.True(outgoing.IsHitTestVisible);
+        shell.SettleTabEntrance();
+        Assert.Empty(parent.Children.OfType<Image>());
+        Assert.Equal(1, outgoing.Opacity);
+        shell.ShowTab("quests");
+        shell.Close();
+        Assert.Empty(parent.Children.OfType<Image>());
+        Assert.Null(shell.EnteringTab);
+        Assert.Null(outgoing.RenderTransform);
+    });
+
+    [Fact]
+    public void StaggerTraversalSkipsHiddenAndDimmedCardsAndCapsAtEight()
+    {
+        var panel = new StackPanel();
+        for (int i = 0; i < 10; i++) panel.Children.Add(new Border());
+        panel.Children.Insert(0, new Border { IsVisible = false });
+        panel.Children.Insert(0, new Border { Opacity = 0.6 });
+        var targets = MainShellWindow.FindStaggerTargets(new Border { Child = panel });
+        Assert.Equal(8, targets.Count);
+        Assert.All(targets, card => Assert.True(card.IsVisible && card.Opacity == 1));
+    }
+
     private sealed class Pending : IDisposable { public void Dispose() { } }
 }

@@ -6,8 +6,8 @@
 // is real too, and runs inside ShowTab (MainShellWindow.AmbientFx.cs).
 //
 // What is NOT, on purpose, each named so it is not lost silently:
-//   - The transition choreography is REAL in part (AnimateTabIn's crossfade, the first-visit door
-//     pulse: MainShellWindow.TabTransitions.cs); the slide, stagger and outgoing fade are not - see that file.
+//   - Transition choreography and first-visit door pulses live in MainShellWindow.TabTransitions.cs.
+//     The outgoing fade snapshots the page to preserve this head's IsVisible lifecycle.
 //     Of WPF's Stop* calls, StopLockdownPulse runs here; the season shimmer, skill-tree air and
 //     vault motion park themselves with their tab's IsVisible (QuestsTabView.Fx, AmbientFxCanvas, BeatLoop).
 //   - UpdatePatreonUI on bambitakeover/studio/haptics/ramp: its tab half is RefreshEntitlementVeils,
@@ -176,13 +176,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF :306: the Lockdown plate's breath stops on every navigation; its case restarts it.
             StopLockdownPulse();
 
+            TabPanels.TryGetValue(CurrentTab, out var previousPanel);
+            PrepareOutgoingTab(previousPanel == null ? null : Named<Control>(previousPanel), Named<Control>(target), CurrentTab);
             foreach (var name in new HashSet<string>(TabPanels.Values))
             {
                 var panel = this.FindControl<Control>(name);
                 if (panel is not null) panel.IsVisible = name == target;
             }
             // WPF AnimateTabIn on every arm of the switch (MainShellWindow.TabTransitions.cs).
-            AnimateTabIn(this.FindControl<Control>(target));
+            AnimateTabIn(this.FindControl<Control>(target), CurrentTab, tab);
             NoteTabHistory(tab); // back/forward (MainShellWindow.TabHistory.cs); unknown keys never reach it
             _tabBefore = CurrentTab;
             CurrentTab = tab;
