@@ -46,10 +46,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///     but its live inputs (an offer in hand, an open ceremony) and <c>App.Descent</c> (the block)
     ///     are WPF-head services, so <see cref="Refresh"/> passes false for those and Spiral is
     ///     unreachable — see the placeholder there.</item>
-    ///   <item><c>SpiralFirstLightVisual</c> is a WPF <c>DrawingVisual</c>, so <c>FogHost</c> stays
-    ///     empty and FIRST LIGHT hands straight back rather than holding a black room for its three
-    ///     and a half seconds. The reveal's frame loop, its block wait and its timeout go with it;
-    ///     all three exist only to drive that canvas.</item>
+    ///   <item>The first-light canvas supplies the fog; the one-shot reveal still needs the
+    ///     ceremony director and block-service handoff, timeout and cancellation integration.</item>
     ///   <item><c>SpiralEmbedView</c> now carries the Core ready/state protocol over WebHost;
     ///     native process-loss reporting and a pre-document carrier remain
     ///     unavailable on this seam.</item>
@@ -192,6 +190,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private readonly DriftField _motes;
 
         // ---- clocks ----
+        private SpiralFirstLightVisual? _visual;
+        private BeatLoop? _fogFrames;
         private CancellationTokenSource? _fogFx;
         private CancellationTokenSource? _emberFx;
         private CancellationTokenSource? _splashFx;
@@ -352,6 +352,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void Suspend()
         {
             Unwire();
+            StopFogFrames();
             ApplyHelpChip(false);
             StopFogFx();
             HideSplash(fade: false);
@@ -413,6 +414,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     HideSplash(fade: false);
 
                     _fogHost.IsVisible = true;
+                    StartFogFrames();
                     _fogCopy.IsVisible = true;
                     ApplyFogReadout();
                     StartFogFx();
@@ -425,6 +427,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 case SpiralRoomState.Spiral:
                     StopFogFx();
+                    StopFogFrames();
                     _fogHost.IsVisible = false;
                     _fogCopy.IsVisible = false;
 
@@ -470,6 +473,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 default:
                     StopFogFx();
+                    StopFogFrames();
                     TeardownEmbed();
                     HideSplash(fade: false);
                     _fogHost.IsVisible = false;
@@ -494,8 +498,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// user's own ceremony commits (owner ruling 2026-08-16). Called by
         /// <c>DescentShowDirector</c> after it has brought the window forward and navigated here.
         ///
-        /// <para>ponytail: needs Controls/SpiralFirstLightVisual (a WPF DrawingVisual) — the reveal
-        /// IS that canvas, and without it there is nothing to play. It fails SOFT the way every
+        /// <para>ponytail: the drawing control is ported, but the ceremony director and descent
+        /// block service are absent. Without their wait/timeout/cancellation there is no handoff. It fails SOFT the way every
         /// other first-light failure does in the original (a thrown frame, a withdrawn block, a
         /// twelve-second timeout): hand the room straight back to the ordinary selection rather
         /// than hold a black rectangle for three and a half seconds. Nothing is lost — the withhold
@@ -504,8 +508,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         internal void BeginFirstLight()
         {
-            Log.Information("[Spiral] first light: no canvas on this head - handing the room back quietly.");
+            Log.Information("[Spiral] first light: no block handoff on this head - handing the room back quietly.");
             Refresh();
+        }
+
+        // The fog holds the Core reveal timeline before the first stroke, even under reduced
+        // motion: snapping to a finished figure here would reveal a spiral still withheld by the fuse.
+        private void StartFogFrames()
+        {
+            if (_visual == null)
+            {
+                var accent = Color.FromRgb(0xFF, 0x69, 0xB4);
+                if (this.TryFindResource("PinkColor", out var c) && c is Color color) accent = color;
+                else if (this.TryFindResource("PinkBrush", out var b) && b is ISolidColorBrush brush) accent = brush.Color;
+                _visual = new SpiralFirstLightVisual(accent);
+                _fogHost.Children.Add(_visual);
+            }
+            _visual.Begin(false);
+            if (!AllowAmbientLoops)
+            {
+                StopFogFrames();
+                _visual.SetFrame(SpiralFirstLightTimeline.DrawStartSeconds, 0);
+                return;
+            }
+            if (_fogFrames != null) return; // repaints must not restart the seeded field
+            _fogFrames = new BeatLoop(_visual, t => _visual.SetFrame(SpiralFirstLightTimeline.DrawStartSeconds, t));
+            _fogFrames.Start();
+        }
+
+        private void StopFogFrames()
+        {
+            _fogFrames?.Stop();
+            _fogFrames = null;
         }
 
         // ============================== the "?" ==============================

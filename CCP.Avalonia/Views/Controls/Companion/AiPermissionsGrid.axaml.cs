@@ -189,11 +189,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             catch (Exception ex) { Log.Warning(ex, "BtnClearChatMemory_Click failed"); }
         }
 
-        /// <summary>WPF BtnLabEffectsSetupLocal_Click (MainWindow.Patreon.cs:1619): reveal the Engine Room,
-        /// then the same local-AI wizard its own "set up local" button runs.</summary>
+        /// <summary>WPF BtnLabEffectsSetupLocal_Click (MainWindow.Patreon.cs:1628): Companion > AI (the
+        /// Engine Room's page under v2), reveal the drawer, then the same local-AI wizard its own
+        /// "set up local" button runs.</summary>
         private void BtnLabEffectsSetupLocal_Click(object? sender, RoutedEventArgs e)
         {
-            var room = this.FindAncestorOfType<CompanionRoomView>();
+            var shell = TopLevel.GetTopLevel(this) as Windows.MainShellWindow;
+            shell?.ShowTab("companionai");
+            var room = shell?.RoomView() ?? this.FindAncestorOfType<CompanionRoomView>();
             try { room?.RevealEngineRoom(); }
             catch (Exception ex) { Log.Debug("BtnLabEffectsSetupLocal_Click: {E}", ex.Message); }
             (room?.FindControl<EngineRoomDrawer>("EngineZone")?.DataContext as EngineRoomVm)?.SetupLocalCommand.Execute(null);

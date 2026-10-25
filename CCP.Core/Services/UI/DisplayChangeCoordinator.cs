@@ -41,6 +41,10 @@ namespace ConditioningControlPanel.Services.UI
         /// <summary>True while spawns should be skipped (a display change happened within the last <see cref="QuietMs"/> ms).</summary>
         public static bool SpawnsSuppressed => Environment.TickCount64 < Interlocked.Read(ref _quietUntilTick);
 
+        /// <summary>Test seam: end the quiet window now, so a test that drove a display change does
+        /// not suppress the next test's spawns for real wall-clock time.</summary>
+        internal static void ResetForTests() => Interlocked.Exchange(ref _quietUntilTick, 0);
+
         // 1 while the user is inside the main window's native modal move/size loop
         // (WM_ENTERSIZEMOVE..WM_EXITSIZEMOVE). Written from the main thread's WndProc, read from any
         // thread (the avatar tube's own-thread reconcilers gate on it), hence Interlocked/Volatile.
