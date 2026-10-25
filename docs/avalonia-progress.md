@@ -2725,6 +2725,10 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-dialogs-companion-prompt-editor: +179
 - Installed community prompt badge wired (purple name / red unknown), shared Core loader with one folder-name constant; WPF forwards to it.
 
+## Cloud merge-fix: wire-shell-favorites-rail + wire-dialogs-companion-prompt-editor
+- Keep the favorites Click tips popup, inverted dashboard clicks and pin NavGlow alongside the companion prompt editor's installed-prompt badge and shared Core loader.
+- EscapeClaim documents both marked edit surfaces and retains the mini-player foreground rule. Parity rows consolidate evidence and advanced existing statuses without new verification claims; the retired migration-input blocker points to the local-only migration test. All panic surfaces and test assertions are retained.
+
 ## avalonia-port/wire-views-companion-room: cloud merge-fix
 - Retained the lane's shared BeatLoop thinking dots, Core CompanionThinkingPulse, Enter-to-send/frame/minimise coverage, and room hide/detach parking while merging the incoming conversation page's room wiring and resume/park lifecycle.
 - Ambient animation ratchets retain both the ChatThresholdView animation migration and the incoming DailyQuestCard Effect migration; no tests or assertions were removed to merge them.
@@ -2903,6 +2907,10 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-views-deeper-new-enhancement-dialog: +240
 - The New enhancement dialog's HypnoTube/TikTok sample now comes from a shared Core selector (`HypnotubeDefaultLinks.SelectTikTokTutorialVideo`), which both heads call. On Avalonia the table is still the static one, so users see no change yet.
 - Headless tests click the real button from the shell's Deeper tab and cover native Browse/Create (fail-proven). The row stays stub: the three interactive tutorials are deferred to lane `-b`.
+
+## Cloud merge-fix: wire-shell-favorites-rail + wire-views-deeper-new-enhancement-dialog
+- Retain the shipped panic-test bootstrap (including Inter/AppFonts) and every panic surface, assertion and ordering constraint. Keep the favorites Click tips/inversion/pin cue alongside the incoming dashboard gesture caption and shared new-enhancement sample selection.
+- Consolidate the parity ledger to one row per ID, preserving both histories' evidence and advanced statuses without verified claims; retain both progress histories.
 
 ## avalonia-port/wire-views-tab-friends (cloud merge-fix)
 - Retains this lane's one-time presence question: Yes shares, No stays hidden, both persist the Core FriendsPresenceAsk marker; WPF delegates to the same rule.
@@ -3365,3 +3373,7 @@ Windows "Test process did not return valid JSON (non-object)" discovery flake: x
 ## avalonia-port/wire-shell-assets-fx: +214
 - Pack-card hover sheen is wired: one CardSheenAdorner moves between cards and detaches on leave, hide, card removal or unload. The strip stays hidden, as in WPF. The shell-assets-fx row is now `wired`.
 - Five AssetsTabTests cover it, including one that uses real headless mouse moves. All were fail-proven (runs 39696872030 red, then 39697331663 green).
+
+## avalonia-port/wire-shell-favorites-rail: +403
+- Favorites drawer click-tips popup (hover/pin/Escape/focus return), persisted inverted dashboard clicks via Core DashboardClickRule, lilac glow on a new pin.
+- Review fixes: bounded glow wait, seeded intro gates, real Escape key routing, no temp PNG; gate run 39688122404 green; feat-split-card row now cites DashboardClickRule (no duplicate inversion).
