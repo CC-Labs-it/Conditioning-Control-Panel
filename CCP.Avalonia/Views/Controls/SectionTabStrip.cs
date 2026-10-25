@@ -174,6 +174,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _sheenClock?.Stop();   // P65: a detached strip never ticks
             _noteTimer?.Stop();
             HideNote();
+            CloseConfirm();
             base.OnDetachedFromVisualTree(e);
         }
 
@@ -244,6 +245,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// breadcrumb's page word (Settings passes its current section's label). WPF Show.</summary>
         public void Show(string? section, string? tab, string? pageLabel = null)
         {
+            if (!string.Equals(section, _section, StringComparison.OrdinalIgnoreCase)) CloseConfirm();
             _tab = tab;
             bool sectionChanged = !string.Equals(section, _section, StringComparison.OrdinalIgnoreCase);
             if (!NavStripTable.ShowsHeader(section))
@@ -317,6 +319,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         private void BuildPills(string section)
         {
+            CloseConfirm();
             _pillRow.Children.Clear();
             _pills.Clear();
             _helpBadges.Clear();
@@ -462,6 +465,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (tab.Kind is NavTabKind.Tab or NavTabKind.Zone) SetActive(tab.Key, animate: true);
             if (focus) PillFor(tab.Key)?.Focus();
             FxOnChosen(tab);
+            if (tab.Kind == NavTabKind.Window) { AskBeforeOpening(tab); return; }
             TabRequested?.Invoke(tab);
         }
 

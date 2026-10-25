@@ -228,11 +228,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             };
         }
 
-        /// <summary>Pills this head can open. A page another lane has not ported yet (Friends,
-        /// Leash, the Companion pages, Folders' scroll...) is not drawn rather than drawn dead.</summary>
+        /// <summary>Pills with a real route on this head, including the existing Just Drop window.
+        /// Unknown page keys remain hidden.</summary>
         private static bool CanOpenNavTab(NavTab tab) => tab.Kind == NavTabKind.Launcher
             ? tab.Key is "mods" or "catalogue" or "phrases" or "medialog"
-            : TabPanels.ContainsKey(tab.Key);
+            : tab.Key == "justdrop" || TabPanels.ContainsKey(tab.Key);
 
         /// <summary>WPF OnSectionPillChosen (:246): launchers through their old handlers, pages and
         /// zones through ShowTab.</summary>
