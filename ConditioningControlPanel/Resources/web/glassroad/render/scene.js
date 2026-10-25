@@ -60,6 +60,7 @@ import { createRoadWords } from './roadWords.js';
 import { createNearDressing } from './nearDressing.js';
 import { createWordRush } from './wordRush.js';
 import { createPhraseGates } from './phraseGates.js';
+import { createAirWords } from './airWords.js';
 import { createWaterfall } from './waterfall.js';
 import { buildWaterVolume } from './waterVolume.js';
 import { waterTable, tableCode } from './waterMath.js';
@@ -360,6 +361,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   // pass 4: the popped word rushes at the camera (render/wordRush.js, a DOM layer under the cards, on `word-pop`)
   let wordRush = null;
   const phraseGates = createPhraseGates(scene, track, { feel, photosafe, bus });
+  const airWords = createAirWords(scene, track, { feel, photosafe });
   try { wordRush = globalThis.document ? createWordRush({ bus, feel, track, pal }) : null; } catch (e) { console.warn('[glassroad/world] word rush failed: ' + (e && e.message)); }
 
   // positional juice from the bus, applied in the next update (bus events flush before world.update)
@@ -620,6 +622,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (roadWords) roadWords.update(view.song || null, view.songS, k, mf, { gentle, paused: !!view.paused });
     if (wordRush) wordRush.update(dt, !!view.paused);
     phraseGates.update(k, dt, { paused: !!view.paused, mode: view.mode, song: view.song, songS: view.songS });
+    airWords.update(view.airWords, dt, { paused: !!view.paused, mode: view.mode, gentle });
   }
 
   let disposed = false;
@@ -644,6 +647,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (roadWords) roadWords.dispose();
     if (wordRush) wordRush.dispose();
     phraseGates.dispose();
+    airWords.dispose();
     if (waterfall) waterfall.dispose();
     waterVolume.dispose();
     underwaterFx.dispose();
@@ -664,9 +668,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { setItemMediaSource: source => itemVis?.setMediaSource(source), primaryColour: () => pal.primaryHex(), scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, worldScreens, musicRoad, reactive: road.uniforms.reactive, roadWords, wordRush, phraseGates, terrace, court, stones, mainframe, boudoirDressing, boudoirForks, perfumeView, boudoirHazardView, mirrorRoom, waterVolume, underwaterFx, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge, goonworks, goonworksHazards,
+  return { setItemMediaSource: source => itemVis?.setMediaSource(source), primaryColour: () => pal.primaryHex(), scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, worldScreens, musicRoad, reactive: road.uniforms.reactive, roadWords, wordRush, phraseGates, airWords, terrace, court, stones, mainframe, boudoirDressing, boudoirForks, perfumeView, boudoirHazardView, mirrorRoom, waterVolume, underwaterFx, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge, goonworks, goonworksHazards,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
-    resetReactions: () => { phraseGates.clear(); if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); goonworks?.reset(); goonworksHazards?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
+    resetReactions: () => { phraseGates.clear(); airWords.clear(); if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); goonworks?.reset(); goonworksHazards?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
 }

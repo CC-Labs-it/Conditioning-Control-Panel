@@ -86,13 +86,16 @@ test('Keep is solid architecture with instanced decks, walls, halls and a tower,
       solids.push({ name: o.name, cylinder: o.geometry.type === 'CylinderGeometry', inverse: world.invert(), center, radius: scale.length() });
     }
   });
-  const point = new Vector3();
+  const point = new Vector3(), sample = new Vector3(), across = new Vector3(), up = new Vector3();
   const contains = (solid, p) => {
     if (p.distanceTo(solid.center) > solid.radius) return false;
     point.copy(p).applyMatrix4(solid.inverse);
     return Math.abs(point.y) < .499 && (solid.cylinder ? Math.hypot(point.x, point.z) < .999 : Math.abs(point.x) < .499 && Math.abs(point.z) < .499);
   };
-  const openBricks = fortress.plan.missingBricks.filter((p) => !solids.some((o) => contains(o, new Vector3(...p))));
+  const openBricks = fortress.plan.missingBricks.filter((p) => {
+    sample.fromArray(p);
+    return !solids.some((o) => contains(o, sample));
+  });
   assert.ok(openBricks.length >= 50, 'missing bricks are real openings through the outer masonry');
   for (const room of fortress.plan.interiors) for (let s = room.s0 + 6; s < room.s1 - 6; s += 15) {
     const f = track.frameAt(s), p = new Vector3();
@@ -103,36 +106,40 @@ test('Keep is solid architecture with instanced decks, walls, halls and a tower,
     }
   }
   for (let s = 0; s < track.lengthM; s += 3) {
-    const f = track.frameAt(s);
-    for (const x of [0, -f.w / 2 + 0.7, f.w / 2 - 0.7]) for (const height of [0.03, 1.4, 6.5]) for (const solid of solids) {
-      point.fromArray(f.p).addScaledVector(new Vector3(...f.b), x).addScaledVector(new Vector3(...f.n), height);
-      if (point.distanceTo(solid.center) > solid.radius) continue;
-      point.applyMatrix4(solid.inverse);
-      const inside = Math.abs(point.y) < 0.499 && (solid.cylinder ? Math.hypot(point.x, point.z) < 0.999 : Math.abs(point.x) < 0.499 && Math.abs(point.z) < 0.499);
-      assert.ok(!inside, `${solid.name} blocks s=${s}, x=${x.toFixed(2)}`);
+    const f = track.frameAt(s); across.fromArray(f.b); up.fromArray(f.n);
+    for (const x of [0, -f.w / 2 + 0.7, f.w / 2 - 0.7]) for (const height of [0.03, 1.4, 6.5]) {
+      sample.fromArray(f.p).addScaledVector(across, x).addScaledVector(up, height);
+      for (const solid of solids) {
+        if (sample.distanceTo(solid.center) > solid.radius) continue;
+        point.copy(sample).applyMatrix4(solid.inverse);
+        const inside = Math.abs(point.y) < 0.499 && (solid.cylinder ? Math.hypot(point.x, point.z) < 0.999 : Math.abs(point.x) < 0.499 && Math.abs(point.z) < 0.499);
+        assert.ok(!inside, `${solid.name} blocks s=${s}, x=${x.toFixed(2)}`);
+      }
     }
   }
   // A failed crossing must still visibly fall into the moat, never onto hidden architectural decking.
   for (const [a, b] of [...track.jumps.map((j) => [j.s, j.landS]), ...track.fields.map((f) => [f.fromS, f.toS]),
     ...track.aerials.map(a => [a.gapS0, a.gapS1])]) {
     for (let s = a + 1; s < b - 1; s += 3) {
-      const f = track.frameAt(s);
-      for (const x of [-f.w / 2, 0, f.w / 2]) for (const depth of [1, 3, 8, 16]) for (const solid of solids) {
-        point.fromArray(f.p).addScaledVector(new Vector3(...f.b), x).addScaledVector(new Vector3(...f.n), -depth);
-        if (point.distanceTo(solid.center) > solid.radius) continue;
-        point.applyMatrix4(solid.inverse);
-        const inside = Math.abs(point.y) < .499 && (solid.cylinder ? Math.hypot(point.x, point.z) < .999 : Math.abs(point.x) < .499 && Math.abs(point.z) < .499);
-        assert.ok(!inside, `${solid.name} fills crossing at ${s}`);
+      const f = track.frameAt(s); across.fromArray(f.b); up.fromArray(f.n);
+      for (const x of [-f.w / 2, 0, f.w / 2]) for (const depth of [1, 3, 8, 16]) {
+        sample.fromArray(f.p).addScaledVector(across, x).addScaledVector(up, -depth);
+        for (const solid of solids) {
+          if (sample.distanceTo(solid.center) > solid.radius) continue;
+          point.copy(sample).applyMatrix4(solid.inverse);
+          const inside = Math.abs(point.y) < .499 && (solid.cylinder ? Math.hypot(point.x, point.z) < .999 : Math.abs(point.x) < .499 && Math.abs(point.z) < .499);
+          assert.ok(!inside, `${solid.name} fills crossing at ${s}`);
+        }
       }
     }
   }
   for (const edge of layout.brokenEdges) for (let s = edge.s0 + 6; s < edge.s1 - 6; s += 3) {
     const f = track.frameAt(s), side = edge.side === 'L' ? -1 : 1;
     if (f.flags.includes('rail') || f.flags.includes('rail' + edge.side)) continue;
+    sample.fromArray(f.p).addScaledVector(across.fromArray(f.b), side * (f.w / 2 + 1.3)).addScaledVector(up.fromArray(f.n), .7);
     for (const solid of solids) {
-      point.fromArray(f.p).addScaledVector(new Vector3(...f.b), side * (f.w / 2 + 1.3)).addScaledVector(new Vector3(...f.n), .7);
-      if (point.distanceTo(solid.center) > solid.radius) continue;
-      point.applyMatrix4(solid.inverse);
+      if (sample.distanceTo(solid.center) > solid.radius) continue;
+      point.copy(sample).applyMatrix4(solid.inverse);
       assert.ok(!(Math.abs(point.y) < .499 && (solid.cylinder ? Math.hypot(point.x, point.z) < .999 : Math.abs(point.x) < .499 && Math.abs(point.z) < .499)), `${solid.name} seals broken edge at ${s}`);
     }
   }
