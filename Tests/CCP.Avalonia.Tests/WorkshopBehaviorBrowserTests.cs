@@ -11,6 +11,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -38,9 +39,11 @@ public sealed class WorkshopBehaviorBrowserTests
         {
             shell.Show(); shell.ShowTab("companion");
             Dispatcher.UIThread.RunJobs();
-            shell.GetLogicalDescendants().OfType<WorkshopAccordion>().Single().ExpandAndReveal("BEHAVIOR");
+            // Companion v2 collapses the room; the Behaviour cell's deep link opens Companion > AI, which adopts it.
+            shell.RevealCompanionWorkshopCell(CompanionRoomAnchors.WorkshopBehaviorCell);
             Dispatcher.UIThread.RunJobs();
-            var cell = shell.GetLogicalDescendants().OfType<WorkshopBehaviorCell>().Single();
+            Assert.Equal("companionai", shell.CurrentTab);
+            var cell = shell.Named<AiPage>("CompanionAiTab")!.GetLogicalDescendants().OfType<WorkshopBehaviorCell>().Single();
             var host = shell.Named<SettingsTabView>("SettingsTab")!.FindControl<WebHost>("BrowserWebHost")!;
             body(cell, host);
         }
