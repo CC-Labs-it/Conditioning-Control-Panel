@@ -12,10 +12,11 @@ import { buildMeshes } from './mesh.js';
 import { buildCourts, buildFields } from './courts.js';
 import { canalProfile, canalNormal } from './canal.js';
 import { installForks } from './forks.js';
+import { movingPlan, installMovingSupport } from './movingHazards.js';
 import { buildAerials, shapeAerialNodes, aerialGapAt, aerialBoostAllowed } from './aerial.js';
 
 /** @returns {object} Track; throws an Error listing the schema errors */
-export function loadTrack(json, { validate = true, aerials: includeAerials = true } = {}) {
+export function loadTrack(json, { validate = true, aerials: includeAerials = true, moving: includeMoving = false } = {}) {
   if (validate) {
     const r = validateJson(json);
     if (!r.ok) throw new Error('track invalid: ' + r.errors.join('; '));
@@ -113,7 +114,9 @@ export function loadTrack(json, { validate = true, aerials: includeAerials = tru
     checklines: null,
   };
   track.checklines = buildChecklines(track, json.checkpoints);
-  installForks(track, json.forks);
+  const moving = includeMoving ? movingPlan(track) : { traps: [], bridge: null };
+  installForks(track, [...(json.forks || []), ...(moving.bridge?.fork ? [moving.bridge.fork] : [])]);
+  if (includeMoving) installMovingSupport(track, moving);
   let dl = null, meshes = null;
   Object.defineProperty(track, 'driveline', { enumerable: true, get: () => {
     if (!dl) {

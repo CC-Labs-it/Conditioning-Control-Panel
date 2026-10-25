@@ -19,6 +19,7 @@ import {
   HemisphereLight, DirectionalLight, Vector3, FogExp2,
 } from 'three/webgpu';
 import { S } from '../sim/state.js';
+import { createMovingHazardView } from './movingHazards.js';
 import { clamp, lerp, smoothstep, qrotate, v3cross, v3norm } from '../core/math.js';
 import { LOOK, SKIES, FALLBACK_SKY } from './look.js';
 import { waterBedPositions } from './waterBed.js';
@@ -238,7 +239,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const rails = createRailMaterial(pal, art);
   if (goon) applyGoonworksRails(rails);
   add(meshFrom(track.meshes.rails, rails.material));
-  const boudoirForks = boudoir ? buildBoudoirForks(track, { roadMaterial: road.material, railMaterial: rails.material, phone: Q.name === 'phone' }) : null;
+  const boudoirForks = track.forks?.length ? buildBoudoirForks(track, { roadMaterial: road.material, railMaterial: rails.material, phone: Q.name === 'phone' }) : null;
+  const movingHazards = createMovingHazardView(scene, track, pal);
   if (boudoirForks) scene.add(boudoirForks.group);
   // EDGES lane: open edges (hazard strip, lip, haze below) and rail end posts, one draw (render/edges.js)
   let edges = null;
@@ -407,6 +409,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     on('goonworks-hit', (p) => ['machine', p.racer ?? 0, 0]);
     on('goonworks-launch', (p) => ['machine', p.racer ?? 0, 1]);
     for (const name of ['keep-gate-hit', 'keep-chain-hit']) on(name, () => ['bump', 0, 12]);
+    on('moving-trap-hit', p => ['bump', p.racer, 8]);
     for (const name of ['boudoir-press-hit', 'boudoir-sweeper-hit', 'boudoir-mirror-hit']) on(name, p => [name, 0, 12, p]);
     on('bubble-pop', (p) => ['pop', p.racer, 0, p.p]);
     on('item-box', (p) => ['box', p.racer, 0, p.p]);
@@ -523,6 +526,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   // when the racer list changes
   let labelsOf = null, labels = [];
   function update(view) {
+    movingHazards.update(view.raceTimeS ?? 0);
     if (keepGates) keepGates.update(view.raceTimeS ?? 0);
     if (keepChains) keepChains.update(view.raceTimeS ?? 0);
     goonworksHazards?.update(view.raceTimeS ?? 0);
@@ -711,6 +715,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (keepDressing) keepDressing.dispose();
     if (keepGates) keepGates.dispose();
     if (keepChains) keepChains.dispose();
+    movingHazards.dispose();
     if (keepBackdrop) keepBackdrop.dispose();
     if (keepDrawbridge) keepDrawbridge.dispose();
     goonworks?.dispose();

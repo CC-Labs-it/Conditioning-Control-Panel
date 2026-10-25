@@ -20,6 +20,10 @@ export function machineryBeatAt(track, raceS) {
   const beat = (songS - c.offsetS) / c.beatS - c.epochBeat;
   return { beat, beatS: c.beatS, safe: beat < 0, rearming: c.rearming };
 }
+// A missing recording still gives every physical trap the same deterministic musical grid.
+export function hazardBeatAt(track, raceS) {
+  return machineryBeatAt(track, raceS) || { beat: Math.max(0, raceS || 0) * 2, beatS: .5, safe: false, rearming: false };
+}
 export const beatCycle = (beat, period) => ((beat % period) + period) % period;
 export function machineryRearming(frame, offset = 0, period = 16) {
   return frame?.safe || (frame?.rearming && frame.beat < beatCycle(-offset, period));

@@ -284,6 +284,8 @@ export function createAi(track, feel, { seed = 1, forkChoice = null } = {}) {
     if (held) b.fork = held;
     if (b.fork && !held && (s > b.fork.toS - 2 || s < b.fork.fromS - 65 || s > b.fork.fromS + b.fork.mouthM + 30)) b.fork = null;
     if (!b.fork) for (const f of track.forks) {
+      // The permanent bypass is the bot route; timed bridges remain an optional player gamble.
+      if (f.movingBridge) continue;
       if (s < f.fromS - 60 || s > f.fromS + 4) continue;
       const choose = typeof forkChoice === 'function' ? forkChoice({ fork: f, racer: r, lap, seed })
         : forkChoice === 'all' || forkChoice === f.id || (forkChoice !== 'none' && forkChoice === null && (r.i + f.index + lap + seed) % 3 === 0);

@@ -45,6 +45,7 @@ import { loadTrack } from './track/load.js';
 import { selectTrack, allowsOnline, courseSongs } from './track/selection.js';
 import { createMainframeScan, scanClock } from './sim/mainframeScan.js';
 import { createMainframeIndustry } from './sim/mainframeIndustry.js';
+import { createMovingHazards } from './sim/movingHazards.js';
 import { setMachineryBeat } from './track/machineryBeat.js';
 import { createRenderer } from './render/renderer.js';
 import { buildWorld } from './render/world.js';
@@ -267,9 +268,9 @@ async function boot(course, options, lifetime, isCurrent) {
   loading.calm(hostGentle);
   if (qs.get('feel') === '1' && !shared.feelSheet) { shared.feelSheet = true; openFeelSheet(feel, document.body); }
   if (!(trackJson.laps > 0)) trackJson.laps = 3;
-  const track = loadTrack(trackJson);
+  const track = loadTrack(trackJson, { moving: true });
   const onlineCourseHash = await courseHash(trackJson, shared.baseFeel,
-    { aerialRevision: AERIAL_REVISION, aerials: track.aerials });
+    { aerialRevision: AERIAL_REVISION, aerials: track.aerials, moving: track.moving });
   if (!lifetime.alive) return;
   loaded('course');
   debug.trackId = track.id;
@@ -471,7 +472,7 @@ async function boot(course, options, lifetime, isCurrent) {
   let assist;       // Rebuilt with the player's current pace overlay on every run.
   // the run: solo (count COUNT, the page seed) or online (one racer per seat from the room session, its seed, the
   // queue tapped so local cp / lap / finish / drop and pulses go up); rebuilt by buildRun on every switch
-  let race, racers, ai, contact, standings, items, scan, industry, perfume, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
+  let race, racers, ai, contact, standings, items, scan, industry, moving, perfume, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
   let runAssist = false;                          // the Options assist switch (applyOptions), carried into every rebuilt run
   function buildRun(s = null) {
     if (P) { bindAirWords(P.st, null); bindAirWords(P.view, null); }
@@ -488,6 +489,12 @@ async function boot(course, options, lifetime, isCurrent) {
     contact = createContact(track, feel, q);
     scan = createMainframeScan(track, q);
     industry = createMainframeIndustry(track, q);
+    moving = createMovingHazards(track);
+    const movingDrive = ai.drive;
+    ai.drive = (r, ctx, dt, out) => {
+      movingDrive(r, ctx, dt, out);
+      if (ctx.race.phase === 'racing' || ctx.race.phase === 'finished') moving.steer(r, out);
+    };
     if (track.id === 'mainframe') {
       const drive = ai.drive;
       ai.drive = (r, ctx, dt, out) => { drive(r, ctx, dt, out); if (ctx.race.phase === 'racing' || ctx.race.phase === 'finished') industry.steer(r, out); };
@@ -501,7 +508,8 @@ async function boot(course, options, lifetime, isCurrent) {
       airWords = createAirWordRun(null, track);
       bindAirWords(P.st, airWords); bindAirWords(P.view, airWords);
     }
-    sctx = { ai, items, standings, hazards, industry };
+    sctx = { ai, items, standings, hazards, industry, moving };
+    Object.defineProperty(debug, 'movingTraps', { get: () => moving.inspect(racers.clockS), configurable: true });
     aiCtx = { racers: racers.list, items, standings, race };
     kartViews = racers.list.map((r) => ({ st: r.view, meta: r.meta, fxv: r.fxv }));
     mapXz = new Float32Array(racers.list.length * 2);
@@ -602,6 +610,7 @@ async function boot(course, options, lifetime, isCurrent) {
     race.reset(); racers.place(); contact.reset(); standings.reset(); items.reset();
     scan.reset();
     industry.reset();
+    moving.reset(); if (track.moving) track.moving.timeS = 0;
     setMachineryBeat(track, null);
     perfume.reset();
     effects.reset(); payoff.reset(); cueBurst.clear(); ai.reset(); fx.reset(); assist.reset();
@@ -1075,9 +1084,11 @@ async function boot(course, options, lifetime, isCurrent) {
     const machinerySong = machineryMusic?.song || machineryMusic?.analysis;
     sctx.cleanPace = !online;
     sctx.songDrive = machineryMusic?.playing ? songDrive(machinerySong, machineryMusic.songS) : 0;
-    if (!paused || online) setMachineryBeat(track, { enabled: inRace && !online && (race.phase === 'racing' || race.phase === 'finished') && !!machineryMusic?.playing,
-      songS: machineryMusic?.songS, raceS: racers.clockS + (simOn ? steps * clock.dt : 0),
-      bpm: machinerySong?.bpm, offsetS: machinerySong?.downbeatS ?? machinerySong?.downbeats?.[0] ?? 0, playing: simOn });
+    const machineryRaceS = racers.clockS + (simOn ? steps * clock.dt : 0);
+    if (!paused || online) setMachineryBeat(track, { enabled: inRace && !online && (race.phase === 'racing' || race.phase === 'finished'),
+      songS: machineryMusic?.playing ? machineryMusic.songS : machineryRaceS, raceS: machineryRaceS,
+      bpm: machineryMusic?.playing ? machinerySong?.bpm : 120,
+      offsetS: machineryMusic?.playing ? machinerySong?.downbeatS ?? machinerySong?.downbeats?.[0] ?? 0 : 0, playing: simOn });
     if (simOn) for (let i = 0; i < steps; i++) {                    // 2. sim
       if (BOT && !P.finished) {
         ai.drive(P, aiCtx, clock.dt, a); if (fall) fall.apply(a);
