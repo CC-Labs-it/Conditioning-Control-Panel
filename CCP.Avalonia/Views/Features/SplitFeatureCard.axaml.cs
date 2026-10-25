@@ -11,6 +11,8 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Threading;
+using ConditioningControlPanel.Services.UI;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
@@ -30,8 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
     /// FX plumbing is deliberately copied from <see cref="FeatureCard"/> rather than shared
     /// through a base class, as in WPF. Motion/tier/window-focus/visibility gates read
     /// <see cref="Env"/> (the head's MotionFx/PerformanceProfile twin).
-    /// ponytail: DashboardCardDepth (face/bevel/socket, inverted clicks) and the greyscale
-    /// HalfMute (ArtDesaturate) are not ported; off halves only dim.
+    /// Off halves fade to a cached grey twin; dashboard hover keeps an off half muted.
     /// </summary>
     public partial class SplitFeatureCard : UserControl
     {
@@ -113,7 +114,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// <summary>HelpContentService section for half B's "?"; no button when it has no content.</summary>
         public string? HelpSectionIdB { get => GetValue(HelpSectionIdBProperty); set => SetValue(HelpSectionIdBProperty, value); }
         /// <summary>WPF DashboardDepth: on the dashboard an off half stays dim even while hovered.</summary>
-        public bool DashboardDepth { get; set; }
+        private bool _dashboardDepth;
+        public bool DashboardDepth
+        {
+            get => _dashboardDepth;
+            set { _dashboardDepth = value; if (_rootBorder != null) { ApplyHalfRestOpacity(); RefreshDepth(); } }
+        }
         public bool IsActiveA { get => GetValue(IsActiveAProperty); set => SetValue(IsActiveAProperty, value); }
         public bool IsActiveB { get => GetValue(IsActiveBProperty); set => SetValue(IsActiveBProperty, value); }
         private double SplitProgress { get => GetValue(SplitProgressProperty); set => SetValue(SplitProgressProperty, value); }
@@ -141,6 +147,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// <summary>Which half the pointer has committed the card to: true = A, false = B, null = neither.</summary>
         private bool? _halfHover;
 
+        private readonly Grid[] _regions = new Grid[2], _faces = new Grid[2];
+        private readonly Border[] _sockets = new Border[2], _mute = new Border[2];
+        private readonly Path[] _bevels = new Path[2];
+        private readonly TranslateTransform[] _travel = { new(), new() };
+        private readonly RotateTransform[] _tilt = { new(), new() };
+        private readonly double[] _tiltTarget = new double[2];
+        private bool? _pressedHalf;
+
         public SplitFeatureCard()
         {
             AvaloniaXamlLoader.Load(this);
@@ -163,6 +177,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _activeGlow = this.FindControl<Border>("GlowLayer")!;
             _btnHelpA = this.FindControl<Button>("BtnHelpA")!;
             _btnHelpB = this.FindControl<Button>("BtnHelpB")!;
+            for (int i = 0; i < 2; i++)
+            {
+                string side = i == 0 ? "A" : "B";
+                _regions[i] = this.FindControl<Grid>("HalfRegion" + side)!;
+                _faces[i] = this.FindControl<Grid>("HalfFace" + side)!;
+                _sockets[i] = this.FindControl<Border>("HalfSocket" + side)!;
+                _mute[i] = this.FindControl<Border>("HalfMute" + side)!;
+                _bevels[i] = this.FindControl<Path>("DepthBevel" + side)!;
+                _faces[i].RenderTransform = new TransformGroup { Children = { _tilt[i], _travel[i] } };
+            }
+            AddHandler(PointerPressedEvent, OnDepthPress, RoutingStrategies.Tunnel);
+            AddHandler(PointerReleasedEvent, (_, _) => { _pressedHalf = null; RefreshDepth(); }, RoutingStrategies.Tunnel);
+            PointerCaptureLost += (_, _) => { _pressedHalf = null; RefreshDepth(); };
 
             _rootScale.Transitions = ScaleTransitions(HoverMs, new QuadraticEaseOut());
             _titleScaleA.Transitions = ScaleTransitions(SplitExpandMs, new QuadraticEaseOut());
@@ -174,11 +201,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
 
             _contentRoot.SizeChanged += (_, _) => { UpdateRoundedClip(); RebuildGeometry(); };
             PointerEntered += (_, _) => ApplyHover(true);
-            PointerExited += (_, _) => { ApplyHover(false); SetHalfHover(null); };
-            PointerMoved += (_, e) => SetHalfHover(IsInHalfA(e.GetPosition(_contentRoot)));
+            PointerExited += (_, _) => { _pressedHalf = null; ApplyHover(false); SetHalfHover(null); RefreshDepth(); };
+            PointerMoved += (_, e) =>
+            {
+                SetHalfHover(IsInHalfA(e.GetPosition(_contentRoot)));
+                TiltDepth(e);
+            };
             PointerReleased += OnPointerReleased;
             Unloaded += (_, _) =>
             {
+                _pressedHalf = null;
+                RefreshDepth();
                 _visibilityWatch?.Dispose();
                 _visibilityWatch = null;
                 UnhookWindow();
@@ -200,7 +233,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             ApplyHalfRestOpacity();
         }
 
-        /// <summary>WPF RefreshFx: re-applies the motion/tier/focus gates (settings changed).</summary>
+        /// <summary>WPF RefreshFx: re-applies the motion/tier/focus gates; the shell calls it on Env.MotionGateChanged.</summary>
         internal void RefreshFx() => ApplyActiveState();
 
         /// <summary>True while the breath clock runs (test seam).</summary>
@@ -262,10 +295,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         /// <summary>An OFF half rests dim unless the pointer has committed a non-dashboard card to it.</summary>
-        private void ApplyHalfRestOpacity()
+        private void ApplyHalfRestOpacity(bool snapMute = false)
         {
             _halfHostA.Opacity = IsActiveA || (!DashboardDepth && _halfHover == true) ? 1.0 : InactiveHalfOpacity;
             _halfHostB.Opacity = IsActiveB || (!DashboardDepth && _halfHover == false) ? 1.0 : InactiveHalfOpacity;
+            ApplyHalfMute(snapMute);
+        }
+
+        private void ApplyHalfMute(bool snap)
+        {
+            int ms = snap ? 0 : CardMuteRule.TransitionMs(Env.AllowTransitions, IsLoaded);
+            for (int i = 0; i < 2; i++)
+            {
+                if (_mute[i] == null) continue;
+                double target = CardMuteRule.ShouldMuteHalf(i == 0 ? IsActiveA : IsActiveB,
+                    !DashboardDepth && _halfHover == (i == 0)) ? 1 : 0;
+                if (ms == 0) Snap(_mute[i], () => _mute[i].Opacity = target);
+                else
+                {
+                    _mute[i].Transitions = new Transitions
+                    { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(ms), Easing = new QuadraticEaseOut() } };
+                    _mute[i].Opacity = target;
+                }
+            }
         }
 
         /// <summary>WPF SweepAllowed: the sweep costs a geometry per frame, so it wants Full motion
@@ -294,19 +346,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (_rootBorder is null) return; // fired before the XAML loaded
             if (change.Property == TitleAProperty) _txtTitleA.Text = TitleA ?? "";
             else if (change.Property == TitleBProperty) _txtTitleB.Text = TitleB ?? "";
-            else if (change.Property == IconAProperty) ApplyIcon(_halfHostA, IconA);
-            else if (change.Property == IconBProperty) ApplyIcon(_halfHostB, IconB);
+            else if (change.Property == IconAProperty) ApplyIcon(_halfHostA, _mute[0], IconA);
+            else if (change.Property == IconBProperty) ApplyIcon(_halfHostB, _mute[1], IconB);
             else if (change.Property == IsActiveAProperty || change.Property == IsActiveBProperty) ApplyActiveState();
             else if (change.Property == HelpSectionIdAProperty || change.Property == HelpSectionIdBProperty) RefreshHelp();
             else if (change.Property == SplitProgressProperty) RebuildGeometry();
-            else if (change.Property == IsVisibleProperty && !IsVisible) ResetSplit();
+            else if (change.Property == IsVisibleProperty && !IsVisible)
+            { _pressedHalf = null; ResetSplit(); RefreshDepth(); }
         }
 
-        private static void ApplyIcon(Border host, IImageBrushSource? src)
+        private static void ApplyIcon(Border host, Border mute, IImageBrushSource? src)
         {
             host.Background = src == null
                 ? null
                 : new ImageBrush(src) { Stretch = Stretch.UniformToFill, AlignmentY = AlignmentY.Center };
+            var grey = CardArtDesaturate.Of(src);
+            mute.Background = grey == null ? null : new ImageBrush(grey) { Stretch = Stretch.UniformToFill, AlignmentY = AlignmentY.Center };
         }
 
         // ============================== geometry ==============================
@@ -340,8 +395,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             var regionA = RegionGeometry(true, k, w, h, 0);
             var regionB = RegionGeometry(false, k, w, h, 0);
 
-            _halfHostA.Clip = regionA;
-            _halfHostB.Clip = regionB;
+            _regions[0].Clip = regionA;
+            _regions[1].Clip = regionB;
+            _bevels[0].Data = RegionGeometry(true, k, w, h, 1);
+            _bevels[1].Data = RegionGeometry(false, k, w, h, 1);
             _hoverWashA.Data = regionA;
             _hoverWashB.Data = regionB;
 
@@ -432,6 +489,92 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
 
         // ============================== input ==============================
 
+        private void OnDepthPress(object? sender, PointerPressedEventArgs e)
+        {
+            var point = e.GetCurrentPoint(_contentRoot);
+            if (!DashboardDepth || (!point.Properties.IsLeftButtonPressed && !point.Properties.IsRightButtonPressed)) return;
+            _pressedHalf = IsInHalfA(point.Position);
+            RefreshDepth();
+        }
+
+        private void TiltDepth(PointerEventArgs e)
+        {
+            bool allow = DashboardDepth && _pressedHalf == null && Env.Level != MotionLevel.Off
+                && Env.CurrentTier != PerformanceTier.Performance;
+            for (int i = 0; i < 2; i++)
+            {
+                var at = e.GetPosition(_faces[i]);
+                var size = _faces[i].Bounds.Size;
+                double angle = allow && _halfHover == (i == 0) && size.Width > 0 && size.Height > 0
+                    ? DashboardDepthLaw.TiltFor(at.X / size.Width * 2 - 1, at.Y / size.Height * 2 - 1) : 0;
+                TiltTo(i, angle, new LinearEasing());
+            }
+        }
+
+        private void RefreshDepth()
+        {
+            if (_faces[0] == null) return;
+            for (int i = 0; i < 2; i++)
+            {
+                bool active = DashboardDepth && (i == 0 ? IsActiveA : IsActiveB);
+                bool pressed = _pressedHalf == (i == 0);
+                bool hovered = _halfHover == (i == 0);
+                _sockets[i].IsVisible = _bevels[i].IsVisible = DashboardDepth;
+                _bevels[i].Opacity = pressed ? 1 : active ? 0.75 : 0.9;
+                if (this.TryFindResource(DashboardDepthLaw.BevelKeyFor(pressed, active), out var lamp) && lamp is IBrush brush)
+                    _bevels[i].Stroke = brush;
+                double target = DashboardDepthLaw.TravelFor(DashboardDepth, pressed, active, hovered);
+                double from = _travel[i].Y;
+                int ms = DepthLaw.Ms(pressed ? DepthLaw.PressMs : DepthLaw.ReleaseMs, Env.Level);
+                Easing easing = !pressed && target < from ? new DepthSpring(from, target) : new QuadraticEaseOut();
+                if (target != from || !Env.AllowTransitions)
+                    SetDepthValue(_travel[i], TranslateTransform.YProperty, target, ms, easing);
+                if (!hovered || pressed || !DashboardDepth || Env.Level == MotionLevel.Off || Env.CurrentTier == PerformanceTier.Performance)
+                    TiltTo(i, 0, new QuadraticEaseOut());
+            }
+        }
+
+        // Pointer moves fire constantly: an unchanged target must not restart (or cancel) the running tween.
+        private void TiltTo(int i, double angle, Easing easing)
+        {
+            if (angle == _tiltTarget[i]) return;
+            _tiltTarget[i] = angle;
+            SetDepthValue(_tilt[i], RotateTransform.AngleProperty, angle, DepthLaw.Ms(DepthLaw.HoverMs, Env.Level), easing);
+        }
+
+        private void SetDepthValue<T>(T transform, StyledProperty<double> property, double value, int ms, Easing easing)
+            where T : Transform
+        {
+            if (ms <= 0 || !IsLoaded || !IsEffectivelyVisible)
+            { Snap(transform, () => transform.SetValue(property, value)); return; }
+            var duration = TimeSpan.FromMilliseconds(ms);
+            // Reuse the transform's one transition when nothing about it changed; a new set cancels the tween.
+            if (transform.Transitions is not [DoubleTransition t] || t.Property != property || t.Duration != duration
+                || t.Easing.GetType() != easing.GetType() || easing is DepthSpring)
+                transform.Transitions = new Transitions
+                {
+                    new DoubleTransition { Property = property, Duration = duration, Easing = easing }
+                };
+            transform.SetValue(property, value);
+        }
+
+        // WPF's release keyframes: 65% reaches one pixel above rest, then settles.
+        private sealed class DepthSpring(double from, double target) : Easing
+        {
+            public override double Ease(double progress)
+            {
+                double peak = 1 + DepthLaw.ReleaseOvershootPx / (from - target);
+                if (progress <= 0.65)
+                {
+                    double t = progress / 0.65;
+                    return peak * (1 - (1 - t) * (1 - t));
+                }
+                double u = (progress - 0.65) / 0.35;
+                double ease = u < 0.5 ? 2 * u * u : 1 - Math.Pow(-2 * u + 2, 2) / 2;
+                return peak + (1 - peak) * ease;
+            }
+        }
+
         private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
         {
             // Purely positional, against the seam where it is DRAWN at that instant - the corner
@@ -439,16 +582,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             // toggles the half under it.
             if (e.Source is Visual src && (src == _btnHelpA || src == _btnHelpB
                 || _btnHelpA.IsVisualAncestorOf(src) || _btnHelpB.IsVisualAncestorOf(src))) return;
+            if (e.InitialPressMouseButton is not (MouseButton.Left or MouseButton.Right)) return;
             bool halfA = IsInHalfA(e.GetPosition(_contentRoot));
-            if (e.InitialPressMouseButton == MouseButton.Left)
-            {
-                RaiseEvent(new RoutedEventArgs(halfA ? ClickAEvent : ClickBEvent, this));
-            }
-            else if (e.InitialPressMouseButton == MouseButton.Right)
-            {
-                e.Handled = true;
-                RaiseEvent(new RoutedEventArgs(halfA ? ToggleAEvent : ToggleBEvent, this));
-            }
+            bool right = e.InitialPressMouseButton == MouseButton.Right;
+            bool toggle = DashboardDepthLaw.ToggleFor(DashboardDepth,
+                global::ConditioningControlPanel.CoreSettings.Current.DashboardInvertClicks, right);
+            if (right || toggle) e.Handled = true;
+            var routed = toggle ? (halfA ? ToggleAEvent : ToggleBEvent) : (halfA ? ClickAEvent : ClickBEvent);
+            RaiseEvent(new RoutedEventArgs(routed, this));
         }
 
         /// <summary>Commits the card to a half: the wash flips, the seam sweeps, its title grows.
@@ -459,6 +600,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _halfHover = halfA;
             ApplyHelpForHover();
             ApplyHalfRestOpacity();
+            RefreshDepth();
 
             _hoverWashA.Opacity = halfA == true ? 1 : 0;
             _hoverWashB.Opacity = halfA == false ? 1 : 0;
@@ -512,7 +654,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             _halfHover = null;
             ApplyHelpForHover();
-            ApplyHalfRestOpacity();
+            ApplyHalfRestOpacity(snapMute: true);
+            RefreshDepth();
             Transitions = null; // no motion on the way back
             SplitProgress = SplitRest;
             Transitions = new Transitions { _splitTransition };
@@ -530,6 +673,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
 
         private void ApplyActiveState()
         {
+            RefreshDepth();
             _activeRingA.IsVisible = IsActiveA;
             _activeRingB.IsVisible = IsActiveB;
             ApplyHalfRestOpacity();

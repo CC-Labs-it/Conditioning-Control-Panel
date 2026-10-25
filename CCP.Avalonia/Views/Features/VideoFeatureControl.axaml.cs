@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -49,6 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             CmbMercyAfter.SelectionChanged += CmbMercyAfter_Changed;
             SliderPerHour.ValueChanged += SliderPerHour_Changed;
             ChkStrict.IsCheckedChanged += ChkStrict_Changed;
+            CmbAppearance.SelectionChanged += CmbAppearance_Changed;
             // WPF Lab.cs:640-647 / 726-732: greyed while a Lockdown forces Strict Lock, given back on exit.
             Windows.MainShellWindow.HoldWhileLockdown(ChkStrict, () => ConditioningControlPanel.Services.LockdownStrictHold.HoldsNow);
             SliderVideoMinDur.ValueChanged += SliderVideoMinDur_Changed;
@@ -148,6 +150,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 TxtTargetSize.Text = s.AttentionSize.ToString();
                 ChkVideoGazeClick.IsChecked = s.VideoGazeClickEnabled;
                 PopulateMonitors();
+                // Full screen first (the default). Rebuilt on every load so the names follow the language.
+                CmbAppearance.Items.Clear();
+                CmbAppearance.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_fullscreen"), Tag = false });
+                CmbAppearance.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_floating"), Tag = true });
+                CmbAppearance.SelectedIndex = s.MandatoryVideoFloating ? 1 : 0;
+                TxtAppearanceNote.IsVisible = s.MandatoryVideoFloating;
                 ChkMercy.IsChecked = s.MercySystemEnabled;
                 CmbMercyAfter.IsVisible = s.MercySystemEnabled;
                 foreach (var obj in CmbMercyAfter.Items)
@@ -182,12 +190,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.AttentionLifespan) ||
                 e.PropertyName == nameof(AppSettings.AttentionSize) ||
                 e.PropertyName == nameof(AppSettings.VideoGazeClickEnabled) ||
+                e.PropertyName == nameof(AppSettings.MandatoryVideoFloating) ||
                 e.PropertyName == nameof(AppSettings.VideoTargetMonitor) ||
                 e.PropertyName == nameof(AppSettings.MercySystemEnabled) ||
                 e.PropertyName == nameof(AppSettings.MercyAfterFails))
             {
                 Dispatcher.UIThread.Post(LoadFromSettings);
             }
+        }
+
+        /// <summary>WPF CmbAppearance_Changed: read at the next video's start; a video already playing stays as it is.</summary>
+        private void CmbAppearance_Changed(object? sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoading || CmbAppearance.SelectedItem is not ComboBoxItem { Tag: bool floating }) return;
+            var s = CoreSettings.Current;
+            if (s.MandatoryVideoFloating == floating) return;
+            s.MandatoryVideoFloating = floating;
+            CoreSettings.Save();
         }
 
         // -- Display monitor picker (ccp-bugs #1154; WPF VideoFeatureControl.xaml.cs, Pink filter recipe) --
@@ -412,7 +431,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             await new AttentionTargetEditorDialog().ShowDialogSafe(owner);
         }
 
-        private async void BtnTestVideo_Click(object? sender, RoutedEventArgs e)
+        /// <summary>The last Test click's run, so a test can await it instead of yielding (P57).</summary>
+        internal Task TestVideoRun { get; private set; } = Task.CompletedTask;
+
+        private void BtnTestVideo_Click(object? sender, RoutedEventArgs e) => TestVideoRun = LogFault(TestVideoAsync());
+
+        // The click used to be async void (faults reached the global handler); a stored Task
+        // would swallow them silently, so log here instead.
+        private static async Task LogFault(Task run)
+        {
+            try { await run; }
+            catch (Exception ex) { Serilog.Log.Error(ex, "Test video failed"); }
+        }
+
+        private async Task TestVideoAsync()
         {
             // WPF BtnTestVideo_Click -> TriggerVideo(userInitiated: true), after its stuck-video prompt.
             // ponytail: WPF's second prompt ("another interaction is in progress") needs the interaction
@@ -423,7 +455,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 if (TopLevel.GetTopLevel(this) is not Window owner) return;
                 if (!await Dialogs.MessageDialog.ConfirmAsync(owner, "Video Playing",
                         "A video appears to be playing.\n\nIf you don't see a video, it may be stuck. Click Yes to force reset and try again.",
-                        okText: "Yes")) return;
+                        okText: "Yes", cancelText: "No")) return;
                 Serilog.Log.Warning("User requested force reset of stuck video state");
                 video.ForceCleanup();
             }

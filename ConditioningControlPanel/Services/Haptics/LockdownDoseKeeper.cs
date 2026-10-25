@@ -243,6 +243,8 @@ public sealed class LockdownDoseKeeper : IDisposable
             _engineWasRunning = App.IsEngineRunning;
             _weStartedEngine = false;
             DeleteRecoveryFile();
+            // Switching Lockdown on is the user's own act: an old panic no longer holds the engine.
+            Services.Safety.PanicAftermath.ReleaseEngineHold();
 
             App.Logger?.Information("Lockdown dose: armed (engine {Engine}, dose {Dose}: {Keys})",
                 _engineWasRunning ? "running" : "OFF", _wasEmpty ? "EMPTY" : "ok", string.Join(",", _snapshotOn));
@@ -319,6 +321,9 @@ public sealed class LockdownDoseKeeper : IDisposable
 
             if (!App.IsEngineRunning)
             {
+                // A panic stopped it: only the user's START undoes a panic, never this 4 s grace
+                // (ccp-bugs #1464 stack review). Lockdown switched on afterwards releases the hold.
+                if (Services.Safety.PanicAftermath.HoldsEngineRestart) { _engineIdle = 0; return; }
                 _engineIdle++;
                 if (atActivation || _engineIdle >= EngineGraceSeconds)
                 {

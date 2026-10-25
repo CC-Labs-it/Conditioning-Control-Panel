@@ -6,9 +6,21 @@
  * the payout lines that arrive over the bridge as payout-result.
  * ==========================================================================*/
 
+import { createMomentFeel } from './momentFeel.js';
+import { planRowFor, buildPlanRow, postFunnel, PLAN_FEATURE, PLAN_ROW_DELAY_MS } from './planCard.js';
+
 const ART = 'https://ccp.art/';
 
 export function createOverlays(hud) {
+  // Feel wave 2: the countdown breath, recap stagger + count-up, edge bloom (game/momentFeel.js).
+  const mf = createMomentFeel(hud);
+  /** One countdown beat: the eased breath, or the stock CSS beat when the page cannot animate. */
+  const beatNum = (go, ms) => {
+    cdNum.classList.remove('is-beat');
+    if (mf.beat(cdNum, { go, ms })) return;
+    void cdNum.offsetWidth;
+    cdNum.classList.add('is-beat');
+  };
   // ---- countdown ----
   const cd = document.createElement('div');
   cd.className = 'cf-overlay cf-countdown';
@@ -30,9 +42,7 @@ export function createOverlays(hud) {
       cdTimers.push(window.setTimeout(() => {
         cdNum.textContent = b;
         cdNum.classList.toggle('is-go', b === 'GO!');
-        cdNum.classList.remove('is-beat');
-        void cdNum.offsetWidth;
-        cdNum.classList.add('is-beat');
+        beatNum(b === 'GO!', b === 'GO!' ? (short ? 450 : 650) : undefined);
         if (onTick) onTick(b);
         if (b === 'GO!') {
           cdTimers.push(window.setTimeout(() => { cd.hidden = true; if (onGo) onGo(); }, short ? 450 : 650));
@@ -51,9 +61,7 @@ export function createOverlays(hud) {
     beats.forEach((b, i) => {
       cdTimers.push(window.setTimeout(() => {
         cdNum.textContent = b;
-        cdNum.classList.remove('is-beat');
-        void cdNum.offsetWidth;
-        cdNum.classList.add('is-beat');
+        beatNum(false);
         if (onTick) onTick(b);
       }, i * 1000));
     });
@@ -66,16 +74,12 @@ export function createOverlays(hud) {
     cd.hidden = false;
     cdNum.classList.remove('is-go');
     cdNum.textContent = 'Ready? :3';
-    cdNum.classList.remove('is-beat');
-    void cdNum.offsetWidth;
-    cdNum.classList.add('is-beat');
+    beatNum(false);
     if (onTick) onTick('ready');
     cdTimers.push(window.setTimeout(() => {
       cdNum.textContent = 'GO!';
       cdNum.classList.add('is-go');
-      cdNum.classList.remove('is-beat');
-      void cdNum.offsetWidth;
-      cdNum.classList.add('is-beat');
+      beatNum(true, 450);
       if (onTick) onTick('GO!');
       cdTimers.push(window.setTimeout(() => { cd.hidden = true; if (onResume) onResume(); }, 450));
     }, 900));
@@ -343,17 +347,24 @@ export function createOverlays(hud) {
     row.append(again, leave);
     card.appendChild(row);
     rc.hidden = false;
+    mf.staggerRows(card);
   }
 
-  function showPayout(p) {
+  function showPayout(p, opts) {
     if (!payoutSlot || rc.hidden) return;
+    mf.finishCounts();
     payoutSlot.innerHTML = '';
     const l1 = document.createElement('p');
-    l1.textContent = `+${Math.round(p.baseXp)} XP` + (p.skillMult > 1 ? ` × ${p.skillMult.toFixed(1)} skills = ${Math.round(p.finalXp)} XP` : '');
+    // The payout counts up to the real figure (ease-out); the last frame is the exact shipped text.
+    const skilled = p.skillMult > 1;
+    const xpText = (v) => (skilled ? `+${Math.round(p.baseXp)} XP × ${p.skillMult.toFixed(1)} skills = ${v} XP` : `+${v} XP`);
+    const xpTotal = Math.round(skilled ? p.finalXp : p.baseXp);
+    mf.countUp(l1, xpTotal, xpText, xpText(xpTotal));
     payoutSlot.appendChild(l1);
     if (p.sparksEarned > 0) {
       const l2 = document.createElement('p');
-      l2.textContent = `+${p.sparksEarned} ✦ emotes earned`;
+      const sparkText = (v) => `+${v} ✦ emotes earned`;
+      mf.countUp(l2, p.sparksEarned, sparkText, sparkText(p.sparksEarned), { delay: 180 });
       payoutSlot.appendChild(l2);
     }
     if (p.rankUp) {
@@ -367,6 +378,28 @@ export function createOverlays(hud) {
       l4.textContent = 'new personal best!';
       payoutSlot.appendChild(l4);
     }
+    mf.staggerRows(payoutSlot, 0);   // the card is already up: the payout rows start at once, one after another
+    showPlanRow(p, opts);
+  }
+
+  /* THE PLAN ROW (brief C10, game/planCard.js): a Daily Gift run's summary gets one calm line and one link,
+   * last on the card, under the buttons. It waits for the payout rows to land and then only fades in. */
+  let planTimer = 0;
+  const clearPlan = () => { if (planTimer) { clearTimeout(planTimer); planTimer = 0; } };
+  function showPlanRow(p, opts) {
+    clearPlan();
+    try {
+      const row = planRowFor(p);
+      if (!row || card.querySelector('.cf-recap-plan')) return;
+      const box = buildPlanRow({ doc: document, row, plans: opts && opts.plans });
+      card.appendChild(box);
+      planTimer = setTimeout(() => {
+        planTimer = 0;
+        if (rc.hidden || !box.isConnected) return;
+        box.classList.add('is-in');
+        postFunnel('gate_shown', PLAN_FEATURE, row.key);
+      }, PLAN_ROW_DELAY_MS);
+    } catch (e) { /* the summary stands without it */ }
   }
 
   return {
@@ -380,8 +413,8 @@ export function createOverlays(hud) {
     isDraftUp: () => !dr.hidden,
     showRecap,
     showPayout,
-    hideRecap() { rc.hidden = true; payoutSlot = null; },
+    hideRecap() { mf.finishCounts(); clearPlan(); rc.hidden = true; payoutSlot = null; },
     isRecapUp: () => !rc.hidden,
-    dispose() { clearCd(); clearDraftTimers(); clearWashTimers(); cd.remove(); dr.remove(); rc.remove(); wash.remove(); },
+    dispose() { clearPlan(); clearCd(); clearDraftTimers(); clearWashTimers(); cd.remove(); dr.remove(); rc.remove(); wash.remove(); mf.dispose(); },
   };
 }

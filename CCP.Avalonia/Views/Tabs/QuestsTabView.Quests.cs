@@ -38,7 +38,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             base.OnAttachedToVisualTree(e);
             UpdateAmbient(attached: true);
+            CoreMods.ModChanged += OnJournalModChanged;
+            ApplyBimboJournalModVisibility();
             if (App.Quests is not { } quests) return;
+            WatchStreakFixCharges(attached: true);
             quests.QuestCompleted += OnQuestCompleted;
             quests.QuestProgressChanged += OnQuestProgressChanged;
             quests.QuestsRefreshed += OnQuestsRefreshed;
@@ -50,6 +53,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             base.OnDetachedFromVisualTree(e);
             UpdateAmbient(attached: false);
+            CoreMods.ModChanged -= OnJournalModChanged;
+            WatchStreakFixCharges(attached: false);
             if (App.Quests is not { } quests) return;
             quests.QuestCompleted -= OnQuestCompleted;
             quests.QuestProgressChanged -= OnQuestProgressChanged;
@@ -115,7 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // Server-rolled quests have no loc key, so the lookup returns the raw key (WPF :150).
         private static string Localized(string localized, string fallback) =>
-            string.IsNullOrWhiteSpace(localized) || localized.StartsWith("quest_", StringComparison.Ordinal) ? fallback : localized;
+            QuestStampRules.Text(localized, fallback);
 
         private static DailyQuestCardModel BuildDailyCardModel(int slot, ActiveQuest quest, QuestDefinition def, int rerollsLeft, AppSettings s)
         {
@@ -133,9 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 XpText = $"{xp} XP",
                 StreakBonusPct = streakPct,
                 RerollBonusPct = rerollPct,
-                // ponytail: no quest art - GetModeAwareQuestImagePath resolves pack:// resources this
-                // head does not ship; the card draws its icon instead.
-                Art = null,
+                Art = GetQuestArt(def),
                 CanReroll = canReroll,
                 RerollKey = canReroll ? "btn_reroll_with_count" : "btn_reroll_none",
                 RerollCount = rerollsLeft,
@@ -143,14 +146,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             };
         }
 
-        /// <summary>MainWindow.QuestsTab.cs:188 RefreshQuestUI, minus the punch card (its service is
-        /// WPF-only) and the season title (App.QuestDefinitions is not exposed; the XAML title stays).</summary>
+        /// <summary>MainWindow.QuestsTab.cs:188 RefreshQuestUI. The punch card stays collapsed, as
+        /// WPF's does while IntakePunchCardService.UiEnabled is false (its prize is TBD).</summary>
         internal void RefreshQuestUI()
         {
             var quests = App.Quests;
             if (quests == null) return;
             var s = CoreSettings.Current;
             quests.RecalculateStreak();
+
+            // The server's season title, else the local month name (QuestDefinitionService.SeasonTitle).
+            var seasonTitle = App.QuestDefinitions?.SeasonTitle;
+            if (!string.IsNullOrEmpty(seasonTitle)) TxtSeasonTitle.Text = seasonTitle;
 
             int dailyCompleted = quests.GetDailyQuestsCompletedToday();
             TxtDailyQuestCounter.Text = $"{dailyCompleted}/{QuestService.MaxDailyQuestsPerDay}";
@@ -182,7 +189,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var rerollText = TxtWeeklyReroll;
             if (weeklyDef != null && weekly != null)
             {
+                ImgWeeklyQuest.Source = GetQuestArt(weeklyDef);
                 TxtWeeklyQuestIcon.Emoji = weeklyDef.Icon;   // collapsed, as in WPF
+                if (GetQuestArt(weeklyDef) is { } weeklyArt) ImgWeeklyQuest.Source = weeklyArt;
                 TxtWeeklyQuestName.Text = CoreMods.MakeModAware(weeklyDef.Name);
                 TxtWeeklyQuestDesc.Text = CoreMods.MakeModAware(weeklyDef.Description);
                 TxtWeeklyProgress.Text = $"{weekly.CurrentProgress} / {weeklyDef.TargetValue}";
@@ -260,7 +269,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void PaintMonth(QuestService quests)
         {
             double width = StreakCalendarCanvas.Bounds.Width;
-            if (width <= 0) return;
+            if (width <= 0) { PaintFixButton(StreakFix.HasMissedDays(quests.Progress, DateTime.Today)); return; }   // not laid out yet
             var completed = new HashSet<DateTime>(quests.Progress.DailyQuestCompletionDates.Select(d => d.Date));
             var shielded = new HashSet<DateTime>(CoreSettings.Current.StreakShieldUsedDates.Select(d => d.Date));
             IBrush accent;
@@ -271,12 +280,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var today = DateTime.Today;
             int days = DateTime.DaysInMonth(today.Year, today.Month);
             double spacing = width / days, centerY = 25, prevX = 0;
-            bool prevDone = false;
+            bool prevDone = false, hasMissedDays = false;
             const string letters = "SMTWTFS";
+            _fixRings.Clear();
             for (int i = 0; i < days; i++)
             {
                 var day = new DateTime(today.Year, today.Month, i + 1);
                 bool done = completed.Contains(day), future = day > today, isToday = day == today;
+                bool missed = !done && day < today;
+                hasMissedDays |= missed;
                 double size = day.DayOfWeek == DayOfWeek.Sunday ? 26 : 20, x = spacing * i + spacing / 2;
                 if (i > 0)
                     StreakCalendarCanvas.Children.Add(new Line
@@ -306,9 +318,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     Canvas.SetTop(shield, centerY - size / 2 - 12);
                     StreakCalendarCanvas.Children.Add(shield);
                 }
+                if (_isStreakFixMode && missed) AddFixRing(day, x, centerY, size, accent);   // WPF :694
                 prevX = x;
                 prevDone = done;
             }
+            PaintFixButton(hasMissedDays);
         }
     }
 }
