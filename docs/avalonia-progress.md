@@ -3061,3 +3061,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-theme-inputs: +291
 - Implicit WPF TextBox chrome + FocusGlowTextBox alias: r8, 8x5 padding, 60% hover border, 45% pink focus glow (200ms), 40% pink selection, 50% disabled.
 - Borderless .transparent boxes keep no halo; 4 deterministic headless tests; row stays stub (ComboBox/CheckBox/menus -> wire-theme-inputs-b).
+
+## avalonia-port/wire-views-companion-workshop-accordion: +274
+- Workshop Triggers cell: phrase preset select/save/delete restored on shared Core `PhrasePreset` (WPF prompt, confirm, log lines); combo re-reads on companion-tab return. 4 headless tests, each fail-proven.
+- Row stays stub; camera/browser/roster/community/phrase-pool work handed to lane `-b`.
