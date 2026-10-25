@@ -10,6 +10,7 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -98,13 +99,16 @@ public sealed class WorkshopPhrasePresetTests
         var shell = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
         try
         {
+            // Companion v2 (WPF CompanionTabView.xaml.cs:36-40): the Triggers cell, and its preset combo,
+            // live on Companion > AI (WPF AiPage.OnShown adopts tab.Vm.Shelf.Triggers).
             shell.Show(); shell.ShowTab("companion"); Dispatcher.UIThread.RunJobs();
-            var drawer = shell.GetVisualDescendants().OfType<WorkshopAccordion>().Single();
-            var combo = ((WorkshopRuntimeVm)drawer.DataContext!).Parts.Triggers.FindControl<ComboBox>("CmbPhrasePresets")!;
+            shell.ShowTab("companionai"); Dispatcher.UIThread.RunJobs(); shell.UpdateLayout();
+            var combo = shell.Named<AiPage>("CompanionAiTab")!.GetVisualDescendants().OfType<ComboBox>()
+                .Single(c => c.Name == "CmbPhrasePresets");
             shell.ShowTab("achievements"); Dispatcher.UIThread.RunJobs();
             var added = new PhrasePreset { Name = "Added elsewhere" };
             s.PhrasePresets.Add(added); s.CurrentPhrasePresetId = added.Id;
-            shell.ShowTab("companion"); Dispatcher.UIThread.RunJobs();   // CompanionRoomView.ResumeClocks
+            shell.ShowTab("companion"); Dispatcher.UIThread.RunJobs();   // WPF ShowTab("companion") -> InitializePhrasePresets
             Assert.Contains(added, combo.Items.OfType<PhrasePreset>());
             Assert.Equal(added, combo.SelectedItem);
         }
