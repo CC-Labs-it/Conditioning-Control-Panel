@@ -12,6 +12,8 @@ internal static class CompanionApiKey
 
     internal static void Store(string? key)
     {
+        // WPF MainWindow.CompanionRoom.cs:315 returns early without settings.
+        if (CoreSettings.Current is null) return;
         // Store first: a store failure must not replace the last usable settings value.
         CoreSecrets.StoreOrThrow(Name, string.IsNullOrEmpty(key) ? null : key);
         CoreSettings.Current.CompanionPrompt.OpenAiCompatibleApiKey =

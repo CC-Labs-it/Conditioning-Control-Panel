@@ -480,8 +480,9 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   no guard"; unseeded it uses CoreModerationLog.Guard, which fails closed.
 - The Avalonia `App.Ai` is the same AiServiceStrategy, so the brain follows the Engine Room's provider as on WPF. The
   configured host/endpoint is the only destination; a sandbox reaches loopback only (SandboxNet, unchanged).
-- OpenAI-compatible on this head: no DPAPI and no BYO key store, so ApiKeyUnprotect stays unseeded and the provider never
-  sends (WPF requires a key too; the stored blob is never sent in the clear). The key box writes nothing.
+- OpenAI-compatible on this head: the key box writes the BYO key to the OS secret store (`CompanionApiKey`, slot
+  companion_openai; memory-only without a keyring) and settings keep only a reference. A legacy WPF DPAPI blob is read on
+  Windows only and fails closed elsewhere; no key = no send (as WPF). Superseded the earlier "no BYO key store" note.
 - The Engine Room's mapping (CompanionProviderMode, ModeFor/SettingsFor/ClearsLiveActions) and the two Test probes are Core
   `EngineRoomProviders`; WPF EngineRoomRuntimeVm and both MainWindow Test handlers delegate. Avalonia `EngineRoomVm` binds
   the existing drawer; "Clear conversation" (ForgetThread + legacy local transcript + tube log) is restored on this head.
