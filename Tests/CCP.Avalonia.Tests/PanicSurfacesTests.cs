@@ -110,6 +110,7 @@ public sealed class PanicSurfacesTests
         "takeover",
         "program-session",
         "engine",
+        "flash",
         "pink-rush",
         "corner-gif",
         "emi-desk-feedback",
