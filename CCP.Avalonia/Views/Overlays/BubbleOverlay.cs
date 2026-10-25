@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Media.Immutable;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -218,7 +219,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _chaosPopped = onPop;
             _chaosCanChannel = canChannel;
             Field.Held = false;
-            Field.ChaosDefused = onDefuse == null ? null : b => { AnchorPop(b); onDefuse(b); };
+            Field.ChaosDefused = onDefuse == null ? null : b =>
+            {
+                AnchorPop(b);
+                // WPF CreateChaosBubble onDefuse (:1571): a held snap deflates with a hiss, a sweep snaps.
+                PlayChaosCue(b.DefusedViaChannel && File.Exists(ChaosCuePath("defuse_hiss")) ? "defuse_hiss" : "snap", 0.6f);
+                onDefuse(b);
+            };
             Field.ChaosDetonated = onDetonate == null ? null : b => { AnchorPop(b); onDetonate(b); };
             if (_running) return;
             Start(host, null, ambient: false);
@@ -271,8 +278,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             b.Popping = true;
             ChaosLastPopX = b.CenterX;
             ChaosLastPopY = b.CenterY;
+            PlayChaosCue(null, 1f);   // WPF onBenignPop: PlayPopSound(false)
             _chaosPopped?.Invoke(b);
             RequestFrame();
+        }
+
+        private static string ChaosCuePath(string name) =>
+            ContentLocator.Resolve(Path.Combine("Resources", "sounds", "chaos", name + ".mp3"));   // as ChaosSfx
+
+        /// <summary>WPF PlayChaosCue/PlayCue (BubbleService.cs:2049, :2058): the chaos cue at
+        /// (master x bubbles)^1.5 x scale, or the ambient pop when the cue is absent (or null).</summary>
+        internal static void PlayChaosCue(string? name, float scale)
+        {
+            var s = CoreSettings.Current;
+            var vol = (float)Math.Pow(s.MasterVolume / 100f * (s.BubblesVolume / 100f), 1.5);
+            var cue = name == null ? "" : ChaosCuePath(name);
+            if (cue.Length > 0 && File.Exists(cue)) { CoreAudio.PlayOneShot(cue, Math.Min(vol * scale, 1f), "chaos-cue"); return; }
+            var pop = new[] { "Pop.mp3", "Pop2.mp3", "Pop3.mp3" }[Field.Random.Next(3)];
+            CoreAudio.PlayOneShot(Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", "bubbles", pop), Math.Min(vol, 1f), "bubble-pop");
         }
 
         /// <summary>WPF AwardAmbientPop, head half: sound, XP, quest credit.</summary>
@@ -337,9 +360,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             GradientStops = { new GradientStop(Color.FromArgb(180, 200, 220, 255), 0), new GradientStop(Color.FromArgb(80, 255, 255, 255), 1) },
         };
         private static readonly IPen FallbackPen = new Pen(Brushes.White, 2);
-        private static readonly IPen FuseYellow = new Pen(new SolidColorBrush(Color.FromRgb(255, 210, 40)), 4);
-        private static readonly IPen FuseRed = new Pen(new SolidColorBrush(Color.FromRgb(255, 45, 45)), 4);
+        private static readonly Dictionary<uint, IPen> FuseCache = new();
         private static readonly Dictionary<uint, (IBrush, IPen)> TintCache = new();
+
+        /// <summary>One pen per ring colour+opacity (a few hundred at most), so the render pass stays allocation-free.</summary>
+        internal static IPen FusePen(uint argb)
+        {
+            if (FuseCache.TryGetValue(argb, out var p)) return p;
+            return FuseCache[argb] = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromUInt32(argb)), 4);
+        }
 
         /// <summary>One fill + pen per variant tint, built once (the render pass stays allocation-free).</summary>
         private static (IBrush, IPen) TintPaint(uint argb)
@@ -470,11 +499,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         }
                         if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
                         else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
-                        if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45, red at the brink
+                        if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45; yellow, flash, red brink
                         {
                             double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);
-                            double brinkMs = Math.Min(b.FuseTotalMs * 0.30, ConditioningControlPanel.Services.Chaos.ChaosTuning.RING_BRINK_MS);
-                            dc.DrawEllipse(null, b.FuseRemainingMs <= brinkMs ? FuseRed : FuseYellow, new Point(cx, cy), rr, rr);
+                            dc.DrawEllipse(null, FusePen(b.FuseRingArgb), new Point(cx, cy), rr, rr);
                         }
                     }
                 }
