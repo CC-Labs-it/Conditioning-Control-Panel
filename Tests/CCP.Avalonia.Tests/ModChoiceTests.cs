@@ -87,6 +87,65 @@ public sealed class ModChoiceTests
     });
 
     [Fact]
+    public Task HeaderManagerFooterOpensManagerWithoutChangingTheModOrPendingChoice() => Run(async (shell, svc, server) =>
+    {
+        var combo = shell.FindControl<ComboBox>("ModSelectorCombo")!;
+        var active = AvApp.Mods!.ActiveModId;
+        PendingModChoice.Record(BuiltInMods.BambiSleepId, active);
+        var footer = Assert.Single(shell.AvailableMods, i => i.Id == "__open_mod_manager__");
+        Assert.Same(footer, shell.AvailableMods.Last());
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_open_mod_manager"), footer.Name);
+
+        combo.IsDropDownOpen = true;
+        combo.SelectedItem = footer;
+        Assert.False(combo.IsDropDownOpen);
+        Assert.Equal(active, ((ModSelectorItem)combo.SelectedItem!).Id);
+        var manager = await Owned<ModManagerDialog>(shell);
+        Assert.Equal(active, AvApp.Mods.ActiveModId);
+        Assert.Equal(BuiltInMods.BambiSleepId, PendingModChoice.Pending);
+        Assert.Equal(active, (combo.SelectionBoxItem as ModSelectorItem)?.Id);
+        manager.Close();
+        await WaitFor(() => !shell.OwnedWindows.OfType<ModManagerDialog>().Any());
+        Assert.Equal(active, ((ModSelectorItem)combo.SelectedItem!).Id);
+    });
+
+    [Fact]
+    public Task HeaderModSwitchRepaintsHomeArtAndExternalModChangeRestoresShippedArt() => Run(async (shell, svc, server) =>
+    {
+        var dash = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView>("SettingsTab")!;
+        var cards = new[] { dash.CardFlash, dash.CardSubliminal, dash.CardBouncingText,
+            dash.CardBubblePop, dash.CardLockCard, dash.CardMystery, dash.CardVault };
+        var pairs = new[] { dash.ComboVideoBubble, dash.ComboSpiralPink, dash.ComboMindDrain };
+        var old = CoreModArt.OverridePathProvider;
+        var scratch = Directory.CreateTempSubdirectory("ccp-home-art-");
+        var png = Path.Combine(scratch.FullName, "art.png");
+        using (var bmp = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(6, 3), new Vector(96, 96)))
+            bmp.Save(png);
+        try
+        {
+            CoreModArt.OverridePathProvider = p => AvApp.Mods!.ActiveModId == BuiltInMods.DronificationId
+                && p.StartsWith("features/", StringComparison.Ordinal) ? png : null;
+            var combo = shell.FindControl<ComboBox>("ModSelectorCombo")!;
+            combo.SelectedItem = shell.AvailableMods.Single(i => i.Id == BuiltInMods.DronificationId);
+            Dispatcher.UIThread.RunJobs();
+            Assert.All(cards, card => Assert.Equal(2, ((global::Avalonia.Media.Imaging.Bitmap)card.Icon!).Size.AspectRatio));
+            Assert.All(pairs, pair =>
+            {
+                Assert.Equal(2, ((global::Avalonia.Media.Imaging.Bitmap)pair.IconA!).Size.AspectRatio);
+                Assert.Equal(2, ((global::Avalonia.Media.Imaging.Bitmap)pair.IconB!).Size.AspectRatio);
+            });
+            var custom = dash.CardFlash.Icon;
+            // Uninstalling the active mod switches it without going through ApplyActiveModChange.
+            AvApp.Mods!.ActivateMod(BuiltInMods.CCPDefaultId);
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotSame(custom, dash.CardFlash.Icon);
+            Assert.NotEqual(2, ((global::Avalonia.Media.Imaging.Bitmap)dash.CardFlash.Icon!).Size.AspectRatio);
+        }
+        finally { CoreModArt.OverridePathProvider = old; scratch.Delete(true); }
+        await Task.CompletedTask;
+    });
+
+    [Fact]
     public Task FirstRunPackChoiceRecordsDownloadsThenActivatesOnArrival() => Run(async (shell, svc, server) =>
     {
         var wizard = Wizard(shell);
@@ -238,7 +297,11 @@ public sealed class ModChoiceTests
         server.Handle = original;
         var attempts = server.PackGets;
         PressDownload(picker);
-        await WaitFor(() => AvApp.Mods.ActiveModId == BuiltInMods.BambiSleepId && card.IsInstalled);
+        // PackInstalled marks the card and activates the mod before the RequestPackAsync continuation
+        // relabels the button, so wait for the label too.
+        var close = ConditioningControlPanel.Localization.Loc.Get("modpicker_btn_close");
+        await WaitFor(() => AvApp.Mods.ActiveModId == BuiltInMods.BambiSleepId && card.IsInstalled
+            && picker.FindControl<TextBlock>("TxtDownload")!.Text == close);
         Assert.Equal(attempts + 1, server.PackGets);
         Assert.True(card.IsInstalled);
         Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("modpicker_btn_close"),

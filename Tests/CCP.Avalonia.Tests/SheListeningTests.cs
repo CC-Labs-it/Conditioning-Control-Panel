@@ -70,6 +70,10 @@ public sealed class SheListeningTests
                 Assert.False(tab.BtnSL_OpenModels.IsVisible);
 
                 // The pill is the privacy stop, by mouse and by keyboard (P17).
+                // Visibility invalidates layout; input hit testing needs the newly arranged pill.
+                shell.UpdateLayout();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Assert.True(pill.Bounds.Width > 0 && pill.Bounds.Height > 0);
                 var at = pill.TranslatePoint(new Point(pill.Bounds.Width / 2, pill.Bounds.Height / 2), shell)!.Value;
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);

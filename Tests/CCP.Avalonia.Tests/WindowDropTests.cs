@@ -60,12 +60,15 @@ public sealed class WindowDropTests
     });
 
     [Fact]
-    public Task EnhancementDropSaysTheLibraryIsNotReady() => Run(async (shell, root, _) =>
+    public Task EnhancementDropRunsTheRealImport() => Run(async (shell, root, _) =>
     {
+        // Tagged but versionless: the shared import batch rejects it (WPF ImportEnhancementFiles), nothing is written.
         var enh = Path.Combine(root, "wave.ccpenh.json");
         File.WriteAllText(enh, "{\"$schema\":\"" + ConditioningControlPanel.Models.Deeper.Enhancement.SchemaTag + "\"}");
         Drop(shell, enh);
-        await WaitFor(() => Toast(shell, Loc.Get("deeper_import_library_not_ready")));
+        var head = Loc.GetF("deeper_import_failed_fmt", 1);
+        await WaitFor(() => shell.Named<Panel>("NotificationHost")!.GetVisualDescendants().OfType<TextBlock>()
+            .FirstOrDefault(t => t.Text?.StartsWith(head, StringComparison.Ordinal) == true && t.Text.Contains("wave.ccpenh.json")));
     });
 
     [Fact]

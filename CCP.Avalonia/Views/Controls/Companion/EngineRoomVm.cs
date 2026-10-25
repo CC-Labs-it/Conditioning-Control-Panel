@@ -23,14 +23,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     ///
     /// <para>The live-actions collection is shared with the command sink, and remains observable.
     /// The BYO API key box writes nothing:
-    /// MainShellWindow.CompanionRoom.cs says why (no at-rest store reads it yet). The "offer setup when
-    /// Ollama is unreachable" prompt is not wired yet (OllamaSetupService.DetectAsync is in Core now). Login has
+    /// MainShellWindow.CompanionRoom.cs says why (no at-rest store reads it yet). Login has
     /// no account tab deep link here yet, so LoginCommand stays null.</para>
     /// </summary>
     public sealed class EngineRoomVm : INotifyPropertyChanged
     {
+        // The same OS/service probe as the wizard; headless tests substitute it before selecting Local.
+        internal static Func<string?, Task<Services.AIService.OllamaSetupService.StatusSnapshot>> DetectLocal =
+            model => Services.AIService.OllamaSetupService.DetectAsync(targetModel: model);
         private readonly Control _host;
-        private bool _isExpanded, _isHealthy, _isLoggedIn, _suppressWrite;
+        private bool _isExpanded, _isHealthy, _isLoggedIn, _suppressWrite, _offeringLocalSetup;
         private Mode _provider = Mode.Cloud;
         private string _statusLine = "", _ollamaModel = "", _ollamaHost = "", _customEndpoint = "",
             _customModel = "", _dailyLimitLabel = "";
@@ -66,8 +68,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 if (Providers.ClearsLiveActions(value)) App.AiLiveActions.Clear();
                 Serilog.Log.Information("Companion room: provider set to {Mode}", value);
                 Sync();
+                if (value == Mode.LocalOllama && MaybeOfferLocalSetupAsync() is { IsCompleted: false } offer) LocalOffer = offer;
             }
         }
+
+        /// <summary>The offer still in flight (detect + dialog); tests await it instead of yielding.</summary>
+        internal Task? LocalOffer { get; private set; }
 
         public string DrawerNote => Loc.Get("companion_engine_drawer_note");
         public bool IsLoggedIn { get => _isLoggedIn; private set => Set(ref _isLoggedIn, value); }
@@ -185,10 +191,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             }
         }
 
+        /// <summary>WPF MainWindow.Patreon.cs:1589: picking Local offers setup when Ollama is not ready.</summary>
+        private async Task MaybeOfferLocalSetupAsync()
+        {
+            if (_offeringLocalSetup || TopLevel.GetTopLevel(_host) is not Window { IsVisible: true } owner) return;
+            _offeringLocalSetup = true;
+            try
+            {
+                var status = await DetectLocal(CoreSettings.Current?.CompanionPrompt?.AiModel);
+                if (status.Status == Services.AIService.OllamaSetupService.InstallStatus.Ready
+                    || Provider != Mode.LocalOllama || !owner.IsVisible) return;
+                if (await Views.Dialogs.MessageDialog.ConfirmAsync(owner,
+                    Loc.Get("dialog_local_ai_setup_offer_title"), Loc.Get("dialog_local_ai_setup_offer_body"),
+                    okText: Loc.Get("label_yes"), cancelText: Loc.Get("btn_cancel")))
+                    await SetupLocalAsync();
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Companion room: detect-on-local-toggle failed"); }
+            finally { _offeringLocalSetup = false; }
+        }
+
         /// <summary>WPF LaunchLocalAiSetupWizard: the wizard saves model + provider; a ready finish selects Local.</summary>
         private async Task SetupLocalAsync()
         {
-            if (Window is not { IsVisible: true } owner) return;
+            if (TopLevel.GetTopLevel(_host) is not Window { IsVisible: true } owner) return;
             var wizard = new Views.Dialogs.LocalAiSetupWizard();
             if (await wizard.ShowDialogSafe<bool>(owner) && wizard.LocalAiReady) Provider = Mode.LocalOllama;
             Sync();
