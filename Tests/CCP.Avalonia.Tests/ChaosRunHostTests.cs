@@ -664,7 +664,8 @@ public sealed class ChaosRunHostTests
                 var b = BubbleOverlay.SpawnChaos(LiveSpec());
                 BubbleOverlay.Press(b, b.CenterX, b.CenterY);
                 for (int i = 0; i < 40 && !b.Popping; i++) BubbleOverlay.Field.Step();
-                Assert.Equal(new[] { "sfx:defuse_hiss", "label:SNAP", "pulse:90,255,150@0.16" }, log.Where(e => !e.StartsWith("label:+")));
+                Assert.Equal(new[] { "sfx:defuse_hiss", "label:SNAP", "pulse:90,255,150@0.16",
+                    "pulse:255,170,80@0.05" }, log.Where(e => !e.StartsWith("label:+")));
 
                 string[] Press(int shields, int collars)
                 {
@@ -707,7 +708,7 @@ public sealed class ChaosRunHostTests
                 var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
                     { VariantId = "spiral", SizePx = 200, Payload = new FlashPayload() });
                 BubbleOverlay.Press(b, b.CenterX, b.CenterY);
-                Assert.Equal(new[] { "sfx:", "label:SPIRAL" },
+                Assert.Equal(new[] { "sfx:", "label:SPIRAL", "pulse:255,200,235@0.10", "pulse:255,170,80@0.05" },   // + WPF benign pulse, combo micro pulse
                     log.Where(e => !e.StartsWith("label:+")).Select(e => e.StartsWith("sfx:Pop") ? "sfx:" : e));
             }
             finally { Unjuice(); ChaosRunHost.ForceShutdown(); FreshMeta(); }
