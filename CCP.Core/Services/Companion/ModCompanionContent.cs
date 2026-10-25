@@ -109,6 +109,20 @@ namespace ConditioningControlPanel.Services.Companion
             }
         }
 
+        /// <summary>WPF CompanionPhraseService.ResolveEventAudio: a mod may voice event text.
+        /// Missing clips stay silent; never borrow a different mod's voice.</summary>
+        public static string? ResolveEventAudio(string? text)
+            => ResolveEventAudioInFolder(ResolveActive(CompanionChannel.EventAudio).Path, text);
+
+        internal static string? ResolveEventAudioInFolder(string? folder, string? text)
+        {
+            if (folder == null || string.IsNullOrWhiteSpace(text)) return null;
+            var slug = CompanionPhraseIds.Slugify(text);
+            if (slug.Length == 0) return null;
+            var path = Path.Combine(folder, slug + ".mp3");
+            return File.Exists(path) ? path : null;
+        }
+
         /// <summary>Resolve a channel for whatever mod is active right now. Never throws.</summary>
         public static CompanionContentPick ResolveActive(CompanionChannel channel, string? fileName = null)
         {

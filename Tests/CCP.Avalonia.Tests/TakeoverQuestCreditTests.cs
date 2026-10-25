@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -23,7 +24,8 @@ public sealed class TakeoverQuestCreditTests
     public Task LateTicksCreditInFullAndASleepCreditsNothing() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
+            AppBuilder.Configure<AvApp>().WithInterFont()
+                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
         var (consent, enabled, resume) = (s.AutonomyConsentGiven, s.AutonomyModeEnabled, s.AutonomyResumeOnStartup);

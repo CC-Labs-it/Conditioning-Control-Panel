@@ -491,9 +491,7 @@
 
             <!-- Takeover countdown bar - thin pink bar under the avatar, drains toward the next
                  random Takeover action. Shown only while Takeover is running (driven in code-behind).
-                 ponytail: the WPF fill was horizontally scaled by the x:Named TakeoverCountdownScale
-                 (1.0 full -> 0 about to fire) from InitTakeoverCountdownBar, which lives in a partial
-                 this layer does not port. The transform is dropped, so the bar renders full. -->
+                 Updated at 100 ms while Takeover runs, as in WPF. -->
             <Border x:Name="TakeoverCountdownBar"
                     ZIndex="5"
                     HorizontalAlignment="Center"
@@ -510,11 +508,12 @@
                         HorizontalAlignment="Left"
                         Width="116" Height="5"
                         CornerRadius="2"
+                        BoxShadow="0 0 6 0 #99FF69B4"
                         Background="#FFF7A8D8"
                         RenderTransformOrigin="0%,50%">
-                    <Border.Effect>
-                        <DropShadowEffect Color="{StaticResource PinkColor}" BlurRadius="6" OffsetX="0" OffsetY="0" Opacity="0.6"/>
-                    </Border.Effect>
+                    <Border.RenderTransform>
+                        <ScaleTransform ScaleX="1" ScaleY="1"/>
+                    </Border.RenderTransform>
                 </Border>
             </Border>
 

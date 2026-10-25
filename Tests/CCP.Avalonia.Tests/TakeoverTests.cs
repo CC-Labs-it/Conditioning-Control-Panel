@@ -10,6 +10,7 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -27,7 +28,8 @@ public sealed class TakeoverTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                    .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var s = CoreSettings.Current;
@@ -106,7 +108,8 @@ public sealed class TakeoverTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                    .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var s = CoreSettings.Current;
@@ -186,7 +189,8 @@ public sealed class TakeoverTests
         AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                    .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var s = CoreSettings.Current;
@@ -221,6 +225,169 @@ public sealed class TakeoverTests
             }
             return Task.CompletedTask;
         });
+
+    [Fact]
+    public Task CountdownFollowsScheduleToggleStopRestartAndTubeClose() => WithArmedShell((shell, _) =>
+    {
+        var s = CoreSettings.Current;
+        var (random, show) = (s.AutonomyRandomTriggerEnabled, s.ShowTakeoverCountdownBar);
+        var tube = new global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow(shell);
+        var now = new DateTime(2026, 1, 1, 14, 0, 0);
+        shell.Autonomy.Clock = () => now;
+        try
+        {
+            s.AutonomyRandomTriggerEnabled = s.ShowTakeoverCountdownBar = true;
+            shell.Autonomy.RefreshRandomTimer();
+            tube.Show();
+            var bar = tube.FindControl<Border>("TakeoverCountdownBar")!;
+            var fill = (global::Avalonia.Media.ScaleTransform)tube.FindControl<Border>("TakeoverCountdownFill")!.RenderTransform!;
+            Assert.True(tube.CountdownTickRunning);
+            Assert.True(bar.IsVisible);
+            var seconds = (shell.Autonomy.NextRandomFire - now).TotalSeconds;
+            now = now.AddSeconds(seconds / 2);
+            tube.RefreshTakeoverCountdown();
+            Assert.Equal(0.5, fill.ScaleX, 5);
+            s.ShowTakeoverCountdownBar = false;
+            tube.RefreshTakeoverCountdown();
+            Assert.False(bar.IsVisible);
+            s.ShowTakeoverCountdownBar = true;
+            shell.Autonomy.Stop();
+            Assert.False(tube.CountdownTickRunning);
+            Assert.False(bar.IsVisible);
+            shell.Autonomy.Start(withTimer: false);
+            Assert.True(tube.CountdownTickRunning);
+            Assert.True(bar.IsVisible);
+            s.AutonomyRandomTriggerEnabled = false;
+            shell.Autonomy.RefreshRandomTimer();
+            tube.RefreshTakeoverCountdown();
+            Assert.False(bar.IsVisible);
+            tube.Close();
+            Assert.False(tube.CountdownTickRunning);
+        }
+        finally
+        {
+            tube.Close();
+            (s.AutonomyRandomTriggerEnabled, s.ShowTakeoverCountdownBar) = (random, show);
+        }
+    });
+
+    [Fact]
+    public Task TestDialogPrecedesActionAndPanicDuringDialogDropsIt() => WithArmedShell((shell, _) =>
+    {
+        var s = CoreSettings.Current;
+        var announcement = s.AutonomyAnnouncementChance;
+        var (flash, sub, bubbles) = (s.AutonomyCanTriggerFlash, s.AutonomyCanTriggerSubliminal, s.AutonomyCanTriggerBubbles);
+        var oldPerform = shell.Autonomy.CanPerform;
+        var oldFlash = CoreFlash.ShowProvider;
+        try
+        {
+            s.AutonomyAnnouncementChance = 0;
+            s.AutonomyCanTriggerFlash = true;
+            shell.Autonomy.CanPerform = a => a == AutonomyActionType.Flash;
+            int fired = 0;
+            CoreFlash.ShowProvider = () => fired++;
+            var pending = new TaskCompletionSource<bool>();
+            string? title = null, body = null;
+            shell.AutonomyTestMessage = (t, b) => { title = t; body = b; return pending.Task; };
+            shell.TestAutonomy();
+            Assert.Equal("Autonomy Test", title);
+            Assert.Contains("Service Enabled: True", body!);
+            Assert.Equal(0, fired);
+            pending.SetResult(true);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, fired);
+
+            pending = new TaskCompletionSource<bool>();
+            shell.TestAutonomy();
+            shell.StopAutonomyForPanic();
+            pending.SetResult(false);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, fired);
+            shell.AutonomyTestMessage = (t, b) => { title = t; body = b; return Task.FromResult(true); };
+            shell.TestAutonomy();
+            Assert.Equal("Autonomy Not Running", title);
+            Assert.Contains("Diagnostic Status:", body!);
+            Assert.Contains("Click the green", body!);
+            CoreEntitlement.HasPremiumProvider = () => false;
+            shell.TestAutonomy();
+            Assert.Contains("requires Patreon access", body!);
+        }
+        finally
+        {
+            shell.AutonomyTestMessage = null;
+            CoreFlash.ShowProvider = oldFlash;
+            shell.Autonomy.CanPerform = oldPerform;
+            s.AutonomyAnnouncementChance = announcement;
+            (s.AutonomyCanTriggerFlash, s.AutonomyCanTriggerSubliminal, s.AutonomyCanTriggerBubbles) = (flash, sub, bubbles);
+        }
+    });
+
+    [Fact]
+    public Task AnnouncementPlaysTheActiveModsEventClipAndPanicStopsIt() => WithArmedShell((shell, _) =>
+    {
+        var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-announcement-" + Guid.NewGuid());
+        var folder = System.IO.Path.Combine(root, "resources", "sounds", "event_audio");
+        System.IO.Directory.CreateDirectory(folder);
+        var s = CoreSettings.Current;
+        var (avatar, muted, chance, flash) = (s.AvatarEnabled, s.AvatarMuted, s.AutonomyAnnouncementChance, s.AutonomyCanTriggerFlash);
+        var (package, id) = (CoreMods.ActiveModPackageProvider, CoreMods.ActiveModIdProvider);
+        var audio = CoreAudio.PlayStoppableProvider;
+        var canPerform = shell.Autonomy.CanPerform;
+        try
+        {
+            foreach (var phrase in AutonomyScheduler.AnnouncementPhrases[AutonomyActionType.Flash])
+                System.IO.File.WriteAllText(System.IO.Path.Combine(folder,
+                    CompanionPhraseIds.Slugify(phrase) + ".mp3"), "fixture");
+            CoreMods.ActiveModPackageProvider = () => new global::ConditioningControlPanel.Models.ModPackage(
+                new global::ConditioningControlPanel.Models.ModManifest { Id = "event-test" }, root, false);
+            CoreMods.ActiveModIdProvider = () => "event-test";
+            string? played = null;
+            int stops = 0;
+            CoreAudio.PlayStoppableProvider = (path, _, _, _, _) => { played = path; return () => stops++; };
+            s.AvatarMuted = false;
+            shell.SetAvatarEnabled(true);
+            Dispatcher.UIThread.RunJobs();
+            shell.Tube!.EndSpeechBubble();
+            shell.Tube.SpeechDelayScheduler = (_, fire) => { fire(); return () => { }; };
+            s.AutonomyAnnouncementChance = 100;
+            s.AutonomyCanTriggerFlash = true;
+            shell.Autonomy.CanPerform = a => a == AutonomyActionType.Flash;
+            shell.Autonomy.TestTrigger();
+            shell.StopAutonomyForPanic();   // announcement is still queued on the UI thread
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(played);
+            shell.Autonomy.Start(withTimer: false);
+            shell.Autonomy.TestTrigger();
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotNull(played);
+            Assert.Equal(folder, System.IO.Path.GetDirectoryName(played));
+            var before = stops;
+            PanicSurfaces.StopAll("test", shell);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(stops > before);
+        }
+        finally
+        {
+            shell.SetAvatarEnabled(false);
+            (s.AvatarEnabled, s.AvatarMuted, s.AutonomyAnnouncementChance, s.AutonomyCanTriggerFlash) = (avatar, muted, chance, flash);
+            CoreMods.ActiveModPackageProvider = package;
+            CoreMods.ActiveModIdProvider = id;
+            CoreAudio.PlayStoppableProvider = audio;
+            shell.Autonomy.CanPerform = canPerform;
+            System.IO.Directory.Delete(root, true);
+        }
+    });
+
+    [Fact]
+    public Task PanicClosesTheDiagnosticModal() => WithArmedShell((shell, _) =>
+    {
+        shell.TestAutonomy();
+        Assert.Contains(shell.OwnedWindows, w => w is global::ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog);
+        PanicSurfaces.StopAll("test", shell);
+        Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(shell.OwnedWindows, w => w is global::ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog);
+        Assert.False(shell.Autonomy.IsEnabled);
+    });
 
     /// <summary>overlay-takeover-announcer: an announced action queues the "TAKEOVER" cue (WPF
     /// AutonomyService.cs:961, #534 silent roll shows none), cues play in turn on the real timings,
@@ -293,7 +460,8 @@ public sealed class TakeoverTests
     public Task CueReRaisesOnRealTimeAndWritesAlphaOnlyOnChange() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                    .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var w = new TakeoverAnnouncerWindow(live: true);
@@ -403,7 +571,8 @@ public sealed class TakeoverTests
     public Task PresetCommentIsWpfGiggle() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                    .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var tube = new global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow(null);

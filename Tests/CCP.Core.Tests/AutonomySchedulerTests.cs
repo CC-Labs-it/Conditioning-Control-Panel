@@ -59,6 +59,47 @@ public class AutonomySchedulerTests : IDisposable
         Perform = (a, _) => _performed.Add(a),
     };
 
+    [Fact]
+    public void CountdownTracksReschedulesRetryDisableAndStop()
+    {
+        var scheduler = Make();
+        Assert.Null(scheduler.NextRandomFireFraction);
+        scheduler.Start(withTimer: false);
+        var interval = (scheduler.NextRandomFire - _now).TotalSeconds;
+        Assert.Equal(1, scheduler.NextRandomFireFraction!.Value, 6);
+        _now = _now.AddSeconds(interval / 2);
+        Assert.Equal(0.5, scheduler.NextRandomFireFraction!.Value, 6);
+        _now = _now.AddSeconds(interval);
+        Assert.Equal(0, scheduler.NextRandomFireFraction);
+        scheduler.IsBusy = () => true;
+        scheduler.Tick();
+        Assert.Equal(1, scheduler.NextRandomFireFraction!.Value, 6);
+        Assert.InRange((scheduler.NextRandomFire - _now).TotalSeconds, 12, 24);
+        CoreSettings.Current.AutonomyRandomTriggerEnabled = false;
+        scheduler.RefreshRandomTimer();
+        Assert.Null(scheduler.NextRandomFireFraction);
+        scheduler.Stop();
+        Assert.Null(scheduler.NextRandomFireFraction);
+    }
+
+    [Fact]
+    public void DiagnosticsReadLiveScheduleCooldownMoodAndSettings()
+    {
+        var scheduler = Make();
+        Assert.Contains("Service Enabled: False", scheduler.GetDiagnosticStatus());
+        scheduler.Start(withTimer: false);
+        scheduler.TestTrigger();
+        var status = scheduler.GetDiagnosticStatus();
+        Assert.Contains("Service Enabled: True", status);
+        Assert.Contains("Random Timer Running: True", status);
+        Assert.Contains("Idle Timer Running: False", status);
+        Assert.Contains("On Cooldown: True", status);
+        Assert.Contains("Last Action: 14:00:00", status);
+        Assert.Contains("Current Mood: Attentive", status);
+        scheduler.Stop();
+        Assert.Contains("Random Timer Running: False", scheduler.GetDiagnosticStatus());
+    }
+
     private void Advance(AutonomyScheduler s, int seconds)
     {
         for (var i = 0; i < seconds; i++) { _now = _now.AddSeconds(1); s.Tick(); }

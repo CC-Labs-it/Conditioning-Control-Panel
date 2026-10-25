@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### fin5 shell autonomy
+
+1. WPF `ConditioningControlPanel/AvatarTube/AvatarTubeWindow.Avatar.cs`: enable Takeover and random triggers with the companion visible. The bar shrinks toward its left edge as the remaining time falls; rescheduling resets it. Disable the countdown preference or random triggers: it hides. Stop/restart Takeover: the timer stops/restarts; close the tube: no ticker remains. Rows: `shell-autonomy`.
+2. WPF `ConditioningControlPanel/Services/AutonomyService.cs` (`AnnounceAction`): use a mod with event_audio clips and 100% announcements. The chosen line speaks in the mod voice; a missing clip stays text-only. Panic stops the clip and the pending action. Rows: `shell-autonomy`.
+3. WPF `ConditioningControlPanel/Services/AutonomyService.cs` (`TestTrigger`): press Test while stopped, with/without entitlement; compare reason and diagnostic status. Start and press Test: status appears before the action; dismiss it to fire despite cooldown. Panic while the dialog is open closes it and prevents the action. Rows: `shell-autonomy`.

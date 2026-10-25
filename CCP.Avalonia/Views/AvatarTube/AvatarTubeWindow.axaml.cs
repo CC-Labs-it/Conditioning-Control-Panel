@@ -312,9 +312,10 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             RefreshTubeLayout();
 
             AttachAwareness();   // WPF xaml.cs:317-322 (Reactions.cs)
+            InitTakeoverCountdownBar();
 
             // ponytail: WPF's OnLoaded also ran StartFloatingAnimation / StartFullscreenDetection
-            // and InitTakeoverCountdownBar; none has ported.
+            // (countdown is wired separately).
         }
 
         protected override void OnClosed(EventArgs e)
@@ -334,6 +335,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // in one process, and a tick against a torn-down visual tree is exactly the flaky
             // failure the constructor's note refuses to risk.
             LocalizationManager.Instance.LanguageChanged -= OnTubeLanguageChanged;
+            StopTakeoverCountdownBar();
             _poseTimer.Stop();
             _speechTimer?.Stop();
             ClearSpeechQueue();
@@ -1033,6 +1035,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// more than one pose to rotate between.</summary>
         private void ApplyAvatarSet()
         {
+            StopTakeoverCountdownBar();
             _poseTimer.Stop();
             _avatarPoses = LoadAvatarPoses(_currentAvatarSet);
             _currentPoseIndex = 0;
@@ -1152,6 +1155,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             s.SelectedAvatarSet = set;
             ConditioningControlPanel.Services.Companion.ModAvatarLooks.Store(s.ModAvatarSet, CoreMods.ActiveModId, set);
             CoreSettings.Save();
+            StopTakeoverCountdownBar();
             _poseTimer.Stop();
             ApplyAvatarSet();
             UpdateNavigationArrows();

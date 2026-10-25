@@ -7,15 +7,17 @@
 // (mandatory), Bubbles and Bouncing Text as 30 s pulses, Pink Filter as a 30 s pulse (X11 only -
 // only where the compositor can show the tint), Bubble Count (forced game), Comment (AI when chat is on
 // and available, else a preset phrase through the tube), Mind Wipe (only once CoreMindWipe is
-// seeded). Never picked here (CanPerform false, exactly as WPF skips an unavailable action):
-// ponytail: Spiral pulse and Brain Drain pulse (no spiral / blur overlay on this head), Web Video
-// (no browser media service), Wallpaper (Win32 WallpaperService). Spoken Mantra runs through the
-// voice funnel (MainShellWindow.VoiceCommands.cs, Core SpokenMantra). Add each to CanPerformAutonomy the day its surface lands.
-// The TakeoverAnnouncerOverlay banner shows on the announced roll (AutonomyService.cs:961). Not here: the avatar
-// countdown bar, the announcement's event audio (CompanionPhraseService), the diagnostic Test
-// dialogs and Force Start (debug). Voice/PTT/wake word: MainShellWindow.VoiceCommands.cs.
+// seeded by LibVLC startup). Never picked here (CanPerform false, as WPF skips unavailable actions):
+// ponytail: Spiral and Brain Drain pulses have no WPF picker candidate. Web Video needs the
+// browser media host; Wallpaper needs the desktop restore/shuffle host. Spoken Mantra uses
+// MainShellWindow.VoiceCommands.cs and Core SpokenMantra.
+// Announcer banner, avatar countdown, event audio and diagnostic Test dialogs are wired.
+// Force Start remains collapsed like WPF. Voice/PTT/wake word: MainShellWindow.VoiceCommands.cs.
 using System;
+using System.Threading.Tasks;
+using ConditioningControlPanel.Services.Companion;
 using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
@@ -81,9 +83,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 SetTakeoverActiveUi(on);
                 UpdateAutonomyButtonState(on);
             });
-            // WPF AnnounceAction: the tube says it (text only; no event audio here).
             Autonomy.AnnouncementMade += (_, phrase) => Dispatcher.UIThread.Post(() =>
-                _avatarTubeWindow?.GigglePriority(phrase, false, aiGenerated: false));
+            {
+                if (!Autonomy.IsEnabled) return;   // panic before the UI post must not start a new clip
+                var audio = ModCompanionContent.ResolveEventAudio(phrase);
+                _avatarTubeWindow?.GigglePriority(phrase, audio != null, aiGenerated: false, phraseAudioPath: audio);
+            });
             Closed += (_, _) => { CancelAutonomyPulses(); Autonomy.Stop(); TakeoverAnnouncerOverlay.CloseActive(); _takeoverQuestTick?.Stop(); StopVoiceInput(); };
             Opened += (_, _) => { ResumeAutonomyOnStartup(); RefreshVoiceInputModes(); };
         }
@@ -258,14 +263,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return true;
         }
 
-        /// <summary>The Test button. WPF TestTrigger explains itself when Takeover is off.</summary>
-        internal void TestAutonomy()
+        // The existing autonomy panic registration closes this modal before its continuation can act.
+        private MessageDialog? _autonomyTestDialog;
+        internal Func<string, string, Task<bool>>? AutonomyTestMessage;
+        private async Task<bool> ShowAutonomyTestMessage(string title, string body)
         {
-            if (Autonomy.IsEnabled) { Autonomy.TestTrigger(); return; }
-            var reason = !AutonomyScheduler.HasEntitlement
-                ? "Bambi Takeover requires Patreon access."
-                : "Click the green \"Start\" button to enable it, then press Test again.";
-            _ = MessageDialog.ShowAsync(this, "Autonomy Not Running", $"Autonomy Mode isn't running yet.\n\n{reason}");
+            if (AutonomyTestMessage is { } show) return await show(title, body);
+            var dialog = new MessageDialog(title, body, showCancel: false);
+            _autonomyTestDialog = dialog;
+            try { return await dialog.ShowDialogSafe<bool?>(this) == true; }
+            finally { if (_autonomyTestDialog == dialog) _autonomyTestDialog = null; }
+        }
+
+        /// <summary>WPF TestTrigger: show diagnostics before firing, then bypass cooldown.</summary>
+        internal async void TestAutonomy()
+        {
+            var status = Autonomy.GetDiagnosticStatus();
+            Log.Information("AutonomyService Diagnostic Status:\n{Status}", status);
+            if (!Autonomy.IsEnabled)
+            {
+                var reason = !AutonomyScheduler.HasEntitlement
+                    ? "Bambi Takeover requires Patreon access."
+                    : "Click the green \"Start\" button to enable it, then press Test again.";
+                await ShowAutonomyTestMessage("Autonomy Not Running",
+                    $"Autonomy Mode isn't running yet.\n\n{reason}\n\nDiagnostic Status:\n{status}");
+                return;
+            }
+            await ShowAutonomyTestMessage("Autonomy Test", $"Triggering test action...\n\nCurrent Status:\n{status}");
+            // Panic can close the modal; the scheduler still refuses when stopped meanwhile.
+            Autonomy.TestTrigger();
         }
 
         /// <summary>Panic (key or tray): Takeover stops with everything else and its queued
@@ -274,6 +300,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void StopAutonomyForPanic()
         {
             Autonomy.Stop();
+            _autonomyTestDialog?.Close(false);
             TakeoverAnnouncerOverlay.CloseActive();   // the queued cues go with the action
             CancelVoicePrompt();   // decisions "Panic ↔ mic": the capture in flight ends, the loop stays armed
         }

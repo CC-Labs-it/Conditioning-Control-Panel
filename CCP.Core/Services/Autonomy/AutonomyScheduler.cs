@@ -235,9 +235,44 @@ namespace ConditioningControlPanel.Services
         private DateTime _lastAction = DateTime.MinValue, _nextRandom = DateTime.MaxValue, _nextIdle = DateTime.MaxValue;
         private (AutonomyActionType action, DateTime due, int gen)? _pending;
         private Timer? _timer;
+        private double _lastRandomIntervalSeconds;
 
         public bool IsEnabled => _enabled;
         public DateTime NextRandomFire => _nextRandom;
+
+        /// <summary>WPF countdown: fraction left in the last scheduled window; null without a timer.</summary>
+        public double? NextRandomFireFraction => !_enabled || _nextRandom == DateTime.MaxValue
+            || _lastRandomIntervalSeconds <= 0 ? null
+            : Math.Clamp((_nextRandom - Clock()).TotalSeconds / _lastRandomIntervalSeconds, 0, 1);
+
+        /// <summary>WPF TestTrigger's diagnostic dialog, reading this scheduler's live state.</summary>
+        public string GetDiagnosticStatus()
+        {
+            var s = CoreSettings.Current;
+            return string.Join("\n", new[]
+            {
+                $"Service Enabled: {_enabled}",
+                $"Idle Timer Running: {_nextIdle != DateTime.MaxValue}",
+                $"Random Timer Running: {_nextRandom != DateTime.MaxValue}",
+                $"On Cooldown: {(Clock() - _lastAction).TotalSeconds < s.AutonomyCooldownSeconds}",
+                $"Interaction Queue Busy: {IsBusy()}",
+                $"Last Action: {(_lastAction == DateTime.MinValue ? "Never" : _lastAction.ToString("HH:mm:ss"))}",
+                $"Current Mood: {MoodAt(Clock().Hour)}", "", "Settings:",
+                $"  AutonomyModeEnabled: {s.AutonomyModeEnabled}",
+                $"  AutonomyConsentGiven: {s.AutonomyConsentGiven}",
+                $"  PlayerLevel: {s.PlayerLevel}",
+                $"  IdleTriggerEnabled: {s.AutonomyIdleTriggerEnabled}",
+                $"  RandomTriggerEnabled: {s.AutonomyRandomTriggerEnabled}",
+                $"  RandomIntervalMinutes: {s.AutonomyRandomIntervalMinutes}",
+                $"  CooldownSeconds: {s.AutonomyCooldownSeconds}", "", "Enabled Actions:",
+                $"  Flash: {s.AutonomyCanTriggerFlash}", $"  Video: {s.AutonomyCanTriggerVideo}",
+                $"  Subliminal: {s.AutonomyCanTriggerSubliminal}", $"  BrainDrain: {s.AutonomyCanTriggerBrainDrain}",
+                $"  Bubbles: {s.AutonomyCanTriggerBubbles}", $"  Comment: {s.AutonomyCanComment}",
+                $"  MindWipe: {s.AutonomyCanTriggerMindWipe}", $"  LockCard: {s.AutonomyCanTriggerLockCard}",
+                $"  Spiral: {s.AutonomyCanTriggerSpiral}", $"  PinkFilter: {s.AutonomyCanTriggerPinkFilter}",
+                $"  BouncingText: {s.AutonomyCanTriggerBouncingText}"
+            });
+        }
 
         /// <summary>WPF Start: refuses without enable + consent + entitlement; idempotent.</summary>
         public bool Start(bool withTimer = true)
@@ -286,9 +321,14 @@ namespace ConditioningControlPanel.Services
         {
             var s = CoreSettings.Current;
             var now = Clock();
-            _nextRandom = _enabled && s.AutonomyRandomTriggerEnabled
-                ? now.AddSeconds(NextRandomSeconds(s, retry, false, now.Hour, Rng.NextDouble()))
-                : DateTime.MaxValue;
+            if (!_enabled || !s.AutonomyRandomTriggerEnabled)
+            {
+                _nextRandom = DateTime.MaxValue;
+                _lastRandomIntervalSeconds = 0;
+                return;
+            }
+            _lastRandomIntervalSeconds = NextRandomSeconds(s, retry, false, now.Hour, Rng.NextDouble());
+            _nextRandom = now.AddSeconds(_lastRandomIntervalSeconds);
         }
 
         /// <summary>WPF CanTakeAction: on, entitled (a lapse mid-run stops her acting), not busy, past the cooldown.</summary>
