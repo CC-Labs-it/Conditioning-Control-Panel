@@ -1,12 +1,14 @@
 /* Larger pictures share the same media owners. Fit once, before warm-up. */
-import { axesFrom, roadSamples, placeBillboard, tunnelLayout, mediaLook, tierOf, V3 } from './mediaMath.js';
+import { axesFrom, roadSamples, placeBillboard, haloSlots, tunnelLayout, mediaLook, tierOf, V3 } from './mediaMath.js';
 import { fitMainframeBillboard, motionEnvelope } from './mainframeMediaMotion.js';
 import { worldScreenBlockers, worldScreenSightlines } from './worldScreens.js';
 import { boudoirBoxesIntersect } from './boudoirMedia.js';
+import { screenBodyBox } from './screenBodyMath.js';
+import { spatialCandidates } from './spatialCandidates.js';
 
 export const WORLD_MEDIA_SCALE = 1.85;
 const { add, sub, mul, dot, norm } = V3;
-const body = slot => ({ p: slot.C, size: [slot.w + .6, slot.h + .6, .6], axes: [slot.X, slot.Y, slot.Z] });
+const body = screenBodyBox;
 const radius = row => row.radius ?? Math.hypot(...row.size) / 2;
 const prepared = row => ({ ...row, radius: radius(row) });
 const overlaps = (a, b) => Math.hypot(...sub(a.p, b.p)) <= radius(a) + radius(b) && boudoirBoxesIntersect(a, b, .35);
@@ -25,6 +27,7 @@ export function largeMediaLayout(track, layout, { samples = null, solids = [], t
   const road = samples || roadSamples(track, 4), corridors = mediaRoadCorridors(track, road);
   const architecture = [...worldScreenBlockers(track), ...solids].map(prepared);
   const blockers = [...corridors.map(prepared), ...architecture], accepted = [];
+  const blockerNear = spatialCandidates(blockers), architectureNear = spatialCandidates(architecture);
   const clear = (slot, nearby) => {
     const b = body(slot.flight ? motionEnvelope(slot, M) : slot);
     return !nearby.some(row => overlaps(b, row)) && !accepted.some(row => overlaps(b, row));
@@ -34,8 +37,8 @@ export function largeMediaLayout(track, layout, { samples = null, solids = [], t
     const slot = { ...source, w: source.w * (grow ? scale : 1), h: source.h * (grow ? scale : 1) };
     const base = add(source.C, mul(source.Y, (slot.h - source.h) / 2));
     const reach = 160 + Math.hypot(slot.w, slot.h) / 2 + Math.hypot(...sub(base, f.p));
-    const nearby = blockers.filter(row => Math.hypot(...sub(row.p, base)) < radius(row) + reach);
-    const viewBlockers = architecture.filter(row => Math.hypot(...sub(row.p, base)) < radius(row) + reach);
+    const nearby = blockerNear(base, reach).filter(row => Math.hypot(...sub(row.p, base)) < radius(row) + reach);
+    const viewBlockers = architectureNear(base, reach).filter(row => Math.hypot(...sub(row.p, base)) < radius(row) + reach);
     // Preserve the readable bottom edge first; move only when the larger face meets architecture.
     for (const up of [0, 6, 12, 24]) for (const out of [0, 6, 16]) for (const front of [0, 4, 12, 24]) {
       slot.C = add(add(add(base, mul(f.n, up)), mul(f.b, side * out)), mul(slot.Z, front));
@@ -51,7 +54,7 @@ export function largeMediaLayout(track, layout, { samples = null, solids = [], t
     }
     // A cabinet wedged between buttresses cannot hold a wider picture. Put its
     // face on the adjacent frontage, with the same identity and media owner.
-    if (!relocated && source.frame !== 'tunnel') for (const shift of [0, -20, 20, -40, 40, -70, 70]) {
+    if (!relocated && source.frame !== 'tunnel') for (const shift of [0, -20, 20, -40, 40, -70, 70, -100, 100]) {
       const s = (source.s + shift + track.lengthM) % track.lengthM, frame = track.frameAt(s);
       const axes = axesFrom(norm(add(mul(frame.t, -.45), mul(frame.b, -side * .9))), frame.n);
       const C = add(add(frame.p, mul(frame.b, side * (frame.w / 2 + 4 + slot.w / 2 * Math.abs(dot(axes.X, frame.b))))), mul(frame.n, 3 + source.h / 2));
@@ -67,9 +70,16 @@ export function largeMediaLayout(track, layout, { samples = null, solids = [], t
     radiusM: (layout.halo.radiusM ?? 26) * scale } : null;
   if (halo) {
     const frame = track.frameAt((halo.f || 0) * track.lengthM);
+    const count = Math.max(3, Math.round((halo.count || 12) * T.haloShare));
+    // Closed cabinets need room at the inner corners of the tilted ring.
+    let ringClear = false;
+    for (let attempt = 0; attempt < 32; attempt++, halo.radiusM += 1) {
+      const ring = haloSlots(halo, frame, count, 0, M).map(body);
+      if (ring.every((panel, i) => !ring.slice(0, i).some(other => overlaps(panel, other)))) { ringClear = true; break; }
+    }
     let found = false;
     // Reserve the full moving ring, not only its initial phase.
-    for (let lift = 0; lift <= 120; lift += 8) {
+    for (let lift = 0; ringClear && lift <= 120; lift += 8) {
       halo.upM = (layout.halo.upM ?? 30) + lift;
       const envelope = { p: add(frame.p, mul(frame.n, halo.upM)), size: [2 * halo.radiusM + halo.heightM * 2.2,
         halo.heightM * 2.2, 2 * halo.radiusM + halo.heightM * 2.2], axes: [frame.b, frame.n, frame.t] };
