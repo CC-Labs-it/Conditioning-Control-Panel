@@ -1291,7 +1291,9 @@ namespace ConditioningControlPanel.Avalonia.Controls
             /// than more than they asked for.
             /// ponytail: read the desktop's reduced-motion preference here when Avalonia has one.
             /// </summary>
-            public static MotionLevel Level => CoreSettings.Current.MotionLevel;
+            public static MotionLevel Level => CoreSettings.Current.MotionLevel == MotionLevel.Off
+                ? MotionLevel.Off
+                : CoreSettings.Current.GentleVisuals ? MotionLevel.Reduced : CoreSettings.Current.MotionLevel;
 
             /// <summary>MotionFx.AllowAmbientLoops, now the real gate.</summary>
             public static bool AllowAmbientLoops =>

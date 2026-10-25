@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Performance follow-up
+
+1. Open Settings > Performance. Toggle Gentle visuals: its fade/speed choices appear only while enabled; defaults are 0.75 s and 0.5x. Choose 2 s and 0.25x, leave and return, then restart; choices persist. WPF `Views/Controls/AppSettings/PerformanceSettingsSection.xaml.cs` Rows: `views-settings-performance`.
+2. Set motion Full, then enable Gentle visuals: ambient loops stop while the motion selector stays Full. Disable it to restore the effective Full level. Set Off and enable Gentle visuals: motion stays Off. WPF `Services/MotionFx.cs` Rows: `views-settings-performance`.
+3. Seed non-choice values (0.9 s, 0.6x): opening the section shows nearest choices (1 s, 0.5x), without changing the stored values. Restore/reset settings and confirm the section repaints without saving defaults. WPF `Views/Controls/AppSettings/PerformanceSettingsSection.xaml.cs` Rows: `views-settings-performance`.
