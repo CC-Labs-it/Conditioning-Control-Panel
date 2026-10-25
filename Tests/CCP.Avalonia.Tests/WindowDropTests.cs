@@ -60,12 +60,14 @@ public sealed class WindowDropTests
     });
 
     [Fact]
-    public Task EnhancementDropSaysTheLibraryIsNotReady() => Run(async (shell, root, _) =>
+    public Task EnhancementDropRunsTheDeeperImport() => Run(async (shell, root, _) =>
     {
+        // WPF Window_Drop -> ImportEnhancementFiles (SessionIO.cs:1470). A .ccpenh.json without the
+        // schema tag is skipped by the import sniff, so nothing is written into the library.
         var enh = Path.Combine(root, "wave.ccpenh.json");
-        File.WriteAllText(enh, "{\"$schema\":\"" + ConditioningControlPanel.Models.Deeper.Enhancement.SchemaTag + "\"}");
+        File.WriteAllText(enh, "{}");
         Drop(shell, enh);
-        await WaitFor(() => Toast(shell, Loc.Get("deeper_import_library_not_ready")));
+        await WaitFor(() => Toast(shell, Loc.Get("deeper_import_skipped_not_enh")));
     });
 
     [Fact]

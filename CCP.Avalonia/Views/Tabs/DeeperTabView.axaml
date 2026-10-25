@@ -179,8 +179,6 @@
                                                FontSize="10" FontWeight="SemiBold"/>
                                 </StackPanel>
                             </Border>
-                            <TextBlock Text="{Binding DurationDisplay}" IsVisible="{Binding ShowDuration}"
-                                       Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="0,0,8,0"/>
                             <!-- Creator -->
                             <TextBlock Text="{Binding CreatorDisplay}"
                                        IsVisible="{Binding ShowCreator}"
@@ -201,6 +199,11 @@
                                 <TextBlock Text=" · "
                                            Foreground="{DynamicResource TextDimBrush}" FontSize="11"/>
                             </StackPanel>
+                            <!-- Media length (m:ss or h:mm:ss); hidden while unknown (WPF DeeperTabView.xaml:236-241) -->
+                            <TextBlock Text="{Binding DurationDisplay}" IsVisible="{Binding ShowDuration}"
+                                       Foreground="{DynamicResource TextDimBrush}" FontSize="11"/>
+                            <TextBlock Text=" · " IsVisible="{Binding ShowDuration}"
+                                       Foreground="{DynamicResource TextDimBrush}" FontSize="11"/>
                             <!-- Auto-tag chips -->
                             <ItemsControl ItemsSource="{Binding Tags}"
                                           IsVisible="{Binding ShowTags}">

@@ -47,6 +47,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void InitializeDeeperHub()
         {
             if (_deeperHubClosed) return;
+            EnsureDeeperLibrary();
+            ReloadDeeperLibraryFromDisk();
+        }
+
+        /// <summary>Creates the watched library once, without a rescan (import reloads once itself).</summary>
+        private void EnsureDeeperLibrary()
+        {
+            if (_deeperHubClosed) return;
             if (_deeperLibrary == null)
             {
                 _deeperLibrary = new EnhancementLibrary();
@@ -58,7 +66,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     _deeperLibrary.Dispose();
                 };
             }
-            ReloadDeeperLibraryFromDisk();
         }
 
         private void OnDeeperLibraryChanged(object? sender, EventArgs e)
@@ -168,7 +175,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void ImportEnhancementFiles(System.Collections.Generic.IEnumerable<string> paths)
         {
             var sourcePaths = paths.ToArray();
-            InitializeDeeperHub();
+            EnsureDeeperLibrary();
             var lib = _deeperLibrary;
             if (lib == null)
             {
@@ -279,7 +286,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal async Task PickDeeperImportsAsync()
         {
-            InitializeDeeperHub();
+            try { CoreBark.NotifyUiAction("deeper_import"); } catch (Exception ex) { Diag.Swallowed(ex); }   // WPF MainWindow.DeeperTab.cs:745
+            EnsureDeeperLibrary();
+            if (_deeperLibrary == null) return;
             var files = await StorageProvider.OpenFilePickerAsync(new global::Avalonia.Platform.Storage.FilePickerOpenOptions
             {
                 Title = Loc.Get("deeper_import_dialog_title"), AllowMultiple = true,
@@ -291,6 +300,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     global::Avalonia.Platform.Storage.FilePickerFileTypes.All,
                 }
             });
+            if (files.Count == 0) return;   // cancelled: WPF returns without a rescan
             ImportEnhancementFiles(files.Select(f => f.TryGetLocalPath()).OfType<string>().ToArray());
         }
 
@@ -300,7 +310,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var index = model.Highlight(path);
             if (index < 0) return;
             Dispatcher.UIThread.Post(() => view.ScrollToRow(index), DispatcherPriority.Loaded);
-            DispatcherTimer.RunOnce(() => model.ClearHighlight(path), TimeSpan.FromMilliseconds(1800));
+            _ = ClearRevealAsync(model, path);
+        }
+
+        /// <summary>The reveal's 1800 ms wait (WPF RevealDeeperLibraryRow); tests swap in a completion signal.</summary>
+        internal static Func<TimeSpan, Task> DeeperRevealDelay = Task.Delay;
+
+        private static async Task ClearRevealAsync(DeeperTabViewModel model, string path)
+        {
+            await DeeperRevealDelay(TimeSpan.FromMilliseconds(1800));
+            model.ClearHighlight(path);
         }
 
         // ---- the welcome card (WPF MainWindow.DeeperTab.cs:71-118) ----

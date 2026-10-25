@@ -285,6 +285,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _searchDebounce.Start();
         }
 
+        /// <summary>Test seam: the pending 150 ms debounce fires now (WPF search debounce).</summary>
+        internal bool FlushSearchDebounce()
+        {
+            if (_searchDebounce is not { IsEnabled: true } t || t.Interval != TimeSpan.FromMilliseconds(150)) return false;
+            ApplySearch(null, EventArgs.Empty);
+            return true;
+        }
+
         private void ApplySearch(object? sender, EventArgs e)
         {
             _searchDebounce?.Stop();
@@ -366,8 +374,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _allEntries.AddRange(result.Entries.Where(e => !PendingDeletes.ContainsKey(FullPath(e.FilePath))));
             _libraryError = result.HasError;
             ApplyFilter();
-            _ = ProbeDurationsAsync();
+            if (!_probingDurations) DurationBackfill = ProbeDurationsAsync();
         }
+
+        /// <summary>The running duration backfill, so tests await it instead of sleeping.</summary>
+        internal System.Threading.Tasks.Task DurationBackfill { get; private set; } = System.Threading.Tasks.Task.CompletedTask;
 
         private bool _probingDurations;
         private readonly HashSet<string> _durationTried = new(StringComparer.OrdinalIgnoreCase);

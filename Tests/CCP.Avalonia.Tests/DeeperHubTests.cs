@@ -39,8 +39,15 @@ public sealed class DeeperHubTests
         MainShellWindow? shell = null;
         string? saved = null;
         var oldDir = CoreSettings.Current.DeeperLastDirectory;
+        var oldDelay = MainShellWindow.DeeperRevealDelay;
+        var reveals = new System.Collections.Generic.List<TaskCompletionSource>();
         try
         {
+            MainShellWindow.DeeperRevealDelay = wait =>
+            {
+                Assert.Equal(TimeSpan.FromMilliseconds(1800), wait);
+                var t = new TaskCompletionSource(); reveals.Add(t); return t.Task;
+            };
             var enhancement = new Enhancement { MediaType = MediaTypes.Audio };
             enhancement.Metadata.Name = "Imported " + Guid.NewGuid().ToString("N");
             var path = Path.Combine(source.FullName, "input.ccpenh.json");
@@ -63,7 +70,10 @@ public sealed class DeeperHubTests
             Assert.Single(model.FilteredEntries.Where(r => r.Name == enhancement.Metadata.Name));
             Dispatcher.UIThread.RunJobs();
             Assert.Contains("highlighted", RowBorder(view, saved).Classes);
-            await Task.Delay(1900); // WPF reveal expires after 1800 ms, including after reload.
+            Assert.NotEmpty(reveals);
+            Assert.True(model.FilteredEntries.Single(r => r.Entry.FilePath == saved).IsHighlighted);
+            foreach (var t in reveals) t.SetResult(); // WPF reveal expires after 1800 ms, including after reload.
+            Dispatcher.UIThread.RunJobs();
             Assert.False(model.FilteredEntries.Single(r => r.Entry.FilePath == saved).IsHighlighted);
             model.SetSearch("no matching row " + Guid.NewGuid());
             Assert.Equal(-1, model.Highlight(saved)); // filtered imports never clear the user's filters
@@ -74,6 +84,7 @@ public sealed class DeeperHubTests
             if (saved != null) File.Delete(saved);
             source.Delete(true);
             CoreSettings.Current.DeeperLastDirectory = oldDir;
+            MainShellWindow.DeeperRevealDelay = oldDelay;
         }
     });
 
@@ -104,9 +115,7 @@ public sealed class DeeperHubTests
             model.ReloadLibrary();
             Assert.All(model.FilteredEntries, row => Assert.False(row.ShowDuration));
             answer.SetResult(125);
-            // Pump the UI continuation without opening a desktop or audio device.
-            for (var i = 0; i < 20 && model.FilteredEntries.Any(r => !r.ShowDuration); i++)
-                await Task.Delay(10);
+            await model.DurationBackfill.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Equal(1, calls);
             Assert.All(model.FilteredEntries, row => Assert.Equal("2:05", row.DurationDisplay));
             Assert.True(MediaDurationCache.TryGetCached(media, out var seconds));
@@ -129,12 +138,10 @@ public sealed class DeeperHubTests
             shell.Show(); shell.ShowTab("deeper");
             var model = (DeeperTabViewModel)shell.Named<DeeperTabView>("DeeperTab")!.DataContext!;
             path = WriteEnhancement("watcher");
-            for (var i = 0; i < 100 && !model.FilteredEntries.Any(r => r.Entry.FilePath == path); i++)
-                await Task.Delay(20);
+            await Until(model, () => model.FilteredEntries.Any(r => r.Entry.FilePath == path));
             Assert.Contains(model.FilteredEntries, r => r.Entry.FilePath == path);
             File.Delete(path);
-            for (var i = 0; i < 100 && model.FilteredEntries.Any(r => r.Entry.FilePath == path); i++)
-                await Task.Delay(20);
+            await Until(model, () => !model.FilteredEntries.Any(r => r.Entry.FilePath == path));
             Assert.DoesNotContain(model.FilteredEntries, r => r.Entry.FilePath == path);
         }
         finally { shell.Close(); if (path != null) File.Delete(path); }
@@ -187,8 +194,9 @@ public sealed class DeeperHubTests
             var row = model.FilteredEntries.Single(r => r.Entry.FilePath == path);
             Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("deeper_hub_tip_media_missing"), row.MediaSourceTooltip);
             view.FindControl<TextBox>("TxtDeeperSearch")!.Text = "no match " + Guid.NewGuid();
+            Dispatcher.UIThread.RunJobs();   // TextChanged is raised from the dispatcher queue
             Assert.Contains(model.FilteredEntries, r => r.Entry.FilePath == path);
-            await Task.Delay(200);
+            Assert.True(view.FlushSearchDebounce(), "search did not wait on the 150 ms debounce");
             Assert.Empty(model.FilteredEntries);
         }
         finally { shell.Close(); File.Delete(path); }
@@ -231,6 +239,17 @@ public sealed class DeeperHubTests
         public override long GetTimestamp() => Now;
         public override long TimestampFrequency => TimeSpan.TicksPerSecond;
         public void Step(TimeSpan by) => Now += by.Ticks;
+    }
+
+    /// <summary>Completion signal for the watcher's reload, bounded by time (P73), never a sleep.</summary>
+    private static Task Until(DeeperTabViewModel model, Func<bool> done)
+    {
+        if (done()) return Task.CompletedTask;
+        var tcs = new TaskCompletionSource();
+        System.Collections.Specialized.NotifyCollectionChangedEventHandler? h = null;
+        h = (_, _) => { if (done()) { model.FilteredEntries.CollectionChanged -= h; tcs.TrySetResult(); } };
+        model.FilteredEntries.CollectionChanged += h;
+        return tcs.Task.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
     private static void Setup()
@@ -289,7 +308,7 @@ public sealed class DeeperHubTests
             var vm = (DeeperTabViewModel)view.DataContext!;
             view.FindControl<TextBox>("TxtDeeperSearch")!.Text = "HubTest";   // only this test's rows
             Dispatcher.UIThread.RunJobs();
-            await Task.Delay(200); // WPF search debounce is 150 ms.
+            Assert.True(view.FlushSearchDebounce()); // WPF search debounce is 150 ms.
             Assert.Equal(2, vm.FilteredEntries.Count);
 
             // Ctrl+F focuses the search box; Down selects the first row and paints it.
