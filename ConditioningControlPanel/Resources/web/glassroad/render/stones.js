@@ -9,6 +9,8 @@ import { LOOK } from './look.js';
 import { STONE_HEX } from '../track/courts.js';
 import { createStoneHover } from './stoneHover.js';
 import { machineSurface } from './mainframeMaterials.js';
+import { desiredPlatformDepth, platformBodyGeometry } from './platformDepth.js';
+import { visualClearanceSamples, capVisualDepth } from '../track/visualDepth.js';
 
 export const STONE_KIT = Object.freeze({ modelId: 'stone-threshold', deckM: 0.55, slab: Object.freeze([5, 0.8, 5]),
   rim: '#f3e2ce', brass: '#cda15f' });
@@ -117,6 +119,12 @@ function compactTrayGeometry() {
 export function buildStones(track, art, pal) {
   const group = new Group(); group.name = 'stepping-stones';
   const rows = stoneLayout(track), hexes = rows.filter((r) => r.shape === 'hex'), tiled = rows.filter((r) => r.shape !== 'hex'), owned = [], geometries = [], moving = [];
+  const clearance = rows.length ? visualClearanceSamples(track) : [];
+  for (const r of rows) {
+    const radius = r.source.spin ? Math.hypot(r.w,r.len)/2 : null;
+    r.depthM = capVisualDepth(r,desiredPlatformDepth(r,track.id),clearance,
+      {halfWidth:radius||r.w/2,halfLength:radius||r.len/2,motionM:.45,ignoreId:r.stone});
+  }
   const basis = new Matrix4(), rotation = new Quaternion();
   const hexMeshes = [], spin = new Quaternion(), up = new Vector3(0,1,0), hexAges = hexes.map(()=>Infinity), lightColor = new Color();
   const x = new Vector3(), y = new Vector3(), z = new Vector3();
@@ -144,6 +152,10 @@ export function buildStones(track, art, pal) {
     const lip = lipSrc ? lipSrc.clone() : null;
     if (lip) { lip.name = 'stone-lip'; if (lip.color) lip.color.set(track.id === 'mainframe' ? '#76dfae' : STONE_KIT.brass); owned.push(lip); }
     let compactTray = null, compactPaint = null;
+    const bodyGeometry = platformBodyGeometry(track.id), bodyPaint = new MeshBasicNodeMaterial();
+    geometries.push(bodyGeometry); owned.push(bodyPaint); bodyPaint.name = 'platform-structural-body';
+    const bodyShade = clamp(dot(normalize(normalWorld),normalize(vec3(...LOOK.lightDir))).mul(.42).add(.58),.22,1);
+    bodyPaint.colorNode = attribute('color','vec3').mul(bodyShade);
     if (track.id === 'boudoir') {
       compactTray = compactTrayGeometry(); geometries.push(compactTray);
       compactPaint = new MeshBasicNodeMaterial(); compactPaint.name = 'boudoir-compact-tray';
@@ -166,6 +178,10 @@ export function buildStones(track, art, pal) {
         else if (lip && o.material && o.material.name === 'lip') o.material = lip;
       });
       holder.add(body);
+      if (r.depthM > .05) {
+        const hull = new Mesh(bodyGeometry,bodyPaint); hull.name = 'platform-depth:' + r.id;
+        hull.scale.y = r.depthM; hull.castShadow = true; holder.add(hull);
+      }
       if (compactTray && r.broad) {
         const tray = new Mesh(compactTray, compactPaint); tray.name = 'boudoir-compact-tray'; tray.castShadow = true;
         holder.add(tray);
@@ -185,14 +201,15 @@ export function buildStones(track, art, pal) {
     material.colorNode = mix(base, pal?.col ? pal.col(1) : base, 0.015).mul(shade);
     owned.push(material);
     const mesh = new InstancedMesh(geometry, material, tiled.length), matrix = new Matrix4();
-    const position = new Vector3(), scale = new Vector3(1, 1, 1), half = STONE_KIT.slab[1] / 2;
+    const position = new Vector3(), scale = new Vector3(1, 1, 1);
     mesh.name = 'stone-slab';
     tiled.forEach((r, i) => {
       basis.makeBasis(x.fromArray(r.b), y.fromArray(r.n), z.fromArray(r.t).negate());
       rotation.setFromRotationMatrix(basis);
-      // the box is centred: lift it half its height so its base sits at the root
-      position.set(r.p[0] + r.n[0] * half, r.p[1] + r.n[1] * half, r.p[2] + r.n[2] * half);
-      scale.set(r.scaleX || 1, 1, r.scaleT || 1);
+      // The fallback deepens only downward; its existing top remains exactly where it was.
+      const centre = (STONE_KIT.slab[1] - r.depthM) / 2;
+      position.set(r.p[0] + r.n[0] * centre, r.p[1] + r.n[1] * centre, r.p[2] + r.n[2] * centre);
+      scale.set(r.scaleX || 1, (STONE_KIT.slab[1] + r.depthM) / STONE_KIT.slab[1], r.scaleT || 1);
       matrix.compose(position, rotation, scale); mesh.setMatrixAt(i, matrix);
       if (r.broad) moving.push({ row: r, mesh, index: i, p: position.clone(), q: rotation.clone(), scale: scale.clone(), age: Infinity });
     });
@@ -214,7 +231,8 @@ export function buildStones(track, art, pal) {
       mesh.name = material.name;
       hexes.forEach((r, i) => {
         basis.makeBasis(x.fromArray(r.b), y.fromArray(r.n), z.fromArray(r.t).negate()); rotation.setFromRotationMatrix(basis);
-        matrix.compose(position.fromArray(r.p), rotation, scale.set(r.w, 1, r.len)); mesh.setMatrixAt(i, matrix);
+        const hidden = kind === 'hull' && r.depthM <= .05;
+        matrix.compose(position.fromArray(r.p), rotation, scale.set(hidden ? 0 : r.w, kind === 'hull' ? r.depthM / 3.2 : 1, hidden ? 0 : r.len)); mesh.setMatrixAt(i, matrix);
         mesh.setColorAt(i, lightColor.setRGB(1,1,1));
       });
       mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere(); mesh.castShadow = true; group.add(mesh);
@@ -250,8 +268,9 @@ export function buildStones(track, art, pal) {
       rotation.setFromRotationMatrix(basis).multiply(spin.setFromAxisAngle(up, r.source.angle || 0))
         .multiply(rockQ.setFromAxisAngle(motionAxis, rock));
       position.fromArray(r.p).addScaledVector(motionN.fromArray(r.n), -depth);
-      matrix.compose(position, rotation, scale.set(r.w, 1, r.len));
       for (const mesh of hexMeshes) {
+        const hull = mesh.name === 'stone-hex-hull', hidden = hull && r.depthM <= .05;
+        matrix.compose(position, rotation, scale.set(hidden ? 0 : r.w,hull ? r.depthM / 3.2 : 1,hidden ? 0 : r.len));
         mesh.setMatrixAt(i, matrix);
         const gain = mesh.name === 'stone-hex-rim' ? 1.8 : mesh.name === 'stone-hex-deck' ? 1.5 : .45;
         lightColor.setRGB(1 + glow * gain * .55, 1 + glow * gain, 1 + glow * gain * .9);

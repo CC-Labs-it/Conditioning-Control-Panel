@@ -120,7 +120,7 @@ test('model path: Astra platform cloned per stone with shared geometry and one b
   assert.equal(built.group.children.length, rows.length);
   const lips = new Set(), geos = new Set();
   built.group.traverse((o) => { if (o.isMesh) { geos.add(o.geometry); if (o.material.name === 'stone-lip') lips.add(o.material); } });
-  assert.equal(geos.size, 1, 'geometry shared');
+  assert.equal(geos.size, 2, 'accepted top and structural hull each share one geometry');
   assert.equal(lips.size, 1, 'one lip material');
   const lip = [...lips][0];
   assert.notEqual(lip, mats.lip, 'the art set keeps its own lip');
