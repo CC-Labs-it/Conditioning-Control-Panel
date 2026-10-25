@@ -81,7 +81,10 @@ internal sealed partial class FirstShowStageWindow : Window
     internal Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadDesktopInput = X11Pointer.Read;
     private bool _speechPending;
     private string _pendingSpeech = "";
-    internal PixelRect[] InputRects { get; private set; } = Array.Empty<PixelRect>();
+    private PixelRect[] _inputBuf = new PixelRect[64];   // reused every frame
+    internal int InputRectCount { get; private set; }
+    internal int InputPushes { get; private set; }
+    internal PixelRect[] InputRects => _inputBuf[..InputRectCount];
     internal FirstShowEffects? Effects => _effects;
     private bool _closed, _greeted, _centered, _playing, _ending, _serious, _moving, _bundled;
     private double _last, _moveAt, _spokeAt = -10, _showStart = double.NaN, _showFrozen, _settledAt, _x, _y;
@@ -390,8 +393,12 @@ internal sealed partial class FirstShowStageWindow : Window
     }
     private void UpdateBubbleInput()
     {
-        InputRects = _playing && _effects != null ? _effects.BubbleInputRects(_scale) : Array.Empty<PixelRect>();
-        X11Overlay.SetInputRects(this, InputRects, InputRects.Length);
+        int n = _playing && _effects != null ? _effects.BubbleInputRects(_scale, ref _inputBuf) : 0;
+        // Stayed empty: the region already is (SetClickThrough at open). A non-empty region is re-sent
+        // every frame on purpose: the Win32 path re-reads the cursor on each call.
+        if (n == 0 && InputRectCount == 0) return;
+        InputRectCount = n; InputPushes++;
+        X11Overlay.SetInputRects(this, _inputBuf, n);
     }
     private ShowSize BodySize() => _emi == null ? new ShowSize(0, 0) : new ShowSize(_emi.BodyWidth, _emi.BodyWidth * EmiDeskWindow.BodyAspect);
     private RectD SafeBounds()

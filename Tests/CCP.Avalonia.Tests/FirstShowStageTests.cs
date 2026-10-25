@@ -81,9 +81,9 @@ public sealed class FirstShowStageTests
         Assert.True(stage.Playing);
         Assert.Equal(bundled ? 0 : .75, stage.Credit.Opacity);
         t += S.FlashAt + .01; stage.Frame();
-        Assert.True(played.Count(p => p == "chip_pop.mp3") >= 2, string.Join(",", played));
+        Assert.True(played.Count(p => p == "chip_pop.mp3") >= 2, string.Join(",", played));   // the beat's cue + a picture flash
         t += S.Length; stage.Frame();
-        Assert.Equal(0, stage.Credit.Opacity);   // the beat's cue + a picture flash
+        Assert.Equal(0, stage.Credit.Opacity);
     });
 
     [Fact]
@@ -290,9 +290,13 @@ public sealed class FirstShowStageTests
         stage.Start();
         stage.Frame();
         Assert.Empty(stage.InputRects);
+        var pushes = stage.InputPushes;
+        stage.Frame();
+        Assert.Equal(pushes, stage.InputPushes);   // empty stays empty: no region re-sent
         t = S.BubblesAt; stage.Frame();
         Assert.NotEmpty(stage.InputRects);
         var rows = stage.Effects!.BubbleInputRects(1);
+        Assert.True(rows.Length < rows.Sum(r => r.Height), $"{rows.Length} rects, no rows merged");
         var center = rows[rows.Length / 2];
         var cues = new List<string>();
         CoreSettings.Current.MasterVolume = 50;
@@ -306,6 +310,9 @@ public sealed class FirstShowStageTests
         Assert.NotEmpty(stage.InputRects);
         t = S.GatherAt; stage.Frame();
         Assert.Empty(stage.InputRects);
+        pushes = stage.InputPushes;
+        t += .1; stage.Frame();
+        Assert.Equal(pushes, stage.InputPushes);
     });
 
     [Fact]
@@ -347,6 +354,11 @@ public sealed class FirstShowStageTests
         shell.FindControl<Button>("BtnFirstShowReplay")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(1, opened);
         var old = EmiBookWindow.ReplayShow;
+        var oldSettings = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        // Motion off: the book closes at once instead of folding (Fold), whatever an earlier test left.
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
         var book = new EmiBookWindow();
         try
         {
@@ -355,7 +367,7 @@ public sealed class FirstShowStageTests
             book.FindControl<Button>("BtnFirstShow")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(2, opened);
         }
-        finally { EmiBookWindow.ReplayShow = old; book.Kill(); shell.RequestExit(); }
+        finally { EmiBookWindow.ReplayShow = old; book.Kill(); shell.RequestExit(); CoreSettings.ServiceProvider = oldSettings; }
         return Task.CompletedTask;
     });
 
