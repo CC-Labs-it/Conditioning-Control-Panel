@@ -10,6 +10,8 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// Cloud load (unit 6), then the known-fields-only push and heartbeat (unit 7c, Core <see cref="SyncPush"/>); no Rich Presence.</summary>
 internal static class AccountSeed
 {
+    internal static EntitlementTierMonitor TierSync { get; private set; } = new();
+
     internal static ProviderSubscription? Patreon { get; private set; }
     internal static ProviderSubscription? SubscribeStar { get; private set; }
     internal static DiscordAccount? Discord { get; private set; }
@@ -46,6 +48,12 @@ internal static class AccountSeed
             return false;
         }
         (Patreon, SubscribeStar, Discord) = (patreon, substar, discord);
+        TierSync = new EntitlementTierMonitor();
+        V2AuthService.TierReadingProvider = (id, tier) => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (TierSync.Apply(CoreSettings.Current, id, tier, DateTime.UtcNow, () => CoreSettings.Save()))
+                patreon.NotifyEntitlementRaised(tier >= 2 ? Models.PatreonTier.Level2 : Models.PatreonTier.Level1);
+        });
         patreon.PeerDisplayName = () => discord.CustomDisplayName; // WPF PatreonService
 
         // WPF App.IsLoggedIn / UserDisplayName / the PatreonService gates.
@@ -168,9 +176,6 @@ internal static class AccountSeed
             return false;
         }
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
-        // EntitlementTierSync.SignedInWithV2: a rise only for a V2 account with a token.
-        if (!string.IsNullOrEmpty(s.AuthToken))
-            EntitlementTierRule.ApplyRise(s, EntitlementTierRule.ParseTier(user.EffectiveTierRaw), DateTime.UtcNow);
         ProfileAdopt.AdoptReadBeforeWrite(s, user);
         CoreSettings.Save();
         Log.Information("Profile load: Level {Level} ({Xp} XP into level) after adopt", s.PlayerLevel, (int)s.PlayerXP);
