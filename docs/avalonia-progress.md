@@ -3345,3 +3345,7 @@ Companion chat threshold (Z2) motion matches WPF: staggered thinking dots on the
 ## avalonia-port/migration-privacy-seed: +141
 - Moving from the Windows app keeps your six privacy choices owned by your account, so the first sync sends exactly what Windows always sent.
 - A fresh install, a different account or an incomplete settings file sends no privacy values until you change them yourself.
+
+## avalonia-port/wire-views-tab-programs: +371
+- Programs live session slot (clock, progress bar, paused caption, heat sheen); 1 s tick repaints clock only.
+- Core `SessionClockLabel` program clock/progress shared with WPF; zero-length bar reads full as WPF.
