@@ -3261,3 +3261,7 @@ Roster entrance stagger (WPF StaggerSubjectCards/MotionFx.StaggerIn) on the shar
 ## avalonia-port/sync7-scrolller-d: +507
 - Core ScrolllerWebRules: the WPF web gate's rules, one copy that WPF forwards to. WebHost sends the honest UA and our Referer to Scrolller, and refuses Scrolller page loads while the licence switch is off. The in-app browser is not gated.
 - Rows 194/201/204 stay needs-port (sync7-scrolller-d-native): this engine has no response seam, so embedded sub-resources cannot be refused or cached yet.
+
+## avalonia-port/wire-shell-keyword-triggers: +736
+- Keyboard/audio keyword triggers: matching extracted to Core; armed at boot; panic cuts the clip only; tutorial demo stays a gated no-op stub; foreground looked up only when the scope needs it.
+- Gate 39707879211: only P115 flakes (RaceTrack decode, GoonClock); row stays stub (follow-up -b).
