@@ -475,27 +475,28 @@ Set the panic key to Enter for steps 1-4 (Settings -> panic key).
 15. **[SAFETY] developers re-check this before release.** Pop a few bubbles, press panic. Expect HUD, overlay and every bubble gone at once, no recap, and drops/gold unchanged in the hub. WPF `Services/Chaos/ChaosModeService.cs:288`, `:3161`. Rows: `chaos-hud-window`, `chaos-overlay-window`.
 16. **[SAFETY] developers re-check this before release.** FALL IN again, press panic twice within 2 s. Expect the run to end and the app to stay open. Rows: `chaos-hud-window`.
 17. **[SAFETY] developers re-check this before release.** Tray -> Stop everything mid-run: same as step 15. Rows: `chaos-hud-window`.
-18. Let a run finish. Expect the recap; the hub then shows the recap's drops, +1 descent, more gold, and the XP bar moved. Rows: `chaos-hub-window`.
-19. First visit to the hub: the intro card appears; "i understand. take me down" closes it; `?` shows it again; it does not come back on reopen. WPF `Chaos/ChaosHubWindow.Reveals.cs:145-153`. Rows: `chaos-intro-window`.
-20. **[SAFETY] developers re-check this before release.** Intro card up: press panic with its button focused. Expect the card to close and panic to run. Rows: `chaos-intro-window`.
-21. Toy button (with a toy pocket): round button bottom-right with a key badge; click or press its key: "20s" countdown, then "ready". It never steals focus. WPF `Chaos/ChaosToyButtonWindow.cs:42`. Rows: `chaos-toy-button`.
-22. **[SAFETY] developers re-check this before release.** Set the toy key to the panic key: pressing it panics and does not fire the toy. After panic the toy key does nothing. Rows: `chaos-toy-button`.
-23. Pocket Watch charm: a "WAVE 1/N" pill top-right; clock turns red under 10 s; "LAST WAVE" blinks. WPF `Chaos/ChaosWaveTimerOverlay.cs:23`. Rows: `chaos-wave-timer`.
-24. Announcer on: "THE HOLE IS CLOSING..." pops near the top, lines never overlap. WPF `Chaos/ChaosAnnouncerOverlay.cs:65`. Rows: `chaos-announcer`.
-25. Draft a mantra and a sin: tiles appear in a pill top-right, hover shows a card. WPF `Chaos/ChaosBoonBarOverlay.cs:34`. Rows: `chaos-boon-bar`.
-26. Heat bar full: warm edge tint fades in; off when "colour flashes" is off. WPF `Chaos/ChaosFxWindow.cs:26`. Rows: `chaos-fx-window`.
-27. Pop words ("SNAP"), effect banners, cursor halo, vibe trail, sparks, ripples, DVD logo, GIF rain, brain-drain wash, e-stim bolt: when each appears, clicks pass through and nothing takes focus. WPF `Chaos/ChaosPopText.cs:50`, `Chaos/ChaosEffectBannerOverlay.cs:57`, `Chaos/ChaosCursorGlowOverlay.cs:46`, `Chaos/ChaosVibeTrailOverlay.cs:58`, `Chaos/ChaosSkiaFxOverlay.cs:72`, `Chaos/ChaosFieldFxOverlay.cs:59`, `Chaos/ChaosDvdOverlay.cs:92`, `Chaos/ChaosGifCascadeOverlay.cs:51`, `Chaos/ChaosFlashOverlay.cs:44`, `Chaos/ChaosEStimOverlay.cs:40`. Rows: `chaos-pop-text`, `chaos-effect-banner`, `chaos-cursor-glow`, `chaos-vibe-trail`, `chaos-skia-fx`, `chaos-field-fx`, `chaos-dvd-overlay`, `chaos-dvd-host`, `chaos-gif-cascade`, `chaos-flash-overlay`, `chaos-estim-overlay`, `chaos-estim-glow`.
-28. **[SAFETY] developers re-check this before release.** While any of step 27's effects or the wave pill, boon pill or announcer shows: panic, tray -> Stop everything, and the safe word each close it at once with no window left behind. Rows: as step 27, plus `chaos-wave-timer`, `chaos-boon-bar`, `chaos-announcer`, `chaos-fx-window`, `chaos-toy-button`.
-29. Without a compositor (or on plain Wayland): those effects show nothing rather than a black or click-blocking sheet. Rows: as step 27.
-30. Click a bubble: it pops and the click does not reach the window below; empty space between bubbles stays clickable. WPF `Chaos/ChaosBubbleHostOverlay.cs:137`. Rows: `chaos-bubble-host`.
+18. In an isolated test desktop, start the full countdown, restart flash, and ready countdown; any key or left/right press completes exactly once. Middle/wheel/release must not skip; close/panic detaches input and queued old presses cannot complete a successor. WPF `Chaos/ChaosOverlayWindow.xaml.cs` Rows: `chaos-overlay-window`. Native Wayland uses timed completion.
+19. Let a run finish. Expect the recap; the hub then shows the recap's drops, +1 descent, more gold, and the XP bar moved. Rows: `chaos-hub-window`.
+20. First visit to the hub: the intro card appears; "i understand. take me down" closes it; `?` shows it again; it does not come back on reopen. WPF `Chaos/ChaosHubWindow.Reveals.cs:145-153`. Rows: `chaos-intro-window`.
+21. **[SAFETY] developers re-check this before release.** Intro card up: press panic with its button focused. Expect the card to close and panic to run. Rows: `chaos-intro-window`.
+22. Toy button (with a toy pocket): round button bottom-right with a key badge; click or press its key: "20s" countdown, then "ready". It never steals focus. WPF `Chaos/ChaosToyButtonWindow.cs:42`. Rows: `chaos-toy-button`.
+23. **[SAFETY] developers re-check this before release.** Set the toy key to the panic key: pressing it panics and does not fire the toy. After panic the toy key does nothing. Rows: `chaos-toy-button`.
+24. Pocket Watch charm: a "WAVE 1/N" pill top-right; clock turns red under 10 s; "LAST WAVE" blinks. WPF `Chaos/ChaosWaveTimerOverlay.cs:23`. Rows: `chaos-wave-timer`.
+25. Announcer on: "THE HOLE IS CLOSING..." pops near the top, lines never overlap. WPF `Chaos/ChaosAnnouncerOverlay.cs:65`. Rows: `chaos-announcer`.
+26. Draft a mantra and a sin: tiles appear in a pill top-right, hover shows a card. WPF `Chaos/ChaosBoonBarOverlay.cs:34`. Rows: `chaos-boon-bar`.
+27. Heat bar full: warm edge tint fades in; off when "colour flashes" is off. WPF `Chaos/ChaosFxWindow.cs:26`. Rows: `chaos-fx-window`.
+28. Pop words ("SNAP"), effect banners, cursor halo, vibe trail, sparks, ripples, DVD logo, GIF rain, brain-drain wash, e-stim bolt: when each appears, clicks pass through and nothing takes focus. WPF `Chaos/ChaosPopText.cs:50`, `Chaos/ChaosEffectBannerOverlay.cs:57`, `Chaos/ChaosCursorGlowOverlay.cs:46`, `Chaos/ChaosVibeTrailOverlay.cs:58`, `Chaos/ChaosSkiaFxOverlay.cs:72`, `Chaos/ChaosFieldFxOverlay.cs:59`, `Chaos/ChaosDvdOverlay.cs:92`, `Chaos/ChaosGifCascadeOverlay.cs:51`, `Chaos/ChaosFlashOverlay.cs:44`, `Chaos/ChaosEStimOverlay.cs:40`. Rows: `chaos-pop-text`, `chaos-effect-banner`, `chaos-cursor-glow`, `chaos-vibe-trail`, `chaos-skia-fx`, `chaos-field-fx`, `chaos-dvd-overlay`, `chaos-dvd-host`, `chaos-gif-cascade`, `chaos-flash-overlay`, `chaos-estim-overlay`, `chaos-estim-glow`.
+29. **[SAFETY] developers re-check this before release.** While any of step 28's effects or the wave pill, boon pill or announcer shows: panic, tray -> Stop everything, and the safe word each close it at once with no window left behind. Rows: as step 28, plus `chaos-wave-timer`, `chaos-boon-bar`, `chaos-announcer`, `chaos-fx-window`, `chaos-toy-button`.
+30. Without a compositor (or on plain Wayland): those effects show nothing rather than a black or click-blocking sheet. Rows: as step 28.
+31. Click a bubble: it pops and the click does not reach the window below; empty space between bubbles stays clickable. WPF `Chaos/ChaosBubbleHostOverlay.cs:137`. Rows: `chaos-bubble-host`.
 
 ### Other controls
-31. Help "?" on a setting with a clip: a looping silent video with a caption; closing stops it; switching language re-translates the caption. WPF `Controls/InlineLoopVideo.cs:57`, `MainWindow/MainWindow.Presets.cs:130`. Rows: `ctrl-inline-loop-video`, `ctrl-help-popover`.
-32. Back Room counter (test account): open the Flashes card. Expect "Checking...", a price and "Get it"; Cancel buys nothing; Yes buys, shows a toast and the row disappears; not enough points shows the Windows error text. WPF `Controls/V2GetItRow.xaml.cs:35`. Rows: `ctrl-v2-get-it-row`, `svc-prize-ownership`.
-33. Companion tube: shows beside the panel; minimise hides it; maximise detaches it; restore re-attaches. WPF `MainWindow/MainWindow.xaml.cs:3695`. Rows: `avatar-tube-window`, `shell-companion`.
-34. Season recap: Leaderboard -> recap button opens the card window. Rows: `ctrl-season-recap-card`, `ctrl-season-recap-window`.
-35. Attention check during a session: the prompt appears and must be answered. WPF `App.xaml.cs:3229-3246`. Rows: `ctrl-attention-check`.
-36. Launcher tiles: hover sheen and the comet around the edge. WPF `Windows/Launcher/LauncherWindow.Fx.cs:141`, `:381`. Rows: `ctrl-card-sheen-adorner`, `ctrl-perimeter-comet-adorner`.
+32. Help "?" on a setting with a clip: a looping silent video with a caption; closing stops it; switching language re-translates the caption. WPF `Controls/InlineLoopVideo.cs:57`, `MainWindow/MainWindow.Presets.cs:130`. Rows: `ctrl-inline-loop-video`, `ctrl-help-popover`.
+33. Back Room counter (test account): open the Flashes card. Expect "Checking...", a price and "Get it"; Cancel buys nothing; Yes buys, shows a toast and the row disappears; not enough points shows the Windows error text. WPF `Controls/V2GetItRow.xaml.cs:35`. Rows: `ctrl-v2-get-it-row`, `svc-prize-ownership`.
+34. Companion tube: shows beside the panel; minimise hides it; maximise detaches it; restore re-attaches. WPF `MainWindow/MainWindow.xaml.cs:3695`. Rows: `avatar-tube-window`, `shell-companion`.
+35. Season recap: Leaderboard -> recap button opens the card window. Rows: `ctrl-season-recap-card`, `ctrl-season-recap-window`.
+36. Attention check during a session: the prompt appears and must be answered. WPF `App.xaml.cs:3229-3246`. Rows: `ctrl-attention-check`.
+37. Launcher tiles: hover sheen and the comet around the edge. WPF `Windows/Launcher/LauncherWindow.Fx.cs:141`, `:381`. Rows: `ctrl-card-sheen-adorner`, `ctrl-perimeter-comet-adorner`.
 
 ### Rows (general check G)
 - [ ] `feat-adaptive-side-art` - WPF `Features/AdaptiveSideArt.cs`
@@ -673,5 +674,3 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
-
-1. In an isolated test desktop, start the full countdown, restart flash, and ready countdown; any key or left/right press completes exactly once. Middle/wheel/release must not skip; close/panic detaches input and queued old presses cannot complete a successor. WPF `Chaos/ChaosOverlayWindow.xaml.cs` Rows: `chaos-overlay-window`. Native Wayland uses timed completion.
