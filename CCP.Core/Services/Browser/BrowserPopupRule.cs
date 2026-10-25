@@ -7,6 +7,8 @@ namespace ConditioningControlPanel.Services.Browser;
 /// all other non-ad popups navigate the existing browser.</summary>
 public static class BrowserPopupRule
 {
+    // ponytail: deliberate copy of WPF BrowserService.cs:31-71 and :676-698. The WPF head is the
+    // frozen reference, so it keeps its own list; edit both if either changes.
     private static readonly HashSet<string> _blockedDomains = new(StringComparer.OrdinalIgnoreCase)
     {
         // Major ad networks
