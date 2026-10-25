@@ -46,18 +46,10 @@
          Effect sits under a loop.
          ================================================================ -->
 
-    <UserControl.Resources>
-        <!-- ponytail: local copy of ConditioningControlPanel/App.xaml:Font.Mono, hoist when a second view needs it -->
-        <FontFamily x:Key="Font.Mono">Cascadia Mono, Consolas, Courier New</FontFamily>
-    </UserControl.Resources>
-
     <Grid Background="#0A0514">
 
-        <!-- The fog / reveal canvas.
-             ponytail: needs Controls/SpiralFirstLightVisual (a WPF DrawingVisual), wired when the
-             reveal is redrawn for this head. The WPF code-behind builds it with an accent Color
-             and drops it in here; this host stays empty, so the fog era is its copy on the bare
-             ground - which is what a machine that cannot run the canvas would show anyway. -->
+        <!-- WPF first-light drawing port. During fog, the Core intro clock is held before
+             its first stroke; the ambient clock rides the shared beat and parks under reduced motion. -->
         <Grid x:Name="FogHost"/>
 
         <!-- The fog era's embers: a handful of gold specks drifting up through the

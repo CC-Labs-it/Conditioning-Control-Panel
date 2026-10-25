@@ -76,7 +76,7 @@ namespace ConditioningControlPanel
         {
             bool signedIn = BackRoomApi.AppIdentity() != null;
             bool remote = App.Patreon?.HasPremiumAccess == true || App.DailyFree?.IsFreeToday("remote") == true;
-            return LobbyGates.From(signedIn, GoonHostService.HostingAllowed(), remote);
+            return LobbyGates.From(signedIn, GoonHostRules.HostingAllowed(), remote);
         }
 
         /// <summary>ShowTab("availablesubjects"): hook once, take a lease, paint what we have.</summary>
@@ -237,10 +237,20 @@ namespace ConditioningControlPanel
             }
         }
 
-        /// <summary>A row's button. Signed out asks to sign in; a gate refusal shows the gate.</summary>
+        /// <summary>A row's button. Signed out asks to sign in; a gate refusal shows the gate.
+        /// A Playing chess row's Watch opens the match as a spectator (free with an account, like
+        /// joining a chess table).</summary>
         internal async void OnLobbyRowClick(LobbyRowView view, FrameworkElement button)
         {
             var row = view.Row;
+            if (row.CanWatch && row.Game == LobbyGame.Chess && !string.IsNullOrEmpty(row.Key))
+            {
+                var watchGates = CurrentLobbyGates();
+                if (!watchGates.SignedIn || !watchGates.CanJoin(LobbyGame.Chess)) { OpenUnifiedLoginDialog(); return; }
+                try { PieceByPieceHostService.HostSpectate(row.Key); }
+                catch (Exception ex) { App.Logger?.Warning(ex, "[Lobby] watch failed"); }
+                return;
+            }
             if (!row.CanJoin || string.IsNullOrEmpty(row.Key)) return;
             var gates = CurrentLobbyGates();
             if (!gates.SignedIn) { OpenUnifiedLoginDialog(); return; }
@@ -277,7 +287,7 @@ namespace ConditioningControlPanel
                         PieceByPieceHostService.HostOpenTable();
                         break;
                     case LobbyGame.Goon:
-                        // Patrons host (GoonHostService.HostingAllowed); everyone else sees the gate.
+                        // Patrons host (GoonHostRules.HostingAllowed); everyone else sees the gate.
                         if (TierGate.DemandPremium("Goon Game")) GoonHostService.LaunchToHost();
                         break;
                     case LobbyGame.Remote:

@@ -34,9 +34,12 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// The Presets tab's stop button. <paramref name="withClock"/> is the resolved
         /// "STOP SESSION ({0}:{1})" template, <paramref name="plain"/> the bare "STOP SESSION".
+        /// <paramref name="pauseIndicator"/> is the paused mark (SessionClockRules.PauseMark): a
+        /// held clock says so, so it never reads as a stuck one (ccp-bugs #1464).
         /// </summary>
-        public static string StopButton(TimeSpan remaining, bool showCountdown, string withClock, string plain) =>
-            showCountdown ? Format(withClock, Minutes(remaining), Seconds(remaining)) : plain;
+        public static string StopButton(TimeSpan remaining, bool showCountdown, string withClock, string plain,
+                                        string pauseIndicator = "") =>
+            (showCountdown ? Format(withClock, Minutes(remaining), Seconds(remaining)) : plain) + pauseIndicator;
 
         /// <summary>
         /// The title-bar START button while a session runs. <paramref name="withClock"/> is the
@@ -47,6 +50,29 @@ namespace ConditioningControlPanel.Services
                                          string pauseIndicator, string withClock) =>
             showCountdown ? Format(withClock, name, Minutes(remaining), Seconds(remaining), pauseIndicator)
                           : name + pauseIndicator;
+
+        /// <summary>Longest session name the bottom bar prints before it trims with "...".</summary>
+        public const int BarNameMax = 40;
+
+        /// <summary>
+        /// The line above START / STOP while a SESSION runs (a bare engine run keeps "Running..."):
+        /// the session name and the time left, or the time elapsed for a session with no set
+        /// length. <paramref name="leftTemplate"/> and <paramref name="elapsedTemplate"/> are the
+        /// resolved "{0} - {1} left" / "{0} - {1} elapsed" strings. With the countdown switched
+        /// off (ShowSessionCountdown) it is the name and the pause mark, nothing else.
+        /// </summary>
+        public static string BarStatus(string name, TimeSpan elapsed, TimeSpan remaining, bool openEnded,
+                                       bool showCountdown, string pauseIndicator,
+                                       string leftTemplate, string elapsedTemplate)
+        {
+            name = (name ?? "").Trim();
+            if (name.Length > BarNameMax) name = name.Substring(0, BarNameMax - 3) + "...";
+            if (!showCountdown) return name + pauseIndicator;
+            var line = openEnded
+                ? Format(elapsedTemplate, name, Countdown(elapsed))
+                : Format(leftTemplate, name, Countdown(remaining));
+            return line + pauseIndicator;
+        }
 
         private static string Minutes(TimeSpan t) => ((int)t.TotalMinutes).ToString("D2");
         private static string Seconds(TimeSpan t) => t.Seconds.ToString("D2");
