@@ -35,6 +35,7 @@ import { createSpiralBeatClock } from './spiralBeat.js';
 import { selectScrolllerSlots } from './mediaSelection.js';
 import { MAX_MEDIA_CLIPS, mediaClipLimit } from './mediaVariety.js';
 import { fitMainframeBillboard, moveMainframePanel } from './mainframeMediaMotion.js';
+import { tunnelArchGeometry, tunnelArchMaterial } from './tunnelArches.js';
 
 // the shared colour system (render/spectrum.js); the local ring stays the fallback for a missing hue
 import * as SPECTRUM from './spectrum.js';
@@ -303,7 +304,7 @@ export function createMediaSlots(scene, track, opts = {}) {
     stalks.frustumCulled = false; stalks.name = 'media-stalk'; group.add(stalks);
   }
 
-  // the tunnel: a glass arch with lines along it, and glowing ribs every half ring
+  // Textured solid ribs hold the glass canopy; animated inlays travel across their faces.
   let shell = null, ribs = null;
   if (tun) {
     const g = new BufferGeometry();
@@ -315,24 +316,17 @@ export function createMediaSlots(scene, track, opts = {}) {
     const shm = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: DoubleSide });
     const base = vec3(...new Color(M.shellColour).toArray());
     // lines along the tunnel, each its own drifting hue; the glass between them is a faint tint
-    const lane = fract(uv().x.mul(12)), line = smoothstep(0.86, 1, abs(lane.sub(0.5)).mul(2));
+    const lane = fract(uv().x.mul(12)), line = smoothstep(0.93, 1, abs(lane.sub(0.5)).mul(2));
     const lineHue = hue(vec3(1, 0.25, 0.7), uv().x.mul(TAU).add(U.time.mul(M.borderHueRadps * 1.5)));
     shm.colorNode = mix(base, lineHue, line);
-    shm.opacityNode = mix(float(M.shellAlpha), float(0.75), line).mul(U.contrast.mul(0.5).add(0.5));
+    shm.opacityNode = mix(float(M.shellAlpha), float(0.28), line).mul(U.contrast.mul(0.5).add(0.5));
     shell = new Mesh(g, shm); shell.renderOrder = 1; shell.name = 'media-tunnel';
     group.add(shell);
 
-    const rg = new BufferGeometry();
-    rg.setAttribute('position', new Float32BufferAttribute(tun.ribs.positions, 3));
-    const rc = [];
-    for (const r of tun.ribs.hues) rc.push(...slotColour(r * 5, SPECTRUM, ['dawn', 'deep', 'afterglow'][r % 3]));
-    rg.setAttribute('aCol', new Float32BufferAttribute(rc, 3));
-    rg.setIndex(tun.ribs.indices);
-    rg.computeBoundingSphere();
+    const rg = tunnelArchGeometry(tun, track, layout.tunnel, buildTier === 'phone' ? 18 : 32);
     owned.push(rg);
-    const rm = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide });
-    rm.colorNode = hue(attribute('aCol', 'vec3'), U.time.mul(M.borderHueRadps)).mul(U.rib);
-    ribs = new Mesh(rg, rm); ribs.renderOrder = 2; ribs.name = 'media-ribs';
+    const rm = tunnelArchMaterial(U.time, U.contrast, track.id, opts.art);
+    ribs = new Mesh(rg, rm); ribs.name = 'media-ribs';
     group.add(ribs);
   }
 

@@ -7,15 +7,16 @@
  * plane, so nothing ever lies on the surface the kart drives on; near the camera they fade, so a strand
  * never slices across the view. One additive draw call; hidden while the weight is zero.
  */
-import { Mesh, BufferGeometry, Float32BufferAttribute, MeshBasicNodeMaterial, AdditiveBlending, DoubleSide } from 'three/webgpu';
-import { uniform, attribute, vec3, float, sin, cos, mix, smoothstep, cameraPosition, fract, abs, exp } from 'three/tsl';
+import { Group, Mesh, BufferGeometry, Float32BufferAttribute, MeshBasicNodeMaterial, AdditiveBlending, DoubleSide } from 'three/webgpu';
+import { uniform, attribute, vec2, vec3, float, sin, cos, mix, smoothstep, cameraPosition, fract, abs, exp, normalize, dot, pow, texture } from 'three/tsl';
 
 import { HELIX_LOOK, helixGeometryData } from './helixMath.js';
+import { helixBodyData } from './helixBody.js';
 
 export { HELIX_LOOK };
 
 /** @returns {{ object: Mesh, update(mf: object, ctx: { kartS: number, gentle: boolean }): void, dispose(): void }} */
-export function createHelix(track, pal, L = HELIX_LOOK) {
+export function createHelix(track, pal, L = HELIX_LOOK, art = null) {
   const d = helixGeometryData(track, L);
   const g = new BufferGeometry();
   // six vertex buffers (WebGPU allows eight): the centre rides in position, the four scalars in one vec4
@@ -49,19 +50,41 @@ export function createHelix(track, pal, L = HELIX_LOOK) {
   const pulse = exp(abs(dS).div(35).negate()).mul(u.kick).mul(kind.mul(L.kickGain).add(0.25));
   m.colorNode = col.mul(float(L.gain).add(pulse)).mul(u.weight).mul(span).mul(nearFade);
   const mesh = new Mesh(g, m);
-  mesh.frustumCulled = false; mesh.visible = false; mesh.renderOrder = 2;
+  mesh.frustumCulled = false; mesh.renderOrder = 2;
+  const data = helixBodyData(track, L), bodyGeometry = new BufferGeometry();
+  for (const [name, values] of Object.entries(data.attrs)) bodyGeometry.setAttribute(name,
+    new Float32BufferAttribute(values, name === 'aP' ? 4 : name === 'aDepth' ? 1 : 3));
+  bodyGeometry.setIndex(data.index);
+  const bodyMaterial = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: DoubleSide });
+  const depth = attribute('aDepth', 'float'), bodyPos = C.add(radial.mul(rad.add(depth))).add(across.mul(w));
+  bodyMaterial.positionNode = bodyPos;
+  const normal = normalize(radial.mul(depth).add(across.mul(w)));
+  const view = normalize(cameraPosition.sub(bodyPos)), lamp = normalize(vec3(.3, .8, .5));
+  const lit = abs(dot(normal, lamp)).mul(.65).add(.35);
+  const seam = smoothstep(.025, .07, abs(fract(sA.div(3.5)).sub(.5)));
+  const wearMap = art?.detail?.('detail-gold-wear');
+  const wear = wearMap ? texture(wearMap, vec2(sA.div(4), w.mul(3))).r.mul(.22).add(.85) : float(1);
+  const baseColour = track.id === 'keep' ? vec3(.27, .13, .2) : track.id === 'mainframe' ? vec3(.12, .26, .2) : vec3(.24, .2, .3);
+  const metal = baseColour.mul(lit).mul(wear).mul(seam.mul(.65).add(.35));
+  const specular = pow(abs(dot(normal, normalize(lamp.add(view)))), 24).mul(.22);
+  const inlay = smoothstep(.36, .49, abs(w)).mul(sin(sA.mul(.22).sub(u.phase.mul(.5))).mul(.3).add(.5));
+  bodyMaterial.colorNode = metal.add(vec3(.65, .72, .69).mul(specular)).add(ramp(sA.div(80).add(u.hue)).mul(inlay).mul(.35));
+  bodyMaterial.opacityNode = u.weight.mul(span).mul(smoothstep(L.nearFadeM[0], L.nearFadeM[1], cameraPosition.sub(bodyPos).length())).mul(.92);
+  const body = new Mesh(bodyGeometry, bodyMaterial); body.frustumCulled = false; body.name = 'music-helix-textured-body';
+  mesh.name = 'music-helix-song-glow';
+  const group = new Group(); group.name = 'music-helix'; group.visible = false; group.add(body, mesh);
   return {
-    object: mesh,
+    object: group,
     update(mf, { kartS = 0, gentle = false } = {}) {
       const wgt = mf && mf.on ? mf.helix : 0;
-      mesh.visible = wgt > 0.002;
+      group.visible = wgt > 0.002;
       u.weight.value = wgt;
-      if (!mesh.visible) return;
+      if (!group.visible) return;
       u.phase.value = mf.helixPhase;
       u.kartS.value = kartS;
       u.kick.value = gentle ? mf.kick * 0.4 : mf.kick;
       u.hue.value = (mf.barIndex + mf.barPhase) * 0.02;
     },
-    dispose() { g.dispose(); m.dispose(); },
+    dispose() { g.dispose(); m.dispose(); bodyGeometry.dispose(); bodyMaterial.dispose(); },
   };
 }

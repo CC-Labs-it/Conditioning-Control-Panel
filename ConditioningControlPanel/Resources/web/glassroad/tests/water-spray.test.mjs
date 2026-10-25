@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {registerHooks} from 'node:module';
 import {createState,S} from '../sim/state.js';
+import {waterResponse} from '../render/waterResponse.js';
 const hooks=registerHooks({resolve(s,c,next){const files={'three/webgpu':'three.webgpu.min.js','three/tsl':'three.tsl.min.js'};
   return files[s]?{url:new URL('../vendor/three/build/'+files[s],import.meta.url).href,shortCircuit:true}:next(s,c);}});
 const {createWaterSpray}=await import('../render/waterSpray.js');
@@ -20,7 +21,7 @@ test('water droplets are bounded real geometry that rises, stretches, falls and 
   assert.ok(spray.fans.geometry.attributes.uv&&spray.fans.material.opacityNode,'fan sheets soften edges, ends and camera proximity');
   assert.ok(spray.fans.geometry.attributes.position.count>=150,'curled fan strips have curved subdivided surfaces');
   assert.equal(spray.drops.material.map,null,'no illustrated atlas or billboard texture');
-  assert.ok(spray.stats().active===12&&spray.stats().fanActive===1);
+  assert.ok(spray.stats().active===12&&spray.stats().fanActive===3);
   const velocity=spray.data[4],size=spray.data[8];assert.ok(size<.1);
   spray.update(.2);assert.ok(spray.drops.instanceMatrix.array[13]>3);
   assert.ok(Math.abs(spray.drops.instanceMatrix.array[13]-(3+velocity*.2-4.9*.04))<.001);
@@ -31,6 +32,40 @@ test('water droplets are bounded real geometry that rises, stretches, falls and 
   assert.equal(spray.stats().active,32);assert.equal(spray.stats().fanActive,4);
   buffers.forEach((b,i)=>assert.equal(b,[spray.data,spray.fanData,spray.drops.instanceMatrix.array,spray.fans.instanceMatrix.array][i]));
   spray.reset();assert.equal(spray.stats().active,0);assert.equal(spray.stats().fanActive,0);
+});
+
+test('cruising spray has separated sheet layers and a readable small-drop volume',t=>{
+  const spray=createWaterSpray({capacity:96,fanCapacity:12});t.after(()=>spray.dispose());
+  const response=waterResponse({speed:36});
+  spray.emit({p:[0,0,0],count:response.count,lift:response.lift,size:response.size,
+    dirX:3.6,dirS:-5.4,spread:2.2,life:.85});
+  assert.equal(spray.stats().fanActive,3);
+  assert.ok(spray.fanData[4]<spray.fanData[16]&&spray.fanData[16]<spray.fanData[28],
+    'low, middle and crest sheets leave at different upward velocities');
+  spray.update(.28);
+  const heights=[],widths=[],radii=[];
+  for(let i=0;i<response.count;i++) {
+    heights.push(spray.drops.instanceMatrix.array[i*16+13]);
+    widths.push(spray.drops.instanceMatrix.array[i*16+12]);
+    radii.push(spray.data[i*12+8]);
+  }
+  assert.ok(Math.max(...heights)>.7,'a straight run throws water above the deck without requiring a drift');
+  assert.ok(Math.max(...heights)-Math.min(...heights)>.35,'the plume fills depth instead of one particle line');
+  assert.ok(Math.max(...widths)-Math.min(...widths)>.4,'the plume has lateral body');
+  assert.ok(Math.min(...radii)>=.03&&Math.max(...radii)<=.06,'droplets remain small rather than opaque chunks');
+});
+
+test('Gentle spray eases in and reduces density while retaining physical layered water',t=>{
+  const normal=createWaterSpray({capacity:96,fanCapacity:12}),gentle=createWaterSpray({capacity:96,fanCapacity:12});
+  t.after(()=>{normal.dispose();gentle.dispose();});
+  const burst={p:[0,0,0],count:30,lift:3.2,size:.06,life:1,dirX:3,dirS:-4};
+  normal.emit(burst);gentle.emit({...burst,gentle:true});
+  assert.equal(gentle.stats().fanActive,2);assert.ok(gentle.stats().active<normal.stats().active);
+  assert.ok(gentle.data[10]>=.3&&gentle.fanData[10]>=.3,'rise cannot snap on in Gentle');
+  assert.equal(gentle.drops.instanceMatrix.array[0],0,'new drops start at zero size');
+  gentle.update(.2,{gentle:true});
+  assert.ok(Math.abs(gentle.data[6]-.1)<1e-6,'Gentle retains its half-rate clock');
+  const held=[...gentle.fanData];gentle.update(.2,{paused:true});assert.deepEqual([...gentle.fanData],held);
 });
 
 test('wet driving displaces the field and side steering creates a directed persistent wake',t=>{

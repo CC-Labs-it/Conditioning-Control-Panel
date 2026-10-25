@@ -110,9 +110,9 @@ export function createWaterfall(track, pal, { fluid = null, L = WATER_LOOK, reac
     const impact=Math.min(1,Math.max(0,down)/12),speed=Math.min(40,Math.max(0,payload.speed||0));
     fluid?.disturb?.({s,x,radius:hop?1.5:2.5+impact*2,strength:(hop?-.18:.3+impact*.4)*(gentle?.7:1),
       dirX:0,dirS:speed*.06,foam:hop?.25:.6});
-    for(const side of [-1,1])sprayPool.emit({...pt,count:hop?9:18+Math.round(impact*12),
+    for(const side of [-1,1])sprayPool.emit({...pt,count:hop?14:30+Math.round(impact*18),
       dirX:side*(hop?1.8:3+impact*3),dirS:speed*.12,lift:hop?2:3.8+impact*3,spread:2+impact*2,
-      size:hop?.04:.06,life:hop?.65:1.05,gentle});
+      size:hop?.05:.07,life:hop?.8:1.15,gentle});
   }
   /** Pooled spray follows actual wet contacts, including lateral drift on curved banks. */
   function kart(i, st, dt, { gentle = false, visible = true, paused = false } = {}) {
@@ -150,7 +150,7 @@ export function createWaterfall(track, pal, { fluid = null, L = WATER_LOOK, reac
       const pt=contact(s-.7,x),push=side*(1.6+speed*.055+steering*2.4)+lateral*.35;
       fluid?.disturb?.({s:s-1.8,x,radius:2+steering*.9,strength:-strength*.85,dirX:push,dirS:-along*.08,foam:.25+steering*.35});
       sprayPool.emit({...pt,count:Math.round(response.count*response.pressure(side)),dirX:push,dirS:-along*.15,
-        lift:response.lift,spread:1.4+steering,size:response.size,life:.65+steering*.2,gentle});
+        lift:response.lift,spread:2.2+steering*1.2,size:response.size,life:.85+steering*.2,gentle});
     }
   }
   /** CONTRACT `chute { s }`: the lip nearest s sprays at once. */
