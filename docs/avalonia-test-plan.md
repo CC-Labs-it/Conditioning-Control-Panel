@@ -674,3 +674,12 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Settings Devices completion
+
+1. Open Settings → Devices, change the calibration monitor, reopen Settings, then calibrate. Expect Primary plus every screen, missing saved screens shown as Primary without rewriting the saved name, and calibration on the selected screen. WPF `MainWindow/MainWindow.LabTab.cs:1438`. Rows: `views-settings-devices`.
+2. Enable wake word: expect the voice premium gate, mic consent if absent, then the always-on warning; decline at either prompt and expect the toggle off. Enable PTT: expect the same gate/consent without the always-on warning. Turning either off always works. WPF `MainWindow/MainWindow.Autonomy.cs:609`. Rows: `views-settings-devices`.
+3. Set the PTT key: lone modifiers wait, the next real key saves, and the localized button caption returns. Change mic, headphones, and wake phrases while armed: expect the listening chips to update and the next capture to use the new device/phrases. WPF `MainWindow/MainWindow.Autonomy.cs:699`, `Views/Controls/AppSettings/DevicesSettingsSection.xaml.cs:277`. Rows: `views-settings-devices`.
+4. Enable debug cursor: expect no dot without running calibrated tracking, a pink comet while tracking, no stale dot after face loss, and teardown on panic/revoke. An unsupported transparent desktop must refuse the overlay visibly. WPF `MainWindow/MainWindow.LabTab.cs:1298`, `Services/Tracking/GazeDebugCursorService.cs:95`. Rows: `views-settings-devices`.
+5. Rebind the camera shortcut, cancel, reset, and toggle global activation. Expect the chosen combo to start/stop tracking; missing consent restores the shell before prompting; an extra modifier must not match. X11/XWayland and Windows global listeners are platform-limited as the panic key is. WPF `MainWindow/MainWindow.SessionIO.cs:1404`, `MainWindow/MainWindow.BlinkTrainer.cs:355`. Rows: `views-settings-devices`.
+6. Bind the optional pause key; Escape clears it. During a mandatory video, the key opens the grace pause, holds do not repeat, panic wins a shared binding, and Lockdown refuses it. WPF `MainWindow/MainWindow.xaml.cs:955`. Rows: `views-settings-devices`.

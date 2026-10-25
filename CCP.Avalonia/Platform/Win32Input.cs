@@ -100,7 +100,8 @@ internal static class Win32Input
     }
 
     /// <summary>Test seam: forget a held pause key.</summary>
-    internal static void ResetPauseKeyForTest() => _pauseDown = false;
+    internal static void ReleasePauseKey() => _pauseDown = false;
+    internal static void ResetPauseKeyForTest() => ReleasePauseKey();
 
     /// <summary>WPF OnLockdownActivated/Deactivated (MainWindow.Lab.cs:621/714): the system keys are
     /// blocked only while a Lockdown runs with its "block system keys" safety on. A no-op until

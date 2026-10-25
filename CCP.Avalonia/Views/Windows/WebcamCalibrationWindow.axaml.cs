@@ -465,8 +465,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// ran on (matched by pixel origin) so Maximized lands there; unknown monitor: leave it.</summary>
         internal static void PlaceOnCalibratedScreen(Window window)
         {
-            if (Tracker.Calibration?.MonitorBounds is not { } mb || window.Screens is not { } screens) return;
-            if (screens.All.FirstOrDefault(s => s.Bounds.X == mb.X && s.Bounds.Y == mb.Y) is not { } sc) return;
+            var screens = window.Screens;
+            var saved = CoreSettings.Current.WebcamCalibrationScreen;
+            var sc = screens.All.FirstOrDefault(s => string.Equals(s.DisplayName, saved, StringComparison.OrdinalIgnoreCase))
+                     ?? screens.Primary;
+            if (sc == null) return;
             window.WindowStartupLocation = WindowStartupLocation.Manual;
             window.Position = sc.Bounds.Position;
         }

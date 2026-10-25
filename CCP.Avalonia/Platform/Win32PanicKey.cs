@@ -199,6 +199,15 @@ internal static class Win32PanicKey
         KeyDown?.Invoke(vk, VirtualKeys.NameOf(vk));
         if (vk != 0 && vk == _boundVk && !HeldPanic.Down(nowUtc))
             _onPress();
+        if (CameraShortcut.Pressed != null && vk == VirtualKeys.Of(CameraShortcut.Gesture.Key.ToString()))
+        {
+            var mods = global::Avalonia.Input.KeyModifiers.None;
+            if (GetAsyncKeyState(0x11) < 0) mods |= global::Avalonia.Input.KeyModifiers.Control;
+            if (GetAsyncKeyState(0x12) < 0) mods |= global::Avalonia.Input.KeyModifiers.Alt;
+            if (GetAsyncKeyState(0x10) < 0) mods |= global::Avalonia.Input.KeyModifiers.Shift;
+            if (GetAsyncKeyState(0x5B) < 0 || GetAsyncKeyState(0x5C) < 0) mods |= global::Avalonia.Input.KeyModifiers.Meta;
+            CameraShortcut.Route(CameraShortcut.Gesture.Key, mods);
+        }
         // She's Listening push-to-talk rides the same hook (WPF GlobalKeyboardHook), as on X11.
         if (X11PanicKey.PushToTalk is { } ptt && vk == VirtualKeys.Of(X11PanicKey.PushToTalkKey?.Invoke()) && vk != _boundVk)
             ptt();
@@ -212,6 +221,7 @@ internal static class Win32PanicKey
     internal static void OnUp(int vk)
     {
         if (vk == _boundVk) HeldPanic.Up();
+        if (vk == VirtualKeys.Of(CameraShortcut.Gesture.Key.ToString())) CameraShortcut.Release();
         KeyUp?.Invoke(vk, VirtualKeys.NameOf(vk));
     }
 }

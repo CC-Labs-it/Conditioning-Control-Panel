@@ -305,6 +305,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// CoreWebcam.RevokeConsentAction; UI thread (it closes the Blink Trainer overlays).</summary>
         internal static void RevokeConsent()
         {
+            Views.Windows.GazeDebugCursorWindow.CloseActive();
             Views.Overlays.BlinkTrainerSession.Stop();
             Instance.Stop();
             WebcamCalibrationData.DeleteIfExists();   // WPF ClearCalibration (WebcamTrackingService.cs:1112)

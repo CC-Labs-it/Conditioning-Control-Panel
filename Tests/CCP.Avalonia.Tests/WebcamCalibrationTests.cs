@@ -535,15 +535,20 @@ public sealed class WebcamCalibrationTests
     });
 
     [Fact]
-    public void QuickRecal_OpensOnTheCalibratedMonitor() => WithTracker(start: false, (tracker, _) =>
+    public void QuickRecal_OpensOnTheSelectedMonitorAndFallsBackToPrimary() => WithTracker(start: false, (tracker, _) =>
     {
         var screen = new global::Avalonia.Controls.Window().Screens.All[0];
-        tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { X = screen.Bounds.X, Y = screen.Bounds.Y } };
+        CoreSettings.Current.WebcamCalibrationScreen = screen.DisplayName;
+        // WPF App.GetWebcamCalibrationScreen follows Settings, even if the old fit was elsewhere.
+        tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { X = -99999, Y = 7 } };
         var win = new WebcamQuickRecalWindow();
         Assert.Equal(WindowStartupLocation.Manual, win.WindowStartupLocation);
         Assert.Equal(screen.Bounds.Position, win.Position);
-        tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { X = -99999, Y = 7 } };
-        Assert.Equal(WindowStartupLocation.CenterScreen, new WebcamQuickRecalWindow().WindowStartupLocation);   // unknown monitor: left alone
+        CoreSettings.Current.WebcamCalibrationScreen = "disconnected-display";
+        var fallback = new WebcamQuickRecalWindow();
+        Assert.Equal(WindowStartupLocation.Manual, fallback.WindowStartupLocation);
+        Assert.Equal(fallback.Screens.Primary!.Bounds.Position, fallback.Position);
+        Assert.Equal("disconnected-display", CoreSettings.Current.WebcamCalibrationScreen);
     });
 
     private static Action<global::Avalonia.Point>? GazeHandlers(WebcamTracker tracker) =>

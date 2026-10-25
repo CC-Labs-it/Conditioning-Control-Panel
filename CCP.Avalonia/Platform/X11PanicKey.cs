@@ -189,8 +189,38 @@ internal static class X11PanicKey
                 if (keycode < 0) continue;
 
                 Resolve();
-                if (evType == XI_RawKeyRelease) { Route(false, keycode, onPress); continue; }
+                var pauseKey = global::ConditioningControlPanel.CoreSettings.Current.PauseKey;
+                bool isPause = KeysymOf(pauseKey) is var pauseSym and not 0 && keycode == XKeysymToKeycode(display, pauseSym);
+                if (evType == XI_RawKeyRelease)
+                {
+                    Route(false, keycode, onPress);
+                    if (isPause) Win32Input.ReleasePauseKey();
+                    if (KeysymOf(CameraShortcut.Gesture.Key.ToString()) is var cameraSym and not 0
+                        && keycode == XKeysymToKeycode(display, cameraSym)) CameraShortcut.Release();
+                    continue;
+                }
+                if (isPause) Win32Input.OnPauseKeyDown(ConditioningControlPanel.Input.VirtualKeys.Of(pauseKey));
                 Route(true, keycode, onPress);
+                if (CameraShortcut.Pressed != null)
+                {
+                    var gesture = CameraShortcut.Gesture;
+                    if (KeysymOf(gesture.Key.ToString()) is var cs and not 0 && keycode == XKeysymToKeycode(display, cs))
+                    {
+                        var keys = new byte[32];
+                        XQueryKeymap(display, keys);
+                        bool Down(string name)
+                        {
+                            int code = XKeysymToKeycode(display, XStringToKeysym(name));
+                            return code > 0 && (keys[code / 8] & (1 << (code % 8))) != 0;
+                        }
+                        var mods = global::Avalonia.Input.KeyModifiers.None;
+                        if (Down("Control_L") || Down("Control_R")) mods |= global::Avalonia.Input.KeyModifiers.Control;
+                        if (Down("Alt_L") || Down("Alt_R")) mods |= global::Avalonia.Input.KeyModifiers.Alt;
+                        if (Down("Shift_L") || Down("Shift_R")) mods |= global::Avalonia.Input.KeyModifiers.Shift;
+                        if (Down("Super_L") || Down("Super_R")) mods |= global::Avalonia.Input.KeyModifiers.Meta;
+                        CameraShortcut.Route(gesture.Key, mods);
+                    }
+                }
                 // She's Listening push-to-talk rides the same XI2 listener (WPF GlobalKeyboardHook).
                 if (PushToTalk is { } ptt && KeysymOf(PushToTalkKey?.Invoke()) is var ps and not 0
                     && keycode == XKeysymToKeycode(display, ps)) ptt();
