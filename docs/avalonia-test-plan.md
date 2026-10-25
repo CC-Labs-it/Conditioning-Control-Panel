@@ -673,3 +673,11 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Bubble Count remaining-path checks (fin5)
+
+1. Open For You, then Studio > Bubble Count > Test Now twice. No Freeze or game starts over the feed. Close the feed within 90 seconds: one Freeze occurs, followed by the game after 800 ms. Leave the feed open over 90 seconds: no old game replays after closing it. WPF `Services/BubbleCountService.cs:223-347`. Rows: `feat-bubble-count`.
+2. Start a scheduled game defer over For You, then turn Bubble Count off or stop the engine. Close the feed: no game replays. Repeat with panic during a Test Now defer. WPF `Services/BubbleCountService.cs:270-303`, `:928-958`. Rows: `feat-bubble-count`.
+3. During a Bubble Count clip, answer or strict retry, request a mandatory video and a lock card. Each waits for the game to end (handover can lag one second). Panic drops pending requests. WPF `Services/BubbleCountService.cs:424-440`, `Services/UI/InteractionQueueService.cs:276-300`. Rows: `feat-bubble-count`.
+4. With no enabled local videos or active pack videos, Test Now shows the localized Bubble Count warning every time. Scheduled games warn once per launch. Installed packs all off show the turn-a-pack-on guidance. WPF `Services/BubbleCountService.cs:535-550`, `Services/BubbleCountNoVideos.cs:17-27`. Rows: `feat-bubble-count`.
+5. In a disposable test session, leave a game unanswered: stuck recovery closes it after the longer of five minutes or clip duration plus 150 seconds; a strict retry renews the allowance for 330 seconds. Panic still closes it immediately and gives no completion credit. WPF `Services/BubbleCountService.cs:521`, `:639-642`, `Services/UI/InteractionQueueService.cs:284-300`. Rows: `feat-bubble-count`.

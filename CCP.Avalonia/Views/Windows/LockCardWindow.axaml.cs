@@ -1068,6 +1068,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // is also why the WPF original deferred a second show rather than reusing the set.
             if (_allWindows.Count > 0) return;
 
+            // ponytail: reuse 1 s polling instead of a second global FIFO; hold through answer/retry.
+            if (CoreEngine.BubbleCount?.IsBusy == true)
+            {
+                _heldForBubbleCount ??= () => ShowOnAllMonitors(phrase, repeats, strictMode, isTest, voiceMode);
+                _bubbleWait ??= DispatcherTimer.Run(() =>
+                {
+                    ReplayAfterBubbleCount();
+                    return _heldForBubbleCount != null;
+                }, BubbleCountScheduler.QueuePoll);
+                return;
+            }
+
             // #763 (WPF LockCardService.cs:157): a visible pop quiz blocks the card. Hold one
             // replay until the last quiz closes, as PopQuizHost does the other way round.
             if (PopQuizWindow.IsAnyOpen())
@@ -1174,12 +1186,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The last card left the screen: a pop quiz deferred behind it replays (#763).</summary>
         public static event Action? AllClosed;
 
-        private static Action? _heldForQuiz;
+        private static Action? _heldForQuiz, _heldForBubbleCount;
+        private static IDisposable? _bubbleWait;
+
+        internal static void ReplayAfterBubbleCount()
+        {
+            if (CoreEngine.BubbleCount?.IsBusy == true) return;
+            _bubbleWait?.Dispose(); _bubbleWait = null;
+            var replay = _heldForBubbleCount; _heldForBubbleCount = null;
+            replay?.Invoke();
+        }
 
         /// <summary>Forget a card held behind a pop quiz. An engine stop calls this BEFORE closing the
         /// quizzes, or the last quiz closing would replay the card (and its mic) mid-stop; WPF's stop
         /// drops deferred interactions the same way.</summary>
-        internal static void DropHeld() => _heldForQuiz = null;
+        internal static void DropHeld()
+        {
+            _heldForQuiz = _heldForBubbleCount = null;
+            _bubbleWait?.Dispose(); _bubbleWait = null;
+        }
 
         static LockCardWindow() =>
             PopQuizWindow.AllClosed += () => { var r = _heldForQuiz; _heldForQuiz = null; r?.Invoke(); };
@@ -1188,7 +1213,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// this: <c>_isCompleted</c> is set first on each window so OnClosing cannot refuse.</summary>
         public static void ForceCloseAll()
         {
-            _heldForQuiz = null;
+            DropHeld();
             var windows = _allWindows.ToList();
             _allWindows.Clear();
             foreach (var window in windows)

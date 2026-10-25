@@ -63,7 +63,7 @@ namespace ConditioningControlPanel.Services
         private readonly Func<IReadOnlyList<string>> _library;
         private readonly Random _random = new();
         private Queue<string> _queue = new();
-        private ITimer? _scheduler, _preroll;
+        private ITimer? _scheduler, _preroll, _bubbleWait;
         private volatile bool _running, _playing;
         private int _retryGeneration, _noVideosShown;
 
@@ -319,6 +319,21 @@ namespace ConditioningControlPanel.Services
         public bool Trigger(bool? strictOverride = null, string? path = null)
         {
             if (_playing) return false;
+            // WPF InteractionQueue: keep one video request behind the whole game, including retries.
+            if (CoreEngine.BubbleCount?.IsBusy == true)
+            {
+                if (_bubbleWait != null) return true;
+                ITimer? pending = null;
+                pending = _time.CreateTimer(_ => CoreDispatch.Post(() =>
+                {
+                    if (!ReferenceEquals(pending, _bubbleWait)) return;
+                    Dispose(ref _bubbleWait);
+                    Trigger(strictOverride, path);
+                }), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                _bubbleWait = pending;
+                pending.Change(BubbleCountScheduler.QueuePoll, Timeout.InfiniteTimeSpan);
+                return true;
+            }
             path ??= PickNext();
             if (path == null)
             {
@@ -410,6 +425,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF ForceCleanup: close without scheduling a replacement.</summary>
         public void ForceCleanup()
         {
+            Dispose(ref _bubbleWait);
             _retryGeneration++;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.

@@ -21,6 +21,63 @@ namespace CCP.Avalonia.Tests;
 public sealed class BubbleCountQueueTests
 {
     [Fact]
+    public Task LiveFeedDefersTestNowUntilClosed() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var feed = new ConditioningControlPanel.Avalonia.Views.Games.GameWindow(
+            ConditioningControlPanel.Avalonia.Views.Games.GameWindow.Games["fyp"]);
+        var clock = new Clock();
+        var b = new BubbleCountScheduler(BubbleCountHost.Instance, clock, () => Array.Empty<string>());
+        try
+        {
+            feed.Show();
+            Assert.True(BubbleCountHost.Instance.FeedOwnsTheScreen);
+            b.Trigger(true);
+            Assert.False(b.IsBusy);
+            feed.Close();
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(b.IsBusy);
+        }
+        finally { feed.Close(); b.ForceCleanup(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task LockCardWaitsForBubbleGameAndPanicDropsReplay() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var clock = new Clock();
+        var previous = CoreEngine.BubbleCount;
+        var b = new BubbleCountScheduler(BubbleCountHost.Instance, clock, () => Array.Empty<string>());
+        CoreEngine.BubbleCount = b;
+        try
+        {
+            b.Trigger(true); // stay in the lead-in: no real video or native player
+            LockCardWindow.ShowOnAllMonitors("obey", 1, false, isTest: true);
+            Assert.False(LockCardWindow.IsAnyOpen());
+            b.ForceCleanup();
+            LockCardWindow.ReplayAfterBubbleCount();
+            Assert.True(LockCardWindow.IsAnyOpen());
+            LockCardWindow.ForceCloseAll();
+            b.Trigger(true);
+            LockCardWindow.ShowOnAllMonitors("obey", 1, false, isTest: true);
+            LockCardWindow.DropHeld();
+            b.ForceCleanup();
+            LockCardWindow.ReplayAfterBubbleCount();
+            Assert.False(LockCardWindow.IsAnyOpen());
+        }
+        finally { LockCardWindow.ForceCloseAll(); b.ForceCleanup(); CoreEngine.BubbleCount = previous; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task TestNowOverALockCardWaitsForIt() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)

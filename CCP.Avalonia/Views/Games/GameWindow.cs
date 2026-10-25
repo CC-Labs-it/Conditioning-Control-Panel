@@ -235,6 +235,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         // ---- panic (PanicSurfaces "games", WPF GameSurfaces.cs:53-55 -> CloseActive("panic")) ----
 
+        internal static bool FeedOwnsTheScreen { get { lock (Open) return Open.Any(w => w.Spec.Id == FypId); } }
+
         internal static bool IsAnyOpen() { lock (Open) return Open.Count > 0; }
 
         internal static GameWindow[] OpenWindowsForTests() { lock (Open) return Open.ToArray(); }

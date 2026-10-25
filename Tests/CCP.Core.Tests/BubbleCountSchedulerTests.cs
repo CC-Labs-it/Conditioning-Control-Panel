@@ -21,6 +21,9 @@ public sealed class BubbleCountSchedulerTests
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete) => Shown.Add((path, difficulty, strict, onComplete));
         public void ShowMessage(string text, int ms, Action then) => Messages.Add((text, then));
         public void CloseAll() => Closes++;
+        public bool FeedOwnsTheScreen { get; set; }
+        public int Notices;
+        public void TellNoVideos() => Notices++;
         public bool Other;
         public bool OtherInteractionActive => Other;
     }
@@ -42,6 +45,125 @@ public sealed class BubbleCountSchedulerTests
     }
 
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
+
+    private sealed class VideoHost : IMandatoryVideoHost
+    {
+        public int Shown;
+        public void Show(string path, bool strict) => Shown++;
+        public double CloseAll() => 0;
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) => then();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Feed_replay_rechecks_engine_and_enabled_flag(bool stop) => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true };
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        b.Start(); b.Trigger();
+        if (stop) b.Stop(); else CoreSettings.Current.BubbleCountEnabled = false;
+        host.FeedOwnsTheScreen = false;
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Empty(host.Shown);
+        Assert.False(b.IsBusy);
+        b.Stop();
+    });
+
+    [Fact]
+    public void Mandatory_video_waits_for_game_and_panic_drops_pending_video() => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var videoHost = new VideoHost();
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        var video = new MandatoryVideoScheduler(videoHost, clock, () => Clips);
+        var prev = CoreEngine.BubbleCount;
+        CoreEngine.BubbleCount = b;
+        try
+        {
+            b.Trigger(true); clock.Advance(BubbleCountScheduler.LeadIn);
+            Assert.True(video.Trigger());
+            clock.Advance(TimeSpan.FromSeconds(5));
+            Assert.False(video.IsPlaying);
+            Assert.Equal(0, videoHost.Shown);
+            host.Shown[0].Done(true);
+            clock.Advance(TimeSpan.FromSeconds(3));
+            Assert.True(video.IsPlaying);
+            Assert.Equal(1, videoHost.Shown);
+            video.ForceCleanup();
+            b.Trigger(true); video.Trigger(); video.ForceCleanup(); b.ForceCleanup();
+            clock.Advance(TimeSpan.FromSeconds(3));
+            Assert.Equal(1, videoHost.Shown);
+        }
+        finally { video.ForceCleanup(); b.ForceCleanup(); CoreEngine.BubbleCount = prev; }
+    });
+
+    [Fact]
+    public void Feed_coalesces_triggers_then_replays_without_freezing_early() => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true };
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        b.Trigger(true); b.Trigger(true);
+        Assert.False(b.IsBusy);
+        clock.Advance(TimeSpan.FromSeconds(89));
+        Assert.Empty(host.Shown);
+        host.FeedOwnsTheScreen = false;
+        clock.Advance(TimeSpan.FromSeconds(0.5));
+        Assert.True(b.IsBusy);
+        clock.Advance(BubbleCountScheduler.LeadIn);
+        Assert.Single(host.Shown);
+        b.ForceCleanup();
+    });
+
+    [Fact]
+    public void Feed_wait_expires_and_panic_cancels_replay() => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true };
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        b.Trigger(true);
+        clock.Advance(TimeSpan.FromSeconds(91));
+        host.FeedOwnsTheScreen = false;
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Empty(host.Shown);
+        host.FeedOwnsTheScreen = true;
+        b.Trigger(true); b.ForceCleanup();
+        host.FeedOwnsTheScreen = false;
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Empty(host.Shown);
+    });
+
+    [Fact]
+    public void Empty_library_warns_once_per_launch_but_every_test() => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var b = new BubbleCountScheduler(host, clock, () => Array.Empty<string>());
+        b.Start();
+        for (int i = 0; i < 2; i++) { b.Trigger(); clock.Advance(TimeSpan.FromSeconds(1)); }
+        Assert.Equal(1, host.Notices);
+        b.Trigger(true); clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(2, host.Notices);
+        Assert.False(b.IsBusy);
+        b.Stop();
+    });
+
+    [Fact]
+    public void Stuck_game_uses_duration_plus_150_seconds_and_retry_renews() => With(true, true, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { LastVideoDurationSeconds = 400 };
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        b.Trigger(true); clock.Advance(BubbleCountScheduler.LeadIn);
+        clock.Advance(TimeSpan.FromSeconds(549));
+        Assert.True(b.IsBusy);
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.False(b.IsBusy);
+        Assert.Equal(1, host.Closes);
+        b.Trigger(true); clock.Advance(BubbleCountScheduler.LeadIn);
+        host.Shown[^1].Done(false);
+        host.Messages[^1].Then();
+        clock.Advance(TimeSpan.FromSeconds(329));
+        Assert.True(b.IsBusy);
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.False(b.IsBusy);
+    });
 
     [Fact]
     public void Rules_match_wpf()

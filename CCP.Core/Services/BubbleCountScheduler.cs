@@ -26,6 +26,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>The game can play at all (Avalonia: the shared LibVLC loaded). False skips it,
         /// as WPF skips before counting it started (BubbleCountService.cs:373).</summary>
         bool CanPlay => true;
+        bool FeedOwnsTheScreen => false;
+        void TellNoVideos() { }
     }
 
     /// <summary>
@@ -36,7 +38,7 @@ namespace ConditioningControlPanel.Services
     /// The Bambi Freeze lead-in (:353) goes through <see cref="CoreSubliminal.TriggerBambiFreeze"/>.
     /// A game due while another fullscreen interaction is up waits and replays once it ends
     /// (WPF TriggerGame :321 queueing on InteractionQueue), re-checked every <see cref="QueuePoll"/>.
-    /// Pack clips come through <see cref="PackVideos"/>. ponytail: the For You defer needs the feed host.
+    /// Pack clips come through <see cref="PackVideos"/>; the head reports feed ownership.
     /// </summary>
     public sealed class BubbleCountScheduler
     {
@@ -54,7 +56,9 @@ namespace ConditioningControlPanel.Services
         private readonly Func<IReadOnlyList<string>> _library;
         private readonly Random _random = new();
         private Queue<string> _queue = new();
-        private ITimer? _scheduler, _leadIn, _queued;
+        private ITimer? _scheduler, _leadIn, _queued, _feedWait, _stuck;
+        private DateTimeOffset _feedDeadline;
+        private bool _toldNoVideos;
         private DateTimeOffset _lastXp = DateTimeOffset.MinValue;
         private int _retryCount;
 
@@ -110,6 +114,8 @@ namespace ConditioningControlPanel.Services
         {
             IsRunning = false;
             Dispose(ref _scheduler);
+            Dispose(ref _feedWait);
+            _feedDeadline = default;
         }
 
         /// <summary>WPF RefreshSchedule: a live schedule picks up a new frequency.</summary>
@@ -119,6 +125,8 @@ namespace ConditioningControlPanel.Services
         public void ForceCleanup()
         {
             Dispose(ref _leadIn);
+            Dispose(ref _feedWait);
+            _feedDeadline = default;
             Dispose(ref _queued);   // WPF panic: InteractionQueue.ForceReset drops the queued game
             var wasBusy = IsBusy;
             Idle();   // WPF ForceCleanup: App.Bubbles.Resume()
@@ -150,7 +158,17 @@ namespace ConditioningControlPanel.Services
             if (IsBusy || (!forceTest && !IsRunning)) return;
             if (!forceTest && !CoreSettings.Current.BubbleCountEnabled)
             {
+                _feedDeadline = default;
                 Log.Information("BubbleCountService: game dropped - bubble count is disabled in settings");
+                return;
+            }
+            if (_host.FeedOwnsTheScreen)
+            {
+                if (_feedWait == null)
+                {
+                    if (_feedDeadline == default) _feedDeadline = _time.GetUtcNow() + TimeSpan.FromSeconds(90);
+                    WaitForFeed(forceTest);
+                }
                 return;
             }
             if (_host.OtherInteractionActive)
@@ -160,7 +178,11 @@ namespace ConditioningControlPanel.Services
                 QueueBehind(forceTest);
                 return;
             }
+            Dispose(ref _queued);
+            Dispose(ref _feedWait);
+            _feedDeadline = default;
             IsBusy = true;
+            ExtendTimeout(0);
             _retryCount = 0;
             CoreBubbles.Pause();   // WPF App.Bubbles.PauseAndClear: nothing else to count
             CoreSubliminal.TriggerBambiFreeze();   // WPF :353, before the 800 ms lead-in
@@ -173,7 +195,37 @@ namespace ConditioningControlPanel.Services
                 {
                     Log.Warning("BubbleCountService: No videos found");
                     Idle();
+                    if (forceTest || !_toldNoVideos)
+                    {
+                        _toldNoVideos = true;
+                        _host.TellNoVideos();
+                    }
                 }
+            });
+        }
+
+        // WPF RunWhenFeedClear: one replay, 500 ms polling, a 90-second ceiling.
+        private void WaitForFeed(bool forceTest) => _feedWait = After(TimeSpan.FromMilliseconds(500), mine =>
+        {
+            if (!ReferenceEquals(mine, _feedWait)) return;
+            Dispose(ref _feedWait);
+            if ((!forceTest && (!IsRunning || !CoreSettings.Current.BubbleCountEnabled)) ||
+                (_host.FeedOwnsTheScreen && _time.GetUtcNow() >= _feedDeadline))
+            {
+                _feedDeadline = default;
+                return;
+            }
+            if (_host.FeedOwnsTheScreen) WaitForFeed(forceTest);
+            else Trigger(forceTest);
+        });
+
+        // WPF InteractionQueue.ExtendTimeout adds 30 s, with a 5-minute minimum.
+        private void ExtendTimeout(double seconds)
+        {
+            Dispose(ref _stuck);
+            _stuck = After(TimeSpan.FromSeconds(Math.Max(300, seconds + 30)), mine =>
+            {
+                if (ReferenceEquals(mine, _stuck) && IsBusy) ForceCleanup();
             });
         }
 
@@ -185,7 +237,7 @@ namespace ConditioningControlPanel.Services
             else Trigger(forceTest);
         });
 
-        private bool Play(bool strict)
+        private bool Play(bool strict, bool retry = false)
         {
             var path = PickNext();
             if (path == null) return false;
@@ -198,7 +250,11 @@ namespace ConditioningControlPanel.Services
                 return true;
             }
             CoreProgression.TrackBubbleCountGameStarted();
-            try { _host.Show(path, CoreSettings.Current.BubbleCountDifficulty, strict, OnComplete); }
+            try
+            {
+                _host.Show(path, CoreSettings.Current.BubbleCountDifficulty, strict, OnComplete);
+                if (IsBusy) ExtendTimeout(retry ? 300 : _host.LastVideoDurationSeconds + 120);
+            }
             catch (Exception ex) { Log.Error(ex, "Failed to start bubble count game"); Idle(); _retryCount = 0; }
             return true;
         }
@@ -241,12 +297,14 @@ namespace ConditioningControlPanel.Services
             _host.ShowMessage(CoreMods.BubbleCountRetryMessage ?? "WRONG!\nWATCH AGAIN", 2000, () =>
             {
                 if (!IsBusy) return;   // panic during the message
-                if (!Play(true)) { Log.Warning("BubbleCountService: No videos for retry, granting mercy"); _retryCount = 0; Idle(); }
+                ExtendTimeout(300);
+                if (!Play(true, retry: true)) { Log.Warning("BubbleCountService: No videos for retry, granting mercy"); _retryCount = 0; Idle(); }
             });
         }
 
         private void Idle()
         {
+            Dispose(ref _stuck);
             IsBusy = false;
             CoreBubbles.Resume();
         }

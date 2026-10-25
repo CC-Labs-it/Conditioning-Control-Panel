@@ -33,6 +33,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public bool OtherInteractionActive =>
             CoreEngine.Video?.IsPlaying == true || LockCardWindow.IsAnyOpen() || PopQuizWindow.IsAnyOpen();
 
+        // ponytail: ghost mode is not ported by this head; every live feed owns the screen.
+        public bool FeedOwnsTheScreen => Games.GameWindow.FeedOwnsTheScreen;
+
+        public void TellNoVideos() => Dispatcher.UIThread.Post(() =>
+        {
+            var packs = ContentPackStore.Current;
+            var key = packs?.InstalledPackIds.Count > 0 && packs.GetActivePackIds().Count == 0
+                ? "bubblecount_no_videos_packs_off" : "bubblecount_no_videos";
+            App.Notifications.Show(global::ConditioningControlPanel.Localization.Loc.Get(key), Helpers.NotificationType.Warning);
+        });
+
         // The app seeds CoreDispatch (AvaloniaCoreDispatch), but headless tests do not: every door hops onto the UI thread.
         // WPF skips the game outright when the shared LibVLC is unusable (BubbleCountService.cs:373):
         // opening it would end as a failed count and, in strict mode, retry forever.
