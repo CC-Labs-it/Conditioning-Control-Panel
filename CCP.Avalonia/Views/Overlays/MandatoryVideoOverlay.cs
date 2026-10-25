@@ -63,6 +63,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private WriteableBitmap? _fill;
         private bool _closing, _didDuck, _attention, _gracePaused, _graceConsumed;
         private long _watchedMs;
+
+        // WPF VideoService.PrimaryPlaybackTimeMsChanged: the primary player's raw millisecond clock.
+        internal event Action<long>? PrimaryPlaybackTimeMsChanged;
+        internal void ReportPlaybackTime(long milliseconds)
+        {
+            Interlocked.Exchange(ref _watchedMs, milliseconds);
+            try { PrimaryPlaybackTimeMsChanged?.Invoke(milliseconds); }
+            catch (Exception ex) { Log.Debug(ex, "Primary playback time handler failed"); }
+        }
         /// <summary>Stopwatch timestamp of the last frame shown (tests age it to fake a lost output).</summary>
         internal long FrameTs;
         private bool _healUsed, _strict;
@@ -195,7 +204,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var live = _player;
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
             _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) LibVlcAudio.ApplyPreferredDevice(live); });
-            _player.TimeChanged += (_, e) => Interlocked.Exchange(ref _watchedMs, e.Time);
+            _player.TimeChanged += (_, e) =>
+            {
+                if (_player == live) ReportPlaybackTime(e.Time);
+            };
             _player.EndReached += (_, _) =>
             {
                 var len = _player?.Length ?? 0;
