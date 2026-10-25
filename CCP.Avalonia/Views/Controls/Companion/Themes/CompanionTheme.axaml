@@ -1491,7 +1491,8 @@
            CmpShimmerSweepStoryboard     TranslateTransform.X -90 to host width (900 default),
                                          1.4s, 0.25s delay, CubicEaseInOut, once
            CmpNodePulseStoryboard        scale 1.0 to 1.18 and back, 0.32s out + 0.32s back, once
-           CmpThinkingDotsStoryboard     Opacity 0.25 to 1.0, 0.45s each way, forever while sending
+           CmpThinkingDotsStoryboard     Opacity 0.25 to 1.0, 0.45s each way, 0.15s stagger, while IsThinking
+                                         (ChatThresholdView BeatLoop; parks when hidden or minimised)
            CmpCursorBlinkStoryboard      IsVisible on 0.6s / off 0.6s, forever while the card is live -->
 
 </ResourceDictionary>

@@ -17,6 +17,7 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Services.Deeper;
+using ConditioningControlPanel.Services.Webcam;
 using DeeperFilter = ConditioningControlPanel.Services.Deeper.EnhancementLibraryFilter;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs
@@ -42,6 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             DataContext = new DeeperTabViewModel();
             ApplyFeatureArt();
             AddHandler(KeyDownEvent, DeeperTab_KeyDown, RoutingStrategies.Tunnel);   // WPF PreviewKeyDown
+            PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && IsVisible) RefreshWebcamColumn(); };
         }
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -99,6 +101,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private MainShellWindow? Owner => TopLevel.GetTopLevel(this) as MainShellWindow;
 
         private DeeperTabViewModel? ViewModel => DataContext as DeeperTabViewModel;
+
+        /// <summary>WPF RefreshDeeperWebcamColumn: both launchers show the same camera state.</summary>
+        internal void RefreshWebcamColumn()
+        {
+            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(RefreshWebcamColumn); return; }
+            if (ViewModel == null) return;
+            ViewModel.RefreshWebcamColumn();
+            bool consented = WebcamConsent.IsCurrent(CoreSettings.Current);
+            DeeperWebcamConsentCard.Background = new SolidColorBrush(consented
+                ? Color.FromArgb(0x1A, 0x4A, 0xDE, 0x80) : Color.FromArgb(0x1A, 0xFF, 0xD0, 0x80));
+            DeeperWebcamConsentCard.BorderBrush = new SolidColorBrush(consented
+                ? Color.FromRgb(0x4A, 0xDE, 0x80) : Color.FromRgb(0xFF, 0xD0, 0x80));
+            BtnDeeperWebcamStartStopTracker.Content = Platform.WebcamTracker.Instance.IsRunning ? "Stop tracker" : "Start tracker";
+        }
+
 
         private static EnhancementLibraryEntry? EntryOf(object? sender) =>
             ((sender as Control)?.DataContext as DeeperLibraryRowVm)?.Entry;
@@ -195,16 +212,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
         }
         private bool _webcamRefreshQueued;
-
-        internal void RefreshWebcamColumn()
-        {
-            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(RefreshWebcamColumn); return; }
-            ViewModel?.RefreshWebcam();
-            bool consented = Services.Webcam.WebcamConsent.IsCurrent(CoreSettings.Current);
-            DeeperWebcamConsentCard.Background = new SolidColorBrush(Color.Parse(consented ? "#1A4ADE80" : "#1AFFD080"));
-            DeeperWebcamConsentCard.BorderBrush = new SolidColorBrush(Color.Parse(consented ? "#4ADE80" : "#FFD080"));
-            BtnDeeperWebcamStartStopTracker.Content = Platform.WebcamTracker.Instance.IsRunning ? "Stop tracker" : "Start tracker";
-        }
         private void BtnDeeperWelcomeDismiss_Click(object? sender, RoutedEventArgs e) => Owner?.DismissDeeperWelcomeCard();
         private void BtnDeeperWelcomeDemo_Click(object? sender, RoutedEventArgs e) => Owner?.BtnDeeperWelcomeDemo_Click();
         private void BtnDeeperWelcomeTour_Click(object? sender, RoutedEventArgs e) => Owner?.BtnDeeperWelcomeTour_Click();
@@ -565,8 +572,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             foreach (var name in names) PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
         }
 
-        private bool Consented => Services.Webcam.WebcamConsent.IsCurrent(CoreSettings.Current);
-        internal void RefreshWebcam() => Notify(nameof(ConsentStatusText), nameof(ConsentButtonText), nameof(ShowRevokeConsent), nameof(CalibrationStatusText));
+        internal void RefreshWebcamColumn() => Notify(nameof(ConsentStatusText), nameof(ConsentButtonText),
+            nameof(ShowRevokeConsent), nameof(CalibrationStatusText));
+
+        private bool Consented => WebcamConsent.IsCurrent(CoreSettings.Current);
         public string ConsentStatusText => Loc.Get(Consented ? "blink_trainer_consent_granted" : "blink_trainer_consent_required");
         public string ConsentButtonText => Loc.Get(Consented ? "blink_trainer_consent_manage" : "blink_trainer_consent_grant");
         public bool ShowRevokeConsent => Consented;
