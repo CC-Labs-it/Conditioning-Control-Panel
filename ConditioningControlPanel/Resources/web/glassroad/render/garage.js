@@ -12,7 +12,8 @@ import {dressKart,riderOnly,VEHICLE_MECHANISMS} from './wardrobe.js';
 import {createEmiSkin} from './emiSkin.js';
 import {garageArrows} from './garageArrows.js';
 import {garageUi} from '../hud/garage.js';
-import {KARTS,LOCKED,STORAGE,loadGarage,stepKart,routeTo,raceLook} from '../hud/garageState.js';
+import {KARTS,OUTFITS,LOCKED,STORAGE,loadGarage,stepKart,routeTo,raceLook} from '../hud/garageState.js';
+import {warmGarageWardrobe} from './garageWarm.js';
 
 /** One menu scene on the game's existing renderer, driven by the existing frame loop. */
 export async function createGarage({art,renderer,canvas,action,sound,track,laps,trackId='threshold',online=true,changeTrack}) {
@@ -134,9 +135,14 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   const observer=new ResizeObserver(resize);observer.observe(canvas);
   redress();paint();resize();update(0,true);
   // The full wardrobe warms before the loading card lifts; no shader compile on an outfit click.
-  const initial=state.outfit,allOutfits=new T.Box3();
-  for(const id of ['none','varsity','croupier','drone-protocol','builder','cheer','pool','snow-day','swim']){state.outfit=id;redress();const bounds=riderBounds();allOutfits.expandByPoint(new T.Vector3(...bounds.min));allOutfits.expandByPoint(new T.Vector3(...bounds.max));await renderer.three.compileAsync(scene,camera);}
-  wardrobeBounds={min:allOutfits.min.toArray(),max:allOutfits.max.toArray()};state.outfit=initial;redress();paint();
+  dress?.dispose();dress=null;
+  wardrobeBounds=await warmGarageWardrobe({
+    outfits:OUTFITS.filter(([id])=>id!=='none').map(([id])=>id),
+    attach:id=>dressKart(art,model,{outfit:raceLook({...state,outfit:id}).outfit,vehicle:null}),
+    measure(){style.apply(model);customBounds=null;return riderBounds();},
+    compile:()=>renderer.three.compileAsync(scene,camera),
+    restore(){redress();paint();},
+  });
   return {
     scene,camera,nav,life:{emi:emiLife.metrics,vehicles:vehicleLives.map(l=>l.metrics)},get state(){return {...state};},get yaw(){return yaw;},get custom(){return custom;},get busy(){return !!moving||viewBusy;},get transition(){return {progress:view,busy:viewBusy,framing:customFrame};},get selected(){return KARTS[selected][0];},select,customize,change,
     setCourse(course){ui.setCourse(course);},

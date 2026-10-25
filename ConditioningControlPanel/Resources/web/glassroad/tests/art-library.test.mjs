@@ -102,6 +102,25 @@ test('overlapping course leases keep shared transient assets alive until their l
   library.dispose(); assert.ok(f.resources.every(row => row.disposals === 1));
 });
 
+test('garage and course acquisition starts together and shares pending racer decodes', async t => {
+  const f = fixture(t), library = createArtLibrary({}), makeModel = f.model, pending = new Map();
+  f.model = url => new Promise(resolve => pending.set(String(url), () => resolve(makeModel(url))));
+  const garageTask = library.acquire({ trackId: 'shared', want: ['emi-teacup-kart'] });
+  const courseTask = library.acquire({ trackId: 'fixture', want: ['emi-teacup-kart', 'course-a'] });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(pending.size, 2, 'course geometry starts before the held garage model completes');
+  for (const finish of pending.values()) finish();
+  const [garage, course] = await Promise.all([garageTask, courseTask]);
+  assert.equal(garage.model('emi-teacup-kart'), course.model('emi-teacup-kart'));
+  assert.equal(currentArt(), course, 'shared completion does not replace the course material context');
+  assert.equal(f.manifests, 1);
+  assert.ok([...f.loads.values()].every(count => count === 1));
+  course.release();
+  assert.ok(garage.model('emi-teacup-kart'), 'the retained garage survives course release');
+  library.dispose();
+  assert.ok(f.resources.every(row => row.disposals === 1));
+});
+
 test('texture tier changes keep source model decoding shared but never mutate a leased texture sampler', async t => {
   const f = fixture(t), library = createArtLibrary({}), want = ['emi-teacup-kart', 'emi-faces'];
   setTier('high'); const high = await library.acquire({ trackId: 'shared', want });
