@@ -85,6 +85,8 @@ namespace ConditioningControlPanel.Services
         public DateTime? LastSyncTime { get; private set; }
         /// <summary>WPF FeatureDayLog.Rebaseline after adopting another device's lifetime counters.</summary>
         public Action? LifetimeLifted { get; set; }
+        /// <summary>WPF's silent achievement union, owned by the head's achievement store.</summary>
+        public Action<IEnumerable<string>?>? RestoreAchievements { get; set; }
 
         /// <param name="localAchievements">This install's unlocked achievement ids.</param>
         /// <param name="inSession">The heartbeat's in_session.</param>
@@ -101,6 +103,7 @@ namespace ConditioningControlPanel.Services
         public void MarkLoaded(IEnumerable<string>? serverAchievements)
         {
             _serverAchievements = serverAchievements?.ToArray();
+            RestoreAchievements?.Invoke(_serverAchievements);
             Loaded = true;
         }
 
@@ -293,6 +296,12 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         internal bool AdoptFromResponse(AppSettings s, JObject reply)
         {
+            if (reply["user"]?["achievements"] is JArray achievements)
+            {
+                var ids = achievements.Values<string>().OfType<string>().ToArray();
+                _serverAchievements = (_serverAchievements ?? Array.Empty<string>()).Concat(ids).Distinct().ToArray();
+                RestoreAchievements?.Invoke(ids);
+            }
             bool Flag(string k) => reply[k]?.Type == JTokenType.Boolean && reply.Value<bool>(k);
             int? points = reply["skill_points"]?.Type == JTokenType.Integer ? reply.Value<int>("skill_points") : null;
             var forceReset = Flag("force_skills_reset");

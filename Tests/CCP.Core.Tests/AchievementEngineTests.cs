@@ -30,6 +30,24 @@ public sealed class AchievementEngineTests : IDisposable
         new AchievementStore(path).Load().IsUnlocked(id);
 
     [Fact]
+    public void CloudRestoreUnionsUnknownAndExclusiveIdsSilentlyAndPersists()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        engine.TryUnlock(FreeId);
+        var raised = 0;
+        engine.Unlocked += (_, _) => raised++;
+        engine.RestoreCloud(new[] { ExclusiveId, "future-cloud-id", ExclusiveId });
+        engine.RestoreCloud(null);
+        var loaded = new AchievementStore(MainPath).Load();
+        Assert.True(loaded.IsUnlocked(FreeId));
+        Assert.True(loaded.IsUnlocked(ExclusiveId));
+        Assert.True(loaded.IsUnlocked("future-cloud-id"));
+        Assert.Equal(3, loaded.UnlockedAchievements.Count);
+        Assert.Equal(0, raised);
+        Assert.False(engine.SuppressPopups);
+    }
+
+    [Fact]
     public void AttentionTrackersCountAndUnlockAtWpfThresholds()
     {
         var engine = new AchievementEngine(new AchievementStore(MainPath));

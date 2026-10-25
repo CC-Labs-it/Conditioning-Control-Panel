@@ -768,7 +768,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             Controls.Invites.InvitePanel.ArmExpiry();
             CoreSettings.Save();
             CoreAccount.UnifiedUserId = user.UnifiedId; // before the load: its push is gated on signed in
-            ProfileLoad = AccountSeed.LoadProfileAsync(); // WPF MainWindow.Login.cs:170
+            ProfileLoad = AccountSeed.LoadAfterLoginAsync(); // WPF MainWindow.Login.cs:170
 
             // WPF UpdateServiceProperties
             if (provider == "patreon" && AccountSeed.Patreon is { } p) { p.UnifiedUserId = user.UnifiedId; p.DisplayName = user.DisplayName; }
@@ -794,6 +794,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             {
                 ProgressionClear.Apply(CoreSettings.Current);
                 App.Achievements?.Reset();
+                App.Quests?.ResetProgress(generateQuests: false);
                 AccountSeed.Sync?.Reset();
             }
         }
@@ -978,7 +979,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             s.UnifiedId = result.UnifiedId;
             CoreSettings.Save();
             CoreAccount.UnifiedUserId = result.UnifiedId;
-            ProfileLoad = AccountSeed.LoadProfileAsync(); // WPF MainWindow.Login.cs:170 runs after every sign-in
+            ProfileLoad = AccountSeed.LoadAfterLoginAsync(); // WPF MainWindow.Login.cs:170 runs after every sign-in
             Result = new LoginResult
             {
                 Success = true,

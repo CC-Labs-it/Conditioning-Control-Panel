@@ -148,6 +148,24 @@ internal static class AccountSeed
     /// <summary>Tests only: the client every default-path load and restore uses.</summary>
     internal static Func<V2AuthService> NewV2 = () => new V2AuthService();
 
+    /// <summary>WPF MainWindow.Login.cs:163-204: settle tokens, suppress restored unlock
+    /// notices through load + push, then generate quests after cloud restoration.</summary>
+    internal static async Task LoadAfterLoginAsync()
+    {
+        var id = CoreSettings.Current.UnifiedId;
+        await Task.Delay(TimeSpan.FromMilliseconds(500), Views.Dialogs.LoginDialog.Clock);
+        if (CoreSettings.Current.UnifiedId != id || string.IsNullOrEmpty(id)) return;
+        var achievements = App.Achievements;
+        if (achievements != null) achievements.SuppressPopups = true;
+        try
+        {
+            App.Quests?.EnsureOwnedBy(id);
+            await LoadProfileAsync();
+        }
+        finally { if (achievements != null) achievements.SuppressPopups = false; }
+        if (CoreSettings.Current.UnifiedId == id) App.Quests?.CheckAndGenerateQuests();
+    }
+
     private static async Task<bool> LoadProfileCoreAsync(V2AuthService v2)
     {
         var s = CoreSettings.Current;
@@ -159,6 +177,10 @@ internal static class AccountSeed
             Log.Warning("Profile load: server profile could not be read for {Id}", id);
             return false;
         }
+        // A logout/account switch while the GET was in flight must not restore the old account.
+        if (s.UnifiedId != id) return false;
+        App.Quests?.EnsureOwnedBy(id);
+        App.Achievements?.RestoreCloud(user.Achievements);
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
         // EntitlementTierSync.SignedInWithV2: a rise only for a V2 account with a token.
         if (!string.IsNullOrEmpty(s.AuthToken))
@@ -202,8 +224,9 @@ internal static class AccountSeed
         Patreon?.Logout();
         Discord?.Logout();
         SubscribeStar?.Logout();
-        CoreAccount.UnifiedUserId = null;
         var s = CoreSettings.Current;
+        if (!accountDeleted) App.Quests?.StampOwner(CoreAccount.UnifiedUserId ?? s.UnifiedId);
+        CoreAccount.UnifiedUserId = null;
         s.UnifiedId = null;
         s.AuthToken = null;
         s.UserDisplayName = null;

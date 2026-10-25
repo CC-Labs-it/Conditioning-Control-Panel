@@ -68,6 +68,17 @@ internal sealed class AchievementEngine
         Save();
     }
 
+    /// <summary>WPF ProfileSyncService:2103: union the server ids directly, including ids
+    /// unknown to this client version. Restoration never earns a popup or Discord post.</summary>
+    public void RestoreCloud(System.Collections.Generic.IEnumerable<string>? ids)
+    {
+        if (ids == null) return;
+        var changed = false;
+        foreach (var id in ids)
+            if (!Progress.IsUnlocked(id)) { Progress.Unlock(id); changed = true; }
+        if (changed) Save();
+    }
+
     private static readonly ConcurrentDictionary<string, byte> _alreadyUnlockedNoted = new();
 
     /// <summary>True the first time an already-held achievement is re-asked for in this run.</summary>

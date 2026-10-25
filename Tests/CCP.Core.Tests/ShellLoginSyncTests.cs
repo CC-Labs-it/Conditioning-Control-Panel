@@ -13,6 +13,17 @@ namespace CCP.Core.Tests;
 public class ShellLoginSyncTests
 {
     [Fact]
+    public void CloudAchievementsReachTheStoreOnLoadAndOnSync()
+    {
+        var restored = new List<string>();
+        var sync = new SyncPush(() => null, () => false) {
+            RestoreAchievements = ids => { if (ids != null) restored.AddRange(ids); } };
+        sync.MarkLoaded(new[] { "from-load" });
+        sync.AdoptFromResponse(new AppSettings(), JObject.Parse("""{"user":{"achievements":["from-sync"]}}"""));
+        Assert.Equal(new[] { "from-load", "from-sync" }, restored);
+    }
+
+    [Fact]
     public void ConsentsCarryExplicitRevocationAndRemainIndependent()
     {
         var s = new AppSettings { AllowDiscordDm = true, ShowOnlineStatus = false,

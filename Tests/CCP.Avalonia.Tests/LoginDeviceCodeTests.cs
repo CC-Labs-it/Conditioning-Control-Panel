@@ -168,6 +168,7 @@ public sealed class LoginDeviceCodeTests
                 Assert.Equal("u_dev", s.UnifiedId);
                 Assert.Equal("tok-dev", s.AuthToken);
                 Assert.Equal("u_dev", CoreAccount.UnifiedUserId);
+                clock.Advance(TimeSpan.FromMilliseconds(500));
                 await dialog.ProfileLoad;
             }));
     }
