@@ -174,8 +174,57 @@ namespace ConditioningControlPanel.Services
             return b;
         }
 
-        /// <summary>Draw scale this step: the pop/breathe scale plus WPF's 0.06 x sin(7.5 t) wobble.</summary>
-        public double DrawScale => Scale + 0.06 * Math.Sin(_timeAlive * 7.5 + _wobbleOffset);
+        /// <summary>WPF DANGER_TELEGRAPH_MS: the last stretch of a live fuse breathes faster and deeper.</summary>
+        public const double DangerTelegraphMs = 1200;
+
+        /// <summary>WPF _dangerFactor (BubbleService.cs:4155): 0 until the last DangerTelegraphMs of a
+        /// live fuse, then ramps to 1 at fuse-out. Visual only.</summary>
+        public double DangerFactor
+        {
+            get
+            {
+                if (Spec is not { IsLive: true } || FuseTotalMs <= 0) return 0;
+                double dangerMs = Math.Min(FuseTotalMs, DangerTelegraphMs);
+                return FuseRemainingMs < dangerMs ? Math.Clamp(1.0 - FuseRemainingMs / Math.Max(1, dangerMs), 0, 1) : 0;
+            }
+        }
+
+        /// <summary>Draw scale this step: the pop scale plus WPF's breathe (:4231): 0.06 x sin(7.5 t),
+        /// faster and deeper as the danger ramps; video/htlink breathe 60% calmer (:3233).</summary>
+        public double DrawScale
+        {
+            get
+            {
+                double calm = Spec?.VariantId is "video" or "htlink" ? 0.4 : 1.0, d = DangerFactor;
+                return Scale + (0.06 + d * 0.0225 * calm) * Math.Sin(_timeAlive * (7.5 + d * 9.0 * calm) + _wobbleOffset);
+            }
+        }
+
+        /// <summary>WPF's three fuse-ring phases (BubbleService.cs:4166-4190) as ARGB, the ring's
+        /// opacity in the alpha: yellow while burning, a yellow/red flash from RING_FLASH_FROM_MS,
+        /// solid red with a quickening pulse in the brink window.</summary>
+        public uint FuseRingArgb
+        {
+            get
+            {
+                double brinkMs = Math.Min(FuseTotalMs * 0.30, Chaos.ChaosTuning.RING_BRINK_MS);
+                double flashMs = Math.Min(FuseTotalMs * 0.65, Chaos.ChaosTuning.RING_FLASH_FROM_MS);
+                if (FuseRemainingMs <= brinkMs)
+                {
+                    double pulse = 0.5 + 0.5 * Math.Sin(_timeAlive * (18.0 + DangerFactor * 34.0));
+                    return Argb(0.65 + 0.35 * pulse, 255, 45, 45);
+                }
+                if (FuseRemainingMs <= flashMs)
+                {
+                    double f = 0.5 + 0.5 * Math.Sin(_timeAlive * 14.0);
+                    return Argb(0.8 + 0.2 * f, 255, (byte)(45 + (210 - 45) * f), (byte)(45 + (40 - 45) * f));
+                }
+                return Argb(1.0, 255, 210, 40);
+            }
+        }
+
+        private static uint Argb(double opacity, byte r, byte g, byte b) =>
+            ((uint)Math.Round(Math.Clamp(opacity, 0, 1) * 255) << 24) | ((uint)r << 16) | ((uint)g << 8) | b;
 
         public double CenterX => X + Size / 2;
         public double CenterY => Y + Size / 2;

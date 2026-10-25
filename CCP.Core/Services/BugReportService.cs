@@ -71,6 +71,8 @@ namespace ConditioningControlPanel.Services
         internal static readonly string[] DiagMarkers =
         {
             "[RES]", "[Res ",
+            // Native memory breakdown on a private-bytes jump (#1484, #1488): category "Res-jump".
+            "[RES-JUMP]", "[Res-jump ",
             "[WATCHDOG]", "[Watchdog ",
             "[BLUR]", "[Blur ",
             "[VIDEO]", "[VideoDiag]"
