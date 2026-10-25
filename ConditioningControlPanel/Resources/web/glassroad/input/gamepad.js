@@ -12,6 +12,9 @@ import { readPad, profileFor, padFamily, loadChoices } from './padmap.js';
 import { devices as sharedDevices } from './device.js';
 
 const DEADZONE = 0.16;
+const usedInput = r => r.south || r.east || r.west || r.north || r.lb || r.rb || r.start || r.select ||
+  r.up || r.down || r.left || r.right || r.lt > 0.1 || r.rt > 0.1 ||
+  Math.abs(r.x) > DEADZONE || Math.abs(r.y) > DEADZONE || Math.hypot(r.lookX, r.lookY) > DEADZONE;
 
 export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigator : null, devices = sharedDevices, choices = null } = {}) {
   let was = {}, navWas = null, navEdge = null, lostEdge = false;
@@ -19,17 +22,24 @@ export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigat
   const known = new Map();               // index -> id, for the connect and leave notes
   const seen = new Map();                // id -> trigger axes seen moving
   let kept = choices || loadChoices();
-  const r = {};
+  const r = {}, probe = {};
+  let sampled = null;
   const look = { x: 0, y: 0 };
   const offDev = devices.on((type) => { if (type === 'layout') kept = loadChoices(); });
 
   const idOf = (g) => g.id || 'pad';
   const infoOf = (g) => ({ id: idOf(g), family: padFamily(g), profile: profileFor(g, kept), standard: g.mapping === 'standard' });
 
-  /** Notes connects and leaves; returns the pad to read: the one in use, else a standard one, else any. */
-  function scan() {
+  function read(g, k, out) {
+    const key = k + ':' + idOf(g);
+    if (!seen.has(key)) seen.set(key, {});
+    return readPad(g, profileFor(g, kept), seen.get(key), out);
+  }
+
+  /** Prefer current input, retaining the active pad for idle frames and rumble. */
+  function scan(readInputs = false) {
     const list = nav && nav.getGamepads ? nav.getGamepads() : null;
-    let pick = null, std = null, any = null;
+    let pick = null, std = null, any = null, used = null;
     const live = new Set();
     if (list) for (let i = 0; i < list.length; i++) {
       const g = list[i];
@@ -38,6 +48,7 @@ export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigat
       live.add(k);
       if (known.get(k) !== idOf(g)) { known.set(k, idOf(g)); devices.connected(infoOf(g)); }
       if (k === active) pick = { g, k };
+      if (readInputs && usedInput(read(g, k, probe)) && (!used || k === active)) used = { g, k };
       if (!std && g.mapping === 'standard') std = { g, k };
       any = any || { g, k };
     }
@@ -48,16 +59,17 @@ export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigat
       if (wasActive) { active = -1; lostEdge = true; was = {}; navWas = null; }
       devices.lost({ id, active: wasActive });
     }
-    return pick || std || any;
+    return used || pick || std || any;
   }
 
   function poll(into) {
-    const hit = scan();
+    const hit = scan(true);
     into.padLost = lostEdge; lostEdge = false;
-    if (!hit) { was = {}; navWas = null; look.x = look.y = 0; return; }
+    if (!hit) { sampled = null; was = {}; navWas = null; navEdge = null; look.x = look.y = 0; return; }
     const { g, k } = hit, id = idOf(g);
-    if (!seen.has(id)) seen.set(id, {});
-    readPad(g, profileFor(g, kept), seen.get(id), r);
+    const key = k + ':' + id;
+    if (sampled !== key) { sampled = key; was = {}; navWas = null; navEdge = null; }
+    read(g, k, r);
     const ax = r.x, ay = r.y;
     const magnitude = Math.hypot(r.lookX, r.lookY);
     const gain = magnitude > DEADZONE ? Math.min(1, (magnitude - DEADZONE) / (1 - DEADZONE)) / magnitude : 0;
@@ -77,8 +89,7 @@ export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigat
         : r.south ? 'ok' : r.east ? 'back' : null;
     if (dir && dir !== navWas) navEdge = dir;
     navWas = dir;
-    const used = r.south || r.east || r.west || r.north || r.lb || r.rb || r.start || r.select ||
-      r.up || r.down || r.left || r.right || r.lt > 0.1 || r.rt > 0.1 || Math.abs(ax) > 0.5 || Math.abs(ay) > 0.5 || magnitude > DEADZONE;
+    const used = usedInput(r);
     if (used) { active = k; devices.use('pad', infoOf(g)); }
     was = { south: r.south, start: r.start, west: r.west, rb: r.rb };
   }
