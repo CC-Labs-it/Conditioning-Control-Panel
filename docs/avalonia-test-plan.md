@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### Shell status FX completion
+
+1. Start/stop a Blink Trainer session, connect/disconnect Haptics in Studio, arm/disarm She's Listening, and toggle Awareness's master switch. Only Running/connected/armed/master-on dots glow; idle dots keep their opaque fill. Open Studio with Haptics already connected and expect a glow immediately. WPF `MainWindow/MainWindow.TabFxTakeoverLabStatus.cs:308-333`. Rows: `shell-tab-fx-takeover-lab-status`.
+2. With a live dot visible, expect the sibling glow to breathe from 0.22 to 0.95 in 2.8 seconds and back in another 2.8 seconds; refresh the feature without changing state and expect no phase reset. She's Listening uses the larger blur; performance caps still apply. WPF `MainWindow/MainWindow.TabFxTakeoverLabStatus.cs:250-303`. Rows: `shell-tab-fx-takeover-lab-status`.
+3. Switch tabs, deactivate/minimise the shell, choose reduced motion or performance mode: pulses park and the status fill stays steady. Restore the gates: only requested pulses resume. Switch mods: glows retint. Close: no pulse clock remains. WPF `MainWindow/MainWindow.TabFxTakeoverLabStatus.cs:127-190`. Rows: `shell-tab-fx-takeover-lab-status`.
+4. Open Takeover and a locked premium surface: the existing orb and premium decoration remain reachable; no second Takeover loop or Lab surface is added. Lab aliases Play, where its retired decorations now belong. WPF `MainWindow/MainWindow.TabFxTakeoverLabStatus.cs:193-211`. Rows: `shell-tab-fx-takeover-lab-status`.

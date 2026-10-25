@@ -57,9 +57,19 @@ public sealed class StatusPulseLifecycleTests
             Assert.Equal(0.22, glow.Opacity, 3);
             Assert.Equal(1, glow.BoxShadow.Count);
             Assert.Equal(10, glow.BoxShadow[0].Blur);
-            clock.Ticks += TimeSpan.FromSeconds(2.8).Ticks;
+            var pulse = Assert.Single(BeatLoop.Running, l => ReferenceEquals(l.Owner, glow));
+            clock.Ticks += TimeSpan.FromSeconds(1.4).Ticks;
+            BeatLoop.StepAll();
+            Assert.Equal(0.585, glow.Opacity, 3); // WPF SineEase midpoint
+            shell.SetAwarenessStatusPulse(true); // repeated feature refresh must not restart the clock
+            Assert.Same(pulse, Assert.Single(BeatLoop.Running, l => ReferenceEquals(l.Owner, glow)));
+            Assert.Equal(0.585, glow.Opacity, 3);
+            clock.Ticks += TimeSpan.FromSeconds(1.4).Ticks;
             BeatLoop.StepAll();
             Assert.Equal(0.95, glow.Opacity, 3);
+            clock.Ticks += TimeSpan.FromSeconds(2.8).Ticks;
+            BeatLoop.StepAll();
+            Assert.Equal(0.22, glow.Opacity, 3); // auto-reverse returns after a full 5.6 s cycle
 
             settings.Current.MotionLevel = MotionLevel.Reduced;
             AmbientFxCanvas.Env.RaiseMotionGateChanged();
