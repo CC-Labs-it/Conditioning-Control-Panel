@@ -178,7 +178,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
                 var closed = false;
                 shell.Closed += (_, _) => closed = true;
-                while (!closed && (!CoreSettings.Current.HasAcceptedAgeVerification || !shell.IsVisible || StartupModalOpen()))
+                while (!closed && (!CoreSettings.Current.HasAcceptedAgeVerification || !shell.IsVisible || StartupLadder.LauncherHolding || StartupModalOpen()))
                     await Task.Delay(500);
                 if (!closed && !_busy) await OfferAsync(shell, info);
             }

@@ -127,6 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_windowClosed) return;
             RestoreLauncherPanelOpacity();
             Show();
+            Platform.StartupLadder.ReleaseLauncher();
             WindowState = WindowState.Normal;
             Activate();
             ShowAvatarTube();

@@ -47,6 +47,7 @@ public sealed class LauncherWindowTests
             }
             finally
             {
+                global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
                 LauncherWindow.Instance?.Close();
                 LauncherWindow.Boot = BootDecision.PanelFirst;
                 LockdownService.Current = null;
@@ -401,6 +402,77 @@ public sealed class LauncherWindowTests
             CoreEngine.Stop();
         }
     });
+
+    [Fact]
+    public void HiddenBoot_ConcealsBeforeOpened_ThenRestoresWindowProperties() => Run(_ =>
+    {
+        var panel = new MainShellWindow();
+        try
+        {
+            LauncherWindow.Boot = BootDecision.LauncherFirst;
+            // This observer is registered first: it sees the window before boot routing hides it.
+            bool opened = false;
+            void ObserveBoot(object? sender, EventArgs args)
+            {
+                panel.Opened -= ObserveBoot;
+                opened = true;
+                Assert.Equal(0, panel.Opacity);
+                Assert.False(panel.ShowActivated);
+                Assert.False(panel.ShowInTaskbar);
+                Assert.True(panel.BuildingHiddenForBoot);
+                Assert.True(global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.LauncherHolding);
+            }
+            panel.Opened += ObserveBoot;
+            panel.PrepareHiddenForLauncherBoot();
+            panel.Show();
+            Assert.True(opened);
+            Assert.False(panel.IsVisible);
+            Assert.Equal(1, panel.Opacity);
+            Assert.True(panel.ShowActivated);
+            Assert.True(panel.ShowInTaskbar);
+            Assert.False(panel.BuildingHiddenForBoot);
+            panel.ShowFromTray();
+            Assert.Equal(1, panel.Opacity);
+            Assert.False(global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.LauncherHolding);
+        }
+        finally { panel.Close(); }
+    }, pumpUntilIdle: false);
+
+    [Fact]
+    public void LauncherHold_InboxesPassiveSurface_AndPanelDoorReleasesIt() => Run(shell =>
+    {
+        global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
+        LauncherWindow.BackToLauncher(shell);
+        bool opened = false;
+        global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.PresentOrInbox(
+            new global::ConditioningControlPanel.Services.Startup.InboxItem
+            { Key = "launcher-hold-test", Open = () => opened = true });
+        Assert.False(opened);
+        Assert.Equal(1, global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.Inbox.UnreadCount);
+        LauncherWindow.Instance!.OpenPanel();
+        Assert.True(shell.IsVisible);
+        Assert.False(global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.LauncherHolding);
+        global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.PresentOrInbox(
+            new global::ConditioningControlPanel.Services.Startup.InboxItem
+            { Key = "panel-open-test", Open = () => opened = true });
+        Assert.True(opened);
+    }, pumpUntilIdle: false);
+
+    [Fact]
+    public void BootRouting_WhenLockdownStarts_KeepsPanelVisibleAndLadderReleased() => Run(shell =>
+    {
+        LauncherWindow.Boot = BootDecision.LauncherFirst;
+        var ld = LockdownService.Current = new LockdownService();
+        try
+        {
+            ld.Activate(TimeSpan.FromMinutes(30));
+            LauncherWindow.RouteBoot(shell);
+            Assert.True(shell.IsVisible);
+            Assert.Null(LauncherWindow.Instance);
+            Assert.False(global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.LauncherHolding);
+        }
+        finally { ld.Deactivate(); }
+    }, pumpUntilIdle: false);
 
     // ---- slice 2: boot surface, second-instance handoff, tray row, skip box
 

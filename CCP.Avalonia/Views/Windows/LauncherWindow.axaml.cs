@@ -137,6 +137,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 // Lockdown can begin during the fade: keep the panel as the live surface.
                 if (MainShellWindow.LockdownActive) return;
+                Platform.StartupLadder.HoldForLauncher();
                 panel.Hide();
                 panel.HideAvatarTube();
                 OpenFor(panel);
@@ -166,6 +167,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                if (MainShellWindow.LockdownActive) { panel.ShowFromTray(); return; }
+                Platform.StartupLadder.HoldForLauncher();
                 panel.Hide();
                 panel.HideAvatarTube();
                 if (!(Boot.Surface == BootSurface.Game && Boot.GameId is { } id && LaunchGame(panel, id)))

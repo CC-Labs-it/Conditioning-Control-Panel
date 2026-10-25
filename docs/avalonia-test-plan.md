@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## fin5 launcher boot and startup hold
+
+1. With a welcomed, age-accepted sandbox, launch without arguments: expect the launcher first, with no panel flash or taskbar entry. Open the panel using Launch, return using CC Labs, and restore using the tray: expect an opaque panel and preserved engine/session. WPF `MainWindow/MainWindow.Launcher.cs` (`ShowHiddenForBoot`, `HideForLauncher`). Rows: `shell-launcher`.
+2. While the launcher owns the screen, offer a passive announcement and an available update: expect an Inbox row for the announcement and no update dialog until the panel opens. Repeat via Launch, tray Show and a second-instance --panel. WPF `Services/Launcher/LauncherHost.cs` (`HoldStartupLadder`, `ReleaseStartupLadder`). Rows: `shell-launcher`.
+3. Start with Lockdown active, and separately activate it during launcher boot routing: expect the panel to remain visible with its existing Lockdown exits. Check Windows and Linux on real desktops. WPF `MainWindow/MainWindow.Launcher.cs` (`HideForLauncher`) and `Services/Launcher/LauncherBoot.cs` (`PanelStartsHidden`, now in Core). Rows: `shell-launcher`.
