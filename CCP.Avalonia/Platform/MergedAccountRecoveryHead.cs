@@ -42,7 +42,12 @@ internal static class MergedAccountRecoveryHead
         {
             Dispatcher.UIThread.Post(() =>
             {
-                try { MainShellWindow.Current?.UpdateQuickLoginUI(); }   // WPF RefreshAccountUiAfterMergedSwap
+                try
+                {
+                    // WPF RefreshAccountUiAfterMergedSwap (MainWindow.Login.cs:49): login, then the welcome banner.
+                    MainShellWindow.Current?.UpdateQuickLoginUI();
+                    MainShellWindow.Current?.UpdateBannerWelcomeMessage();
+                }
                 catch (Exception ex) { Log.Debug("[MergedAccount] UI refresh failed: {Error}", ex.Message); }
             });
             if (!reauthed) OfferSignIn(canonical);
