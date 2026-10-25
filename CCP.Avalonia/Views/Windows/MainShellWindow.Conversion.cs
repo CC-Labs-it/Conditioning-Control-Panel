@@ -30,6 +30,8 @@ public partial class MainShellWindow
         /// Reconnect copy instead, never a lapse row. True when a stamp changed.</summary>
         private bool MaybePostLapseRow(Models.AppSettings settings)
         {
+            // Never from memory alone: the server must have answered this run (WPF MainWindow.Inbox.cs:178).
+            if (!AccountSeed.ServerAnsweredThisRun) return false;
             var reading = Services.Conversion.ConversionRules.DecideLapse(settings.PatreonTier, settings.ServerTierSeen,
                 settings.PatreonPremiumValidUntil, settings.PatreonLabValidUntil, DateTime.UtcNow, liveCoversIt: false);
             if (reading.Row == Services.Conversion.LapseRow.None || LiveCovers(reading.Tier)) return false;
@@ -100,7 +102,9 @@ public partial class MainShellWindow
             if (patreon == null) return false;
             if (patreon.IsWhitelisted) return true;
             if (patreon.CurrentTier >= (tier >= 2 ? Models.PatreonTier.Level2 : Models.PatreonTier.Level1)) return true;
-            return tier < 2 && AccountSeed.SubscribeStar?.CurrentTier >= Models.PatreonTier.Level1;
+            // WPF reads SubscribeStarService.HasPremiumAccess: tier 1+ or whitelisted.
+            var substar = AccountSeed.SubscribeStar;
+            return tier < 2 && (substar?.IsWhitelisted == true || substar?.CurrentTier >= Models.PatreonTier.Level1);
         }
 
         /// <summary>A plan button on a conversion row: the Patreon checkout for the tier.</summary>

@@ -28,8 +28,14 @@ public sealed partial class AccountSeedTests
                 .SetupWithoutStarting();
         StartupLadder.ResetForTests();
         AccountSeed.Seed(Make); // The fixture owns an empty in-memory secret store.
+        var answered = AccountSeed.ServerAnsweredThisRun;
+        AccountSeed.ServerAnsweredThisRun = true;
         try { body(); }
-        finally { InboxNoticeCard.CloseActive(); StartupLadder.ResetForTests(); Dispatcher.UIThread.RunJobs(); }
+        finally
+        {
+            AccountSeed.ServerAnsweredThisRun = answered;
+            InboxNoticeCard.CloseActive(); StartupLadder.ResetForTests(); Dispatcher.UIThread.RunJobs();
+        }
         return Task.CompletedTask;
     });
 
@@ -73,6 +79,54 @@ public sealed partial class AccountSeedTests
         }
         finally
         {
+            shell.Close();
+            (s.PatreonTier, s.ServerTierSeen, s.PatreonPremiumValidUntil, s.PatreonLabValidUntil, s.InboxStamps) = old;
+        }
+    });
+
+    [Fact]
+    public Task LapseWaitsForServerAnswerThenFocusAndProfileLoadPostIt() => RunConversion(() =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.PatreonTier, s.ServerTierSeen, s.PatreonPremiumValidUntil, s.PatreonLabValidUntil, s.InboxStamps);
+        var shell = new MainShellWindow();
+        var other = new Window();
+        try
+        {
+            s.PatreonTier = 2; s.ServerTierSeen = 1;
+            s.PatreonLabValidUntil = DateTime.UtcNow.AddDays(2);
+            s.InboxStamps = new();
+            StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+
+            // A lower tier remembered from an earlier run: focus posts nothing until the server answers.
+            AccountSeed.ServerAnsweredThisRun = false;
+            shell.Show();
+            shell.Activate();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(StartupLadder.Inbox.Items);
+            Assert.Empty(s.InboxStamps);
+
+            // The profile load is the server answering: its event posts the row.
+            AccountSeed.ServerAnsweredThisRun = true;
+            var loaded = (MulticastDelegate?)typeof(AccountSeed)
+                .GetField("ProfileLoaded", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null);
+            loaded!.DynamicInvoke();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("conv:lapse_warn_3", Assert.Single(StartupLadder.Inbox.Items).Key);
+
+            // Focus returning to the shell posts it too (fresh stamps and inbox).
+            StartupLadder.ResetForTests();
+            StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+            s.InboxStamps = new();
+            other.Show();
+            other.Activate();
+            shell.Activate();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("conv:lapse_warn_3", Assert.Single(StartupLadder.Inbox.Items).Key);
+        }
+        finally
+        {
+            other.Close();
             shell.Close();
             (s.PatreonTier, s.ServerTierSeen, s.PatreonPremiumValidUntil, s.PatreonLabValidUntil, s.InboxStamps) = old;
         }

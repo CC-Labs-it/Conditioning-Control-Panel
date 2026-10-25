@@ -153,6 +153,11 @@ internal static class AccountSeed
     /// <summary>WPF ProfileSyncService.ProfileLoaded: a profile load succeeded (the welcome-back sheet's second look).</summary>
     internal static event Action? ProfileLoaded;
 
+    /// <summary>WPF EntitlementTierSync.ServerAnsweredThisRun (4fcd2fe65): the server answered with a tier
+    /// THIS run. The lapse rows wait for it, so a lower reading remembered from an earlier run never tells
+    /// someone who renewed since that their plan is closing.</summary>
+    internal static bool ServerAnsweredThisRun { get; set; }
+
     /// <summary>Tests only: the client every default-path load and restore uses.</summary>
     internal static Func<V2AuthService> NewV2 = () => new V2AuthService();
 
@@ -172,6 +177,7 @@ internal static class AccountSeed
         if (!string.IsNullOrEmpty(s.AuthToken))
         {
             var tier = EntitlementTierRule.ParseTier(user.EffectiveTierRaw);
+            if (tier.HasValue) ServerAnsweredThisRun = true;
             s.ServerTierSeen = EntitlementTierRule.ServerTierSeenAfter(
                 EntitlementTierRule.Decide(s.PatreonTier, tier), tier, s.ServerTierSeen);
             EntitlementTierRule.ApplyRise(s, tier, DateTime.UtcNow);
