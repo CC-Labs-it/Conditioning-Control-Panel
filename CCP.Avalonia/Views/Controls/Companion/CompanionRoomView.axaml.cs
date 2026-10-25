@@ -100,6 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             foreach (var d in _visibilityWatch) d.Dispose();
             _visibilityWatch.Clear();
+            ParkClocks();
             base.OnDetachedFromVisualTree(e);
         }
 
@@ -182,6 +183,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 // have changed while the tab was hidden, and a resume that restored the state at
                 // park time would be a lie.
                 ChatZone.ViewModel?.Sync();
+                ChatZone.SyncThinking();
                 MemoryZone.ViewModel?.Sync();
                 PersonalityZone.ViewModel.Sync();   // WPF CompanionRoomRuntimeVm.Sync -> PersonalityVm.Sync
                 AttentionZone.ViewModel?.Sync();
@@ -189,10 +191,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 HeroZone.GetLogicalDescendants().OfType<RelationshipConstellation>().FirstOrDefault()?.PlayIntro();
                 // WPF UpdateCompanionCardsUI runs on the same show: the roster's levels and ring.
                 (WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts.Roster.Refresh();
-                // ponytail: WPF also calls ChatZone.SyncThinking() here. This head's
-                // ChatThresholdView has no thinking clock to sync - WPF's dots are three
-                // RepeatBehavior=Forever Storyboards (CmpThinkingDotsStoryboard) and the port
-                // draws the dots static. Add the call when that animation exists here.
             }
             catch (InvalidOperationException)
             {
@@ -205,6 +203,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             try
             {
                 HeroZone.StopAmbientLoop();
+                ChatZone.StopThinking();
                 // The privacy card parks itself off its own visibility (AwarenessPrivacyView): under v2 it
                 // lives on the Awareness tab, where the room's edges are not its edges.
             }

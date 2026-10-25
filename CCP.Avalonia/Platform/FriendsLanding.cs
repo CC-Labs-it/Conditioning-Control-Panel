@@ -82,6 +82,8 @@ internal static class FriendsLanding
             }
             _router?.Release();
             if (KnockCard.AnyUp && World().Holding) KnockCard.FoldAll();
+            // The server lists blocks now: carry this PC's old list over once (WPF FriendsLanding.cs:71).
+            if (current != null) global::ConditioningControlPanel.Controls.Friends.FriendsBlockList.MigrateIfDue(current);
         }
         catch (Exception ex) { Log.Debug("[Friends] landing tick: {E}", ex.Message); }
     }
