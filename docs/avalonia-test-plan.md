@@ -673,3 +673,11 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+
+### Bubble Pop finishing pass
+
+1. Buy Bubbles v2 through Get it, then select Rain, Spiral In and Mix. Rain enters above the selected screen; Spiral In fades quietly into its centre. Unowned styles display Float up without rewriting the preference. Off uses Float up; Reduced halves v2 speed/turns. WPF `Services/AmbientBubbleMotion.cs`, `Services/BubbleService.cs:3332`. Rows: `feat-bubble-pop`.
+2. Pop with a mod replacing bubble audio; check its pop and lucky chime. Suppress perk notifications: lucky pops use normal sound. Remove the chime file: normal pop still plays. WPF `Services/BubbleService.cs:2191`. Rows: `feat-bubble-pop`.
+3. Pop with Sparkle Boost: eight pink particles; a paid lucky pop shows gold glow and sixteen gold particles, fading more slowly. After the daily bucket is exhausted, a lucky roll shows the ordinary pop. WPF `Services/BubbleService.cs:4401`. Rows: `feat-bubble-pop`.
+4. Pop through 50/100/1000 lifetime totals, including after exhausting XP: progress persists at 50, each 100 credits one point and a milestone toast, 1000 unlocks Pop the Thought. Panic dismisses any milestone toast. WPF `Services/Progression/AchievementService.cs:378`. Rows: `feat-bubble-pop`.

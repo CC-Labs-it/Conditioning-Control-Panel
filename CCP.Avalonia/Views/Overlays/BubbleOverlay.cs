@@ -166,7 +166,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // Outside sessions, bubbles are always clickable (no UI toggle exists for the setting).
             var clickable = !CoreSession.IsSessionRunning || s.BubblesClickable;
             var mod = (CoreMods.ActiveModTokenProvider?.Invoke() as ModManifest)?.BubbleScale;
-            Field.Bubbles.Add(AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable));
+            Field.Bubbles.Add(AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable, AmbientBubbleMotionRules.Resolve(s.BubbleMotionStyle, PrizeOwnership.IsGranted(PrizeOwnership.BubbleRain), PrizeOwnership.IsGranted(PrizeOwnership.BubbleSpiralIn), s.MotionLevel, Field.Random.NextDouble())));
             RequestFrame();
         }
 
@@ -294,30 +294,57 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var vol = (float)Math.Pow(s.MasterVolume / 100f * (s.BubblesVolume / 100f), 1.5);
             var cue = name == null ? "" : ChaosCuePath(name);
             if (cue.Length > 0 && File.Exists(cue)) { CoreAudio.PlayOneShot(cue, Math.Min(vol * scale, 1f), "chaos-cue"); return; }
-            var pop = new[] { "Pop.mp3", "Pop2.mp3", "Pop3.mp3" }[Field.Random.Next(3)];
-            CoreAudio.PlayOneShot(Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", "bubbles", pop), Math.Min(vol, 1f), "bubble-pop");
+            PlayPopSound(false);
         }
 
         /// <summary>WPF AwardAmbientPop, head half: sound, XP, quest credit.</summary>
         internal static void Pop(AmbientBubble b)
         {
+            if (b.Popping) return;
             if (b.Spec != null) { PopChaos(b); return; }
             var s = CoreSettings.Current;
             var paid = Field.Pop(b, s);
             if (paid > 0) CoreProgression.AddXP(paid, "Bubble");
             XpBudgetChanged?.Invoke();
             App.NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureBubbles);   // WPF OnBubblePopped
-            var master = s.MasterVolume / 100f;
-            var vol = (float)Math.Pow(master * (s.BubblesVolume / 100f), 1.5);
-            var dir = Path.Combine(AppContext.BaseDirectory, "Resources", "sounds");
-            var path = b.Lucky
-                ? Path.Combine(dir, $"chime{Field.Random.Next(1, 4)}.mp3")   // lucky: a chime replaces the pop, at 0.35x
-                : Path.Combine(dir, "bubbles", new[] { "Pop.mp3", "Pop2.mp3", "Pop3.mp3" }[Field.Random.Next(3)]);
-            if (b.Lucky) vol *= 0.35f;
-            CoreAudio.PlayOneShot(path, Math.Min(vol, 1f), "bubble-pop");
+            PlayPopSound(b.Lucky);
+            try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("bubble popped handler: {E}", ex.Message); }   // WPF OnBubblePopped
+            var milestone = App.Achievements?.TrackBubblePopped(s) ?? false;
+            if (milestone)
+            {
+                CoreSettings.Save();
+                try
+                {
+                    var popup = new Windows.AchievementPopup(
+                        global::ConditioningControlPanel.Localization.Loc.GetF("achievement_bubble_milestone_name", App.Achievements!.Progress.TotalBubblesPopped),
+                        global::ConditioningControlPanel.Localization.Loc.Get("achievement_bubble_milestone_flavor"), "bubble_pop.png",
+                        headerText: global::ConditioningControlPanel.Localization.Loc.Get("achievement_bubble_milestone_header"));
+                    popup.Show();
+                }
+                catch (Exception ex) { Log.Debug("bubble milestone popup: {E}", ex.Message); }
+            }
             try { App.Quests?.TrackBubblePopped(); } catch (Exception ex) { Log.Debug("bubble quest credit: {E}", ex.Message); }
             _ = CoreHaptics.Service?.BubblePopAsync();   // WPF BubbleService.cs:1089
-            try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("bubble popped handler: {E}", ex.Message); }   // WPF OnBubblePopped
+        }
+
+        // WPF PlayPopSound: mod cue first, chime opt-out/missing chime falls through to pop.
+        internal static void PlayPopSound(bool lucky)
+        {
+            var s = CoreSettings.Current;
+            var volume = (float)Math.Pow(s.MasterVolume / 100f * s.BubblesVolume / 100f, 1.5);
+            string Resolve(string name) => CoreModArt.AudioOverridePath(name)
+                ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", name));
+            if (lucky && !s.SuppressPerkNotifications)
+            {
+                var chime = Resolve($"chime{Field.Random.Next(1, 4)}.mp3");
+                if (File.Exists(chime))
+                {
+                    CoreAudio.PlayOneShot(chime, Math.Clamp(volume * 0.35f, 0, 1), "bubble-pop");
+                    return;
+                }
+            }
+            var pop = Resolve("bubbles/" + new[] { "Pop.mp3", "Pop2.mp3", "Pop3.mp3" }[Field.Random.Next(3)]);
+            if (File.Exists(pop)) CoreAudio.PlayOneShot(pop, Math.Clamp(volume, 0, 1), "bubble-pop");
         }
 
         internal static void OnFrame(TimeSpan now)
@@ -489,6 +516,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
                           * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(cx, cy);
+                    if (b.Sparkles != null)
+                        foreach (var p in b.Sparkles)
+                        {
+                            using (dc.PushOpacity(Math.Clamp(p.Alpha, 0, 1)))
+                                dc.DrawEllipse(b.Lucky ? Brushes.Gold : Brushes.HotPink, null,
+                                    new Point(cx + p.X * k, cy + p.Y * k), p.Size * k / 2, p.Size * k / 2);
+                        }
+                    // ponytail: concentric translucent discs replace WPF's animated blur effect.
+                    if (b.Lucky && global::ConditioningControlPanel.Services.Flash.FlashFxRules.AllowGlow(global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier))
+                        for (var ring = 3; ring > 0; ring--)
+                            using (dc.PushOpacity(Math.Clamp(b.Fade * 0.08, 0, 1)))
+                                dc.DrawEllipse(Brushes.Gold, null, new Point(cx, cy), size * s / 2 + ring * 8 * k, size * s / 2 + ring * 8 * k);
                     using (dc.PushTransform(m))
                     using (dc.PushOpacity(Math.Clamp(b.Fade, 0, 1)))
                     {

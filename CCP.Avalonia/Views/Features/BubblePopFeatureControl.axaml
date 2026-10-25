@@ -15,7 +15,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
-             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             xmlns:ctl="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls" xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Features.BubblePopFeatureControl">
 
     <!-- Velvet Kit 2 density pass. The root IS the StackPanel (the old Grid wrapper is gone):
@@ -148,6 +148,17 @@
                                 <CheckBox Grid.Column="1" x:Name="ChkSolidMode"
                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                             </Grid>
+
+                            <Border x:Name="BoxBubbleV2" Margin="0,10,0,2" CornerRadius="10" Padding="12,8" Background="#14FFE08A" BorderBrush="#33FFE08A" BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="{loc:Str label_bubbles_v2_box}"/>
+                                    <StackPanel x:Name="RowMotion" Orientation="Horizontal" Spacing="12">
+                                        <TextBlock Text="{loc:Str setting_bubble_motion}" VerticalAlignment="Center"/>
+                                        <ComboBox x:Name="CmbMotion" sessionLock:SessionLock.Owned="True" MinWidth="180"/>
+                                    </StackPanel>
+                                    <ctl:V2GetItRow x:Name="RowGetBubblesV2"/>
+                                </StackPanel>
+                            </Border>
 
                             <!-- Trigger Bubbles: a share of bubbles fire a Chaos effect when popped. The egg
                                  hint stays VISIBLE (code-behind rewrites it with the active persona's name). -->

@@ -130,6 +130,24 @@ internal sealed class AchievementEngine
             if (level >= milestone) TryUnlock(id);
     }
 
+    /// <summary>WPF TrackBubblePopped: milestone points, unlock, and a bounded 50-pop flush.
+    /// Returns true for the head's milestone notification. Quest credit stays in the head.</summary>
+    public bool TrackBubblePopped(AppSettings settings)
+    {
+        Progress.TotalBubblesPopped++;
+        _isDirty = true;
+        if (Progress.TotalBubblesPopped >= AchievementRules.PopTheThoughtBubbles) TryUnlock("pop_the_thought");
+        var milestone = Progress.TotalBubblesPopped % 100 == 0;
+        if (milestone)
+        {
+            var before = settings.SkillPoints;
+            settings.SkillPoints++;
+            SparklePointRewards.PublishCredit(before, settings.SkillPoints, SparklePointSource.BubbleMilestone);
+        }
+        if (Progress.TotalBubblesPopped % 50 == 0) Save();
+        return milestone;
+    }
+
     /// <summary>A bubble-count answer: the correct-answer streak (mathematicians_nightmare) and the totals.</summary>
     public void TrackBubbleCountResult(bool correct)
     {

@@ -29,6 +29,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     public partial class AchievementPopup : Window
     {
         private const double FadeMs = 300;
+        private static readonly System.Collections.Generic.HashSet<AchievementPopup> Live = new();
+        internal static void CloseAllForPanic()
+        {
+            foreach (var popup in System.Linq.Enumerable.ToArray(Live)) popup.Close();
+        }
 
         private readonly DispatcherTimer _autoCloseTimer;
 
@@ -50,6 +55,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                                 string? headerIcon = null, string? headerText = null)
         {
             AvaloniaXamlLoader.Load(this);
+            Opened += (_, _) => Live.Add(this);
+            Closed += (_, _) => Live.Remove(this);
 
             // Set content
             this.FindControl<TextBlock>("TxtName")!.Text = name;

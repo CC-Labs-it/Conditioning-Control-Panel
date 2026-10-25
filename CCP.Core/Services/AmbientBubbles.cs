@@ -60,6 +60,27 @@ namespace ConditioningControlPanel.Services
         public Chaos.EffectBubbleSpec? Spec;
         private double _startX, _top, _speed, _wobbleOffset, _timeAlive;
         private int _animType;
+        public BubbleMotionStyle Motion { get; private set; }
+        private double _bottom, _spiralCx, _spiralCy, _spiralR0, _spiralRadial, _spiralTurns, _spiralDir;
+        private AmbientSpiralInPath.State _spiral;
+        public sealed class Sparkle
+        {
+            public double X, Y, VelX, VelY, Alpha = 1, Size;
+        }
+        public List<Sparkle>? Sparkles { get; private set; }
+
+        public void SetPopVisuals(Random random, bool sparkleBoost)
+        {
+            if (!Lucky && !sparkleBoost) return;
+            Sparkles = new List<Sparkle>();
+            for (var i = 0; i < (Lucky ? 16 : 8); i++)
+            {
+                var angle = random.NextDouble() * Math.PI * 2;
+                var speed = 2 + random.NextDouble() * 4;
+                Sparkles.Add(new Sparkle { VelX = Math.Cos(angle) * speed, VelY = Math.Sin(angle) * speed,
+                    Size = (Lucky ? 4 : 3) + random.NextDouble() * (Lucky ? 4 : 3) });
+            }
+        }
 
         // ---- live chaos bubble (WPF Bubble _fuseRemainingMs / _isChanneling / TickChannel) ----
         /// <summary>WPF's fuse tick: 32 ms per logical step (BubbleService.cs:4149).</summary>
@@ -140,19 +161,33 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF Bubble ctor for a plain ambient bubble. <paramref name="area"/> is the screen's
         /// working area in px, <paramref name="scaling"/> its DPI scale.</summary>
         public static AmbientBubble Spawn(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
-            double scaling, AppSettings s, double? modScale, bool clickable)
+            double scaling, AppSettings s, double? modScale, bool clickable, BubbleMotionStyle motion = BubbleMotionStyle.FloatUp)
         {
             var b = new AmbientBubble { Screen = screen, Clickable = clickable };
             b.Size = BubbleSizing.Scale(r.Next(BubbleSizing.BaseMinDip, BubbleSizing.BaseMaxDip), s.BubblesSize, modScale);
             b._speed = 1.0 + r.NextDouble();   // 1.0 to 2.0 DIP/step
             var boost = s.BubbleSpeedBoost;      // dashboard speed slider, up to +500%
             if (boost > 0) b._speed *= 1.0 + Math.Clamp(boost, 0, 500) / 100.0;
+            b.Motion = motion;
+            if (motion != BubbleMotionStyle.FloatUp) b._speed *= AmbientBubbleMotionRules.SpeedMult(s.MotionLevel);
             b._animType = r.Next(4);
             b._wobbleOffset = r.NextDouble() * 100;
             b.Angle = r.Next(360);
             b._top = areaY / scaling - b.Size - 50;
             b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
-            b.Y = (areaY + areaH) / scaling;   // start at the bottom
+            b._bottom = (areaY + areaH) / scaling;
+            b.Y = motion == BubbleMotionStyle.Rain ? areaY / scaling - b.Size : b._bottom;
+            if (motion == BubbleMotionStyle.SpiralIn)
+            {
+                b._spiralCx = (areaX + areaW / 2) / scaling;
+                b._spiralCy = (areaY + areaH / 2) / scaling;
+                b._spiralR0 = AmbientSpiralInPath.StartRadius(Math.Min(areaW, areaH) / scaling);
+                b._spiralRadial = b._speed * AmbientSpiralInPath.RadialPerSpeed;
+                b._spiralTurns = AmbientSpiralInPath.Turns(s.MotionLevel);
+                b._spiralDir = r.Next(2) == 0 ? 1 : -1;
+                b._spiral = AmbientSpiralInPath.Start(b._spiralR0, r.NextDouble() * Math.PI * 2);
+                b.PlaceSpiral();
+            }
             return b;
         }
 
@@ -226,6 +261,13 @@ namespace ConditioningControlPanel.Services
         private static uint Argb(double opacity, byte r, byte g, byte b) =>
             ((uint)Math.Round(Math.Clamp(opacity, 0, 1) * 255) << 24) | ((uint)r << 16) | ((uint)g << 8) | b;
 
+        private void PlaceSpiral()
+        {
+            X = _spiralCx + Math.Cos(_spiral.Angle) * _spiral.Radius - Size / 2;
+            Y = _spiralCy + Math.Sin(_spiral.Angle) * _spiral.Radius - Size / 2;
+            Fade = _spiral.Fade;
+        }
+
         public double CenterX => X + Size / 2;
         public double CenterY => Y + Size / 2;
 
@@ -242,6 +284,12 @@ namespace ConditioningControlPanel.Services
         {
             if (Popping)
             {
+                if (Sparkles != null)
+                    foreach (var p in Sparkles)
+                    {
+                        p.X += p.VelX; p.Y += p.VelY; p.VelY += 0.15;
+                        p.Alpha -= Lucky ? 0.04 : 0.06;
+                    }
                 // Pop animation - expand and fade; lucky pops linger ~50% longer.
                 Scale += Deflating ? -0.03 : 0.04;
                 Fade -= Lucky ? 0.044 : 0.066;
@@ -264,8 +312,15 @@ namespace ConditioningControlPanel.Services
                 case 2: offset = Math.Cos(_timeAlive * 5.4) * 25; Angle = (Angle - 0.66) % 360; break;
                 case 3: offset = Math.Sin(_timeAlive * 3) * 30 + Math.Cos(_timeAlive * 6) * 15; Angle = (Angle + 0.54) % 360; break;
             }
-            Y -= _speed;
+            if (Motion == BubbleMotionStyle.SpiralIn)
+            {
+                _spiral = AmbientSpiralInPath.Step(_spiral, _spiralR0, _spiralRadial, _spiralTurns, _spiralDir, 1);
+                PlaceSpiral();
+                return _spiral.Done ? Result.Missed : Result.Alive;
+            }
+            Y += Motion == BubbleMotionStyle.Rain ? _speed : -_speed;
             X = _startX + offset;
+            if (Motion == BubbleMotionStyle.Rain) return Y > _bottom ? Result.Missed : Result.Alive;
             if (Y >= _top) return Result.Alive;
             return Spec is { IsLive: true } ? GoOff(null) : Result.Missed;   // WPF :4212: a live that escapes detonates
         }
@@ -329,6 +384,7 @@ namespace ConditioningControlPanel.Services
             var multiplier = SkillTreeRules.HasSkill(s, "lucky_bubbles") && Random.NextDouble() < 0.05 ? 20 : 1;
             var paid = AmbientBubbleXp.Take(s, 5 * multiplier);
             b.Lucky = multiplier > 1 && paid > 0;
+            b.SetPopVisuals(Random, SkillTreeRules.GetSparkleBoostTier(s) > 0 && s.FlashGlowEnabled);
             return paid;
         }
 

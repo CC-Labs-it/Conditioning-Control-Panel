@@ -46,6 +46,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             SliderTriggerChance.ValueChanged += SliderTriggerChance_Changed;
             foreach (var box in TriggerTypeBoxes()) box.IsCheckedChanged += TriggerType_Changed;
 
+            CmbMotion.SelectionChanged += (_, _) =>
+            {
+                if (_isLoading || CmbMotion.SelectedItem is not ComboBoxItem { Tag: BubbleMotionStyle style }) return;
+                CoreSettings.Current.BubbleMotionStyle = style;
+                CoreSettings.Save();
+            };
+            RowGetBubblesV2.RowChanged += (_, _) => BuildMotionPicker();
+            RowGetBubblesV2.Configure(Services.Prizes.V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box");
             LoadFromSettings();
 
             // ponytail: WPF also repaints the hero and side art plates here (ApplyFeatureArt).
@@ -119,6 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _isLoading = true;
             try
             {
+                BuildMotionPicker();
                 ChkEnable.IsChecked = s.BubblesEnabled;
                 SliderFreq.Value = s.BubblesFrequency;
                 TxtFreq.Text = s.BubblesFrequency.ToString();
@@ -162,9 +171,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 AmbientBubbleXp.PaidToday(CoreSettings.Current), AmbientBubbleXp.DailyXpCap);
         }
 
+        private void BuildMotionPicker()
+        {
+            var loading = _isLoading;
+            _isLoading = true;
+            try
+            {
+                var rain = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.BubbleRain);
+                var spiral = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.BubbleSpiralIn);
+                RowMotion.IsVisible = rain || spiral;
+                BoxBubbleV2.IsVisible = RowMotion.IsVisible || !RowGetBubblesV2.IsRowHidden;
+                CmbMotion.Items.Clear();
+                Add(BubbleMotionStyle.FloatUp, "bubble_motion_float_up", false);
+                if (rain) Add(BubbleMotionStyle.Rain, "bubble_motion_rain", true);
+                if (spiral) Add(BubbleMotionStyle.SpiralIn, "bubble_motion_spiral_in", true);
+                if (rain || spiral) Add(BubbleMotionStyle.Mix, "bubble_motion_mix", false);
+                CmbMotion.SelectedItem ??= CmbMotion.Items[0];
+            }
+            finally { _isLoading = loading; }
+            void Add(BubbleMotionStyle style, string key, bool v2)
+            {
+                var row = new StackPanel { Orientation = global::Avalonia.Layout.Orientation.Horizontal };
+                row.Children.Add(new TextBlock { Text = Loc.Get(key) });
+                if (v2) row.Children.Add(FlashFeatureControl.NewV2Badge(new Thickness(8, 0, 0, 0)));
+                var item = new ComboBoxItem { Content = row, Tag = style };
+                CmbMotion.Items.Add(item);
+                if (style == CoreSettings.Current.BubbleMotionStyle) CmbMotion.SelectedItem = item;
+            }
+        }
+
         private void OnSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(AppSettings.BubblesEnabled) ||
+            if (e.PropertyName == nameof(AppSettings.BubbleMotionStyle) ||
+                e.PropertyName == nameof(AppSettings.BubblesEnabled) ||
                 e.PropertyName == nameof(AppSettings.BubblesFrequency) ||
                 e.PropertyName == nameof(AppSettings.BubblesVolume) ||
                 e.PropertyName == nameof(AppSettings.BubblesSize) ||

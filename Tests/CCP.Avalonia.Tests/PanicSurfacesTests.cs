@@ -122,6 +122,7 @@ public sealed class PanicSurfacesTests
         "attention-test",
         "deeper-editor-audio",
         "knock-cards",
+        "achievement-popups",
         "camera",
     };
 
