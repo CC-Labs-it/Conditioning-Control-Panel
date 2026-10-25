@@ -66,6 +66,7 @@ import { createDirectionWarning } from './hud/direction.js';
 import { createWordRun } from './sim/words.js';
 import { createAirWordRun, bindAirWords } from './sim/airWords.js';
 import { createSongCueRun } from './sim/songCues.js';
+import { createFlashBurst } from './fx/flashBurst.js';
 import { AERIAL_REVISION } from './track/aerial.js';
 import { createWordCount } from './hud/words.js';
 import { openFeelSheet } from './hud/feelSheet.js';
@@ -413,6 +414,14 @@ async function boot(course, options, lifetime, isCurrent) {
   lifetime.defer(() => gateScreen.dispose());
   const musicEdges = createMusicEdges({ parent: document.body, photosafe, palette: () => world.musicColours(), tier: renderer.tier });
   const edgeMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const cueSafety = { get on() { return gentle.on || edgeMotion.matches; },
+    rise(s) { return this.on ? Math.max(.6, gentle.rise(s)) : s; },
+    fade(s) { return this.on ? Math.max(1, gentle.fade(s)) : s; } };
+  const cueBurst = createFlashBurst({ source: seed => cardMedia?.sourceForFlash(seed) || null, photosafe, gentle: cueSafety });
+  let cueRunSeen = null, cueRevision = -1;
+  lifetime.defer(() => cueBurst.dispose());
+  Object.defineProperty(debug, 'cueBurst', { get: () => cueBurst.stats });
+  Object.defineProperty(debug, 'cueVeils', { get: () => world.veils.stats });
   lifetime.defer(() => musicEdges.dispose());
   Object.defineProperty(debug, 'musicEdges', { get: () => musicEdges.stats });
   bus.on('gate-pass', (g) => { if (state === 'race' && !paused) gateScreen.play(g.params, 1); });
@@ -1123,7 +1132,13 @@ async function boot(course, options, lifetime, isCurrent) {
     const sc = scanClock(inRace && !online ? music : null, racers.clockS);
     if (BOT) debug.scan = { hits: scan.hits, ready: scan.ready, timeS: sc.timeS };
     const pv = P.view;
-    const cueView = songCues?.update(songS, pv, { paused: frozen, gentle });
+    const cueView = songCues?.update(songS, pv, { paused: frozen, gentle: cueSafety });
+    const cueEpoch = cueView?.revision ?? -1;
+    if (cueRunSeen !== songCues || cueRevision !== cueEpoch) {
+      cueBurst.clear(); world.veils.clear(); cueRunSeen = songCues; cueRevision = cueEpoch;
+    }
+    for (const cue of cueView?.fired || NO_WORDS) if (cue.kind === 'VEIL') cueBurst.fire(cue);
+    cueBurst.update(frameDt, { paused: frozen, aspect: renderer.aspect, screen: effects.screen });
     const wordLive = words && song ? words.update(songS,
       { s: pv[S.s], lat: pv[S.lateral], speedMps: Math.max(0, pv[S.speedPct]) * feel.get('speed.topMps') }) : NO_WORDS;
     if (words) {
@@ -1153,7 +1168,7 @@ async function boot(course, options, lifetime, isCurrent) {
     world.update({ kart: P.view, karts: kartViews, fx: viewFx, timeS: renderTime, beat: clock.beat,
       raceTimeS: racers.clockS, sectionIdx: viewSection, items: iv, mode, camera: cam.camera, paused, song, songS, audioReactive, words: wordLive, beatSong,
       airWords: inRace && !online ? airWords : null,
-      songCues: cueView?.live || NO_WORDS,
+      songCues: cueView?.live || NO_WORDS, cueGentle: cueSafety.on,
       scanTimeS: sc.timeS, scanBpm: sc.bpm, scanReady: scan.ready, perfumeReady: perfume.ready });
     if (BOT && song && world.musicRoad) {                         //    dev only: the boot check reads the music road
       const m = world.musicRoad.frame;
