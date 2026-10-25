@@ -515,7 +515,7 @@ public sealed partial class FriendsDrawer : Border
         return new Border
         {
             CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 1),
-            ContextMenu = RequestMenu(r),
+            ContextMenu = incoming ? RequestMenu(r) : null,   // WPF FriendsDrawer.cs:819, inside if (incoming)
             Tag = (incoming ? "friends-request-in:" : "friends-request-out:") + r.Id,
             Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto"), Children = { Avatar(r.Name, 38, null), mid, buttons } },
         };

@@ -65,6 +65,9 @@ public sealed class FriendsBlockList
     private static readonly HashSet<string> MovedAccounts = new(StringComparer.Ordinal);
     private static bool _moving;
 
+    /// <summary>Test seam: forget which accounts already moved.</summary>
+    internal static void ResetMoved() => MovedAccounts.Clear();
+
     /// <summary>Once the server lists blocks for the signed-in account, the account's local entries
     /// go: from then on the file is never read for that account. An old server leaves everything.
     /// WPF calls this from the landing tick; this head calls it from the drawer's snapshot.</summary>

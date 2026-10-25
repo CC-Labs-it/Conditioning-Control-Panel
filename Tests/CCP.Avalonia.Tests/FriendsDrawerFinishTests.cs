@@ -115,6 +115,23 @@ public sealed class FriendsDrawerFinishTests
     });
 
     [Fact]
+    public Task OnlyIncomingRequestsCarryTheBlockAndReportMenu() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Init();
+        var (svc, wire) = FriendsDrawerTests.Service();
+        wire.StateBody = wire.StateBody.Replace("\"outgoing\":[]", "\"outgoing\":[{\"id\":\"u_out\",\"name\":\"Cat\",\"via\":null,\"at\":\"2026-09-01T00:00:00Z\"}]");
+        try
+        {
+            await svc.RefreshAsync();
+            var d = new FriendsDrawer(svc);
+            Assert.NotNull(Find<Border>(d, "friends-request-in:u_req")!.ContextMenu);
+            // WPF FriendsDrawer.cs:819 attaches the menu inside if (incoming) only.
+            Assert.Null(Find<Border>(d, "friends-request-out:u_out")!.ContextMenu);
+        }
+        finally { svc.Dispose(); }
+    });
+
+    [Fact]
     public Task RequestMenuBlocksAndReportsAndOldServersRememberPerAccount() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Init();
@@ -157,6 +174,6 @@ public sealed class FriendsDrawerFinishTests
             Assert.Empty(d.BlockedRows());
             Assert.Empty(entries);
         }
-        finally { svc.Dispose(); FriendsBlockList.Shared = oldList; FriendsBlockList.Account = oldAccount; }
+        finally { svc.Dispose(); FriendsBlockList.Shared = oldList; FriendsBlockList.Account = oldAccount; FriendsBlockList.ResetMoved(); }
     });
 }
