@@ -356,7 +356,9 @@ public sealed class ChaosRunHostTests
             Setup();
             try
             {
-                ChaosRunHost.StartRun(Cfg());
+                var cfg = Cfg();
+                cfg.EnabledVariants = new() { "flash", "subliminal" };   // treats: this test pops by click
+                ChaosRunHost.StartRun(cfg);
                 ChaosRunHost.SpawnTick();   // countdown up: nothing spawns
                 Assert.Equal(0, BubbleOverlay.ChaosCount);
                 ChaosRunHost.Overlay!.FinishCountdown();
@@ -364,7 +366,7 @@ public sealed class ChaosRunHostTests
                 for (int i = 0; i < 3; i++) ChaosRunHost.SpawnTick();
                 Assert.True(BubbleOverlay.ChaosCount >= 3);
                 var b = BubbleOverlay.Field.Bubbles.First(x => x.Spec != null && !x.Popping);
-                Assert.False(b.Spec!.IsLive);   // treats only until live bubbles land
+                Assert.False(b.Spec!.IsLive);   // this click-to-pop test explicitly enables only treats
                 BubbleOverlay.Pop(b);
                 Assert.True(state.Score > 0);
                 Assert.Equal(1, state.Combo);
@@ -441,6 +443,308 @@ public sealed class ChaosRunHostTests
                 Assert.True(ChaosRunHost.Overlay!.FindControl<Border>("ResultsPanel")!.IsVisible);
             }
             finally { ChaosRunHost.ForceShutdown(); hub?.Close(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>WPF OnDetonated (:2055) -> _waveDetonations -> AwardLoopTip (:1743): a loop with a
+    /// detonation tips round(roll x diff), a clean one twice that, and only a clean loop teaches
+    /// silk_touch (ChaosLessonHooks.OnLoopCompleted :193). Expected gold uses WPF's formula with
+    /// the host's seeded dice. Panic (ForceShutdown) after a detonation still pays nothing.</summary>
+    [Fact]
+    public async Task A_detonation_costs_the_clean_loop_tip_and_silk_touch_and_panic_pays_nothing()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            CoreProgression.AddXPProvider = (_, _) => { };   // TestIsolation restores it
+            var oldRng = ChaosRunHost.Rng;
+            static EffectBubbleSpec Live() => new()
+                { VariantId = "pink", IsLive = true, FuseMs = 320, SizePx = 200, Payload = new FlashPayload() };
+            void Detonate()
+            {
+                var b = BubbleOverlay.SpawnChaos(Live());
+                for (int i = 0; i < 10; i++) BubbleOverlay.Field.Step();   // 10 x 32 ms burns the fuse
+                Assert.True(b.Popping);
+            }
+            (int Gold, bool SilkAfterLoop1, int Detonated, long Popup) Run(bool detonate)
+            {
+                FreshMeta();
+                ChaosRunHost.Rng = new Random(7);
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                var state = ChaosRunHost.State!;
+                int gold0 = ChaosMeta.State.Gold;
+                state.Shields = 2;   // one absorbs the detonation, one is left at the end
+                if (detonate) Detonate();
+                int loop1 = state.WaveIndex;
+                while (state.WaveIndex == loop1) ChaosRunHost.Tick();
+                bool silk = ChaosLessons.IsComplete("silk_touch");
+                for (int i = 0; i < 4 * 1000 && ChaosRunHost.IsDescending; i++) ChaosRunHost.Tick();
+                Assert.False(ChaosRunHost.IsDescending);
+                int detonated = state.Detonated;
+                ChaosRunHost.ForceShutdown();
+                return (ChaosMeta.State.Gold - gold0, silk, detonated, ChaosLessons.Progress("popup_notification"));
+            }
+            try
+            {
+                var clean = Run(detonate: false);
+                var dirty = Run(detonate: true);
+                double diff = Cfg().DifficultyMult;
+                var r = new Random(7);
+                int t1 = (int)Math.Round(r.Next(3, 7) * diff), t2 = (int)Math.Round(r.Next(3, 7) * diff),
+                    t3 = (int)Math.Round(r.Next(3, 7) * diff);
+                Assert.Equal((2 * (t1 + t2 + t3), true, 0, 1L), clean);   // popup_notification: ended with resistance held
+                Assert.Equal((t1 + 2 * (t2 + t3), false, 1, 1L), dirty);
+
+                // Panic mid-run after a detonation: no tip, no XP, no Sparks, no run counted.
+                FreshMeta();
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                var meta = ChaosMeta.State;
+                var before = (meta.Gold, meta.Sparks, meta.RunsCompleted);
+                Detonate();
+                Ticks(4 * 25);   // across the first loop boundary (60 s / 3 loops)
+                int tipped = meta.Gold - before.Gold;
+                ChaosRunHost.ForceShutdown();
+                Assert.Equal((before.Gold + tipped, before.Sparks, before.RunsCompleted), (meta.Gold, meta.Sparks, meta.RunsCompleted));
+                Assert.DoesNotContain(BubbleOverlay.Field.Bubbles, x => x.Spec != null);
+            }
+            finally { ChaosRunHost.ForceShutdown(); ChaosRunHost.Rng = oldRng; FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+    /// <summary>WPF OnPlayerPress -> CanChannelDefuse (:1927) -> TickChannel -> OnDefused (:1984): a press
+    /// on a live bubble with the focus to pay holds it to a snap that costs DEFUSE_COST and scores;
+    /// without the focus it triggers in the grip.</summary>
+    [Fact]
+    public async Task A_held_press_snaps_a_live_and_no_focus_sets_it_off()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                var state = ChaosRunHost.State!;
+                state.Focus = 100;
+                var t = DateTime.UnixEpoch;
+                BubbleOverlay.Field.Clock = () => t = t.AddMilliseconds(32);
+                var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                    { VariantId = "pink", IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                for (int i = 0; i < 40 && !b.Popping; i++) BubbleOverlay.Field.Step();
+                Assert.Equal((1, 0, 100 - ChaosTuning.DEFUSE_COST), (state.Defused, state.Detonated, state.Focus));
+                Assert.True(state.Score > 0);
+
+                state.Focus = 0;
+                var c = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                    { VariantId = "pink", IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
+                BubbleOverlay.Press(c, c.CenterX, c.CenterY);
+                Assert.Equal((1, "nofocus"), (state.Detonated, c.BrokenReason));
+            }
+            finally { ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow; FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    private static EffectBubbleSpec LiveSpec() => new()
+        { VariantId = "pink", IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() };
+
+    /// <summary>WPF polls the physical button (BubbleService.cs:545): a release the window never saw
+    /// (capture lost: alt-tab, compositor grab) still breaks the hold and sets the bubble off.</summary>
+    [Fact]
+    public async Task A_lost_pointer_capture_breaks_the_hold()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                var state = ChaosRunHost.State!;
+                state.Focus = 100;
+                var t = DateTime.UnixEpoch;
+                BubbleOverlay.Field.Clock = () => t;
+                var b = BubbleOverlay.SpawnChaos(LiveSpec());
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                Assert.True(b.Channeling);
+                t = t.AddMilliseconds(500);   // held past a click, short of the snap
+                var w = new BubbleOverlayWindow();
+                w.RaiseEvent(new global::Avalonia.Input.PointerCaptureLostEventArgs(w,
+                    new global::Avalonia.Input.Pointer(global::Avalonia.Input.Pointer.GetNextFreeId(), global::Avalonia.Input.PointerType.Mouse, true)));
+                BubbleOverlay.Field.Step();
+                Assert.Equal((1, "release"), (state.Detonated, b.BrokenReason));
+            }
+            finally { ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow; FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>WPF Snap Chain (ChaosModeService.cs:2000, :2079) is a wall-clock window after a snap:
+    /// a detonation inside it holds the combo, one after it breaks it, with the run clock standing still.</summary>
+    [Fact]
+    public async Task The_snap_chain_window_runs_on_wall_time()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                var state = ChaosRunHost.State!;
+                state.Focus = 100;
+                state.DefuseInvulnMs = 900;
+                var t = DateTime.UnixEpoch;
+                BubbleOverlay.Field.Clock = () => t;
+                BubbleOverlay.SpawnChaos(LiveSpec());
+                BubbleOverlay.Field.DefuseAllLive();
+                Assert.Equal(1, state.Combo);
+
+                t = t.AddMilliseconds(500);
+                state.Focus = 0;
+                var c = BubbleOverlay.SpawnChaos(LiveSpec());
+                BubbleOverlay.Press(c, c.CenterX, c.CenterY);
+                Assert.Equal((1, 1), (state.Detonated, state.Combo));   // inside the window: held
+
+                t = t.AddMilliseconds(500);
+                var d = BubbleOverlay.SpawnChaos(LiveSpec());
+                BubbleOverlay.Press(d, d.CenterX, d.CenterY);
+                Assert.Equal((2, 0), (state.Detonated, state.Combo));   // past it: the combo breaks
+            }
+            finally { ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow; FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>The run's juice hooks recorded in order: labels (PopText), cues (CoreAudio), pulses, shakes.</summary>
+    private static System.Collections.Generic.List<string> Juice()
+    {
+        var log = new System.Collections.Generic.List<string>();
+        ChaosRunHost.PopText = (_, y, w, _) => log.Add("label:" + w);
+        ChaosRunHost.PulseFx = (c, s) => log.Add($"pulse:{c.R},{c.G},{c.B}@{s:0.00}");
+        ChaosRunHost.ShakeFx = (i, ms) => log.Add($"shake:{i:0.000}/{ms}");
+        CoreAudio.PlayOneShotProvider = (p, _, _, _, _) => log.Add("sfx:" + System.IO.Path.GetFileNameWithoutExtension(p));
+        return log;
+    }
+
+    private static void Unjuice()
+    {
+        ChaosRunHost.PopText = null; ChaosRunHost.PulseFx = null; ChaosRunHost.ShakeFx = null;
+        CoreAudio.PlayOneShotProvider = null;
+    }
+
+    /// <summary>WPF CompleteDefuse (SNAP, :4577) + the hiss (:1571) + OnDefused's green confirm (:2049);
+    /// OnPlayerPress's NO FOCUS (:4502) + OnChannelBroken (:1943) + Detonate's effect word (:4862);
+    /// and OnDetonated's three outcomes (:2091 shield, :2104 collar, :2126 bare) with their cue,
+    /// HUD flash, pulse and shake, at the run's shake intensity.</summary>
+    [Fact]
+    public async Task Snap_no_focus_and_each_detonation_outcome_label_cue_pulse_and_shake_like_wpf()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var log = Juice();
+            try
+            {
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, ShakeIntensity = 0.5 });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                var state = ChaosRunHost.State!;
+                state.Focus = 100;
+                var t = DateTime.UnixEpoch;
+                BubbleOverlay.Field.Clock = () => t = t.AddMilliseconds(32);
+                log.Clear();   // the countdown's own ticks
+                var b = BubbleOverlay.SpawnChaos(LiveSpec());
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                for (int i = 0; i < 40 && !b.Popping; i++) BubbleOverlay.Field.Step();
+                Assert.Equal(new[] { "sfx:defuse_hiss", "label:SNAP", "pulse:90,255,150@0.16" }, log.Where(e => !e.StartsWith("label:+")));
+
+                string[] Press(int shields, int collars)
+                {
+                    log.Clear();
+                    state.Focus = 0; state.Shields = shields; state.CollarSaves = collars;
+                    var c = BubbleOverlay.SpawnChaos(LiveSpec());
+                    BubbleOverlay.Press(c, c.CenterX, c.CenterY);
+                    return log.ToArray();
+                }
+                double s = LiveSpec().Strength / 100.0;
+                string[] noFocus = { "label:NO FOCUS", "sfx:focus_empty", "pulse:255,80,80@0.22", "label:PINK" };
+                Assert.Equal(noFocus.Concat(new[] { "sfx:resist_absorb", "pulse:80,160,255@0.28",
+                    $"shake:{(0.25 + s * 0.3) * 0.5:0.000}/280" }), Press(2, 0));
+                Assert.Equal("sfx:resist_crumble", Press(1, 0)[4]);   // the last point has its own cue
+                Assert.Equal(noFocus.Concat(new[] { "sfx:collar_save", "pulse:255,215,0@0.32",
+                    $"shake:{(0.25 + s * 0.3) * 0.5:0.000}/280" }), Press(0, 1));
+                Assert.Equal(noFocus.Concat(new[] { "sfx:trigger", $"pulse:255,50,50@{0.4 + s * 0.35:0.00}",
+                    $"shake:{(0.4 + s * 0.5) * 0.5:0.000}/380" }), Press(0, 0));
+            }
+            finally { Unjuice(); ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow; FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>WPF onBenignPop (BubbleService.cs:1565): the ambient pop sound, then Bubble.Pop's
+    /// effect word in the variant tint (:4685) before the treat scores.</summary>
+    [Fact]
+    public async Task A_treat_pop_plays_the_pop_and_flashes_its_effect_word()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var log = Juice();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                log.Clear();
+                var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                    { VariantId = "spiral", SizePx = 200, Payload = new FlashPayload() });
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                Assert.Equal(new[] { "sfx:", "label:SPIRAL" },
+                    log.Where(e => !e.StartsWith("label:+")).Select(e => e.StartsWith("sfx:Pop") ? "sfx:" : e));
+            }
+            finally { Unjuice(); ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>WPF Pulse/Shake (:1672) honour the run's flash and shake toggles; panic clears a live
+    /// field without a label, cue or effect (EndChaosMode fires nothing).</summary>
+    [Fact]
+    public async Task Flash_and_shake_toggles_mute_the_juice_and_panic_fires_nothing()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var log = Juice();
+            try
+            {
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3,
+                    ColorFlashesEnabled = false, ScreenShakeEnabled = false });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                var state = ChaosRunHost.State!;
+                state.Focus = 0; state.Shields = 0; state.CollarSaves = 0;
+                var c = BubbleOverlay.SpawnChaos(LiveSpec());
+                BubbleOverlay.Press(c, c.CenterX, c.CenterY);
+                Assert.Equal(1, state.Detonated);
+                Assert.DoesNotContain(log, e => e.StartsWith("pulse:") || e.StartsWith("shake:"));
+                Assert.Contains("sfx:trigger", log);
+
+                BubbleOverlay.SpawnChaos(LiveSpec());
+                log.Clear();
+                ChaosRunHost.ForceShutdown();
+                Assert.Equal(0, BubbleOverlay.ChaosCount);
+                Assert.Empty(log);
+            }
+            finally { Unjuice(); ChaosRunHost.ForceShutdown(); FreshMeta(); }
             return Task.CompletedTask;
         });
     }

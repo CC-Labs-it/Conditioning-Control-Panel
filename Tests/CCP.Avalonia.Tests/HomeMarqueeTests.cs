@@ -224,7 +224,7 @@ public sealed class HomeMarqueeTests
         time.Advance(TimeSpan.FromMilliseconds(140));
         BeatLoop.StepAll();
         Assert.InRange(canvas.Opacity, 0.01, 0.99);      // the ticker is fading out
-        time.Advance(TimeSpan.FromMilliseconds(MarqueeInterlude.ActMs));
+        time.Advance(TimeSpan.FromMilliseconds(reads.ActMs));
         BeatLoop.StepAll();
         Assert.Equal(0, canvas.Opacity);
         Assert.Equal(1, stage.Opacity);
@@ -269,6 +269,107 @@ public sealed class HomeMarqueeTests
         w.ShowTab("settings");
         Dispatcher.UIThread.RunJobs();
         Assert.NotNull(reads.LoopInterval);
+        return Task.CompletedTask;
+    });
+
+    /// <summary>Four loops past the three minute floor with the act table narrowed to <paramref name="act"/>.</summary>
+    private static void PlayAct(MarqueeInterlude reads, Action<TimeSpan> wall, string act)
+    {
+        reads.Acts = new[] { act };
+        wall(TimeSpan.FromMinutes(4));
+        for (var i = 0; i < 4 && !reads.IsPlaying; i++) reads.OnLoop();
+        Assert.True(reads.IsPlaying);
+        Assert.Equal(act, reads.ActId);
+    }
+
+    private static void At(SteppedTime time, ref double now, double ms)
+    {
+        time.Advance(TimeSpan.FromMilliseconds(ms - now));
+        now = ms;
+        BeatLoop.StepAll();
+    }
+
+    /// <summary>The text actually showing: every TextBlock whose own and ancestors' opacity up to the stage is > 0.5.</summary>
+    private static string Drawn(Grid stage) =>
+        string.Join(" ", stage.GetVisualDescendants().OfType<TextBlock>()
+            .Where(t => t.GetSelfAndVisualAncestors().TakeWhile(v => v != stage).Aggregate(1.0, (o, v) => o * v.Opacity) > 0.5)
+            .Select(t => t.Text)).ToUpperInvariant();
+
+    /// <summary>WPF MarqueeReadEffects.cs: each of the five acts takes the stage, draws the whole line by its end,
+    /// hands the ticker back, and the return sheen (WPF RestoreTicker -> SweepBannerSheen) crosses once.</summary>
+    [Theory]
+    [InlineData(MarqueeReadActs.GlitchHeal)]
+    [InlineData(MarqueeReadActs.NumberFirst)]
+    [InlineData(MarqueeReadActs.Teletype)]
+    [InlineData(MarqueeReadActs.NeonWarmUp)]
+    [InlineData(MarqueeReadActs.Redaction)]
+    public Task EveryActStartsAndEnds(string act) => WithReads((w, dash, reads, time, wall) =>
+    {
+        var canvas = dash.FindControl<Canvas>("MarqueeCanvas")!;
+        var stage = dash.FindControl<Grid>("MarqueeRead")!;
+        var sheen = w.Named<Border>("BannerSheen")!;
+        PlayAct(reads, wall, act);
+        double now = 0, end = MarqueeInterlude.FadeStepMs + reads.ActMs;
+        At(time, ref now, MarqueeInterlude.FadeStepMs + 1);
+        Assert.NotEmpty(stage.GetVisualDescendants().OfType<TextBlock>());
+        Assert.Equal(1, stage.Opacity);
+        if (act == MarqueeReadActs.NeonWarmUp)
+        {
+            At(time, ref now, end - 1202);   // the tag has warmed up, its 1.2 s breath not yet begun
+            Assert.EndsWith(reads.StageText.Split(' ')[^1].ToUpperInvariant(), Drawn(stage));
+        }
+        At(time, ref now, end - 1);
+        Dispatcher.UIThread.RunJobs();
+        var drawn = Drawn(stage);
+        foreach (var word in reads.StageText.ToUpperInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            Assert.Contains(word, drawn);
+        if (act == MarqueeReadActs.Redaction)
+            Assert.All(stage.GetVisualDescendants().OfType<global::Avalonia.Controls.Shapes.Rectangle>(), r => Assert.Equal(0, r.Opacity));
+        Assert.NotEmpty(stage.GetVisualDescendants().OfType<Image>().Where(i => i.Source != null));   // the baked glow
+
+        At(time, ref now, end + MarqueeInterlude.FadeStepMs + 1);
+        Assert.False(reads.IsPlaying);
+        Assert.Empty(stage.Children);
+        Assert.Equal(1, canvas.Opacity);
+        Assert.True(dash.Marquee.IsScrolling);
+        Assert.True(w.BannerSheenSweeping);   // over the support banner, as WPF RestoreTicker
+        At(time, ref now, now + MainShellWindow.BannerSheenMs * 0.5);
+        Assert.Equal(MainShellWindow.BannerSheenPeak, sheen.Opacity, 3);
+        At(time, ref now, now + MainShellWindow.BannerSheenMs);
+        Assert.False(w.BannerSheenSweeping);
+        Assert.Equal(0, sheen.Opacity);
+        return Task.CompletedTask;
+    });
+
+    /// <summary>WPF MarqueeReadStage.AllowFlicker: NeonWarmUp's words flicker on discrete 1 / 0.15 frames and the
+    /// glitch jitters 3 px, but Photosafe swaps the flicker for one ease and drops the jitter.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task FlickerAndJitterStopUnderPhotosafe(bool photosafe) => WithReads((w, dash, reads, time, wall) =>
+    {
+        var s = CoreSettings.Current;
+        var saved = s.LockdownPhotosafe;
+        try
+        {
+            s.LockdownPhotosafe = photosafe;
+            var stage = dash.FindControl<Grid>("MarqueeRead")!;
+            PlayAct(reads, wall, MarqueeReadActs.NeonWarmUp);
+            double now = 0;
+            // The first word warms over 720 ms (WarmMs * 0.4); 20 % in is mid-flicker, or 0.49 on the ease.
+            At(time, ref now, MarqueeInterlude.FadeStepMs + 144);
+            var first = stage.GetVisualDescendants().OfType<Grid>().First(g => g.Children.OfType<TextBlock>().Any());
+            if (photosafe) Assert.Equal(MarqueeInterlude.Ease(0.2), first.Opacity, 3);
+            else Assert.Contains(first.Opacity, new[] { 1, 0.15 });
+            reads.Cancel();
+
+            PlayAct(reads, wall, MarqueeReadActs.GlitchHeal);
+            now = 0;
+            At(time, ref now, MarqueeInterlude.FadeStepMs + 2200 * 0.23);   // the -3 px jitter frame
+            Assert.Equal(photosafe ? 0 : -3, ((TranslateTransform)stage.RenderTransform!).X);
+            reads.Cancel();
+        }
+        finally { s.LockdownPhotosafe = saved; }
         return Task.CompletedTask;
     });
 

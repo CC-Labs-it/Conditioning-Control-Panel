@@ -50,64 +50,6 @@
             <GradientStop Color="#00000000" Offset="0.55"/>
         </LinearGradientBrush>
 
-        <!-- ponytail: local copy of Resources/Theme/Controls.xaml:DeeperRoundButton, hoist when a
-             second view needs it. Standard body button, 8px corners; Background / BorderBrush /
-             Padding stay TemplateBound so every inline setter at the call sites keeps working. -->
-        <ControlTheme x:Key="DeeperRoundButton" TargetType="Button">
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Template">
-                <ControlTemplate TargetType="Button">
-                    <Border x:Name="bd" CornerRadius="8"
-                            Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            Padding="{TemplateBinding Padding}">
-                        <ContentPresenter Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}"
-                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-            <Style Selector="^:pointerover /template/ Border#bd">
-                <Setter Property="Opacity" Value="0.85"/>
-            </Style>
-            <Style Selector="^:pressed /template/ Border#bd">
-                <Setter Property="Opacity" Value="0.70"/>
-            </Style>
-            <Style Selector="^:disabled /template/ Border#bd">
-                <Setter Property="Opacity" Value="0.40"/>
-            </Style>
-        </ControlTheme>
-
-        <!-- ponytail: local copy of Resources/Theme/Controls.xaml:DeeperRoundIconButton, hoist
-             when a second view needs it. Icon-only buttons, 6px corners, no size defaults. -->
-        <ControlTheme x:Key="DeeperRoundIconButton" TargetType="Button">
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <ControlTemplate TargetType="Button">
-                    <Border x:Name="bd" CornerRadius="6"
-                            Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            Padding="{TemplateBinding Padding}">
-                        <ContentPresenter Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}"
-                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-            <Style Selector="^:pointerover /template/ Border#bd">
-                <Setter Property="Opacity" Value="0.85"/>
-            </Style>
-            <Style Selector="^:pressed /template/ Border#bd">
-                <Setter Property="Opacity" Value="0.70"/>
-            </Style>
-            <Style Selector="^:disabled /template/ Border#bd">
-                <Setter Property="Opacity" Value="0.40"/>
-            </Style>
-        </ControlTheme>
-
         <!-- Pill theme for the All / Video / Audio / Haptics / Webcam toggles. -->
         <ControlTheme x:Key="DeeperPillStyle" TargetType="ToggleButton">
             <Setter Property="Cursor" Value="Hand"/>
@@ -806,7 +748,7 @@
                                                 <Button HorizontalAlignment="Left" Margin="16,6,0,0"
                                                         Padding="8,3" FontSize="10"
                                                         Theme="{StaticResource OutlineButton}"
-                                                        Click="BtnOpenDeviceSettings_Click">
+                                                        x:Name="BtnDeeperDeviceSettings" Click="BtnOpenDeviceSettings_Click">
                                                     <TextBlock Text="{loc:Str set2_configure_in_settings}"/>
                                                 </Button>
                                             </StackPanel>
@@ -863,12 +805,12 @@
                                         <WrapPanel Orientation="Horizontal">
                                             <Button Theme="{StaticResource OutlineButton}"
                                                     Padding="10,4" Margin="0,0,6,6" FontSize="10"
-                                                    Click="BtnDeeperWebcamCalibrate_Click">
+                                                    x:Name="BtnDeeperWebcamCalibrate" Click="BtnDeeperWebcamCalibrate_Click">
                                                 <TextBlock Text="{loc:Str blink_trainer_calibration_btn}"/>
                                             </Button>
                                             <Button Theme="{StaticResource OutlineButton}"
                                                     Padding="10,4" Margin="0,0,6,6" FontSize="10"
-                                                    Click="BtnDeeperWebcamQuickRecal_Click">
+                                                    x:Name="BtnDeeperWebcamQuickRecal" Click="BtnDeeperWebcamQuickRecal_Click">
                                                 <TextBlock Text="{loc:Str blink_trainer_calibration_quick}"/>
                                             </Button>
                                             <!-- Start/Stop tracker. Required to actually calibrate: the

@@ -826,7 +826,7 @@ namespace ConditioningControlPanel.Services
             {
                 var settings = App.Settings.Current;
                 var soundPath = playSound ? GetNextSound() : null;
-                var scale = (size ?? settings.ImageScale) / 100.0;
+                var scale = FlashScaleRule.Resolve(size, settings.ImageScale);
 
                 var data = await LoadImageAsync(imagePath);
                 if (data == null)
@@ -998,8 +998,9 @@ namespace ConditioningControlPanel.Services
                 // Get sound ONCE for this flash event
                 var soundPath = GetNextSound();
 
-                // Scale is percentage: 50-250%, stored as 50-250, so divide by 100
-                var scale = (size ?? settings.ImageScale) / 100.0;
+                // Scale is percentage: 50-250%, stored as 50-250, so divide by 100. A named size
+                // wins (FlashScaleRule); it used to be computed here and then never passed on.
+                var scale = FlashScaleRule.Resolve(size, settings.ImageScale);
 
                 // Load images, retrying with fresh picks if some are corrupted/unsupported,
                 // until we reach the requested count or run out of candidates.
@@ -1015,8 +1016,8 @@ namespace ConditioningControlPanel.Services
                 // URL for remote), which is the property a burst needs. Spare candidates ride along so
                 // one unreadable file shortens the burst instead of forcing a second, repeating draw.
                 var loadedImages = look == null
-                    ? await LoadImagesUntilAsync(targetCount)
-                    : await LoadImagesUntilAsync(targetCount, GetChaosImagePaths(targetCount + BurstSpareCandidates));
+                    ? await LoadImagesUntilAsync(targetCount, scale: scale)
+                    : await LoadImagesUntilAsync(targetCount, GetChaosImagePaths(targetCount + BurstSpareCandidates), scale);
 
                 if (loadedImages.Count == 0)
                 {
@@ -1043,7 +1044,12 @@ namespace ConditioningControlPanel.Services
                 () => ActiveWindowCount > 0,
                 () => App.Video?.IsPlaying == true || App.DualMonitorVideo?.IsPlaying == true || App.BrowserMedia?.IsPlaying == true,
                 () => App.Settings?.Current?.JackpotRemixEnabled == true,
-                Path.Combine(App.UserDataPath, "cache", "remix"));
+                Path.Combine(App.UserDataPath, "cache", "remix"),
+                owned: () => PrizeGrants.IsGranted(PrizeGrants.JackpotRemix),
+                motion: () => MotionFx.Level,
+                builderDisabled: () => JackpotRemixBuilder.Default.Disabled,
+                build: async (sources, seed, ct) => (await JackpotRemixBuilder.Default.BuildAsync(sources, seed, ct).ConfigureAwait(false))?.FilePath,
+                availablePhysicalBytes: JackpotRemixBuilder.AvailablePhysicalBytes);
 
         /// <summary>The local flash pool's gifs under the assets root (what the remix page can read).</summary>
         private IReadOnlyList<string> SnapshotGifPool()
@@ -1114,13 +1120,14 @@ namespace ConditioningControlPanel.Services
         /// candidate list (see <see cref="FlashBurstLook"/>). Given one, candidates are taken from it in
         /// order and it is NEVER topped up, so a burst can come up short but can never repeat a picture.</para>
         /// </summary>
-        private async Task<List<LoadedImageData>> LoadImagesUntilAsync(int targetCount, IReadOnlyList<string>? fixedPool = null)
+        private async Task<List<LoadedImageData>> LoadImagesUntilAsync(int targetCount, IReadOnlyList<string>? fixedPool = null,
+            double? scale = null)
         {
             var loaded = new List<LoadedImageData>(targetCount);
             var attempted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             int poolCursor = 0;
             var settings = App.Settings.Current;
-            var scale = settings.ImageScale / 100.0;
+            double drawScale = scale ?? FlashScaleRule.Resolve(null, settings.ImageScale);
             int attempts = 0;
             int maxAttempts = Math.Max(targetCount * 5, 20);
             var pending = new List<Task<LoadedImageData?>>();
@@ -1163,7 +1170,7 @@ namespace ConditioningControlPanel.Services
                 if (data != null && loaded.Count < targetCount)
                 {
                     var monitor = PickMonitor(settings);
-                    var geometry = CalculateGeometry(data.Width, data.Height, monitor, scale);
+                    var geometry = CalculateGeometry(data.Width, data.Height, monitor, drawScale);
                     data.Geometry = geometry;
                     data.Monitor = monitor;
                     loaded.Add(data);

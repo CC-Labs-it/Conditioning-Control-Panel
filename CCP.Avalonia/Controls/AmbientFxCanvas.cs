@@ -1248,13 +1248,22 @@ namespace ConditioningControlPanel.Avalonia.Controls
             internal static void RaiseMotionGateChanged() => MotionGateChanged?.Invoke();
 
             /// <summary>
-            /// PerformanceProfile.CurrentTier. Its automatic escalation counts live flash windows
-            /// and ambient bubbles; this head has neither, so HeavyElementCount is 0,
-            /// AutoPerformanceMode can never escalate, and the explicit toggle IS the whole
-            /// decision. Do not "fix" the missing Balanced branch - it is unreachable here.
+            /// PerformanceProfile.CurrentTier through the Core rule. AutoPerformanceMode escalates by
+            /// <see cref="HeavyElementCount"/>; like WPF, read it at spawn/start time, not per frame.
             /// </summary>
-            public static PerformanceTier CurrentTier =>
-                CoreSettings.Current.PerformanceMode ? PerformanceTier.Performance : PerformanceTier.Quality;
+            public static PerformanceTier CurrentTier
+            {
+                get
+                {
+                    var s = CoreSettings.Current;
+                    return global::ConditioningControlPanel.Services.UI.PerformanceTierRule.Resolve(s.PerformanceMode, s.AutoPerformanceMode,
+                        s.PerformanceMode || !s.AutoPerformanceMode ? 0 : HeavyElementCount);
+                }
+            }
+
+            /// <summary>WPF PerformanceProfile.HeavyElementCount: live flash windows + ambient bubbles.</summary>
+            public static int HeavyElementCount =>
+                Views.Overlays.FlashOverlay.Active.Count + Views.Overlays.BubbleOverlay.Field.Bubbles.Count;
 
             /// <summary>PerformanceProfile.MaxAmbientParticles, verbatim.</summary>
             public static int MaxAmbientParticles(PerformanceTier tier) => tier switch
