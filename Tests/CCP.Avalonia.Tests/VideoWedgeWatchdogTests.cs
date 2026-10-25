@@ -144,10 +144,10 @@ public sealed class VideoWedgeWatchdogTests
     public void AClickOnTheVideo_IsAnsweredNoActivate_OtherMessagesPassThrough()
     {
         bool handled = false;
-        Assert.Equal(new IntPtr(3), VideoWedgeWatchdog.NoClickRaiseHook(IntPtr.Zero, 0x0021, IntPtr.Zero, IntPtr.Zero, ref handled));
+        Assert.Equal(new IntPtr(3), Win32Overlay.PreventClickRaise(IntPtr.Zero, 0x0021, IntPtr.Zero, IntPtr.Zero, ref handled));
         Assert.True(handled);                                 // WM_MOUSEACTIVATE -> MA_NOACTIVATE
         handled = false;
-        Assert.Equal(IntPtr.Zero, VideoWedgeWatchdog.NoClickRaiseHook(IntPtr.Zero, 0x0201, IntPtr.Zero, IntPtr.Zero, ref handled));
+        Assert.Equal(IntPtr.Zero, Win32Overlay.PreventClickRaise(IntPtr.Zero, 0x0201, IntPtr.Zero, IntPtr.Zero, ref handled));
         Assert.False(handled);                                // the button-down itself still reaches the targets
     }
 }

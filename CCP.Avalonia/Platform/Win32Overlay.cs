@@ -105,6 +105,15 @@ internal static class Win32Overlay
         return SetClickThrough(window, hwnd, through);
     }
 
+    // WPF BubbleCountWindow.NoClickRaiseHook: deny the activation/raise while delivering
+    // the original click. Unlike WS_EX_NOACTIVATE this preserves explicit keyboard focus.
+    internal static IntPtr PreventClickRaise(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (message != 0x0021) return IntPtr.Zero; // WM_MOUSEACTIVATE
+        handled = true;
+        return new IntPtr(3); // MA_NOACTIVATE, not MA_NOACTIVATEANDEAT
+    }
+
     private static StrongBox<bool> Track(TopLevel window) => Wanted.GetValue(window, w =>
     {
         var box = new StrongBox<bool>();

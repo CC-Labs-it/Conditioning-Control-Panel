@@ -147,6 +147,36 @@ public sealed class MandatoryVideoOverlayTests
                         }
                     }
 
+                    // The same close landing INSIDE rung 1's 3 s Stop budget: the watchdog's Stop() is still running,
+                    // so the teardown must quarantine the player too, not Stop/Dispose it underneath that call.
+                    w = await Open(strict: true);
+                    using (var stuck = new System.Threading.ManualResetEventSlim(false))
+                    using (var entered = new System.Threading.ManualResetEventSlim(false))
+                    {
+                        var realStop = MandatoryVideoOverlay.StopPlayer;
+                        var quarantined = MandatoryVideoOverlay.QuarantinedCount;
+                        Task? tick = null;
+                        try
+                        {
+                            MandatoryVideoOverlay.StopPlayer = p => { entered.Set(); stuck.Wait(); p.Stop(); };
+                            var stalled = DateTime.UtcNow.Ticks + TimeSpan.FromSeconds(9).Ticks;
+                            MandatoryVideoOverlay.WedgeNow = () => stalled;
+                            var dog = o.Wedge!;
+                            tick = Task.Run(dog.Tick);                    // the threadpool tick, now inside its Stop budget
+                            Assert.True(entered.Wait(TimeSpan.FromSeconds(10)), "the watchdog's Stop() started");
+                            w.Close();
+                            Assert.False(v.IsPlaying, "a stalled strict clip can be closed mid-Stop");
+                            Assert.Equal(quarantined + 1, MandatoryVideoOverlay.QuarantinedCount);
+                        }
+                        finally
+                        {
+                            stuck.Set();
+                            if (tick != null) await tick;
+                            MandatoryVideoOverlay.StopPlayer = realStop;
+                            MandatoryVideoOverlay.WedgeNow = () => DateTime.UtcNow.Ticks;
+                        }
+                    }
+
                     // Strict with NO live listener (#875): the panic key must escape, not trap.
                     MandatoryVideoOverlay.PanicListenerLive = () => false;
                     w = await Open(strict: true);
@@ -157,7 +187,7 @@ public sealed class MandatoryVideoOverlayTests
                     // Non-strict: Esc dismisses and the watched seconds are credited.
                     credited = 0;
                     w = await Open(strict: false);
-                    Assert.True((ducks, unducks) == (4, 3), $"one duck ref per open, released by each close ({ducks}/{unducks})");
+                    Assert.True((ducks, unducks) == (5, 4), $"one duck ref per open, released by each close ({ducks}/{unducks})");
 
                     // WPF blurred fill: the 16:9 clip leaves bars on the 4:3 headless window, so the fill shows a
                     // small, non-black copy of the frame under the scrim.
@@ -222,7 +252,7 @@ public sealed class MandatoryVideoOverlayTests
                     Assert.Empty(o.Windows);
                     Assert.True(o.Sink == null, "frame buffer freed");
                     Assert.True(credited >= 1, $"credited {credited}s");
-                    Assert.True((ducks, unducks) == (4, 4), $"every close releases its duck ({ducks}/{unducks})");
+                    Assert.True((ducks, unducks) == (5, 5), $"every close releases its duck ({ducks}/{unducks})");
 
                     // The pink pill by mouse (0.85 hover, 0.7 pressed, click resumes), then the 60 s auto-resume
                     // on the next clip; neither stops the clip.

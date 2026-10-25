@@ -173,21 +173,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>The X11 release (tests swap it: there is no X server under the headless backend).</summary>
         internal static Func<IntPtr, bool> UnmapX11 { get; set; } = X11Overlay.UnmapOffThread;
 
-        // ---- WPF PreventClickRaise (VideoService.cs:8931): a click on the video must not raise it ----
-
-        private const uint WM_MOUSEACTIVATE = 0x0021;
-        private const int MA_NOACTIVATE = 3;
-
-        /// <summary>WPF NoClickRaiseHook: WM_MOUSEACTIVATE answers MA_NOACTIVATE, which denies the click
-        /// activation (and the z-order raise riding on it) but keeps the mouse message, so the attention
-        /// targets still take the click and focus (Esc / panic key) is untouched.</summary>
-        internal static IntPtr NoClickRaiseHook(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, ref bool handled)
-        {
-            if (msg != WM_MOUSEACTIVATE) return IntPtr.Zero;
-            handled = true;
-            return new IntPtr(MA_NOACTIVATE);
-        }
-
         public void Dispose()
         {
             _disposed = true;

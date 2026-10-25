@@ -38,7 +38,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// The off-thread UI-wedge watchdog is <see cref="VideoWedgeWatchdog"/> (WPF rungs 1 and 3; a player whose Stop
     /// wedged is quarantined with its media and frame buffer; rung 2's LibVLC retire is a recorded divergence), and
     /// a click on the video never raises it over what sits above (WPF PreventClickRaise, Windows).
-    /// ponytail: missing against WPF - the toy-button/gaze/haptics attention inputs, the chaos-run
+    /// ponytail: missing against WPF - a normal teardown (CloseAll) still calls the native Stop() on the UI
+    /// thread, so a Stop that hangs there still hangs the UI thread (WPF stops off-thread with a time limit and
+    /// quarantines the ones that don't finish); the toy-button/gaze/haptics attention inputs, the chaos-run
     /// WS_EX_NOACTIVATE (no chaos run on this head), and the remote-media offer after the "no videos" dialog.
     /// </summary>
     internal sealed class MandatoryVideoOverlay : IMandatoryVideoHost
@@ -243,8 +245,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     var p = _player;
                     if (p == null) return true;
+                    // Wedged from the start: a close landing during the 3 s budget must quarantine p, not
+                    // Stop/Dispose it while this Stop() is still running (the next hang, or a crash).
+                    _playerWedged = true;
                     bool ok = VideoWedgeWatchdog.StopOffThread(() => StopPlayer(p));
-                    if (!ok) _playerWedged = true;
+                    if (ReferenceEquals(_player, p)) _playerWedged = !ok;
                     return ok;
                 },
                 // Guarded by identity: a teardown that already ran (and a newer clip) must not be ended by this one.
@@ -324,7 +329,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF PreventClickRaise: a missed click on the video must not raise it over what sits above.
             if (OperatingSystem.IsWindows())
             {
-                try { Win32Properties.AddWndProcHookCallback(w, VideoWedgeWatchdog.NoClickRaiseHook); }
+                try { Win32Properties.AddWndProcHookCallback(w, Win32Overlay.PreventClickRaise); }
                 catch (Exception ex) { Log.Debug("VideoService: click-raise hook failed: {E}", ex.Message); }
             }
             void OnKey(KeyEventArgs e)
