@@ -17,7 +17,7 @@
  *   4. ATTACH/DETACH on currentMatch changes. The relay fallback REBUILDS the
  *      match object (net/session.js _fallBackToRelay), so nothing may cache the
  *      first instance — the whole executor/log/HUD graph re-binds here;
- *   5. the Escape ladder (mercy is never more than one keypress away);
+ *   5. Escape opens local options; mercy stays on its own button;
  *   6. phase-driven routing;
  *   7. Practice mode: a loopback pair and a scripted opponent, so the game is
  *      fully playable with no server and no second machine.
@@ -31,7 +31,11 @@
  * ==========================================================================*/
 
 import * as bridge from './bridge.js';
+import { createHostEscape, HOST_ESCAPE } from './host-escape.js';
+const hostEscape = createHostEscape();
+bridge.on(HOST_ESCAPE, () => hostEscape.kept());
 import { media } from './exec/media.js';
+import { pageMark } from './exec/scrolllerMark.js';
 import * as layers from './exec/layers.js';
 // The per-match record of which artifacts a duel PARTNER put on this screen —
 // exec/videos.js owns it, the recap's report card reads it, and this file is
@@ -52,6 +56,7 @@ import {
   cleanNiches, peerNiches, SCORE_CAP_VERSION,
 } from './core/contracts.js';
 import { local as localCapsOf, UNIVERSAL_ROUND } from './core/caps.js';
+import { capToyMessage } from './exec/toys.js';
 import { GoonReceiptStatus } from './core/scoring.js';
 import { GoonSession } from './net/session.js';
 import { GoonSignalingClient, normalizeCode } from './net/signaling.js';
@@ -122,7 +127,6 @@ if (typeof window !== 'undefined') {
 const WARM_MS = 12000;   // hosted: "warming up" line in the loader
 const BOOT_MS = 45000;   // hosted: give up and tell C#
 const EXIT_FALLBACK_MS = 1200;
-const ESC_HOLD_MS = 1200;
 
 /**
  * How long after `matchEnded` we stop waiting for the countersignature and put
@@ -422,6 +426,9 @@ const mediaFlavour = (() => {
   return api;
 })();
 
+// "via Scrolller" (2026-10-17): one corner mark while an online picture is on screen.
+media.setOnlineShownHandler(() => pageMark().note());
+
 // The online deck is mostly shown: ask the host for the next wave (it re-checks the pick and
 // the switch, and fetches only posts this list has not had).
 media.setOnlineLowHandler(() => {
@@ -635,10 +642,12 @@ function stakeCode() {
   } catch (_e) { return ''; }
 }
 
-// Reserved: the host does not post this yet (caps.haptics is false until the
-// haptics-v2 overhaul merges). Wired now so the toy HUD has a seam on day one.
+// A toy connected or dropped in CCP while this window is open (ccp-bugs #1429). session.caps is
+// REPLACED, never mutated. The next match advertises it; a lobby already open keeps the hello
+// it sent, and its toy row repaints from session.caps.
 bridge.on('haptics-state', (m) => {
   session.haptics = m || null;
+  session.caps = Object.assign({}, session.caps, { haptics: !!(m && m.connected === true) });
   paintProbe();
 });
 
@@ -817,7 +826,6 @@ let micGateSaid = false;     // the mic breadcrumb is once per match — see rep
 let hudHandle = null;
 let mercyHandle = null;
 let phaseUnsubs = [];
-let escMercied = false;
 let awaitingEntry = false;
 let lastConnectFailed = null;
 let recapFallbackTimer = 0;
@@ -1287,6 +1295,8 @@ function buildMatch(transport, isHost, { withSuddenDeathUi = true, displayName =
     caps: night ? localCaps() : Object.assign({}, localCaps(), { night: 0 }),
     tag: isHost ? 'GG:host' : 'GG:guest',
   });
+  // Said in the hello, beside the ToyPatterns cap localCaps() advertises from the same flag.
+  match.localToyConnected = !!(session.caps && session.caps.haptics);
 
   if (withSuddenDeathUi) {
     let sd = null;
@@ -1387,7 +1397,6 @@ function attachMatch(match, transport) {
       peerNicheLink.fromCaps(match.remoteCaps);   // their hello may already be in
     } catch (_e) { /* a hook, never load-bearing */ }
   }
-  escMercied = false;
   // A new match is a new answer to "is there a mic on the desk". See reportMicGate.
   micGateSaid = false;
 
@@ -2843,7 +2852,15 @@ function buildApp() {
         media, layers, audio, logger,
         // The toy bridge only exists inside the app: a browser cannot reach a
         // toy, and a null bridge is how the executor knows to skip toy cues.
-        toyBridge: session.hosted ? ((m) => bridge.send(m)) : null,
+        // Every cue carries the toy cap the two players signed (exec/toys.js capToyMessage).
+        // Never in practice: the bot is not a person who signed anything. And the other
+        // player can only lower the cap: session.ownToyCap is this player's own figure.
+        toyBridge: session.hosted
+          ? ((m) => {
+            if (soloPair) return;
+            bridge.send(capToyMessage(m, currentMatch && currentMatch.consentSheet, session.ownToyCap));
+          })
+          : null,
       });
     } catch (e) {
       logger.error('createExecutor threw: ' + ((e && e.stack) || e));
@@ -2955,38 +2972,7 @@ function finishExit(why) {
   bridge.send({ type: 'exit-done' });
 }
 
-/* ----------------------------------------------------------------------------
- * THE ESCAPE LADDER — the safety contract, in code.
- *
- *   TAP, Live or SuddenDeath   -> declareMercy() ON KEYDOWN. Not on keyup, not
- *                                 behind a confirm dialog, not after an
- *                                 animation. The dignified concede has to be
- *                                 the FASTEST thing on the page, and the engine
- *                                 ends the match locally even if the wire is
- *                                 dead (core/match.js §11).
- *   TAP, Lobby/Consent/Draft/Countdown
- *                              -> confirm-free cancel + leave. Pre-live is a
- *                                 clean fold that never reaches the ledger, so
- *                                 there is nothing to confirm.
- *   TAP, Recap                 -> leave, exactly like "Back to menu". The match
- *                                 is already over: there is nothing left to
- *                                 concede, and Escape must never be a key that
- *                                 does nothing. The owner hit precisely that —
- *                                 an end card with no way out.
- *   TAP, no match              -> close the topmost overlay, or nothing.
- *   HOLD >= 1.2s               -> mercy first (if we have not already), THEN
- *                                 the exit handshake. Closing the window can
- *                                 never be a way to dodge a loss or strand the
- *                                 opponent waiting on a countersignature.
- *
- * e.repeat is dropped and `escDown` latches, so a held key fires the tap action
- * exactly once — a mercy storm would spam the wire with `mercy` frames.
- * The mercy BUTTON (ui/mercy.js, sibling I) calls the same match API; neither
- * path is privileged over the other.
- * -------------------------------------------------------------------------- */
-let escTimer = 0;
-let escDown = false;
-
+// Escape opens local options; online clocks keep running. Leaving uses a button.
 function isPreLive(phase) {
   return phase === GoonMatchPhase.Lobby || phase === GoonMatchPhase.Consent
     || phase === GoonMatchPhase.Draft || phase === GoonMatchPhase.Countdown;
@@ -3002,51 +2988,10 @@ function onKeyDown(e) {
     }
     return;
   }
-  if (e.key !== 'Escape' || e.repeat || escDown) return;
-  escDown = true;
-
-  const m = currentMatch;
-  const phase = m ? m.phase : GoonMatchPhase.Idle;
-
-  if (m && (phase === GoonMatchPhase.Live || phase === GoonMatchPhase.SuddenDeath)) {
-    if (!escMercied) {
-      escMercied = true;
-      logger.info('escape -> mercy');
-      try { m.declareMercy(); } catch (err) { logger.error('declareMercy threw: ' + ((err && err.stack) || err)); }
-    }
-  } else if (m && isPreLive(phase)) {
-    logger.info('escape -> pre-live cancel');
-    void actions.leave('escape');
-  } else if (sheets && sheets.isOpen) {
-    sheets.close(null);
-  } else if (options && options.isOpen) {
-    options.close();
-  } else if (phase === GoonMatchPhase.Recap || (router && router.current === 'recap')) {
-    // The end card is a screen, not a match: Escape leaves it the same way the
-    // button does. Checked AFTER the overlays so Escape still peels the drawer
-    // or a sheet off the recap first, one layer per press.
-    logger.info('escape -> leave the recap');
-    void actions.leave('escape-recap');
-  }
-
-  try {
-    escTimer = setTimeout(() => { if (escDown) holdExit(); }, ESC_HOLD_MS);
-  } catch (_e) { /* ignore */ }
-}
-
-function holdExit() {
-  const m = currentMatch;
-  if (m && !escMercied && (m.phase === GoonMatchPhase.Live || m.phase === GoonMatchPhase.SuddenDeath)) {
-    escMercied = true;
-    try { m.declareMercy(); } catch (_e) { /* ignore */ }
-  }
-  requestExit('hold-escape');
-}
-
-function onKeyUp(e) {
-  if (e.key !== 'Escape') return;
-  escDown = false;
-  try { clearTimeout(escTimer); } catch (_e) { /* ignore */ }
+  if (e.key !== 'Escape' || e.repeat) return;
+  e.preventDefault();
+  if (sheets?.isOpen) sheets.close(null);
+  else options?.toggle();
 }
 
 /* ----------------------------------------------------------------------------
@@ -3116,7 +3061,6 @@ if (hasDom()) {
   initDebugOverlay();
   try {
     window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
     window.addEventListener('pagehide', () => { try { prefs?.flush?.(); } catch (_e) { /* ignore */ } });
   } catch (_e) { /* ignore */ }
   layers.setFxHeat(0);

@@ -304,7 +304,7 @@ namespace ConditioningControlPanel
             _leashSnoozeUntilUtc = DateTime.UtcNow + LeashUiRules.PanicSnooze;
             try { _leashRunner?.Park(); } catch { }
             HideLeashGate();
-            HandlePanicKeyPress();
+            HandlePanicFromStopButton();
         }
 
         /// <summary>A key-down of the panic key: true = a repeat of a held key, swallow it, leashed or
