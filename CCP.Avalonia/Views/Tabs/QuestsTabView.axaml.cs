@@ -43,6 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             InitializeComponent();
 
             _dailyCards = new[] { DailyCard0, DailyCard1, DailyCard2 };
+            InitDepth();
             RoadmapScrollContainer.TemplateApplied += (_, _) => _rescanParticles = true; // QuestsTabView.Fx.cs
 
             BtnQuestSubDaily.Click += (_, _) => ShowDailyWeekly();
@@ -62,6 +63,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         // ---- SUB-TABS (view-only, ported for real) --------------------------------
+
+        private void OnJournalModChanged(object? sender, Models.ModPackage mod) =>
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(ApplyBimboJournalModVisibility);
+
+        internal void ApplyBimboJournalModVisibility()
+        {
+            BtnQuestSubRoadmap.IsVisible = Models.BuiltInMods.SupportsBimboJournal(CoreMods.ActiveModId);
+            if (!BtnQuestSubRoadmap.IsVisible && RoadmapPanel.IsVisible) ShowDailyWeekly();
+        }
 
         private void ShowDailyWeekly()
         {
@@ -102,7 +112,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private ControlTheme? TabTheme(string key) =>
-            Resources.TryGetResource(key, null, out var value) ? value as ControlTheme : null;
+            this.FindResource(key) as ControlTheme;
 
         // ---- REROLLS (MainWindow.QuestsTab.cs:41/:59) ------------------------------
 
@@ -136,14 +146,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _ = Dialogs.MessageDialog.ShowAsync(owner, ConditioningControlPanel.Localization.Loc.Get("quest_reroll_limit_title"), ConditioningControlPanel.Localization.Loc.Get(key));
         }
 
-        // ponytail: there is NO QuestStreakService - the name in the note this replaces does not
-        // exist anywhere in the repo. The streak fix is
-        // ConditioningControlPanel/Services/Progression/SkillTreeService.cs:423 (UseStreakShield,
-        // for the charge count) plus the signed-in check, painted by
-        // ConditioningControlPanel/MainWindow/MainWindow.QuestsTab.cs:748. The dates it writes,
-        // AppSettings.StreakShieldUsedDates, are already in Core.
-        private void FixStreak() { }
-
         // ---- STREAK CALENDAR ------------------------------------------------------
 
         /// <summary>
@@ -151,7 +153,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// day, accent-filled when a daily quest was completed, gold ring on today, 🛡 on shielded
         /// days, joined by an accent line between consecutive completed days. Without a service
         /// (headless render) it paints a seven-pip sample so the band is not a blank.
-        /// ponytail: no streak-fix mode (pulsing missed days) - SpendStreakFix is a server round trip.
+        /// Fix mode (pulsing missed days) is QuestsTabView.StreakFix.cs.
         /// </summary>
         private void PaintStreakCalendar()
         {

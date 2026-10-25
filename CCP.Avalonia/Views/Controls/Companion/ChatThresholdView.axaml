@@ -196,8 +196,7 @@
                             <TextBlock Text="{Binding StateCopy}" Theme="{StaticResource CmpDormantCopyStyle}"/>
                             <!-- the sweep band; its X is animated once by the code-behind -->
                             <Border x:Name="DormantShimmer" Width="46" HorizontalAlignment="Left"
-                                    RenderTransformOrigin="0%,0%"
-                                    Background="{StaticResource CmpShimmerSoftBrush}"
+                                    Background="{StaticResource CmpShimmerSoftBrush}" RenderTransformOrigin="0%,0%"
                                     IsHitTestVisible="False" Opacity="0">
                                 <Border.RenderTransform>
                                     <TransformGroup>

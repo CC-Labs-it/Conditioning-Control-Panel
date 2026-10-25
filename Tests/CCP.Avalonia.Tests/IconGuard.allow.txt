@@ -8,6 +8,7 @@
 
 # --- temporary (removed by L10 icons-shell-chrome) ---
 Views/Windows/MainShellWindow.axaml :: Text="&#xE713;" FontFamily="Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI" :: font: temporary - MDL2 settings gear, the one icon-font site at L0b; L10 converts it to IconGlyph Kind=Settings
+Views/Windows/EmiDesk/EmiFace.cs :: "Noto Sans Symbols 2, Segoe UI Symbol, Segoe UI Emoji, Nirmala UI, MS Gothic, Courier New, monospace" :: font: content - Emi's kaomoji mood text (chat content, not an icon); WPF EmiFace.cs fallback chain for its glyphs
 
 # --- content (c).1: companion/chat text ---
 Views/Controls/Companion/ChatThresholdView.axaml.cs :: good. it should~ 💕 :: chat sample bubble, companion text (content (c).1)
@@ -59,6 +60,7 @@ Controls/SpiralGlyph.cs :: * :: path: D6 art - spiral glyph drawing
 Controls/ChasterRailChip.cs :: * :: path: D6 art - Chaster rail chip lock drawing
 Controls/DescentFuseRailChip.cs :: * :: path: D6 art - descent fuse rail chip drawing
 Views/Controls/SeasonRecapCard. :: * :: path: D6 art - season recap card illustration
+Views/Controls/Leash/LeashHelpSlip.cs :: * :: path: D6 art - leash ink-slip pictograms (WPF owner-approved mockup drawings)
 Helpers/BreakoutCardArt.cs :: * :: path: D6 art - breakout card art
 Views/Features/SplitFeatureCard. :: * :: path: D6 art - split feature card illustration
 Views/Windows/TutorialOverlay. :: * :: path: D6 art - tutorial overlay spotlight/arrows

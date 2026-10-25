@@ -7,6 +7,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.JustDrop;
 using ConditioningControlPanel.Services.Chaos;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -99,6 +100,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Closing += (_, _) => _closing = true;
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); };
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
+            if (spec.Id == JustDropId) Closed += (_, _) =>
+            {
+                JustDropOrdersService.Invalidate();
+                Windows.MainShellWindow.Current?.RefreshTakeawayShelf();
+            };
         }
 
         private WebAssetServer? _server;
