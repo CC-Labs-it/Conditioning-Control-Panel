@@ -3273,3 +3273,7 @@ Roster entrance stagger (WPF StaggerSubjectCards/MotionFx.StaggerIn) on the shar
 ## avalonia-port/sync7-leash-a: +320
 - Main sync #7 row 6 (a12bb6c53): LeashLevelGuide git-mv to Core; LeashLevelHelp ported to the Avalonia head with Core + headless tests (fail-proven).
 - No user path yet: hosts LeashSelfCard/LeashAskCard missing (follow-up feat-leash); row stays needs-port.
+
+## avalonia-port/flake-tube-takeover: +114
+
+Test-only reliability fix for the tube chat, takeover cue, She Listening pill and tube content-gates tests: production callbacks stepped at a controlled clock, awaited menu activation, chunked-safe HttpListener fake with port retry, one window-driven RequestAnimationFrame check kept. rgate GATE-OK; 4 tests x20 green (run 40150070220). No ledger changes.
