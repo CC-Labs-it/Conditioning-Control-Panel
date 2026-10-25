@@ -239,6 +239,9 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>WPF FlashDisplayed / SubliminalDisplayed / OnBubblePopped, as a MemorySignalWriter feature id.</summary>
         internal static event Action<string>? FeatureUsed;
+        // Display confirmation, distinct from the scheduler/memory usage signal.
+        internal static event Action<string>? FeatureDisplayed;
+        internal static void NotifyFeatureDisplayed(string feature) => FeatureDisplayed?.Invoke(feature);
         internal static void NoteFeatureUsed(string feature) => FeatureUsed?.Invoke(feature);
 
         /// <summary>

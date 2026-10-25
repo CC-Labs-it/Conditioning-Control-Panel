@@ -158,6 +158,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// hydra child skips only when timing is independent.</summary>
         internal static void Paid(string path, AppSettings s, int hydraGeneration, int multiplier)
         {
+            App.NotifyFeatureDisplayed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureFlash);
             App.Sessions?.SessionLog.RecordImages(new[] { path });
             App.MediaHistory?.RecordImages(new[] { path });   // WPF MediaHistoryService.OnFlashDisplayed
             if (multiplier > 1 && !s.SuppressPerkNotifications) LuckyChime(s);   // WPF :4441 PerkNotificationsSuppressed

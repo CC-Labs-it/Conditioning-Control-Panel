@@ -9,9 +9,7 @@
 // (UpdateQuickLoginUI) and tier changes (App RepaintVeils). XP / level-up / achievement events
 // pulse and glow the bubble (WPF OnBubble*).
 //
-// ponytail: still missing vs WPF - the flash wobble and subliminal shimmer
-// (no FlashDisplayed / SubliminalDisplayed event on this head), the spiral row (shell-profile-spiral,
-// no DescentService here).
+// ponytail: spiral summary/menu remain blocked on the live Descent and migration hosts.
 // PlaceProfileBubblePopup is dropped: Placement="BottomEdgeAlignedRight" is the same result.
 //
 // Controls are reached with Named<T>(name): the window loads with AvaloniaXamlLoader.Load.
@@ -326,12 +324,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Action<double, string> awarded = (_, _) => Dispatcher.UIThread.Post(OnBubbleXPChanged);
             Action<int> levelUp = _ => Dispatcher.UIThread.Post(OnBubbleLevelUp);
             EventHandler<Achievement> unlocked = (_, _) => Dispatcher.UIThread.Post(OnBubbleAchievementUnlocked);
+            App.FeatureDisplayed += OnBubbleFeatureUsed;
+            Closed += (_, _) => CleanupBubbleReactions();
             var engine = App.Achievements;
             ProgressionBank.Awarded += awarded;
             ProgressionBank.LevelUp += levelUp;
             if (engine != null) engine.Unlocked += unlocked;
             Closed += (_, _) =>
             {
+                App.FeatureDisplayed -= OnBubbleFeatureUsed;
                 ProgressionBank.Awarded -= awarded;
                 ProgressionBank.LevelUp -= levelUp;
                 if (engine != null) engine.Unlocked -= unlocked;

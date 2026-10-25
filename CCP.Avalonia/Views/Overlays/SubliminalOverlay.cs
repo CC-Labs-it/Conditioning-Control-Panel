@@ -100,6 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Active.Add(overlay);
             }
             card.Show();
+            App.NotifyFeatureDisplayed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureSubliminal);
             if (!stealsFocus) return;
             try { ActivateCard(card); }
             catch (Exception ex) { Log.Debug("Subliminal: focus steal refused: {E}", ex.Message); }

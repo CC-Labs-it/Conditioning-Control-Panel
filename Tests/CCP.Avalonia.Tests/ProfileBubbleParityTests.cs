@@ -72,6 +72,70 @@ public sealed class ProfileBubbleParityTests : IDisposable
         MainShellWindow.ProfileLinkAllowed = _allowedBefore;
     }
 
+    [Theory]
+    [InlineData("flash", 0.09, 2.5)]
+    [InlineData("subliminal", 0.3, 4.0)]
+    public Task DisplayReactionsFollowWpfKeysThrottleAndDetach(string feature, double peakAt, double throttle) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var before = BeatLoop.Time;
+        var time = new SteppedTime();
+        BeatLoop.Time = time;
+        var shell = Shell(MotionLevel.Full);
+        var visual = shell.FindControl<Grid>("ProfileBubbleVisual")!;
+        double Value() => feature == "flash"
+            ? ((RotateTransform)((TransformGroup)visual.RenderTransform!).Children[1]).Angle : visual.Opacity;
+        double resting = feature == "flash" ? 0 : 1;
+        void Display()
+        {
+            global::ConditioningControlPanel.Avalonia.App.NotifyFeatureDisplayed(feature);
+            Dispatcher.UIThread.RunJobs();
+        }
+        try
+        {
+            Display();
+            time.Advance(TimeSpan.FromSeconds(peakAt));
+            BeatLoop.StepAll();
+            Assert.Equal(feature == "flash" ? -12 : 0.55, Value(), 5);
+            Display(); // Inside the floor: must not restart the active track.
+            Assert.Equal(feature == "flash" ? -12 : 0.55, Value(), 5);
+            time.Advance(TimeSpan.FromSeconds(0.6));
+            BeatLoop.StepAll();
+            Assert.Equal(resting, Value(), 5);
+            Assert.DoesNotContain(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, visual));
+            Display(); // Still inside the floor after completion.
+            Assert.DoesNotContain(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, visual));
+            time.Advance(TimeSpan.FromSeconds(throttle));
+            Display();
+            Assert.Contains(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, visual));
+            global::ConditioningControlPanel.Avalonia.App.NotifyFeatureDisplayed(feature); // Pending UI callback must die on close too.
+            shell.Close();
+            Display();
+            Assert.Equal(resting, Value(), 5);
+            Assert.DoesNotContain(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, visual));
+        }
+        finally { shell.Close(); Dispatcher.UIThread.RunJobs(); BeatLoop.Time = before; }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData("flash")]
+    [InlineData("subliminal")]
+    public Task DisplayReactionsRespectMotionOff(string feature) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var shell = Shell();
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.App.NotifyFeatureDisplayed(feature);
+            Dispatcher.UIThread.RunJobs();
+            var visual = shell.FindControl<Grid>("ProfileBubbleVisual")!;
+            Assert.Equal(1, visual.Opacity);
+            Assert.Equal(0, ((RotateTransform)((TransformGroup)visual.RenderTransform!).Children[1]).Angle);
+            Assert.DoesNotContain(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, visual));
+        }
+        finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task EquippedPresetWinsOverInitialsAndInvalidPresetFallsBack() => AvaloniaTestDispatcher.RunAsync(() =>
     {
@@ -271,4 +335,14 @@ public sealed class ProfileBubbleParityTests : IDisposable
         }
         finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
     });
+}
+
+public sealed class ProfileBubbleEasingTests
+{
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(0.5, 1.1)]
+    [InlineData(1, 1)]
+    public void TierGrowthUsesWpfAmplitude(double progress, double expected)
+        => Assert.Equal(expected, new MainShellWindow.ProfileTierBackEase().Ease(progress), 6);
 }

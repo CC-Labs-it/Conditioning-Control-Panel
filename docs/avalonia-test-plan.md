@@ -673,3 +673,8 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+
+1. WPF `MainWindow/MainWindow.ProfileBubble.cs` Rows: `shell-profile-bubble`: with full motion, display a flash: bubble tilts -12/9/-5/0 at 90/220/340/480ms. Repeated displays inside 2500ms do not restart it; a later display does.
+2. WPF `MainWindow/MainWindow.ProfileBubble.cs` Rows: `shell-profile-bubble`: display a subliminal: opacity reaches .55 at 300ms and returns to 1 at 600ms; repeated displays inside 4000ms do not restart it. Motion off suppresses both tracks; closing removes the subscriptions and active frame clocks.
+3. WPF `MainWindow/MainWindow.ProfileBubbleTierFx.cs` Rows: `shell-profile-bubble`: hover the tier badge with motion enabled; growth lasts 260ms from .35 to 1 using BackEaseOut amplitude .45 (midpoint easing 1.1); motion off shows full size immediately.
