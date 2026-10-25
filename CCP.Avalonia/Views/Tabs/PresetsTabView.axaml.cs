@@ -28,7 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// honest read-only slice restored here, including pointer and keyboard selection.
     ///
     /// Preset Load / New / Save-over / Delete are wired (WPF MainWindow.Presets.cs:2202-2381).
-    /// ponytail: needs JustDropOrdersService. The focal tab FX now live in PresetsTabView.Fx.cs. Reveal spoilers and the Catalogue chip are wired. The remaining wiring points,
+    /// The focal tab FX now live in PresetsTabView.Fx.cs. Reveal spoilers and the Catalogue chip are wired. The remaining wiring points,
     /// all named in the XAML, are:
     ///   BtnSelectCornerGif / ChkCornerGifEnabled / RbCornerTL..BR /
     ///   SliderCornerGifSize + SliderCornerGifOpacity / CmbRackSort.SelectionChanged /
@@ -99,11 +99,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             RefreshLocalizedDetails();
             AttachFocalFx();
+            HookTakeaway();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
+            UnhookTakeaway();
             DetachFocalFx();
             base.OnDetachedFromVisualTree(e);
         }
@@ -1402,11 +1404,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             return file?.TryGetLocalPath();
         }
 
-        /// <summary>WPF PaintTakeawayShelf (MainWindow.Takeaway.cs:107) with an empty drawer and the
-        /// door withheld: no chips, no tray rows, no count, the shelf collapsed and the empty sentence
-        /// shown. This head has neither JustDropOrdersService (the device-token order drawer) nor
-        /// JustDropService.DoorAvailable, so that is exactly what WPF paints for it - never sample
-        /// orders. The Community Catalogue chip and Export stay live on the same line.</summary>
+        /// <summary>Constructor-only empty state; arrival and availability changes load the live drawer.</summary>
         private void SeedTakeaway()
         {
             TakeawayShelf.Children.Clear();

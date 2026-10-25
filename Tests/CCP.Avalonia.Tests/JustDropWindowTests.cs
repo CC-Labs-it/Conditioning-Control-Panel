@@ -60,6 +60,25 @@ public sealed class JustDropWindowTests
     private static GameWindow? Open() => GameWindow.OpenForTests(GameWindow.JustDropId);
 
     [Fact]
+    public void ReplayUsesBarePlayerAndRestoresPanelOnPanic() => Run(shell =>
+    {
+        JustDropService.SetServerEnabledForTests(false); // owned receipts outlive the shop door
+        Assert.Null(GameWindow.LaunchJustDropReplay("  ", shell));
+        var window = GameWindow.LaunchJustDropReplay(" A B ", shell)!;
+        Assert.Contains("/express/play?order=A%20B", window.PageUrl!.AbsoluteUri);
+        Assert.Equal(global::Avalonia.Controls.WindowState.FullScreen, window.WindowState);
+        Assert.Equal(global::Avalonia.Controls.WindowState.Minimized, shell.WindowState);
+        Assert.Same(window, GameWindow.LaunchJustDropReplay("OTHER", shell));
+        int refreshed = 0;
+        void Changed() => refreshed++;
+        JustDropOrdersService.DrawerChanged += Changed;
+        try { GameWindow.CloseAllForPanic(); Dispatcher.UIThread.RunJobs(); }
+        finally { JustDropOrdersService.DrawerChanged -= Changed; }
+        Assert.Equal(1, refreshed);
+        Assert.Equal(global::Avalonia.Controls.WindowState.Normal, shell.WindowState);
+    });
+
+    [Fact]
     public void ShowTab_OpensTheShopOnlyWhenTheDoorIsOpen_AndPanicClosesIt() => Run(shell =>
     {
         var tab = shell.CurrentTab;

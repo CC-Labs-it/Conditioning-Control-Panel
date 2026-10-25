@@ -3,9 +3,7 @@
 // default and no persistence) and telling the shell when that changes. The refusal and the launch
 // live in ShowTab("justdrop") -> OpenJustDrop, one gate for every caller (palette row, Premium shelf).
 //
-// ApplyJustDropDoorVisibility fans the flag out to WPF's one other surface, the Takeaway shelf
-// (WPF :118 RefreshTakeawayShelf); this head's shelf still paints only WPF's empty state
-// (MainShellWindow.Takeaway.cs, no JustDropOrdersService here), so the fan-out is the log line.
+// Availability changes refresh the receipt shelf through its tab-owned arrival funnel.
 
 using System;
 using System.Threading.Tasks;
@@ -56,8 +54,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Warning(ex, "OnJustDropAvailabilityChanged failed"); }
         }
 
-        private void ApplyJustDropDoorVisibility() =>
-            Log.Debug("JustDrop door visibility -> {State}", JustDropService.DoorAvailable ? "visible" : "hidden");
+        private void ApplyJustDropDoorVisibility() => Dispatcher.UIThread.Post(() =>
+            PresetsTab?.RefreshTakeawayShelf());
 
         /// <summary>WPF ShowTab("justdrop") -> JustDropHostService.LaunchShop. The window's gate
         /// (GameWindow.JustDropDoorOpen) refuses an unavailable door as a no-op; a live one is refocused.</summary>

@@ -1,4 +1,8 @@
 using System;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Layout;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Services.JustDrop;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -13,8 +17,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// Nothing is served from disk; navigation stays on the site's https origin (WPF PrimaryHost); every
     /// page message goes to Core <see cref="JustDropService"/>; a panic closes it with every other game
     /// window (PanicSurfaces "games", WPF GameSurfaces.cs:57).
-    /// <para>Not here: WPF LaunchReplay's fullscreen + duck (no Takeaway shelf caller on this head yet),
-    /// HostOwnedFullscreen's strip, and the Chromium no-throttle flags (WebKitGTK has no equivalent).</para>
+    /// <para>Replay uses host fullscreen and ducks/restores the panel. Chromium no-throttle flags
+    /// have no WebKitGTK equivalent.</para>
     /// </summary>
     internal sealed partial class GameWindow
     {
@@ -28,6 +32,55 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             return false;
         }
 
+        // Reuse the games panic registry and single-window rule; replay does not require an open shop door.
+        internal static GameWindow? LaunchJustDropReplay(string code, Window? main = null)
+        {
+            if (string.IsNullOrWhiteSpace(code)) return null;
+            GameWindow? live;
+            lock (Open) live = Open.Find(w => w.Spec.Id == JustDropId);
+            if (live != null) { live.Activate(); return live; }
+            var window = new GameWindow(Games[JustDropId]);
+            window.LoadJustDrop(JustDropHandoff.ReplayPath(code));
+            window.WindowState = WindowState.FullScreen;
+            var before = main?.WindowState ?? WindowState.Normal;
+            bool duck = main is { IsVisible: true } && before != WindowState.Minimized;
+            window.Closed += (_, _) =>
+            {
+                if (duck && main is { IsVisible: true, WindowState: WindowState.Minimized })
+                {
+                    main.WindowState = before == WindowState.Maximized ? WindowState.Maximized : WindowState.Normal;
+                    main.Activate();
+                }
+            };
+            window.Show();
+            if (duck) { main!.WindowState = WindowState.Minimized; window.Activate(); }
+            return window;
+        }
+
+        private void InstallJustDropControls()
+        {
+            var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
+            Content = null;
+            Grid.SetRow(Web, 1);
+            grid.Children.Add(Web);
+            var toggle = new Button
+            {
+                Content = new IconGlyph { Kind = IconKind.FullScreenMaximize, Size = 18 },
+                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
+            };
+            toggle.Click += (_, _) => WindowState = WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
+            ToolTip.SetTip(toggle, "Fullscreen / Esc");
+            // ponytail: separate native-web row keeps the host toggle above native browser content.
+            grid.Children.Add(toggle);
+            Content = grid;
+            AddHandler(KeyDownEvent, (_, e) =>
+            {
+                if (e.Key != Key.Escape) return;
+                WindowState = WindowState.Normal;
+                e.Handled = true;
+            }, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+        }
+
         /// <summary>WPF AttachAuthHeader: the token rides the handoff request once in this window's life,
         /// never any other url (WPF filters to Document requests; this engine names no resource kind).
         /// Spent only once the engine took the header, so a refused set leaves the next try signed in.</summary>
@@ -38,13 +91,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         }
 
         /// <summary>WPF Launch(ShopPath) (:75-158): windowed, the panel stays where it is (this is browsing).</summary>
-        private void LoadJustDrop()
+        private void LoadJustDrop(string? next = null)
         {
-            PageUrl = new Uri(JustDropHandoff.BuildStartUrl(JustDropHandoff.ShopPath, JustDropHandoff.UnifiedId(), JustDropHandoff.AuthToken()));
+            PageUrl = new Uri(JustDropHandoff.BuildStartUrl(next ?? JustDropHandoff.ShopPath, JustDropHandoff.UnifiedId(), JustDropHandoff.AuthToken()));
             Web.AllowNavigation = JustDropHandoff.IsSite;
             Web.RequestHeader = uri => JustDropHeaderFor(uri, JustDropHandoff.AuthToken());
             Web.InjectCarrier = true;   // the remote page speaks chrome.webview; WebKitGTK needs the shim
+            InstallJustDropControls();
             Web.Navigate(PageUrl);
+            Closed += (_, _) => JustDropOrdersService.NoteDrawerChanged();
             Log.Information("[Game] justdrop: launched (shop)");   // never the url: it names the account
         }
 

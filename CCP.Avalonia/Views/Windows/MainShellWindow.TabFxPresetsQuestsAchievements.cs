@@ -9,8 +9,8 @@
 // The data-before-FX arrival funnel (SyncCustomSessionsFromDisk, RepaintSessionRack, shelf repaint)
 // runs in PresetsTabView.Fx.cs OnPropertyChanged before the stagger. IsIncomingTab has nothing to
 // filter: ShowTab snaps tabs, there is no FadeOutgoingTab re-show on this head yet.
-// Follow-up wire-shell-tab-fx-presets-quests-achievements-b-next: real Takeaway receipts, blocked on
-// JustDropOrdersService (not in Core; see MainShellWindow.Takeaway.cs).
+// Takeaway receipts now refresh through Core JustDropOrdersService; the tab owns chip FX and
+// arrival repaint. The existing games panic registry owns the shop and replay window.
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow { }

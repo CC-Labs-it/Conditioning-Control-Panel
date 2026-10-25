@@ -91,7 +91,7 @@ public partial class PresetsTabView
         {
             SyncCustomSessionsFromDisk();
             RepaintSessionRack();
-            SeedTakeaway();
+            RefreshTakeawayShelf();
         }
         if (IsVisible && _fxWindow != null) StaggerZones();
         else { CancelEntrances(); DetachRowSweep(); }
