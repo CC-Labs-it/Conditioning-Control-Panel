@@ -14,7 +14,7 @@ export function createPhrasePieces(model) {
   }
   function update(pose, enabled = true) {
     beforePose();
-    if (!enabled || bindings.length !== 3 || !pose) return;
+    if (!enabled || bindings.length !== 3 || !pose || !(pose.cupM || pose.riderM || pose.saucerM)) return;
     model.updateMatrixWorld(true); model.getWorldQuaternion(world);
     for (const b of bindings) {
       b.pos.copy(b.bone.position);

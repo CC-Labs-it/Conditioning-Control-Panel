@@ -60,5 +60,14 @@ test('accepted R4 native joints separate in model-up and restore the actual anim
     nodes.forEach((n, i) => assert.ok(n.getWorldPosition(new Vector3()).distanceTo(second[i]) < 1e-9, 'no accumulated offset'));
     parts.update(pose, false);
     nodes.forEach((n, i) => assert.ok(n.position.distanceTo(local[i]) < 1e-12, 'other vehicles keep their complete assembly'));
+    parts.update(pose);
+    const updateWorld = model.updateMatrixWorld;
+    let matrixCalls = 0;
+    model.updateMatrixWorld = function (...args) { matrixCalls++; return updateWorld.apply(this, args); };
+    parts.update(phraseReboundPose(null));
+    nodes.forEach((n, i) => assert.ok(n.position.distanceTo(local[i]) < 1e-12, 'inactive pose restores the previous separation'));
+    for (let i = 0; i < 60; i++) parts.update(phraseReboundPose(null));
+    assert.equal(matrixCalls, 0, 'inactive karts never traverse world matrices for a phrase');
+    model.updateMatrixWorld = updateWorld;
   } finally { hooks.deregister(); }
 });

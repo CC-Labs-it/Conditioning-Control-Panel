@@ -150,6 +150,24 @@ test('the first arc remains within 2.2 metres of the steady camera grade on ever
   }
 });
 
+test('the rebound leaves room for the separated rider within the steady camera view on every gap', () => {
+  for (const tr of tracks) for (const zone of tr.aerials) {
+    const f = setup(tr, zone), [, start, end] = phraseFlightPoints(tr, zone);
+    while (!f.ev.all('air-word-land').length) tick(f);
+    let peak = 0;
+    while (f.st[S.s] < end.s) {
+      tick(f);
+      const u = Math.min(1, (f.st[S.s] - start.s) / (end.s - start.s));
+      const baseline = start.y + (end.y - start.y) * phraseEase(u);
+      const above = f.st[S.posY] - baseline;
+      assert.ok(above <= 1.801, tr.id + ': rebound left its stable framing envelope');
+      peak = Math.max(peak, above);
+    }
+    assert.ok(peak > 1.75, tr.id + ': rebound still has a visible spring');
+    assert.ok(peak + .37 * .78 < 2.2, 'separated rider fits within the verified first-jump height');
+  }
+});
+
 test('contact springs without stopping forward travel and opens the hat only after the rebound apex', () => {
   const f = setup(), { st, ev } = f;
   while (!ev.all('air-word-land').length) tick(f);
