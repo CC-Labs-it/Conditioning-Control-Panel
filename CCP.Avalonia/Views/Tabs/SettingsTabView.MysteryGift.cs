@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Helpers;
@@ -27,7 +28,10 @@ public partial class SettingsTabView
         {
             if (MysteryFlipHost.Parent is Control parent) _giftPointer = e.GetPosition(parent);
         }
-        MysteryFlipHost.PointerMoved += (_, e) => RememberPointer(e);
+        // Tracked on the whole view, not the plate: an exit swallowed mid-turn must still be
+        // corrected by the move that follows it (WPF re-reads Mouse after each turn).
+        AddHandler(PointerMovedEvent, (_, e) => RememberPointer(e), RoutingStrategies.Bubble, handledEventsToo: true);
+        PointerExited += (_, e) => RememberPointer(e);
         MysteryFlipHost.PointerEntered += (_, e) => { RememberPointer(e); RequestGiftFace(true); };
         MysteryFlipHost.PointerExited += (_, e) =>
         {
@@ -93,14 +97,18 @@ public partial class SettingsTabView
 
     internal void SyncMysteryGiftFx()
     {
-        _giftBreath?.Stop();
-        _giftBreath = null;
         MysteryBadge.IsVisible = GiftUnopened && IsVisible;
-        MysteryGlow.Opacity = 0.55;
-        GiftBadgeScale.ScaleX = GiftBadgeScale.ScaleY = 1;
         if (!Env.AllowTransitions && _giftTurn != null) SetGiftFace(_giftWanted);
         if (!GiftUnopened || !IsEffectivelyVisible || !Env.AllowAmbientLoops ||
-            TopLevel.GetTopLevel(this) is Window { IsActive: false }) return;
+            TopLevel.GetTopLevel(this) is Window { IsActive: false })
+        {
+            _giftBreath?.Stop();
+            _giftBreath = null;
+            MysteryGlow.Opacity = 0.55;
+            GiftBadgeScale.ScaleX = GiftBadgeScale.ScaleY = 1;
+            return;
+        }
+        if (_giftBreath != null) return; // WPF leaves a running breath in phase
         _giftBreath = new BeatLoop(MysteryBadge, t =>
         {
             var k = BeatLoop.Breath(t, 0.9);

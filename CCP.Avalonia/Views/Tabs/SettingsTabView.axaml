@@ -871,6 +871,7 @@
               Grid.Row="2" Grid.Column="0" ZIndex="12" IsHitTestVisible="False"
               HorizontalAlignment="Right" VerticalAlignment="Top"
               Margin="0,2,2,0" Padding="8,3,8,4" CornerRadius="8"
+              BoxShadow="0 0 10 0 #D9FFD54A"
               RenderTransformOrigin="50%,50%">
         <Border.Background>
           <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
@@ -884,9 +885,7 @@
             <RotateTransform Angle="8"/>
           </TransformGroup>
         </Border.RenderTransform>
-        <Border.Effect>
-          <DropShadowEffect Color="#FFD54A" BlurRadius="10" OffsetX="0" OffsetY="0" Opacity="0.85"/>
-        </Border.Effect>
+        <!-- BoxShadow, not a DropShadowEffect: the badge breathes on the beat (lag fix, P82). -->
         <TextBlock Text="{loc:Str mosaic_new_today}"
                    Foreground="#3A2A00" FontSize="10" FontWeight="Black"/>
       </Border>

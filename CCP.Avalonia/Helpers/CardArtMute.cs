@@ -1,11 +1,12 @@
-using System.IO;
+using System.Runtime.InteropServices;
+using Avalonia;
+using Avalonia.Platform;
 using System.Runtime.CompilerServices;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
-using SkiaSharp;
 using Env = ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env;
 
 namespace ConditioningControlPanel.Avalonia.Helpers;
@@ -20,25 +21,27 @@ internal static class CardArtMute
         if (source is not Bitmap bitmap) return null;
         try { return Cache.GetValue(source, _ =>
         {
-            using var stream = new MemoryStream();
-            bitmap.Save(stream);
-            using var original = SKBitmap.Decode(stream.ToArray());
-            double ratio = System.Math.Min(1, 320.0 / System.Math.Max(original.Width, original.Height));
-            using var surface = SKSurface.Create(new SKImageInfo(System.Math.Max(1, (int)(original.Width * ratio)),
-                System.Math.Max(1, (int)(original.Height * ratio))));
-            using var filter = SKColorFilter.CreateColorMatrix(new float[]
+            // WPF CardMute shrinks to 320 px before converting; copy pixels, never re-encode.
+            double ratio = System.Math.Min(1, 320.0 / System.Math.Max(bitmap.PixelSize.Width, bitmap.PixelSize.Height));
+            using var scaled = ratio < 1
+                ? bitmap.CreateScaledBitmap(new PixelSize(System.Math.Max(1, (int)(bitmap.PixelSize.Width * ratio)),
+                    System.Math.Max(1, (int)(bitmap.PixelSize.Height * ratio))))
+                : null;
+            var src = scaled ?? bitmap;
+            // CopyPixels(framebuffer) transcodes any source format into this Bgra8888 twin.
+            var gray = new WriteableBitmap(src.PixelSize, src.Dpi, PixelFormat.Bgra8888, AlphaFormat.Premul);
+            using (var fb = gray.Lock())
             {
-                .299f, .587f, .114f, 0, 0, .299f, .587f, .114f, 0, 0,
-                .299f, .587f, .114f, 0, 0, 0, 0, 0, 1, 0,
-            });
-            using var paint = new SKPaint { ColorFilter = filter };
-            surface.Canvas.Clear(SKColors.Transparent);
-            surface.Canvas.DrawBitmap(original, new SKRect(0, 0, surface.Canvas.DeviceClipBounds.Width,
-                surface.Canvas.DeviceClipBounds.Height), paint);
-            using var image = surface.Snapshot();
-            using var encoded = image.Encode(SKEncodedImageFormat.Png, 100);
-            using var result = encoded.AsStream();
-            return new Bitmap(result);
+                src.CopyPixels(fb);
+                var px = new byte[fb.RowBytes * fb.Size.Height];
+                Marshal.Copy(fb.Address, px, 0, px.Length);
+                // Channel-linear, so premultiplied stays premultiplied.
+                for (int i = 0; i < px.Length; i += 4)
+                    px[i] = px[i + 1] = px[i + 2] = (byte)System.Math.Min(255,
+                        (int)(.114 * px[i] + .587 * px[i + 1] + .299 * px[i + 2] + 0.5));
+                Marshal.Copy(px, 0, fb.Address, px.Length);
+            }
+            return (Bitmap)gray;
         }); }
         catch (System.Exception ex)
         {

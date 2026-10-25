@@ -139,6 +139,44 @@ public sealed class DashboardGiftPresentationTests
     });
 
     [Fact]
+    public Task ExitSwallowedMidTurnIsCorrectedByTheNextMoveOverTheView() => WithView((window, view) =>
+    {
+        var settings = CoreSettings.Current;
+        var saved = (settings.MotionLevel, settings.PerformanceMode, settings.DailyGiftLastRevealDate);
+        var oldTime = BeatLoop.Time;
+        var time = new SteppedTime();
+        try
+        {
+            settings.MotionLevel = MotionLevel.Full;
+            settings.PerformanceMode = false;
+            BeatLoop.Time = time;
+            var host = view.MysteryFlipHost;
+            var pointer = new Pointer(4, PointerType.Mouse, true);
+            var inside = host.TranslatePoint(new Point(host.Bounds.Width / 2, host.Bounds.Height / 2), window)!.Value;
+            var outside = host.TranslatePoint(new Point(host.Bounds.Width + 40, host.Bounds.Height / 2), window)!.Value;
+            void Step(int ms) { time.Advance(TimeSpan.FromMilliseconds(ms)); BeatLoop.StepAll(); }
+            host.RaiseEvent(new PointerEventArgs(InputElement.PointerEnteredEvent, host,
+                pointer, window, inside, 0, new PointerPointProperties(), KeyModifiers.None));
+            Step(75);
+            // The thin plate drops out of the hit-test under a still pointer: that exit is ignored.
+            host.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, host,
+                pointer, window, inside, 0, new PointerPointProperties(), KeyModifiers.None));
+            // The pointer then leaves over the rest of the view, never over the plate.
+            view.RaiseEvent(new PointerEventArgs(InputElement.PointerMovedEvent, view,
+                pointer, window, outside, 0, new PointerPointProperties(), KeyModifiers.None));
+            for (int i = 0; i < 12; i++) Step(50);
+            Assert.True(view.CardMystery.IsVisible);
+            Assert.False(view.MysteryRevealFace.IsVisible);
+        }
+        finally
+        {
+            view.ResetGift();
+            BeatLoop.Time = oldTime;
+            (settings.MotionLevel, settings.PerformanceMode, settings.DailyGiftLastRevealDate) = saved;
+        }
+    });
+
+    [Fact]
     public Task GrayArtPreservesAlphaCachesAndEachHalfMutesIndependently() => WithView((window, view) =>
     {
         using var pixels = new SkiaSharp.SKBitmap(1, 1);
@@ -156,6 +194,12 @@ public sealed class DashboardGiftPresentationTests
         Assert.Equal(color.Red, color.Green);
         Assert.Equal(color.Red, color.Blue);
         Assert.Equal(128, color.Alpha);
+        using var widePixels = new SkiaSharp.SKBitmap(640, 10);
+        using var wideImage = SkiaSharp.SKImage.FromBitmap(widePixels);
+        using var widePng = wideImage.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+        using var wideStream = widePng.AsStream();
+        using var wide = new global::Avalonia.Media.Imaging.Bitmap(wideStream);
+        Assert.Equal(new PixelSize(320, 5), CardArtMute.Gray(wide)!.PixelSize); // WPF shrinks to 320 first
         var oldMotion = CoreSettings.Current.MotionLevel;
         CoreSettings.Current.MotionLevel = MotionLevel.Off;
         try
