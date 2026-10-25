@@ -33,9 +33,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private FlashClipPlayer? _clip;
         private DispatcherTimer? _clipRetry;
         internal bool HasClip => _clip != null;
+        /// <summary>The clip file this flash asked to play (null: a still).</summary>
+        internal string? ClipSource { get; private set; }
         internal void StartClip(string? path, int width, int height)
         {
             if (path == null) return;
+            ClipSource = path;
             void Try()
             {
                 _clip = FlashClipPlayer.TryStart(LibVlcAudio.Shared, path, width, height,

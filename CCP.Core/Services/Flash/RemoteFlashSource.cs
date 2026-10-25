@@ -3,9 +3,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Models;
@@ -122,7 +119,8 @@ namespace ConditioningControlPanel.Services.Flash
         private const int ReadyTarget = 12;
         private const int ReadyMax = 24;
         private const int PrefetchGapSeconds = 1;
-        private const int ClipMaxBytes = 40 * 1024 * 1024;
+        internal const int ClipMaxBytes = 40 * 1024 * 1024;
+        internal const int PosterMaxBytes = 8 * 1024 * 1024;
 
         private static readonly RemoteFlashPool Pool = new();
         private static readonly object Lock = new();
@@ -130,7 +128,10 @@ namespace ConditioningControlPanel.Services.Flash
         private static CancellationTokenSource Cts = new();
         private static bool _inFlight;
         private static DateTime _lastFetchUtc = DateTime.MinValue;
-        internal static HttpClient? _http; // test transport; production uses the shared client below
+        private static Task _prefetch = Task.CompletedTask;
+
+        /// <summary>The latest background top-up (tests await it instead of polling).</summary>
+        internal static Task Prefetching { get { lock (Lock) return _prefetch; } }
 
         /// <summary>Settings reader (tests swap it).</summary>
         internal static Func<AppSettings?> Settings = () => CoreSettings.Current;
@@ -138,8 +139,11 @@ namespace ConditioningControlPanel.Services.Flash
         /// <summary>Batch fetcher (tests swap it). Default = the coordinator tenant.</summary>
         internal static Func<CancellationToken, Task<(List<FypAssetManifest.Entry> Entries, string? Error)>> Fetch = DefaultFetch;
 
-        /// <summary>Where clips and posters land.</summary>
-        internal static string CacheDir => Path.Combine(CorePaths.UserData, "cache", "flash-clips");
+        /// <summary>Poster/clip download (tests swap it). Default = the shared Scrolller device cache,
+        /// like WPF RemoteMediaCache (:486): it honours MayFetchFresh and consent, sends the honest
+        /// user-agent and charges the allowance; a cached copy costs nothing.</summary>
+        internal static Func<string, long, CancellationToken, Task<string?>> Download =
+            (url, maxBytes, ct) => ScrolllerDiskCache.GetOrFetchAsync(url, null, maxBytes, ct);
 
         private static IReadOnlyList<string> Channels()
         {
@@ -175,7 +179,7 @@ namespace ConditioningControlPanel.Services.Flash
                 _lastFetchUtc = DateTime.UtcNow;
                 var ct = Cts.Token;
                 var generation = Pool.Generation;
-                _ = Task.Run(() => PrefetchBatchAsync(ct, generation));
+                _prefetch = Task.Run(() => PrefetchBatchAsync(ct, generation));
             }
         }
 
@@ -197,7 +201,9 @@ namespace ConditioningControlPanel.Services.Flash
             lock (Lock) return Items.TryGetValue(url, out var item) && File.Exists(item.ClipPath) ? item.ClipPath : null;
         }
 
-        // Panic invalidates in-flight downloads; a later user trigger may warm again.
+        // Panic and final exit (WPF FlashService teardown :3846-3848, :5141-5145) drop the warm pool
+        // and invalidate in-flight downloads; the files stay in the device cache, which ages them.
+        // A later user trigger may warm again.
         internal static void CleanupCache()
         {
             lock (Lock)
@@ -207,13 +213,11 @@ namespace ConditioningControlPanel.Services.Flash
                 Pool.Clear();
                 Items.Clear();
                 _lastFetchUtc = DateTime.MinValue;
-                DeleteCache(CacheDir);
             }
         }
 
         private static async Task PrefetchBatchAsync(CancellationToken ct, int generation)
         {
-            var directory = Path.Combine(CacheDir, generation.ToString(System.Globalization.CultureInfo.InvariantCulture));
             try
             {
                 var entries = new List<FypAssetManifest.Entry>();
@@ -244,15 +248,15 @@ namespace ConditioningControlPanel.Services.Flash
                     }
                     if (string.IsNullOrEmpty(entry.PosterUrl)) continue;
                     var url = entry.SmallUrl ?? entry.Url;
-                    var poster = await DownloadAsync(entry.PosterUrl!, directory, ct).ConfigureAwait(false);
+                    var poster = await Download(entry.PosterUrl!, PosterMaxBytes, ct).ConfigureAwait(false);
                     if (poster == null) continue;
-                    var clip = await DownloadAsync(url, directory, ct, ClipMaxBytes).ConfigureAwait(false);
+                    var clip = await Download(url, ClipMaxBytes, ct).ConfigureAwait(false);
                     if (clip == null) continue;
                     RefreshSelection();
                     lock (Lock)
                     {
                         if (ct.IsCancellationRequested || generation != Pool.Generation) return;
-                        // ponytail: retain files until panic; never delete a clip under a live decoder.
+                        // The files belong to the device cache, which ages them; TryTake skips one it already removed.
                         if (Items.Count >= 256 && !Items.ContainsKey(url)) break;
                         Items[url] = new RemoteFlashItem(url, poster, clip);
                         if (Pool.Add(generation, url)) warmed++;
@@ -264,72 +268,8 @@ namespace ConditioningControlPanel.Services.Flash
             catch (Exception ex) { Log.Debug("Flash: remote prefetch failed (non-fatal): {Error}", ex.Message); }
             finally
             {
-                if (ct.IsCancellationRequested) DeleteCache(directory);
                 lock (Lock) _inFlight = false;
             }
-        }
-
-        private static HttpClient Http => _http ??= new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-
-        /// <summary>Bytes of <paramref name="url"/> into the cache dir, keyed by a hash of the whole
-        /// URL. Null on any failure or when the body exceeds <paramref name="maxBytes"/>.</summary>
-        private static async Task<string?> DownloadAsync(string url, string directory, CancellationToken ct, int maxBytes = 8 * 1024 * 1024)
-        {
-            string? partial = null;
-            try
-            {
-                if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
-                    || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)) return null;
-                Directory.CreateDirectory(directory);
-                var ext = Path.GetExtension(uri.AbsolutePath).ToLowerInvariant();
-                if (ext.Length is 0 or > 5) ext = ".bin";
-                var name = Convert.ToHexString(SHA1.HashData(Encoding.UTF8.GetBytes(url)))[..20] + ext;
-                var path = Path.Combine(directory, name);
-                if (File.Exists(path) && new FileInfo(path).Length > 0) return path;
-
-                using var resp = await Http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-                if (!resp.IsSuccessStatusCode) return null;
-                if (resp.Content.Headers.ContentLength is long len && len > maxBytes) return null;
-                var tmp = path + ".part";
-                partial = tmp;
-                await using (var src = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false))
-                await using (var dst = File.Create(tmp))
-                {
-                    var buf = new byte[81920];
-                    long total = 0;
-                    int n;
-                    while ((n = await src.ReadAsync(buf, ct).ConfigureAwait(false)) > 0)
-                    {
-                        total += n;
-                        if (total > maxBytes) { dst.Close(); TryDelete(tmp); return null; }
-                        await dst.WriteAsync(buf.AsMemory(0, n), ct).ConfigureAwait(false);
-                    }
-                }
-                ct.ThrowIfCancellationRequested();
-                File.Move(tmp, path, overwrite: true);
-                return path;
-            }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception ex)
-            {
-                Log.Debug("Flash: remote download from {Host} failed: {Error}", SafeHost(url), ex.Message);
-                return null;
-            }
-            finally { if (partial != null) TryDelete(partial); }
-        }
-
-        private static void DeleteCache(string directory)
-        {
-            try { if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true); }
-            catch (Exception ex) { Log.Debug("Flash cache cleanup incomplete: {Error}", ex.Message); }
-        }
-
-        private static string SafeHost(string url) => Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.Host : "?";
-
-        private static void TryDelete(string? path)
-        {
-            if (string.IsNullOrEmpty(path)) return;
-            try { File.Delete(path); } catch { }
         }
     }
 }

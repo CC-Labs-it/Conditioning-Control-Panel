@@ -324,7 +324,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void CloseAll(bool final = true)
         {
             _generation++;
-            RemoteFlashSource.CleanupCache();
+            // WPF keeps the warm pool across a stop/start (FlashService.cs:3846-3848); only exit
+            // (here) and panic (PanicSurfaces "flash-clips") drop it.
+            if (final) RemoteFlashSource.CleanupCache();
             _closed |= final;
             foreach (var (w, _) in Active.ToList()) w.Close();
             foreach (var w in Exiting.ToList()) w.Close();
@@ -451,7 +453,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// from the header size alone, so each picture is decoded AT its display size like WPF's
         /// decode-at-display-size - never a full-resolution source held per window.
         /// </summary>
-        private static List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> LoadPictures(int count, IReadOnlyList<Screen> screens,
+        internal static List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> LoadPictures(int count, IReadOnlyList<Screen> screens,
             int[] targets, AppSettings s, List<PixelRect> occupied, int? size)
         {
             var root = CorePaths.EffectiveAssets;

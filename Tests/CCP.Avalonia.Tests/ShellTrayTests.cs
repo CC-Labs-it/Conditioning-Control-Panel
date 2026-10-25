@@ -64,7 +64,9 @@ public sealed class ShellTrayTests
                 Assert.False(CoreEngine.IsRunning);
                 Assert.False(CoreFlash.IsRunning);
                 Assert.False(CoreSubliminal.IsRunning);
-                Assert.Equal(generation + 1, FlashOverlay.Generation);
+                // Two exact bumps: the engine stop's StopDesktopOverlays, then the panic "flash-clips" surface
+                // (which must also close flashes when no engine runs, e.g. a Flash test burst).
+                Assert.Equal(generation + 2, FlashOverlay.Generation);
                 Assert.True(CoreSettings.Current.FlashEnabled && CoreSettings.Current.SubliminalEnabled && CoreSettings.Current.BouncingTextEnabled);
                 Assert.Equal(Loc.Get("label_start"), shell.Named<TextBlock>("TxtStartLabel")!.Text);
                 Assert.True(shell.IsVisible);

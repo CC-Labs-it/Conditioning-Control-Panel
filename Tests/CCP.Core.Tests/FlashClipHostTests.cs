@@ -1,11 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Net;
-using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services.Fyp;
+using ConditioningControlPanel.Services.Fyp.Online;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Flash;
@@ -87,63 +86,79 @@ public sealed class FlashClipHostTests
         s.MediaSource = "local";
         Assert.False(FlashSourceRules.ShouldDrawRemote(s, false, new Random(1)));
     }
-    private sealed class Transport : HttpMessageHandler
+    private static readonly FypAssetManifest.Entry Clip = new()
     {
-        internal int Requests;
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
-        {
-            Interlocked.Increment(ref Requests);
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-                { Content = new ByteArrayContent(new byte[] { 1, 2, 3 }) });
-        }
-    }
+        Id = "test", Url = "https://example.invalid/clip.mp4?variant=1",
+        PosterUrl = "https://example.invalid/poster.jpg", Origin = "online", Type = "video"
+    };
 
-    [Fact]
-    public async Task WarmCacheUsesUrlIdentityAndPanicClearsItThenAllowsRewarming()
+    /// <summary>Settings/fetch/download seams restored and the pool emptied after every test (P02).</summary>
+    private static async Task WithSource(Func<Task> body)
     {
-        var settings = RemoteFlashSource.Settings;
-        var fetch = RemoteFlashSource.Fetch;
-        var http = RemoteFlashSource._http;
-        using var transport = new Transport();
-        using var client = new HttpClient(transport);
-        var entry = new FypAssetManifest.Entry
-        {
-            Id = "test", Url = "https://example.invalid/clip.mp4?variant=1",
-            PosterUrl = "https://example.invalid/poster.jpg", Origin = "online", Type = "video"
-        };
+        var (settings, fetch, download) = (RemoteFlashSource.Settings, RemoteFlashSource.Fetch, RemoteFlashSource.Download);
         try
         {
             RemoteFlashSource.CleanupCache();
             RemoteFlashSource.Settings = () => new AppSettings { MediaSource = "online", RemoteMediaConsented = true };
-            RemoteFlashSource.Fetch = _ => Task.FromResult((new List<FypAssetManifest.Entry> { entry }, (string?)null));
-            RemoteFlashSource._http = client;
-            for (int cycle = 0; cycle < 2; cycle++)
-            {
-                var timeout = DateTime.UtcNow.AddSeconds(10);
-                do
-                {
-                    RemoteFlashSource.EnsurePrefetch();
-                    await Task.Delay(20);
-                } while (RemoteFlashSource.ReadyCount == 0 && DateTime.UtcNow < timeout);
-                var item = RemoteFlashSource.TryTake(new Random(1));
-                Assert.NotNull(item);
-                Assert.Equal(entry.Url, item.Value.Url);
-                Assert.True(File.Exists(item.Value.ClipPath));
-                Assert.Equal(item.Value.ClipPath, RemoteFlashSource.ClipPath(entry.Url));
-                Assert.Equal(item, RemoteFlashSource.TryTake(new Random(2)));
-                RemoteFlashSource.CleanupCache();
-                Assert.Null(RemoteFlashSource.ClipPath(entry.Url));
-                Assert.Equal(0, RemoteFlashSource.ReadyCount);
-            }
-            Assert.Equal(4, transport.Requests); // three batches share one poster + one clip per cycle
+            RemoteFlashSource.Fetch = _ => Task.FromResult((new List<FypAssetManifest.Entry> { Clip }, (string?)null));
+            await body();
         }
         finally
         {
             RemoteFlashSource.CleanupCache();
-            RemoteFlashSource.Settings = settings;
-            RemoteFlashSource.Fetch = fetch;
-            RemoteFlashSource._http = http;
+            (RemoteFlashSource.Settings, RemoteFlashSource.Fetch, RemoteFlashSource.Download) = (settings, fetch, download);
         }
     }
 
+    [Fact]
+    public Task WarmCacheUsesUrlIdentityAndPanicClearsItThenAllowsRewarming() => WithSource(async () =>
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-flash-clip-").FullName;
+        var asked = new List<(string Url, long Max)>();
+        try
+        {
+            RemoteFlashSource.Download = (url, max, _) =>
+            {
+                lock (asked) asked.Add((url, max));
+                var path = Path.Combine(dir, url.EndsWith(".jpg") ? "poster.jpg" : "clip.mp4");
+                File.WriteAllBytes(path, new byte[] { 1, 2, 3 });
+                return Task.FromResult<string?>(path);
+            };
+            for (int cycle = 0; cycle < 2; cycle++)
+            {
+                RemoteFlashSource.EnsurePrefetch();
+                await RemoteFlashSource.Prefetching;
+                var item = RemoteFlashSource.TryTake(new Random(1));
+                Assert.NotNull(item);
+                Assert.Equal(Clip.Url, item.Value.Url);
+                Assert.True(File.Exists(item.Value.ClipPath));
+                Assert.Equal(item.Value.ClipPath, RemoteFlashSource.ClipPath(Clip.Url));
+                Assert.Equal(item, RemoteFlashSource.TryTake(new Random(2)));
+                RemoteFlashSource.CleanupCache();
+                Assert.Null(RemoteFlashSource.ClipPath(Clip.Url));
+                Assert.Equal(0, RemoteFlashSource.ReadyCount);
+            }
+            Assert.Contains((Clip.Url, (long)RemoteFlashSource.ClipMaxBytes), asked);
+            Assert.Contains((Clip.PosterUrl!, (long)RemoteFlashSource.PosterMaxBytes), asked);
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    });
+
+    /// <summary>The licence path: downloads go through ScrolllerDiskCache.GetOrFetchAsync, which asks
+    /// consent (then MayFetchFresh) before any byte; refused, nothing warms.</summary>
+    [Fact]
+    public Task DownloadsGoThroughTheScrolllerDeviceCacheGate() => WithSource(async () =>
+    {
+        var consent = ScrolllerDiskCache.RemoteConsent;
+        int asked = 0;
+        try
+        {
+            ScrolllerDiskCache.RemoteConsent = () => { Interlocked.Increment(ref asked); return false; };
+            RemoteFlashSource.EnsurePrefetch();
+            await RemoteFlashSource.Prefetching;
+            Assert.True(asked > 0);
+            Assert.Equal(0, RemoteFlashSource.ReadyCount);
+        }
+        finally { ScrolllerDiskCache.RemoteConsent = consent; }
+    });
 }
