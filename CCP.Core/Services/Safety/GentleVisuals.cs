@@ -49,6 +49,17 @@ namespace ConditioningControlPanel.Services.Safety
         public static double ClampSpeed(double speed)
             => double.IsNaN(speed) ? DefaultSpeed : Math.Clamp(speed, MinSpeed, MaxSpeed);
 
+        /// <summary>
+        /// The effective UI motion level: Off stays Off; the OS animation flag being off or gentle
+        /// visuals being on caps it at Reduced (they only ever remove motion). Shared by every head.
+        /// </summary>
+        public static Models.MotionLevel CapMotion(Models.MotionLevel setting, bool osAnimationsEnabled, bool gentleVisuals)
+        {
+            if (setting == Models.MotionLevel.Off) return Models.MotionLevel.Off;
+            if (!osAnimationsEnabled || gentleVisuals) return Models.MotionLevel.Reduced;
+            return setting;
+        }
+
         // ---- live reads ----
 
         /// <summary>True when the player switched gentle visuals on.</summary>

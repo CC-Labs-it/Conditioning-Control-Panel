@@ -34,12 +34,8 @@ namespace ConditioningControlPanel.Services
         /// never add it back).
         /// </summary>
         public static MotionLevel ResolveLevel(MotionLevel setting, bool osAnimationsEnabled, bool gentleVisuals = false)
-        {
-            if (setting == MotionLevel.Off) return MotionLevel.Off;
             // Gentle visuals caps UI motion like the OS flag does: it can only remove motion.
-            if (!osAnimationsEnabled || gentleVisuals) return MotionLevel.Reduced;
-            return setting;
-        }
+            => global::ConditioningControlPanel.Services.Safety.GentleVisuals.CapMotion(setting, osAnimationsEnabled, gentleVisuals);
 
         /// <summary>The effective motion level right now (user setting capped by the OS flag).</summary>
         public static MotionLevel Level

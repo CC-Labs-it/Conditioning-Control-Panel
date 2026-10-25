@@ -134,6 +134,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             if (_isLoading) return;
             CoreSettings.Current.GentleVisuals = ChkGentleVisuals.IsChecked == true;
             PnlGentleChoices.IsVisible = CoreSettings.Current.GentleVisuals;
+            Log.Information("Gentle visuals set to {On}", CoreSettings.Current.GentleVisuals);
             // WPF forwards to its motion handler: keep the selected level, re-gate live loops.
             global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
             CoreSettings.Save();
