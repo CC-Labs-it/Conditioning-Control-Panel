@@ -49,12 +49,12 @@ public sealed class CameraShortcutTests
                 MainShellWindow.ApplyCameraShortcutTo(window);   // never stacks
                 var binding = Assert.Single(window.KeyBindings, b => ReferenceEquals(b.Command, MainShellWindow.ToggleCameraCommand));
                 Assert.Equal(new KeyGesture(Key.M, KeyModifiers.Control | KeyModifiers.Shift), binding.Gesture);
-                binding.Command!.Execute(null);
+                window.KeyPress(Key.M, RawInputModifiers.Control | RawInputModifiers.Shift, PhysicalKey.M, null);
                 window.Close();
                 return Task.CompletedTask;
             });
-            // No live shell in this test: the command finds no window and does nothing, never throws.
-            Assert.Equal(MainShellWindow.Current == null ? 0 : 1, toggles);
+            // The real key press reached the toggle through the binding.
+            Assert.Equal(1, toggles);
         }
         finally
         {

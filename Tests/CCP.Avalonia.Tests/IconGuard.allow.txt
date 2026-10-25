@@ -32,6 +32,8 @@ Views/Features/VideoFeatureControl.axaml :: min length &#x2192; max length :: ar
 Views/Windows/ModCreatorWindow.axaml.cs :: "COMPLY.mp3\" → companion says :: arrow inside help prose (content (c).4)
 Views/Windows/ModCreatorWindow.axaml.cs :: Video name → URL pairs :: arrow inside help prose (content (c).4)
 Views/Windows/QuizWindow.axaml.cs :: (Companion → AI) :: arrow inside an error sentence (content (c).4)
+Views/Controls/AppSettings/DevicesSettingsSection.Diagnostics.cs :: State → { :: arrow inside a webcam debug-log line, verbatim WPF MainWindow.LabTab.cs:666 (content (c).4)
+Views/Controls/AppSettings/DevicesSettingsSection.Diagnostics.cs :: Gaze → { :: arrow inside a webcam debug-log line, verbatim WPF MainWindow.LabTab.cs:713 (content (c).4)
 Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Up => "\u2191" :: trend arrow inside the "65% ↑5%" history line, typography (content (c).4)
 Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Down => "\u2193" :: trend arrow inside the "65% ↑5%" history line, typography (content (c).4)
 Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Flat => "\u2192" :: trend arrow inside the "65% ↑5%" history line, typography (content (c).4)

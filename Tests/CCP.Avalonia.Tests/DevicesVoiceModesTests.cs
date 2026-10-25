@@ -24,9 +24,15 @@ public sealed class DevicesVoiceModesTests
         var s = CoreSettings.Current;
         var old = (s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled, s.MicConsentGiven, s.SpeechPushToTalkKey, s.SpeechWakeWords, s.SpeechHeadphonesMode);
         var oldPremium = CoreEntitlement.HasPremiumProvider;
+        var oldFree = CoreEntitlement.IsFreeTodayProvider;
+        var oldDenied = CoreEntitlement.ShowDeniedHandler;
         try
         {
-            CoreEntitlement.HasPremiumProvider = () => true;
+            bool premium = false;
+            int denied = 0, asks = 0;
+            CoreEntitlement.HasPremiumProvider = () => premium;
+            CoreEntitlement.IsFreeTodayProvider = _ => false;
+            CoreEntitlement.ShowDeniedHandler = _ => denied++;
             s.SpeechWakeWordEnabled = false; s.SpeechPushToTalkEnabled = false; s.MicConsentGiven = false;
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
@@ -42,8 +48,18 @@ public sealed class DevicesVoiceModesTests
 
                 // Consent declined: the switch falls back, nothing is saved, no mic.
                 bool consent = false, alwaysOn = false;
-                section.AskMicConsent = () => { if (consent) s.MicConsentGiven = true; return Task.FromResult(consent); };
+                section.AskMicConsent = () => { asks++; if (consent) s.MicConsentGiven = true; return Task.FromResult(consent); };
                 section.AskAlwaysOn = () => Task.FromResult(alwaysOn);
+
+                // Premium bar refused (WPF order: before consent): told once, switch falls back, no ask.
+                wake.IsChecked = true;
+                await Task.Yield();
+                Assert.False(wake.IsChecked);
+                Assert.False(s.SpeechWakeWordEnabled);
+                Assert.Equal(1, denied);
+                Assert.Equal(0, asks);
+                premium = true;
+
                 wake.IsChecked = true;
                 await Task.Yield();
                 Assert.False(wake.IsChecked);
@@ -84,6 +100,8 @@ public sealed class DevicesVoiceModesTests
                 window.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.F9 });
                 Assert.Equal("F9", s.SpeechPushToTalkKey);
                 Assert.Equal("F9", section.FindControl<TextBlock>("TxtPttKey")!.Text);
+                // The label goes back as a TextBlock child (trap 1: bare Content eats "_").
+                Assert.IsType<TextBlock>(section.FindControl<Button>("BtnSetPttKey")!.Content);
                 Assert.Equal(4, section.VoiceApplies);
 
                 // G12: headphones mode applies live, no restart.
@@ -93,7 +111,7 @@ public sealed class DevicesVoiceModesTests
                 Assert.Equal(5, section.VoiceApplies);
                 var phrases = section.FindControl<TextBox>("TxtSpeechWakeWords")!;
                 phrases.Text = "  ";
-                phrases.RaiseEvent(new RoutedEventArgs(InputElement.LostFocusEvent));
+                phrases.RaiseEvent(new FocusChangedEventArgs(InputElement.LostFocusEvent));   // TextBox's own handler casts to this
                 Assert.Equal("hey bambi", s.SpeechWakeWords);
                 Assert.Equal("hey bambi", phrases.Text);
                 Assert.Equal(6, section.VoiceApplies);
@@ -103,6 +121,8 @@ public sealed class DevicesVoiceModesTests
         finally
         {
             CoreEntitlement.HasPremiumProvider = oldPremium;
+            CoreEntitlement.IsFreeTodayProvider = oldFree;
+            CoreEntitlement.ShowDeniedHandler = oldDenied;
             (s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled, s.MicConsentGiven, s.SpeechPushToTalkKey, s.SpeechWakeWords, s.SpeechHeadphonesMode) = old;
             CoreSettings.SaveImmediate();
         }

@@ -26,7 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             public bool CanExecute(object? parameter) => true;
             public void Execute(object? parameter)
             {
-                try { Current?.ToggleWebcamFromHotkey(); } catch (Exception ex) { Log.Debug("Camera shortcut: {E}", ex.Message); }
+                try { if (CameraToggleOverride is { } o) o(); else Current?.ToggleWebcamFromHotkey(); } catch (Exception ex) { Log.Debug("Camera shortcut: {E}", ex.Message); }
             }
         }
 
@@ -130,13 +130,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                if (CameraToggleOverride is { } o) { o(); return; }
                 if (!CoreWebcam.IsAvailable || _windowClosed) return;
                 var tracker = Platform.WebcamTracker.Instance;
                 if (tracker.IsRunning || tracker.IsStarting)
                 {
                     await tracker.StopAsync();
-                    App.Notifications.Show(global::ConditioningControlPanel.Localization.Loc.Get("rf_webcam_stopped"), Helpers.NotificationType.Info, TimeSpan.FromSeconds(3));
+                    // WPF MainWindow.BlinkTrainer.cs:328: camera_shortcut_toast_stopped for 2 s.
+                    App.Notifications.Show(global::ConditioningControlPanel.Localization.Loc.Get("camera_shortcut_toast_stopped"), Helpers.NotificationType.Info, TimeSpan.FromSeconds(2));
                     return;
                 }
                 if (!WebcamConsent.IsCurrent(CoreSettings.Current))
@@ -146,8 +146,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     if (!WebcamConsent.IsCurrent(CoreSettings.Current)) return;
                 }
                 bool started = await tracker.StartAsync();
-                App.Notifications.Show(started ? global::ConditioningControlPanel.Localization.Loc.Get("rf_webcam_tracking") : (tracker.LastError ?? global::ConditioningControlPanel.Localization.Loc.Get("rf_webcam_error")),
-                    Helpers.NotificationType.Info, TimeSpan.FromSeconds(started ? 3 : 6));
+                // WPF MainWindow.BlinkTrainer.cs:343: started toast for 2 s, nothing on failure.
+                if (started)
+                    App.Notifications.Show(global::ConditioningControlPanel.Localization.Loc.Get("camera_shortcut_toast_started"), Helpers.NotificationType.Info, TimeSpan.FromSeconds(2));
             }
             catch (Exception ex) { Log.Warning(ex, "ToggleWebcamFromHotkey failed"); }
         }

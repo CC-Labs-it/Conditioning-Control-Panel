@@ -537,13 +537,24 @@ public sealed class WebcamCalibrationTests
     [Fact]
     public void QuickRecal_OpensOnTheCalibratedMonitor() => WithTracker(start: false, (tracker, _) =>
     {
-        var screen = new global::Avalonia.Controls.Window().Screens.All[0];
-        tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { X = screen.Bounds.X, Y = screen.Bounds.Y } };
-        var win = new WebcamQuickRecalWindow();
-        Assert.Equal(WindowStartupLocation.Manual, win.WindowStartupLocation);
-        Assert.Equal(screen.Bounds.Position, win.Position);
-        tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { X = -99999, Y = 7 } };
-        Assert.Equal(WindowStartupLocation.CenterScreen, new WebcamQuickRecalWindow().WindowStartupLocation);   // unknown monitor: left alone
+        // WPF App.GetWebcamCalibrationScreen (App.xaml.cs:1485): the display picked in Settings > Devices,
+        // a missing one falls back to Primary. Quick Recal and Tracker Test (LabTab.cs:1164) both place.
+        var all = new global::Avalonia.Controls.Window().Screens.All;
+        var primary = all.FirstOrDefault(s => s.IsPrimary) ?? all[0];
+        var old = CoreSettings.Current.WebcamCalibrationScreen;
+        try
+        {
+            foreach (var saved in new[] { "Primary", "\\\\.\\GONE" })
+            {
+                CoreSettings.Current.WebcamCalibrationScreen = saved;
+                foreach (var win in new global::Avalonia.Controls.Window[] { new WebcamQuickRecalWindow(), new WebcamGazeTrackerWindow() })
+                {
+                    Assert.Equal(WindowStartupLocation.Manual, win.WindowStartupLocation);
+                    Assert.Equal(primary.Bounds.Position, win.Position);
+                }
+            }
+        }
+        finally { CoreSettings.Current.WebcamCalibrationScreen = old; }
     });
 
     private static Action<global::Avalonia.Point>? GazeHandlers(WebcamTracker tracker) =>

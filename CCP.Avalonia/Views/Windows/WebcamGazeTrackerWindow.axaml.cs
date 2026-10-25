@@ -44,6 +44,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             this.FindControl<Button>("BtnClose")!.Click += (_, _) => Close();
             this.FindControl<Button>("BtnErrorClose")!.Click += (_, _) => Close();
             KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
+            // WPF MainWindow.LabTab.cs:1164 calls App.ApplyCalibrationScreenPlacement before Show.
+            WebcamCalibrationWindow.PlaceOnCalibratedScreen(this);
         }
 
         protected override void OnOpened(EventArgs e)

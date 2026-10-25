@@ -129,8 +129,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 top.RemoveHandler(KeyDownEvent, OnKey);
                 if (top is Window w) w.Deactivated -= OnCancel;
                 _capturingPttKey = false;
-                BtnSetPttKey.Bind(ContentControl.ContentProperty, new global::Avalonia.Data.Binding("[set2_btn_set_key]")
+                // A TextBlock child, not bare Content: Avalonia reads "_" in Content as an access key (trap 1).
+                var label = new TextBlock();
+                label.Bind(TextBlock.TextProperty, new global::Avalonia.Data.Binding("[set2_btn_set_key]")
                 { Source = LocalizationManager.Instance });
+                BtnSetPttKey.Content = label;
             }
 
             void OnCancel(object? s, EventArgs a) => Detach();
