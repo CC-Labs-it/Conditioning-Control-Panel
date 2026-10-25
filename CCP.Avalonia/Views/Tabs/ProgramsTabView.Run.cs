@@ -10,6 +10,7 @@ using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Helpers;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Models.Program;
 using ConditioningControlPanel.Services.Program;
@@ -224,8 +225,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>WPF UpdateProgramSessionRow :1451-1585, button and glyph states. Repainted on every
-        /// refresh and on a session start/end (ProgramEngineBridge.SessionChanged), never per tick (P07).
-        /// ponytail: the live clock, progress bar and sheen while our session runs are programs slice 5.</summary>
+        /// refresh and on a session start/end (ProgramEngineBridge.SessionChanged). The separate
+        /// live clock/bar update never rebuilds these buttons or the task list on a tick (P07).</summary>
         private void UpdateSessionRow(ProgramService svc, ProgramEnrollment enrollment, ProgramDayRecord record,
                                       IBrush accent, IBrush muted)
         {
@@ -246,6 +247,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // P09: choose the key in code and bind it, so a language switch keeps the state's text.
             Find<TextBlock>("TxtStartTodaySession").Bind(TextBlock.TextProperty,
                 (global::Avalonia.Data.Binding)new Localization.StrExtension(key).ProvideValue(null!));
+            RefreshLiveSessionProgress();
         }
 
         // ---- reward track (WPF BuildProgramDayStrip :794-939) ----
@@ -260,6 +262,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var days = program.AllDays.GroupBy(d => d.DayIndex).ToDictionary(g => g.Key, g => g.First());
             var glow = MainShellWindow.ProgramRadialGlowBrush(accent, 170);
             var pips = new List<ProgramDayPip>(Math.Max(0, program.LengthDays));
+            _ignitedPips.Clear(); // new containers, new one-shot carriers
+            var igniteBrush = MainShellWindow.ProgramRadialGlowBrush(accent, 220); // WPF MainWindow.ProgramsTab.cs:777
 
             for (int i = 1; i <= program.LengthDays; i++)
             {
@@ -324,6 +328,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 }
 
                 if (milestone) pip.NodeSize += 6;
+                if (_dayJustCompleted && i == enrollment.CurrentDay)
+                {
+                    pip.Ignite = true;
+                    pip.IgniteBrush = igniteBrush;
+                }
                 pip.Tip = day != null && !string.IsNullOrWhiteSpace(day.Title) ? $"{tip} · {day.Title}" : tip;
                 pips.Add(pip);
             }

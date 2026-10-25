@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using ConditioningControlPanel.Services.Fyp;
 
 namespace ConditioningControlPanel.Services.Video
@@ -23,30 +22,26 @@ namespace ConditioningControlPanel.Services.Video
         private static readonly object Gate = new();
         private static readonly Dictionary<string, Credit> ByUrl = new(StringComparer.Ordinal);
         private static readonly Queue<string> Order = new();
-        private static readonly Regex SubName = new("^[A-Za-z0-9_]{2,32}$", RegexOptions.CultureInvariant);
 
         internal sealed record Credit(string Sub, string Link);
 
         /// <summary>Credit for an entry id shaped "scrolller/&lt;sub&gt;/&lt;postId&gt;", or null.</summary>
         internal static Credit? FromId(string? id)
         {
-            if (string.IsNullOrEmpty(id)) return null;
-            var parts = id.Split('/');
-            if (parts.Length != 3 || !string.Equals(parts[0], "scrolller", StringComparison.Ordinal)) return null;
-            var link = LinkFor(parts[1]);
-            return link == null ? null : new Credit(parts[1], link);
+            var sub = Fyp.Online.ScrolllerCreditRules.SubFromId(id);
+            return sub == null ? null : new Credit(sub, LinkFor(sub)!);
         }
 
         /// <summary>https://scrolller.com/r/&lt;sub&gt;, or null for anything that is not a plain
         /// subreddit name (the link reaches a command line in BrowserLauncher's fallbacks).</summary>
         internal static string? LinkFor(string? sub)
-            => sub != null && SubName.IsMatch(sub) ? "https://scrolller.com/r/" + sub : null;
+            => Fyp.Online.ScrolllerCreditRules.LinkFor(sub);
 
         /// <summary>The brand mark every native surface shows (brief contract: never a loc key).</summary>
-        public const string Mark = "via Scrolller";
+        public const string Mark = Fyp.Online.ScrolllerCreditRules.Mark;
 
         /// <summary>The scrolller.com home page, for the calm credit lines (pickers, settings).</summary>
-        public const string HomeLink = "https://scrolller.com";
+        public const string HomeLink = Fyp.Online.ScrolllerCreditRules.HomeLink;
 
         /// <summary>RemoteMediaCache's temp-file prefix (kept in step with it by a test). Scrolller
         /// is the only feed source, so a remote temp copy is always one of theirs.</summary>
@@ -59,20 +54,7 @@ namespace ConditioningControlPanel.Services.Video
         /// <summary>Is the thing a surface is about to show Scrolller's? A scrolller url, an entry
         /// id shaped "scrolller/&lt;sub&gt;/&lt;postId&gt;", or a RemoteMediaCache temp copy. A local file,
         /// a pack temp file and anything else: false.</summary>
-        internal static bool IsScrolllerMedia(string? pathOrUrl)
-        {
-            if (string.IsNullOrWhiteSpace(pathOrUrl)) return false;
-            if (IsScrolllerUrl(pathOrUrl)) return true;
-            if (FromId(pathOrUrl) != null) return true;
-            if (pathOrUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-                || pathOrUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return false;
-            try
-            {
-                return System.IO.Path.GetFileName(pathOrUrl)
-                    .StartsWith(RemoteTempPrefix, StringComparison.OrdinalIgnoreCase);
-            }
-            catch (ArgumentException) { return false; }
-        }
+        internal static bool IsScrolllerMedia(string? pathOrUrl) => Fyp.Online.ScrolllerCreditRules.IsScrolllerMedia(pathOrUrl);
 
         /// <summary>Open https://scrolller.com from a calm surface (a picker, Media History).
         /// Refused under Strict Lock, Lockdown or a Chaos or DtRH run. Never throws.</summary>
@@ -89,7 +71,7 @@ namespace ConditioningControlPanel.Services.Video
 
         /// <summary>The link may open only outside every lock: a browser coming up over Strict Lock,
         /// Lockdown or a Chaos run would be a way out of them.</summary>
-        internal static bool CanOpenLink(bool strict, bool lockdown, bool chaos) => !strict && !lockdown && !chaos;
+        internal static bool CanOpenLink(bool strict, bool lockdown, bool chaos) => Fyp.Online.ScrolllerCreditRules.CanOpenLink(strict, lockdown, chaos);
 
         public static void Remember(FypAssetManifest.Entry entry)
         {

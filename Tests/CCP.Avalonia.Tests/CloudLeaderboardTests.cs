@@ -126,7 +126,8 @@ public sealed partial class AccountSeedTests
             {
                 if (global::Avalonia.Application.Current is null)
                     global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                        .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                        .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 LocalizationManager.Instance.SetLanguage("en");
 
@@ -177,12 +178,13 @@ public sealed partial class AccountSeedTests
             s.OfflineMode = false;
             s.UnlockedSkills.Clear();
             s.UnlockedSkills.AddRange(new[] { "hive_mind", "popular_girl" });
-            global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.NoteLeaderboardPage(0, null, null, 0);
+            global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.NoteLeaderboardPage(new ConditioningControlPanel.Services.LeaderboardPage<ConditioningControlPanel.Services.LeaderboardEntryData>());
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
                     global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                        .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                        .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 LocalizationManager.Instance.SetLanguage("en");
                 var shell = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
@@ -224,7 +226,7 @@ public sealed partial class AccountSeedTests
             (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId) = (oldOffline, oldClient, oldId);
             s.UnlockedSkills.Clear();
             s.UnlockedSkills.AddRange(oldSkills);
-            global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.NoteLeaderboardPage(0, null, null, 0);
+            global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.NoteLeaderboardPage(new ConditioningControlPanel.Services.LeaderboardPage<ConditioningControlPanel.Services.LeaderboardEntryData>());
             (s.TotalConditioningMinutes, s.StreakShieldsRemaining) = (oldMinutes, oldShields);
         }
     }
@@ -243,7 +245,8 @@ public sealed partial class AccountSeedTests
             {
                 if (global::Avalonia.Application.Current is null)
                     global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                        .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                        .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var tab = new LeaderboardTabView();
                 // Seasons are retired (WPF feda9c907): a fresh tab opens on All-Time, titled as such.

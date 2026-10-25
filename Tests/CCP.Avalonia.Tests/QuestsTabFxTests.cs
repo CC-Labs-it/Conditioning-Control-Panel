@@ -34,9 +34,7 @@ public sealed class QuestsTabFxTests
 
     private static void Setup()
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        AmbientBeatLoopsTests.Setup();
     }
 
     [Fact]
@@ -158,7 +156,7 @@ public sealed class QuestsTabFxTests
             Assert.Equal(1, view.Bursts);
             Assert.Single(posted, p => p.StartsWith("QuestComplete", StringComparison.Ordinal));
 
-            // Off-tab: no burst on a hidden bar (WPF moves it to the nav button; not on this head yet).
+            // A standalone view has no shell nav fallback: no burst on its hidden bar.
             view.IsVisible = false;
             quests.TrackSpiralMinutes(10_000);
             Dispatcher.UIThread.RunJobs();
