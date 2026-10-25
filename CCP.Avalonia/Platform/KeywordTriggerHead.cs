@@ -19,6 +19,7 @@ internal static class KeywordTriggerHead
     internal static KeywordAudioRuntime Engine { get; } = new();
     private static bool _subscribed;
     private static int _generation;
+    private static DateTime _lastSampleAt;
     internal static void Sync()
     {
         if (CoreSettings.Current.KeywordTriggersEnabled && KeywordAudioRuntime.HasAccess)
@@ -65,11 +66,16 @@ internal static class KeywordTriggerHead
             var ch = special == null ? Translate(vk) : null;
             uint processId = 0;
             var needsForeground = KeywordMatchRules.NeedsForeground(CoreSettings.Current);
-            if (needsForeground) GetWindowThreadProcessId(GetForegroundWindow(), out processId);
+            var sample = needsForeground || (DateTime.UtcNow - _lastSampleAt).TotalSeconds >= 2;
+            if (sample)
+            {
+                _lastSampleAt = DateTime.UtcNow;
+                GetWindowThreadProcessId(GetForegroundWindow(), out processId);
+            }
             Dispatcher.UIThread.Post(() =>
             {
                 if (generation != Volatile.Read(ref _generation)) return;
-                var foreground = needsForeground ? Foreground(processId) : (null, false);
+                var foreground = sample ? Foreground(processId) : (null, false);
                 if (special is { } key) Engine.Key(key, foreground.Process, foreground.Own);
                 else if (ch is { } c) Engine.Character(c, foreground.Process, foreground.Own);
                 else Engine.Key(KeywordInputKey.None, foreground.Process, foreground.Own);
@@ -114,6 +120,7 @@ internal static class KeywordTriggerHead
 internal sealed partial class KeywordAudioRuntime
 {
     private readonly KeywordTextInput _input = new();
+    internal KeywordForegroundApps ForegroundApps { get; } = new();
     private readonly KeywordCooldowns _cooldowns = new();
     private CancellationTokenSource? _audio;
     private Action? _stop;
@@ -130,6 +137,7 @@ internal sealed partial class KeywordAudioRuntime
         var s = CoreSettings.Current;
         if (!IsActive || !s.KeywordTriggersEnabled ||
             !HasAccess) return false;
+        ForegroundApps.Remember(process, own);
         if (KeywordMatchRules.AppAllowed(s, process, own)) return true;
         _input.Clear(); // never join text typed on either side of a blocked app
         return false;

@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+
+### fin4 keyword runtime follow-up
+
+1. WPF `MainWindow/MainWindow.Awareness.cs:568-640` — Enable Awareness on Windows, type in more than eight external apps (including Everywhere mode), then open app scope. Only the eight newest distinct processes are offered; own windows and already-listed names (case-insensitive, optional .exe) are excluded. Click a chip: the saved list and textbox update once and the chip disappears. Rows: `shell-keyword-triggers`
+2. WPF `MainWindow/MainWindow.TabFxTakeoverLabStatus.cs:329` — On the Awareness tab, turn the master on/off: the existing shared-beat glow starts/stops; hide the tab or deactivate/minimize the shell and the glow parks. Rows: `shell-keyword-triggers`
+3. WPF `MainWindow/MainWindow.Patreon.cs:187-191,436-441` — While a keyword clip plays, revoke premium with no awareness free day: master clears, playback stops and input detaches while panic remains available. Resolve premium with a saved-on master: the keyword runtime re-arms. Rows: `shell-keyword-triggers`

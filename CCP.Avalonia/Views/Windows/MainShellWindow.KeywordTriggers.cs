@@ -10,7 +10,7 @@
 //
 // The Windows keyword runtime is Platform/KeywordTriggerHead.cs; buffer/matching/cooldown
 // rules live in Core and are also consumed by WPF's service. ponytail: OCR, highlight windows,
-// recent-app chips, OverlayPulse/BrainDrain and a Linux source remain
+// OverlayPulse/BrainDrain and a Linux source remain
 // follow-ups (see the ledger and hand-off).
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows

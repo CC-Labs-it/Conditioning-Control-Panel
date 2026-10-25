@@ -27,6 +27,25 @@ public sealed class KeywordTextInputTests
         Assert.Equal("", input.Text);
     }
 
+    [Fact]
+    public void RecentAppsAreEightDistinctNewestFirstAndNeverIncludeOwnOrUnknown()
+    {
+        var apps = new KeywordForegroundApps();
+        apps.Remember(null, false);
+        apps.Remember(" ", false);
+        apps.Remember("panel", true);
+        Assert.Empty(apps.Recent);
+        for (var i = 0; i < 10; i++) apps.Remember("app" + i, false);
+        Assert.Equal(Enumerable.Range(2, 8).Reverse().Select(i => "app" + i), apps.Recent);
+        apps.Remember("APP3", false);
+        Assert.Equal("app3", apps.Recent[0]); // preserve first spelling, move to front
+        Assert.Equal(8, apps.Recent.Count);
+        var snapshot = apps.Recent;
+        apps.Remember("other", false);
+        Assert.Equal("app3", snapshot[0]);
+        Assert.DoesNotContain("app2", apps.Recent);
+    }
+
     [Theory]
     [InlineData("intensity", "sit", false)]
     [InlineData("SIT!", "sit", true)]

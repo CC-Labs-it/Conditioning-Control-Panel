@@ -19,6 +19,9 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class KeywordAudioRuntimeTests
 {
+    // The singleton deliberately retains cooldowns across Stop. Every fixture moves forward
+    // beyond the previous fixture (including the panic test's two-hour second match).
+    private static DateTime _singletonNow = new(2026, 10, 14, 12, 0, 0);
     private static void Run(Action<KeywordAudioRuntime, AppSettings, List<(string Path, float Volume)>> body) =>
         RunAsync((engine, settings, played) => { body(engine, settings, played); return Task.CompletedTask; }).GetAwaiter().GetResult();
 
@@ -31,6 +34,9 @@ public sealed class KeywordAudioRuntimeTests
         var saved = (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
             s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
             CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled, CoreSession.IsEngineRunningProvider);
+        var singletonClock = KeywordTriggerHead.Engine.Now;
+        _singletonNow = _singletonNow.AddHours(3);
+        KeywordTriggerHead.Engine.Now = () => _singletonNow;
         var engine = new KeywordAudioRuntime();
         var played = new List<(string, float)>();
         var file = Path.GetTempFileName();
@@ -52,6 +58,7 @@ public sealed class KeywordAudioRuntimeTests
         finally
         {
             engine.Stop(); KeywordTriggerHead.Stop(); File.Delete(file);
+            KeywordTriggerHead.Engine.Now = singletonClock;
             (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
                 s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
                 CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled, CoreSession.IsEngineRunningProvider) = saved;
@@ -146,7 +153,7 @@ public sealed class KeywordAudioRuntimeTests
     {
         // Linux headless test deliberately never installs a native keyboard hook.
         s.KeywordTriggersEnabled = false;
-        var clock = new DateTime(2026, 10, 14, 12, 0, 0);
+        var clock = _singletonNow;
         var realNow = KeywordTriggerHead.Engine.Now;
         KeywordTriggerHead.Engine.Now = () => clock;   // the re-type below must not depend on wall-clock cooldowns
         try
@@ -216,6 +223,79 @@ public sealed class KeywordAudioRuntimeTests
             Assert.Equal("editor, browser", box.Text);
         }
         finally { s.KeywordTriggerApps = saved; }
+    });
+
+    [Fact]
+    public void RecentAppChipsExcludeOwnAndListedAppsAndAddWithoutDuplicates() => Run((_, s, _) =>
+    {
+        var saved = s.KeywordTriggerApps;
+        try
+        {
+            s.KeywordTriggerApps = new() { "editor.exe" };
+            s.KeywordTriggerAppScope = AwarenessAppScope.ExceptListed;
+            var engine = KeywordTriggerHead.Engine;
+            engine.Start();
+            engine.Character('x', "editor");
+            engine.Character('x', "Browser");
+            engine.Character('x', "ccp", own: true);
+            var view = new AwarenessTabView();
+            var panel = view.FindControl<WrapPanel>("AwarenessSeenAppsPanel")!;
+            var chip = Assert.Single(panel.Children.OfType<Button>());
+            Assert.Equal("+ Browser", chip.Content);
+            chip.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(new[] { "editor.exe", "Browser" }, s.KeywordTriggerApps);
+            Assert.Empty(panel.Children);
+            view.SyncAwarenessTabUi();
+            Assert.Empty(panel.Children);
+            Assert.False(view.FindControl<TextBlock>("TxtAwarenessSeenAppsLabel")!.IsVisible);
+        }
+        finally { s.KeywordTriggerApps = saved; }
+    });
+
+    [Fact]
+    public void EntitlementRefreshStopsAudioAndRearmsSavedMasterWhenAccessResolves() => Run((_, s, played) =>
+    {
+        s.KeywordTriggers[0].Keyword = "access-resolution-word";
+        var shell = new MainShellWindow();
+        try
+        {
+            Type(KeywordTriggerHead.Engine, "access-resolution-word");
+            Assert.Single(played);
+            CoreEntitlement.HasPremiumProvider = () => false;
+            shell.RefreshEntitlementVeils(persist: true);
+            Assert.False(s.KeywordTriggersEnabled);
+            Assert.False(KeywordTriggerHead.Engine.IsActive);
+            Assert.Equal("stopped", played.Last().Path);
+            // A saved-on master can precede asynchronous entitlement validation.
+            s.KeywordTriggersEnabled = true;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            shell.RefreshEntitlementVeils();
+            Assert.True(KeywordTriggerHead.Engine.IsActive);
+        }
+        finally { shell.Close(); }
+    });
+
+    [Fact]
+    public void MasterSwitchDrivesTheExistingSharedBeatStatusGlow() => Run((_, s, _) =>
+    {
+        s.KeywordTriggersEnabled = false;
+        var shell = new MainShellWindow();
+        shell.Show();
+        shell.Activate();
+        try
+        {
+            shell.ShowTab("awareness");
+            Dispatcher.UIThread.RunJobs();
+            var view = shell.Named<AwarenessTabView>("AwarenessTab")!;
+            var master = view.FindControl<CheckBox>("ChkAwarenessMaster")!;
+            var dot = view.FindControl<Control>("AwarenessStatusDot")!;
+            master.IsChecked = true;
+            Assert.IsType<global::Avalonia.Media.DropShadowEffect>(dot.Effect);
+            master.IsChecked = false;
+            Assert.Null(dot.Effect);
+            Assert.Equal(1, dot.Opacity);
+        }
+        finally { shell.Close(); }
     });
 
 }

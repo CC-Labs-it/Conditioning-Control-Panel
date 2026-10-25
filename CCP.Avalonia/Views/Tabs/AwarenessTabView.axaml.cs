@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// and write <c>AppSettings</c> for real and save.</para>
     ///
     /// <para>The master and keyboard switches drive the Windows keyboard/audio runtime.
-    /// ponytail: ScreenOcr, highlight windows and recent-app chips remain
+    /// ponytail: ScreenOcr and highlight windows remain
     /// follow-ups; Linux has no keyword source yet.</para>
     /// </summary>
     public partial class AwarenessTabView : UserControl
@@ -147,6 +147,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 TxtAwarenessAppList.Text = string.Join(", ", s.KeywordTriggerApps ?? new());
                 AwarenessAppListPanel.IsVisible = s.KeywordTriggerAppScope != AwarenessAppScope.Everywhere;
 
+                RefreshSeenAppChips();
                 RefreshPulseFeed();
                 UpdateStatusIndicator(masterOn);
                 RefreshAwarenessPresetCards();
@@ -176,8 +177,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtAwarenessStatus.Text = on ? "Live" : "Off";
             TxtAwarenessStatus.Foreground = on ? pink ?? Brushes.HotPink : OffLabel;
 
-            // ponytail: WPF also breathes the dot while the engine is genuinely live
-            // (SetAwarenessStatusPulse). Cosmetic, and it belongs with the engine seam.
+            (TopLevel.GetTopLevel(this) as Views.Windows.MainShellWindow)?.SetAwarenessStatusPulse(on);
         }
 
         // ------------------------------------------------------------------ live editors
@@ -330,9 +330,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Log.Warning(ex, "Awareness tab: failed to write KeywordTriggerAppScope");
             }
 
-            // ponytail: WPF also rebuilds the "recently focused" chips from
-            // KeywordTriggerService.GetRecentForegroundApps(). That ring is fed by a foreground-
-            // window poll (Win32) and lives with the service, so the chip row stays empty here.
+            RefreshSeenAppChips();
+        }
+
+        private void RefreshSeenAppChips()
+        {
+            AwarenessSeenAppsPanel.Children.Clear();
+            var listed = CoreSettings.Current.KeywordTriggerApps;
+            var seen = Platform.KeywordTriggerHead.Engine.ForegroundApps.Recent
+                .Where(app => !ConditioningControlPanel.Services.KeywordMatchRules.MatchesAppList(listed, app)).ToList();
+            TxtAwarenessSeenAppsLabel.IsVisible = seen.Count > 0;
+            foreach (var app in seen)
+            {
+                var chip = new Button
+                {
+                    Content = "+ " + app, Tag = app, FontSize = 10,
+                    Padding = new Thickness(7, 3), Margin = new Thickness(0, 0, 5, 5),
+                    Cursor = new Cursor(StandardCursorType.Hand), Foreground = Brushes.White,
+                    Background = new SolidColorBrush(Color.Parse("#2A2A44")),
+                    BorderBrush = new SolidColorBrush(Color.Parse("#3A3A5A")), BorderThickness = new Thickness(1),
+                };
+                ToolTip.SetTip(chip, $"Add '{app}' to the list");
+                chip.Click += (_, _) =>
+                {
+                    var s = CoreSettings.Current;
+                    var apps = new System.Collections.Generic.List<string>(s.KeywordTriggerApps ?? new());
+                    if (!ConditioningControlPanel.Services.KeywordMatchRules.MatchesAppList(apps, app)) apps.Add(app);
+                    s.KeywordTriggerApps = apps;
+                    CoreSettings.Save();
+                    TxtAwarenessAppList.Text = string.Join(", ", apps);
+                    RefreshSeenAppChips();
+                };
+                AwarenessSeenAppsPanel.Children.Add(chip);
+            }
         }
 
         private void TxtAwarenessAppList_LostFocus(object? sender, RoutedEventArgs e) => CommitAppList();
@@ -351,6 +381,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             s.KeywordTriggerApps = parsed;
             CoreSettings.Save();
             TxtAwarenessAppList.Text = string.Join(", ", parsed);
+            RefreshSeenAppChips();
         }
 
         // ------------------------------------------------------------------ highlight colour

@@ -132,8 +132,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF MainWindow.Patreon.cs:92, over the shared Core flag pass. Skipped while the seam is
         /// unseeded: WPF never runs it before App.Patreon exists, and a head that cannot read the account
-        /// must not wipe a patron's settings. ponytail: this head runs none of the lapsed engines (no
-        /// keyword hook, OCR, autonomy, mantra chant or haptics mixer), so there is nothing to stop yet.</summary>
+        /// must not wipe a patron's settings. Keyword and window awareness runtimes reconcile below;
+        /// ponytail: OCR, autonomy, mantra chant and the haptics mixer remain unported here.</summary>
         private bool _lapseUnsaved;   // cleared in memory, not yet written by an entitlement event
 
         private void EnforceEntitlementLapse(bool persist)
@@ -157,9 +157,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (s.AwarenessModeEnabled && s.AwarenessConsentGiven && ConditioningControlPanel.Services.WindowAwarenessService.HasEntitlement
                     && !App.WindowAwareness.IsRunning)
                     App.WindowAwareness.Start();
+                // WPF EnforceEntitlementLapse + UpdatePatreonUI: stop on lapse and re-arm
+                // a saved-on master when asynchronous access validation resolves.
+                Platform.KeywordTriggerHead.Sync();
+                Named<Tabs.AwarenessTabView>("AwarenessTab")?.SyncAwarenessTabUi();
                 if (cleared.Count == 0) return;
                 Named<Tabs.BambiTakeoverTabView>("BambiTakeoverTab")?.SyncFromSettings();
-                Named<Tabs.AwarenessTabView>("AwarenessTab")?.SyncAwarenessTabUi();
                 StudioRack?.HapticsPanel.LoadHapticsSettingsToUi();   // haptics Enabled may just have been cleared
                 RefreshSheListeningTab();   // "voice" / "voice-mic" may just have been cleared
             }
