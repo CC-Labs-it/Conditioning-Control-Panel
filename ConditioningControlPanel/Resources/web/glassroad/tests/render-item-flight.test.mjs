@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { advanceRibbon, flightSpark } from '../render/items/flight.js';
+import { advanceRibbon, flightSpark, launchSpark } from '../render/items/flight.js';
 
 const history = (n = 28) => ({ pts: new Float32Array(n * 3), n: 0 });
 
@@ -12,6 +12,18 @@ test('projectile ribbon preserves distance and density through a slow frame', ()
   for (let x = 3; x <= 12; x += 3) advanceRibbon(slow, x, x * 0.2, 0, 0.5);
   assert.equal(fast.n, slow.n);
   for (let j = 0; j < fast.n * 3; j++) assert.ok(Math.abs(fast.pts[j] - slow.pts[j]) < 0.00001);
+});
+
+test('release cone starts and ends transparent, stays bounded and follows actual throw direction', () => {
+  const out = [0, 0, 0];
+  assert.equal(launchSpark(0, 12, 0, 0, [30, 0, 0], out), 0);
+  assert.equal(launchSpark(0, 12, .48, 0, [30, 0, 0], out), 0);
+  for (let t = .01; t < .48; t += .01) for (let i = 0; i < 12; i++) {
+    const a = launchSpark(i, 12, t, 1, [30, 0, 0], out);
+    assert.ok(a >= 0 && a <= 1); assert.ok(out.every(Number.isFinite));
+    assert.ok(out[0] <= 0, 'release plume stays behind the thrown object');
+    assert.ok(Math.hypot(...out) < 14);
+  }
 });
 
 test('ribbon bounds long-frame work and clears rescue discontinuities', () => {

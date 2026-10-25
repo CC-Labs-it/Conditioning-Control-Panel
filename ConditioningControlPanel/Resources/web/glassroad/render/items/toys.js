@@ -2,11 +2,12 @@
 import { Group, Mesh, MeshBasicNodeMaterial, RingGeometry, CircleGeometry, BufferGeometry, BufferAttribute, Vector3, Quaternion, DoubleSide } from 'three/webgpu';
 import { texture, uv, uniform, vec2, sin, cos } from 'three/tsl';
 import { acquireLoomAtlas, loomAtlasUv } from '../loomAtlas.js';
-import { TOY_MODELS, TOYS, toyPose, toyEnvelope, snapRing, guardLook, toyLod, toyScale } from './toyMath.js';
+import { TOY_MODELS, TOYS, toyPose, toyEnvelope, snapRing, guardLook, toyLod, toyScale, toyLaunchPose } from './toyMath.js';
 import { S } from '../../sim/state.js';
 import { Q } from '../quality.js';
 
 const UP = new Vector3(0, 1, 0), P = new Vector3(), N = new Vector3(), ROT = new Quaternion();
+const FORWARD = new Vector3(0, 0, -1), FLIGHT = new Vector3(), RELEASE = {};
 const point = (o, p) => o.position.set(p?.[0] || 0, p?.[1] || 0, p?.[2] || 0);
 function starRing() {
   const p = [];
@@ -79,7 +80,7 @@ export function createToyProps(root, art, feel, { photosafe = null, palette = ()
     used.set(id, index + 1); e.carrier.visible = true; point(e.carrier, p);
     e.carrier.quaternion.identity();
     if (rotation) e.carrier.quaternion.copy(rotation);
-    else if (velocity && Math.hypot(...velocity) > .01) e.carrier.rotation.y = Math.atan2(-velocity[0], -velocity[2]);
+    else if (velocity && Math.hypot(...velocity) > .01) e.carrier.quaternion.setFromUnitVectors(FORWARD, FLIGHT.fromArray(velocity).normalize());
     const pose = toyPose(kind, time, still);
     e.rotator.rotation.set(0, 0, 0); e.obj.position.set(0, kind === 'pendulum' ? -.45 : kind === 'bigSpiral' ? -.8 : 0, 0);
     if (e.pivot) e.pivot.rotation.z = pose.swing;
@@ -87,8 +88,9 @@ export function createToyProps(root, art, feel, { photosafe = null, palette = ()
     if (kind === 'disc') e.rotator.rotation.set(pose.bank, pose.spin, .16);
     if (kind === 'bigSpiral') e.rotator.rotation.z = pose.spin;
     // The held watch's top chain anchor stays above the kart, at the shared held socket.
-    e.carrier.scale.setScalar(toyScale(kind, held));
-    setAlpha(e, held ? 1 : Math.min(1, Math.max(0, age) / (still ? .3 : .12)));
+    const size = toyScale(kind, held), release = toyLaunchPose(held ? 1 : age, still, RELEASE);
+    e.carrier.scale.set(size * release.cross, size * release.cross, size * release.along);
+    setAlpha(e, held ? 1 : release.alpha);
     return true;
   }
   function ring(row, p, n, r, a, star = true, col = palette()) {
@@ -161,7 +163,7 @@ export function createToyProps(root, art, feel, { photosafe = null, palette = ()
     const bright = !quiet && !!photosafe?.request('item-toy');
     if (effects.length >= 16) effects.shift();
     effects.push({ name, age: 0, p: [...e.p], n: e.n ? [...e.n] : null, v: e.v ? [...e.v] : null, col: palette(), bright,
-      radius: name === 'disc-bounce' ? 1.15 : name === 'item-flyby' ? 1.25 : name === 'item-fire' ? 2.1 : e.kind === 'bigSpiral' ? 3.3 : 2.2,
+      radius: name === 'disc-bounce' ? 1.7 : name === 'item-flyby' ? 1.5 : name === 'item-fire' ? 3.2 : e.kind === 'bigSpiral' ? 4.1 : 3,
       duration: name === 'snap-burst' ? (quiet ? .9 : .6) : quiet ? .9 : .72 });
   }
   function clear() {
