@@ -135,7 +135,7 @@ public sealed class WebcamTrackerTests
             Assert.Equal(WebcamTrackingState.Stopped, t.State);
             WebcamTracker.SourceFactory = () => new FakeSource { OpenResult = false };
             Assert.False(t.Start());
-            Assert.Equal(WebcamTrackingState.Error, t.State);
+            Assert.Equal(WebcamTrackingState.CameraDenied, t.State); // WPF: Open false on every backend
         });
     }
 
