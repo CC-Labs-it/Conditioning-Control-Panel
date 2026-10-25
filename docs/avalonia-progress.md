@@ -3486,3 +3486,7 @@ Tests: ShellLabTabTests (fail-proven x3), MandatoryVideoOverlayTests, WebcamTrac
 - Delayed session spiral guard ported (WPF SessionEngine.cs:826-838); the Avalonia head now ships Spirals/spiral.gif like WPF (csproj :708) so default installs pass it.
 - Tests: SessionRunnerTests.Spiral_DelayedStart*, SpiralFinishTests (default-path, Loom, native video bounded poll), PanicSurfaces allowlist. Fail-proofs: rcheck 39921591384, 39922349918 (red), 39927322722 (green). Gate 39928158450: known flakes only.
 - feat-spiral stays stub (session corner GIF policy, Deeper holds, Spiral embed bridge, WebHost profile/failure seams).
+
+## avalonia-port/fin-views-companion-room: +113
+
+Restores the late Dormant shimmer in ChatThresholdView (WPF State -> PlayDormantShimmer at Normal priority; 250 ms delay, 1.4 s CubicEase InOut, once per view). CompanionRoomShimmerTests: the `false` case is fail-proven (rcheck 39921325857 red, 39922233760 green 6/6). views-companion-room stays stub. rgate: flake-only (RaceTrackPlayer), runs 39927190050 and 39930580281.
