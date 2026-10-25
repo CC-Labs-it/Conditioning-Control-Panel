@@ -53,6 +53,25 @@ public sealed class LeaderboardClient
         return ordered;
     }
 
+    /// <summary>WPF GetPlayerPercentile: prefer the server rank, then scan the fetched board by
+    /// unified id, Discord id or display name. Position is the one-based order of that board.</summary>
+    public static int PlayerPercentile<T>(int? yourRank, int? yourTotal, IReadOnlyList<T> entries,
+        int totalUsers, string? unifiedId, string? discordId, string? displayName) where T : LeaderboardEntryData
+    {
+        static int Percent(int rank, int total) => Math.Clamp((int)Math.Ceiling((double)rank / total * 100), 1, 99);
+        if (yourRank.HasValue && yourTotal is > 0) return Percent(yourRank.Value, yourTotal.Value);
+        if (entries.Count == 0 || totalUsers <= 0) return 0;
+        for (int i = 0; i < entries.Count; i++)
+        {
+            var e = entries[i];
+            if ((!string.IsNullOrEmpty(unifiedId) && e.UnifiedId == unifiedId)
+                || (!string.IsNullOrEmpty(discordId) && e.DiscordId == discordId)
+                || (!string.IsNullOrEmpty(displayName) && string.Equals(e.DisplayName, displayName, StringComparison.OrdinalIgnoreCase)))
+                return Percent(i + 1, totalUsers);
+        }
+        return 0;
+    }
+
     /// <summary>A user's fresh profile card by display name; null on any failure.</summary>
     public async Task<UserLookupResult?> LookupUserAsync(string displayName)
     {
