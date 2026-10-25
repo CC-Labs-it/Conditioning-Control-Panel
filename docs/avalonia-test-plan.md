@@ -230,6 +230,8 @@ Set the panic key to Enter for steps 1-4 (Settings -> panic key).
 18. Help -> Report a bug: fill and send to a test address. WPF `Windows/BugReportWindow.xaml.cs:87-101`. Rows: `win-bug-report`, `win-my-reports`.
 19. Webcam: calibrate, quick recalibrate, gaze tracker. WPF `MainWindow/MainWindow.LabTab.cs:1094`, `MainWindow/MainWindow.xaml.cs:3631`. Rows: `win-webcam-calibration`, `win-webcam-quick-recal`, `win-webcam-gaze-tracker`, `win-webcam-loading-splash`.
 20. Emi desk: open it, its options, ring and book; mute prompt. WPF `AvatarTube/AvatarTubeWindow.Speech.cs:461`. Rows: `win-emi-desk`, `win-emi-options`, `win-emi-ring`, `win-emi-book`, `win-emi-codex`, `win-emi-mute-prompt`.
+    - Ring dismissal and host doors. WPF `Windows/EmiDesk/EmiRingWindow.xaml.cs` + `Windows/EmiDesk/EmiDeskWindow.Ring.cs` + `Services/EmiDesk/EmiTargets.cs`. Rows: `win-emi-ring`.
+      Summon EMI, open cards, click a card and then reopen. Click EMI to toggle; click a gap or another application and check the click reaches it while cards fold once. Reopen during the fold; Escape folds globally without stealing focus. Drag past six DIPs and resize near a screen corner. Check the small fan settle and reverse fold. Pin DtRH/Intake in options; their live gates and existing hosts must launch/refuse normally. Just Drop appears only when its account door is available. Panic while cards are up folds them. Repeat on Windows and X11; Wayland global input and sub-poll X11 presses remain a known gap.
 21. Settings palette shortcut opens the command palette. WPF `MainWindow/MainWindow.xaml.cs:280-283`. Rows: `win-settings-palette`.
 
 ### Down the Rabbit Hole game
@@ -673,6 +675,3 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
-
-300. EMI ring dismissal and host doors. WPF `Windows/EmiDesk/EmiRingWindow.xaml.cs` + `Windows/EmiDesk/EmiDeskWindow.Ring.cs` + `Services/EmiDesk/EmiTargets.cs`. Rows: `win-emi-ring`.
-    Summon EMI, open cards, click a card and then reopen. Click EMI to toggle; click a gap or another application and check the click reaches it while cards fold once. Reopen during the fold; Escape folds globally without stealing focus. Drag past six DIPs and resize near a screen corner. Check the small fan settle and reverse fold. Pin DtRH/Intake in options; their live gates and existing hosts must launch/refuse normally. Just Drop appears only when its account door is available. Panic while cards are up folds them. Repeat on Windows and X11; Wayland global input and sub-poll X11 presses remain a known gap.
