@@ -95,6 +95,45 @@ public sealed class PbpMediaTests
             Directory.Delete(root, true);
         }
     }
+    [Fact]
+    public async Task HeadSpecificFileOwnersStayWithTheirPool()
+    {
+        var root = Directory.CreateTempSubdirectory("pbp-owners-").FullName;
+        var oldFetch = GoonOnlineMedia.Fetch;
+        var oldAssets = CorePaths.EffectiveAssetsProvider;
+        var first = new ConcurrentQueue<string>();
+        var second = new ConcurrentQueue<string>();
+        int id = 0;
+        try
+        {
+            CorePaths.EffectiveAssetsProvider = () => root;
+            GoonOnlineMedia.Fetch = (_, _, kind, _) => Task.FromResult((new List<FypAssetManifest.Entry>
+            {
+                new() { Id = "scrolller/Sub/" + Interlocked.Increment(ref id),
+                    Url = "https://media.example/picture.jpg", Type = "image" }
+            }, (string?)null));
+            using var a = GoonOnlineMedia.ForGame("pbp-owner-a", _ => { },
+                (_, _) => Task.FromResult<string?>(Path.Combine(root, "first.jpg")), first.Enqueue);
+            using var b = GoonOnlineMedia.ForGame("pbp-owner-b", _ => { },
+                (_, _) => Task.FromResult<string?>(Path.Combine(root, "second.jpg")), second.Enqueue);
+            a.Start(new[] { "Sub" }); b.Start(new[] { "Other" });
+            await Task.WhenAll(a.Pending, b.Pending).WaitAsync(TimeSpan.FromSeconds(10));
+            a.Off();
+            Assert.NotEmpty(first);
+            Assert.All(first, path => Assert.EndsWith("first.jpg", path));
+            Assert.Empty(second);
+            b.Dispose();
+            Assert.NotEmpty(second);
+            Assert.All(second, path => Assert.EndsWith("second.jpg", path));
+        }
+        finally
+        {
+            GoonOnlineMedia.Fetch = oldFetch;
+            CorePaths.EffectiveAssetsProvider = oldAssets;
+            Directory.Delete(root, true);
+        }
+    }
+
     [Theory]
     [InlineData(false, "empty")]
     [InlineData(true, "error")]

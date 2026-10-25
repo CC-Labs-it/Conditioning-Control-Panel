@@ -673,3 +673,8 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Chess media sharing (fin5)
+
+1. WPF `Services/PieceByPiece/PieceByPieceHostService.Media.cs`: save a chess flavour with app-wide remote consent off, reopen the board, and confirm the choice stays saved and online stills/clips arrive. Switch to own pictures only and confirm no online refill; close or panic during a refill and confirm the board closes and owned files are released. Repeat in Avalonia; do not use a real profile in automated tests. Rows: `feat-pbp-media-friends`
+2. WPF `Services/PieceByPiece/PieceByPieceHostService.Friends.cs`: Lobby Host/Join/Watch, launcher Join, Live Join and Featured Watch remain unavailable in Avalonia; keep the row stub until those real entry paths exist, including fresh-board spectate settings and existing-board spectate intents. Rows: `feat-pbp-media-friends`

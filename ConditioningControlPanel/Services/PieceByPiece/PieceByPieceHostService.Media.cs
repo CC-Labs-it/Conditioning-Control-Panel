@@ -4,7 +4,9 @@ using System.Threading.Tasks;
 using System.Windows;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Fyp.Online;
-using ConditioningControlPanel.Services.GoonGame;
+using GoonOnlineMedia = ConditioningControlPanel.Services.GoonGame.Online.GoonOnlineMedia;
+using GoonOnlineMediaRules = ConditioningControlPanel.Services.GoonGame.Online.GoonOnlineMediaRules;
+using PbpMediaRules = ConditioningControlPanel.Services.PieceByPiece.Media.PbpMediaRules;
 using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Services.PieceByPiece;
@@ -194,11 +196,17 @@ internal static partial class PieceByPieceHostService
                     Array.Empty<GoonOnlineMedia.Item>(), Array.Empty<GoonOnlineMedia.Item>(), 0, 0));
                 return;
             }
-            _onlineMedia ??= GoonOnlineMedia.ForGame(OnlineTenant, PostOnlineMedia);
+            _onlineMedia ??= CreateOnlineMedia(PostOnlineMedia);
             _onlineMedia.Start(subs);
         }
         catch (Exception ex) { App.Logger?.Warning("PieceByPiece: online media start failed: {E}", ex.Message); }
     }
+
+    // Keep WPF's bounded cache and owner-releases contract while sharing the wave engine.
+    internal static GoonOnlineMedia CreateOnlineMedia(Action<GoonOnlineMedia.Snapshot> sink)
+        => GoonOnlineMedia.ForGame(OnlineTenant, sink,
+            (url, ct) => RemoteMediaCache.MaterializeAsync(url, ct, ownerReleases: true),
+            RemoteMediaCache.ReleaseTempFile);
 
     /// <summary>Worker thread -&gt; UI thread -&gt; page <c>pbp:online-media</c>. The whole current
     /// list every time: stills as <c>images</c>, gif clips (webm/mp4) as <c>clips</c>.</summary>

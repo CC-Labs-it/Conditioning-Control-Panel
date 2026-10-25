@@ -93,7 +93,8 @@ namespace ConditioningControlPanel.Services.GoonGame.Online
         public sealed record Item(string Name, string Url, string Path);
         internal static Func<string, CancellationToken, Task<string?>> Materialize = ConditioningControlPanel.Services.Chaos.DtrhRemoteMedia.AssetsTempCopier.Materialize;
         internal static Action<string> ReleaseFile = ConditioningControlPanel.Services.Chaos.DtrhRemoteMedia.AssetsTempCopier.Release;
-        private static Task<string?> MaterializeAsync(string url, CancellationToken ct) => Materialize(url, ct);
+        private readonly Func<string, CancellationToken, Task<string?>> _materialize;
+        private readonly Action<string> _release;
         public sealed record Snapshot(string State, IReadOnlyList<string> Subs,
             IReadOnlyList<Item> Images, IReadOnlyList<Item> Videos, int Have, int Want);
         private readonly string _prefix;
@@ -103,8 +104,18 @@ namespace ConditioningControlPanel.Services.GoonGame.Online
         private string StillTenant => _prefix + "-stills";
         private string ClipTenant => _prefix + "-clips";
         private IReadOnlyList<string> Channels() => NamedChannels.TryGetValue(_prefix, out var c) ? c : Array.Empty<string>();
-        public static GoonOnlineMedia ForGame(string prefix, Action<Snapshot> onSnapshot) => new(prefix, onSnapshot);
-        private GoonOnlineMedia(string prefix, Action<Snapshot> onSnapshot) { _prefix = prefix; _onSnapshot = onSnapshot; }
+        public static GoonOnlineMedia ForGame(string prefix, Action<Snapshot> onSnapshot,
+            Func<string, CancellationToken, Task<string?>>? materialize = null, Action<string>? release = null)
+            => new(prefix, onSnapshot, materialize, release);
+        private GoonOnlineMedia(string prefix, Action<Snapshot> onSnapshot,
+            Func<string, CancellationToken, Task<string?>>? materialize, Action<string>? release)
+        {
+            _prefix = string.IsNullOrWhiteSpace(prefix) ? "game" : prefix.Trim();
+            _onSnapshot = onSnapshot;
+            // The WPF head keeps RemoteMediaCache ownership; Avalonia uses the assets copier.
+            _materialize = materialize ?? ((url, ct) => Materialize(url, ct));
+            _release = release ?? (path => ReleaseFile(path));
+        }
         private readonly object _gate = new();
         private readonly Action<Snapshot> _onSnapshot;
         private CancellationTokenSource? _cts;
@@ -265,12 +276,12 @@ namespace ConditioningControlPanel.Services.GoonGame.Online
             CancellationToken ct)
         {
             if (ct.IsCancellationRequested || Added(isImage) >= target) return;
-            var path = await MaterializeAsync(e.Url, ct).ConfigureAwait(false);
+            var path = await _materialize(e.Url, ct).ConfigureAwait(false);
             if (path == null) return;
             var url = GoonOnlineMediaRules.UrlFor(path, CorePaths.EffectiveAssets);
             if (url == null)
             {
-                ReleaseFile(path);
+                _release(path);
                 return;
             }
             bool kept = false;
@@ -291,7 +302,7 @@ namespace ConditioningControlPanel.Services.GoonGame.Online
                     kept = true;
                 }
             }
-            if (!kept) { ReleaseFile(path); return; }
+            if (!kept) { _release(path); return; }
             if (retired != null) ReleaseLater(retired);
             Emit(gen);
         }
@@ -306,7 +317,7 @@ namespace ConditioningControlPanel.Services.GoonGame.Online
             lock (_gate) return isImage ? _stillAdded : _clipAdded;
         }
         // Leave a retired file alive for 30 s while the page replaces the element showing it.
-        private static void ReleaseLater(Item item)
+        private void ReleaseLater(Item item)
         {
             _ = Task.Run(async () =>
             {
@@ -351,11 +362,11 @@ namespace ConditioningControlPanel.Services.GoonGame.Online
             _videos.Clear();
             return all;
         }
-        private static void Release(IEnumerable<Item> items)
+        private void Release(IEnumerable<Item> items)
         {
             foreach (var i in items)
             {
-                try { ReleaseFile(i.Path); } catch { }
+                try { _release(i.Path); } catch { }
             }
         }
         public void Dispose()

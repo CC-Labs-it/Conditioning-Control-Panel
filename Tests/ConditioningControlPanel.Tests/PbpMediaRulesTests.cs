@@ -1,3 +1,4 @@
+using PbpMediaRules = ConditioningControlPanel.Services.PieceByPiece.Media.PbpMediaRules;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.PieceByPiece;
 using Newtonsoft.Json;
@@ -9,6 +10,16 @@ namespace ConditioningControlPanel.Tests;
 /// online share of a deal, and the four remembered settings.</summary>
 public class PbpMediaRulesTests
 {
+    [Fact]
+    public void ChessUsesTheSharedCoreRulesAndWaveEngine()
+    {
+        Assert.Equal("CCP.Core", typeof(PbpMediaRules).Assembly.GetName().Name);
+        using var pool = PieceByPieceHostService.CreateOnlineMedia(snapshot => Assert.Equal("off", snapshot.State));
+        Assert.Equal("CCP.Core", pool.GetType().Assembly.GetName().Name);
+        pool.Off();
+        Assert.False(pool.More());
+    }
+
     private static readonly string[] Pink = { "bimbofication", "Bimbos" };
     private static readonly string[] App = { "EroticHypnosis" };
 
