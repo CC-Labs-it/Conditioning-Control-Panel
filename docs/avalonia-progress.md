@@ -3397,3 +3397,7 @@ Windows "Test process did not return valid JSON (non-object)" discovery flake: x
 ## avalonia-port/flake-mantra-task-door: +72
 
 Mantra Lab completion close timer is now stopped in Cleanup, so an early-closed completed lab can no longer end the next Programs task-door session (shard-2 flake root cause). Regression test fail-proven remotely; gate green.
+
+## avalonia-port/wire-views-companion-awareness-privacy: +200
+- Retained awareness history shown/forgotten/pruned/wiped via the Companion privacy card; ActivityLedger/AwarenessLive shared in Core.
+- Fix rounds: startup only sweeps retention, startup hook tested via WindowAwarenessService, ledger unpublished on exit; row stays stub.
