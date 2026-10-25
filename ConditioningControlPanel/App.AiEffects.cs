@@ -21,9 +21,7 @@ namespace ConditioningControlPanel
 
                 void Apply()
                 {
-                    var list = AiLiveActions;
-                    list.Add($"[{DateTime.Now:HH:mm:ss}] {line}");
-                    while (list.Count > AiCommandService.MaxLiveActions) list.RemoveAt(0);
+                    AiLiveActionFeed.Append(AiLiveActions, line, DateTime.Now);
                 }
 
                 if (dispatcher.CheckAccess()) Apply();
@@ -47,7 +45,9 @@ namespace ConditioningControlPanel
             };
             MantraLockScreenCommand.Surface = (phrase, repeats) =>
             {
-                Current.Dispatcher.Invoke(() => LockCard?.ShowLockCard(phrase, repeats, customStrict: true));
+                // Strict follows the user's own Lock Card switch, which asks twice before it
+                // turns on (no Esc). An AI card used to force strict on every player (61eeb4d0d).
+                Current.Dispatcher.Invoke(() => LockCard?.ShowLockCard(phrase, repeats, customStrict: false));
                 return true;
             };
             BounceCommand.Surface = (on, words) =>
