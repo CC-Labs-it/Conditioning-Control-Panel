@@ -71,11 +71,21 @@ namespace ConditioningControlPanel.Avalonia
         internal static MediaHistoryService? MediaHistory { get; set; }
         /// <summary>THE FUSE (WPF App.DescentCountdown). Built before the shell so its spark can subscribe.</summary>
         internal static Services.Descent.DescentCountdownService? DescentCountdown { get; set; }
+        internal static Services.Descent.DescentService? Descent { get; set; }
         /// <summary>WPF App.DiscordRpc. Null until startup built it (and in headless tests).</summary>
         internal static Services.DiscordRichPresenceService? DiscordRpc { get; set; }
 
         /// <summary>The presence switch moved (either surface): the other one repaints from the setting.</summary>
         internal static event Action? RichPresenceChanged;
+
+        /// <summary>WPF ProfileSyncService.ApplyServerCurveEpoch -> RaiseProfileLoadedIfProgressionChanged: follow the
+        /// server's curve, save, and repaint the level header on the UI thread.</summary>
+        internal static void AdoptServerCurveEpoch(int? epoch, Func<Views.Windows.MainShellWindow?> shell)
+        {
+            if (!Services.ProfileAdopt.ApplyCurveEpoch(CoreSettings.Current, epoch)) return;
+            CoreSettings.Save();
+            Dispatcher.UIThread.Post(() => shell()?.UpdateLevelDisplay());
+        }
 
         /// <summary>WPF App.xaml.cs:3126: built always, armed only if asked AND a Discord is linked. The client
         /// connects on its own thread; no Discord running is a logged failure, nothing else.</summary>
@@ -615,6 +625,11 @@ namespace ConditioningControlPanel.Avalonia
                 // ponytail: no Speaker - the tube's speech coupling is not ported, so phase lines stay unsaid.
                 DescentCountdown = new Services.Descent.DescentCountdownService();
                 DescentCountdown.Start();
+                Descent = new Services.Descent.DescentService
+                {
+                    // ponytail: full clean-ledger level/XP poll adoption needs the remaining profile lane.
+                    ProgressionReceived = (_, _, _, epoch) => AdoptServerCurveEpoch(epoch, () => desktop.MainWindow as Views.Windows.MainShellWindow),
+                };
                 // WPF MainWindow.Marquee.cs:688: the server announcement check, 7 s after the shell opens.
                 // A sandbox never reaches the real proxy (the dailyFree rule above).
                 if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")))
@@ -630,7 +645,7 @@ namespace ConditioningControlPanel.Avalonia
                     var sync = Platform.AccountSeed.Sync = new SyncPush(
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true,
                         sanitizeCosmetics: Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
-                        { Countdown = DescentCountdown };
+                        { Countdown = DescentCountdown, DescentReader = Descent };
                     CoreProgression.AddXPProvider = ProgressionBank.Add;
                     ProgressionBank.LevelUp += level => sync.PushAsync($"level-up {level}");
                     ProgressionBank.Awarded += (amount, source) =>
@@ -1263,6 +1278,7 @@ namespace ConditioningControlPanel.Avalonia
             try { Views.Windows.MainShellWindow.DisposeRoadmapIfCreated(); }
             catch { /* one service cannot prevent the head from exiting */ }
 
+            Descent?.Reset();
             DescentCountdown?.Dispose();   // its pool timer outlives the dispatcher otherwise
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.Instance.Stop();   // same
             _desktopDispatch?.Stop();
