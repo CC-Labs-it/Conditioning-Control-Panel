@@ -137,6 +137,13 @@
 
                             <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
+                            <Grid x:Name="MotionRow" ColumnDefinitions="*,Auto" Height="36">
+                                <TextBlock Text="{loc:Str setting_bubble_motion}" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Column="1" x:Name="CmbMotion" Width="150"/>
+                            </Grid>
+
+                            <CheckBox x:Name="ChkBrainDrainBubble" Content="{loc:Str setting_bubble_braindrain}"/>
+
                             <!-- Solid mode: render all bubbles on one shared host (the DTRH/Chaos path). -->
                             <Grid Height="34" Background="Transparent" ToolTip.Tip="Uses the Rabbit Hole's optimized renderer so the field stays smooth with lots of bubbles. Lifts the on-screen cap. Turn off to use the classic one-window-per-bubble mode. Takes effect when bubbles restart.">
                                 <Grid.ColumnDefinitions>

@@ -58,8 +58,38 @@ namespace ConditioningControlPanel.Services
         public bool Clickable, Popping, Lucky;
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
+        public bool AmbientTrigger;
+        private double _treatMs;
+        private double _left, _right, _startY, _vx, _vy;
+        public void SetAmbientTrigger(int speedBoost)
+        {
+            AmbientTrigger = true;
+            var multiplier = 1 + Math.Clamp(speedBoost, 0, 500) / 100.0;
+            _speed *= multiplier; _vx *= multiplier; _vy *= multiplier;
+        }
         private double _startX, _top, _speed, _wobbleOffset, _timeAlive;
         private int _animType;
+        private BubbleMotionStyle _motion;
+        private double _bottom, _cx, _cy, _r0, _radial, _turns, _dir;
+        private AmbientSpiralInPath.State _spiral;
+        public sealed class Sparkle
+        {
+            public double X, Y, VelX, VelY, Size, Alpha = 1;
+        }
+        public Sparkle[] Sparkles = Array.Empty<Sparkle>();
+
+        public void StartSparkles(Random r, bool boosted)
+        {
+            if (!Lucky && !boosted) return;
+            Sparkles = new Sparkle[Lucky ? 16 : 8];
+            for (var i = 0; i < Sparkles.Length; i++)
+            {
+                var angle = r.NextDouble() * Math.PI * 2;
+                var speed = 2 + r.NextDouble() * 4;
+                Sparkles[i] = new Sparkle { VelX = Math.Cos(angle) * speed, VelY = Math.Sin(angle) * speed,
+                    Size = (Lucky ? 4 : 3) + r.NextDouble() * (Lucky ? 4 : 3) };
+            }
+        }
 
         // ---- live chaos bubble (WPF Bubble _fuseRemainingMs / _isChanneling / TickChannel) ----
         /// <summary>WPF's fuse tick: 32 ms per logical step (BubbleService.cs:4149).</summary>
@@ -140,7 +170,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF Bubble ctor for a plain ambient bubble. <paramref name="area"/> is the screen's
         /// working area in px, <paramref name="scaling"/> its DPI scale.</summary>
         public static AmbientBubble Spawn(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
-            double scaling, AppSettings s, double? modScale, bool clickable)
+            double scaling, AppSettings s, double? modScale, bool clickable, BubbleMotionStyle? motion = null)
         {
             var b = new AmbientBubble { Screen = screen, Clickable = clickable };
             b.Size = BubbleSizing.Scale(r.Next(BubbleSizing.BaseMinDip, BubbleSizing.BaseMaxDip), s.BubblesSize, modScale);
@@ -153,6 +183,21 @@ namespace ConditioningControlPanel.Services
             b._top = areaY / scaling - b.Size - 50;
             b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
             b.Y = (areaY + areaH) / scaling;   // start at the bottom
+            b._motion = motion ?? AmbientBubbleMotionRules.Resolve(s.BubbleMotionStyle, AmbientBubbleMotionRules.RainOwned, AmbientBubbleMotionRules.SpiralInOwned, s.MotionLevel, r.NextDouble());
+            b._bottom = (areaY + areaH) / scaling + 50;
+            if (b._motion != BubbleMotionStyle.FloatUp) b._speed *= AmbientBubbleMotionRules.SpeedMult(s.MotionLevel);
+            if (b._motion == BubbleMotionStyle.Rain) b.Y = areaY / scaling - b.Size;
+            if (b._motion == BubbleMotionStyle.SpiralIn)
+            {
+                b._cx = (areaX + areaW / 2) / scaling;
+                b._cy = (areaY + areaH / 2) / scaling;
+                b._r0 = AmbientSpiralInPath.StartRadius(Math.Min(areaW, areaH) / scaling);
+                b._radial = b._speed * AmbientSpiralInPath.RadialPerSpeed;
+                b._turns = AmbientSpiralInPath.Turns(s.MotionLevel);
+                b._dir = r.Next(2) == 0 ? 1 : -1;
+                b._spiral = AmbientSpiralInPath.Start(b._r0, r.NextDouble() * Math.PI * 2);
+                b.PlaceSpiral();
+            }
             return b;
         }
 
@@ -171,10 +216,36 @@ namespace ConditioningControlPanel.Services
             b._top = areaY / scaling - b.Size - 50;
             b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
             b.Y = (areaY + areaH) / scaling;
+            b._left = areaX / scaling;
+            b._right = (areaX + areaW) / scaling - b.Size;
+            b._bottom = (areaY + areaH) / scaling + 50;
+            switch (spec.Motion)
+            {
+                case Chaos.ChaosMotion.RainDown: b.Y = areaY / scaling - b.Size; break;
+                case Chaos.ChaosMotion.RoamBounce:
+                    b.Y = (areaY + r.Next(50, (int)Math.Max(100, areaH - b.Size - 50))) / scaling;
+                    var angle = r.NextDouble() * Math.PI * 2;
+                    b._vx = Math.Cos(angle) * b._speed * 1.4;
+                    b._vy = Math.Sin(angle) * b._speed * 1.4;
+                    break;
+                case Chaos.ChaosMotion.SideDrift:
+                    b.Y = b._startY = (areaY + r.Next(120, (int)Math.Max(240, areaH - b.Size - 120))) / scaling;
+                    var fromLeft = r.Next(2) == 0;
+                    b.X = b._startX = fromLeft ? b._left - b.Size : b._right + b.Size;
+                    b._vx = (fromLeft ? 1 : -1) * b._speed * 1.15;
+                    break;
+            }
             return b;
         }
 
         /// <summary>Draw scale this step: the pop/breathe scale plus WPF's 0.06 x sin(7.5 t) wobble.</summary>
+        private void PlaceSpiral()
+        {
+            X = _cx + Math.Cos(_spiral.Angle) * _spiral.Radius - Size / 2;
+            Y = _cy + Math.Sin(_spiral.Angle) * _spiral.Radius - Size / 2;
+            Fade = _spiral.Fade;
+        }
+
         public double DrawScale => Scale + 0.06 * Math.Sin(_timeAlive * 7.5 + _wobbleOffset);
 
         public double CenterX => X + Size / 2;
@@ -187,18 +258,26 @@ namespace ConditioningControlPanel.Services
             return dx * dx + dy * dy <= r * r;
         }
 
+        private Result Exit() => Spec is { IsLive: true } ? GoOff(null) : Result.Missed;
+
         /// <summary>One logical step. <paramref name="held"/> and the cursor (global DIPs) feed a
         /// running defuse channel; a channel pins the bubble and pauses the fuse (WPF :3796).</summary>
         public Result Step(bool held = false, double cursorX = 0, double cursorY = 0, DateTime nowUtc = default)
         {
             if (Popping)
             {
+                foreach (var sp in Sparkles)
+                {
+                    sp.X += sp.VelX; sp.Y += sp.VelY; sp.VelY += 0.15;
+                    sp.Alpha -= Lucky ? 0.04 : 0.06;
+                }
                 // Pop animation - expand and fade; lucky pops linger ~50% longer.
                 Scale += Deflating ? -0.03 : 0.04;
                 Fade -= Lucky ? 0.044 : 0.066;
                 Angle += 2;
                 return Fade <= 0 ? Result.Done : Result.Alive;
             }
+            if (AmbientTrigger && (_treatMs += FuseStepMs) >= (Spec?.TreatLifeMs ?? 7000)) return Result.Missed;
             if (Channeling) return TickChannel(held, cursorX, cursorY, nowUtc);
             // WPF :4147-4193: the fuse burns 32 ms a step; fuse-out detonates.
             if (Spec is { IsLive: true } && FuseRemainingMs > 0)
@@ -215,10 +294,37 @@ namespace ConditioningControlPanel.Services
                 case 2: offset = Math.Cos(_timeAlive * 5.4) * 25; Angle = (Angle - 0.66) % 360; break;
                 case 3: offset = Math.Sin(_timeAlive * 3) * 30 + Math.Cos(_timeAlive * 6) * 15; Angle = (Angle + 0.54) % 360; break;
             }
-            Y -= _speed;
+            if (_motion == BubbleMotionStyle.SpiralIn)
+            {
+                _spiral = AmbientSpiralInPath.Step(_spiral, _r0, _radial, _turns, _dir, 1);
+                PlaceSpiral();
+                return _spiral.Done ? Result.Missed : Result.Alive;
+            }
+            if (Spec is { } spec)
+            {
+                switch (spec.Motion)
+                {
+                    case Chaos.ChaosMotion.RainDown:
+                        Y += _speed; X = _startX + offset;
+                        return Y > _bottom ? Exit() : Result.Alive;
+                    case Chaos.ChaosMotion.RoamBounce:
+                        X += _vx; Y += _vy;
+                        if (X < _left) { X = _left; _vx = Math.Abs(_vx); }
+                        else if (X > _right) { X = _right; _vx = -Math.Abs(_vx); }
+                        var top = _top + Size + 50; var bottom = _bottom - Size - 50;
+                        if (Y < top) { Y = top; _vy = Math.Abs(_vy); }
+                        else if (Y > bottom) { Y = bottom; _vy = -Math.Abs(_vy); }
+                        return Result.Alive;
+                    case Chaos.ChaosMotion.SideDrift:
+                        X += _vx; Y = _startY + offset;
+                        return (_vx > 0 ? X > _right + Size : X < _left - Size) ? Exit() : Result.Alive;
+                }
+            }
+            Y += _motion == BubbleMotionStyle.Rain ? _speed : -_speed;
             X = _startX + offset;
+            if (_motion == BubbleMotionStyle.Rain) return Y > _bottom ? Exit() : Result.Alive;
             if (Y >= _top) return Result.Alive;
-            return Spec is { IsLive: true } ? GoOff(null) : Result.Missed;   // WPF :4212: a live that escapes detonates
+            return Exit();   // WPF :4212: a live that escapes detonates
         }
     }
 
@@ -280,6 +386,7 @@ namespace ConditioningControlPanel.Services
             var multiplier = SkillTreeRules.HasSkill(s, "lucky_bubbles") && Random.NextDouble() < 0.05 ? 20 : 1;
             var paid = AmbientBubbleXp.Take(s, 5 * multiplier);
             b.Lucky = multiplier > 1 && paid > 0;
+            b.StartSparkles(Random, s.FlashGlowEnabled && SkillTreeRules.GetSparkleBoostTier(s) > 0);
             return paid;
         }
 
@@ -304,7 +411,7 @@ namespace ConditioningControlPanel.Services
             {
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
-                if (HoldChaos && b.Spec != null && !b.Popping) { b.CancelChannel(); continue; }
+                if (HoldChaos && b.Spec != null && !b.AmbientTrigger && !b.Popping) { b.CancelChannel(); continue; }
                 var r = b.Step(Held, CursorX, CursorY, now);
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }

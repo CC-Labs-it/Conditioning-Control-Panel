@@ -35,7 +35,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             // InitializeComponent, not AvaloniaXamlLoader.Load: only the generated one assigns the
             // x:Name fields, and everything below reads them.
             InitializeComponent();
+            AttachedToVisualTree += (_, _) => ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged += OnGrantsChanged;
+            DetachedFromVisualTree += (_, _) => ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged -= OnGrantsChanged;
 
+            ChkBrainDrainBubble.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.BubbleBrainDrainEnabled = ChkBrainDrainBubble.IsChecked ?? false;
+                CoreSettings.Save();
+            };
+            CmbMotion.SelectionChanged += (_, _) =>
+            {
+                if (_isLoading || CmbMotion.SelectedItem is not ComboBoxItem { Tag: BubbleMotionStyle style }) return;
+                CoreSettings.Current.BubbleMotionStyle = style;
+                CoreSettings.Save();
+            };
             ChkEnable.IsCheckedChanged += ChkEnable_Changed;
             SliderFreq.ValueChanged += SliderFreq_Changed;
             SliderVolume.ValueChanged += SliderVolume_Changed;
@@ -113,12 +127,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         private void OnModChanged(object? sender, ModPackage mod) =>
             Dispatcher.UIThread.Post(LoadFromSettings);
 
+        private void OnGrantsChanged() => Dispatcher.UIThread.Post(LoadFromSettings);
+
         private void LoadFromSettings()
         {
             var s = CoreSettings.Current;
             _isLoading = true;
             try
             {
+                ChkBrainDrainBubble.IsVisible = AmbientBubbleMotionRules.AnyV2Owned;
+                ChkBrainDrainBubble.IsChecked = s.BubbleBrainDrainEnabled;
+                MotionRow.IsVisible = AmbientBubbleMotionRules.AnyV2Owned;
+                CmbMotion.Items.Clear();
+                void AddMotion(BubbleMotionStyle style, string key)
+                {
+                    var item = new ComboBoxItem { Tag = style, Content = Loc.Get(key) };
+                    CmbMotion.Items.Add(item);
+                    if (style == s.BubbleMotionStyle) CmbMotion.SelectedItem = item;
+                }
+                AddMotion(BubbleMotionStyle.FloatUp, "bubble_motion_float_up");
+                if (AmbientBubbleMotionRules.RainOwned) AddMotion(BubbleMotionStyle.Rain, "bubble_motion_rain");
+                if (AmbientBubbleMotionRules.SpiralInOwned) AddMotion(BubbleMotionStyle.SpiralIn, "bubble_motion_spiral_in");
+                if (AmbientBubbleMotionRules.AnyV2Owned) AddMotion(BubbleMotionStyle.Mix, "bubble_motion_mix");
+                CmbMotion.SelectedItem ??= CmbMotion.Items[0];
                 ChkEnable.IsChecked = s.BubblesEnabled;
                 SliderFreq.Value = s.BubblesFrequency;
                 TxtFreq.Text = s.BubblesFrequency.ToString();
@@ -169,6 +200,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.BubblesVolume) ||
                 e.PropertyName == nameof(AppSettings.BubblesSize) ||
                 e.PropertyName == nameof(AppSettings.BubbleSpeedBoost) ||
+                e.PropertyName == nameof(AppSettings.BubbleMotionStyle) ||
+                e.PropertyName == nameof(AppSettings.BubbleBrainDrainEnabled) ||
                 e.PropertyName == nameof(AppSettings.BubbleGazePopEnabled) ||
                 e.PropertyName == nameof(AppSettings.BubbleTriggersEnabled) ||
                 e.PropertyName == nameof(AppSettings.BubbleTriggerChance) ||

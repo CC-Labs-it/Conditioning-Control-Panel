@@ -673,3 +673,12 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+
+## Bubble Pop remaining behavior (fin4)
+
+1. Enable Bubble Pop and start the engine. Unlock Rain/Spiral In prizes; select each and Mix. Expect Rain from above, Spiral In fading at the centre, Mix selecting only owned styles. Reduced halves v2 speed/turns; Off floats up. Revoke grants and expect Float Up fallback. WPF `Services/AmbientBubbleMotion.cs` + `Services/BubbleService.cs:3315`. Rows: `feat-bubble-pop`.
+2. Enable Trigger Bubbles, choose only Pink, set chance to 50%. Pop one: expect normal ambient XP plus the pink payload; leave one alone: quiet expiry after 7 seconds. Disable triggers or set chance to zero: plain bubbles. At most four effect bubbles including Chaos treats. WPF `Services/BubbleService.cs:1150`. Rows: `feat-bubble-pop`.
+3. Use a mod with pop audio overrides; pop with volume/master sliders. Lucky chimes replace pops at 0.35 volume; suppression or missing chime falls back to pop. Gold pops emit 16 sparks; sparkle boost emits 8 pink sparks. No gold payout flourish after daily cap. WPF `Services/BubbleService.cs:2191` + `Services/BubbleService.cs:4401`. Rows: `feat-bubble-pop`.
+4. Pop across a 100-bubble milestone: expect one sparkle point; at 1000 expect Pop the Thought unlock. Counts flush every 50 pops and persist after restart. Quests and haptics still receive each pop once even at daily XP cap. WPF `Services/Progression/AchievementService.cs:405`. Rows: `feat-bubble-pop`.
+5. Stop/panic during an ambient/Chaos field: expect all relevant bubbles cleared and no queued heavy trigger after stop. WPF `Services/BubbleService.cs:827`. Rows: `feat-bubble-pop`.

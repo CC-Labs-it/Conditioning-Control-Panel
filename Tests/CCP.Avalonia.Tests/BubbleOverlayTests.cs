@@ -16,6 +16,75 @@ namespace CCP.Avalonia.Tests;
 /// from the daily bucket; a press beside it pops nothing.</summary>
 public sealed class BubbleOverlayTests
 {
+    [Fact]
+    public void Chaos_teardown_preserves_ambient_effect_bubbles()
+    {
+        var ambient = new AmbientBubble { AmbientTrigger = true, Spec = AmbientBubbleTriggers.Build("pink", "Mixed") };
+        var chaos = new AmbientBubble { Spec = AmbientBubbleTriggers.Build("pink", "Mixed") };
+        try
+        {
+            BubbleOverlay.Field.Bubbles.Add(ambient); BubbleOverlay.Field.Bubbles.Add(chaos);
+            Assert.Equal(1, BubbleOverlay.ChaosCount);
+            BubbleOverlay.EndChaos();
+            Assert.Contains(ambient, BubbleOverlay.Field.Bubbles);
+            Assert.DoesNotContain(chaos, BubbleOverlay.Field.Bubbles);
+        }
+        finally { BubbleOverlay.Field.Bubbles.Clear(); }
+    }
+
+    [Fact]
+    public void Pop_sound_resolves_mod_override_and_suppressed_lucky_falls_back()
+    {
+        var dir = System.IO.Directory.CreateTempSubdirectory("ccp-bubble-sound-");
+        var path = System.IO.Path.Combine(dir.FullName, "cue.wav");
+        System.IO.File.WriteAllBytes(path, new byte[0]);
+        var previous = CoreModArt.AudioOverridePathProvider;
+        var requests = new System.Collections.Generic.List<string>();
+        try
+        {
+            CoreModArt.AudioOverridePathProvider = cue => { requests.Add(cue); return path; };
+            Assert.Equal((path, true), BubbleOverlay.ResolvePopSound(true, false, new System.Random(1)));
+            Assert.StartsWith("chime", requests[0]);
+            requests.Clear();
+            Assert.Equal((path, false), BubbleOverlay.ResolvePopSound(true, true, new System.Random(1)));
+            Assert.StartsWith("bubbles/Pop", requests[0]);
+            requests.Clear();
+            CoreModArt.AudioOverridePathProvider = cue => { requests.Add(cue); return cue.StartsWith("chime") ? path + ".missing" : path; };
+            Assert.Equal((path, false), BubbleOverlay.ResolvePopSound(true, false, new System.Random(1)));
+            Assert.Equal(2, requests.Count);
+        }
+        finally { CoreModArt.AudioOverridePathProvider = previous; dir.Delete(true); }
+    }
+
+    [Fact]
+    public async Task Trigger_pop_fires_payload_and_pays_once_even_when_reentered()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var settings = CoreSettings.Current;
+            var (day, paid) = (settings.AmbientBubbleXpDayKey, settings.AmbientBubbleXpPaidToday);
+            var firer = global::ConditioningControlPanel.Services.Chaos.EffectPayload.Firer;
+            var fires = 0;
+            try
+            {
+                settings.AmbientBubbleXpDayKey = "";
+                global::ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = _ => fires++;
+                var b = new AmbientBubble { AmbientTrigger = true, Spec = AmbientBubbleTriggers.Build("pink", "Mixed") };
+                Assert.NotNull(b.Spec);
+                BubbleOverlay.Pop(b);
+                BubbleOverlay.Pop(b);
+                Assert.Equal(1, fires);
+                Assert.Equal(5, AmbientBubbleXp.PaidToday(settings));
+            }
+            finally
+            {
+                global::ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = firer;
+                settings.AmbientBubbleXpDayKey = day; settings.AmbientBubbleXpPaidToday = paid;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     /// <summary>WPF BubbleService.cs:221 LoadBubbleImage: each Start re-resolves bubble.png through the
     /// active mod, so after a mod switch the next start draws the new mod's sprite, not the cached one.</summary>
     [Fact]

@@ -132,7 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // The ambient game stops mid-run: its bubbles go, the run keeps the windows.
                 _spawnTimer?.Stop();
                 _spawnTimer = null;
-                Field.Bubbles.RemoveAll(b => b.Spec == null);
+                Field.Bubbles.RemoveAll(b => b.Spec == null || b.AmbientTrigger);
                 _chaosOpenedWindows = true;
                 foreach (var w in Windows) w.Sync();
                 if (wasRunning) App.DiscordRpc?.SetIdleActivity();   // WPF BubbleService.cs:853
@@ -166,7 +166,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // Outside sessions, bubbles are always clickable (no UI toggle exists for the setting).
             var clickable = !CoreSession.IsSessionRunning || s.BubblesClickable;
             var mod = (CoreMods.ActiveModTokenProvider?.Invoke() as ModManifest)?.BubbleScale;
-            Field.Bubbles.Add(AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable));
+            var spec = AmbientBubbleTriggers.Roll(s, Field.Random,
+                Field.Bubbles.Count(b => b.AmbientTrigger || b.Spec is { IsLive: false }), AmbientBubbleMotionRules.AnyV2Owned);
+            var bubble = spec == null
+                ? AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable)
+                : AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
+            if (spec != null) bubble.SetAmbientTrigger(s.BubbleSpeedBoost);
+            bubble.Clickable = clickable;
+            Field.Bubbles.Add(bubble);
             RequestFrame();
         }
 
@@ -207,7 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Live (not popping) chaos bubbles: WPF ActiveBubbles during a run.</summary>
         internal static int ChaosCount
         {
-            get { var n = 0; foreach (var b in Field.Bubbles) if (b.Spec != null && !b.Popping) n++; return n; }
+            get { var n = 0; foreach (var b in Field.Bubbles) if (b.Spec != null && !b.AmbientTrigger && !b.Popping) n++; return n; }
         }
 
         /// <summary>WPF BeginChaosMode: chaos pops go to <paramref name="onPop"/>; opens the windows
@@ -242,7 +249,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _chaosCanChannel = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
             Field.Held = false;
-            Field.Bubbles.RemoveAll(b => b.Spec != null);
+            Field.Bubbles.RemoveAll(b => b.Spec != null && !b.AmbientTrigger);
             if (_chaosOpenedWindows) { Stop(); return; }
             foreach (var w in Windows) w.Sync();
         }
@@ -279,7 +286,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF AwardAmbientPop, head half: sound, XP, quest credit.</summary>
         internal static void Pop(AmbientBubble b)
         {
-            if (b.Spec != null) { PopChaos(b); return; }
+            if (b.Popping) return;
+            if (b.Spec != null && !b.AmbientTrigger) { PopChaos(b); return; }
             var s = CoreSettings.Current;
             var paid = Field.Pop(b, s);
             if (paid > 0) CoreProgression.AddXP(paid, "Bubble");
@@ -287,15 +295,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             App.NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureBubbles);   // WPF OnBubblePopped
             var master = s.MasterVolume / 100f;
             var vol = (float)Math.Pow(master * (s.BubblesVolume / 100f), 1.5);
-            var dir = Path.Combine(AppContext.BaseDirectory, "Resources", "sounds");
-            var path = b.Lucky
-                ? Path.Combine(dir, $"chime{Field.Random.Next(1, 4)}.mp3")   // lucky: a chime replaces the pop, at 0.35x
-                : Path.Combine(dir, "bubbles", new[] { "Pop.mp3", "Pop2.mp3", "Pop3.mp3" }[Field.Random.Next(3)]);
-            if (b.Lucky) vol *= 0.35f;
-            CoreAudio.PlayOneShot(path, Math.Min(vol, 1f), "bubble-pop");
-            try { App.Quests?.TrackBubblePopped(); } catch (Exception ex) { Log.Debug("bubble quest credit: {E}", ex.Message); }
-            _ = CoreHaptics.Service?.BubblePopAsync();   // WPF BubbleService.cs:1089
+            var (path, chime) = ResolvePopSound(b.Lucky, s.SuppressPerkNotifications, Field.Random);
+            if (chime) vol *= 0.35f;
+            if (File.Exists(path)) CoreAudio.PlayOneShot(path, Math.Min(vol, 1f), "bubble-pop");
             try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("bubble popped handler: {E}", ex.Message); }   // WPF OnBubblePopped
+            App.Achievements?.TrackBubblePopped();
+            try { App.Quests?.TrackBubblePopped(); } catch (Exception ex) { Log.Debug("bubble quest credit: {E}", ex.Message); }
+            if (b.AmbientTrigger && b.Spec?.Payload is { } payload)
+            {
+                // ponytail: heavy effects return the click first and never stack over video/cascade.
+                // WPF's deferred cascade queue is still missing; leave this explicit in the ledger.
+                var heavy = payload.Kind is Services.Chaos.EffectBubblePayloadKind.Video or Services.Chaos.EffectBubblePayloadKind.HtLink;
+                void Fire()
+                {
+                    if (heavy && (CoreEngine.Video?.IsPlaying == true || Views.Chaos.ChaosGifCascadeOverlay.IsRaining)) return;
+                    try { payload.Fire(); } catch (Exception ex) { Log.Warning(ex, "Ambient bubble payload failed"); }
+                }
+                if (heavy) Dispatcher.UIThread.Post(() => { if (IsRunning) Fire(); }, DispatcherPriority.Background);
+                else Fire();
+            }
+            _ = CoreHaptics.Service?.BubblePopAsync();   // WPF BubbleService.cs:1089
+        }
+
+        internal static (string Path, bool Chime) ResolvePopSound(bool lucky, bool suppressed, Random random)
+        {
+            string Resolve(string cue) => CoreModArt.AudioOverridePath(cue)
+                ?? Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", cue);
+            if (lucky && !suppressed)
+            {
+                var chime = Resolve($"chime{random.Next(1, 4)}.mp3");
+                if (File.Exists(chime)) return (chime, true);
+            }
+            return (Resolve("bubbles/" + new[] { "Pop.mp3", "Pop2.mp3", "Pop3.mp3" }[random.Next(3)]), false);
         }
 
         internal static void OnFrame(TimeSpan now)
@@ -501,6 +532,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     using (dc.PushTransform(m))
                     using (dc.PushOpacity(Math.Clamp(b.Fade, 0, 1)))
                     {
+                        if (b.Lucky)
+                        {
+                            // ponytail: concentric alpha rings avoid a per-bubble blur Effect.
+                            for (var ring = 1; ring <= 5; ring++)
+                                using (dc.PushOpacity(0.16 / ring))
+                                    dc.DrawEllipse(null, new Pen(Brushes.Gold, 3), new Point(cx, cy), size / 2 + ring * 3, size / 2 + ring * 3);
+                        }
+                        foreach (var sp in b.Sparkles)
+                            using (dc.PushOpacity(Math.Clamp(sp.Alpha, 0, 1)))
+                                dc.DrawEllipse(b.Lucky ? Brushes.Gold : Brushes.HotPink, null,
+                                    new Point(cx + sp.X * k, cy + sp.Y * k), sp.Size * k / 2, sp.Size * k / 2);
                         if (b.Spec != null)   // chaos bubble: its variant tint under the sprite
                         {
                             var (fill, pen) = TintPaint(b.Spec.Tint);
