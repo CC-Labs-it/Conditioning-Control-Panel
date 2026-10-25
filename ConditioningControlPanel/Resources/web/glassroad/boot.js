@@ -425,7 +425,9 @@ async function boot(course, options, lifetime, isCurrent) {
   lifetime.defer(() => cueBurst.dispose());
   Object.defineProperty(debug, 'cueBurst', { get: () => cueBurst.stats });
   Object.defineProperty(debug, 'cueVeils', { get: () => world.veils.stats });
-  Object.defineProperty(debug, 'marquees', { get: () => world.marquees.stats });
+  Object.defineProperty(debug, 'marquees', { get: () => world.marquees?.stats || null });
+  Object.defineProperty(debug, 'cueKit', { get: () => ({ shift: world.cueShift?.stats, gantries: world.gantries?.stats, bar: world.cueBar?.stats,
+    particles: world.cueParticles?.stats }) });
   lifetime.defer(() => musicEdges.dispose());
   Object.defineProperty(debug, 'musicEdges', { get: () => musicEdges.stats });
   bus.on('gate-pass', (g) => { if (state === 'race' && !paused) gateScreen.play(g.params, 1); });
@@ -1145,9 +1147,11 @@ async function boot(course, options, lifetime, isCurrent) {
     if (DEV) debug.songS = songS;
     const cueEpoch = cueView?.revision ?? -1;
     if (cueRunSeen !== songCues || cueRevision !== cueEpoch) {
-      cueBurst.clear(); world.veils.clear(); world.marquees.clear(); cueRunSeen = songCues; cueRevision = cueEpoch;
+      cueBurst.clear(); world.veils.clear(); world.marquees?.clear();
+      for (const x of [world.cueShift, world.cueParticles, world.gantries, world.cueBar]) x?.clear();
+      cueRunSeen = songCues; cueRevision = cueEpoch;
     }
-    for (const cue of cueView?.fired || NO_WORDS) if (cue.kind === 'VEIL') cueBurst.fire(cue);
+    for (const cue of cueView?.fired || NO_WORDS) if (cue.kind === 'VEIL' || (cue.kind === 'BURST' && cue.params?.variant === 'cards')) cueBurst.fire(cue);
     cueBurst.update(frameDt, { paused: frozen, aspect: renderer.aspect, screen: effects.screen });
     const wordLive = words && song ? words.update(songS,
       { s: pv[S.s], lat: pv[S.lateral], speedMps: Math.max(0, pv[S.speedPct]) * feel.get('speed.topMps') }) : NO_WORDS;
@@ -1177,7 +1181,8 @@ async function boot(course, options, lifetime, isCurrent) {
     world.update({ kart: P.view, karts: kartViews, fx: viewFx, timeS: renderTime, beat: clock.beat,
       raceTimeS: racers.clockS, sectionIdx: viewSection, items: iv, mode, camera: cam.camera, paused, song, songS, audioReactive, words: wordLive, beatSong,
       airWords: inRace && !online ? airWords : null,
-      songCues: cueView?.live || NO_WORDS, cueGentle: cueSafety.on,
+      songCues: cueView?.live || NO_WORDS, cueGentle: cueSafety.on, songCueList: songCues?.cues || NO_WORDS,
+      cueFired: cueView?.fired || NO_WORDS, cueSpeed: cueView?.speed || 0, cueSolo: !online,
       scanTimeS: sc.timeS, scanBpm: sc.bpm, scanReady: scan.ready, perfumeReady: perfume.ready });
     if (BOT && song && world.musicRoad) {                         //    dev only: the boot check reads the music road
       const m = world.musicRoad.frame;
