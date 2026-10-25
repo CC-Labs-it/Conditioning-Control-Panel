@@ -113,13 +113,18 @@ export function howtoPanels(devices = {}) {
   ];
 }
 
-/** The card's inner html: three panels, the go line, the don't-show-again switch. */
+/** The card's inner html: three panels, camera hint, the go line and don't-show-again switch. */
 export function howtoHtml(devices = {}, { off = false } = {}) {
   const v = deviceView(devices || {}), p = padLabels(v.family, v.profile);
   const panels = howtoPanels(devices).map((x) => '<li class="hw-panel" style="--hw-i:' + (x.n - 1) + '"><span class="hw-n" aria-hidden="true">' + x.n +
     '</span>' + x.art + '<p class="hw-cap">' + esc(x.cap) + '</p></li>').join('');
   const goLabel = v.last === 'touch' ? 'Start' : 'Press ' + throttleName(v, p) + ' to start';
+  const viewLabel = v.last === 'pad' ? p.rs : v.last === 'touch' ? 'Tap View' : 'C';
+  const rearLabel = v.last === 'pad' ? v.family === 'xbox' ? 'Hold left stick in' : 'Hold ' + p.ls
+    : v.last === 'touch' ? 'Hold Rear' : 'Hold V';
   return '<ol class="hw-panels" data-last="' + v.last + '">' + panels + '</ol>' +
+    '<p class="c-hint hw-camera" style="margin:0 0 14px"><strong>' + esc(viewLabel) + '</strong>: chase / first person. ' +
+    '<strong>' + esc(rearLabel) + '</strong>: look behind.</p>' +
     '<div class="hw-foot"><button type="button" class="c-btn hot hw-go" data-act="howto-go">' + esc(goLabel) + '</button>' +
     '<button type="button" class="c-btn c-tog hw-off' + (off ? ' on' : '') + '" data-act="howto-off" aria-pressed="' + !!off + '">Don&#39;t show again</button></div>';
 }
