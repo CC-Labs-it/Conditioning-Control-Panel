@@ -71,7 +71,11 @@ public sealed class ConversationRulesTests
     [Theory]
     [InlineData(TurnKind.UserChat, true)]
     [InlineData(TurnKind.AssistantChat, true)]
+    [InlineData(TurnKind.AmbientEvent, false)]
+    [InlineData(TurnKind.AmbientReply, true)]
     [InlineData(TurnKind.BarkEcho, false)]
+    [InlineData(TurnKind.SystemNote, false)]
+    [InlineData(TurnKind.TubeLine, true)]
     public void OnlyChatTurnsShow(TurnKind kind, bool expected) => Assert.Equal(expected, Rules.Shows(kind));
 
     [Theory]

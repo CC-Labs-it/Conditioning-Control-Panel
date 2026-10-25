@@ -1367,9 +1367,15 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             return windowMs > 0 && (DateTime.UtcNow - _lastAiBubbleUtc).TotalMilliseconds < windowMs;
         }
 
-        /// <summary>The user's avatar mute. WPF mirrors this setting into a field the quick menu
-        /// flips; reading the setting itself is the same answer with nothing to keep in sync.</summary>
-        public bool IsMuted => CoreSettings.Current.AvatarMuted;
+        private bool _windowMuted;
+        /// <summary>Saved voice mute plus the shell's temporary attached-minimize mute.</summary>
+        public bool IsMuted => CoreSettings.Current.AvatarMuted || _windowMuted;
+
+        internal void SetWindowMute(bool muted)
+        {
+            _windowMuted = muted;
+            UpdateQuickMenuState();
+        }
 
         /// <summary>
         /// Auto-hide, at the user's Bubble Duration (1-10s). A long line gets an ESL-friendly
@@ -1427,9 +1433,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     }
                     if (!File.Exists(phraseAudioPath)) return;
                     handedOff = true;
-                    _stopSpoken();   // WPF PlaySpokenAudio (Speech.cs:1896): cut the previous line, no overlap
+                    // Publish the new clip BEFORE cutting the old one: the cut fires the old line's
+                    // onSpoken, and a voice-host waiter resuming on the pool must already see this clip.
                     var clipDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                     SpokenAudioDone = clipDone.Task;
+                    _stopSpoken();   // WPF PlaySpokenAudio (Speech.cs:1896): cut the previous line, no overlap
                     _stopSpoken = CoreAudio.PlayStoppable(phraseAudioPath!, curved * (barkVoice ? 0.85f : 0.56f),
                                           barkVoice ? "bark-voice" : "phrase-audio",
                                           onFinished: () => { clipDone.TrySetResult(); onSpoken?.Invoke(); });

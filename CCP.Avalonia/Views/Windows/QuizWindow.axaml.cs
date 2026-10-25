@@ -150,9 +150,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// list. Internal, so no production caller can ship it.</summary>
         internal QuizWindow() : this(false, false) { }
 
+        // WPF reads Application.Current.Windows.OfType<QuizWindow>(); Avalonia has no such list.
+        private static readonly System.Collections.Generic.List<QuizWindow> _shown = new();
+
+        /// <summary>Close every open quiz (WPF MainWindow.WindowChrome.cs:349, the X -> tray branch).</summary>
+        public static void CloseAll()
+        {
+            foreach (var w in _shown.ToArray()) try { w.Close(); } catch { }
+        }
+
         public QuizWindow(bool fullscreen, bool playDrone)
         {
             IsOpen = true;
+            Opened += (_, _) => _shown.Add(this);
 
             // ponytail: needs App.AvatarWindow.IsMuted / SetMuteAvatar - there is NO
             // ConditioningControlPanel/Windows/AvatarWindow.xaml.cs, which is what this note used
@@ -1390,6 +1400,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         protected override void OnClosed(EventArgs e)
         {
             IsOpen = false;
+            _shown.Remove(this);
 
             _loadingDotsTimer.Stop();
             _gradientTimer.Stop();

@@ -86,7 +86,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     await _voiceConfirmationSpoken.WaitAsync(TimeSpan.FromMilliseconds(5800), ct).ConfigureAwait(false);
                     // WPF polls IsSpeakingAudio, not just its own line: a bark that cut the confirmation
                     // is still her voice, so follow whatever clip is now in the air, within the same cap.
-                    while (_avatarTubeWindow?.SpokenAudioDone is { IsCompleted: false } speaking)
+                    // Read it on the UI thread: the cut completes the old clip mid-GigglePriority, before the
+                    // new clip is published, so a pool-thread read could see the stale (finished) clip.
+                    while (await Dispatcher.UIThread.InvokeAsync<Task?>(() => _avatarTubeWindow?.SpokenAudioDone)
+                               .GetTask().ConfigureAwait(false) is { IsCompleted: false } speaking)
                     {
                         var left = deadline - DateTime.UtcNow;
                         if (left <= TimeSpan.Zero) break;

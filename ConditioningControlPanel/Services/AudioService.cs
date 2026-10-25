@@ -51,7 +51,7 @@ namespace ConditioningControlPanel.Services
         // Periodic re-enumeration during duck window — catches sessions that appear AFTER Duck() ran
         // (e.g. Discord notification sound, Steam friend ping). Without this they play un-ducked.
         private System.Threading.Timer? _duckRescanTimer;
-        private const int DuckRescanIntervalMs = 2_500;
+        private const int DuckRescanIntervalMs = CoreAudio.DuckRescanIntervalMs;
 
         // Sessions that couldn't be restored at Unduck time (PID gone, app silent). Retried on a timer
         // so when the app starts producing audio again its volume gets restored — fixes "stuck at 0%".
@@ -459,6 +459,8 @@ namespace ConditioningControlPanel.Services
         // Crash recovery file for ducking state
         private static readonly string DuckingRecoveryFile = Path.Combine(
             App.UserDataPath, "ducking_recovery.json");
+        private static readonly string DuckingRecoveryNamesFile = Path.Combine(
+            App.UserDataPath, "ducking_recovery_names.json");
 
         #endregion
 
@@ -702,40 +704,58 @@ namespace ConditioningControlPanel.Services
 
                 var json = File.ReadAllText(DuckingRecoveryFile);
                 var savedVolumes = JsonConvert.DeserializeObject<Dictionary<int, float>>(json);
+                Dictionary<int, string>? savedNames = null;
+                try
+                {
+                    if (File.Exists(DuckingRecoveryNamesFile))
+                        savedNames = JsonConvert.DeserializeObject<Dictionary<int, string>>(File.ReadAllText(DuckingRecoveryNamesFile));
+                }
+                catch (Exception ex) { Diag.Swallowed(ex, "an unreadable names file only loses the name fallback"); }
 
                 if (savedVolumes != null && savedVolumes.Count > 0)
                 {
                     using var scope = CollectRenderSessions();
                     var sessions = scope.Sessions;
 
-                    int restoredCount = 0;
+                    // PID -> name for every live session, so a stored entry finds its app again
+                    // after a restart (new PID) and never lands on a recycled PID (DuckRecoveryRule).
+                    // Our own process never matches: the file maps PIDs from the PREVIOUS run.
+                    var live = new Dictionary<int, string>();
                     for (int i = 0; i < sessions.Count; i++)
                     {
                         try
                         {
-                            var session = sessions[i];
-                            var processId = (int)session.GetProcessID;
-
-                            // Never write a stored volume onto our own session: the file maps
-                            // PIDs from the PREVIOUS run, and a recycled PID landing on us would
-                            // stamp a foreign app's volume onto our own audio at startup. The
-                            // live-duck sweeps have always had this guard; this path didn't.
-                            if (processId == Environment.ProcessId || processId == 0) continue;
-
-                            if (savedVolumes.TryGetValue(processId, out var originalVolume))
-                            {
-                                session.SimpleAudioVolume.Volume = originalVolume;
-                                restoredCount++;
-                            }
+                            var pid = (int)sessions[i].GetProcessID;
+                            if (pid != 0 && !live.ContainsKey(pid)) live[pid] = TryGetProcessName(pid);
                         }
                         catch (Exception ex) { Diag.Swallowed(ex, "the session may have ended"); }
+                    }
+
+                    int restoredCount = 0;
+                    foreach (var kv in savedVolumes)
+                    {
+                        string? name = null;
+                        savedNames?.TryGetValue(kv.Key, out name);
+                        var target = Audio.DuckRecoveryRule.Match(kv.Key, name, live, Environment.ProcessId);
+                        if (target == null) continue;
+                        for (int i = 0; i < sessions.Count; i++)
+                        {
+                            try
+                            {
+                                var session = sessions[i];
+                                if ((int)session.GetProcessID != target.Value) continue;
+                                session.SimpleAudioVolume.Volume = kv.Value;
+                                restoredCount++;
+                            }
+                            catch (Exception ex) { Diag.Swallowed(ex, "the session may have ended"); }
+                        }
                     }
 
                     App.Logger?.Information("Restored {Count} audio sessions from crash recovery", restoredCount);
                 }
 
                 // Delete recovery file after restore
-                File.Delete(DuckingRecoveryFile);
+                ClearDuckingState();
             }
             catch (Exception ex)
             {
@@ -753,8 +773,18 @@ namespace ConditioningControlPanel.Services
         {
             try
             {
+                // Every original not yet handed back: the live ducks AND the restores parked for
+                // the retry (Audio.DuckRecoveryRule). Nothing owed = no file.
                 Dictionary<int, float> snapshot;
-                lock (_lockObj) { snapshot = new Dictionary<int, float>(_originalVolumes); }
+                Dictionary<int, string> names;
+                lock (_lockObj)
+                {
+                    snapshot = Audio.DuckRecoveryRule.ToPersist(_originalVolumes, _pendingRestores);
+                    names = new Dictionary<int, string>();
+                    foreach (var pid in snapshot.Keys)
+                        if (_processNames.TryGetValue(pid, out var n) && !string.IsNullOrEmpty(n)) names[pid] = n;
+                }
+                if (snapshot.Count == 0) { ClearDuckingState(); return; }
 
                 var dir = Path.GetDirectoryName(DuckingRecoveryFile);
                 if (!string.IsNullOrEmpty(dir))
@@ -762,6 +792,8 @@ namespace ConditioningControlPanel.Services
 
                 var json = JsonConvert.SerializeObject(snapshot);
                 File.WriteAllText(DuckingRecoveryFile, json);
+                // Names beside it (the volumes file keeps its old shape for older builds).
+                File.WriteAllText(DuckingRecoveryNamesFile, JsonConvert.SerializeObject(names));
             }
             catch (Exception ex)
             {
@@ -778,6 +810,8 @@ namespace ConditioningControlPanel.Services
             {
                 if (File.Exists(DuckingRecoveryFile))
                     File.Delete(DuckingRecoveryFile);
+                if (File.Exists(DuckingRecoveryNamesFile))
+                    File.Delete(DuckingRecoveryNamesFile);
             }
             catch (Exception ex)
             {
@@ -1277,8 +1311,9 @@ namespace ConditioningControlPanel.Services
                 App.Logger?.Information("[Ducking] {Count} session(s) had no current audio at unduck — will retry restore for up to {Min} min",
                     pendingCount, RestoreRetryWindow.TotalMinutes);
 
-            // Clear crash recovery file
-            ClearDuckingState();
+            // Rewrite the crash recovery file: it is deleted only when nothing is owed. Parked
+            // restores stay in it, so an exit inside the retry window still heals at next launch.
+            SaveDuckingState();
 
             App.Logger?.Debug("Audio unducked ({Restored} restored, {Pending} deferred)",
                 restored.Count, pendingCount);
@@ -1499,7 +1534,7 @@ namespace ConditioningControlPanel.Services
                         // Skip sessions already at 0 — most likely they're sessions we ducked in a
                         // prior generation and the PID got recycled; treating their 0 as "original"
                         // would silence the app forever.
-                        if (currentVolume <= 0.001f) continue;
+                        if (CoreAudio.IsSilentForDuckRescan(currentVolume)) continue;
 
                         lock (_lockObj)
                         {
@@ -1550,10 +1585,10 @@ namespace ConditioningControlPanel.Services
 
                 if (DateTime.UtcNow > _restoreRetryDeadline)
                 {
-                    App.Logger?.Warning("[Ducking] Restore retry window expired with {Count} unrestored — giving up",
+                    // Stop retrying, but keep them: ducking_recovery.json still holds them, so the
+                    // next launch (or the next unduck's retry) can hand them back.
+                    App.Logger?.Warning("[Ducking] Restore retry window expired with {Count} unrestored — kept for the next launch",
                         _pendingRestores.Count);
-                    _pendingRestores.Clear();
-                    _processNames.Clear();
                     _restoreRetryTimer?.Dispose();
                     _restoreRetryTimer = null;
                     return;
@@ -1663,8 +1698,11 @@ namespace ConditioningControlPanel.Services
             }
 
             if (restored.Count > 0)
+            {
                 App.Logger?.Information("[Ducking] Deferred-restore: recovered volume for {Count} session(s); {Remaining} still pending",
                     restored.Count, remaining);
+                SaveDuckingState();
+            }
         }
 
         #region Sweep worker
