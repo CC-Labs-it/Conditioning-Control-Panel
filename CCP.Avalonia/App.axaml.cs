@@ -56,6 +56,9 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The presence switch moved (either surface): the other one repaints from the setting.</summary>
         internal static event Action? RichPresenceChanged;
 
+        /// <summary>The tube the countdown speaks through. Test seam: a headless app cannot swap its lifetime after init.</summary>
+        internal static Func<Views.AvatarTube.AvatarTubeWindow?> DescentTube = () => Views.AvatarTube.AvatarTubeWindow.Live;
+
         /// <summary>WPF App.xaml.cs:3126: arm before the shell; a missing tube leaves the line retryable.</summary>
         internal static void StartDescentCountdown()
         {
@@ -63,7 +66,7 @@ namespace ConditioningControlPanel.Avalonia
             {
                 Speaker = line =>
                 {
-                    if (Views.AvatarTube.AvatarTubeWindow.Live is not { } avatar) return false;
+                    if (DescentTube() is not { } avatar) return false;
                     avatar.GigglePriority(line, playSound: false, aiGenerated: false);
                     return true;
                 },

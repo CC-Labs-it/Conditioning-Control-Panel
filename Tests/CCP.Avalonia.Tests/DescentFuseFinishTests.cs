@@ -109,13 +109,13 @@ public sealed class DescentFuseFinishTests
 
         // A phase announcement repaints immediately; ticks inside a step must keep the brush.
         fuse.ApplyCeremonyAt(DateTime.UtcNow.AddHours(23).ToString("o"));
-        Assert.Equal(Color.Parse("#18182B"), Resource("DarkerBg")); // #1A1A2E, 11% toward #0A0514
-        Assert.Equal(Color.Parse("#22213D"), Resource("PanelBg"));
-        Assert.Equal(Color.Parse("#1C1B36"), Resource("SurfaceBg"));
-        Assert.Equal(Color.Parse("#43425A"), Resource("PanelAccent"));
-        Assert.Equal(Color.Parse("#59586D"), Resource("PanelAccentHover"));
-        Assert.Equal(Color.Parse("#141424"), Resource("PreviewBg"));
-        Assert.Equal(Color.Parse("#B022213D"), Resource("PanelBgTransparent"));
+        Assert.Equal(Color.Parse("#08080D"), Resource("DarkerBg")); // CCP Default #08080C, 11% toward #0A0514
+        Assert.Equal(Color.Parse("#101019"), Resource("PanelBg"));
+        Assert.Equal(Color.Parse("#0C0B13"), Resource("SurfaceBg"));
+        Assert.Equal(Color.Parse("#33333B"), Resource("PanelAccent"));
+        Assert.Equal(Color.Parse("#4B4B52"), Resource("PanelAccentHover"));
+        Assert.Equal(Color.Parse("#06060B"), Resource("PreviewBg"));
+        Assert.Equal(Color.Parse("#B0101019"), Resource("PanelBgTransparent"));
         var brush = Brush("DarkerBg");
         fuse.OnTimerTick();
         Assert.Same(brush, Brush("DarkerBg"));
@@ -125,17 +125,17 @@ public sealed class DescentFuseFinishTests
         // Same phase, different six-hour step: only a tick sees this move.
         s.DescentCeremonyAtUtc = DateTime.UtcNow.AddHours(17).ToString("o");
         fuse.OnTimerTick();
-        Assert.Equal(Color.Parse("#161528"), Resource("DarkerBg"));
+        Assert.Equal(Color.Parse("#08070E"), Resource("DarkerBg"));
         Assert.NotSame(brush, Brush("DarkerBg"));
         s.DescentCeremonyAtUtc = DateTime.UtcNow.AddHours(11).ToString("o");
         fuse.OnTimerTick();
-        Assert.Equal(Color.Parse("#151325"), Resource("DarkerBg"));
+        Assert.Equal(Color.Parse("#09070F"), Resource("DarkerBg"));
         s.DescentCeremonyAtUtc = DateTime.UtcNow.AddHours(5).ToString("o");
         fuse.OnTimerTick();
-        Assert.Equal(Color.Parse("#131123"), Resource("DarkerBg"));
+        Assert.Equal(Color.Parse("#090710"), Resource("DarkerBg"));
 
         fuse.ApplyCeremonyAt(DateTime.UtcNow.AddSeconds(-1).ToString("o"));
-        Assert.Equal(Color.Parse("#131123"), Resource("DarkerBg")); // hold through zero
+        Assert.Equal(Color.Parse("#090710"), Resource("DarkerBg")); // hold through zero
         fuse.ApplyCeremonyAt(DateTime.UtcNow.AddHours(-13).ToString("o"));
         Assert.Equal(original, Resource("DarkerBg")); // the existing Core twelve-hour release
         fuse.ApplyCeremonyAt(DateTime.UtcNow.AddHours(5).ToString("o"));
@@ -168,10 +168,9 @@ public sealed class DescentFuseFinishTests
     [Fact]
     public Task RealPhaseLinesRetry_SpeakOnce_StopAtTerminal_AndUseTheExistingPanicSurface() => Run(shell =>
     {
-        var app = Application.Current!;
-        var lifetime = app.ApplicationLifetime;
-        using var desktop = new TubeLifetime(() => shell.Tube);
-        app.ApplicationLifetime = desktop;
+        var liveTube = AvApp.DescentTube;
+        // What Live answers on a desktop: the shown tube only (the lifetime is fixed once a headless app inits).
+        AvApp.DescentTube = () => shell.Tube is { IsVisible: true } shown ? shown : null;
         var oneShot = CoreAudio.PlayOneShotProvider;
         var stoppable = CoreAudio.PlayStoppableProvider;
         var sounds = 0;
@@ -225,17 +224,10 @@ public sealed class DescentFuseFinishTests
             shell.Tube?.CloseSafe();
             CoreAudio.PlayOneShotProvider = oneShot;
             CoreAudio.PlayStoppableProvider = stoppable;
-            app.ApplicationLifetime = lifetime;
+            AvApp.DescentTube = liveTube;
         }
         return Task.CompletedTask;
     });
-
-    // Supply the actual shown tube to Live without starting App.StartDesktop or a second dispatcher.
-    private sealed class TubeLifetime(Func<Window?> tube) : ClassicDesktopStyleApplicationLifetime, IClassicDesktopStyleApplicationLifetime
-    {
-        System.Collections.Generic.IReadOnlyList<Window> IClassicDesktopStyleApplicationLifetime.Windows =>
-            tube() is { IsVisible: true } window ? new[] { window } : Array.Empty<Window>();
-    }
 
     private static Task Run(Func<MainShellWindow, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
