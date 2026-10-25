@@ -214,11 +214,14 @@
                       <TextBlock Text="{loc:Str label_daily_quest}" Foreground="#FFD700"
                                  FontSize="16" FontWeight="Bold" Margin="8,0,0,0"
                                  VerticalAlignment="Center"/>
-                      <Border x:Name="DailyQuestCounterBadge" Background="#3D3D60" CornerRadius="8"
-                              Padding="6,2" Margin="8,0,0,0" VerticalAlignment="Center">
-                        <TextBlock x:Name="TxtDailyQuestCounter" Text="0/3"
+                      <Grid Margin="8,0,0,0" VerticalAlignment="Center">
+                        <Border x:Name="DailyCounterDrop" CornerRadius="8" Margin="1,3,1,-3"
+                                IsHitTestVisible="False" Background="{StaticResource DepthDropBand}"/>
+                        <Border x:Name="DailyQuestCounterBadge" Background="#3D3D60" CornerRadius="8"
+                              BorderBrush="{StaticResource DepthRaisedBevel}" BorderThickness="1">
+                        <Grid><Border CornerRadius="7" IsHitTestVisible="False" Background="{StaticResource DepthRaisedSheen}"/><TextBlock Margin="6,2" x:Name="TxtDailyQuestCounter" Text="0/3"
                                    Foreground="#FFD700" FontSize="11" FontWeight="Bold"/>
-                      </Border>
+                      </Grid></Border></Grid>
                     </StackPanel>
                     <TextBlock Text="{loc:Str label_resets_at_midnight}"
                                Foreground="{DynamicResource TextMutedBrush}" FontSize="11"
@@ -250,12 +253,35 @@
 
                   <!-- The three seats. CAPPED AT 800 (3 x ~257 + 2 gutters): stretching them
                        letterboxes each quest's square 256x256 art. -->
+                  <Border x:Name="DailyWell" CornerRadius="12" Padding="8,8,8,12" MaxWidth="816"
+                          HorizontalAlignment="Center" Background="{StaticResource DepthWellFloorBrush}">
+                    <Grid>
+                      <Border Height="9" VerticalAlignment="Top" Margin="-8,-8,-8,0" CornerRadius="12,12,0,0"
+                              IsHitTestVisible="False" Background="{StaticResource DepthWellTop}"/>
+                      <Border Width="6" HorizontalAlignment="Left" Margin="-8,-8,0,-12" CornerRadius="12,0,0,12"
+                              IsHitTestVisible="False" Background="{StaticResource DepthWellLeft}"/>
+                      <Rectangle Height="1" VerticalAlignment="Bottom" Margin="4,0,4,-12"
+                                 IsHitTestVisible="False" Fill="{StaticResource DepthWellFoot}"/>
                   <Grid x:Name="DailyCardsGrid" MaxWidth="800" HorizontalAlignment="Stretch"
                         ColumnDefinitions="*,14,*,14,*">
-                    <ctrl:DailyQuestCard x:Name="DailyCard0" Grid.Column="0"/>
-                    <ctrl:DailyQuestCard x:Name="DailyCard1" Grid.Column="2"/>
-                    <ctrl:DailyQuestCard x:Name="DailyCard2" Grid.Column="4"/>
+                    <Grid x:Name="DailySeat0" Grid.Column="0">
+                      <Border x:Name="DailySeatBand0" Height="12" VerticalAlignment="Bottom" Margin="6,0,6,-8"
+                              CornerRadius="6" IsHitTestVisible="False" Background="{StaticResource DepthFloatBand}"/>
+                      <ctrl:DailyQuestCard x:Name="DailyCard0"/>
+                    </Grid>
+                    <Grid x:Name="DailySeat1" Grid.Column="2">
+                      <Border x:Name="DailySeatBand1" Height="12" VerticalAlignment="Bottom" Margin="6,0,6,-8"
+                              CornerRadius="6" IsHitTestVisible="False" Background="{StaticResource DepthFloatBand}"/>
+                      <ctrl:DailyQuestCard x:Name="DailyCard1"/>
+                    </Grid>
+                    <Grid x:Name="DailySeat2" Grid.Column="4">
+                      <Border x:Name="DailySeatBand2" Height="12" VerticalAlignment="Bottom" Margin="6,0,6,-8"
+                              CornerRadius="6" IsHitTestVisible="False" Background="{StaticResource DepthFloatBand}"/>
+                      <ctrl:DailyQuestCard x:Name="DailyCard2"/>
+                    </Grid>
                   </Grid>
+                    </Grid>
+                  </Border>
 
                   <!-- All Daily Quests Completed: a ribbon UNDER the finished board, not a card
                        that replaces it - three stamped cards are worth looking at. -->
@@ -304,7 +330,11 @@
                                Margin="0,3,0,0"/>
                   </StackPanel>
 
+                  <Grid x:Name="WeeklySeat">
+                    <Border x:Name="WeeklyFloatBand" Height="12" VerticalAlignment="Bottom" Margin="6,0,6,-8"
+                            CornerRadius="6" IsHitTestVisible="False" Background="{StaticResource DepthFloatBand}"/>
                   <Border x:Name="WeeklyQuestCard" Background="{DynamicResource PanelBgBrush}"
+                          BorderBrush="{StaticResource DepthFloatRim}" BorderThickness="1"
                           CornerRadius="10" ClipToBounds="True">
                     <Grid RowDefinitions="Auto,Auto">
                       <!-- ART. Square, like the daily frames: every file in Resources/quests is
@@ -331,20 +361,26 @@
                           <!-- Completed. Under the caption, so a finished weekly still says which
                                weekly it was. -->
                           <Border x:Name="WeeklyCompletedOverlay" Background="#992D4A2D" IsVisible="False">
-                            <fx:IconGlyph Kind="Checkmark" Size="72" Foreground="#00E676"
-                                          HorizontalAlignment="Center"
-                                          VerticalAlignment="Center" Margin="0,0,0,38">
-                              <fx:IconGlyph.Effect>
-                                <DropShadowEffect Color="Black" BlurRadius="8" OffsetX="0" OffsetY="2"/>
-                              </fx:IconGlyph.Effect>
-                            </fx:IconGlyph>
+                            <Grid x:Name="WeeklyDoneStamp" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Margin="0,0,0,38" RenderTransformOrigin="50%,50%" IsHitTestVisible="False">
+                              <Grid.RenderTransform><RotateTransform Angle="-6"/></Grid.RenderTransform>
+                              <Border CornerRadius="9" BorderBrush="#00E676" BorderThickness="3" Background="#D90B1A12"/>
+                              <Border CornerRadius="6" Margin="3" Background="{StaticResource DepthPressedShade}"/>
+                              <Border CornerRadius="6" Margin="5" BorderBrush="#6600E676" BorderThickness="1"/>
+                              <StackPanel Orientation="Horizontal" Margin="18,6,20,8">
+                                <fx:IconGlyph Kind="Checkmark" Size="34" Foreground="#00E676" VerticalAlignment="Center"/>
+                                <TextBlock Text="{loc:Str btn_done}" Foreground="#00E676" FontSize="26"
+                                           FontWeight="ExtraBold" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                              </StackPanel>
+                            </Grid>
                           </Border>
 
                           <!-- XP, on the art, same corner the daily cards use. -->
-                          <Border Background="#B01A1A2E" CornerRadius="9" Padding="7,2" Margin="8"
-                                  HorizontalAlignment="Right" VerticalAlignment="Top"
-                                  IsHitTestVisible="False">
-                            <StackPanel Orientation="Horizontal">
+                          <Grid Margin="8" HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="False">
+                            <Border x:Name="WeeklyXpDrop" CornerRadius="9" Margin="1,3,1,-3"
+                                    IsHitTestVisible="False" Background="{StaticResource DepthDropBand}"/>
+                          <Border x:Name="WeeklyXpChip" BorderBrush="{StaticResource DepthRaisedBevel}" BorderThickness="1" Background="#B01A1A2E" CornerRadius="9">
+                            <Grid><Border CornerRadius="8" IsHitTestVisible="False" Background="{StaticResource DepthRaisedSheen}"/><StackPanel Orientation="Horizontal" Margin="7,2">
                               <fx:IconGlyph x:Name="WeeklyXpIcon" Kind="Gift" Size="11"
                                             Foreground="{DynamicResource PinkBrush}" Margin="0,0,4,0"/>
                               <TextBlock x:Name="TxtWeeklyXP" Text="{loc:StrBare label_0_xp}"
@@ -356,8 +392,9 @@
                               <TextBlock x:Name="TxtWeeklyRerollBonus" Text=""
                                          Foreground="#7BC8F6" FontSize="10" FontWeight="Bold"
                                          Margin="4,0,0,0" VerticalAlignment="Center" IsVisible="False"/>
-                            </StackPanel>
+                            </StackPanel></Grid>
                           </Border>
+                          </Grid>
 
                           <!-- CAPTION -->
                           <StackPanel VerticalAlignment="Bottom" Margin="11,0,11,9" IsHitTestVisible="False">
@@ -378,10 +415,25 @@
                       <!-- BODY: the bar and its count on one line, same as a daily card. -->
                       <Grid Grid.Row="1" Margin="11,9,11,11" ColumnDefinitions="*,Auto">
                         <Border x:Name="WeeklyProgressTrack" Grid.Column="0"
-                                Background="{DynamicResource DarkerBgBrush}" CornerRadius="4"
+                                Background="{StaticResource DepthWellFloorBrush}" CornerRadius="4"
                                 Height="10" VerticalAlignment="Center" Margin="0,0,10,0">
-                          <Border x:Name="WeeklyProgressFill" Background="#9370DB"
-                                  CornerRadius="4" HorizontalAlignment="Left" Width="0"/>
+                          <Grid>
+                            <Border x:Name="WeeklyGrooveTop" Height="4" VerticalAlignment="Top" CornerRadius="4,4,0,0"
+                                    IsHitTestVisible="False" Background="{StaticResource DepthWellTop}"/>
+                            <Border Width="3" HorizontalAlignment="Left" CornerRadius="4,0,0,4"
+                                    IsHitTestVisible="False" Background="{StaticResource DepthWellLeft}"/>
+                            <Border x:Name="WeeklyProgressFill" Background="#9370DB" CornerRadius="4"
+                                    HorizontalAlignment="Left" Width="0">
+                              <Grid>
+                                <Border x:Name="WeeklyTubeGloss" CornerRadius="4" IsHitTestVisible="False"
+                                        Background="{StaticResource DepthTubeGloss}"/>
+                                <Ellipse x:Name="WeeklyTubeBead" Width="8" Height="8" HorizontalAlignment="Right"
+                                         Margin="0,0,1,0" IsVisible="False" IsHitTestVisible="False" Fill="{StaticResource DepthTubeBead}"/>
+                              </Grid>
+                            </Border>
+                            <Rectangle Height="1" VerticalAlignment="Bottom" Margin="3,0,3,0"
+                                       IsHitTestVisible="False" Fill="{StaticResource DepthWellFoot}"/>
+                          </Grid>
                         </Border>
                         <TextBlock x:Name="TxtWeeklyProgress" Grid.Column="1" Text="0 / 0"
                                    Foreground="#9370DB" FontSize="12" FontWeight="Bold"
@@ -389,16 +441,25 @@
                       </Grid>
                     </Grid>
                   </Border>
+                  </Grid>
 
                   <!-- Reroll. Stretched: at 300 wide a left-aligned button leaves a lopsided gap
                        the dailies do not have. -->
-                  <Button x:Name="BtnRerollWeekly" Theme="{StaticResource OutlineButton}"
-                          FontSize="11" Padding="8,4" Margin="0,10,0,0"
+                  <Grid Margin="0,10,0,0">
+                    <Border x:Name="WeeklyRerollDrop" CornerRadius="8" Margin="1,3,1,-3"
+                            IsHitTestVisible="False" Background="{StaticResource DepthDropBand}"/>
+                    <Grid x:Name="WeeklyRerollFace">
+                      <Button x:Name="BtnRerollWeekly" Theme="{StaticResource OutlineButton}"
+                          FontSize="11" Padding="8,4"
                           HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                           ToolTip.ShowOnDisabled="True"
                           ToolTip.Tip="{loc:Str tooltip_reroll_for_a_different_quest_once_per_week}">
                     <fx:IconLabel x:Name="TxtWeeklyReroll" Key="btn_reroll"/>
                   </Button>
+                      <Border x:Name="WeeklyRerollBevel" CornerRadius="8" BorderThickness="1" IsHitTestVisible="False"
+                              BorderBrush="{StaticResource DepthRaisedBevel}" Background="{StaticResource DepthRaisedSheen}"/>
+                    </Grid>
+                  </Grid>
                 </StackPanel>
               </ContentControl>
             </Grid>
@@ -461,15 +522,23 @@
                   <TextBlock x:Name="TxtQuestStreakCount" Grid.Column="1" Text="" Foreground="#FFD700"
                              FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Right"
                              VerticalAlignment="Center" Margin="0,0,10,0"/>
-                  <Button x:Name="BtnFixStreak" Grid.Column="2" Theme="{StaticResource OutlineButton}"
+                  <Grid Grid.Column="2" VerticalAlignment="Center">
+                    <Border x:Name="FixStreakDrop" CornerRadius="8" Margin="1,3,1,-3"
+                            IsHitTestVisible="False" Background="{StaticResource DepthDropBand}"/>
+                    <Grid x:Name="FixStreakFace">
+                      <Button x:Name="BtnFixStreak" Theme="{StaticResource OutlineButton}"
                           Padding="8,3" FontSize="11" IsVisible="False" VerticalAlignment="Center"
                           ToolTip.ShowOnDisabled="True">
-                    <fx:IconLabel Key="btn_fix_day"/>
+                    <fx:IconLabel x:Name="FixStreakLabel" Key="btn_fix_day"/>
                   </Button>
+                      <Border x:Name="FixStreakBevel" CornerRadius="8" BorderThickness="1" IsHitTestVisible="False"
+                              BorderBrush="{StaticResource DepthRaisedBevel}" Background="{StaticResource DepthRaisedSheen}"/>
+                    </Grid>
+                  </Grid>
                 </Grid>
                 <Canvas x:Name="StreakCalendarCanvas" Height="50" ClipToBounds="True"/>
-                <TextBlock x:Name="TxtFixStreakStatus" Text="" Foreground="{DynamicResource PinkBrush}"
-                           FontSize="11" TextAlignment="Center" Margin="0,5,0,0" IsVisible="False"/>
+                <fx:IconLabel x:Name="TxtFixStreakStatus" TextElement.Foreground="{DynamicResource PinkBrush}"
+                              TextElement.FontSize="11" HorizontalAlignment="Center" Margin="0,5,0,0" IsVisible="False"/>
               </StackPanel>
             </Border>
 

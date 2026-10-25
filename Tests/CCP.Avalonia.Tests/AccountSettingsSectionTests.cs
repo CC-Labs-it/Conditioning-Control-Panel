@@ -1,4 +1,9 @@
 using System.Threading.Tasks;
+using System.Threading;
+using System.Net;
+using System.Net.Http;
+using System.Linq;
+using System.Web;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using System;
 using System.Collections.Generic;
@@ -31,7 +36,10 @@ namespace CCP.Avalonia.Tests;
 public sealed class AccountSettingsSectionTests
 {
     private static void Run(Action<MainShellWindow, AccountSettingsSection, AppSettings, Dictionary<string, string?>> body) =>
-        AvaloniaTestDispatcher.Run(() =>
+        RunAsync((shell, section, s, secrets) => { body(shell, section, s, secrets); return Task.CompletedTask; }).GetAwaiter().GetResult();
+
+    private static Task RunAsync(Func<MainShellWindow, AccountSettingsSection, AppSettings, Dictionary<string, string?>, Task> body) =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
                 // The production builder includes Inter and AppFonts registration for this headless host.
@@ -49,6 +57,9 @@ public sealed class AccountSettingsSectionTests
             var service = new SettingsService();
             CoreSettings.ServiceProvider = () => service;
             var s = CoreSettings.Current;
+            // No test reaches the real server for the backup status line.
+            var oldBackup = AccountSettingsSection.NewBackup;
+            AccountSettingsSection.NewBackup = () => new CloudSettingsBackup(new CannedBackup("{\"backup\":null}"));
             MainShellWindow? shell = null;
             try
             {
@@ -58,7 +69,7 @@ public sealed class AccountSettingsSectionTests
                 shell.ShowTab("appsettings");
                 Dispatcher.UIThread.RunJobs();
                 var section = shell.AppSettingsPage!.FindControl<AccountSettingsSection>("SectionAccount")!;
-                body(shell, section, s, secrets);
+                await body(shell, section, s, secrets);
             }
             finally
             {
@@ -67,6 +78,7 @@ public sealed class AccountSettingsSectionTests
                 CoreSecrets.RetrieveProvider = oldGet;
                 CoreSecrets.StoreProvider = oldSet;
                 CoreSettings.ServiceProvider = oldSettings;
+                AccountSettingsSection.NewBackup = oldBackup;
                 // P02: providers that read the process settings again, not this test's thrown-away ones.
                 AccountSeed.Seed(p => new ProviderSubscription(p));
                 CoreAccount.IsLoggedInProvider = CoreAccount.HasPremiumAccessProvider = CoreAccount.HasLabAccessProvider = CoreAccount.IsWhitelistedProvider = null;
@@ -79,6 +91,87 @@ public sealed class AccountSettingsSectionTests
                 if (settingsBefore != null) File.WriteAllBytes(settingsPath, settingsBefore); else File.Delete(settingsPath);
             }
         });
+
+    private sealed class CannedBackup(string body) : HttpMessageHandler
+    {
+        public readonly List<string> Paths = new();
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
+        {
+            lock (Paths) Paths.Add(r.RequestUri!.AbsolutePath);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
+        }
+    }
+
+    private static string Packed(AppSettings settings)
+    {
+        using var output = new MemoryStream();
+        using (var gz = new System.IO.Compression.GZipStream(output, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true))
+            gz.Write(System.Text.Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(settings)));
+        return Convert.ToBase64String(output.ToArray());
+    }
+
+    /// <summary>Settings > Account > Restore from cloud: asked first (No sends nothing), then the backup replaces the
+    /// settings with this machine's absolute paths and level kept, and the Backup now button uploads.</summary>
+    [Fact]
+    public Task CloudRestoreAsksFirstAndKeepsThisMachinesPaths() => RunAsync(async (shell, section, s, _) =>
+    {
+        s.UnifiedId = "u-test";
+        s.AuthToken = "TOK";
+        s.SpiralPath = "/home/me/spiral.gif";
+        s.FlashEnabled = true;
+        s.PlayerLevel = 5;
+        var windows = new AppSettings { SpiralPath = @"C:\spiral.gif", FlashEnabled = false, PlayerLevel = 99 };
+        var server = new CannedBackup(new Newtonsoft.Json.Linq.JObject
+        {
+            ["backup"] = new Newtonsoft.Json.Linq.JObject { ["settings_data"] = Packed(windows), ["app_version"] = "6.11.0" },
+        }.ToString());
+        var oldBackup = AccountSettingsSection.NewBackup;
+        var oldTell = AccountSettingsSection.Tell;
+        var oldConfirm = AccountSettingsSection.Confirm;
+        var oldSession = CoreSession.IsSessionRunningProvider;
+        var dialogs = new List<string>();
+        var answer = false;
+        AccountSettingsSection.NewBackup = () => new CloudSettingsBackup(server);
+        AccountSettingsSection.Tell = (_, title, _) => { dialogs.Add(title); return Task.CompletedTask; };
+        AccountSettingsSection.Confirm = (_, title, _) => { dialogs.Add(title); return Task.FromResult(answer); };
+        try
+        {
+            section.Refresh();
+            Assert.True(Shown(section, "CloudSettingsBackupSection"));
+
+            await section.RestoreAsync();
+            Assert.Equal(new[] { Loc.Get("title_restore_settings_from_cloud") }, dialogs);
+            Assert.Same(s, CoreSettings.Current);   // No: nothing swapped
+
+            answer = true;
+            await section.RestoreAsync();
+            var now = CoreSettings.Current;
+            Assert.NotSame(s, now);
+            Assert.Equal("/home/me/spiral.gif", now.SpiralPath);
+            Assert.Equal(5, now.PlayerLevel);
+            Assert.False(now.FlashEnabled);
+            Assert.Equal("u-test", now.UnifiedId);
+            Assert.Contains(Loc.Get("title_settings_restored"), dialogs);
+            Assert.True(section.FindControl<Button>("BtnRestoreSettings")!.IsEnabled);
+
+            await section.BackupNowAsync();
+            lock (server.Paths) Assert.Contains("/v2/user/backup-settings", server.Paths);
+            Assert.Contains(Loc.Get("title_backup_complete"), dialogs);
+
+            // A section with no shell above it still refuses mid-session (PresetsTabView's `?? IsSessionRunning`).
+            dialogs.Clear();
+            CoreSession.IsSessionRunningProvider = () => true;
+            await new AccountSettingsSection().RestoreAsync();
+            Assert.Empty(dialogs);
+        }
+        finally
+        {
+            CoreSession.IsSessionRunningProvider = oldSession;
+            AccountSettingsSection.NewBackup = oldBackup;
+            AccountSettingsSection.Tell = oldTell;
+            AccountSettingsSection.Confirm = oldConfirm;
+        }
+    });
 
     private static string Text(Control c, string name) => c.FindControl<TextBlock>(name)!.Text ?? "";
     private static bool Shown(Control c, string name) => c.FindControl<Control>(name)!.IsVisible;
@@ -291,4 +384,86 @@ public sealed class AccountSettingsSectionTests
             }
         });
     }
+    private sealed class LinkServer(bool success) : HttpMessageHandler
+    {
+        internal readonly List<string> Paths = new();
+        internal string? LinkBody;
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            Paths.Add(path);
+            var json = path switch
+            {
+                "/discord/token" => "{\"access_token\":\"fake-discord-token\",\"refresh_token\":\"fake-refresh\",\"expires_in\":3600}",
+                "/discord/validate" => "{\"id\":\"discord-test\",\"username\":\"Bambi\",\"unified_id\":\"u-test\"}",
+                "/v2/auth/link" when success => "{\"success\":true,\"auth_token\":\"fake-rotated-token\"}",
+                "/v2/auth/link" => "{\"error\":\"different account\"}",
+                _ => throw new InvalidOperationException("Unexpected fake request " + path),
+            };
+            if (path == "/v2/auth/link") LinkBody = await request.Content!.ReadAsStringAsync(ct);
+            return new HttpResponseMessage(path == "/v2/auth/link" && !success ? HttpStatusCode.Conflict : HttpStatusCode.OK)
+            { Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json") };
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task DiscordLinkRoundTripOnlyOffersSharingAfterSuccessfulLink(bool success) => RunAsync(async (shell, section, s, secrets) =>
+    {
+        s.UnifiedId = "u-test";
+        s.HasLinkedDiscord = false;
+        s.DiscordShareAchievements = false;
+        using var server = new LinkServer(success);
+        AccountSeed.Seed(p => new ProviderSubscription(p, () => s), p => new DiscordAccount(() => p, () => s, server));
+        var oldV2 = AccountSeed.NewV2;
+        var oldProbe = LoginDialog.ProxyReachable;
+        var oldTell = AccountSettingsSection.Tell;
+        var dialogs = new List<string>();
+        Task? callback = null;
+        StartupLadder.ResetForTests();
+        AccountSeed.NewV2 = () => new V2AuthService(() => s, server);
+        LoginDialog.ProxyReachable = _ => Task.FromResult(true);
+        AccountSettingsSection.Tell = (_, title, _) => { dialogs.Add(title); return Task.CompletedTask; };
+        section.OpenProviderForTest = url =>
+        {
+            var query = HttpUtility.ParseQueryString(new Uri(url).Query);
+            callback = Task.Run(async () =>
+            {
+                using var http = new HttpClient();
+                var reply = await http.GetAsync(query["redirect_uri"] + "?code=fake-code&state=" + Uri.EscapeDataString(query["state"]!));
+                Assert.True(reply.IsSuccessStatusCode);
+            });
+        };
+        try
+        {
+            shell.Hide(); // OAuth may resolve minutes later with the panel in the tray.
+            await section.LinkAsync("discord", section.FindControl<Button>("BtnLinkDiscord")!, "TxtBtnLinkDiscord").WaitAsync(TimeSpan.FromSeconds(15));
+            await callback!;
+            Assert.Equal(new[] { "/discord/token", "/discord/validate", "/v2/auth/link" }, server.Paths);
+            Assert.Contains("fake-discord-token", server.LinkBody);
+            Assert.Equal(success, s.HasLinkedDiscord);
+            Assert.False(s.DiscordShareAchievements); // an offer is never consent
+            Assert.True(section.FindControl<Button>("BtnLinkDiscord")!.IsEnabled);
+            if (success)
+            {
+                Assert.Equal("fake-rotated-token", s.AuthToken);
+                Assert.Equal("discord-share-achievements", Assert.Single(StartupLadder.Inbox.Items).Key);
+                Assert.Contains(Loc.Get("account_linked_title"), dialogs);
+            }
+            else
+            {
+                Assert.Empty(StartupLadder.Inbox.Items);
+                Assert.Contains(Loc.Get("account_link_failed_title"), dialogs);
+            }
+        }
+        finally
+        {
+            AccountSeed.NewV2 = oldV2;
+            LoginDialog.ProxyReachable = oldProbe;
+            AccountSettingsSection.Tell = oldTell;
+            StartupLadder.ResetForTests();
+        }
+    });
+
 }

@@ -8,6 +8,9 @@ using ConditioningControlPanel.Models;
 namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 
 // Adapted from parity/trunk 7b6f94800e90a90fa443fb47efcfaeedc17eff0e.
+// Quest art, PORTED from WPF MainWindow.QuestsTab.cs GetQuestArt / ClearQuestArtCache and
+// MainWindow.xaml.cs GetModeAwareQuestImagePath + LoadQuestImage: cached remote image first, a mod
+// override next, then the Sissy / CCP Default swaps; bundled pictures ship as avares Resources/quests.
 public partial class QuestsTabView
 {
     private const string PackResources = "pack://application:,,,/Resources/";
