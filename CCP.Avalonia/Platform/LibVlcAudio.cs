@@ -175,7 +175,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 // Cubic like PlayOneShot; applied off libvlc's thread once the output exists.
                 set { _vol = (int)Math.Round(Math.Cbrt(Math.Clamp(value, 0, 1)) * 100); Apply(); }
             }
-            private void Apply() => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (_done == 0 && player.IsPlaying) player.Volume = _vol; });
+            private void Apply() => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (_done == 0 && player.IsPlaying) { ApplyPreferredDevice(player); player.Volume = _vol; } });
             public bool Play()
             {
                 var started = 0;
@@ -422,6 +422,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static List<OutputDevice> EnumerateOutputDevices(Func<string, string>? pactl = null)
         {
             var list = new List<OutputDevice> { new("", Loc.Get("set2_mic_system_default")) };
+            if (pactl is null && OperatingSystem.IsWindows())
+                return WindowsAudioDevices.Enumerate(list);
             if (pactl is null && !OperatingSystem.IsLinux()) return list;
             try
             {
