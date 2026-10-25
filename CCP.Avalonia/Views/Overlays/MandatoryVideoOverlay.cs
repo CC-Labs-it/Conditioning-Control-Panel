@@ -106,6 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal IReadOnlyList<Window> Messages => _messages;
         internal VlcFrameSink? Sink => _sink;
         internal int LiveTargets => _targets.Count;
+        internal IEnumerable<Target> GazeTargets => _gracePaused ? Enumerable.Empty<Target>() : _targets.AsEnumerable().Reverse();
         /// <summary>This clip arms the attention checks (never on a floating window).</summary>
         internal bool AttentionArmed => _attention;
         /// <summary>Milliseconds from Show to the first frame on screen; -1 until then.</summary>
@@ -655,7 +656,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var x in _surfaces)
             {
                 var t = new Target(x.Layer, text, Math.Max(40, s.AttentionSize), elapsed + s.AttentionLifespan, _random);
-                t.Root.PointerPressed += (_, e) => { e.Handled = true; Hit(t); };
+                t.OnHit = () => Hit(t);   // gaze and pointer share the one batch catch
+                t.Root.PointerPressed += (_, e) => { e.Handled = true; t.Hit(); };
                 batch.Add(t);
                 _targets.Add(t);
             }
@@ -679,6 +681,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             public readonly Border Root;
             public readonly double Due;
             private readonly Canvas _layer;
+            internal Action? OnHit;
+            private bool _hit;
+            internal void Hit() { if (_hit || !_layer.Children.Contains(Root)) return; _hit = true; OnHit?.Invoke(); }
+            internal Rect GazeBounds
+            {
+                get
+                {
+                    if (!_layer.Children.Contains(Root) || TopLevel.GetTopLevel(Root) is not { } top) return default;
+                    var p = Root.PointToScreen(default);
+                    var k = top.RenderScaling;
+                    return new Rect(p.X / k, p.Y / k, _w, _h);
+                }
+            }
             private double _x, _y, _vx, _vy, _minX, _minY, _maxX, _maxY;
             private readonly double _w, _h;
 

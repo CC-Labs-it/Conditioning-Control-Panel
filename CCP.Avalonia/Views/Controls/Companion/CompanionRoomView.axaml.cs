@@ -158,7 +158,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         internal const string EngineDrawerKey = "EngineRoom", WorkshopDrawerKey = "Workshop";
 
         /// <summary>WPF OnCompanionFxModChanged's UpdateCompanionCardsUI half: the roster's names,
-        /// accent ring and supported set follow a mod switch made while the tab is open.</summary>
+        /// accent ring, supported set and assigned-prompt
+        /// labels/tooltips follow a mod switch made while the tab is open.</summary>
         internal Runtime.WorkshopShelfParts? WorkshopParts => (WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts;
 
         internal void RefreshRoster() => WorkshopParts?.Roster.Refresh();

@@ -133,6 +133,75 @@ public class AutonomySchedulerTests : IDisposable
         Assert.Empty(_performed);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void MindWipeDisabledDuringAnnouncementDoesNotRun(bool disableCard)
+    {
+        var st = CoreSettings.Current;
+        st.AutonomyCanTriggerFlash = false;
+        st.AutonomyCanTriggerMindWipe = st.MindWipeEnabled = true;
+        st.AutonomyAnnouncementChance = 100;
+        var s = Make();
+        s.CanPerform = a => a == AutonomyActionType.MindWipe;
+        try
+        {
+            s.Start(withTimer: false);
+            s.TestTrigger();
+            if (disableCard) st.MindWipeEnabled = false;
+            else st.AutonomyCanTriggerMindWipe = false;
+            Advance(s, 2);
+            Assert.Empty(_performed);
+        }
+        finally { st.MindWipeEnabled = false; s.Stop(); }
+    }
+
+    [Fact]
+    public void CountdownTracksCurrentIntervalRetryRefreshAndStop()
+    {
+        var s = Make();
+        Assert.Null(s.NextRandomFireFraction);
+        s.Start(withTimer: false);
+        var start = _now;
+        var interval = (s.NextRandomFire - start).TotalSeconds;
+        Assert.Equal(1, s.NextRandomFireFraction!.Value);
+        _now = start.AddSeconds(interval / 2);
+        Assert.Equal(0.5, s.NextRandomFireFraction!.Value, 6);
+        _now = start.AddSeconds(-10);
+        Assert.Equal(1, s.NextRandomFireFraction!.Value);
+        _now = start.AddSeconds(interval + 1);
+        Assert.Equal(0, s.NextRandomFireFraction!.Value);
+        s.IsBusy = () => true;
+        s.Tick();
+        Assert.InRange((s.NextRandomFire - _now).TotalSeconds, 12, 24);
+        Assert.Equal(1, s.NextRandomFireFraction!.Value);
+        CoreSettings.Current.AutonomyRandomTriggerEnabled = false;
+        s.RefreshRandomTimer();
+        Assert.Null(s.NextRandomFireFraction);
+        CoreSettings.Current.AutonomyRandomTriggerEnabled = true;
+        s.RefreshRandomTimer();
+        Assert.Equal(1, s.NextRandomFireFraction!.Value);
+        s.Stop();
+        Assert.Null(s.NextRandomFireFraction);
+    }
+
+    [Fact]
+    public void DiagnosticStatusReportsLiveTimersCooldownAndLastActionInWpfOrder()
+    {
+        var s = Make();
+        Assert.StartsWith("Service Enabled: False\nIdle Timer Running: False\nRandom Timer Running: False", s.GetDiagnosticStatus());
+        Assert.Contains("Last Action: Never\nCurrent Mood: Attentive\n\nSettings:", s.GetDiagnosticStatus());
+        s.Start(withTimer: false);
+        s.TestTrigger();
+        s.IsBusy = () => true;
+        Assert.StartsWith("Service Enabled: True\nIdle Timer Running: False\nRandom Timer Running: True\nOn Cooldown: True\nInteraction Queue Busy: True\nLast Action: 14:00:00", s.GetDiagnosticStatus());
+        _now = _now.AddSeconds(31);
+        Assert.Contains("On Cooldown: False", s.GetDiagnosticStatus());
+        Assert.EndsWith("  PinkFilter: False\n  BouncingText: False", s.GetDiagnosticStatus());
+        s.Stop();
+        Assert.Contains("Random Timer Running: False", s.GetDiagnosticStatus());
+    }
+
     /// <summary>A Random whose rolls are fixed, so the weighted pick is exact.</summary>
     private sealed class FixedRoll : Random
     {

@@ -37,7 +37,7 @@ public sealed class TutorialAdvanceTests
             TutorialHeadHooks.ShellProvider = () => null;
             TutorialHead.Seed();
             TutorialHead.ResetForTests();
-            var host = new Window { Width = 500, Height = 200 };
+            var host = new Window { Width = 900, Height = 650 };
             TutorialOverlay? overlay = null;
             try
             {
@@ -45,7 +45,13 @@ public sealed class TutorialAdvanceTests
                 while (TutorialHead.Service.IsActive && TutorialHead.Service.CurrentStep!.Id != id) TutorialHead.Service.Next();
                 Assert.True(TutorialHead.Service.IsActive, "Card absent from test tour: " + id);
                 target.Name = TutorialHead.Service.CurrentStep.TargetElementName;
-                host.Content = target;
+                // Leave room for the in-window card beside the actual control. A full-window
+                // slider makes the card overlap the fixture's pointer position by construction.
+                target.Width = 300;
+                target.Height = 42;
+                Canvas.SetLeft(target, 40);
+                Canvas.SetTop(target, 80);
+                host.Content = new Canvas { Children = { target } };
                 host.Show();
                 overlay = new TutorialOverlay(host);
                 overlay.Show();

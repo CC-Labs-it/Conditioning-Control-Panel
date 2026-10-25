@@ -219,6 +219,15 @@ public sealed class WebAssetServer : IDisposable
     {
         var rel = Uri.UnescapeDataString(urlPath).TrimStart('/');
         var root = _root;
+        // WPF ccp.spirals mapping: only store-owned, flat GIF names; never sidecars or profile files.
+        if (rel.StartsWith("__spirals__/", StringComparison.Ordinal))
+        {
+            var name = rel["__spirals__/".Length..];
+            if (!name.StartsWith("loom_", StringComparison.Ordinal) || !name.EndsWith(".gif", StringComparison.Ordinal)) return null;
+            var file = ConditioningControlPanel.Services.Chaos.DtrhLoomStore.GifPathFor(name[5..^4]);
+            return file != null && new DirectoryInfo(ConditioningControlPanel.Services.Chaos.DtrhLoomStore.SpiralsFolder).LinkTarget == null
+                && new FileInfo(file).LinkTarget == null ? file : null;
+        }
         bool asset = rel.StartsWith(AssetsPrefix, StringComparison.Ordinal);
         bool whisper = rel.StartsWith(PbpWhisperClips.SubAudioHost + "/", StringComparison.Ordinal)
             || rel.StartsWith(PbpWhisperClips.WordsHost + "/", StringComparison.Ordinal);
