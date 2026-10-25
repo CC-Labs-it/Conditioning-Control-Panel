@@ -92,6 +92,13 @@ public sealed class StartHeroTests
             shell.WindowState = WindowState.Minimized;
             Assert.Equal(0, Ring("StartRingExhale").Opacity);
             Assert.DoesNotContain(BeatLoop.Running, l => ReferenceEquals(l.Owner, button));
+
+            // A mod switch re-tints the idle charge from the mod's FxGlowColor (WPF HeroFx re-reads on ModChanged).
+            shell.Resources["FxGlowColor"] = Color.FromRgb(0, 0, 255);
+            CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, false));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(charge, button.Background);
+            Assert.Equal(Color.FromRgb(0, 0, 255), charge.GradientStops[0].Color);
         }
         finally
         {
