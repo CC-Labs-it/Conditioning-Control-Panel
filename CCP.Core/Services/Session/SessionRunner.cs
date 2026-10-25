@@ -226,6 +226,7 @@ namespace ConditioningControlPanel.Services
         {
             if (!IsRunning || !IsPaused || CurrentSession is not { } session) return;
             IsPaused = false;
+            RemoteCommands.ReleaseOverlayStop(); // WPF local Resume restarts the overlay service after panic
             _startTime = DateTime.Now;
             _stopwatch.Start();
             _timer?.Change(1000, 1000);

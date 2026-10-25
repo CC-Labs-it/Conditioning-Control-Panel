@@ -43,6 +43,124 @@ public sealed class RemoteRelayTests
     private static void Poll(FakeRelay f, string json) =>
         f.Answer = path => path == "/v2/remote/poll" ? Json(HttpStatusCode.OK, json) : Json(HttpStatusCode.OK, "{}");
 
+    [Theory]
+    [InlineData("show_pink_filter", true, true)]
+    [InlineData("stop_pink_filter", true, false)]
+    [InlineData("show_spiral", false, true)]
+    [InlineData("stop_spiral", false, false)]
+    public void Overlay_commands_set_the_saved_switch(string verb, bool pink, bool enabled)
+    {
+        var old = CoreSettings.ServiceProvider;
+        var oldRefresh = RemoteCommands.RefreshOverlays;
+        RemoteCommands.RefreshOverlays = () => { };
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        try
+        {
+            settings.Current.PinkFilterEnabled = settings.Current.SpiralEnabled = !enabled;
+            Assert.Null(RemoteCommands.Execute(verb, null));
+            Assert.Equal(enabled, pink ? settings.Current.PinkFilterEnabled : settings.Current.SpiralEnabled);
+        }
+        finally { RemoteCommands.StopOverlays(); RemoteCommands.ReleaseOverlayStop(); RemoteCommands.RefreshOverlays = oldRefresh; CoreSettings.ServiceProvider = old; }
+    }
+
+    [Theory]
+    [InlineData("set_pink_opacity", -1, 0)]
+    [InlineData("set_pink_opacity", 90, 50)]
+    [InlineData("set_spiral_opacity", 190, 100)]
+    [InlineData("set_spiral_opacity", 42, 42)]
+    public void Overlay_opacity_uses_Wpf_bounds(string verb, int value, int expected)
+    {
+        var old = CoreSettings.ServiceProvider;
+        var oldRefresh = RemoteCommands.RefreshOverlays;
+        RemoteCommands.RefreshOverlays = () => { };
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        try
+        {
+            Assert.Null(RemoteCommands.Execute(verb, JObject.FromObject(new { value })));
+            Assert.Equal(expected, verb == "set_pink_opacity" ? settings.Current.PinkFilterOpacity : settings.Current.SpiralOpacity);
+        }
+        finally { RemoteCommands.StopOverlays(); RemoteCommands.ReleaseOverlayStop(); RemoteCommands.RefreshOverlays = oldRefresh; CoreSettings.ServiceProvider = old; }
+    }
+
+    [Fact]
+    public void Remote_mind_wipe_uses_local_clips_and_settings_and_stops_on_disconnect()
+    {
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldStart = CoreMindWipe.StartProvider;
+        var oldTrigger = CoreMindWipe.TriggerOnceProvider;
+        var oldStop = CoreMindWipe.StopProvider;
+        var oldCount = CoreMindWipe.ClipCountProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var started = new List<(double, double)>();
+        var triggered = 0; var stopped = 0; var clips = 0;
+        CoreMindWipe.StartProvider = (f, v) => started.Add((f, v));
+        CoreMindWipe.TriggerOnceProvider = () => triggered++;
+        CoreMindWipe.StopProvider = () => stopped++;
+        CoreMindWipe.ClipCountProvider = () => clips;
+        try
+        {
+            settings.Current.MindWipeFrequency = 9; settings.Current.MindWipeVolume = 37;
+            Assert.Null(RemoteCommands.Execute("trigger_mind_wipe", null));
+            Assert.Equal(0, triggered); // WPF: an empty pool is a no-op
+            clips = 1;
+            Assert.Null(RemoteCommands.Execute("trigger_mind_wipe", null));
+            Assert.Equal(1, triggered);
+            Assert.Null(RemoteCommands.Execute("start_mind_wipe", null));
+            Assert.Equal(new[] { (9.0, 0.37) }, started);
+            Assert.Null(RemoteCommands.Execute("stop_mind_wipe", null));
+            Assert.Equal(1, stopped);
+            RemoteCommands.StopEffects(force: false);
+            Assert.Equal(2, stopped);
+        }
+        finally
+        {
+            CoreMindWipe.StartProvider = oldStart; CoreMindWipe.TriggerOnceProvider = oldTrigger;
+            CoreMindWipe.StopProvider = oldStop; CoreMindWipe.ClipCountProvider = oldCount;
+            CoreSettings.ServiceProvider = oldSettings; RemoteCommands.ReleaseOverlayStop();
+        }
+    }
+
+    [Fact]
+    public void Overlay_commands_refresh_without_starting_engine_and_stop_preserves_switches()
+    {
+        var old = CoreSettings.ServiceProvider;
+        var oldRefresh = RemoteCommands.RefreshOverlays;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var states = new List<bool>();
+        RemoteCommands.RefreshOverlays = () => states.Add(RemoteCommands.OverlayRunning);
+        try
+        {
+            Assert.False(CoreEngine.IsRunning);
+            settings.Current.PinkFilterOpacity = 17;
+            Assert.Null(RemoteCommands.Execute("set_pink_opacity", null));
+            Assert.Empty(states);
+            Assert.Equal(17, settings.Current.PinkFilterOpacity);
+            Assert.Null(RemoteCommands.Execute("set_pink_opacity", new JObject()));
+            Assert.Equal(25, settings.Current.PinkFilterOpacity);
+            Assert.Null(RemoteCommands.Execute("show_pink_filter", null));
+            Assert.False(CoreEngine.IsRunning);
+            CoreEngine.Stop(); // panic/Stop reaches remote-only overlays too
+            Assert.False(states[^1]);
+            Assert.True(RemoteCommands.OverlaysStopped);
+            Assert.True(settings.Current.PinkFilterEnabled);
+            Assert.Null(RemoteCommands.Execute("show_spiral", null));
+            Assert.True(states[^1]);
+            Assert.False(RemoteCommands.OverlaysStopped);
+            RemoteCommands.StopEffects(force: false); // opted-in disconnect
+            Assert.False(states[^1]);
+            Assert.True(settings.Current.SpiralEnabled);
+        }
+        finally
+        {
+            RemoteCommands.StopOverlays(); RemoteCommands.ReleaseOverlayStop();
+            RemoteCommands.RefreshOverlays = oldRefresh; CoreSettings.ServiceProvider = old;
+        }
+    }
+
     [Fact]
     public void A_sandbox_never_reaches_the_real_relay()
     {

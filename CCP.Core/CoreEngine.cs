@@ -43,6 +43,7 @@ namespace ConditioningControlPanel
         /// Not idempotent in TotalSessions, exactly as WPF; callers start only when stopped.</summary>
         public static void Start()
         {
+            RemoteCommands.ReleaseOverlayStop();
             var s = CoreSettings.Current;
             s.TotalSessions++;
             CoreSettings.Save();
@@ -91,6 +92,7 @@ namespace ConditioningControlPanel
                 PopQuiz?.Stop();   // closes an open quiz (WPF StartStop.cs:492)
                 CoreMindWipe.Stop();   // WPF StartStop.cs:489, also ends the loop
                 _running = false;
+                RemoteCommands.StopOverlays(); // remote-only overlays must not survive Stop or panic
                 StartedUtc = null;
                 try { StoppedHook?.Invoke(); }
                 catch (Exception ex) { Log.Warning(ex, "Engine stop hook failed"); }

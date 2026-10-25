@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## FIN4 remote shell follow-up
+
+1. WPF `MainWindow/MainWindow.RemoteControl.cs` and `Services/RemoteControlService.cs`: pair a controller. Confirm the embedded browser hides while the remote card is up, stays hidden during its 200 ms exit fade, and returns after disconnect. Reconnect during fade-out: the browser must stay hidden. Open a leash gate while connected and disconnect: the browser stays hidden until that gate dismisses. Rows: `shell-remote-control`.
+2. WPF `MainWindow/MainWindow.RemoteControl.cs`: join with the shell visible, then hidden/minimized. Both joins notify; the hidden/minimized join flashes the Windows taskbar without restoring or activating the shell. Linux retains the OS notification. Rows: `shell-remote-control`.
+3. WPF `Services/RemoteControlService.cs`: with the engine stopped, send show/stop pink filter and spiral, then opacity commands. Pink clamps to 0–50, spiral to 0–100, absent value defaults to 25, null parameters do nothing. On a supported composited X11 desktop the enabled overlays appear without starting the engine. Panic/engine Stop and opted-in disconnect stop them without clearing saved switches; a later command can restart them. Rows: `shell-remote-control`.
+4. WPF `Services/RemoteControlService.cs`: remote mind-wipe trigger with no clips is a no-op; with local clips it plays once. Start uses saved frequency and volume; Stop, panic and opted-in disconnect end playback. Rows: `shell-remote-control`.
