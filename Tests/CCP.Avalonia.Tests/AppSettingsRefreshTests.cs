@@ -27,7 +27,7 @@ public sealed class AppSettingsRefreshTests
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var root = Directory.CreateTempSubdirectory("ccp-settings-refresh-").FullName;
-            var oldCameras = V4l2Cameras.Root;
+            var (oldCameras, oldList) = (V4l2Cameras.Root, CameraList.Override);
             var oldStartup = XdgAutostart.DirectoryOverride;
             var oldAvailable = CoreWebcam.IsAvailableProvider;
             var oldMics = CoreSpeech.EnumerateInputDevicesProvider;
@@ -39,6 +39,7 @@ public sealed class AppSettingsRefreshTests
             try
             {
                 V4l2Cameras.Root = root;
+                CameraList.Override = V4l2Cameras.Enumerate;   // the fake sysfs tree on every OS (Windows lists DirectShow)
                 XdgAutostart.DirectoryOverride = Path.Combine(root, "autostart");
                 CoreWebcam.IsAvailableProvider = () => true;
                 CoreSpeech.EnumerateInputDevicesProvider = () => mics;
@@ -89,7 +90,7 @@ public sealed class AppSettingsRefreshTests
             finally
             {
                 shell?.Close();
-                V4l2Cameras.Root = oldCameras;
+                (V4l2Cameras.Root, CameraList.Override) = (oldCameras, oldList);
                 XdgAutostart.DirectoryOverride = oldStartup;
                 CoreWebcam.IsAvailableProvider = oldAvailable;
                 CoreSpeech.EnumerateInputDevicesProvider = oldMics;
