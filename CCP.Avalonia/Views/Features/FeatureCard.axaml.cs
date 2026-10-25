@@ -158,7 +158,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (change.Property == TitleProperty) _txtTitle.Text = Title ?? "";
             else if (change.Property == IconProperty || change.Property == GlyphProperty) ApplyArt();
             else if (change.Property == LockLevelProperty || change.Property == IsLockedProperty) ApplyLockState();
-            else if (change.Property == IsActiveProperty) ApplyActiveState();
+            else if (change.Property == IsActiveProperty || change.Property == DimWhenInactiveProperty) ApplyActiveState();
             else if (change.Property == HelpSectionIdProperty) RefreshHelpTooltip();
             else if (change.Property == TierBadgeProperty) ApplyTierBadge();
             else if (change.Property == TeaseTierProperty) ApplyTeaseState();
@@ -171,6 +171,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _imgIconHost.Background = src is null
                 ? null
                 : new ImageBrush(src) { Stretch = Stretch.UniformToFill, AlignmentY = AlignmentY.Center };
+            var gray = CardArtMute.Gray(src);
+            this.FindControl<Border>("ImgIconMute")!.Background = gray == null ? null : new ImageBrush(gray)
+                { Stretch = Stretch.UniformToFill, AlignmentY = AlignmentY.Center };
             _imgIconHost.IsVisible = src is not null;
             _glyphHost.IsVisible = src is null && !string.IsNullOrEmpty(Glyph);
         }
@@ -193,6 +196,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// </summary>
         private void ApplyTeaseState()
         {
+            ApplyRestAppearance();
             if (TeaseTier <= 0)
             {
                 _teaseHost.IsVisible = false;
@@ -260,6 +264,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             // A locked feature can't really be "on" even if the underlying setting is true.
             var showActive = (IsActive || TutorialPreview) && !IsLocked;
+            ApplyRestAppearance();
             _activeBorder.IsVisible = showActive;
             ApplyActiveBreath(showActive);
         }
@@ -342,13 +347,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _hovered = on;
             // A locked tile is not an affordance; lighting it up promises a click that does nothing.
             if (IsLocked) on = false;
-            _rootScale.ScaleX = _rootScale.ScaleY = on ? HoverLiftScale : 1;
-            if (on) HoverPop.Enter(_imgIconHost); else HoverPop.Leave(_imgIconHost);
+            ApplyRestAppearance();
+            _rootScale.ScaleX = _rootScale.ScaleY = on && !DashboardDepth ? HoverLiftScale : 1;
+            if (on && !DashboardDepth) HoverPop.Enter(_imgIconHost); else HoverPop.Leave(_imgIconHost);
             _rimLight.Opacity = on ? RimLightOpacity : 0;
         }
 
         public bool DashboardDepth { get; set; }
-        public bool DimWhenInactive { get; set; }
+        public static readonly StyledProperty<bool> DimWhenInactiveProperty =
+            AvaloniaProperty.Register<FeatureCard, bool>(nameof(DimWhenInactive));
+        public bool DimWhenInactive { get => GetValue(DimWhenInactiveProperty); set => SetValue(DimWhenInactiveProperty, value); }
+
+        private void ApplyRestAppearance()
+        {
+            bool active = IsActive || TutorialPreview;
+            bool resting = DimWhenInactive && !active && (DashboardDepth || !_hovered);
+            // WPF FeatureCard.ApplyRestOpacity: lock wins over off, hover only lifts non-Home cards.
+            _contentRoot.Opacity = IsLocked ? 0.35 : resting ? 0.62 : 1.0;
+            _txtTitle.Opacity = resting && !IsLocked && TeaseTier <= 0 ? 0.72 : 1.0;
+            CardArtMute.Fade(this.FindControl<Border>("ImgIconMute")!, resting && !IsLocked && TeaseTier <= 0);
+        }
 
         private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
         {

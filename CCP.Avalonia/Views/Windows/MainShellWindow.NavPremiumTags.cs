@@ -12,7 +12,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     {
         /// <summary>A tier change repaints the dashboard's favorites chips, which read the same
         /// lock answer (WPF :158).</summary>
-        internal void RefreshNavPremiumTags() => RefreshFavoritesRail();
+        internal void RefreshNavPremiumTags()
+        {
+            RefreshFavoritesRail();
+            SettingsPage?.RefreshMysteryGift();
+        }
 
         /// <summary>WPF MainWindow.NavRail.cs:936, over Core's roster and the entitlement seam.
         /// Fails to unlocked on anything unexpected, as WPF does.</summary>

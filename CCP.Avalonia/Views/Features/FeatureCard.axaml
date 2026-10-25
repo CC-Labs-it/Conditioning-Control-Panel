@@ -39,6 +39,8 @@
             <Border x:Name="ImgIconHost" CornerRadius="11"
                     RenderOptions.BitmapInterpolationMode="HighQuality"/>
 
+            <Border x:Name="ImgIconMute" CornerRadius="11" Opacity="0" IsHitTestVisible="False"/>
+
             <!-- Glyph fallback (for cards without an image) -->
             <Border x:Name="GlyphHost"
                     Width="68" Height="68"

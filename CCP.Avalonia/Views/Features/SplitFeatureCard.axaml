@@ -37,9 +37,13 @@
         <Grid x:Name="ContentRoot">
             <!-- The two art halves. Full-bleed brushes, polygon-clipped in code. -->
             <Border x:Name="HalfHostA" CornerRadius="11"
-                    RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                    RenderOptions.BitmapInterpolationMode="HighQuality">
+                <Border x:Name="HalfMuteA" CornerRadius="11" Opacity="0" IsHitTestVisible="False"/>
+            </Border>
             <Border x:Name="HalfHostB" CornerRadius="11"
-                    RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                    RenderOptions.BitmapInterpolationMode="HighQuality">
+                <Border x:Name="HalfMuteB" CornerRadius="11" Opacity="0" IsHitTestVisible="False"/>
+            </Border>
 
             <!-- Per-half hover wash: opacity flips on pointer move, geometry rides the seam. -->
             <Path x:Name="HoverWashA" Fill="#14FFFFFF" Opacity="0" IsHitTestVisible="False"/>

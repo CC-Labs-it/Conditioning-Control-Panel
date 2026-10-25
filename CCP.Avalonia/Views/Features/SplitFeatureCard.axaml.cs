@@ -264,6 +264,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// <summary>An OFF half rests dim unless the pointer has committed a non-dashboard card to it.</summary>
         private void ApplyHalfRestOpacity()
         {
+            CardArtMute.Fade(this.FindControl<Border>("HalfMuteA")!, !IsActiveA && (DashboardDepth || _halfHover != true));
+            CardArtMute.Fade(this.FindControl<Border>("HalfMuteB")!, !IsActiveB && (DashboardDepth || _halfHover != false));
             _halfHostA.Opacity = IsActiveA || (!DashboardDepth && _halfHover == true) ? 1.0 : InactiveHalfOpacity;
             _halfHostB.Opacity = IsActiveB || (!DashboardDepth && _halfHover == false) ? 1.0 : InactiveHalfOpacity;
         }
@@ -302,8 +304,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             else if (change.Property == IsVisibleProperty && !IsVisible) ResetSplit();
         }
 
-        private static void ApplyIcon(Border host, IImageBrushSource? src)
+        private void ApplyIcon(Border host, IImageBrushSource? src)
         {
+            var layer = this.FindControl<Border>(host == _halfHostA ? "HalfMuteA" : "HalfMuteB")!;
+            var gray = CardArtMute.Gray(src);
+            layer.Background = gray == null ? null : new ImageBrush(gray) { Stretch = Stretch.UniformToFill };
             host.Background = src == null
                 ? null
                 : new ImageBrush(src) { Stretch = Stretch.UniformToFill, AlignmentY = AlignmentY.Center };
