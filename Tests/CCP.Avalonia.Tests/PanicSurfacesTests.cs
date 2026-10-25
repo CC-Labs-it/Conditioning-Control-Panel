@@ -104,6 +104,7 @@ public sealed class PanicSurfacesTests
         "chaos-skia-fx",
         "chaos-intro",
         "settings-palette",
+        "keyword-triggers",
         "haptics",
         "remote-haptics",
         "takeover",

@@ -1180,6 +1180,7 @@ namespace ConditioningControlPanel.Avalonia
             try { StopMantra(((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).Windows); } catch { }
 
             // Restore any app we ducked; a pending Unduck would otherwise die with the process.
+            try { Platform.KeywordTriggerHead.Stop(); } catch { }
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
             try { Platform.LayeredAudio.Instance?.Shutdown(); } catch { }
             try { ReleaseContent?.Dispose(); } catch { }
