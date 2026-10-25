@@ -76,6 +76,15 @@ public sealed class EnhancementsPurchaseTests
             s.UnlockedSkills = new();
             Dispatcher.UIThread.RunJobs();
             Assert.False(board.ShowTrophyStats);
+            // A cloud restore swaps the settings object: the board follows the new one.
+            var restored = new AppSettings { UnlockedSkills = new() { "trophy_case" }, SkillPoints = 1000 };
+            settings.RestoreFrom(restored);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(board.ShowTrophyStats);
+            restored.UnlockedSkills = new();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(board.ShowTrophyStats);
+            s = restored;
 
             var promptTab = new EnhancementsTabView();
             var prompt = promptTab.AskPurchase(window, "Purchase", "Confirm purchase");
@@ -141,7 +150,7 @@ public sealed class EnhancementsPurchaseTests
             Dispatcher.UIThread.RunJobs();
             var asked = Assert.Single(questions);
             Assert.StartsWith(Loc.Get("dialog_purchase_enhancement") + "|", asked);
-            Assert.Contains(Loc.Get("msg_skill_permanent_note"), asked);
+            Assert.Contains(IconText.BareLoc("msg_skill_permanent_note"), asked);
             Assert.Equal(0, http.Calls);
             Assert.Equal(1000, s.SkillPoints);
 
@@ -165,9 +174,13 @@ public sealed class EnhancementsPurchaseTests
             Assert.DoesNotContain("sparkle_boost_2", s.UnlockedSkills);
 
             // A debited answer: the server's balance, the node repainted as owned.
+            Assert.Equal(0, tab.PurchaseBursts);
+            s.MotionLevel = MotionLevel.Full;
+            s.PerformanceMode = false;
             http.Answer = "{'success':true,'skill_points':" + (1000 - buyable.Cost) + ",'unlocked_skills':['sparkle_boost_1','sparkle_boost_2']}";
             await tab.PurchaseAsync(Nodes(tab)["sparkle_boost_2"], "sparkle_boost_2");
             Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, tab.PurchaseBursts);   // the node burst; no prestige rank crossed
             Assert.Single(failures);
             Assert.Equal(1000 - buyable.Cost, s.SkillPoints);
             Assert.Contains("sparkle_boost_2", s.UnlockedSkills);

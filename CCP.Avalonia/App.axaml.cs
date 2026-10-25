@@ -770,7 +770,8 @@ namespace ConditioningControlPanel.Avalonia
                 };
                 SkillPurchase.Current.SkillUnlocked += (_, id) =>
                 {
-                    if (id == Models.PinkRushRules.SkillId && Sessions?.IsRunning == true)
+                    // WPF SkillTreeService.cs:136-138 starts the check on any run: engine or guided session.
+                    if (id == Models.PinkRushRules.SkillId && (CoreEngine.IsRunning || Sessions?.IsRunning == true))
                         Views.Windows.PinkRushHost.Start();
                 };
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;

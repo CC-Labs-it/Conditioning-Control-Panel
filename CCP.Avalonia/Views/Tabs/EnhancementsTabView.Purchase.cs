@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.LogicalTree;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
@@ -81,7 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var pointsLabel = (CoreMods.Service?.GetPointsLabel() ?? Loc.Get("label_sparkle_points")).ToLower();
                 var message = Loc.GetF("msg_purchase_skill", CoreMods.MakeModAware(skill.LocalizedName), skill.Cost, pointsLabel,
                                   CoreMods.MakeModAware(skill.LocalizedFlavorText), CoreMods.MakeModAware(skill.LocalizedDescription))
-                              + "\n\n" + Loc.Get("msg_skill_permanent_note");
+                              + "\n\n" + IconText.BareLoc("msg_skill_permanent_note");   // the leading star is an icon (IconGuard)
                 if (!await AskPurchase(owner, Loc.Get("dialog_purchase_enhancement"), message)) return;
 
                 card.IsEnabled = false;
@@ -93,8 +94,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     if (success)
                     {
                         Serilog.Log.Information("Skill purchased via UI: {SkillId}", skillId);
-                        // Before the repaint: it rebuilds the tree and a detached anchor cannot be mapped.
-                        _purchaseBurst.Fire(card, EnhancementBurstCount);
+                        // The wallet write already posted a repaint that detaches `card`: rebuild now and burst
+                        // on the fresh node (tree wrappers and secret cards both carry the skill id as Tag).
+                        Repaint();
+                        (TopLevel.GetTopLevel(this) as Window)?.UpdateLayout();
+                        var node = this.GetLogicalDescendants().OfType<Control>()
+                            .FirstOrDefault(c => c.Tag as string == skillId) ?? card;
+                        _purchaseBurst.Fire(node, EnhancementBurstCount);
                         if (PrestigeRankNow() > rankBefore && _prestigeRow != null)
                             _purchaseBurst.Fire(_prestigeRow, PrestigeBurstCount, color: Env.GlowColor);
                     }

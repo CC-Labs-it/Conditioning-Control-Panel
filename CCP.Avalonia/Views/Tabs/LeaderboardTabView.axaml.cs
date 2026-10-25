@@ -116,12 +116,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // browser hop) are still unhooked.
 
             RefreshTrophyStats();
+            // RestoreFrom/Reset swap the settings object (SettingsService.cs:1135, :1149): follow the new one.
+            Models.AppSettings? watched = null;
+            void Watch()
+            {
+                if (watched != null) watched.PropertyChanged -= OnTrophySettingsChanged;
+                watched = CoreSettings.Current;
+                watched.PropertyChanged += OnTrophySettingsChanged;
+                Dispatcher.UIThread.Post(RefreshTrophyStats);
+            }
             AttachedToVisualTree += (_, _) =>
             {
-                CoreSettings.Current.PropertyChanged += OnTrophySettingsChanged;
+                Watch();
                 RefreshTrophyStats();
+                if (CoreSettings.Service is { } svc) svc.CurrentReplaced += Watch;
             };
-            DetachedFromVisualTree += (_, _) => CoreSettings.Current.PropertyChanged -= OnTrophySettingsChanged;
+            DetachedFromVisualTree += (_, _) =>
+            {
+                if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= Watch;
+                if (watched != null) watched.PropertyChanged -= OnTrophySettingsChanged;
+                watched = null;
+            };
 
             Loaded += OnLeaderboardTabLoaded;
             PropertyChanged += OnLeaderboardTabPropertyChanged;
