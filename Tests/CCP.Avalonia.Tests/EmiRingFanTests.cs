@@ -21,7 +21,7 @@ public sealed class EmiRingFanTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -103,7 +103,7 @@ public sealed class EmiRingFanTests
             CoreAudio.PlayOneShotProvider = (path, _, tag, _, _) => played.Add(tag);
             CoreSettings.Current.MasterVolume = 50;
             EmiSfx.Clock = clock;
-            var desk = new EmiDeskWindow();
+            var desk = new EmiDeskWindow { PatClock = clock };
             desk.Show();
             var pat = typeof(EmiDeskWindow).GetMethod("PetFromClick",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
@@ -112,6 +112,7 @@ public sealed class EmiRingFanTests
             Assert.Equal(pets + 1, st.PetsTotal);
 
             clock.Now += TimeSpan.TicksPerSecond;   // past the sfx floor, inside the 6 s pet cooldown
+            desk.AdvancePatFeedback();              // the 900 ms pet face is over; a live one eats the click
             pat.Invoke(desk, null);
             Assert.Equal(2, played.Count);
             Assert.Equal(pets + 1, st.PetsTotal);
