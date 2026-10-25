@@ -162,16 +162,6 @@
     <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.9.0.20240103" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
 
-    <!-- WebRTC data channel for the Goon Game 1v1 transport (Services\GoonGame\).
-         Pure managed .NET (BouncyCastle DTLS + its own SCTP stack), MIT, no native libs — so
-         it survives the single-file / self-contained publish with no extraction shim.
-         DATA CHANNEL ONLY: no media tracks are ever created; mic/cam never cross the wire.
-         Verified at coding time on net8.0 + Windows 11 (26200): two in-process peers reach
-         `connected` in ~0.85 s, an ordered/reliable channel opens at ~0.97 s, a 60 KB string
-         round-trips intact (SCTP fragmentation works), and public STUN yields an srflx
-         candidate. See docs/GOON_GAME_PLAN.md "Transport decisions". -->
-    <PackageReference Include="SIPSorcery" Version="10.0.14" />
-
     <!-- SVG rendering for color emoji (Twemoji) — WPF can't render Segoe UI Emoji
          in color, so we ship the Twemoji SVG set and render via SharpVectors.
          See Helpers/EmojiImage.cs. -->
@@ -578,7 +568,8 @@
       ..\Assets\web\piecebypiece\dev\**\*;
       ..\Assets\web\piecebypiece\**\*.md;
       ..\Assets\web\piecebypiece\package.json;
-      ..\Assets\web\dtrh\tests\**\*
+      ..\Assets\web\dtrh\tests\**\*;
+      ..\Assets\web\intake\tests\**\*
     </ArcademyHarnessExclude>
     <!-- Remix engine (Resources\web\remix, vendored from cclabs-site/remix for the Jackpot Remix
          flash): its node tests ride along so the vendored copy stays checkable, but they are
@@ -607,7 +598,8 @@
       $(MSBuildProjectDirectory)\..\Assets\web\piecebypiece\dev\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\piecebypiece\**\*.md;
       $(MSBuildProjectDirectory)\..\Assets\web\piecebypiece\package.json;
-      $(MSBuildProjectDirectory)\..\Assets\web\dtrh\tests\**\*
+      $(MSBuildProjectDirectory)\..\Assets\web\dtrh\tests\**\*;
+      $(MSBuildProjectDirectory)\..\Assets\web\intake\tests\**\*
     </ArcademyHarnessExcludeAbs>
   </PropertyGroup>
 
@@ -654,13 +646,6 @@
     <!-- EMI desk lines (Resources\emi\desk-lines.json): read from disk at runtime by the desk
          line engine, so it ships next to the exe like the web assets above. -->
     <Content Include="..\Assets\emi\**\*.json" Link="Resources\emi\%(RecursiveDir)%(Filename)%(Extension)">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
-    </Content>
-    <!-- Header banner line pool (Resources\banner\lines.<lang>.json): read from disk at
-         runtime by BannerPoolService, so it ships next to the exe like the EMI lines above. -->
-    <Content Include="..\Assets\banner\*.json" Link="Resources\banner\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>

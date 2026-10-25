@@ -124,7 +124,7 @@ public sealed class LeashSelfCard : Border
     private FrameworkElement Waiting()
     {
         var sp = new StackPanel { Margin = new Thickness(0, 10, 0, 0), Tag = "leash-self-waiting" };
-        int gates = _me.Pending.Count(p => p.Kind != PunishKind.Chaster);
+        int gates = LeashUiRules.PendingGateCount(_me.Pending);
         if (gates > 0) sp.Children.Add(Line("bolt", FriendsLook.RedBrush, Loc.GetF("leash_self_pending", gates)));
         if (_me.Assignment is { } a)
         {
@@ -195,6 +195,7 @@ public sealed class LeashSelfCard : Border
             (int)_me.Intensity,
             i => _ = SetLevelAsync((LeashIntensity)i),
             "leash-level"));
+        sp.Children.Add(new LeashLevelHelp(_me.Intensity, lines: true));
 
         bool dnd = LeashUiRules.DndOn(_me.DndUntil, now);
         var h2 = LeashLook.Caption(dnd && _me.DndUntil is { } u ? Loc.GetF("leash_self_quiet_until", LeashUiRules.DndUntilText(u)) : Loc.Get("leash_self_quiet"),

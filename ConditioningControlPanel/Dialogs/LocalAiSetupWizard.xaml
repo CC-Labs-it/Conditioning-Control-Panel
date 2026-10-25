@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
         Title="{loc:Str dialog_local_ai_setup_title}"
-        Width="560" Height="540"
+        Width="560" Height="650"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         Background="{DynamicResource DarkerBgBrush}">
@@ -115,6 +115,21 @@
                             <TextBlock Style="{StaticResource WizardBody}"
                                        Text="{loc:Str label_local_ai_consent_runs_local}"/>
                         </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Owner, 2026-10-14: say plainly that this runs on the player's own PC and can
+                     slow it down; the title turns into a warning when the PC is under the
+                     recommendation (Services/AIService/LocalAiHardware). -->
+                <Border x:Name="PerfCard" Margin="0,14,0,0" Padding="14,10" CornerRadius="6"
+                        Background="{DynamicResource PanelBgBrush}" BorderThickness="1"
+                        BorderBrush="{StaticResource PinkBrush}">
+                    <StackPanel>
+                        <TextBlock x:Name="TxtPerfTitle" Style="{StaticResource WizardBody}" FontWeight="SemiBold"
+                                   Text="{loc:Str label_local_ai_perf_title}"/>
+                        <TextBlock Margin="0,6,0,0" Style="{StaticResource WizardBody}"
+                                   Text="{loc:Str label_local_ai_perf_body}"/>
+                        <TextBlock x:Name="TxtPerfFound" Margin="0,6,0,0" Style="{StaticResource WizardSub}"/>
                     </StackPanel>
                 </Border>
 

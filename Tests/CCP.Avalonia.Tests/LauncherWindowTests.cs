@@ -22,12 +22,12 @@ namespace CCP.Avalonia.Tests;
 /// the close rule (WPF LauncherHost, decided by Core LauncherRules).</summary>
 public sealed class LauncherWindowTests
 {
-    private static void Run(Action<MainShellWindow> body)
+    private static void Run(Action<MainShellWindow> body, bool pumpUntilIdle = true)
     {
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -42,7 +42,7 @@ public sealed class LauncherWindowTests
             try
             {
                 shell.Show();
-                Dispatcher.UIThread.RunJobs();
+                if (pumpUntilIdle) Dispatcher.UIThread.RunJobs();
                 body(shell);
             }
             finally
@@ -63,6 +63,84 @@ public sealed class LauncherWindowTests
     private static string?[] Texts(Control c) =>
         c.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
 
+    // Finite routing/opacity checks drive their own clock; they do not pump the
+    // unrelated headless renderer until idle (Skia frames can stay queued under load).
+    [Fact]
+    public void BackToLauncher_WithMotion_HoldsTheVisiblePanelForItsFade() => Run(shell =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        Assert.True(LauncherWindow.BackToLauncher(shell));
+        Assert.True(shell.IsVisible);
+        Assert.Null(LauncherWindow.Instance);
+        var root = shell.FindControl<Grid>("RootGrid")!;
+        shell.StepLauncherFade(0.09);
+        Assert.Equal(0.75, root.Opacity, 6);
+        Assert.True(LauncherWindow.BackToLauncher(shell)); // a repeated press must not restart it
+        shell.StepLauncherFade(0.09);
+        Assert.False(shell.IsVisible);
+        Assert.True(LauncherWindow.Instance!.IsVisible);
+        Assert.Equal(1, root.Opacity);
+    }, pumpUntilIdle: false);
+
+    [Fact]
+    public void OpenPanel_WithMotion_FadesThePanelUp_ThenParksOpaque() => Run(shell =>
+    {
+        LauncherWindow.BackToLauncher(shell); // motion off for initial routing
+        var launcher = LauncherWindow.Instance!;
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        launcher.OpenPanel();
+        launcher.StepFx(0.3);
+        Assert.True(shell.IsVisible);
+        Assert.False(launcher.IsVisible);
+        var root = shell.FindControl<Grid>("RootGrid")!;
+        Assert.Equal(0, root.Opacity);
+        shell.StepLauncherFade(0.13);
+        Assert.Equal(0.75, root.Opacity, 6);
+        shell.StepLauncherFade(0.13);
+        Assert.Equal(1, root.Opacity);
+    }, pumpUntilIdle: false);
+
+    [Fact]
+    public void TrayShow_InterruptsAPendingLauncherFade_AndRestoresOpacity() => Run(shell =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        LauncherWindow.BackToLauncher(shell);
+        shell.StepLauncherFade(0.09);
+        shell.ShowFromTray();
+        shell.StepLauncherFade(1);
+        Assert.True(shell.IsVisible);
+        Assert.Null(LauncherWindow.Instance);
+        Assert.Equal(1, shell.FindControl<Grid>("RootGrid")!.Opacity);
+    }, pumpUntilIdle: false);
+
+    [Fact]
+    public void HideDuringPanelFade_StillOpensTheLauncher() => Run(shell =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        LauncherWindow.BackToLauncher(shell);
+        shell.StepLauncherFade(0.09);
+        shell.Hide(); // WPF guard: the pending step still runs
+        Assert.True(LauncherWindow.Instance!.IsVisible);
+        Assert.Equal(1, shell.FindControl<Grid>("RootGrid")!.Opacity);
+    }, pumpUntilIdle: false);
+
+    [Fact]
+    public void LockdownStartingDuringPanelFade_KeepsThePanelVisible() => Run(shell =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        LauncherWindow.BackToLauncher(shell);
+        var ld = LockdownService.Current = new LockdownService();
+        try
+        {
+            ld.Activate(TimeSpan.FromMinutes(30));
+            shell.StepLauncherFade(1);
+            Assert.True(shell.IsVisible);
+            Assert.Null(LauncherWindow.Instance);
+            Assert.Equal(1, shell.FindControl<Grid>("RootGrid")!.Opacity);
+        }
+        finally { ld.Deactivate(); }
+    }, pumpUntilIdle: false);
+
     [Fact]
     public void BackToLauncher_TucksThePanel_AndIntakeOpensItOnTheTab() => Run(shell =>
     {
@@ -75,8 +153,9 @@ public sealed class LauncherWindowTests
         Assert.True(launcher.IsVisible);
         Assert.False(shell.IsVisible);
 
-        // Only the destinations this head has: the Breakout demo and Piece by Piece game hosts, then the intake tab.
-        Assert.Equal(new[] { "breakoutdemo", "piecebypiece", "intake" }, Tiles(launcher));
+        // Only the destinations this head has: the Breakout demo, Piece by Piece and Down the Rabbit Hole game hosts,
+        // then the intake tab.
+        Assert.Equal(new[] { "breakoutdemo", "piecebypiece", "dtrh", "intake" }, Tiles(launcher));
         var tile = launcher.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
         Assert.Contains(Loc.Get("launcher_game_intake_title"), Texts(tile));
         Assert.Contains(Loc.Get("launcher_play"), Texts(tile));

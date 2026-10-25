@@ -4,7 +4,7 @@
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages.AiPage">
     <!-- PORTED from ConditioningControlPanel/Views/Controls/Companion/Pages/AiPage.xaml (48f587200, 9db154ab6):
          Companion > AI, the Connection drawer, how often it talks (Behaviour + Triggers, open) and Memory.
-         The hosts borrow the room's LIVE controls while the page is shown (AiPage.axaml.cs). -->
+         The hosts adopt the collapsed room's LIVE controls (AiPage.axaml.cs). -->
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
         <StackPanel Margin="24,16,24,24" MaxWidth="980" HorizontalAlignment="Stretch">
             <TextBlock Theme="{StaticResource Type.PageTitle}" Text="{loc:Str label_ai_badge}" Margin="0,0,0,16"/>
@@ -25,8 +25,8 @@
                 <StackPanel>
                     <TextBlock Text="{loc:Str companion_v2_memory}" FontSize="15" FontWeight="SemiBold" Foreground="#FF69B4"/>
                     <TextBlock Text="{loc:Str companion_v2_memory_note}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,2,0,10"/>
-                    <!-- ponytail: WPF puts PreferredNameEditor + ConversationRecap (Companion V2) above the diary;
-                         neither exists on this head (parity row views-companion-v2-conversation). -->
+                    <ContentControl x:Name="NameHost" Focusable="False"/>
+                    <ContentControl x:Name="RecapHost" Focusable="False"/>
                     <ContentControl x:Name="MemoryHost" Focusable="False"/>
                 </StackPanel>
             </Border>
