@@ -36,6 +36,11 @@
          WPF head's Microsoft.Web.WebView2 dependency does not follow us across. Only Views/Controls/WebHost
          touches it, and that control draws a fallback panel wherever no web view exists. -->
     <PackageReference Include="Avalonia.Controls.WebView" Version="12.1.0" />
+    <!-- Native trailer policy uses only Core COM wrappers; never load the SDK's WPF/WinForms controls. -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2535.41" GeneratePathProperty="true" ExcludeAssets="all" />
+    <Reference Include="Microsoft.Web.WebView2.Core">
+      <HintPath>$(PkgMicrosoft_Web_WebView2)/lib/netcoreapp3.0/Microsoft.Web.WebView2.Core.dll</HintPath>
+    </Reference>
     <!-- ColorView, the inline colour panel behind ColorPickerDialog. WPF opened
          System.Windows.Forms.ColorDialog; this is the cross-platform twin. PINNED to the same
          12.1.2 as Avalonia itself - a control package built against a different Avalonia minor

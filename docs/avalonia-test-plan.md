@@ -673,3 +673,8 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### Chaster trailer native host completion
+1. With a linked test lock, visit Circe's menu, wait before hovering, then hover two different price rows. Expect the one 320 px trailer to open after 150 ms, retarget immediately, hold while the pointer crosses onto it, and close 140 ms after leaving. Reopen repeatedly; expect the same browser scene engine to survive moving from the hidden warm host into the popup. WPF `Views/Tabs/ChasterTabView.xaml.cs:123-126`, `Views/Tabs/ChasterTabView.xaml.cs:1378-1458`. Rows: `ctrl-chaster-trailer-view`.
+2. On Windows, focus the trailer and try the context menu, Ctrl+R, Ctrl+plus/minus/0, and F12. Expect no browser menu, zoom, reload or tools; no status UI, web messages or built-in error page. On Linux, check context-menu suppression and the still-picture fallback after a failed load. WPF `Controls/ChasterTrailerView.cs:163-170`. Rows: `ctrl-chaster-trailer-view`.
+3. On each platform, terminate only the trailer web-content process while hovering a row. Expect the still picture immediately, without another hover; subsequent row changes keep showing still art and live price copy. Repeat during initial navigation, then hide/unlink/panic; expect no late browser scene, popup or figure. WPF `Controls/ChasterTrailerView.cs:216-240`. Rows: `ctrl-chaster-trailer-view`.

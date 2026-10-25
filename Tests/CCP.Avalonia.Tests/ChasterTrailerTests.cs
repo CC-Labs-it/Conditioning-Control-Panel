@@ -13,6 +13,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -121,6 +122,50 @@ public sealed class ChasterTrailerTests
         Assert.False(view.AllowsNavigation(new Uri("http://127.0.0.1:12346/chaster/trailers.html")));
         Assert.False(view.AllowsNavigation(new Uri("http://127.0.0.1:12345/elsewhere.html")));
         Assert.Equal("window.__mount && window.__mount('typo',30,null)", ChasterTrailerView.MountScript("t\\y'p\"o<>", 30));
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ProcessFailureImmediatelyRestoresFallbackDuringMountOrAfterReady(bool afterReady) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        App();
+        var mount = new TaskCompletionSource<string?>();
+        var host = new WebHost(); // headless: no native browser or persistent profile
+        var view = new ChasterTrailerView(Page, script => script.StartsWith("window.__mount")
+            ? mount.Task : Task.FromResult<string?>("true"));
+        view.ObserveBrowser(host);
+        var failures = 0;
+        var ready = 0;
+        view.Failed += (_, _) => failures++;
+        view.Ready += (_, _) => ready++;
+        view.Show("typo", 30);
+        var navigation = view.NavigationFinished(Page, true);
+        if (afterReady) { mount.SetResult("true"); await navigation; Assert.True(view.IsReady); }
+        host.OnBrowserProcessFailed(); // same signal used by the native adapters, without another hover/mount
+        Assert.True(view.HasFailed);
+        Assert.False(view.IsReady);
+        Assert.Equal(1, failures);
+        if (!afterReady) { mount.SetResult("true"); await navigation; Assert.Equal(0, ready); }
+        host.OnBrowserProcessFailed();
+        Assert.Equal(1, failures);
+        view.Shutdown();
+    });
+
+    [Fact]
+    public Task ProcessFailureAfterShutdownDoesNotNotifyOrRestart() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        App();
+        var host = new WebHost();
+        var view = new ChasterTrailerView(Page, _ => Task.FromResult<string?>("true"));
+        view.ObserveBrowser(host);
+        var failures = 0;
+        view.Failed += (_, _) => failures++;
+        view.Shutdown();
+        host.OnBrowserProcessFailed();
+        Assert.Equal(0, failures);
+        Assert.False(view.IsReady);
         return Task.CompletedTask;
     });
 

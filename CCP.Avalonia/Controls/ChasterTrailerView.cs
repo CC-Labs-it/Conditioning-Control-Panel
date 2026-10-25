@@ -52,7 +52,7 @@ public sealed class ChasterTrailerView : Grid
             _page = new Uri(WebAssetServer.Shared.Url("chaster/trailers.html"));
             _script = _web.InvokeScriptAsync;
             _web.AllowNavigation = AllowsNavigation;
-            _web.NavigationResult += (uri, ok) => _ = NavigationFinished(uri, ok);
+            ObserveBrowser(_web);
             Children.Add(_web);
             _web.Navigate(_page);
         }
@@ -137,6 +137,14 @@ public sealed class ChasterTrailerView : Grid
         if (IsReady && _script != null) _ = _script(PauseScript);
     }
 
+    internal void ObserveBrowser(WebHost web)
+    {
+        web.NavigationResult += (uri, ok) => _ = NavigationFinished(uri, ok);
+        web.BrowserProcessFailed += BrowserProcessFailed;
+    }
+
+    internal void BrowserProcessFailed() => Fail("browser process failed");
+
     private void Fail(string reason)
     {
         if (_disposed || HasFailed) return;
@@ -156,6 +164,4 @@ public sealed class ChasterTrailerView : Grid
         Children.Clear();
         _web = null;
     }
-    // ponytail: WebHost exposes no web-process failure event or native accelerator/zoom settings.
-    // Script failures fall back on the next mount; automatic crash notification remains unported.
 }
