@@ -118,6 +118,33 @@ internal static class Win32Overlay
         return SetClickThrough(window, hwnd, through);
     }
 
+    [DllImport("user32.dll")] private static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, bool redraw);
+    [DllImport("gdi32.dll")] private static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);
+    [DllImport("gdi32.dll")] private static extern int CombineRgn(IntPtr destination, IntPtr first, IntPtr second, int mode);
+    [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr obj);
+
+    internal static bool SetWindowInputRegion(TopLevel window, IntPtr hwnd, global::Avalonia.PixelRect[]? rects)
+    {
+        if (!OperatingSystem.IsWindows() || !SetClickThrough(window, hwnd, false)) return false;
+        if (rects is null) return SetWindowRgn(hwnd, IntPtr.Zero, true) != 0;
+        var region = CreateRectRgn(0, 0, 0, 0);
+        if (region == IntPtr.Zero) return false;
+        try
+        {
+            foreach (var r in rects)
+            {
+                var part = CreateRectRgn(r.X, r.Y, r.Right, r.Bottom);
+                if (part == IntPtr.Zero) return false;
+                try { if (CombineRgn(region, region, part, 2 /* RGN_OR */) == 0) return false; }
+                finally { DeleteObject(part); }
+            }
+            if (SetWindowRgn(hwnd, region, true) == 0) return false;
+            region = IntPtr.Zero; // user32 owns the region after success.
+            return true;
+        }
+        finally { if (region != IntPtr.Zero) DeleteObject(region); }
+    }
+
     private static StrongBox<bool> Track(TopLevel window) => Wanted.GetValue(window, w =>
     {
         var box = new StrongBox<bool>();

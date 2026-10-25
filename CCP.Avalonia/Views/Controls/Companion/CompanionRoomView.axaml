@@ -19,7 +19,6 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion"
-             xmlns:v2="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion.V2"
              mc:Ignorable="d"
              d:DesignWidth="1240" d:DesignHeight="1400">
 
@@ -98,10 +97,6 @@
                     <!-- ========== Z0 + Z1 ==========
                          WPF binds DataContext="{Binding Hero}"; this head's zones seed themselves
                          from CoreSettings, so there is no ICompanionRoomVm to bind against. -->
-                    <!-- Companion V2 conversation page (WPF CompanionTabView mounts it and collapses the room;
-                         this head keeps the room below it until companion-v2-pages-b builds the pages). -->
-                    <v2:ConversationPage x:Name="ConversationZone"
-                                         AutomationProperties.AutomationId="CompanionConversationPage"/>
                     <local:CompanionHeroCard x:Name="HeroZone" Margin="0,0,0,16"
                                              AutomationProperties.AutomationId="CompanionRoomHero"/>
 
