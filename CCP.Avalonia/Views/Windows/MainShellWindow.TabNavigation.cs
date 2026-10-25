@@ -66,8 +66,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal Tabs.AppSettingsTabView? AppSettingsPage => Named<Tabs.AppSettingsTabView>("AppSettingsTab");
         internal Tabs.StudioTabView? StudioRack => Named<Tabs.StudioTabView>("StudioTab");
 
-        /// <summary>The Companion tab's room (the zone pills scroll it).</summary>
-        private Controls.Companion.CompanionRoomView? RoomView() =>
+        /// <summary>The Companion tab's collapsed room, which owns the zones until a page adopts them.</summary>
+        internal Controls.Companion.CompanionRoomView? RoomView() =>
             Named<Tabs.CompanionTabView>("CompanionTab")?.FindControl<Controls.Companion.CompanionRoomView>("Room");
 
         /// <summary>The tab key currently shown, lower-case. "settings" until the first switch,
@@ -98,10 +98,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ["friends"] = "FriendsTab",          ["leash"] = "LeashTab",
             // Nav rework zone pills (WPF MainWindow.TabNavigation.cs:521/572/666): places inside a page.
             ["playeyes"] = "PlayTab", ["playsessions"] = "PlayTab", ["folders"] = "AssetsTab", ["ramp"] = "StudioTab",
-            // WPF 5681c132a gives these three their own pages because v2 collapses the room. This head
-            // has no v2 ConversationPage, so the room is on screen: they are zone pills into it until
-            // the pages land with views-companion-v2-conversation (docs/avalonia-decisions.md).
-            ["personality"] = "CompanionTab", ["permissions"] = "CompanionTab", ["companionlinks"] = "CompanionTab",
+            // WPF 5681c132a: v2 collapses the room, so these three are pages of their own (MainWindow.CompanionTabs.cs).
+            ["personality"] = "CompanionPersonalityTab", ["permissions"] = "CompanionPermissionsTab", ["companionlinks"] = "CompanionLinksTab",
         };
 
         /// <summary>Keys that open a window or a service rather than a tab. ShowTab leaves the
@@ -205,10 +203,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     case "haptics": StudioRack?.FocusRackEntry("haptics"); RefreshSessionFeatureLock(); MaybeShowFeatureIntro("haptics"); break;
                     // WPF :666, the "Scheduler & Ramp" zone pill: the rack's scheduler module.
                     case "ramp": StudioRack?.FocusRackEntry("scheduler"); RefreshSessionFeatureLock(); break;
-                    // The Companion zone pills (see TabPanels): scroll the room to what WPF's page hosts.
-                    case "personality": RoomView()?.RevealPersonality(); break;
-                    case "permissions": RoomView()?.RevealPermissions(); break;
-                    case "companionlinks": RoomView()?.RevealWorkshop(Controls.Companion.CompanionRoomAnchors.WorkshopLibraryCell); break;
+                    // WPF MainWindow.CompanionTabs.cs NavTabHost(..., OnShown): each page adopts the collapsed room's live zones.
+                    case "personality": Named<Controls.Companion.Pages.PersonalityPage>("CompanionPersonalityTab")?.OnShown(RoomView()); break;
+                    case "permissions": Named<Controls.Companion.Pages.PermissionsPage>("CompanionPermissionsTab")?.OnShown(RoomView()); break;
+                    case "companionlinks": Named<Controls.Companion.Pages.LinksPage>("CompanionLinksTab")?.OnShown(RoomView()); break;
 
                     // WPF MainWindow.TabNavigation.cs:420/457/527/534 - the door tour cards (studio-rack: :505, case "studio").
                     case "play": case "lab": case "playeyes": case "playsessions":
@@ -223,10 +221,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         };
                         if (zone != null) Named<Tabs.PlayTabView>("PlayTab")?.ScrollToZone(zone);
                         break;
-                    case "awareness": MaybeShowFeatureIntro("awareness"); break;
+                    // WPF AwarenessTabView.Companion.cs HostCompanionPrivacy: the collapsed room's privacy card.
+                    case "awareness": Named<Tabs.AwarenessTabView>("AwarenessTab")?.HostCompanionPrivacy(RoomView()); MaybeShowFeatureIntro("awareness"); break;
                     // WPF MainWindow.CompanionTabs.cs NavTabHost("companionai", OnShown): borrow the room's live zones.
                     case "companionai":
-                        Named<Controls.Companion.Pages.AiPage>("CompanionAiTab")?.OnShown(Named<Tabs.CompanionTabView>("CompanionTab")?.Room);
+                        Named<Controls.Companion.Pages.AiPage>("CompanionAiTab")?.OnShown(RoomView());
                         break;
                     case "lockdown": MaybeShowFeatureIntro("lockdown"); break;
                     case "blinktrainer": MaybeShowFeatureIntro("blinktrainer"); break;
@@ -254,6 +253,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     case "leaderboard": _ = Named<Tabs.LeaderboardTabView>("LeaderboardTab")?.RefreshLeaderboardAsync(); RefreshSeasonRecapReview(); break;
                     // WPF MainWindow.SocialTabs.cs: subscribe and ask for a fresh list (the page folds itself on hide).
                     case "friends": Named<Tabs.FriendsTabView>("FriendsTab")?.OnShown(); break;
+                    case "leash": Named<Tabs.LeashTabView>("LeashTab")?.OnShown(); break;
 
                     // WPF MainWindow.Exclusives.cs RefreshExclusivesTab "on tab show": gates can move between visits.
                     case "premium": RefreshExclusivesTab(); break;

@@ -175,10 +175,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void OnSessionLogReady(object? sender, SessionLogReadyEventArgs e)
         {
+            if (_windowClosed || _exitRequested) return;
             if (_suppressNextSessionSummary) { _suppressNextSessionSummary = false; return; }
             var log = e.Log;
             Dispatcher.UIThread.Post(() =>
             {
+                if (_windowClosed || _exitRequested) return;
                 // WPF MainWindow.Presets.cs:1709: the run that just ended is a receipt now; after the
                 // suppressed-summary return above, so a quiet stop stays quiet.
                 RefreshTakeawayShelf();

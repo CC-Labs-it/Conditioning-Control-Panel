@@ -111,6 +111,16 @@ namespace ConditioningControlPanel.AvatarTubeLayout
             double tailX = tailMax < tailMin ? x + w / 2 : Math.Clamp(anchorX, tailMin, tailMax);
             return new BubblePlan(new Box(x, top, w, h), Math.Max(0, maxW - chrome), tail, tailX, growsLeft);
         }
+
+        /// <summary>
+        /// When a placement earns a log line: the side, the row (its top and height), her box, the
+        /// work area, the main window and the scale. Never the bubble's left edge or width: the
+        /// typewriter widens the bubble one character at a time, so a key on those wrote a line every
+        /// 30-90 ms and filled a quarter of every bug report's activity log (ccp-bugs #1454, #1479).
+        /// </summary>
+        public static string LogKey(BubblePlan plan, Box avatar, Box workArea, Box? obstacle, double scale)
+            => FormattableString.Invariant(
+                $"{plan.Tail}|{plan.GrowsLeft}|{(int)plan.Bubble.Y},{(int)plan.Bubble.H}|{(int)avatar.X},{(int)avatar.Y},{(int)avatar.W},{(int)avatar.H}|{(int)workArea.X},{(int)workArea.Y},{(int)workArea.W},{(int)workArea.H}|{(obstacle is Box m ? $"{(int)m.X},{(int)m.Y},{(int)m.W},{(int)m.H}" : "-")}|{scale:F2}");
     }
 
     /// <summary>Which side of the main window the attached tube ended up on.</summary>

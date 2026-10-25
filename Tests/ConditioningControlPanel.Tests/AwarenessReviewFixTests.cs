@@ -475,8 +475,10 @@ public class AwarenessReviewFixTests : IDisposable
         watcher.Stop();
         Assert.Null(watcher.Current);
 
+        // A second Start must re-arm instead of no-op: a no-op leaves the watcher stopped, so the poll below
+        // reads nothing. (Comparing StartCompletion instances raced: an arm that completes synchronously is the
+        // runtime's one cached completed Task, so both Starts could return the same instance.)
         watcher.Start();
-        Assert.NotSame(first, watcher.StartCompletion); // a second Start re-arms instead of no-op
         await watcher.StartCompletion;
         await watcher.PollAsync();
 
