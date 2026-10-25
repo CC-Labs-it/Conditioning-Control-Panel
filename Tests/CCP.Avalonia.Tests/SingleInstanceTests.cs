@@ -101,8 +101,6 @@ namespace CCP.Avalonia.Tests
             }
         }
 
-        /// <summary>WPF's kill fails closed (App.xaml.cs:4041-4057): only our exact, readable executable path is a
-        /// target, and a host shared by unrelated processes (dotnet, testhost) never kills anything.</summary>
         /// <summary>The kill is per profile like the mutex: a sandbox (kc, tests) never kills the user's app or
         /// another sandbox running the same binary, and an unreadable profile is never a target.</summary>
         [Fact]
@@ -120,6 +118,8 @@ namespace CCP.Avalonia.Tests
             Assert.True(SingleInstance.SameProfile(null, null, false));                                       // no environ, real app: WPF
         }
 
+        /// <summary>WPF's kill fails closed (App.xaml.cs:4041-4057): only our exact, readable executable path is a
+        /// target, and a host shared by unrelated processes (dotnet, testhost) never kills anything.</summary>
         [Fact]
         public void TheStaleKillOnlyTargetsThisExactBuild()
         {
