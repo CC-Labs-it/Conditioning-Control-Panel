@@ -129,6 +129,7 @@ namespace ConditioningControlPanel.Services
         public bool Loaded { get; private set; }
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
         public Descent.DescentCountdownService? Countdown { get; set; }
+        public Descent.DescentService? DescentReader { get; set; }
         public DateTime? LastSyncTime { get; private set; }
 
         /// <param name="localAchievements">This install's unlocked achievement ids.</param>
@@ -153,6 +154,7 @@ namespace ConditioningControlPanel.Services
         public void Reset()
         {
             StopHeartbeat();
+            DescentReader?.Reset();
             Loaded = false;
             _serverAchievements = null;
             _pendingCosmeticsClear = false;   // never carry one account's unequip into the next
@@ -298,6 +300,7 @@ namespace ConditioningControlPanel.Services
                 // THE FUSE's cache, off the RAW body (WPF ProfileSyncService.HandleDescentCountdown).
                 if (Countdown != null && Descent.DescentCountdownService.TryReadCeremonyAt(json, out var ceremonyAt))
                     Countdown.ApplyCeremonyAt(ceremonyAt);
+                if (DescentReader?.HasSeenBlock == true) DescentReader.RequestRefresh("profile synced");
                 CoreSettings.Save();
                 return true;
             }
@@ -329,6 +332,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF StartHeartbeat: one now, then every 120 s.</summary>
         public void StartHeartbeat()
         {
+            DescentReader?.OnSignedIn();
             if (_heartbeat != null) return;
             _heartbeat = new Timer(_ => _ = HeartbeatAsync(), null, TimeSpan.Zero, HeartbeatInterval);
             Log.Information("Heartbeat started (every {Seconds}s)", HeartbeatInterval.TotalSeconds);

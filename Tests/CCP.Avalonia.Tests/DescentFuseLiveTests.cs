@@ -53,7 +53,7 @@ public sealed class DescentFuseShellTests
     public Task ShellPaintsEachFusePhaseLikeWpf() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();
@@ -98,10 +98,10 @@ public sealed class DescentFuseShellTests
     });
 
     [Fact]
-    public Task ZeroOpensTheLiveShow_OnlyForAnUnansweredAccount() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task ZeroOpensNoLiveShow_RetiredLikeWpf() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();
@@ -114,7 +114,8 @@ public sealed class DescentFuseShellTests
             service.Current.PendingDescentMigrationChoice = DescentMigrationChoices.Restore;
             Assert.Null(MainShellWindow.OpenLiveFuseShow());
             service.Current.PendingDescentMigrationChoice = null;
-            Assert.NotNull(MainShellWindow.OpenLiveFuseShow());
+            Assert.Null(MainShellWindow.OpenLiveFuseShow()); // WPF DescentFuseWindow.ShowsRetired
+            Assert.Empty(DescentFuseWindow.OnScreen);
         }
         finally { DescentFuseWindow.ForceCloseAll(); service.SaveImmediate(); CoreSettings.ServiceProvider = null; }
         return Task.CompletedTask;
