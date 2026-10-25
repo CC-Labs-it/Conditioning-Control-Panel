@@ -391,11 +391,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (r.Width < 16 || r.Height < 16) { NoFace(); return; }
             var lm = run.Mesh!.Detect(bgr, r);
             if (lm == null) { NoFace(); return; }
-            if (_gaze.FaceSeen()) Dispatcher.UIThread.Post(() =>
-            {
-                if (IsRunning) PublishStatus(WebcamStatus.Tracking);
-                OnFaceFound?.Invoke();
-            });
+            if (_gaze.FaceSeen()) Dispatcher.UIThread.Post(FaceFoundOnUi);
             if (HeadPose(_gaze, lm, bgr.Width, bgr.Height) is { } pose)
                 Dispatcher.UIThread.Post(() => OnHeadPose?.Invoke(pose.Yaw, pose.Pitch));
             var left = run.Iris!.Detect(bgr, lm[FaceMeshDetector.LeftEyeOuterIdx], lm[FaceMeshDetector.LeftEyeInnerIdx], isRightEye: false);
@@ -449,13 +445,22 @@ namespace ConditioningControlPanel.Avalonia.Platform
             catch (Exception ex) { gaze.HeadPoseFailed(); Log.Debug("[Webcam] head pose failed: {Error}", ex.Message); return null; }
         }
 
+        // A late post after Stop must not repaint a stopped tracker as live.
+        internal void FaceFoundOnUi()
+        {
+            if (IsRunning) PublishStatus(WebcamStatus.Tracking);
+            OnFaceFound?.Invoke();
+        }
+
+        internal void FaceLostOnUi()
+        {
+            if (IsRunning) PublishStatus(WebcamStatus.FaceLost);
+            OnFaceLost?.Invoke();
+        }
+
         private void NoFace()
         {
-            if (_gaze.FaceMissing()) Dispatcher.UIThread.Post(() =>
-            {
-                if (IsRunning) PublishStatus(WebcamStatus.FaceLost);
-                OnFaceLost?.Invoke();
-            });
+            if (_gaze.FaceMissing()) Dispatcher.UIThread.Post(FaceLostOnUi);
             _blink.CancelClosure();
         }
     }

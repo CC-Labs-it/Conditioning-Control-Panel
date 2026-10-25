@@ -253,10 +253,17 @@ public sealed class PlayWallTests
             try
             {
                 settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full;
+                // Before Show: once animating, a section drops out of EntranceTargets (opacity filter).
+                var last = play.EntranceTargets()[^1];
                 host.Show();
                 Dispatcher.UIThread.RunJobs();
                 var first = Assert.IsType<System.Threading.CancellationTokenSource>(Active()).Token;
                 Assert.False(first.IsCancellationRequested);
+                // The animations really run: one frame in, the last section (240 ms delay) holds its "from" values.
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(0, last.Opacity);
+                Assert.Equal(10, Assert.IsType<global::Avalonia.Media.TranslateTransform>(last.RenderTransform).Y);
                 play.IsVisible = false;
                 Assert.True(first.IsCancellationRequested);
                 Assert.Null(Active());
@@ -269,6 +276,18 @@ public sealed class PlayWallTests
                 host.Content = play;
                 Assert.Null(Active());
                 Assert.Equal(1, play.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Opacity);
+                // WPF AnimateTabIn returns at Reduced before StaggerTabCards.
+                host.Content = null;
+                settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Reduced;
+                host.Content = play;
+                play.IsVisible = false; play.IsVisible = true;
+                Assert.Null(Active());
+                // P07: attaching while hidden (startup) starts nothing.
+                host.Content = null;
+                settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full;
+                play.IsVisible = false;
+                host.Content = play;
+                Assert.Null(Active());
             }
             finally { host.Close(); settings.MotionLevel = previous; }
         });

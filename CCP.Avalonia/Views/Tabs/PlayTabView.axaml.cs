@@ -1,9 +1,6 @@
 using System;
 using System.Linq;
 using System.Threading;
-using Avalonia.Animation;
-using Avalonia.Animation.Easings;
-using Avalonia.Styling;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -65,7 +62,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Platform.WebcamTracker.Instance.StateChanged += OnTrackerChanged;
             RefreshPlayCards();
             RefreshTracker();
-            StartEntrance();
+            if (IsVisible) StartEntrance(); // P07: the tab attaches hidden at startup
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -111,29 +108,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void StartEntrance()
         {
             StopEntrance();
-            if (!AmbientFxCanvas.Env.AllowTransitions) return;
+            // WPF AnimateTabIn returns at Reduced before StaggerTabCards (ChromeFx.cs:248-255).
+            if (AmbientFxCanvas.Env.Level != MotionLevel.Full) return;
             _entrance = new CancellationTokenSource();
             int index = 0;
             foreach (var target in EntranceTargets())
             {
                 target.RenderTransform = new TranslateTransform();
                 var delay = TimeSpan.FromMilliseconds(40 * Math.Min(index++, 6));
-                Enter(target, delay, 220, OpacityProperty, 0, 1, _entrance.Token);
-                Enter(target, delay, 260, TranslateTransform.YProperty, 10, 0, _entrance.Token);
+                MainShellWindow.Entrance(target, delay, 220, OpacityProperty, 0, 1, _entrance.Token);
+                MainShellWindow.Entrance(target, delay, 260, TranslateTransform.YProperty, 10, 0, _entrance.Token);
             }
         }
-
-        private static void Enter(Control target, TimeSpan delay, int ms, AvaloniaProperty property,
-            double from, double to, CancellationToken cancel) => _ = new Animation
-            {
-                Delay = delay, Duration = TimeSpan.FromMilliseconds(ms),
-                Easing = new QuadraticEaseOut(), FillMode = FillMode.Backward,
-                Children =
-                {
-                    new KeyFrame { Cue = new Cue(0), Setters = { new Setter(property, from) } },
-                    new KeyFrame { Cue = new Cue(1), Setters = { new Setter(property, to) } },
-                },
-            }.RunAsync(target, cancel);
 
         private void OnTrackerChanged() => Dispatcher.UIThread.Post(() =>
         {

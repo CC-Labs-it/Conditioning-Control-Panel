@@ -74,9 +74,12 @@ public sealed class WebcamTrackerTests
         WithConsent(false, () =>
         {
             WebcamTracker.SourceFactory = () => src;
+            var seen = Statuses();
             Assert.False(WebcamTracker.Instance.Start());
             Assert.Equal(0, src.Opens);
             Assert.NotNull(WebcamTracker.Instance.LastError);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { WebcamStatus.Starting, WebcamStatus.Error }, seen.Done());
         });
     }
 
@@ -87,9 +90,12 @@ public sealed class WebcamTrackerTests
         WithConsent(true, () =>
         {
             WebcamTracker.SourceFactory = () => src;
+            var seen = Statuses();
             Assert.False(WebcamTracker.Instance.Start());
             Assert.False(WebcamTracker.Instance.IsRunning);
             Assert.StartsWith("No camera could be opened", WebcamTracker.Instance.LastError);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { WebcamStatus.Starting, WebcamStatus.Error }, seen.Done());
             Assert.True(src.Disposed);
         });
     }
@@ -102,14 +108,39 @@ public sealed class WebcamTrackerTests
         {
             WebcamTracker.SourceFactory = () => src;
             WebcamTracker.Instance.FrameErrors = 0;
+            var seen = Statuses();
             Assert.True(WebcamTracker.Instance.Start(), WebcamTracker.Instance.LastError);
             Assert.True(WebcamTracker.Instance.IsRunning);
             WaitFor(() => Volatile.Read(ref src.Reads) >= 5);
             Assert.Equal(0, WebcamTracker.Instance.FrameErrors); // the loop swallows; nothing may have thrown
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            // The synthetic frame holds no face; drive the posted face callbacks directly.
+            WebcamTracker.Instance.FaceLostOnUi();
+            WebcamTracker.Instance.FaceFoundOnUi();
             WebcamTracker.Instance.Stop();
             Assert.False(WebcamTracker.Instance.IsRunning);
             Assert.True(src.Disposed);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            WebcamTracker.Instance.FaceLostOnUi(); // late post after Stop stays Stopped
+            Assert.Equal(new[] { WebcamStatus.Starting, WebcamStatus.Tracking, WebcamStatus.FaceLost,
+                WebcamStatus.Tracking, WebcamStatus.Stopped }, seen.Done());
+            Assert.Equal(WebcamStatus.Stopped, WebcamTracker.Instance.Status);
         });
+    }
+
+    private sealed class StatusLog
+    {
+        public readonly System.Collections.Generic.List<WebcamStatus> Seen = new();
+        public void Add() => Seen.Add(WebcamTracker.Instance.Status);
+        public WebcamStatus[] Done() { WebcamTracker.Instance.StateChanged -= Add; return Seen.ToArray(); }
+    }
+
+    private static StatusLog Statuses()
+    {
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); // drop posts left by an earlier test
+        var log = new StatusLog();
+        WebcamTracker.Instance.StateChanged += log.Add;
+        return log;
     }
 
     private static void WaitFor(Func<bool> cond)
@@ -148,6 +179,8 @@ public sealed class WebcamTrackerTests
             ConditioningControlPanel.CoreSettings.Current.WebcamConsentGiven = false;
             WaitFor(() => src.Disposed);
             WaitFor(() => !WebcamTracker.Instance.IsRunning);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(WebcamStatus.Error, WebcamTracker.Instance.Status); // loop ended on its own
         });
     }
 
