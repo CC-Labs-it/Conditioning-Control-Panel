@@ -9,6 +9,7 @@ import {goonworksTubeShell,goonworksPlatformGeometry} from './goonworksGeometry.
 import { Q } from './quality.js';
 import { machineryBeatAt, gearBeatTravel } from '../track/machineryBeat.js';
 import { createGearSpiralPaint } from './gearSpirals.js';
+import { visualClearanceSamples, capVisualDepth } from '../track/visualDepth.js';
 export { applyGoonworksRoad, applyGoonworksRails } from './goonworksMaterials.js';
 export { goonworksMediaLayout, goonworksSpiralLayout } from './goonworksMedia.js';
 
@@ -55,19 +56,14 @@ export function goonworksGearGeometry(){
   const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(P,3));g.setAttribute('goonworksAccent',new Float32BufferAttribute(A,1));g.computeVertexNormals();g.computeBoundingSphere();return g;
 }
 
-/** Extend only actual side and underside triangles. Existing gaps remain cut through every layer. */
+/** The shared depth-capped road owns the volume. This skin only paints its sides and underside. */
 export function goonworksRibbonShell(track){
   const source=track.meshes.road,P=new Float32Array(source.positions),N=source.normals,U=source.uvs,I=[],types=new Int8Array(P.length/3);
   for(let i=0;i<types.length;i++){
     const k=i*3,f=track.frameAt(U[i*2+1]),up=N[k]*f.n[0]+N[k+1]*f.n[1]+N[k+2]*f.n[2];
-    const side=N[k]*f.b[0]+N[k+1]*f.b[1]+N[k+2]*f.b[2];
     if(up>.15){types[i]=0;continue;}types[i]=up<-.15?2:1;
-    if(types[i]===2||U[i*2]>.12)for(let a=0;a<3;a++)P[k+a]-=f.n[a]*1.4;
-    if(Math.abs(side)>.45)for(let a=0;a<3;a++)P[k+a]+=f.b[a]*Math.sign(side)*.035;
   }
   for(let i=0;i<source.indices.length;i+=3){const a=source.indices[i],b=source.indices[i+1],c=source.indices[i+2];
-    // End caps use local depth in UV.y rather than route distance. Their original thin cap remains.
-    if(Math.max(U[a*2+1],U[b*2+1],U[c*2+1])<=.251&&Math.max(Math.abs(U[a*2]),Math.abs(U[b*2]),Math.abs(U[c*2]))>1)continue;
     if(types[a]&&types[b]&&types[c])I.push(a,b,c);}
   return{positions:P,normals:new Float32Array(N),uvs:new Float32Array(U),indices:new Uint32Array(I)};
 }
@@ -105,7 +101,8 @@ export function buildGoonworks(track,art=null,pal=null,samples=null){
   // This mesh contains outward side and underside triangles only. Its back faces must never
   // compete with the white driving surface when a distant camera quantizes their depth together.
   shellMat.side=FrontSide;
-  const sideInk=float(1).sub(smoothstep(.015,.042,min(abs(uv().x),abs(uv().x.sub(.25))))).mul(float(1).sub(smoothstep(.3,.7,abs(up))));
+  shellMat.polygonOffset=true;shellMat.polygonOffsetFactor=-1;shellMat.polygonOffsetUnits=-1;
+  const sideInk=float(1).sub(smoothstep(.015,.042,abs(uv().x))).mul(float(1).sub(smoothstep(.3,.7,abs(up))));
   shellMat.colorNode=mix(shellMat.colorNode,vec3(.009,.002,.012),sideInk);owned.push(shellMat);
   const ribbon=new Mesh(shell,shellMat);ribbon.name='goonworks-thick-ribbon';group.add(ribbon);
 
@@ -115,11 +112,18 @@ export function buildGoonworks(track,art=null,pal=null,samples=null){
 
   // Every broad field platform is one whole deck, never a repetition of the small stone kit.
   const platformGroups=[];
+  const platformClearance=visualClearanceSamples(track);
   for(const row of plan.platforms){const holder=new Group();holder.name='goonworks-platform-'+row.id;
     B.makeBasis(X.fromArray(row.b),Y.fromArray(row.n),Z.fromArray(row.t).negate());holder.quaternion.setFromRotationMatrix(B);holder.position.fromArray(row.p);
     const capMaterial=createGoonworksPlatformMaterial(row.w,row.len,platformGroups.length);owned.push(capMaterial);
     const top=new Mesh(upload(goonworksPlatformGeometry(row.w,row.len)),capMaterial);top.name='single-surface-platform-cap';holder.add(top);
-    const skirt=new Mesh(geometries.openIsland,materials[platformGroups.length%3===0?'magenta':platformGroups.length%3===1?'fuchsia':'rose']);skirt.scale.set(row.w-.3,4.8,row.len-.3);skirt.position.y=-3.1;holder.add(skirt);
+    // Retain the rounded glazed island, extending its keel down from the cap's existing bottom.
+    const depthFrame={...row,s:row.s+row.len/2,p:row.p.map((v,i)=>v-row.n[i]*.6)};
+    row.depthM=capVisualDepth(depthFrame,Math.min(10,Math.max(7.8,Math.min(row.w,row.len)*.4)),platformClearance,
+      {halfWidth:row.w/2,halfLength:row.len/2,motionM:.25,ignoreId:row.id});
+    const skirt=new Mesh(geometries.openIsland,materials[platformGroups.length%3===0?'magenta':platformGroups.length%3===1?'fuchsia':'rose']);
+    skirt.name='goonworks-platform-keel';skirt.scale.set(row.w-.3,row.depthM,row.len-.3);
+    skirt.position.y=-.6-row.depthM/2;skirt.visible=row.depthM>.05;holder.add(skirt);
     group.add(holder);platformGroups.push({row,holder,rest:holder.position.clone(),age:Infinity});
   }
   // The sky carries static pale ink silhouettes, not a rainbow spiral or a distant ground plane.

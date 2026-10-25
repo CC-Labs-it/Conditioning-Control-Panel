@@ -83,3 +83,47 @@ test('world restart clears items alongside the song cue renderers', async () => 
   const reset = source.slice(source.indexOf('resetReactions:'));
   for (const owner of ['itemVis', 'marquees', 'veils']) assert.match(reset, new RegExp(owner + '(?:\\?\\.)?\\.?clear\\(\\)'));
 });
+
+test('physical projectiles retain readable wakes through a pass, fade after a hit and clear on restart', async () => {
+  const doc = globalThis.document, image = globalThis.Image;
+  globalThis.document = { createElement: () => canvas() };
+  globalThis.Image = class { constructor() { this.complete = true; this.naturalWidth = this.naturalHeight = 256; } set src(value) { this.onload?.(); } };
+  let visuals;
+  try {
+    const bytes = await readFile(new URL('../art/toys/toy-disc.glb', import.meta.url));
+    const model = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), '');
+    const feel = createFeel(JSON.parse(await readFile(new URL('../feel.json', import.meta.url), 'utf8')));
+    const scene = new Group();
+    visuals = createItemVisuals(scene, { model: id => id === 'toy-disc' ? model : null }, feel, { photosafe: { request: () => true } });
+    const root = scene.getObjectByName('item-visuals'), motes = root.children[2], toys = scene.getObjectByName('physical-toys');
+    const shot = { id: 12, kind: 'disc', mode: 'throw', t: 0, p: [0, 2, 0], v: [40, 0, 0] };
+    visuals.event('item-fire', { id: 'disc', p: [0, 0, 0] });
+    for (let i = 0; i < 7; i++) {
+      shot.t = i * .1; shot.p[0] = i * 4;
+      visuals.update({ projectiles: [shot] }, .1);
+    }
+    assert.ok(motes.count >= 40, 'actual GLB flight carries a continuous core and halo wake');
+    const carrier = toys.children.find(o => o.type === 'Group' && o.visible);
+    assert.ok(carrier.scale.x >= 1.8, 'the actual exported disc is materially enlarged');
+    const paused = motes.count;
+    visuals.update({ projectiles: [shot] }, .1, [], null, { paused: true });
+    assert.equal(motes.count, paused, 'pause does not change a live wake');
+    visuals.update({ projectiles: [] }, .1);
+    assert.ok(motes.count > 0, 'impact retains the tail for its OUT instead of cutting it off');
+    for (let i = 0; i < 5; i++) visuals.update({ projectiles: [] }, .1);
+    assert.equal(motes.count, 0, 'retired tail has a bounded lifetime');
+    visuals.clear();
+    feel.set('gentle.on', true);
+    for (let i = 0; i < 5; i++) { shot.t = i * .1; shot.p[0] = i * 4; visuals.update({ projectiles: [shot] }, .1); }
+    assert.equal(motes.count, 0, 'Gentle keeps the larger physical prop without moving wake particles');
+    assert.ok(visibleMeshes(toys).length > 0);
+    visuals.event('item-flyby', { kind: 'disc', p: [20, 2, 0], v: [40, 0, 0] });
+    visuals.update({ projectiles: [] }, .1);
+    visuals.clear();
+    assert.equal(motes.count, 0); assert.equal(visibleMeshes(toys).length, 0);
+  } finally {
+    visuals?.dispose();
+    if (doc === undefined) delete globalThis.document; else globalThis.document = doc;
+    if (image === undefined) delete globalThis.Image; else globalThis.Image = image;
+  }
+});

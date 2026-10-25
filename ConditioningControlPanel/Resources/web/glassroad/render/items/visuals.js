@@ -38,7 +38,7 @@ import { createItemStatus } from './status.js';
 import { advanceRibbon, flightSpark } from './flight.js';
 import { createTethers } from './tethers.js';
 import { createToyProps } from './toys.js';
-import { TOYS } from './toyMath.js';
+import { TOYS, TOY_TRAIL, toyTrailPoint } from './toyMath.js';
 import { selectShieldShells, shieldLook } from './shieldMath.js';
 
 const UP = new Vector3(0, 1, 0), V = new Vector3(), W = new Vector3(), N = new Vector3(), QT = new Quaternion(), QS = new Quaternion();
@@ -150,6 +150,17 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
   }
   const trails = new Map(), seen = new Set(), glows = new Map(), launches = new Map();
   const trailOf = (id, n) => { let h = trails.get(id); if (!h) trails.set(id, h = { pts: new Float32Array(n * 3), n: 0 }); return h; };
+  function toyWake(h, fade, quiet) {
+    const c = TINTS[h.kind] || TINTS.box;
+    for (let i = 0; i < h.n - 1; i++) {
+      const j = i * 3, look = toyTrailPoint(i, h.n, fade, quiet);
+      if (look.alpha <= .001) continue;
+      motes.push(h.pts[j], h.pts[j + 1], h.pts[j + 2], look.size, c[0], c[1], c[2], look.alpha);
+      // The narrow warm core reads against bright floors, the halo against dark walls.
+      if (i & 1) motes.push(h.pts[j], h.pts[j + 1], h.pts[j + 2], look.size * .3, 1, .96, .9, look.alpha * .8);
+      else motes.push(h.pts[j], h.pts[j + 1], h.pts[j + 2], look.size * 1.7, c[0], c[1], c[2], look.alpha * .16);
+    }
+  }
   const confT = [];
   const kartModel = art && art.model ? art.model('emi-teacup-kart') : null;
   const ghostGeo = new SphereGeometry(0.7, 16, 10).scale(1, 0.8, 1).translate(0, 0.6, 0);
@@ -313,7 +324,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
       kartPos(k); W.set(sx, sy + bob, sz).applyQuaternion(kartQuat(k)).add(V);
       const id = h.rolling ? rollIconAt(h.rollT, ITEM_IDS, soft ? L.rollSwapGentleS : L.rollSwapS) : h.id;
       if (!h.rolling && toys.place(id, [W.x, W.y, W.z], { held: true, rotation: QT })) continue;
-      bubble3d(W.x, W.y, W.z, id || 'box', L.heldR * (me ? L.playerHeldScale : 1), 1, h.racer * 7, me ? 4 : -1);
+      bubble3d(W.x, W.y, W.z, id || 'box', L.heldR * (TOYS.has(id) ? 1.5 : 1) * (me ? L.playerHeldScale : 1), 1, h.racer * 7, me ? 4 : -1);
     }
 
     // throws and lobs: the sim's p already carries the arc. A throw draws a sparkling ribbon of motes
@@ -326,12 +337,18 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
       const physical = toys.place(pr.kind, pr.p, { age, velocity: pr.v });
       if (physical) {
         seen.add(id);
-        const h = trailOf(id, 10), c = TINTS[pr.kind] || TINTS.box;
+        const h = trailOf(id, TOY_TRAIL.points), c = TINTS[pr.kind] || TINTS.box;
         if (age < (h.age || 0)) h.n = 0;
-        h.age = age; advanceRibbon(h, x, y, z, .24);
-        if (!soft && !reduced) for (let i = 0; i < h.n - 1; i++) {
-          const j = i * 3, a = (i + 1) / h.n;
-          motes.push(h.pts[j], h.pts[j + 1], h.pts[j + 2], .06 + .06 * a, c[0], c[1], c[2], a * .55);
+        h.age = age; h.kind = pr.kind; h.retired = 0;
+        advanceRibbon(h, x, y, z, TOY_TRAIL.stepM);
+        toyWake(h, Math.min(1, age / .12), soft || reduced);
+        // Bound the live wake to the same existing mote draw, with actual velocity orientation.
+        if (!soft && !reduced && Math.hypot(...(pr.v || [0, 0, 0])) > .5) {
+          const n = Math.max(4, Math.round(8 * moteK));
+          for (let i = 0; i < n; i++) {
+            const a = flightSpark(i, n, timeS, id, pr.v, .5, OFF);
+            motes.push(x + OFF[0], y + OFF[1], z + OFF[2], .22, c[0], c[1], c[2], a * Math.min(1, age / .12));
+          }
         }
         continue;
       }
@@ -375,7 +392,13 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
         mark(pr.landingP, pr.landingN, m.ring, L.markColour, m.ringAlpha, 0.07);
       }
     }
-    for (const id of trails.keys()) if (!seen.has(id)) trails.delete(id);
+    let retired = 0;
+    for (const [id, h] of trails) if (!seen.has(id)) {
+      if (!h.kind || ++retired > TOY_TRAIL.maxRetired) { trails.delete(id); continue; }
+      h.retired = (h.retired || 0) + dt;
+      if (h.retired >= TOY_TRAIL.fadeS) { trails.delete(id); continue; }
+      toyWake(h, 1 - h.retired / TOY_TRAIL.fadeS, soft || reduced);
+    }
     for (const id of launches.keys()) if (!seen.has(id)) launches.delete(id);
 
     // traps: Melt is a puddle; any other kind sits on the road as a low bubble that pulses; either wakes

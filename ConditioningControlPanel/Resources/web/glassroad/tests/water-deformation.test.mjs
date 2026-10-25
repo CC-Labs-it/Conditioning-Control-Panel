@@ -28,7 +28,13 @@ test('dense water geometry covers the entire curved canal and carries its real c
   let largestLateral=0,highest=0;
   for(let i=0;i<position.count;i++) {
     const x=uv.getX(i),s=uv.getY(i),contact=tr.surfaceAt(s,x);
-    for(let axis=0;axis<3;axis++)assert.ok(Math.abs(position.array[i*3+axis]-contact.p[axis]-contact.n[axis]*.1)<.00001);
+    const offset=contact.p.map((p,k)=>position.array[i*3+k]-p);
+    const lift=offset.reduce((sum,v,k)=>sum+v*contact.n[k],0);
+    for(let axis=0;axis<3;axis++)assert.ok(Math.abs(offset[axis]-contact.n[axis]*lift)<.00001,'follows the curved support normal');
+    assert.ok(lift>=.00799&&lift<=.10001,'bounded shallow water and wet patches');
+    if(s>=6&&s<=34)assert.ok(Math.abs(lift-.1)<.00001,'interior liquid keeps its full height');
+    if(Math.abs(s)<.00001||Math.abs(s-40)<.00001)assert.ok(Math.abs(lift-.015)<.00001,'shoreline meets the shallow join');
+    if(s>40)assert.ok(lift<=.01501,'dry-side patches stay flush');
     assert.ok(Math.abs(aWaterN.getX(i)-contact.n[0])<1e-6);
     assert.ok(aWaterUV.getX(i)>0&&aWaterUV.getX(i)<1&&aWaterUV.getY(i)>0&&aWaterUV.getY(i)<1);
     largestLateral=Math.max(largestLateral,Math.abs(x));highest=Math.max(highest,position.getY(i));
@@ -45,7 +51,8 @@ test('one fixed texture carries signed shape, shading slopes and foam, uploads o
   assert.equal(pixels,water.field.pixels);
   assert.equal(texture.generateMipmaps,false);
   assert.equal(texture.flipY,false);
-  assert.ok(water.object.children.filter(m=>!m.isInstancedMesh).every(m=>m.material.positionNode),'surface, depth rim and spill lip share deformation');
+  const liquids=water.object.children.filter(m=>m.isMesh&&!m.isInstancedMesh);
+  assert.ok(liquids.length>=2&&liquids.every(m=>m.material.positionNode),'surface, depth rim and spill lip share deformation');
   const version=texture.version;
   water.update(0);assert.equal(texture.version,version);
   water.field.disturb({s:15,x:3,radius:4,strength:.6,foam:.9,dirX:1});
@@ -71,7 +78,7 @@ for(const name of ['threshold','keep','mainframe'])test(`${name} has bounded ful
   assert.ok(phone.stats.surfaceVertices<desktop.stats.surfaceVertices);
   assert.equal(phone.field.width,32);assert.equal(desktop.field.width,64);
   assert.deepEqual(desktop.runs,phone.runs);
-  for(const mesh of desktop.object.children)for(const a of Object.values(mesh.geometry.attributes))assert.ok(a.array.every(Number.isFinite));
+  desktop.object.traverse(mesh=>{if(mesh.geometry)for(const a of Object.values(mesh.geometry.attributes))assert.ok(a.array.every(Number.isFinite));});
   for(const water of [desktop,phone]) {
     const field=water.field;
     const checkEdge=(a,i,run,s,side)=>{

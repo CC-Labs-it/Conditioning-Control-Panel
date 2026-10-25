@@ -41,6 +41,48 @@ test('phrase notes use the unlocked shared context and obey pause, restart and d
   audio.dispose();const disposed=log.started;bus.emit('phrase-gate',payload);assert.equal(log.started,disposed);
 });
 
+test('item passes share the unlocked SFX bus and cannot play while paused, inactive or disposed', async () => {
+  const bus = createBus(), { ctx, log } = fakeCtx(), passes = [];
+  const audio = createAudio(createFeel(feelJson), bus, { win: null, makeCtx: () => ctx, fetchFn: async () => { throw Error('offline'); } });
+  bus.on('item-flyby', p => passes.push(p));
+  const ear = { p: [0, 0, 0], right: [1, 0, 0] };
+  const row = (z, t) => [{ id: 1, kind: 'disc', p: [2, 0, z], t }];
+  audio.updateItems(row(-4, 0), ear, 0); audio.updateItems(row(4, .1), ear, .1);
+  assert.equal(log.started, 0, 'no audio context before gesture');
+  await audio.start(); audio.reset(); const before = log.started;
+  audio.updateItems(row(-4, 0), ear, 0); audio.updateItems(row(4, .1), ear, .1);
+  assert.equal(log.started, before + 3);
+  audio.reset(); audio.setPaused(true);
+  audio.updateItems(row(-4, 0), ear, 0); audio.updateItems(row(4, .1), ear, .1);
+  assert.equal(log.started, before + 3);
+  audio.setPaused(false); await audio.start();
+  audio.updateItems(row(-4, 0), ear, 0); audio.updateItems(row(4, .1), ear, .1, { active: false });
+  assert.equal(log.started, before + 3);
+  audio.dispose(); const stopped = log.started, events = passes.length;
+  audio.updateItems(row(-4, 0), ear, 0); audio.updateItems(row(4, .1), ear, .1);
+  assert.equal(log.started, stopped);
+  assert.equal(passes.length, events, 'disposed observers cannot emit ghost visual events');
+});
+
+test('launches are heard at the thrower and mute does not suppress passing visual events', async () => {
+  const bus = createBus(), { ctx, log } = fakeCtx(), passes = [];
+  const audio = createAudio(createFeel(feelJson), bus, { win: null, makeCtx: () => ctx, fetchFn: async () => { throw Error('offline'); } });
+  await audio.start(); const before = log.started;
+  bus.emit('item-fire', { racer: 7, target: 0, id: 'tether', mode: 'tether' });
+  assert.equal(log.started, before, 'distant throwers do not get full volume by naming the player');
+  audio.update(.5, {}, [{ i: 7, distM: 4, pan: -.8, speedPct: .5 }]);
+  const nearby = log.started;
+  bus.emit('item-fire', { racer: 7, target: 0, id: 'tether', mode: 'tether' });
+  assert.ok(log.started > nearby);
+  audio.setVolumes({ master: 0, sfx: 0 });
+  bus.on('item-flyby', p => passes.push(p));
+  const ear = { p: [0, 0, 0], right: [1, 0, 0] };
+  audio.updateItems([{ id: 1, kind: 'disc', p: [2, 0, -4], t: 0 }], ear, 0);
+  audio.updateItems([{ id: 1, kind: 'disc', p: [2, 0, 4], t: .1 }], ear, .1);
+  assert.equal(passes.length, 1, 'mute acts on the shared output gains only');
+  audio.dispose();
+});
+
 /** A WebAudio stand-in that records every node and scheduled value. */
 function fakeCtx() {
   const log = { nodes: 0, started: 0, sets: [] };

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toyPose, toyEnvelope, snapRing, guardLook, toyLod } from '../render/items/toyMath.js';
+import { toyPose, toyEnvelope, snapRing, guardLook, toyLod, toyScale, toyTrailPoint, TOY_TRAIL } from '../render/items/toyMath.js';
 
 test('toys: the frozen clock reproduces every pose and reduced motion stills all spins', () => {
   for (const id of ['pendulum', 'disc', 'bigSpiral']) {
@@ -42,4 +42,20 @@ test('toys: one second guard fades at both ends without expanding into a shell',
 
 test('toys: distant watches and phone quality select the lighter mesh', () => {
   assert.equal(toyLod(10), 0); assert.equal(toyLod(29), 1); assert.equal(toyLod(1, true), 1);
+});
+
+test('toys: enlarged silhouettes and distance-sampled wakes remain bounded at driver scale', () => {
+  for (const id of ['pendulum', 'disc', 'tether', 'bigSpiral']) {
+    assert.ok(toyScale(id) >= 1.6 && toyScale(id) <= 2);
+    assert.ok(toyScale(id, true) >= toyScale(id) && toyScale(id, true) <= 2.1);
+  }
+  assert.ok(TOY_TRAIL.points * TOY_TRAIL.stepM >= 9 && TOY_TRAIL.points * TOY_TRAIL.stepM <= 12);
+  let previous = 0;
+  for (let i = 0; i < TOY_TRAIL.points; i++) {
+    const full = toyTrailPoint(i, TOY_TRAIL.points), faded = toyTrailPoint(i, TOY_TRAIL.points, .25);
+    assert.ok(full.size >= .18 && full.size <= .8);
+    assert.ok(full.alpha >= previous && full.alpha <= .78); previous = full.alpha;
+    assert.equal(faded.alpha, full.alpha * .25);
+    assert.equal(toyTrailPoint(i, TOY_TRAIL.points, 1, true).alpha, 0);
+  }
 });

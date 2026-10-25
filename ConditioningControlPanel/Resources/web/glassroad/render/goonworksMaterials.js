@@ -33,7 +33,7 @@ function filteredWave(phase) {
 function surfaceGrain(p, paper) {
   const fibre=filteredWave(dot(p,vec3(91.7,137.3,73.1)));
   const tooth=filteredWave(dot(p,vec3(173.3,-59.7,119.9)));
-  return fibre.mul(paper?.012:.005).add(tooth.mul(paper?.008:.004)).add(1);
+  return fibre.mul(paper?.019:.008).add(tooth.mul(paper?.012:.006)).add(1);
 }
 
 export function createGoonworksMaterial(hex, { ink = false, paper = false, unlit = false, outline = false } = {}) {
@@ -43,7 +43,7 @@ export function createGoonworksMaterial(hex, { ink = false, paper = false, unlit
   const base = rgb(hex), N = normalize(normalWorld), L = normalize(vec3(-.38, .82, .42));
   const V = normalize(cameraPosition.sub(positionWorld)), light = dot(N, L), H = normalize(L.add(V));
   const bands = smoothstep(-.08, .08, light).mul(.17).add(smoothstep(.52, .66, light).mul(.13)).add(.7);
-  const highlight = pow(max(dot(N,H),0), paper ? 22 : 36).mul(paper ? .035 : .2);
+  const highlight = pow(max(dot(N,H),0), paper ? 22 : 36).mul(paper ? .035 : .28);
   const edge = float(1).sub(abs(dot(N,V))), silhouette = smoothstep(.89,.975,edge);
   // Dots stay attached to each source mesh. Pixel filtering suppresses distant moire.
   const p = positionGeometry.xy.mul(24), cell = fract(p).sub(.5), footprint = max(fwidth(p.x),fwidth(p.y));
@@ -54,7 +54,7 @@ export function createGoonworksMaterial(hex, { ink = false, paper = false, unlit
   // The source position follows rotating wheels and gears without swimming across their faces.
   const grain=surfaceGrain(positionGeometry,paper);
   const paintRoll=sin(dot(positionGeometry,vec3(3.2,1.4,2.1))).mul(.5).add(.5);
-  const finish=paper?float(1):paintRoll.mul(.024).add(.984);
+  const finish=paper?float(1):paintRoll.mul(.06).add(.96);
   const lit = shaded.mul(grain).mul(finish).mul(float(1).sub(dots)).add(rgb('#f5eddf').mul(highlight));
   material.colorNode = mix(lit,rgb(GOONWORKS_PALETTE.ink),silhouette.mul(.87));
   return material;
@@ -80,8 +80,8 @@ export function applyGoonworksRoad(road, art, track) {
   const light=max(dot(N,normalize(vec3(-.38,.82,.42))),0).mul(.09).add(.87);
   const glaze=smoothstep(0,half,abs(p.x)).mul(.045).add(sin(p.y.mul(.018)).mul(.012)).add(.945);
   // A warm printed board under the glossy shoulder paint. Fine fibres disappear at distance.
-  const roadGrain=filteredWave(p.x.mul(43).add(p.y.mul(7))).mul(.009)
-    .add(filteredWave(p.y.mul(31).sub(p.x.mul(11))).mul(.006)).add(1);
+  const roadGrain=filteredWave(p.x.mul(43).add(p.y.mul(7))).mul(.014)
+    .add(filteredWave(p.y.mul(31).sub(p.x.mul(11))).mul(.009)).add(1);
   const paper=texture(widths,vec2(distanceUV,.375)).rgb.mul(light).mul(glaze).mul(roadGrain);
   const dark=rgb(GOONWORKS_PALETTE.wine),pink=texture(widths,vec2(distanceUV,.625)).rgb,accent=texture(widths,vec2(distanceUV,.875)).rgb;
   let colour=mix(dark,paper,top);
@@ -90,12 +90,12 @@ export function applyGoonworksRoad(road, art, track) {
   const bandStart=2.8,bandEnd=half.mul(.18).add(bandStart);
   const districtBand=smoothstep(float(bandStart).sub(pixel),float(bandStart).add(pixel),edge)
     .mul(float(1).sub(smoothstep(bandEnd.sub(pixel),bandEnd.add(pixel),edge)));
-  const bandRoll=smoothstep(0,1,edge.sub(bandStart).div(half.mul(.18))).mul(.05).add(.965);
+  const bandRoll=smoothstep(0,1,edge.sub(bandStart).div(half.mul(.18))).mul(.10).add(.93);
   const bandGlaze=mix(accent,paper,.14).mul(light).mul(bandRoll);
   colour=mix(colour,bandGlaze,districtBand.mul(top));
   // An inset ivory pinline makes the wide accent read as finished enamel, not a flat fill.
   const bandLip=float(1).sub(smoothstep(.04,pixel.add(.10),abs(edge.sub(bandEnd.sub(.3)))));
-  colour=mix(colour,mix(accent,rgb(GOONWORKS_PALETTE.ivory),.58),bandLip.mul(top).mul(.5));
+  colour=mix(colour,mix(accent,rgb(GOONWORKS_PALETTE.ivory),.58),bandLip.mul(top).mul(.7));
   // Two fine enamel ribbons bring scale to the wide floor without filling the racing line.
   const laneCenter=half.mul(.12).add(3.8).add(sin(p.y.mul(.026)).mul(.32)),laneDistance=abs(abs(p.x).sub(laneCenter));
   const lanePixel=max(fwidth(laneDistance),.025),laneSoft=float(1).sub(smoothstep(.64,lanePixel.add(.88),laneDistance));

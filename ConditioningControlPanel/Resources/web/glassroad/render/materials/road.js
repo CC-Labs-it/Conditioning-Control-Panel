@@ -323,7 +323,10 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const h1 = hash(cell.x.add(cell.y.mul(157.31))), h2 = hash(cell.x.mul(7.13).add(cell.y.mul(311.7)).add(19.1));
   const jit = vec2(h1, h2).sub(0.5).mul(0.5);
   const inCell = fract(p.div(P.glintCellM)).sub(0.5).sub(jit).mul(P.glintCellM);
-  const spot = float(1).sub(smoothstep(0, P.glintSizeM, length(inCell)));
+  // Preserve glitter in the foreground while covering subpixel flecks at steep viewing angles.
+  const glintPixel = max(max(fwidth(p.x), fwidth(p.y)), P.glintSizeM);
+  const spot = float(1).sub(smoothstep(0, glintPixel, length(inCell)))
+    .mul(float(P.glintSizeM).div(glintPixel).pow(2));
   const lit = smoothstep(1 - P.glintDensity, 1, h1);
   const seed = vec3(h2.sub(0.5), h1.mul(0.7), float(0.5).sub(h1));
   const catchA = pow(max(sin(dot(V, seed).mul(P.glintTwinkle * TAU).add(h2.mul(TAU))), 0), P.glintPow);

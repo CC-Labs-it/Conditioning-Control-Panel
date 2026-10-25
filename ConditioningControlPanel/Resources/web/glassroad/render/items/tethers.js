@@ -72,7 +72,7 @@ export function createTethers(root, art) {
     const st = karts[racer]?.st;
     if (isCuff && st) quat.set(st[S.quatX], st[S.quatY], st[S.quatZ], st[S.quatW]);
     else { dir.set(other[0] - p[0], other[1] - p[1], other[2] - p[2]).normalize(); quat.setFromUnitVectors(FORWARD, dir.lengthSq() ? dir : FORWARD); }
-    for (const { mesh } of parts) { mesh.position.copy(pos); mesh.quaternion.copy(quat); mesh.scale.setScalar(isCuff ? 1.25 : 1); }
+    for (const { mesh } of parts) { mesh.position.copy(pos); mesh.quaternion.copy(quat); mesh.scale.setScalar(isCuff ? 1.65 : 1.8); }
   }
   function render(row, points, age, soft, palette, karts, breaking = false) {
     tetherBreakPose(age, 0, row.reason, soft, motion);
@@ -86,7 +86,7 @@ export function createTethers(root, art) {
       if (breaking) { pos.x += ax / len * motion.recoil; pos.z += az / len * motion.recoil; pos.y += motion.lift; }
       dir.set(segment.dx, segment.dy, segment.dz); quat.setFromUnitVectors(UP, dir);
       quat.multiply(roll.setFromAxisAngle(UP, segment.roll + (breaking ? motion.turn : 0)));
-      scale.set(sizing.width, sizing.length, sizing.width); matrix.compose(pos, quat, scale);
+      scale.set(sizing.width * 1.45, sizing.length, sizing.width * 1.45); matrix.compose(pos, quat, scale);
       for (const part of row.chain) part.mesh.setMatrixAt(i, matrix);
     }
     for (const part of row.chain) { part.mesh.count = TETHER_LOOK.links; part.mesh.instanceMatrix.needsUpdate = true; }

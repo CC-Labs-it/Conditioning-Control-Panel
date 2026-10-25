@@ -1016,6 +1016,7 @@ async function boot(course, options, lifetime, isCurrent) {
     }
   }
   let frameId = 0;
+  const itemListener = { p: [0, 0, 0], right: [1, 0, 0] };
   lifetime.defer(() => cancelAnimationFrame(frameId));
   function frame(now) {
     if (!lifetime.alive) return;
@@ -1140,6 +1141,15 @@ async function boot(course, options, lifetime, isCurrent) {
     if (HT) hLap('cam');
     if (BOT && debug.peek) peekCamera(cam.camera, track, debug.peek, renderer.aspect);
     const iv = items.view();
+    // Share one near-pass crossing with sound and the world-space toy accent.
+    cam.camera.updateMatrixWorld();
+    const cameraBasis = cam.camera.matrixWorld.elements;
+    for (let i = 0; i < 3; i++) {
+      itemListener.p[i] = pst[S.posX + i];
+      itemListener.right[i] = cameraBasis[i];
+    }
+    audio.updateItems(iv.projectiles, itemListener, racers.clockS,
+      { active: inRace && race.phase === 'racing', paused: frozen });
     // the song position the player hears (frozen while paused: the context is suspended)
     const music = audio.music, song = inRace && music ? music.song : null;
     const beatSong = song || (inRace ? music?.analysis : null);

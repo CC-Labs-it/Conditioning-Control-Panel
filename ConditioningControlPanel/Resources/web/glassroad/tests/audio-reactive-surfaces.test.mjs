@@ -96,7 +96,10 @@ test('one prewarmed envelope drives real road, water skin, depth and waterfall g
   const fall = createWaterfall(track, pal, { reactive });
   t.after(() => { road.material.dispose(); volume.dispose(); fall.dispose(); });
   assert.equal(volume.uniforms.reactive, reactive); assert.equal(fall.uniforms.reactive, reactive);
-  const materials = [road.material, ...volume.object.children.map(m => m.material),
+  // Static drain groups have no material graph; the three liquid surfaces still do.
+  for (const name of ['water-surface-raised', 'water-visible-depth', 'water-spills-into-void'])
+    assert.ok(volume.object.getObjectByName(name)?.material?.colorNode, name);
+  const materials = [road.material, ...volume.object.children.filter(m => m.material?.colorNode).map(m => m.material),
     ...fall.object.children.filter(m => m.material?.colorNode).map(m => m.material)];
   const roots = materials.map(m => m.colorNode), before = roots.map(graph);
   for (const nodes of before.slice(0, 4)) {

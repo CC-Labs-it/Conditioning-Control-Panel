@@ -10,7 +10,7 @@
  * Missing art uses the same procedural field coordinates and keeps the contact geometry intact.
  * Gentle: the scroll clock runs at half speed; the shared music envelope reduces optical wave/light gain.
  */
-import { float, vec2, vec3, sin, cos, mix, smoothstep, clamp, max, abs, dot, pow, normalize, length, select, reflect, attribute } from 'three/tsl';
+import { float, vec2, vec3, sin, cos, mix, smoothstep, clamp, max, abs, dot, pow, normalize, length, select, reflect, attribute, fwidth } from 'three/tsl';
 import { LOOK } from '../look.js';
 import { WATER_LOOK } from '../waterMath.js';
 import { reactiveWaterNodes, waterHelixLight } from '../audioReactive.js';
@@ -61,7 +61,9 @@ export function createWaterSurface({ surface, flow, p, trueEdge, V, N0, pal, u, 
   // Short capillary ripples break up reflections between the larger displaced swells.
   const rippleA=proceduralSlope(p.mul(vec2(.39,.31)).add(vec2(u.t.mul(.24),u.t.mul(-.19))));
   const rippleB=proceduralSlope(p.mul(vec2(-.61,.47)).add(vec2(u.t.mul(-.16),u.t.mul(.27))));
-  const fineRipples=rippleA.mul(.075).add(rippleB.mul(.045));
+  // Fade capillary texture before its wavelengths collapse below a pixel at a low chase angle.
+  const rippleDetail=float(1).sub(smoothstep(.35,1.2,max(fwidth(p.x),fwidth(p.y))));
+  const fineRipples=rippleA.mul(.075).add(rippleB.mul(.045)).mul(rippleDetail);
   const wakeSlope = deformation ? deformation.slope.add(smallSlope.mul(0.55)).add(fineRipples) : smallSlope;
   const slope = response ? wakeSlope.add(response.slope) : wakeSlope;
   // the road normal tilted by the slope (u along the road's right, v along its tangent: both lie in the plane)
@@ -97,7 +99,8 @@ export function createWaterSurface({ surface, flow, p, trueEdge, V, N0, pal, u, 
     const fallback = pal.col(0).mul(0.13).add(vec3(.015,.035,.045));
     const reflected = deformation.reflection ? mix(fallback,deformation.reflection(R),deformation.reflectionReady || float(1)) : fallback;
     const grazing = pow(float(1).sub(ndv),5).mul(.98).add(.02);
-    const sharpSpec = pow(clamp(dot(N,H),0,1),64).mul(0.95);
+    const sharpSpec = pow(clamp(dot(N,H),0,1),64).mul(0.82)
+      .add(pow(clamp(dot(N,H),0,1),18).mul(.09));
     const crestLight=smoothstep(.56,.92,elevation).mul(.065);
     colour = mix(transmitted,reflected,grazing.mul(.67).add(.12))
       .add(vec3(0.72,0.9,1).mul(sharpSpec))

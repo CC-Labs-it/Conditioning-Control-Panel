@@ -8,6 +8,7 @@
  */
 import { AUDIO_CUES } from './cues.js';
 import { mixGet, rollTickTimes, ladderSemis } from './mix.js';
+import { playToyLaunch } from './itemFlight.js';
 
 const fg = (syn, path, def) => { try { return syn.feel.get(path); } catch (e) { return def; } };
 const m = (syn, k) => mixGet(syn.feel, k);
@@ -114,6 +115,7 @@ export const B1_CUES = {
       return;
     }
     const f = (mode === 'self' ? FIRE[id] : FIRE[mode]) || FIRE.throw;
+    if (playToyLaunch(syn, id)) return;
     f(syn);
   },
   'item-refused'(syn, { racer }) {
