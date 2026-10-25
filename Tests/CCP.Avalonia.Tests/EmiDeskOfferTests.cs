@@ -175,6 +175,57 @@ public sealed class EmiDeskOfferTests
         return Task.CompletedTask;
     });
 
+    // Drive the real body-click -> fan -> card path with deterministic lines, rather than
+    // replacing a pet offer's effect. The shipped ringPick ask uses this same target payload.
+    [Fact]
+    public Task RingPickCanOfferToPinTheActualTopCard() => InDesk((desk, window) =>
+    {
+        var pins = EmiState.Current.Pins.ToArray();
+        try
+        {
+            EmiState.Current.Pins.Clear();
+            desk.LineEngine = EmiLineEngine.FromJson(Lines
+                .Replace("petted", "ringPick")
+                .Replace("\"effect\":\"shrink\"", "\"effect\":\"pinTop:{target}\",\"when\":[\"pickIsTop\"]"));
+            window.ToggleRing();
+            var ring = (EmiRingWindow)typeof(EmiDeskWindow).GetField("_ring", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window)!;
+            var first = ring.Cards[0];
+            var id = ((EmiRingCard)first.Tag!).Id;
+            typeof(EmiRingWindow).GetMethod("OnCardPicked", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(ring, new object[] { (EmiRingCard)first.Tag! });
+            Assert.False(window.RingOpen);
+            Assert.True(window.AskLive);
+            window.AdvanceAsk(); window.AdvanceAsk(); window.AdvanceAsk();
+            window.AskChips[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(id, EmiState.Current.Pins[0]);
+        }
+        finally { EmiState.Current.Pins.Clear(); EmiState.Current.Pins.AddRange(pins); }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData("ringOpen", 0)]
+    [InlineData("ringDismissed", 1)]
+    [InlineData("suggestionIgnored3x", 3)]
+    public Task RingGesturesDeliverTheirMoments(string moment, int dismissals) => InDesk((desk, window) =>
+    {
+        int previous = EmiState.Current.RingIgnoreStreak;
+        try
+        {
+            EmiState.Current.RingIgnoreStreak = 0;
+            desk.LineEngine = EmiLineEngine.FromJson(Lines.Replace("petted", moment));
+            for (int i = 0; i < Math.Max(1, dismissals); i++)
+            {
+                window.ToggleRing();
+                if (dismissals > 0) window.CloseRing();
+            }
+            Assert.True(window.AskLive);
+            Assert.Equal(dismissals == 3 ? 0 : dismissals, EmiState.Current.RingIgnoreStreak);
+        }
+        finally { EmiState.Current.RingIgnoreStreak = previous; }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task BedtimeOfferPersistsQuietGateWithoutDismissingHer() => InDesk((desk, window) =>
     {

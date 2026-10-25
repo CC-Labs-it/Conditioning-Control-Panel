@@ -18,8 +18,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// <para>ponytail: HIDDEN, not faked, until this head has their surface: arcademy, dtrh,
     /// intake, spiral (overlay), goon, backroom and justdrop. Each is a host window or overlay no
     /// Avalonia code launches yet; a null from <see cref="Door"/> keeps the card out of the ring the
-    /// same way an unavailable door does. Also missing: the moments WPF's Pick fires
-    /// (<c>ringPick</c>, <c>lockedCardTapped</c>) - there is no <c>App.EmiDesk.Fire</c> on this head.</para>
+    /// same way an unavailable door does. ponytail: lockedCardTapped still needs the
+    /// locked-door reaction path; unlocked picks now fire ringPick after navigation.</para>
     /// </summary>
     internal static class EmiTargets
     {
@@ -109,7 +109,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             }
             catch (Exception ex) { Log.Warning(ex, "[EmiDesk] target {Target} failed to open", id); }
 
-            try { EmiState.NoteUsage(id); }
+            try
+            {
+                EmiState.NoteUsage(id);
+                EmiDeskService.Instance.Fire("ringPick", new { target = id, pickIsTop = EmiSuggester.TopSlotIs(id) });
+            }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] pick bookkeeping failed for {Target}", id); }
         }
     }
