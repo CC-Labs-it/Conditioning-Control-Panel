@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { loadTrack } from '../track/load.js';
 import { densifyBoosts, safeBoostStation, boostExclusions } from '../track/boostPlan.js';
+import { filterKeepHoleBoosts } from '../track/keepHoles.js';
+import { holeAt } from '../track/courts.js';
 import { regenerateBoosts } from '../dev/densify-boosts.mjs';
 import { place, makeFeel, acts, recorder, run } from './sim-fake.mjs';
 import { S } from '../sim/state.js';
@@ -15,7 +17,13 @@ for (const id of ['threshold', 'keep', 'mainframe']) {
   const json = JSON.parse(readFileSync(new URL('../tracks/' + id + '.json', import.meta.url), 'utf8'));
   const originalCount = id === 'mainframe' ? 8 : 4;
   const source = { ...json, boosts: json.boosts.slice(0, originalCount) };
-  const plan = densifyBoosts(source), track = loadTrack(json);
+  // Keep preserves its established runs and removes only unsafe pads after authoring worn slabs.
+  const plan = densifyBoosts(id === 'keep' ? { ...source, courts: [] } : source), track = loadTrack(json);
+  if (id === 'keep') {
+    plan.boosts = filterKeepHoleBoosts(track, plan.boosts);
+    const kept = new Set(plan.boosts.map(p => p.node));
+    plan.runs = plan.runs.map(run => run.filter(node => kept.has(node))).filter(run => run.length);
+  }
 
   test(id + ': committed plan preserves original pads, uses 2-4 pad trains and regenerates exactly', () => {
     assert.deepEqual(json.boosts, regenerateBoosts(id));
@@ -23,8 +31,8 @@ for (const id of ['threshold', 'keep', 'mainframe']) {
     assert.deepEqual(json.boosts.slice(0, originalCount), source.boosts);
     assert.ok(json.boosts.length >= (id === 'threshold' ? 16 : 100));
     assert.ok(plan.runs.length >= 2);
-    assert.ok(plan.runs.every((r) => r.length >= 2 && r.length <= 4));
-    const authored = loadTrack(json, { aerials: false }), exclusions = boostExclusions(authored);
+    assert.ok(plan.runs.every((r) => r.length >= (id === 'keep' ? 1 : 2) && r.length <= 4));
+    const authored = loadTrack(id === 'keep' ? { ...json, courts: [] } : json, { aerials: false }), exclusions = boostExclusions(authored);
     for (const p of json.boosts.slice(originalCount)) assert.ok(safeBoostStation(authored, authored.nodeS[p.node], { ...p, exclusions }), 'safe authored pad at ' + p.node);
     for (const r of plan.runs) for (let i = 1; i < r.length; i++) {
       const gap = track.nodeS[r[i]] - track.nodeS[r[i - 1]];
@@ -58,6 +66,8 @@ for (const id of ['threshold', 'keep', 'mainframe']) {
         const shoulder = frame.w / 2 - Math.abs(pad.x) - pad.w / 2;
         assert.ok(shoulder >= 2, '2m shoulder at node ' + pad.node + ', x=' + pad.x + ', offset=' + d + ': ' + shoulder);
         assert.ok(frame.flags.includes('rail') && !frame.flags.includes('jump') && !frame.flags.includes('magnet'));
+        if (id === 'keep') for (let x = pad.x - pad.w / 2 - .65; x <= pad.x + pad.w / 2 + .65; x += .25)
+          assert.equal(holeAt(track.courts, pad.s + d, x), null, 'Retained pad rollout never reaches a new opening');
       }
     }
   });

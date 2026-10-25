@@ -87,7 +87,7 @@ export function getKeepLayout(track) {
     courts: [{ id: 'gallows', x: 520, z: 900, w: 170, d: 65, baseY: 14, wallM: 12 }],
     ruins: [{ id: 'collapsed-north-wing', x: 475, z: 980, w: 140, d: 55, baseY: 14, topY: 42 }],
   };
-  const stoneFields = [{ id: 'keep-stones', s0: find('stones').s0, s1: find('stones').s1, lanes: [-16, 0, 16], widthM: 72, platformWidthM: 56, platformLengthM: 52, gapM: 14 }];
+  const stoneFields = [{ id: 'keep-stones', s0: find('stones').s0, s1: track.fields.find(f => f.id === 'keep-stones')?.toS ?? find('stones').s1, lanes: [-16, 0, 16], widthM: 72, platformWidthM: 56, platformLengthM: 52, gapM: 13.6 }];
   const bounds = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity, minY: 0, maxY: 0 };
   for (let s = 0; s < track.lengthM; s += 10) {
     const f = track.frameAt(s), margin = f.w / 2;

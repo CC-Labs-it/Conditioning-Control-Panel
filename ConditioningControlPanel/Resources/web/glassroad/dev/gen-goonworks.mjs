@@ -62,8 +62,9 @@ export function buildGoonworks() {
   padRun('fold-overlook', 10, 2, 6);
   padRun('fold-runout', 40, 2, -6);
   padRun('home-straight', 40, 4, 6);
-  const from = node('leapfrog-field'), to = node('leapfrog-exit'), s0 = base.nodeS[from], s1 = base.nodeS[to], stones = [];
-  const count = 10, pitch = (s1 - s0 + 2) / count;
+  const from = node('leapfrog-field'), to = node('leapfrog-field', 2 / 3), s0 = base.nodeS[from], s1 = base.nodeS[to], stones = [];
+  for (let i = to; i < node('leapfrog-exit'); i++) nodes[i].flags = ['rail'];
+  const count = 7, pitch = (s1 - s0 + 2) / count;
   for (let i = 0; i < count; i++) {
     const s = s0 + i * pitch, n = nearest(s), anchor = base.nodeS[n] > s ? n - 1 : n;
     stones.push({ id: 'leapfrog-' + i, node: anchor, ds: round(s-base.nodeS[anchor]), x: 0, w: 30,
