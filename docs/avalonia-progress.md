@@ -3333,3 +3333,8 @@ Header mod selector regains the WPF "Open Mod Manager" footer row, and Home feat
 ## avalonia-port/fin-ctrl-sparkle-wallet: +165
 - Sparkle wallet visor face: WPF EmiFace flat path (`WalletEmiFace`, Noto Sans Mono, 152x137 glass, 95% fit, 5 px round pink stroke, 2% lift) replaces the text placeholder.
 - ctrl-sparkle-wallet stays `wired`; tests `WalletVisorUsesTheEmiGeometryRenderer`, `WalletFacePaintsTheFittedPinkInkAndClears` (fail-proven).
+
+## avalonia-port/fin-feat-leash-receipts-hold: +348
+- Leash hold tick sound (WPF LeashFx.Tick gain/suppression/mod cue), WPF hover colours on the cut confirm, and a portal Activated/Deactivated hold on native Wayland.
+- Portal repeats are dropped only within RepeatGap (panic never goes dead); a portal hold trusts release only after the compositor has sent Deactivated.
+- Row stays stub: holder receipts list and Let go need the feat-leash holder card.
