@@ -205,7 +205,7 @@ namespace ConditioningControlPanel.Avalonia
                         global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
                     if (w is Views.Windows.MainShellWindow shell) Views.Windows.LauncherWindow.RouteHandoff(shell, payload);
                     else w?.Activate();
-                }).GetTask(), Services.Launcher.LauncherHandoff.Encode(args));
+                }).GetTask(), Services.Deeper.DeeperFileOpen.Encode(args) ?? Services.Launcher.LauncherHandoff.Encode(args));
             if (instance is null)
             {
                 Serilog.Log.Information("Another instance is running; asked it to show its window");

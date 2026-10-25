@@ -247,7 +247,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         _ = CheckCatalogueSubmissionStatusesAsync(CatalogueKindSessions);
                         break;
                     // WPF TabNavigation.cs:358: every door into the tab rescans the library.
-                    case "deeper": InitializeDeeperHub(); _ = CheckDeeperSubmissionStatusesAsync(); break;
+                    case "deeper":
+                        StopDeeperTabPulse();
+                        if (!CoreSettings.Current.HasSeenDeeperTab)
+                        {
+                            CoreSettings.Current.HasSeenDeeperTab = true;
+                            CoreSettings.Save();
+                        }
+                        UpdateDeeperWelcomeCardVisibility();
+                        InitializeDeeperHub(); _ = CheckDeeperSubmissionStatusesAsync(); break;
 
                     // WPF MainWindow.TabNavigation.cs:429: every show re-fetches the board (read-only).
                     case "leaderboard": _ = Named<Tabs.LeaderboardTabView>("LeaderboardTab")?.RefreshLeaderboardAsync(); RefreshSeasonRecapReview(); break;

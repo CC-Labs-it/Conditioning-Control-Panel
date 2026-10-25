@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## fin4 Deeper shell paths
+
+1. Open Play, then Deeper for the first time. Confirm the welcome card, saved visit flag and stopped Play-door pulse; restart to confirm it stays stopped. With an unseen profile, observe four bounded beats after 1200 ms; Motion Off and startup quiet suppress them. WPF `MainWindow/MainWindow.DeeperTab.cs` + `MainWindow/MainWindow.TabNavigation.cs`. Rows: `shell-deeper-tab`
+2. Use both the welcome tour and header tutorial button. Confirm the Deeper coachmarks, dismissal persistence and panic abandonment. WPF `MainWindow/MainWindow.DeeperTab.cs`. Rows: `shell-deeper-tab`
+3. Import multiple enhancements through the picker and by dropping onto the shell. Include plain settings JSON, a wrong extension, invalid enhancement JSON and a reformatted duplicate. Confirm WPF batch toasts, no duplicate copy, last source folder, selected imported row and visible-library refresh after an external save. WPF `MainWindow/MainWindow.DeeperTab.cs`. Rows: `shell-deeper-tab`
+4. Launch with --play and --edit using supported local audio/video, both with and without an existing instance. Confirm player reuse, blank editor media type/source, invalid-path rejection and long-path handoff. WPF `App.xaml.cs` + `MainWindow/MainWindow.DeeperTab.cs`. Rows: `shell-deeper-tab`

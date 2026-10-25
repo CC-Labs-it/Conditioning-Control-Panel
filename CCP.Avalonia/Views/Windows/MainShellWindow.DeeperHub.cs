@@ -4,9 +4,7 @@
 // card's demo/tour buttons). The index, filter and sort live in DeeperTabViewModel over Core
 // DeeperLocalLibrary; this partial owns the windows, dialogs, timers and files.
 //
-// Still out (see docs/avalonia-parity.md shell-deeper-hub): import (EnhancementLibrary
-// FindDuplicateOf/PromoteToLibrary + RevealDeeperLibraryRow's flash), the bundled-demo seeding, the
-// library FileSystemWatcher (LibraryChanged), the duration probe, and the Deeper tutorial.
+// Remaining hub gaps are recorded in docs/avalonia-parity.md.
 
 using System;
 using System.Collections.Generic;
@@ -45,7 +43,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private DeeperTabViewModel? DeeperModel => Named<DeeperTabView>("DeeperTab")?.DataContext as DeeperTabViewModel;
 
         /// <summary>Reloads the local index when the Deeper view is attached or the tab opens.</summary>
-        internal void InitializeDeeperHub() => ReloadDeeperLibraryFromDisk();
+        private EnhancementLibrary? _deeperLibrary;
+        private EnhancementLibrary DeeperLibrary
+        {
+            get
+            {
+                if (_deeperLibrary != null) return _deeperLibrary;
+                _deeperLibrary = new EnhancementLibrary();
+                _deeperLibrary.LibraryChanged += OnDeeperLibraryChanged;
+                Closed += (_, _) =>
+                {
+                    _deeperLibrary.LibraryChanged -= OnDeeperLibraryChanged;
+                    _deeperLibrary.Dispose();
+                };
+                return _deeperLibrary;
+            }
+        }
+
+        private void OnDeeperLibraryChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(() =>
+        {
+            if (Named<DeeperTabView>("DeeperTab")?.IsVisible == true) ReloadDeeperLibraryFromDisk();
+        });
+
+        internal void InitializeDeeperHub()
+        {
+            _ = DeeperLibrary;
+            ReloadDeeperLibraryFromDisk();
+        }
 
         private void ReloadDeeperLibraryFromDisk() => DeeperModel?.ReloadLibrary();
 
@@ -154,7 +178,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             CoreBark.NotifyUiAction("deeper_tour");
             DismissDeeperWelcomeCard();
-            // ponytail: StartTutorial(TutorialType.Deeper) - no TutorialService on this head.
+            StartDeeperTabTutorial();
+        }
+
+        internal void StartDeeperTabTutorial()
+        {
+            ShowTab("deeper");
+            UpdateDeeperWelcomeCardVisibility();
+            CoreTutorial.Start("Deeper");
         }
 
         internal void BtnDeeperWelcomeDemo_Click()

@@ -1333,6 +1333,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 return;
             }
 
+            if (Windows.MainShellWindow.Current is { IsVisible: true } mainShell)
+            {
+                mainShell.OpenDeeperEditorFromPlayer(path);
+                return;
+            }
+
             // Dedupe: one editor per file.
             foreach (var ed in DeeperEditorWindow.OpenEditors)
             {

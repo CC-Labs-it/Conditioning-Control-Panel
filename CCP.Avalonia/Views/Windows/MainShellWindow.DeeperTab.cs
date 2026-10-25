@@ -1,52 +1,4 @@
-// PARTIALLY PORTED from ConditioningControlPanel/MainWindow/MainWindow.DeeperTab.cs (1241 lines).
-// Sorted member by member against the fifteen Core seams; the blanket "wired when the services
-// move to Core" claim was wrong for the tab's own entry path, which is restored below.
-//
-// WHAT IS REAL HERE: opening the Deeper tab. BtnDeeper_Click navigates, retires the rail pulse
-// flag (HasSeenDeeperTab, CCP.Core/Models/AppSettings.cs:7929) through CoreSettings, and shows or
-// hides the welcome card from HasSeenDeeperWelcome (:7935). DismissDeeperWelcomeCard writes the
-// other flag and folds the card; the card's tour / demo / dismiss buttons relay to it from
-// DeeperTabView.axaml.cs through MainShellWindow.DeeperHub.cs.
-//
-// THE x:NAME HAZARD APPLIES TWICE HERE, and both hops go through FindControl for that reason.
-// This window loads with AvaloniaXamlLoader.Load(this), so "DeeperTab" is reached with Named<T>.
-// DeeperTabView loads the same way (DeeperTabView.axaml.cs:24), so its DeeperWelcomeCard field is
-// permanently null even though the .axaml marks it x:FieldModifier="internal" - that modifier
-// invites exactly the write that would silently do nothing. FindControl on the view reads its own
-// name scope and is the only form that works.
-//
-// NOT BLOCKED, MOVED: ChkEnableDeeper_Changed. The Deeper master switch is now owned by
-// Views/Controls/AppSettings/GeneralSettingsSection.axaml.cs:142, which persists EnableDeeper and
-// guards its own programmatic sets. It is not this partial's job any more; a second copy here
-// would be a second writer for one setting.
-//
-// LIBRARY ACTIONS (open, play, delete, folder, demo) are in MainShellWindow.DeeperHub.cs.
-// STILL OUT, and why:
-//   OpenInDeeperPlayer, OpenDeeperEditorFromPlayer, OpenInDeeperEditorForMedia,
-//   HandlePendingFileOpen (file-association entry points), OnDeeperLibraryChanged (no watcher),
-//   BtnDeeperImport_Click / ImportEnhancementFiles (EnhancementLibrary.FindDuplicateOf /
-//   PromoteToLibrary are in Core now; this head has no EnhancementLibrary instance yet).
-//   The browser half - OnDeeperBrowserBound/Unbound, RefreshBrowserWebcamButton,
-//   BtnWebcamTracking_Click, MaybePromptBrowserWebcamForEnhancement, OnBrowserEnhanceMatchChanged,
-//   ChkForceShowBambiCloud_Changed, ToggleEnhanceIfPossible_Changed. WebView2 plus WebcamTrackingState.
-//   BtnWebcamTracking_Click is also a REFUSAL and not just a wait: its portable half flips a caption,
-//   its unportable half opens or closes the camera, and the same judgement recorded for the two
-//   status pills in MainShellWindow.LabTab.cs holds - a control that reports tracking with no
-//   camera behind it is worse than one that does nothing.
-//   The tutorial - StartDeeperTabTutorial, BtnDeeperTutorial_Click, BtnDeeperWelcomeTour_Click.
-//   StartTutorial(TutorialType.Deeper) is not on this head.
-//   The rail pulse - StartDeeperTabPulse / StopDeeperTabPulse, a WPF storyboard on BtnDeeper.
-//   (Not out any more: the catalogue. The submit half is in MainShellWindow.DeeperSubmissions.cs
-//   (U3); the lookup -> toast -> picker -> download -> player chain is at the bottom of this file.)
-//   IsImportableEnhancementPath is pure and would compile, and is held back with
-//   ImportEnhancementFiles, its only caller.
-//   MaybePromptMandatoryVideoEnhancement (with its "Don't ask again" fold).
-//
-// NOT BLOCKED, RESTORED: BtnDeeperNewEnhancement_Click. It used to be listed on the line above with
-// the other library relays and that was wrong - the only thing it takes from EnhancementLibrary is
-// CreateBlank, which is a three-line construction of Core types
-// (CCP.Core/Services/Deeper/EnhancementLibrary.cs:400), and both windows it needs
-// are already on this head (Views/Deeper/NewEnhancementDialog, Views/Deeper/DeeperEditorWindow).
+// WPF reference: MainWindow/MainWindow.DeeperTab.cs. Remaining gaps: docs/avalonia-parity.md shell-deeper-tab.
 
 using System;
 using Avalonia.Controls;
@@ -73,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>
         /// The rail's Deeper entry. Navigates, then retires the "you have not opened this yet"
         /// pulse flag exactly where WPF does - on the first open, not on install - so the rail
-        /// stops nagging even though the pulse animation itself is not on this head.
+        /// stops nagging and the bounded Play-door pulse stops.
         /// </summary>
         private void BtnDeeper_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {

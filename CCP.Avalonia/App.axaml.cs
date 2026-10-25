@@ -943,6 +943,13 @@ namespace ConditioningControlPanel.Avalonia
                     Serilog.Log.Warning(ex, "[Launcher] boot decision failed; booting the panel");
                     Views.Windows.LauncherWindow.Boot = Services.Launcher.BootDecision.PanelFirst;
                 }
+                var fileOpen = Services.Deeper.DeeperFileOpen.Parse(desktop.Args);
+                if (fileOpen.Action != null && fileOpen.Path != null)
+                {
+                    Views.Windows.LauncherWindow.Boot = Services.Launcher.BootDecision.PanelFirst;
+                    shell.Opened += (_, _) => Dispatcher.UIThread.Post(() =>
+                        shell.HandlePendingFileOpen(fileOpen.Action, fileOpen.Path));
+                }
                 var boot = Views.Windows.LauncherWindow.Boot;
                 bool panelHidden = Services.Launcher.LauncherBoot.PanelStartsHidden(boot, Views.Windows.MainShellWindow.LockdownActive);
                 Serilog.Log.Information("[Launcher] boot surface {Surface} game {GameId}, panel shown: {Shown}", boot.Surface, boot.GameId, !panelHidden);
