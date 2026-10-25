@@ -75,14 +75,19 @@ public sealed class DeeperShellEntryTests
             string? imported = null;
             try
             {
+                shell.ShowTab("settings");
                 shell.ImportDroppedFilesAsync(new[] { source }).GetAwaiter().GetResult();
                 Dispatcher.UIThread.RunJobs();
+                Assert.Equal("settings", shell.CurrentTab);   // WPF reveals the row without switching tabs
                 var model = (DeeperTabViewModel)shell.Named<DeeperTabView>("DeeperTab")!.DataContext!;
                 var row = Assert.Single(model.FilteredEntries.Where(r => r.Entry.Name == enhancement.Metadata.Name));
                 imported = row.Entry.FilePath;
-                Assert.True(row.IsSelected);
+                Assert.False(row.IsSelected);                 // ...and without selecting it
                 Assert.True(row.IsHighlighted);
                 Assert.Empty(shell.ImportEnhancementFiles(new[] { source }).Imported);
+                Assert.True(shell.DeeperRevealTimer!.IsEnabled);
+                shell.DeeperRevealTimer.Stop();               // the 1800 ms flash must not race the watcher wait
+                shell.ShowTab("deeper");
                 var refreshed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 enhancement.Metadata.Creator = "Updated creator";
                 void ObserveRefresh(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -94,8 +99,7 @@ public sealed class DeeperShellEntryTests
                 try
                 {
                     File.WriteAllText(imported, EnhancementSerializer.Save(enhancement));
-                    await Task.WhenAny(refreshed.Task, Task.Delay(TimeSpan.FromSeconds(5)));
-                    Assert.True(refreshed.Task.IsCompleted, "The visible hub did not refresh after an external file save");
+                    await refreshed.Task.WaitAsync(TimeSpan.FromSeconds(5));   // throws if the visible hub never refreshed
                     Assert.True(model.FilteredEntries.Single(r => r.Entry.FilePath == imported).IsHighlighted);
                 }
                 finally { model.PropertyChanged -= ObserveRefresh; }

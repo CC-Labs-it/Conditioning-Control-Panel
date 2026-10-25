@@ -34,10 +34,12 @@ public partial class MainShellWindow
         catch (Exception ex) { Serilog.Log.Warning(ex, "Deeper import picker failed"); }
     }
 
+    /// <summary>WPF RevealDeeperLibraryRow's 1800 ms flash; one live timer, stopped on close.</summary>
+    internal global::Avalonia.Threading.DispatcherTimer? DeeperRevealTimer;
+
     internal EnhancementImportBatch ImportEnhancementFiles(IEnumerable<string> paths)
     {
         var result = EnhancementImportBatch.Run(DeeperLibrary, paths);
-        ShowTab("deeper");
         ReloadDeeperLibraryFromDisk();
         if (result.Imported.Count > 0)
             App.Notifications.Show(result.Imported.Count == 1
@@ -57,13 +59,19 @@ public partial class MainShellWindow
         var reveal = result.LastImportedPath ?? result.DuplicatePath;
         if (reveal != null && DeeperModel is { } model)
         {
-            var index = model.Select(reveal);
+            var index = -1;
+            for (var i = 0; i < model.FilteredEntries.Count && index < 0; i++)
+                if (Tabs.DeeperTabViewModel.PathsEqual(model.FilteredEntries[i].Entry.FilePath, reveal)) index = i;
             model.Highlight(reveal);
-            var timer = global::Avalonia.Threading.DispatcherTimer.RunOnce(() =>
+            if (DeeperRevealTimer == null) Closed += (_, _) => DeeperRevealTimer?.Stop();
+            else DeeperRevealTimer.Stop();
+            var timer = DeeperRevealTimer = new global::Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1800) };
+            timer.Tick += (_, _) =>
             {
+                timer.Stop();
                 if (Tabs.DeeperTabViewModel.PathsEqual(model.HighlightedPath, reveal)) model.Highlight(null);
-            }, TimeSpan.FromMilliseconds(1800));
-            Closed += (_, _) => timer.Dispose();
+            };
+            timer.Start();
             Named<Tabs.DeeperTabView>("DeeperTab")?.FindControl<ItemsControl>("DeeperLibraryList")?
                 .ContainerFromIndex(index)?.BringIntoView();
         }

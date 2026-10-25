@@ -19,6 +19,9 @@ public partial class MainShellWindow
     {
         Opened += (_, _) =>
         {
+            // Opened fires on every Show (tray round trip): never orphan an armed delay, it roots the window.
+            _deeperPulseDelay?.Dispose();
+            _deeperPulseDelay = null;
             if (CoreSettings.Current.EnableDeeper && !CoreSettings.Current.HasSeenDeeperTab)
                 _deeperPulseDelay = DispatcherTimer.RunOnce(StartDeeperTabPulse, TimeSpan.FromMilliseconds(1200));
         };
