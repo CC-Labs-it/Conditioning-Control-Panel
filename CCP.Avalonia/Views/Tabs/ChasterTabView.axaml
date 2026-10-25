@@ -632,8 +632,10 @@
 
                         <!-- the two limits, behind one link: most players never touch them -->
                         <Grid Margin="0,10,0,0">
-                            <Button x:Name="BtnLimits" Theme="{StaticResource CirceLink}" Content="{loc:Str chaster_limits}"
-                                    HorizontalAlignment="Left" Click="BtnLimits_Click"/>
+                            <Button x:Name="BtnLimits" Theme="{StaticResource CirceLink}" Padding="4,2"
+                                    HorizontalAlignment="Left" Click="BtnLimits_Click">
+                                <TextBlock Text="{loc:Str chaster_limits}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"/>
+                            </Button>
                         </Grid>
                         <Border x:Name="LimitsCard" IsVisible="False" Theme="{StaticResource CirceCard}" Margin="0,10,0,0">
                             <Grid>
