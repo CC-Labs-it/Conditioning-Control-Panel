@@ -150,6 +150,32 @@ public sealed class LoginAchievementOfferTests
         }
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task DiscordProviderLinkOffersSharingOnlyAfterLinkConfirmation(bool success) => Run(async (shell, s) =>
+    {
+        s.UnifiedId = "test-account";
+        var section = new ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.AccountSettingsSection();
+        shell.Content = section;
+        var linked = section.FinishLinkAsync("discord", new V2AuthService.LinkResponse
+            { Success = success, Error = success ? null : "link refused" });
+        await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().Any());
+        var confirmation = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+        Assert.Equal(Loc.Get(success ? "account_linked_title" : "account_link_failed_title"), confirmation.Title);
+        confirmation.Close();
+        if (success)
+        {
+            await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().Any());
+            var offer = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+            Assert.Equal(Loc.Get("title_discord_linked"), offer.Title);
+            offer.Close(false);
+        }
+        await linked;
+        Assert.Equal(success, s.HasLinkedDiscord);
+        Assert.False(s.DiscordShareAchievements);
+    });
+
     [Fact]
     public Task GameParksOneOfferAndInboxClickAsksEvenWhileGameRemains() => Run(async (shell, s) =>
     {

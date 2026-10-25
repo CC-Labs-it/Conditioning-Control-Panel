@@ -351,25 +351,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
                 var s = CoreSettings.Current;
                 var result = await AccountSeed.NewV2().LinkProviderAsync(s.UnifiedId!, provider, token);
-                var alreadyLinked = !result.Success && ProviderLinkResponseRules.IsAlreadyLinkedToThisAccount(result.Error);
-                if (!result.Success && !alreadyLinked)
-                {
-                    Log.Warning("Failed to link {Provider}: {Error}", provider, result.Error);
-                    await Tell(Owner, Loc.Get("account_link_failed_title"), result.Error ?? Loc.GetF("account_link_failed_generic", provider));
-                    return;
-                }
-                if (provider == "discord") s.HasLinkedDiscord = true; else s.HasLinkedPatreon = true;
-                if (!string.IsNullOrEmpty(result.AuthToken)) s.AuthToken = result.AuthToken;
-                CoreSettings.Save();
-                if (alreadyLinked && provider == "patreon")
-                {
-                    // A patron repairing a dead grant: its own word, no dialog (WPF AccountService).
-                    App.Notifications.Show(Loc.Get("account_patreon_reconnected"), Helpers.NotificationType.Success, TimeSpan.FromSeconds(6));
-                    _ = AccountSeed.Patreon?.ValidateSubscriptionAsync(forceRefresh: true);
-                }
-                else
-                    await Tell(Owner, Loc.Get("account_linked_title"), Loc.GetF("account_linked_success", provider));
-                Shell?.UpdateQuickLoginUI();
+                await FinishLinkAsync(provider, result);
             }
             catch (OperationCanceledException) { }
             // Core ends a cancelled browser wait as a timeout; here that is the page going away, not a failure.
@@ -385,6 +367,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 button.IsEnabled = true;
                 Refresh();
             }
+        }
+
+        // WPF MainWindow.Patreon.cs:797-802: successful linking has its own sharing caller.
+        // Kept separate from OAuth so the real post-link continuation can be exercised headlessly.
+        internal async Task FinishLinkAsync(string provider, V2AuthService.LinkResponse result)
+        {
+            var s = CoreSettings.Current;
+            var alreadyLinked = !result.Success && ProviderLinkResponseRules.IsAlreadyLinkedToThisAccount(result.Error);
+            if (!result.Success && !alreadyLinked)
+            {
+                Log.Warning("Failed to link {Provider}: {Error}", provider, result.Error);
+                await Tell(Owner, Loc.Get("account_link_failed_title"), result.Error ?? Loc.GetF("account_link_failed_generic", provider));
+                return;
+            }
+            if (provider == "discord") s.HasLinkedDiscord = true; else s.HasLinkedPatreon = true;
+            if (!string.IsNullOrEmpty(result.AuthToken)) s.AuthToken = result.AuthToken;
+            CoreSettings.Save();
+            if (alreadyLinked && provider == "patreon")
+            {
+                // A patron repairing a dead grant: its own word, no dialog (WPF AccountService).
+                App.Notifications.Show(Loc.Get("account_patreon_reconnected"), Helpers.NotificationType.Success, TimeSpan.FromSeconds(6));
+                _ = AccountSeed.Patreon?.ValidateSubscriptionAsync(forceRefresh: true);
+            }
+            else
+                await Tell(Owner, Loc.Get("account_linked_title"), Loc.GetF("account_linked_success", provider));
+            Shell?.UpdateQuickLoginUI();
+            if (provider == "discord" && Shell is { } shell)
+                await shell.OfferAchievementSharingAfterDiscordLink();
         }
 
         private System.Threading.CancellationTokenSource? _linkCts;

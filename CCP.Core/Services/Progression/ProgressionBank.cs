@@ -49,7 +49,7 @@ namespace ConditioningControlPanel
         }
 
         /// <summary>WPF ProgressionService.AddClaimedXP: web XP the server already earned - the login gate and the level
-        /// loop, no multipliers, no companion share. ponytail: no first-claim toast (AnnounceFirstWebXpClaim).</summary>
+        /// loop, no multipliers, no companion share; one first-claim toast per install.</summary>
         public static void AddClaimed(double amount)
         {
             var s = CoreSettings.Current;
@@ -62,6 +62,18 @@ namespace ConditioningControlPanel
             s.PlayerXP += amount;
             Log.Information("Web XP claim applied: +{Amount} (now {Now})", amount, s.PlayerXP);
             SpendAndRaise(s, amount, null);   // not Awarded: WPF counts no quest for it (AddClaimedXP has no TrackXPEarned)
+            // WPF AnnounceFirstWebXpClaim: spend the seen flag beside the toast on the UI thread.
+            // No new surface: use the head's existing passive notification presenter.
+            if (CoreProgram.NotifyProvider == null || !CoreDispatch.HasUiThread) return;
+            CoreDispatch.Post(() =>
+            {
+                var live = CoreSettings.Current;
+                if (live.SeenFeatureIntros.Contains("web-xp")) return;
+                live.SeenFeatureIntros.Add("web-xp");
+                CoreSettings.Save();
+                CoreProgram.Notify($"+{amount:0} XP from your web account - descending is account-wide now.",
+                    "Success", TimeSpan.FromSeconds(9));
+            });
         }
 
         private static void SpendAndRaise(Models.AppSettings s, double amount, string? source)

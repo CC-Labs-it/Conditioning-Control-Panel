@@ -23,7 +23,8 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed partial class AccountSeedTests
 {
-    private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "achievements" };
+    private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "achievements",
+        "allow_discord_dm", "show_online_status", "share_profile_picture", "public_share_avatar", "goon_share_avatar", "goon_share_dm" };
 
     /// <summary>Records every request with its body; profile GET answers <see cref="Profile"/> (500 when null).</summary>
     private sealed class SyncWire : HttpMessageHandler
@@ -136,15 +137,50 @@ public sealed partial class AccountSeedTests
 
         var body = Assert.Single(wire.Syncs);
         Assert.All(body.Properties(), p => Assert.Contains(p.Name, Allowed));
-        foreach (var k in new[] { "stats", "allow_discord_dm", "public_share_avatar", "web_xp_claim_ack", "install_date",
+        foreach (var k in new[] { "stats", "companion_progress", "total_conditioning_minutes", "web_xp_claim_ack", "install_date",
                      "reset_weekly_quest", "reset_daily_quest", "force_streak_override", "force_skills_reset", "cosmetics" })
             Assert.Null(body[k]);
+        var settings = CoreSettings.Current;
+        Assert.Equal(settings.AllowDiscordDm, (bool)body["allow_discord_dm"]!);
+        Assert.Equal(settings.ShowOnlineStatus, (bool)body["show_online_status"]!);
+        Assert.Equal(settings.ShareProfilePicture, (bool)body["share_profile_picture"]!);
+        Assert.Equal(settings.PublicShareRealAvatar, (bool)body["public_share_avatar"]!);
+        Assert.Equal(settings.GoonShareAvatar, (bool)body["goon_share_avatar"]!);
+        Assert.Equal(settings.GoonShareDiscordDm, (bool)body["goon_share_dm"]!);
         Assert.Equal("u1", (string?)body["unified_id"]);
         Assert.True((int)body["xp"]! >= L40Xp, $"xp {body["xp"]} < {L40Xp}");
         Assert.Equal(40, (int)body["level"]!);
         Assert.Equal(1, (int)body["descent_epoch"]!);
         Assert.Superset(new HashSet<string> { "first_steps", "night_owl", "linux_only" },
             body["achievements"]!.Values<string>().ToHashSet()!);
+    });
+
+    [Fact]
+    public void CompanionAndTimePushOnlyAfterReadAndDisarmOnLogout() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
+        var s = CoreSettings.Current;
+        s.TotalConditioningMinutes = 0;
+        s.CompanionProgressData = new Dictionary<int, CompanionProgress>();
+        wire.SyncReply = """{"success":true,"total_conditioning_minutes":15,"companion_progress":{"0":{"Level":3,"TotalXPEarned":90}}}""";
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.Null(wire.Syncs.Last()["companion_progress"]);
+        Assert.Null(wire.Syncs.Last()["total_conditioning_minutes"]);
+        s.CompanionProgressData[0].TotalXPEarned = 100;
+        s.TotalConditioningMinutes = 16;
+        sync.UtcNow = () => T0.AddSeconds(31);
+        Assert.True(await sync.PushAsync("progress"));
+        var sent = wire.Syncs.Last();
+        Assert.Equal(16, (double)sent["total_conditioning_minutes"]!);
+        Assert.Equal(100, (double)sent["companion_progress"]!["0"]!["TotalXPEarned"]!);
+        await AccountSeed.Logout();
+        (s.UnifiedId, s.AuthToken) = ("u1", "tok");
+        CoreAccount.UnifiedUserId = "u1";
+        wire.SyncReply = """{"success":true}""";
+        sync.UtcNow = () => T0.AddSeconds(62);
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.Null(wire.Syncs.Last()["companion_progress"]);
+        Assert.Null(wire.Syncs.Last()["total_conditioning_minutes"]);
     });
 
     [Fact]

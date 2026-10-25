@@ -24,7 +24,9 @@ namespace ConditioningControlPanel.Services
     public sealed class SyncPush
     {
         public const SyncBody.Field Sent = SyncBody.Field.UnifiedId | SyncBody.Field.Xp | SyncBody.Field.Level
-            | SyncBody.Field.DescentEpoch | SyncBody.Field.Achievements;
+            | SyncBody.Field.DescentEpoch | SyncBody.Field.Achievements
+            | SyncBody.Field.AllowDiscordDm | SyncBody.Field.ShowOnlineStatus | SyncBody.Field.ShareProfilePicture
+            | SyncBody.Field.PublicShareAvatar | SyncBody.Field.GoonShareAvatar | SyncBody.Field.GoonShareDm;
         /// <summary>Sent only once a sync response this session carried the server's skill_points and unlocked_skills and
         /// they were adopted (MergeMax / union): a fresh install never pushes its defaults before it has read them.</summary>
         public const SyncBody.Field AfterAdopt = SyncBody.Field.UnlockedSkills | SyncBody.Field.SkillPoints;
@@ -43,6 +45,7 @@ namespace ConditioningControlPanel.Services
         private int _nudgePending;
         private readonly Func<ProfileCosmetics?, ProfileCosmetics>? _sanitizeCosmetics;
         private volatile bool _pendingCosmeticsClear;
+        private SyncBody.Field _knownProgress; // read-before-write, independent of the skills response
         private volatile bool _adopted;   // WPF _hasLoadedProfile for the skills and the empty-loadout send
 
         /// <summary>A response this session carried the server's skills and they were adopted.</summary>
@@ -80,6 +83,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
         public Descent.DescentCountdownService? Countdown { get; set; }
         public DateTime? LastSyncTime { get; private set; }
+        /// <summary>WPF FeatureDayLog.Rebaseline after adopting another device's lifetime counters.</summary>
+        public Action? LifetimeLifted { get; set; }
 
         /// <param name="localAchievements">This install's unlocked achievement ids.</param>
         /// <param name="inSession">The heartbeat's in_session.</param>
@@ -105,6 +110,7 @@ namespace ConditioningControlPanel.Services
             StopHeartbeat();
             Loaded = false;
             _adopted = false;
+            _knownProgress = SyncBody.Field.None;
             _serverAchievements = null;
             _pendingCosmeticsClear = false;   // never carry one account's unequip into the next
             LastSyncTime = null;
@@ -118,14 +124,23 @@ namespace ConditioningControlPanel.Services
         /// loadout, the empty one included - that is the unequip-everything clear). Null leaves the key out.</param>
         /// <param name="adopted">The server's skills were adopted this session: send <see cref="AfterAdopt"/>, and the
         /// force_skills_reset ack (false) while one is pending (WPF SyncProfileAsync:1698-1756).</param>
-        public static SyncBody Body(AppSettings s, IEnumerable<string>? achievements, ProfileCosmetics? cosmetics = null, bool adopted = false) => new()
+        public static SyncBody Body(AppSettings s, IEnumerable<string>? achievements, ProfileCosmetics? cosmetics = null, bool adopted = false, SyncBody.Field knownProgress = SyncBody.Field.None) => new()
         {
             Known = (achievements == null ? Sent & ~SyncBody.Field.Achievements : Sent)
                     | (cosmetics == null ? SyncBody.Field.None : SyncBody.Field.Cosmetics)
                     | (adopted ? AfterAdopt : SyncBody.Field.None)
+                    | (knownProgress & (SyncBody.Field.CompanionProgress | SyncBody.Field.TotalConditioningMinutes))
                     | (adopted && s.PendingSkillsResetAck ? SyncBody.Field.ForceSkillsReset : SyncBody.Field.None)
                     | (s.LastWebXpClaimId == null ? SyncBody.Field.None : SyncBody.Field.WebXpClaimAck),
             WebXpClaimAck = s.LastWebXpClaimId,
+            AllowDiscordDm = s.AllowDiscordDm,
+            ShowOnlineStatus = s.ShowOnlineStatus,
+            ShareProfilePicture = s.ShareProfilePicture,
+            PublicShareAvatar = s.PublicShareRealAvatar,
+            GoonShareAvatar = s.GoonShareAvatar,
+            GoonShareDm = s.GoonShareDiscordDm,
+            CompanionProgress = s.CompanionProgressData,
+            TotalConditioningMinutes = s.TotalConditioningMinutes,
             UnlockedSkills = s.UnlockedSkills?.ToList() ?? new List<string>(),
             SkillPoints = s.SkillPoints,
             ForceSkillsReset = false,
@@ -187,7 +202,7 @@ namespace ConditioningControlPanel.Services
                 var server = _serverAchievements;
                 var clearing = _pendingCosmeticsClear;
                 var cosmetics = CosmeticsPayload(s, clearing);
-                var body = JsonConvert.SerializeObject(Body(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, _adopted));
+                var body = JsonConvert.SerializeObject(Body(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, _adopted, _knownProgress));
                 var tokenUsed = s.AuthToken;
                 HttpRequestMessage NewRequest()
                 {
@@ -325,6 +340,31 @@ namespace ConditioningControlPanel.Services
                 }
             }
             catch (Exception ex) { Log.Debug("AdoptCloudCosmetics skipped: {E}", ex.Message); }
+            // WPF ProfileSyncService:2175-2231: time takes higher; a companion's whole record
+            // is selected by level, then lifetime XP. Missing fields never arm a defaults push.
+            if (reply["total_conditioning_minutes"] is { Type: JTokenType.Integer or JTokenType.Float } minutes)
+            {
+                if (minutes.Value<double>() > s.TotalConditioningMinutes)
+                {
+                    s.TotalConditioningMinutes = minutes.Value<double>();
+                    LifetimeLifted?.Invoke();
+                }
+                _knownProgress |= SyncBody.Field.TotalConditioningMinutes;
+            }
+            if (reply["companion_progress"] is JObject companions)
+            {
+                foreach (var entry in companions.Properties())
+                {
+                    if (!int.TryParse(entry.Name, out var id) || entry.Value is not JObject record) continue;
+                    var server = record.ToObject<CompanionProgress>();
+                    if (server == null) continue;
+                    s.CompanionProgressData.TryGetValue(id, out var local);
+                    if (local == null || server.Level > local.Level
+                        || server.Level == local.Level && server.TotalXPEarned > local.TotalXPEarned)
+                        s.CompanionProgressData[id] = server;
+                }
+                _knownProgress |= SyncBody.Field.CompanionProgress;
+            }
             return points != null && skills != null;
         }
 
