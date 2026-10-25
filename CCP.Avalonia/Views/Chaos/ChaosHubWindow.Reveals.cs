@@ -1,8 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using Avalonia.Controls;
-using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Services.Chaos;
 using Serilog;
 
@@ -21,7 +20,7 @@ public partial class ChaosHubWindow
     internal static Action<string, float> PlayRevealSfx = ChaosOverlayWindow.ChaosSfx.Play;
 
     private readonly List<RevealPulse> _revealPulses = new();
-    private DispatcherTimer? _revealTimer;
+    private BeatLoop? _revealLoop;
     private bool _revealClosed;
 
     // WPF ChaosHubWindow.Reveals.cs:168-244: one batch bark, silent consumption for
@@ -51,12 +50,11 @@ public partial class ChaosHubWindow
                 else RevealService.MarkSeen(id);
             }
             if (_revealPulses.Count == 0) return;
-            var clock = Stopwatch.StartNew();
-            _revealTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-            _revealTimer.Tick += (_, _) => AdvanceRevealFlashes(clock.Elapsed.TotalSeconds);
-            AdvanceRevealFlashes(0);
+            // The window's shared beat (AmbientBeatLoopsTests), not a per-view frame timer.
+            // Start steps t=0 at once: the first chime, then the batch bark, as before.
+            _revealLoop = new BeatLoop(this, AdvanceRevealFlashes);
+            _revealLoop.Start();
             Platform.BarkHead.Engine?.Raise("ChaosRevealFlash", c => c.Set("element", _revealPulses[0].Id));
-            _revealTimer.Start();
         }
         catch (Exception ex) { Log.Warning("RunRevealFlashes failed ({E})", ex.Message); }
     }
@@ -82,14 +80,14 @@ public partial class ChaosHubWindow
             }
             else pulse.Target.Opacity = 0.625 + 0.375 * Math.Cos(t * 2 * Math.PI);
         }
-        if (_revealPulses.Count == 0) { _revealTimer?.Stop(); _revealTimer = null; }
+        if (_revealPulses.Count == 0) { _revealLoop?.Stop(); _revealLoop = null; }
     }
 
     private void StopRevealFlashes()
     {
         _revealClosed = true;
-        _revealTimer?.Stop();
-        _revealTimer = null;
+        _revealLoop?.Stop();
+        _revealLoop = null;
         // Teardown settles already-started reveals without leaving timers or delayed sounds.
         foreach (var pulse in _revealPulses)
         {

@@ -245,17 +245,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (_dollhouseBeatsFired || RenderProof.Rendering) return;
             _dollhouseBeatsFired = true;
+            ChaosIntroWindow? intro = null;
             try
             {
                 if (!ChaosMeta.State.SeenIntroGuide)
                 {
-                    await new ChaosIntroWindow().ShowDialogSafe(this);
+                    intro = new ChaosIntroWindow();
+                    await intro.ShowDialogSafe(this);
                     ChaosMeta.State.SeenIntroGuide = true;
                     ChaosMeta.Save();
                 }
             }
             catch (Exception ex) { Log.Warning("Chaos intro guide failed ({E})", ex.Message); }
             if (_revealClosed) return; // A closed hub must not start FX after the modal returns.
+            // WPF's modal ignored panic, so it never reached here on one. After a panic she must not
+            // speak or chime: SeenDollhouse and the pending reveals wait for the next open.
+            if (intro?.ClosedByPanic == true) return;
             try
             {
                 if (!ChaosMeta.State.SeenDollhouse)

@@ -36,7 +36,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static bool IsOpen() => Current != null;
 
         /// <summary>PanicSurfaces "chaos-intro". Idempotent, safe when none is open.</summary>
-        internal static void CloseForPanic() => Current?.Close();
+        internal static void CloseForPanic() => Current?.CloseByPanic();
+
+        /// <summary>True when panic closed the card; the hub then skips its first-open beats.</summary>
+        internal bool ClosedByPanic { get; private set; }
+
+        private void CloseByPanic() { ClosedByPanic = true; Close(); }
 
         private static Bitmap? LoadHero()
         {
@@ -216,7 +221,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 e.Handled = true;
                 if (Platform.PanicListeners.Live) return;
                 if (MainShellWindow.Current is { } shell) shell.HandlePanicKeyPress(DateTime.Now);
-                else Close();
+                else CloseByPanic();
             }, RoutingStrategies.Tunnel);
 
             Opened += (_, _) => Current = this;

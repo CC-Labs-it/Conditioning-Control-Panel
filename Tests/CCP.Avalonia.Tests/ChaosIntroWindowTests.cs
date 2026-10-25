@@ -211,9 +211,21 @@ public sealed class ChaosIntroWindowTests
         {
             Setup();
             var oldSlot = CoreSettings.Current.ChaosActiveSlot;
+            var old = (BarkHead.Engine, CoreSettings.Current.AvatarEnabled, ChaosHubWindow.PlayRevealSfx);
             ChaosHubWindow? hub = null, hub2 = null;
             try
             {
+                int chimes = 0, barks = 0;
+                ChaosHubWindow.PlayRevealSfx = (_, _) => chimes++;
+                var engine = new BarkEngine(() => new BarkRuleSet(new[]
+                {
+                    new BarkRule { Id = "first_open", Trigger = "ChaosDollhouseFirstOpen",
+                        VariantPool = new() { new BarkVariant("welcome") } },
+                }));
+                engine.Speak = _ => barks++;
+                engine.Start();
+                CoreSettings.Current.AvatarEnabled = true;
+                BarkHead.Engine = engine;
                 ChaosMetaStore.Save(new ChaosMetaState { SeenIntroGuide = false }, 1);
                 ChaosMetaStore.SetActiveSlot(1);
 
@@ -228,14 +240,19 @@ public sealed class ChaosIntroWindowTests
                     .Select(t => t.Text ?? string.Concat(t.Inlines!.OfType<Run>().Select(r => r.Text))));
                 Assert.Contains("DOWN THE RABBIT HOLE", text);
                 Assert.Contains("follow the white rabbit. everything else down there is yours to find out.", text);
+                ChaosMeta.State.PendingReveals.Add(RevealIds.TabLookingGlass);   // a reveal a pass would chime
 
                 PanicSurfaces.All.Single(s => s.Id == "chaos-intro").Stop(null);
                 await hub.IntroShown!;
                 Assert.Null(ChaosIntroWindow.Current);
                 Assert.True(ChaosMeta.State.SeenIntroGuide);
-                Assert.True(ChaosMeta.State.SeenDollhouse);
-                Assert.True(ChaosMetaStore.Load(1).SeenDollhouse);
                 Assert.True(ChaosMetaStore.Load(1).SeenIntroGuide);   // saved, not just in memory
+                // Panic: no first-open bark, no reveal chime; both wait for the next open.
+                Assert.Equal(0, barks);
+                Assert.Equal(0, chimes);
+                Assert.False(ChaosMeta.State.SeenDollhouse);
+                Assert.False(ChaosMetaStore.Load(1).SeenDollhouse);
+                Assert.True(RevealService.IsPending(RevealIds.TabLookingGlass));
                 hub.Close();
 
                 hub2 = new ChaosHubWindow();   // Init reloads the save: seen, so no card
@@ -252,6 +269,7 @@ public sealed class ChaosIntroWindowTests
                 ChaosMetaStore.Delete(1);
                 ChaosMeta.Init();
                 CoreSettings.Current.ChaosActiveSlot = oldSlot;
+                (BarkHead.Engine, CoreSettings.Current.AvatarEnabled, ChaosHubWindow.PlayRevealSfx) = old;
             }
         });
     }
