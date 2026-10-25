@@ -17,7 +17,7 @@ namespace ConditioningControlPanel.Services.Bark
     /// cooldown, chance), the no-repeat variant rotation persisted in AppSettings (:1793-1941) and the
     /// {0}/{key} substitutions (:2000). The head owns the event subscriptions and the mouth.
     /// ponytail: DispatchIdle, the awareness arbiter and CCP_BARK_DRYRUN land with a caller;
-    /// the whisper / Chaos-narrator gates with a source; tier latches key on "None" until a tier reaches Core.
+    /// the Chaos-narrator gate with a source; tier latches key on "None" until a tier reaches Core.
     /// </summary>
     public sealed class BarkEngine
     {
@@ -33,6 +33,13 @@ namespace ConditioningControlPanel.Services.Bark
         {
             "AttentionCheckFail", "PossessionEffect", "PossessionTripwire", "PossessionWarden", "PossessionRungChanged",
             "PossessionTimerRestarted", "PossessionRemember", "LockdownConscript", "EmergencyExitOpened", "EmergencyExitVerdict",
+        };
+
+        private static readonly HashSet<string> WhisperExemptTriggers = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "PossessionEffect", "PossessionTripwire", "PossessionWarden", "PossessionRungChanged",
+            "PossessionTimerRestarted", "PossessionRemember", "LockdownConscript",
+            "EmergencyExitOpened", "EmergencyExitVerdict",
         };
 
         private readonly object _gate = new();
@@ -65,6 +72,7 @@ namespace ConditioningControlPanel.Services.Bark
         // Head seams; unseeded = WPF's answer for a missing service. No mouth = nothing said, nothing spent.
         public Action<BarkSpeech>? Speak;
         public Func<bool>? IsSpeaking;                 // App.AvatarWindow.IsSpeaking
+        public Func<bool>? IsWhisperActive;
         public Func<int, bool>? IsCompanionBusy;       // App.AvatarWindow.IsCompanionBusy(windowMs)
         public Func<bool>? EmiDeskAvatarMuted;         // App.EmiDesk.AvatarMuted
         public Func<string?>? FocusedAppName;          // WindowAwareness service ?? detected name, for {0}
@@ -268,6 +276,9 @@ namespace ConditioningControlPanel.Services.Bark
             {
                 var now = Now;
                 if (now < _safetyHoldUntilUtc) return (false, -1, "safety-active");
+                // WPF: attribution rules are text-only and cannot talk over a whisper.
+                if (!WhisperExemptTriggers.Contains(rule.Trigger) && Safe(IsWhisperActive))
+                    return (false, -1, "whisper-active");
                 int window = s.BarkChatSuppressionMs;
                 if (Safe(() => IsCompanionBusy?.Invoke(window) == true)
                     || (window > 0 && (now - _lastUserMessageUtc).TotalMilliseconds < window))

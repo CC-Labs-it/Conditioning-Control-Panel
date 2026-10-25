@@ -673,3 +673,11 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Subliminal completion follow-up
+
+1. Studio -> Subliminals -> Manage Messages: recorded lines have no mute mark; add an unrecorded phrase and expect a Fluent mute mark and the silent-lines hint, including when that line is disabled. In the panel the hint requires whispers enabled and at least one enabled unrecorded phrase; change mods and check it refreshes. WPF `Features/SubliminalFeatureControl.xaml.cs`, `Dialogs/TextEditorDialog.xaml.cs`. Rows: `feat-subliminal`.
+2. Enable Solid Mode, run subliminals, change text/font/colors, then request focus: passive cards use retained stages; focus cards use classic surfaces. Stop and panic remove all cards and stages. A host failure must fall back to classic cards. WPF `Services/Subliminal/SubliminalService.cs:746`. Rows: `feat-subliminal`.
+3. Play a mandatory video with attention checks off and recorded Freeze audio enabled: Freeze precedes pre-roll by 800 ms; Reset waits until teardown, then 1–2 s on a passing 90% roll. Attention checks suppress Freeze; muted Freeze has no Reset. Panic during Freeze or video must leave no delayed Reset. WPF `Services/Video/VideoService.cs:2485`, `Services/Subliminal/SubliminalService.cs:384`. Rows: `feat-subliminal`.
+4. Select Fredoka (bundled), save and reopen the panel; cards use the bundled face. WPF `Helpers/FontPickerHelper.cs`. Rows: `feat-subliminal`.
+5. While a subliminal whisper plays, ordinary companion barks wait through its duration plus 250 ms. Safety/guaranteed barks and text-only possession/emergency attribution still pass. WPF `Services/AudioService.cs:948`, `Services/Companion/BarkService.cs:1668`. Rows: `feat-subliminal`.

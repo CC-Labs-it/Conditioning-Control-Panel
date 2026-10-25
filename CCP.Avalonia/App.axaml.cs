@@ -507,6 +507,8 @@ namespace ConditioningControlPanel.Avalonia
                     NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureSubliminal);
                 };
                 CoreSubliminal.BambiFreezeProvider = Views.Overlays.SubliminalWhisperShow.Freeze;
+                CoreSubliminal.VideoFreezeProvider = () => Views.Overlays.SubliminalWhisperShow.Freeze(true);
+                CoreSubliminal.DeferredResetProvider = Views.Overlays.SubliminalWhisperShow.DeferredReset;
                 CoreSubliminal.RunStateChanged = running =>
                 {
                     if (running) return;

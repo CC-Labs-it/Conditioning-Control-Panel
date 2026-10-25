@@ -40,6 +40,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         private readonly ObservableCollection<TextItem> _items;
         private readonly TextBox _txtNewItem;
         private readonly ItemsControl _itemList;
+        private Func<string, bool>? _hasVoice;
+        public void MarkSilentLines(Func<string, bool> hasVoice)
+        {
+            _hasVoice = hasVoice;
+            RefreshSilentHint();
+        }
+
+        private void RefreshSilentHint()
+        {
+            foreach (var item in _items)
+                item.IsSilent = _hasVoice != null && Services.SpokenClipRule.IsSilent(item.Text, _hasVoice);
+            this.FindControl<TextBlock>("TxtSilentHint")!.IsVisible = _items.Any(x => x.IsSilent);
+        }
+
         private bool _hasChanges = false;
         private bool? _dialogResult;
 
@@ -72,6 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 item.PropertyChanged += TextItem_Changed;
 
             _itemList.ItemsSource = _items;
+            _items.CollectionChanged += (_, _) => RefreshSilentHint();
 
             // Handlers live here rather than in markup, per the porting convention.
             _txtNewItem.KeyDown += (_, e) => { if (e.Key == Key.Enter) AddNewItem(); };
@@ -340,6 +355,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         private string _text = "";
         private bool _isEnabled = true;
         private bool _isSelected = false;
+        private bool _isSilent;
+        public bool IsSilent
+        {
+            get => _isSilent;
+            set { _isSilent = value; OnPropertyChanged(nameof(IsSilent)); }
+        }
 
         public string Text
         {

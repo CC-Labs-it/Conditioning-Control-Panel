@@ -64,6 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("remote-haptics", _ => RemoteCommands.StopHaptics()),   // decisions 2026-10-08
             new("takeover", sh => sh?.StopAutonomyForPanic()),           // WPF KillAllAudio -> Autonomy.Stop
             // WPF RunPanicStopTail StopEngine/StopAdHocEffects: pauses a running session; OnEngineStopped
+            // SharedOverlayHost leases are released by SubliminalOverlay.CloseAll in this path.
             // then ends Takeover pulses, desktop overlays (subliminal/whisper, mind wipe, spiral, video,
             // bubbles, pink filter), pop quizzes and open lock cards.
             // programs 3a (P06, docs/avalonia-decisions.md): today's program session ENDS, not pauses, so

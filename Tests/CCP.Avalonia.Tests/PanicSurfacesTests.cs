@@ -242,6 +242,7 @@ public sealed class PanicSurfacesTests
         ["SettingsTabView"] = "the Home browser card's webcam pill: the 'camera' surface stops WebcamTracker",
         ["BlinkTrainerTabView"] = "camera: the 'camera' and 'blink-trainer' surfaces",
         ["LibVlcAudio"] = "the CoreAudio sink: Core services stop their clips on the 'engine' surface",
+        ["SharedOverlayHost"] = "subliminal leases: engine StopDesktopOverlays calls SubliminalOverlay.CloseAll; tested by SubliminalSolidHostTests",
         ["MandatoryVideoOverlay"] = "Core video sink: the 'engine' surface (CoreEngine.Stop) closes it",
         ["BubbleCountWindow"] = "Core bubble-count sink: the 'engine' surface closes it",
         ["BubbleCountHost"] = "Core bubble-count sink: the 'engine' surface closes it",
