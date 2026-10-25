@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform;
+using ConditioningControlPanel.Services.Fyp.Online;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls
@@ -73,17 +74,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public event Action<Uri>? NavigationCompleted;
 
+        /// <summary>Completion outcome, for decorative embeds that must fall back on a failed load.</summary>
+        public event Action<Uri, bool>? NavigationFinished;
+
         /// <summary>
         /// The seam the engine's NavigationCompleted routes through, internal so a headless test
         /// (which never has an engine) can drive the same path. A completion with no URL raises
         /// nothing: there is nothing live to report.
         /// </summary>
-        internal void OnNavigationCompleted(Uri? url)
+        internal void OnNavigationCompleted(Uri? url, bool success = true)
         {
             if (url is null) return;
             CurrentUrl = url;
             if (InjectCarrier) _ = InvokeScriptAsync(CarrierShim);
             NavigationCompleted?.Invoke(url);
+            NavigationFinished?.Invoke(url, success);
         }
 
         /// <summary>
@@ -102,13 +107,57 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>Requests <see cref="RequestHeader"/> actually stamped (the engine accepted the header; never the value).</summary>
         internal int StampedRequests { get; private set; }
 
-        private void StampRequestHeader(WebResourceRequestedEventArgs e)
+        internal void StampRequestHeader(WebResourceRequestedEventArgs e)
         {
             try
             {
-                if (e.Request?.Uri is { } uri) Stamp(uri, e.Request.Headers.TrySet);
+                if (e.Request?.Uri is not { } uri) return;
+                var headers = e.Request.Headers;
+                GateScrolllerRequest(uri, n => headers.TryGetValue(n, out var v) ? v : null, headers.TrySet);
+                Stamp(uri, headers.TrySet);
             }
             catch (Exception ex) { Log.Debug("WebHost: request header not set: {Error}", ex.Message); }
+        }
+
+        /// <summary>
+        /// False for the in-app web browser only: the user's own browsing is not the app fetching
+        /// Scrolller (WPF ScrolllerWebGate leaves MainWindow.Browser untouched). Every other page is gated.
+        /// </summary>
+        public bool GateScrolller { get; set; } = true;
+
+        /// <summary>Scrolller requests that left with the honest user-agent (a headless test's view).</summary>
+        internal int ScrolllerRewrites { get; private set; }
+
+        /// <summary>Navigations and loads refused because the Scrolller licence switch is off.</summary>
+        internal int ScrolllerRefusals { get; private set; }
+
+        /// <summary>
+        /// WPF ScrolllerWebGate.Handle (main c45d58a65), header half: a Scrolller request goes out with
+        /// <see cref="ScrolllerSource.HonestUserAgent"/> and a foreign Referer becomes ours. This engine's
+        /// WebResourceRequested carries no response, so it cannot answer locally (403 when off, the device
+        /// cache, the daily share): ponytail: sync7-scrolller-d-native adds a WebKitGTK content filter and
+        /// the WebView2 filter. Off, top-level loads are refused instead (<see cref="RefusesScrolller"/>).
+        /// </summary>
+        internal bool GateScrolllerRequest(Uri uri, Func<string, string?> get, Func<string, string, bool> trySet)
+        {
+            if (!GateScrolller || ScrolllerWebRules.Decide(Absolute(uri), ScrolllerPolicy.Enabled) != ScrolllerWebDecision.Rewrite)
+                return false;
+            if (!trySet("User-Agent", ScrolllerSource.HonestUserAgent)) return false;
+            if (!ScrolllerWebRules.IsOurReferer(get("Referer"))) trySet("Referer", ScrolllerWebRules.OurReferer);
+            ScrolllerRewrites++;
+            return true;
+        }
+
+        private static string? Absolute(Uri? u) => u is { IsAbsoluteUri: true } ? u.AbsoluteUri : null;
+
+        /// <summary>True (and counted) when <paramref name="target"/> is Scrolller while the licence switch is off.</summary>
+        private bool RefusesScrolller(Uri? target)
+        {
+            if (!GateScrolller || ScrolllerWebRules.Decide(Absolute(target), ScrolllerPolicy.Enabled) != ScrolllerWebDecision.Block)
+                return false;
+            ScrolllerRefusals++;
+            Log.Information("WebHost: Scrolller is switched off, {Host} not loaded", target!.Host);
+            return true;
         }
 
         /// <summary>One request through <see cref="RequestHeader"/>; counts only a header the engine took (tests drive it).</summary>
@@ -152,12 +201,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (!string.IsNullOrEmpty(body)) WebMessage?.Invoke(body);
         }
 
+        /// <summary>Return keyboard focus to the native page after a title-bar Escape.</summary>
+        public void FocusPage()
+        {
+            if (_web != null) _web.Focus();
+            else Focus();
+        }
+
         /// <summary>
         /// True when THIS instance built an adapter. <see cref="IsAvailable"/> is the process-wide
         /// probe; the constructor can still fail after it passes, and a caller about to drive the
         /// page through script needs to know about this control, not about the machine.
         /// </summary>
-        public bool HasEngine => _web is not null;
+        public bool HasEngine => _web is not null || ScriptInvoker != null;
+
+        // Native script boundary; tests supply a per-instance page adapter without opening a desktop.
+        internal Func<string, Task<string?>>? ScriptInvoker { get; set; }
+
+        /// <summary>Live pause from the Workshop switch (WebHostMedia.SetPausedAsync). Re-applied mutes honour it, so a
+        /// navigation while paused stays muted, as WPF's engine-level IsMuted does.</summary>
+        internal bool MediaPaused { get; set; }
 
         /// <summary>
         /// Runs JS in the current page and returns its result, or null when there is no engine.
@@ -172,8 +235,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public async Task<string?> InvokeScriptAsync(string javaScript)
         {
-            if (_web is null || string.IsNullOrEmpty(javaScript)) return null;
-            try { return await _web.InvokeScript(javaScript); }
+            if (string.IsNullOrEmpty(javaScript)) return null;
+            try
+            {
+                if (ScriptInvoker != null) return await ScriptInvoker(javaScript);
+                return _web == null ? null : await _web.InvokeScript(javaScript);
+            }
             catch (Exception ex)
             {
                 Log.Debug("WebHost: InvokeScript failed: {Error}", ex.Message);
@@ -229,7 +296,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // gate has to be live for the FIRST navigation too, and a caller that assigns
                     // the predicate and the Source in that order would otherwise race the engine.
                     _web.NavigationStarted += OnNavigationStarted;
-                    _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source);
+                    _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source, e.IsSuccess);
                     _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
                     _web.WebResourceRequested += (_, e) => StampRequestHeader(e);
                     _webSlot.Children.Add(_web);
@@ -263,9 +330,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             ApplySource();
         }
 
-        private void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
+        internal void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
         {
             var target = e.Request;
+            if (RefusesScrolller(target)) { e.Cancel = true; return; }
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(target)) { e.Cancel = true; return; }
             var gate = AllowNavigation;
@@ -289,6 +357,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
             NavigationRequests++;
+            if (RefusesScrolller(url)) { RefusedNavigations++; return; }
             // A sandbox never loads a real site (as ApplySource): the panel may name it, the engine never gets it.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; return; }
             if (_web is null) return;
@@ -327,7 +396,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // A sandbox never loads a real site (see OnNavigationStarted); the panel may still name it.
             if (_web is not null)
             {
-                if (!_explicitNavigate) _web.Source = ConditioningControlPanel.Services.SandboxNet.Allows(src) ? src! : null!;
+                if (!_explicitNavigate)
+                    _web.Source = ConditioningControlPanel.Services.SandboxNet.Allows(src) && !RefusesScrolller(src) ? src! : null!;
                 return;
             }
             // No engine: the panel at least names the page that was meant to load.

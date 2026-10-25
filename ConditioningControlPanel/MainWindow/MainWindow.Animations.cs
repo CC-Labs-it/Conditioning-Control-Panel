@@ -96,14 +96,17 @@ namespace ConditioningControlPanel
                 var glow = LockdownTab?.LockdownImageGlow;
                 if (borderBrush == null || glow == null) return;
 
+                var start = Services.UI.LockdownPulse.At(0);
+                var peak = Services.UI.LockdownPulse.At(Services.UI.LockdownPulse.LegSeconds);
+                var duration = TimeSpan.FromSeconds(Services.UI.LockdownPulse.LegSeconds);
                 _lockdownPulseStoryboard = new Storyboard { RepeatBehavior = RepeatBehavior.Forever, AutoReverse = true };
-                var colorAnim = new ColorAnimation { From = (Color)ColorConverter.ConvertFromString("#FF1493"), To = (Color)ColorConverter.ConvertFromString("#FF69B4"), Duration = TimeSpan.FromSeconds(1.5) };
+                var colorAnim = new ColorAnimation { From = Color.FromRgb(start.R, start.G, start.B), To = Color.FromRgb(peak.R, peak.G, peak.B), Duration = duration };
                 Storyboard.SetTarget(colorAnim, borderBrush);
                 Storyboard.SetTargetProperty(colorAnim, new PropertyPath(SolidColorBrush.ColorProperty));
-                var blurAnim = new DoubleAnimation { From = 12, To = 22, Duration = TimeSpan.FromSeconds(1.5) };
+                var blurAnim = new DoubleAnimation { From = start.Blur, To = peak.Blur, Duration = duration };
                 Storyboard.SetTarget(blurAnim, glow);
                 Storyboard.SetTargetProperty(blurAnim, new PropertyPath(DropShadowEffect.BlurRadiusProperty));
-                var opacAnim = new DoubleAnimation { From = 0.7, To = 1.0, Duration = TimeSpan.FromSeconds(1.5) };
+                var opacAnim = new DoubleAnimation { From = start.Opacity, To = peak.Opacity, Duration = duration };
                 Storyboard.SetTarget(opacAnim, glow);
                 Storyboard.SetTargetProperty(opacAnim, new PropertyPath(DropShadowEffect.OpacityProperty));
                 _lockdownPulseStoryboard.Children.Add(colorAnim);

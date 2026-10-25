@@ -38,6 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private void WireCellHostActions(WorkshopShelfParts parts)
         {
             parts.Behavior.ChatShortcutRequested += async (_, _) => await RebindChatShortcutAsync();
+            WirePhrasePresets(parts);
 
             // Deliberately NOT wired, each for the reason a previous layer already recorded:
             //
@@ -45,14 +46,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             //    ToggleWebcamFromHotkey / WebcamTrackingService, and no webcam engine exists on this
             //    head, so a rebind would configure a key for a feature that cannot fire. Same
             //    refusal as DevicesSettingsSection.axaml.cs's BtnCameraShortcutDevices.
-            //  · Behavior.PauseBrowserChanged — WPF mutes and suspends the live WebView2
-            //    (MainWindow.Patreon.cs); this drawer holds no WebHost to suspend, and a switch
-            //    that flips with nothing behind it would report a paused browser that is playing.
-            //  · Roster.CompanionCardClicked / PersonalityAssignRequested — MainWindow's
-            //    CompanionCard_Click / BtnCompanionPersonality_Click (MainWindow.Patreon.cs), which
-            //    switch the active companion through App.Companion. No seam on this head.
-            //  · Community.Browse/Import/Export/RefreshPromptsRequested — the community-prompt
-            //    service, still in the WPF head.
+            // Browser pause forwards from the cell to the shell's live Home WebHost.
+            //  · Roster.PersonalityAssignRequested — personality prompt assignment remains absent.
+            //    CompanionTabView wires CompanionCardClicked to the shell's shared-Core switch.
+            // Community owns its shared-service actions and native picker presentation.
         }
 
         /// <summary>

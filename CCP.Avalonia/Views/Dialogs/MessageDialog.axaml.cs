@@ -1,5 +1,8 @@
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 {
@@ -60,6 +63,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         public static async Task<bool> ShowAsync(Window owner, string title, string message)
             => await new MessageDialog(title, message, showCancel: false).ShowDialogSafe<bool?>(owner) == true;
 
+        /// <summary>WPF BrowserLauncher.OpenUrlOrPrompt's failure half: copy <paramref name="url"/> (a locked
+        /// clipboard never suppresses the prompt), then say where it went.</summary>
+        public static async Task ShowLinkCopiedAsync(Window owner, string url, string purpose)
+        {
+            try { if (owner.Clipboard is { } c) await c.SetTextAsync(url); } catch { /* clipboard may be locked */ }
+            await ShowAsync(owner, ConditioningControlPanel.Localization.Loc.Get("title_open_link_in_browser"),
+                ConditioningControlPanel.Localization.Loc.GetF("msg_browser_no_default_for", purpose)
+                + ConditioningControlPanel.Localization.Loc.GetF("msg_browser_link_copied", url));
+        }
+
         /// <summary>Asks the user something. True only on OK - Cancel and the X both answer false.</summary>
         /// <param name="defaultToCancel">
         /// Puts Enter on Cancel instead of OK, for a question where the safe answer is "no": the
@@ -71,5 +84,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                                                     string? cancelText = null)
             => await new MessageDialog(title, message, showCancel: true, defaultToCancel, okText, cancelText)
                 .ShowDialogSafe<bool?>(owner) == true;
+
+        /// <summary>WPF <c>MessageBoxButton.YesNoCancel</c>, in WPF's Yes/No/Cancel order.
+        /// True = Yes, false = No, null = Cancel or the X.</summary>
+        public static async Task<bool?> AskYesNoCancelAsync(Window owner, string title, string message)
+        {
+            var dialog = new MessageDialog(title, message, showCancel: true,
+                okText: Loc.Get("btn_yes"));
+            var ok = dialog.FindControl<Button>("BtnOk")!;
+            var no = dialog.FindControl<Button>("BtnNo")!;
+            var cancel = dialog.FindControl<Button>("BtnCancel")!;
+            no.IsVisible = true;
+            Grid.SetColumn(ok, 1);
+            Grid.SetColumn(cancel, 3);
+            ok.Margin = new Thickness(0, 0, 10, 0);
+            cancel.Margin = default;
+            var saidNo = false;
+            no.Click += (_, _) => { saidNo = true; dialog.Close(false); };
+            return await dialog.ShowDialogSafe<bool?>(owner) == true ? true : saidNo ? false : null;
+        }
     }
 }

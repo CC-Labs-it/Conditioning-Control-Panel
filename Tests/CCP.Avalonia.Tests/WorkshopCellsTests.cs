@@ -32,7 +32,7 @@ public sealed class WorkshopCellsTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -40,6 +40,7 @@ public sealed class WorkshopCellsTests
     private static T OpenCell<T>(MainShellWindow shell) where T : Control
     {
         shell.Show();
+        CollapsedRoom.Show(shell);   // the drawer itself (the pages' adoption is CompanionPagesTests)
         shell.ShowTab("companion");
         Dispatcher.UIThread.RunJobs();
         shell.GetLogicalDescendants().OfType<WorkshopAccordion>().Single().ExpandAndReveal();
