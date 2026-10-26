@@ -59,7 +59,10 @@ import { createCourseController } from './core/courseSession.js';
 import { scopedBus, scopedBridge } from './core/lifetime.js';
 import { createChaseCamera } from './render/camera.js';
 import { createHitCam } from './render/hitCam.js';
+import { vFovForAspect } from './render/cameraMath.js';
 import { createCourseIntro } from './render/courseIntro.js';
+import { stagePoses, stagePlan } from './render/stagedWarmPoses.js';
+import { viewTime } from './render/stagedWarmPlan.js';
 import { createGentle } from './fx/gentle.js';
 import { createPhotosafe } from './fx/photosafe.js';
 import { createFx } from './fx/reactions.js';
@@ -409,11 +412,14 @@ async function boot(course, options, lifetime, isCurrent) {
   let words = null;
   let airWords = null, airSong = null;
   let songCues = null;
+  const chaseAim = { aspect: NaN };
   lifetime.defer(() => songCues?.dispose());
   let state = 'boot', paused = false, finishAt = 0, result = null, rumbleT = 0, rumbleSent = 0, botT = 0;
   // the tier the course's programs were built at; a Quality pick or governor step in the menu re-warms before the
   // next race (a phone froze ~7 s on the first race frame after Quality went to High, owner report 2026-10-26)
   let warmedTier = null, rewarmBusy = false;
+  // phone tier: the scenery the cover did not prepare, prepared group by group while the menu, intro and countdown play
+  let deferred = null, stagedLate = 0;
   let online = null, lobbyUi = null;
   let songToken = 0, pickedSong = shared.pickedSong;
   lifetime.defer(() => { songToken++; });
@@ -910,7 +916,7 @@ async function boot(course, options, lifetime, isCurrent) {
     } catch (e) { console.warn('[glassroad] rewarm', e && e.message); }
     finally {
       rewarmBusy = false;
-      if (lifetime.alive) { renderer.beginCourse(); warmedTier = renderer.tier; showLoading('Ready to roll', 1); loading.finish(); }
+      if (lifetime.alive) { renderer.beginCourse(); warmedTier = renderer.tier; deferred?.dispose(); deferred = null; showLoading('Ready to roll', 1); loading.finish(); }
     }
     if (lifetime.alive && state === 'menu') startRace();
   }
@@ -1176,8 +1182,12 @@ async function boot(course, options, lifetime, isCurrent) {
       const hall = boudoirLayout.landmarks.find(row => row.id === 'drawer-hall');
       peekCamera(cam.camera, track, { s: hall.s0 + 80, backM: 10, upM: 5, aheadM: 40 }, renderer.aspect);
     }
+    // phone tier, no mirror hall (its captures need the whole scene): stage the warm (render/stagedWarm.js); ?stage=0 (dev) off
+    const staged = renderer.tier === 'phone' && !warmPose && qs.get('stage') !== '0';
+    const stage = staged ? (a) => stagePlan({ ...a, poses: stagePoses(track, intro.shots, { introS: intro.duration, goS }), poolSpan: [1.5, intro.duration] }) : null;
     warm = await renderer.compile(world.scene, cam.camera, undefined,
-      { onProgress: (k, n) => showLoading('Getting the lights ready', 0.55 + 0.4 * k / n) });
+      { onProgress: (k, n) => showLoading('Getting the lights ready', 0.55 + 0.4 * k / n), stage });
+    deferred = renderer.deferredWarm(warm, world.scene);
     loaded('shaders');
     if (warmPose) {
       showLoading('One last look', .96);
@@ -1201,7 +1211,9 @@ async function boot(course, options, lifetime, isCurrent) {
       world.update(warmView(kartViews));
     }
   }
-  debug.warm = warm;
+  debug.warm = warm && { ...warm, staged: warm.staged ? warm.staged.stats : null, all: undefined };
+  lifetime.defer(() => { deferred?.dispose(); deferred = null; });
+  Object.defineProperty(debug, 'staged', { get: () => deferred ? { ...deferred.stats, done: deferred.done, late: stagedLate } : null });
   if (world.waterVolume.warmReflections) {
     hud.setLoading('Preparing water reflections', 0.96);
     await paintGap();
@@ -1410,7 +1422,10 @@ async function boot(course, options, lifetime, isCurrent) {
     const beatSong = song || (inRace ? music?.analysis : null);
     const songS = inRace && music?.playing ? music.songS : NaN;
     const pv = P.view;
-    const cueView = songCues?.update(songS, pv, { paused: frozen, gentle: cueSafety });
+    // Dropping screens pick their spot from the steady chase pose this player actually sees (aspect included).
+    if (chaseAim.aspect !== renderer.aspect) Object.assign(chaseAim, { aspect: renderer.aspect,
+      vFovDeg: vFovForAspect(feel.get('fov.baseVDeg'), renderer.aspect), eyeUpM: feel.get('camera.eyeUpM'), eyeBackM: feel.get('camera.eyeBackM') });
+    const cueView = songCues?.update(songS, pv, { paused: frozen, gentle: cueSafety, view: chaseAim });
     const mode = state === 'menu' ? 'menu' : state === 'results' ? 'results' : 'race';
     const mouseLook = pointerLook.read();
     const lookInput = canLook() ? Math.hypot(mouseLook.x, mouseLook.y) > Math.hypot(gamepad.look.x, gamepad.look.y) ? mouseLook : gamepad.look : null;
@@ -1425,7 +1440,8 @@ async function boot(course, options, lifetime, isCurrent) {
     });
     if (DEV || BOT) debug.cameraView = { selected: cam.views.selected, rear: !!rearView, mirror: cam.views.mirrorActive };
     if (state === 'intro') {
-      if (!frozen) introElapsed = Math.min(intro.duration, introElapsed + frameDt);
+      // the intro clock waits for a deferred group its next frames need (no first-view compile on screen)
+      if (!frozen && !(deferred && deferred.behind(introElapsed + frameDt))) introElapsed = Math.min(intro.duration, introElapsed + frameDt);
       const gentleIntro = hostGentle || !!feel.get('gentle.on') || !!hud.options.gentlePreview || matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (!frozen) introTarget.copy(cam.camera);
       const done = intro.apply(cam.camera, introElapsed, { gentle: gentleIntro, target: introTarget });
@@ -1531,6 +1547,10 @@ async function boot(course, options, lifetime, isCurrent) {
     if (HT) hLap('world');
     musicEdges.update(frameDt, { enabled: inRace && race.phase === 'racing' && !P.finished, paused,
       gentle: reactiveOptions.gentle, reducedMotion: edgeMotion.matches, beatSong, songS, audioReactive, screen: effects.screen });
+    if (deferred && !deferred.done) {                                              //    staged shaders: one group in flight
+      if (state === 'race' && deferred.behind(viewTime({ state, introS: intro.duration, goS, goInS: race.goInS, raceTimeS: race.timeS, phase: race.phase }), 0)) stagedLate++;
+      deferred.step();
+    }
     renderer.setHold(state === 'race' || state === 'intro');                           //    no tier step (a relink) mid-race or under the pause card
     const garageScene=!!garage&&state==='menu',inGarage=garageScene&&hud.card==='menu';
     garage?.setVisible(inGarage);

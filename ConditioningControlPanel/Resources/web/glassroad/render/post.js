@@ -89,6 +89,19 @@ export function createPost(three, scene, camera) {
         three.setMRT(mrt);
       }
     },
+    /** compileAsync for frames that keep running (render/stagedWarm.js): the render list is taken and the target
+     *  handed back in this task, so a frame drawn while the pipelines build never lands in the scene pass target. */
+    compileStart() {
+      const target = three.getRenderTarget(), mrt = three.getMRT();
+      try {
+        three.setRenderTarget(scenePass.renderTarget);
+        three.setMRT(scenePass.getMRT());
+        return three.compileAsync(scene, camera, null, null, three._callDepth + 2);
+      } finally {
+        three.setRenderTarget(target);
+        three.setMRT(mrt);
+      }
+    },
     /** Call after a quality step. */
     retier() { if (builtBloom !== Q.bloom) build(); else if (bloomNode) bloomNode.setResolutionScale(Q.bloomScale); },
     update(fx, dt = 0, aspect = 16 / 9, view = {}) {

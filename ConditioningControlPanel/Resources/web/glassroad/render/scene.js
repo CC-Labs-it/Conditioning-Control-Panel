@@ -61,6 +61,7 @@ import { createWordPopFx } from './wordPopFx.js';
 import { createRoadWords } from './roadWords.js';
 import { createNearDressing } from './nearDressing.js';
 import { createThresholdAtmosphere } from './thresholdAtmosphere.js';
+import { createCourseAtmosphere } from './courseAtmosphere.js';
 import { createWordRush } from './wordRush.js';
 import { createPhraseGates } from './phraseGates.js';
 import { createAirWords } from './airWords.js';
@@ -274,6 +275,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const scatter = (keep || isMainframe || goon || boudoir) ? null : buildScatter(art, track, seed, { pal, avoid: colossi ? colossi.placed : [], samples });
   const pinkAtmosphere = track.id === 'threshold' ? createThresholdAtmosphere(track, { phone: Q.name === 'phone' }) : null;
   if (pinkAtmosphere) scene.add(pinkAtmosphere.object);
+  const courseAtmosphere = createCourseAtmosphere(track, { phone: Q.name === 'phone' });
+  if (courseAtmosphere) scene.add(courseAtmosphere.object);
   if (!keep && !isMainframe && !goon && !boudoir) add(scatter ? scatter.object : props(track));
   if (!keep && !isMainframe && !goon && !boudoir) add(createNearDressing(track, { phone: Q.name === 'phone' }).object);
   let terrace = null, terraceScreen = null;
@@ -528,6 +531,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   // tag names match the HUD toasts, minimap and results (hud/format.js racerLabels); rebuilt only
   // when the racer list changes
   let labelsOf = null, labels = [];
+  const atmosphereView = { paused: false, gentle: false, reducedMotion: false,
+    playerPos: null, songS: NaN, audioReactive: null };
   function update(view) {
     movingHazards.update(view.raceTimeS ?? 0);
     if (keepGates) keepGates.update(view.raceTimeS ?? 0);
@@ -635,7 +640,14 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (countdown) countdown.update(dt, turn, gentle);
     if (finish) finish.update(dt, turn * 0.5, gentle);
     if (scatter) scatter.update(dt, scroll);
-    pinkAtmosphere?.update(dt, { gentle, paused: !!view.paused, reducedMotion: !!view.reducedMotion });
+    pinkAtmosphere?.update(dt, { gentle: gentle || !!view.gentle, paused: !!view.paused, reducedMotion: !!view.reducedMotion });
+    atmosphereView.paused = !!view.paused;
+    atmosphereView.gentle = gentle || !!view.gentle;
+    atmosphereView.reducedMotion = !!view.reducedMotion;
+    atmosphereView.playerPos = kart.position;
+    atmosphereView.songS = view.songS;
+    atmosphereView.audioReactive = view.audioReactive;
+    courseAtmosphere?.update(dt, atmosphereView);
     if (colossi) colossi.update(dt, scroll);
     if (mainframe) mainframe.update(dt, view, gentle);
     goonworks?.update(dt, view, gentle);
@@ -700,6 +712,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (shadows) shadows.dispose();
     if (colossi && colossi.dispose) colossi.dispose();
     pinkAtmosphere?.dispose();
+    courseAtmosphere?.dispose();
     if (spirals) spirals.dispose();
     if (media) media.dispose();
     if (routes) routes.dispose();
@@ -735,9 +748,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { pinkAtmosphere, veils, marquees, cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps, setItemMediaSource: source => { cueMediaSource = source; itemVis?.setMediaSource(source); }, primaryColour: () => pal.primaryHex(), musicColours: () => [pal.primaryHex(), pal.accentHex()], scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, worldScreens, musicRoad, reactive: road.uniforms.reactive, roadWords, wordRush, phraseGates, airWords, terrace, court, stones, mainframe, boudoirDressing, boudoirForks, perfumeView, boudoirHazardView, mirrorRoom, waterVolume, underwaterFx, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge, goonworks, goonworksHazards,
+  return { courseAtmosphere, pinkAtmosphere, veils, marquees, cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps, setItemMediaSource: source => { cueMediaSource = source; itemVis?.setMediaSource(source); }, primaryColour: () => pal.primaryHex(), musicColours: () => [pal.primaryHex(), pal.accentHex()], scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, worldScreens, musicRoad, reactive: road.uniforms.reactive, roadWords, wordRush, phraseGates, airWords, terrace, court, stones, mainframe, boudoirDressing, boudoirForks, perfumeView, boudoirHazardView, mirrorRoom, waterVolume, underwaterFx, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge, goonworks, goonworksHazards,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
-    resetReactions: () => { pinkAtmosphere?.reset(); itemVis?.clear(); marquees?.clear(); veils.clear(); for (const x of [cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps]) x?.clear(); phraseGates.clear(); airWords.clear(); if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); goonworks?.reset(); goonworksHazards?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
+    resetReactions: () => { courseAtmosphere?.reset(); pinkAtmosphere?.reset(); itemVis?.clear(); marquees?.clear(); veils.clear(); for (const x of [cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps]) x?.clear(); phraseGates.clear(); airWords.clear(); if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); goonworks?.reset(); goonworksHazards?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
 }

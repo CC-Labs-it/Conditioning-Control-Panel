@@ -43,6 +43,47 @@ test('ambient motion pauses, calms, resets and releases shared resources once', 
   a.dispose(); a.dispose(); assert.equal(disposed, 1);
 });
 
+test('cotton-candy scallops fit the original clearance and bubble highlights share four draws', () => {
+  const a = createThresholdAtmosphere(track), phone = createThresholdAtmosphere(track, { phone: true });
+  assert.equal(a.object.children.length, 4);
+  const [clouds, bubbles, highlights, mist] = a.object.children;
+  assert.equal(highlights.count, bubbles.count * 2);
+  assert.equal(highlights.geometry, bubbles.geometry);
+  assert.equal(mist.geometry, bubbles.geometry);
+  assert.notEqual(clouds.geometry, bubbles.geometry);
+  const p = clouds.geometry.attributes.position;
+  let smallest = 1, largest = 0;
+  for (let i = 0; i < p.count; i++) {
+    const radius = Math.hypot(p.getX(i), p.getY(i), p.getZ(i));
+    smallest = Math.min(smallest, radius); largest = Math.max(largest, radius);
+    assert.ok(radius >= .879 && radius <= 1.000001, 'scallops stay within the tested puff envelope');
+  }
+  assert.ok(largest - smallest > .08, 'clouds have rounded relief instead of smooth ellipsoids');
+  assert.ok(phone.object.children[0].geometry.attributes.position.count < p.count);
+  const resources = new Set(a.object.children.flatMap(mesh => [mesh.geometry, mesh.material]));
+  let released = 0; resources.forEach(resource => resource.addEventListener('dispose', () => released++));
+  a.dispose(); a.dispose(); assert.equal(released, resources.size);
+  phone.dispose();
+});
+
+test('cloud grain and soap films use bounded spatial shaders without extra textures or clocks', () => {
+  const a = createThresholdAtmosphere(track);
+  for (const mesh of a.object.children.slice(0, 2)) {
+    const seen = new Set(), pending = [mesh.material.colorNode];
+    while (pending.length) {
+      const node = pending.pop(); if (seen.has(node)) continue; seen.add(node);
+      assert.ok(!node.isTextureNode && !node.isUniformNode);
+      for (const child of node.getChildren()) pending.push(child);
+    }
+    assert.ok(seen.size < 180, `bounded atmosphere shader (${seen.size} nodes)`);
+  }
+  const mesh = a.object.children[1];
+  a.update(.1); a.update(.1, { reducedMotion: true });
+  const quiet = [...mesh.instanceMatrix.array];
+  a.update(.1, { reducedMotion: true }); assert.deepEqual([...mesh.instanceMatrix.array], quiet);
+  a.dispose();
+});
+
 test('accepted island models and missing-art fallback share the three lane colours without repainting source art', () => {
   const scene = new Group(), source = new MeshStandardMaterial({ color: '#ddccaa' }); source.name = 'surface';
   const geometry = new BoxGeometry(5, .8, 5); scene.add(new Mesh(geometry, source));
