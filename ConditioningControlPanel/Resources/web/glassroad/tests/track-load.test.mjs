@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { loadTrack } from '../track/load.js';
+import { safeBoostTurn } from '../track/boostSafety.js';
 
 const json = JSON.parse(readFileSync(new URL('../tracks/threshold.json', import.meta.url), 'utf8'));
 const tr = loadTrack(json);
@@ -78,7 +79,11 @@ test('track: derived lists', () => {
   assert.equal(tr.sectionAt(0), 0);
   for (const [k, sec] of json.sections.entries()) assert.equal(tr.sectionAt(tr.nodeS[Math.floor((sec.from + sec.to) / 2)]), k);
   assert.equal(tr.sectionAt(tr.lengthM + 1), 0);
-  assert.equal(tr.boosts[0].s, tr.nodeS[json.boosts[0].node]);
+  const offline = loadTrack(json, { aerials: false, boostSafety: false });
+  assert.deepEqual(offline.boosts, json.boosts.map(pad => ({ ...pad, s: offline.nodeS[pad.node] })));
+  const unfiltered = loadTrack(json, { boostSafety: false });
+  assert.deepEqual(tr.boosts, unfiltered.boosts.filter(pad => safeBoostTurn(unfiltered, pad)));
+  for (const pad of tr.boosts) assert.equal(pad.s, tr.nodeS[pad.node]);
   const j = tr.jumps[0];
   assert.equal(j.s, tr.nodeS[json.jumps[0].node]);
   assert.equal(j.landS, tr.nodeS[json.jumps[0].node + 1]);

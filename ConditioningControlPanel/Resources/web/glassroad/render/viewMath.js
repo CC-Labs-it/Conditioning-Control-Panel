@@ -15,6 +15,7 @@ import { vFovForAspect } from './cameraMath.js';
 import { SPECTRUM_BASE, sectionKey } from './spectrum.js';
 import { onLoop } from './colossiMath.js';
 import { RACER_FRAMING } from './framing.js';
+import { CHASE_NEUTRAL_PITCH_DEG } from '../core/chaseView.js';
 
 /**
  * Kart look scale. modelRadiusM / modelUpM are conservative framing dimensions at scale 1, including
@@ -36,7 +37,7 @@ export function chaseFraming(cam, baseVDeg, aspect, { scale = KART_VIEW.scale, r
   const vFov = vFovForAspect(baseVDeg, aspect), th = Math.tan(vFov * Math.PI / 360), tw = th * aspect;
   // Aim above the visual centre by its screen offset, matching the moving chase rig's composition.
   const pitch = Math.atan2(cam.eyeUpM - upM * scale, cam.eyeBackM)
-    - Math.atan((RACER_FRAMING.screenY * 2 - 1) * th);
+    - Math.atan((RACER_FRAMING.screenY * 2 - 1) * th) - CHASE_NEUTRAL_PITCH_DEG * Math.PI / 180;
   const proj = (y, z) => {
     // a point at height y, z metres ahead of the kart (negative = behind)
     const dy = y - cam.eyeUpM, dz = z + cam.eyeBackM;
