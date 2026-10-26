@@ -167,3 +167,13 @@ test('a settled spot stays unseen until its drop begins, then fades in falling; 
   assert.ok(Math.abs(marqueePose(old, 6.2).x) > 20 && Math.abs(marqueePose(row(), 6.2).x) < 1, 'a retired screen snaps away early');
   effect.dispose();
 });
+
+test('two consecutive drops in the same slot ask the source for different seeds', () => {
+  const seeds = [];
+  const { effect } = setup({ source: seed => { seeds.push(seed); return { width: 640, height: 360 }; } });
+  effect.update([row({ id: 'keep' })], .1, { songS: 4 });
+  effect.update([], .1, { songS: 5 });
+  effect.update([row({ id: 'keep~1', startS: 6, bornS: 5 })], .1, { songS: 7 });
+  assert.equal(new Set(seeds).size, 2, 'the redrop took the freed slot but must not repeat the first picture');
+  effect.dispose();
+});

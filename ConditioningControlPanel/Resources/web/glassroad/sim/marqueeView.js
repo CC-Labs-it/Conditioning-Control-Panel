@@ -21,6 +21,8 @@ export const MARQUEE_VIEW = Object.freeze({
   scales: Object.freeze([1, .8, .65]),   // smaller faces only where no full-size spot fits (climbs, tight turns)
   laneInM: 3,     // the kart's own line stays this far inside the face edge
   fallPadM: .6, minFallM: 6, maxFallM: 46,
+  deckPadM: 3,    // another road within the face half-width plus this, overhead, is a deck over the fall column
+  deckGapM: 3,    // and the screen (its fall start too) stays this far under that deck's surface
 });
 
 /** Face width and height for a road width and a slot (side -1/0/1); the size render/marquee.js draws. */
@@ -75,14 +77,30 @@ export function rigBox(cam, f, sides, shiftM, liftM, V = MARQUEE_VIEW, scale = 1
  * Pick the hang of one dropping rig at its impact.
  * spot(d): the road frame d metres past the kart's impact position ({p,t,n,b,w}, or null when there is none);
  * kart: the kart's road frame at the impact; lane: its lateral offset (+ = frame.b); sides: the rig's faces;
- * minM: the approach floor (owner: at least three seconds and 60 metres); lift(d, x): road surface rise at x.
- * Returns { aheadM, shiftM, liftM, scale, fallM, fits } or null when no spot exists.
+ * minM: the approach floor (owner: at least three seconds and 60 metres); lift(d, x): road surface rise at x;
+ * deck(d, x, radius): height over the spot's road of the lowest OTHER road passing within radius of the column at
+ * x (Infinity when none; sim/marqueeDecks.js). Without decks the pick is the plain view pick.
+ * Returns { aheadM, shiftM, liftM, scale, fallM, fits, clear, roomM } or null when no spot exists.
  */
-export function fitMarquee({ spot, kart, lane = 0, sides = [0], minM = 60, lift = () => 0, view = null }) {
+export function fitMarquee({ spot, kart, lane = 0, sides = [0], minM = 60, lift = () => 0, deck = null, view = null }) {
   const V = view ? { ...MARQUEE_VIEW, ...view } : MARQUEE_VIEW, cam = chaseCamera(kart, V);
   const end = Math.max(minM, Math.min(V.maxM, minM + V.spanM));
-  let best = null;
-  for (const scale of V.scales) {
+  // The drop starts with every face bottom at the impact view's top edge, so the whole fall reads in frame
+  // (render/marquee.js fades the screen in as the drop begins, never earlier).
+  const fallOf = c => {
+    let fallM = V.minFallM;
+    for (const side of sides) {
+      const { h } = marqueeFace(c.f.w, side, c.scale), x = faceX(c.f.w, side, c.shiftM, c.scale);
+      const bottom = c.liftM + restY(h) - h / 2, base = at(c.f, x, 0);
+      const v0 = [0, 1, 2].map(i => base[i] - cam.eye[i]), n = c.f.n;
+      const den = dot(n, cam.u) - cam.th * dot(n, cam.f);
+      if (Math.abs(den) > 1e-6) fallM = Math.max(fallM, (cam.th * dot(v0, cam.f) - dot(v0, cam.u)) / den - bottom + V.fallPadM);
+    }
+    return Math.max(V.minFallM, Math.min(V.maxFallM, fallM));
+  };
+  const groups = [], group = k => groups[k] ??= sweep(V.scales[k]);
+  function sweep(scale) {
+    const list = [];
     for (let d = minM; d <= end; d += V.stepM) {
       const f = spot(d);
       if (!f || !(f.w > 0)) continue;
@@ -101,22 +119,47 @@ export function fitMarquee({ spot, kart, lane = 0, sides = [0], minM = 60, lift 
       const over = Math.max(0, box.top - V.topNdc) + Math.max(0, -box.left - V.sideNdc) + Math.max(0, box.right - V.sideNdc)
         + Math.max(0, Math.abs(box.main.x) - V.centreNdc) * .5 + (box.near > 1 ? 0 : 10);
       const score = over > 0 ? -over : box.main.height * Math.max(.05, 1 - 1.6 * Math.max(0, Math.abs(box.main.x) - V.aimNdc));
-      if (!best || (over > 0) < (best.over > 0) || ((over > 0) === (best.over > 0) && score > best.score))
-        best = { aheadM: d, shiftM, liftM, scale, over, score, f: { p: f.p.slice(), t: f.t.slice(), n: f.n.slice(), b: f.b.slice(), w: f.w } };
+      const c = { aheadM: d, shiftM, liftM, scale, over, score, f: { p: f.p.slice(), t: f.t.slice(), n: f.n.slice(), b: f.b.slice(), w: f.w } };
+      c.fallM = fallOf(c); c.roomM = Infinity; c.tier = 2;
+      if (deck) {
+        // Room between each hanging face top and the lowest other road over its column (GOONWORKS runs 660 m
+        // under its own upper deck): 2 = the whole fall clears it, 1 = the hanging screen at least fits under it.
+        for (const side of sides) {
+          const { w: fw, h } = marqueeFace(f.w, side, scale), fx = faceX(f.w, side, shiftM, scale);
+          c.roomM = Math.min(c.roomM, deck(d, fx, fw / 2 + V.deckPadM) - (liftM + restY(h) + h / 2));
+        }
+        c.tier = c.roomM >= c.fallM + V.deckGapM ? 2 : c.roomM >= V.bounceM + V.deckGapM ? 1 : 0;
+      }
+      list.push(c);
     }
-    if (best && best.over <= 0) break;   // a full-size fit always wins; smaller faces are the fallback
+    return list;
   }
-  if (!best) return null;
-  // The drop starts with every face bottom at the impact view's top edge, so the whole fall reads in frame
-  // (render/marquee.js fades the screen in as the drop begins, never earlier).
-  let fallM = V.minFallM;
-  for (const view of [cam]) for (const side of sides) {
-    const { h } = marqueeFace(best.f.w, side, best.scale), x = faceX(best.f.w, side, best.shiftM, best.scale);
-    const bottom = best.liftM + restY(h) - h / 2, base = at(best.f, x, 0);
-    const v0 = [0, 1, 2].map(i => base[i] - view.eye[i]), n = best.f.n;
-    const den = dot(n, view.u) - view.th * dot(n, view.f);
-    if (Math.abs(den) > 1e-6) fallM = Math.max(fallM, (view.th * dot(v0, view.f) - dot(v0, view.u)) / den - bottom + V.fallPadM);
+  const better = (c, b) => !b || (c.over > 0) < (b.over > 0) || ((c.over > 0) === (b.over > 0) && c.score > b.score);
+  // The plain view pick: a full-size fit always wins; smaller faces are the fallback.
+  const choose = ok => {
+    let best = null;
+    for (let k = 0; k < V.scales.length; k++) {
+      for (const c of group(k)) if (ok(c) && better(c, best)) best = c;
+      if (best && best.over <= 0) break;
+    }
+    return best;
+  };
+  const plain = choose(() => true);
+  if (!plain) return null;
+  let best = plain;
+  if (plain.tier < 2) {
+    // A deck over the fall column: the nearest clear spot that still fits the view, later first, then earlier
+    // (same face size first); else the best spot the hanging screen fits under, its fall capped under the deck.
+    const k0 = V.scales.indexOf(plain.scale), order = [k0, ...V.scales.keys()].filter((k, i, a) => a.indexOf(k) === i);
+    let moved = null;
+    for (const k of order) {
+      const ok = group(k).filter(c => c.tier === 2 && c.over <= 0);
+      moved = ok.find(c => c.aheadM > plain.aheadM) || ok.filter(c => c.aheadM < plain.aheadM).pop() || null;
+      if (moved) break;
+    }
+    best = moved || choose(c => c.tier === 1) || plain;
   }
+  const capped = best.tier < 2 ? Math.max(0, Math.min(best.fallM, best.roomM - V.deckGapM)) : best.fallM;
   return { aheadM: best.aheadM, shiftM: best.shiftM, liftM: best.liftM, scale: best.scale, fits: best.over <= 0,
-    fallM: Math.max(V.minFallM, Math.min(V.maxFallM, fallM)) };
+    fallM: capped, clear: best.tier === 2, roomM: best.roomM };
 }

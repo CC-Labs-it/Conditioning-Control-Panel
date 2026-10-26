@@ -119,7 +119,7 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
   try { atlas = acquireAtlas(); } catch { /* The shared Loom can be unavailable; use the procedural canvas. */ }
   const matrix = new Matrix4(), xAxis = new Vector3(), yAxis = new Vector3(), zAxis = new Vector3();
   const dummy = new Object3D(), from = new Vector3(), to = new Vector3(), delta = new Vector3(), up = new Vector3(0, 1, 0);
-  let clock = 0, disposed = false, cursor = 0, copies = 0;
+  let clock = 0, disposed = false, cursor = 0, copies = 0, drops = 0;
   const material = options => { const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, fog: false, ...options }); materials.push(m); return m; };
   for (let i = 0; i < CAPACITY; i++) {
     const root = new Group(), hanger = new Group(), screen = new Group(); root.add(hanger, screen); object.add(root);
@@ -135,7 +135,7 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
     chain.frustumCulled = straps.frustumCulled = false; hanger.add(chain, straps);
     const anchors = [-1, 1].map(() => { const m = new Mesh(box, ink); hanger.add(m); return m; });
     slots.push({ root, screen, backing, border, face, chain, straps, anchors, surface, mats: [ink, rim, metal, cloth, picture],
-      id: null, row: null, side: 0, bornS: 0, soft: false, alpha: 0 });
+      id: null, pick: 0, row: null, side: 0, bornS: 0, soft: false, alpha: 0 });
   }
   scene.add(object);
   function clear() {
@@ -201,7 +201,7 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
       const s = slots.find(v => v.id === id) || slots.find(v => !v.id);
       if (!s) continue;
       // A screen shows as its drop begins (or from a seek's rebuild): it never waits visibly above the frame.
-      if (!s.id) { s.id = id; s.bornS = Math.max(Number.isFinite(item.row.bornS) ? item.row.bornS : clock, item.row.startS - FALL_S); s.soft = photosafe?.request('marquee') === false; }
+      if (!s.id) { s.id = id; s.pick = drops++; s.bornS = Math.max(Number.isFinite(item.row.bornS) ? item.row.bornS : clock, item.row.startS - FALL_S); s.soft = photosafe?.request('marquee') === false; }
       s.row = item.row; s.side = item.side; s.root.visible = true;
       if (!paused) pose(s, item.row, clock, gentle);
     }
@@ -215,7 +215,8 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
         const typed = String(s.row.params.text || '').slice(0, Math.max(0, Math.floor((clock - s.row.startS) / .11)));
         s.surface.terminal(typed, Math.floor(clock * 2.2) % 2 === 0); continue;
       }
-      const picture = source(i);
+      // Seeded per drop, not per slot: a redrop reuses the freed slot 0 and would repeat the same picture.
+      const picture = source(s.pick);
       if (s.surface.paint(picture, clock, { paused, allowed: budget > 0 })) { copies++; if (picture) budget--; }
     }
     if (!paused) cursor = (cursor + 1) % slots.length;

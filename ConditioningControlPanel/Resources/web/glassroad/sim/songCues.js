@@ -1,6 +1,7 @@
 import { S } from './state.js';
 import { wrap } from '../core/math.js';
 import { fitMarquee, DROP_S } from './marqueeView.js';
+import { deckIndex, deckOver } from './marqueeDecks.js';
 
 export const CUE_KINDS = Object.freeze(['VEIL', 'MARQUEE', 'SHIFT', 'GANTRY', 'BAR', 'BURST', 'SWARM', 'PROP', 'STOMP']);
 const clean = value => String(value || '').toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/[^\p{L}\p{N}'\s]/gu, '').trim();
@@ -87,6 +88,8 @@ export function createSongCueRun(chart, track) {
   // A dropping screen hangs where the player's own chase view sees all of it at the impact (sim/marqueeView.js):
   // far enough to fit under the top edge, on the kart's line leaning toward the view centre, falling into frame.
   const probe = { frame: frame() }, kartAt = { frame: frame() };
+  // Roads passing over a fall column (GOONWORKS' upper deck): indexed once per course, read only at a lock.
+  const decks = cues.some(c => c.kind === 'MARQUEE') ? deckIndex(track) : null;
   const rise = (p, x) => (p.forkId === null && track.canalProfile ? track.canalProfile(p.s, x, {}).height : 0) || 0;
   function hang(row, st, leadM, plan, view) {
     const minM = watchStandoff(row, plan), lane = Number.isFinite(st[S.lateral]) ? st[S.lateral] : 0;
@@ -95,7 +98,8 @@ export function createSongCueRun(chart, track) {
     const kart = { p: k.p.map((v, i) => v + k.b[i] * lane + k.n[i] * up), t: k.t, n: k.n, b: k.b };
     const sides = row.params.count === 3 ? [-1, 0, 1] : row.params.count === 2 ? [-1, 1] : [0];
     const fit = fitMarquee({ kart, lane, sides, minM, view, spot: d => place(probe, st, leadM + d) ? probe.frame : null,
-      lift: (d, x) => rise(probe, x) });
+      lift: (d, x) => rise(probe, x),
+      deck: decks ? (d, x, radius) => deckOver(decks, probe.frame, x, radius, probe.forkId === null ? probe.s : null) : null });
     if (!place(row, st, leadM + (fit ? fit.aheadM : minM))) return false;
     if (fit) { row.shiftM = fit.shiftM; row.liftM = fit.liftM; row.fallM = fit.fallM; row.faceScale = fit.scale; }
     return true;
