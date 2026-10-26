@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { FAILURE_KEY, reasonOf, describeFailure, failureLine, rememberFailure, readLastFailure, isStalled, STALL_MS, FRAME_THROWS } from '../core/failure.js';
+import { FAILURE_KEY, reasonOf, describeFailure, failureLine, rememberFailure, readLastFailure, isStalled, blockedTick, STALL_MS, WATCH_MS, FRAME_THROWS } from '../core/failure.js';
 import { createLoading } from '../hud/loading.js';
 
 const src = (p) => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
@@ -45,6 +45,14 @@ test('stall rule: a visible, uncovered, idle page with no frame for STALL_MS is 
   assert.equal(isStalled({ ...base, busy: true }), false, 'a course is opening');
   assert.equal(isStalled({ ...base, visibleSinceMs: 19000 }), false, 'just back from hidden: the loop has not had its chance');
   assert.equal(isStalled({ ...base, lastFrameMs: 0 }), false, 'no frame yet is a boot, not a stall');
+  // one long synchronous task (a first-use pipeline compile, a GC) held the main thread: the watchdog tick itself
+  // came late, the loop was busy, not dead (review of #3002)
+  assert.equal(blockedTick({ nowMs: 20000, lastTickMs: 18000 }), false, 'a tick on time');
+  assert.equal(blockedTick({ nowMs: 20000, lastTickMs: 15900 }), true, 'a tick more than two intervals late');
+  assert.equal(blockedTick({ nowMs: 20000, lastTickMs: 0 }), false, 'the first tick has no previous one');
+  assert.equal(isStalled({ ...base, lastTickMs: 12000 }), false, 'a 6 s compile is not a dead loop');
+  assert.equal(isStalled({ ...base, lastTickMs: 18000 }), true, 'ticks on time and still no frame: dead');
+  assert.equal(WATCH_MS * 2 < STALL_MS, true, 'two ticks fit inside the stall window');
 });
 
 test('loading cover: fail shows the reason in small text and a Retry that runs the handler; start clears both', () => {
@@ -110,6 +118,8 @@ test('boot.js: device loss, a stalled loop and a loop that keeps throwing all re
   assert.match(rec, /teardownGpu\(\{ lowerTier: kind === 'lost' \}\)/, 'a lost device rebuilds one tier lower');
   assert.match(rec, /selectCourse\(rec\.course, \{ force: true, replace: true, race \}\)/);
   const wd = b.slice(b.indexOf('const watchdog = setInterval('), b.indexOf('function frame(now) {'));
+  assert.match(wd, /const blocked = blockedTick\(\{ nowMs, lastTickMs \}\);\s*lastTickMs = nowMs;\s*if \(blocked\) \{ lastFrameMs = lastDrawMs = nowMs; return; \}/, 'a late tick moves the stamps and judges nothing');
+  assert.match(wd, /\}, WATCH_MS\);/);
   assert.match(wd, /isStalled\(\{ nowMs, lastFrameMs, visible, visibleSinceMs, covered, busy \}\)/);
   assert.match(wd, /racing\(\) && !paused && isStalled\(\{ nowMs, lastFrameMs: lastDrawMs,/, 'a race that draws nothing is as dead');
   assert.match(wd, /covered = document\.body\.dataset\.boot !== 'ready', busy = rewarmBusy \|\| controller\.busy/);

@@ -90,7 +90,7 @@ import { poseOf } from './hud/presets.js';
 import { createDevHook, devAllowed } from './dev/hook.js';
 import { chipAlpha, kartPoint } from './hud/countdown.js';
 import { createLoading } from './hud/loading.js';
-import { describeFailure, rememberFailure, failureLine, isStalled, STALL_MS, FRAME_THROWS } from './core/failure.js';
+import { describeFailure, rememberFailure, failureLine, isStalled, blockedTick, STALL_MS, WATCH_MS, FRAME_THROWS } from './core/failure.js';
 import { ORDER as TIER_ORDER } from './render/quality.js';
 import { createGarage } from './render/garage.js';
 import { raceLook } from './hud/garageState.js';
@@ -1253,13 +1253,19 @@ async function boot(course, options, lifetime, isCurrent) {
   // (lastDrawMs: the last frame that drew anything; a loop that runs but draws nothing in a race is as dead)
   let lastFrameMs = performance.now(), lastDrawMs = performance.now(), visibleSinceMs = performance.now(), frameThrows = 0;
   lifetime.listen(document, 'visibilitychange', () => { if (!document.hidden) visibleSinceMs = performance.now(); });
+  let lastTickMs = 0;
   const watchdog = setInterval(() => {
     if (!isCurrent() || shared.recovering) return;
     const nowMs = performance.now(), covered = document.body.dataset.boot !== 'ready', busy = rewarmBusy || controller.busy, visible = !document.hidden;
+    // a tick that comes late ran after one long synchronous task (a first-use compile, a GC): the loop was busy,
+    // not dead; its stamps move to now and the following ticks judge
+    const blocked = blockedTick({ nowMs, lastTickMs });
+    lastTickMs = nowMs;
+    if (blocked) { lastFrameMs = lastDrawMs = nowMs; return; }
     const stalled = isStalled({ nowMs, lastFrameMs, visible, visibleSinceMs, covered, busy }) ? 'no frame'
       : racing() && !paused && isStalled({ nowMs, lastFrameMs: lastDrawMs, visible, visibleSinceMs, covered, busy }) ? 'nothing drawn' : null;
     if (stalled) { cancelAnimationFrame(frameId); void recover('stalled', new Error(stalled + ' for ' + Math.round(STALL_MS / 1000) + ' s'), { race: racing() }); }
-  }, 2000);
+  }, WATCH_MS);
   lifetime.defer(() => clearInterval(watchdog));
   function frame(now) {
     if (!lifetime.alive) return;

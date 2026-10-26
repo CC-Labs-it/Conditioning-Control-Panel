@@ -56,8 +56,17 @@ export function readLastFailure(storage = store()) {
  *    visibleSinceMs = when the page last became visible (a hidden tab draws nothing and is never dead).
  *  @returns {boolean} true when the loop counts as dead */
 export const STALL_MS = 6000;
-export function isStalled({ nowMs, lastFrameMs, visible, visibleSinceMs = 0, covered, busy, stallMs = STALL_MS }) {
+/** The watchdog's own interval; a tick that comes more than twice this late ran after one long synchronous task. */
+export const WATCH_MS = 2000;
+/** True when the watchdog tick itself ran late: one synchronous task (a first-use pipeline compile, a GC on a
+ *  phone; 3.6-7 s measured in #3000) held the whole main thread, so the loop was busy, not dead. The caller moves its
+ *  frame stamps to now and lets the following ticks judge. */
+export function blockedTick({ nowMs, lastTickMs = 0, tickMs = WATCH_MS }) {
+  return lastTickMs > 0 && nowMs - lastTickMs > 2 * tickMs;
+}
+export function isStalled({ nowMs, lastFrameMs, visible, visibleSinceMs = 0, covered, busy, stallMs = STALL_MS, lastTickMs = 0, tickMs = WATCH_MS }) {
   if (!visible || covered || busy || !(lastFrameMs > 0)) return false;
+  if (blockedTick({ nowMs, lastTickMs, tickMs })) return false;
   return nowMs - Math.max(lastFrameMs, visibleSinceMs || 0) > stallMs;
 }
 
