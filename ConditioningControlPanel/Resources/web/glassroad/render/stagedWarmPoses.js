@@ -42,19 +42,28 @@ function chainVisible(o, root, vis) {
  * hiddenMats: materials that were invisible. Pieces with no frustum test (never culled, hidden, empty pools, invisible
  * materials) are pinned to the cover: when they appear is not knowable.
  */
-export function stagePlan({ items, saved, hiddenMats, scene, camera, poses, pinRoot = null, perGroup = STAGE.perGroup }) {
+export function stagePlan({ items, saved, hiddenMats, scene, camera, poses, pinRoot = null, perGroup = STAGE.perGroup, poolSpan = null }) {
   const vis = new Map(), culled = new Map(), counts = new Map();
   for (const [o, v, f, n] of saved) { vis.set(o, v); culled.set(o, f); counts.set(o, n); }
-  const cam = camera.clone();
+  const cam = camera.clone(), pinnedBy = {};
   const entries = items.map((item) => {
     const mats = [].concat(item.material || []).filter(Boolean);
     let extra = false;
     for (let q = item; q; q = q.parent) if (q === pinRoot) { extra = true; break; }
-    const pinned = extra || item.receiveShadow || culled.get(item) === false || !chainVisible(item, scene, vis) || counts.get(item) === 0 ||
-      mats.some((m) => hiddenMats.has(m));
-    return { item, mats: mats.map((m) => m.id ?? m), pinned, needT: pinned ? 0 : Infinity };
+    // never-culled pieces still carry bounds (instanced and batched meshes keep a bounding sphere): the frustum test stands
+    // a hidden piece that sits somewhere in the world (the world hides far scenery itself) gets a need time like
+    // any other; one at the origin is a pool that appears anywhere, so it stays behind the cover
+    const hidden = !chainVisible(item, scene, vis), placed = hidden && item.getWorldPosition(V).lengthSq() > 1;
+    const why = extra ? 'extra' : item.receiveShadow ? 'receiver' : hidden && !placed ? 'pool' : counts.get(item) === 0 ? 'empty'
+      : mats.some((m) => hiddenMats.has(m)) ? 'hiddenMat' : null;
+    pinnedBy[why || 'open'] = (pinnedBy[why || 'open'] || 0) + 1;
+    // pools (hidden at the origin: item visuals, particles, words) appear anywhere once the race runs; with a poolSpan
+    // [t0, t1] they are spread over the intro in need order instead of all behind the cover
+    const pool = why === 'pool' && !!poolSpan;
+    return { item, mats: mats.map((m) => m.id ?? m), pinned: why !== null && !pool, pool, needT: why !== null && !pool ? 0 : Infinity };
   });
-  const open = entries.filter((e) => !e.pinned);
+  if (poolSpan) { const pools = entries.filter((e) => e.pool); pools.forEach((e, k) => { e.needT = poolSpan[0] + (poolSpan[1] - poolSpan[0]) * k / Math.max(1, pools.length - 1); }); }
+  const open = entries.filter((e) => !e.pinned && !e.pool);
   for (const pose of poses) {
     if (!open.length) break;
     cam.position.fromArray(pose.eye); cam.up.set(0, 1, 0); cam.lookAt(V.fromArray(pose.look));
@@ -75,7 +84,7 @@ export function stagePlan({ items, saved, hiddenMats, scene, camera, poses, pinR
     e.needT = t;
   }
   const plan = planStages(entries, { perGroup });
-  plan.stats = { items: items.length, now: plan.now.length, deferred: plan.groups.reduce((n, g) => n + g.items.length, 0), groups: plan.groups.length,
+  plan.stats = { pinnedBy, items: items.length, now: plan.now.length, deferred: plan.groups.reduce((n, g) => n + g.items.length, 0), groups: plan.groups.length,
     lastNeedT: plan.groups.length ? Math.round(plan.groups[plan.groups.length - 1].needT * 10) / 10 : 0 };
   return plan;
 }

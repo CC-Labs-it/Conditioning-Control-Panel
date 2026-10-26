@@ -1175,7 +1175,7 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     // phone tier, no mirror hall (its captures need the whole scene): stage the warm (render/stagedWarm.js); ?stage=0 (dev) off
     const staged = renderer.tier === 'phone' && !warmPose && qs.get('stage') !== '0';
-    const stage = staged ? (a) => stagePlan({ ...a, poses: stagePoses(track, intro.shots, { introS: intro.duration, goS }) }) : null;
+    const stage = staged ? (a) => stagePlan({ ...a, poses: stagePoses(track, intro.shots, { introS: intro.duration, goS }), poolSpan: [1.5, intro.duration] }) : null;
     warm = await renderer.compile(world.scene, cam.camera, undefined,
       { onProgress: (k, n) => showLoading('Getting the lights ready', 0.55 + 0.4 * k / n), stage });
     deferred = renderer.deferredWarm(warm, world.scene);
