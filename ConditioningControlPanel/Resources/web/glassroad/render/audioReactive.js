@@ -1,6 +1,7 @@
 // All paths are built during scene construction, including silence. Updates only change uniforms.
 import { uniform, float, vec2, vec3, sin, cos, abs, pow, mix, smoothstep, floor, fract, hash, length, fwidth, max, min, mod, step } from 'three/tsl';
 import { AUDIO_REACTIVE as L, stepAudioReactive } from './audioReactiveMath.js';
+import { createWaterDnaFrame, waterDnaFrame } from './waterDnaMath.js';
 const UNIFORM_NAMES = Object.freeze(['bass', 'mid', 'treble', 'energy', 't', 'gentle', ...Array.from({ length: 8 }, (_, i) => 'note' + i)]);
 
 export function createAudioReactiveUniforms() {
@@ -8,28 +9,36 @@ export function createAudioReactiveUniforms() {
   // The state is allocated once, outside the render loop.
   u.state = { bass: 0, mid: 0, treble: 0, energy: 0, t: 0, gentle: 0 };
   for (let i = 0; i < 8; i++) { u['note' + i] = uniform(0); u.state['note' + i] = 0; }
+  u.dna = createWaterDnaFrame();
+  u.dnaPhase = uniform(0); u.dnaRadius = uniform(2.1); u.dnaHue = uniform(.5); u.dnaPulse = uniform(0);
   return u;
 }
 
 export { mainframeTileLight } from './materials/mainframeMusicFloor.js';
 
 /** Paired strands, crossbars and travelling beads, anchored in the liquid's own coordinates. */
-export function waterHelixLight(p, u, tint) {
-  const time = u.t.mul(mix(float(.5), float(.18), u.gentle)), lane = floor(p.x.div(9));
-  const x = mod(p.x.add(4.5), 9).sub(4.5), phase = p.y.mul(.32).sub(time).add(lane.mul(1.7));
-  const wave = sin(phase).mul(u.mid.mul(.65).add(2.1));
-  const width = max(float(.075), fwidth(x).mul(1.2));
+export function waterHelixLight(p, u, tint, accent = tint) {
+  const lane = floor(p.x.add(4.5).div(9));
+  const x = mod(p.x.add(4.5), 9).sub(4.5), phase = p.y.mul(.32).sub(u.dnaPhase).add(lane.mul(1.7));
+  const wave = sin(phase).mul(u.dnaRadius);
+  const width = max(u.dnaPulse.mul(.10).add(.09), fwidth(x).mul(1.2));
   const strand = d => float(1).sub(smoothstep(width, width.add(.12), abs(d)));
   const a = strand(x.sub(wave)), b = strand(x.add(wave));
   const rung = float(1).sub(smoothstep(.06, .14, abs(sin(phase.mul(3))))).mul(float(1).sub(smoothstep(abs(wave), abs(wave).add(.15), abs(x))));
-  const bead = pow(sin(phase.sub(time.mul(.25))).mul(.5).add(.5), 12).mul(a.add(b));
-  const level = u.mid.mul(1.1).add(u.treble.mul(.65)).add(u.bass.mul(.3)).mul(gain(u));
-  return tint.mul(a.add(rung.mul(.4))).add(mix(tint,vec3(.7,.9,1),.55).mul(b)).add(vec3(.65,1,.9).mul(bead).mul(.5)).mul(level);
+  const bead = pow(sin(phase.sub(u.dnaPhase.mul(.5))).mul(.5).add(.5), 8).mul(a.add(b));
+  const colour = u.dnaHue.mul(.72).add(sin(lane.mul(1.7)).mul(.14)).add(.14).clamp(0,1);
+  const strandA = mix(tint, accent, colour), strandB = mix(tint, accent, float(1).sub(colour));
+  const level = u.mid.mul(.7).add(u.treble.mul(.35)).add(u.bass.mul(.35)).mul(gain(u));
+  return strandA.mul(a.add(rung.mul(.35).mul(u.dnaPulse.mul(.5).add(.5))))
+    .add(strandB.mul(b)).add(mix(strandA, strandB, .5).mul(bead).mul(.35)).mul(level).min(.7);
 }
 
 export function updateAudioReactiveUniforms(u, signal, dt, options) {
   stepAudioReactive(u.state, signal, dt, options);
   for (const name of UNIFORM_NAMES) u[name].value = u.state[name];
+  waterDnaFrame(u.dna, u.state, signal, options?.song, options);
+  u.dnaPhase.value = u.dna.phase; u.dnaRadius.value = u.dna.radius;
+  u.dnaHue.value = u.dna.hue; u.dnaPulse.value = u.dna.pulse;
 }
 
 const gain = u => mix(float(1), float(L.gentleGain), u.gentle);

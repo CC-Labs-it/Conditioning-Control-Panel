@@ -5,6 +5,7 @@ import { loadTrack } from '../track/load.js';
 import { installForks } from '../track/forks.js';
 import { movingStations } from '../track/moving/goonworks.js';
 import { goonworksSetpieces, goonworksPose, GOONWORKS_TOYS } from '../track/goonworks-setpieces.js';
+import { getGoonworksLayout } from '../track/goonworks-layout.js';
 const source = JSON.parse(readFileSync(new URL('../tracks/goonworks.json', import.meta.url), 'utf8'));
 const track = loadTrack(source), plan = movingStations(track), old = goonworksSetpieces(track);
 
@@ -21,6 +22,27 @@ test('GOONWORKS puts six horizontal traps on supported approaches with permanent
     assert.ok(track.boosts.every(other => Math.abs(other.s - row.s) >= other.len / 2 + 16));
     assert.ok(!track.aerials.some(other => row.s > other.rampS0 - 30 && row.s < other.landingS1 + 30));
     assert.ok(!track.fields.some(other => row.s > other.fromS - 30 && row.s < other.toS + 30));
+  }
+});
+
+test('GOONWORKS complete head envelopes stay above the real floor during rest and full extension', () => {
+  const physical = loadTrack(source, { moving: true }), layout = getGoonworksLayout(physical);
+  const first = physical.moving.traps[0], gallery = layout.byId['grotto-gallery'];
+  assert.ok(first.s >= gallery.s0 && first.s < gallery.s0 + 12, 'first stroke teaches its timing at the flat gallery entrance');
+  assert.ok(physical.boosts.every(other => Math.abs(other.s - first.s) >= other.len / 2 + 125), 'long unboosted approach');
+  for (const row of physical.moving.traps) {
+    for (const extension of [0, .25, .5, .75, 1]) {
+      const centre = row.x - row.side * row.travelM * extension;
+      for (const along of [-row.len / 2, 0, row.len / 2]) {
+        for (let lateral = -row.w / 2; lateral <= row.w / 2; lateral += row.w / 8) {
+          const s = row.s + along, x = centre + lateral;
+          assert.ok(physical.canalProfile(s, x, {}).height < .05,
+            row.id + ' visible head clears curved floor at extension=' + extension + ' x=' + x);
+          const surface = physical.surfaceAt(s, x), q = physical.query(...surface.p, surface.seg);
+          assert.ok(q.onRoad && Math.abs(q.height) < .05, row.id + ' head sweep has physical road underneath');
+        }
+      }
+    }
   }
 });
 

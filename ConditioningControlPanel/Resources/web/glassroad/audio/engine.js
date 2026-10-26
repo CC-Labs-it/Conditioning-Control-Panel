@@ -78,8 +78,15 @@ export function createEngine(ctx, out, feel) {
   }
 
   let on = false;
+  function silence() {
+    if (!on) return;
+    on = false;
+    glide(gain.gain, 0, .08); glide(padGain.gain, 0, .15); glide(nzGain.gain, 0, .08);
+    if (rec) for (const k of LAYERS) glide(rec.v[k].gain, 0, .08);
+  }
   const layersOut = { idle: 0, cruise: 0, air: 0 };   // engineLayers fills it in place every frame
   function update(speedPct, flags = {}) {
+    if (flags.active === false) { silence(); return; }
     const maxPct = feel.get('speed.maxPct');
     const p = Math.max(0, Math.min(speedPct || 0, maxPct));
     if (!on) { on = true; glide(padGain.gain, SOUND.padGain, 0.8); }
@@ -118,5 +125,5 @@ export function createEngine(ctx, out, feel) {
     try { duck.disconnect(); } catch (e) { /* gone */ }
   }
 
-  return { update, chord, dispose, useSamples, get recorded() { return !!rec; } };
+  return { update, chord, silence, dispose, useSamples, get recorded() { return !!rec; } };
 }

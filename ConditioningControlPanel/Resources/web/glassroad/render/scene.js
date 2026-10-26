@@ -591,7 +591,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     road.uniforms.phase.value = (road.uniforms.phase.value + dt * LOOK.bandScrollMps * band) % LOOK.bandLenM;
     road.uniforms.contrast.value = contrast;
     road.uniforms.sheen.value = gentle ? LOOK.sheenGentle : 1;
-    updateAudioReactiveUniforms(road.uniforms.reactive, view.audioReactive, dt, { paused: !!view.paused, gentle });
+    updateAudioReactiveUniforms(road.uniforms.reactive, view.audioReactive, dt, { paused: !!view.paused, gentle, song: view.beatSong || view.song });
     // Water and road share one measured music envelope and freeze together on pause.
     if (road.uniforms.water && !view.paused) road.uniforms.water.t.value += dt * scroll;
     if (waterfall) waterfall.update(dt, { playerPos: kart.position, gentle, paused: !!view.paused, scroll });
