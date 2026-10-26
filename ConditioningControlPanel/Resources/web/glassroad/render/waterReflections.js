@@ -1,12 +1,16 @@
 // One local scene probe, allocated before warmup and refreshed a single face at a time.
+// Its six cameras see only REFLECT_LAYER (render/reflectionLayer.js): the broad surfaces, assigned once
+// at warm. Compiling and drawing the whole scene for a 64 px cube cost a second program per material.
 import { CubeCamera, CubeRenderTarget, HalfFloatType, LinearFilter } from 'three/webgpu';
+import { REFLECT_LAYER, assignReflectionLayer } from './reflectionLayer.js';
 
 export function createWaterReflections({ scene, renderer, exclude, quality='mid', track }={}) {
   const three=renderer?.three||renderer, size=quality==='phone'?32:64;
   const target=new CubeRenderTarget(size,{type:HalfFloatType,generateMipmaps:false,minFilter:LinearFilter,magFilter:LinearFilter});
   target.texture.name='water-local-scene-reflection';
   const camera=new CubeCamera(.5,quality==='phone'?100:160,target);
-  const stats={ready:false,failed:false,error:'',captures:0,size,face:0};
+  for(const face of camera.children)face.layers.set(REFLECT_LAYER);
+  const stats={ready:false,failed:false,error:'',captures:0,size,face:0,reflected:0,skipped:0};
   let elapsed=0,disposed=false;
   function position(playerPos,playerS) {
     const p=playerPos||track?.frameAt(playerS||0)?.p||[0,0,0];
@@ -44,6 +48,7 @@ export function createWaterReflections({ scene, renderer, exclude, quality='mid'
       if(disposed)return false;
       try {
         position(playerPos,playerS);
+        const layered=assignReflectionLayer(scene,{exclude});stats.reflected=layered.on;stats.skipped=layered.off;
         await withCapture(async()=>{
           for(let face=0;face<6;face++) {
             three.setRenderTarget(target,face);
@@ -61,8 +66,8 @@ export function createWaterReflections({ scene, renderer, exclude, quality='mid'
                 if(object.count===0&&(object.isInstancedMesh||object.isSprite||object.isBatchedMesh))object.count=1;
                 for(const material of [].concat(object.material||[]))if(material&&material.visible===false){materials.push(material);material.visible=true;}
               });
-              // Keep the real cube layer mask. Layer-2 road shadow catchers never enter
-              // this no-shadow capture; compiling ShadowNodeMaterial without shadows
+              // Keep the real cube layer mask (REFLECT_LAYER only). Layer-2 road shadow catchers
+              // never enter this no-shadow capture; compiling ShadowNodeMaterial without shadows
               // asks its shadow-mask lighting model for a float that does not exist.
               scene.updateMatrixWorld?.(true);
               if(face===0) {
