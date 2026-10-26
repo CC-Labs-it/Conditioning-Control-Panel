@@ -22,8 +22,12 @@ const shaken = (fx) => Math.hypot(...fx.state.shake) > 0;
 
 test('juice: an item hit on the player shakes and rumbles; on a bot or under Gentle it does not', () => {
   const r = rig();
-  r.bus.emit('item-hit', { victim: 3, by: 0, kind: 'spiral', verdict: 'hit' }); r.run(0.05);
+  r.bus.emit('item-hit', { victim: 3, by: 2, kind: 'spiral', verdict: 'hit' }); r.run(0.05);
   assert.ok(!shaken(r.fx) && r.fx.state.rumble === 0);
+  // item feel: the player's own hit landing on a bot rumbles the pad as a confirm, but never shakes
+  r.bus.emit('item-hit', { victim: 3, by: 0, kind: 'spiral', verdict: 'hit' }); r.run(0.05);
+  assert.ok(!shaken(r.fx) && r.fx.state.rumble > 0);
+  r.run(1);
   r.bus.emit('item-hit', { victim: 0, by: 2, kind: 'spiral', verdict: 'hit' }); r.run(0.05);
   assert.ok(shaken(r.fx) && r.fx.state.rumble > 0);
   const g = rig({ gentle: true });

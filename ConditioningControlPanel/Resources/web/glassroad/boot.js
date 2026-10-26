@@ -58,6 +58,7 @@ import { prepareWorldLayouts } from './render/scene.js';
 import { createCourseController } from './core/courseSession.js';
 import { scopedBus, scopedBridge } from './core/lifetime.js';
 import { createChaseCamera } from './render/camera.js';
+import { createHitCam } from './render/hitCam.js';
 import { createCourseIntro } from './render/courseIntro.js';
 import { createGentle } from './fx/gentle.js';
 import { createPhotosafe } from './fx/photosafe.js';
@@ -481,6 +482,11 @@ async function boot(course, options, lifetime, isCurrent) {
   const cam = createChaseCamera(feel, { bus });
   lifetime.defer(() => cam.dispose());   // the kick layer hears the player's bumps and wall hits
   if (BOT || DEV) globalThis.__glassroadCamera = cam.camera;   // dev capture: observe the real chase projection
+  // HIT CAM: a live inset of the rival your item hit (render/hitCam.js); optional, a throw leaves the race as it was
+  let hitCam = null;
+  try { hitCam = createHitCam({ bus, feel, renderer, world }); lifetime.defer(() => hitCam?.dispose()); }
+  catch (e) { console.warn('[glassroad] hit cam unavailable', e); hitCam = null; }
+  Object.defineProperty(debug, 'hitCam', { get: () => (hitCam ? { ...hitCam.stats, focus: hitCam.focus, on: renderer.insetOn } : null), enumerable: true });
   debug.backend = renderer.backend;
   debug.gpu = renderer.gpu;
   // the HUD item slot's orbit and roll shuffle (FXPOLISH lane)
@@ -711,6 +717,7 @@ async function boot(course, options, lifetime, isCurrent) {
     setMachineryBeat(track, null);
     perfume.reset();
     effects.reset(); payoff.reset(); cueBurst.clear(); ai.reset(); fx.reset(); assist.reset();
+    hitCam?.reset();
     if (hazards) hazards.reset();
     if (world.resetReactions) world.resetReactions();   // last race's cheer, sulk and faces never carry over
     fx.state.screen = effects.screen;
@@ -1125,6 +1132,13 @@ async function boot(course, options, lifetime, isCurrent) {
       onProgress: (k, n) => hud.setLoading('Preparing water reflections ' + k + '/' + n, 0.96) });
     loaded('water');
   }
+  // the hit cam's own shadowless programs (its first hit would otherwise compile mid-race)
+  if (hitCam && feel.get('hitCam.on')) {
+    showLoading('One last look', 0.965);
+    await paintGap();
+    try { debug.hitCamWarm = await hitCam.warm(cam.camera); } catch (e) { console.warn('[glassroad] hit cam warm', e); }
+    if (!lifetime.alive) return;
+  }
   // and the gate screen's own context and Loom program (its first build froze the race at the first gate)
   showLoading('One last look', 0.97);
   await paintGap();
@@ -1381,7 +1395,15 @@ async function boot(course, options, lifetime, isCurrent) {
       airWords: inRace && !online ? airWords : null,
       songCues: cueView?.live || NO_WORDS, cueGentle: cueSafety.on, songCueList: songCues?.cues || NO_WORDS,
       cueFired: cueView?.fired || NO_WORDS, cueSpeed: cueView?.speed || 0, cueSolo: !online,
-      scanTimeS: sc.timeS, scanBpm: sc.bpm, scanReady: scan.ready, perfumeReady: perfume.ready });
+      scanTimeS: sc.timeS, scanBpm: sc.bpm, scanReady: scan.ready, perfumeReady: perfume.ready,
+      focusRacer: hitCam ? hitCam.focus : -1 });
+    if (hitCam) {                                                 //    HIT CAM: after the karts are posed, before render
+      try {
+        hitCam.update(frozen ? 0 : frameDt, { racing: state === 'race' && race.phase === 'racing', paused, card: !!hud.card,
+          finished: !!P.finished, gentle: cueSafety.on, racers: racers.list, player: P.view, mainCamera: cam.camera,
+          viewW: canvas.clientWidth, viewH: canvas.clientHeight });
+      } catch (e) { console.warn('[glassroad] hit cam', e); hitCam.dispose(); hitCam = null; renderer.setInset(null); }
+    }
     if (BOT && song && world.musicRoad) {                         //    dev only: the boot check reads the music road
       const m = world.musicRoad.frame;
       debug.song = { t: Math.round(songS * 100) / 100, section: m.sectionId, calm: +m.calm.toFixed(2), helix: +m.helix.toFixed(2),

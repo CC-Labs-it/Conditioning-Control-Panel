@@ -9,6 +9,8 @@
  * player kicks the camera in toward the kart (channel 'kick', added to camPush; Gentle removes it).
  * Polish 6: fx.side(ampM, sign) is a short sideways shake (the camera's x) for a hard bump: the same parabola
  * lobes as fx/shake.js (sideStep), SIDE numbers below, added on top of the shake vector; Gentle removes it.
+ * Item feel: ITEM_CUES also ticks the pad when the player uses an item (and flicks the speed lines on a throw) and
+ * rumbles when the player's hit lands (feel itemFeel.*); the camera nudges for both are render/camera.js.
  */
 import { clamp, smoothstep } from '../core/math.js';
 import { S } from '../sim/state.js';
@@ -42,9 +44,24 @@ const CHANNELS = ['bloom', 'band', 'push', 'fov', 'lines', 'bandSpeed', 'burst',
 
 /** Item cues beside the FX_CUES registry (render/items/look.js HIT_LOOK numbers). */
 export const ITEM_CUES = {
-  'item-hit'(fx, { victim = -1, verdict }) {
+  'item-hit'(fx, { victim = -1, by = -1, verdict }) {
+    // item feel: your hit landed on someone: a firm pad rumble (Gentle: none); the camera lean is render/camera.js
+    if (by === 0 && victim !== 0 && verdict === 'hit') {
+      fx.fire('thud', fx.gentle.kick(fx.feel.get('itemFeel.confirmRumble')), 0, 0, fx.feel.get('itemFeel.confirmRumbleOutS'));
+      return;
+    }
     if (victim !== 0 || verdict !== 'hit') return;
     fx.fire('kick', fx.gentle.kick(HIT_LOOK.kickPushM), HIT_LOOK.kickInS, 0, HIT_LOOK.kickOutS);
+  },
+  // item feel: your own use ticks the pad (Gentle: none) and a throw flicks the speed lines forward
+  'item-fire'(fx, { racer = -1, mode }) {
+    if (racer !== 0) return;
+    fx.fire('thud', fx.gentle.kick(fx.feel.get('itemFeel.fireRumble')), 0, 0, fx.feel.get('itemFeel.fireRumbleOutS'));
+    const peak = fx.gentle.scroll(fx.feel.get('itemFeel.throwLinesPeak')), L = fx.ch.lines;
+    // never cut a boost's held lines short, never pull a stronger beat down
+    if ((mode === 'throw' || mode === 'bounce' || mode === 'tether' || mode === 'wide') && !L.held && !(L.on && L.v >= peak)) {
+      fx.fire('lines', peak, fx.feel.get('juice.riseS'), 0, fx.feel.get('itemFeel.throwLinesOutS'));
+    }
   },
 };
 

@@ -6,9 +6,13 @@
  * already asked photosafe and Gentle; fx.screen (fx/effects.js) drives the screen effect.
  * Polish 2 (perf): MSAA lives on the scene pass only (Q.antialias, 4 samples); the canvas gets the one
  * composite quad and needs none. compileAsync() builds the scene pass pipelines for its own target.
+ * HIT CAM (render/hitCam.js): the inset picture is its own small render target (`inset.target`, linear HDR like
+ * the scene pass), laid over the finished frame in this same composite quad as a rotated rect in CSS px
+ * (screenUV is top-left origin on both backends, and three flips render target uvs on WebGL2, so one law
+ * serves WebGPU and WebGL2). setInset(null) turns it off; the tone map then runs over both alike.
  */
-import { RenderPipeline, Color } from 'three/webgpu';
-import { pass, uniform, screenUV, smoothstep, mix, vec3, vec4, clamp } from 'three/tsl';
+import { RenderPipeline, Color, RenderTarget, HalfFloatType, LinearFilter, Vector2, Vector4 } from 'three/webgpu';
+import { pass, uniform, screenUV, smoothstep, mix, vec2, vec3, vec4, clamp, texture, step, abs } from 'three/tsl';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { LOOK } from './look.js';
 import { Q } from './quality.js';
@@ -29,6 +33,17 @@ export function createPost(three, scene, camera) {
   try { screen = screenMod ? screenMod.createScreenFx(three) : null; } catch (e) { console.warn('[glassroad/post] screenfx failed: ' + (e && e.message)); }
   const base = screen ? screen.node(col) : col.rgb;
   let bloomNode = null, builtBloom = null;
+  // the hit cam inset: centre and half size in CSS px (rect), rotation (cos, sin), the CSS view size
+  const insetTarget = new RenderTarget(2, 2, { type: HalfFloatType, depthBuffer: true, generateMipmaps: false, minFilter: LinearFilter, magFilter: LinearFilter });
+  insetTarget.texture.name = 'hit-cam-inset';
+  const iu = { on: uniform(0), rect: uniform(new Vector4(0, 0, 1, 1)), rot: uniform(new Vector2(1, 0)), view: uniform(new Vector2(1, 1)) };
+  function insetOver(out) {
+    const p = screenUV.mul(iu.view).sub(iu.rect.xy);
+    const l = vec2(p.x.mul(iu.rot.x).add(p.y.mul(iu.rot.y)), p.y.mul(iu.rot.x).sub(p.x.mul(iu.rot.y)));
+    const inside = step(abs(l.x), iu.rect.z).mul(step(abs(l.y), iu.rect.w)).mul(iu.on);
+    const pic = texture(insetTarget.texture, l.div(iu.rect.zw.mul(2)).add(0.5)).rgb;
+    return mix(out, pic, inside);
+  }
 
   function build() {
     if (bloomNode) { bloomNode.dispose(); bloomNode = null; }
@@ -45,6 +60,7 @@ export function createPost(three, scene, camera) {
     out = mix(out, vec3(1, 1, 1), u.white).add(rgb(LOOK.flashTint).mul(u.flash));
     // A steady coolant tint eases with depth; no strobe, blur or loss of the driving corridor.
     out = mix(out, out.mul(vec3(0.48, 0.82, 1.02)).add(vec3(0.006, 0.035, 0.055)), u.submerged.mul(0.8));
+    out = insetOver(out);
     pipe.outputNode = vec4(out, 1);
     pipe.needsUpdate = true;
     builtBloom = Q.bloom;
@@ -85,7 +101,17 @@ export function createPost(three, scene, camera) {
       u.side.value = fx.edgeSide || 0;
       u.submerged.value = fx.submerged || 0;
     },
+    /** The hit cam's render target (its picture is drawn into it before render()). */
+    inset: { target: insetTarget },
+    /** r = { cx, cy, w, h, rotRad } in CSS px with the CSS view size, or null to turn the inset off. */
+    setInset(r, viewW = 1, viewH = 1) {
+      if (!r) { iu.on.value = 0; return; }
+      iu.on.value = 1;
+      iu.rect.value.set(r.cx, r.cy, r.w / 2, r.h / 2);
+      iu.rot.value.set(Math.cos(r.rotRad || 0), Math.sin(r.rotRad || 0));
+      iu.view.value.set(Math.max(1, viewW), Math.max(1, viewH));
+    },
     render() { pipe.render(); },
-    dispose() { if (bloomNode) bloomNode.dispose(); if (screen) screen.dispose(); pipe.dispose(); },
+    dispose() { if (bloomNode) bloomNode.dispose(); if (screen) screen.dispose(); insetTarget.dispose(); pipe.dispose(); },
   };
 }

@@ -5,12 +5,19 @@
  * Polish 3: the rig's kick layer (cameraMath.js createKick). Landings and boost starts come from state;
  * the player's bumps and wall hits come from the bus when one is given (opts.bus, or attach(bus) later),
  * else from the rig's own velocity-jump detector.
+ * Item feel: the player's item uses, landed and blocked hits and hits taken nudge the same springs (attach below).
  */
 import { PerspectiveCamera } from 'three/webgpu';
 import { createCamRig, vFovForAspect } from './cameraMath.js';
 import { S } from '../sim/state.js';
 import { LOOK } from './look.js';
 import { createCameraViews } from './cameraViews.js';
+import { fireKickKey, scaleKick } from '../fx/itemFeelMath.js';
+
+/** OS reduced motion, read live (false without matchMedia). */
+function reducedMotion() {
+  try { return !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches; } catch (e) { return false; }
+}
 
 export function createChaseCamera(feel, { bus = null } = {}) {
   const camera = new PerspectiveCamera(feel.get('fov.baseVDeg'), 16 / 9, LOOK.nearM, LOOK.farM);
@@ -52,6 +59,17 @@ export function createChaseCamera(feel, { bus = null } = {}) {
     rig.useVel = false;
     offs.push(b.on('bump', ({ a = -1, b: o = -1, dv = 0, p = null } = {}) => { if (a === 0 || o === 0) rig.hit('bump', dv, sideOf(p)); }));
     offs.push(b.on('wall', ({ dv = 0, side = 1 } = {}) => rig.hit('wall', dv, side)));
+    // items from the thrower's seat (feel itemFeel.*KickM): a use nudges by its mode, a landed hit leans in,
+    // a blocked one settles back, a hit on you jolts in; Gentle and OS reduced motion keep gentleKickMul of it
+    const nudge = (key) => {
+      const soft = !!feel.get('gentle.on') || reducedMotion();
+      rig.kick.nudge(scaleKick(feel.get(key), soft ? feel.get('itemFeel.gentleKickMul') : 1));
+    };
+    offs.push(b.on('item-fire', ({ racer = -1, mode } = {}) => { if (racer === 0) nudge(fireKickKey(mode)); }));
+    offs.push(b.on('item-hit', ({ victim = -1, by = -1, verdict } = {}) => {
+      if (victim === 0 && verdict === 'hit') nudge('itemFeel.victimKickM');
+      else if (by === 0 && victim !== 0) nudge(verdict === 'hit' ? 'itemFeel.confirmKickM' : 'itemFeel.blockedKickM');
+    }));
   }
   if (bus) attach(bus);
   return {

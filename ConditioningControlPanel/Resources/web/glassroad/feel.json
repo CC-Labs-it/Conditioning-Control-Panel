@@ -265,6 +265,32 @@
     "popShowS": 0.6
   },
   "payoff": { "on": true, "cascadeMinS": 1.8, "cascadeMaxS": 3.0, "flashS": 0.7, "flashCover": 0.42, "flashCoolS": 6, "malusCoolS": 2.5, "padWordChance": 0.35, "padWordS": 1.0, "padCoolS": 4 },
+  "itemFeel": {
+    "throwKickM": [0, 0.05, 0.24],
+    "lobKickM": [0, -0.16, 0.1],
+    "wideKickM": [0, 0.06, -0.2],
+    "dropKickM": [0, -0.1, 0.04],
+    "selfKickM": [0, 0.08, -0.1],
+    "confirmKickM": [0, 0.04, -0.14],
+    "blockedKickM": [0, -0.03, 0.05],
+    "victimKickM": [0, -0.16, -0.34],
+    "gentleKickMul": 0.35,
+    "fireRumble": 0.35,
+    "fireRumbleOutS": 0.12,
+    "confirmRumble": 0.6,
+    "confirmRumbleOutS": 0.24,
+    "throwLinesPeak": 0.35,
+    "throwLinesOutS": 0.3,
+    "comboWindowS": 0.6,
+    "confirmSemisPerCombo": 3,
+    "markerS": 0.45,
+    "stampS": 1.0,
+    "edgeS": 0.4,
+    "edgeAlpha": 0.55,
+    "edgeMinGapS": 1.2,
+    "toastMinShowS": 0.45,
+    "flingS": 0.42
+  },
   "ai": {
     "stones": { "approachM": 80, "holdLeadM": 35 },
     "routeChance": 0.2,
@@ -327,5 +353,9 @@
     "slipAmount": 0.1,
     "slipHoldS": 0.6,
     "slipCooldownS": 2.5
-  }
+  },
+  "hitCam": { "on": true, "holdS": 2.2, "leadTimeoutS": 2.5, "minDistM": 14, "enterS": 0.34, "exitS": 0.3, "overshoot": 1.35,
+    "fovDeg": 42, "backM": 3.1, "upM": 1.05, "lookUpM": 0.35, "aheadM": 0.3, "sideDeg": 32, "orbitDegps": 18, "orbitMaxDeg": 70, "followTcS": 0.1,
+    "creep": 0.1, "creepS": 0.9, "punch": 0.2, "punchS": 0.45, "shakeM": 0.11, "shakeS": 0.42, "shakeHz": 19,
+    "flash": 0.55, "flashS": 0.22, "glowS": 0.7, "wordS": 0.75, "contactDelayS": 0.12 }
 }
