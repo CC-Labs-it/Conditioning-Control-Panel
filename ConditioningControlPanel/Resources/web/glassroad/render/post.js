@@ -26,12 +26,17 @@ const NONE = Object.freeze({ kind: 'none', t: 0, durS: 0, k: 0, strength: 0, pre
 
 export function createPost(three, scene, camera) {
   const pipe = new RenderPipeline(three);
-  const u = { strength: uniform(LOOK.bloomStrength), white: uniform(0), flash: uniform(0), edge: uniform(0), side: uniform(0), submerged: uniform(0), webPictures: uniform(1) };
+  const u = { strength: uniform(LOOK.bloomStrength), aberration: uniform(0), white: uniform(0), flash: uniform(0), edge: uniform(0), side: uniform(0), submerged: uniform(0), webPictures: uniform(1) };
   const scenePass = pass(scene, camera, { samples: Q.antialias ? 4 : 0 });
   const col = scenePass.getTextureNode('output');
   let screen = null;
   try { screen = screenMod ? screenMod.createScreenFx(three) : null; } catch (e) { console.warn('[glassroad/post] screenfx failed: ' + (e && e.message)); }
-  const base = screen ? screen.node(col) : col.rgb;
+  // feel wave: trauma chromatic aberration (fx.aberrationPx, 0 at rest and under Gentle): red and blue re-read the scene
+  // a few px outward and inward from the centre; the delta rides on whatever the screen effect drew
+  const abUv = screenUV.sub(0.5).mul(u.aberration);
+  const abDelta = vec3(col.sample(screenUV.add(abUv)).r.sub(col.r), 0, col.sample(screenUV.sub(abUv)).b.sub(col.b));
+  const base0 = screen ? screen.node(col) : col.rgb;
+  const base = base0.add(abDelta);
   let bloomNode = null, builtBloom = null;
   // the hit cam inset: centre and half size in CSS px (rect), rotation (cos, sin), the CSS view size
   const insetTarget = new RenderTarget(2, 2, { type: HalfFloatType, depthBuffer: true, generateMipmaps: false, minFilter: LinearFilter, magFilter: LinearFilter });
@@ -119,6 +124,8 @@ export function createPost(three, scene, camera) {
       u.edge.value = fx.edgeGlow || 0;
       u.side.value = fx.edgeSide || 0;
       u.submerged.value = fx.submerged || 0;
+      // px -> uv per unit of centre distance (aberrationPx at the edge of a 1280 px wide frame); 0 = no shift
+      u.aberration.value = Math.min(2.5, fx.aberrationPx || 0) / 640;
       const scr = fx.screen;
       u.webPictures.value = Math.max(scr?.k || 0, scr?.prevK || 0, fx.whiteFade || 0,
         fx.submerged || 0, fx.fog?.k || 0) > .0001 ? 0 : 1;

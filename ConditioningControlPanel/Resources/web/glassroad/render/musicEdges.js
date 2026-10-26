@@ -53,6 +53,9 @@ export function createMusicEdgeState({ photosafe = null } = {}) {
     const drive = Math.pow(frame.level, 1.2);
     frame.shakePx = timed && allowed && !quiet
       ? Math.sin(beat.phase * Math.PI * 4) * frame.pulse * drive * 4 : 0;
+    // feel wave: the trauma border shake (fx.state.borderShakePx, already smooth noise) rides on top, 6 px at most
+    const tp = quiet ? 0 : Number(view.traumaPx) || 0;
+    if (tp) frame.shakePx = Math.max(-6, Math.min(6, frame.shakePx + tp));
     frame.particleCount = active && allowed && !quiet ? Math.min(48, Math.floor(drive * (28 + sat(a.treble) * 20))) : 0;
     // Slow movement between the two actual course colours, not a rainbow sweep.
     const hue = timed && !quiet ? .5 + .35 * Math.sin((beat.index + beat.phase) * Math.PI / 16) : .5;

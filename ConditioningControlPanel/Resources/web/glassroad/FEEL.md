@@ -247,18 +247,8 @@ take-off, on a pad up to padLateS after entering it, or on the ground up to earl
 
 ## fov
 - `fov.baseVDeg` 60: vertical fov at 16:9, through the lifted viewport law for other aspects.
-- `fov.kickByTierDeg` [2, 4, 6, 9]: held boost fov kick by ladder step: mini-turbo, drift tier 1, 2, 3 (polish 5, was one `fov.boostKickDeg` 8 for every boost). A launch takes boost.launchTier, a trick its grade, Surge step 2; pads, bubbles, slipstreams and the clean landing sit on the ladder by amount (fx/cues.js boostLadder). The camera adds a small snap on the IN (render/cameraMath.js boostFovDeg). None under Gentle.
-- `fov.kickInS` 0.12: kick in time.
-- `fov.kickOutS` 0.45: kick out time.
 
 ## shake (off under Gentle)
-- `shake.hitAmpM` 0.12: vertical hit amplitude.
-- `shake.boostAmpM` 0.35: forward-axis boost amplitude (drift tier 3, launch). Polish 5: boosts shake only from ladder step 2 and on launch; pads, bubbles and slipstreams never.
-- `shake.tier2Mul` 0.55: share of boostAmpM a step 2 boost (drift tier 2, great trick, Surge) shakes with (added).
-- `shake.boostRepeatMul` 0.6: repeat share of a boost shake, so it dies in 0.4 s instead of 1.2 s (added).
-- `shake.periodS` 0.1: one parabola `a*t - b*t^2` lasts this long (added).
-- `shake.repeatMul` 0.85: each repeat is this much of the last.
-- `shake.stopBelowM` 0.05: repeats stop under this amplitude.
 
 ## beatShake (polish 6: the camera dips on the beat once the song's rhythm part arrives; zero under Gentle and OS reduced motion)
 audio/songShape.js bakes the plan per beat from the chart (bars, section moods, mix and drum energy) or, for a song with no chart, one analysis of the decoded samples; fx/shake.js reads it on the song clock (music.songS) and adds it to the vertical shake axis. Pink road: onset bar 34 (61.8 s, the s4 drop), every beat by about bar 49 (88 s), 6.5 cm in the late drops and peaks.
@@ -306,7 +296,6 @@ audio/songShape.js bakes the plan per beat from the chart (bars, section moods, 
 - `juice.finishOrbitDeg` 100: camera orbit at the finish over finishSwellS (halved under Gentle) (added).
 - `juice.riseS` 0.08: generic fast IN for fx envelopes (added).
 - `juice.tailTcs` 3: fx tails after a boost last this many boost.tailTcS (added).
-- `juice.launchPushM` 1.2: forward camera push on a launch boost (added).
 - `juice.padBandPeak` 0.6: band flash on a pad, inside the photosafe budget (added).
 - `juice.releasePulse` 0.25: bloom pulse on rescue release (added).
 - `juice.edgeGlowRefused` 0.3: edge glow level when photosafe refuses the full glow (added).
@@ -576,3 +565,26 @@ Keep broad platforms refresh the existing lip lift once when an early hop crosse
 - `hitCam.glowS` 0.7: the frame's pink glow pulse decay (Gentle: half).
 - `hitCam.wordS` 0.75: the comic impact word's life.
 - `hitCam.contactDelayS` 0.12: a fresh inset lands its contact beats this long after opening, as it seats.
+
+## Feel wave 2026-10-26
+
+### Lane A
+
+One trauma value (fx/trauma.js) drives every screen-side shake; the chase camera never reads it. Hits add trauma
+(fx/cues.js TRAUMA: hit 0.5, bump up to 0.2, landing 0.1/0.2/0.3, hit received 0.35, tier 3 drift release 0.15,
+finish 0.3, lap 0.08); channels read out = trauma^2 x the Motion multiplier. The old `shake.*`, `fov.kick*` and
+`juice.launchPushM` keys are retired (the camera never read them).
+- `trauma.decayPerS` 1.6: linear trauma decay per second.
+- `trauma.lessMul` 0.45: Motion "Less" multiplier on the trauma channels (Off = 0; Gentle reads as Less).
+- `trauma.noiseHz` 18: speed of the seeded per-axis noise the shakes follow.
+- `trauma.borderPx` 6: screen border shake at full trauma (render/musicEdges.js, capped at 6 px with the music shake).
+- `trauma.rumble` 0.8: gamepad rumble at full trauma (zero under Gentle).
+- `trauma.duck` 0.4: audio duck at full trauma (fx.state.duck).
+- `hitstop.ms` 40: render-only hit-stop on wall, trap and item hits (owner default ON); less and Gentle halve, Off 0.
+- `hitstop.bigMs` 60: hit-stop for an item hit flagged `big`.
+- `hitstop.minGapS` 0.4: least time between two hit-stops. Bumps never stop.
+- `finishHold.s` 0.5: the finish slow frame: the drawn karts run at finishHold.rate this long (owner default ON).
+- `finishHold.rate` 0.4: drawn pose speed during the finish hold (sim and clocks untouched).
+- `finishHold.backS` 0.3: ease back to 1x, then the lag closes.
+- `post.aberration` { maxPx 2.5, photosafeMul 0.5 }: trauma chromatic aberration at full trauma; a strict photosafe host halves it, Gentle 0.
+- `kart.wobble` { mul 1, maxDeg 3 }: fx.state.wobble (trauma x noise, -1..1) for the player kart wobble; maxDeg is the roll a renderer should map it to.

@@ -5,42 +5,22 @@
  * is a new registry key. An envelope rises to a peak (IN, Gentle rise floor), holds while
  * held or for holdS, then eases back to rest over outS (OUT, Gentle fade length). Pausing
  * freezes every envelope. update() also advances the photosafe window.
- * Polish 4: ITEM_CUES (below) is this lane's own small registry, run beside FX_CUES: an item hit on the
- * player kicks the camera in toward the kart (channel 'kick', added to camPush; Gentle removes it).
- * Polish 6: fx.side(ampM, sign) is a short sideways shake (the camera's x) for a hard bump: the same parabola
- * lobes as fx/shake.js (sideStep), SIDE numbers below, added on top of the shake vector; Gentle removes it.
- * Item feel: ITEM_CUES also ticks the pad when the player uses an item (and flicks the speed lines on a throw) and
- * rumbles when the player's hit lands (feel itemFeel.*); items never move the chase camera.
+ * ITEM_CUES (below) is this lane's own small registry, run beside FX_CUES (item feel: the pad ticks when the player
+ * uses an item, a throw flicks the speed lines, your hit landing rumbles). WAVE_CUES (fx/cues.js) are the feel
+ * wave's events (rev, launch, hitter-hit, traps).
+ * Feel wave 2026-10-26 (Lane A): the old camera shake / push / fov kick are RETIRED (the camera never read them).
+ * One trauma value (fx/trauma.js) drives borderShakePx, rumble, duck, aberrationPx and the kart wobble; hits add
+ * to it through fx.shock(). fx.hitstop(ms) and fx.finishHold() are render-side holds (state.holdS,
+ * state.renderRate): the sim, the room clock and renderTime never stop.
  */
 import { clamp, smoothstep } from '../core/math.js';
 import { S } from '../sim/state.js';
-import { createShake, lobe } from './shake.js';
+import { FX_CUES, WAVE_CUES } from './cues.js';
+import { createTrauma, noise } from './trauma.js';
 
-/** The side shake (polish 6): lobe length, the share each lobe keeps, the floor it stops under, at most this many at once. */
-export const SIDE = Object.freeze({ periodS: 0.07, repeatMul: 0.55, stopM: 0.02, maxRuns: 3 });
-
-/**
- * One side shake step: advances every run by dt (runs die under SIDE.stopM) and returns the summed x offset.
- * runs: [{ amp, sign, t }] (mutated in place).
- */
-export function sideStep(runs, dt, P = SIDE) {
-  let x = 0;
-  for (let i = runs.length - 1; i >= 0; i--) {
-    const r = runs[i];
-    r.t += dt;
-    while (r.t >= P.periodS && r.amp >= P.stopM) { r.t -= P.periodS; r.amp *= P.repeatMul; r.sign = -r.sign; }
-    if (r.amp < P.stopM) { runs.splice(i, 1); continue; }
-    x += r.sign * lobe(r.amp, r.t, P.periodS);
-  }
-  return x;
-}
-import { FX_CUES } from './cues.js';
-import { HIT_LOOK } from '../render/items/look.js';
-
-const CHANNELS = ['bloom', 'band', 'push', 'fov', 'lines', 'bandSpeed', 'burst', 'squash', 'stretch',
+const CHANNELS = ['bloom', 'band', 'lines', 'bandSpeed', 'burst', 'squash', 'stretch',
   'dust', 'edge', 'duck', 'tendril', 'rescue', 'white', 'flash', 'orbit', 'rumble', 'thud', 'pad',
-  'wake',    // B1: slipstream charge (speed lines at LOOK-free half strength)
-  'kick'];   // polish 4: the camera kick of an item hit on the player
+  'wake'];   // B1: slipstream charge (speed lines at LOOK-free half strength)
 
 /** Item cues beside the FX_CUES registry (render/items/look.js HIT_LOOK numbers). */
 export const ITEM_CUES = {
@@ -50,8 +30,6 @@ export const ITEM_CUES = {
       fx.fire('thud', fx.gentle.kick(fx.feel.get('itemFeel.confirmRumble')), 0, 0, fx.feel.get('itemFeel.confirmRumbleOutS'));
       return;
     }
-    if (victim !== 0 || verdict !== 'hit') return;
-    fx.fire('kick', fx.gentle.kick(HIT_LOOK.kickPushM), HIT_LOOK.kickInS, 0, HIT_LOOK.kickOutS);
   },
   // item feel: your own use ticks the pad (Gentle: none) and a throw flicks the speed lines forward
   'item-fire'(fx, { racer = -1, mode }) {
@@ -69,7 +47,10 @@ export const ITEM_CUES = {
 
 export function restState() {
   return {
-    shake: [0, 0, 0], fovKick: 0, camPush: 0, bloomBoost: 0, bandSpeedMul: 1, bandBright: 0,
+    // retired (feel wave): nothing reads these; shake[0] mirrors traumaOut for the camera boundary tests only
+    shake: [0, 0, 0], fovKick: 0, camPush: 0,
+    trauma: 0, traumaOut: 0, holdS: 0, renderRate: 1, borderShakePx: 0, aberrationPx: 0, wobble: 0,
+    bloomBoost: 0, bandSpeedMul: 1, bandBright: 0,
     paletteMix: { from: 0, to: 0, t: 1 }, sparkTier: 0, sparkSide: 0, sparkBurst: 0, squash: 0,
     dust: 0, padRing: 0, padGlow: 0, speedLines: 0, edgeGlow: 0, edgeSide: 0, rescueGlow: 0, tendril: 0,
     whiteFade: 0, flashLevel: 0, orbit: 0, duck: 0,
@@ -108,12 +89,27 @@ function stepEnv(e, dt) {
 export function createFx(bus, feel, { gentle, photosafe }) {
   const state = restState();
   const ch = Object.fromEntries(CHANNELS.map((n) => [n, newEnv()]));
-  const shake = createShake(feel);
-  let padT = -1, padLife = 1;
-  const sides = [];   // polish 6: side shake runs (fx.side)
+  const trauma = createTrauma(feel);
+  let padT = -1, padLife = 1, clockS = 0, lastStopS = -1e9, finishT = -1, level = 'full';
+  const T = (k, d) => { try { const v = feel.get(k); return Number.isFinite(v) ? v : d; } catch (e) { return d; } };
+  // Gentle (host or preview) reads as 'less' at read time; storage keeps the player's pick
+  const motion = () => (gentle.on && level === 'full' ? 'less' : level);
 
   const fx = {
-    state, ch, shake, gentle, feel, paused: false,
+    state, ch, gentle, feel, paused: false, trauma,
+    /** Add trauma (0..1 total, clamped); Gentle and motion 'off' leave the channels still (traumaOut). */
+    shock(amount) { trauma.add(amount); },
+    /** Render-only hit-stop: the drawn pose holds for ms (boot.js); never on bumps, 400 ms apart, less halves. */
+    hitstop(ms) {
+      const m = motion(), gap = T('hitstop.minGapS', 0.4);
+      if (m === 'off' || !(ms > 0) || clockS - lastStopS < gap) return;
+      lastStopS = clockS;
+      state.holdS = Math.max(state.holdS, (m === 'less' ? 0.5 : 1) * ms / 1000);
+    },
+    setMotion(l) { level = l === 'off' || l === 'less' ? l : 'full'; trauma.setMotion(motion()); },
+    get motionMul() { trauma.setMotion(motion()); return trauma.motionMul; },
+    get motion() { return motion(); },
+    noise,
     fire(name, peak, inS, holdS, outS) {
       const e = ch[name];
       e.from = e.v; e.peak = peak; e.inS = inS > 0 || gentle.on ? gentle.rise(inS) : 0;
@@ -141,15 +137,11 @@ export function createFx(bus, feel, { gentle, photosafe }) {
       fx.paletteS = gentle.fade(s);
     },
     paletteS: 1,
-    /** A short sideways shake (a hard bump): IN on the first lobe, OUT as each lobe shrinks; Gentle: none. */
-    side(ampM, sign = 1) {
-      if (gentle.on || feel.get('gentle.on') || !(ampM > 0)) return;
-      if (sides.length >= SIDE.maxRuns) sides.shift();
-      sides.push({ amp: ampM, sign: sign < 0 ? -1 : 1, t: 0 });
-    },
+    /** The finish slow frame: the drawn pose runs at finishHold.rate for finishHold.s, then eases back. */
+    finishHold() { if (motion() !== 'off') finishT = 0; },
   };
 
-  const offs = [...Object.entries(FX_CUES), ...Object.entries(ITEM_CUES)].map(([name, react]) => bus.on(name, (p) => react(fx, p || {})));
+  const offs = [...Object.entries(FX_CUES), ...Object.entries(ITEM_CUES), ...Object.entries(WAVE_CUES)].map(([name, react]) => bus.on(name, (p) => react(fx, p || {})));
 
   function update(dt, kart) {
     if (fx.paused || !(dt > 0)) return;
@@ -157,8 +149,6 @@ export function createFx(bus, feel, { gentle, photosafe }) {
     for (const n of CHANNELS) stepEnv(ch[n], dt);
     state.bloomBoost = clamp(ch.bloom.v, 0, 1);
     state.bandBright = clamp(ch.band.v, 0, 1);
-    state.camPush = ch.push.v + ch.kick.v;
-    state.fovKick = ch.fov.v;
     state.bandSpeedMul = 1 + ch.bandSpeed.v;
     state.sparkBurst = ch.burst.v;
     state.squash = ch.squash.v - ch.stretch.v;
@@ -181,17 +171,41 @@ export function createFx(bus, feel, { gentle, photosafe }) {
     if (pm.waitS > 0) pm.waitS = Math.max(0, pm.waitS - dt);   // the old palette lingers one beat
     else if (pm.t < 1) pm.t = Math.min(1, pm.t + dt / Math.max(fx.paletteS, 1e-3));
     if (pm.t >= 1 && pm.base) pm.base = null;
-    const sh = shake.update(dt, sides.length > 0);
-    if (sides.length && (gentle.on || feel.get('gentle.on'))) sides.length = 0;
-    state.shake[0] = sh[0] + (sides.length ? sideStep(sides, dt) : 0); state.shake[1] = sh[1]; state.shake[2] = sh[2];
+    traumaStep(dt);
+  }
+
+  // the one trauma value -> every screen-side channel (the chase camera never reads any of them)
+  function traumaStep(dt) {
+    clockS += dt;
+    trauma.setMotion(motion());
+    trauma.step(dt);
+    const out = trauma.out, calm = gentle.on;
+    state.trauma = trauma.value; state.traumaOut = out;
+    state.shake[0] = out;
+    const nt = clockS * T('trauma.noiseHz', 18);
+    state.borderShakePx = calm ? 0 : out * T('trauma.borderPx', 6) * noise(0, nt);
+    const safe = T("photosafe.on", 0) ? T("post.aberration.photosafeMul", 0.5) : 1;   // a strict photosafe host halves it
+    state.aberrationPx = calm ? 0 : out * T('post.aberration.maxPx', 2.5) * safe;
+    state.wobble = calm ? 0 : out * T('kart.wobble.mul', 1) * noise(1, nt * 0.5);
+    state.duck = Math.max(state.duck, clamp(out * T('trauma.duck', 0.4), 0, 1));
+    state.rumble = Math.max(state.rumble, gentle.kick(clamp(out * T('trauma.rumble', 0.8), 0, 1)));
+    state.holdS = Math.max(0, state.holdS - dt);
+    if (finishT >= 0) {
+      finishT += dt;
+      const hold = T('finishHold.s', 0.5), back = T('finishHold.backS', 0.3), rate = T('finishHold.rate', 0.4);
+      const k = finishT <= hold ? 0 : Math.min(1, (finishT - hold) / Math.max(back, 1e-3));
+      state.renderRate = rate + (1 - rate) * smoothstep(0, 1, k);
+      if (k >= 1) { finishT = -1; state.renderRate = 1; }
+    }
   }
 
   function reset() {
     for (const n of CHANNELS) Object.assign(ch[n], newEnv());
     Object.assign(state, restState());
-    shake.reset(); photosafe.reset?.(); sides.length = 0;
-    padT = -1; fx.paused = false;
+    trauma.reset(); photosafe.reset?.();
+    padT = -1; fx.paused = false; finishT = -1; lastStopS = -1e9;
   }
 
-  return { state, update, reset, dispose() { offs.forEach((off) => off()); } };
+  return { state, update, reset, noise, setMotion: fx.setMotion, get motionMul() { return fx.motionMul; },
+    hitstop: fx.hitstop, shock: fx.shock, dispose() { offs.forEach((off) => off()); } };
 }
