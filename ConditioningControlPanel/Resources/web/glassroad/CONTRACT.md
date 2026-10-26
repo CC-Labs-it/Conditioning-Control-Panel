@@ -255,6 +255,12 @@ echo. LAW: Scrolller's media hosts send no CORS headers, so these rows are DISPL
 texture, never read back) and nowhere else. The host asks api.scrolller.com from the same browser (no CC Labs
 server touches a byte). If Scrolller ever serves CORS to the page's origin, the host may instead fetch whole clips
 into `blob:` urls and post the existing `card-media` manifest, which reaches the world screens.
+Per-course niches (2026-10-26, `host/scrolllerNiches.js`): the web switch is the race's OWN (stored under
+`glassroad-web:scrolller`, ON unless the player turned it off; it never writes the campus-wide consent). Each course
+has a default pick (`TRACK_NICHES`, one to four catalog ids); the player's own pick per course is kept in
+`glassroad.niches.v1`. Page -> host `scrolller-niches { track, niches: [id] }` on every course load and every chip
+press; the host answers with a fresh `scrolller-feed` drawn from those subs and may add `catalog: [{ id, label }]`
+(the chips the Options card draws while the switch is on). No catalog, no chips.
 
 ## 8. Events (the 10 juice beats)
 
