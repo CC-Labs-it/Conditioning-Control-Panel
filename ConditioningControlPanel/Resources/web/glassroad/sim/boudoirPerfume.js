@@ -14,12 +14,10 @@ export function perfumePhase(zone, timeS, out = {}, beat = null) {
   if (beat?.fallback) { timeS *= pace; beat = null; }
   if (beat) {
     const step = beat.beatS, offset = Math.round((zone.offsetS || 0) / step);
-    const duration = seconds => machineryDuration(seconds, beat);
-    const warn = Math.round(duration(PERFUME.warnS) / step), spray = warn + Math.ceil(duration(PERFUME.sprayS - PERFUME.warnS) / step);
-    const active = spray + Math.ceil(Math.max(.6, duration(PERFUME.activeS - PERFUME.sprayS)) / step);
-    const clear = Math.max(active + 1, Math.round(duration(PERFUME.clearS) / step));
-    const fade = clear + Math.ceil(Math.max(.6, duration(PERFUME.fadeS - PERFUME.clearS)) / step);
-    const period = Math.max(Math.ceil(duration(PERFUME.cycleS) / step / 4) * 4, Math.ceil((fade + 1) / 4) * 4);
+    // A short phrase replaces the old twelve-second cycle, keeping both mist fades soft.
+    const fadeBeats = Math.max(1, Math.ceil(.6 / step));
+    const warn = 1, spray = 2, active = spray + fadeBeats, clear = active + 1, fade = clear + fadeBeats;
+    const period = Math.ceil((fade + 1) / 4) * 4;
     const t = beatCycle(beat.beat + offset, period);
     // Initial pickup and every seek wait for a full clear/warn/spray sequence.
     const safe = machineryRearming(beat, offset, period) || beat.beat < beatCycle(-offset, period);

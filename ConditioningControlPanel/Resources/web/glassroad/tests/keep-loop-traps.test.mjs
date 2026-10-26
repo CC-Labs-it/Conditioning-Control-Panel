@@ -46,7 +46,7 @@ test('Keep spiral stations break up both drives and leave shortcut approaches an
 test('every spiral grille has real beat-timed collision and two continuously usable bypasses', () => {
   for (const row of gates) {
     const offset = Math.round(row.offsetS / beatS);
-    clock(64 + 9.5 - offset);
+    clock(64 + 1.1 - offset);
     const expected = keepGatePhase(row, .1, {}, machineryBeatAt(track, .1));
     assert.ok(expected.blocking);
     const trap = createKeepGates(track, { gates: [row] });
@@ -58,19 +58,19 @@ test('every spiral grille has real beat-timed collision and two continuously usa
       assert.equal(createKeepGates(track, { gates: [row] }).apply(c.racer, c.before, .1), null, row.id + ' bypass ' + side);
       assert.equal(c.racer.st[S.stalled], 0);
     }
-    clock(64 + 2 - offset);
+    clock(64 + 1.75 - offset);
     const open = crossing(row);
     assert.equal(createKeepGates(track, { gates: [row] }).apply(open.racer, open.before, .1), null, 'open beat restores the centre');
   }
   setMachineryBeat(track, null);
 });
 
-test('descent weights swing on eight subdivisions, hit their visible low sweep and leave wide escape lanes', () => {
+test('descent weights swing on four beats, hit their visible low sweep and leave wide escape lanes', () => {
   for (const row of chains) {
-    const offset = Math.round(row.offsetS / beatS), beat = 64 + 2 - offset;
+    const offset = Math.round(row.offsetS / beatS), beat = 64 + 1 - offset;
     clock(beat);
     const pose = keepChainPhase(row, .1, machineryBeatAt(track, .1));
-    const repeated = keepChainPhase(row, .1, { beat: beat + 8, beatS, pace: 2, safe: false });
+    const repeated = keepChainPhase(row, .1, { beat: beat + 4, beatS, safe: false });
     assert.ok(Math.abs(pose.x) < 1e-9 && Math.abs(pose.y - (KEEP_CHAIN.pivotM - KEEP_CHAIN.lengthM)) < 1e-9);
     assert.ok(Math.abs(pose.x - repeated.x) < 1e-9 && Math.abs(pose.y - repeated.y) < 1e-9);
     const trap = createKeepChains(track, { chains: [row] }), centre = crossing(row);
@@ -91,7 +91,7 @@ test('loop traps never collide with the same footprint on the neighbouring revol
     const turnM = (section.s1 - section.s0) / (up ? 3.5 : 2.25);
     const otherS = row.s + turnM < section.s1 - 10 ? row.s + turnM : row.s - turnM;
     const offset = Math.round(row.offsetS / beatS), isChain = row.id.includes('chain');
-    clock(64 + (isChain ? 2 : 9.5) - offset);
+    clock(64 + (isChain ? 1 : 1.1) - offset);
     const other = crossing({ ...row, s: otherS });
     const trap = isChain ? createKeepChains(track, { chains: [row] }) : createKeepGates(track, { gates: [row] });
     assert.equal(trap.apply(other.racer, other.before, .1), null, row.id + ' leaves the other deck free');

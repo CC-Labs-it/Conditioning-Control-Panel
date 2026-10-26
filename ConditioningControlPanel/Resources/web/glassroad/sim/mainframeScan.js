@@ -20,16 +20,16 @@ export function scanZones(track) {
 
 export function scanPose(zone, timeS, bpm = 120) {
   const absoluteBeat = Math.max(0, timeS) * bpm / 60 + zone.offset;
-  const beat = ((absoluteBeat % 16) + 16) % 16;
-  const effect = Math.floor(absoluteBeat / 16) % 2 ? 'boost' : 'slow';
-  const phase = beat < 4 || beat >= 14 ? 'clear' : beat < 8 ? 'warn' : beat < 12 ? 'sweep' : 'hold';
-  const u = Math.max(0, Math.min(1, (beat - 8) / 4));
+  const beat = ((absoluteBeat % 2) + 2) % 2;
+  const effect = Math.floor(absoluteBeat / 2) % 2 ? 'boost' : 'slow';
+  const phase = beat < .35 || beat >= 1.75 ? 'clear' : beat < 1 ? 'warn' : beat < 1.5 ? 'sweep' : 'hold';
+  const u = Math.max(0, Math.min(1, (beat - 1) / .5));
   const travel = zone.travel || 3;
   return { phase, effect, color: effect === 'boost' ? 'green' : 'yellow',
-    nextEffect: effect === 'boost' ? 'slow' : 'boost', warning: phase === 'warn', changingSoon: beat >= 14,
+    nextEffect: effect === 'boost' ? 'slow' : 'boost', warning: phase === 'warn', changingSoon: beat >= 1.75,
     x: -travel + 2 * travel * (u * u * (3 - 2 * u)),
-    opacity: phase === 'clear' ? Math.max(0, 1 - (beat - 14) / 2) * (beat >= 14 ? 0.28 : 0)
-      : phase === 'warn' ? Math.min(1, (beat - 4) / 1.5) * 0.18 : 0.28,
+    opacity: phase === 'clear' ? Math.max(0, 1 - (beat - 1.75) / .25) * (beat >= 1.75 ? 0.28 : 0)
+      : phase === 'warn' ? Math.min(1, (beat - .35) / .65) * 0.18 : 0.28,
     active: phase === 'sweep' || phase === 'hold' };
 }
 

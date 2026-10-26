@@ -26,12 +26,12 @@ test('machine footprint keeps a permanent broad centre lane and excludes shortcu
 });
 test('press has a full readable warning and identical physical/render pose at fixed race time',()=> {
   const z={...zones[0],offsetS:0};
-  for(let t=2.4;t<4.2;t+=.05) { assert.equal(industryPose(z,t).warning,true); assert.equal(industryPose(z,t).active,false); }
-  assert.equal(industryPose(z,5.5).active,true);
-  assert.deepEqual(industryPose(z,5.5),industryPose(z,5.5));
+  for(let t=.25;t<.85;t+=.025) { assert.equal(industryPose(z,t).warning,true); assert.equal(industryPose(z,t).active,false); }
+  assert.equal(industryPose(z,1.05).active,true);
+  assert.deepEqual(industryPose(z,1.05),industryPose(z,1.05));
 });
 test('press contact is bounded, single-shot, with centre bypass and other-deck rejection',()=> {
-  const z=zones[0], active=5.5-z.offsetS;
+  const z=zones[0], active=1.05-z.offsetS;
   for(const [x,h,hit] of [[z.x,0,1],[0,0,0],[z.x,12,0],[z.x,-12,0]]) {
     const {industry,r,log}=setup(z,{x,height:h}); industry.update([r],active,1/60);
     assert.equal(industry.hits,hit); assert.equal(log.filter(e=>e.name==='industry-hit').length,hit);
@@ -47,7 +47,7 @@ test('closed heads stop a complete high-speed swept crossing, open heads and cen
     for(let j=0;j<3;j++){st[S.posX+j]=z.p[j]+z.t[j]*along+z.b[j]*x+z.n[j]*h;st[S.velX+j]=z.t[j]*65;}
     return st;
   };
-  for(const [time,x,hit] of [[5.5,z.x,true],[1,z.x,false],[5.5,0,false]]){
+  for(const [time,x,hit] of [[1.05,z.x,true],[.3,z.x,false],[1.05,0,false]]){
     const {industry,r,log}=setup(z);r.st=at(7,x);r.prev=at(-7,x);
     industry.apply(r,r.prev,time,r.events);
     assert.equal(industry.hits,hit?1:0);
@@ -100,8 +100,8 @@ test('visible press heads share collision poses, Gentle timing and pause freezes
   const {buildMainframeHazards}=await import('../render/mainframeHazards.js'); hooks.deregister();
   const world=buildMainframeHazards(track,null); assert.equal(world.group.children.length,zones.length);
   for(const gentle of [false,true]) {
-    world.update(.1,{timeS:5.5,gentle});
-    for(const z of zones.filter(z=>z.kind==='piston')) assert.equal(world.group.getObjectByName(z.id).getObjectByName('press-head').position.y,industryPose(z,5.5).lift);
+    world.update(.1,{timeS:1.05,gentle});
+    for(const z of zones.filter(z=>z.kind==='piston')) assert.equal(world.group.getObjectByName(z.id).getObjectByName('press-head').position.y,industryPose(z,1.05).lift);
   }
   const transforms=()=>{const a=[];world.group.traverse(o=>a.push([...o.position.toArray(),...o.scale.toArray(),...o.quaternion.toArray()]));return a;};
   const before=transforms(); world.update(1,{timeS:9,paused:true}); assert.deepEqual(transforms(),before);

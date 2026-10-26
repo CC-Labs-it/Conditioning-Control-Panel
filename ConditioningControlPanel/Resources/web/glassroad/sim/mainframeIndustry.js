@@ -33,22 +33,20 @@ export function industryZones(track) {
 const ease = v => { v = clamp(v, 0, 1); return v * v * (3 - 2 * v); };
 export function industryPose(zone, timeS, beat = null) {
   if (beat?.fallback) { timeS *= beat.pace; beat = null; }
-  if (beat && zone.kind === 'piston') {
+  if (zone.kind === 'piston') {
+    // Silent races use the same brisk 120 BPM grid on the shared race clock.
+    beat ||= { beat: Math.max(0, timeS) * 2, beatS: .5, safe: false, rearming: false };
     const offset = Math.round(zone.offsetS / beat.beatS);
     // An initial offset must enter at clear, never skip straight to a closed press.
-    const safe = machineryRearming(beat, offset, 8) || beat.beat < beatCycle(-offset,8);
-    const t = beatCycle(beat.beat + offset, 8);
-    const phase = safe ? 'warn' : t < 1 ? 'clear' : t < 3 ? 'warn' : t < 4 ? 'lower' : t < 5 ? 'hold' : t < 6 ? 'rise' : 'clear';
-    const lift = phase === 'lower' ? 7 * (1 - ease(t - 3)) : phase === 'hold' ? 0 : phase === 'rise' ? 7 * ease(t - 5) : 7;
-    return { phase, lift, active: lift < PRESS_BODY.kartHeight, warning: phase === 'warn', travel: t / 8,
-      impactIndex: safe ? null : Math.floor((beat.beat + offset - 4) / 8) };
+    const safe = machineryRearming(beat, offset, 4) || beat.beat < beatCycle(-offset,4);
+    const t = beatCycle(beat.beat + offset, 4);
+    const phase = safe ? 'warn' : t < .5 ? 'clear' : t < 1.7 ? 'warn' : t < 2 ? 'lower' : t < 2.25 ? 'hold' : t < 2.6 ? 'rise' : 'clear';
+    const lift = phase === 'lower' ? 7 * (1 - ease((t - 1.7) / .3)) : phase === 'hold' ? 0 : phase === 'rise' ? 7 * ease((t - 2.25) / .35) : 7;
+    return { phase, lift, active: lift < PRESS_BODY.kartHeight, warning: phase === 'warn', travel: t / 4,
+      impactIndex: safe ? null : Math.floor((beat.beat + offset - 2) / 4) };
   }
   const t = ((Math.max(0, timeS) + zone.offsetS) % 9 + 9) % 9;
-  if (zone.kind !== 'piston') return { phase: 'running', lift: 0, active: true, warning: false, travel: t / 9 };
-  const phase = t < 2.4 ? 'clear' : t < 4.2 ? 'warn' : t < 5.2 ? 'lower' : t < 6.4 ? 'hold' : t < 7.8 ? 'rise' : 'clear';
-  const lift = phase === 'lower' ? 7 * (1 - ease((t - 4.2)))
-    : phase === 'hold' ? 0 : phase === 'rise' ? 7 * ease((t - 6.4) / 1.4) : 7;
-  return { phase, lift, active: lift < 1.6, warning: phase === 'warn', travel: t / 9 };
+  return { phase: 'running', lift: 0, active: true, warning: false, travel: t / 9 };
 }
 
 function local(st, z) {

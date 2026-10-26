@@ -108,12 +108,13 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1, net = nu
   }
 
   function step(dt, a, race, ctx = {}) {
-    const { ai = null, items = null, standings = null, hazards = null, industry = null } = ctx;
+    const { ai = null, items = null, standings = null, hazards = null, industry = null, moving = null } = ctx;
     const live = race.phase === 'racing' || race.phase === 'finished';
     if (live) updateStoneMotion(track.fields, dt, !!feel.get('gentle.on'), false, ctx.timeS);
     if (live && Number.isFinite(ctx.timeS)) racers.clockS = Math.max(0, ctx.timeS);
     else if (race.phase === 'racing') racers.clockS = race.timeS;
     else if (race.phase === 'finished') racers.clockS += dt;
+    if (live && track.moving) track.moving.timeS = racers.clockS;
     const aiCtx = { racers: list, items, standings, race };
     const base = basePace();
     for (const r of list) {
@@ -155,6 +156,7 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1, net = nu
         // Resolve course obstacles before crediting checkpoint or finish crossings.
         if (hazards) hazards.apply(r, r.prev, racers.clockS, r.events);
         if (industry) industry.apply(r, r.prev, racers.clockS, r.events, dt);
+        if (moving) moving.apply(r, r.prev, racers.clockS, r.events, dt);
       }
       updateRespawn(r.st, track, r.feel, dt, r.events);
       r.progress.update(r.st, r.raceView);

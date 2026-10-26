@@ -26,6 +26,13 @@ export function machineryBeatAt(track, raceS) {
   return { beat: beat * MACHINERY_PACE, beatS: c.beatS / MACHINERY_PACE,
     pace: MACHINERY_PACE, fallback: !!c.fallback, safe: beat < 0, rearming: c.rearming };
 }
+// A missing recording still gives every physical trap the same deterministic musical grid.
+export function hazardBeatAt(track, raceS) {
+  const frame = machineryBeatAt(track, raceS);
+  // New side pistons author explicit heard beats, independent of legacy machinery subdivisions.
+  return frame ? { ...frame, beat: frame.beat / (frame.pace || 1), beatS: frame.beatS * (frame.pace || 1), pace: 1 }
+    : { beat: Math.max(0, raceS || 0) * 2, beatS: .5, safe: false, rearming: false };
+}
 export const beatCycle = (beat, period) => ((beat % period) + period) % period;
 export function machineryRearming(frame, offset = 0, period = 16) {
   return frame?.safe || (frame?.rearming && frame.beat < beatCycle(-offset, period));

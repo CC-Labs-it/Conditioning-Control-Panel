@@ -48,6 +48,11 @@ export function buildForkMeshData(forks, { stepM = FORK_RENDER.sampleM } = {}) {
   const road = dataBuilder(true), rails = dataBuilder(), summaries = [], minimap = [];
   for (const fork of forks || []) {
     const samples = fork.samples(stepM); if (samples.length < 2) continue;
+    if (fork.movingBridge) {
+      for (const s of [fork.movingBridge.fromM, fork.movingBridge.toM])
+        if (!samples.some(f => Math.abs(f.localS - s) < .001)) samples.push(fork.frameAt(s));
+      samples.sort((a, b) => a.localS - b.localS);
+    }
     const top = [], bottom = [], sides = [[], []];
     for (const frame of samples) {
       const h = frame.w / 2, y = forkPortalDepth(frame.localS, fork.lengthM), topRow = [], bottomRow = [];
@@ -65,6 +70,8 @@ export function buildForkMeshData(forks, { stepM = FORK_RENDER.sampleM } = {}) {
     }
     let railSpans = 0, buriedSkirts = 0;
     for (let i = 0; i < samples.length - 1; i++) {
+      const bridge = fork.movingBridge;
+      if (bridge && samples[i].localS < bridge.toM - .01 && samples[i + 1].localS > bridge.fromM + .01) continue;
       for (let col = 0; col < 4; col++) {
         road.quad(top[i][col], top[i][col + 1], top[i + 1][col], top[i + 1][col + 1]);
         road.quad(bottom[i][col], bottom[i][col + 1], bottom[i + 1][col], bottom[i + 1][col + 1]);

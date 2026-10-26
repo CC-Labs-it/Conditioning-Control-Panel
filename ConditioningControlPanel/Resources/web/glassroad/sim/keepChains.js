@@ -2,11 +2,11 @@
 import { S, BOOST, RESPAWN } from './state.js';
 import { clamp, wrap } from '../core/math.js';
 import { gateSweep, createKeepGates } from './keepGates.js';
-import { machineryBeatAt, beatCycle, machineryRearming, machineryDuration } from '../track/machineryBeat.js';
+import { machineryBeatAt, beatCycle, machineryRearming } from '../track/machineryBeat.js';
 export const KEEP_CHAIN = Object.freeze({ cycleS: 6.4, pivotM: 15.9, lengthM: 12, angleRad: .72, radiusM: 3.4, stallS: .45 });
-// Four-subdivision cycles keep both turning points aligned with the heard beat.
+// A four-beat swing crosses the driving line on each alternating beat.
 export function pendulumBeatPhase(row, cycleS, beat) {
-  const period = Math.max(4, Math.ceil(machineryDuration(cycleS, beat) / beat.beatS / 4) * 4);
+  const period = 4;
   const offset = Math.round((row.offsetS || 0) / beat.beatS), safe = machineryRearming(beat, offset, period);
   const u = beatCycle(beat.beat + offset, period), rate = Math.PI * 2 / (period * beat.beatS);
   const elapsed = beat.beat - beatCycle(-offset, period), releaseBeats = Math.max(2, Math.ceil(3 / beat.beatS));

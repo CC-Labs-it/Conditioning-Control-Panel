@@ -38,15 +38,15 @@ test('gear stroke stays continuous, monotonic and has a clearly faster beat than
   assert.equal(gearBeatTravel(24),24);
 });
 
-test('press impacts repeat after two warning subdivisions, with bounded holds',()=>{
+test('press impacts repeat every four beats with a fast stroke and bounded hold',()=>{
   const track=trackFor('mainframe'),zone={...industryZones(track)[0],offsetS:0}; clock(track,.22,0);
   const pose=beat=>industryPose(zone,beat*.3125,machineryBeatAt(track,beat*.3125));
-  for(let b=1;b<3;b+=.1){assert.equal(pose(b).warning,true);assert.equal(pose(b).active,false);}
-  assert.ok(pose(3.5).lift>0); assert.equal(pose(4).lift,0);
-  assert.equal(pose(3.99).impactIndex,-1); assert.equal(pose(4).impactIndex,0);
-  assert.equal(pose(12).impactIndex,1); assert.equal(pose(6).lift,7);
+  for(let b=.5;b<1.7;b+=.1){assert.equal(pose(b).warning,true);assert.equal(pose(b).active,false);}
+  assert.ok(pose(1.85).lift>0); assert.equal(pose(2).lift,0);
+  assert.equal(pose(1.99).impactIndex,-1); assert.equal(pose(2).impactIndex,0);
+  assert.equal(pose(6).impactIndex,1); assert.equal(pose(3).lift,7);
   const r={i:0,st:place(track,{s:zone.s,lateral:zone.x,speed:30}),feel:makeFeel(),events:recorder()};
-  const machine=createMainframeIndustry(track,r.events);machine.update([r],1.25,1/60);
+  const machine=createMainframeIndustry(track,r.events);machine.update([r],.625,1/60);
   assert.equal(machine.hits,1);assert.ok(r.st[S.stalled]<=.32);
 });
 
@@ -65,8 +65,8 @@ test('song seeks and loop wraps visibly rearm the same physical pose before anot
 test('Goonworks swept contact uses the same kicked wheel pose, including the safe bypass',()=>{
   const track=trackFor('goonworks'),rows=goonworksSetpieces(track),wheel=rows.find(r=>r.kind==='wheel');
   clock(track,.22,0);
-  const t=8*.3125,pose=goonworksPose(wheel,t,machineryBeatAt(track,t));
-  assert.equal(pose.angle,wheel.phase+8*Math.PI/6);
+  const t=8.125*.3125,pose=goonworksPose(wheel,t,machineryBeatAt(track,t));
+  assert.equal(pose.angle,wheel.phase+gearBeatTravel(8.125)*Math.PI/2);
   const at=(along,x)=>{
     const st=place(track,{s:wheel.s+along,lateral:x,speed:30});
     for(let j=0;j<3;j++)st[S.posX+j]=wheel.p[j]+wheel.t[j]*along+wheel.b[j]*x;
@@ -83,8 +83,8 @@ test('song-synced rising blocks and flippers preserve warning time and actual cl
   const track=trackFor('goonworks'),rows=goonworksSetpieces(track);clock(track,.22,0);
   for(const kind of ['block','flipper']){
     const row={...rows.find(r=>r.kind===kind),offsetS:0},pose=b=>goonworksPose(row,b*.3125,machineryBeatAt(track,b*.3125));
-    for(let b=2.5;b<4;b+=.1){assert.equal(pose(b).warning,true);assert.equal(pose(b).active,false);}
-    assert.equal(pose(0).height,0);assert.equal(pose(7.5).height,0);assert.ok(pose(4.15).height>0);
+    for(let b=.4;b<.8;b+=.1){assert.equal(pose(b).warning,true);assert.equal(pose(b).active,false);}
+    assert.equal(pose(0).height,0);assert.equal(pose(1.75).height,0);assert.ok(pose(.95).height>0);
   }
 });
 
@@ -103,29 +103,30 @@ test('initial pickup keeps authored Goon wheel and shutter motion continuous thr
 
 test('initial offset presses and gates remain clear until a complete warning cycle',()=>{
   for(const bpm of [40,96.75,240])for(const offsetS of [0,1.6,4.8,-2.2,10.1]){
-    const beatS=60/bpm,offset=Math.round(offsetS/beatS),start=((-offset%16)+16)%16,pressStart=((-offset%8)+8)%8;
+    const beatS=60/bpm,offset=Math.round(offsetS/beatS),start=((-offset%2)+2)%2,pressStart=((-offset%4)+4)%4;
     const frame=beat=>({beat,beatS,safe:beat<0,rearming:false});
     const press=b=>industryPose({kind:'piston',offsetS},0,frame(b)),gate=b=>keepGatePhase({offsetS},0,{},frame(b));
-    for(const b of [-.00001,0,.00001,pressStart,pressStart+.99]){
+    for(const b of [-.00001,0,.00001,pressStart,pressStart+.49]){
       assert.equal(press(b).lift,7);assert.equal(press(b).active,false);
     }
-    for(const b of [-.00001,0,.00001,start,start+3.9]){
+    for(const b of [-.00001,0,.00001,start,start+.24]){
       assert.equal(gate(b).liftM,KEEP_GATE.liftM);assert.equal(gate(b).blocking,false);
     }
-    for(const b of [1,2,2.99]){assert.equal(press(pressStart+b).warning,true);assert.equal(press(pressStart+b).active,false);}
-    for(const b of [5,6,7.99]){assert.equal(gate(start+b).phase,'warn');assert.equal(gate(start+b).blocking,false);}
-    assert.equal(press(pressStart+4).lift,0);assert.equal(gate(start+9).liftM,0);
+    for(const b of [.5,1,1.69]){assert.equal(press(pressStart+b).warning,true);assert.equal(press(pressStart+b).active,false);}
+    for(const b of [.25,.5,.74]){assert.equal(gate(start+b).phase,'warn');assert.equal(gate(start+b).blocking,false);}
+    assert.equal(press(pressStart+2).lift,0);assert.equal(gate(start+1).liftM,0);
   }
 });
 
 test('initial Goon rising toys start clear and seek release preserves every toy pose',()=>{
   const rows=goonworksSetpieces(trackFor('goonworks')),epsilon=.00001;
   for(const bpm of [40,96.75,240])for(const row of rows){
-    const beatS=60/bpm,offset=Math.round((row.offsetS||0)/beatS),start=((-offset%8)+8)%8;
+    const beatS=60/bpm,offset=Math.round((row.offsetS||0)/beatS),period=row.kind==='wheel'||row.kind==='shutter'?4:2,start=((-offset%period)+period)%period;
     const pose=(beat,rearming)=>goonworksPose(row,0,{beat,beatS,safe:beat<0,rearming});
     if(row.kind==='block'||row.kind==='flipper'){
-      for(const b of [-epsilon,0,epsilon,start,start+2.49])assert.equal(pose(b,false).height,0);
-      for(const b of [2.5,3,3.99]){assert.equal(pose(start+b,false).warning,true);assert.equal(pose(start+b,false).active,false);}
+      for(const b of [-epsilon,0,epsilon,start,start+.34])assert.equal(pose(b,false).height,0);
+      // Probe within the warning interval: offset arithmetic can round the exact .35 boundary down.
+      for(const b of [.36,.5,.79]){assert.equal(pose(start+b,false).warning,true);assert.equal(pose(start+b,false).active,false);}
     }
     const a=pose(start-epsilon,true),b=pose(start+epsilon,true);
     for(const key of ['x','height','angle'])assert.ok(Math.abs(a[key]-b[key])<.001,row.id+' '+key);

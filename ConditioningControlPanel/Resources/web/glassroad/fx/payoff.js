@@ -12,7 +12,7 @@
 export const PAYOFF_HITS = Object.freeze({ pendulum: 'words', melt: 'words', snap: 'word', disc: 'both', tether: 'both', shatter: 'both', bigSpiral: 'both', pink: 'words' });
 /** Course hazards on the local player. Events with a `racer` field count only for racer 0. */
 export const MALUS_EVENTS = Object.freeze(['keep-gate-hit', 'keep-chain-hit', 'boudoir-press-hit', 'boudoir-sweeper-hit',
-  'boudoir-mirror-hit', 'goonworks-hit', 'scan-hit', 'perfume-contact']);
+  'boudoir-mirror-hit', 'goonworks-hit', 'scan-hit', 'perfume-contact', 'moving-trap-hit']);
 
 const WORD_TAIL_S = 0.5;     // the burst's cards fade on their own clock; keep the canvas up a beat after durS
 const FLASH_IN_S = 0.12, FLASH_OUT_S = 0.25;
