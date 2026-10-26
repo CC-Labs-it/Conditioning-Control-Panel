@@ -21,17 +21,7 @@ import { reasonOf } from '../core/failure.js';
 import { loadOptions, cleanOptions } from '../hud/options.js';
 import { WARM, warmGroups } from './warmGroups.js';
 import { createDeferredWarm } from './stagedWarm.js';
-
-// r186 keeps a small InstancedMesh's matrices in a uniform buffer NAMED BY NODE ID when they fit the backend's
-// uniform-buffer limit, so every instanced mesh of the same material still got its own vertex program (chain
-// links, cups, glints, props: about 280 of the 577 vertex programs at Threshold, each one a pipeline build at
-// warm). With the limit reported as 0 every instanced mesh takes the interleaved instance-attribute path
-// (identical source, one program per material); InstanceNode syncs instanceMatrix versions into that buffer
-// on both backends. Bones and range nodes take their texture paths, which the scene does not use.
-export function shareInstancePrograms(three) {
-  const caps = three.backend && three.backend.capabilities;
-  if (caps) caps.getUniformBufferLimit = () => 0;
-}
+import { shareInstancePrograms } from './instancePrograms.js';
 
 /** A canvas can hold one context for life: a failed WebGPU init, or a lost context, needs a new element in its place. */
 function replaceCanvas(canvas) {
