@@ -58,6 +58,7 @@ import { prepareWorldLayouts } from './render/scene.js';
 import { createCourseController } from './core/courseSession.js';
 import { scopedBus, scopedBridge } from './core/lifetime.js';
 import { createChaseCamera } from './render/camera.js';
+import { vFovForAspect } from './render/cameraMath.js';
 import { createCourseIntro } from './render/courseIntro.js';
 import { stagePoses, stagePlan } from './render/stagedWarmPoses.js';
 import { viewTime } from './render/stagedWarmPlan.js';
@@ -410,6 +411,7 @@ async function boot(course, options, lifetime, isCurrent) {
   let words = null;
   let airWords = null, airSong = null;
   let songCues = null;
+  const chaseAim = { aspect: NaN };
   lifetime.defer(() => songCues?.dispose());
   let state = 'boot', paused = false, finishAt = 0, result = null, rumbleT = 0, rumbleSent = 0, botT = 0;
   // the tier the course's programs were built at; a Quality pick or governor step in the menu re-warms before the
@@ -1407,7 +1409,10 @@ async function boot(course, options, lifetime, isCurrent) {
     const beatSong = song || (inRace ? music?.analysis : null);
     const songS = inRace && music?.playing ? music.songS : NaN;
     const pv = P.view;
-    const cueView = songCues?.update(songS, pv, { paused: frozen, gentle: cueSafety });
+    // Dropping screens pick their spot from the steady chase pose this player actually sees (aspect included).
+    if (chaseAim.aspect !== renderer.aspect) Object.assign(chaseAim, { aspect: renderer.aspect,
+      vFovDeg: vFovForAspect(feel.get('fov.baseVDeg'), renderer.aspect), eyeUpM: feel.get('camera.eyeUpM'), eyeBackM: feel.get('camera.eyeBackM') });
+    const cueView = songCues?.update(songS, pv, { paused: frozen, gentle: cueSafety, view: chaseAim });
     const mode = state === 'menu' ? 'menu' : state === 'results' ? 'results' : 'race';
     const mouseLook = pointerLook.read();
     const lookInput = canLook() ? Math.hypot(mouseLook.x, mouseLook.y) > Math.hypot(gamepad.look.x, gamepad.look.y) ? mouseLook : gamepad.look : null;

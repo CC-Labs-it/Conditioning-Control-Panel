@@ -1,6 +1,6 @@
 // Private verse renders stay outside the game tree. Adapt their timing data for the music road.
-export const MAINFRAME_CHART = '/private-audio/tracks-2026-10-24/mainframe/out/v3/race-chart.json';
-// Preserve the chart URL while reading the accepted recording and its matching timing source.
+export const MAINFRAME_CHART = '/private-audio/tracks-2026-10-24/mainframe/out/v5/race-chart.json';
+// The accepted recording, checked by hash before the dev server reads or serves it.
 export const MAINFRAME_AUDIO = '/private-audio/tracks-2026-10-24/mainframe/out/v5/mainframe_phone.mp3';
 export const MAINFRAME_SHA256 = '1cfd92950a65643363753d7a627dd64bf202a1c0c6f8559e3e3bc4227d6ec47c';
 

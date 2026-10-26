@@ -18,7 +18,7 @@ export function courseSongRows(trackId, songs) {
 export function courseSongs(trackId, search, charts) {
   const chart = new URLSearchParams(search).get('chart');
   if (trackId === 'mainframe' && !chart?.trim() && charts.includes('/private-audio/pink-road/chart.json')) {
-    return ['/private-audio/tracks-2026-10-24/mainframe/out/v3/race-chart.json'];
+    return ['/private-audio/tracks-2026-10-24/mainframe/out/v5/race-chart.json'];
   }
   if (trackId === 'keep' && !chart?.trim() && charts.includes('/private-audio/pink-road/chart.json')) return ['/private-audio/keep/race-chart.json'];
   if (trackId === 'goonworks' && !chart?.trim() && charts.includes('/private-audio/pink-road/chart.json')) return ['/private-audio/goonworks/race-chart.json'];
