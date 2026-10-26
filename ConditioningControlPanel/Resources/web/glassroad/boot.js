@@ -80,6 +80,7 @@ import { createAssist } from './sim/assist.js';
 import { createRoomSession } from './net/room.js';
 import { courseHash } from './net/courseHash.js';
 import { createLobbyApi, fetchTransport, hostTransport } from './net/lobbyApi.js';
+import { createProfileSync } from './meta/profileSync.js';
 import { configureLobby } from './hud/lobby.js';
 import { linkToken, dropLinkParam } from './hud/lobbyMath.js';
 import { poseOf } from './hud/presets.js';
@@ -111,6 +112,7 @@ const DEV = devAllowed(location.search);
 // ?hitch=1 (dev/hitch-check.mjs): per-frame section times in window.__hitch (ms), read by the check's rAF probe
 const HT = qs.get('hitch') === '1' ? (window.__hitch = { sim: 0, fx: 0, audio: 0, cam: 0, world: 0, render: 0, hud: 0, steps: 0 }) : null;
 let hT = 0;
+let profilePulled = false;   // the account record is pulled once per page, not once per course
 const hLap = (k) => { const t = performance.now(); HT[k] = t - hT; hT = t; };
 // the race song (handoff-1022/MUSIC-ROAD-BRIEF.md): ?chart=<url> plays that chart, ?chart=0 none; the dev
 // loopback server tries the private song folder it mounts at /private-audio/; a host names its own charts in
@@ -777,6 +779,13 @@ async function boot(course, options, lifetime, isCurrent) {
   }
   const link = lobbyLink();
   const lobbyApi = link ? createLobbyApi(link.transport) : null;
+  // the account record (CONTRACT-LOGBOOK.md section 8): pull once per page, push after each saved run; silent offline
+  const profileSync = link ? createProfileSync({ request: link.transport }) : null;
+  if (profileSync && !profilePulled) {
+    profilePulled = true;
+    void profileSync.pull().then(record => { if (lifetime.alive) bus.emit('logbook-pulled', { record }); });
+  }
+  bus.on('logbook-saved', ({ record } = {}) => profileSync?.push(record));
   // race songs from our own storage (NET.md section 14): nothing named a chart and the lobby is there, so ask it once
   // for signed chart urls on the room origin (a local lobby names its room with &room=http://127.0.0.1:<port>). A
   // refusal (preview, dark, offline) leaves no song; a race that starts before the answer lands runs without one.
