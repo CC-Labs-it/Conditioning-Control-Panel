@@ -10,6 +10,9 @@
 export const FACE_IDS = Object.freeze(['neutral', 'happy', 'grin', 'wink', 'determined', 'drift-focus', 'dizzy', 'sleepy',
   'frozen', 'heart', 'x-eyes', 'smug', 'sad', 'sparkle', 'cheer', 'blank']);
 
+// feel wave 2026-10-26 (lane C): rival glance / grin on overtake, 0.8 s, one change per racer per 2 s (render/worldFeel.js)
+export { createFaceGlance } from './worldFeel.js';
+
 /** Atlas cell of a face id (unknown ids show neutral): { col, row } on a 4 x 4 grid. */
 export function faceCell(id) {
   const i = Math.max(0, FACE_IDS.indexOf(id));

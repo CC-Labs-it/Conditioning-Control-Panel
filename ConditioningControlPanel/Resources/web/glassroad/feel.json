@@ -345,6 +345,12 @@
     "slipHoldS": 0.6,
     "slipCooldownS": 2.5
   },
+  "permanence": { "skidCapMul": 3, "skidLifeS": 600, "scorchLenM": 1.4, "scorchWidthM": 0.9, "scorchColour": "#3a1430",
+    "debrisCount": 10, "debrisSettleS": 20, "debrisFadeS": 1.5, "debrisSizeM": 0.16 },
+  "speedSense": { "finalLapTweenS": 1.5, "finalLapParticleMul": 1.5, "finalLapFieldShift": 0.12, "finalLapReactiveMul": 1.35,
+    "topFromPct": 0.85, "topLenMul": 0.6, "topDensity": 0.25 },
+  "cascade": { "staggerMs": [40, 90], "durMs": 320, "riseY": 14, "overshoot": 1.7, "lessMul": 0.5 },
+  "faces": { "holdS": 0.8, "cooldownS": 2, "passer": "grin", "passed": "determined" },
   "hitCam": { "on": true, "holdS": 2.2, "leadTimeoutS": 2.5, "minDistM": 14, "enterS": 0.34, "exitS": 0.3, "overshoot": 1.35,
     "fovDeg": 42, "backM": 3.1, "upM": 1.05, "lookUpM": 0.35, "aheadM": 0.3, "sideDeg": 32, "orbitDegps": 18, "orbitMaxDeg": 70, "followTcS": 0.1,
     "creep": 0.1, "creepS": 0.9, "punch": 0.2, "punchS": 0.45, "shakeM": 0.11, "shakeS": 0.42, "shakeHz": 19,
