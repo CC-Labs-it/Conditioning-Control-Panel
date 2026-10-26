@@ -7,6 +7,13 @@
  * The ?feel=1 sheet (hud lane) edits through set(); this module only stores.
  */
 
+/** An Error that captures no stack frames (a cached, rethrown Error must not pin its first caller's objects). */
+export function stacklessError(message) {
+  const limit = Error.stackTraceLimit;
+  Error.stackTraceLimit = 0;
+  try { return new Error(message); } finally { Error.stackTraceLimit = limit; }
+}
+
 function walk(root, path) {
   const parts = path.split('.');
   let o = root;
@@ -38,7 +45,9 @@ export function createFeel(data) {
     const v = o == null ? undefined : o[k];
     // a missing key throws one Error per path, made once: callers that probe with try (audio/mix.js mixGet, every
     // frame) used to build an Error and its stack per call, the biggest share of the race garbage
-    if (v === undefined) { let e = missing.get(path); if (!e) { e = new Error('[feel] missing key ' + path); missing.set(path, e); } throw e; }
+    // Made WITHOUT a stack: V8 keeps every frame's receiver behind an unformatted stack, so a probe that
+    // first missed during a course build pinned that whole course (its scene) for the life of the page.
+    if (v === undefined) { let e = missing.get(path); if (!e) { e = stacklessError('[feel] missing key ' + path); missing.set(path, e); } throw e; }
     return v;
   }
   function rad(path) {
