@@ -8,7 +8,7 @@ import { hazardBeatAt, beatCycle, machineryRearming } from './machineryBeat.js';
 const authors = { threshold, keep, mainframe, boudoir, goonworks };
 const clamp = v => Math.max(0, Math.min(1, v));
 const ease = v => { v = clamp(v); return v * v * (3 - 2 * v); };
-export const MOVING_REVISION = 1;
+export const MOVING_REVISION = 2;
 
 export function movingPlan(track) {
   const plan = authors[track.id]?.(track) || { traps: [], bridge: null };
@@ -41,6 +41,11 @@ export function bridgePose(bridge, timeS, index = 0, count = 1) {
     remainingS: Math.max(0, open - t) };
 }
 
+export function bridgeSlabX(bridge, timeS, index, width) {
+  return (index % 2 ? -1 : 1) * (width + 2) *
+    (1 - bridgePose(bridge, timeS, index, bridge.slabs).extension);
+}
+
 export function installMovingSupport(track, plan) {
   track.moving = { ...plan, revision: MOVING_REVISION, timeS: 0 };
   const bridge = plan.bridge, fork = track.forks?.find(f => f.id === bridge?.forkId);
@@ -52,17 +57,30 @@ export function installMovingSupport(track, plan) {
   bridge.slabs = Math.max(3, Math.ceil((bridge.toM - bridge.fromM) / 5));
   bridge.slabM = (bridge.toM - bridge.fromM) / bridge.slabs;
   fork.movingBridge = bridge;
-  const supported = q => {
+  const frames = Array.from({ length: bridge.slabs }, (_, i) => fork.frameAt(bridge.fromM + (i + .5) * bridge.slabM));
+  const supported = (q, px, py, pz) => {
     if (q?.forkId !== fork.id || q.forkS < bridge.fromM || q.forkS >= bridge.toM) return q;
+    q.railed = false;
+    if (!q.onRoad) return q; // Shifted machinery outside the driving corridor is not a route.
     const index = Math.min(bridge.slabs - 1, Math.floor((q.forkS - bridge.fromM) / bridge.slabM));
-    if (!bridgePose(bridge, track.moving.timeS, index, bridge.slabs).supported) {
-      q.onRoad = false; q.railed = false; q.hole = 'piston-bridge'; q.stone = null;
+    // Test the actual straight slab, including its small rendered seam overlap.
+    for (let i = Math.max(0, index - 1); i <= Math.min(bridge.slabs - 1, index + 1); i++) {
+      const f = frames[i], dx = px - f.p[0], dy = py - f.p[1], dz = pz - f.p[2];
+      const lateral = dx * f.b[0] + dy * f.b[1] + dz * f.b[2];
+      const along = dx * f.t[0] + dy * f.t[1] + dz * f.t[2];
+      if (Math.abs(lateral - bridgeSlabX(bridge, track.moving.timeS, i, f.w)) > (f.w + .06) / 2 ||
+          Math.abs(along) > (bridge.slabM + .16) / 2) continue;
+      q.height = dx * f.n[0] + dy * f.n[1] + dz * f.n[2];
+      q.p[0] = px - f.n[0] * q.height; q.p[1] = py - f.n[1] * q.height; q.p[2] = pz - f.n[2] * q.height;
+      for (let j = 0; j < 3; j++) q.normal[j] = f.n[j];
+      return q;
     }
+    q.onRoad = false; q.hole = 'piston-bridge'; q.stone = null;
     return q;
   };
   const original = track.query;
-  function query(...args) { return supported(original(...args)); }
-  query.below = (...args) => { const q = supported(original.below(...args)); return q?.onRoad ? q : null; };
+  function query(...args) { return supported(original(...args), ...args); }
+  query.below = (...args) => { const q = supported(original.below(...args), ...args); return q?.onRoad ? q : null; };
   track.query = query;
 }
 

@@ -1,5 +1,5 @@
 import { Group, Mesh, InstancedMesh, Color, BoxGeometry, MeshStandardNodeMaterial, MeshBasicNodeMaterial, Matrix4, Vector3 } from 'three/webgpu';
-import { movingPoseAt, bridgePose } from '../track/movingHazards.js';
+import { movingPoseAt, bridgePose, bridgeSlabX } from '../track/movingHazards.js';
 
 export function createMovingHazardView(scene, track, pal) {
   const group = new Group(); group.name = 'moving-piston-traps'; scene.add(group);
@@ -66,7 +66,7 @@ export function createMovingHazardView(scene, track, pal) {
       // Permanent inlays show the strike zone without introducing beat-rate light flashes.
     }
     for (const item of slabs) {
-      const p = bridgePose(bridge, timeS, item.i, bridge.slabs), x = item.side * (item.width + 2) * (1 - p.extension);
+      const x = bridgeSlabX(bridge, timeS, item.i, item.width);
       item.slab.position.x = x;
       const anchor = item.side * (item.width + 1), end = x + item.side * item.width / 2;
       item.rod.position.x = (anchor + end) / 2; item.rod.scale.x = Math.max(.1, Math.abs(anchor - end));
