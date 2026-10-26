@@ -596,7 +596,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
       const d0 = i ? Math.hypot(r.st[S.posX] - k[S.posX], r.st[S.posY] - k[S.posY], r.st[S.posZ] - k[S.posZ]) : 0;
       // the HIT CAM's victim (view.focusRacer, render/hitCam.js) counts as near: full pose, face, stun stars
       const d = i && view.focusRacer === i ? Math.min(d0, Q.kartLodM) : d0;
-      karts.pose(kk, r.st, r.fxv, dt, d, { glide: !!r.glide, underwater: r.st[S.respawnPhase] ? 0 : immersion(r.st[S.s], r.st[S.posY] + 0.65), paused: !!view.paused, squash: i ? null : fx.squash || 0, gentle, topMps, name: r.meta ? labels[i] || r.meta.name : '', face: glance.face(i, nowS) });
+      karts.pose(kk, r.st, r.fxv, dt, d, { glide: !!r.glide, underwater: r.st[S.respawnPhase] ? 0 : immersion(r.st[S.s], r.st[S.posY] + 0.65), paused: !!view.paused, squash: i ? null : fx.squash || 0, gentle, topMps, name: r.meta ? labels[i] || r.meta.name : '', face: glance.face(i, nowS),
+        rollAdd: i || gentle ? 0 : (fx.wobble || 0) * (feel.get('kart.wobble.maxDeg') || 0) * Math.PI / 180 });
       kk.root.updateMatrixWorld();
       const near = i === 0 || d <= Q.kartLodM;
       if (near) particles.kart(kk.root, r.st, kk.mem, dt, { mul: i ? LOOK.botSparkMul : 1, slip: (r.fxv && r.fxv.slip) || 0 });

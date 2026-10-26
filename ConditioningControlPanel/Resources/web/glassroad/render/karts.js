@@ -383,7 +383,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
    * One kart per frame. st = interpolated state, fxv = RacerFx or null, distM = distance to the camera,
    * opts: { squash (the player's fx.squash; the reaction layer now owns squash), gentle, topMps, name }.
    */
-  function pose(k, st, fxv, dt, distM, { squash = null, gentle = false, topMps = 30, name = '', glide = false, underwater = 0, paused = false, face = null } = {}) {
+  function pose(k, st, fxv, dt, distM, { squash = null, gentle = false, topMps = 30, name = '', glide = false, underwater = 0, paused = false, face = null, rollAdd = 0 } = {}) {
     k.underwater=underwater;
     if(!paused){k.caustics.time.value+=dt*(gentle?.5:1);k.caustics.amount.value+=(underwater*(gentle?.5:1)-k.caustics.amount.value)*Math.min(1,dt/.35);}
     const { root, body, pose: p, react: r } = k;
@@ -413,7 +413,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     }
     body.position.set(0, o.lift, 0);
     body.quaternion.setFromAxisAngle(UPY, p.yawAdd + o.yaw)
-      .multiply(QX.setFromAxisAngle(FZ, p.roll * o.stiff * (rig ? rig.bank : 1) + o.roll)).multiply(QX.setFromAxisAngle(RX, (rig ? 0 : p.pitch) + o.pitch));
+      .multiply(QX.setFromAxisAngle(FZ, p.roll * o.stiff * (rig ? rig.bank : 1) + o.roll + rollAdd)).multiply(QX.setFromAxisAngle(RX, (rig ? 0 : p.pitch) + o.pitch));
     const motionOff = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     const bounce = phraseReboundPose(motionOff ? null : phraseBouncePhase(st), gentle, k.phrasePose);
     // The brief body spring reads on every vehicle; only the accepted cup stack separates.

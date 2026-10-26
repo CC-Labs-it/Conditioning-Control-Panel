@@ -368,7 +368,7 @@ async function boot(course, options, lifetime, isCurrent) {
   if (BOT) Object.defineProperty(debug, 'waterTravelAudio', { get: () => audio.waterTravel });
   for (const name of ['keep-gate-hit', 'keep-chain-hit', 'boudoir-press-hit', 'boudoir-sweeper-hit', 'boudoir-mirror-hit', 'goonworks-hit']) bus.on(name, () => bus.emit('wall', { dv: 12 }));
   configureLobby({ track: track.id, trackLaps: TRACK_LAPS });
-  const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus, { photosafe });
+  const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus, { photosafe, racers: () => racers?.list });
   const directionWarning = createDirectionWarning(track);
   lifetime.defer(() => hud.dispose());
   // Host state stays live while art and shaders load behind the cover.
@@ -754,6 +754,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (Number.isFinite(o.steerSens)) feel.set('steer.userMul', o.steerSens);   // FEEL.md: grip yaw, player only
     renderer.setOptions(o);
     fx.setMotion?.(o.motion || 'full');                // feel wave: the Motion row (Gentle reads as 'less' inside fx)
+    garage?.setMotion?.(o.motion || 'full');
     if (world.shadows) world.shadows.setEnabled(qs.get('shadows') !== '0' && o.shadows !== false);
   }
   applyOptions(opts);
@@ -1403,6 +1404,7 @@ async function boot(course, options, lifetime, isCurrent) {
       active: inRace, menu: state === 'menu',
       boosting: pst[S.boostKind] > 0, drifting: pst[S.driftDir] !== 0, driftTier: pst[S.driftStage],
       airborne: pst[S.airborne] > 0, onRoad: pst[S.grounded] > 0, edge: fs.edgeGlow > 0, paused: frozen, duck: fs.duck,
+      driftCharge: pst[S.driftCharge] || 0, traumaOut: fs.traumaOut ?? 0,
       submerged: inRace ? immersion(pst[S.s], cam.camera.position.y) : 0,
       ...waterContact(pst, inRace, feel.get('speed.topMps')),
     }, inRace ? racers.nearby(feel.get('ai.audibleKarts'), 80) : []);
@@ -1524,7 +1526,7 @@ async function boot(course, options, lifetime, isCurrent) {
       ghostToState(ghostSample(ghost, ghostT, ghostPose), ghostView.st);
       ghostKarts[0] = kartViews[0]; shownKarts = ghostKarts;
     }
-    world.update({ kart: P.view, karts: shownKarts, fx: viewFx, timeS: renderTime, beat: clock.beat,
+    world.update({ kart: P.view, karts: shownKarts, fx: viewFx, timeS: renderTime, beat: clock.beat, motion: opts?.motion || 'full',
       raceTimeS: racers.clockS, sectionIdx: viewSection, items: iv, mode, camera: cam.camera, paused, song, songS, audioReactive, words: wordLive, beatSong,
       airWords: inRace && !online ? airWords : null,
       songCues: cueView?.live || NO_WORDS, cueGentle: cueSafety.on, songCueList: songCues?.cues || NO_WORDS,
