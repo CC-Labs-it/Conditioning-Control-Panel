@@ -418,6 +418,8 @@ async function boot(course, options, lifetime, isCurrent) {
     lifetime.defer(() => cardMedia.dispose());
   }
   Object.defineProperty(debug, 'cardMedia', { get: () => world.media?.stats() || null });
+  Object.defineProperty(debug, 'scrolller', { get: () => (scrolller
+    ? { consent: scrolller.consent, pictures: scrolller.count, ready: scrolller.ready } : null) });
   Object.defineProperty(debug, 'songGates', { get: () => world.phraseGates.stats });
   Object.defineProperty(debug, 'airWords', { get: () => world.airWords?.stats || null });
   Object.defineProperty(debug, 'songCues', { get: () => ({ total: songCues?.cues.length || 0,

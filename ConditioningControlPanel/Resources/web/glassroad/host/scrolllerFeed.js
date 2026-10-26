@@ -12,6 +12,7 @@
  */
 export const MAX_FEED_ROWS = 12;
 const SCROLLLER_MEDIA = /^https:\/\/([a-z0-9-]+\.)*scrolller\.com\//i;
+const loaded = (img) => img.complete && img.naturalWidth > 0;
 
 /** The rows a feed message may carry: v1, https on a scrolller.com host, stills only, deduped, capped. */
 export function feedRows(msg) {
@@ -53,9 +54,10 @@ export function createScrolllerFeed({ bridge, makeImage = () => new Image() } = 
     /** The stored consent from the last echo, or null before any echo. */
     get consent() { return consent; },
     get count() { return pictures.length; },
+    get ready() { return pictures.filter(loaded).length; },
     /** A loaded picture for a flash burst, or null. Never hand this to a texture. */
     sourceFor(seed = 0) {
-      const ready = pictures.filter((img) => img.complete && img.naturalWidth > 0);
+      const ready = pictures.filter(loaded);
       return ready.length ? ready[Math.abs(Math.trunc(seed)) % ready.length] : null;
     },
     setConsent(on) { bridge?.send({ type: 'set-setting', key: 'media.remoteConsent', value: on === true }); },
