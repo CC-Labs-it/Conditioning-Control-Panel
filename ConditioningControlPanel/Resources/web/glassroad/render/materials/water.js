@@ -112,7 +112,7 @@ export function createWaterSurface({ surface, flow, p, trueEdge, V, N0, pal, u, 
     // displaces the physical field nor changes the kart wake, spray origin or collision surface.
     const liquidTint = pal.col(0).mul(0.55).add(pal.col(1).mul(0.45));
     colour = colour.add(liquidTint.mul(response.light)).add(white.mul(response.crest));
-    colour = colour.add(waterHelixLight(p, reactive, liquidTint));
+    colour = colour.add(waterHelixLight(p, reactive, pal.col(0), pal.col(1)));
   }
   const alpha = deformation ? float(.52).add(pow(float(1).sub(ndv),3).mul(.34)).add(foam.mul(.06)).clamp(.52,.93)
     : clamp(float(L.alpha).add(foam.mul(0.1)).add(spec.mul(0.3)), 0, 1);
