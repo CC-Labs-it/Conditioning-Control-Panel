@@ -5,7 +5,7 @@
  * the kart position with velocity prediction on the road and a plain vertical ease in the air (hops do
  * not jerk the view). Horizon stays level: up is world +Y. Vertical fov goes through the lifted viewport law.
  * Polish 3, the kick layer: a short camera kick on bumps and walls (away from the hit) and landings
- * (a dip by tier), a slight fov punch when a boost starts. Each is one damped spring lobe (no oscillation
+ * (a dip by tier). Legacy FOV spring output is isolated from the camera. Each is one damped spring lobe (no oscillation
  * run, so it is a kick, never a shake); Gentle halves every amplitude and damps critically.
  * Landings and boosts are read from state edges; bumps come from the bus (camera.js) or, without one,
  * from a velocity jump that steering cannot explain.
@@ -15,7 +15,8 @@
  * frame, camera up = the kart's smoothed up. The blend weight eases in and out, so the horizon follows the road
  * up through the loop with no roll snap, and stays level everywhere else.
  * Screen framing: the eye keeps that smooth orbit, then its aim holds the actual racer centre below the
- * middle of the viewport. A small eased airborne excursion preserves the hop. Shake and kicks follow it.
+ * middle of the viewport. A small eased airborne excursion preserves the hop. Contact kicks follow it;
+ * effect shake, push and boost zoom never enter the camera pose.
  */
 import { S, BOOST, RESPAWN } from '../sim/state.js';
 import { clamp, damp, angleDiff, qrotate, rad, smoothstep } from '../core/math.js';

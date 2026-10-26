@@ -121,13 +121,13 @@ test('kick: state edges find landings by fall, boost starts and unexplained velo
   kickEdges(wr, r, DT); r[S.airborne] = 0; assert.deepEqual(kickEdges(wr, r, DT), [], 'no landing kick from a rescue');
 });
 
-test('kick: the rig widens the fov on a boost start and comes back; snap clears it', () => {
+test('kick: boost springs never change the camera FOV and snap clears contact offsets', () => {
   const f = feel(), rig = createCamRig(f), k = moving();
   rig.snap(k, 16 / 9); rig.update(k, null, DT, 16 / 9);
   const base = rig.vFov;
   k[S.boostKind] = BOOST.DRIFT3;
   let top = 0; for (let t = 0; t < 0.4; t += DT) { rig.update(k, null, DT, 16 / 9); top = Math.max(top, rig.vFov); }
-  assert.ok(top > base + 2, 'punch ' + (top - base));
+  assert.equal(top, base, 'a boost must not pump zoom or anchor pitch');
   for (let t = 0; t < 3; t += DT) rig.update(k, null, DT, 16 / 9);
   assert.ok(Math.abs(rig.vFov - base) < 0.05);
   rig.hit('bump', 9, 1); rig.update(k, null, DT, 16 / 9); rig.snap(k, 16 / 9);
