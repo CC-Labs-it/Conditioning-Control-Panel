@@ -64,7 +64,9 @@ test('GOONWORKS: along the whole double deck, at every aspect and approach, no d
 
 test('a deck over the view pick moves the spot to the nearest clear one, later first, then earlier', () => {
   const flat = fakeTrack(), s0 = 300;
-  const call = deck => fitMarquee({ kart: flat.frameAt(s0), minM: 60, spot: d => flat.frameAt(s0 + d), deck });
+  // A downward reference view makes the optimum lie beyond minM, leaving real
+  // earlier candidates for this selection-policy fixture. Live-view tests above use the current neutral.
+  const call = deck => fitMarquee({ kart: flat.frameAt(s0), minM: 60, view: { neutralPitchDeg: 0 }, spot: d => flat.frameAt(s0 + d), deck });
   const plain = call(null);
   const later = call(d => Math.abs(d - plain.aheadM) <= 10 ? 20 : Infinity);
   assert.ok(later.clear && later.fits && later.aheadM === plain.aheadM + 15 && later.scale === plain.scale, 'next clear spot beyond the deck');

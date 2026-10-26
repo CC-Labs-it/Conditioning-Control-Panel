@@ -67,14 +67,14 @@ const detail = (run, result) => JSON.stringify({ run: run.id, contacts: contacts
   maxError: result.maxError, minMargin: result.minMargin, maxSpeed: result.maxSpeed, brakeDistance: result.brakeDistance });
 
 test('Dense authored sequences are real distinct triggers with supported full footprints', () => {
-  assert.ok(track.boosts.length >= 30 && track.boosts.length <= 60);
-  const authoredPlan = getBoudoirBoostPlan(loadTrack(json, { aerials: false }));
+  assert.ok(track.boosts.length >= 20 && track.boosts.length <= 60);
+  const authoredPlan = getBoudoirBoostPlan(loadTrack(json, { aerials: false, boostSafety: false }));
   assert.deepEqual(authoredPlan.pads.map(({ node, x, w, len }) => ({ node, x, w, len })), json.boosts);
   assert.deepEqual(plan.pads.map(({ node, x, w, len }) => ({ node, x, w, len })),
     track.boosts.map(({ node, x, w, len }) => ({ node, x, w, len })));
   assert.equal(new Set(track.boosts.map(p => p.node + '/' + p.x)).size, track.boosts.length);
   for (const run of plan.runs) {
-    assert.ok(run.pads.length >= 2 && run.pads.length <= 4, run.id);
+    assert.ok(run.pads.length >= 1 && run.pads.length <= 4, run.id);
     for (let i = 1; i < run.pads.length; i++) {
       const gap = run.pads[i].s - run.pads[i - 1].s;
       assert.ok(gap >= run.pads[i - 1].len + 5 && gap <= 32, run.id + ' readable, separate entries');

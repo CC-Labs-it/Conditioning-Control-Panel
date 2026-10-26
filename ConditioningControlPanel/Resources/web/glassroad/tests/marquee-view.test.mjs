@@ -4,6 +4,8 @@ import { createCamRig, vFovForAspect } from '../render/cameraMath.js';
 import { createSongCueRun } from '../sim/songCues.js';
 import { marqueeFace, faceX, restY, CLEAR_M, MARQUEE_VIEW } from '../sim/marqueeView.js';
 import { RACER_FRAMING } from '../render/framing.js';
+import { CHASE_NEUTRAL_PITCH_DEG } from '../core/chaseView.js';
+import { DRIVER_LOOK } from '../render/lookAround.js';
 import { S } from '../sim/state.js';
 import { makeFeel, fakeTrack, place } from './sim-fake.mjs';
 
@@ -103,6 +105,8 @@ test('a quick second drop retires the first one instead of landing hidden behind
 test('the transport predicts the same chase numbers the rig composes with', () => {
   const feel = makeFeel();
   assert.equal(MARQUEE_VIEW.screenY, RACER_FRAMING.screenY);
+  assert.equal(MARQUEE_VIEW.neutralPitchDeg, CHASE_NEUTRAL_PITCH_DEG);
+  assert.equal(CHASE_NEUTRAL_PITCH_DEG, DRIVER_LOOK.upDeg, 'neutral is the previous fully-up glance');
   assert.ok(Math.abs(MARQUEE_VIEW.centreUpM - RACER_FRAMING.centerUpM * RACER_FRAMING.scale) < .001);
   assert.equal(MARQUEE_VIEW.eyeUpM, feel.get('camera.eyeUpM')); assert.equal(MARQUEE_VIEW.eyeBackM, feel.get('camera.eyeBackM'));
   assert.equal(MARQUEE_VIEW.vFovDeg, feel.get('fov.baseVDeg'));

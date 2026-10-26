@@ -35,7 +35,7 @@
   "offroad": { "hazeThrustLoss": 0.35 },
   "water": { "flowBlendTcS": 0.4, "streamGripMul": 1.8, "streamSlideMul": 1.5, "streamThrustMul": 0.95, "chuteSteerMul": 0.6, "chuteGradeDeg": 25,
     "poolLandMul": 0.75, "poolThrustMul": 0.85, "poolDragTcS": 1.2 },
-  "wall": { "normalKeep": 0.4, "engineLoss": 0.12, "cueFullDvMps": 12, "shakeFrac": 0.5, "topM": 1.5 },
+  "wall": { "normalKeep": 0.4, "engineLoss": 0.12, "cueFullDvMps": 12, "shakeFrac": 0.5, "topM": 24 },
   "route": { "catchPct": 0.25, "catchHoldS": 2.5, "cleanLenM": 24, "cleanLatM": 3.5, "cleanDeg": 25, "cleanAmount": 0.15, "cleanHoldS": 0.6, "kickUpMps": 2.5,
     "airPull": 2, "airMaxMps": 10, "airAccel": 30 },
   "stones": { "kickUpMps": 3.5, "clearGapM": 4, "minClearMps": 14, "leadM": 25, "flightCapM": 7.5, "shoveMul": 0.3 },

@@ -1,5 +1,6 @@
-/* Offline boost authoring only. Runtime uses the committed JSON unchanged, so hosts and
- * clients agree on every physical pad. Existing authored pads retain their exact order.
+/* Offline boost authoring only. Runtime applies the shared deterministic turn-safety
+ * filter to committed pads, so hosts and clients agree on every physical pad.
+ * Source authoring retains the original pad order for reproducible generators.
  */
 import { loadTrack } from './load.js';
 import { getKeepLayout } from './keep-layout.js';
@@ -61,7 +62,7 @@ export function safeBoostStation(track, s, { x = 0, w = BOOST_PLAN.widthM, len =
 
 /** Deterministic runs of 2-4 actual boost entries, with a visible gap between each pad. */
 export function densifyBoosts(json) {
-  const track = loadTrack(json, { aerials: false }), originals = json.boosts.map((p) => ({ ...p }));
+  const track = loadTrack(json, { aerials: false, boostSafety: false }), originals = json.boosts.map((p) => ({ ...p }));
   const exclusions = boostExclusions(track), candidates = [];
   const compact = track.id === 'threshold', spacing = compact ? 10 : BOOST_PLAN.spacingM;
   for (let node = 0; node < track.nodeCount; node++) {

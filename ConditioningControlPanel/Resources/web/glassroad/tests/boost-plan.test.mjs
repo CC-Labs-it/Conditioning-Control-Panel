@@ -42,6 +42,7 @@ for (const id of ['threshold', 'keep', 'mainframe']) {
 
   test(id + ': an actual kart contacts each pad in a straight acceleration train once', () => {
     const nodes = plan.runs.find((r) => {
+      if (!r.every(node => track.boosts.some(p => p.node === node && p.x === 0))) return false;
       if (track.nodeS[r[0]] < 2) return false;
       const first = track.frameAt(track.nodeS[r[0]] - 2), last = track.frameAt(track.nodeS[r.at(-1)] + 7);
       return first.t.reduce((sum, v, i) => sum + v * last.t[i], 0) > .9999;

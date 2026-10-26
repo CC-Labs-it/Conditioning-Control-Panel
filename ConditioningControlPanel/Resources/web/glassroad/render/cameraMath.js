@@ -23,6 +23,7 @@ import { clamp, damp, angleDiff, qrotate, rad, smoothstep } from '../core/math.j
 import { LOOK } from './look.js';
 import { RACER_FRAMING } from './framing.js';
 import { createLookAround } from './lookAround.js';
+import { CHASE_NEUTRAL_PITCH_DEG } from '../core/chaseView.js';
 import { phraseCameraGuide } from '../core/phraseFlight.js';
 
 // ---- the kick layer (polish 3) ----
@@ -276,7 +277,9 @@ export function createCamRig(feel) {
         for (let k = 0; k < 3; k++) o[k] += (R[k] * K.x + UU[k] * K.y + B[k] * K.z) * s;
       }
     }
-    glance.apply(rig.eye, rig.look, rig.up);
+    // The owner's preferred chase angle is the previous fully-up driver glance.
+    // Keep this local to chase so first-person, rear and authored shots retain their basis.
+    glance.apply(rig.eye, rig.look, rig.up, CHASE_NEUTRAL_PITCH_DEG);
   }
 
   /** viewDt: how far the interpolated kart's own clock moved this frame (the clock's renderTime delta). It

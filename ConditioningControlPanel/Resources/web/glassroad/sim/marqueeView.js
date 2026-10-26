@@ -8,10 +8,13 @@
  * centre on curves, and the drop starts just above the top edge so the whole fall reads in frame.
  * Nothing here moves the camera: it only predicts the steady chase pose (no shake, push or zoom).
  */
+import { CHASE_NEUTRAL_PITCH_DEG } from '../core/chaseView.js';
+
 export const CLEAR_M = 7.2, HANG_M = 7.8, DROP_S = 1.05;   // road clearance, hang height, the drop's fall time
 export const MARQUEE_VIEW = Object.freeze({
   // feel.json camera / fov and render/framing.js numbers; boot passes the live ones (aspect included).
   eyeUpM: 2.2, eyeBackM: 3.9, eyeLiftM: .25, centreUpM: .429, screenY: .62, vFovDeg: 60, aspect: 16 / 9,
+  neutralPitchDeg: CHASE_NEUTRAL_PITCH_DEG,
   topNdc: .95,    // the face top, bounce included, stays under this share of the upper half
   sideNdc: .86,   // and every face inside this share of each side
   aimNdc: .25,    // a face centre further off-centre than this costs score (curves)
@@ -20,7 +23,7 @@ export const MARQUEE_VIEW = Object.freeze({
   stepM: 5, spanM: 170, maxM: 280,
   scales: Object.freeze([1, .8, .65]),   // smaller faces only where no full-size spot fits (climbs, tight turns)
   laneInM: 3,     // the kart's own line stays this far inside the face edge
-  fallPadM: .6, minFallM: 6, maxFallM: 46,
+  fallPadM: .6, minFallM: 6, maxFallM: 39,
   deckPadM: 3,    // another road within the face half-width plus this, overhead, is a deck over the fall column
   deckGapM: 3,    // and the screen (its fall start too) stays this far under that deck's surface
 });
@@ -46,7 +49,8 @@ export function chaseCamera(k, V = MARQUEE_VIEW) {
   const eye = [0, 1, 2].map(i => k.p[i] - k.t[i] * V.eyeBackM + W[i] * eyeH);
   const a = unit([0, 1, 2].map(i => k.p[i] + k.n[i] * V.centreUpM - eye[i]));
   // Like the rig's aim: the racer centre projects at screenY, the horizon stays level (world up).
-  const r = unit(cross(a, Math.abs(a[1]) > .98 ? k.t : W)), ua = cross(r, a), lift = Math.atan((2 * V.screenY - 1) * th);
+  const r = unit(cross(a, Math.abs(a[1]) > .98 ? k.t : W)), ua = cross(r, a);
+  const lift = Math.atan((2 * V.screenY - 1) * th) + V.neutralPitchDeg * Math.PI / 180;
   const c = Math.cos(lift), s = Math.sin(lift);
   const f = [0, 1, 2].map(i => a[i] * c + ua[i] * s), u = [0, 1, 2].map(i => ua[i] * c - a[i] * s);
   return { eye, f, r, u, th, tw: th * V.aspect };
@@ -157,7 +161,7 @@ export function fitMarquee({ spot, kart, lane = 0, sides = [0], minM = 60, lift 
       moved = ok.find(c => c.aheadM > plain.aheadM) || ok.filter(c => c.aheadM < plain.aheadM).pop() || null;
       if (moved) break;
     }
-    best = moved || choose(c => c.tier === 1) || plain;
+    best = moved || choose(c => c.tier === 1) || choose(c => c.tier === 2) || plain;
   }
   const capped = best.tier < 2 ? Math.max(0, Math.min(best.fallM, best.roomM - V.deckGapM)) : best.fallM;
   return { aheadM: best.aheadM, shiftM: best.shiftM, liftM: best.liftM, scale: best.scale, fits: best.over <= 0,

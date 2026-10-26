@@ -11,7 +11,7 @@ const GAPS = {
   'drift.slideTcS': 0.25,     // the same bleed while drifting: sets the drift slip angle
   'drift.steerMin': 0.2,      // stick share that picks a drift direction and the soft-drift side
   'wall.minHitMps': 1.0,      // into-rail speed under this slides along the rail with no hit
-  'wall.topM': 1.5,           // polish 4: an airborne kart this far over the road plane clears a rail (the tube is 0.9 m)
+  'wall.topM': 24,            // invisible guard above a rail, well above hop and shield-launch height
   'boost.tailEndTcs': 4,      // a boost tail ends after this many tail time constants
   'respawn.hoverM': 2.0,      // hover height above the anchor node during a rescue
   // polish 4 ROUTES (sim/routes.js): the drop shortcut's soft catch and its clean-landing boost
