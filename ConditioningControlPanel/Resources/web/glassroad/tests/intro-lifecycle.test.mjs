@@ -31,6 +31,7 @@ function run(extra = '') {
     function syncAssist(){events.push('assist')}
     function playSong(align){events.push(['song',align()])}
     function stopSong(){events.push('song-stop')}
+    function openRunLog(){} function closeRunLog(){}
     ${fn('begin')}
     ${fn('startRace')}
     ${fn('setPaused')}

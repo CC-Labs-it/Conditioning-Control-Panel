@@ -96,6 +96,10 @@ import { createBoudoirHazards } from './sim/boudoirHazards.js';
 import { createKeepHazards } from './sim/keepHazards.js';
 import { getGoonworksLayout } from './track/goonworks-layout.js';
 import { createGoonworksHazards } from './sim/goonworksHazards.js';
+import { createRunLog, roomResult } from './meta/runLog.js';
+import { applyRun } from './meta/applyRun.js';
+import { buildRecap } from './meta/recap.js';
+import { loadRecord, saveRecord } from './meta/record.js';
 
 const qs = new URLSearchParams(location.search);
 const initialCourse = selectedCourse(location.search);
@@ -475,6 +479,39 @@ async function boot(course, options, lifetime, isCurrent) {
   // queue tapped so local cp / lap / finish / drop and pulses go up); rebuilt by buildRun on every switch
   let race, racers, ai, contact, standings, items, scan, industry, moving, perfume, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
   let runAssist = false;                          // the Options assist switch (applyOptions), carried into every rebuilt run
+  let runMode = 'race';                           // 'race' | 'trial' (TRIAL lane sets it); online is always race
+  // ---- the Logbook (meta/): one run log per run, saved at the results; a throw never breaks the race ----
+  let runLog = null;
+  debug.logbook = { summary: null, diff: null, recap: null };
+  function openRunLog() {
+    closeRunLog(false);
+    try {
+      runLog = createRunLog(bus, { track: track.id, mode: online ? 'race' : runMode, online: !!online, laps,
+        seed: online ? online.s.seed : seed, assist: assist ? assist.mode : 'light',
+        gentle: hostGentle || !!feel.get('gentle.on'), lengthM: track.lengthM, offered: () => (words ? words.shown : 0) });
+    } catch (e) { console.warn('[glassroad] logbook', e); runLog = null; }
+  }
+  /** Fold the run into the record. result: the race-result payload (null = quit). @returns the recap or null */
+  function logRun(res) {
+    if (!runLog) return null;
+    const log = runLog; runLog = null;
+    try {
+      const summary = log.finish(res), before = loadRecord();
+      const { record, diff } = applyRun(before, summary);
+      saveRecord(record);
+      bus.emit('logbook-saved', { record, summary, diff });
+      const recap = buildRecap(summary, diff, before);
+      debug.logbook = { summary, diff, recap };
+      return recap;
+    } catch (e) { console.warn('[glassroad] logbook', e); return null; } finally { log.dispose(); }
+  }
+  /** A run left mid-race counts as an unfinished race (save = true); before go it is simply dropped. */
+  function closeRunLog(save = true) {
+    if (!runLog) return;
+    if (save && race && race.phase === 'racing') { logRun(null); return; }
+    try { runLog.dispose(); } catch (e) { /* nothing to keep */ }
+    runLog = null;
+  }
   function buildRun(s = null) {
     if (P) { bindAirWords(P.st, null); bindAirWords(P.view, null); }
     airWords?.reset(); airWords = null; airSong = null;
@@ -723,6 +760,7 @@ async function boot(course, options, lifetime, isCurrent) {
   }
   function begin() {
     state = 'race';
+    openRunLog();
     introHud.style.visibility = '';
     garage?.setVisible(false);
     hud.setCard(null);
@@ -738,6 +776,7 @@ async function boot(course, options, lifetime, isCurrent) {
   function startRace() {
     if (!lifetime.alive) return;
     if (online) return;
+    closeRunLog();
     stopSong();
     const started = audio.start(); unpause(); resetAll();
     if(garage){world.setLook(0,raceLook(garage.state));debug.playerLook=world.looks()[0];}
@@ -751,6 +790,7 @@ async function boot(course, options, lifetime, isCurrent) {
     bridge.runStarted({ track: track.id, laps });
   }
   function toMenu() {
+    closeRunLog();
     stopSong();
     if (online && lobbyUi) lobbyUi.leave();       // quit mid-race online: leave the room (online-left tears down)
     if (online) endOnline();
@@ -868,6 +908,7 @@ async function boot(course, options, lifetime, isCurrent) {
   function goOnline() {
     if (!online || state === 'race') return;
     state = 'race';
+    openRunLog();
     hud.setCard(null);
     canvas.focus({ preventScroll: true });
     const started = audio.start(), s = online.s;
@@ -878,6 +919,7 @@ async function boot(course, options, lifetime, isCurrent) {
   }
   /** Back to the solo run (left, closed or aborted). showLobby: put the lobby card back when no card is up. */
   function endOnline(showLobby = false) {
+    closeRunLog();
     if (!online) return;
     online = null;
     track.laps = TRACK_LAPS; laps = TRACK_LAPS;
@@ -894,6 +936,7 @@ async function boot(course, options, lifetime, isCurrent) {
   hud.on('online-finish', (m) => {
     if (!online) return;
     debug.onlineResult = m && m.lines ? m.lines.map((l) => [l.place, l.name, l.time]) : null;
+    logRun(m && m.rows ? roomResult(m.rows, m.seat) : result);   // the lobby card shows the room's results
     unpause();
     state = 'results';
     hud.setCard('lobby', { view: 'results' });
@@ -1126,6 +1169,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (HT) hLap('sim');
     if (online) online.s.update({ paused, assist: assist.mode !== 'off' });   //    online: clock slew, pings, uploads
     queue.flush(bus);                                             // 3. events
+    if (runLog && simOn && race.phase === 'racing' && !P.finished) runLog.sample(P.st, standings.placeOf(0), steps * clock.dt);
     const frozen = paused && !online;                             //    online the pause card freezes nothing
     const fxDt = frozen ? 0 : frameDt;                            //    the pause card freezes every effect too
     fx.update(fxDt, P.st, race);                                  // 4. fx
@@ -1287,7 +1331,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (!online && state === 'race' && finishAt && now >= finishAt && result) {   // results after the finish swell (online: the room's)
       finishAt = 0;
       state = 'results';
-      hud.setCard('results', result);
+      hud.setCard('results', { ...result, recap: logRun(result) });
       if (BOT) botT = now + 5000;
     }
     if (HT) hLap('hud');
