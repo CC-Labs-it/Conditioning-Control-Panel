@@ -5,7 +5,7 @@
  * the kart position with velocity prediction on the road and a plain vertical ease in the air (hops do
  * not jerk the view). Horizon stays level: up is world +Y. Vertical fov goes through the lifted viewport law.
  * Polish 3, the kick layer: a short camera kick on bumps and walls (away from the hit) and landings
- * (a dip by tier), a slight fov punch when a boost starts. Each is one damped spring lobe (no oscillation
+ * (a dip by tier). Legacy FOV spring output is isolated from the camera. Each is one damped spring lobe (no oscillation
  * run, so it is a kick, never a shake); Gentle halves every amplitude and damps critically.
  * Landings and boosts are read from state edges; bumps come from the bus (camera.js) or, without one,
  * from a velocity jump that steering cannot explain.
@@ -15,7 +15,8 @@
  * frame, camera up = the kart's smoothed up. The blend weight eases in and out, so the horizon follows the road
  * up through the loop with no roll snap, and stays level everywhere else.
  * Screen framing: the eye keeps that smooth orbit, then its aim holds the actual racer centre below the
- * middle of the viewport. A small eased airborne excursion preserves the hop. Shake and kicks follow it.
+ * middle of the viewport. A small eased airborne excursion preserves the hop. Contact kicks follow it;
+ * effect shake, push and boost zoom never enter the camera pose.
  */
 import { S, BOOST, RESPAWN } from '../sim/state.js';
 import { clamp, damp, angleDiff, qrotate, rad, smoothstep } from '../core/math.js';
@@ -251,17 +252,12 @@ export function createCamRig(feel) {
       const l = Math.hypot(up[0], up[1], up[2]) || 1; up[0] /= l; up[1] /= l; up[2] /= l;
     } else { up[0] = 0; up[1] = 1; up[2] = 0; }
     const K = rig.kick.out;
-    rig.vFov = vFovForAspect(feel.get('fov.baseVDeg') + (fx ? fx.fovKick || 0 : 0) + K.fov, aspect);
-    if (fx) {
-      const push = fx.camPush || 0;
-      if (push) {
-        const ex = F[0] - rig.eye[0], ey = F[1] - rig.eye[1], ez = F[2] - rig.eye[2];
-        const l = Math.hypot(ex, ey, ez) || 1;
-        rig.eye[0] += ex / l * push; rig.eye[1] += ey / l * push; rig.eye[2] += ez / l * push;
-      }
-    }
+    // Effect envelopes belong to the border/HUD. Push follows a tilted view ray, so even a
+    // nominal forward push changes eye height; boost FOV also pumps pitch through anchor aim.
+    // Keep this boundary independent of all shake, push and zoom envelopes, including future cues.
+    rig.vFov = vFovForAspect(feel.get('fov.baseVDeg'), aspect);
     // Anchor the actual racer, not the lagging orbit focus. The kart's own up carries its centre through
-    // slopes and loops, while rig.up retains the existing smooth horizon. FOV/push are settled first.
+    // slopes and loops, while rig.up retains the existing smooth horizon.
     const centre = RACER_FRAMING.centerUpM * RACER_FRAMING.scale, A = rig.anchor;
     A[0] = kart[S.posX] + u[0] * centre; A[1] = kart[S.posY] + u[1] * centre; A[2] = kart[S.posZ] + u[2] * centre;
     // Keep the horizon on the route's grade. The kart is free to rise above that quiet aim.
@@ -272,17 +268,6 @@ export function createCamRig(feel) {
       ? clamp(-lagUp * 0.65 / (2 * anchorDistance * Math.tan(rig.vFov * DEG / 2)), -RACER_FRAMING.airScreenMax, RACER_FRAMING.airScreenMax) : 0;
     rig.airScreen = damp(rig.airScreen, airTo, kart[S.airborne] > 0.5 ? 0.08 : 0.14, dt);
     aimAtAnchor(rig.look, rig.eye, up, A, rig.vFov, RACER_FRAMING.screenY + rig.airScreen);
-    if (fx) {
-      const sh = fx.shake;
-      if (sh && (sh[0] || sh[1] || sh[2])) {
-        // camera-local: x right, y up, z back (toward the eye)
-        basis();
-        for (let i = 0; i < 2; i++) {
-          const o = i ? rig.look : rig.eye;
-          for (let k = 0; k < 3; k++) o[k] += R[k] * sh[0] + UU[k] * sh[1] + B[k] * sh[2];
-        }
-      }
-    }
     // polish 3 kick: the eye takes the whole offset, the look point half (the view dips and leans a little)
     if (K.x || K.y || K.z) {
       basis();

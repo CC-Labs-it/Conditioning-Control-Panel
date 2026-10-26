@@ -104,18 +104,17 @@ test('follow: the whole stacked-course frame path holds composition across slope
   }
 });
 
-test('follow: boost FOV, the launch push and a finish orbit do not displace the anchor', () => {
+test('follow: boost effects and a finish orbit do not displace the anchor or change FOV', () => {
   for (const aspect of ASPECTS) {
     const rig = createCamRig(freshFeel()), k = createState(); rig.useVel = false;
     k[S.grounded] = 1; rig.snap(k, aspect);
-    let maxFov = 0;
+    const baseFov = rig.vFov;
     for (let i = 0; i < 150; i++) {
       k[S.boostKind] = i < 70 ? BOOST.PAD : BOOST.NONE;
       const wave = Math.sin(i / 150 * Math.PI);
       rig.update(k, { ...fx0(), fovKick: 9 * wave, camPush: 1.2 * wave, orbit: i / 150 }, DT, aspect);
-      assertAnchor(rig, k, aspect); maxFov = Math.max(maxFov, rig.vFov);
+      assertAnchor(rig, k, aspect); assert.equal(rig.vFov, baseFov);
     }
-    assert.ok(maxFov >= rig.vFov, 'exercised FOV expansion');
   }
 });
 
@@ -143,7 +142,7 @@ test('follow: a hop has bounded vertical travel and eases back on landing', () =
   }
 });
 
-test('follow: shake and hit kicks remain visible after the aim correction and settle', () => {
+test('follow: horizontal hit kicks remain visible while effect shake cannot bob the view', () => {
   for (const aspect of ASPECTS) {
     const rig = createCamRig(freshFeel()), k = createState(); rig.useVel = false;
     k[S.grounded] = 1; rig.snap(k, aspect); rig.hit('wall', 9, 1);
@@ -155,7 +154,7 @@ test('follow: shake and hit kicks remain visible after the aim correction and se
       dx = Math.max(dx, Math.abs(p.x - 0.5)); dy = Math.max(dy, Math.abs(p.y - F.screenY));
     }
     assert.ok(dx > 0.01 && dx < 0.12, 'visible bounded horizontal kick ' + dx);
-    assert.ok(dy > 0.005 && dy < 0.08, 'visible bounded vertical kick ' + dy);
+    assert.ok(dy < 0.002, 'no vertical effect shake ' + dy);
     assertAnchor(rig, k, aspect);
   }
 });
