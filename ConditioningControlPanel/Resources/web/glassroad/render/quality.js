@@ -195,3 +195,14 @@ export function createDynRes({ rules = DYNRES, scale = rules.max } = {}) {
   }
   return d;
 }
+
+/** Where a Quality option change lands. A tier step relinks every program (on a phone, seconds of a frozen
+ *  page: 3.6 s of main thread plus a 5.8 s frame gap measured for Auto to High under the pause card, 4x CPU
+ *  throttle), so while held (a race, its countdown, its pause card) the new tier waits like a governor verdict
+ *  and lands on the next menu or results card, or at the next course load. Choosing the tier already in use
+ *  clears anything that waits.
+ *  @returns {{ apply: string|null, pending: string|null }} */
+export function qualityLanding({ want, current, hold = false }) {
+  if (!want || want === current) return { apply: null, pending: null };
+  return hold ? { apply: null, pending: want } : { apply: want, pending: null };
+}

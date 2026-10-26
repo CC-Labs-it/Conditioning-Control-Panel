@@ -15,7 +15,7 @@
 import { WebGPURenderer, Group, Mesh, Sprite, PlaneGeometry } from 'three/webgpu';
 import { createPost } from './post.js';
 import { releaseSceneResources, trackSceneResources, disposeSceneResources } from './sceneResources.js';
-import { Q, TIERS, GOVERNOR, setTier, pickTier, createGovernor, createDynRes, dynLines, shortGpu } from './quality.js';
+import { Q, TIERS, GOVERNOR, setTier, pickTier, createGovernor, createDynRes, dynLines, shortGpu, qualityLanding } from './quality.js';
 import { createFrameGate } from '../core/clock.js';
 import { loadOptions, cleanOptions } from '../hud/options.js';
 import { WARM, warmGroups } from './warmGroups.js';
@@ -96,10 +96,14 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     if (post && post.antialias === Q.antialias) post.retier();   // an MSAA change rebuilds on the next frame
     for (const fn of tierFns) fn(Q.name);
   }
+  // a Quality change under hold (the pause card mid-race) waits like a governor verdict: applied at once it
+  // relinked every program and froze a phone for seconds (owner report 2026-10-26, quality.js qualityLanding)
   function setQuality() {
     const pin = pinOf(), name = pin || autoTier;
     gov = pin ? null : createGovernor({ tier: name, ceiling: autoTier, rules: govRules });
-    if (name !== Q.name) { setTier(name); retier(); }
+    const land = qualityLanding({ want: name, current: Q.name, hold });
+    pending = land.pending;
+    if (land.apply) { setTier(land.apply); retier(); }
   }
 
   function readout(on) {
@@ -158,6 +162,8 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     frameDue(now) { gated = true; return gate.due(now); },
     /** Loading is not a slow gameplay frame. Keep quality/options, but restart their timing grace. */
     beginCourse(){
+      // a pinned Quality that waited lands here, behind the loading card and before the warm; a governor verdict is dropped
+      const pin=pinOf();if(pin&&pin!==Q.name){setTier(pin);retier();}
       last=0;gated=false;pending=null;gate.setCap(opts.frameCap);
       meter.n=0;meter.t=0;meter.fps=0;
       gov=pinOf()?null:createGovernor({tier:Q.name,ceiling:autoTier,rules:govRules});

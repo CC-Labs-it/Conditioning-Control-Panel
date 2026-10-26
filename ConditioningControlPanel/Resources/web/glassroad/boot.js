@@ -361,6 +361,9 @@ async function boot(course, options, lifetime, isCurrent) {
   let songCues = null;
   lifetime.defer(() => songCues?.dispose());
   let state = 'boot', paused = false, finishAt = 0, result = null, rumbleT = 0, rumbleSent = 0, botT = 0;
+  // the tier the course's programs were built at; a Quality pick or governor step in the menu re-warms before the
+  // next race (a phone froze ~7 s on the first race frame after Quality went to High, owner report 2026-10-26)
+  let warmedTier = null, rewarmBusy = false;
   let online = null, lobbyUi = null;
   let songToken = 0, pickedSong = shared.pickedSong;
   lifetime.defer(() => { songToken++; });
@@ -832,9 +835,27 @@ async function boot(course, options, lifetime, isCurrent) {
     const align = () => songAt - race.goInS;
     if (pickedSong || CHARTS.length) Promise.resolve(raceAudioStart).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
   }
+  /** Rebuild the course's programs at the current tier behind the loading cover (renderer.compile, in groups with
+   *  painted frames between them), then start the race. Frames pause meanwhile: the warm owns the scene. */
+  async function rewarmThenRace() {
+    rewarmBusy = true;
+    try {
+      loading.start(); garage?.setVisible(false); hud.setCard(null);
+      showLoading('Getting the lights ready', 0.05);
+      await paintGap();
+      await renderer.compile(world.scene, cam.camera, undefined, { onProgress: (k, n) => showLoading('Getting the lights ready', 0.05 + 0.9 * k / n) });
+    } catch (e) { console.warn('[glassroad] rewarm', e && e.message); }
+    finally {
+      rewarmBusy = false;
+      if (lifetime.alive) { renderer.beginCourse(); warmedTier = renderer.tier; showLoading('Ready to roll', 1); loading.finish(); }
+    }
+    if (lifetime.alive && state === 'menu') startRace();
+  }
   function startRace() {
     if (!lifetime.alive) return;
     if (online) return;
+    if (rewarmBusy) return;
+    if (warmedTier && renderer.tier !== warmedTier && state === 'menu') { void rewarmThenRace(); return; }
     closeRunLog();
     stopSong();
     prepareRunMode();
@@ -1132,6 +1153,7 @@ async function boot(course, options, lifetime, isCurrent) {
   if (qs.get('profileLoad') === '1') debug.readyGraphs = renderer.stats().compiledGraphs;
   if (!isCurrent()) return;
   renderer.beginCourse(); // Covered preparation must not count toward a later quality verdict.
+  warmedTier = renderer.tier;
   showLoading('Ready to roll', 1);
   hud.setReady(true);
   bridge.ready();
@@ -1175,7 +1197,8 @@ async function boot(course, options, lifetime, isCurrent) {
   function frame(now) {
     if (!lifetime.alive) return;
     frameId = requestAnimationFrame(frame);
-    if (!renderer.frameDue(now)) return;                          // the Frame cap option skips this one
+    if (rewarmBusy) return;                                       // a menu re-warm owns the scene under the cover
+    if (!renderer.frameDue(now)) return;                        // the Frame cap option skips this one
     if (HT) hT = performance.now();
     const { steps, alpha, frameDt, renderTime } = clock.frame(now);
     if (HT) HT.steps = steps;
