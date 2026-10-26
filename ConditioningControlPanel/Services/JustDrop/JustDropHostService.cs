@@ -140,7 +140,7 @@ namespace ConditioningControlPanel.Services.JustDrop
                         "--autoplay-policy=no-user-gesture-required "
                         + "--disable-background-timer-throttling "
                         + "--disable-backgrounding-occluded-windows",
-                    OnCoreCreated = AttachAuthHeader,
+                    OnCoreCreated = core => AttachAuthHeader(core, nextPath),
                     OnMessage = OnPageMessage,
                     OnReady = () => App.Logger?.Information("JustDropHost: page ready"),
                     OnProcessFailed = OnProcessFailed,
@@ -180,11 +180,28 @@ namespace ConditioningControlPanel.Services.JustDrop
         /// Put the CCP token on the sign-in request, and on nothing else. The filter is scoped to
         /// the one path that reads it, so no other request this page makes - to our own site or to
         /// anything it embeds - ever carries the app's credential.
+        /// <para>A refused handoff (ccp-bugs #1499) used to leave the site's raw JSON on screen
+        /// (<c>invalid_ccp_token</c>): the app's token had gone stale, which every other surface
+        /// survives quietly. The window now drops to the signed-out page instead, where the site
+        /// asks the user to sign in like any browser would.</para>
         /// </summary>
-        private static void AttachAuthHeader(CoreWebView2 core)
+        private static void AttachAuthHeader(CoreWebView2 core, string nextPath)
         {
             var token = SafeAuthToken();
             if (string.IsNullOrEmpty(token)) return;
+
+            var fellBack = false;
+            core.NavigationCompleted += (_, e) =>
+            {
+                if (fellBack) return;
+                int status;
+                try { status = e.HttpStatusCode; } catch { return; }
+                if (!IsRefusedHandoff(core.Source, status)) return;
+                fellBack = true;
+                App.Logger?.Warning("JustDropHost: sign-in handoff refused ({Status}); opening signed-out", status);
+                try { core.Navigate(SiteOrigin + nextPath); }
+                catch (Exception ex) { App.Logger?.Warning("JustDropHost: signed-out fallback failed: {E}", ex.Message); }
+            };
 
             core.AddWebResourceRequestedFilter(
                 SiteOrigin + "/api/auth/desktop-session*",
@@ -216,6 +233,12 @@ namespace ConditioningControlPanel.Services.JustDrop
                 && u.UserInfo.Length == 0
                 && string.Equals(u.AbsolutePath.TrimEnd('/'), "/api/auth/desktop-session", StringComparison.Ordinal);
         }
+
+        /// <summary>The handoff answered with an error page (a stale token's 401, a rate limit, a
+        /// server fault) instead of its 303 to the destination. A success never completes ON the
+        /// handoff url, it redirects away, so any status of 400 or more there is a refusal.</summary>
+        internal static bool IsRefusedHandoff(string? source, int httpStatus)
+            => httpStatus >= 400 && IsDesktopSessionRequest(source);
 
         /// <summary>The ccp-server token the site's bridge endpoint validates. Empty when signed
         /// out. Never logged, never put in a URL.</summary>
