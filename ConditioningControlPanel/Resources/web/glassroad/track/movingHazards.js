@@ -8,15 +8,16 @@ import { hazardBeatAt, beatCycle, machineryRearming } from './machineryBeat.js';
 const authors = { threshold, keep, mainframe, boudoir, goonworks };
 const clamp = v => Math.max(0, Math.min(1, v));
 const ease = v => { v = clamp(v); return v * v * (3 - 2 * v); };
-export const MOVING_REVISION = 2;
+export const MOVING_REVISION = 3;
 
 export function movingPlan(track) {
   const plan = authors[track.id]?.(track) || { traps: [], bridge: null };
   return { ...plan, traps: plan.traps.map(row => {
     const f = track.frameAt(row.s), side = row.side === -1 ? -1 : 1;
-    const w = Math.min(row.w || 5, f.w / 2 - 4), travelM = Math.min(row.travelM || f.w * .33, f.w - w - 6);
+    // Long visible heads and swept contact use the same footprint. Retain the outer bypass.
+    const w = Math.min((row.w || 5) * 1.6, f.w / 2 - 4), travelM = Math.min(row.travelM || f.w * .33, f.w - w - 6);
     return { ...row, side, w, travelM, x: row.x ?? side * (f.w / 2 - w / 2 - .8),
-      len: row.len || 4, roadWidth: f.w, p: [...f.p], b: [...f.b], n: [...f.n], t: [...f.t] };
+      len: (row.len || 4) * 1.4, roadWidth: f.w, p: [...f.p], b: [...f.b], n: [...f.n], t: [...f.t] };
   }).filter(row => row.w >= 2) };
 }
 
