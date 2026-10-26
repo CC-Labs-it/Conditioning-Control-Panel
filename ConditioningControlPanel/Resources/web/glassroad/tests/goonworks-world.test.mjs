@@ -120,6 +120,11 @@ test('GOONWORKS renderer prebuilds finite batches and has pause-safe platform fe
   for(const name of['goonworks-thick-ribbon','goonworks-rabbit-inner-shell','goonworks-rabbit-outer-shell'])assert.equal(world.group.getObjectByName(name).material.side,FrontSide,name);
   world.group.traverse(o=>{if(o.isInstancedMesh)assert.ok(o.instanceMatrix.array.every(Number.isFinite),o.name);});
   const p=world.platforms[0],start=p.holder.position.clone();world.hit(p.row.id);world.update(.1,{paused:true});assert.deepEqual(p.holder.position.toArray(),start.toArray());
-  world.update(.1,{});assert.ok(p.holder.position.distanceTo(start)>0);world.reset();assert.deepEqual(p.holder.position.toArray(),start.toArray());world.dispose();world.dispose();
+  const restRotation=p.holder.quaternion.clone();
+  world.update(.1,{});assert.ok(p.holder.position.distanceTo(start)>.25);assert.ok(p.holder.quaternion.angleTo(restRotation)>.01);
+  const pausedPosition=p.holder.position.toArray(),pausedRotation=p.holder.quaternion.toArray();world.update(.2,{paused:true});
+  assert.deepEqual(p.holder.position.toArray(),pausedPosition);assert.deepEqual(p.holder.quaternion.toArray(),pausedRotation);
+  world.update(.3,{});assert.ok(p.holder.position.clone().sub(start).dot({x:p.row.n[0],y:p.row.n[1],z:p.row.n[2]})>0,'The deck springs back past rest');
+  world.reset();assert.deepEqual(p.holder.position.toArray(),start.toArray());assert.deepEqual(p.holder.quaternion.toArray(),restRotation.toArray());world.dispose();world.dispose();
   const shell=goonworksRibbonShell(track);assert.ok(shell.indices.length>0);assert.ok(shell.indices.length<track.meshes.road.indices.length);assert.ok(shell.positions.every(Number.isFinite));
 });

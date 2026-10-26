@@ -8,6 +8,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { recordingRange, sendRecording, verifiedRecording } from '../dev/privateRecording.mjs';
 import { GOON_CHART, GOON_AUDIO } from '../dev/goonChart.mjs';
+import { MAINFRAME_CHART, MAINFRAME_AUDIO } from '../dev/verseChart.mjs';
 import { BOUDOIR_CHART, BOUDOIR_AUDIO } from '../dev/boudoirChart.mjs';
 import { KEEP_REMIX_CHART, KEEP_REMIX_AUDIO } from '../dev/keepRemixChart.mjs';
 
@@ -46,7 +47,7 @@ test('missing private song and timings return 503 without exposing any private p
   const dir = await mkdtemp(join(tmpdir(), 'glassroad-no-recording-'));
   const child = spawn(process.execPath, [fileURLToPath(new URL('../dev/serve.mjs', import.meta.url)), '0'],
     { env: { ...process.env, GLASSROAD_AUDIO_DIR: dir, GLASSROAD_GOON_RECORDING: join(dir, 'missing.mp3'),
-      GLASSROAD_BOUDOIR_RECORDING: join(dir, 'missing.mp3'), GLASSROAD_KEEP_RECORDING: join(dir, 'missing.mp3'),
+      GLASSROAD_BOUDOIR_RECORDING: join(dir, 'missing.mp3'), GLASSROAD_KEEP_RECORDING: join(dir, 'missing.mp3'), GLASSROAD_MAINFRAME_RECORDING: join(dir, 'missing.mp3'),
       GLASSROAD_PREVIEW_PROVIDER: '' }, windowsHide: true });
   try {
     const url = await new Promise((resolve, reject) => {
@@ -55,7 +56,7 @@ test('missing private song and timings return 503 without exposing any private p
       child.stdout.on('data', data => { const match = data.toString().match(/http:\/\/127\.0\.0\.1:\d+/); if (match) { clearTimeout(timer); resolve(match[0]); } });
       child.once('exit', code => { clearTimeout(timer); reject(new Error(`Dev server exited ${code}`)); });
     });
-    for (const path of [GOON_CHART, GOON_AUDIO, BOUDOIR_CHART, BOUDOIR_AUDIO, KEEP_REMIX_CHART, KEEP_REMIX_AUDIO]) {
+    for (const path of [GOON_CHART, GOON_AUDIO, BOUDOIR_CHART, BOUDOIR_AUDIO, KEEP_REMIX_CHART, KEEP_REMIX_AUDIO, MAINFRAME_CHART, MAINFRAME_AUDIO]) {
       const res = await fetch(url + path); assert.equal(res.status, 503); assert.equal((await res.text()).includes(dir), false);
       assert.equal((await fetch(url + path, { method: 'POST' })).status, 405);
     }

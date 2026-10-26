@@ -7,7 +7,7 @@ const hooks=registerHooks({resolve(specifier,context,next){
   return path?{url:new URL('../vendor/three/'+path,import.meta.url).href,shortCircuit:true}:next(specifier,context);
 }});
 const {warmAll,WARM}=await import('../render/renderer.js');
-const {Scene,Group,Mesh,InstancedMesh,BoxGeometry,MeshBasicNodeMaterial,PerspectiveCamera}=await import('three/webgpu');
+const {Scene,Group,LOD,Mesh,InstancedMesh,BoxGeometry,MeshBasicNodeMaterial,PerspectiveCamera}=await import('three/webgpu');
 hooks.deregister();
 
 test('larger WebGPU warm batches keep every render variant and restore hidden pools, materials and layers',async()=>{
@@ -47,4 +47,35 @@ test('larger WebGPU warm batches keep every render variant and restore hidden po
     pooled.dispose();geometry.dispose();results[backend]=result.groups;
   }
   assert.ok(results.webgpu<results.webgl2);assert.equal(results.unknown,results.webgl2,'unknown backends retain the serial budget');
+});
+
+test('covered warm freezes distance selection so the intro can cut to every LOD without a new shader',async()=>{
+  const scene=new Scene(),camera=new PerspectiveCamera(),geometry=new BoxGeometry(),lod=new LOD();
+  const near=new Mesh(geometry,new MeshBasicNodeMaterial()),far=new Mesh(geometry,new MeshBasicNodeMaterial());
+  lod.addLevel(near,0);lod.addLevel(far,200);scene.add(lod);lod.update(camera);
+  assert.equal(far.visible,false);
+  const seen=new Set();
+  const project=()=>{
+    if(lod.autoUpdate)lod.update(camera);
+    scene.traverseVisible(o=>{if(o.isMesh)seen.add(o);});
+  };
+  await warmAll({backend:'webgpu',post:()=>({async compileAsync(){project();},render:project})},scene,camera);
+  assert.ok(seen.has(near));assert.ok(seen.has(far),'the distant finish portal is prepared under the cover');
+  assert.equal(lod.autoUpdate,true);assert.equal(near.visible,true);assert.equal(far.visible,false);
+  camera.position.z=300;camera.updateMatrixWorld();lod.update(camera);
+  assert.equal(near.visible,false);assert.equal(far.visible,true,'normal distance selection resumes');
+  near.material.dispose();far.material.dispose();geometry.dispose();
+});
+
+test('a failed warm returns each LOD to its original automatic or manual selection policy',async()=>{
+  const scene=new Scene(),camera=new PerspectiveCamera(),auto=new LOD(),manual=new LOD();
+  manual.autoUpdate=false;scene.add(auto,manual);
+  const oldWarn=console.warn;
+  try{
+    console.warn=()=>{};
+    await warmAll({backend:'webgpu',post:()=>({async compileAsync(){
+      assert.equal(auto.autoUpdate,false);assert.equal(manual.autoUpdate,false);throw Error('test compilation failure');
+    },render(){}})},scene,camera);
+  }finally{console.warn=oldWarn;}
+  assert.equal(auto.autoUpdate,true);assert.equal(manual.autoUpdate,false);
 });

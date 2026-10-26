@@ -136,13 +136,13 @@ test('ribbon braid makes two real turns across three visible heights', () => {
   }
 });
 
-test('leapfrog supplies seven broad landing decks with real small gaps and supported endpoints', () => {
-  const f=track.fields[0]; assert.equal(f.stones.length,7); assert.ok(Math.abs(f.toS-f.fromS-200)<.01);
+test('leapfrog supplies five broad landing decks with readable jump gaps and supported endpoints', () => {
+  const f=track.fields[0]; assert.equal(f.stones.length,5); assert.equal(f.platforming,true); assert.ok(Math.abs(f.toS-f.fromS-200)<.01);
   for(const x of f.lanes) {
     assert.ok(stoneIn(f,f.fromS+.1,x)); assert.ok(stoneIn(f,f.toS-.1,x));
     for(let i=1;i<f.stones.length;i++) {
       const a=f.stones[i-1],b=f.stones[i],gap=b.s-a.s-a.len;
-      assert.ok(gap>1.98&&gap<2.02); assert.equal(stoneIn(f,a.s+a.len+gap/2,x),null);
+      assert.ok(gap>9.98&&gap<10.02); assert.equal(stoneIn(f,a.s+a.len+gap/2,x),null);
     }
   }
   assert.ok(f.stones.every(s=>s.w===30&&s.len>26.8));

@@ -65,3 +65,15 @@ test('boot stages the warm on the phone tier only, steps the runner each frame a
   assert.match(src('render/post.js'), /compileStart\(\) \{/);
   assert.ok(!/from 'three/.test(src('render/stagedWarm.js')), 'the runner has no three import (renderer test stubs)');
 });
+
+test('a deferred distance variant keeps its LOD selected throughout projection and restores automatic selection', async () => {
+  const scene={},lod={isLOD:true,autoUpdate:true,visible:true,parent:scene};
+  const far={visible:false,frustumCulled:true,parent:lod,material:null};
+  let prepared=false;
+  const deferred=createDeferredWarm({initTexture(){}},()=>({compileStart(){
+    assert.equal(lod.autoUpdate,false);assert.equal(far.visible,true);prepared=true;return Promise.resolve();
+  }}),{all:[far],groups:[{items:[far],needT:3}],scene});
+  deferred.step();
+  assert.equal(prepared,true);assert.equal(lod.autoUpdate,true);assert.equal(far.visible,false);
+  await new Promise(resolve=>setTimeout(resolve,0));assert.equal(deferred.done,true);
+});

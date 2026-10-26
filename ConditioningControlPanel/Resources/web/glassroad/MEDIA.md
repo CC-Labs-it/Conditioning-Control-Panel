@@ -3,6 +3,14 @@
 Where Scrolller media will show in the race, and the rules it will follow. This pass ships
 **placeholders only**: animated procedural pictures, nothing downloaded, no Scrolller request of any kind.
 
+Current web path (2026-10-26): the host feed also fills selected world screens through
+`media.setDisplayFeed(feed, canvas)`. Scrolller pictures stay in display-only DOM elements behind
+the game canvas. One instanced group of zero-alpha faces supplies normal GPU depth occlusion;
+the renderer enables alpha and the post pass preserves premultiplied scene alpha. Full-screen
+effects close these windows. No remote picture becomes a GPU texture, and no server copies it.
+Pause freezes the seven-second picture changes; source-off, feed expiry and disposal clear them.
+The origin-clean desktop clip path below remains independent.
+
 Files: `render/media.js` (three.js), `render/mediaMath.js` (three-free placement, fitting, budget, url
 guard), `render/mediaPlaceholders.js` (the placeholder programs, three-free), `tracks/threshold.media.json`
 (the layout), `tests/render-media.test.mjs`.

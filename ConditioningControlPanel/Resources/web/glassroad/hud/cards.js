@@ -185,7 +185,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   function scrolllerHtml() {
     const s = host.scrolller;
     if (!s) return '';
-    let html = '<div class="c-opt"><span>Online pictures<small>From Scrolller, in the flashes</small></span>' +
+    let html = '<div class="c-opt"><span>Online pictures<small>From Scrolller, on screens and in flashes</small></span>' +
       btn('scrolller', s.on ? 'On' : 'Off', 'c-tog' + (s.on ? ' on' : ''), ' aria-pressed="' + s.on + '"') + '</div>';
     if (s.on && s.catalog) {
       html += '<div class="c-opt c-niches"><span>Pictures on ' + esc(s.track) + '<small>' +

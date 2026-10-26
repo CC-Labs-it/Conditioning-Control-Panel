@@ -22,7 +22,7 @@ const NONE = Object.freeze({ kind: 'none', t: 0, durS: 0, k: 0, strength: 0, pre
 
 export function createPost(three, scene, camera) {
   const pipe = new RenderPipeline(three);
-  const u = { strength: uniform(LOOK.bloomStrength), white: uniform(0), flash: uniform(0), edge: uniform(0), side: uniform(0), submerged: uniform(0) };
+  const u = { strength: uniform(LOOK.bloomStrength), white: uniform(0), flash: uniform(0), edge: uniform(0), side: uniform(0), submerged: uniform(0), webPictures: uniform(1) };
   const scenePass = pass(scene, camera, { samples: Q.antialias ? 4 : 0 });
   const col = scenePass.getTextureNode('output');
   let screen = null;
@@ -45,7 +45,11 @@ export function createPost(three, scene, camera) {
     out = mix(out, vec3(1, 1, 1), u.white).add(rgb(LOOK.flashTint).mul(u.flash));
     // A steady coolant tint eases with depth; no strobe, blur or loss of the driving corridor.
     out = mix(out, out.mul(vec3(0.48, 0.82, 1.02)).add(vec3(0.006, 0.035, 0.055)), u.submerged.mul(0.8));
-    pipe.outputNode = vec4(out, 1);
+    // Only display-only world screens write zero alpha. Their DOM pictures sit
+    // behind the canvas, so the scene's normal depth test supplies occlusion.
+    // Fullscreen effects close those windows instead of letting pictures escape.
+    const alpha = mix(1, col.a, u.webPictures);
+    pipe.outputNode = vec4(out.mul(alpha), alpha);
     pipe.needsUpdate = true;
     builtBloom = Q.bloom;
   }
@@ -97,6 +101,9 @@ export function createPost(three, scene, camera) {
       u.edge.value = fx.edgeGlow || 0;
       u.side.value = fx.edgeSide || 0;
       u.submerged.value = fx.submerged || 0;
+      const scr = fx.screen;
+      u.webPictures.value = Math.max(scr?.k || 0, scr?.prevK || 0, fx.whiteFade || 0,
+        fx.submerged || 0, fx.fog?.k || 0) > .0001 ? 0 : 1;
     },
     render() { pipe.render(); },
     dispose() { if (bloomNode) bloomNode.dispose(); if (screen) screen.dispose(); pipe.dispose(); },

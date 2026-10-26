@@ -16,12 +16,15 @@ export function createDeferredWarm(three, getPost, { all, groups, scene }) {
   let next = 0, busy = false, disposed = false;
   const log = [];
   async function run(g) {
-    const t0 = performance.now(), mine = new Set(g.items), hidden = [], shown = [], unculled = [];
+    const t0 = performance.now(), mine = new Set(g.items), hidden = [], shown = [], unculled = [], lods = [];
     let p;
     try {
       for (const o of all) if (o.visible && !mine.has(o)) { o.visible = false; hidden.push(o); }
       for (const o of g.items) {
-        for (let q = o; q && q !== scene; q = q.parent) if (!q.visible) { q.visible = true; shown.push(q); }
+        for (let q = o; q && q !== scene; q = q.parent) {
+          if (!q.visible) { q.visible = true; shown.push(q); }
+          if (q.isLOD && q.autoUpdate) { q.autoUpdate = false; lods.push(q); }
+        }
         if (o.frustumCulled) { o.frustumCulled = false; unculled.push(o); }
       }
       p = getPost().compileStart();
@@ -29,6 +32,7 @@ export function createDeferredWarm(three, getPost, { all, groups, scene }) {
       for (const o of hidden) o.visible = true;
       for (const o of shown) o.visible = false;
       for (const o of unculled) o.frustumCulled = true;
+      for (const o of lods) o.autoUpdate = true;
     }
     const syncMs = performance.now() - t0;
     try { await p; } catch (e) { console.warn('[glassroad/stagedWarm] ' + (e && e.message)); }
