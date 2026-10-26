@@ -64,7 +64,7 @@ Kart record (40 B; plan 3.2 grew from 32 B: track `s` instead of seg/segT, plus 
 | 32 | speedPct | u8 | `round(clamp(S.speedPct, 0, 1.5) / 1.5 * 255)` |
 | 33 | drive | u8 | bits 0-1 driftDir (0 none, 1 left = -1, 2 right = +1), 2-3 driftStage 0..3, 4-6 boostKind 0..7 (`BOOST` + 6 trick), 7 zero |
 | 34 | item | u8 | bits 0-4 held item (0 none, 1..12 = `WIRE_ITEMS` index + 1), 5 rolling, 6-7 zero |
-| 35 | aura | u8 | bits 0-3 running screen effect `fxv.effect` (0 none, 1..8 = `WIRE_ITEMS` index + 1 of the 8 hit kinds), 4-5 shield (0 none, 1 glass, 2 golden, 3 echo), 6-7 echo copies left 0..3 |
+| 35 | aura | u8 | bits 0-3 running screen effect `fxv.effect` (0 none, 1..13 = `EFFECTS` index + 1: the 8 old hit kinds, then pendulum disc tether snap bigSpiral), 4-5 shield (0 none, 1 glass, 2 golden, 3 echo), 6-7 echo copies left 0..3 |
 | 36 | pose | u8 | trick / emote animation id (0 none; 1 trick good, 2 trick great; 16+ = emote presets, B2-d) |
 | 37 | pulses | u8 | one-shot edges since this seat's previous record (table below) |
 | 38 | pops | u16 | word bubbles popped this race (the music road), monotone |
@@ -100,7 +100,7 @@ The larger welcome bound accommodates eight full garage appearances and seat met
 or an extra field the table does not list = malformed (`error { code: 'bad' }`; three in 10 s closes 4002).
 `?` = optional. `seat?` on a client message = act for a bot seat this client keeps (default: own seat).
 Types: `seat` int 0..7, `u8`/`u16`/`u32` ints, `num` finite number, `unit` 0..1, `item` one of `WIRE_ITEMS`,
-`mode` one of `throw lob wide drop self`, `code` /^[a-z0-9-]{1,24}$/, `lookId` /^[a-z0-9-]{1,48}$/ or null.
+`mode` one of `throw lob wide drop self bounce tether`, `code` /^[a-z0-9-]{1,24}$/, `lookId` /^[a-z0-9-]{1,48}$/ or null.
 
 Garage `skinCode` is exactly 37 lowercase characters: six RGB hex colors without `#`, in shell, accent,
 antenna, hands, shoes and face order, then one pattern digit 0..3. The original skin omits the field.
@@ -136,8 +136,8 @@ Room -> client:
 | `start` | `countAt, startAt, goTick, seed` |
 | `keep` | `seats` (bot seats this client now simulates; `[]` = stop) |
 | `roll` | `seat, box, item` (to all: the box is gone for `items.boxRespawnS`, the seat rolls `items.rollS`) |
-| `fired` | `sid, seat, id, item, mode, tick, s, x, target` (`target` seat or null; `sid` = room shot id) |
-| `hit` | `sid, victim, by, item, verdict, durationS, tick` (`verdict` hit glass golden mercy decoy) |
+| `fired` | `sid, seat, id, item, mode, tick, s, x, target` (`target` seat or null; `sid` = room shot id; `vx` = a Disc's lateral m/s) |
+| `hit` | `sid, victim, by, item, verdict, durationS, tick` (`verdict` hit glass golden mercy decoy snapped) |
 | `fizzle` | `sid, tick` (a throw, lob or trap ended without a hit) |
 | `standings` | `tick, rows: [{ seat, place, lap, progM, pops, finished, timeMs }]` (every 500 ms racing + on a place change) |
 | `finish` | `rows: [{ seat, place, name, bot, finished, timeMs, bestLapMs, pops }]` (final, by place) |
@@ -166,7 +166,14 @@ media consent and their own Gentle, never the thrower's).
   on the driveline from `s, x` (CONTRACT-B1 item rules, speeds from feel), keeps traps (`drop`, melt), applies `wide`
   at once, and sends `hit` per victim or `fizzle`. Self items (`surge glass echo golden`) only get `fired`; the
   shield shows through the aura byte. Shatter refused near an open edge stays a client rule (`item-refused`, no fire).
-- Verdict order (room): golden, glass, decoy (throw or lob at an echo kart, room rand), mercy (the room's per-victim
+- Toys kit: `bounce` (Disc) flies unhomed on the room's `vx`, banks off railed edges (track card `edges`) up to
+  `discBounces`, falls off open ones (`fizzle`). `tether` hooks the kart ahead within `tetherRangeM` (`fired.target`; no
+  one = `fired` then `fizzle`); both clients drag their own kart (`tetherTowCap`, `tetherDragCap`) until the link's sid
+  ends: a `hit` (item tether) when the tower passes, a `fizzle` after `tetherMaxS`, past `tetherBreakM`, a kart gone or a
+  Snap. `snap` (self) gives its user `snapGuardS` (throws, lobs and traps that reach it are `snapped`) and sends a
+  `snap` hit to each kart within `snapRadiusM`; the victim shoves away from the snapper's lateral. Disc and Tether
+  spins, like Shatter, never land near an open edge.
+- Verdict order (room): snapped (a throw, lob or trap inside a Snap guard), golden, glass, decoy (throw or lob at an echo kart, room rand), mercy (the room's per-victim
   ledger: `mercyS`, `viewWindowS`, `viewBudgetS`, `mildBlockMul`, `minHitS`), else hit with the trimmed `durationS`.
   Shield state comes from the victim's newest record. Bots get verdicts like people; their keeper applies them.
 
