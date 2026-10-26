@@ -29,9 +29,11 @@ export const RATES = Object.freeze({
 export const WIRE_ITEMS = Object.freeze(['flash', 'spiral', 'brainDrain', 'freeze', 'blackout', 'pink', 'melt', 'shatter',
   'surge', 'glass', 'echo', 'golden', 'pendulum', 'disc', 'tether', 'snap', 'bigSpiral']);
 export const EFFECT_COUNT = 8;
+/** Effect kinds a record carries (byte 35, 4 bits): the 8 old hit kinds, then the toys kit's. */
+export const EFFECTS = Object.freeze([...WIRE_ITEMS.slice(0, EFFECT_COUNT), 'pendulum', 'disc', 'tether', 'snap', 'bigSpiral']);
 export const SHIELDS = Object.freeze([null, 'glass', 'golden', 'echo']);
-export const MODES = Object.freeze(['throw', 'lob', 'wide', 'drop', 'self']);
-export const VERDICTS = Object.freeze(['hit', 'glass', 'golden', 'mercy', 'decoy']);
+export const MODES = Object.freeze(['throw', 'lob', 'wide', 'drop', 'self', 'bounce', 'tether']);
+export const VERDICTS = Object.freeze(['hit', 'glass', 'golden', 'mercy', 'decoy', 'snapped']);
 export const PHASES = Object.freeze(['lobby', 'countdown', 'racing', 'done']);
 export const ERRORS = Object.freeze(['bad', 'phase', 'seat', 'item', 'host', 'rate']);
 export const ABORTS = Object.freeze(['hello', 'ticket', 'expired', 'replay', 'version', 'config', 'full', 'started', 'closed', 'server']);
@@ -100,8 +102,8 @@ export function packKart(dv, o, k) {
   dv.setUint8(o + 33, dd | (clampI(k.driftStage, 0, 3) << 2) | (clampI(k.boostKind, 0, 7) << 4));
   const it = k.item ? WIRE_ITEMS.indexOf(k.item) + 1 : 0;
   dv.setUint8(o + 34, it | (k.rolling && it ? 32 : 0));
-  const ef = k.effect ? WIRE_ITEMS.indexOf(k.effect) + 1 : 0, sh = Math.max(0, SHIELDS.indexOf(k.shield || null));
-  dv.setUint8(o + 35, (ef > EFFECT_COUNT ? 0 : ef) | (sh << 4) | (clampI(k.echo, 0, 3) << 6));
+  const ef = k.effect ? EFFECTS.indexOf(k.effect) + 1 : 0, sh = Math.max(0, SHIELDS.indexOf(k.shield || null));
+  dv.setUint8(o + 35, ef | (sh << 4) | (clampI(k.echo, 0, 3) << 6));
   dv.setUint8(o + 36, clampI(k.pose, 0, 255));
   dv.setUint8(o + 37, clampI(k.pulses, 0, 255));
   dv.setUint16(o + 38, clampI(k.pops, 0, 65535), true);
@@ -135,7 +137,7 @@ export function unpackKart(dv, o, out = createKart()) {
   out.item = it >= 1 && it <= WIRE_ITEMS.length ? WIRE_ITEMS[it - 1] : null;
   out.rolling = !!(dv.getUint8(o + 34) & 32) && !!out.item;
   const a = dv.getUint8(o + 35), ef = a & 15;
-  out.effect = ef >= 1 && ef <= EFFECT_COUNT ? WIRE_ITEMS[ef - 1] : null;
+  out.effect = ef >= 1 && ef <= EFFECTS.length ? EFFECTS[ef - 1] : null;
   out.shield = SHIELDS[(a >> 4) & 3]; out.echo = (a >> 6) & 3;
   out.pose = dv.getUint8(o + 36);
   out.pulses = dv.getUint8(o + 37);
@@ -264,7 +266,7 @@ export const R2C = Object.freeze({
   start: { countAt: 'num', startAt: 'num', goTick: 'u32', seed: 'u32' },
   keep: { seats: 'seats' },
   roll: { seat: 'seat', box: 'u16', item: 'item' },
-  fired: { sid: 'u32', seat: 'seat', id: 'u16', item: 'item', mode: 'mode', tick: 'u32', s: 'num', x: 'num', target: 'seatOrNull', fork: 'u8?', targetFork: 'u8?' },
+  fired: { sid: 'u32', seat: 'seat', id: 'u16', item: 'item', mode: 'mode', tick: 'u32', s: 'num', x: 'num', target: 'seatOrNull', fork: 'u8?', targetFork: 'u8?', vx: 'num?' },
   hit: { sid: 'u32', victim: 'seat', by: 'seat', item: 'item', verdict: 'verdict', durationS: 'num', tick: 'u32' },
   fizzle: { sid: 'u32', tick: 'u32' },
   standings: { tick: 'u32', rows: 'standRows' },

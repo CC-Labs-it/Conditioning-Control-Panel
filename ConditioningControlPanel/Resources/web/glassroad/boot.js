@@ -70,7 +70,6 @@ import { createWordRun } from './sim/words.js';
 import { createAirWordRun, bindAirWords } from './sim/airWords.js';
 import { createSongCueRun } from './sim/songCues.js';
 import { createFlashBurst } from './fx/flashBurst.js';
-import { AERIAL_REVISION } from './track/aerial.js';
 import { songDrive } from './sim/cleanPace.js';
 import { createWordCount } from './hud/words.js';
 import { openFeelSheet } from './hud/feelSheet.js';
@@ -80,7 +79,7 @@ import { createMusicEdges } from './render/musicEdges.js';
 import { loadFonts } from './render/fonts.js';
 import { createAssist } from './sim/assist.js';
 import { createRoomSession } from './net/room.js';
-import { courseHash } from './net/courseHash.js';
+import { onlineCourseHash as onlineHash } from './net/courseHash.js';
 import { createLobbyApi, fetchTransport, hostTransport } from './net/lobbyApi.js';
 import { createProfileSync } from './meta/profileSync.js';
 import { configureLobby } from './hud/lobby.js';
@@ -277,8 +276,7 @@ async function boot(course, options, lifetime, isCurrent) {
   if (qs.get('feel') === '1' && !shared.feelSheet) { shared.feelSheet = true; openFeelSheet(feel, document.body); }
   if (!(trackJson.laps > 0)) trackJson.laps = 3;
   const track = loadTrack(trackJson, { moving: true });
-  const onlineCourseHash = await courseHash(trackJson, shared.baseFeel,
-    { aerialRevision: AERIAL_REVISION, aerials: track.aerials, moving: track.moving });
+  const onlineCourseHash = await onlineHash(trackJson, shared.baseFeel, track);
   if (!lifetime.alive) return;
   loaded('course');
   debug.trackId = track.id;
