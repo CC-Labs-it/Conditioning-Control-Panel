@@ -519,7 +519,9 @@ async function boot(course, options, lifetime, isCurrent) {
       action: name => hud.menuAction(name), sound: name => { audio.start(); audio.cue(name); } });
     garage.setVisible(false);
     lifetime.defer(() => { garage.setVisible(false); garage.setHandlers({ action: null, sound: null, changeTrack: null }); });
-    hud.setGarageNav(garage.nav); debug.garage = garage;
+    // not enumerable: the garage holds its three.js scene, and every status JSON.stringify of the debug
+    // record (perf/boot checks poll it each second) otherwise serialised the whole scene (Scene.toJSON)
+    hud.setGarageNav(garage.nav); Object.defineProperty(debug, 'garage', { value: garage, enumerable: false, configurable: true, writable: true });
   }
   Object.defineProperty(debug, 'resources', { get: () => ({ ...shared.counts, art: shared.artLibrary?.stats }) });
   if (BOT || DEV) Object.defineProperty(debug, 'shared', { value: shared, enumerable: false });

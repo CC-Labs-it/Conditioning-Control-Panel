@@ -1,6 +1,7 @@
 import { Group, InstancedMesh, ShapeGeometry, Shape, PlaneGeometry, BufferGeometry, Float32BufferAttribute,
   MeshBasicNodeMaterial, DoubleSide, Object3D, Color, Vector3, DynamicDrawUsage } from 'three/webgpu';
 import { rng, hashId } from './cueKit.js';
+import { matrixInto } from './instanceWrite.js';
 
 // BURST: world particles for hearts, glass shards, falling road tiles and confetti. One pooled instanced mesh
 // per shape, no per-burst allocation. Gentle halves the count and drops spin. Particles never collide.
@@ -31,7 +32,7 @@ export function createCueParticles(scene) {
     for (let i = 0; i < CAP[kind]; i++) mesh.setColorAt(i, color.set('#ffffff'));
     object.add(mesh);
     pools[kind] = { mesh, material, parts: Array.from({ length: CAP[kind] }, () => ({ life: 0, age: 0, p: new Vector3(), v: new Vector3(),
-      spin: new Vector3(), r: new Vector3(), size: 1 })), next: 0 };
+      spin: new Vector3(), r: new Vector3(), size: 1, shown: true })), next: 0 };
   }
   let seq = 0;
   /** Emit count particles from origin with base velocity dir (m/s), a cone spread and an upward kick. */
@@ -51,24 +52,29 @@ export function createCueParticles(scene) {
     pool.mesh.instanceColor.needsUpdate = true;
     return n;
   }
+  // A finished particle writes its zero-scale matrix once; a pool with nothing alive and nothing left to
+  // hide does no matrix work and no upload (the four pools idle through most of a race).
   function update(dt, { paused = false } = {}) {
     if (paused) return;
     const step = Math.min(.1, Math.max(0, dt || 0));
-    for (const pool of Object.values(pools)) {
-      let live = 0;
-      for (let i = 0; i < pool.parts.length; i++) {
-        const q = pool.parts[i];
-        if (q.age >= q.life) { dummy.scale.setScalar(0); }
-        else {
+    for (const kind in pools) {
+      const pool = pools[kind], parts = pool.parts, array = pool.mesh.instanceMatrix.array;
+      let live = 0, wrote = false;
+      for (let i = 0; i < parts.length; i++) {
+        const q = parts[i];
+        if (q.age >= q.life) {
+          if (!q.shown) continue;
+          dummy.scale.setScalar(0); q.shown = false;
+        } else {
           q.age += step; q.v.y -= q.g * step; q.v.multiplyScalar(1 - .35 * step); q.p.addScaledVector(q.v, step);
-          q.r.addScaledVector(q.spin, step); live++;
+          q.r.addScaledVector(q.spin, step); live++; q.shown = true;
           const k = q.age / q.life, s = q.size * (k < .08 ? k / .08 : k > .7 ? Math.max(0, (1 - k) / .3) : 1);
           dummy.position.copy(q.p); dummy.rotation.set(q.r.x, q.r.y, q.r.z); dummy.scale.setScalar(s);
         }
-        dummy.updateMatrix(); pool.mesh.setMatrixAt(i, dummy.matrix);
+        dummy.updateMatrix(); matrixInto(array, i, dummy.matrix); wrote = true;
       }
-      pool.mesh.count = live ? pool.parts.length : 0;
-      pool.mesh.instanceMatrix.needsUpdate = true;
+      pool.mesh.count = live ? parts.length : 0;
+      if (wrote) pool.mesh.instanceMatrix.needsUpdate = true;
     }
   }
   function clear() { for (const pool of Object.values(pools)) { for (const q of pool.parts) q.age = q.life = 0; pool.mesh.count = 0; } }
