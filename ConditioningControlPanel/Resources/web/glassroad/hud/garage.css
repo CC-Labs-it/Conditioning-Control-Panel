@@ -81,3 +81,6 @@
 @media(prefers-reduced-motion:reduce){.g-track-picker{animation:g-soft-arrive .4s ease both}#race-garage .g-track-tile:hover,#race-garage .g-track-tile:focus-visible{transform:none}}
 
 .g-course-leaving .g-track-picker{animation:g-course-out .35s ease both}@keyframes g-course-out{to{opacity:0}}
+
+/* Controller focus must remain visible after a mouse click. */
+#race-garage .g-menu-row:focus{outline:3px solid var(--g-rose);outline-offset:0;border-color:var(--g-rose)}

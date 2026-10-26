@@ -87,13 +87,12 @@ test('loop: at the loop the rig is level until the kart reaches the magnet stret
   assert.ok(LOOP_CAM.pitchMaxDeg >= 30);
 });
 
-test('loop: shake and kicks keep working in road mode (camera-local basis from rig.up)', () => {
+test('loop: effect shake cannot move the road-mode camera, including inverted sections', () => {
   const f = feel(), rig = createCamRig(f), k = createState();
   loopKart(k, Math.PI, true);
   rig.snap(k, 16 / 9, null, track);
-  const e0 = rig.eye.slice();
+  const e0 = rig.eye.slice(), look0 = rig.look.slice();
   rig.snap(k, 16 / 9, { shake: [0, 0.2, 0], fovKick: 0, camPush: 0, orbit: 0 }, track);
-  const dy = [rig.eye[0] - e0[0], rig.eye[1] - e0[1], rig.eye[2] - e0[2]];
-  assert.ok(Math.abs(Math.hypot(...dy) - 0.2) < 1e-6);
-  assert.ok(dot(dy, rig.up) > 0.15, 'shake y moves along the camera up');
+  assert.deepEqual(rig.eye, e0);
+  assert.deepEqual(rig.look, look0);
 });

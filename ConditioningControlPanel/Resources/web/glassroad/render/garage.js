@@ -12,6 +12,7 @@ import {dressKart,riderOnly,VEHICLE_MECHANISMS} from './wardrobe.js';
 import {createEmiSkin} from './emiSkin.js';
 import {garageArrows} from './garageArrows.js';
 import {garageUi} from '../hud/garage.js';
+import {createGarageNav} from '../hud/garageNav.js';
 import {KARTS,OUTFITS,LOCKED,STORAGE,loadGarage,stepKart,routeTo,raceLook} from '../hud/garageState.js';
 import {warmGarageWardrobe} from './garageWarm.js';
 
@@ -125,10 +126,8 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
     if(dir!==null)select(dir,true);else if(index!==null)select(index);else if(g.target&&!custom)customize(true);};
   const cancel=()=>{gesture=null;};
   for(const [event,fn]of [['pointerdown',down],['pointermove',move],['pointerup',up],['pointercancel',cancel],['lostpointercapture',cancel]])canvas.addEventListener(event,fn);
-  function nav(dir){if(ui.trackPicking){ui.trackNav(dir);return;}if(!visible||viewBusy||!['up','down','left','right','ok','back'].includes(dir))return;if((dir==='left'||dir==='right')&&!custom){select(dir==='left'?-1:1,true);return;}
-    if(dir==='back'){if(custom)customize(false);return;}
-    if(dir==='ok'){if(ui.root.contains(document.activeElement))document.activeElement.click?.();else ui.root.querySelector('[data-g=race]').click();return;}
-    const buttons=[...ui.root.querySelectorAll('button,input')].filter(b=>!b.disabled&&b.getClientRects().length&&getComputedStyle(b).visibility!=='hidden');const i=buttons.indexOf(document.activeElement);buttons[(i+(['up','left'].includes(dir)?-1:1)+buttons.length)%buttons.length]?.focus();}
+  const nav=createGarageNav({root:ui.root,select,customize,isCustom:()=>custom,isVisible:()=>visible,
+    isBusy:()=>viewBusy,trackPicking:()=>ui.trackPicking,trackNav:dir=>ui.trackNav(dir)});
   const keydown=e=>{if(!visible||e.altKey||e.ctrlKey||e.metaKey)return;if(ui.trackPicking){const dir={Escape:'back',Enter:'ok',ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'}[e.key];if(dir){e.preventDefault();e.stopImmediatePropagation();ui.trackNav(dir);}return;}if(e.key==='Escape'){if(custom)customize(false);return;}if(['INPUT'].includes(e.target.tagName))return;
     const dir={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'}[e.key];if(dir){e.preventDefault();e.stopImmediatePropagation();nav(dir);}};
   document.addEventListener('keydown',keydown,true);
