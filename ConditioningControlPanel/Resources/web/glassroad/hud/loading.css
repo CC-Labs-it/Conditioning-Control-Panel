@@ -16,6 +16,11 @@ body[data-boot=loading] #view,body[data-boot=loading] #hud,body[data-boot=loadin
 .boot-ride svg circle{fill:#ffe068}.boot-ride svg path:nth-of-type(2){stroke:#fff4df}
 .boot-ride::after{content:'';position:absolute;left:var(--boot-left,0%);bottom:9px;width:31px;height:17px;border-top:2px solid #ffe068;border-bottom:2px solid #78e3d3;transform:translateX(-38px);animation:boot-trail .65s ease-in-out infinite alternate}
 #race-loading.boot-leaving{opacity:0;pointer-events:none}.boot-failed .boot-ride svg{fill:#a6babd}
+.boot-reason{font:11px/1.45 ui-monospace,Consolas,'Courier New',monospace;color:#c9dfe4;margin:14px 0 0;word-break:break-word;user-select:text;-webkit-user-select:text}
+.boot-reason[hidden],.boot-retry[hidden]{display:none}
+.boot-retry{margin-top:16px;min-height:40px;padding:8px 26px;border:2px solid #080e19;border-radius:999px;background:#ff72aa;color:#10101b;font:700 14px/1 'Segoe UI',sans-serif;box-shadow:0 3px 0 #080e19;cursor:pointer}
+.boot-retry:active{transform:translateY(2px);box-shadow:0 1px 0 #080e19}
+.boot-failed .boot-fill,.boot-failed .boot-title::after,.boot-failed .boot-ride svg,.boot-failed .boot-ride::after{animation:none}
 @keyframes boot-engine{from{transform:translateY(0) rotate(-2deg)}to{transform:translateY(-4px) rotate(2deg)}}
 @keyframes boot-trail{from{opacity:.4;scale:.75 1}to{opacity:1;scale:1 1}}
 @keyframes boot-checks{to{background-position:28px 0}}@keyframes boot-stripes{to{background-position:26px 0}}
