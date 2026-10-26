@@ -879,4 +879,57 @@ public class ChasterLadderTests : IDisposable
         Assert.Single(ladder.NameOptIns);
         Assert.Empty(ladder.Verifies); // the raffle read verifies, the board read does not
     }
+
+    // ccp-bugs #1511: a raffle month, 10:00 of credit on the tab, and the picked lock's timer ran out.
+    private void SeedCreditInRaffleMonth()
+    {
+        _utc = new DateTime(2026, 10, 20, 10, 0, 0, DateTimeKind.Utc);
+        _store.Tokens = new ChasterStoredTokens("AT", "RT", _utc.AddHours(1));
+        var tab = new TabState { BalanceSeconds = -600, PushedNetSeconds = 3600, RaffleMonth = "2026-10" };
+        File.WriteAllText(Path.Combine(_dir, "tab.json"), Newtonsoft.Json.JsonConvert.SerializeObject(tab));
+    }
+
+    private Handler RanOutLock() => new()
+    {
+        Answer = p => p == "/locks"
+            ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(
+                "[{\"_id\":\"lock1\",\"status\":\"locked\",\"role\":\"wearer\",\"endDate\":\"" + _utc.AddHours(-8).ToString("o") + "\"}]") }
+            : new HttpResponseMessage(HttpStatusCode.NoContent),
+    };
+
+    [Fact]
+    public async Task A_lock_that_ran_out_never_hides_the_credit_behind_a_raffle_day_slip_up()
+    {
+        SeedCreditInRaffleMonth();
+        using var service = Make(new FakeLadder(), RanOutLock());
+
+        // Lock not read yet: the raffle rule sets the credit aside and the slip-up waits to go.
+        service.NoteSeconds("typo", 60);
+        Assert.Equal(60, service.BalanceSeconds);
+
+        // The push finds the timer ran out: the credit comes back and cancels the slip-up in sight.
+        Assert.Equal(SettleOutcome.LockRanOut, await service.SettleAsync());
+        Assert.Equal(-540, service.BalanceSeconds);
+
+        // The lock is known to have run out now: later slip-ups book against the credit, visibly.
+        await service.RefreshLockAsync();
+        service.NoteSeconds("typo", 60);
+        Assert.Equal(-480, service.BalanceSeconds);
+    }
+
+    [Fact]
+    public async Task With_the_picked_lock_gone_a_raffle_day_slip_up_books_against_the_credit()
+    {
+        SeedCreditInRaffleMonth();
+        var chaster = new Handler { Answer = p => p == "/locks"
+            ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("[{\"_id\":\"lock2\",\"status\":\"locked\",\"role\":\"wearer\"}]") }
+            : new HttpResponseMessage(HttpStatusCode.NoContent) };
+        using var service = Make(new FakeLadder(), chaster);
+
+        await service.RefreshLockAsync();
+        Assert.Equal(LockLookup.Ambiguous, service.LockLookup);
+        service.NoteSeconds("typo", 60);
+
+        Assert.Equal(-540, service.BalanceSeconds);
+    }
 }
