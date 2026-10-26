@@ -1,6 +1,6 @@
 /* Rear marine drive. All parts exist before warmup; one reversible travel coordinate
  * extends the piston, opens three hinges, then accelerates the rotor. Forward is -Z. */
-import { Group, Mesh, MeshBasicNodeMaterial, CylinderGeometry, TorusGeometry, Shape,
+import { Group, Mesh, InstancedMesh, MeshBasicNodeMaterial, CylinderGeometry, TorusGeometry, Shape,
   ExtrudeGeometry, Box3, Color, Matrix4, Vector3 } from 'three/webgpu';
 import { normalWorld, positionViewDirection, normalView, vec3, float, max, dot, normalize, pow, abs } from 'three/tsl';
 
@@ -42,17 +42,71 @@ function bladeGeometry() {
   g.computeVertexNormals();return g;
 }
 
-export function createSwimPropeller(body, source=null) {
+/** The three metals and three shapes every drive is made of. */
+function createPropellerKit() {
+  const materials=[metal('#273a48'),metal('#9caeb9'),metal('#38c9ce')];
+  const cylinder=new CylinderGeometry(1,1,1,12), ring=new TorusGeometry(.128,.016,5,16), blade=bladeGeometry();
+  return {materials,cylinder,ring,blade,geometries:[cylinder,ring,blade],
+    dispose() {for(const g of this.geometries)g.dispose();for(const m of this.materials)m.dispose();}};
+}
+
+/**
+ * Perf (Firefox frame cost): every kart's drive is the same twelve parts in three metals. Drawn as plain meshes
+ * that was 12 draws per kart per pass (96 in the view plus 96 in the shadow map with eight karts). A fleet draws
+ * each part ONCE for every kart: one InstancedMesh per part (shared kit), its instances copied from the karts'
+ * part placeholders right before each draw. The placeholders stay in each kart's tree with the same names,
+ * transforms, geometry and material (so fit, motion, castShadow and the tests see the same drive), on no layer,
+ * so no camera ever draws them. A kart whose tree is hidden drops out of the instances. Picture unchanged.
+ * capacity: the most drives at once (the kart count). Add `group` to the scene beside the karts.
+ */
+export function createPropellerFleet(capacity=8) {
+  const kit=createPropellerKit(), group=new Group(), parts=new Map();
+  group.name='swim-propeller-fleet';
+  const shown=o=>{for(let p=o;p;p=p.parent)if(!p.visible)return false;return true;};
+  function sync(row) {
+    const mesh=row.mesh, out=mesh.instanceMatrix.array;
+    let n=0, changed=false;
+    for(const m of row.members) {
+      if(n>=capacity || !shown(m)) continue;
+      const e=m.matrixWorld.elements, o=n*16;
+      for(let i=0;i<16;i++) if(out[o+i]!==e[i]) {out[o+i]=e[i];changed=true;}
+      n++;
+    }
+    if(mesh.count!==n) {mesh.count=n;changed=true;}
+    if(changed && n) {mesh.instanceMatrix.clearUpdateRanges();mesh.instanceMatrix.addUpdateRange(0,n*16);mesh.instanceMatrix.needsUpdate=true;}
+  }
+  function rowFor(name,geometry,material) {
+    let row=parts.get(name);
+    if(row) return row;
+    const mesh=new InstancedMesh(geometry,material,capacity);
+    mesh.name=name;mesh.count=0;mesh.frustumCulled=false;
+    row={mesh,members:[]};
+    // The map's casters are chosen on the karts' trees (shadows.js castFrom): the fleet casts when they do.
+    Object.defineProperty(mesh,'castShadow',{configurable:true,get:()=>row.members.some(m=>m.castShadow),set(){}});
+    Object.defineProperty(mesh,'receiveShadow',{configurable:true,get:()=>row.members.some(m=>m.receiveShadow),set(){}});
+    mesh.onBeforeRender=()=>sync(row);
+    parts.set(name,row);group.add(mesh);return row;
+  }
+  return {group,kit,parts,capacity,
+    /** Draw `mesh` (a drive part) through the fleet: it keeps its transform but leaves every layer. */
+    adopt(mesh) {const row=rowFor(mesh.name,mesh.geometry,mesh.material);row.members.push(mesh);mesh.layers.disableAll();return row;},
+    release(mesh) {for(const row of parts.values()){const i=row.members.indexOf(mesh);if(i>=0)row.members.splice(i,1);}},
+    /** Instance count per part right now (diagnostics). */
+    count() {let n=0;for(const row of parts.values())n+=row.members.length;return n;},
+    dispose() {group.removeFromParent();for(const row of parts.values()){row.members.length=0;row.mesh.dispose();}parts.clear();kit.dispose();},
+  };
+}
+
+export function createSwimPropeller(body, source=null, fleet=null) {
   const object=new Group(), carriage=new Group(), rotor=new Group(), hinges=[];
   object.name='swim-propeller';carriage.name='swim-drive-carriage';rotor.name='swim-drive-rotor';
   body.add(object);object.add(carriage);carriage.add(rotor);
-  const materials=[metal('#273a48'),metal('#9caeb9'),metal('#38c9ce')], geometries=[];
-  const own=g=>(geometries.push(g),g);
-  const cylinder=own(new CylinderGeometry(1,1,1,12)), ring=own(new TorusGeometry(.128,.016,5,16));
-  const blade=own(bladeGeometry());
+  const kit=fleet?fleet.kit:createPropellerKit(), materials=kit.materials, {cylinder,ring,blade}=kit, adopted=[];
   function part(parent,name,geometry,mat,x,y,z,sx=1,sy=1,sz=1) {
     const mesh=new Mesh(geometry,materials[mat]);mesh.name=name;mesh.position.set(x,y,z);mesh.scale.set(sx,sy,sz);
-    mesh.frustumCulled=false;parent.add(mesh);return mesh;
+    mesh.frustumCulled=false;parent.add(mesh);
+    if(fleet) {fleet.adopt(mesh);adopted.push(mesh);}
+    return mesh;
   }
   function barrel(parent,name,mat,radius,length,z) {
     const mesh=part(parent,name,cylinder,mat,0,0,z,radius,length,radius);mesh.rotation.x=Math.PI/2;return mesh;
@@ -103,6 +157,7 @@ export function createSwimPropeller(body, source=null) {
   fit(source);apply();
   return {object,carriage,rotor,hinges,motion,fit,
     update(underwater,dt,options) {stepPropellerMotion(motion,underwater,dt,options);apply();}, reset,
-    dispose() {object.removeFromParent();for(const g of geometries)g.dispose();for(const m of materials)m.dispose();},
+    // A fleet owns the shared kit (its own dispose frees it); a lone drive owns its kit.
+    dispose() {object.removeFromParent();if(fleet){for(const m of adopted)fleet.release(m);}else kit.dispose();},
   };
 }

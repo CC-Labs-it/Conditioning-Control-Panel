@@ -102,7 +102,9 @@ export function createPickupCards({ source = () => null, doc = document } = {}) 
       const root = new Group(), front = new Mesh(faceGeo, fronts[index % fronts.length].material), rear = new Mesh(faceGeo, backMat);
       front.position.z = .05; rear.rotation.y = Math.PI; rear.position.z = -.05;
       root.add(new Mesh(edgeGeo, edgeMat), front, rear); root.userData.pickupFace = index % fronts.length;
-      root.traverse(o => { if (o.isMesh) o.frustumCulled = false; }); return root;
+      // perf: the cards keep frustum culling (36 cards x 3 meshes were drawn every frame wherever they stood);
+      // the warm still links them, it turns culling off for its own frames (render/renderer.js)
+      return root;
     },
     use(index) { fronts[index % fronts.length].active = true; },
     update,
