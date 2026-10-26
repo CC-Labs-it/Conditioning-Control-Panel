@@ -26,6 +26,31 @@ export function disposeSceneResources(three) {
   histories.get(three)?.clear(); histories.delete(three);
 }
 
+/** r186 Geometries.initGeometry closes its per-geometry dispose listener over the FIRST render variant
+ * that uploaded the geometry. A geometry shared across courses (pooled racers, library models, Sprite's
+ * quad) therefore pins that variant until the geometry itself is disposed, and the variant's scene pins
+ * the whole departed course (about 110 MB of heap per switch, measured on the phone tier). Cut every
+ * course reference from a retired variant; keep the geometry and attribute fields the listener reads. */
+export function severRow(three, row) {
+  try { three.backend?.delete?.(row); } catch (e) { /* no backend data for this variant */ }
+  // getAttributes() rebuilds from the node builder state when attributes are null; keep that path whole
+  if (row.attributes || row._nodeBuilderState) { row.object = null; row.material = null; row._sourceMaterial = null; }
+  // the builder state's update nodes hold uniform callbacks bound into the course; once the attribute list is cached it is unused
+  if (row.attributes) row._nodeBuilderState = null;
+  row.scene = null; row.camera = null; row.lightsNode = null; row.context = null; row.clippingContext = null;
+  row.pipeline = null; row.bundle = null; row._bindings = null; row._monitor = null;
+}
+
+/** Take a departed course's scene tree apart: every node loses its parent and its children, so a stray
+ * reference to any one object (a three cache keyed by string, a dispose listener, a cached Error's stack)
+ * keeps that object alone and never the whole course. Pooled racers leave the scene before this runs. */
+export function dismantleScene(root) {
+  const all = [];
+  root?.traverse?.(o => all.push(o));
+  for (const o of all) { o.children.length = 0; o.parent = null; }
+  return all.length;
+}
+
 export function releaseSceneResources(three, scene, beforeRetire = () => {}) {
   const objects = three?._objects?._renderObjects;
   if (!objects) { beforeRetire(); return; }
@@ -56,7 +81,7 @@ export function releaseSceneResources(three, scene, beforeRetire = () => {}) {
   // Light disposal removes shadow render variants. Capture their node arrays first,
   // then release targets while light listeners still exist, and retire remaining bindings.
   beforeRetire();
-  for (const row of retired) if (objects.has(row)) row.dispose();
+  for (const row of retired) if (objects.has(row)) { row.dispose(); severRow(three, row); }
   for (const attribute of candidates) {
     const buffer = identity(attribute);
     // Each interleaved view has its own r186 attribute/version/memory entry even when

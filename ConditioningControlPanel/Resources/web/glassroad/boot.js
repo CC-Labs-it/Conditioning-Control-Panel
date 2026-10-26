@@ -92,6 +92,7 @@ import { chipAlpha, kartPoint } from './hud/countdown.js';
 import { createLoading } from './hud/loading.js';
 import { describeFailure, rememberFailure, failureLine, isStalled, blockedTick, STALL_MS, WATCH_MS, FRAME_THROWS } from './core/failure.js';
 import { ORDER as TIER_ORDER } from './render/quality.js';
+import { dismantleScene } from './render/sceneResources.js';
 import { createGarage } from './render/garage.js';
 import { raceLook } from './hud/garageState.js';
 import { COURSES, selectedCourse, courseUrl, courseRaceIntent } from './track/catalog.js';
@@ -475,6 +476,7 @@ async function boot(course, options, lifetime, isCurrent) {
   lifetime.defer(() => {
     if (!renderer.releaseScene(world.scene, undefined, () => world.shadows?.dispose())) world.shadows?.dispose();
     world.dispose();
+    dismantleScene(world.scene);
   });
   // A visual review may keep the Loom faces without requesting or displaying private media.
   const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge });
