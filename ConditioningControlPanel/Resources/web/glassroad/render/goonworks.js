@@ -13,6 +13,12 @@ import { visualClearanceSamples, capVisualDepth } from '../track/visualDepth.js'
 export { applyGoonworksRoad, applyGoonworksRails } from './goonworksMaterials.js';
 export { goonworksMediaLayout, goonworksSpiralLayout } from './goonworksMedia.js';
 
+export function platformFeedback(age, gentle = false) {
+  if (!(age >= 0) || age >= 1.8) return { dip: 0, roll: 0 };
+  const spring = Math.sin(age * 12) * Math.exp(-3 * age);
+  return { dip: spring * (gentle ? .045 : .48), roll: spring * (gentle ? .002 : .022) };
+}
+
 function islandGeometry(hex=false,cap=true){
   const positions=[],tri=(a,b,c)=>positions.push(...a,...b,...c),count=hex?6:24;
   const ring=(radius,y)=>Array.from({length:count},(_,i)=>{const a=i/count*Math.PI*2;
@@ -125,11 +131,11 @@ export function buildGoonworks(track,art=null,pal=null,samples=null){
     // Retain the rounded glazed island, extending its keel down from the cap's existing bottom.
     const depthFrame={...row,s:row.s+row.len/2,p:row.p.map((v,i)=>v-row.n[i]*.6)};
     row.depthM=capVisualDepth(depthFrame,Math.min(10,Math.max(7.8,Math.min(row.w,row.len)*.4)),platformClearance,
-      {halfWidth:row.w/2,halfLength:row.len/2,motionM:.25,ignoreId:row.id});
+      {halfWidth:row.w/2,halfLength:row.len/2,motionM:.65,ignoreId:row.id});
     const skirt=new Mesh(geometries.openIsland,materials[platformGroups.length%3===0?'magenta':platformGroups.length%3===1?'fuchsia':'rose']);
     skirt.name='goonworks-platform-keel';skirt.scale.set(row.w-.3,row.depthM,row.len-.3);
     skirt.position.y=-.6-row.depthM/2;skirt.visible=row.depthM>.05;holder.add(skirt);
-    group.add(holder);platformGroups.push({row,holder,rest:holder.position.clone(),age:Infinity});
+    group.add(holder);platformGroups.push({row,holder,rest:holder.position.clone(),restRotation:holder.quaternion.clone(),age:Infinity});
   }
   // The sky carries static pale ink silhouettes, not a rainbow spiral or a distant ground plane.
   const skyG=new SphereGeometry(plan.skyRadius,32,18),skyM=new MeshBasicNodeMaterial({side:BackSide,depthWrite:false,fog:false,toneMapped:false});
@@ -156,12 +162,14 @@ export function buildGoonworks(track,art=null,pal=null,samples=null){
     for(let i=0;i<bubblesCount;i++){const seed=plan.particles[Math.floor(i/2)%plan.particles.length],phase=i*1.74,rise=((time*2+phase*4)%36+36)%36;
       P.fromArray(seed.p);P.x+=Math.sin(phase)*seed.spread;P.z+=Math.cos(phase)*seed.spread;P.y+=rise;const size=(1.4+i%3*.75)*Math.min(1,rise/3,(36-rise)/3);S.set(size,size,size);
       rotation.setFromAxisAngle(Y.set(0,1,0),phase+time*.15);bubbles.setMatrixAt(i,M.compose(P,rotation,S));}bubbles.instanceMatrix.needsUpdate=true;
-    for(const platform of platformGroups){if(!Number.isFinite(platform.age))continue;platform.age+=Math.max(0,dt);const a=platform.age;if(a>=1.4){platform.age=Infinity;platform.holder.position.copy(platform.rest);continue;}
-      const u=a<.2?a/.2:Math.max(0,1-(a-.2)/1.2),dip=(gentle?.025:.18)*u*u*(3-2*u);platform.holder.position.copy(platform.rest).addScaledVector(axis.fromArray(platform.row.n),-dip);}
+    for(const platform of platformGroups){if(!Number.isFinite(platform.age))continue;platform.age+=step;const a=platform.age;
+      const feedback=platformFeedback(a,gentle);platform.holder.position.copy(platform.rest).addScaledVector(axis.fromArray(platform.row.n),-feedback.dip);
+      spin.setFromAxisAngle(axis.set(0,0,1),feedback.roll);platform.holder.quaternion.copy(platform.restRotation).multiply(spin);
+      if(a>=1.8)platform.age=Infinity;}
   }
   update();sparkle.computeBoundingSphere();bubbles.computeBoundingSphere();if(sparkle.boundingSphere)sparkle.boundingSphere.radius+=50;if(bubbles.boundingSphere)bubbles.boundingSphere.radius+=60;
   const hit=event=>{const id=typeof event==='string'?event:event?.id,platform=platformGroups.find(p=>p.row.id===id);if(platform){platform.age=0;return platform.row;}return null;};
-  const reset=()=>{time=0;drive=0;lastBeat=null;for(const p of platformGroups){p.age=Infinity;p.holder.position.copy(p.rest);}update();};
+  const reset=()=>{time=0;drive=0;lastBeat=null;for(const p of platformGroups){p.age=Infinity;p.holder.position.copy(p.rest);p.holder.quaternion.copy(p.restRotation);}update();};
   const stats={draws:0,parts:plan.rows.length,rooms:plan.rooms.length,media:plan.mounts.length,platforms:platformGroups.length,sparkles:sparkleCount,bubbles:bubblesCount,rejected:plan.rejected};group.traverse(o=>{if(o.isMesh)stats.draws++;});
   return{group,plan,stats,casters:[],update,hit,reset,platforms:platformGroups,
     dispose(){if(disposed)return;disposed=true;group.removeFromParent();gearPaint.dispose();group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});Object.values(geometries).forEach(g=>g.dispose());extraGeometry.forEach(g=>g.dispose());Object.values(materials).forEach(m=>m.dispose());owned.forEach(m=>m.dispose());}};

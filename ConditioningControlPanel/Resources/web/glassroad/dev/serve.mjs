@@ -6,7 +6,7 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { MAINFRAME_CHART, verseChart, mixEnvelope } from './verseChart.mjs';
+import { MAINFRAME_CHART, MAINFRAME_AUDIO, MAINFRAME_SHA256, verseChart, mixEnvelope } from './verseChart.mjs';
 import { KEEP_CHART, lockedChunks, lockedChart } from './lockedChart.mjs';
 import { GOON_CHART, GOON_AUDIO, GOON_SHA256, goonChart } from './goonChart.mjs';
 import { BOUDOIR_CHART, BOUDOIR_AUDIO, BOUDOIR_SHA256, boudoirChart, remixEvents } from './boudoirChart.mjs';
@@ -23,7 +23,7 @@ const ARCADEMY = resolve(ROOT, '..', 'arcademy');
 const PRIVATE = resolve(process.env.GLASSROAD_AUDIO_DIR || 'C:/Projects/glassroad-audio');
 const MOUNTS = [['/arcademy/', ARCADEMY], ['/private-audio/', PRIVATE]];
 const PORT = Number(process.argv[2] || process.env.PORT || 8790);
-let mainframeChart;
+let mainframeChart, mainframeRecording;
 let keepChart;
 let keepRemixRecording, keepRemixChartBody;
 async function readKeepRemixRecording() {
@@ -120,15 +120,22 @@ async function readKeepChart() {
 }
 async function readMainframeChart() {
   if (!mainframeChart) mainframeChart = (async () => {
-    const dir = join(PRIVATE, 'tracks-2026-10-24/mainframe/out/v3');
+    const dir = join(PRIVATE, 'tracks-2026-10-24/mainframe/out/v5');
+    const recording = await readMainframeRecording();
     const raw = JSON.parse(await readFile(join(dir, 'chart.json'), 'utf8'));
     const { stdout } = await promisify(execFile)('ffmpeg', ['-v', 'error', '-threads', '2',
-      '-i', join(dir, 'mainframe_phone.mp3'), '-vn', '-ac', '1', '-ar', '8000',
+      '-i', recording.file, '-vn', '-ac', '1', '-ar', '8000',
       '-threads', '2', '-f', 'f32le', 'pipe:1'], { encoding: 'buffer', maxBuffer: 16 * 1024 * 1024, windowsHide: true });
     const pcm = new Float32Array(stdout.buffer.slice(stdout.byteOffset, stdout.byteOffset + stdout.byteLength));
-    return JSON.stringify(verseChart(raw, mixEnvelope(pcm)));
+    return JSON.stringify({ ...verseChart(raw, mixEnvelope(pcm)), audio: MAINFRAME_AUDIO });
   })().catch(e => { mainframeChart = null; throw e; });
   return mainframeChart;
+}
+async function readMainframeRecording() {
+  if (!mainframeRecording) mainframeRecording = verifiedRecording([
+    process.env.GLASSROAD_MAINFRAME_RECORDING || join(PRIVATE, 'tracks-2026-10-24/mainframe/out/v5/mainframe_phone.mp3'),
+  ], MAINFRAME_SHA256).catch(e => { mainframeRecording = null; throw e; });
+  return mainframeRecording;
 }
 // A developer may attach a private local provider. Its settings and receipts stay outside this tree.
 const providerModule = process.env.GLASSROAD_PREVIEW_PROVIDER;
@@ -196,9 +203,10 @@ const server = createServer(async (req, res) => {
     catch { res.writeHead(503, head); res.end('Private Keep recording unavailable'); }
     return;
   }
-  if (new URL(req.url, 'http://local').pathname === MAINFRAME_CHART) {
+  if (pathname === MAINFRAME_CHART || pathname === MAINFRAME_AUDIO) {
     if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405, head); res.end(); return; }
     try {
+      if (pathname === MAINFRAME_AUDIO) { sendRecording(req, res, (await readMainframeRecording()).bytes, head); return; }
       const body = JSON.stringify(await withPrivateCues(PRIVATE, 'mainframe', JSON.parse(await readMainframeChart())));
       res.writeHead(200, { ...head, 'Content-Type': 'application/json' });
       res.end(req.method === 'HEAD' ? undefined : body);

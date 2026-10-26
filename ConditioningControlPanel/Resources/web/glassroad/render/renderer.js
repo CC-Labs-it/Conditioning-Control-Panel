@@ -60,7 +60,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   if (webgl2) context = glContext(canvas);
   setTier(pinOf() || capTier(pickTier({ override, coarse, webgl2: webgl2 && !firefox })));
 
-  let three = new WebGPURenderer({ canvas, antialias: false, forceWebGL: webgl2, powerPreference: 'high-performance', ...(context ? { context } : {}) });
+  let three = new WebGPURenderer({ canvas, alpha: true, antialias: false, forceWebGL: webgl2, powerPreference: 'high-performance', ...(context ? { context } : {}) });
   try {
     await three.init();
   } catch (e) {
@@ -74,7 +74,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     canvas = replaceCanvas(canvas);
     context = glContext(canvas);
     if (!context) throw new Error('no WebGL2 context after the WebGPU failure (' + fallback + ')');
-    three = new WebGPURenderer({ canvas, antialias: false, forceWebGL: true, powerPreference: 'high-performance', context });
+    three = new WebGPURenderer({ canvas, alpha: true, antialias: false, forceWebGL: true, powerPreference: 'high-performance', context });
     await three.init();
   }
   trackSceneResources(three);
@@ -301,9 +301,12 @@ export async function warmAll(renderer, scene, camera, extras = [], { onProgress
     if (o && !o.parent) temp.add(o);
   }
   scene.add(temp);
-  const saved = [], mats = [], items = [];
+  const saved = [], mats = [], items = [], lods = [];
   let objects = 0, groups = [];
   scene.traverse((o) => {
+    // Projection normally selects one LOD and hides the others, undoing the warm's
+    // all-visible state. Prepare every distance variant before an intro cut needs it.
+    if (o.isLOD) { lods.push([o, o.autoUpdate]); o.autoUpdate = false; }
     saved.push([o, o.visible, o.frustumCulled, o.count]);
     o.visible = true; o.frustumCulled = false;
     if (o.count === 0 && (o.isInstancedMesh || o.isSprite || o.isBatchedMesh)) o.count = 1;
@@ -356,6 +359,7 @@ export async function warmAll(renderer, scene, camera, extras = [], { onProgress
   } catch (e) {
     console.warn('[glassroad/renderer] warm: ' + (e && e.message));
   } finally {
+    for (const [o, autoUpdate] of lods) o.autoUpdate = autoUpdate;
     if (layers !== null) camera.layers.mask = layers;
     for (const [o, v, f, n] of saved) { o.visible = v; o.frustumCulled = f; if (o.count !== n) o.count = n; }
     for (const m of mats) m.visible = false;

@@ -46,7 +46,7 @@ import { createContact } from './sim/contact.js';
 import { createStandings } from './sim/standings.js';
 import { createItems } from './sim/items.js';
 import { loadTrack } from './track/load.js';
-import { selectTrack, allowsOnline, courseSongs } from './track/selection.js';
+import { selectTrack, allowsOnline, courseSongs, courseSongRows } from './track/selection.js';
 import { createMainframeScan, scanClock } from './sim/mainframeScan.js';
 import { createMainframeIndustry } from './sim/mainframeIndustry.js';
 import { createMovingHazards } from './sim/movingHazards.js';
@@ -147,7 +147,7 @@ shared.feelTask = Promise.all([loadFeel(), loadFonts()]).then(([feel]) => {
   shared.baseFeel = feel.toJSON(); shared.feel = feel; shared.gentle = createGentle(feel); return feel;
 });
 shared.bridge.on('gentle', m => { shared.hostGentle = m; });
-// The web host's Scrolller pictures (host/scrolllerFeed.js): display only, flash bursts only. Built once so a feed
+// The web host's Scrolller pictures (host/scrolllerFeed.js): display only. Built once so a feed
 // that lands before the first course is kept; the desktop host never sends one.
 shared.scrolllerFeed = createScrolllerFeed({ bridge: shared.bridge });
 const controller = createCourseController({
@@ -484,6 +484,7 @@ async function boot(course, options, lifetime, isCurrent) {
   });
   // A visual review may keep the Loom faces without requesting or displaying private media.
   const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge });
+  if (scrolller && qs.get('media') !== '0') world.media?.setDisplayFeed(scrolller, renderer.canvas);
   world.setItemMediaSource(seed => cardMedia?.sourceForFlash(seed) || null);
   const subliminalBurst = createSubliminalBurst({ parent: document.body, primary: () => world.primaryColour() });
   effects.screen.params.mediaFlash = true;
@@ -968,11 +969,11 @@ async function boot(course, options, lifetime, isCurrent) {
   // race songs from our own storage (NET.md section 14): nothing named a chart and the lobby is there, so ask it once
   // for signed chart urls on the room origin (a local lobby names its room with &room=http://127.0.0.1:<port>). A
   // refusal (preview, dark, offline) leaves no song; a race that starts before the answer lands runs without one.
-  if (lobbyApi && !qs.has('chart') && courseSongs(TRACK_ID, '', ['recording']).length) {
+  if (lobbyApi && !qs.has('chart')) {
     const devLobby = LOCAL_URL.test(qs.get('lobby') || '') && /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
     const roomOrigin = !devLobby ? ROOM_ORIGIN : (LOCAL_URL.test(qs.get('room') || '') ? qs.get('room') : null);
     let fallback;
-    extraSongs = () => fallback ||= lobbyApi.songs().then(r => lobbySongCharts(r?.songs, { roomOrigin })).catch(() => []);
+    extraSongs = () => fallback ||= lobbyApi.songs().then(r => lobbySongCharts(courseSongRows(TRACK_ID, r?.songs), { roomOrigin })).catch(() => []);
     if (wantLobbySongs({ search: location.search, charts: CHARTS })) extraSongs().then(list => {
       if (!lifetime.alive || !list.length) return;
       if (!CHARTS.length) CHARTS = list;

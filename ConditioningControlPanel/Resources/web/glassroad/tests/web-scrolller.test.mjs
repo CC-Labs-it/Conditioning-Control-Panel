@@ -69,13 +69,14 @@ test('only loaded pictures are handed out; a closed consent drops them; the swit
   assert.equal(b2.has('scrolller-feed'), false);
 });
 
-test('Scrolller pictures reach the flash canvas only, never a texture path', () => {
+test('Scrolller pictures reach display-only flashes and world windows, never a texture path', () => {
   const boot = src('boot.js');
   const uses = boot.split('\n').filter((l) => /scrolller(Feed)?\??\.sourceFor/.test(l));
   assert.equal(uses.length, 1, 'one consumer');
   assert.match(uses[0], /createFlashBurst\(\{ source:/);
   assert.doesNotMatch(boot, /setItemMediaSource\([^)]*scrolller/i);
   assert.doesNotMatch(boot, /createCardMedia\([^)]*scrolller/i);
+  assert.match(boot, /setDisplayFeed\(scrolller, renderer.canvas\)/);
   const feed = src('host/scrolllerFeed.js');
   assert.doesNotMatch(feed, /\bfetch\(|Texture|getImageData|toDataURL|crossOrigin/);
   // the flash canvas is a page canvas that is never read back
@@ -85,9 +86,24 @@ test('Scrolller pictures reach the flash canvas only, never a texture path', () 
 test('the Options switch: drawn only where the host offers the feed, echo-driven, plain copy', () => {
   const cards = src('hud/cards.js');
   assert.match(cards, /host\.scrolller \? '<div class="c-scrolller">' \+ scrolllerHtml\(\)/);
-  assert.match(cards, /<span>Online pictures<small>From Scrolller, in the flashes<\/small>/);
+  assert.match(cards, /<span>Online pictures<small>From Scrolller, on screens and in flashes<\/small>/);
   assert.match(cards, /emit\('scrolller', \{ on: !host\.scrolller\.on \}\)/);
   for (const l of cards.split('\n').filter((x) => /Online pictures|Pictures on|Track default|this track/i.test(x)))
     assert.doesNotMatch(l, /[—–!]/, l);
   assert.match(src('boot.js'), /init\.caps\.scrolller \? shared\.scrolllerFeed : null/);
+});
+
+test('display-only pictures expire in 24 hours and a late feed cannot reopen a closed switch', () => {
+  const bridge = fakeBridge(), imgs = []; let clock = 10;
+  const feed = createScrolllerFeed({ bridge, now: () => clock, makeImage: () => {
+    const img = fakeImage(); img.complete = true; img.naturalWidth = 640; imgs.push(img); return img;
+  } });
+  const msg = { v: 1, rows: [{ url: 'https://images.scrolller.com/a.jpg', kind: 'image' }] };
+  bridge.emit('scrolller-feed', msg);
+  assert.equal(feed.ready, 1);
+  clock += 24 * 60 * 60 * 1000;
+  assert.equal(feed.sourceFor(0), null); assert.equal(feed.count, 0); assert.equal(imgs[0].src, '');
+  bridge.emit('setting', { key: 'media.remoteConsent', value: false });
+  bridge.emit('scrolller-feed', msg);
+  assert.equal(feed.ready, 0); assert.equal(feed.sourceFor(0), null); feed.dispose();
 });

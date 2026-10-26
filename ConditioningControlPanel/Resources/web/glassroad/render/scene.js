@@ -447,6 +447,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (kind === 'chute') { if (waterfall) waterfall.chute(p || {}, gentle); return; }
     if (kind === 'stone') {
       const deck = goonworks?.hit(p) || stones?.hit(p);
+      if (deck && k && track.id === 'goonworks') kickWobble(k.pose, LOOK, gentle, .65);
       if (obj && obj.visible) {
         const near = i === 0 || obj.position.distanceTo(kart.position) < Q.kartLodM;
         wakes.ring(posOf(i), obj.quaternion, LOOK.ringMaxM[deck ? 1 : 0], { gentle, gain: LOOK.ringGain * (deck ? .8 : .4) });
