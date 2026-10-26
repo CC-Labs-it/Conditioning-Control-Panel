@@ -315,7 +315,7 @@ audio/songShape.js bakes the plan per beat from the chart (bars, section moods, 
 
 ## clock
 - `clock.hz` 60: fixed sim rate.
-- `clock.maxSubsteps` 2: most sim steps per frame; extra time is dropped.
+- `clock.maxSubsteps` 6: most sim steps per frame, one capped frame (0.1 s) at 60 Hz; extra time is dropped. At 2 a phone drawing 20 fps raced in slow motion (sim at 2 x 20 / 60 = 67 percent of real time, 30 percent at 9 fps) while the song ran on in real time (owner 2026-10-26).
 - `clock.bpm` 96: beat clock tempo for the slice (no music yet) (added).
 
 ## photosafe
