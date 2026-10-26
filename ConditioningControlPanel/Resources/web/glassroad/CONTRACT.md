@@ -245,6 +245,16 @@ caps platform 'web', net false, relayBase null, texturableRemote false, gamepad 
 Host -> page used in A: `init`, `pause {on}`, `kept-escape`, `gentle {...}`, `focus`, `ping`.
 Page -> host in A: `ready`, `heartbeat`, `pong`, `run-started`, `run-ended { timeS, laps }`, `telemetry`.
 Escape only pauses; the page never sends `exit` on Escape.
+Web Scrolller pictures (2026-10-26, `host/scrolllerFeed.js`): a host that can feed them sets `caps.scrolller:
+{ consent: boolean }` (the web shim; the desktop never does). Host -> page `scrolller-feed { v: 1, rows: [{ url, kind:
+'image' }] }` (https on a scrolller.com host, at most 12 used; an empty list when consent is off) and the `setting
+{ key: 'media.remoteConsent', value }` echo (what is STORED). Page -> host `set-setting { key: 'media.remoteConsent',
+value }` from the Options "Online pictures" switch, drawn only when `caps.scrolller` is set and moved only by the
+echo. LAW: Scrolller's media hosts send no CORS headers, so these rows are DISPLAY ONLY: the browser loads each
+`<img>` itself, nothing fetches them, and they go to the flash-burst page canvas (`fx/flashMedia.js`, never a
+texture, never read back) and nowhere else. The host asks api.scrolller.com from the same browser (no CC Labs
+server touches a byte). If Scrolller ever serves CORS to the page's origin, the host may instead fetch whole clips
+into `blob:` urls and post the existing `card-media` manifest, which reaches the world screens.
 
 ## 8. Events (the 10 juice beats)
 

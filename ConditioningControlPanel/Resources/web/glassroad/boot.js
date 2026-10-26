@@ -21,6 +21,7 @@
 import { createBridge, songCharts, isLocalSongHost, wantLobbySongs, lobbySongCharts, ROOM_ORIGIN } from './host/bridge.js';
 import { createHostEscape } from './host/hostEscape.js';
 import { createCardMedia } from './host/cardMedia.js';
+import { createScrolllerFeed } from './host/scrolllerFeed.js';
 import { createSubliminalBurst } from './fx/subliminalBurst.js';
 import { loadFeel } from './core/feel.js';
 import { createBus, createQueue } from './core/events.js';
@@ -139,6 +140,9 @@ shared.feelTask = Promise.all([loadFeel(), loadFonts()]).then(([feel]) => {
   shared.baseFeel = feel.toJSON(); shared.feel = feel; shared.gentle = createGentle(feel); return feel;
 });
 shared.bridge.on('gentle', m => { shared.hostGentle = m; });
+// The web host's Scrolller pictures (host/scrolllerFeed.js): display only, flash bursts only. Built once so a feed
+// that lands before the first course is kept; the desktop host never sends one.
+shared.scrolllerFeed = createScrolllerFeed({ bridge: shared.bridge });
 const controller = createCourseController({
   cover() { loading.start(); shared.renderer?.setHold(true); shared.garage?.setVisible(false); },
   open(id, options, lifetime, isCurrent) { return boot(COURSES.find(c => c.id === id), options, lifetime, isCurrent); },
@@ -320,6 +324,13 @@ async function boot(course, options, lifetime, isCurrent) {
   };
   bridge.on('gentle', applyHostGentle);
   if (shared.hostGentle) applyHostGentle(shared.hostGentle);
+  // Online pictures: a switch in Options only where the host offers the feed (the web), moved only by its echo.
+  const scrolller = init.caps.scrolller ? shared.scrolllerFeed : null;
+  if (scrolller) {
+    hud.setScrolller({ on: scrolller.consent ?? init.caps.scrolller.consent === true });
+    lifetime.defer(scrolller.subscribe((on) => hud.setScrolller({ on })));
+    hud.on('scrolller', (e) => scrolller.setConsent(!!e?.on));
+  }
   lifetime.listen(cardEl, 'click', e => {
     const anchor = e.target.closest?.('a.c-link[href]');
     if (!anchor) return;
@@ -407,6 +418,8 @@ async function boot(course, options, lifetime, isCurrent) {
     lifetime.defer(() => cardMedia.dispose());
   }
   Object.defineProperty(debug, 'cardMedia', { get: () => world.media?.stats() || null });
+  Object.defineProperty(debug, 'scrolller', { get: () => (scrolller
+    ? { consent: scrolller.consent, pictures: scrolller.count, ready: scrolller.ready } : null) });
   Object.defineProperty(debug, 'songGates', { get: () => world.phraseGates.stats });
   Object.defineProperty(debug, 'airWords', { get: () => world.airWords?.stats || null });
   Object.defineProperty(debug, 'songCues', { get: () => ({ total: songCues?.cues.length || 0,
@@ -440,7 +453,9 @@ async function boot(course, options, lifetime, isCurrent) {
   const cueSafety = { get on() { return gentle.on || edgeMotion.matches; },
     rise(s) { return this.on ? Math.max(.6, gentle.rise(s)) : s; },
     fade(s) { return this.on ? Math.max(1, gentle.fade(s)) : s; } };
-  const cueBurst = createFlashBurst({ source: seed => cardMedia?.sourceForFlash(seed) || null, photosafe, gentle: cueSafety });
+  // The flash canvas is a plain page canvas (never a texture), so the web's display-only Scrolller pictures may fill it.
+  const cueBurst = createFlashBurst({ source: seed => cardMedia?.sourceForFlash(seed) || scrolller?.sourceFor(seed) || null,
+    photosafe, gentle: cueSafety });
   let cueRunSeen = null, cueRevision = -1;
   lifetime.defer(() => cueBurst.dispose());
   Object.defineProperty(debug, 'cueBurst', { get: () => cueBurst.stats });
