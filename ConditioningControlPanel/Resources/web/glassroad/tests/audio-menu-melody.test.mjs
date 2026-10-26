@@ -29,9 +29,9 @@ function fakeContext() {
   return { ctx, sources, gains, sets };
 }
 
-test('original instrumental is a quiet stereo loop with no clipped or discontinuous join', () => {
+test('upbeat original instrumental keeps its 120 BPM pocket quiet and joins without a click', () => {
   const rendered = renderMenuMelody(12000);
-  assert.equal(rendered.duration, 24); assert.equal(MENU_MELODY.bpm, 80);
+  assert.equal(rendered.duration, 24); assert.equal(MENU_MELODY.bpm, 120); assert.equal(MENU_MELODY.beats, 48);
   let difference = 0;
   for (const samples of rendered.channels) {
     let peak = 0, sum = 0;
