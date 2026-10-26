@@ -126,10 +126,17 @@ export function createMinimap(canvas, { doc = globalThis.document } = {}) {
   const ctx = canvas.getContext && canvas.getContext('2d');
   let loop = null, ys = null, forks = [], forkLayer = null, fit = null, layer = null, bands = null, w = 0, h = 0, dpr = 1, at = -1;
   const p = [0, 0];
+  // the box is read only when it can have changed: draw() runs after the HUD's text writes, so reading
+  // clientWidth there forced a synchronous layout every frame (phone profile). No observer (tests): read each draw.
+  let boxed = false;
+  const watch = typeof globalThis.ResizeObserver === 'function' ? new globalThis.ResizeObserver(() => { boxed = false; }) : null;
+  if (watch && canvas.nodeType === 1) watch.observe(canvas);
 
   function size() {
-    const cw = canvas.clientWidth || 120, ch = canvas.clientHeight || 96;
     const d = Math.min(2, globalThis.devicePixelRatio || 1);
+    if (boxed && d === dpr && layer) return;
+    const cw = canvas.clientWidth || 120, ch = canvas.clientHeight || 96;
+    boxed = !!watch && canvas.clientWidth > 0;
     if (cw === w && ch === h && d === dpr && layer) return;
     w = cw; h = ch; dpr = d;
     canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
@@ -193,7 +200,7 @@ export function createMinimap(canvas, { doc = globalThis.document } = {}) {
       if (xz && xz.length >= 6 && y && y.length * 2 >= xz.length) { const t = thinLoopY(xz, y); loop = t.xz; ys = t.y; }
       else { loop = xz && xz.length >= 6 ? thinLoop(xz) : null; ys = null; }
       forks = paths.filter(f => f.xz?.length >= 4);
-      at = -1; w = 0; size();
+      at = -1; w = 0; boxed = false; size();
     },
     /** @param {Float32Array} map x, z per racer (racer 0 = you) @param {number} leader racer index in 1st */
     draw(map, leader = -1) {

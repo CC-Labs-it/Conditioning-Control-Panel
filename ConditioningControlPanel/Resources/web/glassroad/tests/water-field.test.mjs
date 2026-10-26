@@ -89,3 +89,23 @@ test('idle fields sleep, disturbances wake them and reset publishes neutral pixe
   f.reset();assert.ok(f.stats.version>activeVersion);assert.equal(f.sample(15,0).height,0);
   assert.equal(f.step(1/60),false);
 });
+test('table-driven solver keeps the reference bytes on the real course (pinned before the perf pass)',()=>{
+  const tr=loadTrack(JSON.parse(readFileSync(new URL('../tracks/threshold.json',import.meta.url))),{moving:true}),f=createWaterField(tr,{quality:'phone'});
+  let sum=0;
+  for(let k=0;k<300;k++){
+    f.runs.forEach((r,j)=>{if((k+j)%2===0)f.disturb({s:r.fromS+((k*7.3+j*11)%Math.max(1,r.toS-r.fromS)),x:((k%5)-2)*.4,strength:.3,dirX:1,dirS:.5});});
+    f.step(1/60*(1+k%3));const q=f.sample(f.runs[0].fromS+3,.2);sum+=q.height+q.slopeX+q.slopeS+q.foam;
+  }
+  let h=0;for(const v of f.pixels)h=(h*31+v)>>>0;
+  assert.equal(h,1647520444);assert.equal(sum,30.647941466131503);assert.equal(f.stats.activeCells,15785);
+});
+test('a settled run rests on its own while another run keeps moving',()=>{
+  const f=createWaterField(fixture()),[a,b]=f.runs;
+  f.disturb({s:15,x:0,radius:3,strength:.4});
+  for(let i=0;i<1500;i++){f.disturb({s:60,x:0,radius:2,strength:.3});f.step(1/60);}
+  const neutral=(r)=>{for(let p=(r.rowOffset-1)*f.width*4;p<(r.rowOffset+r.ny+1)*f.width*4;p+=4)
+    if(f.pixels[p]!==128||f.pixels[p+1]!==128||f.pixels[p+2]!==128||f.pixels[p+3]!==0)return false;return true;};
+  assert.equal(a.live,false);assert.ok(neutral(a),'quiet run packs neutral texels');assert.equal(f.sample(15,0).height,0);
+  assert.equal(b.live,true);assert.ok(!neutral(b));assert.ok(f.stats.activeCells>0);
+  f.disturb({s:15,x:0,radius:3,strength:.4});assert.equal(a.live,true);f.step(1/60);assert.ok(!neutral(a),'a contact wakes it');
+});

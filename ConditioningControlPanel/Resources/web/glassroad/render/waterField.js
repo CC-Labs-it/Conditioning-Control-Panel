@@ -39,6 +39,22 @@ export function createWaterField(track,{quality='mid'}={}) {
     activeCells:0,maxHeight:0,energy:0,droppedTimeS:0};
   let accumulator=0,dirty=true,awake=false;
   const index=(r,row,col)=>(r.rowOffset+row)*width+col;
+  // Static taps: where each cell's lateral position lands in the previous and next rows of its own run (the
+  // aligned() lookup) depends only on the run widths, so integrate()/pack() read it from these tables instead of
+  // recomputing it per cell per step. Same expressions as aligned()/rowValue(), stored as doubles: bit-identical.
+  const PA=new Int32Array(count),NA=new Int32Array(count),PT=new Float64Array(count),NT=new Float64Array(count);
+  function tap(r,row,x,A,T,i) {
+    const col=clamp((x/r.widths[row]+.5)*(width-1),0,width-1),left=Math.min(width-2,Math.floor(col));
+    A[i]=index(r,row,left);T[i]=col-left;
+  }
+  for(const r of runs) {
+    // live: may hold motion (integrate it); clean: at rest and already packed as neutral texels (skip it)
+    r.live=false;r.clean=false;
+    for(let row=0;row<r.ny;row++)for(let col=0;col<width;col++) {
+      const i=index(r,row,col),x=(col/(width-1)-.5)*r.widths[row];
+      tap(r,Math.max(0,row-1),x,PA,PT,i);tap(r,Math.min(r.ny-1,row+1),x,NA,NT,i);
+    }
+  }
   function locate(s,x) {
     if(!Number.isFinite(s)||!Number.isFinite(x))return null;
     const r=runs.find(r=>s>=r.fromS&&s<=r.toS);if(!r)return null;
@@ -58,28 +74,42 @@ export function createWaterField(track,{quality='mid'}={}) {
   function aligned(array,r,row,x) {return rowValue(array,r,row,(x/r.widths[row]+.5)*(width-1));}
   function pack() {
     stats.activeCells=stats.maxHeight=stats.energy=0;
-    let maxVelocity=0,maxFoam=0;
-    for(const r of runs)for(let row=0;row<r.ny;row++)for(let col=0;col<width;col++) {
-      const i=index(r,row,col),dx=r.widths[row]/(width-1),x=(col/(width-1)-.5)*r.widths[row];
-      const left=index(r,row,Math.max(0,col-1)),right=index(r,row,Math.min(width-1,col+1));
-      const previous=Math.max(0,row-1),next=Math.min(r.ny-1,row+1);
-      SX[i]=clamp((H[right]-H[left])/(dx*(col===0||col===width-1?1:2)),-1,1);
-      SS[i]=clamp((aligned(H,r,next,x)-aligned(H,r,previous,x))/(r.ds*(next-previous)),-1,1);
-      const p=i*4;pixels[p]=Math.round((H[i]+1)*127.5);pixels[p+1]=Math.round((SX[i]+1)*127.5);
-      pixels[p+2]=Math.round((SS[i]+1)*127.5);pixels[p+3]=Math.round(F[i]*255);
-      const a=Math.abs(H[i]);stats.maxHeight=Math.max(stats.maxHeight,a);stats.energy+=H[i]*H[i]+V[i]*V[i]*.05;
-      maxVelocity=Math.max(maxVelocity,Math.abs(V[i]));maxFoam=Math.max(maxFoam,F[i]);
-      if(a>.002||Math.abs(V[i])>.002||F[i]>.01)stats.activeCells++;
+    const last=width-1;
+    for(const r of runs) {
+      if(!r.live&&r.clean)continue;
+      let maxHeight=0,maxVelocity=0,maxFoam=0,energy=0,active=0;
+      for(let row=0;row<r.ny;row++) {
+        const dx=r.widths[row]/(width-1),base=(r.rowOffset+row)*width;
+        const previous=Math.max(0,row-1),next=Math.min(r.ny-1,row+1),ssDen=r.ds*(next-previous);
+        for(let col=0;col<width;col++) {
+          const i=base+col,left=col>0?i-1:i,right=col<last?i+1:i;
+          SX[i]=clamp((H[right]-H[left])/(dx*(col===0||col===width-1?1:2)),-1,1);
+          const a=PA[i],t=PT[i],b=NA[i],u=NT[i];
+          SS[i]=clamp((H[b]*(1-u)+H[b+1]*u-(H[a]*(1-t)+H[a+1]*t))/ssDen,-1,1);
+          const p=i*4;pixels[p]=Math.round((H[i]+1)*127.5);pixels[p+1]=Math.round((SX[i]+1)*127.5);
+          pixels[p+2]=Math.round((SS[i]+1)*127.5);pixels[p+3]=Math.round(F[i]*255);
+          const h=Math.abs(H[i]),v=Math.abs(V[i]);
+          if(h>maxHeight)maxHeight=h;energy+=H[i]*H[i]+V[i]*V[i]*.05;
+          if(v>maxVelocity)maxVelocity=v;if(F[i]>maxFoam)maxFoam=F[i];
+          if(h>.002||v>.002||F[i]>.01)active++;
+        }
+      }
+      const from=r.rowOffset*width,to=(r.rowOffset+r.ny)*width;
+      // The rest rule, per run: below these bounds every texel already packs neutral, so settle the run exactly
+      // and stop stepping it until a contact wakes it (a busy run elsewhere no longer keeps it integrating).
+      if(maxHeight<.00001&&maxVelocity<.00001&&maxFoam<.002) {
+        H.fill(0,from,to);V.fill(0,from,to);F.fill(0,from,to);SX.fill(0,from,to);SS.fill(0,from,to);
+        for(let p=(from-width)*4,end=(to+width)*4;p<end;p+=4){pixels[p]=pixels[p+1]=pixels[p+2]=128;pixels[p+3]=0;}
+        r.live=false;r.clean=true;continue;
+      }
+      r.clean=false;
+      // Repeated guard rows isolate linear filtering from the next run in the atlas.
+      pixels.copyWithin((r.rowOffset-1)*width*4,r.rowOffset*width*4,(r.rowOffset+1)*width*4);
+      pixels.copyWithin((r.rowOffset+r.ny)*width*4,(r.rowOffset+r.ny-1)*width*4,(r.rowOffset+r.ny)*width*4);
+      if(maxHeight>stats.maxHeight)stats.maxHeight=maxHeight;stats.energy+=energy;stats.activeCells+=active;
     }
-    // Repeated guard rows isolate linear filtering from the next run in the atlas.
-    for(const r of runs)for(const [src,dst] of [[r.rowOffset,r.rowOffset-1],[r.rowOffset+r.ny-1,r.rowOffset+r.ny]])
-      pixels.copyWithin(dst*width*4,src*width*4,(src+1)*width*4);
-    if(!runs.length)for(let i=0;i<count;i++)pixels.set([128,128,128,0],i*4);
-    if(stats.maxHeight<.00001&&maxVelocity<.00001&&maxFoam<.002) {
-      H.fill(0);V.fill(0);F.fill(0);SX.fill(0);SS.fill(0);
-      for(let i=0;i<count;i++){const p=i*4;pixels[p]=pixels[p+1]=pixels[p+2]=128;pixels[p+3]=0;}
-      stats.activeCells=stats.maxHeight=stats.energy=0;awake=false;
-    }
+    if(!runs.length)for(let i=0;i<count;i++){const p=i*4;pixels[p]=pixels[p+1]=pixels[p+2]=128;pixels[p+3]=0;}
+    awake=runs.some(r=>r.live);
     dirty=false;stats.version++;
   }
   function disturb({s,x,radius=2,strength=.25,dirX=0,dirS=0,foam=.4}={}) {
@@ -105,21 +135,29 @@ export function createWaterField(track,{quality='mid'}={}) {
       H[i]=clamp(H[i]+delta,-MAX_HEIGHT,MAX_HEIGHT);V[i]=clamp(V[i]+delta*2.2,-MAX_VELOCITY,MAX_VELOCITY);
       F[i]=clamp(F[i]+foam*Math.max(core*.2,rim*.75),0,1);
     }
-    stats.disturbances++;dirty=true;awake=true;return true;
+    r.live=true;r.clean=false;stats.disturbances++;dirty=true;awake=true;return true;
   }
   function integrate() {
-    const damping=Math.exp(-1.25*FIXED),foamDecay=Math.exp(-.8*FIXED);
-    for(const r of runs)for(let row=0;row<r.ny;row++)for(let col=0;col<width;col++) {
-      const i=index(r,row,col),h=H[i],dx=r.widths[row]/(width-1),x=(col/(width-1)-.5)*r.widths[row];
-      const left=H[index(r,row,Math.max(0,col-1))],right=H[index(r,row,Math.min(width-1,col+1))];
-      const previous=aligned(H,r,Math.max(0,row-1),x),next=aligned(H,r,Math.min(r.ny-1,row+1),x);
-      const lap=(left+right-2*h)/(dx*dx)+(previous+next-2*h)/(r.ds*r.ds);
-      V[i]=clamp((V[i]+(r.speed*r.speed*lap-.45*h)*FIXED)*damping,-MAX_VELOCITY,MAX_VELOCITY);
-    }
-    for(const r of runs)for(let row=0;row<r.ny;row++)for(let col=0;col<width;col++) {
-      const i=index(r,row,col);H[i]=clamp(H[i]+V[i]*FIXED,-MAX_HEIGHT,MAX_HEIGHT);
-      F[i]=Math.max(F[i]*foamDecay,Math.min(.35,Math.abs(V[i])*.045));
-      if(Math.abs(H[i])<1e-7&&Math.abs(V[i])<1e-7)H[i]=V[i]=0;
+    const damping=Math.exp(-1.25*FIXED),foamDecay=Math.exp(-.8*FIXED),last=width-1;
+    // Runs never exchange water, and a run at exact rest stays at exact rest, so only live runs step.
+    for(const r of runs) {
+      if(!r.live)continue;
+      const speed2=r.speed*r.speed,ds2=r.ds*r.ds;
+      for(let row=0;row<r.ny;row++) {
+        const dx=r.widths[row]/(width-1),dx2=dx*dx,base=(r.rowOffset+row)*width;
+        for(let col=0;col<width;col++) {
+          const i=base+col,h=H[i],left=H[col>0?i-1:i],right=H[col<last?i+1:i];
+          const a=PA[i],t=PT[i],b=NA[i],u=NT[i];
+          const previous=H[a]*(1-t)+H[a+1]*t,next=H[b]*(1-u)+H[b+1]*u;
+          const lap=(left+right-2*h)/dx2+(previous+next-2*h)/ds2;
+          V[i]=clamp((V[i]+(speed2*lap-.45*h)*FIXED)*damping,-MAX_VELOCITY,MAX_VELOCITY);
+        }
+      }
+      for(let i=r.rowOffset*width,end=(r.rowOffset+r.ny)*width;i<end;i++) {
+        H[i]=clamp(H[i]+V[i]*FIXED,-MAX_HEIGHT,MAX_HEIGHT);
+        F[i]=Math.max(F[i]*foamDecay,Math.min(.35,Math.abs(V[i])*.045));
+        if(Math.abs(H[i])<1e-7&&Math.abs(V[i])<1e-7)H[i]=V[i]=0;
+      }
     }
     stats.steps++;dirty=true;
   }
@@ -147,7 +185,7 @@ export function createWaterField(track,{quality='mid'}={}) {
       slopeS:clamp((at(next,x)-at(previous,x))/((next-previous)*r.ds),-1,1),foam:value(F,q),wet:true});
   }
   function atlasUV(s,x) {const q=locate(s,x);return q?{u:(q.col+.5)/width,v:(q.r.rowOffset+q.y+.5)/height,wet:true}:{u:.5/width,v:.5/height,wet:false};}
-  function reset() {H.fill(0);V.fill(0);F.fill(0);SX.fill(0);SS.fill(0);accumulator=0;awake=false;stats.steps=stats.disturbances=stats.droppedTimeS=0;dirty=true;pack();}
+  function reset() {for(const r of runs)r.live=r.clean=false;H.fill(0);V.fill(0);F.fill(0);SX.fill(0);SS.fill(0);accumulator=0;awake=false;stats.steps=stats.disturbances=stats.droppedTimeS=0;dirty=true;pack();}
   pack();
   return {runs,width,height,pixels,disturb,step,sample,atlasUV,reset,stats};
 }
