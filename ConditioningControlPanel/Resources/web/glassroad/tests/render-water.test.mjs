@@ -95,7 +95,7 @@ test('module shape: the road reads the attributes defensively, water is one bran
   assert.ok(fall.includes('new Mesh(g, mat)') && (fall.match(/new Mesh\(/g) || []).length === 1, 'one sheet mesh');
   assert.ok(!fall.includes('requestAnimationFrame') && !fall.includes('setInterval'), 'no clock of its own');
   for (const k of ['splash(fx', 'surface(fx', 'chute(fx']) assert.ok(cues.includes(k), k);
-  assert.ok(cues.includes('fx.gentle.kick(W.splashDipDeg') && cues.includes('fx.gentle.kick(W.chuteLeanDeg'));
+  assert.ok(cues.includes('fx.shock?.(TRAUMA.land[0] * k)') && !cues.includes("fire('fov'"), 'feel wave: a splash is trauma, never a fov dip');
   assert.ok(wakes.includes('wakeOnWater('));
   assert.ok(WATER_CUES.splashDipDeg < 0 && WATER_CUES.streamLiftDeg > 0 && WATER_CUES.chuteLeanDeg > 0);
 });

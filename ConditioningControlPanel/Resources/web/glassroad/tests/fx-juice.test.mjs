@@ -18,7 +18,8 @@ function rig({ gentle = false } = {}) {
   const run = (s, dt = 1 / 60) => { for (let t = 0; t < s - 1e-9; t += dt) fx.update(dt, kart); };
   return { feel, bus, fx, run };
 }
-const shaken = (fx) => Math.hypot(...fx.state.shake) > 0;
+// feel wave: shaking is the trauma channel (aberration is non-zero whenever traumaOut is, and 0 under Gentle)
+const shaken = (fx) => fx.state.aberrationPx > 0;
 
 test('juice: an item hit on the player shakes and rumbles; on a bot or under Gentle it does not', () => {
   const r = rig();
@@ -45,14 +46,14 @@ test('juice: bumps shake only the player and only past the cue speed', () => {
   assert.ok(shaken(r.fx) && r.fx.state.rumble > 0);
 });
 
-test('juice: a pickup bubble boost kicks the fov less than a pad and never shakes; Surge shakes', () => {
+test('juice: a pickup bubble boost draws fewer lines than a pad; no boost shakes (feel wave), Surge included', () => {
   const pad = rig(), bub = rig(), surge = rig();
   pad.bus.emit('boost-start', { kind: 'pad', tier: 0, amount: 0.2 });
   bub.bus.emit('boost-start', { kind: 'bubble', tier: 0, amount: 0.05 });
   surge.bus.emit('boost-start', { kind: 'surge', tier: 0, amount: 0.16 });
   for (const x of [pad, bub, surge]) x.run(0.3);
-  assert.ok(bub.fx.state.fovKick > 0 && bub.fx.state.fovKick < pad.fx.state.fovKick);
-  assert.ok(!shaken(bub.fx) && shaken(surge.fx));
+  assert.ok(bub.fx.state.speedLines > 0 && bub.fx.state.speedLines < pad.fx.state.speedLines);
+  assert.ok(!shaken(bub.fx) && !shaken(surge.fx) && !shaken(pad.fx));
 });
 
 test('juice: slipstream charge draws a half wake of speed lines, released on out', () => {

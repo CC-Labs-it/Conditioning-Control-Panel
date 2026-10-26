@@ -143,23 +143,23 @@ function rig({ gentle = false } = {}) {
   return { bus, fx, run: (s) => { for (let t = 0; t < s - 1e-9; t += 1 / 60) fx.update(1 / 60, kart); } };
 }
 
-test('cues: a stone is a tick and a 2 cm bob, Gentle keeps only the tick; a void dips and darkens, shorter than a drop', () => {
+test('cues: a stone is a tick (the camera bob is retired); a void darkens, shorter than a drop', () => {
   assert.equal(typeof FX_CUES.stone, 'function'); assert.equal(typeof FX_CUES.void, 'function');
   const a = rig();
   a.bus.emit('stone', { id: 'x', s: 1, x: 0 }); a.run(0.05);
   assert.ok(a.fx.state.rumble > 0, 'tick');
-  assert.ok(a.fx.state.camPush > 0 && a.fx.state.camPush <= STONE_CUES.bobM + 1e-9, 'bob ' + a.fx.state.camPush);
+  assert.equal(a.fx.state.camPush, 0, 'no camera bob (feel wave)'); assert.ok(STONE_CUES.bobM > 0);
   a.run(0.6);
   assert.equal(a.fx.state.camPush, 0); assert.equal(a.fx.state.rumble, 0);
   const g = rig({ gentle: true });
   g.bus.emit('stone', { id: 'x', s: 1, x: 0 }); g.run(0.05);
-  assert.equal(g.fx.state.camPush, 0, 'no bob under Gentle');
+  assert.equal(g.fx.state.rumble, 0, 'no rumble under Gentle');
   const v = rig();
   v.bus.emit('void', { s: 1, x: 0 }); v.run(0.08);
-  assert.ok(v.fx.state.fovKick < 0, 'dip'); assert.ok(v.fx.state.duck > 0, 'darkening');
+  assert.equal(v.fx.state.fovKick, 0, 'no fov dip'); assert.ok(v.fx.state.duck > 0, 'darkening');
   v.run(0.6);
   assert.equal(v.fx.state.fovKick, 0); assert.equal(v.fx.state.duck, 0, 'a void lets go on its own, a drop holds');
   const gv = rig({ gentle: true });
   gv.bus.emit('void', { s: 1, x: 0 }); gv.run(0.08);
-  assert.equal(gv.fx.state.fovKick, 0, 'no dip under Gentle');
+  assert.ok(gv.fx.state.duck > 0, 'Gentle keeps the darkening');
 });
