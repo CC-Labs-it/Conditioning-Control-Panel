@@ -20,6 +20,9 @@
  * mode, a landed hit stamps BONK! / DOUBLE! beside the slot with a hit marker and an edge flash, a blocked one
  * stamps BLOCKED. Toasts carry a priority (fx/itemFeelMath.js toastDecide): a hit confirm replaces a stale lap note
  * at once and a combo updates its own toast in place; a lower one waits its turn.
+ * Feel wave (2026-10-26): the HUD turns landed item and trap hits into hitter-hit {racer, hitter, from} on the bus
+ * (sim/hitterHit.js; `racers` getter option for the bearing, else from is null); the item chip answers a hit the
+ * player lands and the lap chip pulses on every lap (hud/hudPulse.js, by the Motion option).
  */
 import { formatTime, ordinal, iconOf, itemName, rollFrame, racerLabels, ICON_IDS } from './format.js';
 import { slotState, slotMoment, gentleMoment, pipMoment, USED_S, PIP_OUT_S } from './slotMath.js';
@@ -29,6 +32,8 @@ import { createKit, placeArt } from './kit.js';
 import { devices as sharedDevices } from '../input/device.js';
 import { createItemFeel, ITEM_FEEL_MARKUP } from './itemFeel.js';
 import { toastDecide, PRIORITY } from '../fx/itemFeelMath.js';
+import { wireHitterHit } from '../sim/hitterHit.js';
+import { playPulse } from './hudPulse.js';
 
 export { formatTime };
 
@@ -36,7 +41,7 @@ const NAMES = ['race', 'online', 'options', 'controls', 'back', 'resume', 'resta
 const TOAST_S = 1.6, TOAST_GAP_S = 0.6;
 
 /** @returns {Hud} */
-export function createHud({ root, card }, feel, bus, { doc = globalThis.document, now = () => performance.now(), devices = sharedDevices, photosafe = null } = {}) {
+export function createHud({ root, card }, feel, bus, { doc = globalThis.document, now = () => performance.now(), devices = sharedDevices, photosafe = null, racers = null } = {}) {
   root.classList.add('hud');
   root.dataset.screen = 'race';
   root.innerHTML =
@@ -178,6 +183,9 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
       play(el.pop, gentleOn() ? 'on-soft' : 'on', ['on', 'on-soft']);
       play(el.speedBox, gentleOn() ? 'punch-soft' : 'punch', ['punch', 'punch-soft']);
     }),
+    wireHitterHit(bus, () => (typeof racers === 'function' ? racers() : racers)),
+    bus.on('hitter-hit', ({ hitter }) => { if (hitter === 0) pulse(el.item, 'hit', 'hud.hitterFlashMs'); }),
+    bus.on('lap', () => pulse(el.lap, 'lap', 'hud.lapPulseMs')),
     bus.on('lap', ({ lap }) => { if (lap > 0 && lap < laps) toast(lap === laps - 1 ? 'Final lap' : 'Lap ' + (lap + 1), { priority: PRIORITY.note }); }),
     bus.on('slipstream', ({ racer, state }) => { if (racer === 0 && state === 'fire') toast('Slipstream'); }),
     bus.on('race-standings', ({ order }) => { leader = order && order.length ? order[0] : -1; itemFeel.standings(order); }),
@@ -187,6 +195,10 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     bus.on('tether-hook', (p) => itemFeel.hook(p || {})),
   ];
   const colours = () => feel.get('juice.sparkColours');
+  function pulse(node, kind, key) {
+    let ms = 0; try { ms = feel.get(key); } catch { ms = 0; }
+    playPulse(node, kind, ms, (cards.options && cards.options.motion) || 'full', gentleOn());
+  }
   function pips(tier) {
     const c = colours(), t = Math.max(0, Math.min(3, tier | 0));
     const m = pipMoment(pipTier, t);

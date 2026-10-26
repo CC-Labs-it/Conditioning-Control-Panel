@@ -207,6 +207,8 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       tog('gentlePreview', 'Gentle preview', opts.gentlePreview, g ? 'Set in CCP, stays on' : 'Softer effects, no flicker', g) +
       '<div class="c-opt"><span>Steer assist<small>Leans to the middle, drives hands off</small></span>' +
         btn('cycle', choiceLabel('steerAssist', opts.steerAssist), 'c-tog', ' data-key="steerAssist" aria-label="Steer assist"') + '</div>' +
+      '<div class="c-opt"><span>Motion<small>Shake, pulses and hit pauses</small></span>' +
+        btn('cycle', choiceLabel('motion', opts.motion), 'c-tog', ' data-key="motion" aria-label="Motion"') + '</div>' +
       tog('assist', 'Soft rails', opts.assist, 'Open edges hold you in', false) +
       '<label class="c-opt"><span>Steering<small>How hard the wheel turns</small></span><input type="range" min="' + STEER_SENS.min + '" max="' +
         STEER_SENS.max + '" step="' + STEER_SENS.step + '" data-key="steerSens" value="' + opts.steerSens + '" aria-label="Steering"></label>' +
