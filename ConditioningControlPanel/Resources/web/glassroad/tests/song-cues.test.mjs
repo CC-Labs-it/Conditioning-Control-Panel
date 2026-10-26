@@ -39,15 +39,17 @@ test('cross planes lock before impact; watch spots settle on the road, stay put 
     }
     passed ||= seen?.state==='passed';
   }
-  // Hanging screens stay three seconds ahead at impact so the full face fits the approach view.
-  assert.ok(Math.abs(spot-(200+30*9))<1); assert.ok(passed); assert.equal(watch.live.length,0);
+  // Hanging screens land at least three seconds ahead at impact, further when the whole face needs it to fit the
+  // chase view (marquee-view.test.mjs judges the actual picture).
+  assert.ok(spot>=200+30*9-1 && spot<=200+30*6+280, String(spot)); assert.ok(passed); assert.equal(watch.live.length,0);
 });
 test('a re-dropping rig drops a fresh fixed screen on each of its beats', () => {
   const c=song('WATCH'); c.cues[0].params={redrop:true}; c.cues[0].jolts=[{word:'signal',n:2}]; c.cues[0].endAnchor={event:'hit',n:1};
   const run=createSongCueRun(c,track); assert.deepEqual(run.cues.map(x=>[x.id,x.startS]),[['a',6],['a~1',12]]);
   const spots=new Map();
   for(let i=0;i<16*60;i++){const t=i/60;for(const r of run.update(t,kart(200+30*t)).live) if(r.locked) spots.set(r.id,r.s);}
-  assert.ok(Math.abs(spots.get('a')-(200+30*9))<1); assert.ok(Math.abs(spots.get('a~1')-(200+30*15))<1);
+  for (const [id, at] of [['a', 6], ['a~1', 12]]) assert.ok(spots.get(id) >= 200 + 30 * (at + 3) - 1 && spots.get(id) <= 200 + 30 * at + 280, id);
+  assert.ok(spots.get('a~1') > spots.get('a') + 100);
 });
 test('sky and zone pieces need no road spot and survive a stopped kart', () => {
   const c=song('WATCH'); c.cues[0].kind='SHIFT'; const run=createSongCueRun(c,track);

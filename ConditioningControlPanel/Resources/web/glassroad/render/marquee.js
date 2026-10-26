@@ -4,6 +4,7 @@ import { acquireLoomAtlas } from './loomAtlas.js';
 import { wordTheme } from './wordTheme.js';
 import { screenBodyGeometry, screenBodyMaterial } from './screenBody.js';
 import { screenBodySize } from './screenBodyMath.js';
+import { marqueeFace, faceX, CLEAR_M, HANG_M, DROP_S } from '../sim/marqueeView.js';
 
 const CAPACITY = 12, LINKS = 30, CW = 512, CH = 288;
 const unit = x => Math.max(0, Math.min(1, Number(x) || 0));
@@ -12,11 +13,14 @@ const ease = x => { const u = unit(x); return u * u * (3 - 2 * u); };
 // Song-relative motion only, around a fixed road spot. The camera and physical road never participate.
 // The drop lands exactly on startS (gravity: slow at the top, fastest at impact), bounces twice, then sways
 // one swing per two beats and dips on every beat. An exit at endS snaps one chain (swing off the road) or winches up.
-const FALL_S = 1.05, FALL_M = 46;
+// The transport (sim/marqueeView.js) sets where it hangs for the chase view: shiftM along the road's side axis,
+// fallM so the drop starts just above the top edge, liftM over a raised canal floor, faceScale on climbs and
+// tight turns, and replacedS when a newer drop retires it (it leaves as the next screen falls).
+const FALL_S = DROP_S, FALL_M = 46;
 export function marqueePose(row, songS, gentle = false, side = 0, beat = null) {
-  const w = Math.max(14, Math.min(32, (row.frame?.w || 24) * .9)) * (side ? .78 : 1), h = w * .5625;
-  const age = songS - row.startS, exit = Math.max(0, songS - row.endS);
-  const u = unit((age + FALL_S) / FALL_S), fall = FALL_M * (1 - u * u);
+  const fw = row.frame?.w || 24, { w, h } = marqueeFace(fw, side, row.faceScale);
+  const age = songS - row.startS, exit = Math.max(0, songS - Math.min(row.endS, row.replacedS ?? Infinity));
+  const u = unit((age + FALL_S) / FALL_S), fall = (row.fallM ?? FALL_M) * (1 - u * u);
   const bounce = gentle || age < 0 || age >= .9 ? 0 : Math.abs(Math.sin(age / .45 * Math.PI)) * 2.6 * (1 - age / .9) ** 1.5;
   let sway = 0, dip = 0;
   if (!gentle && age > 0 && beat?.bpm > 0) {
@@ -33,10 +37,10 @@ export function marqueePose(row, songS, gentle = false, side = 0, beat = null) {
   const snap = row.params?.exit === 'snap', away = ease(exit / (gentle ? 2.4 : 1.3));
   const direction = side || (row.params?.snapSide ?? 1);
   const roll = sway + jolt + (!gentle && snap ? direction * away * 1.25 : 0);
-  const x = side * ((row.frame?.w || 24) / 2 + w / 2 + 2) + (snap ? direction * away * (w + 18) : 0);
-  // Rotation cannot lower any corner into the seven-metre road clearance.
+  const x = faceX(fw, side, row.shiftM, row.faceScale) + (snap ? direction * away * (w + 18) : 0);
+  // Rotation cannot lower any corner into the seven-metre road clearance (over a raised canal floor too).
   const extent = Math.abs(Math.cos(roll)) * h * .54 + Math.abs(Math.sin(roll)) * w * .54;
-  const y = Math.max(7.2 + extent, 7.8 + h / 2 + fall + bounce - dip + away * (snap ? 14 : 44));
+  const y = (row.liftM || 0) + Math.max(CLEAR_M + extent, HANG_M + h / 2 + fall + bounce - dip + away * (snap ? 14 : 44));
   return { x, y, w, h, roll, yaw: gentle ? 0 : Math.sin(Math.max(0, age) * .7) * .05,
     whip: gentle ? 0 : bounce * .5 + Math.abs(jolt) * 10 + dip * .6 + (age > -FALL_S && age < 0 ? .8 : 0), away, bottom: y - extent,
     snapped: snap && exit > 0 ? (direction > 0 ? 0 : 1) : -1 };
@@ -196,7 +200,8 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
     for (const [id, item] of wanted) {
       const s = slots.find(v => v.id === id) || slots.find(v => !v.id);
       if (!s) continue;
-      if (!s.id) { s.id = id; s.bornS = Number.isFinite(item.row.bornS) ? item.row.bornS : clock; s.soft = photosafe?.request('marquee') === false; }
+      // A screen shows as its drop begins (or from a seek's rebuild): it never waits visibly above the frame.
+      if (!s.id) { s.id = id; s.bornS = Math.max(Number.isFinite(item.row.bornS) ? item.row.bornS : clock, item.row.startS - FALL_S); s.soft = photosafe?.request('marquee') === false; }
       s.row = item.row; s.side = item.side; s.root.visible = true;
       if (!paused) pose(s, item.row, clock, gentle);
     }
