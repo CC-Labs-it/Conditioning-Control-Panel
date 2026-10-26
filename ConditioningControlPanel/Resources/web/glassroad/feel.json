@@ -358,5 +358,7 @@
   "hitCam": { "on": true, "holdS": 2.2, "leadTimeoutS": 2.5, "minDistM": 14, "enterS": 0.34, "exitS": 0.3, "overshoot": 1.35,
     "fovDeg": 42, "backM": 3.1, "upM": 1.05, "lookUpM": 0.35, "aheadM": 0.3, "sideDeg": 32, "orbitDegps": 18, "orbitMaxDeg": 70, "followTcS": 0.1,
     "creep": 0.1, "creepS": 0.9, "punch": 0.2, "punchS": 0.45, "shakeM": 0.11, "shakeS": 0.42, "shakeHz": 19,
-    "flash": 0.55, "flashS": 0.22, "glowS": 0.7, "wordS": 0.75, "contactDelayS": 0.12 }
+    "flash": 0.55, "flashS": 0.22, "glowS": 0.7, "wordS": 0.75, "contactDelayS": 0.12 },
+  "audio": { "hitThumpMin": 0.35, "hitDuckWall": 0.55, "hitDuckItem": 0.45, "hitDuckBump": 0.8, "thumpHz": 72, "thumpGain": 0.22, "thumpDurS": 0.09, "squealGain": 0.03, "squealLowHz": 1500, "squealOct": 0.75, "windFromPct": 0.3, "windGain": 0.03, "windTopHz": 3200, "revGain": 0.045, "finalPercGain": 0.07, "finalPercInS": 1.5 },
+  "music": { "finalLapRate": 1.0 }
 }

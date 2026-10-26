@@ -105,7 +105,7 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
   gain.connect(out);
   const reactive = createMusicReactivity(ctx, gain);
   const reactiveOptions = { playing: false, muted: false, paused: false, gentle: false, songS: 0 };
-  let src = null, startT = 0, durS = 0, chart = null, song = null, bpm = 96, volume = 1, token = 0;
+  let src = null, startT = 0, rate = 1, durS = 0, chart = null, song = null, bpm = 96, volume = 1, token = 0;
   let cached = null;   // { url, buffer, chart, song }: the last chart's decode, reused by a restart
   let cachedFile = null; // One personally selected File, retained across course transitions.
   let analysis = null, analyzed = null;   // a picked file's beat analysis, and the buffer it belongs to
@@ -116,7 +116,7 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
   const latency = () => { const o = ctx.outputLatency; return Number.isFinite(o) && o > 0 ? o : (Number.isFinite(ctx.baseLatency) ? ctx.baseLatency : 0); };
   function songTime() {
     if (!src) return 0;
-    const t = ctx.currentTime - startT - latency();
+    const t = (ctx.currentTime - startT) * rate - latency();
     if (t < 0) return 0;
     return durS > 0 ? t % durS : t;
   }
@@ -154,7 +154,7 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
       s.start(a.when, a.offset);
       startT = a.startT;
     } else { s.start(t); startT = t; }
-    src = s;
+    src = s; rate = 1;
     gain.gain.cancelScheduledValues(t);
     gain.gain.setValueAtTime(0, t);
     gain.gain.setTargetAtTime(volume, t, Math.max(g('musicFadeInS') / 3, 0.01));
@@ -218,6 +218,15 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
       if (src) { try { gain.gain.setTargetAtTime(volume, ctx.currentTime, 0.05); } catch (e) { gain.gain.value = volume; } }
     },
     get playing() { return !!src; },
+    /** Playback rate (the final lap, music.finalLapRate): the song clock keeps its place across the change. */
+    get rate() { return rate; },
+    setRate(r) {
+      const next = r > 0.5 && r < 2 ? r : 1;
+      if (next === rate) return;
+      const now = ctx.currentTime;
+      if (src) { startT = now - (now - startT) * rate / next; try { src.playbackRate.setValueAtTime(next, now); } catch (e) { /* older context */ } }
+      rate = next;
+    },
     /** Persistent 0..1 music-only envelope. readReactivity updates it once per render. */
     get reactivity() { return reactive.frame; },
     readReactivity(dt, opts = null) {

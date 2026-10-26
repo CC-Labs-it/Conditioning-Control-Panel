@@ -33,6 +33,7 @@ import { createUnderwater } from './underwater.js';
 import { createWaterTravel } from './water-travel.js';
 import { createItemPassTracker, playItemPass } from './itemFlight.js';
 import { comboNext } from '../fx/itemFeelMath.js';
+import { createFeelVoices } from './feelVoices.js';
 
 const GESTURES = ['pointerdown', 'touchstart', 'keydown'];
 const clamp01 = (x) => (x > 0 ? (x < 1 ? x : 1) : 0);
@@ -47,7 +48,7 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
   let ctx = null, engine = null, syn = null, rivals = null, music = null, menuMelody = null, paused = false, dead = false;
   let samples = null, samplesReady = Promise.resolve(0), plays = 0, lapCount = laps;
   const popSt = { rung: -1, t: -1e9 }, comboSt = { n: 0, t0: -1e9 };
-  let master = null, sfx = null, bed = null, musicBus = null, musicDuck = null, underwater = null, waterTravel = null;
+  let master = null, sfx = null, bed = null, musicBus = null, musicDuck = null, underwater = null, waterTravel = null, voices = null;
   const vol = { master: 1, music: 1, sfx: 1 };
   const near = new Map();
   const itemPasses = createItemPassTracker(p => {
@@ -85,20 +86,24 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
     syn.duck = duck;
     try { music = createMusic(ctx, musicBus, feel, { fetchFn: musicFetchFn }); } catch (e) { music = null; }
     menuMelody = createMenuMelody(ctx, musicBus);
+    voices = createFeelVoices(ctx, sfx, bed, feel, bus, {
+      music: () => music, duck, alive: () => !!ctx && !paused && ctx.state === 'running',
+      laps: () => (typeof lapCount === 'function' ? lapCount() : lapCount),
+    });
     samples = createSamples(ctx, sfx, { fetchFn, ...(sfxBase ? { base: sfxBase } : {}) });
     samplesReady = samples.load().then((n) => { engine?.useSamples(samples); rivals?.useSamples(samples); return n; }).catch(() => 0);
     return ctx;
   }
 
-  /** A screen effect landed: engine, rivals and music dip, then come back. */
-  function duck(durationS = 0) {
+  /** A screen effect or a big hit (floor by hit size, audio/feelVoices.js) landed: engine, rivals and music dip, then come back. */
+  function duck(durationS = 0, floor = g('effectDuck')) {
     if (!ctx) return;
     const t = ctx.currentTime, inS = g('effectDuckInS');
     const hold = Math.min(Math.max(0, Number(durationS) || 0), g('effectDuckHoldMaxS'));
     for (const p of [bed.gain, musicDuck.gain]) {
       try {
         p.cancelScheduledValues(t);
-        p.setTargetAtTime(g('effectDuck'), t, Math.max(inS / 3, 0.005));
+        p.setTargetAtTime(Number.isFinite(floor) ? clamp01(floor) : g('effectDuck'), t, Math.max(inS / 3, 0.005));
         p.setTargetAtTime(1, t + inS + hold, Math.max(g('effectDuckOutS') / 3, 0.01));
       } catch (e) { p.value = 1; }
     }
@@ -168,12 +173,13 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
       if (!engine || paused) return;
       menuMelody?.update(!!flags.menu && !flags.paused);
       if (flags.active === false) {
-        engine.silence(); rivals?.silence(); near.clear();
+        engine.silence(); rivals?.silence(); near.clear(); voices?.update(0, flags);
         underwater?.update(0); waterTravel?.reset(); return;
       }
       underwater?.update(flags.submerged);
       waterTravel?.update(speedPct, flags);
       engine.update(speedPct, flags);
+      voices?.update(speedPct, flags);
       near.clear();
       for (const r of list || []) if (r && Number.isInteger(r.i)) near.set(r.i, r);
       let n = 3;
@@ -215,6 +221,7 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
       underwater?.reset();
       itemPasses.reset();
       waterTravel?.reset();
+      voices?.reset();
       if (ctx) for (const p of [bed.gain, musicDuck.gain]) { try { p.cancelScheduledValues(ctx.currentTime); } catch (e) { /* none */ } glide(p, 1, 0.05); }
     },
     setPaused(on) {
@@ -226,6 +233,7 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
     get music() { return music; },
     get menuMusic() { return menuMelody?.inspect || { playing: false, cached: false, voices: 0 }; },
     get underwater() { return underwater?.inspect || Object.freeze({ available: false, submerged: 0 }); },
+    get feelVoices() { return voices?.inspect || null; },
     get waterTravel() { return waterTravel?.inspect || Object.freeze({ available: false, wet: false, depth: 0 }); },
     /** Laps in this race (a number or a getter), so the last lap gets its own sound. */
     setLaps(n) { lapCount = n; },
@@ -243,10 +251,11 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
       rivals?.dispose();
       engine?.dispose();
       waterTravel?.dispose();
+      voices?.dispose();
       underwater?.dispose();
       master?.disconnect?.();
       if (ctx) { try { ctx.close(); } catch (e) { /* gone */ } }
-      ctx = engine = syn = rivals = music = menuMelody = samples = underwater = waterTravel = null;
+      ctx = engine = syn = rivals = music = menuMelody = samples = underwater = waterTravel = voices = null;
     },
     get state() { return ctx ? ctx.state : (dead ? 'unavailable' : 'not created'); },
   };
