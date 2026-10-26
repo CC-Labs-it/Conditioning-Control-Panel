@@ -48,7 +48,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
 
   let kind = 'start', data = {}, ready = false, waitNote = note?.textContent || '';
   const sound = (name) => { if (name) emit('sound', { name }); };
-  let opts = loadOptions(), host = { gentle: false };
+  let opts = loadOptions(), host = { gentle: false, scrolller: null };   // scrolller: { on } where the host offers its feed
   const load = { p: 0 };
   function paintLoad() {
     if (kind !== 'start' || ready || card.hidden) return;
@@ -194,7 +194,10 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       CYCLE_ROWS.map(([key, label, hint]) => '<div class="c-opt"><span>' + label + '<small>' + hint + '</small></span>' +
         btn('cycle', choiceLabel(key, opts[key]), 'c-tog', ' data-key="' + key + '" aria-label="' + label + '"') + '</div>').join('') +
       tog('shadows', 'Shadows', opts.shadows, 'Off is lighter on the GPU', false) +
-      tog('showFps', 'Show fps', opts.showFps, 'A small counter in the corner', false) + '</div>';
+      tog('showFps', 'Show fps', opts.showFps, 'A small counter in the corner', false) +
+      (host.scrolller ? '<div class="c-opt"><span>Online pictures<small>From Scrolller, in the flashes. Same switch as Arcademy</small></span>' +
+        btn('scrolller', host.scrolller.on ? 'On' : 'Off', 'c-tog' + (host.scrolller.on ? ' on' : ''), ' aria-pressed="' + !!host.scrolller.on + '"') + '</div>' : '') +
+      '</div>';
   }
 
   /** The controls table for the device used last, plus the layout button for a non-standard pad. */
@@ -251,6 +254,10 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     if (a.startsWith('lb-')) { lobby.act(el); return; }   // the lobby picks its own sound (it knows a refusal)
     if (a === 'rc-next') { if (rc) rc.at = 0; recapNext(); return; }   // a click is never a held throttle
     if (!(a === 'back' && BACKS.includes(kind))) sound(actSound(a));   // back() plays its own
+    if (a === 'scrolller') {   // the host stores consent; only its echo (setScrolller) moves the switch
+      if (host.scrolller) { el.classList.add('pending'); emit('scrolller', { on: !host.scrolller.on }); }
+      return;
+    }
     if (a === 'toggle') {
       const key = el.dataset.key, on = !(opts[key]);
       setOption(key, on);
@@ -400,6 +407,14 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       paintLoad();
     },
     setHostGentle(on) { host.gentle = !!on; },
+    /** The host's Scrolller consent ({ on }), or null where the host has no feed (the switch is not drawn). */
+    setScrolller(state) {
+      host.scrolller = state ? { on: state.on === true } : null;
+      const el = card.querySelector('[data-act="scrolller"]');
+      if (!el || !host.scrolller) return;
+      const on = host.scrolller.on;
+      el.textContent = on ? 'On' : 'Off'; el.classList.remove('pending'); el.classList.toggle('on', on); el.setAttribute('aria-pressed', String(on));
+    },
     /** The course loop for the recap sketch ({ xz } from boot's centreline, evenly spaced along s). */
     setTrack(t) { trackLoop = t && t.xz ? t : null; },
   };
