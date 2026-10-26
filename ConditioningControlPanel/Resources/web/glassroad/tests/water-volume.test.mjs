@@ -104,3 +104,16 @@ test('a course with no raised water surface skips the reflection probe warm-up (
   wet.reflections.warm = async () => { warmed = true; return true; };
   assert.equal(await wet.warmReflections({ playerS: 0 }), true); assert.equal(warmed, true);
 });
+
+test('PHONE WATER: the phone tier builds no scene probe, warms nothing and captures nothing; mid keeps it', async t => {
+  const phone = buildWaterVolume(track(), pal, null, { quality: 'phone' }); t.after(() => phone.dispose());
+  assert.ok(phone.object.getObjectByName('water-surface-raised'), 'the raised liquid surface is still built');
+  assert.equal(phone.reflections, null);
+  assert.equal(await phone.warmReflections({ playerS: 0 }), false); assert.equal(phone.uniforms.reflectionReady.value, 0);
+  phone.update(1 / 60, { playerS: 10 }); phone.update(1, { playerS: 10 });
+  assert.equal(phone.uniforms.reflectionReady.value, 0);
+  const mid = buildWaterVolume(track(), pal, null, { quality: 'mid' }); t.after(() => mid.dispose());
+  assert.ok(mid.reflections && mid.reflections.texture, 'mid keeps the live probe');
+  let warmed = false; mid.reflections.warm = async () => { warmed = true; return true; };
+  assert.equal(await mid.warmReflections({ playerS: 0 }), true); assert.equal(warmed, true);
+});
