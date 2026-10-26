@@ -35,6 +35,8 @@ const LOAD_HTML = '<div class="c-load" role="progressbar" aria-label="Loading" a
 /** Display rows (polish 2): a button that cycles its values, with a short hint. */
 const CYCLE_ROWS = [['frameCap', 'Frame cap', 'Lower keeps a slow PC steady'], ['renderScale', 'Render scale', 'Auto drops pixels to hold the frame rate'],
   ['quality', 'Quality', 'Auto follows your PC']];
+/** The Quality hint on the options card opened from the pause card. */
+export const QUALITY_LATER = 'Changes after this race';
 
 export function createCards(card, { doc = globalThis.document, emit, devices = null, kit = null } = {}) {
   const body = card.querySelector('.card-body');
@@ -191,7 +193,8 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
         STEER_SENS.max + '" step="' + STEER_SENS.step + '" data-key="steerSens" value="' + opts.steerSens + '" aria-label="Steering"></label>' +
       VOL_ROWS.map(([key, label]) => '<label class="c-opt"><span>' + label + '</span><input type="range" min="0" max="1" step="0.05" data-key="' +
         key + '" value="' + opts[key] + '" aria-label="' + label + '"></label>').join('') +
-      CYCLE_ROWS.map(([key, label, hint]) => '<div class="c-opt"><span>' + label + '<small>' + hint + '</small></span>' +
+      // mid-race the Quality step waits for the race to end (render/quality.js qualityLanding), and the hint says so
+      CYCLE_ROWS.map(([key, label, hint]) => '<div class="c-opt"><span>' + label + '<small>' + (key === 'quality' && data.from === 'pause' ? QUALITY_LATER : hint) + '</small></span>' +
         btn('cycle', choiceLabel(key, opts[key]), 'c-tog', ' data-key="' + key + '" aria-label="' + label + '"') + '</div>').join('') +
       tog('shadows', 'Shadows', opts.shadows, 'Off is lighter on the GPU', false) +
       tog('showFps', 'Show fps', opts.showFps, 'A small counter in the corner', false) +
