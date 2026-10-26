@@ -65,8 +65,8 @@ test('record: storage round trip, and a throwing storage falls back to an empty 
   assert.equal(saveRecord(r, null), false);
 });
 
-test('medals: unset courses award nothing, ranks order none to glass', () => {
-  assert.equal(medalFor('threshold', 10), null);
+test('medals: unknown courses and no time award nothing, ranks order none to glass', () => {
+  assert.equal(medalFor('threshold', 0), null);
   assert.equal(medalFor('moon', 10), null);
   assert.equal(medalRank(null), 0); assert.equal(medalRank('glass'), 4); assert.ok(medalRank('gold') > medalRank('silver'));
 });
