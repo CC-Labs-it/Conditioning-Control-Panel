@@ -585,3 +585,34 @@ Drawn-only camera layers after `compose()` (`render/cameraMath.js`, applied in `
 
 - `camera.hint` { shortcutDeg 4, bendDeg 6, aheadM 25, inS 0.25, outS 0.4 }: the look direction (never the eye) leads up to shortcutDeg toward the next shortcut gate or fork mouth within aheadM and up to bendDeg into the bend the road turns within aheadM (full at 30 degrees of turn). Tweens in over inS, out over outS. Chase view only; none in first person, rear view, the mirror dolly or while looking around; none under Gentle or Motion off.
 - `camera.traumaRot` { rollDeg 0, yawDeg 0, pitchDeg 0 }: rotational trauma on the drawn camera only, `fx.noise(axis, t) * fx.state.traumaOut * deg` (axes 0 pitch, 1 yaw, 2 roll). All 0 by default; owner trial values 1.5 / 0.8 / 0.6. None under Gentle; traumaOut is 0 under Motion off.
+
+### Lane C
+
+Render world (`render/worldFeel.js` holds the rules; skids, particles, speedlines, audioReactive, faces, garage read them).
+Motion 'less' halves the new effects, 'off' removes them.
+
+- `permanence.skidCapMul` skid ring size multiplier on desktop tiers (high, mid); the phone tier keeps its ring.
+- `permanence.skidLifeS` skid mark life on desktop tiers, seconds (600 = race-long; the oldest segment still recycles).
+- `permanence.scorchLenM` length of the scorch laid under a wall or trap hit, metres.
+- `permanence.scorchWidthM` width of that scorch, metres.
+- `permanence.scorchColour` scorch colour (born hot white, cools to this).
+- `permanence.debrisCount` debris chips per wall or trap hit (phone half, Gentle 0.6).
+- `permanence.debrisSettleS` seconds settled debris stays on the road.
+- `permanence.debrisFadeS` the ease out after that, seconds.
+- `permanence.debrisSizeM` debris chip size, metres.
+- `speedSense.finalLapTweenS` the final-lap wake tween in, seconds (one variable 0..1).
+- `speedSense.finalLapParticleMul` particle count share at full wake.
+- `speedSense.finalLapFieldShift` speed share the speed field threshold drops by at full wake.
+- `speedSense.finalLapReactiveMul` audio-reactive prop pulse gain at full wake.
+- `speedSense.topFromPct` speed share where top-speed streaks start.
+- `speedSense.topLenMul` added streak length at full speed (share).
+- `speedSense.topDensity` added speed field density at full speed.
+- `cascade.staggerMs` random gap between list rows, ms [min, max].
+- `cascade.durMs` one row's entrance, ms (easeOutBack).
+- `cascade.riseY` how far a row rises in, px.
+- `cascade.overshoot` easeOutBack overshoot (0 under motion less).
+- `cascade.lessMul` stagger and rise share under motion less.
+- `faces.holdS` rival glance / grin hold after an overtake, seconds.
+- `faces.cooldownS` minimum gap between face changes per racer, seconds.
+- `faces.passer` face the passing racer shows.
+- `faces.passed` face the passed racer shows.
