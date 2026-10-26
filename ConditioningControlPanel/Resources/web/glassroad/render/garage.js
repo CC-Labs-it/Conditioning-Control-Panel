@@ -12,7 +12,9 @@ import {dressKart,riderOnly,VEHICLE_MECHANISMS} from './wardrobe.js';
 import {createEmiSkin} from './emiSkin.js';
 import {garageArrows} from './garageArrows.js';
 import {garageUi} from '../hud/garage.js';
-import {KARTS,OUTFITS,LOCKED,STORAGE,loadGarage,stepKart,routeTo,raceLook} from '../hud/garageState.js';
+import {KARTS,OUTFITS,STORAGE,loadGarage,stepKart,routeTo,raceLook,lockedKarts} from '../hud/garageState.js';
+import {loadRecord} from '../meta/record.js';
+import {unlockedSet} from '../meta/unlocks.js';
 import {warmGarageWardrobe} from './garageWarm.js';
 
 /** One menu scene on the game's existing renderer, driven by the existing frame loop. */
@@ -21,7 +23,8 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   if(!base||KARTS.some(([id])=>!art.model('emi-vehicle-'+id)))return null;
   let storage;try{storage=localStorage;}catch{}
   let layout=garageLayout(canvas.clientWidth,canvas.clientHeight);
-  const state=loadGarage(storage),scene=new T.Scene(),camera=new T.PerspectiveCamera(33,1,.03,40);
+  const darkNow=()=>lockedKarts(unlockedSet(loadRecord(storage)));let locked=darkNow();
+  const state=loadGarage(storage,locked),scene=new T.Scene(),camera=new T.PerspectiveCamera(33,1,.03,40);
   scene.background=new T.Color('#164b59');scene.fog=new T.Fog('#164b59',7,15);
   const style=createGarageStyle();
   scene.add(new T.HemisphereLight(0xf5fff0,0x27566b,.95));
@@ -44,12 +47,13 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   const emiLife=createEmiLife(model),lifeSignals={},vehicleLives=[];
   const contactGeo=new T.PlaneGeometry(2.2,2.2),contactMat=new T.MeshBasicNodeMaterial({color:0x100a0e,transparent:true,depthWrite:false});
   contactMat.opacityNode=float(.32).mul(float(1).sub(smoothstep(.05,.5,uv().sub(.5).length())));
+  const dark=new T.MeshBasicNodeMaterial({color:0x211e24});owned.push(dark);
   const collection=KARTS.map(([id],index)=>{
     const holder=new T.Group(),asset=clone(art.model('emi-vehicle-'+id).scene);holder.add(asset);holder.userData.kartIndex=index;
     const meshes=[];asset.traverse(m=>{if(m.isSkinnedMesh){m.material=racerFinish(m.material);meshes.push(m);}});
     vehicleLives.push(createVehicleLife(meshes,{...VEHICLE_MECHANISMS?.vehicles?.[id],vehicleId:id},{seed:index,art}));
     const contact=new T.Mesh(contactGeo,contactMat);contact.rotation.x=-Math.PI/2;contact.position.y=-.014;holder.add(contact);
-    asset.traverse(m=>{if(!m.isMesh)return;m.frustumCulled=false;if(LOCKED.has(id)){m.material=new T.MeshBasicNodeMaterial({color:0x211e24});owned.push(m.material);}});style.apply(asset,{locked:LOCKED.has(id)});scene.add(holder);return holder;
+    holder.userData.asset=asset;asset.traverse(m=>{if(!m.isMesh)return;m.frustumCulled=false;if(locked.has(id)){m.userData.garageLit=m.material;m.material=dark;}});style.apply(asset,{locked:locked.has(id)});scene.add(holder);return holder;
   });
   let selected=KARTS.findIndex(k=>k[0]===state.kart),orbit=-selected*Math.PI/4,yaw=0,custom=false,visible=false,moving=null,queued=null,time=0,reduced=true,dress=null,view=0,viewBusy=false,customBounds=null,customFrame=null,wardrobeBounds=null;
   const arrows=garageArrows(scene),ray=new T.Raycaster(),pointer=new T.Vector2(),particles=[];
@@ -57,7 +61,12 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   for(const arrow of arrows.arrows)style.apply(arrow.root);
   const ui=garageUi({change,select,customize,trackId,online,changeTrack:id=>changeTrack?.(id),action:name=>{if(!moving&&!viewBusy){sound('menu-ok');action(name);}},hover:(dir,on)=>arrows.hover(dir,on)});ui.track(track,laps);
   function save(){try{storage?.setItem(STORAGE,JSON.stringify(state));}catch{}}
-  function paint(){skin.set(state);ui.paint(state,{custom:custom||view>0,busy:!!moving||viewBusy,locked:LOCKED});save();}
+  function paint(){skin.set(state);ui.paint(state,{custom:custom||view>0,busy:!!moving||viewBusy,locked});save();}
+  // A kart earned in the logbook since the last look gets its own paint back; nothing ever re-darkens.
+  function refreshLocks(){const next=darkNow();let lifted=false;
+    for(const [index,[id]]of KARTS.entries())if(locked.has(id)&&!next.has(id)){lifted=true;const asset=collection[index].userData.asset;
+      asset.traverse(m=>{if(m.isMesh&&m.userData.garageLit){m.material=m.userData.garageLit;delete m.userData.garageLit;}});style.apply(asset);}
+    if(lifted){locked=new Set([...locked].filter(id=>next.has(id)));paint();renderer.three.compileAsync?.(scene,camera)?.catch?.(()=>{});}}
   function change(values,colors=false){if(viewBusy)return;const previous=state.outfit;Object.assign(state,values);if(colors){state.antenna=state.secondary;state.shoes=state.secondary;state.hands='#'+new T.Color(state.primary).lerp(new T.Color('#ffffff'),.24).getHexString();state.face='#'+new T.Color(state.primary).lerp(new T.Color('#ffffff'),.65).getHexString();}
     if(previous!==state.outfit)redress();paint();sound('menu-toggle');}
   function redress(){dress?.dispose();dress=dressKart(art,model,{outfit:raceLook(state).outfit,vehicle:null});style.apply(model);customBounds=null;if(custom)resize();}
@@ -77,7 +86,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   }
   function customize(on){if(moving||on===custom)return;custom=on;gesture=null;viewBusy=true;paint();resize();ui.customFocus(on);sound(on?'menu-ok':'menu-back');}
   function select(value,relative=false){if(custom||viewBusy)return;if(moving){queued={value,relative};return;}
-    const route=relative?stepKart(selected,value):routeTo(selected,value);if(!route){sound('menu-deny');return;}
+    const route=relative?stepKart(selected,value,locked):routeTo(selected,value,locked);if(!route){if(!relative&&KARTS[value]&&locked.has(KARTS[value][0]))ui.lockNote(KARTS[value][0]);sound('menu-deny');return;}
     moving={elapsed:0,duration:reduced?.32:1.12,from:orbit,to:orbit-route.steps*Math.PI/4,index:route.index,yaw,landed:false};
     arrows.press(Math.sign(route.steps));sound('menu-move');if(hop){mixer.stopAllAction();hop.reset().play();}paint();}
   function sparkle(){if(reduced)return;for(let i=0;i<20;i++){const mesh=new T.Mesh(particleGeo,particleMaterial);mesh.position.set((Math.random()-.5)*.4,.25,0);scene.add(mesh);particles.push({mesh,v:new T.Vector3((Math.random()-.5)*.9,Math.random()*.7+.2,(Math.random()-.5)*.7),life:0});}}
@@ -125,11 +134,11 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
     if(dir!==null)select(dir,true);else if(index!==null)select(index);else if(g.target&&!custom)customize(true);};
   const cancel=()=>{gesture=null;};
   for(const [event,fn]of [['pointerdown',down],['pointermove',move],['pointerup',up],['pointercancel',cancel],['lostpointercapture',cancel]])canvas.addEventListener(event,fn);
-  function nav(dir){if(ui.trackPicking){ui.trackNav(dir);return;}if(!visible||viewBusy||!['up','down','left','right','ok','back'].includes(dir))return;if((dir==='left'||dir==='right')&&!custom){select(dir==='left'?-1:1,true);return;}
+  function nav(dir){if(ui.trackPicking){ui.trackNav(dir);return;}if(ui.recordOpen){ui.recordNav(dir);return;}if(!visible||viewBusy||!['up','down','left','right','ok','back'].includes(dir))return;if((dir==='left'||dir==='right')&&!custom){select(dir==='left'?-1:1,true);return;}
     if(dir==='back'){if(custom)customize(false);return;}
     if(dir==='ok'){if(ui.root.contains(document.activeElement))document.activeElement.click?.();else ui.root.querySelector('[data-g=race]').click();return;}
     const buttons=[...ui.root.querySelectorAll('button,input')].filter(b=>!b.disabled&&b.getClientRects().length&&getComputedStyle(b).visibility!=='hidden');const i=buttons.indexOf(document.activeElement);buttons[(i+(['up','left'].includes(dir)?-1:1)+buttons.length)%buttons.length]?.focus();}
-  const keydown=e=>{if(!visible||e.altKey||e.ctrlKey||e.metaKey)return;if(ui.trackPicking){const dir={Escape:'back',Enter:'ok',ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'}[e.key];if(dir){e.preventDefault();e.stopImmediatePropagation();ui.trackNav(dir);}return;}if(e.key==='Escape'){if(custom)customize(false);return;}if(['INPUT'].includes(e.target.tagName))return;
+  const keydown=e=>{if(!visible||e.altKey||e.ctrlKey||e.metaKey)return;if(ui.trackPicking||ui.recordOpen){const dir={Escape:'back',Enter:'ok',ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'}[e.key];if(dir){e.preventDefault();e.stopImmediatePropagation();(ui.trackPicking?ui.trackNav:ui.recordNav)(dir);}return;}if(e.key==='Escape'){if(custom)customize(false);return;}if(['INPUT'].includes(e.target.tagName))return;
     const dir={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'}[e.key];if(dir){e.preventDefault();e.stopImmediatePropagation();nav(dir);}};
   document.addEventListener('keydown',keydown,true);
   const observer=new ResizeObserver(resize);observer.observe(canvas);
@@ -151,7 +160,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
       if('sound' in next)sound=typeof next.sound==='function'?next.sound:()=>{};
       if('changeTrack' in next)changeTrack=typeof next.changeTrack==='function'?next.changeTrack:()=>{};
     },
-    setVisible(on){if(on!==visible){visible=on;gesture=null;ui.setVisible(on);if(on)resize();}},
+    setVisible(on){if(on!==visible){visible=on;gesture=null;if(on)refreshLocks();ui.setVisible(on);if(on)resize();}},
     render(dt,reduced,{gentle=false}={}){update(dt,reduced,gentle);renderer.three.render(scene,camera);},
     dispose(){canvas.style.opacity='';observer.disconnect();document.removeEventListener('keydown',keydown,true);for(const [event,fn]of [['pointerdown',down],['pointermove',move],['pointerup',up],['pointercancel',cancel],['lostpointercapture',cancel]])canvas.removeEventListener(event,fn);contactGeo.dispose();contactMat.dispose();emiLife.dispose();for(const l of vehicleLives)l.dispose();dress?.dispose();style.dispose();skin.dispose();arrows.dispose();ui.dispose();mixer.stopAllAction();environment.dispose();floor.geometry.dispose();floor.material.dispose();particleGeo.dispose();particleMaterial.dispose();for(const m of owned)m.dispose();},
   };
