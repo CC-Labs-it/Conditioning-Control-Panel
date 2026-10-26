@@ -39,9 +39,14 @@ export function createWaterReflections({ scene, renderer, exclude, quality='mid'
     console.warn('[glassroad/water] scene reflections unavailable: '+stats.error);
   }
   return { texture:target.texture,stats,target,camera,
-    async warm({playerPos,playerS=0,onProgress=null}={}) {
+    /** overdraw(): called in the same task as the staging draw (garage first: the menu's own frame goes over it). */
+    async warm({playerPos,playerS=0,onProgress=null,overdraw=null}={}) {
       if(!scene||!three){stats.error='Scene renderer not supplied';return false;}
       if(disposed)return false;
+      // the canvas (or whatever target the caller had) goes back before every await: a menu frame drawn while
+      // the pipelines build or during the painted gap must never land in a cube face
+      const outer=three.getRenderTarget(),outerFace=three.getActiveCubeFace(),outerMip=three.getActiveMipmapLevel();
+      const handBack=()=>three.setRenderTarget(outer,outerFace,outerMip);
       try {
         position(playerPos,playerS);
         await withCapture(async()=>{
@@ -66,12 +71,17 @@ export function createWaterReflections({ scene, renderer, exclude, quality='mid'
               // asks its shadow-mask lighting model for a float that does not exist.
               scene.updateMatrixWorld?.(true);
               if(face===0) {
-                await three.compileAsync(scene,faceCamera);
+                // the compile takes its render list and target in this task; the pipelines build afterwards
+                const compiling=three.compileAsync(scene,faceCamera);
+                handBack();
+                await compiling;
+                three.setRenderTarget(target,face);
                 // r186's async compiler sees a transparent material after its temporary
                 // front/back side is restored. An actual unculled draw warms both cull
                 // pipelines, including distant media that first enter a later cube view.
                 // The clean capture below overwrites this staging face before it is used.
                 three.render(scene,faceCamera);
+                if(overdraw){handBack();overdraw();three.setRenderTarget(target,face);}
               }
             } finally {
               for(const [object,visible,culled,count] of saved){object.visible=visible;object.frustumCulled=culled;if(object.count!==count)object.count=count;}
@@ -80,6 +90,7 @@ export function createWaterReflections({ scene, renderer, exclude, quality='mid'
             }
             // Capture normal visibility so hidden warmup props do not enter the reflection.
             three.render(scene,camera.children[face]);stats.captures++;
+            handBack();
             onProgress?.(face+1,6);
             await new Promise(resolve=>globalThis.requestAnimationFrame?requestAnimationFrame(()=>setTimeout(resolve,0)):setTimeout(resolve,0));
           }

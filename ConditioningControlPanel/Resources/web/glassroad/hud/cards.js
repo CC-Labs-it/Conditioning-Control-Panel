@@ -53,6 +53,10 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   const sound = (name) => { if (name) emit('sound', { name }); };
   let opts = loadOptions(), host = { gentle: false, scrolller: null };   // scrolller: { on } where the host offers its feed
   const load = { p: 0 };
+  // garage first: the course's lights warm behind the menu; until they are ready the Race door says so (a press
+  // still works: boot covers the garage and starts the race the moment the lights are ready)
+  const lights = { ready: true, stage: '', p: 0 };
+  const raceDoorNote = () => lights.ready ? 'You and 7 bots' : (lights.stage || 'Getting the lights ready') + (lights.p > 0 ? ' ' + Math.round(lights.p * 100) + '%' : '');
   function paintLoad() {
     if (kind !== 'start' || ready || card.hidden) return;
     note.textContent = waitNote;
@@ -110,7 +114,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       title.innerHTML = esc(data.title || 'Racing Thoughts') + '<small>A CC Labs game</small>';
       note.textContent = (data.track || 'Threshold') + ', ' + (data.laps || 3) + ' laps';
       extra.innerHTML = '<div class="c-doors">' +
-        btn('race', '<b>Race</b><em>You and 7 bots</em>', 'c-door hot') +
+        btn('race', '<b>Race</b><em>' + raceDoorNote() + '</em>', 'c-door' + (lights.ready ? ' hot' : ' c-wait')) +
         (data.online === false ? '' : btn('online', '<b>Race online</b><em>Tables and friends</em>', 'c-door')) +
         '</div><div class="c-links">' + btn('options', 'Options', 'c-link') + btn('controls', 'Controls', 'c-link') +
         btn('howto', 'How to play', 'c-link') + btn('back', 'Back', 'c-link') + '</div>' +
@@ -427,6 +431,17 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     get lobby() { return lobby; },
     get options() { return { ...opts }; },
     setReady(r, n) { ready = !!r; if (n) waitNote = n; if (kind === 'start' && !card.hidden) show('start', data); },
+    /** { ready, stage, p }: the lights behind the menu; an open menu card's Race door is updated in place. */
+    setLights(s) {
+      if (!s) return;
+      if (typeof s.ready === 'boolean') lights.ready = s.ready;
+      if (s.stage) lights.stage = String(s.stage);
+      lights.p = s.ready ? 0 : Math.max(lights.p, Math.min(1, Math.max(0, Number(s.p) || 0)));   // never backwards
+      if (kind !== 'menu' || card.hidden) return;
+      const door = extra.querySelector('[data-act="race"]'), em = door && door.querySelector('em');
+      if (em) em.textContent = raceDoorNote();
+      if (door) { door.classList.toggle('hot', lights.ready); door.classList.toggle('c-wait', !lights.ready); }
+    },
     /** The warming card's stage line and bar (p 0..1), updated in place: no re-show, no card-in replay. */
     setProgress(stage, p) {
       if (stage) waitNote = String(stage);

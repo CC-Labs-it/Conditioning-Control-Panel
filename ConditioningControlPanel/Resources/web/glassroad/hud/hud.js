@@ -310,6 +310,8 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     setReady: (r, n) => cards.setReady(r, n),
     /** The warming card's stage line and bar, p 0..1 (pass 3: boot names each stage). */
     setLoading: (stage, p) => cards.setProgress(stage, p),
+    /** Garage first: the course's lights (shaders, reflections) warm behind the menu; the Race door shows it. */
+    setLights: (s) => cards.setLights(s),
     on(name, fn) { if(disposed)return()=>{};(listeners[name] || (listeners[name] = [])).push(fn); return () => { const l = listeners[name], i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); }; },
     onStart: (fn) => {if(!disposed)fns.start.push(fn);}, onResume: (fn) => {if(!disposed)fns.resume.push(fn);}, onRestart: (fn) => {if(!disposed)fns.restart.push(fn);},
     setRacers(meta) { metas = meta || null; labels = racerLabels(meta || []); },

@@ -298,7 +298,8 @@ function withInsetTarget(three, target, fn) {
   three.setRenderTarget(target);
   let out;
   try { out = fn(); } catch (e) { restore(); throw e; }
-  if (out && typeof out.then === 'function') return out.finally(restore);   // an async compile keeps the switches until done
+  // an async compile takes its render list, target and shadow state in this task (three builds the pipelines
+  // afterwards): the switches go back at once, so a garage frame drawn while they build lands on the canvas
   restore();
   return out;
 }
@@ -348,20 +349,26 @@ export async function warmInset(three, post, scene, camera) {
  * each), one group shown per pass and a painted frame between passes, so the warming card's bar moves
  * and the tab never looks hung (Firefox linked every program serially in one ~7 s task). A last pass with
  * everything shown catches anything only a full frame builds. onProgress(done, total) after each group.
- * @returns {Promise<{ ms: number, objects: number, groups: number }>}
+ * Garage first: the warm can run behind the live menu. overdraw() is called in the same task as every warm
+ * frame (the garage draws its own frame over it before anything is presented, so no warm frame is ever seen)
+ * and alive() false after a pass stops the warm (a course switch mid-warm) with everything put back.
+ * @returns {Promise<{ ms: number, objects: number, groups: number, stopped: boolean }>}
  */
 export { WARM, warmGroups };
 
 // a painted frame between warm passes (the card and its bar redraw), falling back to a plain task
 const paintGap = () => new Promise((r) => (globalThis.requestAnimationFrame ? requestAnimationFrame(() => setTimeout(r, 0)) : setTimeout(r, 0)));
 
-export async function warmAll(renderer, scene, camera, extras = [], { onProgress = null, stage = null } = {}) {
+export async function warmAll(renderer, scene, camera, extras = [], { onProgress = null, stage = null, alive = null, overdraw = null } = {}) {
   const t0 = performance.now();
   const post = renderer.post(scene, camera);
   const timing = { compileMs: 0, renderMs: 0, gapMs: 0 };
-  const compile = async () => { const t = performance.now(); await post.compileAsync(); timing.compileMs += performance.now() - t; };
-  const render = () => { const t = performance.now(); post.render(); timing.renderMs += performance.now() - t; };
+  // compileStart hands the scene pass target back in this task (post.js): a frame drawn while the pipelines
+  // build (the garage behind the menu) lands on the canvas, never in the scene pass target
+  const compile = async () => { const t = performance.now(); await (post.compileStart ? post.compileStart() : post.compileAsync()); timing.compileMs += performance.now() - t; };
+  const render = () => { const t = performance.now(); post.render(); if (overdraw) overdraw(); timing.renderMs += performance.now() - t; };
   const gap = async () => { const t = performance.now(); await paintGap(); timing.gapMs += performance.now() - t; };
+  const stopped = () => !!alive && !alive();
   const temp = new Group(), plane = new PlaneGeometry(0.01, 0.01);
   temp.name = 'warm-extras';
   for (const x of [].concat(extras || [])) {
@@ -408,23 +415,27 @@ export async function warmAll(renderer, scene, camera, extras = [], { onProgress
     if (later) for (const o of later) o.visible = false;
     // pass 0: the post chain and the receivers alone (the road's programs are big), then a painted frame
     await compile();
-    render();
-    await gap();
+    if (!stopped()) { render(); await gap(); }
     const shown = [];
-    for (let g = 0; g < groups.length; g++) {
+    for (let g = 0; g < groups.length && !stopped(); g++) {
       for (const o of groups[g]) for (let p = o; p && p !== scene; p = p.parent) if (!p.visible) { p.visible = true; shown.push(p); }
       await compile();
-      render();
+      if (!stopped()) render();
       for (const p of shown) p.visible = false;
       shown.length = 0;
+      if (stopped()) break;
       if (onProgress) { try { onProgress(g + 1, groups.length + 1); } catch { /* the card only */ } }
       await gap();
     }
-    // the whole scene once: anything only a full frame builds (everything above is cached by now)
-    for (const o of items) o.visible = !(later && later.has(o));
-    await compile();
-    render();
-    if (onProgress) { try { onProgress(groups.length + 1, groups.length + 1); } catch { /* the card only */ } }
+    if (!stopped()) {
+      // the whole scene once: anything only a full frame builds (everything above is cached by now)
+      for (const o of items) o.visible = !(later && later.has(o));
+      await compile();
+      if (!stopped()) {
+        render();
+        if (onProgress) { try { onProgress(groups.length + 1, groups.length + 1); } catch { /* the card only */ } }
+      }
+    }
   } catch (e) {
     console.warn('[glassroad/renderer] warm: ' + (e && e.message));
   } finally {
@@ -437,7 +448,7 @@ export async function warmAll(renderer, scene, camera, extras = [], { onProgress
     plane.dispose();
     scene.updateMatrixWorld(true);
   }
-  render();
-  return { ms: Math.round(performance.now() - t0), objects, groups: groups.length, staged: plan, all: plan ? items : null,
+  if (!stopped()) render();
+  return { ms: Math.round(performance.now() - t0), objects, groups: groups.length, staged: plan, all: plan ? items : null, stopped: stopped(),
     ...Object.fromEntries(Object.entries(timing).map(([key, value]) => [key, Math.round(value)])) };
 }

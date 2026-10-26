@@ -420,6 +420,13 @@ async function boot(course, options, lifetime, isCurrent) {
   let warmedTier = null, rewarmBusy = false;
   // phone tier: the scenery the cover did not prepare, prepared group by group while the menu, intro and countdown play
   let deferred = null, stagedLate = 0;
+  // GARAGE FIRST: the menu opens as soon as the garage is built; the course's lights (shaders, mirrors, water
+  // reflections, hit cam, gate screen) warm behind it (warmLights). busy while they warm, ready when done, covered
+  // while a race waits for them under the cover, want = what waits ('race' | 'online'), stage + p = the door's note
+  // quiet = the garage holds its last frame (the hit cam's compile of every program waits on GPU replies that each
+  // menu frame delays: measured 0.25 s alone, 4 s with frames between; shaders and water do not care)
+  const lights = { ready: false, busy: false, covered: false, want: null, quiet: false, stage: 'Getting the lights ready', p: 0 };
+  const WARM_MENU_FPS = 30; let menuDrawMs = 0;   // the garage's pace while the lights warm
   let online = null, lobbyUi = null;
   let songToken = 0, pickedSong = shared.pickedSong;
   lifetime.defer(() => { songToken++; });
@@ -921,10 +928,20 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     if (lifetime.alive && state === 'menu') startRace();
   }
+  /** Race (or the room's go) before the lights are ready: the cover comes back with the bar, the garage hides, and
+   *  the race starts the moment the lights are done (warmLights). A second press changes nothing. */
+  function waitForLights(want) {
+    lights.want = want;
+    if (lights.covered) return;
+    lights.covered = true;
+    loading.start(); garage?.setVisible(false); hud.setCard(null);
+    showLoading(lights.stage, lights.p);
+  }
   function startRace() {
     if (!lifetime.alive) return;
     if (online) return;
     if (rewarmBusy) return;
+    if (!lights.ready) { waitForLights('race'); return; }
     if (warmedTier && renderer.tier !== warmedTier && state === 'menu') { void rewarmThenRace(); return; }
     closeRunLog();
     stopSong();
@@ -947,10 +964,11 @@ async function boot(course, options, lifetime, isCurrent) {
     if (online) endOnline();
     unpause(); resetAll();
     state = 'menu';
-    hud.setCard('menu', { title: 'Racing Thoughts', track: trackName, laps, online: course.online,
-      courses: COURSES.map(c => ({ name: c.name, selected: c.id === track.id, url: courseUrl(location.href, c.id, {race:true}) })) });
+    hud.setCard('menu', menuCard());
     if (audio.state === 'running') void menuSong();
   }
+  const menuCard = () => ({ title: 'Racing Thoughts', track: trackName, laps, online: course.online,
+    courses: COURSES.map(c => ({ name: c.name, selected: c.id === track.id, url: courseUrl(location.href, c.id, {race:true}) })) });
 
   // ---- online (wave B2): lobby transport, the room session behind the lobby UI, the run per room --------------
   /** The lobby transport and identity: dev local lobby, desktop host relay, or a direct fetch on the web. */
@@ -1065,6 +1083,7 @@ async function boot(course, options, lifetime, isCurrent) {
   /** countAt: the card goes, the song starts (everyone hears the same moment), go lands on startAt (frame loop). */
   function goOnline() {
     if (!online || state === 'race') return;
+    if (!lights.ready) { waitForLights('online'); return; }   // the room's clock runs on; this seat joins when its lights are ready
     state = 'race';
     openRunLog();
     hud.setCard(null);
@@ -1163,80 +1182,13 @@ async function boot(course, options, lifetime, isCurrent) {
     if (state === 'race') Promise.resolve(audio.start()).then(() => playSong(() => -race.goInS)).catch((err) => console.warn('[glassroad] song', err));
   });
 
-  // warm every material and the post chain behind the warming card, a group at a time (the bar moves)
   // Clip transport overlaps garage setup. The same complete, consent-valid sources still
   // settle before shader preparation and the cover lifting; no streaming shortcut is used.
   if (cardMedia) await cardMedia.ready;
   if (!lifetime.alive) return;
   loaded('media');
-  showLoading('Getting the lights ready', 0.55);
-  await paintGap();
-  // Native mirrors skip capture from behind their planes. Warm from inside the hall
-  // so its reflection pipelines compile behind the loading card, before the first lap.
-  const warmPose = world.mirrorRoom ? cam.camera.clone() : null;
-  const warmView = (views) => ({ kart: views[0].st, karts: views, fx: fx.state, timeS: 0, beat: clock.beat,
-    raceTimeS: 0, sectionIdx: views[0].st[S.sectionIdx], items: items.view(), mode: 'menu', camera: cam.camera, paused: false,
-    scanTimeS: 0, scanReady: scan.ready, perfumeReady: perfume.ready });
-  let warm;
-  try {
-    if (warmPose) {
-      const hall = boudoirLayout.landmarks.find(row => row.id === 'drawer-hall');
-      peekCamera(cam.camera, track, { s: hall.s0 + 80, backM: 10, upM: 5, aheadM: 40 }, renderer.aspect);
-    }
-    // phone tier, no mirror hall (its captures need the whole scene): stage the warm (render/stagedWarm.js); ?stage=0 (dev) off
-    const staged = renderer.tier === 'phone' && !warmPose && qs.get('stage') !== '0';
-    const stage = staged ? (a) => stagePlan({ ...a, poses: stagePoses(track, intro.shots, { introS: intro.duration, goS }), poolSpan: [1.5, intro.duration] }) : null;
-    warm = await renderer.compile(world.scene, cam.camera, undefined,
-      { onProgress: (k, n) => showLoading('Getting the lights ready', 0.55 + 0.4 * k / n), stage });
-    deferred = renderer.deferredWarm(warm, world.scene);
-    loaded('shaders');
-    if (warmPose) {
-      showLoading('One last look', .96);
-      await paintGap();
-      const hall = boudoirLayout.landmarks.find(row => row.id === 'drawer-hall');
-      // Temporary view copies put all racers in the capture without changing race state.
-      const warmKarts = kartViews.map((r, i) => {
-        const st = r.st.slice(), s = hall.s0 + 82 + i * 1.6, f = track.frameAt(s);
-        f.p.forEach((value, j) => { st[S.posX + j] = value + f.b[j] * ((i % 3) - 1) * 4; });
-        st[S.s] = s;
-        return { ...r, st };
-      });
-      world.update(warmView(warmKarts));
-      await world.mirrorRoom.warmCapture(renderer, world.scene, cam.camera);
-      loaded('mirrors');
-    }
-  } finally {
-    if (warmPose) {
-      cam.camera.position.copy(warmPose.position); cam.camera.quaternion.copy(warmPose.quaternion); cam.camera.up.copy(warmPose.up);
-      cam.camera.updateMatrixWorld(true);
-      world.update(warmView(kartViews));
-    }
-  }
-  debug.warm = warm && { ...warm, staged: warm.staged ? warm.staged.stats : null, all: undefined };
-  lifetime.defer(() => { deferred?.dispose(); deferred = null; });
-  Object.defineProperty(debug, 'staged', { get: () => deferred ? { ...deferred.stats, done: deferred.done, late: stagedLate } : null });
-  if (world.waterVolume.warmReflections) {
-    hud.setLoading('Preparing water reflections', 0.96);
-    await paintGap();
-    await world.waterVolume.warmReflections({ playerPos: world.kart.position, playerS: 0,
-      onProgress: (k, n) => hud.setLoading('Preparing water reflections ' + k + '/' + n, 0.96) });
-    loaded('water');
-  }
-  // the hit cam's own shadowless programs (its first hit would otherwise compile mid-race)
-  if (hitCam && feel.get('hitCam.on')) {
-    showLoading('One last look', 0.965);
-    await paintGap();
-    try { debug.hitCamWarm = await hitCam.warm(cam.camera); } catch (e) { console.warn('[glassroad] hit cam warm', e); }
-    if (!lifetime.alive) return;
-  }
-  // and the gate screen's own context and Loom program (its first build froze the race at the first gate)
-  showLoading('One last look', 0.97);
-  await paintGap();
-  gateScreen.warm(world.spirals && world.spirals.gates[0] ? world.spirals.gates[0].params : null);
-  if (qs.get('profileLoad') === '1') debug.readyGraphs = renderer.stats().compiledGraphs;
-  if (!isCurrent()) return;
-  renderer.beginCourse(); // Covered preparation must not count toward a later quality verdict.
-  warmedTier = renderer.tier;
+  // GARAGE FIRST: the cover lifts on the garage now; every material, the post chain, the mirrors, the water probe,
+  // the hit cam and the gate screen warm behind the live menu (warmLights). Race waits for them under the cover.
   showLoading('Ready to roll', 1);
   hud.setReady(true);
   bridge.ready();
@@ -1244,6 +1196,115 @@ async function boot(course, options, lifetime, isCurrent) {
   loading.finish().then(() => {
     if (isCurrent()) { loaded('ready'); debug.loading.totalMs = Math.round(performance.now() - loadStarted); }
   });
+  lifetime.defer(() => { deferred?.dispose(); deferred = null; });
+  Object.defineProperty(debug, 'staged', { get: () => deferred ? { ...deferred.stats, done: deferred.done, late: stagedLate } : null });
+  /** The menu's own frame while the lights warm: the garage alone, the world's state belongs to the warm.
+   *  dt 0 = an overdraw, called in the same task as a warm frame so that frame is never presented. */
+  function garageFrame(dt) {
+    if (!lifetime.alive || !garage || state !== 'menu' || lights.covered) return;
+    garage.render(dt, matchMedia('(prefers-reduced-motion: reduce)').matches, { gentle: hostGentle || !!feel.get('gentle.on') || !!hud.options.gentlePreview });
+  }
+  /** Warm every material and the post chain behind the menu, a group at a time (the Race door's note moves; under
+   *  the cover, its bar), then the mirrors, the water probe, the hit cam and the gate screen. */
+  async function warmLights() {
+    lights.busy = true;
+    const showLights = (stage, p) => { lights.stage = stage; lights.p = Math.max(lights.p, p); showLoading(stage, p); hud.setLights({ ready: false, stage, p }); };
+    const overdraw = () => garageFrame(0);
+    const alive = () => lifetime.alive;
+    try {
+      showLights('Getting the lights ready', 0.02);
+      await paintGap();
+      if (!lifetime.alive) return;
+      // Native mirrors skip capture from behind their planes. Warm from inside the hall
+      // so its reflection pipelines compile behind the menu, before the first lap.
+      const warmPose = world.mirrorRoom ? cam.camera.clone() : null;
+      const warmView = (views) => ({ kart: views[0].st, karts: views, fx: fx.state, timeS: 0, beat: clock.beat,
+        raceTimeS: 0, sectionIdx: views[0].st[S.sectionIdx], items: items.view(), mode: 'menu', camera: cam.camera, paused: false,
+        scanTimeS: 0, scanReady: scan.ready, perfumeReady: perfume.ready });
+      let warm;
+      try {
+        if (warmPose) {
+          const hall = boudoirLayout.landmarks.find(row => row.id === 'drawer-hall');
+          peekCamera(cam.camera, track, { s: hall.s0 + 80, backM: 10, upM: 5, aheadM: 40 }, renderer.aspect);
+        }
+        // phone tier, no mirror hall (its captures need the whole scene): stage the warm (render/stagedWarm.js); ?stage=0 (dev) off
+        const staged = renderer.tier === 'phone' && !warmPose && qs.get('stage') !== '0';
+        const stage = staged ? (a) => stagePlan({ ...a, poses: stagePoses(track, intro.shots, { introS: intro.duration, goS }), poolSpan: [1.5, intro.duration] }) : null;
+        warm = await renderer.compile(world.scene, cam.camera, undefined,
+          { onProgress: (k, n) => showLights('Getting the lights ready', 0.02 + 0.88 * k / n), stage, alive, overdraw });
+        if (!lifetime.alive) return;
+        deferred = renderer.deferredWarm(warm, world.scene);
+        loaded('shaders');
+        if (warmPose) {
+          showLights('One last look', .91);
+          await paintGap();
+          if (!lifetime.alive) return;
+          const hall = boudoirLayout.landmarks.find(row => row.id === 'drawer-hall');
+          // Temporary view copies put all racers in the capture without changing race state.
+          const warmKarts = kartViews.map((r, i) => {
+            const st = r.st.slice(), s = hall.s0 + 82 + i * 1.6, f = track.frameAt(s);
+            f.p.forEach((value, j) => { st[S.posX + j] = value + f.b[j] * ((i % 3) - 1) * 4; });
+            st[S.s] = s;
+            return { ...r, st };
+          });
+          world.update(warmView(warmKarts));
+          await world.mirrorRoom.warmCapture(renderer, world.scene, cam.camera, { overdraw });
+          loaded('mirrors');
+        }
+      } finally {
+        if (warmPose && lifetime.alive) {
+          cam.camera.position.copy(warmPose.position); cam.camera.quaternion.copy(warmPose.quaternion); cam.camera.up.copy(warmPose.up);
+          cam.camera.updateMatrixWorld(true);
+          world.update(warmView(kartViews));
+        }
+      }
+      debug.warm = warm && { ...warm, staged: warm.staged ? warm.staged.stats : null, all: undefined };
+      if (world.waterVolume.warmReflections) {
+        showLights('Preparing water reflections', 0.92);
+        await paintGap();
+        if (!lifetime.alive) return;
+        await world.waterVolume.warmReflections({ playerPos: world.kart.position, playerS: 0, overdraw,
+          onProgress: (k, n) => showLights('Preparing water reflections', 0.92 + 0.05 * k / n) });
+        if (!lifetime.alive) return;
+        loaded('water');
+      }
+      // the hit cam's own shadowless programs (its first hit would otherwise compile mid-race)
+      if (hitCam && feel.get('hitCam.on')) {
+        showLights('One last look', 0.975);
+        await paintGap();
+        if (!lifetime.alive) return;
+        lights.quiet = true;
+      try { debug.hitCamWarm = await hitCam.warm(cam.camera); } catch (e) { console.warn('[glassroad] hit cam warm', e); }
+      finally { lights.quiet = false; }
+        if (!lifetime.alive) return;
+      }
+      // and the gate screen's own context and Loom program (its first build froze the race at the first gate)
+      showLights('One last look', 0.98);
+      await paintGap();
+      if (!lifetime.alive) return;
+      gateScreen.warm(world.spirals && world.spirals.gates[0] ? world.spirals.gates[0].params : null);
+      if (qs.get('profileLoad') === '1') debug.readyGraphs = renderer.stats().compiledGraphs;
+      if (!isCurrent()) return;
+      renderer.beginCourse(); // Covered preparation must not count toward a later quality verdict.
+      warmedTier = renderer.tier;
+      showLoading('Ready to roll', 1);
+    } catch (e) {
+      // a warm that throws is not the end: the race runs on first-use compiles, as it did before the warm existed
+      console.warn('[glassroad] lights', e);
+    } finally {
+      lights.busy = false;
+      if (lifetime.alive && isCurrent()) {
+        lights.ready = true; hud.setLights({ ready: true });
+        loaded('lights'); debug.loading.lightsMs = Math.round(performance.now() - loadStarted);
+        const want = lights.want; lights.want = null;
+        if (lights.covered) { lights.covered = false; void loading.finish(); }
+        if (want === 'race') startRace();
+        else if (want === 'online') goOnline();
+        if (state === 'menu' && !hud.card) hud.setCard('menu', menuCard());   // a room that went away meanwhile
+      }
+    }
+  }
+  void warmLights();
   // ?r=<token>: a friend's race link goes straight to the lobby card, which claims it (seated, waiting or refused)
   const linkTok = course.online ? linkToken(location.search) : null;
   const pendingRoom = sessionStorage.getItem('glassroad.pendingRoom');
@@ -1285,7 +1346,7 @@ async function boot(course, options, lifetime, isCurrent) {
   let lastTickMs = 0;
   const watchdog = setInterval(() => {
     if (!isCurrent() || shared.recovering) return;
-    const nowMs = performance.now(), covered = document.body.dataset.boot !== 'ready', busy = rewarmBusy || controller.busy, visible = !document.hidden;
+    const nowMs = performance.now(), covered = document.body.dataset.boot !== 'ready', busy = rewarmBusy || controller.busy || lights.busy, visible = !document.hidden;
     // a tick that comes late ran after one long synchronous task (a first-use compile, a GC): the loop was busy,
     // not dead; its stamps move to now and the following ticks judge
     const blocked = blockedTick({ nowMs, lastTickMs });
@@ -1309,6 +1370,7 @@ async function boot(course, options, lifetime, isCurrent) {
   }
   function frameBody(now) {
     if (rewarmBusy) return;                                       // a menu re-warm owns the scene under the cover
+    if (lights.busy) { menuFrame(now); return; }                  // the lights warm behind the garage (warmLights)
     if (!renderer.frameDue(now)) return;                        // the Frame cap option skips this one
     if (HT) hT = performance.now();
     const { steps, alpha, frameDt, renderTime } = clock.frame(now);
@@ -1600,6 +1662,25 @@ async function boot(course, options, lifetime, isCurrent) {
       // dev server only (node dev/serve.mjs prints it): what the tester's own browser actually runs
       if (DIAG && now - diagT >= 10000) { diagT = now; try { navigator.sendBeacon('/__diag', JSON.stringify({ fps: debug.fps, backend: debug.backend, gpu: debug.gpu, tier: renderer.tier, art: debug.art, song: audio.music ? { chart: debug.chart || null, playing: audio.music.playing, has: !!audio.music.song, t: Math.round(audio.music.songS), ctx: audio.state } : 'no-music', words: words ? words.pops + '/' + words.total : null, colossi: debug.colossi.length, lap: debug.lap, s: Math.round(debug.s || 0), stats: renderer.stats(), w: innerWidth, h: innerHeight, dpr: devicePixelRatio, ua: navigator.userAgent })); } catch { /* best effort */ } }
     }
+  }
+  /** GARAGE FIRST: while the lights warm (lights.busy) the frame is the menu's own: input and cards, the menu's
+   *  audio, the garage. The world (visibility, camera, render targets, the tier hold) belongs to the warm. */
+  function menuFrame(now) {
+    if (!renderer.frameDue(now)) return;
+    const { frameDt } = clock.frame(now);
+    const a = actions.sample();
+    const nav = gamepad.takeNav();
+    if (hud.card) { if (nav) hud.nav(nav); else if (a.throttle >= 0.5 && !cardThrottle) hud.nav('throttle'); }
+    cardThrottle = a.throttle >= 0.5;
+    hopLatch.clear(); itemLatch.clear();
+    if (BOT && botT && now >= botT) { botT = 0; if (state === 'menu') startRace(); }
+    if (lights.quiet || now - menuDrawMs < 1000 / WARM_MENU_FPS) return;
+    menuDrawMs = now;
+    const pst = P.st;
+    audio.update(0, { active: false, menu: state === 'menu', boosting: false, drifting: false, driftTier: 0, airborne: false, onRoad: true,
+      edge: false, paused: false, duck: fx.state.duck, submerged: 0, ...waterContact(pst, false, feel.get('speed.topMps')) }, []);
+    garage?.setVisible(!!garage && state === 'menu' && hud.card === 'menu' && !lights.covered);
+    garageFrame(frameDt);
   }
   frameId = requestAnimationFrame(frame);
 }
