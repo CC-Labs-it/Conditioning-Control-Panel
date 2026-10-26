@@ -38,7 +38,7 @@ import { fitMainframeBillboard, moveMainframePanel } from './mainframeMediaMotio
 import { tunnelArchGeometry, tunnelArchMaterial } from './tunnelArches.js';
 import { screenBodyGeometry, screenBodyMaterial } from './screenBody.js';
 import { screenBodySize } from './screenBodyMath.js';
-import { createWebMediaScreens } from './webMediaScreens.js';
+import { createWebMediaScreens, maxPlayingFor } from './webMediaScreens.js';
 
 // the shared colour system (render/spectrum.js); the local ring stays the fallback for a missing hue
 import * as SPECTRUM from './spectrum.js';
@@ -689,10 +689,10 @@ export function createMediaSlots(scene, track, opts = {}) {
     get videoCapacity() { return videoCapacity(); },
     tunnel: tun ? { fromS: tun.fromS, toS: tun.toS } : null,
     setSource,
-    /** Browser feed is display-only. Its images must never enter a GPU texture. */
+    /** Browser feed is display-only. Its images and clips must never enter a GPU texture. */
     setDisplayFeed(feed, canvas = globalThis.document?.getElementById('view')) {
       if (!webScreens && feed) webScreens = createWebMediaScreens({ scene, canvas,
-        isVisible: sl => !hidden(sl),
+        isVisible: sl => !hidden(sl), maxPlaying: () => maxPlayingFor(Q.name),
         slots: selected.filter(sl => ['billboard', 'halo', 'tunnel'].includes(sl.frame)) });
       webScreens?.setFeed(feed);
     },
