@@ -9,9 +9,9 @@ const zone = { id: 'press', kind: 'piston', p: [0, 0, 0], b: [1, 0, 0], x: 0, of
 test('one quiet thud at the real floor contact, no repeat during its hold', () => {
   const track = {}, heard = [], contacts = createPressContacts(track, (...args) => heard.push(args), [zone]);
   setMachineryBeat(track, { enabled: true, songS: 0, raceS: 0, bpm: 120 });
-  contacts.update(.45, [0, 0, 0]);
-  contacts.update(.5, [0, 0, 0]);
-  contacts.update(.55, [0, 0, 0]);
+  contacts.update(.95, [0, 0, 0]);
+  contacts.update(1, [0, 0, 0]);
+  contacts.update(1.05, [0, 0, 0]);
   assert.equal(heard.length, 1);
   assert.equal(heard[0][0], 'press-thud');
   assert.equal(heard[0][1].gain, 1);

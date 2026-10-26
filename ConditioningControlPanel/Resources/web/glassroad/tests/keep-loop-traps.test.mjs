@@ -10,7 +10,7 @@ import { S } from '../sim/state.js';
 import { place, makeFeel, recorder } from './sim-fake.mjs';
 
 const track = loadTrack(JSON.parse(readFileSync(new URL('../tracks/keep.json', import.meta.url), 'utf8')));
-const layout = getKeepLayout(track), beatS = 60 / 142 / 2;
+const layout = getKeepLayout(track), beatS = 60 / 142;
 const gates = layout.gates.filter(row => /^(ascent|descent)-/.test(row.id));
 const chains = layout.chains.filter(row => row.id.startsWith('descent-'));
 const clock = beat => {

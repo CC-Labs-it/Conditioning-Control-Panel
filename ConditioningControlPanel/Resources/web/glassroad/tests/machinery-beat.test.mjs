@@ -16,10 +16,10 @@ const clock = (track,songS,raceS=songS,more={}) => setMachineryBeat(track,{enabl
 test('machinery uses the heard song anchor, freezes on pause and stays opt-in for authoritative races',()=>{
   const track={}; assert.equal(machineryBeatAt(track,2),null);
   clock(track,.22,0);clock(track,10.22,10);
-  assert.equal(machineryBeatAt(track,10).beat,32);
-  assert.equal(machineryBeatAt(track,10.125).beat,32.4);
+  assert.equal(machineryBeatAt(track,10).beat,16);
+  assert.equal(machineryBeatAt(track,10.125).beat,16.2);
   clock(track,10.22,10,{playing:false});
-  assert.equal(machineryBeatAt(track,11).beat,32);
+  assert.equal(machineryBeatAt(track,11).beat,16);
   setMachineryBeat(track,null); assert.equal(machineryBeatAt(track,9),null);
   clock(track,10,10,{enabled:false}); assert.equal(machineryBeatAt(track,10),null);
 });
@@ -40,13 +40,13 @@ test('gear stroke stays continuous, monotonic and has a clearly faster beat than
 
 test('press impacts repeat every four beats with a fast stroke and bounded hold',()=>{
   const track=trackFor('mainframe'),zone={...industryZones(track)[0],offsetS:0}; clock(track,.22,0);
-  const pose=beat=>industryPose(zone,beat*.3125,machineryBeatAt(track,beat*.3125));
+  const pose=beat=>industryPose(zone,beat*.625,machineryBeatAt(track,beat*.625));
   for(let b=.5;b<1.7;b+=.1){assert.equal(pose(b).warning,true);assert.equal(pose(b).active,false);}
   assert.ok(pose(1.85).lift>0); assert.equal(pose(2).lift,0);
   assert.equal(pose(1.99).impactIndex,-1); assert.equal(pose(2).impactIndex,0);
   assert.equal(pose(6).impactIndex,1); assert.equal(pose(3).lift,7);
   const r={i:0,st:place(track,{s:zone.s,lateral:zone.x,speed:30}),feel:makeFeel(),events:recorder()};
-  const machine=createMainframeIndustry(track,r.events);machine.update([r],.625,1/60);
+  const machine=createMainframeIndustry(track,r.events);machine.update([r],1.25,1/60);
   assert.equal(machine.hits,1);assert.ok(r.st[S.stalled]<=.32);
 });
 
@@ -65,7 +65,7 @@ test('song seeks and loop wraps visibly rearm the same physical pose before anot
 test('Goonworks swept contact uses the same kicked wheel pose, including the safe bypass',()=>{
   const track=trackFor('goonworks'),rows=goonworksSetpieces(track),wheel=rows.find(r=>r.kind==='wheel');
   clock(track,.22,0);
-  const t=8.125*.3125,pose=goonworksPose(wheel,t,machineryBeatAt(track,t));
+  const t=8.125*.625,pose=goonworksPose(wheel,t,machineryBeatAt(track,t));
   assert.equal(pose.angle,wheel.phase+gearBeatTravel(8.125)*Math.PI/2);
   const at=(along,x)=>{
     const st=place(track,{s:wheel.s+along,lateral:x,speed:30});
@@ -82,7 +82,7 @@ test('Goonworks swept contact uses the same kicked wheel pose, including the saf
 test('song-synced rising blocks and flippers preserve warning time and actual clear windows',()=>{
   const track=trackFor('goonworks'),rows=goonworksSetpieces(track);clock(track,.22,0);
   for(const kind of ['block','flipper']){
-    const row={...rows.find(r=>r.kind===kind),offsetS:0},pose=b=>goonworksPose(row,b*.3125,machineryBeatAt(track,b*.3125));
+    const row={...rows.find(r=>r.kind===kind),offsetS:0},pose=b=>goonworksPose(row,b*.625,machineryBeatAt(track,b*.625));
     for(let b=.4;b<.8;b+=.1){assert.equal(pose(b).warning,true);assert.equal(pose(b).active,false);}
     assert.equal(pose(0).height,0);assert.equal(pose(1.75).height,0);assert.ok(pose(.95).height>0);
   }
@@ -143,7 +143,8 @@ test('rendered press and wheel transforms exactly match song-clock collision, in
     const {buildMainframeHazards}=await import('../render/mainframeHazards.js');
     const {createGoonworksHazardView}=await import('../render/goonworksHazards.js');
     const main=trackFor('mainframe'),goon=trackFor('goonworks'),press=buildMainframeHazards(main,null),wheels=createGoonworksHazardView(new Scene(),goon);
-    clock(main,.22,0);clock(goon,.22,0);
+    const song={id:'render-arrangement',bpm:96,durationS:80,sections:[]};
+    clock(main,.22,0,{song});clock(goon,.22,0,{song});
     for(const gentle of [false,true])for(const timeS of [2.7,4.5,5,6.3]){
       press.update(.1,{timeS,gentle});wheels.update(timeS);
       for(const zone of industryZones(main).filter(z=>z.kind==='piston')){

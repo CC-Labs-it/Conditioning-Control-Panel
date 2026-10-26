@@ -60,7 +60,8 @@ test('perfume drawing and swept contact share heard time, pause and seek rearmin
   const r = { i: 0, kind: 'local', st: place(track, { s: 120, lateral: -5, speed: 35 }), finished: false }, t = (activeStep + .5) * stepS;
   const sprayT = (activeStep - .5) * stepS;
   sim.update([r], sprayT); assert.equal(events.all('perfume-contact').length, 0); assert.equal(sim.inspect().zones[0].phase, 'spray');
-  sim.update([r], t); assert.equal(events.all('perfume-contact').length, 1); assert.equal(sim.inspect().zones[0].phase, 'active');
+  for (let tick = 1; tick <= 10; tick++) sim.update([r], sprayT + (t - sprayT) * tick / 10);
+  assert.equal(events.all('perfume-contact').length, 1); assert.equal(sim.inspect().zones[0].phase, 'active');
   for (let n = 0; n < 30; n++) view.update(t, { gentle: true });
   assert.ok(view.inspect().cloudOpacity[0] > .1);
   const before = view.inspect(); view.update(t + 3, { paused: true }); assert.deepEqual(view.inspect(), before);

@@ -5,6 +5,7 @@ import { movingStations as mainframe } from './moving/mainframe.js';
 import { movingStations as boudoir } from './moving/boudoir.js';
 import { movingStations as goonworks } from './moving/goonworks.js';
 import { hazardBeatAt, beatCycle, machineryRearming } from './machineryBeat.js';
+import { trapStroke } from './trapArrangement.js';
 const authors = { threshold, keep, mainframe, boudoir, goonworks };
 const clamp = v => Math.max(0, Math.min(1, v));
 const ease = v => { v = clamp(v); return v * v * (3 - 2 * v); };
@@ -22,6 +23,8 @@ export function movingPlan(track) {
 }
 
 export function movingPose(row, timeS, beat) {
+  const arranged = trapStroke(row, beat);
+  if (arranged) return { ...arranged, x: row.x - row.side * row.travelM * arranged.extension, active: !arranged.safe };
   const period = row.periodBeats || 2, offset = row.offsetBeats || 0;
   const safe = machineryRearming(beat, offset, period) || (beat?.beat || 0) < beatCycle(-offset, period);
   const u = beatCycle((beat?.beat || 0) + offset, period) / period;
