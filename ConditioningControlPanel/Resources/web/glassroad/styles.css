@@ -313,6 +313,13 @@
 .c-opt small { display: block; font-size: 11px; color: var(--paper-dim); font-weight: 400; margin-top: 2px; }
 #card .c-tog { min-width: 68px; padding: 6px 14px; min-height: 36px; }
 #card .c-tog.on { background: var(--paper-ink); color: var(--paper); }
+/* Online pictures: this track's Scrolller niches as chips (web only) */
+.c-niches { flex-direction: column; align-items: stretch; }
+.c-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+#card .c-chip { min-height: 34px; padding: 4px 11px; font-size: 12px; }
+#card .c-chip.on { background: var(--paper-ink); color: var(--paper); }
+#card .c-chip-reset { border-style: dashed; }
+#card .c-btn.pending { opacity: .6; }
 .c-opt input[type="range"] { width: 52%; accent-color: var(--paper-pink); }
 
 .c-keys { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 12px; text-align: left; }

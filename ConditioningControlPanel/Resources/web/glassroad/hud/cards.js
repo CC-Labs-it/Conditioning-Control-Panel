@@ -24,6 +24,7 @@ import { PROFILES, nextProfile } from '../input/padmap.js';
 import { createLobby } from './lobby.js';
 import { actSound } from './sounds.js';
 import { recapState, dotsHtml, runPageHtml, stampsPageHtml, PAGE_TITLES, RECAP_FIXTURE } from './recap.js';
+import { togglePick, MAX_NICHES } from '../host/scrolllerNiches.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const btn = (act, label, cls = '', extra = '') => '<button type="button" class="c-btn ' + cls + '" data-act="' + act + '"' + extra + '>' + label + '</button>';
@@ -178,6 +179,24 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     leaving = setTimeout(() => { leaving = 0; if (kind !== 'results' || !rc) return; rc.state.next(); rc.at = 0; paintResults(); }, gentle ? 260 : 170);
   }
 
+  /** Online pictures (web host only): the switch, then this track's niches as chips while it is on. */
+  function scrolllerHtml() {
+    const s = host.scrolller;
+    if (!s) return '';
+    let html = '<div class="c-opt"><span>Online pictures<small>From Scrolller, in the flashes</small></span>' +
+      btn('scrolller', s.on ? 'On' : 'Off', 'c-tog' + (s.on ? ' on' : ''), ' aria-pressed="' + s.on + '"') + '</div>';
+    if (s.on && s.catalog) {
+      html += '<div class="c-opt c-niches"><span>Pictures on ' + esc(s.track) + '<small>' +
+        (s.custom ? 'Your pick for this track' : 'This track\'s picks') + ', up to ' + MAX_NICHES + '</small></span><div class="c-chips">' +
+        s.catalog.map((c) => {
+          const on = s.niches.includes(c.id);
+          return btn('niche', esc(c.label), 'c-chip' + (on ? ' on' : ''), ' data-niche="' + esc(c.id) + '" aria-pressed="' + on + '"');
+        }).join('') +
+        (s.custom ? btn('niche-reset', 'Track default', 'c-chip c-chip-reset') : '') + '</div></div>';
+    }
+    return html;
+  }
+
   function optionsHtml() {
     const g = host.gentle;
     const tog = (key, label, on, hint, lock) => '<div class="c-opt"><span>' + label + '<small>' + hint + '</small></span>' +
@@ -195,8 +214,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
         btn('cycle', choiceLabel(key, opts[key]), 'c-tog', ' data-key="' + key + '" aria-label="' + label + '"') + '</div>').join('') +
       tog('shadows', 'Shadows', opts.shadows, 'Off is lighter on the GPU', false) +
       tog('showFps', 'Show fps', opts.showFps, 'A small counter in the corner', false) +
-      (host.scrolller ? '<div class="c-opt"><span>Online pictures<small>From Scrolller, in the flashes. Same switch as Arcademy</small></span>' +
-        btn('scrolller', host.scrolller.on ? 'On' : 'Off', 'c-tog' + (host.scrolller.on ? ' on' : ''), ' aria-pressed="' + !!host.scrolller.on + '"') + '</div>' : '') +
+      (host.scrolller ? '<div class="c-scrolller">' + scrolllerHtml() + '</div>' : '') +
       '</div>';
   }
 
@@ -258,6 +276,12 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       if (host.scrolller) { el.classList.add('pending'); emit('scrolller', { on: !host.scrolller.on }); }
       return;
     }
+    if (a === 'niche' && host.scrolller) {   // this track's pick: at least one, at most four
+      const next = togglePick(host.scrolller.niches || [], el.dataset.niche);
+      if (next) emit('scrolller-niches', { niches: next });
+      return;
+    }
+    if (a === 'niche-reset') { emit('scrolller-niches', { niches: null }); return; }
     if (a === 'toggle') {
       const key = el.dataset.key, on = !(opts[key]);
       setOption(key, on);
@@ -407,13 +431,16 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       paintLoad();
     },
     setHostGentle(on) { host.gentle = !!on; },
-    /** The host's Scrolller consent ({ on }), or null where the host has no feed (the switch is not drawn). */
+    /** The host's Scrolller state ({ on, track, niches, custom, catalog }), or null where the host has no feed (nothing
+     * drawn). An open Options card redraws its pictures rows in place and keeps the focused control. */
     setScrolller(state) {
-      host.scrolller = state ? { on: state.on === true } : null;
-      const el = card.querySelector('[data-act="scrolller"]');
-      if (!el || !host.scrolller) return;
-      const on = host.scrolller.on;
-      el.textContent = on ? 'On' : 'Off'; el.classList.remove('pending'); el.classList.toggle('on', on); el.setAttribute('aria-pressed', String(on));
+      host.scrolller = state ? { on: state.on === true, track: String(state.track || ''), niches: [...(state.niches || [])],
+        custom: !!state.custom, catalog: Array.isArray(state.catalog) ? state.catalog : null } : null;
+      const box = card.querySelector('.c-scrolller');
+      if (!box || !host.scrolller) return;
+      const f = doc.activeElement, keep = f && box.contains(f) ? (f.dataset.niche ? '[data-niche="' + f.dataset.niche + '"]' : '[data-act="' + f.dataset.act + '"]') : null;
+      box.innerHTML = scrolllerHtml();
+      if (keep) (box.querySelector(keep) || box.querySelector('[data-act="scrolller"]'))?.focus?.({ preventScroll: true });
     },
     /** The course loop for the recap sketch ({ xz } from boot's centreline, evenly spaced along s). */
     setTrack(t) { trackLoop = t && t.xz ? t : null; },

@@ -22,6 +22,7 @@ import { createBridge, songCharts, isLocalSongHost, wantLobbySongs, lobbySongCha
 import { createHostEscape } from './host/hostEscape.js';
 import { createCardMedia } from './host/cardMedia.js';
 import { createScrolllerFeed } from './host/scrolllerFeed.js';
+import { nichesFor, isDefault, savePick } from './host/scrolllerNiches.js';
 import { createSubliminalBurst } from './fx/subliminalBurst.js';
 import { loadFeel } from './core/feel.js';
 import { createBus, createQueue } from './core/events.js';
@@ -324,12 +325,22 @@ async function boot(course, options, lifetime, isCurrent) {
   };
   bridge.on('gentle', applyHostGentle);
   if (shared.hostGentle) applyHostGentle(shared.hostGentle);
-  // Online pictures: a switch in Options only where the host offers the feed (the web), moved only by its echo.
+  // Online pictures: a switch in Options only where the host offers the feed (the web), moved only by its echo, and this
+  // course's niches (host/scrolllerNiches.js: its default pair, or the player's own pick kept in this browser).
   const scrolller = init.caps.scrolller ? shared.scrolllerFeed : null;
   if (scrolller) {
-    hud.setScrolller({ on: scrolller.consent ?? init.caps.scrolller.consent === true });
-    lifetime.defer(scrolller.subscribe((on) => hud.setScrolller({ on })));
+    let niches = nichesFor(track.id);
+    const view = () => ({ on: scrolller.consent ?? init.caps.scrolller.consent === true, track: trackName, niches,
+      custom: !isDefault(track.id), catalog: scrolller.catalog });
+    hud.setScrolller(view());
+    scrolller.setNiches(track.id, niches);
+    lifetime.defer(scrolller.subscribe(() => hud.setScrolller(view())));
     hud.on('scrolller', (e) => scrolller.setConsent(!!e?.on));
+    hud.on('scrolller-niches', (e) => {
+      niches = savePick(track.id, e?.niches || null);
+      scrolller.setNiches(track.id, niches);
+      hud.setScrolller(view());
+    });
   }
   lifetime.listen(cardEl, 'click', e => {
     const anchor = e.target.closest?.('a.c-link[href]');

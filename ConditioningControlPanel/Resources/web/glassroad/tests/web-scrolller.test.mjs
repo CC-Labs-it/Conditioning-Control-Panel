@@ -84,9 +84,10 @@ test('Scrolller pictures reach the flash canvas only, never a texture path', () 
 
 test('the Options switch: drawn only where the host offers the feed, echo-driven, plain copy', () => {
   const cards = src('hud/cards.js');
-  assert.match(cards, /host\.scrolller \? '<div class="c-opt"><span>Online pictures/);
+  assert.match(cards, /host\.scrolller \? '<div class="c-scrolller">' \+ scrolllerHtml\(\)/);
+  assert.match(cards, /<span>Online pictures<small>From Scrolller, in the flashes<\/small>/);
   assert.match(cards, /emit\('scrolller', \{ on: !host\.scrolller\.on \}\)/);
-  const line = cards.split('\n').find((l) => l.includes('Online pictures'));
-  assert.doesNotMatch(line, /[—–!]/);
+  for (const l of cards.split('\n').filter((x) => /Online pictures|Pictures on|Track default|this track/i.test(x)))
+    assert.doesNotMatch(l, /[—–!]/, l);
   assert.match(src('boot.js'), /init\.caps\.scrolller \? shared\.scrolllerFeed : null/);
 });
