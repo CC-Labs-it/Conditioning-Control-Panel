@@ -87,6 +87,7 @@ const sortRecent = (list) => {
 const minPos = (a, b) => (a > 0 && b > 0 ? Math.min(a, b) : a > 0 ? a : b);
 const higherMedal = (a, b) => (MEDAL_ORDER.indexOf(a) >= MEDAL_ORDER.indexOf(b) ? a : b);
 const earlier = (a, b) => (!a ? b : !b ? a : Date.parse(a) <= Date.parse(b) ? a : b);
+const later = (a, b) => (!a ? b : !b ? a : Date.parse(a) >= Date.parse(b) ? a : b);
 
 /** The one merge rule (section 4). Both sides are cleaned first; the result is a new object. */
 export function mergeRecords(a, b) {
@@ -102,7 +103,7 @@ export function mergeRecords(a, b) {
   r.recent = sortRecent([...x.recent, ...y.recent]);
   for (const id of new Set([...Object.keys(x.achievements), ...Object.keys(y.achievements)])) r.achievements[id] = earlier(x.achievements[id], y.achievements[id]);
   r.unlocks = [...new Set([...x.unlocks, ...y.unlocks])].sort();
-  r.updatedAt = earlier(x.updatedAt, y.updatedAt) === x.updatedAt ? y.updatedAt || x.updatedAt : x.updatedAt;   // the later one
+  r.updatedAt = later(x.updatedAt, y.updatedAt);   // the later one (an empty side never blanks it)
   return r;
 }
 
