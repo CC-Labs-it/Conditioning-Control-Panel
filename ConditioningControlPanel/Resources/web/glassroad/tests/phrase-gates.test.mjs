@@ -139,7 +139,7 @@ test('audio crossing event shares the exact visual onset and never repeats durin
   const at=z=>{const st=createState();st[S.s]=gate.s+z;for(let i=0;i<3;i++)st[S.posX+i]=gate.frame.p[i]+gate.frame.t[i]*z;return st;};
   effect.update(at(-2),.1);effect.update(at(2),.1,{paused:true});assert.equal(events.length,0);
   effect.update(at(2),.1);assert.equal(events.length,1);
-  assert.deepEqual(events[0],{id:gate.id,course:'mainframe',index:0,gentle:false});
+  assert.deepEqual(events[0],{id:gate.id,passed:true,course:'mainframe',index:0,gentle:false});
   effect.update(at(3),.6);effect.update(at(4),.6);assert.equal(events.length,1);
   effect.clear();effect.update(at(-2),.1);effect.update(at(2),.1);assert.equal(events.length,2);
   effect.dispose();

@@ -32,7 +32,9 @@ import { createGamepad } from './input/gamepad.js';
 import { createPointerLook } from './input/pointerLook.js';
 import { createTouch } from './input/touch.js';
 import { glideActive, resetGlide } from './sim/glide.js';
-import { S, RESPAWN } from './sim/state.js';
+import { S, RESPAWN, createState } from './sim/state.js';
+import { resolveMode } from './meta/mode.js';
+import { createGhostRecorder, loadGhost, saveBestGhost, sample as ghostSample, toState as ghostToState, lapGap, formatGap } from './meta/ghost.js';
 import { createImmersion } from './track/immersion.js';
 import { createWaterContact } from './audio/water-travel.js';
 import { createRace } from './sim/race.js';
@@ -80,6 +82,7 @@ import { createAssist } from './sim/assist.js';
 import { createRoomSession } from './net/room.js';
 import { courseHash } from './net/courseHash.js';
 import { createLobbyApi, fetchTransport, hostTransport } from './net/lobbyApi.js';
+import { createProfileSync } from './meta/profileSync.js';
 import { configureLobby } from './hud/lobby.js';
 import { linkToken, dropLinkParam } from './hud/lobbyMath.js';
 import { poseOf } from './hud/presets.js';
@@ -96,6 +99,10 @@ import { createBoudoirHazards } from './sim/boudoirHazards.js';
 import { createKeepHazards } from './sim/keepHazards.js';
 import { getGoonworksLayout } from './track/goonworks-layout.js';
 import { createGoonworksHazards } from './sim/goonworksHazards.js';
+import { createRunLog, roomResult } from './meta/runLog.js';
+import { applyRun } from './meta/applyRun.js';
+import { buildRecap } from './meta/recap.js';
+import { loadRecord, saveRecord } from './meta/record.js';
 
 const qs = new URLSearchParams(location.search);
 const initialCourse = selectedCourse(location.search);
@@ -111,6 +118,7 @@ const DEV = devAllowed(location.search);
 // ?hitch=1 (dev/hitch-check.mjs): per-frame section times in window.__hitch (ms), read by the check's rAF probe
 const HT = qs.get('hitch') === '1' ? (window.__hitch = { sim: 0, fx: 0, audio: 0, cam: 0, world: 0, render: 0, hud: 0, steps: 0 }) : null;
 let hT = 0;
+let profilePulled = false;   // the account record is pulled once per page, not once per course
 const hLap = (k) => { const t = performance.now(); HT[k] = t - hT; hT = t; };
 // the race song (handoff-1022/MUSIC-ROAD-BRIEF.md): ?chart=<url> plays that chart, ?chart=0 none; the dev
 // loopback server tries the private song folder it mounts at /private-audio/; a host names its own charts in
@@ -475,12 +483,74 @@ async function boot(course, options, lifetime, isCurrent) {
   // queue tapped so local cp / lap / finish / drop and pulses go up); rebuilt by buildRun on every switch
   let race, racers, ai, contact, standings, items, scan, industry, moving, perfume, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
   let runAssist = false;                          // the Options assist switch (applyOptions), carried into every rebuilt run
+  // ---- the Logbook (meta/): one run log per run, saved at the results; a throw never breaks the race ----
+  let runLog = null;
+  debug.logbook = { summary: null, diff: null, recap: null };
+  function openRunLog() {
+    closeRunLog(false);
+    try {
+      runLog = createRunLog(bus, { track: track.id, mode: online ? 'race' : runMode, online: !!online, laps,
+        seed: online ? online.s.seed : seed, assist: assist ? assist.mode : 'light',
+        gentle: hostGentle || !!feel.get('gentle.on'), lengthM: track.lengthM, offered: () => (words ? words.shown : 0) });
+    } catch (e) { console.warn('[glassroad] logbook', e); runLog = null; }
+  }
+  /** Fold the run into the record. result: the race-result payload (null = quit). @returns the recap or null */
+  function logRun(res) {
+    if (!runLog) return null;
+    const log = runLog; runLog = null;
+    try {
+      const summary = log.finish(res), before = loadRecord();
+      const { record, diff } = applyRun(before, summary);
+      saveRecord(record);
+      bus.emit('logbook-saved', { record, summary, diff });
+      const recap = buildRecap(summary, diff, before);
+      debug.logbook = { summary, diff, recap };
+      return recap;
+    } catch (e) { console.warn('[glassroad] logbook', e); return null; } finally { log.dispose(); }
+  }
+  /** A run left mid-race counts as an unfinished race (save = true); before go it is simply dropped. */
+  function closeRunLog(save = true) {
+    if (!runLog) return;
+    if (save && race && race.phase === 'racing') { logRun(null); return; }
+    try { runLog.dispose(); } catch (e) { /* nothing to keep */ }
+    runLog = null;
+  }
+  // Time Trial (CONTRACT-LOGBOOK section 7): runMode is the built run's mode (META reads it); pickedMode is the
+  // url / garage pick (hud/trackPicker.js sends glassroad-mode), applied by startRace. Online is always a race.
+  let runMode = 'race', pickedMode = resolveMode({ search: location.search });
+  lifetime.listen(document, 'glassroad-mode', (e) => { if (e.detail === 'race' || e.detail === 'trial') pickedMode = e.detail; });
+  // the best ghost rides spare kart slot 1 with the ghost wash (fxv.ghost), no contact, no shadow, no physics
+  let ghost = null, ghostRec = null, ghostT = 0, ghostLapN = 0, ghostLapS = 0;
+  const ghostView = { st: createState(), meta: { i: 1, id: 'ghost', name: 'Ghost', isBot: false, tint: 0, slot: 1 },
+    fxv: { spinRad: 0, shield: null, echo: 0, effect: null, ghost: true, slip: 0, place: 1 } };
+  const ghostPose = {}, ghostKarts = [null, ghostView];
+  const NO_ITEM_VIEW = { boxes: [], bubbles: [], held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [], tethers: [], guards: [] };
+  const noItems = () => ({ update() {}, view: () => NO_ITEM_VIEW, reset() {}, nearOpenEdge: () => false, trapRows: () => [], lobTarget: () => -1 });
+  function ghostSlotShadow(off) {
+    world.karts?.[1]?.traverse((o) => {
+      if (!o.isMesh) return;
+      if (off && !('ghostCast' in o.userData)) { o.userData.ghostCast = o.castShadow; o.userData.noCast = true; o.castShadow = false; }
+      else if (!off && 'ghostCast' in o.userData) { o.castShadow = o.userData.ghostCast; o.userData.noCast = false; delete o.userData.ghostCast; }
+    });
+  }
+  /** Before each solo run: rebuild when the picked mode changed, load the best ghost, start the recorder. */
+  function prepareRunMode() {
+    if (pickedMode !== runMode) { runMode = pickedMode; buildRun(); syncAssist(); }
+    const trial = runMode === 'trial';
+    ghost = trial ? loadGhost(track.id) : null;
+    if (ghost && ghost.laps !== laps) ghost = null;
+    ghostRec = trial ? createGhostRecorder({ track: track.id, laps }) : null;
+    ghostT = 0; ghostLapN = 0; ghostLapS = 0;
+    debug.trial = trial ? { ghost: ghost ? Math.round(ghost.timeS * 100) / 100 : 0, saved: false } : null;
+    if (trial && garage && world.setLook) { world.setLook(1, raceLook(garage.state)); ghostSlotShadow(true); }
+  }
   function buildRun(s = null) {
     if (P) { bindAirWords(P.st, null); bindAirWords(P.view, null); }
     airWords?.reset(); airWords = null; airSong = null;
-    const q = s ? s.tap(queue) : queue, sd = s ? s.seed : seed;
+    if (s) runMode = 'race';
+    const q = s ? s.tap(queue) : queue, sd = s ? s.seed : seed, solo = !s && runMode === 'trial';
     race = createRace(track, feel, q);
-    racers = createRacers(track, feel, q, s ? { net: s.layout(), seed: sd } : { count: COUNT, seed: sd });
+    racers = createRacers(track, feel, q, s ? { net: s.layout(), seed: sd } : { count: solo ? 1 : COUNT, seed: sd });
     ai = createAi(track, feel, { seed: s ? sd + s.seat : sd });
     if (hazards) {
       const drive = ai.drive;
@@ -502,7 +572,7 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     perfume = createBoudoirPerfume(track, q);
     standings = createStandings(track, feel, q);
-    items = s ? s.mount(racers, race, q) : createItems(track, feel, q, { seed: sd });
+    items = s ? s.mount(racers, race, q) : solo ? noItems() : createItems(track, feel, q, { seed: sd });
     P = racers.player;
     assist = createAssist(track, P.feel);
     if (!s) {
@@ -523,6 +593,8 @@ async function boot(course, options, lifetime, isCurrent) {
       if(garage&&!s)world.setLook(0,raceLook(garage.state));
       looksOnline = !!s;
     }
+    if (solo && garage && world.setLook) world.setLook(1, raceLook(garage.state));   // the ghost wears your look
+    ghostSlotShadow(solo);
   }
   buildRun();
   const hudItem = { id: null, rolling: false, rollT: 0, rollS: 1 };
@@ -723,6 +795,7 @@ async function boot(course, options, lifetime, isCurrent) {
   }
   function begin() {
     state = 'race';
+    openRunLog();
     introHud.style.visibility = '';
     garage?.setVisible(false);
     hud.setCard(null);
@@ -738,7 +811,9 @@ async function boot(course, options, lifetime, isCurrent) {
   function startRace() {
     if (!lifetime.alive) return;
     if (online) return;
+    closeRunLog();
     stopSong();
+    prepareRunMode();
     const started = audio.start(); unpause(); resetAll();
     if(garage){world.setLook(0,raceLook(garage.state));debug.playerLook=world.looks()[0];}
     raceAudioStart = started;
@@ -751,6 +826,7 @@ async function boot(course, options, lifetime, isCurrent) {
     bridge.runStarted({ track: track.id, laps });
   }
   function toMenu() {
+    closeRunLog();
     stopSong();
     if (online && lobbyUi) lobbyUi.leave();       // quit mid-race online: leave the room (online-left tears down)
     if (online) endOnline();
@@ -777,6 +853,13 @@ async function boot(course, options, lifetime, isCurrent) {
   }
   const link = lobbyLink();
   const lobbyApi = link ? createLobbyApi(link.transport) : null;
+  // the account record (CONTRACT-LOGBOOK.md section 8): pull once per page, push after each saved run; silent offline
+  const profileSync = link ? createProfileSync({ request: link.transport }) : null;
+  if (profileSync && !profilePulled) {
+    profilePulled = true;
+    void profileSync.pull().then(record => { if (lifetime.alive) bus.emit('logbook-pulled', { record }); });
+  }
+  bus.on('logbook-saved', ({ record } = {}) => profileSync?.push(record));
   // race songs from our own storage (NET.md section 14): nothing named a chart and the lobby is there, so ask it once
   // for signed chart urls on the room origin (a local lobby names its room with &room=http://127.0.0.1:<port>). A
   // refusal (preview, dark, offline) leaves no song; a race that starts before the answer lands runs without one.
@@ -868,6 +951,7 @@ async function boot(course, options, lifetime, isCurrent) {
   function goOnline() {
     if (!online || state === 'race') return;
     state = 'race';
+    openRunLog();
     hud.setCard(null);
     canvas.focus({ preventScroll: true });
     const started = audio.start(), s = online.s;
@@ -878,6 +962,7 @@ async function boot(course, options, lifetime, isCurrent) {
   }
   /** Back to the solo run (left, closed or aborted). showLobby: put the lobby card back when no card is up. */
   function endOnline(showLobby = false) {
+    closeRunLog();
     if (!online) return;
     online = null;
     track.laps = TRACK_LAPS; laps = TRACK_LAPS;
@@ -894,6 +979,7 @@ async function boot(course, options, lifetime, isCurrent) {
   hud.on('online-finish', (m) => {
     if (!online) return;
     debug.onlineResult = m && m.lines ? m.lines.map((l) => [l.place, l.name, l.time]) : null;
+    logRun(m && m.rows ? roomResult(m.rows, m.seat) : result);   // the lobby card shows the room's results
     unpause();
     state = 'results';
     hud.setCard('lobby', { view: 'results' });
@@ -916,6 +1002,18 @@ async function boot(course, options, lifetime, isCurrent) {
   bus.on('bump', ({ a, b, dv = 0 }) => { if (a === 0 || b === 0) { debug.bumpMeAt = performance.now(); debug.bumpDv = Math.round(dv * 10) / 10; } });
   bus.on('item-fire', ({ racer, id, mode }) => { if (mode === 'throw' || mode === 'lob') { debug.fireAt = performance.now(); debug.fire = { racer, id, mode }; } });
   bus.on('lap', () => { debug.laps++; });
+  // Time Trial: the gap to the ghost at each lap line, and the run kept as the ghost when it is the best
+  bus.on('lap', ({ lapTimeS = 0 } = {}) => {
+    if (!ghostRec || online) return;
+    ghostLapS += lapTimeS; ghostRec.lap(ghostLapS);
+    const d = lapGap(ghost, ++ghostLapN, ghostLapS);
+    if (d !== null) hud.toast('Ghost ' + formatGap(d));
+  });
+  bus.on('finish', ({ timeS } = {}) => {
+    if (!ghostRec || online) return;
+    const g = ghostRec.finish(timeS); ghostRec = null;
+    if (debug.trial) debug.trial.saved = saveBestGhost(g);
+  });
   bus.on('go', () => { goAt = performance.now(); });
   bus.on('drop', () => { debug.drops++; });
   bus.on('rescue-release', () => { debug.rescues++; });
@@ -929,7 +1027,7 @@ async function boot(course, options, lifetime, isCurrent) {
     const me = (res && res.me) || {}, row = (res.rows || []).find((r) => r.me) || {};
     debug.result = { place: me.place, of: (res.rows || []).length, timeS: me.timeS, bestLapS: me.bestLapS };
     bridge.send({ type: 'race-result', v: 1, track: track.id, laps, place: me.place, of: (res.rows || []).length,
-      timeS: me.timeS, bestLapS: me.bestLapS, finished: row.finished !== false, items: true, xp: null });
+      timeS: me.timeS, bestLapS: me.bestLapS, finished: row.finished !== false, items: runMode !== 'trial', xp: null });
   });
 
   bridge.on('pause', (m) => setPaused(m.on));
@@ -1111,6 +1209,10 @@ async function boot(course, options, lifetime, isCurrent) {
         { active: !online && (race.phase === 'racing' || race.phase === 'finished'), paused });
       sctx.timeS = online ? online.s.raceTimeS() : undefined;
       racers.step(clock.dt, pa, race, sctx);
+      if (ghostRec || ghost) {                                    //    Time Trial: record you, run the ghost's clock on
+        if (race.phase === 'racing') { ghostT = race.timeS; ghostRec?.tick(ghostT, P.st); }
+        else if (race.phase === 'finished') ghostT += clock.dt;
+      }
       debug.cleanTopMps = P.feel.get('speed.topMps');
       if (race.phase === 'racing' || race.phase === 'finished') {
         const sc = scanClock(online ? null : audio.music, racers.clockS, online ? 1 : MACHINERY_PACE);
@@ -1126,6 +1228,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (HT) hLap('sim');
     if (online) online.s.update({ paused, assist: assist.mode !== 'off' });   //    online: clock slew, pings, uploads
     queue.flush(bus);                                             // 3. events
+    if (runLog && simOn && race.phase === 'racing' && !P.finished) runLog.sample(P.st, standings.placeOf(0), steps * clock.dt);
     const frozen = paused && !online;                             //    online the pause card freezes nothing
     const fxDt = frozen ? 0 : frameDt;                            //    the pause card freezes every effect too
     fx.update(fxDt, P.st, race);                                  // 4. fx
@@ -1240,7 +1343,12 @@ async function boot(course, options, lifetime, isCurrent) {
     const introShot = state === 'intro' ? intro.shotAt(introElapsed) : -1;
     const viewSection = introShot >= 0 && introShot < 3 ? track.sectionAt(intro.shots[introShot].s) : pst[S.sectionIdx];
     const viewFx = state === 'intro' ? { ...fs, paletteMix: { from: viewSection, to: viewSection, t: 1 } } : fs;
-    world.update({ kart: P.view, karts: kartViews, fx: viewFx, timeS: renderTime, beat: clock.beat,
+    let shownKarts = kartViews;
+    if (ghost && !online && runMode === 'trial' && state === 'race' && (race.phase === 'racing' || race.phase === 'finished') && ghostT <= ghost.timeS + 2) {
+      ghostToState(ghostSample(ghost, ghostT, ghostPose), ghostView.st);
+      ghostKarts[0] = kartViews[0]; shownKarts = ghostKarts;
+    }
+    world.update({ kart: P.view, karts: shownKarts, fx: viewFx, timeS: renderTime, beat: clock.beat,
       raceTimeS: racers.clockS, sectionIdx: viewSection, items: iv, mode, camera: cam.camera, paused, song, songS, audioReactive, words: wordLive, beatSong,
       airWords: inRace && !online ? airWords : null,
       songCues: cueView?.live || NO_WORDS, cueGentle: cueSafety.on, songCueList: songCues?.cues || NO_WORDS,
@@ -1288,7 +1396,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (!online && state === 'race' && finishAt && now >= finishAt && result) {   // results after the finish swell (online: the room's)
       finishAt = 0;
       state = 'results';
-      hud.setCard('results', result);
+      hud.setCard('results', { ...result, recap: logRun(result) });
       if (BOT) botT = now + 5000;
     }
     if (HT) hLap('hud');

@@ -437,3 +437,54 @@
 @media (prefers-reduced-motion: reduce) {
   .hw-panel, .hw-key .hw-top, .hw-ring, #card .card-body.out { animation: none; }
 }
+
+/* logbook recap (hud/recap.js, the results branch of hud/cards.js): page 2 = highlights + course sketch, page 3 =
+ * rubber stamps; every page slides in and out, the stamps thunk down one after another; Gentle and reduced motion
+ * fade only (no thunk, no slide) */
+#card { --rc-teal: #168a86; }
+#card[data-kind="results"][data-page="run"] .card-title, #card[data-kind="results"][data-page="stamps"] .card-title { font-size: 24px; margin-bottom: 2px; }
+.rc-page.in { animation: rc-in 0.24s ease-out both; }
+.rc-page.out { animation: rc-out 0.17s ease-in forwards; pointer-events: none; }
+@keyframes rc-in { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+@keyframes rc-out { to { opacity: 0; transform: translateX(-18px); } }
+.rc-dots { display: flex; justify-content: center; gap: 6px; margin: 12px 0 0; }
+.rc-dots i { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--paper-ink); box-sizing: border-box; }
+.rc-dots i.on { background: var(--paper-pink); border-color: var(--paper-pink); }
+.rc-hl { list-style: none; margin: 4px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.rc-hl li { display: flex; flex-direction: column; gap: 3px; padding: 8px 4px 7px; border: 1.5px solid var(--paper-ink); border-radius: 3px;
+  background: #fbf8f2; box-shadow: 2px 2px 0 rgba(28, 23, 34, 0.18); animation: rc-in 0.28s ease-out both; animation-delay: calc(var(--i, 0) * 0.07s); }
+.rc-hl b { font: 900 24px/1 var(--font); font-variant-numeric: tabular-nums; }
+.rc-hl span { font: 600 10.5px/1.2 var(--mono); color: var(--paper-dim); }
+.rc-map { margin: 12px 0 0; }
+.rc-sketch { display: block; width: 100%; max-width: 260px; height: auto; margin: 0 auto; overflow: visible; }
+.rc-loop { fill: none; stroke: var(--paper-ink); stroke-width: 2.2; stroke-linejoin: round; opacity: 0.8; }
+.rc-best { fill: none; stroke: var(--rc-teal); stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
+.rc-start { fill: var(--paper-ink); }
+.rc-fall { fill: var(--paper-pink); stroke: var(--paper); stroke-width: 1.2; }
+.rc-key { display: flex; justify-content: center; gap: 14px; margin: 6px 0 0; font: 600 10.5px/1 var(--mono); color: var(--paper-dim); }
+.rc-key span::before { content: ''; display: inline-block; vertical-align: middle; margin: -2px 5px 0 0; }
+.rc-key .k-best::before { width: 14px; height: 4px; border-radius: 2px; background: var(--rc-teal); }
+.rc-key .k-fall::before { width: 7px; height: 7px; border-radius: 50%; background: var(--paper-pink); }
+.rc-stamps { list-style: none; margin: 6px 0 0; padding: 4px 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 12px; }
+.rc-stamp { --r: -3deg; display: flex; flex-direction: column; gap: 3px; max-width: 100%; padding: 6px 11px 5px; box-sizing: border-box;
+  border: 2px solid var(--paper-pink); border-radius: 4px; color: var(--paper-pink); background: transparent; opacity: 0.94;
+  box-shadow: inset 0 0 0 2px var(--paper), inset 0 0 0 3.5px var(--paper-pink); transform: rotate(var(--r));
+  animation: rc-thunk 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; animation-delay: calc(var(--i, 0) * 0.16s + 0.12s); }
+.rc-stamp b { font: 900 15px/1.05 var(--font); letter-spacing: 0.06em; text-transform: uppercase; }
+.rc-stamp span { font: 600 11px/1.2 var(--mono); color: var(--paper-ink); letter-spacing: 0; text-transform: none; }
+.rc-stamp.medal { border-color: var(--paper-ink); color: var(--paper-ink); box-shadow: inset 0 0 0 2px var(--paper), inset 0 0 0 3.5px var(--paper-ink); }
+.rc-stamp.medal-gold b { color: #a8790f; }
+.rc-stamp.medal-glass b { color: var(--rc-teal); }
+.rc-stamp.unlock { border-style: dashed; }
+@keyframes rc-thunk { from { opacity: 0; transform: scale(1.45) rotate(calc(var(--r) * 2)); } 70% { opacity: 1; } to { opacity: 0.94; transform: rotate(var(--r)); } }
+@keyframes rc-fade { from { opacity: 0; } }
+#card.c-gentle .rc-page.in, #card.c-gentle .rc-hl li { animation: rc-fade 0.4s ease-out both; }
+#card.c-gentle .rc-page.out { animation: hw-out-soft 0.26s ease-out forwards; }
+#card.c-gentle .rc-stamp { animation: rc-fade 0.5s ease-out both; animation-delay: calc(var(--i, 0) * 0.2s + 0.1s); }
+@media (prefers-reduced-motion: reduce) {
+  .rc-page.in, .rc-hl li { animation: rc-fade 0.4s ease-out both; }
+  .rc-page.out { animation: hw-out-soft 0.26s ease-out forwards; }
+  .rc-stamp { animation: rc-fade 0.5s ease-out both; animation-delay: calc(var(--i, 0) * 0.2s + 0.1s); }
+}
+@media (max-width: 420px) { .rc-hl b { font-size: 20px; } }
+/* end logbook recap */

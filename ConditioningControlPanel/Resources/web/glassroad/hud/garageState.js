@@ -1,4 +1,6 @@
-/* The garage stores appearance only. Locks are a catalog rule until host unlocks exist. */
+/* The garage stores appearance only. LOCKED is the catalog's dark list; logbook unlocks lift karts off it. */
+import {UNLOCKS} from '../meta/unlocks.js';
+import {ACHIEVEMENTS} from '../meta/achievements.js';
 export const KARTS = [['pendulum','Pendulum'],['reverie','Reverie'],['house-edge','House Edge'],['checkmate','Checkmate'],['lovebomb','Lovebomb'],['feedback','Feedback'],['velvet-lock','Velvet Lock'],['undertow','Undertow']];
 export const OUTFITS = [['none','Classic'],['varsity','Varsity'],['croupier','Croupier'],['drone-protocol','Protocol'],['builder','Builder'],['cheer','Cheer'],['pool','Pool'],['snow-day','Snow'],['swim','Swim']];
 export const LOCKED = new Set(['velvet-lock','undertow']);
@@ -12,10 +14,10 @@ export const PRESETS = [
 export const COLOR_KEYS = ['primary','secondary','antenna','hands','shoes','face'];
 export const DEFAULT = {kart:'lovebomb',outfit:'drone-protocol',...PRESETS[0],original:true,pattern:0,skin:'Original'};
 export const STORAGE = 'glassroad.garage.v1';
-export function cleanGarage(saved) {
+export function cleanGarage(saved,locked=LOCKED) {
   const s = {...DEFAULT};
   if (!saved || typeof saved !== 'object') return s;
-  if (KARTS.some(([id]) => id === saved.kart) && !LOCKED.has(saved.kart)) s.kart = saved.kart;
+  if (KARTS.some(([id]) => id === saved.kart) && !locked.has(saved.kart)) s.kart = saved.kart;
   const outfit = saved.outfit === 'labcoat' ? 'builder' : saved.outfit;
   if (OUTFITS.some(([id]) => id === outfit)) s.outfit = outfit;
   for (const k of COLOR_KEYS) if (/^#[0-9a-f]{6}$/i.test(saved[k])) s[k] = saved[k];
@@ -24,19 +26,32 @@ export function cleanGarage(saved) {
   s.skin = typeof saved.skin === 'string' ? saved.skin.slice(0,32) : 'Original';
   return s;
 }
-export function loadGarage(storage) {
-  try { return cleanGarage(JSON.parse(storage.getItem(STORAGE) || storage.getItem('rt.garage-proposal.v2'))); }
-  catch { return cleanGarage(null); }
+export function loadGarage(storage,locked=LOCKED) {
+  try { return cleanGarage(JSON.parse(storage.getItem(STORAGE) || storage.getItem('rt.garage-proposal.v2')),locked); }
+  catch { return cleanGarage(null,locked); }
 }
-export function routeTo(from,to) {
-  if (to === from || !KARTS[to] || LOCKED.has(KARTS[to][0])) return null;
+export function routeTo(from,to,locked=LOCKED) {
+  if (to === from || !KARTS[to] || locked.has(KARTS[to][0])) return null;
   const right = (to-from+KARTS.length)%KARTS.length;
   return {index:to,steps:right<=KARTS.length/2?right:right-KARTS.length};
 }
-export function stepKart(from,dir) {
+export function stepKart(from,dir,locked=LOCKED) {
   let index = from;
-  do { index = (index+dir+KARTS.length)%KARTS.length; } while (LOCKED.has(KARTS[index][0]));
-  return routeTo(from,index);
+  do { index = (index+dir+KARTS.length)%KARTS.length; } while (locked.has(KARTS[index][0]) && index !== from);
+  return routeTo(from,index,locked);
+}
+/** The karts that stay dark: the catalog list minus every kart an unlock id in `unlocked` names. */
+export function lockedKarts(unlocked=new Set()) {
+  const out = new Set(LOCKED);
+  for (const id of unlocked) { const kart = UNLOCKS[id]?.garage; if (kart) out.delete(kart); }
+  return out;
+}
+/** What lifts a dark kart: 'Unlocks with <achievement>'. Null for a kart nothing unlocks. */
+export function lockLine(kart) {
+  const entry = Object.values(UNLOCKS).find(u => u.garage === kart);
+  if (!entry) return null;
+  const a = ACHIEVEMENTS.find(x => x.id === entry.by);
+  return a ? 'Unlocks with '+(a.hidden ? 'a hidden achievement' : a.name) : 'Unlocks with an achievement';
 }
 export function raceLook(s) {
   return {vehicle:'emi-vehicle-'+s.kart,outfit:s.outfit==='none'?null:'emi-outfit-'+s.outfit,

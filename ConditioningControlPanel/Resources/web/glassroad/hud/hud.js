@@ -279,7 +279,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     on(name, fn) { if(disposed)return()=>{};(listeners[name] || (listeners[name] = [])).push(fn); return () => { const l = listeners[name], i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); }; },
     onStart: (fn) => {if(!disposed)fns.start.push(fn);}, onResume: (fn) => {if(!disposed)fns.resume.push(fn);}, onRestart: (fn) => {if(!disposed)fns.restart.push(fn);},
     setRacers(meta) { metas = meta || null; labels = racerLabels(meta || []); },
-    setTrack(t) { map.setTrack(t || {}); },
+    setTrack(t) { map.setTrack(t || {}); cards.setTrack?.(t); },
     /** The host's Gentle switch: the options card shows Gentle preview locked on. */
     setHostGentle(on) { cards.setHostGentle(on); },
     /** The saved options, for boot to apply at load. */

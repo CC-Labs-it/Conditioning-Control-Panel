@@ -76,7 +76,9 @@ camera. Under `?bot=1` the AI gets the hands back when the script ends.
 ```bash
 node --test tests/*.test.mjs            # the whole suite (the bare directory form fails on Windows)
 node dev/boot-check.mjs               # headless Edge over CDP, both backends: menu, Race, about 40 s of racing
-node dev/boot-check.mjs --finish      # all 3 laps to the results card (about 3 min per backend)
+node dev/boot-check.mjs --finish --seconds 700   # to the results card: races run 6-13 min since the Oct 24 courses
+                                      # (Goonworks is shortest: add --flags '&track=goonworks' --seconds 640)
+node dev/boot-check.mjs --flags '&mode=trial'    # Time Trial: alone, no items, the best ghost if one is saved
 node dev/boot-check.mjs --fall        # plus &botFall=1 and a rescue shot
 node dev/boot-check.mjs --cards       # no bot: menu, Enter on Race, Escape pauses, Enter resumes
 node dev/shots.mjs                    # look tour: start grid, boost, bump, then a fixed camera on each road section,
