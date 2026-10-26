@@ -1,7 +1,7 @@
 /* Cotton-candy banks and soap bubbles stay fixed in the world, with close parallax.
  * Four shared instanced draws need no extra texture or decoder. */
 import { Group, InstancedMesh, SphereGeometry, MeshBasicNodeMaterial, Object3D, Color } from 'three/webgpu';
-import { vec3, normalize, normalWorld, normalView, positionView, dot, clamp, mix } from 'three/tsl';
+import { vec3, normalize, normalWorld, normalView, positionView, positionGeometry, dot, clamp, mix, sin, float, fwidth, smoothstep } from 'three/tsl';
 
 export const THRESHOLD_PINKS = Object.freeze(['#ff91cc', '#fff5fc', '#e60087']);
 export function thresholdStoneColour(track, row) {
@@ -49,22 +49,38 @@ export function thresholdAtmosphereLayout(track, { phone = false } = {}) {
 export function createThresholdAtmosphere(track, options = {}) {
   const layout = thresholdAtmosphereLayout(track, options), object = new Group(); object.name = 'threshold-pink-atmosphere';
   const geometry = new SphereGeometry(1, 16, 10), pose = new Object3D(), colour = new Color(), white = new Color('#fff5fc');
+  // Rounded scallops stay inside the original unit sphere and its tested road clearance.
+  const cloudGeometry = new SphereGeometry(1, options.phone ? 16 : 24, options.phone ? 10 : 14);
+  const vertices = cloudGeometry.attributes.position;
+  for (let i = 0; i < vertices.count; i++) {
+    const x = vertices.getX(i), y = vertices.getY(i), z = vertices.getZ(i);
+    const lobe = .94 + .06 * Math.sin(x * 8 + z * 3) * Math.sin(y * 7 - z * 4);
+    vertices.setXYZ(i, x * lobe, y * lobe, z * lobe);
+  }
+  cloudGeometry.computeVertexNormals();
   const clouds = new MeshBasicNodeMaterial({ color: '#ffffff' });
-  clouds.colorNode = vec3(1).mul(clamp(dot(normalize(normalWorld), normalize(vec3(-.4, .85, .35))).mul(.2).add(.8), .55, 1));
+  const p = positionGeometry, lamp = dot(normalize(normalWorld), normalize(vec3(-.4, .85, .35)));
+  const grainPhase = p.x.mul(47).add(sin(p.z.mul(19)).mul(2)).add(p.y.mul(31));
+  const grain = sin(grainPhase).mul(float(1).sub(smoothstep(.5, 1.5, fwidth(grainPhase))));
+  const whorl = sin(p.x.mul(9).add(sin(p.z.mul(6)).mul(2)).add(p.y.mul(7)));
+  clouds.colorNode = vec3(1).mul(clamp(lamp.mul(.22).add(.79).add(whorl.mul(.035)).add(grain.mul(.015)), .5, 1.05));
   const soap = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
   const rim = dot(normalize(normalView), normalize(positionView.negate())).abs().oneMinus();
-  const pink = new Color('#ffb2dd'), pearl = new Color('#fff7fe');
-  soap.colorNode = mix(vec3(pink.r, pink.g, pink.b), vec3(pearl.r, pearl.g, pearl.b), rim.pow(3));
-  soap.opacityNode = rim.pow(2).mul(.45).add(.035);
+  const pink = new Color('#ffb2dd'), pearl = new Color('#fff7fe'), lilac = new Color('#c7b5ff'), ice = new Color('#b5ffe9');
+  const film = sin(rim.mul(18).add(normalWorld.y.mul(2))).mul(.5).add(.5);
+  const cool = mix(vec3(lilac.r, lilac.g, lilac.b), vec3(ice.r, ice.g, ice.b), film);
+  const tint = mix(vec3(pink.r, pink.g, pink.b), cool, film.mul(.65));
+  soap.colorNode = mix(tint, vec3(pearl.r, pearl.g, pearl.b), rim.pow(7).mul(.8));
+  soap.opacityNode = rim.pow(2).mul(.5).add(.025);
   const glint = new MeshBasicNodeMaterial({ color: '#fff7fe', transparent: true, opacity: .72, depthWrite: false });
   const mistPaint = new MeshBasicNodeMaterial({ color: '#f586c9', transparent: true, opacity: .13, depthWrite: false });
-  const cloudMesh = new InstancedMesh(geometry, clouds, layout.clouds.length);
+  const cloudMesh = new InstancedMesh(cloudGeometry, clouds, layout.clouds.length);
   const bubbleMesh = new InstancedMesh(geometry, soap, layout.bubbles.length);
-  const glints = new InstancedMesh(geometry, glint, layout.bubbles.length);
+  const glints = new InstancedMesh(geometry, glint, layout.bubbles.length * 2);
   const mistRows = layout.clouds.filter((_, i) => i % 6 === 0), mist = new InstancedMesh(geometry, mistPaint, mistRows.length);
   cloudMesh.name = 'pink-cloud-banks'; bubbleMesh.name = 'floating-soap-bubbles'; glints.name = 'bubble-glints';
   mist.name = 'pink-mist-banks'; object.add(cloudMesh, bubbleMesh, glints, mist);
-  layout.clouds.forEach((row, i) => cloudMesh.setColorAt(i, colour.set(THRESHOLD_PINKS[row.colour]).lerp(white, .48)));
+  layout.clouds.forEach((row, i) => cloudMesh.setColorAt(i, colour.set(THRESHOLD_PINKS[row.colour]).lerp(white, .32)));
   let time = 0, disposed = false;
   function place(quiet = false) {
     layout.clouds.forEach((row, i) => {
@@ -77,8 +93,11 @@ export function createThresholdAtmosphere(track, options = {}) {
       pose.position.fromArray(row.p);
       if (!quiet) { pose.position.y += Math.sin(phase) * 1.1; pose.position.x += Math.cos(phase * .7) * .45; }
       pose.scale.setScalar(row.r); pose.updateMatrix(); bubbleMesh.setMatrixAt(i, pose.matrix);
-      pose.position.x -= row.r * .3; pose.position.y += row.r * .48; pose.position.z -= row.r * .58;
-      pose.scale.set(row.r * .14, row.r * .24, row.r * .085); pose.updateMatrix(); glints.setMatrixAt(i, pose.matrix);
+      const bx = pose.position.x, by = pose.position.y, bz = pose.position.z;
+      pose.position.set(bx - row.r * .32, by + row.r * .62, bz - row.r * .62);
+      pose.scale.set(row.r * .11, row.r * .2, row.r * .045); pose.updateMatrix(); glints.setMatrixAt(i * 2, pose.matrix);
+      pose.position.set(bx + row.r * .43, by - row.r * .47, bz + row.r * .71);
+      pose.scale.set(row.r * .065, row.r * .11, row.r * .035); pose.updateMatrix(); glints.setMatrixAt(i * 2 + 1, pose.matrix);
     });
     mistRows.forEach((row, i) => {
       pose.position.fromArray(row.p); pose.position.y -= row.r * .35;
@@ -100,7 +119,7 @@ export function createThresholdAtmosphere(track, options = {}) {
     dispose() {
       if (disposed) return; disposed = true; object.removeFromParent();
       for (const mesh of [cloudMesh, bubbleMesh, glints, mist]) mesh.dispose();
-      geometry.dispose(); clouds.dispose(); soap.dispose(); glint.dispose(); mistPaint.dispose();
+      geometry.dispose(); cloudGeometry.dispose(); clouds.dispose(); soap.dispose(); glint.dispose(); mistPaint.dispose();
     },
   };
 }
