@@ -11,6 +11,11 @@
  * The adapter: high-performance for WebGPU and for the WebGL2 context (three does not pass it to
  * WebGL2, so that context is made here); its name shows in the fps readout and stats().gpu, so an
  * integrated GPU on a two-GPU PC is easy to spot.
+ * HIT CAM: setInset({ scene, camera, rect, viewW, viewH }) draws a second, small, shadowless view of the scene
+ * into the post chain's inset target right before the post render, every frame it is set (the composite
+ * rewrites the whole canvas each frame); the post quad lays it over the frame (render/post.js). Its size is the
+ * rect times the pixel ratio times the tier's Q.hitCam (0 = off). warmInset() builds its pipelines behind the
+ * loading card (its own target, no shadow map: a different program set from the scene pass).
  */
 import { WebGPURenderer, Group, Mesh, Sprite, PlaneGeometry } from 'three/webgpu';
 import { createPost } from './post.js';
@@ -60,7 +65,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   if (webgl2) context = glContext(canvas);
   setTier(pinOf() || capTier(pickTier({ override, coarse, webgl2: webgl2 && !firefox })));
 
-  let three = new WebGPURenderer({ canvas, antialias: false, forceWebGL: webgl2, powerPreference: 'high-performance', ...(context ? { context } : {}) });
+  let three = new WebGPURenderer({ canvas, alpha: true, antialias: false, forceWebGL: webgl2, powerPreference: 'high-performance', ...(context ? { context } : {}) });
   try {
     await three.init();
   } catch (e) {
@@ -74,7 +79,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     canvas = replaceCanvas(canvas);
     context = glContext(canvas);
     if (!context) throw new Error('no WebGL2 context after the WebGPU failure (' + fallback + ')');
-    three = new WebGPURenderer({ canvas, antialias: false, forceWebGL: true, powerPreference: 'high-performance', context });
+    three = new WebGPURenderer({ canvas, alpha: true, antialias: false, forceWebGL: true, powerPreference: 'high-performance', context });
     await three.init();
   }
   trackSceneResources(three);
@@ -106,7 +111,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   const gate = createFrameGate({ cap: opts.frameCap });
   const dyn = createDynRes();
   const tierFns = new Set();
-  let post = null, postKey = null, last = 0, gated = false;
+  let post = null, postKey = null, last = 0, gated = false, inset = null;
   // a tier step rebuilds the post chain and the shadow mode, so every program relinks (Firefox: one by one,
   // a 1 to 3 s freeze mid-race; under the pause card, black frames). While held (a race, its countdown and
   // its pause card) the governor's verdict waits and lands on the next menu or results card; dynamic
@@ -193,6 +198,11 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
       if (!hold && pending) { const p = pending; pending = null; if (p !== Q.name) { setTier(p); retier(); } }
     },
     get tierPending() { return pending; },
+    /** The hit cam inset for the next frames: { scene, camera, rect: { cx, cy, w, h, rotRad } (CSS px), viewW, viewH } or null. */
+    setInset(spec) { inset = spec && spec.scene && spec.camera && spec.rect && Q.hitCam > 0 ? spec : null; },
+    get insetOn() { return !!inset; },
+    /** insetCamera: the hit cam's own camera; mainCamera keeps the post chain on the race view. */
+    warmInset(scene, insetCamera, mainCamera) { return warmInset(three, postFor(scene, mainCamera), scene, insetCamera); },
     /** The live display options (frameCap, renderScale, quality, showFps); other keys are ignored here. */
     setOptions(o) {
       const was = opts;
@@ -249,6 +259,10 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
       const p = postFor(scene, camera);
       three.info.reset();
       p.update(fx, dt, Math.max(1, canvas.clientWidth) / Math.max(1, canvas.clientHeight), musicView);
+      if (inset && p.inset) {
+        try { renderInset(three, p.inset.target, inset, three.getPixelRatio() * Q.hitCam); p.setInset(inset.rect, inset.viewW, inset.viewH); }
+        catch (e) { console.warn('[glassroad/renderer] hit cam: ' + (e && e.message)); inset = null; p.setInset(null); }
+      } else if (p.setInset) p.setInset(null);
       p.render();
     },
     stats() {
@@ -266,6 +280,61 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     },
   };
   return api;
+}
+
+/** Shadowless, MRT-less, straight into the inset target; every renderer switch it touches is put back. */
+function withInsetTarget(three, target, fn) {
+  const oldTarget = three.getRenderTarget(), mrt = three.getMRT ? three.getMRT() : null;
+  const shadow = three.shadowMap ? three.shadowMap.enabled : false, autoClear = three.autoClear;
+  const restore = () => {
+    three.setRenderTarget(oldTarget);
+    if (three.setMRT) three.setMRT(mrt);
+    if (three.shadowMap) three.shadowMap.enabled = shadow;
+    three.autoClear = autoClear;
+  };
+  if (three.shadowMap) three.shadowMap.enabled = false;
+  three.autoClear = true;
+  if (three.setMRT) three.setMRT(null);
+  three.setRenderTarget(target);
+  let out;
+  try { out = fn(); } catch (e) { restore(); throw e; }
+  if (out && typeof out.then === 'function') return out.finally(restore);   // an async compile keeps the switches until done
+  restore();
+  return out;
+}
+
+function renderInset(three, target, spec, pr) {
+  const w = Math.max(2, Math.round(spec.rect.w * pr)), h = Math.max(2, Math.round(spec.rect.h * pr));
+  if (target.width !== w || target.height !== h) target.setSize(w, h);
+  withInsetTarget(three, target, () => three.render(spec.scene, spec.camera));
+}
+
+/** Compile the inset's own programs (no shadows, its own target) for everything that can appear in a race. */
+export async function warmInset(three, post, scene, camera) {
+  if (!post || !post.inset || !scene || !camera) return { ms: 0 };
+  const t0 = performance.now(), saved = [], mats = [];
+  scene.traverse((o) => {
+    saved.push([o, o.visible, o.frustumCulled, o.count]);
+    o.visible = true; o.frustumCulled = false;
+    if (o.count === 0 && (o.isInstancedMesh || o.isSprite || o.isBatchedMesh)) o.count = 1;
+    for (const m of [].concat(o.material || [])) if (m && m.visible === false) { mats.push(m); m.visible = true; }
+  });
+  const layers = camera.layers.mask;
+  camera.layers.enableAll();
+  scene.updateMatrixWorld(true);
+  try {
+    // the first real hit resizes the target; a 2 px one has the same formats, so the programs carry over
+    await withInsetTarget(three, post.inset.target, () => three.compileAsync(scene, camera));
+    withInsetTarget(three, post.inset.target, () => three.clear());
+  } catch (e) {
+    console.warn('[glassroad/renderer] hit cam warm: ' + (e && e.message));
+  } finally {
+    camera.layers.mask = layers;
+    for (const [o, v, f, n] of saved) { o.visible = v; o.frustumCulled = f; if (o.count !== n) o.count = n; }
+    for (const m of mats) m.visible = false;
+    scene.updateMatrixWorld(true);
+  }
+  return { ms: Math.round(performance.now() - t0) };
 }
 
 /**
@@ -301,9 +370,12 @@ export async function warmAll(renderer, scene, camera, extras = [], { onProgress
     if (o && !o.parent) temp.add(o);
   }
   scene.add(temp);
-  const saved = [], mats = [], items = [];
+  const saved = [], mats = [], items = [], lods = [];
   let objects = 0, groups = [];
   scene.traverse((o) => {
+    // Projection normally selects one LOD and hides the others, undoing the warm's
+    // all-visible state. Prepare every distance variant before an intro cut needs it.
+    if (o.isLOD) { lods.push([o, o.autoUpdate]); o.autoUpdate = false; }
     saved.push([o, o.visible, o.frustumCulled, o.count]);
     o.visible = true; o.frustumCulled = false;
     if (o.count === 0 && (o.isInstancedMesh || o.isSprite || o.isBatchedMesh)) o.count = 1;
@@ -356,6 +428,7 @@ export async function warmAll(renderer, scene, camera, extras = [], { onProgress
   } catch (e) {
     console.warn('[glassroad/renderer] warm: ' + (e && e.message));
   } finally {
+    for (const [o, autoUpdate] of lods) o.autoUpdate = autoUpdate;
     if (layers !== null) camera.layers.mask = layers;
     for (const [o, v, f, n] of saved) { o.visible = v; o.frustumCulled = f; if (o.count !== n) o.count = n; }
     for (const m of mats) m.visible = false;

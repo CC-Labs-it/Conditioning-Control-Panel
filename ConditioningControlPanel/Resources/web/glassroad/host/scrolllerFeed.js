@@ -1,9 +1,9 @@
 /* host/scrolllerFeed.js - the web host's Scrolller pictures (CONTRACT.md section 7, `scrolller-feed`).
  *
  * DISPLAY ONLY. Scrolller's media hosts send no CORS headers, so the browser shows their pictures but never
- * lets them become a WebGL texture or be read back. These elements go to the flash-burst canvas only
- * (fx/flashMedia.js: a plain page canvas, never uploaded, never read), never to cardMedia, the item cards,
- * the marquee or any world screen. Nothing here fetches: each <img> is loaded by the browser itself, and
+ * lets them enter the GPU or be read back. These elements go to the flash-burst page canvas and
+ * display-only world panels behind depth-tested windows in the game canvas. Nothing here fetches:
+ * each <img> is loaded by the browser itself, and
  * the rows come from the host, which asks api.scrolller.com from this same browser (no CC Labs server
  * touches a byte). The desktop host never sends the message, so there it stays empty.
  *
@@ -39,8 +39,8 @@ export function feedCatalog(msg) {
   return out.length ? out : null;
 }
 
-export function createScrolllerFeed({ bridge, makeImage = () => new Image() } = {}) {
-  let pictures = [], consent = null, disposed = false, catalog = null;
+export function createScrolllerFeed({ bridge, makeImage = () => new Image(), now = () => Date.now() } = {}) {
+  let pictures = [], consent = null, disposed = false, catalog = null, expires = 0;
   const listeners = new Set();
   const notify = () => { for (const fn of listeners) { try { fn(consent); } catch (e) { console.warn('[scrolller]', e); } } };
   function drop(list) { for (const img of list) { try { img.removeAttribute('src'); } catch { /* gone */ } } }
@@ -48,7 +48,8 @@ export function createScrolllerFeed({ bridge, makeImage = () => new Image() } = 
     if (disposed) return;
     const next = feedCatalog(msg);
     if (next && JSON.stringify(next) !== JSON.stringify(catalog)) { catalog = next; notify(); }
-    const rows = feedRows(msg), old = pictures;
+    const rows = consent === false ? [] : feedRows(msg), old = pictures;
+    expires = now() + 24 * 60 * 60 * 1000;
     pictures = rows.map(({ url }) => {
       const img = makeImage();
       img.decoding = 'async';
@@ -65,14 +66,18 @@ export function createScrolllerFeed({ bridge, makeImage = () => new Image() } = 
   }
   const offFeed = bridge?.on('scrolller-feed', apply);
   const offEcho = bridge?.on('setting', echo);
+  const current = () => {
+    if (now() >= expires || consent === false) { drop(pictures); pictures = []; }
+    return pictures;
+  };
   return {
     /** The stored consent from the last echo, or null before any echo. */
     get consent() { return consent; },
-    get count() { return pictures.length; },
-    get ready() { return pictures.filter(loaded).length; },
-    /** A loaded picture for a flash burst, or null. Never hand this to a texture. */
+    get count() { return current().length; },
+    get ready() { return current().filter(loaded).length; },
+    /** A loaded display-only picture for a flash or world panel, or null. */
     sourceFor(seed = 0) {
-      const ready = pictures.filter(loaded);
+      const ready = current().filter(loaded);
       return ready.length ? ready[Math.abs(Math.trunc(seed)) % ready.length] : null;
     },
     /** The niches the host can serve ([{ id, label }]), from its last feed; null until one lands. */

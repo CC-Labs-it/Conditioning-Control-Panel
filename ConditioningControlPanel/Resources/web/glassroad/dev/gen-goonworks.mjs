@@ -64,13 +64,13 @@ export function buildGoonworks() {
   padRun('home-straight', 40, 4, 6);
   const from = node('leapfrog-field'), to = node('leapfrog-field', 2 / 3), s0 = base.nodeS[from], s1 = base.nodeS[to], stones = [];
   for (let i = to; i < node('leapfrog-exit'); i++) nodes[i].flags = ['rail'];
-  const count = 7, pitch = (s1 - s0 + 2) / count;
+  const count = 5, gap = 10, pitch = (s1 - s0 + gap) / count;
   for (let i = 0; i < count; i++) {
     const s = s0 + i * pitch, n = nearest(s), anchor = base.nodeS[n] > s ? n - 1 : n;
     stones.push({ id: 'leapfrog-' + i, node: anchor, ds: round(s-base.nodeS[anchor]), x: 0, w: 30,
-      len: round(i === count-1 ? s1-s : pitch-2) });
+      len: round(i === count-1 ? s1-s : pitch-gap) });
   }
-  track.fields.push({ id: 'goonworks-leapfrog', from, to, lanes: [-8,0,8], stones });
+  track.fields.push({ id: 'goonworks-leapfrog', from, to, lanes: [-8,0,8], platforming: true, stones });
   const descent = spans['fold-descent'], turns = descent.to - descent.from;
   for (const [i, phase] of [.06,.2].entries()) {
     const from = descent.from + Math.round(turns * phase), to = from + 4, target = from + Math.round(turns * 2 / 3);

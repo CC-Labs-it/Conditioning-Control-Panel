@@ -123,8 +123,26 @@ export const B1_CUES = {
     syn.tone(syn.semis(-7), { type: 'square', dur: 0.06, vol: 0.04 });
     syn.tone(syn.semis(-8), { type: 'square', dur: 0.06, vol: 0.04, at: 0.09 });
   },
-  'item-hit'(syn, { victim, by, kind, verdict }) {
+  'item-hit'(syn, { victim, by, kind, verdict, combo = 1 }) {
     const mine = victim === 0;
+    // item feel, the thrower's ear: a blocked shot of yours clanks dull and low (a shield keeps a glassy tick)
+    if (by === 0 && !mine && verdict && verdict !== 'hit') {
+      syn.tone(syn.semis(-17), { type: 'square', dur: 0.09, vol: 0.06, glide: syn.semis(-20) });
+      syn.noise({ dur: 0.12, vol: 0.07, freq: 900, sweep: 500, q: 2.5 });
+      syn.tone(syn.semis(-10), { type: 'triangle', dur: 0.18, vol: 0.05, at: 0.03 });
+      if (verdict === 'glass' || verdict === 'golden') syn.tone(syn.semis(31), { type: 'sine', dur: 0.25, vol: 0.03, at: 0.05 });
+      return;
+    }
+    // your hit landed: a pop, a punch and a bright two-step chime that climbs with the chain
+    if (by === 0 && !mine && verdict === 'hit') {
+      const up = (Math.max(1, Math.min(6, combo | 0 || 1)) - 1) * fg(syn, 'itemFeel.confirmSemisPerCombo', 3);
+      pop(syn, 19 + up, 0.08);
+      syn.tone(syn.semis(-14), { type: 'sine', dur: 0.12, vol: 0.12, glide: syn.semis(-22) });
+      syn.tone(syn.semis(24 + up), { type: 'sine', dur: 0.12, vol: 0.06, at: 0.05 });
+      syn.tone(syn.semis(31 + up), { type: 'sine', dur: 0.22, vol: 0.06, at: 0.11 });
+      if (kind === 'shatter') HIT[kind]?.(syn);
+      return;
+    }
     if (verdict === 'glass') {                      // Glass soaks it: a bright ring
       syn.tone(syn.semis(31), { type: 'sine', dur: 0.9, vol: 0.07 });
       syn.tone(syn.semis(38), { type: 'sine', dur: 0.7, vol: 0.04, at: 0.03 });

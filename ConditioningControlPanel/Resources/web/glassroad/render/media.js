@@ -38,6 +38,7 @@ import { fitMainframeBillboard, moveMainframePanel } from './mainframeMediaMotio
 import { tunnelArchGeometry, tunnelArchMaterial } from './tunnelArches.js';
 import { screenBodyGeometry, screenBodyMaterial } from './screenBody.js';
 import { screenBodySize } from './screenBodyMath.js';
+import { createWebMediaScreens } from './webMediaScreens.js';
 
 // the shared colour system (render/spectrum.js); the local ring stays the fallback for a missing hue
 import * as SPECTRUM from './spectrum.js';
@@ -178,6 +179,14 @@ function placeholderColours() {
   return out;
 }
 
+/** Keep the course's family while giving every real Loom style its own ink. */
+export function programPalette(palette, index) {
+  if (!palette) return null;
+  const ink = new Color(palette[0]).offsetHSL((index - 2.5) * .055, 0, 0);
+  const paper = new Color(palette[1]).lerp(ink, .08 + (index % 3) * .06);
+  return ['#' + ink.getHexString(), '#' + paper.getHexString()];
+}
+
 /** The base border colour for a slot: the spectrum's hue at its s when there is one, else the ring. */
 function borderColour(sl, i) {
   try { if (SPECTRUM && typeof SPECTRUM.hueAt === 'function') return colourOf(SPECTRUM.hueAt(sl.s || 0, 0), slotColour(i)); } catch { /* ring */ }
@@ -197,7 +206,7 @@ export function createMediaSlots(scene, track, opts = {}) {
   const buildTier = opts.tier || Q.name, T = tierOf(buildTier, M);
   const group = new Group();
   group.name = 'media';
-  const empty = { object: group, slots: [], videoCapacity: 0, setSource: () => false, update() {}, dispose() { if (scene) scene.remove(group); }, stats: () => ({ slots: 0, draws: 0, uploads: 0 }) };
+  const empty = { object: group, slots: [], videoCapacity: 0, setSource: () => false, setDisplayFeed() {}, update() {}, dispose() { if (scene) scene.remove(group); }, stats: () => ({ slots: 0, draws: 0, uploads: 0 }) };
   if (!layout) { if (scene) scene.add(group); return empty; }
   const samples = opts.samples || roadSamples(track, M.checkStepM);
 
@@ -256,7 +265,7 @@ export function createMediaSlots(scene, track, opts = {}) {
       sl.k = k;
     });
     const m = screenMaterial(texture(pg.tex), instancedBufferAttribute(new InstancedBufferAttribute(crop, 4), 'vec4'),
-      instancedBufferAttribute(new InstancedBufferAttribute(info, 4), 'vec4'), pg.spin, pg.warp, U, M, palette);
+      instancedBufferAttribute(new InstancedBufferAttribute(info, 4), 'vec4'), pg.spin, pg.warp, U, M, programPalette(palette, progs.indexOf(pg)));
     const im = new InstancedMesh(plane, m, n);
     im.frustumCulled = false; im.name = 'media-' + pg.ph.program;
     if (!pg.slots.length) im.count = 0;
@@ -571,6 +580,7 @@ export function createMediaSlots(scene, track, opts = {}) {
   }
 
   // ---- per frame ----
+  let webScreens = null;
   let clock = 0, uploadClock = 0, uploads = 0, sharedVideoUploads = 0, sharedVideoUploadsTotal = 0;
   const spiralBeat = createSpiralBeatClock();
   const picks = [];
@@ -599,6 +609,7 @@ export function createMediaSlots(scene, track, opts = {}) {
     if (opts.extraSlotsDynamic !== false) for (const sl of opts.extraSlots || []) placeSlot(sl);
     for (const sl of flyingSlots) placeSlot(moveMainframePanel(sl, clock));
     if (shownTier !== Q.name) placeAll(); else if (haloSlotsOf.length || flyingSlots.length || (opts.extraSlotsDynamic !== false && opts.extraSlots?.length)) flush();
+    webScreens?.update(dt, view);
 
     // the shared upload budget: nearest overdue programs and live own sources within drawM
     const cam = view.camera;
@@ -656,6 +667,7 @@ export function createMediaSlots(scene, track, opts = {}) {
   }
 
   function dispose() {
+    webScreens?.dispose(); webScreens = null;
     for (const i of [...own.keys()]) drop(i);
     playback.dispose();
     for (const o of persistentSources.values()) { o.baseTex.dispose(); o.creditTex.dispose(); }
@@ -669,7 +681,7 @@ export function createMediaSlots(scene, track, opts = {}) {
   }
 
   const pub = slots.map((sl) => ({ id: sl.id, frame: sl.frame, kind: sl.kind, s: sl.s, w: sl.w, h: sl.h, side: sl.side || 0, phone: sl.phone,
-    get C() { return sl.C; }, get Z() { return sl.Z; } }));
+    get C() { return sl.C; }, get X() { return sl.X; }, get Y() { return sl.Y; }, get Z() { return sl.Z; } }));
   return {
     object: group,
     slots: pub,
@@ -677,6 +689,13 @@ export function createMediaSlots(scene, track, opts = {}) {
     get videoCapacity() { return videoCapacity(); },
     tunnel: tun ? { fromS: tun.fromS, toS: tun.toS } : null,
     setSource,
+    /** Browser feed is display-only. Its images must never enter a GPU texture. */
+    setDisplayFeed(feed, canvas = globalThis.document?.getElementById('view')) {
+      if (!webScreens && feed) webScreens = createWebMediaScreens({ scene, canvas,
+        isVisible: sl => !hidden(sl),
+        slots: selected.filter(sl => ['billboard', 'halo', 'tunnel'].includes(sl.frame)) });
+      webScreens?.setFeed(feed);
+    },
     resumePlayback: playback.resume,
     update,
     dispose,
@@ -687,6 +706,7 @@ export function createMediaSlots(scene, track, opts = {}) {
         selected: selected.filter(sl => sl.frame === frame).length, ready: world.filter(o => o.frame === frame && o.ready).length,
       }]));
       return { slots: slots.length, programs: progs.length, draws: group.children.filter(c => c.visible).length, uploads, canvasPx: T.canvasPx,
+        webPictures: webScreens?.stats() || null,
         readyCardVideos: cards.filter(o => o.ready).length, cardVideoDecoders: new Set(cards.map(o => o.el)).size,
         cardVideoSeconds: cards.map(o => o.el?.currentTime || 0), cardVideoPlayback: playback.snapshot(cards.map(o => o.el)),
         selectedMediaFaces: selected.length, readyMediaVideos: videos.filter(o => o.ready).length,
