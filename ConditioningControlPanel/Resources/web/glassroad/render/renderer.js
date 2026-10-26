@@ -20,6 +20,7 @@ import { createFrameGate } from '../core/clock.js';
 import { reasonOf } from '../core/failure.js';
 import { loadOptions, cleanOptions } from '../hud/options.js';
 import { WARM, warmGroups } from './warmGroups.js';
+import { createDeferredWarm } from './stagedWarm.js';
 
 /** A canvas can hold one context for life: a failed WebGPU init, or a lost context, needs a new element in its place. */
 function replaceCanvas(canvas) {
@@ -224,6 +225,8 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
       post.detachScene();postKey=null;releaseSceneResources(three,scene,beforeRetire);return true;
     },
     compile(scene, camera, extras, opts) { return warmAll(api, scene, camera, extras, opts); },
+    /** The phone tier's deferred groups from a staged warm (render/stagedWarm.js); step() it once per frame. */
+    deferredWarm(warm, scene) { return warm && warm.staged ? createDeferredWarm(three, () => post, { all: warm.all, groups: warm.staged.groups, scene }) : null; },
     resize,
     /** dt (frame seconds) reaches post.update for the item screen effect (CONTRACT-B1). */
     render({ scene, camera, fx, dt = 0, musicView = {} }) {
@@ -283,7 +286,7 @@ export { WARM, warmGroups };
 // a painted frame between warm passes (the card and its bar redraw), falling back to a plain task
 const paintGap = () => new Promise((r) => (globalThis.requestAnimationFrame ? requestAnimationFrame(() => setTimeout(r, 0)) : setTimeout(r, 0)));
 
-export async function warmAll(renderer, scene, camera, extras = [], { onProgress = null } = {}) {
+export async function warmAll(renderer, scene, camera, extras = [], { onProgress = null, stage = null } = {}) {
   const t0 = performance.now();
   const post = renderer.post(scene, camera);
   const timing = { compileMs: 0, renderMs: 0, gapMs: 0 };
@@ -309,6 +312,15 @@ export async function warmAll(renderer, scene, camera, extras = [], { onProgress
     objects++;
   });
   scene.updateMatrixWorld(true);
+  // the phone tier's staged preparation (render/stagedWarm.js): the cover prepares only what the opening needs,
+  // the deferred groups are prepared while the menu, the intro and the countdown play. Extras are always now.
+  let plan = null, later = null;
+  if (stage) {
+    try {
+      plan = stage({ items, saved, hiddenMats: new Set(mats), scene, camera, pinRoot: temp });
+      later = new Set(plan.groups.flatMap((g) => g.items));
+    } catch (e) { plan = null; later = null; console.warn('[glassroad/renderer] stage: ' + (e && e.message)); }
+  }
   // every layer too: the shadow catchers live on their own layer, which the camera only joins in the first
   // world.update; without them the warm frame never runs the shadow pass, and every caster's depth program
   // then links in the first menu frame (a 1.5 s stall in Firefox, which has no parallel shader compile)
@@ -318,9 +330,10 @@ export async function warmAll(renderer, scene, camera, extras = [], { onProgress
     // one group shown per pass: its programs (and its casters' shadow programs) link in their own task
     // shadow receivers (road, pads, catchers) stay in every pass: the shadow pass only runs in a frame that
     // draws a receiver, so without them each group's casters linked their depth programs in the last pass
-    const receivers = items.filter((o) => o.receiveShadow), casting = items.filter((o) => !o.receiveShadow);
+    const receivers = items.filter((o) => o.receiveShadow), casting = items.filter((o) => !o.receiveShadow && !(later && later.has(o)));
     groups = warmGroups(casting, renderer.backend === 'webgpu' ? WARM.webgpuPerGroup : WARM.perGroup);
     for (const o of casting) o.visible = false;
+    if (later) for (const o of later) o.visible = false;
     // pass 0: the post chain and the receivers alone (the road's programs are big), then a painted frame
     await compile();
     render();
@@ -336,7 +349,7 @@ export async function warmAll(renderer, scene, camera, extras = [], { onProgress
       await gap();
     }
     // the whole scene once: anything only a full frame builds (everything above is cached by now)
-    for (const o of items) o.visible = true;
+    for (const o of items) o.visible = !(later && later.has(o));
     await compile();
     render();
     if (onProgress) { try { onProgress(groups.length + 1, groups.length + 1); } catch { /* the card only */ } }
@@ -352,6 +365,6 @@ export async function warmAll(renderer, scene, camera, extras = [], { onProgress
     scene.updateMatrixWorld(true);
   }
   render();
-  return { ms: Math.round(performance.now() - t0), objects, groups: groups.length,
+  return { ms: Math.round(performance.now() - t0), objects, groups: groups.length, staged: plan, all: plan ? items : null,
     ...Object.fromEntries(Object.entries(timing).map(([key, value]) => [key, Math.round(value)])) };
 }
