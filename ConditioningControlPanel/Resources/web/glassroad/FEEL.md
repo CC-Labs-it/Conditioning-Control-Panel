@@ -576,3 +576,16 @@ Keep broad platforms refresh the existing lip lift once when an early hop crosse
 - `hitCam.glowS` 0.7: the frame's pink glow pulse decay (Gentle: half).
 - `hitCam.wordS` 0.75: the comic impact word's life.
 - `hitCam.contactDelayS` 0.12: a fresh inset lands its contact beats this long after opening, as it seats.
+
+## Feel wave 2026-10-26
+
+### Lane D
+
+- `launch.revFullBeats` 1: beats of held throttle that fill the count rev to 1 (rev {level, over} events). Held about one beat at go (pressed on the last bell) is the sweet spot.
+- `launch.perfectS` 0.1: +- seconds around the sweet spot that grade perfect; held longer is early (overcharge).
+- `launch.revStep` 0.05: rev level change that sends a new rev event.
+- `launch.perfectTier` 2: BOOST.LAUNCH tier paid at go for a perfect hold.
+- `launch.goodTier` 1: BOOST.LAUNCH tier for a good hold (any shorter hold, the old boost.launchWindowS press included).
+- `launch.earlyStallS` 0.4: stall at go after an overcharged hold; no boost.
+- `hud.hitterFlashMs` 300: item chip answer when the player lands a hit (hitter-hit, hitter 0).
+- `hud.lapPulseMs` 450: lap chip pulse on every lap. Motion Less / Gentle: soft swell, no scale; Off: none.

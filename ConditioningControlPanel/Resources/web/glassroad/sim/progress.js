@@ -45,7 +45,7 @@ export function createProgress(track, events) {
         events.emit('checkpoint', { idx: next });
         if (next === 0) {
           const lap = (st[S.lap] = st[S.lap] + 1);
-          events.emit('lap', { lap, lapTimeS: race.timeS - race.lapStartS, timeS: race.timeS });
+          events.emit('lap', { lap, lapTimeS: race.timeS - race.lapStartS, timeS: race.timeS, final: lap === track.laps - 1 });
           race.lapStartS = race.timeS;
           if (lap >= track.laps) {
             events.emit('finish', { timeS: race.timeS });

@@ -73,6 +73,8 @@
     "launchTier": 2,
     "launchWindowS": 0.15
   },
+  "launch": { "revFullBeats": 1, "perfectS": 0.1, "revStep": 0.05, "perfectTier": 2, "goodTier": 1, "earlyStallS": 0.4 },
+  "hud": { "hitterFlashMs": 300, "lapPulseMs": 450 },
   "pad": { "amount": 0.2, "holdS": 1.0 },
   "trick": {
     "earlyS": 0.12,
