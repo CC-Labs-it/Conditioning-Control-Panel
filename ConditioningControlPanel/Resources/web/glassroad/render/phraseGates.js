@@ -121,7 +121,7 @@ export function createPhraseGates(scene, track, { feel, photosafe, bus = null, d
     if (mode !== 'race') { clear(); return; }
     if (paused) return;
     const softNow = !!feel?.get('gentle.on');
-    if (song !== activeSong) { activeSong = song; songRun = song ? createSongGateRun(song, track) : null; clear(); }
+    if (song !== activeSong) { activeSong = song; songRun = song ? createSongGateRun(song, track, { events: bus }) : null; clear(); }
     if (songRun) {
       if (songTime !== null && Number.isFinite(songS) && Math.abs(songS - songTime) > .5) {
         age = -1; last = null; if (label) label.style.display = 'none';
@@ -148,7 +148,7 @@ export function createPhraseGates(scene, track, { feel, photosafe, bus = null, d
       age = 0; last = gate;
       const row = animated.find(v => v.gate === gate); row.hitAge = 0; row.soft = gentle;
       if (label) { word.textContent = gate.text; echoes.forEach(e => e.textContent = gate.text); label.style.display = 'block'; }
-      bus?.emit('phrase-gate', { id: gate.id, course: track.id, index: synced ? songRun.cues.findIndex(c => c.id === gate.id) : gates.indexOf(gate), gentle,
+      bus?.emit('phrase-gate', { id: gate.id, passed: true, course: track.id, index: synced ? songRun.cues.findIndex(c => c.id === gate.id) : gates.indexOf(gate), gentle,
         ...(synced ? { song: true, text: gate.text, kind: gate.kind, songS } : {}) });
     } else if (age >= 0) age += Math.max(0, dt);
     for (const row of animated) {

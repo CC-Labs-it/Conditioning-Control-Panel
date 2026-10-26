@@ -26,11 +26,13 @@ export function songGateCues(song) {
   return kept.sort((a, b) => a.startS - b.startS).map((c, i) => ({ ...c, id: `song-${i}` }));
 }
 
-/** Player-local, song-clock gates. Their planes lock before contact; misses never move the song. */
-export function createSongGateRun(song, track) {
+/** Player-local, song-clock gates. Their planes lock before contact; misses never move the song.
+ * events (optional): gets song-gate { id, passed } once per gate that went live (the Logbook counts them). */
+export function createSongGateRun(song, track, { events = null } = {}) {
   const cues = songGateCues(song), live = [], f = frame();
   const rows = cues.map(c => ({ ...c, state: 'wait', s: 0, frame: frame(), forkId: null, locked: false, bornS: 0, alpha: 0 }));
   let lastT = null, previous = null, hits = 0;
+  function done(row) { if (row.state === 'live') events?.emit('song-gate', { id: row.id, passed: false }); row.state = 'done'; }
   function reset() { for (const row of rows) { row.state = 'wait'; row.locked = false; } lastT = null; previous = null; hits = 0; live.length = 0; }
   function place(row, st, remaining, speed) {
     const fork = track.forkAtSeg?.(st[S.seg]);
@@ -65,24 +67,25 @@ export function createSongGateRun(song, track) {
         if (remain < .25 || st[S.respawnPhase] || speed < 2) { if (remain < .25) row.state = 'done'; continue; }
         row.state = 'live'; row.bornS = tS;
       }
-      if (st[S.respawnPhase] || teleported || seek) { row.state = 'done'; continue; }
+      if (st[S.respawnPhase] || teleported || seek) { done(row); continue; }
       if (row.state === 'live' && !row.locked) {
-        if (!place(row, st, remain, speed)) { if (remain <= .25) row.state = 'done'; continue; }
+        if (!place(row, st, remain, speed)) { if (remain <= .25) done(row); continue; }
         row.locked = remain <= .25;
       }
-      if (row.locked && row.forkId !== (fork?.id || null)) { row.state = 'done'; continue; }
+      if (row.locked && row.forkId !== (fork?.id || null)) { done(row); continue; }
       if (row.state === 'live' && row.locked && prev && speed > 1 && Math.abs(remain) <= .35) {
         const a = local(prev, row.frame, 't'), b = local(p, row.frame, 't');
         if (a < 0 && b >= 0 && b > a) {
           const u = -a / (b - a), at = p.map((v, i) => prev[i] + (v - prev[i]) * u);
           if (Math.abs(local(at, row.frame, 'b')) <= row.frame.w / 2 && local(at, row.frame, 'n') >= -.6 && local(at, row.frame, 'n') <= 6) {
             row.state = 'hit'; row.hitS = tS; hits++; hit = row;
+            events?.emit('song-gate', { id: row.id, passed: true });
           }
         }
       }
       const outS = row.state === 'hit' ? row.hitS + 1 : row.startS + .35;
       row.alpha = smooth((tS - row.bornS) / (gentle ? .6 : .35)) * (1 - smooth((tS - outS) / .6));
-      if (tS > outS + .6) { row.state = 'done'; continue; }
+      if (tS > outS + .6) { done(row); continue; }
       live.push(row);
     }
     return { live, hit };
