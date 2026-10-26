@@ -4,6 +4,9 @@ import {MODE_LABEL,resolveMode,saveMode} from '../meta/mode.js';
 const COLORS={threshold:'#ff88b5',mainframe:'#70e6c3',keep:'#ffce62',boudoir:'#e49cfa',goonworks:'#bd006e'};
 // Race / Time trial: two small pills above the grid (Logbook TRIAL lane); the pick is saved and sent as glassroad-mode
 const MODE_CSS='.g-track-mode{display:flex;gap:8px;margin:0 0 14px}#race-garage .g-track-mode button{min-height:34px;padding:6px 14px;border:2px solid #0b1420;border-radius:999px;background:#102d39;color:#b1ded8;font-size:13px}#race-garage .g-track-mode button[aria-pressed=true]{background:#8ee8d1;color:#10101b;border-color:#10101b}';
+/** The chooser's in-game shot of a course: art/ui/course-<id>.webp (960 x 540) and a -phone variant (480 x 270). */
+export function courseShot(id){const at=name=>new URL('../art/ui/'+name+'.webp',import.meta.url).href;
+  const id2=COLORS[id]?id:'threshold';return {src:at('course-'+id2),srcset:at('course-'+id2+'-phone')+' 480w, '+at('course-'+id2)+' 960w'};}
 /** Shows the mode on the garage Race row (the row keeps its own track line). */
 function paintMode(root,mode){const b=root.querySelector('[data-g=race] b');if(b)b.textContent=MODE_LABEL[mode]||'Race';}
 /** Native dialog supplies focus trapping and pointer isolation from the live 3D carousel. */
@@ -27,7 +30,9 @@ export function createTrackPicker({root,courses,trackId,change}) {
   const tiles=courses.map(course=>{
     const b=document.createElement('button');b.type='button';b.className='g-track-tile';b.dataset.course=course.id;b.style.setProperty('--course-color',COLORS[course.id]||COLORS.threshold);
     b.setAttribute('aria-pressed',String(course.id===trackId));
-    b.innerHTML='<span class="g-course-mode"></span><svg viewBox="0 0 180 88" aria-hidden="true"><path class="g-route-shadow"/><path class="g-route"/><circle r="3"/></svg><strong></strong><small class="g-course-details"></small><span class="g-course-selected" aria-hidden="true">Selected</span>';
+    const shot=courseShot(course.id);
+    b.innerHTML='<img class="g-course-shot" alt="" aria-hidden="true" width="960" height="540" loading="lazy" decoding="async" draggable="false" sizes="(max-width:699px) 46vw, 340px"><span class="g-course-mode"></span><span class="g-course-map" aria-hidden="true"><svg viewBox="0 0 180 88"><path class="g-route-shadow"/><path class="g-route"/><circle r="3"/></svg></span><span class="g-course-text"><strong></strong><small class="g-course-details"></small></span><span class="g-course-selected" aria-hidden="true">Selected</span>';
+    const img=b.querySelector('.g-course-shot');img.setAttribute('srcset',shot.srcset);img.setAttribute('src',shot.src);
     b.querySelector('strong').textContent=course.name;b.querySelector('.g-course-mode').textContent=course.online?'Solo / online':'Solo';
     b.onclick=()=>{if(leaving)return;if(course.id===trackId){close();return;}leaving=true;
       for(const tile of tiles)tile.disabled=true;

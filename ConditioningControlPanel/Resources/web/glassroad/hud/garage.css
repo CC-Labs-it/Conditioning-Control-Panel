@@ -113,3 +113,20 @@ body.garage-open .gr-touch{display:none}
 @media(max-height:820px) and (min-height:521px) and (min-width:700px){.g-title-card{padding-top:20px}.g-title-card>p{margin-bottom:12px}.g-logo{font-size:50px}.g-title-rule{margin:18px 0 10px}#race-garage .g-menu-row{min-height:44px;padding:8px 13px}#race-garage .g-menu-row[data-g=race]{min-height:60px}#race-garage .g-course-choice{min-height:50px}}
 @media(max-height:520px) and (min-width:560px) and (max-width:699px) and (orientation:landscape){.g-selector{left:calc(50vw + min(280px,46vw) / 2 + 6px);min-width:0}}
 @media(max-width:699px) and (orientation:portrait){.g-selector{bottom:calc(296px + env(safe-area-inset-bottom))}}
+/* title card logo (art/ui/logo.webp): the picture keeps its own outline, so no text shadow or filter */
+.g-logo-art{font-size:0!important;line-height:0;letter-spacing:0;text-shadow:none!important;white-space:normal}.g-logo-art img{display:block;width:100%;max-width:300px;height:auto;margin:-4px 0 -6px -6px;user-select:none;-webkit-user-drag:none}
+@media(max-height:820px) and (min-width:700px){.g-logo-art img{max-width:250px}}
+@media(max-width:699px){.g-logo-art img{width:min(230px,58vw);margin:0}}
+@media(max-height:520px) and (min-width:560px) and (orientation:landscape){.g-logo-art img{width:150px;margin:0 auto}}
+/* course chooser: an in-game shot per course, the route map pops up on hover, focus and the current pick */
+#race-garage .g-track-tile{padding:0}.g-course-shot{display:block;width:100%;height:auto;aspect-ratio:16/9;flex:none;object-fit:cover;background:#0b1420;border-bottom:3px solid #0b1420}
+.g-track-tile .g-course-text{display:flex;flex-direction:column;padding:10px 15px 12px;min-width:0}.g-track-tile .g-course-mode{position:absolute;left:9px;top:9px;padding:3px 8px;border-radius:999px;background:#0b1420d9}
+.g-course-map{position:absolute;right:9px;top:9px;width:44%;padding:4px 6px 2px;border:2px solid var(--course-color);border-radius:10px;background:#0b1420e6;opacity:0;transform:translateY(-4px);transition:opacity .25s ease,transform .25s ease;pointer-events:none}
+.g-track-tile .g-course-map svg{display:block;width:100%;height:auto;margin:0;aspect-ratio:180/88}
+#race-garage .g-track-tile:hover .g-course-map,#race-garage .g-track-tile:focus-visible .g-course-map,#race-garage .g-track-tile[aria-pressed=true] .g-course-map{opacity:1;transform:none}
+#race-garage .g-track-tile .g-course-selected{top:auto;bottom:13px;right:13px}
+#race-garage.g-calm .g-course-map{transform:none;transition:opacity .4s ease}
+@media(prefers-reduced-motion:reduce){.g-course-map{transform:none;transition:opacity .4s ease}}
+/* phone: the map sits in the shot's bottom-right corner, clear of the mode pill (margin % is of the tile width) */
+@media(max-width:699px){#race-garage .g-track-tile{padding:0}.g-track-tile .g-course-text{padding:7px 9px 9px}.g-course-map{width:42%;right:6px;top:0;margin-top:calc(35.72% - 16px)}.g-track-tile .g-course-mode{left:6px;top:6px;font-size:8px;padding:2px 6px}}
+@media(max-height:580px) and (min-width:700px){.g-course-shot{aspect-ratio:21/9}.g-track-tile .g-course-text{padding:7px 12px 9px}}
