@@ -120,7 +120,7 @@ body.garage-open .gr-touch{display:none}
 @media(max-height:520px) and (min-width:560px) and (orientation:landscape){.g-logo-art img{width:150px;margin:0 auto}}
 /* course chooser: an in-game shot per course, the route map pops up on hover, focus and the current pick */
 #race-garage .g-track-tile{padding:0}.g-course-shot{display:block;width:100%;height:auto;aspect-ratio:16/9;flex:none;object-fit:cover;background:#0b1420;border-bottom:3px solid #0b1420}
-.g-track-tile .g-course-text{display:flex;flex-direction:column;padding:10px 15px 12px;min-width:0}.g-track-tile .g-course-mode{position:absolute;left:9px;top:9px;padding:3px 8px;border-radius:999px;background:#0b1420d9}
+.g-track-tile .g-course-text{display:flex;flex-direction:column;padding:10px 15px 12px;min-width:0}.g-track-tile .g-course-mode{position:absolute;left:9px;top:9px;padding:3px 8px;border-radius:999px;background:#0b1420d9;color:#f2fbf8;border:1px solid var(--course-color)}
 .g-course-map{position:absolute;right:9px;top:9px;width:44%;padding:4px 6px 2px;border:2px solid var(--course-color);border-radius:10px;background:#0b1420e6;opacity:0;transform:translateY(-4px);transition:opacity .25s ease,transform .25s ease;pointer-events:none}
 .g-track-tile .g-course-map svg{display:block;width:100%;height:auto;margin:0;aspect-ratio:180/88}
 #race-garage .g-track-tile:hover .g-course-map,#race-garage .g-track-tile:focus-visible .g-course-map,#race-garage .g-track-tile[aria-pressed=true] .g-course-map{opacity:1;transform:none}
