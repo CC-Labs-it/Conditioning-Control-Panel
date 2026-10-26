@@ -72,4 +72,55 @@ test('post preserves premultiplied depth windows and suppresses them during full
   assert.doesNotMatch(display, /new (CanvasTexture|Texture)|drawImage|getImageData|toDataURL|\bfetch\(/);
 });
 
+function clipDocument() {
+  const elements = [], listeners = {};
+  const doc = { elements, hidden: false, addEventListener(t, fn) { listeners[t] = fn; }, removeEventListener(t) { delete listeners[t]; },
+    fire(t) { listeners[t]?.(); }, listeners,
+    createElement(tag) {
+      const el = { tag, style: {}, children: [], complete: tag === 'img', naturalWidth: tag === 'img' ? 640 : 0,
+        paused: true, readyState: 0, playbackRate: 1, loads: 0, plays: 0,
+        append(...xs) { this.children.push(...xs); }, setAttribute() {}, removeAttribute(key) { delete this[key]; }, remove() { this.removed = true; },
+        play() { this.paused = false; this.plays++; return Promise.resolve(); }, pause() { this.paused = true; }, load() { this.loads++; } };
+      elements.push(el); return el;
+    } };
+  return doc;
+}
+
+test('clips: nearest faces play under the cap, the rest show posters; pause, hidden tab, Gentle, off-screen and consent-off', () => {
+  const scene = new Scene(), doc = clipDocument(), canvas = { clientWidth: 1600, clientHeight: 800, style: {}, parentNode: { insertBefore() {} } };
+  const slots = [0, 1, 2].map(k => ({ C: [k * 3 - 3, 0, -10 - k * 5], X: [1, 0, 0], Y: [0, 1, 0], Z: [0, 0, 1], w: 2, h: 1 }));
+  const clips = [0, 1, 2].map(k => ({ tagName: 'VIDEO', src: `https://iris.scrolller.com/c${k}.mp4`, poster: `https://images.scrolller.com/c${k}.jpg`, readyState: 1 }));
+  let on = true; const visible = new Set([0, 1, 2]);
+  const feed = { get ready() { return on ? 3 : 0; }, sourceFor: (s) => on ? clips[s % 3] : null };
+  const screens = createWebMediaScreens({ scene, slots, canvas, document: doc, maxPlaying: () => 2, isVisible: (sl) => visible.has(slots.indexOf(sl)) });
+  screens.setFeed(feed); screens.update(.1, { camera });
+  const vids = doc.elements.filter(e => e.tag === 'video'), imgs = doc.elements.filter(e => e.tag === 'img');
+  assert.equal(vids.length, 3);
+  assert.deepEqual(vids.map(v => !!v.src), [true, true, false], 'the two nearest faces hold a clip, the far one its poster');
+  assert.equal(imgs[2].src, clips[2].poster);
+  assert.equal(screens.stats().playing, 2);
+  assert.equal(screens.stats().faces, 3, 'posters stand in while clips buffer');
+  vids[0].readyState = 2; vids[1].readyState = 2; screens.update(.1, { camera });
+  assert.equal(vids[0].style.display, 'block'); assert.equal(imgs[0].src, undefined, 'the poster steps aside for the first frame');
+  screens.update(.1, { camera, paused: true });
+  assert.equal(screens.stats().playing, 0, 'race pause pauses every clip');
+  screens.update(.1, { camera }); assert.equal(screens.stats().playing, 2);
+  doc.hidden = true; doc.fire('visibilitychange');
+  assert.equal(screens.stats().playing, 0, 'a hidden tab pauses at once');
+  screens.update(.1, { camera }); assert.equal(screens.stats().playing, 0);
+  doc.hidden = false; screens.update(.1, { camera, gentle: true });
+  assert.equal(vids[0].playbackRate, .5, 'Gentle slows clips'); assert.equal(screens.stats().playing, 2);
+  visible.delete(0); screens.update(1, { camera });
+  assert.equal(vids[0].paused, true); assert.ok(vids[0].src, 'a face just off screen keeps its clip, paused');
+  assert.equal(vids[2].src, clips[2].src, 'its decoder goes to the next nearest face');
+  screens.update(5, { camera });
+  assert.equal(vids[0].src, undefined, 'and lets go after a moment'); assert.ok(vids[0].loads >= 1);
+  on = false; screens.update(0, { camera });
+  assert.ok(vids.every(v => !v.src), 'consent off frees every clip');
+  assert.equal(screens.stats().faces, 0);
+  screens.dispose(); assert.equal(doc.listeners.visibilitychange, undefined);
+  const display = readFileSync(new URL('../render/webMediaScreens.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(display, /crossOrigin|captureStream|requestVideoFrameCallback/);
+});
+
 test.after(() => hooks.deregister());
