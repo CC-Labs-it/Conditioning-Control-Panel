@@ -32,6 +32,7 @@ import { sfxPlan, resolvePlan, jitterRate } from './sfxmap.js';
 import { createUnderwater } from './underwater.js';
 import { createWaterTravel } from './water-travel.js';
 import { createItemPassTracker, playItemPass } from './itemFlight.js';
+import { comboNext } from '../fx/itemFeelMath.js';
 
 const GESTURES = ['pointerdown', 'touchstart', 'keydown'];
 const clamp01 = (x) => (x > 0 ? (x < 1 ? x : 1) : 0);
@@ -45,7 +46,7 @@ const LOCAL = new Set(['effect-start', 'effect-end', 'race-result']);
 export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCtx = null, fetchFn = globalThis.fetch, musicFetchFn = fetchFn, laps = 3, sfxBase } = {}) {
   let ctx = null, engine = null, syn = null, rivals = null, music = null, menuMelody = null, paused = false, dead = false;
   let samples = null, samplesReady = Promise.resolve(0), plays = 0, lapCount = laps;
-  const popSt = { rung: -1, t: -1e9 };
+  const popSt = { rung: -1, t: -1e9 }, comboSt = { n: 0, t0: -1e9 };
   let master = null, sfx = null, bed = null, musicBus = null, musicDuck = null, underwater = null, waterTravel = null;
   const vol = { master: 1, music: 1, sfx: 1 };
   const near = new Map();
@@ -141,6 +142,12 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
     const source = name === 'item-fire' && Number.isInteger(payload?.racer) ? { racer: payload.racer } : payload;
     const lv = LOCAL.has(name) ? { me: true, level: 1, pan: 0 } : eventLevel(source, near, g('nearCueM'), g('botCueMul'));
     if (!(lv.level > 0.01)) return;
+    // item feel: the player's landed hits inside itemFeel.comboWindowS climb (sample plan and synth read p.combo)
+    if (name === 'item-hit' && payload && payload.by === 0 && payload.victim !== 0 && payload.verdict === 'hit') {
+      let w = 0.6;
+      try { w = feel.get('itemFeel.comboWindowS'); } catch (e) { /* older feel */ }
+      payload = { ...payload, combo: comboNext(comboSt, ctx.currentTime, w) };
+    }
     run(name, B1_CUES[name], payload, lv.level, 1, lv.pan, lv.me);
   }
 
@@ -201,7 +208,7 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
       syn?.releaseAll(0.1);
       if (syn) syn.b1 = null;
       if (syn) syn.stoneRun = null;
-      popSt.rung = -1; popSt.t = -1e9;
+      popSt.rung = -1; popSt.t = -1e9; comboSt.n = 0; comboSt.t0 = -1e9;
       engine?.chord(sectionIdx);
       rivals?.silence();
       near.clear();

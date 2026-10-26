@@ -495,3 +495,42 @@
 }
 @media (max-width: 420px) { .rc-hl b { font-size: 20px; } }
 /* end logbook recap */
+
+/* ==== HIT CAM inset (render/hitCam.js, hud/hitCamChrome.js) ====================================
+ * The picture is drawn into the canvas under this rect; this is its chrome, moved with the same transform
+ * (slide, tilt, scale about the centre): ink frame, pink offset shadow and glow pulse (--glow 0..1), vignette,
+ * exposure flash, the tilted chip with a blinking rec dot, the victim tag and the comic impact word. Look after the
+ * chess capture replay (piecebypiece/styles.css .pbp-replay-*). Above the canvas and touch layer, under the HUD. */
+.hitcam { position: fixed; inset: 0; z-index: 12; pointer-events: none; overflow: hidden; }
+.hitcam[hidden] { display: none; }
+.hitcam-frame { position: absolute; box-sizing: border-box; border: 4px solid #0c0a1e; border-radius: 6px; transform-origin: 50% 50%;
+  --glow: 0; will-change: transform;
+  box-shadow: 0 0 0 2px #fff4fa, 5px 5px 0 2px #ff5aa5, 0 0 calc(6px + var(--glow) * 30px) calc(var(--glow) * 8px) rgba(255, 90, 165, calc(0.25 + var(--glow) * 0.75)); }
+.hitcam-vig { position: absolute; inset: 0; border-radius: 2px;
+  background: radial-gradient(ellipse at 50% 55%, transparent 52%, rgba(12, 10, 30, 0.55) 100%); }
+.hitcam-flash { position: absolute; inset: 0; opacity: 0; mix-blend-mode: screen;
+  background: radial-gradient(circle at 50% 55%, #ffffff 0, #ffd0e6 45%, #ff5aa5 100%); }
+.hitcam-chip { position: absolute; left: -10px; top: -14px; display: flex; gap: 6px; align-items: center; padding: 4px 7px 3px;
+  border: 2px solid #fff; border-radius: 5px; background: rgba(12, 10, 30, 0.92); color: #fff; box-shadow: 3px 3px 0 #ff5aa5;
+  font: 800 10px/1 var(--font); letter-spacing: 0.14em; text-shadow: none; transform-origin: 0 50%; }
+.hitcam-chip em { font-style: normal; }
+.hitcam-chip i { width: 8px; height: 8px; border-radius: 50%; background: #ff5aa5; box-shadow: 0 0 8px #ff5aa5;
+  animation: hitcam-rec 700ms steps(2, jump-none) infinite; }
+@keyframes hitcam-rec { 0% { opacity: 1; } 100% { opacity: 0.25; } }
+.hitcam-tag { position: absolute; left: 6px; bottom: 5px; max-width: calc(100% - 12px); display: flex; gap: 6px; align-items: baseline;
+  padding: 2px 7px; border-radius: 4px; background: rgba(12, 10, 30, 0.78); color: #fff4fa; white-space: nowrap; overflow: hidden;
+  font: 800 12px/1.2 var(--font); text-shadow: none; }
+.hitcam-tag small { font-weight: 600; font-size: 10px; color: #ff9cc9; letter-spacing: 0.04em; text-transform: uppercase; }
+.hitcam-word { position: absolute; right: 2px; top: 16%; opacity: 0; white-space: nowrap; transform-origin: 60% 60%;
+  color: #ff5aa5; font: italic 900 34px/1 var(--font); letter-spacing: 0.02em;
+  -webkit-text-stroke: 0.085em #0c0a1e; paint-order: stroke fill; text-shadow: 0.08em 0.08em 0 #0c0a1e; }
+.hitcam.gentle .hitcam-chip i { animation: none; opacity: 0.8; }
+@media (max-width: 640px), (max-height: 480px) {
+  .hitcam-frame { border-width: 3px; }
+  .hitcam-word { font-size: 24px; }
+  .hitcam-tag { font-size: 10px; }
+  .hitcam-tag small { font-size: 9px; }
+  .hitcam-chip { font-size: 8px; padding: 3px 5px 2px; }
+}
+@media (prefers-reduced-motion: reduce) { .hitcam-chip i { animation: none; } }
+/* ==== end HIT CAM ==== */

@@ -455,6 +455,25 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `payoff.padWordS` 1.0: a pad word lasts this long.
 - `payoff.padCoolS` 4: at most one pad word per this many seconds.
 
+## itemFeel (the thrower's seat: what a use, a landed hit and a blocked shot feel like; `fx/itemFeelMath.js`, `hud/itemFeel.js`, `fx/reactions.js`, `audio/`)
+Items never move the chase camera (owner camera rule 2026-10-26: effect shake, push and zoom stay out of the camera
+pose). Gentle and OS reduced motion drop the edge flash and keep fades only; the edge flash also asks photosafe.
+- `itemFeel.fireRumble` 0.35: pad rumble tick when you use an item (zero under Gentle).
+- `itemFeel.fireRumbleOutS` 0.12: and how fast it goes.
+- `itemFeel.confirmRumble` 0.6: pad rumble when your hit lands (zero under Gentle).
+- `itemFeel.confirmRumbleOutS` 0.24: and how fast it goes.
+- `itemFeel.throwLinesPeak` 0.35: a throw streaks the speed lines this much (the flick forward).
+- `itemFeel.throwLinesOutS` 0.3: and they ease back over this.
+- `itemFeel.comboWindowS` 0.6: landed hits inside this window from the first count as one DOUBLE / TRIPLE chain.
+- `itemFeel.confirmSemisPerCombo` 3: the confirm sound climbs this many semitones per extra hit in a chain.
+- `itemFeel.markerS` 0.45: the hit marker (pink X and diamond above the kart) lasts this long.
+- `itemFeel.stampS` 1.0: the comic stamp beside the item slot (BONK!, DOUBLE!, BLOCKED) lasts this long.
+- `itemFeel.edgeS` 0.4: the pink screen-edge flash on a landed hit (off under Gentle and reduced motion).
+- `itemFeel.edgeAlpha` 0.55: its peak opacity at the very edge (it fades to clear well before the middle).
+- `itemFeel.edgeMinGapS` 1.2: at most one edge flash per this long (a chain flashes once).
+- `itemFeel.toastMinShowS` 0.45: a toast shows at least this long before an equal-priority one replaces it.
+- `itemFeel.flingS` 0.42: the spent item flies out of the slot (per mode) over this long.
+
 
 ## ai (B1 bots, sim/ai.js and sim/racers.js)
 - `ai.stones` { approachM: 80, holdLeadM: 35 }: settle onto the picked lane earlier before stone fields,
@@ -527,3 +546,33 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `glide.maxS` 2.6: maximum flight assistance after launch. Release closes the cap; landing, rescue and restart reset it. Lift also ends before the platform approach.
 
 Keep broad platforms refresh the existing lip lift once when an early hop crosses a forward edge. Other fields keep their original timing.
+
+## hitCam (HIT CAM inset: a live picture-in-picture of the rival your item hit, render/hitCam.js, render/hitCamMath.js)
+- `hitCam.on` true: the inset opens at all (the quality tier's Q.hitCam 0 also turns it off).
+- `hitCam.holdS` 2.2: the inset stays this long after contact, then slides out.
+- `hitCam.leadTimeoutS` 2.5: a throw or lob at a far target opens it early as INCOMING; no hit by then closes it (0 = no lead-in).
+- `hitCam.minDistM` 14: a hit closer than this, ahead of you and inside the chase view, shows no inset.
+- `hitCam.enterS` 0.34: slide in from the left.
+- `hitCam.exitS` 0.3: slide back out.
+- `hitCam.overshoot` 1.35: how far the inset swings past its seat on arrival (easeOutBack c1; Gentle: none).
+- `hitCam.fovDeg` 42: the inset camera's base vertical fov.
+- `hitCam.backM` 3.1: eye distance from the victim, along the ground.
+- `hitCam.upM` 1.05: eye height over the victim (along its up).
+- `hitCam.lookUpM` 0.35: aim height over the victim.
+- `hitCam.aheadM` 0.3: aim this far ahead of the victim.
+- `hitCam.sideDeg` 32: the seat's angle off straight behind (low 3/4 view).
+- `hitCam.orbitDegps` 18: the slow orbit while the victim spins out.
+- `hitCam.orbitMaxDeg` 70: the orbit stops this far past the seat.
+- `hitCam.followTcS` 0.1: damping of the eye and aim offsets from the kart.
+- `hitCam.creep` 0.1: lens creep in while INCOMING (share of tan fov; Gentle halves every zoom).
+- `hitCam.creepS` 0.9: the creep's ramp.
+- `hitCam.punch` 0.2: crash zoom at contact (share of tan fov).
+- `hitCam.punchS` 0.45: crash zoom decay.
+- `hitCam.shakeM` 0.11: contact shake at the aim point (Gentle: none).
+- `hitCam.shakeS` 0.42: shake decay.
+- `hitCam.shakeHz` 19: shake frequency.
+- `hitCam.flash` 0.55: white and pink exposure flash at contact (Gentle: none).
+- `hitCam.flashS` 0.22: flash decay.
+- `hitCam.glowS` 0.7: the frame's pink glow pulse decay (Gentle: half).
+- `hitCam.wordS` 0.75: the comic impact word's life.
+- `hitCam.contactDelayS` 0.12: a fresh inset lands its contact beats this long after opening, as it seats.

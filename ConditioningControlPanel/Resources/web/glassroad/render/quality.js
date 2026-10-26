@@ -8,13 +8,14 @@
 /** Per tier: DPR cap, bloom on and its resolution scale, particle budget, speed line count, ambient motes,
  * the distance past which a rival kart drops its bone pose, sparks and name tag (kartLodM), boost ribbon points,
  * shadows ('map' a real shadow map of shadowMapPx, 'blob' soft blobs and ellipses, no map) per CONTRACT polish 2,
- * the art textures' anisotropic filtering (read ONCE at load from the start tier: a change re-uploads), and
+ * the art textures' anisotropic filtering (read ONCE at load from the start tier: a change re-uploads), the
+ * HIT CAM inset's resolution share of the pixel ratio (hitCam, render/hitCam.js; 0 turns the inset off), and
  * sceneReflections: whether the water keeps its live scene probe (read ONCE when the course builds; PHONE WATER,
  * owner 2026-10-26: the phone tier drops the probe warm-up and its in-race cube captures for a stand-in sheen). */
 export const TIERS = Object.freeze({
-  high: Object.freeze({ name: 'high', dprMax: 2, antialias: true, bloom: true, bloomScale: 0.5, particles: 4000, speedLines: 160, scatter: 1, motes: 1400, kartLodM: 90, trailPoints: 28, shadows: 'map', shadowMapPx: 2048, anisotropy: 8, sceneReflections: true }),
-  mid: Object.freeze({ name: 'mid', dprMax: 1.5, antialias: true, bloom: true, bloomScale: 0.25, particles: 1500, speedLines: 100, scatter: 0.7, motes: 800, kartLodM: 60, trailPoints: 20, shadows: 'map', shadowMapPx: 1024, anisotropy: 4, sceneReflections: true }),
-  phone: Object.freeze({ name: 'phone', dprMax: 1.25, antialias: false, bloom: true, bloomScale: 0.25, particles: 700, speedLines: 60, scatter: 0.45, motes: 400, kartLodM: 40, trailPoints: 14, shadows: 'blob', shadowMapPx: 0, anisotropy: 2, sceneReflections: false }),
+  high: Object.freeze({ name: 'high', dprMax: 2, antialias: true, bloom: true, bloomScale: 0.5, particles: 4000, speedLines: 160, scatter: 1, motes: 1400, kartLodM: 90, trailPoints: 28, shadows: 'map', shadowMapPx: 2048, anisotropy: 8, sceneReflections: true, hitCam: 1 }),
+  mid: Object.freeze({ name: 'mid', dprMax: 1.5, antialias: true, bloom: true, bloomScale: 0.25, particles: 1500, speedLines: 100, scatter: 0.7, motes: 800, kartLodM: 60, trailPoints: 20, shadows: 'map', shadowMapPx: 1024, anisotropy: 4, sceneReflections: true, hitCam: 1 }),
+  phone: Object.freeze({ name: 'phone', dprMax: 1.25, antialias: false, bloom: true, bloomScale: 0.25, particles: 700, speedLines: 60, scatter: 0.45, motes: 400, kartLodM: 40, trailPoints: 14, shadows: 'blob', shadowMapPx: 0, anisotropy: 2, sceneReflections: false, hitCam: 0.75 }),
 });
 /** Lowest first; the governor moves one step along this list. */
 export const ORDER = Object.freeze(['phone', 'mid', 'high']);
