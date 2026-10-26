@@ -97,7 +97,12 @@ export function createWaterSurface({ surface, flow, p, trueEdge, V, N0, pal, u, 
     const elevation = (deformation.height || float(0)).mul(1.6).add(0.5).clamp(0,1);
     const transmitted = pal.col(2).mul(0.08).add(vec3(0.035,0.24,0.265)).mul(elevation.mul(0.48).add(0.52));
     const fallback = pal.col(0).mul(0.13).add(vec3(.015,.035,.045));
-    const reflected = deformation.reflection ? mix(fallback,deformation.reflection(R),deformation.reflectionReady || float(1)) : fallback;
+    // PHONE WATER: with no live probe (deformation.sheen) a sky-like sheen from the course palette stands in,
+    // bright toward the horizon and dimmer overhead, through the same rippled normal, so the surface still reads
+    // as liquid rather than dark polished road.
+    const standIn = deformation.sheen ? mix(pal.col(0).mul(.46).add(vec3(.07,.15,.17)), pal.col(1).mul(.16).add(vec3(.02,.07,.09)),
+      pow(clamp(R.y,0,1),.6)) : fallback;
+    const reflected = deformation.reflection ? mix(fallback,deformation.reflection(R),deformation.reflectionReady || float(1)) : standIn;
     const grazing = pow(float(1).sub(ndv),5).mul(.98).add(.02);
     const sharpSpec = pow(clamp(dot(N,H),0,1),64).mul(0.82)
       .add(pow(clamp(dot(N,H),0,1),18).mul(.09));
