@@ -1,5 +1,5 @@
 // Private verse renders stay outside the game tree. Adapt their timing data for the music road.
-export const MAINFRAME_CHART = '/private-audio/tracks-2026-10-24/mainframe/out/v3/race-chart.json';
+export const MAINFRAME_CHART = '/private-audio/tracks-2026-10-24/mainframe/out/v5/race-chart.json';
 
 export function verseChart(raw, energy = null) {
   if (raw.fake || !(raw.durationS > 0) || !(raw.bpm > 0)) throw new Error('Expected a rendered verse chart');

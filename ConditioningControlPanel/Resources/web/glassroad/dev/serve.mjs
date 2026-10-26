@@ -120,7 +120,7 @@ async function readKeepChart() {
 }
 async function readMainframeChart() {
   if (!mainframeChart) mainframeChart = (async () => {
-    const dir = join(PRIVATE, 'tracks-2026-10-24/mainframe/out/v3');
+    const dir = join(PRIVATE, 'tracks-2026-10-24/mainframe/out/v5');
     const raw = JSON.parse(await readFile(join(dir, 'chart.json'), 'utf8'));
     const { stdout } = await promisify(execFile)('ffmpeg', ['-v', 'error', '-threads', '2',
       '-i', join(dir, 'mainframe_phone.mp3'), '-vn', '-ac', '1', '-ar', '8000',
