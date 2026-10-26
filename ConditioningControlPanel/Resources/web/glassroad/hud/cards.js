@@ -23,6 +23,7 @@ import { controlRows, deviceView, pauseHint } from './labels.js';
 import { PROFILES, nextProfile } from '../input/padmap.js';
 import { createLobby } from './lobby.js';
 import { actSound } from './sounds.js';
+import { recapState, dotsHtml, runPageHtml, stampsPageHtml, PAGE_TITLES, RECAP_FIXTURE } from './recap.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const btn = (act, label, cls = '', extra = '') => '<button type="button" class="c-btn ' + cls + '" data-act="' + act + '"' + extra + '>' + label + '</button>';
@@ -63,6 +64,12 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     try { const q = new URLSearchParams(doc.defaultView.location.search); return q.get('howto') === '0' || (q.get('bot') === '1' && q.get('howto') !== '1'); }
     catch (e) { return false; }
   })();
+  // the recap pages (Logbook): rc = { state, recap, at } on a results card; the loop comes from hud.setTrack
+  let rc = null, trackLoop = null;
+  const devFixture = (() => {
+    try { const q = new URLSearchParams(doc.defaultView.location.search); return q.get('dev') === '1' && q.get('recap') === 'fixture'; }
+    catch (e) { return false; }
+  })();
   const howtoDue = () => !howtoSeen && !opts.howtoOff && !howtoSkip;
   const BACKS = ['options', 'controls', 'howto'];
   // B2-d: the online lobby draws in this card as kind 'lobby' (hud/lobby.js); its Back returns to the opener
@@ -76,6 +83,8 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     if (leaving) { clearTimeout(leaving); leaving = 0; }
     body.classList.remove('out');
     card.hidden = !k;
+    delete card.dataset.page;
+    if (k !== 'results') rc = null;
     if (!k) return;
     card.dataset.kind = k;
     card.classList.toggle('c-gentle', !!(host.gentle || opts.gentlePreview));
@@ -126,17 +135,47 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       lobby.show(data);                              // draws and focuses itself
       return;
     } else if (k === 'results') {
-      const me = data.me || {}, o = ordinal(me.place || 0);
-      const flag = kit && kit.ok('flag-finish') ? '<img class="c-flag" src="' + kit.url('flag-finish') + '" alt="" draggable="false">' : '';
-      title.innerHTML = flag + '<span class="c-place">' + o.n + '<sup>' + o.suf + '</sup></span>';
-      note.textContent = formatTime(me.timeS) + (me.bestLapS > 0 ? ', best lap ' + formatTime(me.bestLapS) : '');
-      const rows = resultRows(data, data.metas || null);
-      extra.innerHTML = '<ol class="c-rows">' + rows.map((r) =>
-        '<li class="' + (r.me ? 'me' : '') + '"><span class="p">' + r.place + '</span><span class="n">' + esc(r.name) +
-        '</span><span class="t' + (r.est ? ' est' : '') + '">' + (r.est ? '~' : '') + r.time + '</span></li>').join('') +
-        '</ol><div class="c-list row">' + btn('again', 'Again', 'hot') + btn('menu', 'Menu') + '</div>';
+      // Logbook recap (hud/recap.js): page 1 is the podium as before; a recap adds pages 2 and 3
+      const recap = data.recap || (devFixture ? RECAP_FIXTURE : null);
+      rc = recap ? { state: recapState(recap), recap, at: Date.now() } : null;
+      paintResults();
+      return;
     }
     focusFirst();
+  }
+
+  /** The results card on its current recap page. Again and Menu stay on every page; the last page has no Next. */
+  function paintResults() {
+    const page = rc ? rc.state.page : 'podium', multi = !!rc && rc.state.pages.length > 1, last = !rc || rc.state.last;
+    const me = data.me || {}, o = ordinal(me.place || 0);
+    card.dataset.page = page;
+    note.textContent = formatTime(me.timeS) + (me.bestLapS > 0 ? ', best lap ' + formatTime(me.bestLapS) : '');
+    let html;
+    if (page === 'podium') {
+      const flag = kit && kit.ok('flag-finish') ? '<img class="c-flag" src="' + kit.url('flag-finish') + '" alt="" draggable="false">' : '';
+      title.innerHTML = flag + '<span class="c-place">' + o.n + '<sup>' + o.suf + '</sup></span>';
+      const rows = resultRows(data, data.metas || null);
+      html = '<ol class="c-rows">' + rows.map((r) =>
+        '<li class="' + (r.me ? 'me' : '') + '"><span class="p">' + r.place + '</span><span class="n">' + esc(r.name) +
+        '</span><span class="t' + (r.est ? ' est' : '') + '">' + (r.est ? '~' : '') + r.time + '</span></li>').join('') + '</ol>';
+    } else {
+      title.textContent = PAGE_TITLES[page] || '';
+      html = page === 'run' ? runPageHtml(rc.recap, trackLoop) : stampsPageHtml(rc.recap);
+    }
+    if (multi) html = '<div class="rc-page in">' + html + '</div>' + dotsHtml(rc.state.pages, rc.state.i);
+    extra.innerHTML = html + '<div class="c-list row">' + (last ? '' : btn('rc-next', 'Next', 'hot')) +
+      btn('again', 'Again', last ? 'hot' : '') + btn('menu', 'Menu') + '</div>';
+    if (page === 'stamps' && extra.querySelector('.rc-stamp')) sound('ready-on');
+    focusFirst();
+  }
+  /** Next, Throttle, Enter or pad A: the page slides (fades under Gentle) out and the next one comes in. */
+  function recapNext() {
+    if (kind !== 'results' || card.hidden || !rc || rc.state.last || leaving) return;
+    if (Date.now() - rc.at < 700) return;            // a throttle still held from the finish line never skips page 1
+    sound('menu-move');
+    const page = extra.querySelector('.rc-page'), gentle = card.classList.contains('c-gentle');
+    if (page) { page.classList.remove('in'); page.classList.add('out'); }
+    leaving = setTimeout(() => { leaving = 0; if (kind !== 'results' || !rc) return; rc.state.next(); rc.at = 0; paintResults(); }, gentle ? 260 : 170);
   }
 
   function optionsHtml() {
@@ -210,6 +249,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     if (!el) return;
     const a = el.dataset.act;
     if (a.startsWith('lb-')) { lobby.act(el); return; }   // the lobby picks its own sound (it knows a refusal)
+    if (a === 'rc-next') { if (rc) rc.at = 0; recapNext(); return; }   // a click is never a held throttle
     if (!(a === 'back' && BACKS.includes(kind))) sound(actSound(a));   // back() plays its own
     if (a === 'toggle') {
       const key = el.dataset.key, on = !(opts[key]);
@@ -300,7 +340,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   function nav(dir) {
     if (card.hidden) return;
     if (kind === 'lobby' && lobby.nav(dir)) return;   // back, and left / right on the lobby's form rows
-    if (dir === 'throttle') { if (kind === 'howto' && !leaving) { sound('menu-ok'); howtoGo(); } return; }   // boot.js: a throttle press on a card
+    if (dir === 'throttle') { if (kind === 'howto' && !leaving) { sound('menu-ok'); howtoGo(); } else if (kind === 'results') recapNext(); return; }   // boot.js: a throttle press on a card
     if (dir === 'back') { if (BACKS.includes(kind)) back(); return; }
     const list = focusables();
     if (!list.length) return;
@@ -360,5 +400,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       paintLoad();
     },
     setHostGentle(on) { host.gentle = !!on; },
+    /** The course loop for the recap sketch ({ xz } from boot's centreline, evenly spaced along s). */
+    setTrack(t) { trackLoop = t && t.xz ? t : null; },
   };
 }
