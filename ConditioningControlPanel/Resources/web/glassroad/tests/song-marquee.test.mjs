@@ -154,3 +154,16 @@ test('the transport retains authority over a longer Gentle exit envelope', () =>
   assert.equal(face.material.opacity, .75, 'rendering must not shorten the transport fade');
   effect.dispose();
 });
+
+test('a settled spot stays unseen until its drop begins, then fades in falling; a hanging face takes its placement', () => {
+  const { effect } = setup();
+  const r = row({ bornS: 0, fallM: 20, shiftM: -6, liftM: 1.5 }), face = effect.object.children[0].children[1].children[2];
+  effect.update([r], .1, { songS: 1.5 }); assert.equal(face.material.opacity, 0, 'no screen waits in view before the drop');
+  effect.update([r], .1, { songS: 2.4 }); assert.ok(face.material.opacity > 0);
+  const p = marqueePose(r, 2.0), rest = marqueePose(r, 6);
+  assert.ok(p.y - rest.y > 15 && p.y - rest.y <= 20.5, 'the drop starts its own fall height up');
+  assert.ok(Math.abs(rest.x + 6) < .5 && rest.bottom >= 7.2 + 1.5 - 1e-9, 'shifted onto the lane, clear of the raised floor');
+  const old = row({ replacedS: 5 });
+  assert.ok(Math.abs(marqueePose(old, 6.2).x) > 20 && Math.abs(marqueePose(row(), 6.2).x) < 1, 'a retired screen snaps away early');
+  effect.dispose();
+});
