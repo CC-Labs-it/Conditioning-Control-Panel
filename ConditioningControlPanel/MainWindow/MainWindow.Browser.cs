@@ -915,10 +915,23 @@ namespace ConditioningControlPanel
                             });
 
                             video.muted = false;
+                            // ccp-bugs #1492: a refused request used to vanish without a trace.
+                            // Report why, so the next log says which condition the page failed.
+                            const reportFsDenied = (err) => {
+                                try {
+                                    window.chrome.webview.postMessage(JSON.stringify({
+                                        type: 'fsDenied',
+                                        reason: String((err && (err.name || err.message)) || err).slice(0, 60),
+                                        connected: video.isConnected,
+                                        visibility: document.visibilityState,
+                                        activation: !!(navigator.userActivation && navigator.userActivation.isActive) }));
+                                } catch (_) {}
+                            };
                             const goFullscreen = () => {
                                 if (window._ccpTakeoverStopped) return;
                                 if (video.requestFullscreen) {
-                                    video.requestFullscreen();
+                                    const req = video.requestFullscreen();
+                                    if (req && req.catch) req.catch(reportFsDenied);
                                 } else if (video.webkitRequestFullscreen) {
                                     video.webkitRequestFullscreen();
                                 } else if (video.msRequestFullscreen) {
@@ -1143,6 +1156,13 @@ namespace ConditioningControlPanel
                     {
                         App.BrowserMedia?.OnMediaPlaying(seconds);
                     }
+                }
+                // ccp-bugs #1492: the page refused the takeover's fullscreen request. The payload
+                // is page state only (error name, connected, visibility, activation).
+                else if (message.Contains("\"type\":\"fsDenied\""))
+                {
+                    App.Logger?.Warning("Web takeover fullscreen refused by the page: {Detail}",
+                        message.Length > 200 ? message[..200] : message);
                 }
                 // The user left fullscreen but the page may still be playing. This ends the
                 // TAKEOVER only — conflating it with "media stopped" is what let a stray
