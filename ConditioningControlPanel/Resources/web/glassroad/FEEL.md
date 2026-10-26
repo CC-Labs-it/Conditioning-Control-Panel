@@ -576,3 +576,12 @@ Keep broad platforms refresh the existing lip lift once when an early hop crosse
 - `hitCam.glowS` 0.7: the frame's pink glow pulse decay (Gentle: half).
 - `hitCam.wordS` 0.75: the comic impact word's life.
 - `hitCam.contactDelayS` 0.12: a fresh inset lands its contact beats this long after opening, as it seats.
+
+## Feel wave 2026-10-26
+
+### Lane E
+
+Drawn-only camera layers after `compose()` (`render/cameraMath.js`, applied in `render/camera.js`). The chase pose (eye, follow, yaw cap, FOV) never sees them.
+
+- `camera.hint` { shortcutDeg 4, bendDeg 6, aheadM 25, inS 0.25, outS 0.4 }: the look direction (never the eye) leads up to shortcutDeg toward the next shortcut gate or fork mouth within aheadM and up to bendDeg into the bend the road turns within aheadM (full at 30 degrees of turn). Tweens in over inS, out over outS. Chase view only; none in first person, rear view, the mirror dolly or while looking around; none under Gentle or Motion off.
+- `camera.traumaRot` { rollDeg 0, yawDeg 0, pitchDeg 0 }: rotational trauma on the drawn camera only, `fx.noise(axis, t) * fx.state.traumaOut * deg` (axes 0 pitch, 1 yaw, 2 roll). All 0 by default; owner trial values 1.5 / 0.8 / 0.6. None under Gentle; traumaOut is 0 under Motion off.

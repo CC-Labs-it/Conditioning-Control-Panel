@@ -5,9 +5,11 @@
  * Polish 3: the rig's kick layer (cameraMath.js createKick). Landings and boost starts come from state;
  * the player's bumps and wall hits come from the bus when one is given (opts.bus, or attach(bus) later),
  * else from the rig's own velocity-jump detector.
+ * Feel wave (lane E): after the views pick the pose, the look-point hint and the rotational trauma act on the
+ * copy written into the three.js camera only; the rig keeps the clean pose its follow integrates.
  */
-import { PerspectiveCamera } from 'three/webgpu';
-import { createCamRig, vFovForAspect } from './cameraMath.js';
+import { PerspectiveCamera, Quaternion } from 'three/webgpu';
+import { createCamRig, vFovForAspect, createHint, rotateLook, traumaRot, offsetQuat } from './cameraMath.js';
 import { S } from '../sim/state.js';
 import { LOOK } from './look.js';
 import { createCameraViews } from './cameraViews.js';
@@ -16,9 +18,17 @@ export function createChaseCamera(feel, { bus = null } = {}) {
   const camera = new PerspectiveCamera(feel.get('fov.baseVDeg'), 16 / 9, LOOK.nearM, LOOK.farM);
   const rig = createCamRig(feel);
   const views = createCameraViews();
-  const applyView = (kart, dt, aspect, options) => {
+  const hint = createHint(feel), hintLook = [0, 0, 0], rot = { pitch: 0, yaw: 0, roll: 0 }, rq = [0, 0, 0, 1], offQ = new Quaternion();
+  let shakeT = 0;
+  const applyView = (kart, dt, aspect, options, fx = null) => {
     const pose = views.update(rig, kart, dt, options);
-    apply(aspect, pose.eye, pose.look, pose.up, pose.vFov);
+    const gentle = !!options.gentle || !!feel.get('gentle.on'), still = gentle || options.motion === 'off';
+    const chase = options.active !== false && views.selected === 'chase' && !options.rearView && !views.mirrorActive && !options.manual;
+    const lead = hint.update(options.track, kart, dt, still ? 'off' : chase ? 'on' : 'out');
+    apply(aspect, pose.eye, lead ? rotateLook(hintLook, pose.eye, pose.look, pose.up, lead) : pose.look, pose.up, pose.vFov);
+    if (dt > 0) shakeT += dt;
+    traumaRot(rot, feel, fx, options.noise ?? fx?.noise, shakeT, gentle);
+    if (rot.pitch || rot.yaw || rot.roll) camera.quaternion.multiply(offQ.fromArray(offsetQuat(rq, rot.pitch, rot.yaw, rot.roll)));
   };
   let lastMode = 'race', orbit = 0, last = null;
   const offs = [];
@@ -60,16 +70,17 @@ export function createChaseCamera(feel, { bus = null } = {}) {
     views,
     attach,
     /** track: its magnet stretches put the rig in road mode (the loop). mode: 'race' (chase), 'menu' (attract orbit), 'results' (chase).
-     * viewOptions.viewDt: the drawn karts' clock step this frame (renderTime delta); the follow predicts with it. */
+     * viewOptions.viewDt: the drawn karts' clock step this frame (renderTime delta); the follow predicts with it.
+     * viewOptions.motion: the Motion option ('off' drops the look hint); viewOptions.noise: fx.noise for the rotational trauma. */
     update(kart, fx, track, dt, aspect, mode = 'race', lookInput = null, viewOptions = {}) {
       last = kart;
-      if (mode === 'menu') { lastMode = mode; views.reset(); menu(kart, dt, aspect); return; }
+      if (mode === 'menu') { lastMode = mode; views.reset(); hint.reset(); menu(kart, dt, aspect); return; }
       if (lastMode === 'menu') { rig.snap(kart, aspect, null, track); }
       lastMode = mode;
       rig.update(kart, fx, dt, aspect, track, mode === 'race' ? lookInput : null, viewOptions.viewDt ?? dt);
-      applyView(kart, dt, aspect, { ...viewOptions, track, active: mode === 'race' && viewOptions.active !== false });
+      applyView(kart, dt, aspect, { ...viewOptions, track, active: mode === 'race' && viewOptions.active !== false }, fx);
     },
-    snap(kart, track, aspect = camera.aspect) { last = kart; views.reset(); rig.snap(kart, aspect, null, track); applyView(kart, 0, aspect, { track }); },
+    snap(kart, track, aspect = camera.aspect) { last = kart; views.reset(); hint.reset(); rig.snap(kart, aspect, null, track); applyView(kart, 0, aspect, { track }); },
     dispose() { for (const off of offs) off(); offs.length = 0; },
   };
 }
