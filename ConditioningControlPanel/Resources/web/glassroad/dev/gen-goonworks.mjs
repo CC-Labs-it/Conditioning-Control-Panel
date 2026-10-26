@@ -37,7 +37,7 @@ export function buildGoonworks() {
     items: [], boosts: [], jumps: [{ node: node('pinball-gap'), airLen: 20, height: 26 }], routes: [], fields: [], courts: [], hazards: [], media: [],
     ai: { lines: [], pace: [1, 1.05, 1.1] }, beat: { bpm: null, offsetMs: 0, map: [] },
     limits: { fallY: -45, edgeGraceM: 1.2, edgeGraceS: .8 } };
-  const base = loadTrack(track, { aerials: false }), nearest = s => base.nodeS.slice(0, nodes.length).reduce((best, v, i) => Math.abs(v-s)<Math.abs(base.nodeS[best]-s)?i:best,0);
+  const base = loadTrack(track, { aerials: false, boostSafety: false }), nearest = s => base.nodeS.slice(0, nodes.length).reduce((best, v, i) => Math.abs(v-s)<Math.abs(base.nodeS[best]-s)?i:best,0);
   for (const id of ['start-terrace','grotto-gallery','mill-hall','quiz-ballroom','ribbon-braid','leapfrog-exit','pinball-table','fold-overlook','finish-crossing'])
     for (const x of [-6,-2,2,6]) track.items.push({ node: node(id, .5), x, kind: 'box' });
   // Side-lane chains reward holding a line while leaving the centre free to coast.

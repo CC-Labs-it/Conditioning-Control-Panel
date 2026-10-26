@@ -53,6 +53,7 @@ import { racerLabels } from '../hud/format.js';
 import { createMusicRoad } from './musicRoad.js';
 import { updateAudioReactiveUniforms } from './audioReactive.js';
 import { createPressContacts } from './pressContacts.js';
+import { createRailBarrier } from './railBarrier.js';
 import { createSpiralBeatClock } from './spiralBeat.js';
 import { largeMediaLayout } from './worldMediaScale.js';
 import { worldScreenLayout, worldScreenSolids, worldScreenExistingSlots } from './worldScreens.js';
@@ -334,6 +335,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   add(skids.object);
   // reactions (REACT lane): bumps, walls, the countdown glance, finishes and the head sprays
   const detachKarts = karts.attach({ bus, particles });
+  const railBarrier = createRailBarrier(bus, { colour: () => pal.primaryHex() });
+  scene.add(railBarrier.object);
   // the lamp's soft shadows: colossi, karts and props onto the road and pads; blobs on the phone tier
   let shadows = null;
   if (renderer) {
@@ -558,6 +561,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     fx.submerged = isMainframe && scene.fog ? scene.fog.density / 0.013 : 0;
     setLensCamera(view.camera);   // the lens rule's view height (render/lens.js) follows the rendering camera
     const gentle = !!feel.get('gentle.on');
+    railBarrier.update(dt, { paused: !!view.paused, gentle: gentle || !!view.gentle, reducedMotion: !!view.reducedMotion });
     const scroll = gentle ? feel.get('gentle.scrollMul') : 1, contrast = gentle ? feel.get('gentle.contrastMul') : 1;
     // the road and rail patterns stream toward the player at a speed from the kart (spectrum.js flowMps)
     pal.drive({ speedMps: Math.max(0, k[S.speedPct] || 0) * feel.get('speed.topMps'), gentle, paused: !!view.paused });
@@ -704,6 +708,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   function dispose() {
     if (disposed) return; disposed = true;
     detachKarts?.();
+    railBarrier.dispose();
     if (kartPool) { ringMesh.removeFromParent(); for (const k of karts.list) if(k.root.parent===scene)scene.remove(k.root); }
     // r186 Sprite quads are a global singleton shared with retained racer tags and stars.
     // Disposing a departing particle Sprite's geometry destroys their still-bound GPU buffers.
@@ -753,5 +758,5 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
-    resetReactions: () => { courseAtmosphere?.reset(); pinkAtmosphere?.reset(); itemVis?.clear(); marquees?.clear(); veils.clear(); for (const x of [cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps]) x?.clear(); phraseGates.clear(); airWords.clear(); if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); goonworks?.reset(); goonworksHazards?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
+    resetReactions: () => { railBarrier.reset(); courseAtmosphere?.reset(); pinkAtmosphere?.reset(); itemVis?.clear(); marquees?.clear(); veils.clear(); for (const x of [cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps]) x?.clear(); phraseGates.clear(); airWords.clear(); if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); goonworks?.reset(); goonworksHazards?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
 }

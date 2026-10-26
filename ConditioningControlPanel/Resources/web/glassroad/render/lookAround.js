@@ -17,15 +17,16 @@ export function createLookAround() {
     if (!y && Math.abs(view.pitch) < 1e-5) view.pitch = 0;
     return view;
   }
-  function apply(eye, look, up) {
-    if (!view.yaw && !view.pitch) return look;
+  function apply(eye, look, up, neutralPitchDeg = 0) {
+    const pitch = view.pitch + neutralPitchDeg * DEG;
+    if (!view.yaw && !pitch) return look;
     const dx = look[0] - eye[0], dy = look[1] - eye[1], dz = look[2] - eye[2];
     const reach = Math.hypot(dx, dy, dz) || 1;
     let fx = dx / reach, fy = dy / reach, fz = dz / reach;
     let rx = fy * up[2] - fz * up[1], ry = fz * up[0] - fx * up[2], rz = fx * up[1] - fy * up[0];
     const r = Math.hypot(rx, ry, rz) || 1; rx /= r; ry /= r; rz /= r;
     const ux = ry * fz - rz * fy, uy = rz * fx - rx * fz, uz = rx * fy - ry * fx;
-    const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw), cp = Math.cos(view.pitch), sp = Math.sin(view.pitch);
+    const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
     fx = (fx * cy + rx * sy) * cp + ux * sp;
     fy = (fy * cy + ry * sy) * cp + uy * sp;
     fz = (fz * cy + rz * sy) * cp + uz * sp;

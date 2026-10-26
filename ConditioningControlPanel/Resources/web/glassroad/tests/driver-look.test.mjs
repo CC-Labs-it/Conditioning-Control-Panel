@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createLookAround, DRIVER_LOOK } from '../render/lookAround.js';
-import { createCamRig } from '../render/cameraMath.js';
+import { createCamRig, aimAtAnchor } from '../render/cameraMath.js';
 import { createFeel } from '../core/feel.js';
 import { createState } from '../sim/state.js';
 import { createGamepad } from '../input/gamepad.js';
@@ -10,9 +10,28 @@ import { readPad } from '../input/padmap.js';
 import { createDevices } from '../input/device.js';
 import { createActionMap } from '../core/actions.js';
 import { createPointerLook } from '../input/pointerLook.js';
+import { RACER_FRAMING } from '../render/framing.js';
+import { place, fakeTrack } from './sim-fake.mjs';
 
 const near = (a, b, eps = 1e-8) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
 const DEG = Math.PI / 180;
+
+test('neutral chase exactly matches the previous fully-up held stick, including grid snaps', () => {
+  const feel = createFeel(JSON.parse(readFileSync(new URL('../feel.json', import.meta.url), 'utf8')));
+  for (const aspect of [16 / 9, 390 / 844]) for (const rollDeg of [0, 50, 180]) {
+    const track = fakeTrack({ rollDeg, flags: () => ['rail', 'magnet'] });
+    const kart = place(track, { speed: 20 }), rig = createCamRig(feel);
+    rig.snap(kart, aspect, {}, track);
+    const before = [...rig.look];
+    aimAtAnchor(before, rig.eye, rig.up, rig.anchor, rig.vFov, RACER_FRAMING.screenY);
+    const oldGlance = createLookAround();
+    for (let i = 0; i < 120; i++) oldGlance.update({ x: 0, y: -1 }, .1);
+    oldGlance.apply(rig.eye, before, rig.up);
+    rig.look.forEach((v, i) => near(v, before[i], 1e-10));
+    assert.deepEqual(rig.glance.view, { yaw: 0, pitch: 0 }, 'manual controls remain relative to the new neutral');
+    rig.snap(kart, aspect, {}, track); rig.look.forEach((v, i) => near(v, before[i], 1e-10));
+  }
+});
 test('driver glance has bounded aim, leaves the eye in place and smoothly returns to forward', () => {
   for (const fps of [30, 60, 144]) {
     const glance = createLookAround(), eye = [2, 3, 4], look = [2, 3, -6];
