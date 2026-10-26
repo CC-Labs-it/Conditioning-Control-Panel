@@ -184,6 +184,8 @@ export function createArtLibrary(renderer) {
         row: id => rows.get(resolve(id)) || null,
         dispose() {
           if (released) return; released = true; leases.delete(lease); liveLeases.delete(lease);
+          // the caller's progress callback closes over its course (boot scope): a released lease must not keep it
+          onProgress = null;
           for (const entry of used) { entry.refs--; evict(entry, disposed); }
           used.clear(); tex.clear(); models.clear();
           if (current === lease) current = [...liveLeases].at(-1) || null;

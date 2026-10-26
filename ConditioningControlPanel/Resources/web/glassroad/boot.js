@@ -91,6 +91,9 @@ import { poseOf } from './hud/presets.js';
 import { createDevHook, devAllowed } from './dev/hook.js';
 import { chipAlpha, kartPoint } from './hud/countdown.js';
 import { createLoading } from './hud/loading.js';
+import { describeFailure, rememberFailure, failureLine, isStalled, blockedTick, STALL_MS, WATCH_MS, FRAME_THROWS } from './core/failure.js';
+import { ORDER as TIER_ORDER } from './render/quality.js';
+import { dismantleScene } from './render/sceneResources.js';
 import { createGarage } from './render/garage.js';
 import { raceLook } from './hud/garageState.js';
 import { COURSES, selectedCourse, courseUrl, courseRaceIntent } from './track/catalog.js';
@@ -129,7 +132,7 @@ const DEV_HOST = isLocalSongHost(location);
 
 const COUNT = 8;                                   // offline grid (and the kart slots the world builds); online = the room's seats
 const LOCAL_URL = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/;
-const canvas = document.getElementById('view');
+let canvas = document.getElementById('view');   // replaced by a fresh element after a WebGPU fallback or a GPU rebuild
 const cardEl = document.getElementById('card');
 const cardTemplate = cardEl.innerHTML;
 const loading=createLoading();
@@ -137,7 +140,8 @@ const loading=createLoading();
 const shared = { bridge: createBridge(), hostEscape: createHostEscape(), bus: createBus(),
   songCache: createSongCache(), renderer: null, artLibrary: null, garageArt: null, garage: null,
   kartPool: { current: null }, retiredArt: [], pickedSong: null, audio: null,
-  closed: false, counts: { renderer: 0, audio: 0, garage: 0, courses: 0 } };
+  closed: false, counts: { renderer: 0, audio: 0, garage: 0, courses: 0 },
+  failures: [], rendererOpts: null, recovering: false };
 shared.feelTask = Promise.all([loadFeel(), loadFonts()]).then(([feel]) => {
   shared.baseFeel = feel.toJSON(); shared.feel = feel; shared.gentle = createGentle(feel); return feel;
 });
@@ -171,12 +175,57 @@ window.addEventListener('pagehide', () => {
   shared.songCache.clear(); shared.hostEscape.dispose?.(); shared.bridge.dispose(); loading.dispose();
 }, { once: true });
 
+/** One honest record per failure (core/failure.js): on the cover, on window.__glassroad.lastFailure, in localStorage. */
+function record(kind, e) {
+  const d = window.__glassroad, ms = d && d.loading && d.loading.milestones;
+  const rec = describeFailure(e, { kind, course: controller.active || selectedCourse(location.search).id,
+    backend: shared.renderer?.backend || null, tier: shared.renderer?.tier || null,
+    stage: ms && ms.length ? ms[ms.length - 1].stage : null, ua: navigator.userAgent });
+  rememberFailure(rec);
+  if (d) d.lastFailure = rec;
+  shared.failures.push(rec);
+  return rec;
+}
 function fail(e) {
   console.error('[glassroad] boot failed', e);
+  const rec = record('boot', e);
   const note = document.getElementById('card-note');
-  if (note) note.textContent = 'Could not start: ' + (e && e.message ? e.message : e);
-  if (window.__glassroad) window.__glassroad.phase = 'failed'; loading.fail();
+  if (note) note.textContent = 'Could not start: ' + rec.reason;
+  if (window.__glassroad) window.__glassroad.phase = 'failed';
+  loading.fail(failureLine(rec));
+  loading.onRetry(() => void retry(rec.course));
 }
+/** Drop every GPU-side shared object (renderer, art, garage, kart pool; the audio stays). The next boot builds them
+ *  again on a fresh canvas; lowerTier caps the automatic tier one step under the one that died (a pinned Quality still wins). */
+function teardownGpu({ lowerTier = false } = {}) {
+  const tier = shared.renderer?.tier || null, below = tier ? TIER_ORDER[TIER_ORDER.indexOf(tier) - 1] : null;
+  for (const step of [() => shared.garage?.dispose(), () => shared.kartPool.current?.dispose(), () => shared.artLibrary?.dispose(), () => shared.renderer?.dispose()]) {
+    try { step(); } catch (err) { console.warn('[glassroad] teardown: ' + (err && err.message)); }
+  }
+  shared.garage = null; shared.kartPool.current = null; shared.artLibrary = null; shared.garageArt = null; shared.renderer = null;
+  shared.retiredArt.length = 0;
+  shared.rendererOpts = { freshCanvas: true, maxTier: lowerTier && below ? below : (shared.rendererOpts?.maxTier || null) };
+}
+/** The Retry button after a failed boot: a clean GPU slate (a half-built renderer is the enemy), one tier lower when
+ *  the try before this one died too. */
+function retry(id) {
+  if (shared.closed) return Promise.resolve(false);
+  teardownGpu({ lowerTier: shared.failures.length >= 2 });
+  return selectCourse(id || selectedCourse(location.search).id, { force: true, replace: true });
+}
+/** A dead world never stays dead: a lost GPU device or context, a stalled frame loop or a frame loop that keeps
+ *  throwing rebuilds the renderer and the course behind the loading cover, back into the race or the garage. */
+async function recover(kind, e, { race = false } = {}) {
+  if (shared.closed || shared.recovering) return false;
+  shared.recovering = true;
+  const rec = record(kind, e);
+  console.error('[glassroad] ' + failureLine(rec) + '; rebuilding the graphics');
+  try {
+    teardownGpu({ lowerTier: kind === 'lost' });
+    return await selectCourse(rec.course, { force: true, replace: true, race });
+  } finally { shared.recovering = false; }
+}
+shared.recover = recover;
 
 /** ?botFall=1: once, steer the player to the outside of the first open stretch (a rescue to look at). */
 function createFallSteer(track, st, feel) {
@@ -362,6 +411,9 @@ async function boot(course, options, lifetime, isCurrent) {
   let songCues = null;
   lifetime.defer(() => songCues?.dispose());
   let state = 'boot', paused = false, finishAt = 0, result = null, rumbleT = 0, rumbleSent = 0, botT = 0;
+  // the tier the course's programs were built at; a Quality pick or governor step in the menu re-warms before the
+  // next race (a phone froze ~7 s on the first race frame after Quality went to High, owner report 2026-10-26)
+  let warmedTier = null, rewarmBusy = false;
   let online = null, lobbyUi = null;
   let songToken = 0, pickedSong = shared.pickedSong;
   lifetime.defer(() => { songToken++; });
@@ -378,11 +430,17 @@ async function boot(course, options, lifetime, isCurrent) {
   showLoading('Opening the garage', 0.04);
 
   // the saved display options (frame cap, render scale, quality, fps readout) reach the renderer at boot
-  const renderer = shared.renderer ||= await createRenderer(canvas, { forceRenderer: init.caps.forceRenderer, options: hud.options });
+  const renderer = shared.renderer ||= await createRenderer(canvas, { forceRenderer: init.caps.forceRenderer, options: hud.options, ...(shared.rendererOpts || {}) });
   if (!lifetime.alive) { renderer.dispose(); return; }
+  canvas = renderer.canvas;
+  shared.rendererOpts = shared.rendererOpts ? { ...shared.rendererOpts, freshCanvas: false } : null;
   loaded('renderer');
   if (!shared.counts.renderer) shared.counts.renderer++;
   renderer.beginCourse(); renderer.setHold(true);
+  const racing = () => !online && (state === 'intro' || state === 'race');
+  lifetime.defer(renderer.onLost((lost) => {
+    if (isCurrent()) void recover('lost', new Error((lost.api ? lost.api + ' ' : '') + (lost.message || 'device lost') + (lost.reason ? ' (' + lost.reason + ')' : '')), { race: racing() });
+  }));
   shared.counts.courses++;
   if (!shared.artLibrary && qs.get('art') !== '0') {
     shared.artLibrary = createArtLibrary(renderer);
@@ -419,6 +477,7 @@ async function boot(course, options, lifetime, isCurrent) {
   lifetime.defer(() => {
     if (!renderer.releaseScene(world.scene, undefined, () => world.shadows?.dispose())) world.shadows?.dispose();
     world.dispose();
+    dismantleScene(world.scene);
   });
   // A visual review may keep the Loom faces without requesting or displaying private media.
   const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge });
@@ -839,9 +898,27 @@ async function boot(course, options, lifetime, isCurrent) {
     const align = () => songAt - race.goInS;
     if (pickedSong || CHARTS.length) Promise.resolve(raceAudioStart).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
   }
+  /** Rebuild the course's programs at the current tier behind the loading cover (renderer.compile, in groups with
+   *  painted frames between them), then start the race. Frames pause meanwhile: the warm owns the scene. */
+  async function rewarmThenRace() {
+    rewarmBusy = true;
+    try {
+      loading.start(); garage?.setVisible(false); hud.setCard(null);
+      showLoading('Getting the lights ready', 0.05);
+      await paintGap();
+      await renderer.compile(world.scene, cam.camera, undefined, { onProgress: (k, n) => showLoading('Getting the lights ready', 0.05 + 0.9 * k / n) });
+    } catch (e) { console.warn('[glassroad] rewarm', e && e.message); }
+    finally {
+      rewarmBusy = false;
+      if (lifetime.alive) { renderer.beginCourse(); warmedTier = renderer.tier; showLoading('Ready to roll', 1); loading.finish(); }
+    }
+    if (lifetime.alive && state === 'menu') startRace();
+  }
   function startRace() {
     if (!lifetime.alive) return;
     if (online) return;
+    if (rewarmBusy) return;
+    if (warmedTier && renderer.tier !== warmedTier && state === 'menu') { void rewarmThenRace(); return; }
     closeRunLog();
     stopSong();
     prepareRunMode();
@@ -1146,6 +1223,7 @@ async function boot(course, options, lifetime, isCurrent) {
   if (qs.get('profileLoad') === '1') debug.readyGraphs = renderer.stats().compiledGraphs;
   if (!isCurrent()) return;
   renderer.beginCourse(); // Covered preparation must not count toward a later quality verdict.
+  warmedTier = renderer.tier;
   showLoading('Ready to roll', 1);
   hud.setReady(true);
   bridge.ready();
@@ -1186,10 +1264,39 @@ async function boot(course, options, lifetime, isCurrent) {
   let frameId = 0, lastViewTime = null;   // the drawn karts' clock at the last frame (camera follow step)
   const itemListener = { p: [0, 0, 0], right: [1, 0, 0] };
   lifetime.defer(() => cancelAnimationFrame(frameId));
+  // the watchdog: a visible, uncovered page whose loop stops for STALL_MS, or a loop that throws FRAME_THROWS frames
+  // in a row, is a dead world (music plays on, the picture never moves): rebuild it (recover)
+  // (lastDrawMs: the last frame that drew anything; a loop that runs but draws nothing in a race is as dead)
+  let lastFrameMs = performance.now(), lastDrawMs = performance.now(), visibleSinceMs = performance.now(), frameThrows = 0;
+  lifetime.listen(document, 'visibilitychange', () => { if (!document.hidden) visibleSinceMs = performance.now(); });
+  let lastTickMs = 0;
+  const watchdog = setInterval(() => {
+    if (!isCurrent() || shared.recovering) return;
+    const nowMs = performance.now(), covered = document.body.dataset.boot !== 'ready', busy = rewarmBusy || controller.busy, visible = !document.hidden;
+    // a tick that comes late ran after one long synchronous task (a first-use compile, a GC): the loop was busy,
+    // not dead; its stamps move to now and the following ticks judge
+    const blocked = blockedTick({ nowMs, lastTickMs });
+    lastTickMs = nowMs;
+    if (blocked) { lastFrameMs = lastDrawMs = nowMs; return; }
+    const stalled = isStalled({ nowMs, lastFrameMs, visible, visibleSinceMs, covered, busy }) ? 'no frame'
+      : racing() && !paused && isStalled({ nowMs, lastFrameMs: lastDrawMs, visible, visibleSinceMs, covered, busy }) ? 'nothing drawn' : null;
+    if (stalled) { cancelAnimationFrame(frameId); void recover('stalled', new Error(stalled + ' for ' + Math.round(STALL_MS / 1000) + ' s'), { race: racing() }); }
+  }, WATCH_MS);
+  lifetime.defer(() => clearInterval(watchdog));
   function frame(now) {
     if (!lifetime.alive) return;
     frameId = requestAnimationFrame(frame);
-    if (!renderer.frameDue(now)) return;                          // the Frame cap option skips this one
+    lastFrameMs = now;
+    try { frameBody(now); frameThrows = 0; if (renderer.three.info.render.drawCalls > 0) lastDrawMs = now; }
+    catch (e) {
+      frameThrows++;
+      console.error('[glassroad] frame threw (' + frameThrows + '/' + FRAME_THROWS + ')', e);
+      if (frameThrows >= FRAME_THROWS) { cancelAnimationFrame(frameId); void recover('frame', e, { race: racing() }); }
+    }
+  }
+  function frameBody(now) {
+    if (rewarmBusy) return;                                       // a menu re-warm owns the scene under the cover
+    if (!renderer.frameDue(now)) return;                        // the Frame cap option skips this one
     if (HT) hT = performance.now();
     const { steps, alpha, frameDt, renderTime } = clock.frame(now);
     if (HT) HT.steps = steps;

@@ -7,7 +7,7 @@ import { createWaterSurface } from './materials/water.js';
 import { createWaterField } from './waterField.js';
 import { createWaterFoam } from './waterFoam.js';
 import { createWaterReflections } from './waterReflections.js';
-import { Q } from './quality.js';
+import { Q, TIERS } from './quality.js';
 import { createAudioReactiveUniforms, reactiveWaterNodes } from './audioReactive.js';
 import { buildWaterTransitions, waterJoinWeight, transitionSupport, transitionOutlets } from './waterTransitions.js';
 
@@ -56,7 +56,10 @@ export function buildWaterVolume(track, pal, art = null, { quality = Q.name, sce
   const wind=ambientWaterNodes(positionLocal,u.t);
   const join = attribute('aWaterJoin', 'vec3');
   const fieldHeight = heightSample.r.mul(2).sub(1).clamp(-0.8, 0.8).add(wind.height).mul(join.x);
-  const reflections = createWaterReflections({ scene, renderer, exclude: object, quality, track });
+  // PHONE WATER (owner 2026-10-26): the phone tier builds no live probe (no warm-up, no in-race cube captures);
+  // the surface wears a palette sheen instead. Decided once per course build, like the field resolution.
+  const liveReflections = (TIERS[quality] || TIERS.high).sceneReflections !== false;
+  const reflections = liveReflections ? createWaterReflections({ scene, renderer, exclude: object, quality, track }) : null;
   const froth = createWaterFoam(track, field, spills, { quality });
   const tex = id => art?.detail?.(id) || art?.tex?.(id + (Q.name === 'phone' ? '-phone' : '')) || null;
   const normal = tex('water-normal'), foam = tex('water-foam-mask'), sheet = tex('waterfall-sheet'), phase = tex('waterfall-phase-mask');
@@ -158,7 +161,8 @@ export function buildWaterVolume(track, pal, art = null, { quality = Q.name, sce
   const fields = { ...(normal ? { slope: q => texture(normal, q.mul(0.25)).rg.mul(2).sub(1) } : {}), ...(foam ? { foam: q => texture(foam, q.mul(0.25)).r } : {}) };
   const windSlope=vec2(dot(wind.gradient,attribute('aWaterB','vec3').xz),dot(wind.gradient,attribute('aWaterT','vec3').xz));
   const deformation = { slope: heightSample.gb.mul(2).sub(1).add(windSlope), foam: heightSample.a, height: fieldHeight,
-    reflection: direction => cubeTexture(reflections.texture, direction).rgb, reflectionReady: u.reflectionReady,
+    reflection: reflections ? direction => cubeTexture(reflections.texture, direction).rgb : null, reflectionReady: u.reflectionReady,
+    sheen: !reflections,
     B: normalize(attribute('aWaterB','vec3')), T: normalize(attribute('aWaterT','vec3')) };
   const surface = createWaterSurface({ surface: attribute('surface', 'float'), flow: attribute('flow', 'vec2'), p: uv(), trueEdge: attribute('aWaterEdge', 'float'), V: normalize(cameraPosition.sub(positionWorld)), N0: fieldNormal, pal, u, fields, deformation, reactive });
   skin.colorNode = surface.colour;
@@ -192,7 +196,7 @@ export function buildWaterVolume(track, pal, art = null, { quality = Q.name, sce
   return { object, field, heightTexture, reflections, foam: froth, transitions, uniforms: u, runs, spills, stats: { runs: runs.length, spills: spills.length, transitions: transitions.ends.length, vertices: (top.p.length + wall.p.length + fall.p.length) / 3, surfaceVertices: top.p.length / 3 },
     // Only the raised surface samples the probe. A course without it (GOONWORKS) never reads the cube, and its
     // warm-up compiled every scene material again for the cube pass: ~9 s of the phone load at 4x CPU throttle.
-    async warmReflections(options) { if (!object.getObjectByName('water-surface-raised')) { u.reflectionReady.value = 0; return false; }
+    async warmReflections(options) { if (!reflections || !object.getObjectByName('water-surface-raised')) { u.reflectionReady.value = 0; return false; }
       const ready = await reflections.warm(options); u.reflectionReady.value = ready ? 1 : 0; return ready; },
     update(dt, { gentle = false, paused = false, scroll = gentle ? 0.5 : 1, playerPos = null, playerS = 0 } = {}) {
       if (paused) return;
@@ -200,10 +204,12 @@ export function buildWaterVolume(track, pal, art = null, { quality = Q.name, sce
       const changed = field.step(dt, { gentle, paused });
       if (changed || uploadedVersion !== field.stats.version) { heightTexture.needsUpdate = true; uploadedVersion = field.stats.version; }
       froth.update(dt, { gentle, paused, playerS });
-      reflections.update(dt, { paused, playerPos, playerS, wet: runs.some(r => playerS >= r.fromS - 45 && playerS <= r.toS + 30) });
-      u.reflectionReady.value = reflections.stats.ready ? 1 : 0;
+      if (reflections) {
+        reflections.update(dt, { paused, playerPos, playerS, wet: runs.some(r => playerS >= r.fromS - 45 && playerS <= r.toS + 30) });
+        u.reflectionReady.value = reflections.stats.ready ? 1 : 0;
+      }
     },
     reset() { field.reset(); heightTexture.needsUpdate = true; uploadedVersion = field.stats.version; froth.reset(); },
-    dispose() { for (const child of object.children) { if (child === froth.object || child === transitions.object) continue; child.geometry.dispose(); child.material.dispose(); } transitions.dispose(); froth.dispose(); reflections.dispose(); heightTexture.dispose(); field.dispose?.(); object.clear(); },
+    dispose() { for (const child of object.children) { if (child === froth.object || child === transitions.object) continue; child.geometry.dispose(); child.material.dispose(); } transitions.dispose(); froth.dispose(); reflections?.dispose(); heightTexture.dispose(); field.dispose?.(); object.clear(); },
   };
 }

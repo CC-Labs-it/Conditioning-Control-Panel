@@ -20,12 +20,25 @@
 import { WebGPURenderer, Group, Mesh, Sprite, PlaneGeometry } from 'three/webgpu';
 import { createPost } from './post.js';
 import { releaseSceneResources, trackSceneResources, disposeSceneResources } from './sceneResources.js';
-import { Q, TIERS, GOVERNOR, setTier, pickTier, createGovernor, createDynRes, dynLines, shortGpu } from './quality.js';
+import { Q, TIERS, ORDER, GOVERNOR, setTier, pickTier, createGovernor, createDynRes, dynLines, shortGpu, qualityLanding } from './quality.js';
 import { createFrameGate } from '../core/clock.js';
+import { reasonOf } from '../core/failure.js';
 import { loadOptions, cleanOptions } from '../hud/options.js';
 import { WARM, warmGroups } from './warmGroups.js';
 
-export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2, options = null } = {}) {
+/** A canvas can hold one context for life: a failed WebGPU init, or a lost context, needs a new element in its place. */
+function replaceCanvas(canvas) {
+  const fresh = canvas.cloneNode(false);
+  if (canvas.parentNode) canvas.replaceWith(fresh);
+  return fresh;
+}
+
+/**
+ * @param {{ forceRenderer?: string|null, maxDpr?: number, options?: object|null, freshCanvas?: boolean, maxTier?: string|null }} o
+ *   freshCanvas: build on a new canvas element in place of the given one (a rebuild after a device loss);
+ *   maxTier: a ceiling on the automatic tier (a rebuild after a loss starts one tier lower; a pinned Quality option still wins).
+ */
+export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2, options = null, freshCanvas = false, maxTier = null } = {}) {
   const qs = new URLSearchParams(globalThis.location ? location.search : '');
   const force = forceRenderer || (/^(webgl2|webgpu)$/.test(qs.get('renderer') || '') ? qs.get('renderer') : null);
   const override = TIERS[qs.get('quality')] ? qs.get('quality') : null;
@@ -33,11 +46,13 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   let opts = cleanOptions(options || loadOptions());
   // ?quality= wins (dev), then a pinned Quality option, else the auto pick
   const pinOf = () => override ? null : opts.quality !== 'auto' ? opts.quality : null;
+  const capTier = (name) => maxTier && TIERS[maxTier] && ORDER.indexOf(name) > ORDER.indexOf(maxTier) ? maxTier : name;
+  if (freshCanvas) canvas = replaceCanvas(canvas);
   // ask for the fast GPU on both paths; no adapter means the WebGL2 fallback, with a context made here.
   // Firefox runs WebGL2 unless ?renderer=webgpu: its WebGPU drew every lit prop as a black silhouette for the
   // owner (polish 4, Firefox 158) while its WebGL2 draws them right; a chosen WebGL2 still starts on high
   const firefox = !force && !!globalThis.navigator && (navigator.userAgent || '').includes('Firefox/');
-  let webgl2 = force === 'webgl2' || firefox, gpu = '', context = null;
+  let webgl2 = force === 'webgl2' || firefox, gpu = '', context = null, fallback = null;
   if (!webgl2) {
     try {
       const ad = globalThis.navigator && navigator.gpu ? await navigator.gpu.requestAdapter({ powerPreference: 'high-performance', featureLevel: 'compatibility' }) : null;
@@ -45,12 +60,38 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
       else { const i = ad.info || {}; gpu = shortGpu([i.vendor, i.architecture, i.description].filter(Boolean).join(' ')); }
     } catch (e) { webgl2 = true; }
   }
-  if (webgl2) context = canvas.getContext('webgl2', { antialias: false, alpha: true, depth: true, stencil: false, powerPreference: 'high-performance' });
-  setTier(pinOf() || pickTier({ override, coarse, webgl2: webgl2 && !firefox }));
+  const glContext = (c) => c.getContext('webgl2', { antialias: false, alpha: true, depth: true, stencil: false, powerPreference: 'high-performance' });
+  if (webgl2) context = glContext(canvas);
+  setTier(pinOf() || capTier(pickTier({ override, coarse, webgl2: webgl2 && !firefox })));
 
-  const three = new WebGPURenderer({ canvas, antialias: false, forceWebGL: webgl2, powerPreference: 'high-performance', ...(context ? { context } : {}) });
-  await three.init();
+  let three = new WebGPURenderer({ canvas, antialias: false, forceWebGL: webgl2, powerPreference: 'high-performance', ...(context ? { context } : {}) });
+  try {
+    await three.init();
+  } catch (e) {
+    // a WebGPU adapter that refuses its device (a phone driver, a blocklist, an out-of-memory device) is not the
+    // end: the same page runs on WebGL2, on a fresh canvas since the first one now owns a dead webgpu context
+    if (webgl2 || force === 'webgpu') throw e;
+    fallback = reasonOf(e);
+    console.warn('[glassroad/renderer] WebGPU init failed, running WebGL2: ' + fallback);
+    try { three.dispose(); } catch (err) { /* half built */ }
+    webgl2 = true; gpu = '';
+    canvas = replaceCanvas(canvas);
+    context = glContext(canvas);
+    if (!context) throw new Error('no WebGL2 context after the WebGPU failure (' + fallback + ')');
+    three = new WebGPURenderer({ canvas, antialias: false, forceWebGL: true, powerPreference: 'high-performance', context });
+    await three.init();
+  }
   trackSceneResources(three);
+  // a lost device or context: three stops drawing for good (render returns at once), so the page must rebuild;
+  // onLost(fn) hears it once, with the reason
+  const lostFns = new Set();
+  let lost = null;
+  three.onDeviceLost = (info) => {
+    if (lost) return;
+    lost = { api: info && info.api, message: info && info.message, reason: info && info.reason, at: performance.now() };
+    console.error('[glassroad/renderer] device lost: ' + (lost.api || '') + ' ' + (lost.message || '') + (lost.reason ? ' (' + lost.reason + ')' : ''));
+    for (const fn of lostFns) { try { fn(lost); } catch (e) { console.warn('[glassroad/renderer] onLost', e); } }
+  };
   let compiledGraphs;
   if (qs.get('profileLoad') === '1') {
     compiledGraphs = 0;
@@ -61,7 +102,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   if (backend === 'webgl2') {
     try { const gl = three.backend.gl, ext = gl.getExtension('WEBGL_debug_renderer_info'); gpu = shortGpu(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)); } catch (e) { /* hidden */ }
   }
-  const autoTier = pickTier({ override, coarse, webgl2: backend === 'webgl2' && !firefox, gpu });
+  const autoTier = capTier(pickTier({ override, coarse, webgl2: backend === 'webgl2' && !firefox, gpu }));
   setTier(pinOf() || autoTier);
   // graceS: boot, art decode and the first shader compiles never cost a tier
   const govRules = { ...GOVERNOR, graceS: 6 };
@@ -101,10 +142,14 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     if (post && post.antialias === Q.antialias) post.retier();   // an MSAA change rebuilds on the next frame
     for (const fn of tierFns) fn(Q.name);
   }
+  // a Quality change under hold (the pause card mid-race) waits like a governor verdict: applied at once it
+  // relinked every program and froze a phone for seconds (owner report 2026-10-26, quality.js qualityLanding)
   function setQuality() {
     const pin = pinOf(), name = pin || autoTier;
     gov = pin ? null : createGovernor({ tier: name, ceiling: autoTier, rules: govRules });
-    if (name !== Q.name) { setTier(name); retier(); }
+    const land = qualityLanding({ want: name, current: Q.name, hold });
+    pending = land.pending;
+    if (land.apply) { setTier(land.apply); retier(); }
   }
 
   function readout(on) {
@@ -131,6 +176,14 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   const api = {
     backend,
     three,
+    /** The canvas in use (a new element after a WebGPU init fallback or a rebuild). */
+    get canvas() { return canvas; },
+    /** Why WebGPU gave way to WebGL2 at init, or null. */
+    fallback,
+    /** The device loss three reported ({ api, message, reason, at }), or null while the device lives. */
+    get lost() { return lost; },
+    /** fn(lost) once when the GPU device or the WebGL context goes away. Returns the unsubscribe. */
+    onLost(fn) { lostFns.add(fn); if (lost) { try { fn(lost); } catch (e) { /* told */ } } return () => lostFns.delete(fn); },
     get tier() { return Q.name; },
     get aspect() { return Math.max(1, canvas.clientWidth) / Math.max(1, canvas.clientHeight); },
     get options() { return { ...opts }; },
@@ -168,6 +221,8 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     frameDue(now) { gated = true; return gate.due(now); },
     /** Loading is not a slow gameplay frame. Keep quality/options, but restart their timing grace. */
     beginCourse(){
+      // a pinned Quality that waited lands here, behind the loading card and before the warm; a governor verdict is dropped
+      const pin=pinOf();if(pin&&pin!==Q.name){setTier(pin);retier();}
       last=0;gated=false;pending=null;gate.setCap(opts.frameCap);
       meter.n=0;meter.t=0;meter.fps=0;
       gov=pinOf()?null:createGovernor({tier:Q.name,ceiling:autoTier,rules:govRules});
@@ -212,7 +267,14 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
       return { backend, tier: Q.name, drawCalls: r.drawCalls, triangles: r.triangles, perFrame: true, compiledGraphs,
         renderScale: Math.round(scale() * 100) / 100, renderFps: meter.fps, displayMs: Math.round(gate.displayMs * 100) / 100, gpu, art: meter.art };
     },
-    dispose() { if (ro) ro.disconnect(); if (post) post.dispose(); readout(false); disposeSceneResources(three); three.dispose(); },
+    dispose() {
+      if (ro) ro.disconnect();
+      lostFns.clear();
+      // a dead device throws from anywhere: each step on its own, the page is rebuilding anyway
+      for (const step of [() => post && post.dispose(), () => readout(false), () => disposeSceneResources(three), () => three.dispose()]) {
+        try { step(); } catch (e) { console.warn('[glassroad/renderer] dispose: ' + (e && e.message)); }
+      }
+    },
   };
   return api;
 }

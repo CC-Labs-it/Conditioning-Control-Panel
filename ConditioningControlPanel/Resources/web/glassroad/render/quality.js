@@ -8,12 +8,14 @@
 /** Per tier: DPR cap, bloom on and its resolution scale, particle budget, speed line count, ambient motes,
  * the distance past which a rival kart drops its bone pose, sparks and name tag (kartLodM), boost ribbon points,
  * shadows ('map' a real shadow map of shadowMapPx, 'blob' soft blobs and ellipses, no map) per CONTRACT polish 2,
- * the art textures' anisotropic filtering (read ONCE at load from the start tier: a change re-uploads), and the
- * HIT CAM inset's resolution share of the pixel ratio (hitCam, render/hitCam.js; 0 turns the inset off). */
+ * the art textures' anisotropic filtering (read ONCE at load from the start tier: a change re-uploads), the
+ * HIT CAM inset's resolution share of the pixel ratio (hitCam, render/hitCam.js; 0 turns the inset off), and
+ * sceneReflections: whether the water keeps its live scene probe (read ONCE when the course builds; PHONE WATER,
+ * owner 2026-10-26: the phone tier drops the probe warm-up and its in-race cube captures for a stand-in sheen). */
 export const TIERS = Object.freeze({
-  high: Object.freeze({ name: 'high', dprMax: 2, antialias: true, bloom: true, bloomScale: 0.5, particles: 4000, speedLines: 160, scatter: 1, motes: 1400, kartLodM: 90, trailPoints: 28, shadows: 'map', shadowMapPx: 2048, anisotropy: 8, hitCam: 1 }),
-  mid: Object.freeze({ name: 'mid', dprMax: 1.5, antialias: true, bloom: true, bloomScale: 0.25, particles: 1500, speedLines: 100, scatter: 0.7, motes: 800, kartLodM: 60, trailPoints: 20, shadows: 'map', shadowMapPx: 1024, anisotropy: 4, hitCam: 1 }),
-  phone: Object.freeze({ name: 'phone', dprMax: 1.25, antialias: false, bloom: true, bloomScale: 0.25, particles: 700, speedLines: 60, scatter: 0.45, motes: 400, kartLodM: 40, trailPoints: 14, shadows: 'blob', shadowMapPx: 0, anisotropy: 2, hitCam: 0.75 }),
+  high: Object.freeze({ name: 'high', dprMax: 2, antialias: true, bloom: true, bloomScale: 0.5, particles: 4000, speedLines: 160, scatter: 1, motes: 1400, kartLodM: 90, trailPoints: 28, shadows: 'map', shadowMapPx: 2048, anisotropy: 8, sceneReflections: true, hitCam: 1 }),
+  mid: Object.freeze({ name: 'mid', dprMax: 1.5, antialias: true, bloom: true, bloomScale: 0.25, particles: 1500, speedLines: 100, scatter: 0.7, motes: 800, kartLodM: 60, trailPoints: 20, shadows: 'map', shadowMapPx: 1024, anisotropy: 4, sceneReflections: true, hitCam: 1 }),
+  phone: Object.freeze({ name: 'phone', dprMax: 1.25, antialias: false, bloom: true, bloomScale: 0.25, particles: 700, speedLines: 60, scatter: 0.45, motes: 400, kartLodM: 40, trailPoints: 14, shadows: 'blob', shadowMapPx: 0, anisotropy: 2, sceneReflections: false, hitCam: 0.75 }),
 });
 /** Lowest first; the governor moves one step along this list. */
 export const ORDER = Object.freeze(['phone', 'mid', 'high']);
@@ -195,4 +197,15 @@ export function createDynRes({ rules = DYNRES, scale = rules.max } = {}) {
     return null;
   }
   return d;
+}
+
+/** Where a Quality option change lands. A tier step relinks every program (on a phone, seconds of a frozen
+ *  page: 3.6 s of main thread plus a 5.8 s frame gap measured for Auto to High under the pause card, 4x CPU
+ *  throttle), so while held (a race, its countdown, its pause card) the new tier waits like a governor verdict
+ *  and lands on the next menu or results card, or at the next course load. Choosing the tier already in use
+ *  clears anything that waits.
+ *  @returns {{ apply: string|null, pending: string|null }} */
+export function qualityLanding({ want, current, hold = false }) {
+  if (!want || want === current) return { apply: null, pending: null };
+  return hold ? { apply: null, pending: want } : { apply: want, pending: null };
 }
