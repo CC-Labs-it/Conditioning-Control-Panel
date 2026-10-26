@@ -1143,7 +1143,7 @@ async function boot(course, options, lifetime, isCurrent) {
       }
     }
   }
-  let frameId = 0;
+  let frameId = 0, lastViewTime = null;   // the drawn karts' clock at the last frame (camera follow step)
   const itemListener = { p: [0, 0, 0], right: [1, 0, 0] };
   lifetime.defer(() => cancelAnimationFrame(frameId));
   function frame(now) {
@@ -1267,8 +1267,12 @@ async function boot(course, options, lifetime, isCurrent) {
     const mode = state === 'menu' ? 'menu' : state === 'results' ? 'results' : 'race';
     const mouseLook = pointerLook.read();
     const lookInput = canLook() ? Math.hypot(mouseLook.x, mouseLook.y) > Math.hypot(gamepad.look.x, gamepad.look.y) ? mouseLook : gamepad.look : null;
+    // the follow steps by the drawn karts' own clock: a dropped-time frame (phones near 30 fps) moves them less
+    // than frameDt, and a wall-clock prediction then bounced the eye against the exactly aimed racer
+    const viewDt = lastViewTime != null && renderTime >= lastViewTime ? renderTime - lastViewTime : frameDt;
+    lastViewTime = renderTime;
     if (!frozen) cam.update(P.view, fs, track, frameDt, renderer.aspect, mode, lookInput, {
-      active: state === 'race', rearView,
+      active: state === 'race', rearView, viewDt,
       manual: cameraToggle || !!(lookInput?.x || lookInput?.y) || paused || !!hud.card,
       gentle: cueSafety.on, cues: cueView?.live || NO_WORDS, revision: cueView?.revision, songS,
     });
