@@ -59,13 +59,14 @@ export function createChaseCamera(feel, { bus = null } = {}) {
     rig,
     views,
     attach,
-    /** track: its magnet stretches put the rig in road mode (the loop). mode: 'race' (chase), 'menu' (attract orbit), 'results' (chase). */
+    /** track: its magnet stretches put the rig in road mode (the loop). mode: 'race' (chase), 'menu' (attract orbit), 'results' (chase).
+     * viewOptions.viewDt: the drawn karts' clock step this frame (renderTime delta); the follow predicts with it. */
     update(kart, fx, track, dt, aspect, mode = 'race', lookInput = null, viewOptions = {}) {
       last = kart;
       if (mode === 'menu') { lastMode = mode; views.reset(); menu(kart, dt, aspect); return; }
       if (lastMode === 'menu') { rig.snap(kart, aspect, null, track); }
       lastMode = mode;
-      rig.update(kart, fx, dt, aspect, track, mode === 'race' ? lookInput : null);
+      rig.update(kart, fx, dt, aspect, track, mode === 'race' ? lookInput : null, viewOptions.viewDt ?? dt);
       applyView(kart, dt, aspect, { ...viewOptions, track, active: mode === 'race' && viewOptions.active !== false });
     },
     snap(kart, track, aspect = camera.aspect) { last = kart; views.reset(); rig.snap(kart, aspect, null, track); applyView(kart, 0, aspect, { track }); },

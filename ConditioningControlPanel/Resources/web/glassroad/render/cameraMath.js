@@ -279,8 +279,14 @@ export function createCamRig(feel) {
     glance.apply(rig.eye, rig.look, rig.up);
   }
 
-  function update(kart, fx, dt, aspect, track = null, lookInput = null) {
+  /** viewDt: how far the interpolated kart's own clock moved this frame (the clock's renderTime delta). It
+   * differs from the wall dt when the fixed-step clock drops time (phones near or under 30 fps). Omitted = dt. */
+  function update(kart, fx, dt, aspect, track = null, lookInput = null, viewDt = dt) {
     const c = (k) => feel.get('camera.' + k);
+    // The position follow runs on the drawn kart's clock, so its prediction moves the eye by the distance the kart
+    // moved on screen. A wall-dt prediction over-ran on a dropped-time frame and under-ran on the next while
+    // the aim holds the kart's true centre, so the pitch flickered on every slope and the eye pumped (owner bounce report, Oct 26).
+    const pdt = Number.isFinite(viewDt) ? clamp(viewDt, 0, 0.25) : dt;
     const px = kart[S.posX], py = kart[S.posY], pz = kart[S.posZ];
     const F = rig.focus;
     flightGuide = phraseCameraGuide(track, kart[S.s], guidePoint);
@@ -314,13 +320,13 @@ export function createCamRig(feel) {
     // directly, keeping the existing eased error. Otherwise a fast pull overtakes the chase eye and
     // the exact anchor aim swings backward. Ordinary driving and hops retain their velocity law.
     const rescue = kart[S.respawnPhase] !== RESPAWN.NONE && kart[S.respawnPhase] !== RESPAWN.GRACE;
-    F[0] = damp(F[0] + (rescue ? px - lastPosition[0] : kart[S.velX] * dt), px, tcH, dt);
-    F[2] = damp(F[2] + (rescue ? pz - lastPosition[2] : kart[S.velZ] * dt), pz, tcH, dt);
+    F[0] = damp(F[0] + (rescue ? px - lastPosition[0] : kart[S.velX] * pdt), px, tcH, pdt);
+    F[2] = damp(F[2] + (rescue ? pz - lastPosition[2] : kart[S.velZ] * pdt), pz, tcH, pdt);
     // Grounded climbs need the same prediction as X/Z, or the vertical ease sinks the eye into the road.
     const predictY = kart[S.grounded] > 0.5 && kart[S.airborne] < 0.5 ? 1 : rig.loop;
     const cameraY = flightGuide ? py + (flightGuide.y - py) * flightGuide.weight * .88 : py;
-    F[1] = damp(F[1] + (rescue ? py - lastPosition[1] : kart[S.velY] * dt * predictY * (1 - (flightGuide?.weight || 0))),
-      cameraY, flightGuide ? .55 : tcV, dt);
+    F[1] = damp(F[1] + (rescue ? py - lastPosition[1] : kart[S.velY] * pdt * predictY * (1 - (flightGuide?.weight || 0))),
+      cameraY, flightGuide ? .55 : tcV, pdt);
     lastPosition[0] = px; lastPosition[1] = py; lastPosition[2] = pz;
     const gentle = !!feel.get('gentle.on');
     for (const [kind, mag, side] of kickEdges(rig.watch, kart, dt, KL, rig.useVel)) {
