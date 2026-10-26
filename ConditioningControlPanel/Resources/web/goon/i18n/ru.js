@@ -816,6 +816,7 @@ export default Object.freeze({
   gg_duel_gameName: "The Deep End",
   gg_duel_rule: "Та же игра, то же зерно. Лучший результат побеждает.",
   gg_duel_busy: "сначала доиграй",
+  gg_duel_refused: "у них пока нельзя, карточка остаётся",
   gg_duel_timeLeft: "{n}с",
   gg_duel_waiting: "ждём его доску",
   gg_duel_won: "победа +{bonus}",
