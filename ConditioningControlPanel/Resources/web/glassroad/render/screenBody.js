@@ -1,5 +1,6 @@
 import { BufferGeometry, Float32BufferAttribute, MeshStandardNodeMaterial } from 'three/webgpu';
 import { positionGeometry, uniform, float, abs, max, fract, smoothstep, fwidth } from 'three/tsl';
+import { objectUniform } from './objectUniform.js';
 
 const outline = (r, cut, z) => [[-r + cut, -r, z], [r - cut, -r, z], [r, -r + cut, z], [r, r - cut, z],
   [r - cut, r, z], [-r + cut, r, z], [-r, r - cut, z], [-r, -r + cut, z]];
@@ -41,10 +42,12 @@ export function screenBodyGeometry(rim = false) {
   return g;
 }
 
-export function screenBodyMaterial(rim = false, options = {}) {
+export function screenBodyMaterial(rim = false, { objectAlpha = false, ...options } = {}) {
   const material = new MeshStandardNodeMaterial({ color: rim ? '#b9bcc4' : '#414553', vertexColors: true,
     roughness: rim ? .29 : .53, metalness: rim ? .62 : .32,
     emissive: rim ? '#101017' : '#080a10', emissiveIntensity: .45, ...options });
+  // A pool of cabinets shares one material: its fade comes per drawn object from mesh.userData.fx.alpha.
+  if (objectAlpha) material.opacityNode = objectUniform('alpha', 1);
   if (!rim) {
     const p = positionGeometry;
     // Source-local coordinates keep the finish attached to orbiting and instanced cabinets.

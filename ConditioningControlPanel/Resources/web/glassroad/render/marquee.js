@@ -3,6 +3,7 @@ import { Group, Mesh, InstancedMesh, Object3D, BoxGeometry, PlaneGeometry, Torus
 import { acquireLoomAtlas } from './loomAtlas.js';
 import { wordTheme } from './wordTheme.js';
 import { screenBodyGeometry, screenBodyMaterial } from './screenBody.js';
+import { objectState } from './objectUniform.js';
 import { screenBodySize } from './screenBodyMath.js';
 
 const CAPACITY = 12, LINKS = 30, CW = 512, CH = 288;
@@ -117,11 +118,14 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
   const dummy = new Object3D(), from = new Vector3(), to = new Vector3(), delta = new Vector3(), up = new Vector3(0, 1, 0);
   let clock = 0, disposed = false, cursor = 0, copies = 0;
   const material = options => { const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, fog: false, ...options }); materials.push(m); return m; };
+  // One ink and one rim for every slot (a pair per slot built 50 identical shader graphs at load); the fade
+  // is read per drawn object from mesh.userData.fx.alpha. Metal, cloth and picture stay per slot.
+  const ink = screenBodyMaterial(false, { color: theme.ink, transparent: true, depthWrite: false, objectAlpha: true });
+  const rim = screenBodyMaterial(true, { color: theme.accent, transparent: true, depthWrite: false, objectAlpha: true });
+  materials.push(ink, rim);
   for (let i = 0; i < CAPACITY; i++) {
     const root = new Group(), hanger = new Group(), screen = new Group(); root.add(hanger, screen); object.add(root);
     root.name = 'marquee-slot-' + i; root.visible = false;
-    const ink = screenBodyMaterial(false, { color: theme.ink, transparent: true, depthWrite: false });
-    const rim = screenBodyMaterial(true, { color: theme.accent, transparent: true, depthWrite: false }); materials.push(ink, rim);
     const metal = material({ color: '#2a2230' }), cloth = material({ color: theme.accent });
     const surface = createMarqueeSurface(make(), atlas?.texture, i);
     const picture = material({ map: surface.texture, side: DoubleSide });
@@ -130,7 +134,8 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
     const chain = new InstancedMesh(link, metal, LINKS * 2), straps = new InstancedMesh(box, cloth, LINKS * 2);
     chain.frustumCulled = straps.frustumCulled = false; hanger.add(chain, straps);
     const anchors = [-1, 1].map(() => { const m = new Mesh(box, ink); hanger.add(m); return m; });
-    slots.push({ root, screen, backing, border, face, chain, straps, anchors, surface, mats: [ink, rim, metal, cloth, picture],
+    const fade = objectState([backing, border, ...anchors], { alpha: 0 });
+    slots.push({ root, screen, backing, border, face, chain, straps, anchors, surface, fade, mats: [metal, cloth, picture],
       id: null, row: null, side: 0, bornS: 0, soft: false, alpha: 0 });
   }
   scene.add(object);
@@ -155,6 +160,7 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
     // The transport owns OUT, including longer host-configured Gentle fades.
     s.alpha = unit(row.alpha) * ease((time - s.bornS) / rise) * (s.soft ? .55 : 1);
     for (const m of s.mats) m.opacity = s.alpha;
+    s.fade.alpha.value = s.alpha;
     for (let side = 0; side < 2; side++) {
       const sign = side ? 1 : -1;
       const anchorX = s.side ? p.x + sign * (p.w / 2 + 2) : sign * (f.w / 2 + 3);

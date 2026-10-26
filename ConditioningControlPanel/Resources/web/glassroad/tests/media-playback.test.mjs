@@ -186,9 +186,8 @@ function stagedRenderer(count = 8) {
 }
 function texturesOf(media) {
   const textures = new Set();
-  for (const o of media.object.children) if (o.name.startsWith('media-card-source')) {
-    o.material.colorNode.traverse(n => { if (n.isTextureNode && n.value) textures.add(n.value); });
-  }
+  // Every own screen shares one material; the picture it shows is the mesh's userData.mediaTex.
+  for (const o of media.object.children) if (o.name.startsWith('media-card-source') && o.userData.mediaTex) textures.add(o.userData.mediaTex);
   return [...textures];
 }
 test('WebGL shared video textures stay canvas-backed, bounded and budgeted across eight faces', async () => {

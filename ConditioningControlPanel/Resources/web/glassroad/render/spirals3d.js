@@ -36,7 +36,7 @@ import {
   budgetFor, burstCount, depthAlpha, burstEnvelope, makeRng, toHex, hexRgb,
 } from './spiralMath.js';
 import { GATE_LENS } from './atlas.js';
-import { createSpiralCloud } from './spiralCloud.js';
+import { createSpiralClouds } from './spiralCloud.js';
 import { createSpiralBeatClock } from './spiralBeat.js';
 import { screenRateMul } from './spiralMath.js';
 
@@ -235,11 +235,13 @@ export function createSpiralGates(scene, track, { layout = null, photosafe = nul
       const params = gateParams(g, LOOM, paletteFor(sec && sec.palette, spectrumMod, L));
       const gate = buildGate(g, frames[i], params, (i + 1) * 7919, L);
       gates.push(gate); group.add(gate.sprite);
-      gate.cloud = createSpiralCloud(track, frames[i].s, (i + 1) * 1717);
-      group.add(gate.cloud.object);
+      gate.cloudAt = { s: frames[i].s, seed: (i + 1) * 1717 };
       if (gate.aura) group.add(gate.aura.mesh);
     } catch (e) { console.warn('[glassroad/spirals] gate ' + g.id + ' failed: ' + (e && e.message)); }
   });
+  // every gate's road mist in one batch (a batch per gate built its shader graph once per gate)
+  const clouds = gates.length ? createSpiralClouds(track, gates.map(g => g.cloudAt)) : null;
+  if (clouds) group.add(clouds.object);
   const burst = buildBurst(L);
   group.add(burst.sprite);
   if (scene) scene.add(group);
@@ -269,7 +271,8 @@ export function createSpiralGates(scene, track, { layout = null, photosafe = nul
     cam[0] = camera.position.x; cam[1] = camera.position.y; cam[2] = camera.position.z;
     const ks = karts.map(xyz), me = ks[player] || null;
     const turn = L.turnMul * beat.update(dt, view, gentle);
-    for (const gate of gates) {
+    let mist = false;
+    for (const [j, gate] of gates.entries()) {
       const gf = gate.gf, dist = Math.hypot(cam[0] - gf.c[0], cam[1] - gf.c[1], cam[2] - gf.c[2]);
       // the player's crossing (always checked, it is cheap)
       if (me) {
@@ -285,8 +288,8 @@ export function createSpiralGates(scene, track, { layout = null, photosafe = nul
       gate.sprite.visible = n > 0 && frustum.intersectsSphere(gate.sphere);
       gate.sprite.count = Math.min(gate.n, n);
       if (gate.aura) gate.aura.mesh.visible = gate.sprite.visible;
-      gate.cloud.object.visible = dist < L.activeM;
-      if (gate.cloud.object.visible) gate.cloud.update(dt, { gentle });
+      clouds?.setActive(j, dist < L.activeM);
+      if (dist < L.activeM && !mist) { mist = true; clouds?.update(dt, { gentle }); }
       if (!gate.sprite.visible || dist > L.activeM) continue;
       // the Loom phase: one seamless loop per loopMs2, slowed by Gentle
       gate.phaseT = (gate.phaseT + dt * screenRateMul(gate.params, { gentle, speed: turn }, L)) % (gate.loop * 1000);
@@ -326,7 +329,8 @@ export function createSpiralGates(scene, track, { layout = null, photosafe = nul
   }
 
   function dispose() {
-    for (const g of gates) { g.material.dispose(); g.cloud.dispose(); if (g.aura) { g.aura.material.dispose(); g.aura.geo.dispose(); } }
+    for (const g of gates) { g.material.dispose(); if (g.aura) { g.aura.material.dispose(); g.aura.geo.dispose(); } }
+    clouds?.dispose();
     burst.material.dispose();
     if (group.parent) group.parent.remove(group);
   }

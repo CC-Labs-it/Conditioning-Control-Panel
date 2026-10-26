@@ -45,6 +45,7 @@ import { buildKart } from './dressing.js';
 import { createGlideCap, glideAsset } from './glideCap.js';
 import { createSwimPropeller } from './swimPropeller.js';
 import { coolantCaustics } from './mainframeMaterials.js';
+import { objectUniform, objectState } from './objectUniform.js';
 import { createKartMaterial, createKartSurface } from './materials/kart.js';
 import {
   createPose, stepPose, tagAlpha, rivalLook, rivalNumbers, createReact, reactNumbers, observeKart, reactTo, stepReact, reactionsFor, phraseReboundPose,
@@ -66,21 +67,28 @@ const RIM = [0, 0, 0], STAR = [0, 0, 0, 0];
 // polish 6 VIEW: every kart root carries the look scale (render/viewMath.js); sprites read at range keep their size
 const KS = KART_VIEW.scale, SPRITE_KEEP = KART_VIEW.keepSprites ? 1 / KS : 1;
 
-/** The stun ring: n sprites on the mark atlas's spark cell sharing one material (k fades it, rot turns them). */
-function starRing(tex, n, cell) {
-  const u = { k: uniform(0), rot: uniform(0) };
+// The stun ring, aura and head mark each share ONE material across every kart (a material per kart built
+// the same shader graph eight times at load): k, rot, colour and the rest are read per drawn object from
+// userData.fx (render/objectUniform.js), and written exactly like the old per-kart uniforms.
+/** The stun ring material on the mark atlas's spark cell (k fades it, rot turns the sprites). */
+function starMaterial(tex, cell) {
+  const u = { k: objectUniform('k', 0), rot: objectUniform('rot', 0) };
   const m = new SpriteNodeMaterial({ transparent: true, depthWrite: false });
   const c = texture(tex, vec2(uv().x.add(cell.col).div(4), float(1 - cell.row).add(uv().y).div(2)));
   m.colorNode = c.rgb; m.opacityNode = c.a.mul(u.k); m.rotationNode = u.rot;
+  return m;
+}
+/** One kart's stun ring: n sprites on the shared star material, one state for all of them. */
+function starRing(material, n) {
   const sprites = [];
-  for (let j = 0; j < n; j++) { const s = new Sprite(m); s.renderOrder = 5; s.visible = false; s.frustumCulled = false; sprites.push(s); }
-  return { sprites, u, material: m };
+  for (let j = 0; j < n; j++) { const s = new Sprite(material); s.renderOrder = 5; s.visible = false; s.frustumCulled = false; sprites.push(s); }
+  return { sprites, u: objectState(sprites, { k: 0, rot: 0 }), material };
 }
 
 /** A self item aura: a fresnel shell with bands climbing round it, additive; k fades it, t runs the bands. */
-function auraMesh(geo) {
-  const A = AURA_LOOK, u = { colour: uniform(new Color(1, 1, 1)), k: uniform(0), t: uniform(0),
-    bandHz: uniform(A.bandClimbHz), bandPower: uniform(3), bandColour: uniform(.55), bandAlpha: uniform(.6) };
+function auraMaterial() {
+  const A = AURA_LOOK, u = { colour: objectUniform('colour', new Color(1, 1, 1)), k: objectUniform('k', 0), t: objectUniform('t', 0),
+    bandHz: objectUniform('bandHz', A.bandClimbHz), bandPower: objectUniform('bandPower', 3), bandColour: objectUniform('bandColour', .55), bandAlpha: objectUniform('bandAlpha', .6) };
   const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending });
   const fres = pow(float(1).sub(abs(normalView.dot(positionViewDirection))), A.fresPow);
   const p = positionLocal;
@@ -88,9 +96,13 @@ function auraMesh(geo) {
   const ends = smoothstep(-1, -0.55, p.y).mul(smoothstep(1, 0.5, p.y));
   m.colorNode = u.colour.mul(fres.mul(0.8).add(band.mul(u.bandColour)));
   m.opacityNode = min(fres.add(band.mul(u.bandAlpha)), 1).mul(ends).mul(u.k);
-  const mesh = new Mesh(geo, m);
+  return m;
+}
+function auraMesh(geo, material) {
+  const A = AURA_LOOK, mesh = new Mesh(geo, material);
   mesh.scale.set(A.size[0], A.size[1], A.size[2]); mesh.position.y = A.upM; mesh.renderOrder = 2; mesh.visible = false;
-  return { mesh, u, material: m, emitAcc: 0, style: {} };
+  const u = objectState(mesh, { colour: new Color(1, 1, 1), k: 0, t: 0, bandHz: A.bandClimbHz, bandPower: 3, bandColour: .55, bandAlpha: .6 });
+  return { mesh, u, material, emitAcc: 0, style: {} };
 }
 
 /** Three solid chevrons point forward along -Z. All twelve triangles lie below the saucer. */
@@ -171,18 +183,21 @@ function tagSprite(name, hex) {
   return s;
 }
 
-/** A head mark sprite on the shared mark atlas: cell picks the mark (row 0 on top), k fades and pops it, rot turns it. */
-function markSprite(tex) {
-  const u = { cell: uniform(new Vector2(0, 0)), k: uniform(0), rot: uniform(0) };
+/** The head mark material on the shared mark atlas: cell picks the mark (row 0 on top), k fades and pops it, rot turns it. */
+function markMaterial(tex) {
+  const u = { cell: objectUniform('cell', new Vector2(0, 0)), k: objectUniform('k', 0), rot: objectUniform('rot', 0) };
   const m = new SpriteNodeMaterial({ transparent: true, depthWrite: false });
   // canvas texture with flipY: v = 1 is the canvas top, so row r spans v (1 - r - 1 .. 1 - r) / 2
   const c = texture(tex, vec2(u.cell.x.add(uv().x).div(4), u.cell.y.oneMinus().add(uv().y).div(2)));
   m.colorNode = c.rgb;
   m.opacityNode = c.a.mul(u.k);
   m.rotationNode = u.rot;
-  const s = new Sprite(m);
+  return m;
+}
+function markSprite(material) {
+  const s = new Sprite(material);
   s.renderOrder = 5; s.visible = false; s.frustumCulled = false;
-  return { sprite: s, u, id: null };
+  return { sprite: s, u: objectState(s, { cell: new Vector2(0, 0), k: 0, rot: 0 }), id: null };
 }
 
 /** The accessory scene for id, parented to the kart's head_attach at identity (ART.md "Attachment binding"). */
@@ -253,10 +268,12 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
   const auraGeo = new SphereGeometry(1, 32, 20);
   const surgeGeo = surgeGeometry();
   // one head mark atlas for every kart (none without a document, e.g. under node)
-  let markTex = null;
+  let markTex = null, markMat = null, starMat = null;
   if (typeof document !== 'undefined') {
     markTex = new CanvasTexture(createMarkAtlas(document)); markTex.colorSpace = SRGBColorSpace;
+    markMat = markMaterial(markTex); starMat = starMaterial(markTex, markCell('spark'));
   }
+  const auraMat = auraMaterial();
   for (let i = 0; i < count; i++) {
     const look = rivalLook(i, KART_TABLE, LOOK);
     const root = new Group(), body = new Group();
@@ -292,11 +309,11 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     const caustics={time:uniform(0),amount:uniform(0)};
     for(const material of mats) material.colorNode=material.colorNode.add(
       coolantCaustics(positionWorld.xz,caustics.time).mul(vec3(.08,.28,.36)).mul(max(normalWorld.y,.18)).mul(caustics.amount));
-    const mark = markTex ? markSprite(markTex) : null;
+    const mark = markMat ? markSprite(markMat) : null;
     if (mark) root.add(mark.sprite);
-    const stars = markTex ? starRing(markTex, RR.stunStars, markCell('spark')) : null;
+    const stars = starMat ? starRing(starMat, RR.stunStars) : null;
     if (stars) for (const sp of stars.sprites) root.add(sp);
-    const aura = auraMesh(auraGeo);
+    const aura = auraMesh(auraGeo, auraMat);
     root.add(aura.mesh);
     const surgeMaterial = new MeshBasicNodeMaterial({ color: '#d7a64f', transparent: true, opacity: 0, depthWrite: false, side: DoubleSide });
     const surgeMesh = new Mesh(surgeGeo, surgeMaterial); surgeMesh.name = 'surge-chevrons'; surgeMesh.visible = false; root.add(surgeMesh);
@@ -552,9 +569,6 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
       if (k.tag) { k.tag.material.map.dispose(); k.tag.material.dispose(); }
       for (const m of k.mats) m.dispose();
       if (k.face) k.face.dispose();
-      if (k.mark) k.mark.sprite.material.dispose();
-      if (k.stars) k.stars.material.dispose();
-      k.aura.material.dispose();
       k.surge.material.dispose();
       if (k.accessory) k.accessory.traverse((o) => { if (o.isMesh && o.material) o.material.dispose(); });
       if (k.life) k.life.dispose();
@@ -565,6 +579,9 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
       if (k.rig) { k.rig.mixer.stopAllAction(); k.rig.mixer.uncacheRoot(k.model); }
     }
     if (markTex) markTex.dispose();
+    if (markMat) markMat.dispose();
+    if (starMat) starMat.dispose();
+    auraMat.dispose();
     auraGeo.dispose();
     surgeGeo.dispose();
     if (!kartGltf) greyGeo?.dispose();

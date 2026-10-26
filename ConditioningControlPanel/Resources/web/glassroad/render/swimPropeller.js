@@ -28,6 +28,17 @@ function metal(hex) {
   material.colorNode=vec3(c.r,c.g,c.b).mul(light.mul(.64).add(.42)).add(rim.mul(.18));
   return material;
 }
+// One material per finish for every kart's drive (a set per kart built 24 identical shader graphs at
+// load), released by the last propeller using it so a lone propeller still disposes its materials.
+const METALS=['#273a48','#9caeb9','#38c9ce'], shared=new Map();
+function acquireMetal(hex) {
+  let entry=shared.get(hex);
+  if(!entry){entry={material:metal(hex),refs:0};shared.set(hex,entry);}
+  entry.refs++;return entry.material;
+}
+function releaseMetal(material) {
+  for(const [hex,entry] of shared) if(entry.material===material&&--entry.refs<=0){shared.delete(hex);material.dispose();}
+}
 
 function bladeGeometry() {
   const s=new Shape();s.moveTo(.06,-.045);s.lineTo(.16,-.07);
@@ -46,7 +57,7 @@ export function createSwimPropeller(body, source=null) {
   const object=new Group(), carriage=new Group(), rotor=new Group(), hinges=[];
   object.name='swim-propeller';carriage.name='swim-drive-carriage';rotor.name='swim-drive-rotor';
   body.add(object);object.add(carriage);carriage.add(rotor);
-  const materials=[metal('#273a48'),metal('#9caeb9'),metal('#38c9ce')], geometries=[];
+  const materials=METALS.map(acquireMetal), geometries=[];
   const own=g=>(geometries.push(g),g);
   const cylinder=own(new CylinderGeometry(1,1,1,12)), ring=own(new TorusGeometry(.128,.016,5,16));
   const blade=own(bladeGeometry());
@@ -103,6 +114,6 @@ export function createSwimPropeller(body, source=null) {
   fit(source);apply();
   return {object,carriage,rotor,hinges,motion,fit,
     update(underwater,dt,options) {stepPropellerMotion(motion,underwater,dt,options);apply();}, reset,
-    dispose() {object.removeFromParent();for(const g of geometries)g.dispose();for(const m of materials)m.dispose();},
+    dispose() {object.removeFromParent();for(const g of geometries)g.dispose();for(const m of materials)releaseMetal(m);},
   };
 }
