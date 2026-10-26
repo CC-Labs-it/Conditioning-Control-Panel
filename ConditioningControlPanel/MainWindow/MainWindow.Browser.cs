@@ -2755,6 +2755,8 @@ namespace ConditioningControlPanel
                     Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1A, 0x1A, 0x2E)),
                     Content = _browser.WebView
                 };
+                // Maximize / fullscreen must not ask the render thread for video memory (#1504).
+                Services.Browser.BrowserHostSurface.UseSoftwareTarget(_browserPopoutWindow);
 
                 // Handle window CLOSING (before close) - detach WebView to prevent parent/child errors
                 _browserPopoutWindow.Closing += (s, args) =>
@@ -3025,6 +3027,8 @@ namespace ConditioningControlPanel
                         Height = 300,
                         Content = _browser.WebView
                     };
+                    // A monitor-sized hardware target here killed the render thread (#1504/#1510/#1513).
+                    Services.Browser.BrowserHostSurface.UseSoftwareTarget(_browserPopoutWindow);
 
                     _browserPopoutWindow.Closing += (s, args) =>
                     {

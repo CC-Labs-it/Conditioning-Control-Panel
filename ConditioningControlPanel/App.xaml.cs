@@ -1876,8 +1876,14 @@ namespace ConditioningControlPanel
             };
             TaskScheduler.UnobservedTaskException += (s, args) =>
             {
-                LogCrashDetails("TASK", args.Exception);
                 args.SetObserved();
+                // A late close on a dead Intiface socket is not a crash (ccp-bugs #1510/#1513).
+                if (Services.Diagnostics.BenignTaskFault.IsLateWebSocketClose(args.Exception))
+                {
+                    try { Logger?.Debug("Ignored a WebSocket close on an already-aborted socket: {Msg}", args.Exception?.InnerException?.Message); } catch { }
+                    return;
+                }
+                LogCrashDetails("TASK", args.Exception);
             };
 
             // Clean up old update packages in background (don't block startup)
