@@ -27,12 +27,27 @@ export function feedRows(msg) {
   return out;
 }
 
+/** The host catalog a feed carries: [{ id, label }] with plain ids and short labels, or null when absent. */
+export function feedCatalog(msg) {
+  if (!Array.isArray(msg?.catalog)) return null;
+  const out = [];
+  for (const c of msg.catalog) {
+    if (out.length >= 40) break;
+    if (typeof c?.id === 'string' && /^[a-z0-9_-]{1,24}$/.test(c.id) && typeof c.label === 'string' && c.label.length <= 24
+      && !out.some((x) => x.id === c.id)) out.push({ id: c.id, label: c.label });
+  }
+  return out.length ? out : null;
+}
+
 export function createScrolllerFeed({ bridge, makeImage = () => new Image() } = {}) {
-  let pictures = [], consent = null, disposed = false;
+  let pictures = [], consent = null, disposed = false, catalog = null;
   const listeners = new Set();
+  const notify = () => { for (const fn of listeners) { try { fn(consent); } catch (e) { console.warn('[scrolller]', e); } } };
   function drop(list) { for (const img of list) { try { img.removeAttribute('src'); } catch { /* gone */ } } }
   function apply(msg) {
     if (disposed) return;
+    const next = feedCatalog(msg);
+    if (next && JSON.stringify(next) !== JSON.stringify(catalog)) { catalog = next; notify(); }
     const rows = feedRows(msg), old = pictures;
     pictures = rows.map(({ url }) => {
       const img = makeImage();
@@ -46,7 +61,7 @@ export function createScrolllerFeed({ bridge, makeImage = () => new Image() } = 
     if (disposed || m?.key !== 'media.remoteConsent') return;
     consent = m.value === true;
     if (!consent) { drop(pictures); pictures = []; }
-    for (const fn of listeners) { try { fn(consent); } catch (e) { console.warn('[scrolller]', e); } }
+    notify();
   }
   const offFeed = bridge?.on('scrolller-feed', apply);
   const offEcho = bridge?.on('setting', echo);
@@ -60,7 +75,11 @@ export function createScrolllerFeed({ bridge, makeImage = () => new Image() } = 
       const ready = pictures.filter(loaded);
       return ready.length ? ready[Math.abs(Math.trunc(seed)) % ready.length] : null;
     },
+    /** The niches the host can serve ([{ id, label }]), from its last feed; null until one lands. */
+    get catalog() { return catalog; },
     setConsent(on) { bridge?.send({ type: 'set-setting', key: 'media.remoteConsent', value: on === true }); },
+    /** This course's niches (host/scrolllerNiches.js): the host draws the next pictures from them. */
+    setNiches(track, niches) { bridge?.send({ type: 'scrolller-niches', track: String(track || ''), niches: [...niches] }); },
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     dispose() { disposed = true; offFeed?.(); offEcho?.(); drop(pictures); pictures = []; listeners.clear(); },
   };

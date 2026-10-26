@@ -91,3 +91,16 @@ test('spill curtain is folded in depth with separated layers rather than one fla
   assert.ok(fall.material.positionNode, 'cascade motion displaces geometry, not only its texture');
   assert.ok(p.count < 5000, 'a spill remains a small shared mesh');
 });
+
+test('a course with no raised water surface skips the reflection probe warm-up (nothing samples it)', async t => {
+  const dry = track(); dry.frameAt = (s) => ({ p: [0, 5, -s], b: [1, 0, 0], n: [0, 1, 0], t: [0, 0, -1], w: 12, surface: 'glass', flags: [] });
+  const water = buildWaterVolume(dry, pal); t.after(() => water.dispose());
+  assert.equal(water.object.getObjectByName('water-surface-raised'), undefined);
+  let warmed = false; water.reflections.warm = async () => { warmed = true; return true; };
+  assert.equal(await water.warmReflections({ playerS: 0 }), false); assert.equal(warmed, false);
+  assert.equal(water.uniforms.reflectionReady.value, 0);
+  const wet = buildWaterVolume(track(), pal); t.after(() => wet.dispose());
+  assert.ok(wet.object.getObjectByName('water-surface-raised'));
+  wet.reflections.warm = async () => { warmed = true; return true; };
+  assert.equal(await wet.warmReflections({ playerS: 0 }), true); assert.equal(warmed, true);
+});

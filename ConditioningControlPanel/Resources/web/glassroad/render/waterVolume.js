@@ -190,7 +190,10 @@ export function buildWaterVolume(track, pal, art = null, { quality = Q.name, sce
   object.add(transitions.object);
   let uploadedVersion = field.stats.version;
   return { object, field, heightTexture, reflections, foam: froth, transitions, uniforms: u, runs, spills, stats: { runs: runs.length, spills: spills.length, transitions: transitions.ends.length, vertices: (top.p.length + wall.p.length + fall.p.length) / 3, surfaceVertices: top.p.length / 3 },
-    async warmReflections(options) { const ready = await reflections.warm(options); u.reflectionReady.value = ready ? 1 : 0; return ready; },
+    // Only the raised surface samples the probe. A course without it (GOONWORKS) never reads the cube, and its
+    // warm-up compiled every scene material again for the cube pass: ~9 s of the phone load at 4x CPU throttle.
+    async warmReflections(options) { if (!object.getObjectByName('water-surface-raised')) { u.reflectionReady.value = 0; return false; }
+      const ready = await reflections.warm(options); u.reflectionReady.value = ready ? 1 : 0; return ready; },
     update(dt, { gentle = false, paused = false, scroll = gentle ? 0.5 : 1, playerPos = null, playerS = 0 } = {}) {
       if (paused) return;
       u.t.value += Math.max(0, dt) * scroll; u.motion.value = gentle ? 0.5 : 1;
