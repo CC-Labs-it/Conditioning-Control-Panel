@@ -82,6 +82,8 @@
 
 .g-course-leaving .g-track-picker{animation:g-course-out .35s ease both}@keyframes g-course-out{to{opacity:0}}
 
+/* Controller focus must remain visible after a mouse click. */
+#race-garage .g-menu-row:focus{outline:3px solid var(--g-rose);outline-offset:0;border-color:var(--g-rose)}
 /* Record (logbook lane): the same paper and ink dialog as the track picker, four tabs and a wall of stamps. */
 .g-record{width:min(760px,calc(100vw - 32px));max-height:calc(100dvh - 40px);box-sizing:border-box;display:none;flex-direction:column;border:3px solid #10101b;border-radius:20px;background:#143c49;color:#fff4df;padding:22px 24px;box-shadow:0 8px #10101b;pointer-events:auto;animation:g-card-arrive .35s ease both}
 .g-record[open]{display:flex}.g-record::backdrop{background:#091925bd;animation:g-soft-arrive .3s ease both}

@@ -8,6 +8,7 @@ import { courseHash } from '../net/courseHash.js';
 test('bridge centre and retreating edges follow rendered slabs through both transitions on every course', async () => {
   const hooks = registerHooks({ resolve(specifier, context, next) {
     if (specifier === 'three/webgpu') return { url: new URL('../vendor/three/build/three.webgpu.min.js', import.meta.url).href, shortCircuit: true };
+    if (specifier === 'three/tsl') return { url: new URL('../vendor/three/build/three.tsl.min.js', import.meta.url).href, shortCircuit: true };
     return next(specifier, context);
   } });
   try {

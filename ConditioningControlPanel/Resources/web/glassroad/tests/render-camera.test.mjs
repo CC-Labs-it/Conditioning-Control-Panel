@@ -75,11 +75,11 @@ test('render: drift right biases the camera right, more on the outside line', ()
   close(outside, -f.get('camera.driftBiasOutDeg') * Math.PI / 180, 1e-3);
 });
 
-test('render: fov kick adds through the law and a big jump snaps the rig', () => {
+test('render: effect zoom cannot move the view and a big displacement snaps the rig', () => {
   const f = feel(), rig = createCamRig(f), k = kartAt(0);
   rig.snap(k, 16 / 9);
   rig.update(k, { ...fx0(), fovKick: 8 }, 1 / 60, 16 / 9);
-  close(rig.vFov, f.get('fov.baseVDeg') + 8);
+  close(rig.vFov, f.get('fov.baseVDeg'));
   k[S.posX] = 500;
   rig.update(k, fx0(), 1 / 60, 16 / 9);
   close(rig.focus[0], 500);

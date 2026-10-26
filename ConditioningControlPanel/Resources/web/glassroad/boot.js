@@ -1239,6 +1239,7 @@ async function boot(course, options, lifetime, isCurrent) {
     const fs = fx.state;
     const pst = P.st;
     audio.update(pst[S.speedPct], {                               // 5. audio
+      active: inRace, menu: state === 'menu',
       boosting: pst[S.boostKind] > 0, drifting: pst[S.driftDir] !== 0, driftTier: pst[S.driftStage],
       airborne: pst[S.airborne] > 0, onRoad: pst[S.grounded] > 0, edge: fs.edgeGlow > 0, paused: frozen, duck: fs.duck,
       submerged: inRace ? immersion(pst[S.s], cam.camera.position.y) : 0,

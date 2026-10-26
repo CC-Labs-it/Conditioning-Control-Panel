@@ -1,15 +1,17 @@
-import { Group, Mesh, InstancedMesh, Color, BoxGeometry, MeshStandardNodeMaterial, MeshBasicNodeMaterial, Matrix4, Vector3 } from 'three/webgpu';
+import { Group, Mesh, InstancedMesh, Color, BoxGeometry, MeshBasicNodeMaterial, Matrix4, Vector3 } from 'three/webgpu';
 import { movingPoseAt, bridgePose, bridgeSlabX } from '../track/movingHazards.js';
+import { movingHazardColours, movingHazardFinish } from './movingHazardFinish.js';
 
 export function createMovingHazardView(scene, track, pal) {
   const group = new Group(); group.name = 'moving-piston-traps'; scene.add(group);
+  const colours = movingHazardColours(track.id, pal);
   const box = new BoxGeometry(1, 1, 1), materials = [
-    new MeshStandardNodeMaterial({ color: pal.primaryHex(), roughness: .38, metalness: .65 }),
-    new MeshStandardNodeMaterial({ color: '#30343b', roughness: .5, metalness: .7 }),
-    new MeshStandardNodeMaterial({ color: '#c8d1d6', roughness: .2, metalness: .9 }),
-    new MeshBasicNodeMaterial({ color: pal.accentHex() }),
+    movingHazardFinish(colours.paint),
+    movingHazardFinish(colours.dark, 'rubber'),
+    movingHazardFinish(colours.metal, 'metal'),
+    new MeshBasicNodeMaterial({ color: colours.accent }),
     new MeshBasicNodeMaterial({ color: '#ffffff' }),
-    new MeshBasicNodeMaterial({ color: '#e6b464' }),
+    movingHazardFinish(colours.pale),
   ];
   const part = (parent, name, scale, pos, material = 0) => {
     const m = new Mesh(box, materials[material]); m.name = name; m.scale.set(...scale); m.position.set(...pos); parent.add(m); return m;
@@ -23,9 +25,21 @@ export function createMovingHazardView(scene, track, pal) {
     const root = frameGroup(row, row.id), anchor = row.side * (row.roadWidth / 2 + 1);
     part(root, 'piston-housing', [2.5, 4, row.len + 1], [anchor, 1.8, 0], 1);
     const head = new Group(); root.add(head);
-    part(head, row.kind === 'slider' ? 'sliding-block' : 'crusher-head', [row.w, 3.2, row.len], [0, 1.6, 0]);
-    for (const z of [-1, 1]) part(head, 'face-rim', [row.w + .14, .28, .18], [0, 2.9, z * row.len / 2], 2);
-    for (const x of [-1, 0, 1]) part(head, 'warning-inlay', [.35, 2.1, .06], [x * row.w * .27, 1.6, -row.len / 2 - .04], 3);
+    const slider = row.kind === 'slider';
+    part(head, slider ? 'sliding-block' : 'crusher-head', [row.w, 3.2, row.len], [0, 1.6, 0], slider ? 5 : 0);
+    // Recesses, seals and fasteners stay within the physical head footprint.
+    for (const z of [-1, 1]) {
+      for (const y of [.24, 2.96]) part(head, 'face-rim', [row.w - .16, .16, .12], [0, y, z * (row.len / 2 - .04)], 2);
+      for (const x of [-1, 1]) {
+        part(head, 'rubber-face-seal', [.14, 2.52, .10], [x * (row.w / 2 - .16), 1.6, z * (row.len / 2 - .035)], 1);
+        for (const y of [.45, 2.75]) part(head, 'recessed-fastener', [.18, .18, .06], [x * (row.w / 2 - .39), y, z * (row.len / 2 - .025)], 2);
+      }
+      for (const x of [-1, 0, 1]) {
+        const stripe = part(head, 'warning-inlay', [.32, 2.1, .06], [x * row.w * .27, 1.6, z * (row.len / 2 - .025)], 3);
+        stripe.rotation.z = row.side * -.27;
+      }
+    }
+    for (let i = 0; i < 4; i++) part(root, 'housing-vent', [2.1, .12, .10], [anchor, .9 + i * .45, -row.len / 2 - .51], 2);
     const rod = part(root, 'connected-piston-shaft', [1, .65, .65], [anchor, 1.6, 0], 2);
     const light = part(root, 'approach-warning', [row.w, .08, 1.3], [row.x - row.side * row.travelM, .065, -row.len / 2 - 5], 3);
     return { row, anchor, head, rod, light };
@@ -81,6 +95,6 @@ export function createMovingHazardView(scene, track, pal) {
     }
   }
   update(0);
-  return { group, update, inspect: () => ({ traps: traps.length, slabs: slabs.length, draws: batches.length }),
+  return { group, update, inspect: () => ({ traps: traps.length, slabs: slabs.length, draws: batches.length, colours }),
     dispose() { group.removeFromParent(); for (const { batch } of batches) batch.dispose(); box.dispose(); for (const material of materials) material.dispose(); } };
 }

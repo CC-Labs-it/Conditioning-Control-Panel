@@ -5,7 +5,8 @@ import { goonworksSetpieces } from '../goonworks-setpieces.js';
 export function movingStations(track) {
   if (track.id !== 'goonworks') return { traps: [], bridge: null };
   const layout = getGoonworksLayout(track), old = goonworksSetpieces(track, layout);
-  const anchors = [['rabbit-s-bend', .45], ['mill-approach', .55], ['quiz-approach', .55],
+  // The rabbit bank rises above a parked head. Teach this stroke on the flat gallery entry.
+  const anchors = [['grotto-gallery', .02], ['mill-approach', .55], ['quiz-approach', .55],
     ['ribbon-entry', .45], ['pinball-table', .25], ['finish-crossing', .5]];
   const traps = [];
   for (const [i, [name, u]] of anchors.entries()) {

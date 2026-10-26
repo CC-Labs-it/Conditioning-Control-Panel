@@ -25,6 +25,7 @@ import { AUDIO_CUES, makeSynth } from './cues.js';
 import { B1_CUES, UI_CUES } from './cues-b1.js';
 import { createRivals } from './rivals.js';
 import { createMusic } from './music.js';
+import { createMenuMelody } from './menuMelody.js';
 import { mixGet, eventLevel } from './mix.js';
 import { createSamples } from './samples.js';
 import { sfxPlan, resolvePlan, jitterRate } from './sfxmap.js';
@@ -42,7 +43,7 @@ const LOCAL = new Set(['effect-start', 'effect-end', 'race-result']);
  *   setPaused(on: boolean): void, setVolumes(v: {master?: number, music?: number, sfx?: number}): void,
  *   readonly music: object|null, dispose(): void}} */
 export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCtx = null, fetchFn = globalThis.fetch, musicFetchFn = fetchFn, laps = 3, sfxBase } = {}) {
-  let ctx = null, engine = null, syn = null, rivals = null, music = null, paused = false, dead = false;
+  let ctx = null, engine = null, syn = null, rivals = null, music = null, menuMelody = null, paused = false, dead = false;
   let samples = null, samplesReady = Promise.resolve(0), plays = 0, lapCount = laps;
   const popSt = { rung: -1, t: -1e9 };
   let master = null, sfx = null, bed = null, musicBus = null, musicDuck = null, underwater = null, waterTravel = null;
@@ -82,6 +83,7 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
     syn = makeSynth(ctx, sfx, feel, engine);
     syn.duck = duck;
     try { music = createMusic(ctx, musicBus, feel, { fetchFn: musicFetchFn }); } catch (e) { music = null; }
+    menuMelody = createMenuMelody(ctx, musicBus);
     samples = createSamples(ctx, sfx, { fetchFn, ...(sfxBase ? { base: sfxBase } : {}) });
     samplesReady = samples.load().then((n) => { engine?.useSamples(samples); rivals?.useSamples(samples); return n; }).catch(() => 0);
     return ctx;
@@ -157,6 +159,11 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
     /** rivals = racers.nearby(ai.audibleKarts, 80): [{ i, distM, pan, speedPct, boosting }] */
     update(speedPct, flags = {}, list = []) {
       if (!engine || paused) return;
+      menuMelody?.update(!!flags.menu && !flags.paused);
+      if (flags.active === false) {
+        engine.silence(); rivals?.silence(); near.clear();
+        underwater?.update(0); waterTravel?.reset(); return;
+      }
       underwater?.update(flags.submerged);
       waterTravel?.update(speedPct, flags);
       engine.update(speedPct, flags);
@@ -210,6 +217,7 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
       else ctx.resume?.().catch?.(() => {});
     },
     get music() { return music; },
+    get menuMusic() { return menuMelody?.inspect || { playing: false, cached: false, voices: 0 }; },
     get underwater() { return underwater?.inspect || Object.freeze({ available: false, submerged: 0 }); },
     get waterTravel() { return waterTravel?.inspect || Object.freeze({ available: false, wet: false, depth: 0 }); },
     /** Laps in this race (a number or a getter), so the last lap gets its own sound. */
@@ -224,13 +232,14 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
       offs.forEach((off) => off());
       for (const ev of GESTURES) win?.removeEventListener?.(ev, unlock);
       music?.dispose();
+      menuMelody?.dispose();
       rivals?.dispose();
       engine?.dispose();
       waterTravel?.dispose();
       underwater?.dispose();
       master?.disconnect?.();
       if (ctx) { try { ctx.close(); } catch (e) { /* gone */ } }
-      ctx = engine = syn = rivals = music = samples = underwater = waterTravel = null;
+      ctx = engine = syn = rivals = music = menuMelody = samples = underwater = waterTravel = null;
     },
     get state() { return ctx ? ctx.state : (dead ? 'unavailable' : 'not created'); },
   };

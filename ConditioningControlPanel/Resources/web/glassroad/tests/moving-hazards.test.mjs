@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { loadTrack } from '../track/load.js';
-import { bridgePose, movingPose, movingPoseAt } from '../track/movingHazards.js';
+import { bridgePose, movingPose, movingPoseAt, MOVING_REVISION } from '../track/movingHazards.js';
 import { setMachineryBeat, hazardBeatAt } from '../track/machineryBeat.js';
-import { createMovingHazards } from '../sim/movingHazards.js';
+import { createMovingHazards, movingOverlap } from '../sim/movingHazards.js';
 import { S, RESPAWN } from '../sim/state.js';
 import { fakeTrack, place, recorder, makeFeel } from './sim-fake.mjs';
 import { courseHash } from '../net/courseHash.js';
@@ -41,6 +41,21 @@ test('bridge timer ignores tempo, has a warned exit and extends continuously acr
     assert.ok(!bridgePose(b, 10, index, 15).supported);
     assert.ok(bridgePose(b, 6.1, index, 15).warning);
     assert.ok(Math.abs(bridgePose(b, 14 - .000001, index, 15).extension - bridgePose(b, 14, index, 15).extension) < .00001);
+  }
+});
+
+test('long horizontal heads extend their real contact while retaining permanent bypasses', () => {
+  assert.equal(MOVING_REVISION, 3);
+  for (const id of courses) {
+    const track = loadTrack(jsonFor(id), { moving: true });
+    for (const row of track.moving.traps) {
+      assert.ok(row.w >= 8 && row.len >= 5.6, row.id + ' has the larger physical footprint');
+      const pose = movingPoseAt(track, row, .5);
+      assert.ok(movingOverlap(row, { ...pose, active: true }, { x: pose.x + row.w / 2 + .69, z: 0, h: 1 }));
+      assert.equal(movingOverlap(row, { ...pose, active: true }, { x: pose.x + row.w / 2 + .71, z: 0, h: 1 }), false);
+      assert.ok(movingOverlap(row, { ...pose, active: true }, { x: pose.x, z: row.len / 2 + .69, h: 1 }));
+      assert.equal(movingOverlap(row, { ...pose, active: true }, { x: pose.x, z: row.len / 2 + .71, h: 1 }), false);
+    }
   }
 });
 
@@ -107,6 +122,7 @@ test('online admission fingerprint includes timed geometry and machinery revisio
 test('visible heads, connected rods and bridge slabs share physical poses and dispose their resources', async () => {
   const hooks = registerHooks({ resolve(specifier, context, next) {
     if (specifier === 'three/webgpu') return { url: new URL('../vendor/three/build/three.webgpu.min.js', import.meta.url).href, shortCircuit: true };
+    if (specifier === 'three/tsl') return { url: new URL('../vendor/three/build/three.tsl.min.js', import.meta.url).href, shortCircuit: true };
     return next(specifier, context);
   } });
   try {
@@ -114,11 +130,19 @@ test('visible heads, connected rods and bridge slabs share physical poses and di
     for (const id of courses) {
       const track = loadTrack(jsonFor(id), { moving: true }), scene = new Scene(), view = createMovingHazardView(scene, track,
         { primaryHex: () => '#8f969e', accentHex: () => '#e6b464' });
+      assert.ok(view.inspect().draws <= 6, 'all detailed pieces share bounded instanced draws');
+      if (id === 'threshold') assert.deepEqual(view.inspect().colours, {
+        paint: '#ff91cc', pale: '#fff5fc', accent: '#e60087', metal: '#bfc2d3', dark: '#38213b',
+      });
       for (const t of [.5, 3, 9, 13.8]) {
         view.update(t);
         for (const row of track.moving.traps) {
-          const root = view.group.getObjectByName(row.id), head = root.getObjectByName(row.kind === 'slider' ? 'sliding-block' : 'crusher-head').parent;
+          const root = view.group.getObjectByName(row.id), face = root.getObjectByName(row.kind === 'slider' ? 'sliding-block' : 'crusher-head'), head = face.parent;
           assert.equal(head.position.x, movingPoseAt(track, row, t).x);
+          assert.equal(face.scale.x, row.w); assert.equal(face.scale.z, row.len);
+          assert.equal(face.material.color.getHexString(), view.inspect().colours[row.kind === 'slider' ? 'pale' : 'paint'].slice(1));
+          assert.ok(face.material.colorNode && face.material.roughnessNode, 'machined/enamel finish is visible shader data');
+          assert.ok(root.getObjectByName('recessed-fastener') && root.getObjectByName('housing-vent'));
           assert.ok(root.getObjectByName('connected-piston-shaft').scale.x > 0);
         }
         const bridge = track.moving.bridge;
