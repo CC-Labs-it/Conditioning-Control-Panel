@@ -32,7 +32,9 @@ import { createGamepad } from './input/gamepad.js';
 import { createPointerLook } from './input/pointerLook.js';
 import { createTouch } from './input/touch.js';
 import { glideActive, resetGlide } from './sim/glide.js';
-import { S, RESPAWN } from './sim/state.js';
+import { S, RESPAWN, createState } from './sim/state.js';
+import { resolveMode } from './meta/mode.js';
+import { createGhostRecorder, loadGhost, saveBestGhost, sample as ghostSample, toState as ghostToState, lapGap, formatGap } from './meta/ghost.js';
 import { createImmersion } from './track/immersion.js';
 import { createWaterContact } from './audio/water-travel.js';
 import { createRace } from './sim/race.js';
@@ -475,12 +477,42 @@ async function boot(course, options, lifetime, isCurrent) {
   // queue tapped so local cp / lap / finish / drop and pulses go up); rebuilt by buildRun on every switch
   let race, racers, ai, contact, standings, items, scan, industry, moving, perfume, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
   let runAssist = false;                          // the Options assist switch (applyOptions), carried into every rebuilt run
+  // Time Trial (CONTRACT-LOGBOOK section 7): runMode is the built run's mode (META reads it); pickedMode is the
+  // url / garage pick (hud/trackPicker.js sends glassroad-mode), applied by startRace. Online is always a race.
+  let runMode = 'race', pickedMode = resolveMode({ search: location.search });
+  lifetime.listen(document, 'glassroad-mode', (e) => { if (e.detail === 'race' || e.detail === 'trial') pickedMode = e.detail; });
+  // the best ghost rides spare kart slot 1 with the ghost wash (fxv.ghost), no contact, no shadow, no physics
+  let ghost = null, ghostRec = null, ghostT = 0, ghostLapN = 0, ghostLapS = 0;
+  const ghostView = { st: createState(), meta: { i: 1, id: 'ghost', name: 'Ghost', isBot: false, tint: 0, slot: 1 },
+    fxv: { spinRad: 0, shield: null, echo: 0, effect: null, ghost: true, slip: 0, place: 1 } };
+  const ghostPose = {}, ghostKarts = [null, ghostView];
+  const NO_ITEM_VIEW = { boxes: [], bubbles: [], held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [], tethers: [], guards: [] };
+  const noItems = () => ({ update() {}, view: () => NO_ITEM_VIEW, reset() {}, nearOpenEdge: () => false, trapRows: () => [], lobTarget: () => -1 });
+  function ghostSlotShadow(off) {
+    world.karts?.[1]?.traverse((o) => {
+      if (!o.isMesh) return;
+      if (off && !('ghostCast' in o.userData)) { o.userData.ghostCast = o.castShadow; o.userData.noCast = true; o.castShadow = false; }
+      else if (!off && 'ghostCast' in o.userData) { o.castShadow = o.userData.ghostCast; o.userData.noCast = false; delete o.userData.ghostCast; }
+    });
+  }
+  /** Before each solo run: rebuild when the picked mode changed, load the best ghost, start the recorder. */
+  function prepareRunMode() {
+    if (pickedMode !== runMode) { runMode = pickedMode; buildRun(); syncAssist(); }
+    const trial = runMode === 'trial';
+    ghost = trial ? loadGhost(track.id) : null;
+    if (ghost && ghost.laps !== laps) ghost = null;
+    ghostRec = trial ? createGhostRecorder({ track: track.id, laps }) : null;
+    ghostT = 0; ghostLapN = 0; ghostLapS = 0;
+    debug.trial = trial ? { ghost: ghost ? Math.round(ghost.timeS * 100) / 100 : 0, saved: false } : null;
+    if (trial && garage && world.setLook) { world.setLook(1, raceLook(garage.state)); ghostSlotShadow(true); }
+  }
   function buildRun(s = null) {
     if (P) { bindAirWords(P.st, null); bindAirWords(P.view, null); }
     airWords?.reset(); airWords = null; airSong = null;
-    const q = s ? s.tap(queue) : queue, sd = s ? s.seed : seed;
+    if (s) runMode = 'race';
+    const q = s ? s.tap(queue) : queue, sd = s ? s.seed : seed, solo = !s && runMode === 'trial';
     race = createRace(track, feel, q);
-    racers = createRacers(track, feel, q, s ? { net: s.layout(), seed: sd } : { count: COUNT, seed: sd });
+    racers = createRacers(track, feel, q, s ? { net: s.layout(), seed: sd } : { count: solo ? 1 : COUNT, seed: sd });
     ai = createAi(track, feel, { seed: s ? sd + s.seat : sd });
     if (hazards) {
       const drive = ai.drive;
@@ -502,7 +534,7 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     perfume = createBoudoirPerfume(track, q);
     standings = createStandings(track, feel, q);
-    items = s ? s.mount(racers, race, q) : createItems(track, feel, q, { seed: sd });
+    items = s ? s.mount(racers, race, q) : solo ? noItems() : createItems(track, feel, q, { seed: sd });
     P = racers.player;
     assist = createAssist(track, P.feel);
     if (!s) {
@@ -523,6 +555,8 @@ async function boot(course, options, lifetime, isCurrent) {
       if(garage&&!s)world.setLook(0,raceLook(garage.state));
       looksOnline = !!s;
     }
+    if (solo && garage && world.setLook) world.setLook(1, raceLook(garage.state));   // the ghost wears your look
+    ghostSlotShadow(solo);
   }
   buildRun();
   const hudItem = { id: null, rolling: false, rollT: 0, rollS: 1 };
@@ -739,6 +773,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (!lifetime.alive) return;
     if (online) return;
     stopSong();
+    prepareRunMode();
     const started = audio.start(); unpause(); resetAll();
     if(garage){world.setLook(0,raceLook(garage.state));debug.playerLook=world.looks()[0];}
     raceAudioStart = started;
@@ -916,6 +951,18 @@ async function boot(course, options, lifetime, isCurrent) {
   bus.on('bump', ({ a, b, dv = 0 }) => { if (a === 0 || b === 0) { debug.bumpMeAt = performance.now(); debug.bumpDv = Math.round(dv * 10) / 10; } });
   bus.on('item-fire', ({ racer, id, mode }) => { if (mode === 'throw' || mode === 'lob') { debug.fireAt = performance.now(); debug.fire = { racer, id, mode }; } });
   bus.on('lap', () => { debug.laps++; });
+  // Time Trial: the gap to the ghost at each lap line, and the run kept as the ghost when it is the best
+  bus.on('lap', ({ lapTimeS = 0 } = {}) => {
+    if (!ghostRec || online) return;
+    ghostLapS += lapTimeS; ghostRec.lap(ghostLapS);
+    const d = lapGap(ghost, ++ghostLapN, ghostLapS);
+    if (d !== null) hud.toast('Ghost ' + formatGap(d));
+  });
+  bus.on('finish', ({ timeS } = {}) => {
+    if (!ghostRec || online) return;
+    const g = ghostRec.finish(timeS); ghostRec = null;
+    if (debug.trial) debug.trial.saved = saveBestGhost(g);
+  });
   bus.on('go', () => { goAt = performance.now(); });
   bus.on('drop', () => { debug.drops++; });
   bus.on('rescue-release', () => { debug.rescues++; });
@@ -1111,6 +1158,10 @@ async function boot(course, options, lifetime, isCurrent) {
         { active: !online && (race.phase === 'racing' || race.phase === 'finished'), paused });
       sctx.timeS = online ? online.s.raceTimeS() : undefined;
       racers.step(clock.dt, pa, race, sctx);
+      if (ghostRec || ghost) {                                    //    Time Trial: record you, run the ghost's clock on
+        if (race.phase === 'racing') { ghostT = race.timeS; ghostRec?.tick(ghostT, P.st); }
+        else if (race.phase === 'finished') ghostT += clock.dt;
+      }
       debug.cleanTopMps = P.feel.get('speed.topMps');
       if (race.phase === 'racing' || race.phase === 'finished') {
         const sc = scanClock(online ? null : audio.music, racers.clockS, online ? 1 : MACHINERY_PACE);
@@ -1239,7 +1290,12 @@ async function boot(course, options, lifetime, isCurrent) {
     const introShot = state === 'intro' ? intro.shotAt(introElapsed) : -1;
     const viewSection = introShot >= 0 && introShot < 3 ? track.sectionAt(intro.shots[introShot].s) : pst[S.sectionIdx];
     const viewFx = state === 'intro' ? { ...fs, paletteMix: { from: viewSection, to: viewSection, t: 1 } } : fs;
-    world.update({ kart: P.view, karts: kartViews, fx: viewFx, timeS: renderTime, beat: clock.beat,
+    let shownKarts = kartViews;
+    if (ghost && !online && runMode === 'trial' && state === 'race' && (race.phase === 'racing' || race.phase === 'finished') && ghostT <= ghost.timeS + 2) {
+      ghostToState(ghostSample(ghost, ghostT, ghostPose), ghostView.st);
+      ghostKarts[0] = kartViews[0]; shownKarts = ghostKarts;
+    }
+    world.update({ kart: P.view, karts: shownKarts, fx: viewFx, timeS: renderTime, beat: clock.beat,
       raceTimeS: racers.clockS, sectionIdx: viewSection, items: iv, mode, camera: cam.camera, paused, song, songS, audioReactive, words: wordLive, beatSong,
       airWords: inRace && !online ? airWords : null,
       songCues: cueView?.live || NO_WORDS, cueGentle: cueSafety.on, songCueList: songCues?.cues || NO_WORDS,
