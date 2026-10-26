@@ -1,11 +1,16 @@
-// Original eight-bar instrumental: rounded glass plucks over warm suspended chords.
+// Original twelve-bar instrumental: a bright glass hook, bouncing chords and a soft pocket beat.
 // One reusable sample loop on the existing context, without a timer or live oscillator bank.
-export const MENU_MELODY = Object.freeze({ bpm: 80, beats: 32, sampleRate: 24000, fadeInS: 1.2, fadeOutS: .5 });
-const CHORDS = [[50, 57, 61, 64], [47, 54, 57, 62], [55, 59, 62, 69], [57, 62, 64, 69]];
-const MELODY = [[0, 74], [1.5, 78], [3, 76], [4.5, 73], [6, 69],
-  [8, 71], [10, 74], [11.5, 78], [13, 76], [14.5, 74],
-  [16, 71], [17.5, 69], [19, 74], [21, 78], [22.5, 76],
-  [24, 76], [26, 74], [27.5, 69], [29, 73], [30, 76]];
+export const MENU_MELODY = Object.freeze({ bpm: 120, beats: 48, sampleRate: 24000, fadeInS: 1.2, fadeOutS: .5 });
+const CHORDS = [[62, 66, 69, 76], [62, 66, 69, 73], [59, 62, 66, 69],
+  [61, 64, 69, 74], [59, 62, 66, 69], [61, 64, 69, 74]];
+const ROOTS = [50, 47, 43, 45, 43, 45];
+const HOOK_BEATS = [0, .75, 1.5, 2, 2.5, 3.5, 4, 4.75, 5.5, 6.5, 7, 7.5];
+const HOOKS = [[74, 78, 81, 78, 76, 74, 76, 78, 81, 76, 74, 69],
+  [71, 74, 78, 81, 78, 74, 71, 74, 76, 78, 74, 69],
+  [71, 74, 79, 78, 76, 74, 71, 74, 76, 74, 69, 71],
+  [73, 76, 81, 78, 76, 73, 69, 74, 76, 79, 78, 76],
+  [74, 78, 81, 78, 76, 74, 76, 78, 81, 78, 76, 74],
+  [73, 76, 81, 76, 78, 76, 73, 74, 76, 78, 73, 69]];
 const hz = midi => 440 * 2 ** ((midi - 69) / 12);
 
 /** Circular tails give the last bar a natural join into the first. No random or remote assets. */
@@ -13,27 +18,48 @@ export function renderMenuMelody(sampleRate = MENU_MELODY.sampleRate) {
   const rate = Math.max(8000, Math.min(48000, Math.round(sampleRate) || MENU_MELODY.sampleRate));
   const beatS = 60 / MENU_MELODY.bpm, length = Math.round(MENU_MELODY.beats * beatS * rate);
   const left = new Float32Array(length), right = new Float32Array(length);
-  function note(midi, at, duration, level, pan, pad = false) {
+  function note(midi, at, duration, level, pan, chord = false) {
     const frequency = hz(midi), start = Math.round(at * rate), count = Math.ceil(duration * rate);
     const l = Math.sqrt((1 - pan) / 2), r = Math.sqrt((1 + pan) / 2);
     for (let i = 0; i < count; i++) {
       const t = i / rate, phase = 2 * Math.PI * frequency * t;
-      const attack = 1 - Math.exp(-t / (pad ? .65 : .022));
-      const release = Math.min(1, (duration - t) / (pad ? 1.7 : .55));
-      const envelope = attack * release * release * (pad ? 1 : Math.exp(-t / .95));
-      const body = Math.sin(phase) + (pad ? .045 : .16) * Math.sin(phase * (pad ? 3 : 2)) * Math.exp(-t / .7);
+      const attack = 1 - Math.exp(-t / (chord ? .014 : .011));
+      const release = Math.min(1, (duration - t) / (chord ? .12 : .18));
+      const envelope = attack * release * release * Math.exp(-t / (chord ? .17 : .29));
+      const body = Math.sin(phase) + (chord ? .09 : .19) * Math.sin(phase * 2) * Math.exp(-t / .12);
       const sample = body * envelope * level, index = (start + i) % length;
       left[index] += sample * l; right[index] += sample * r;
     }
   }
-  for (let bar = 0; bar < CHORDS.length; bar++) {
-    CHORDS[bar].forEach((midi, voice) => note(midi, bar * 8 * beatS, 8 * beatS + 1.7, .0105, (voice - 1.5) * .22, true));
+  let seed = 17039;
+  function percussion(at, kick) {
+    const start = Math.round(at * rate), duration = kick ? .13 : .035, count = Math.ceil(duration * rate);
+    let previous = 0;
+    for (let i = 0; i < count; i++) {
+      const t = i / rate, release = Math.min(1, (duration - t) / .015);
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      const noise = seed / 2147483648 - 1;
+      const phase = 2 * Math.PI * (48 * t + 67 * .022 * (1 - Math.exp(-t / .022)));
+      const body = kick ? Math.sin(phase) : (noise - previous) * .5;
+      const envelope = (1 - Math.exp(-t / .002)) * Math.exp(-t / (kick ? .035 : .009)) * release;
+      const sample = body * envelope * (kick ? .030 : .007), index = (start + i) % length;
+      left[index] += sample; right[index] += sample; previous = noise;
+    }
   }
-  MELODY.forEach(([beat, midi], i) => {
-    const pan = i % 2 ? .28 : -.28;
-    note(midi, beat * beatS, 2.7, .052, pan);
-    note(midi, beat * beatS + .375, 2.2, .012, -pan);
-  });
+  for (let phrase = 0; phrase < CHORDS.length; phrase++) {
+    const base = phrase * 8;
+    for (let beat = 0; beat < 8; beat++) {
+      const at = (base + beat) * beatS;
+      note(ROOTS[phrase] + (beat % 4 === 2 ? 7 : 0), at, .31, .041, 0, true);
+      CHORDS[phrase].forEach((midi, voice) => note(midi, at + beatS * .5, .28, .014, (voice - 1.5) * .2, true));
+      percussion(at, true); percussion(at + beatS * .5, false);
+    }
+    HOOKS[phrase].forEach((midi, i) => {
+      const at = (base + HOOK_BEATS[i]) * beatS, pan = i % 2 ? .22 : -.22;
+      note(midi, at, .85, .076, pan);
+      note(midi, at + beatS * .75, .65, .013, -pan);
+    });
+  }
   return { sampleRate: rate, duration: length / rate, channels: [left, right] };
 }
 

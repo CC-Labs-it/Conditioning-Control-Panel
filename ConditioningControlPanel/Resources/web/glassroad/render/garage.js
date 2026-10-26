@@ -14,6 +14,7 @@ import {garageArrows} from './garageArrows.js';
 import {garageUi} from '../hud/garage.js';
 import {KARTS,OUTFITS,LOCKED,STORAGE,loadGarage,stepKart,routeTo,raceLook} from '../hud/garageState.js';
 import {warmGarageWardrobe} from './garageWarm.js';
+import {createGarageBackdrop} from './garageBackdrop.js';
 
 /** One menu scene on the game's existing renderer, driven by the existing frame loop. */
 export async function createGarage({art,renderer,canvas,action,sound,track,laps,trackId='threshold',online=true,changeTrack}) {
@@ -22,12 +23,12 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   let storage;try{storage=localStorage;}catch{}
   let layout=garageLayout(canvas.clientWidth,canvas.clientHeight);
   const state=loadGarage(storage),scene=new T.Scene(),camera=new T.PerspectiveCamera(33,1,.03,40);
-  scene.background=new T.Color('#164b59');scene.fog=new T.Fog('#164b59',7,15);
+  scene.background=new T.Color('#ffe3ec');scene.fog=new T.Fog('#f8d2e1',18,35);
+  const backdrop=createGarageBackdrop(scene);
   const style=createGarageStyle();
   scene.add(new T.HemisphereLight(0xf5fff0,0x27566b,.95));
   const key=new T.DirectionalLight(0xfff2d9,2.4);key.position.set(-3,6,-4);scene.add(key);
-  const fill=new T.DirectionalLight(0x8ce9e0,.55);fill.position.set(4,2,1);scene.add(fill);
-  const floor=new T.Mesh(new T.PlaneGeometry(70,70),new T.MeshStandardNodeMaterial({color:0x164b59,roughness:.87}));floor.rotation.x=-Math.PI/2;floor.position.y=-.03;scene.add(floor);
+  const fill=new T.DirectionalLight(0xffc7e7,.55);fill.position.set(4,2,1);scene.add(fill);
   const env=new T.Scene();env.background=new T.Color('#777078');
   for(const [p,s,c]of[[[-3,3,-3],[3,3,1],0xffffff],[[3,2,1],[2,3,1],0xb5caff],[[0,4,0],[4,1,4],0xffece6]]){const m=new T.Mesh(new T.BoxGeometry(...s),new T.MeshBasicNodeMaterial({color:c}));m.position.set(...p);env.add(m);}
   const pmrem=new T.PMREMGenerator(renderer.three),environment=pmrem.fromScene(env,.04);scene.environment=environment.texture;pmrem.dispose();
@@ -94,6 +95,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   }
   const ease=x=>x*x*(3-2*x);
   function update(dt,motionReduced,gentle=false){dt=Math.max(0,Math.min(.05,Number.isFinite(dt)?dt:0));reduced=motionReduced||gentle;ui.root.classList.toggle('g-calm',reduced);time+=dt;emiLife.beforePose();
+    backdrop.update(dt,{reducedMotion:motionReduced,gentle});
     const screen=advanceGarageView(view,custom,dt,reduced),sceneProgress=screen.framing,wasBusy=viewBusy;view=screen.value;viewBusy=screen.busy;
     ui.root.style.setProperty('--g-custom-progress',String(screen.progress));ui.root.classList.toggle('g-scene-transition',viewBusy);
     canvas.style.opacity=screen.fade===1?'':String(screen.fade);frameView(screen.framing);if(wasBusy&&!viewBusy)paint();
@@ -144,7 +146,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
     restore(){redress();paint();},
   });
   return {
-    scene,camera,nav,life:{emi:emiLife.metrics,vehicles:vehicleLives.map(l=>l.metrics)},get state(){return {...state};},get yaw(){return yaw;},get custom(){return custom;},get busy(){return !!moving||viewBusy;},get transition(){return {progress:view,busy:viewBusy,framing:customFrame};},get selected(){return KARTS[selected][0];},select,customize,change,
+    scene,camera,nav,backdrop,life:{emi:emiLife.metrics,vehicles:vehicleLives.map(l=>l.metrics)},get state(){return {...state};},get yaw(){return yaw;},get custom(){return custom;},get busy(){return !!moving||viewBusy;},get transition(){return {progress:view,busy:viewBusy,framing:customFrame};},get selected(){return KARTS[selected][0];},select,customize,change,
     setCourse(course){ui.setCourse(course);},
     setHandlers(next={}){
       if('action' in next)action=typeof next.action==='function'?next.action:()=>{};
@@ -153,6 +155,6 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
     },
     setVisible(on){if(on!==visible){visible=on;gesture=null;ui.setVisible(on);if(on)resize();}},
     render(dt,reduced,{gentle=false}={}){update(dt,reduced,gentle);renderer.three.render(scene,camera);},
-    dispose(){canvas.style.opacity='';observer.disconnect();document.removeEventListener('keydown',keydown,true);for(const [event,fn]of [['pointerdown',down],['pointermove',move],['pointerup',up],['pointercancel',cancel],['lostpointercapture',cancel]])canvas.removeEventListener(event,fn);contactGeo.dispose();contactMat.dispose();emiLife.dispose();for(const l of vehicleLives)l.dispose();dress?.dispose();style.dispose();skin.dispose();arrows.dispose();ui.dispose();mixer.stopAllAction();environment.dispose();floor.geometry.dispose();floor.material.dispose();particleGeo.dispose();particleMaterial.dispose();for(const m of owned)m.dispose();},
+    dispose(){canvas.style.opacity='';observer.disconnect();document.removeEventListener('keydown',keydown,true);for(const [event,fn]of [['pointerdown',down],['pointermove',move],['pointerup',up],['pointercancel',cancel],['lostpointercapture',cancel]])canvas.removeEventListener(event,fn);contactGeo.dispose();contactMat.dispose();emiLife.dispose();for(const l of vehicleLives)l.dispose();dress?.dispose();style.dispose();skin.dispose();arrows.dispose();ui.dispose();mixer.stopAllAction();environment.dispose();backdrop.dispose();particleGeo.dispose();particleMaterial.dispose();for(const m of owned)m.dispose();},
   };
 }
