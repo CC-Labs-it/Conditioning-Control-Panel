@@ -100,6 +100,7 @@ import { buildBoudoirMirrorRoom } from './boudoirMirrorRoom.js';
 import { createBoudoirWaterPalette } from './boudoirWater.js';
 import { buildBoudoirForks } from './boudoirForks.js';
 import { padMediaSlots } from './padMedia.js';
+import { installMatrixWalk } from './matrixWalk.js';
 
 const FWD = new Vector3();
 const P4_EVENTS = new Set(['drift-start', 'drift-tier', 'drift-boost', 'trick', 'trick-land']);
@@ -201,6 +202,8 @@ function props(track) {
  */
 export function buildWorld(track, feel, { art = null, bus = null, seed = 1, count = 8, renderer = null, shadowsOn = true, photosafe = null, spiralLayout = SPIRAL_LAYOUTS.get(track.id), looks = [], kartPool = null } = {}) {
   const scene = new Scene();
+  // one matrix walk per frame over what moved and what shows (render/matrixWalk.js); the picture is unchanged
+  installMatrixWalk(scene, renderer?.three || null);
   const isMainframe = track.id === 'mainframe';
   // Fog stays in the warmed shader; its density eases as the kart dives into the coolant reservoir.
   const submerged = track.sections.find(s => s.id === 'submerged');
