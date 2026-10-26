@@ -576,3 +576,25 @@ Keep broad platforms refresh the existing lip lift once when an early hop crosse
 - `hitCam.glowS` 0.7: the frame's pink glow pulse decay (Gentle: half).
 - `hitCam.wordS` 0.75: the comic impact word's life.
 - `hitCam.contactDelayS` 0.12: a fresh inset lands its contact beats this long after opening, as it seats.
+
+## Feel wave 2026-10-26
+
+### Lane B
+
+- `audio.hitThumpMin` 0.35: a wall hit under this share of `wall.cueFullDvMps` gets no sub thump.
+- `audio.hitDuckWall` 0.55: bed and music duck floor on a full wall hit (lower = deeper; scales with dv).
+- `audio.hitDuckItem` 0.45: duck floor when an item or trap lands on you (the deepest).
+- `audio.hitDuckBump` 0.8: duck floor on a full kart bump (no thump).
+- `audio.thumpHz` 72: sub thump start pitch under wall and item hits (falls to 0.62x; 4 fixed variants, +-4%; plays at once).
+- `audio.thumpGain` 0.22: sub thump level (sample gain on the sfx bus).
+- `audio.thumpDurS` 0.09: sub thump length.
+- `audio.squealGain` 0.03: drift squeal level at full charge (drift charge 0..1 is its one variable).
+- `audio.squealLowHz` 1500: drift squeal pitch at no charge.
+- `audio.squealOct` 0.75: octaves the squeal climbs to full charge. Release note per tier lands on the next 8th.
+- `audio.windFromPct` 0.3: wind layer is silent under this share of top speed.
+- `audio.windGain` 0.03: wind level at top speed (squared rise).
+- `audio.windTopHz` 3200: wind low-pass at top speed.
+- `audio.revGain` 0.045: countdown rev voice level (follows `rev {level}`).
+- `audio.finalPercGain` 0.07: final-lap percussion level (8ths on the song grid).
+- `audio.finalPercInS` 1.5: final-lap percussion fade-in.
+- `music.finalLapRate` 1.0: song playback rate on the final lap (owner call; 1.04 supported, the song clock keeps its place).

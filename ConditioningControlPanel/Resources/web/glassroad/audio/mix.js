@@ -56,6 +56,23 @@ export const MIX = {
   engGlideS: 0.08,            // layer and pitch glide
   engSampleGain: 1,           // the whole recorded engine, against SFX_GAIN per layer
   rivalSampleGain: 0.32,      // one rival's recorded engine at 0 m (cruise + air layers)
+  // feel wave 2026-10-26 (audio/feelVoices.js); feel.json audio.* carries the same numbers
+  hitThumpMin: 0.35,
+  hitDuckWall: 0.55,
+  hitDuckItem: 0.45,
+  hitDuckBump: 0.8,
+  thumpHz: 72,
+  thumpGain: 0.22,
+  thumpDurS: 0.09,
+  squealGain: 0.03,
+  squealLowHz: 1500,
+  squealOct: 0.75,
+  windFromPct: 0.3,
+  windGain: 0.03,
+  windTopHz: 3200,
+  revGain: 0.045,
+  finalPercGain: 0.07,
+  finalPercInS: 1.5,
 };
 
 /** @returns {number} feel 'audio.<key>' when it exists, else MIX[key]. */
