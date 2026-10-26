@@ -87,14 +87,7 @@ export function createKick(L = KICK_DEFAULTS) {
     return out;
   }
   function reset() { for (const s of [sx, sy, sz, sf]) { s.x = 0; s.v = 0; } out.x = out.y = out.z = out.fov = 0; }
-  /** An item nudge (fx/itemFeelMath.js): [x right, y up, z back] metres, each one lobe; the caller scales it for Gentle. */
-  function nudge(v) {
-    if (!Array.isArray(v)) return false;
-    const [x = 0, y = 0, z = 0] = v;
-    if (x) push(sx, x); if (y) push(sy, y); if (z) push(sz, z);
-    return !!(x || y || z);
-  }
-  return { hit, nudge, update, reset, out };
+  return { hit, update, reset, out };
 }
 
 /** The fov punch of a boost kind (degrees, 0 for none). */

@@ -104,7 +104,7 @@ const num = (feel, k, d) => { try { const v = Number(feel.get(k)); return Number
  * root: the HUD root (ITEM_FEEL_MARKUP already inside). toast(msg, opts) is the HUD's priority toast.
  * names(i) -> the racer's label; tints(i) -> its palette tint (1..7) or 0. @returns {{ hit(p), hook(p), standings(order), reset(), dispose() }}
  */
-export function createItemFeel(root, { doc = globalThis.document, feel, now, toast, names, tints = () => 0, itemName = (k) => k, fetchFn = globalThis.fetch } = {}) {
+export function createItemFeel(root, { doc = globalThis.document, feel, now, toast, names, tints = () => 0, itemName = (k) => k, fetchFn = globalThis.fetch, photosafe = null } = {}) {
   const q = (s) => root.querySelector(s);
   const el = { edge: q('.if-edge'), mark: q('.if-mark'), stamp: q('.if-stamp') };
   try {
@@ -163,7 +163,10 @@ export function createItemFeel(root, { doc = globalThis.document, feel, now, toa
       if (!victims.includes(victim)) victims.push(victim);
       play(el.mark, [], ['blk']);
       stamp(confirmWord(kind, n), n > 1 ? 'combo' : '');
-      if (!gentle() && t - edgeAt >= num(feel, 'itemFeel.edgeMinGapS', 1.2)) { edgeAt = t; play(el.edge); }
+      // the edge flash spends the shared luminance budget (fx/photosafe.js); refused, the stamp and toast still land
+      if (!gentle() && t - edgeAt >= num(feel, 'itemFeel.edgeMinGapS', 1.2) && (!photosafe || photosafe.request('flash'))) {
+        edgeAt = t; play(el.edge);
+      }
     } else if (by === 0 && victim !== 0) {
       play(el.mark, ['blk']);
       stamp(BLOCK_WORDS[verdict] || 'MISSED', 'blk');

@@ -10,7 +10,7 @@
  * Polish 6: fx.side(ampM, sign) is a short sideways shake (the camera's x) for a hard bump: the same parabola
  * lobes as fx/shake.js (sideStep), SIDE numbers below, added on top of the shake vector; Gentle removes it.
  * Item feel: ITEM_CUES also ticks the pad when the player uses an item (and flicks the speed lines on a throw) and
- * rumbles when the player's hit lands (feel itemFeel.*); the camera nudges for both are render/camera.js.
+ * rumbles when the player's hit lands (feel itemFeel.*); items never move the chase camera.
  */
 import { clamp, smoothstep } from '../core/math.js';
 import { S } from '../sim/state.js';
@@ -56,7 +56,9 @@ export const ITEM_CUES = {
   // item feel: your own use ticks the pad (Gentle: none) and a throw flicks the speed lines forward
   'item-fire'(fx, { racer = -1, mode }) {
     if (racer !== 0) return;
-    fx.fire('thud', fx.gentle.kick(fx.feel.get('itemFeel.fireRumble')), 0, 0, fx.feel.get('itemFeel.fireRumbleOutS'));
+    // Snap and Fog emit their item-hit before this item-fire: never let the tick replace a stronger confirm rumble
+    const tick = fx.gentle.kick(fx.feel.get('itemFeel.fireRumble')), T = fx.ch.thud;
+    if (!(T?.on && T.peak >= tick)) fx.fire('thud', tick, 0, 0, fx.feel.get('itemFeel.fireRumbleOutS'));
     const peak = fx.gentle.scroll(fx.feel.get('itemFeel.throwLinesPeak')), L = fx.ch.lines;
     // never cut a boost's held lines short, never pull a stronger beat down
     if ((mode === 'throw' || mode === 'bounce' || mode === 'tether' || mode === 'wide') && !L.held && !(L.on && L.v >= peak)) {

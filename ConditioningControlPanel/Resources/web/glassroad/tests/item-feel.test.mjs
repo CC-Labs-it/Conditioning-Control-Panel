@@ -1,8 +1,8 @@
-// tests/item-feel.test.mjs - the thrower's seat (fx/itemFeelMath.js, audio plans, camera nudge, fx cues, feel keys).
+// tests/item-feel.test.mjs - the thrower's seat (fx/itemFeelMath.js, audio plans, no camera move, photosafe, fx cues).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { comboNext, confirmWord, hitToast, toastDecide, fireKickKey, scaleKick, PRIORITY, BLOCKED_VERDICTS } from '../fx/itemFeelMath.js';
+import { comboNext, confirmWord, hitToast, toastDecide, PRIORITY, BLOCKED_VERDICTS } from '../fx/itemFeelMath.js';
 import { sfxPlan, confirmPlan, blockedPlan } from '../audio/sfxmap.js';
 import { createKick } from '../render/cameraMath.js';
 import { ITEM_CUES } from '../fx/reactions.js';
@@ -64,27 +64,28 @@ test('toast policy: a hit replaces a fresh lap note, a combo replaces itself, a 
   assert.equal(toastDecide(hit, { priority: PRIORITY.hit, group: 'ouch' }, 0.5, { minShowS: 0.45 }), 'now');
 });
 
-test('fire kicks: every mode has a feel key, scaled for Gentle', () => {
-  const feel = createFeel(feelJson);
-  for (const m of ['throw', 'bounce', 'tether', 'lob', 'wide', 'drop', 'self', 'odd']) {
-    const v = feel.get(fireKickKey(m));
-    assert.equal(v.length, 3, m);
-  }
-  assert.equal(fireKickKey('bounce'), 'itemFeel.throwKickM');
-  assert.deepEqual(scaleKick([0, 0.1, 0.2], 0.5), [0, 0.05, 0.1]);
-  assert.deepEqual(scaleKick(null), [0, 0, 0]);
-  assert.deepEqual(scaleKick([1, 'x', 2], -1), [0, 0, 0]);
+test('camera: items never move the chase camera (owner camera rule 2026-10-26)', () => {
+  assert.equal(createKick().nudge, undefined);
+  const cam = readFileSync(new URL('../render/camera.js', import.meta.url), 'utf8');
+  assert.ok(!/'item-(fire|hit)'/.test(cam), 'render/camera.js must not listen to item events');
+  for (const k of Object.keys(feelJson.itemFeel)) assert.ok(!/KickM$|KickMul$/.test(k), k);
 });
 
-test('camera nudge: a back kick moves the eye back, then settles', () => {
-  const k = createKick();
-  assert.equal(k.nudge([0, 0, 0.24]), true);
-  let peak = 0;
-  for (let i = 0; i < 30; i++) peak = Math.max(peak, k.update(1 / 60).z);
-  assert.ok(peak > 0.1 && peak < 0.4, 'peak ' + peak);
-  for (let i = 0; i < 120; i++) k.update(1 / 60);
-  assert.ok(Math.abs(k.out.z) < 0.02);
-  assert.equal(k.nudge(null), false);
+test('edge flash: asks the shared photosafe budget, a refusal keeps the stamp', async () => {
+  const { createItemFeel } = await import('../hud/itemFeel.js');
+  const node = () => ({ textContent: '', offsetWidth: 0, classList: { set: new Set(), add(...c) { c.forEach((x) => this.set.add(x)); }, remove(...c) { c.forEach((x) => this.set.delete(x)); } } });
+  const make = (grant) => {
+    const el = { '.if-edge': node(), '.if-mark': node(), '.if-stamp': node() }, asked = [];
+    const f = createItemFeel({ querySelector: (s) => el[s] }, { doc: null, feel: createFeel(feelJson), now: () => 5000,
+      toast() {}, names: (i) => 'K' + i, fetchFn: () => Promise.reject(new Error('offline')),
+      photosafe: { request: (k) => { asked.push(k); return grant; } } });
+    f.hit({ victim: 2, by: 0, kind: 'pendulum', verdict: 'hit' });
+    return { el, asked };
+  };
+  const yes = make(true), no = make(false);
+  assert.deepEqual(yes.asked, ['flash']); assert.ok(yes.el['.if-edge'].classList.set.has('on'));
+  assert.deepEqual(no.asked, ['flash']); assert.ok(!no.el['.if-edge'].classList.set.has('on'));
+  assert.equal(no.el['.if-stamp'].textContent, 'BONK!');
 });
 
 test('audio: a landed hit chimes (climbing with the chain), a blocked one clanks, the victim keeps its own', () => {
@@ -103,10 +104,18 @@ test('audio: a landed hit chimes (climbing with the chain), a blocked one clanks
 
 function fakeFx(gentleOn = false) {
   const feel = createFeel(feelJson), fired = [];
-  const ch = { lines: { on: false, held: false, v: 0 } };
+  const ch = { lines: { on: false, held: false, v: 0 }, thud: { on: false, peak: 0 } };
   return { fired, ch, feel, gentle: { kick: (v) => (gentleOn ? 0 : v), scroll: (v) => v * (gentleOn ? 0.5 : 1) },
-    fire: (...a) => fired.push(a) };
+    fire: (...a) => { fired.push(a); if (ch[a[0]]) Object.assign(ch[a[0]], { on: true, peak: a[1] }); } };
 }
+
+test('fx: Snap and Fog hit before their item-fire, and the tick keeps the stronger confirm rumble', () => {
+  const fx = fakeFx();
+  ITEM_CUES['item-hit'](fx, { victim: 2, by: 0, verdict: 'hit' });
+  ITEM_CUES['item-fire'](fx, { racer: 0, mode: 'self' });
+  assert.deepEqual(fx.fired.map((a) => a[0]), ['thud']);
+  assert.equal(fx.ch.thud.peak, feelJson.itemFeel.confirmRumble);
+});
 
 test('fx: a use ticks the pad and flicks the lines, a landed hit rumbles, Gentle zeroes the rumble', () => {
   const fx = fakeFx();

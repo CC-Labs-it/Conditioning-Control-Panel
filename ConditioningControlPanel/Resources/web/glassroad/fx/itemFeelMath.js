@@ -1,12 +1,12 @@
 /* fx/itemFeelMath.js - how an item feels from the thrower's seat (pure: no DOM, no three, no WebAudio).
  *
  * The sim says what happened (item-fire, item-hit, tether-hook); these say how the player hears and sees it:
- *   fireKick(mode)        which camera nudge a use plays (feel itemFeel.*KickM, x right, y up, z back, metres)
  *   comboNext(st, t, w)   hits from the player inside one window count up (Fog or Snap catching several karts)
  *   confirmWord(kind, n)  the comic stamp: one word per item, DOUBLE / TRIPLE / MULTI past one
  *   hitToast(p, who)      the toast for an item-hit the player is in: segments, tone and priority
  *   toastDecide(cur, nx)  whether a toast replaces the one on screen now, waits, or is dropped
- * Every number the HUD, camera and audio read lives in feel.json `itemFeel` (FEEL.md); Gentle is applied by the callers.
+ * Every number the HUD and audio read lives in feel.json `itemFeel` (FEEL.md); Gentle is applied by the callers.
+ * Items never move the chase camera (owner camera rule 2026-10-26: effect push stays out of the camera pose).
  */
 
 /** Verdicts that mean the shot connected but did not land (sim/items.js hit()). */
@@ -43,21 +43,6 @@ export function comboNext(st, t, windowS) {
   if (st.n > 0 && now - st.t0 <= Math.max(0, Number(windowS) || 0) && now >= st.t0) st.n++;
   else { st.n = 1; st.t0 = now; }
   return st.n;
-}
-
-const MODES = ['throw', 'lob', 'wide', 'drop', 'self'];
-/** The feel key of a use mode's camera nudge (bounce and tether fly like a throw). */
-export function fireKickKey(mode) {
-  const m = mode === 'bounce' || mode === 'tether' ? 'throw' : mode;
-  return 'itemFeel.' + (MODES.includes(m) ? m : 'throw') + 'KickM';
-}
-
-/** A [x, y, z] nudge scaled by mul (Gentle or reduced motion pass their share); bad input reads as zero. */
-export function scaleKick(v, mul = 1) {
-  const k = Number(mul);
-  const s = Number.isFinite(k) ? Math.max(0, k) : 1;
-  const a = Array.isArray(v) ? v : [];
-  return [0, 1, 2].map((i) => (Number(a[i]) || 0) * s);
 }
 
 /** The ordinal suffix of a place (1st, 2nd ...), '' for none. */

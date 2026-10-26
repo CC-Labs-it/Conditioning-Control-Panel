@@ -455,18 +455,9 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `payoff.padWordS` 1.0: a pad word lasts this long.
 - `payoff.padCoolS` 4: at most one pad word per this many seconds.
 
-## itemFeel (the thrower's seat: what a use, a landed hit and a blocked shot feel like; `fx/itemFeelMath.js`, `hud/itemFeel.js`, `render/camera.js`, `fx/reactions.js`, `audio/`)
-Camera nudges are `[x right, y up, z back]` metres on the chase rig's kick springs (one damped lobe each, never a
-shake). Gentle and OS reduced motion scale every nudge by `gentleKickMul`, drop the edge flash and keep fades only.
-- `itemFeel.throwKickM` [0, 0.05, 0.24]: a throw (Pendulum, Disc, Tether) flicks the camera back a touch (recoil).
-- `itemFeel.lobKickM` [0, -0.16, 0.1]: a lob (Big Spiral) heaves: the view dips, then rises with the arc.
-- `itemFeel.wideKickM` [0, 0.06, -0.2]: a wide pulse (Fog) punches the view forward.
-- `itemFeel.dropKickM` [0, -0.1, 0.04]: a trap set down (Melt, or held back) settles the view.
-- `itemFeel.selfKickM` [0, 0.08, -0.1]: a self item (Snap, Surge, Glass) lifts the view in.
-- `itemFeel.confirmKickM` [0, 0.04, -0.14]: your hit landed: a short lean in.
-- `itemFeel.blockedKickM` [0, -0.03, 0.05]: your shot was blocked: a dull settle back.
-- `itemFeel.victimKickM` [0, -0.16, -0.34]: you were hit: the camera jolts in and down.
-- `itemFeel.gentleKickMul` 0.35: share of every item nudge under Gentle or reduced motion.
+## itemFeel (the thrower's seat: what a use, a landed hit and a blocked shot feel like; `fx/itemFeelMath.js`, `hud/itemFeel.js`, `fx/reactions.js`, `audio/`)
+Items never move the chase camera (owner camera rule 2026-10-26: effect shake, push and zoom stay out of the camera
+pose). Gentle and OS reduced motion drop the edge flash and keep fades only; the edge flash also asks photosafe.
 - `itemFeel.fireRumble` 0.35: pad rumble tick when you use an item (zero under Gentle).
 - `itemFeel.fireRumbleOutS` 0.12: and how fast it goes.
 - `itemFeel.confirmRumble` 0.6: pad rumble when your hit lands (zero under Gentle).

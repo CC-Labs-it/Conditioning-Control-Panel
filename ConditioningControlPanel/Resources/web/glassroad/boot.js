@@ -364,7 +364,7 @@ async function boot(course, options, lifetime, isCurrent) {
   if (BOT) Object.defineProperty(debug, 'waterTravelAudio', { get: () => audio.waterTravel });
   for (const name of ['keep-gate-hit', 'keep-chain-hit', 'boudoir-press-hit', 'boudoir-sweeper-hit', 'boudoir-mirror-hit', 'goonworks-hit']) bus.on(name, () => bus.emit('wall', { dv: 12 }));
   configureLobby({ track: track.id, trackLaps: TRACK_LAPS });
-  const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus);
+  const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus, { photosafe });
   const directionWarning = createDirectionWarning(track);
   lifetime.defer(() => hud.dispose());
   // Host state stays live while art and shaders load behind the cover.

@@ -36,7 +36,7 @@ const NAMES = ['race', 'online', 'options', 'controls', 'back', 'resume', 'resta
 const TOAST_S = 1.6, TOAST_GAP_S = 0.6;
 
 /** @returns {Hud} */
-export function createHud({ root, card }, feel, bus, { doc = globalThis.document, now = () => performance.now(), devices = sharedDevices } = {}) {
+export function createHud({ root, card }, feel, bus, { doc = globalThis.document, now = () => performance.now(), devices = sharedDevices, photosafe = null } = {}) {
   root.classList.add('hud');
   root.dataset.screen = 'race';
   root.innerHTML =
@@ -142,7 +142,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     }
   }
   const nameOf = (i) => labels[i] || (i === 0 ? 'You' : 'Bot ' + i);
-  const itemFeel = createItemFeel(root, { doc, feel, now, toast, names: nameOf, itemName,
+  const itemFeel = createItemFeel(root, { doc, feel, now, toast, names: nameOf, itemName, photosafe,
     tints: (i) => (metas && metas[i] && metas[i].tint) || 0 });
 
   const offs = [
