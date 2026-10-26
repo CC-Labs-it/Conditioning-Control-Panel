@@ -8,6 +8,10 @@
  * Gold = AI average, Silver = average plus 8%, Bronze = average plus 20% (ceil). AI best / average, s:
  * threshold 585.97 / 588.50, mainframe 787.52 / 789.89, keep 524.91 / 530.72, boudoir 559.09 / 563.56,
  * goonworks 397.72 / 401.83.
+ * Cross-check: the same harness and seeds with 8 karts puts the player within about 1% of the solo times
+ * (threshold seed 3: 577.6 s in traffic, 578.8 s alone), so a lone kart is not slowed. The courses are long:
+ * Threshold grew from about 1.7 km to 5.4 km a lap on 2026-10-24 (d6db721c0), so a 3 lap race is about
+ * 10 minutes at the 30 m/s top speed; "about 3 min" race notes predate that.
  */
 export const MEDAL_ORDER = Object.freeze([null, 'bronze', 'silver', 'gold', 'glass']);
 
