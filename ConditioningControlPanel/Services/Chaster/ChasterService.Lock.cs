@@ -93,6 +93,18 @@ public sealed partial class ChasterService
         }
     }
 
+    /// <summary>Caller holds _gate. Whether a push could land on the picked lock, as far as the
+    /// last read knows: false only when that read says the pick is gone (no lock, or not among
+    /// them), its timer ran out and <see cref="LockRelock"/> leaves it, or adding is turned off.
+    /// A read not made yet, or Chaster away, counts as live: the settle's own read decides.</summary>
+    private bool PickedLockTakesTime(ChasterOptions options, DateTime nowUtc)
+    {
+        if (!ChasterClient.IsLockId(options.LockId) || AddsBlockedFor(options.LockId)) return false;
+        if (_lockLookup is LockLookup.None or LockLookup.Ambiguous) return false;
+        if (_lockLookup != LockLookup.Chosen || _lock is not { } seen || seen.Id != options.LockId || seen.IsFrozen) return true;
+        return LockRelock.MayPush(seen.EndsAtUtc, nowUtc, options.RelockPastEnd);
+    }
+
     /// <summary>The lock id whose keyholder does not let the wearer add time, learned from the
     /// lock's own permissions or from a 403 on the add. Forgotten on any link change, and when a
     /// read of that lock says adding is allowed again.</summary>
