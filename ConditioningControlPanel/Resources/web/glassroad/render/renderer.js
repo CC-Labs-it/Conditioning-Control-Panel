@@ -35,6 +35,7 @@ import { reasonOf } from '../core/failure.js';
 import { loadOptions, cleanOptions } from '../hud/options.js';
 import { WARM, warmGroups } from './warmGroups.js';
 import { createDeferredWarm } from './stagedWarm.js';
+import { shareInstancePrograms } from './instancePrograms.js';
 import { lateWarmMaterials } from './warmExtras.js';
 
 /** A canvas can hold one context for life: a failed WebGPU init, or a lost context, needs a new element in its place. */
@@ -93,6 +94,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     await three.init();
   }
   trackSceneResources(three);
+  shareInstancePrograms(three);
   skipUnchangedInstanceUploads(three);
   uploadChangedAttributeBytes(three);        // WebGL2: attributes re-send only their changed bytes (Firefox command-channel budget)
   uploadVideoElementsDirectly(three);

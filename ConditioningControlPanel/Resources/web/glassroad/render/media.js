@@ -19,7 +19,7 @@
 import {
   Group, Mesh, InstancedMesh, PlaneGeometry, CylinderGeometry, BufferGeometry, Float32BufferAttribute,
   InstancedBufferAttribute, CanvasTexture, Texture, SRGBColorSpace, LinearFilter, MeshBasicNodeMaterial, AdditiveBlending,
-  DoubleSide, FrontSide, Matrix4, Vector3, Color,
+  DoubleSide, FrontSide, Matrix4, Vector3, Vector4, Color,
 } from 'three/webgpu';
 import {
   texture, uv, vec2, vec3, float, uniform, instancedBufferAttribute, attribute, cos, sin, hue, mix, smoothstep,
@@ -351,6 +351,17 @@ export function createMediaSlots(scene, track, opts = {}) {
   const blankSource = opts.make ? opts.make(2, 2) : Object.assign(document.createElement('canvas'), { width: 2, height: 2 });
   const blankContext = blankSource.getContext('2d'); blankContext.fillStyle = '#15121b'; blankContext.fillRect(0, 0, 2, 2);
   const sharedVideos = new Map();
+  // Fixed image bindings: one material per preallocated video owner, not per face.
+  // Only the cover crop varies per draw; a texture never swaps under a compiled sampler.
+  const sourceMaterials = new Map();
+  function sourceMaterial(tex) {
+    let material = sourceMaterials.get(tex);
+    if (!material) { material = ownMaterial(tex, U, M); sourceMaterials.set(tex, material); }
+    return material;
+  }
+  function releaseSourceMaterial(tex) {
+    sourceMaterials.get(tex)?.dispose(); sourceMaterials.delete(tex);
+  }
   // Every owner exists before shader warmup, even on phone. Faces only change a texture binding.
   const sharedPool = Array.from({ length: MAX_MEDIA_CLIPS }, () => {
     // Frames go straight from the <video> into this regular Texture (the vendored WebGL getImage passes
@@ -393,20 +404,19 @@ export function createMediaSlots(scene, track, opts = {}) {
     const tex = new Texture(persistent ? blankSource : null);
     tex.colorSpace = SRGBColorSpace; tex.anisotropy = 4;
     if (persistent) tex.needsUpdate = true;
-    const crop = { cx: uniform(0.5), cy: uniform(0.5), sx: uniform(1), sy: uniform(1) };
-    const sample = texture(tex), mat = ownMaterial(sample, crop, U, M), mesh = new Mesh(plane, mat);
+    const crop = new Vector4(0.5, 0.5, 1, 1), mesh = new Mesh(plane, sourceMaterial(persistent ? sharedPool[0].tex : tex));
+    mesh.userData.mediaTex = tex; mesh.userData.mediaCrop = crop;
     mesh.name = persistent ? 'media-' + (sl.frame === 'card' ? 'card' : 'world') + '-source-' + sl.id : 'media-source-' + sl.id;
     mesh.matrixAutoUpdate = false; mesh.frustumCulled = true; mesh.visible = false;
     slotMatrix(sl, mesh.matrix, { lift: 0.01 });
     group.add(mesh);
-    const o = { mesh, mat, tex, baseTex: tex, sample, crop, persistent, frame: sl.frame, shared: null,
+    const o = { mesh, tex, baseTex: tex, crop, persistent, frame: sl.frame, shared: null,
       el: null, kind: null, ready: false, credit: null, creditOn: false, src: -1, unlisten: null };
     if (persistent) {
       const cv = opts.make ? opts.make(256, 40) : Object.assign(document.createElement('canvas'), { width: 256, height: 40 });
       const ct = new CanvasTexture(cv); ct.colorSpace = SRGBColorSpace;
       o.creditCanvas = cv; o.creditTex = ct;
-      const cm = mediaDepthLayer(new MeshBasicNodeMaterial({ transparent: true, depthWrite: false }), 3);
-      const sample = texture(ct); cm.colorNode = sample.rgb; cm.opacityNode = sample.a;
+      const cm = mediaDepthLayer(new MeshBasicNodeMaterial({ map: ct, transparent: true, depthWrite: false }), 3);
       o.credit = new Mesh(plane, cm); o.credit.name = 'media-' + (sl.frame === 'card' ? 'card' : 'world') + '-credit-' + sl.id;
       o.credit.matrixAutoUpdate = false; o.credit.frustumCulled = true; o.credit.renderOrder = 4; o.credit.visible = false;
       group.add(o.credit);
@@ -415,7 +425,8 @@ export function createMediaSlots(scene, track, opts = {}) {
   }
   for (const [i, sl] of selected.entries()) {
     const o = makeOwnSource(sl, true);
-    o.sample.value = sharedPool[i % sharedPool.length].tex;
+    o.mesh.userData.mediaTex = sharedPool[i % sharedPool.length].tex;
+    o.mesh.material = sourceMaterial(o.mesh.userData.mediaTex);
     persistentSources.set(sl.index, o);
   }
 
@@ -428,7 +439,8 @@ export function createMediaSlots(scene, track, opts = {}) {
       owner.el = el; owner.ready = false; owner.uploaded = false;
       sharedVideos.set(el, owner);
     }
-    owner.refs.add(index); o.shared = owner; o.tex = owner.tex; o.sample.value = owner.tex;
+    owner.refs.add(index); o.shared = owner; o.tex = owner.tex; o.mesh.userData.mediaTex = owner.tex;
+    o.mesh.material = sourceMaterial(owner.tex);
     return true;
   }
   function releaseShared(o, index) {
@@ -441,7 +453,7 @@ export function createMediaSlots(scene, track, opts = {}) {
       clearVideoCanvas(owner); owner.idleDisposed = true;
       owner.el = null; owner.ready = false; owner.uploaded = false;
     }
-    o.shared = null; o.tex = o.baseTex; o.sample.value = o.baseTex;
+    o.shared = null; o.tex = o.baseTex; o.mesh.userData.mediaTex = o.baseTex;
   }
 
   // ---- placement of every instance (halo slots move, tier changes hide or show) ----
@@ -508,10 +520,10 @@ export function createMediaSlots(scene, track, opts = {}) {
     if (src.kind === 'video' && !retainShared(o, sl.index, el)) {
       if (!o.borrowed) { try { el.pause?.(); el.removeAttribute?.('src'); el.load?.(); } catch { /* source rejected */ } }
       o.el = null; o.kind = null; o.borrowed = false;
-      if (!o.persistent) { group.remove(o.mesh); o.mat.dispose(); o.baseTex.dispose(); }
+      if (!o.persistent) { group.remove(o.mesh); o.baseTex.dispose(); releaseSourceMaterial(o.baseTex); }
       placeSlot(sl); flush(); return false;
     }
-    if (!o.shared) o.sample.value = o.baseTex;
+    if (!o.shared) { o.mesh.userData.mediaTex = o.baseTex; o.mesh.material = sourceMaterial(o.baseTex); }
     const { tex, crop } = o;
     const text = creditText(src.credit);
     o.creditOn = !!text;
@@ -521,9 +533,7 @@ export function createMediaSlots(scene, track, opts = {}) {
       g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillText(text, 10, 21);
       o.creditTex.needsUpdate = true;
     } else if (text) {
-      const cm = mediaDepthLayer(new MeshBasicNodeMaterial({ transparent: true, depthWrite: false }), 3);
-      const ct = texture(creditTexture(text));
-      cm.colorNode = ct.rgb; cm.opacityNode = ct.a;
+      const cm = mediaDepthLayer(new MeshBasicNodeMaterial({ map: creditTexture(text), transparent: true, depthWrite: false }), 3);
       o.credit = new Mesh(plane, cm); o.credit.matrixAutoUpdate = false; o.credit.frustumCulled = true; o.credit.renderOrder = 4;
       group.add(o.credit);
     }
@@ -531,7 +541,7 @@ export function createMediaSlots(scene, track, opts = {}) {
       if (own.get(sl.index) !== o || o.el !== el) return;
       const w = el.videoWidth || el.naturalWidth || el.width || 1, h = el.videoHeight || el.naturalHeight || el.height || 1;
       const c = fitCover(w / h, sl.w / sl.h);
-      crop.cx.value = c.cx; crop.cy.value = c.cy; crop.sx.value = c.sx; crop.sy.value = c.sy;
+      crop.set(c.cx, c.cy, c.sx, c.sy);
       if (o.shared) {
         if (!o.shared.ready) {
           o.shared.ready = true;
@@ -578,7 +588,7 @@ export function createMediaSlots(scene, track, opts = {}) {
       o.mesh.visible = false; o.credit.visible = false;
       o.el = null; o.kind = null; o.borrowed = false; o.ready = false; o.creditOn = false; o.src = -1;
     } else {
-      group.remove(o.mesh); o.mat.dispose(); o.tex.dispose();
+      group.remove(o.mesh); o.tex.dispose(); releaseSourceMaterial(o.tex);
       if (o.credit) { group.remove(o.credit); o.credit.material.dispose(); }
     }
   }
@@ -678,7 +688,10 @@ export function createMediaSlots(scene, track, opts = {}) {
     for (const owner of sharedPool) { if (!owner.idleDisposed) owner.tex.dispose(); clearVideoCanvas(owner); }
     for (const pg of progs) pg.tex.dispose();
     if (creditTex) creditTex.tex.dispose();
-    group.traverse((o) => { if (o.material) o.material.dispose(); });
+    const pooledMaterials = new Set(sourceMaterials.values());
+    group.traverse((o) => { if (o.material && !pooledMaterials.has(o.material)) o.material.dispose(); });
+    for (const material of pooledMaterials) material.dispose();
+    sourceMaterials.clear();
     for (const g of owned) g.dispose();
     if (scene) scene.remove(group);
   }
@@ -746,11 +759,12 @@ function screenMaterial(tex, crop, info, spin, warp, U, M, palette = null) {
   return m;
 }
 
-/** A real source on one slot: the cover crop from its aspect, same contrast and gain as the placeholders. */
-function ownMaterial(tex, crop, U, M) {
+/** Fixed image per video owner, shared by every borrowing face; only crop varies per draw. */
+function ownMaterial(tex, U, M) {
   const m = mediaDepthLayer(new MeshBasicNodeMaterial({ side: FrontSide }));
-  const tuv = vec2(crop.cx, crop.cy).add(uv().sub(0.5).mul(vec2(crop.sx, crop.sy)));
-  m.colorNode = mix(vec3(0.42, 0.36, 0.48), tex.sample(tuv).rgb, U.contrast).mul(M.screenGain);
+  const crop = uniform(new Vector4(0.5, 0.5, 1, 1)).onObjectUpdate(({ object }) => object.userData.mediaCrop);
+  const tuv = crop.xy.add(uv().sub(0.5).mul(crop.zw));
+  m.colorNode = mix(vec3(0.42, 0.36, 0.48), texture(tex, tuv).rgb, U.contrast).mul(M.screenGain);
   return m;
 }
 
