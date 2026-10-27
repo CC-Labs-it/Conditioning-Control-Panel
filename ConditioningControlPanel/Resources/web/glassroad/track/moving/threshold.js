@@ -2,9 +2,10 @@
 const ANCHORS = [91, 111, 159, 249, 333, 350];
 const distance = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
 
-function clearStation(track, target) {
-  for (let radius = 0; radius <= 42; radius += 2) for (const sign of radius ? [1, -1] : [1]) {
+function clearStation(track, target, placed) {
+  for (let radius = 0; radius <= 140; radius += 2) for (const sign of radius ? [1, -1] : [1]) {
     const s = target + radius * sign, f = track.frameAt(s);
+    if (track.sectionAt(s) !== track.sectionAt(target) || placed.some(row => Math.abs(row.s-s)<40)) continue;
     if (f.w < 24 || f.n[1] < .97 || Math.abs(f.t[1]) > .16 || f.flags.includes('jump')) continue;
     if ((track.boosts || []).some(b => Math.abs(b.s - s) < b.len / 2 + 14)) continue;
     if ((track.aerials || []).some(a => s > a.rampS0 - 35 && s < a.landingS1 + 25)) continue;
@@ -26,7 +27,8 @@ function lensBridge(track) {
   const fork = { id: 'threshold-lens-piston-bridge', label: 'Lens bridge', kind: 'timed', from, to,
     points: [point(a.p), point(a.p.map((v, i) => v + a.t[i] * handle)),
       point(b.p.map((v, i) => v - b.t[i] * handle)), point(b.p)] };
-  return { forkId: fork.id, fork, fromU: .3, toU: .65, periodS: 14, openS: 8, transitionS: .8 };
+  // The broader elbow has a longer chord. Keep a crossing window at the existing 12m/s floor.
+  return { forkId: fork.id, fork, fromU: .32, toU: .64, periodS: 14, openS: 8, transitionS: .8 };
 }
 
 export function movingStations(track) {
@@ -34,7 +36,7 @@ export function movingStations(track) {
   const traps = [];
   for (const [i, node] of ANCHORS.entries()) {
     if (!Number.isFinite(track.nodeS[node])) continue;
-    const s = clearStation(track, track.nodeS[node]);
+    const s = clearStation(track, track.nodeS[node], traps);
     if (s === null) continue;
     traps.push({ id: 'threshold-gallery-' + (i + 1), s, kind: i % 2 ? 'piston' : 'slider',
       side: i % 2 ? -1 : 1, w: 5, len: 4, periodBeats: 2, offsetBeats: i % 2 });

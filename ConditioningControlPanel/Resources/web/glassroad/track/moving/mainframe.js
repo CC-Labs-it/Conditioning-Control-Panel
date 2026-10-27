@@ -18,5 +18,6 @@ export function movingStations(track) {
   const fork = { id: 'mainframe-piston-gantry', kind: 'timed', label: 'PISTON BRIDGE', from, to,
     points: [point([...a.p]), point(add(a.p, a.t, 12)), point(lerp(.3)), point(lerp(.7)),
       point(add(b.p, b.t, -12)), point([...b.p])] };
-  return { traps, bridge: { forkId: fork.id, fork, fromU: .3, toU: .65, periodS: 14, openS: 8, transitionS: .8 } };
+  // Broader road turns lengthen the chord; shorten only its moving cut, retaining the timer.
+  return { traps, bridge: { forkId: fork.id, fork, fromU: .4, toU: .6, periodS: 14, openS: 8, transitionS: .8 } };
 }

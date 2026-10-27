@@ -19,7 +19,8 @@ const vertex = (mesh, i) => ({ p: Array.from(mesh.positions.subarray(i * 3, i * 
   n: Array.from(mesh.normals.subarray(i * 3, i * 3 + 3)), uv: Array.from(mesh.uvs.subarray(i * 2, i * 2 + 2)) });
 
 function checkCurvedPad(json, row, options = {}) {
-  const track = loadTrack({ ...json, boosts: [row] }, options), pad = track.boosts[0], { road, pads } = track.meshes;
+  // Isolate this painted triangle fixture from runtime pad planning and extra train entries.
+  const track = loadTrack({ ...json, boosts: [row] }, { ...options, boostSafety: false }), pad = track.boosts[0], { road, pads } = track.meshes;
   const roadFaces = [];
   for (let i = 0; i < road.indices.length; i += 3) {
     const v = Array.from(road.indices.subarray(i, i + 3), index => vertex(road, index));
@@ -84,7 +85,7 @@ test('A banked curved pad crossing the lap seam retains its complete footprint a
 });
 
 test('Dry pads keep their original two-edge strips, metre UVs and vertex count', () => {
-  const json = read('boudoir'), row = json.boosts[0], track = loadTrack({ ...json, boosts: [row] });
+  const json = read('boudoir'), row = json.boosts[0], track = loadTrack({ ...json, boosts: [row] }, { boostSafety: false });
   const pad = track.boosts[0], mesh = track.meshes.pads, rows = Math.ceil(pad.len);
   assert.equal(mesh.positions.length / 3, (rows + 1) * 2);
   assert.equal(mesh.indices.length, rows * 6);
@@ -97,7 +98,7 @@ test('Dry pads keep their original two-edge strips, metre UVs and vertex count',
 });
 
 test('Wrapped Float32 road UVs retain the preceding face when a pad edge rounds forward', () => {
-  const json = read('mainframe'), track = loadTrack({ ...json, boosts: [] }, { aerials: false });
+  const json = read('mainframe'), track = loadTrack({ ...json, boosts: [] }, { aerials: false, courseShape: false });
   const uv = track.meshes.road.uvs;
   // Changing the lap length moves Float32 rounding boundaries, so locate a real wet edge.
   const node = json.nodes.findIndex((_, node) => {
@@ -111,6 +112,6 @@ test('Wrapped Float32 road UVs retain the preceding face when a pad edge rounds 
   });
   assert.ok(node >= 0, 'fixture must exercise the wrapped Float32 edge crossing');
   const row = { node, x: 0, w: 7, len: 6 };
-  const result = checkCurvedPad(json, row, { aerials: false });
+  const result = checkCurvedPad(json, row, { aerials: false, courseShape: false });
   assert.ok(Math.abs(result.area - row.w * row.len) < 1e-5, 'the submillimetre edge strip has complete coverage');
 });

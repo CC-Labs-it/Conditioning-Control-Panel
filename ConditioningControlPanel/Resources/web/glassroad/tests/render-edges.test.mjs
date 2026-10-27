@@ -28,10 +28,10 @@ test('edges: the rail is a 1.2 m barrier and the render reads the same height', 
 
 test('edges: the hazard strip and lip lie on the road along open edges only, never beside a rail', () => {
   const v = verts(M.edgeStrip);
-  assert.ok(v.length > 60);   // the stone field (wave 2) paints no strip along its 43 m: the lips are the edges there
+  assert.ok(v.length >= 2*Math.ceil((R0.openS1-R0.openS0)/4), 'the real 24m mouth retains detailed edge rows');
   let openRun = 0;
-  for (const [x, y, z, u] of v) {
-    const q = track.query(x, y, z);
+  for (const [x, y, z, u, s] of v) {
+    const q = track.query(x, y, z, track.frameAt(s).seg);
     assert.ok(Math.abs(q.height - 0.02) < 0.02, 'on the road ' + q.height.toFixed(3));
     assert.ok(q.edgeDist > -0.01 && q.edgeDist < EDGE_MESH.stripM + 0.01, 'within the strip of an edge ' + q.edgeDist.toFixed(2));
     assert.ok(Math.abs(q.edgeDist - u) < 0.02, 'u = metres in from the edge');
@@ -41,6 +41,8 @@ test('edges: the hazard strip and lip lie on the road along open edges only, nev
   // the open corner both sides, and the drop shortcut's opening
   const lipS = v.filter((p) => p[3] < 0.01).map((p) => p[4]);
   assert.ok(lipS.some((s) => s >= R0.openS0 - 0.5 && s <= R0.openS1 + 0.5), 'the shortcut opening is an open edge');
+  const mouth=lipS.filter(s=>s>=R0.openS0-4&&s<=R0.openS1+4);
+  assert.ok(Math.max(...mouth)-Math.min(...mouth)>=R0.openS1-R0.openS0-4,'the strip covers the full physical mouth');
   assert.ok(lipS.some((s) => s > track.jumps[0].landS && s < track.lengthM - 50), 'the open corner');
 });
 
@@ -60,9 +62,12 @@ test('edges: a tall end post wherever a rail run stops, none at the shortcut ope
   const v = verts(M.railCaps), n = v.length / 20;
   assert.ok(n >= 6, 'end posts ' + n);
   for (let i = 0; i < n; i++) {
-    const q = track.query(v[i * 20][0], v[i * 20][1], v[i * 20][2]);
-    assert.ok(q.edgeDist < 0.2 && q.edgeDist > -0.5, 'on the rail line ' + q.edgeDist.toFixed(2));
-    assert.ok(Math.abs(q.s - R0.openS0) > EDGE_MESH.capSkipM - 1 && Math.abs(q.s - R0.openS1) > EDGE_MESH.capSkipM - 1);
+    const p=v[i*20],s=p[4],f=track.frameAt(s),d=p.slice(0,3).map((value,k)=>value-f.p[k]);
+    // A post at a field lip has no supporting island under it; a global ground query can pick a lower deck.
+    const edge=f.w/2-Math.abs(d.reduce((sum,value,k)=>sum+value*f.b[k],0));
+    assert.ok(edge < 0.2 && edge > -0.5, 'on its own rail line ' + edge.toFixed(2));
+    assert.ok(Math.abs(d.reduce((sum,value,k)=>sum+value*f.n[k],0))<.01,'post starts on its own lip plane');
+    assert.ok(Math.abs(s - R0.openS0) > EDGE_MESH.capSkipM - 1 && Math.abs(s - R0.openS1) > EDGE_MESH.capSkipM - 1);
   }
   const ends = v.filter((p) => p[3] === 1).length;
   assert.ok(ends >= n * 4, 'a lit top on every post');

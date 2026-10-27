@@ -199,7 +199,17 @@ test('routes: a shallow late cut now lands; a true overshoot still rescues witho
   const why = timid.names.filter((n) => /route|drop|rescue|edge|fall|wall/.test(n)).join(',');
   assert.ok(timid.names.includes('route-land') && timid.names.includes('route-skip'), 'timid: ' + why);
   assert.ok(!timid.names.includes('drop'), 'timid: ' + why);
-  const wild = cut({ v: 50, yawDeg: 80, hop: true, maxS: 6 });
+  // The broader outer road can fairly catch the former 50m/s fixture. A real overshoot
+  // has insufficient air-turning distance even with the strongest high-speed catch.
+  const from = track.frameAt(R0.openS0+4);
+  let landing, nearest = Infinity;
+  for (let s = R0.land.fromS; s < R0.land.toS; s++) {
+    const f = track.frameAt(s), d = Math.hypot(f.p[0]-from.p[0],f.p[2]-from.p[2]);
+    if (d < nearest) { nearest = d; landing = f; }
+  }
+  const beyondOuterEdgeM = nearest + landing.w/2 + from.w/2;
+  const escapeMps = Math.sqrt(2 * makeFeel().get('route.airAccel') * 1.5**2 * beyondOuterEdgeM);
+  const wild = cut({ v: escapeMps, yawDeg: 80, hop: true, maxS: 6 });
   assert.ok(!wild.names.includes('route-land') && !wild.names.includes('route-skip'), 'wild: ' + wild.names.join(','));
   assert.ok(wild.names.includes('drop'), 'wild: ' + wild.names.filter((n) => /route|drop|rescue|edge|fall/.test(n)).join(','));
 });
@@ -208,7 +218,7 @@ test('routes: the bots leave the dare alone, finish, and seldom fall', () => {
   let landed = 0, drops = 0, finished = 0, bots = 0;
   for (const seed of [1, 4]) {
     const R = makeRace({ seed });
-    R.run(900, () => R.racers.list.every((r) => r.finished));
+    R.run(60 + R.track.lengthM * R.track.laps / (R.feel.get('speed.topMps') * .6), () => R.racers.list.every((r) => r.finished));
     landed += R.botEvents('route-land').length;
     drops += R.botEvents('drop').length;
     finished += R.racers.list.filter((r) => r.finished).length;
