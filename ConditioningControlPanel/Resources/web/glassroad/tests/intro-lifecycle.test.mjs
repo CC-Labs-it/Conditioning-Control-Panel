@@ -14,6 +14,7 @@ function run(extra = '') {
   const sandbox = { events, Promise, console };
   vm.runInNewContext(`
     let state='menu', paused=false, online=null, introElapsed=0, introTarget=null, raceAudioStart=null; let warmedTier=null, rewarmBusy=false;
+    const lights={ready:true,busy:false,covered:false,want:null}; function waitForLights(want){lights.want=want;events.push(['wait-lights',want])}
     const lifetime={alive:true}, pickedSong=null, CHARTS=['course-chart'], DEV=false;
     const course={}, track={id:'mainframe'}, trackName='Mainframe', laps=3, P={view:[],st:[]}, S={lap:0};
     const renderer={aspect:16/9}, canvas={focus(){events.push('focus')}}, introHud={style:{visibility:''}};

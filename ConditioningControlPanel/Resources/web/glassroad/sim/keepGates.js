@@ -7,6 +7,8 @@ import { yawParams, calmOf } from './steer.js';
 import { makeQuery } from '../track/query.js';
 import { machineryBeatAt, beatCycle, machineryRearming } from '../track/machineryBeat.js';
 
+import { trapStroke } from '../track/trapArrangement.js';
+
 export const KEEP_GATE = Object.freeze({ cycleS: 9.6, liftM: 8.4, heightM: 8,
   warnStartS: 3, lowerStartS: 5, holdStartS: 5.9, riseStartS: 7.2, clearStartS: 8.4,
   halfDepthM: .55, kartRadiusM: .65, kartHeightM: 1.6, stallS: .4,
@@ -15,6 +17,12 @@ const ease = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 
 /** One phase authority for both visible mesh and collision. No wall-clock reads. */
 export function keepGatePhase(gate, timeS, out = {}, beat = null) {
+  const arranged = trapStroke(gate, beat);
+  if (arranged) {
+    const liftM = KEEP_GATE.liftM * (1 - arranged.extension);
+    return Object.assign(out, arranged, { liftM, opacity: arranged.phase === 'clear' ? .035 : .62,
+      blocking: liftM < KEEP_GATE.kartHeightM });
+  }
   if (beat?.fallback) { timeS *= beat.pace; beat = null; }
   if (beat) {
     const period = 2, offset = Math.round((gate.offsetS || 0) / beat.beatS), t = beatCycle(beat.beat + offset, period);

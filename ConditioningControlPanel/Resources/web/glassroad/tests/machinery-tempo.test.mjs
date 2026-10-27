@@ -27,26 +27,26 @@ for(const kind of ['wheel','shutter','block','flipper']) {
   poses.push([kind,(t,b)=>goonworksPose(r,t,b),kind==='wheel'?'angle':kind==='shutter'?'x':'height']);
 }
 
-test('every silent solo trap moves at twice the authored pace while authority remains unchanged',()=>{
+test('silent solo machinery returns to authored pace while authority remains unchanged',()=>{
   const track={}; setMachineryBeat(track,{enabled:true,fallback:true,raceS:0});
   for(const [name,pose,key] of poses) {
     let changed=0;
     for(let t=.03;t<12;t+=.13) {
-      const faster=pose(t,machineryBeatAt(track,t))[key], old=pose(t,null)[key];
-      assert.ok(Math.abs(faster-pose(t*2,null)[key])<1e-9,name+' uses the shared accelerated pose');
-      if(Math.abs(faster-old)>.05)changed++;
+      const slower=pose(t,machineryBeatAt(track,t))[key], oldFast=pose(t*2,null)[key];
+      assert.ok(Math.abs(slower-pose(t,null)[key])<1e-9,name+' uses the shared authored pose');
+      if(Math.abs(slower-oldFast)>.05)changed++;
     }
-    assert.ok(changed>15,name+' has clearly faster movement');
+    assert.ok(changed>15,name+' differs from the former double-speed motion');
   }
   setMachineryBeat(track,{enabled:false,fallback:true,raceS:6});
   assert.equal(machineryBeatAt(track,6),null,'online authority opts out');
 });
 
-test('song-driven motions double their cycles on heard subdivisions without shortening seek grace',()=>{
+test('song-driven motions keep whole heard beats and full seek grace at half the former cadence',()=>{
   const track={};setMachineryBeat(track,{enabled:true,songS:0,raceS:0,bpm:96});
   const oldFrame=t=>({beat:t/.625,beatS:.625,safe:false});
   for(const [name,pose,key] of poses)for(let t=12;t<20;t+=.21)
-    assert.ok(Math.abs(pose(t,machineryBeatAt(track,t))[key]-pose(t*2,oldFrame(t*2))[key])<1e-8,name+' remains on the musical grid');
+    assert.ok(Math.abs(pose(t,machineryBeatAt(track,t))[key]-pose(t,oldFrame(t))[key])<1e-8,name+' remains on the musical grid');
   setMachineryBeat(track,{enabled:true,songS:1,raceS:12,bpm:96});
   const frame=machineryBeatAt(track,12),graceS=-frame.beat*frame.beatS;
   assert.ok(graceS>=4*.625 && graceS<5*.625,'four heard warning beats after a seek');
@@ -54,17 +54,17 @@ test('song-driven motions double their cycles on heard subdivisions without shor
   assert.equal(machineryBeatAt(track,12+graceS+.001).safe,false);
 });
 
-test('faster perfume still has a visible 600 ms rise and fade in song and silent solo play',()=>{
+test('slower perfume retains visible 600 ms fades and a complete clear window',()=>{
   for(const fallback of [false,true]) {
     const track={};setMachineryBeat(track,{enabled:true,fallback,songS:0,raceS:0,bpm:120});
     const phases=[];
-    for(let i=0;i<6000;i++)phases.push(perfumePhase(row,i/1000,{},machineryBeatAt(track,i/1000)).phase);
+    for(let i=0;i<12000;i++)phases.push(perfumePhase(row,i/1000,{},machineryBeatAt(track,i/1000)).phase);
     for(const phase of ['spray','fade'])assert.ok(phases.filter(p=>p===phase).length>=599,phase+' is readable');
     assert.ok(phases.includes('active')&&phases.includes('clear'));
   }
 });
 
-test('silent brush velocity and faster scan drawing remain the exact collision motion',()=>{
+test('silent brush velocity and optional scan tempo scaling match collision exactly',()=>{
   const track={};setMachineryBeat(track,{enabled:true,fallback:true,raceS:0});
   const t=.71,e=.00001,pose=s=>mascaraPhase(row,s,machineryBeatAt(track,s)),p=pose(t);
   assert.ok(Math.abs((pose(t+e).x-pose(t-e).x)/(2*e)-p.vx)<1e-6);

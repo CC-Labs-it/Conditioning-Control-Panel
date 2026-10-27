@@ -15,6 +15,9 @@
  * Photosafe: thin, small-area elements at the screen sides, the boost eases in over boostRiseS (no step).
  * Gentle halves the alpha, the flow and the curve. Pause: dt 0 freezes the flow and the twinkle.
  * The x clamp mirrors atlas.js fieldPoint (tests/render-particles4.test.mjs checks the centre third rule).
+ * Feel wave 2026-10-26 (lane C, render/worldFeel.js): speed sense without the camera. Near top speed the
+ * streaks grow longer and the field thicker (topSpeedShare); the final-lap wake (setWake 0..1) lowers the
+ * speed threshold. Both scale with the motion level (setMotion) and are gone under 'off'.
  */
 import { Mesh, BufferGeometry, BufferAttribute, MeshBasicNodeMaterial, AdditiveBlending, DoubleSide, Color } from 'three/webgpu';
 import {
@@ -25,8 +28,17 @@ import { S, BOOST } from '../sim/state.js';
 import { LOOK } from './look.js';
 import { Q } from './quality.js';
 import { juiceHues, p4Look, fieldBirth, fieldDensity, boostTarget, tierColour } from './atlas.js';
+import { finalLapMods, topSpeedShare, feelVal, WORLD_FEEL, motionMul } from './worldFeel.js';
 
 const KIND = { streak: 0, glitter: 1, orb: 2 };
+
+/** Fade the camera field out around a busy enclosed section, then restore it outside. */
+export function speedFieldVisibility(s, quietRange = null) {
+  if (!quietRange || !Number.isFinite(s)) return 1;
+  const distance = Math.max(quietRange.s0 - s, s - quietRange.s1);
+  const t = Math.max(0, Math.min(1, distance / 20));
+  return t * t * (3 - 2 * t);
+}
 
 export function createSpeedLines(feel = null) {
   const P = p4Look(LOOK), HUES = juiceHues();
@@ -95,10 +107,10 @@ export function createSpeedLines(feel = null) {
   const mesh = new Mesh(g, m);
   mesh.frustumCulled = false; mesh.renderOrder = 3; mesh.castShadow = false; mesh.receiveShadow = false;
 
-  let boost = 0, curve = 0;
+  let boost = 0, curve = 0, wake = 0, motion = 'full';
   const top = () => (feel && feel.get ? feel.get('speed.topMps') : 0) || 39;
   /** Per frame (signature kept from polish 3; obj unused, the field follows the rendering camera). */
-  function update(dt, kart, fx, obj) {
+  function update(dt, kart, fx, obj, visibility = 1) {
     const gentle = !!(feel && feel.get && feel.get('gentle.on')), pct = Math.max(0, kart[S.speedPct] || 0), mps = pct * top();
     const bk = kart[S.boostKind] | 0, rescue = kart[S.respawnPhase] > 0;
     const want = rescue ? 0 : fx ? Math.min(1, Math.max(0, fx.speedLines || 0)) : boostTarget(bk, BOOST);
@@ -111,10 +123,13 @@ export function createSpeedLines(feel = null) {
     if (dt > 0) curve += (k * (gentle ? 0.5 : 1) - curve) * (1 - Math.exp(-dt / P.curveTcS));
     u.curve.value = curve;
     u.boost.value = boost;
-    u.lenScale.value = (0.35 + pct * P.streakSpeedLen) * (1 + boost * P.streakBoostLen);
-    u.density.value = rescue ? 0 : fieldDensity(pct, boost, P) * Math.min(1, Q.speedLines * P.fieldCountMul / n);
-    u.alpha.value = P.fieldAlpha * (gentle ? P.fieldGentle : 1);
-    mesh.visible = u.density.value > 0.002;
+    const topK = topSpeedShare(pct, feel, motion) * (gentle ? 0.5 : 1), shift = finalLapMods(wake * motionMul(motion), feel).fieldShift;
+    const S2 = WORLD_FEEL.speedSense;
+    u.lenScale.value = (0.35 + pct * P.streakSpeedLen) * (1 + boost * P.streakBoostLen) * (1 + topK * feelVal(feel, 'speedSense.topLenMul', S2.topLenMul));
+    const dens = Math.min(1, fieldDensity(pct + shift, boost, P) + topK * feelVal(feel, 'speedSense.topDensity', S2.topDensity));
+    u.density.value = rescue ? 0 : dens * Math.min(1, Q.speedLines * P.fieldCountMul / n);
+    u.alpha.value = P.fieldAlpha * (gentle ? P.fieldGentle : 1) * visibility;
+    mesh.visible = u.density.value > 0.002 && visibility > .002;
   }
-  return { object: mesh, update, dispose() { g.dispose(); m.dispose(); } };
+  return { object: mesh, update, setWake(v) { wake = Math.max(0, Math.min(1, v || 0)); }, setMotion(m) { motion = m || 'full'; }, dispose() { g.dispose(); m.dispose(); } };
 }

@@ -3,7 +3,7 @@ import { S, BOOST, RESPAWN, cloneState } from './state.js';
 import { clamp, wrap } from '../core/math.js';
 import { gateSweep, createKeepGates } from './keepGates.js';
 import { makeQuery } from '../track/query.js';
-import { BOUDOIR_HAZARD as K, getBoudoirSetpieces, powderPressPhase as pressPose, mascaraHeads, mascaraPhase as brushPose, ribbonPhase as ribbonPose, releasedMirrorGatePhase, releaseBoudoirMirror, breakBoudoirMirror, resetBoudoirMirrors } from '../track/boudoir-setpieces.js';
+import { BOUDOIR_HAZARD as K, getBoudoirSetpieces, powderPressHeads, powderPressPhase as pressPose, mascaraHeads, mascaraPhase as brushPose, ribbonPhase as ribbonPose, releasedMirrorGatePhase, releaseBoudoirMirror, breakBoudoirMirror, resetBoudoirMirrors } from '../track/boudoir-setpieces.js';
 import { machineryBeatAt } from '../track/machineryBeat.js';
 const RADIUS = .7, HEIGHT = 1.6;
 const dot = (a, b) => a.reduce((sum, v, i) => sum + v * b[i], 0);
@@ -16,7 +16,7 @@ export function createBoudoirHazards(track, layout = null) {
   const powderPressPhase = timed(pressPose), mascaraPhase = timed(brushPose), ribbonPhase = timed(ribbonPose);
   const mirrorGatePhase = (row, timeS) => releasedMirrorGatePhase(track, row, timeS, machineryBeatAt(track, timeS));
   const plan = layout?.presses ? layout : getBoudoirSetpieces(track, layout || undefined);
-  const rows = [...plan.presses, ...plan.sweepers.flatMap(mascaraHeads), ...plan.mirrorGates].map(row => ({ ...row, frame: track.frameAt(row.s) }));
+  const rows = [...plan.presses.flatMap(powderPressHeads), ...plan.sweepers.flatMap(mascaraHeads), ...plan.mirrorGates].map(row => ({ ...row, frame: track.frameAt(row.s) }));
   const unique = [...plan.presses, ...plan.sweepers, ...plan.mirrorGates.filter(row => row.lane === 1)].map(row => ({ ...row, x: 0, w: 14 }));
   const lanes = createKeepGates(track, { gates: unique });
   let memory = new WeakMap(), hits = 0, ribbonPasses = 0;
@@ -36,7 +36,7 @@ export function createBoudoirHazards(track, layout = null) {
       const time = ta + (tb - ta) * fraction, h = A[2] + (B[2] - A[2]) * fraction;
       const phase = brush ? mascaraPhase(row, time) : row.kind === 'mirror' ? mirrorGatePhase(row, time) : powderPressPhase(row, time);
       if (phase.broken) continue;
-      const low = brush ? phase.y - phase.radiusM : phase.liftM, high = low + (brush ? phase.radiusM * 2 : row.kind === 'mirror' ? K.mirrorHeightM : K.pressHeightM);
+      const low = brush ? phase.y - phase.radiusM : phase.liftM, high = low + (brush ? phase.radiusM * 2 : row.kind === 'mirror' ? K.mirrorHeightM : (row.heightM || K.pressHeightM));
       if (h + HEIGHT < low || h > high || h < -1.5) continue;
       if (row.kind === 'mirror' && breakBoudoirMirror(track, row, time)) {
         hits++;
@@ -103,7 +103,7 @@ export function createBoudoirHazards(track, layout = null) {
   return { plan, rows, apply, steer(r, out) { if (!track.forkAtSeg?.(r.st[S.seg])) lanes.steer(r, out); },
     reset() { memory = new WeakMap(); hits = ribbonPasses = 0; lanes.reset(); resetBoudoirMirrors(track); },
     inspect(timeS = 0) { return { hits, ribbonPasses,
-      presses: plan.presses.map(row => ({ ...row, ...powderPressPhase(row, timeS) })),
+      presses: plan.presses.flatMap(powderPressHeads).map(row => ({ ...row, ...powderPressPhase(row, timeS) })),
       sweepers: plan.sweepers.map(row => ({ ...row, heads: mascaraHeads(row).map(head => ({ ...head, ...mascaraPhase(head, timeS) })) })),
       conveyors: plan.conveyors.map(row => ({ ...row, ...ribbonPhase(row, timeS) })),
       mirrorGates: plan.mirrorGates.map(row => ({ ...row, ...mirrorGatePhase(row, timeS) })) }; },

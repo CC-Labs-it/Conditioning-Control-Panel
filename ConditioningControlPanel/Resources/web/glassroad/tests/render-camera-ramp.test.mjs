@@ -7,6 +7,7 @@ import { createState, S, setPos, setVel, setQuat } from '../sim/state.js';
 import { qfromBasis } from '../core/math.js';
 import { makeFeel, DT } from './sim-fake.mjs';
 import { RACER_FRAMING } from '../render/framing.js';
+import { DRIVER_LOOK } from '../render/lookAround.js';
 
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const dot = (a, b) => a.reduce((sum, x, i) => sum + x * b[i], 0);
@@ -20,7 +21,9 @@ function framing(rig, k, f) {
   const forward = norm(rig.look.map((v, i) => v - rig.eye[i])), right = norm(cross(forward, rig.up)), up = cross(right, forward);
   const p = [k[S.posX], k[S.posY], k[S.posZ]].map((v, i) => v + f.n[i] * RACER_FRAMING.centerUpM * RACER_FRAMING.scale - rig.eye[i]);
   const screenY = 0.5 - dot(p, up) / dot(p, forward) / Math.tan(rig.vFov * Math.PI / 360) / 2;
-  assert.ok(Math.abs(screenY - RACER_FRAMING.screenY) < 1e-6, 'accepted vertical framing');
+  const tan = Math.tan(rig.vFov * Math.PI / 360);
+  const target = .5 - Math.tan(Math.atan((.5 - RACER_FRAMING.screenY) * 2 * tan) - DRIVER_LOOK.upDeg * Math.PI / 180) / (2 * tan);
+  assert.ok(Math.abs(screenY - target) < 1e-6, 'owner-selected upward neutral framing');
   assert.ok(Math.abs(dot(p, right)) < 1e-5, 'racer stays horizontally centred');
 }
 

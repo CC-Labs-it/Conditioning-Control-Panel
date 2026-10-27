@@ -27,6 +27,9 @@
  * Polish 5 (numbers in atlas.js BIRTH_LOOK): every particle is born over about 50 ms, from a third of its size
  * and no alpha, eased out, so nothing pops in as a hard tick; drift spark streaks are a touch fatter at tier 1.
  * The ring keeps a high-water mark: only the slots below it are drawn and uploaded (addUpdateRange).
+ * Feel wave 2026-10-26 (lane C, render/worldFeel.js): setWake(mul) scales every burst and added count (the
+ * final-lap wake, x1.5 at full); debris(p, opts) throws chips that fall, settle on groundY and stay
+ * permanence.debrisSettleS (20 s) before a permanence.debrisFadeS ease out. Under motion off debris is skipped.
  */
 import { Sprite, SpriteNodeMaterial, AdditiveBlending, InstancedBufferAttribute, DynamicDrawUsage, Color, Vector3 } from 'three/webgpu';
 import {
@@ -40,6 +43,7 @@ import { sparkProfile } from './kartPose.js';
 import { currentArt } from './art.js';
 import { lensDepth, lensScale, lensAlpha } from './lens.js';
 import { LENS } from './lensMath.js';
+import { debrisAlpha, settleY, feelVal, WORLD_FEEL, motionMul } from './worldFeel.js';
 import {
   CELLS, GRID, ATLAS_PX, MAX_LOD, FXART_LOOK, FAMILIES, UPRIGHT, ALIGNED, cellIndex, cellInset, legacyShape, sparkFamily, pickCell,
   familyOf, hitFamily, FX2_LOOK, hitColours, juiceLook, juiceHues, burstBoost, gentleGrow, tierShare,
@@ -95,12 +99,15 @@ export function createParticles(feel, art = currentArt()) {
   let lightNow = 0;
   // polish 2: a colour ramp from birth to death (flame: white core to the boost colour) and growth over life
   const ramp = new Float32Array(max0 * 3), hasRamp = new Uint8Array(max0), grow = new Float32Array(max0);
+  // feel wave: debris rests on its ground y (NaN = not debris) and keeps its size; wake scales counts
+  const ground = new Float32Array(max0).fill(NaN);
+  let wake = 1, motion = 'full';
   const B = LOOK.fx2 || FX2_LOOK, J = juiceLook(LOOK), HUES = juiceHues(), P4 = p4Look(LOOK);
   const tierCol = (t) => tierColour(t, P4);
   const extra = () => (Q.name === 'phone' ? B.phoneExtraMul : 1);
   const gentle = () => !!(feel && feel.get('gentle.on'));
   const big = (m) => gentleGrow(m, gentle(), J);                     // a growth, halved under Gentle
-  const more = () => tierShare(Q.name, J) * (gentle() ? J.gentleCount : 1);   // share of the added counts
+  const more = () => tierShare(Q.name, J) * (gentle() ? J.gentleCount : 1) * wake;   // share of the added counts
   const m = new SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending });
   const posN = instancedDynamicBufferAttribute(aPos, 'vec3');
   m.positionNode = posN;
@@ -161,8 +168,9 @@ export function createParticles(feel, art = currentArt()) {
     aRot.array[i * 2] = ci.code; aRot.array[i * 2 + 1] = ci.aligned ? widthNow : ci.upright ? 0 : Math.random() * 6.283;
     aSize.array[i] = sz * ci.size * (gr > 0 ? 0.4 : 1) * BL.sizeFrom;
     size[i] = sz * ci.size; life[i] = maxLife[i] = lifeS; grav[i] = g; spin[i] = ci.upright ? 0 : sp; light[i] = lightNow;
-    grow[i] = gr; hasRamp[i] = hex2 ? 1 : 0;
+    grow[i] = gr; hasRamp[i] = hex2 ? 1 : 0; ground[i] = NaN;
     if (hex2) { const e = rgb(hex2); ramp[i * 3] = e[0] - k[0]; ramp[i * 3 + 1] = e[1] - k[1]; ramp[i * 3 + 2] = e[2] - k[2]; }
+    return i;
   }
   /** Kart-local emit: position through obj.matrixWorld, velocity through its rotation. */
   /** inherit: the share of the kart velocity (carry, set per kart) it keeps, so a flame hangs off the saucer at speed. */
@@ -327,7 +335,7 @@ export function createParticles(feel, art = currentArt()) {
     const bb = burstBoost(opts, LOOK, J), fam = at ? FAMILIES[familyOf(opts, LOOK)] : null;
     // near: the player's own burst, right under the camera: a share of the count and of the stars (lensMath.js)
     const nearMul = near ? LENS.playerBurstMul : 1;
-    const cnt = Math.round(n * nearMul * (bb.family ? 1 + (bb.count - 1) * tierShare(Q.name, J) : 1));
+    const cnt = Math.round(n * nearMul * wake * (bb.family ? 1 + (bb.count - 1) * tierShare(Q.name, J) : 1));
     const sz = sizeM * big(bb.size), sp = speed * bb.speed, lf = lifeS * bb.life;
     for (let k = 0; k < cnt; k++) {
       const a = Math.random() * 6.283, e = rnd(-0.3, 1), v = sp * rnd(0.5, 1), pick = Math.random();
@@ -466,6 +474,22 @@ export function createParticles(feel, art = currentArt()) {
     return false;
   }
 
+  /** Settling debris at a wall / trap hit: p = [x, y, z] on the road (groundY = p[1] unless given). */
+  function debris(p, opts = {}) {
+    if (!p || motion === 'off') return 0;
+    const W = WORLD_FEEL.permanence, fv = (k) => feelVal(feel, 'permanence.' + k, W[k]);
+    const settle = fv('debrisSettleS'), fade = fv('debrisFadeS'), gy = opts.groundY ?? p[1];
+    const n = Math.round((opts.count ?? fv('debrisCount')) * motionMul(motion) * (gentle() ? J.gentleCount : 1) * (Q.name === 'phone' ? 0.5 : 1));
+    const colours = opts.colours || LOOK.bumpColours || ['#ffffff'];
+    for (let k = 0; k < n; k++) {
+      const a = Math.random() * 6.283, v = rnd(1.5, 4);
+      const i = emit(p[0], gy + 0.25, p[2], Math.cos(a) * v, rnd(2, 4.5), Math.sin(a) * v, colours[k % colours.length], fv('debrisSizeM') * rnd(0.7, 1.3),
+        settle + fade, at ? 'glint' : 'disc', 1, rnd(-1, 1) * LOOK.sparkSpin);
+      ground[i] = gy + 0.04; grow[i] = -fade;   // grow < 0 marks debris and carries its fade
+    }
+    return n;
+  }
+
   function update(dt) {
     const n = Math.min(hw, cap()), drag0 = Math.exp(-LOOK.particleDrag * dt), drag1 = Math.exp(-P4.confettiDrag * dt), g0 = LOOK.particleGravityMps2 * dt;
     const p = aPos.array, cl = aCol.array, sz = aSize.array, rt = aRot.array;
@@ -483,6 +507,13 @@ export function createParticles(feel, art = currentArt()) {
       const t = Math.max(0, life[i] / maxLife[i]);
       // polish 5: born over BL.birthS (alpha from 0, size from BL.sizeFrom), then eased out as before
       const bk = birthK(maxLife[i] - life[i], BL);
+      if (!Number.isNaN(ground[i])) {
+        const sy = settleY(p[j + 1], vel[j + 1], ground[i]);
+        if (sy.rest) { p[j + 1] = sy.y; vel[j] = vel[j + 1] = vel[j + 2] = 0; spin[i] = 0; }
+        cl[i * 4 + 3] = debrisAlpha(maxLife[i] - life[i], maxLife[i] + grow[i], -grow[i]) * bk;
+        sz[i] = size[i] * birthSize(bk, BL);
+        continue;
+      }
       cl[i * 4 + 3] = (t < 0.85 ? t / 0.85 : 1) * bk;
       if (hasRamp[i]) {
         // the ramp is stored as (end - start); step the colour by this frame's share of the life
@@ -499,7 +530,8 @@ export function createParticles(feel, art = currentArt()) {
     // upload only the slots this pass touched (the ones it just cleared above the new mark included)
     for (const a of at ? attrs : attrs.slice(0, 4)) { a.clearUpdateRanges(); a.addUpdateRange(0, was * a.itemSize); a.needsUpdate = true; }
   }
-  const api = { object: sprite, atlas: !!at, kart, dust, burst, hit, halo, event, update, dispose() { m.dispose(); } };
+  const api = { object: sprite, atlas: !!at, kart, dust, burst, hit, halo, event, debris, update,
+    setWake(mul) { wake = Math.max(0, Number.isFinite(mul) ? mul : 1); }, setMotion(m) { motion = m || 'full'; }, get wake() { return wake; }, dispose() { m.dispose(); } };
   // dev only (?bot=1): shot scripts reach the live particles through the boot debug record (never read by the
   // game); not enumerable, so the status JSON never tries to serialise three.js objects
   const dbg = globalThis.__glassroad;

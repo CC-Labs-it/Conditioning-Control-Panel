@@ -34,12 +34,17 @@ test('start-relative metres and coverage are continuous at the lap seam and inde
 });
 
 test('the entire boost pad and outer shoulder retain their original road treatment', () => {
-  const pad = track.boosts[0];
-  const underlay = layout.pads.find(p => p.x === pad.x && Math.abs(p.s - (pad.s + pad.len / 2)) < .001);
+  // The unsafe opening boost is now filtered out. Keep an art-only fixture on
+  // the tiled straight so this test still exercises a real pad underlay.
+  const pad = { ...track.boosts[0], s: 45, x: 0 };
+  const underlayLayout = musicTileLayout({ ...track, boosts: [pad] });
+  const underlay = underlayLayout.pads.find(p => p.x === pad.x && Math.abs(p.s - (pad.s + pad.len / 2)) < .001);
   assert.ok(underlay, 'quiet underlay uses the painted pad centre, rather than its entry edge');
   for (const ds of [0, pad.len / 2, pad.len]) for (const x of [-pad.w / 2, 0, pad.w / 2]) {
-    assert.equal(musicTileMask(layout, pad.s + ds, pad.x + x, 8), 0);
+    assert.equal(musicTileMask(underlayLayout, pad.s + ds, pad.x + x, 8), 0);
   }
+  for (const live of track.boosts) for (const ds of [0, live.len / 2, live.len]) for (const x of [-live.w / 2, 0, live.w / 2])
+    assert.equal(musicTileMask(layout, live.s + ds, live.x + x, 8), 0, 'live pad keeps its original road treatment');
   for (const x of [-8, -7.5, -6.2, 6.2, 7.5, 8]) assert.equal(musicTileMask(layout, 32, x, 8), 0);
   assert.ok(musicTileMask(layout, 32, 6, 8) > 0 && musicTileMask(layout, 32, 6, 8) < 1);
 });

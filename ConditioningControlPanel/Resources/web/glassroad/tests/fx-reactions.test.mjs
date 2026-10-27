@@ -25,9 +25,9 @@ function rig({ gentle = false } = {}) {
 }
 
 test('every CONTRACT event has exactly one fx registry entry and nothing else', () => {
-  // Thirty simulation events plus phrase-gate, press contact, word launch and rebound notifications.
+  // Thirty simulation events plus phrase-gate, press contact, trap tick, word launch and rebound notifications.
   const STONES = ['stone', 'void'];
-  assert.equal(EVENTS.length, 34, 'documented events');
+  assert.equal(EVENTS.length, 35, 'documented events');
   // B1: the registry may also hold CONTRACT-B1 events (its section 4), nothing else
   const b1 = readFileSync(new URL('../CONTRACT-B1.md', import.meta.url), 'utf8');
   const B1 = [...b1.slice(b1.indexOf('## 4. Events')).matchAll(/^\| `([a-z-]+)` \|/gm)].map((m) => m[1]);
@@ -38,7 +38,7 @@ test('every CONTRACT event has exactly one fx registry entry and nothing else', 
 });
 
 test('fx sources never switch on an event name and never import three', () => {
-  for (const f of ['cues.js', 'reactions.js', 'shake.js', 'photosafe.js', 'gentle.js']) {
+  for (const f of ['cues.js', 'reactions.js', 'trauma.js', 'photosafe.js', 'gentle.js']) {
     const src = readFileSync(new URL('../fx/' + f, import.meta.url), 'utf8');
     assert.ok(!/switch\s*\(/.test(src), f + ' has a switch');
     assert.ok(!/from ['"]three/.test(src), f + ' imports three');
@@ -63,22 +63,22 @@ test('countdown steps bloom up per pulse, go releases it over goReleaseS', () =>
   assert.equal(fx.state.bloomBoost, 0);
 });
 
-test('boost: fov kick and band speed in, all eased back after boost-end; Gentle removes the kick', () => {
+test('boost: band speed and lines in, all eased back after boost-end; the retired fov kick stays 0', () => {
   const { bus, fx, run } = rig();
   bus.emit('boost-start', { kind: 'drift', tier: 2, amount: 0.18, holdS: 0.9 }); run(0.2);
-  assert.ok(Math.abs(fx.state.fovKick - 6) < 1e-6, 'tier 2 sits on the ladder');
+  assert.equal(fx.state.fovKick, 0, 'feel wave: no fov kick');
   assert.ok(Math.abs(fx.state.bandSpeedMul - 1.5) < 1e-6);
   assert.equal(fx.state.speedLines, 0.85);
-  assert.ok(Math.hypot(...fx.state.shake) > 0);
+  assert.equal(fx.state.trauma, 0, 'a boost is not a hit');
   bus.emit('boost-end', { kind: 'drift' }); run(0.2);
-  assert.ok(fx.state.fovKick > 0 && fx.state.fovKick < 6);
+  assert.ok(fx.state.speedLines > 0 && fx.state.speedLines < 0.85);
   run(2);
-  assert.equal(fx.state.fovKick, 0); assert.equal(fx.state.bandSpeedMul, 1); assert.equal(fx.state.speedLines, 0);
+  assert.equal(fx.state.bandSpeedMul, 1); assert.equal(fx.state.speedLines, 0);
 
   const gen = rig({ gentle: true });
   gen.bus.emit('boost-start', { kind: 'drift', tier: 2 }); gen.run(0.5);
   assert.equal(gen.fx.state.fovKick, 0);
-  assert.deepEqual(gen.fx.state.shake, [0, 0, 0]);
+  assert.equal(gen.fx.state.borderShakePx, 0);
   assert.ok(Math.abs(gen.fx.state.bandSpeedMul - 1.25) < 1e-6);
 });
 
@@ -98,7 +98,7 @@ test('hop squashes then stretches; a heavy landing squashes, dusts and shakes, g
   assert.ok(fx.state.squash < 0, 'stretched in air');
   bus.emit('land', { tier: 3, airTime: 1.2 }); run(1 / 60);
   assert.ok(fx.state.squash > 0.07 && fx.state.dust > 0.9);   // the stretch eases out under it
-  assert.ok(Math.abs(fx.state.shake[1]) > 0);
+  assert.ok(fx.state.trauma > 0.25 && fx.state.traumaOut > 0, 'a tier 3 landing adds 0.3 trauma');
   run(0.26);
   assert.equal(fx.state.dust, 0); assert.ok(Math.abs(fx.state.squash) < 1e-9);
 });
@@ -181,11 +181,12 @@ test('p4: an item hit on the player kicks the camera in and eases back; a bot hi
   };
   const a = mk(false);
   a.bus.emit('item-hit', { victim: 2, by: 0, kind: 'flash', verdict: 'hit' }); a.run(0.1);
-  assert.equal(a.fx.state.camPush, 0);
-  a.bus.emit('item-hit', { victim: 0, by: 2, kind: 'flash', verdict: 'hit' }); a.run(0.08);
-  assert.ok(a.fx.state.camPush > 0.3, 'kick ' + a.fx.state.camPush);
-  a.run(1); assert.equal(a.fx.state.camPush, 0);
+  assert.equal(a.fx.state.trauma, 0);
+  a.bus.emit('item-hit', { victim: 0, by: 2, kind: 'flash', verdict: 'hit' }); a.run(0.02);
+  assert.ok(a.fx.state.trauma > 0.4 && a.fx.state.holdS > 0, 'trauma ' + a.fx.state.trauma + ' and a hit-stop');
+  assert.equal(a.fx.state.camPush, 0, 'the camera push is retired');
+  a.run(1); assert.equal(a.fx.state.trauma, 0); assert.equal(a.fx.state.holdS, 0);
   const b = mk(true);
   b.bus.emit('item-hit', { victim: 0, by: 2, kind: 'flash', verdict: 'hit' }); b.run(0.1);
-  assert.equal(b.fx.state.camPush, 0);
+  assert.equal(b.fx.state.borderShakePx, 0); assert.equal(b.fx.state.aberrationPx, 0, 'Gentle: no screen shake'); assert.equal(b.fx.state.rumble, 0);
 });

@@ -1,4 +1,4 @@
-// Polish 6 (JUICE): bumps felt by impact (fx/cues.js bumpFeel), the side shake (fx/reactions.js sideStep, fx.side)
+// Polish 6 (JUICE): bumps felt by impact (fx/cues.js bumpFeel); feel wave: a hard bump adds trauma (the side shake retired)
 // and the self item use answering from the shipped sound bank (audio/sfxmap.js).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { createFeel } from '../core/feel.js';
 import { createBus } from '../core/events.js';
 import { createState } from '../sim/state.js';
-import { createFx, sideStep, SIDE } from '../fx/reactions.js';
+import { createFx } from '../fx/reactions.js';
 import { bumpFeel, BUMP_LOOK } from '../fx/cues.js';
 import { createPhotosafe } from '../fx/photosafe.js';
 import { createGentle } from '../fx/gentle.js';
@@ -19,8 +19,8 @@ function rig({ gentle = false } = {}) {
   if (gentle) g.set({ on: true });
   const fx = createFx(bus, feel, { gentle: g, photosafe: createPhotosafe(feel) });
   const kart = createState();
-  // the largest side offset seen over s seconds
-  const peakX = (s, dt = 1 / 120) => { let m = 0; for (let t = 0; t < s - 1e-9; t += dt) { fx.update(dt, kart); m = Math.max(m, Math.abs(fx.state.shake[0])); } return m; };
+  // the largest screen shake (trauma aberration) seen over s seconds
+  const peakX = (s, dt = 1 / 120) => { let m = 0; for (let t = 0; t < s - 1e-9; t += dt) { fx.update(dt, kart); m = Math.max(m, fx.state.aberrationPx); } return m; };
   return { feel, bus, fx, peakX };
 }
 
@@ -37,22 +37,17 @@ test('bumpFeel: a graze is nothing, a real bump thuds, a hard one shakes, and th
   assert.ok(mid.level > soft.level);
 });
 
-test('sideStep: lobes alternate, shrink by repeatMul and stop under the floor', () => {
-  const runs = [{ amp: 0.2, sign: 1, t: 0 }];
-  let first = 0, second = 0, t = 0;
-  for (; t < SIDE.periodS * 0.99; t += 0.005) first = Math.max(first, sideStep(runs, 0.005));
-  for (let k = 0; k < SIDE.periodS / 0.005; k++) second = Math.min(second, sideStep(runs, 0.005));
-  assert.ok(first > 0.15 && first <= 0.2 + 1e-9, 'IN: the first lobe reaches the peak ' + first);
-  assert.ok(second < 0 && -second < first, 'the next lobe swings back, smaller');
-  for (let k = 0; k < 200 && runs.length; k++) sideStep(runs, 0.01);
-  assert.equal(runs.length, 0, 'OUT: the run ends');
+test('bump trauma: never more than the brief 0.2, and never a hit-stop', () => {
+  const r = rig(); r.bus.emit('bump', { a: 0, b: 2, dv: 30 }); r.fx.update(1 / 120);
+  assert.ok(r.fx.state.trauma > 0.15 && r.fx.state.trauma <= 0.2 + 1e-9, 'trauma ' + r.fx.state.trauma);
+  assert.equal(r.fx.state.holdS, 0);
 });
 
 test('fx: a hard bump on the player shakes sideways only, scaled by impact; bots, grazes and Gentle do not', () => {
   const a = rig(); a.bus.emit('bump', { a: 0, b: 2, dv: 4 }); const small = a.peakX(0.4);
   const b = rig(); b.bus.emit('bump', { a: 3, b: 0, dv: 9 }); const big = b.peakX(0.4);
   assert.ok(small > 0 && big > small, 'scaled: ' + small + ' < ' + big);
-  const c = rig(); c.bus.emit('bump', { a: 0, b: 2, dv: 9 }); c.fx.update(1 / 60); assert.equal(c.fx.state.shake[1], 0, 'no vertical hop from a bump');
+  const c = rig(); c.bus.emit('bump', { a: 0, b: 2, dv: 9 }); c.fx.update(1 / 60); assert.equal(c.fx.state.camPush, 0, 'no camera push from a bump');
   const bot = rig(); bot.bus.emit('bump', { a: 2, b: 3, dv: 9 }); assert.equal(bot.peakX(0.3), 0);
   const graze = rig(); graze.bus.emit('bump', { a: 0, b: 3, dv: 1 }); assert.equal(graze.peakX(0.3), 0);
   graze.fx.update(1 / 60); assert.equal(graze.fx.state.rumble, 0, 'a graze is nothing at all');

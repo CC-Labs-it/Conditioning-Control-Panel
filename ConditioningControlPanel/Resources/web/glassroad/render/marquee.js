@@ -5,6 +5,7 @@ import { wordTheme } from './wordTheme.js';
 import { screenBodyGeometry, screenBodyMaterial } from './screenBody.js';
 import { objectState } from './objectUniform.js';
 import { screenBodySize } from './screenBodyMath.js';
+import { marqueeFace, faceX, CLEAR_M, HANG_M, DROP_S } from '../sim/marqueeView.js';
 
 const CAPACITY = 12, LINKS = 30, CW = 512, CH = 288;
 const unit = x => Math.max(0, Math.min(1, Number(x) || 0));
@@ -13,11 +14,14 @@ const ease = x => { const u = unit(x); return u * u * (3 - 2 * u); };
 // Song-relative motion only, around a fixed road spot. The camera and physical road never participate.
 // The drop lands exactly on startS (gravity: slow at the top, fastest at impact), bounces twice, then sways
 // one swing per two beats and dips on every beat. An exit at endS snaps one chain (swing off the road) or winches up.
-const FALL_S = 1.05, FALL_M = 46;
+// The transport (sim/marqueeView.js) sets where it hangs for the chase view: shiftM along the road's side axis,
+// fallM so the drop starts just above the top edge, liftM over a raised canal floor, faceScale on climbs and
+// tight turns, and replacedS when a newer drop retires it (it leaves as the next screen falls).
+const FALL_S = DROP_S, FALL_M = 46;
 export function marqueePose(row, songS, gentle = false, side = 0, beat = null) {
-  const w = Math.max(14, Math.min(32, (row.frame?.w || 24) * .9)) * (side ? .78 : 1), h = w * .5625;
-  const age = songS - row.startS, exit = Math.max(0, songS - row.endS);
-  const u = unit((age + FALL_S) / FALL_S), fall = FALL_M * (1 - u * u);
+  const fw = row.frame?.w || 24, { w, h } = marqueeFace(fw, side, row.faceScale);
+  const age = songS - row.startS, exit = Math.max(0, songS - Math.min(row.endS, row.replacedS ?? Infinity));
+  const u = unit((age + FALL_S) / FALL_S), fall = (row.fallM ?? FALL_M) * (1 - u * u);
   const bounce = gentle || age < 0 || age >= .9 ? 0 : Math.abs(Math.sin(age / .45 * Math.PI)) * 2.6 * (1 - age / .9) ** 1.5;
   let sway = 0, dip = 0;
   if (!gentle && age > 0 && beat?.bpm > 0) {
@@ -34,10 +38,10 @@ export function marqueePose(row, songS, gentle = false, side = 0, beat = null) {
   const snap = row.params?.exit === 'snap', away = ease(exit / (gentle ? 2.4 : 1.3));
   const direction = side || (row.params?.snapSide ?? 1);
   const roll = sway + jolt + (!gentle && snap ? direction * away * 1.25 : 0);
-  const x = side * ((row.frame?.w || 24) / 2 + w / 2 + 2) + (snap ? direction * away * (w + 18) : 0);
-  // Rotation cannot lower any corner into the seven-metre road clearance.
+  const x = faceX(fw, side, row.shiftM, row.faceScale) + (snap ? direction * away * (w + 18) : 0);
+  // Rotation cannot lower any corner into the seven-metre road clearance (over a raised canal floor too).
   const extent = Math.abs(Math.cos(roll)) * h * .54 + Math.abs(Math.sin(roll)) * w * .54;
-  const y = Math.max(7.2 + extent, 7.8 + h / 2 + fall + bounce - dip + away * (snap ? 14 : 44));
+  const y = (row.liftM || 0) + Math.max(CLEAR_M + extent, HANG_M + h / 2 + fall + bounce - dip + away * (snap ? 14 : 44));
   return { x, y, w, h, roll, yaw: gentle ? 0 : Math.sin(Math.max(0, age) * .7) * .05,
     whip: gentle ? 0 : bounce * .5 + Math.abs(jolt) * 10 + dip * .6 + (age > -FALL_S && age < 0 ? .8 : 0), away, bottom: y - extent,
     snapped: snap && exit > 0 ? (direction > 0 ? 0 : 1) : -1 };
@@ -116,7 +120,7 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
   try { atlas = acquireAtlas(); } catch { /* The shared Loom can be unavailable; use the procedural canvas. */ }
   const matrix = new Matrix4(), xAxis = new Vector3(), yAxis = new Vector3(), zAxis = new Vector3();
   const dummy = new Object3D(), from = new Vector3(), to = new Vector3(), delta = new Vector3(), up = new Vector3(0, 1, 0);
-  let clock = 0, disposed = false, cursor = 0, copies = 0;
+  let clock = 0, disposed = false, cursor = 0, copies = 0, drops = 0;
   const material = options => { const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, fog: false, ...options }); materials.push(m); return m; };
   // One ink and one rim for every slot (a pair per slot built 50 identical shader graphs at load); the fade
   // is read per drawn object from mesh.userData.fx.alpha. Metal, cloth and picture stay per slot.
@@ -136,7 +140,7 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
     const anchors = [-1, 1].map(() => { const m = new Mesh(box, ink); hanger.add(m); return m; });
     const fade = objectState([backing, border, ...anchors], { alpha: 0 });
     slots.push({ root, screen, backing, border, face, chain, straps, anchors, surface, fade, mats: [metal, cloth, picture],
-      id: null, row: null, side: 0, bornS: 0, soft: false, alpha: 0 });
+      id: null, pick: 0, row: null, side: 0, bornS: 0, soft: false, alpha: 0 });
   }
   scene.add(object);
   function clear() {
@@ -202,7 +206,8 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
     for (const [id, item] of wanted) {
       const s = slots.find(v => v.id === id) || slots.find(v => !v.id);
       if (!s) continue;
-      if (!s.id) { s.id = id; s.bornS = Number.isFinite(item.row.bornS) ? item.row.bornS : clock; s.soft = photosafe?.request('marquee') === false; }
+      // A screen shows as its drop begins (or from a seek's rebuild): it never waits visibly above the frame.
+      if (!s.id) { s.id = id; s.pick = drops++; s.bornS = Math.max(Number.isFinite(item.row.bornS) ? item.row.bornS : clock, item.row.startS - FALL_S); s.soft = photosafe?.request('marquee') === false; }
       s.row = item.row; s.side = item.side; s.root.visible = true;
       if (!paused) pose(s, item.row, clock, gentle);
     }
@@ -216,7 +221,8 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
         const typed = String(s.row.params.text || '').slice(0, Math.max(0, Math.floor((clock - s.row.startS) / .11)));
         s.surface.terminal(typed, Math.floor(clock * 2.2) % 2 === 0); continue;
       }
-      const picture = source(i);
+      // Seeded per drop, not per slot: a redrop reuses the freed slot 0 and would repeat the same picture.
+      const picture = source(s.pick);
       if (s.surface.paint(picture, clock, { paused, allowed: budget > 0 })) { copies++; if (picture) budget--; }
     }
     if (!paused) cursor = (cursor + 1) % slots.length;

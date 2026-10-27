@@ -138,7 +138,7 @@ test('renderer.js: a WebGPU init failure falls back to WebGL2 on a fresh canvas;
   assert.match(init, /try \{\s*await three\.init\(\);\s*\} catch \(e\) \{/);
   assert.match(init, /if \(webgl2 \|\| force === 'webgpu'\) throw e;/, 'a forced backend keeps its own failure');
   assert.match(init, /canvas = replaceCanvas\(canvas\);/);
-  assert.match(init, /three = new WebGPURenderer\(\{ canvas, antialias: false, forceWebGL: true, powerPreference: 'high-performance', context \}\);\s*await three\.init\(\);/);
+  assert.match(init, /three = new WebGPURenderer\(\{ canvas, alpha: true, antialias: false, forceWebGL: true, powerPreference: 'high-performance', context \}\);\s*await three\.init\(\);/);
   assert.match(r, /function replaceCanvas\(canvas\) \{\s*const fresh = canvas\.cloneNode\(false\);\s*if \(canvas\.parentNode\) canvas\.replaceWith\(fresh\);/);
   assert.match(r, /three\.onDeviceLost = \(info\) => \{\s*if \(lost\) return;/);
   assert.match(r, /onLost\(fn\) \{ lostFns\.add\(fn\); if \(lost\) \{ try \{ fn\(lost\); \}/);

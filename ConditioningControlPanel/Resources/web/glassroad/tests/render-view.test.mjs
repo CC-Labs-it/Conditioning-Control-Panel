@@ -6,6 +6,9 @@ import { loadTrack } from '../track/load.js';
 import { KART_VIEW, scaledRadius, chaseFraming, nearCuePlan, basisMatrix, NEAR_LOOK } from '../render/viewMath.js';
 import { onLoop } from '../render/colossiMath.js';
 import { RACER_FRAMING } from '../render/framing.js';
+import { CHASE_NEUTRAL_PITCH_DEG } from '../core/chaseView.js';
+import { createCamRig } from '../render/cameraMath.js';
+import { S, createState } from '../sim/state.js';
 
 const feelJson = JSON.parse(readFileSync(new URL('../feel.json', import.meta.url), 'utf8'));
 const feel = createFeel(feelJson);
@@ -23,11 +26,11 @@ test('view: the reference framing opens road-word space while retaining a close 
   assert.equal(feel.get('fov.baseVDeg'), 60, 'size comes from framing, not a narrower FOV');
 });
 
-test('view: EMI is more readable, with the complete rest model visible at desktop and phone ratios', () => {
+test('view: EMI remains readable and the requested upward neutral records its lower-frame tradeoff', () => {
   const now = chaseFraming(cam, feel.get('fov.baseVDeg'), ASPECTS.desk);
   assert.ok(KART_VIEW.scale / BEFORE_SCALE >= 1.1 && KART_VIEW.scale / BEFORE_SCALE <= 1.2, 'modest whole-racer enlargement');
   assert.ok(now.kartW >= 0.13 && now.kartW <= 0.18, 'readable screen width ' + now.kartW);
-  assert.ok(Math.abs(now.kartY - 0.62) < 1e-6, 'player centre leaves a little more road above the racer');
+  assert.ok(now.kartY > .8 && now.kartY < .83, 'requested neutral puts the player lower in the desktop view');
   assert.ok(now.horizonY < now.kartY - 0.17, 'road ahead between horizon and kart');
 
   // This shipped R4 mesh has identity mesh ancestors and float POSITION bounds. Project all eight
@@ -41,7 +44,7 @@ test('view: EMI is more readable, with the complete rest model visible at deskto
   for (const [name, a] of Object.entries({ ...ASPECTS, wide: 21 / 9 })) {
     const th = Math.tan(chaseFraming(cam, 60, a).vFov * Math.PI / 360);
     const pitch = Math.atan2(cam.eyeUpM - KART_VIEW.modelUpM * KART_VIEW.scale, cam.eyeBackM)
-      - Math.atan((RACER_FRAMING.screenY * 2 - 1) * th);
+      - Math.atan((RACER_FRAMING.screenY * 2 - 1) * th) - CHASE_NEUTRAL_PITCH_DEG * Math.PI / 180;
     for (const x of [lo[0], hi[0]]) for (const y of [lo[1], hi[1]]) for (const z of [lo[2], hi[2]]) {
       const dy = y * KART_VIEW.scale - cam.eyeUpM, dz = cam.eyeBackM - z * KART_VIEW.scale;
       const depth = dz * Math.cos(pitch) - dy * Math.sin(pitch);
@@ -49,17 +52,30 @@ test('view: EMI is more readable, with the complete rest model visible at deskto
       const sx = 0.5 + x * KART_VIEW.scale / depth / th / a / 2, sy = 0.5 - up / depth / th / 2;
       assert.ok(depth > 2, name + ' clear of the near plane');
       assert.ok(sx > 0.25 && sx < 0.75, name + ' room beside the whole kart');
-      assert.ok(sy > 0.35 && sy < 0.85, name + ' whole kart visible with lower-frame margin: ' + sy);
+      const bottomLimit = name === 'desk' || name === 'portrait' ? 1 : 1.10;
+      assert.ok(sy > 0.35 && sy < bottomLimit, name + ' measured lower-frame envelope at the requested angle: ' + sy);
     }
   }
 });
 
-test('view: phones keep the kart readable and inside the frame', () => {
+test('view: phone framing retains readability and characterizes the requested lower aim', () => {
   for (const [name, a] of Object.entries(ASPECTS)) {
     const f = chaseFraming(cam, feel.get('fov.baseVDeg'), a);
     assert.ok(f.kartW > 0.07 && f.kartW < 0.3, name + ' width ' + f.kartW);
-    assert.ok(f.kartBottomY < 0.95, name + ' kart bottom inside the frame ' + f.kartBottomY);
-    assert.ok(f.horizonY > 0.15 && f.horizonY < 0.5, name + ' horizon ' + f.horizonY);
+    assert.ok(f.kartBottomY < (name === 'landscape' ? 1.10 : 1), name + ' expected kart bottom at the requested angle ' + f.kartBottomY);
+    assert.ok(f.horizonY > 0.15 && f.horizonY < (name === 'portrait' ? .55 : .5), name + ' requested-angle horizon ' + f.horizonY);
+  }
+});
+
+test('view predictor matches the actual chase rig at the new neutral', () => {
+  for (const aspect of Object.values(ASPECTS)) {
+    const kart = createState(); kart[S.grounded] = 1;
+    const rig = createCamRig(feel); rig.snap(kart, aspect);
+    const f = rig.look.map((v, i) => v - rig.eye[i]), length = Math.hypot(...f), forward = f.map(v => v / length);
+    const point = [0, KART_VIEW.modelUpM * KART_VIEW.scale, 0].map((v, i) => v - rig.eye[i]);
+    const up = [0, -forward[2], forward[1]], dot = (a, b) => a.reduce((s, v, i) => s + v * b[i], 0);
+    const actual = .5 - dot(point, up) / dot(point, forward) / Math.tan(rig.vFov * Math.PI / 360) / 2;
+    assert.ok(Math.abs(actual - chaseFraming(cam, 60, aspect).kartY) < 1e-6);
   }
 });
 

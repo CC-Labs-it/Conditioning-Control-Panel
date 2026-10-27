@@ -74,9 +74,11 @@ export function createWaterField(track,{quality='mid'}={}) {
   function aligned(array,r,row,x) {return rowValue(array,r,row,(x/r.widths[row]+.5)*(width-1));}
   function pack() {
     stats.activeCells=stats.maxHeight=stats.energy=0;
+    let rowFrom=Infinity,rowTo=-1;   // atlas rows this pack writes (guard rows included): the texture upload sends only these
     const last=width-1;
     for(const r of runs) {
       if(!r.live&&r.clean)continue;
+      if(r.rowOffset-1<rowFrom)rowFrom=r.rowOffset-1;if(r.rowOffset+r.ny>rowTo)rowTo=r.rowOffset+r.ny;
       let maxHeight=0,maxVelocity=0,maxFoam=0,energy=0,active=0;
       for(let row=0;row<r.ny;row++) {
         const dx=r.widths[row]/(width-1),base=(r.rowOffset+row)*width;
@@ -108,8 +110,9 @@ export function createWaterField(track,{quality='mid'}={}) {
       pixels.copyWithin((r.rowOffset+r.ny)*width*4,(r.rowOffset+r.ny-1)*width*4,(r.rowOffset+r.ny)*width*4);
       if(maxHeight>stats.maxHeight)stats.maxHeight=maxHeight;stats.energy+=energy;stats.activeCells+=active;
     }
-    if(!runs.length)for(let i=0;i<count;i++){const p=i*4;pixels[p]=pixels[p+1]=pixels[p+2]=128;pixels[p+3]=0;}
+    if(!runs.length){for(let i=0;i<count;i++){const p=i*4;pixels[p]=pixels[p+1]=pixels[p+2]=128;pixels[p+3]=0;}rowFrom=0;rowTo=height-1;}
     awake=runs.some(r=>r.live);
+    stats.rowFrom=rowFrom;stats.rowTo=rowTo;
     dirty=false;stats.version++;
   }
   function disturb({s,x,radius=2,strength=.25,dirX=0,dirS=0,foam=.4}={}) {

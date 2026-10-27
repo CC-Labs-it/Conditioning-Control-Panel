@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createLobbyApi } from '../net/lobbyApi.js';
 import { lobbySongCharts, wantLobbySongs, songCharts, ROOM_ORIGIN } from '../host/bridge.js';
+import { courseSongRows, courseSongs } from '../track/selection.js';
 
 const NOW = 1792699000000;
 const SIG = 'A'.repeat(21) + '_-' + 'b'.repeat(20);
@@ -69,12 +70,28 @@ test('wantLobbySongs: only when nothing named a chart (?chart and host songs win
   assert.deepEqual(wantLobbySongs(), true);
 });
 
+test('all five courses select their own signed recording from the shared lobby catalog', () => {
+  const ids = { threshold: 'pink-road', keep: 'keep', mainframe: 'mainframe', boudoir: 'boudoir', goonworks: 'goonworks' };
+  const songs = Object.values(ids).map(id => ({ id, chartUrl: url({ id }) }));
+  for (const [course, id] of Object.entries(ids)) {
+    assert.deepEqual(lobbySongCharts(courseSongRows(course, songs), { nowMs: NOW }), [url({ id })]);
+    assert.deepEqual(courseSongRows(course, songs.filter(row => row.id !== id)), [], 'no unrelated fallback');
+  }
+  assert.deepEqual(courseSongRows('missing', songs), []);
+  assert.deepEqual(courseSongRows('goonworks', null), []);
+  const hostCharts = Object.values(ids).map(id => '/glassroad-audio/' + id + '/chart.json');
+  for (const course of ['mainframe', 'keep', 'boudoir', 'goonworks']) {
+    assert.deepEqual(courseSongs(course, '', hostCharts), ['/glassroad-audio/' + ids[course] + '/chart.json']);
+  }
+});
+
 test('boot memoizes the song fallback and starts recordings that arrive after racing begins', () => {
   const src = readFileSync(new URL('../boot.js', import.meta.url), 'utf8');
   const at = src.indexOf('lobbyApi.songs()');
   assert.ok(at > 0 && src.indexOf('lobbyApi.songs()', at + 1) < 0, 'one call');
   assert.ok(src.includes("!qs.has('chart')"), 'explicit chart choices never fetch a fallback');
   assert.ok(src.includes('fallback ||='), 'one memoized request also serves a failed host chart');
+  assert.ok(!src.includes("courseSongs(TRACK_ID, '', ['recording'])"), 'course-specific filtering must not prevent catalog discovery');
   assert.match(src.slice(at, at + 300), /lobbySongCharts\(/);
   assert.ok(src.includes('if (!CHARTS.length) CHARTS = list;'));
   assert.ok(src.includes("else if (state === 'race') void playSong"), 'a late song no longer leaves a silent race');

@@ -43,7 +43,7 @@ import { KART_VIEW } from './viewMath.js';
 import { Q } from './quality.js';
 import { buildKart } from './dressing.js';
 import { createGlideCap, glideAsset } from './glideCap.js';
-import { createSwimPropeller } from './swimPropeller.js';
+import { createSwimPropeller, createPropellerFleet } from './swimPropeller.js';
 import { coolantCaustics } from './mainframeMaterials.js';
 import { objectUniform, objectState } from './objectUniform.js';
 import { createKartMaterial, createKartSurface } from './materials/kart.js';
@@ -267,6 +267,8 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
   const kartGltf = art && art.model ? art.model('emi-teacup-kart') : null;
   const auraGeo = new SphereGeometry(1, 32, 20);
   const surgeGeo = surgeGeometry();
+  // perf: every kart's marine drive draws through one fleet (one instanced draw per part, not 12 per kart)
+  const propellers = createPropellerFleet(count);
   // one head mark atlas for every kart (none without a document, e.g. under node)
   let markTex = null, markMat = null, starMat = null;
   if (typeof document !== 'undefined') {
@@ -304,7 +306,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
       if (b) bones[n] = { b, rest: b.quaternion.clone() };
     }
     body.add(model); root.add(body); root.visible = false;
-    const propeller = createSwimPropeller(body, art?.model?.(dress?.vehicle || 'emi-teacup-kart')?.scene);
+    const propeller = createSwimPropeller(body, art?.model?.(dress?.vehicle || 'emi-teacup-kart')?.scene, propellers);
     root.userData.swimPropeller = propeller.motion;
     const caustics={time:uniform(0),amount:uniform(0)};
     for(const material of mats) material.colorNode=material.colorNode.add(
@@ -400,7 +402,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
    * One kart per frame. st = interpolated state, fxv = RacerFx or null, distM = distance to the camera,
    * opts: { squash (the player's fx.squash; the reaction layer now owns squash), gentle, topMps, name }.
    */
-  function pose(k, st, fxv, dt, distM, { squash = null, gentle = false, topMps = 30, name = '', glide = false, underwater = 0, paused = false } = {}) {
+  function pose(k, st, fxv, dt, distM, { squash = null, gentle = false, topMps = 30, name = '', glide = false, underwater = 0, paused = false, face = null, rollAdd = 0 } = {}) {
     k.underwater=underwater;
     if(!paused){k.caustics.time.value+=dt*(gentle?.5:1);k.caustics.amount.value+=(underwater*(gentle?.5:1)-k.caustics.amount.value)*Math.min(1,dt/.35);}
     const { root, body, pose: p, react: r } = k;
@@ -430,7 +432,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     }
     body.position.set(0, o.lift, 0);
     body.quaternion.setFromAxisAngle(UPY, p.yawAdd + o.yaw)
-      .multiply(QX.setFromAxisAngle(FZ, p.roll * o.stiff * (rig ? rig.bank : 1) + o.roll)).multiply(QX.setFromAxisAngle(RX, (rig ? 0 : p.pitch) + o.pitch));
+      .multiply(QX.setFromAxisAngle(FZ, p.roll * o.stiff * (rig ? rig.bank : 1) + o.roll + rollAdd)).multiply(QX.setFromAxisAngle(RX, (rig ? 0 : p.pitch) + o.pitch));
     const motionOff = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     const bounce = phraseReboundPose(motionOff ? null : phraseBouncePhase(st), gentle, k.phrasePose);
     // The brief body spring reads on every vehicle; only the accepted cup stack separates.
@@ -438,14 +440,14 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     const bodySq = phraseSq ? Math.max(-.25, Math.min(.35, o.sq + phraseSq)) : o.sq;
     body.scale.set(1 + bodySq / 2, 1 - bodySq, 1 + bodySq / 2);
     const near = k.i === 0 || distM <= Q.kartLodM;
-    if (near && rig) { if (k.face) k.face.set(o.face, o.blink, r.t); }
+    if (near && rig) { if (k.face) k.face.set(face || o.face, o.blink, r.t); }
     else if (near) {
       // EMI frame: +Z up the antenna, Y forward; the sway rolls about Y, the arms lift about Y (mirrored)
       const arms = p.arms + (o.arms - p.arms) * o.armsK, ant = p.ant * o.stiff;
       turn(k.bones.ant0, UPY, -ant * 0.5); turn(k.bones.ant1, UPY, -ant * 0.3); turn(k.bones.ant2, UPY, -ant * 0.2);
       turn(k.bones.shoulderL, UPY, arms); turn(k.bones.shoulderR, UPY, -arms);
       if (k.head) poseHead(k.head, o);
-      if (k.face) k.face.set(o.face, o.blink, r.t);
+      if (k.face) k.face.set(face || o.face, o.blink, r.t);
     }
     const signals=k.lifeSignals;
     signals.time=r.t; signals.speed=Math.min(1,Math.max(0,st[S.speedPct])); signals.steer=st[S.steerSlew];
@@ -584,6 +586,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     auraMat.dispose();
     auraGeo.dispose();
     surgeGeo.dispose();
+    propellers.dispose();
     if (!kartGltf) greyGeo?.dispose();
   }
   /** Re-dress seat i (multiplayer: a remote player's { outfit, vehicle } ids; an unknown id gets the default look). */
@@ -605,5 +608,5 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
   }
   const lookOf = (k) => ({ outfit: k.dress ? k.dress.outfit : null, vehicle: k.dress ? k.dress.vehicle : null });
 
-  return { list, pose, hide, attach, rebind, resetReactions, setLook, looks: () => list.map(lookOf), dispose };
+  return { list, propellers, pose, hide, attach, rebind, resetReactions, setLook, looks: () => list.map(lookOf), dispose };
 }

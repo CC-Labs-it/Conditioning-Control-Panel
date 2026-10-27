@@ -33,6 +33,7 @@ import { S, BOOST, RESPAWN, getPos, getVel, getQuat, setPos, setVel, setQuat } f
 import { clamp, lerp, damp, approach, wrap, RAD2DEG, v3, q4, v3copy, v3dot, v3cross, v3norm, v3reject,
   v3addScaled, v3scale, v3lerp, qrotate, qaxis, qlook } from '../core/math.js';
 import { gap } from './gaps.js';
+import { railHit } from './railHit.js';
 import { applyBoost, boostFloor, endBoost } from './boost.js';
 import { updateDrift, cancelDrift, driftYaw, maybeStartDrift } from './drift.js';
 import { hop, gravityMps2, limitBankHop } from './hop.js';
@@ -300,11 +301,15 @@ export function step(st, a, track, feel, dt, ev) {
   // Counter-steering or a lingering drift must not block a nose deliberately aimed through the arch.
   const towardOpening = edgeKind === 'kicker' && v3dot(F, track.frameAt(qb.s, FR).b) * (lat >= 0 ? 1 : -1) > 0.35;
   const kerb = edgeKind === 'rail' || (edgeKind === 'kicker' && !air && !towardOpening && turnsAway(st, lat, feel));
-  // a kart above the rail top, or already beyond the rail line in the air, flies past it (polish 4)
-  const overRail = air && (qb.height > gap(feel, 'wall.topM') || ed < 0);
+  // Sweep across the edge even when one tick ends outside it. A different deck's
+  // nearby rail must not capture a flying kart or a fall already beyond its own road.
+  const ds = Math.abs(qb.s - qa.s), along = Math.min(ds, track.lengthM - ds);
+  const sameRailRun = qa.forkId === qb.forkId && along <= travel + 2 && qa.edgeDist >= -radius;
+  const overRail = air && (qb.height > gap(feel, 'wall.topM') || !ground && !sameRailRun);
   const soft = feel.get('gentle.on') && edgeKind !== 'kicker';
   if (!qb.airWord && road && !overRail && ((qb.railed && edgeKind !== 'kicker') || kerb || soft) && ed < radius && qb.height > -radius) {
-    const b = (track.pathFrameAt ? track.pathFrameAt(qb.s, qb.seg, FR) : track.frameAt(qb.s, FR)).b, side = lat >= 0 ? 1 : -1, pen = radius - ed;
+    const frame = track.pathFrameAt ? track.pathFrameAt(qb.s, qb.seg, FR) : track.frameAt(qb.s, FR);
+    const b = frame.b, side = lat >= 0 ? 1 : -1, pen = radius - ed;
     v3addScaled(P, P, b, -side * pen); lat -= side * pen; ed = radius;
     const into = v3dot(V, b) * side;
     if (into > 0) {
@@ -314,7 +319,7 @@ export function step(st, a, track, feel, dt, ev) {
       if (into >= gap(feel, 'wall.minHitMps')) {
         st[S.engineV] *= 1 - feel.get('wall.engineLoss');
         if (!grace) { cancelDrift(st, 'wall', ev); endBoost(st, feel, ev); }
-        ev.emit('wall', { dv: into * (1 + keep), side });
+        ev.emit('wall', railHit(P, frame, side, radius, into * (1 + keep)));
       }
     }
   }

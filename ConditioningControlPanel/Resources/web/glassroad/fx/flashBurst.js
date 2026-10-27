@@ -27,7 +27,7 @@ export function flashBurstLayout(index, age, gentle = false, aspect = 16 / 9, se
 }
 
 /** Cosmetic only. The shared approved decoder retains consent, expiry and source-off ownership. */
-export function createFlashBurst({ source = () => null, photosafe, gentle, parent = globalThis.document?.body,
+export function createFlashBurst({ source = () => null, pool = null, photosafe, gentle, parent = globalThis.document?.body,
   make = () => document.createElement('canvas'), acquireLoom = acquireLoomAtlas, visibility = globalThis.document } = {}) {
   const queue = [], seen = new Set(), slots = [], emitted = [], screenSeeds = new WeakMap(), atmosphere = createAtmosphereClock(), amounts = {};
   let loom = null, fallback = make(); fallback.width = fallback.height = 256;
@@ -51,7 +51,11 @@ export function createFlashBurst({ source = () => null, photosafe, gentle, paren
   function fire(cue) {
     if (disposed || !cue?.id || seen.has(cue.id)) return;
     seen.add(cue.id);
-    const soft = calm(), count = soft ? 3 : Math.max(5, Math.min(9, Math.floor(cue.params?.count || 7)));
+    const soft = calm(), wanted = soft ? 3 : Math.max(5, Math.min(9, Math.floor(cue.params?.count || 7)));
+    // A burst never repeats a picture (owner, 2026-10-27): with fewer distinct stills than cards, fewer cards.
+    // Consecutive seeds walk the pool in order, so up to its size every card is a different still.
+    const distinct = typeof pool === 'function' ? Math.floor(pool() || 0) : 0;
+    const count = distinct > 0 ? Math.min(wanted, distinct) : wanted;
     for (let i = 0; i < count && queue.length < 54; i++) queue.push({ id: cue.id, index: i,
       seed: hash(cue.id) + i, soft, expires: clock + 4, owner: cue.owner });
   }

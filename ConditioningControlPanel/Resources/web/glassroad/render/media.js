@@ -18,7 +18,7 @@
  */
 import {
   Group, Mesh, InstancedMesh, PlaneGeometry, CylinderGeometry, BufferGeometry, Float32BufferAttribute,
-  InstancedBufferAttribute, CanvasTexture, Texture, SRGBColorSpace, MeshBasicNodeMaterial, AdditiveBlending,
+  InstancedBufferAttribute, CanvasTexture, Texture, SRGBColorSpace, LinearFilter, MeshBasicNodeMaterial, AdditiveBlending,
   DoubleSide, FrontSide, Matrix4, Vector3, Vector4, Color, TextureNode,
 } from 'three/webgpu';
 import {
@@ -38,6 +38,7 @@ import { fitMainframeBillboard, moveMainframePanel } from './mainframeMediaMotio
 import { tunnelArchGeometry, tunnelArchMaterial } from './tunnelArches.js';
 import { screenBodyGeometry, screenBodyMaterial } from './screenBody.js';
 import { screenBodySize } from './screenBodyMath.js';
+import { createWebMediaScreens, maxPlayingFor } from './webMediaScreens.js';
 
 // the shared colour system (render/spectrum.js); the local ring stays the fallback for a missing hue
 import * as SPECTRUM from './spectrum.js';
@@ -178,6 +179,14 @@ function placeholderColours() {
   return out;
 }
 
+/** Keep the course's family while giving every real Loom style its own ink. */
+export function programPalette(palette, index) {
+  if (!palette) return null;
+  const ink = new Color(palette[0]).offsetHSL((index - 2.5) * .055, 0, 0);
+  const paper = new Color(palette[1]).lerp(ink, .08 + (index % 3) * .06);
+  return ['#' + ink.getHexString(), '#' + paper.getHexString()];
+}
+
 /** The base border colour for a slot: the spectrum's hue at its s when there is one, else the ring. */
 function borderColour(sl, i) {
   try { if (SPECTRUM && typeof SPECTRUM.hueAt === 'function') return colourOf(SPECTRUM.hueAt(sl.s || 0, 0), slotColour(i)); } catch { /* ring */ }
@@ -197,7 +206,7 @@ export function createMediaSlots(scene, track, opts = {}) {
   const buildTier = opts.tier || Q.name, T = tierOf(buildTier, M);
   const group = new Group();
   group.name = 'media';
-  const empty = { object: group, slots: [], videoCapacity: 0, setSource: () => false, update() {}, dispose() { if (scene) scene.remove(group); }, stats: () => ({ slots: 0, draws: 0, uploads: 0 }) };
+  const empty = { object: group, slots: [], videoCapacity: 0, setSource: () => false, setDisplayFeed() {}, update() {}, dispose() { if (scene) scene.remove(group); }, stats: () => ({ slots: 0, draws: 0, uploads: 0 }) };
   if (!layout) { if (scene) scene.add(group); return empty; }
   const samples = opts.samples || roadSamples(track, M.checkStepM);
 
@@ -256,7 +265,7 @@ export function createMediaSlots(scene, track, opts = {}) {
       sl.k = k;
     });
     const m = screenMaterial(texture(pg.tex), instancedBufferAttribute(new InstancedBufferAttribute(crop, 4), 'vec4'),
-      instancedBufferAttribute(new InstancedBufferAttribute(info, 4), 'vec4'), pg.spin, pg.warp, U, M, palette);
+      instancedBufferAttribute(new InstancedBufferAttribute(info, 4), 'vec4'), pg.spin, pg.warp, U, M, programPalette(palette, progs.indexOf(pg)));
     const im = new InstancedMesh(plane, m, n);
     im.frustumCulled = false; im.name = 'media-' + pg.ph.program;
     if (!pg.slots.length) im.count = 0;
@@ -344,20 +353,24 @@ export function createMediaSlots(scene, track, opts = {}) {
   const sharedVideos = new Map();
   // Every owner exists before shader warmup, even on phone. Faces only change a texture binding.
   const sharedPool = Array.from({ length: MAX_MEDIA_CLIPS }, () => {
-    // r186 WebGL's regular texture upload accepts canvases, but not HTMLVideoElement.
-    // One reusable canvas per decoder keeps the warmed graph and shared upload budget.
+    // Frames go straight from the <video> into this regular Texture (the vendored WebGL getImage passes
+    // HTMLVideoElement through, vendor/three/PATCHES.md; WebGPU copies it as an external image). The old 2D
+    // canvas hop made Firefox read every decoded frame back to the CPU (~3 ms per drawImage). A regular
+    // Texture keeps the warmed sRGB sampler graph (a VideoTexture changes the WebGL shader). No mipmaps.
+    // The 2x2 canvas is only the dark placeholder before the first frame and after the last release.
     const canvas = opts.make ? opts.make(2, 2) : Object.assign(document.createElement('canvas'), { width: 2, height: 2 });
     const context = canvas.getContext('2d', { alpha: false });
     context.fillStyle = '#15121b'; context.fillRect(0, 0, 2, 2);
-    const tex = new Texture(canvas); tex.colorSpace = SRGBColorSpace; tex.anisotropy = 4; tex.needsUpdate = true;
-    const owner = { tex, canvas, context, el: null, refs: new Set(), ready: false, uploaded: false, idleDisposed: false, uploads: 0, uploadError: null };
+    const tex = new Texture(canvas); tex.colorSpace = SRGBColorSpace;
+    tex.minFilter = LinearFilter; tex.generateMipmaps = false; tex.anisotropy = 1; tex.needsUpdate = true;
+    const owner = { tex, canvas, el: null, width: 2, height: 2, refs: new Set(), ready: false, uploaded: false, idleDisposed: false, uploads: 0, uploadError: null };
     owner.src = budget.add({ every: 1 / T.videoFps, kind: 'shared-video', owner, on: false });
     return owner;
   });
   const videoCapacity = () => Math.min(sharedPool.length, mediaClipLimit(Q.name));
   function clearVideoCanvas(owner) {
-    owner.canvas.width = 2; owner.canvas.height = 2;
-    owner.context.fillStyle = '#15121b'; owner.context.fillRect(0, 0, 2, 2);
+    // Drop the decoder reference with the GPU allocation; the next clip starts from the dark placeholder.
+    owner.tex.image = owner.canvas; owner.width = 2; owner.height = 2;
     owner.uploadError = null;
   }
   let creditTex = null;
@@ -574,6 +587,7 @@ export function createMediaSlots(scene, track, opts = {}) {
   }
 
   // ---- per frame ----
+  let webScreens = null;
   let clock = 0, uploadClock = 0, uploads = 0, sharedVideoUploads = 0, sharedVideoUploadsTotal = 0;
   const spiralBeat = createSpiralBeatClock();
   const picks = [];
@@ -602,6 +616,7 @@ export function createMediaSlots(scene, track, opts = {}) {
     if (opts.extraSlotsDynamic !== false) for (const sl of opts.extraSlots || []) placeSlot(sl);
     for (const sl of flyingSlots) placeSlot(moveMainframePanel(sl, clock));
     if (shownTier !== Q.name) placeAll(); else if (haloSlotsOf.length || flyingSlots.length || (opts.extraSlotsDynamic !== false && opts.extraSlots?.length)) flush();
+    webScreens?.update(dt, view);
 
     // the shared upload budget: nearest overdue programs and live own sources within drawM
     const cam = view.camera;
@@ -630,16 +645,15 @@ export function createMediaSlots(scene, track, opts = {}) {
       else if (x.kind === 'shared-video') {
         const owner = x.owner;
         if (owner.ready) {
-          const vw = owner.el.videoWidth || 1, vh = owner.el.videoHeight || 1, scale = Math.min(1, 640 / Math.max(vw, vh));
-          const width = Math.max(1, Math.round(vw * scale)), height = Math.max(1, Math.round(vh * scale));
-          if (owner.canvas.width !== width || owner.canvas.height !== height) {
+          const el = owner.el, width = el.videoWidth, height = el.videoHeight;
+          // Upload only a decoded frame: a loop seek or stall keeps the last frame, never a black one.
+          const copied = !el.error && el.readyState >= 2 && width > 0 && height > 0;
+          owner.uploadError = el.error ? 'MediaError' + (el.error.code ? ':' + el.error.code : '') : null;
+          if (copied && (owner.tex.image !== el || owner.width !== width || owner.height !== height)) {
             // Retain the warmed sampler graph, but release r186's old-size GPU allocation.
             if (!owner.idleDisposed) owner.tex.dispose();
-            owner.idleDisposed = true; owner.canvas.width = width; owner.canvas.height = height;
+            owner.idleDisposed = true; owner.tex.image = el; owner.width = width; owner.height = height;
           }
-          let copied = false;
-          try { owner.context.drawImage(owner.el, 0, 0, width, height); copied = true; owner.uploadError = null; }
-          catch (e) { owner.uploadError = e?.name || 'VideoCopyError'; }
           if (copied) {
             if (!owner.uploaded) {
               owner.uploaded = true;
@@ -659,6 +673,7 @@ export function createMediaSlots(scene, track, opts = {}) {
   }
 
   function dispose() {
+    webScreens?.dispose(); webScreens = null;
     for (const i of [...own.keys()]) drop(i);
     playback.dispose();
     for (const o of persistentSources.values()) { o.baseTex.dispose(); o.creditTex.dispose(); }
@@ -673,7 +688,7 @@ export function createMediaSlots(scene, track, opts = {}) {
   }
 
   const pub = slots.map((sl) => ({ id: sl.id, frame: sl.frame, kind: sl.kind, s: sl.s, w: sl.w, h: sl.h, side: sl.side || 0, phone: sl.phone,
-    get C() { return sl.C; }, get Z() { return sl.Z; } }));
+    get C() { return sl.C; }, get X() { return sl.X; }, get Y() { return sl.Y; }, get Z() { return sl.Z; } }));
   return {
     object: group,
     slots: pub,
@@ -681,6 +696,13 @@ export function createMediaSlots(scene, track, opts = {}) {
     get videoCapacity() { return videoCapacity(); },
     tunnel: tun ? { fromS: tun.fromS, toS: tun.toS } : null,
     setSource,
+    /** Browser feed is display-only. Its images and clips must never enter a GPU texture. */
+    setDisplayFeed(feed, canvas = globalThis.document?.getElementById('view')) {
+      if (!webScreens && feed) webScreens = createWebMediaScreens({ scene, canvas,
+        isVisible: sl => !hidden(sl), maxPlaying: () => maxPlayingFor(Q.name),
+        slots: selected.filter(sl => ['billboard', 'halo', 'tunnel'].includes(sl.frame)) });
+      webScreens?.setFeed(feed);
+    },
     resumePlayback: playback.resume,
     update,
     dispose,
@@ -691,6 +713,7 @@ export function createMediaSlots(scene, track, opts = {}) {
         selected: selected.filter(sl => sl.frame === frame).length, ready: world.filter(o => o.frame === frame && o.ready).length,
       }]));
       return { slots: slots.length, programs: progs.length, draws: group.children.filter(c => c.visible).length, uploads, canvasPx: T.canvasPx,
+        webPictures: webScreens?.stats() || null,
         readyCardVideos: cards.filter(o => o.ready).length, cardVideoDecoders: new Set(cards.map(o => o.el)).size,
         cardVideoSeconds: cards.map(o => o.el?.currentTime || 0), cardVideoPlayback: playback.snapshot(cards.map(o => o.el)),
         selectedMediaFaces: selected.length, readyMediaVideos: videos.filter(o => o.ready).length,

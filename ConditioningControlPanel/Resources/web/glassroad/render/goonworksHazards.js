@@ -6,8 +6,9 @@ import { goonworksSetpieces, goonworksPose } from '../track/goonworks-setpieces.
 import { GOONWORKS_PALETTE, GOONWORKS_DISTRICT_PALETTES } from './goonworksMaterials.js';
 import { machineryBeatAt } from '../track/machineryBeat.js';
 import { createGearSpiralPaint } from './gearSpirals.js';
+import { mergeStaticMeshes } from './staticMerge.js';
 
-export function createGoonworksHazardView(scene, track, layout) {
+export function createGoonworksHazardView(scene, track, layout, { merge = false } = {}) {
   const group = new Group(); group.name = 'goonworks-toys'; scene.add(group);
   const rows = goonworksSetpieces(track, layout), geometries = [], materials = [], entries = [], spiralPaint = [];
   const own = geometry => { geometries.push(geometry); return geometry; };
@@ -39,7 +40,7 @@ export function createGoonworksHazardView(scene, track, layout) {
   }
   function cube(parent, mat, p, size, edge = .12) {
     const root = new Group(); root.position.set(...p); parent.add(root);
-    mesh(root, box, outline, [0, 0, 0], size.map(v => v + edge * 2)); mesh(root, box, mat, [0, 0, .015], size);
+    mesh(root, box, outline, [0, 0, 0], size.map(v => v + edge * 2)); mesh(root, box, mat, [0, 0, .015], size).castShadow = false; // the hull's shadow already covers it (VSM: coverage only)
     return root;
   }
   function sectorShape(radius, a, b, inner = 0) {
@@ -162,7 +163,7 @@ export function createGoonworksHazardView(scene, track, layout) {
       cube(root, ink, [row.x, .015, 0], [row.w + .5, .1, row.depth + .5], .03);
       const block = new Group(); block.position.x = row.x; root.add(block); entry.block = block;
       mesh(block, box, outline, [0, .5, 0], [row.w, 1, row.depth]);
-      mesh(block, box, (Number(row.id.at(-1)) % 2) ? white : pink, [0, .5, .015], [row.w - .25, .96, row.depth - .25]);
+      mesh(block, box, (Number(row.id.at(-1)) % 2) ? white : pink, [0, .5, .015], [row.w - .25, .96, row.depth - .25]).castShadow = false; // inside the outline hull above
       // Two bold upward marks identify a rising obstacle even without its warning colour.
       for (const y of [.3, .58]) mesh(block, riseGeometry, ink, [0, y, row.depth / 2 + .025], [1.45, .65, 1]);
       for (const side of [-1, 1]) mesh(block, box, candy, [side * (row.w / 2 - .35), .5, 0], [.22, .92, row.depth - .45]);
@@ -176,6 +177,13 @@ export function createGoonworksHazardView(scene, track, layout) {
       for (const side of [-1, 1]) {
         const hinge = mesh(root, cylinder, candy, [side * (row.w / 2 + .5), .5, row.depth / 2], [.8, 1.5, .8]); hinge.rotation.z = Math.PI / 2;
       }
+    }
+    // Runtime: fold each toy's small static parts into one draw per material and moving frame
+    // (Firefox pays ~3x per draw). Lamps keep their per-toy material, so warnings still recolour.
+    if (merge) {
+      const frames = [entry.rotor, entry.screen, entry.block, entry.crown, entry.flipper].filter(Boolean);
+      for (const frame of frames) geometries.push(...mergeStaticMeshes(frame, { name: row.id }).geometries);
+      geometries.push(...mergeStaticMeshes(root, { keep: frames, name: row.id }).geometries);
     }
     entries.push(entry);
   }

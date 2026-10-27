@@ -132,8 +132,9 @@ function dom(width = 3840, height = 2160) {
   } });
   const parent = { clientWidth: width, clientHeight: height, appendChild(c) { children.push(c); c.parentNode = this; },
     removeChild(c) { const i = children.indexOf(c); if (i >= 0) children.splice(i, 1); c.parentNode = null; } };
-  const doc = { body: parent, defaultView: { innerWidth: width, innerHeight: height }, createElement() {
-    return { width: 0, height: 0, style: {}, setAttribute() {}, getContext: () => context, remove() { this.parentNode?.removeChild(this); } };
+  const doc = { body: parent, defaultView: { innerWidth: width, innerHeight: height }, createElement(tag) {
+    return { tag, width: 0, height: 0, style: {}, kids: [], setAttribute() {}, getContext: () => context,
+      appendChild(c) { this.kids.push(c); c.parentNode = this; }, remove() { this.parentNode?.removeChild(this); } };
   } };
   return { parent, doc, children, calls };
 }
@@ -205,4 +206,21 @@ test('one bounded edge canvas follows the live palette, freezes and disposes bet
     assert.equal(fresh.stats.level, 0, 'the next course starts without old music energy');
     fresh.dispose();
   }
+});
+
+test('the side wash paints a one-row canvas under the ribbons; one layer carries the opacity', () => {
+  const fixture = dom(1920, 1080), { children, calls } = fixture;
+  const effect = createMusicEdges({ ...fixture, tier: 'high' });
+  for (let i = 0; i < 60; i++) effect.update(1 / 60, view({ songS: i / 60 }));
+  assert.equal(children.length, 1);
+  const layer = children[0], [wash, ribbons] = layer.kids;
+  assert.equal(layer.tag, 'div'); assert.equal(ribbons, effect.canvas);
+  assert.equal(wash.height, 1, 'a horizontal gradient is the same on every row');
+  assert.equal(wash.width, effect.canvas.width);
+  assert.ok(effect.canvas.height > 1);
+  assert.equal(layer.style.display, 'block'); assert.ok(Number(layer.style.opacity) > 0);
+  assert.equal(effect.canvas.style.opacity, undefined, 'group opacity only, never per canvas');
+  const fills = calls.filter(([k]) => k === 'fillRect');
+  assert.ok(fills.length > 0 && fills.every(([, , , , h]) => h === 1), 'every wash fill is one row tall');
+  effect.dispose(); assert.equal(children.length, 0);
 });

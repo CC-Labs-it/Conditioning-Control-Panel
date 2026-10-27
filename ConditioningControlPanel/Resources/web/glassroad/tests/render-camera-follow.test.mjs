@@ -7,6 +7,7 @@ import { qfromBasis, qrotate } from '../core/math.js';
 import { loadTrack } from '../track/load.js';
 import { createCamRig, aimAtAnchor } from '../render/cameraMath.js';
 import { RACER_FRAMING as F } from '../render/framing.js';
+import { createLookAround, DRIVER_LOOK } from '../render/lookAround.js';
 
 const freshFeel = () => createFeel(JSON.parse(readFileSync(new URL('../feel.json', import.meta.url))));
 const ASPECTS = [16 / 9, 390 / 844, 844 / 390, 21 / 9], DT = 1 / 60;
@@ -16,12 +17,15 @@ const sub = (a, b) => a.map((v, i) => v - b[i]);
 const norm = (a) => { const l = Math.hypot(...a); return a.map((v) => v / l); };
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
-// Independent look-at projection of the actual state centre, without using rig.anchor or the aim helper.
+// Check the physical anchor before the owner's fixed chase glance. The default
+// glance's actual pose is covered independently in driver-look.test.mjs.
+const neutralGlance = createLookAround();
 function project(rig, kart, aspect) {
   const q = [kart[S.quatX], kart[S.quatY], kart[S.quatZ], kart[S.quatW]];
   const u = qrotate([0, 0, 0], q, [0, F.centerUpM * F.scale, 0]);
   const point = [kart[S.posX] + u[0], kart[S.posY] + u[1], kart[S.posZ] + u[2]];
-  const forward = norm(sub(rig.look, rig.eye)), right = norm(cross(forward, rig.up)), up = cross(right, forward);
+  const baseLook = [...rig.look]; neutralGlance.apply(rig.eye, baseLook, rig.up, -DRIVER_LOOK.upDeg);
+  const forward = norm(sub(baseLook, rig.eye)), right = norm(cross(forward, rig.up)), up = cross(right, forward);
   const delta = sub(point, rig.eye), depth = dot(delta, forward), tan = Math.tan(rig.vFov * Math.PI / 360);
   return { x: 0.5 + dot(delta, right) / depth / tan / aspect / 2, y: 0.5 - dot(delta, up) / depth / tan / 2, depth };
 }

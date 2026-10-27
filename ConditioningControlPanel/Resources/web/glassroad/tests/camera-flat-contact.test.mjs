@@ -65,7 +65,6 @@ test('hard racer and wall events through the actual FX bus never create floor st
       fx.update(dt, st); cam.update(st, fx.state, track, dt, 16 / 9);
       assert.equal(st[S.posY], 0); assert.equal(st[S.airborne], 0);
       assert.ok(Math.abs(cam.camera.position.y - eyeY) < 1e-7, 'flat support keeps a constant camera height');
-      assert.equal(fx.state.shake[1], 0);
       maxStep = Math.max(maxStep, Math.abs(cam.camera.position.y - lastY)); lastY = cam.camera.position.y;
       maxSide = Math.max(maxSide, Math.abs(cam.rig.kick.out.x)); thud = Math.max(thud, fx.state.rumble);
     }

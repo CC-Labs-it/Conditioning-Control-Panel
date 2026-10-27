@@ -80,7 +80,7 @@ export function createVehicleAccents(meshes,vehicleId,{art}={}) {
   const root=new Group();root.name='vehicle-accent-'+vehicleId;root.position.copy(centre);
   root.quaternion.setFromUnitVectors(new Vector3(0,0,1),new Vector3(0,0,1).transformDirection(inverse));bone.add(root);
   const geometries=[],objects=[];
-  const add=(g,m,z)=>{geometries.push(g);const o=new Mesh(g,m);o.position.z=z;o.castShadow=false;o.receiveShadow=false;o.frustumCulled=false;root.add(o);objects.push(o);return o;};
+  const add=(g,m,z)=>{geometries.push(g);const o=new Mesh(g,m);o.position.z=z;o.castShadow=false;o.receiveShadow=false;root.add(o);objects.push(o);return o;};
   const mount=new CylinderGeometry(radius+.014,radius+.014,.016,32,1);mount.rotateX(Math.PI/2);
   add(mount,material('mount'),0);
   const rotor=add(rotorGeometry(theme.petals,radius+.006),material('metal'),.011);

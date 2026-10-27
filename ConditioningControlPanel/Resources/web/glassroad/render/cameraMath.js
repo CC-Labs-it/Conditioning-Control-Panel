@@ -19,10 +19,11 @@
  * effect shake, push and boost zoom never enter the camera pose.
  */
 import { S, BOOST, RESPAWN } from '../sim/state.js';
-import { clamp, damp, angleDiff, qrotate, rad, smoothstep } from '../core/math.js';
+import { clamp, damp, angleDiff, qrotate, rad, smoothstep, wrap } from '../core/math.js';
 import { LOOK } from './look.js';
 import { RACER_FRAMING } from './framing.js';
 import { createLookAround } from './lookAround.js';
+import { CHASE_NEUTRAL_PITCH_DEG } from '../core/chaseView.js';
 import { phraseCameraGuide } from '../core/phraseFlight.js';
 
 // ---- the kick layer (polish 3) ----
@@ -276,7 +277,9 @@ export function createCamRig(feel) {
         for (let k = 0; k < 3; k++) o[k] += (R[k] * K.x + UU[k] * K.y + B[k] * K.z) * s;
       }
     }
-    glance.apply(rig.eye, rig.look, rig.up);
+    // The owner's preferred chase angle is the previous fully-up driver glance.
+    // Keep this local to chase so first-person, rear and authored shots retain their basis.
+    glance.apply(rig.eye, rig.look, rig.up, CHASE_NEUTRAL_PITCH_DEG);
   }
 
   /** viewDt: how far the interpolated kart's own clock moved this frame (the clock's renderTime delta). It
@@ -355,4 +358,97 @@ export function createCamRig(feel) {
     return rig;
   }
   return rig;
+}
+
+// ---- feel wave 2026-10-26 (lane E): drawn-only layers AFTER compose() ----
+// Neither layer writes the rig: eye, look, up, vFov, focus, yaw and pitch stay the clean chase pose that the
+// follow integrates. camera.js applies both to the copy it hands three.js (Eiserloh: shake the drawn camera,
+// never the one that follows). Item 9 leads the LOOK direction only, about the eye; item 12 offsets the drawn
+// orientation by trauma noise (camera.traumaRot.* all 0 by default).
+
+const HINT_FULL_TURN = rad(30);   // a bend that turns this much within hint.aheadM takes the whole bendDeg
+const HF0 = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] }, HF1 = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
+const HQ = [0, 0, 0, 1], HFWD = [0, 0, 0];
+
+/** Distance (m, >= 0) from lap distance s forward to a gate span [s0, s1]; 0 inside it. */
+const gateAhead = (s, s0, s1, L) => (wrap(s - s0, L) <= Math.max(0, s1 - s0) ? 0 : wrap(s0 - s, L));
+
+/**
+ * The look-point lead in radians of yaw about the view up (+ = left, the rig's yaw sign) for a kart on track:
+ * toward the next shortcut gate within aheadM (routes and fork mouths; +-shortcutDeg, stronger as it nears) and
+ * into the bend the road turns within aheadM (+-bendDeg). 0 off the main road, driving backwards or with no track.
+ */
+export function hintTarget(track, kart, shortcutDeg, bendDeg, aheadM) {
+  if (!track || typeof track.frameAt !== 'function' || !(aheadM > 0)) return 0;
+  const L = track.lengthM, s = kart[S.s];
+  if (!(L > 0) || !Number.isFinite(s) || track.forkAtSeg?.(kart[S.seg] | 0)) return 0;
+  const f0 = track.frameAt(wrap(s, L), HF0), f1 = track.frameAt(wrap(s + aheadM, L), HF1);
+  HQ[0] = kart[S.quatX]; HQ[1] = kart[S.quatY]; HQ[2] = kart[S.quatZ]; HQ[3] = kart[S.quatW];
+  qrotate(HFWD, HQ, FWD);
+  if (HFWD[0] * f0.t[0] + HFWD[1] * f0.t[1] + HFWD[2] * f0.t[2] < 0.3) return 0;
+  const bend = rad(bendDeg) * clamp(angleDiff(yawOf(f0.t), yawOf(f1.t)) / HINT_FULL_TURN, -1, 1);
+  let best = Infinity, side = 0;
+  for (const r of track.routes || []) {
+    const d = gateAhead(s, r.openS0, r.openS1, L);
+    if (d <= aheadM && d < best) { best = d; side = r.side === 'L' ? -1 : 1; }
+  }
+  for (const p of track.forkPortals || []) {
+    const fork = (track.forks || []).find((f) => f.id === p.id);
+    if (!fork || Math.abs(angleDiff(wrap(p.s0, L) / L * TAU, wrap(fork.fromS, L) / L * TAU)) * L / TAU > 60) continue;   // the mouth, not the exit
+    const d = gateAhead(s, p.s0, p.s1, L);
+    if (d <= aheadM && d < best) { best = d; side = p.side >= 0 ? 1 : -1; }
+  }
+  if (!side) return bend;
+  const w = smoothstep(aheadM, aheadM * 0.4, best);
+  return -side * rad(shortcutDeg) * w + bend * (1 - w);   // a gate on the right (+b) turns the look right (yaw down)
+}
+
+/** The tweened look lead: update(track, kart, dt, mode) with mode 'on' | 'out' (tween to 0) | 'off' (snap to 0). */
+export function createHint(feel) {
+  const h = { value: 0, target: 0, update, reset() { h.value = h.target = 0; } };
+  function update(track, kart, dt, mode = 'on') {
+    if (mode === 'off') { h.value = h.target = 0; return 0; }
+    const g = (k) => feel.get('camera.hint.' + k);
+    h.target = mode === 'on' ? hintTarget(track, kart, g('shortcutDeg'), g('bendDeg'), g('aheadM')) : 0;
+    const rising = Math.abs(h.target) > Math.abs(h.value) && h.target * h.value >= 0;
+    if (dt > 0) h.value = damp(h.value, h.target, (rising ? g('inS') : g('outS')) / 3, dt);   // ~95% in inS / outS
+    if (h.target === 0 && Math.abs(h.value) < 1e-5) h.value = 0;   // lands exactly on the clean pose
+    return h.value;
+  }
+  return h;
+}
+
+/** look rotated about the unit axis `up` through eye by angle (Rodrigues) into out; eye and up are untouched. */
+export function rotateLook(out, eye, look, up, angle) {
+  const vx = look[0] - eye[0], vy = look[1] - eye[1], vz = look[2] - eye[2];
+  const c = Math.cos(angle), s = Math.sin(angle), k = (up[0] * vx + up[1] * vy + up[2] * vz) * (1 - c);
+  out[0] = eye[0] + vx * c + (up[1] * vz - up[2] * vy) * s + up[0] * k;
+  out[1] = eye[1] + vy * c + (up[2] * vx - up[0] * vz) * s + up[1] * k;
+  out[2] = eye[2] + vz * c + (up[0] * vy - up[1] * vx) * s + up[2] * k;
+  return out;
+}
+
+/**
+ * Rotational trauma (radians) into out { pitch, yaw, roll }: noise(axis, t) * traumaOut * camera.traumaRot.*.
+ * fxState = fx.state (traumaOut, lane A); noise = fx.noise(axis, t) in [-1, 1], axes 0 pitch, 1 yaw, 2 roll.
+ * Either missing, or Gentle, gives 0. traumaOut already carries the Motion level (0 under 'off').
+ */
+export function traumaRot(out, feel, fxState, noise, t, gentle = false) {
+  const amt = gentle || typeof noise !== 'function' ? 0 : clamp(+(fxState?.traumaOut) || 0, 0, 1);
+  const g = (k) => feel.get('camera.traumaRot.' + k);
+  out.pitch = amt && g('pitchDeg') ? noise(0, t) * amt * rad(g('pitchDeg')) : 0;
+  out.yaw = amt && g('yawDeg') ? noise(1, t) * amt * rad(g('yawDeg')) : 0;
+  out.roll = amt && g('rollDeg') ? noise(2, t) * amt * rad(g('rollDeg')) : 0;
+  return out;
+}
+
+/** Camera-local offset quaternion [x, y, z, w] for yaw (local Y), then pitch (local X), then roll (local Z). */
+export function offsetQuat(out, pitch, yaw, roll) {
+  const cx = Math.cos(pitch / 2), sx = Math.sin(pitch / 2), cy = Math.cos(yaw / 2), sy = Math.sin(yaw / 2);
+  const cz = Math.cos(roll / 2), sz = Math.sin(roll / 2);
+  out[0] = sx * cy * cz + cx * sy * sz;   // YXZ order, as three's Euler 'YXZ'
+  out[1] = cx * sy * cz - sx * cy * sz;
+  out[2] = cx * cy * sz - sx * sy * cz;
+  out[3] = cx * cy * cz + sx * sy * sz;
+  return out;
 }

@@ -14,12 +14,16 @@
 import { S, RESPAWN, BOOST } from './state.js';
 import { wrap, clamp } from '../core/math.js';
 import { gap } from './gaps.js';
+import { railHit } from './railHit.js';
+import { edgeAt } from './routes.js';
 import { grantBoost } from './grant.js';
 import { BUBBLE_RAM } from '../core/bubble.js';
 import { resetCleanPace } from './cleanPace.js';
 
 const FR = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
 const QO = { normal: [0, 0, 0], p: [0, 0, 0] };
+const beforeQuery = () => ({ normal: [0, 0, 0], p: [0, 0, 0], x: 0, y: 0, z: 0 });
+const BEFORE_A = beforeQuery(), BEFORE_B = beforeQuery();
 const U = [0, 0, 0];
 const COURT_LEAD_M = 25;   // the slipstream kick holds from here before a court to the end of its last hole
 
@@ -74,6 +78,12 @@ export function createContact(track, feel, events) {
   function move(r, sx, sy, sz) { r.st[S.posX] += sx; r.st[S.posY] += sy; r.st[S.posZ] += sz; }
   function push(r, sx, sy, sz) { r.st[S.velX] += sx; r.st[S.velY] += sy; r.st[S.velZ] += sz; }
 
+  function beforePush(st, out) {
+    const q = track.query(st[S.posX], st[S.posY], st[S.posZ], st[S.seg] | 0, out);
+    q.x = st[S.posX]; q.y = st[S.posY]; q.z = st[S.posZ];
+    return q;
+  }
+
   function seat(r, q) {
     const st = r.st;
     if (!st[S.grounded] || st[S.airborne] || !q.onRoad || Math.abs(q.height) > feel.get('contact.radiusM') * 2) return;
@@ -82,17 +92,29 @@ export function createContact(track, feel, events) {
   }
 
   /** A push never carries a kart through a rail; under Gentle or assist the open sides hold too (soft rails). */
-  function holdInside(r) {
+  function holdInside(r, before) {
     const st = r.st;
     const q = track.query(st[S.posX], st[S.posY], st[S.posZ], st[S.seg] | 0, QO);
     if (q.flags && q.flags.indexOf('jump') >= 0) return;
-    if (!q.railed && !r.feel.get('gentle.on')) { seat(r, q); return; }
     const rad = gap(r.feel, 'kart.radiusM');
+    const moved = Math.hypot(st[S.posX] - before.x, st[S.posY] - before.y, st[S.posZ] - before.z);
+    const ds = Math.abs(q.s - before.s), along = Math.min(ds, L - ds);
+    // A closest-road query can change decks beside a crossing. Only the road the
+    // shove started on can hold its edge; never pull a falling kart onto its neighbour.
+    if ((q.forkId || null) !== (before.forkId || null) || along > moved + 2 || before.edgeDist < -rad) return;
+    if (q.height <= -rad || q.height > gap(r.feel, 'wall.topM')) return;
+    const edge = edgeAt(track, q, q.lateral, rad);
+    if (edge === 'kicker' || !q.railed && edge !== 'rail' && !r.feel.get('gentle.on')) { seat(r, q); return; }
     if (q.edgeDist >= rad) { seat(r, q); return; }
-    const b = (track.pathFrameAt ? track.pathFrameAt(q.s, q.seg, FR) : track.frameAt(q.s, FR)).b, side = q.lateral >= 0 ? 1 : -1, pen = rad - q.edgeDist;
+    const frame = track.pathFrameAt ? track.pathFrameAt(q.s, q.seg, FR) : track.frameAt(q.s, FR);
+    const b = frame.b, side = q.lateral >= 0 ? 1 : -1, pen = rad - q.edgeDist;
     move(r, -b[0] * side * pen, -b[1] * side * pen, -b[2] * side * pen);
     const out = (st[S.velX] * b[0] + st[S.velY] * b[1] + st[S.velZ] * b[2]) * side;
-    if (out > 0) push(r, -b[0] * side * out, -b[1] * side * out, -b[2] * side * out);
+    if (out > 0) {
+      const dv = out * (1 + r.feel.get('wall.normalKeep'));
+      push(r, -b[0] * side * dv, -b[1] * side * dv, -b[2] * side * dv);
+      if (out >= gap(r.feel, 'wall.minHitMps')) r.events.emit('wall', railHit([st[S.posX], st[S.posY], st[S.posZ]], frame, side, rad, dv));
+    }
     st[S.lateral] = q.lateral - side * pen;
     track.query(st[S.posX], st[S.posY], st[S.posZ], st[S.seg] | 0, QO);
     seat(r, q);
@@ -130,6 +152,7 @@ export function createContact(track, feel, events) {
         } else { U[0] /= len; U[1] /= len; U[2] /= len; }
         const wa = weight(ra), wb = weight(rb), sa = wb / (wa + wb), sb = wa / (wa + wb);
         const over = R2 - len;
+        const beforeA = beforePush(a, BEFORE_A), beforeB = beforePush(b, BEFORE_B);
         move(ra, -U[0] * over * sa, -U[1] * over * sa, -U[2] * over * sa);
         move(rb, U[0] * over * sb, U[1] * over * sb, U[2] * over * sb);
 
@@ -154,7 +177,7 @@ export function createContact(track, feel, events) {
             const p=[(a[S.posX]+b[S.posX])/2,(a[S.posY]+b[S.posY])/2,(a[S.posZ]+b[S.posZ])/2];
             events.emit('bump',{a:i,b:j,dv:Math.max(c,18),p});
             events.emit('bubble-ram',{a:i,b:j,attacker:shieldA?ra.i:rb.i,victim:shieldA?rb.i:ra.i,both:shieldA&&shieldB,p});
-            holdInside(ra); holdInside(rb);
+            holdInside(ra, beforeA); holdInside(rb, beforeB);
             continue;
           }
           const p = Math.min(feel.get('contact.maxPushMps'), feel.get('contact.pushMps') + feel.get('contact.pushPerDv') * c);
@@ -176,7 +199,7 @@ export function createContact(track, feel, events) {
               p: [(a[S.posX] + b[S.posX]) / 2, (a[S.posY] + b[S.posY]) / 2, (a[S.posZ] + b[S.posZ]) / 2] });
           }
         }
-        holdInside(ra); holdInside(rb);
+        holdInside(ra, beforeA); holdInside(rb, beforeB);
       }
     }
 

@@ -11,10 +11,24 @@
  * The adapter: high-performance for WebGPU and for the WebGL2 context (three does not pass it to
  * WebGL2, so that context is made here); its name shows in the fps readout and stats().gpu, so an
  * integrated GPU on a two-GPU PC is easy to spot.
+ * HIT CAM: setInset({ scene, camera, rect, viewW, viewH }) draws a second, small, shadowless view of the scene
+ * into the post chain's inset target right before the post render, every frame it is set (the composite
+ * rewrites the whole canvas each frame); the post quad lays it over the frame (render/post.js). Its size is the
+ * rect times the pixel ratio times the tier's Q.hitCam (0 = off). warmInset() builds its pipelines behind the
+ * loading card (its own target, no shadow map: a different program set from the scene pass).
  */
 import { WebGPURenderer, Group, Mesh, Sprite, PlaneGeometry } from 'three/webgpu';
+import * as threeWebgpu from 'three/webgpu';
+import * as GPU from 'three/webgpu';
 import { createPost } from './post.js';
 import { releaseSceneResources, trackSceneResources, disposeSceneResources } from './sceneResources.js';
+import { skipUnchangedInstanceUploads } from './uniformUploads.js';
+import { uploadChangedAttributeBytes } from './attributeUploads.js';
+import { uploadVideoElementsDirectly } from './videoUploads.js';
+import { uploadCanvasRegions } from './canvasRegions.js';
+import { uploadDataTextureRows } from './dataTextureRows.js';
+import { logPipelineLinks } from './linkLog.js';
+import { isFirefox, concreteFloatConstants, uploadVideoThroughExternalTexture } from './firefoxWebgpu.js';
 import { Q, TIERS, ORDER, GOVERNOR, setTier, pickTier, createGovernor, createDynRes, dynLines, shortGpu, qualityLanding } from './quality.js';
 import { createFrameGate } from '../core/clock.js';
 import { reasonOf } from '../core/failure.js';
@@ -22,6 +36,7 @@ import { loadOptions, cleanOptions } from '../hud/options.js';
 import { WARM, warmGroups } from './warmGroups.js';
 import { createDeferredWarm } from './stagedWarm.js';
 import { shareInstancePrograms } from './instancePrograms.js';
+import { lateWarmMaterials } from './warmExtras.js';
 
 /** A canvas can hold one context for life: a failed WebGPU init, or a lost context, needs a new element in its place. */
 function replaceCanvas(canvas) {
@@ -61,7 +76,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   if (webgl2) context = glContext(canvas);
   setTier(pinOf() || capTier(pickTier({ override, coarse, webgl2: webgl2 && !firefox })));
 
-  let three = new WebGPURenderer({ canvas, antialias: false, forceWebGL: webgl2, powerPreference: 'high-performance', ...(context ? { context } : {}) });
+  let three = new WebGPURenderer({ canvas, alpha: true, antialias: false, forceWebGL: webgl2, powerPreference: 'high-performance', ...(context ? { context } : {}) });
   try {
     await three.init();
   } catch (e) {
@@ -75,11 +90,17 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     canvas = replaceCanvas(canvas);
     context = glContext(canvas);
     if (!context) throw new Error('no WebGL2 context after the WebGPU failure (' + fallback + ')');
-    three = new WebGPURenderer({ canvas, antialias: false, forceWebGL: true, powerPreference: 'high-performance', context });
+    three = new WebGPURenderer({ canvas, alpha: true, antialias: false, forceWebGL: true, powerPreference: 'high-performance', context });
     await three.init();
   }
   trackSceneResources(three);
   shareInstancePrograms(three);
+  skipUnchangedInstanceUploads(three);
+  uploadChangedAttributeBytes(three);        // WebGL2: attributes re-send only their changed bytes (Firefox command-channel budget)
+  uploadVideoElementsDirectly(three);
+  uploadCanvasRegions(three);
+  uploadDataTextureRows(three);              // WebGL2: a marked DataTexture (the water height atlas) re-sends only its rows
+  if (qs.get('census') === '1') { try { (await import('../dev/uploadCensus.js')).installUploadCensus(three); } catch (e) { console.warn('census hook failed', e); } }   // dev: ?census=1 (dev/uploadCensus.js)
   // a lost device or context: three stops drawing for good (render returns at once), so the page must rebuild;
   // onLost(fn) hears it once, with the reason
   const lostFns = new Set();
@@ -91,12 +112,16 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     for (const fn of lostFns) { try { fn(lost); } catch (e) { console.warn('[glassroad/renderer] onLost', e); } }
   };
   let compiledGraphs;
+  if (qs.get('logLinks') === '1') logPipelineLinks(three, { Material: GPU.Material });   // dev: every program link, with its phase and pass
   if (qs.get('profileLoad') === '1') {
     compiledGraphs = 0;
     three.debug.onNodeBuilderCreated = () => { compiledGraphs++; };
   }
   three.info.autoReset = false;                    // reset once per frame here, so stats() is one whole frame
   const backend = three.backend.isWebGPUBackend ? 'webgpu' : 'webgl2';
+  // Firefox WebGPU (render/firefoxWebgpu.js): naga rejects constant builtin calls on abstract floats, and
+  // copyExternalImageToTexture refuses a <video>; concrete f32 constants and an external-texture blit there
+  if (backend === 'webgpu' && isFirefox()) { concreteFloatConstants(threeWebgpu.WGSLNodeBuilder); uploadVideoThroughExternalTexture(three); }
   if (backend === 'webgl2') {
     try { const gl = three.backend.gl, ext = gl.getExtension('WEBGL_debug_renderer_info'); gpu = shortGpu(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)); } catch (e) { /* hidden */ }
   }
@@ -108,7 +133,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   const gate = createFrameGate({ cap: opts.frameCap });
   const dyn = createDynRes();
   const tierFns = new Set();
-  let post = null, postKey = null, last = 0, gated = false;
+  let post = null, postKey = null, last = 0, gated = false, inset = null;
   // a tier step rebuilds the post chain and the shadow mode, so every program relinks (Firefox: one by one,
   // a 1 to 3 s freeze mid-race; under the pause card, black frames). While held (a race, its countdown and
   // its pause card) the governor's verdict waits and lands on the next menu or results card; dynamic
@@ -195,6 +220,11 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
       if (!hold && pending) { const p = pending; pending = null; if (p !== Q.name) { setTier(p); retier(); } }
     },
     get tierPending() { return pending; },
+    /** The hit cam inset for the next frames: { scene, camera, rect: { cx, cy, w, h, rotRad } (CSS px), viewW, viewH } or null. */
+    setInset(spec) { inset = spec && spec.scene && spec.camera && spec.rect && Q.hitCam > 0 ? spec : null; },
+    get insetOn() { return !!inset; },
+    /** insetCamera: the hit cam's own camera; mainCamera keeps the post chain on the race view. */
+    warmInset(scene, insetCamera, mainCamera) { return warmInset(three, postFor(scene, mainCamera), scene, insetCamera); },
     /** The live display options (frameCap, renderScale, quality, showFps); other keys are ignored here. */
     setOptions(o) {
       const was = opts;
@@ -251,6 +281,10 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
       const p = postFor(scene, camera);
       three.info.reset();
       p.update(fx, dt, Math.max(1, canvas.clientWidth) / Math.max(1, canvas.clientHeight), musicView);
+      if (inset && p.inset) {
+        try { renderInset(three, p.inset.target, inset, three.getPixelRatio() * Q.hitCam); p.setInset(inset.rect, inset.viewW, inset.viewH); }
+        catch (e) { console.warn('[glassroad/renderer] hit cam: ' + (e && e.message)); inset = null; p.setInset(null); }
+      } else if (p.setInset) p.setInset(null);
       p.render();
     },
     stats() {
@@ -270,6 +304,69 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   return api;
 }
 
+/** Shadowless, MRT-less, straight into the inset target; every renderer switch it touches is put back. */
+function withInsetTarget(three, target, fn) {
+  const oldTarget = three.getRenderTarget(), mrt = three.getMRT ? three.getMRT() : null;
+  const shadow = three.shadowMap ? three.shadowMap.enabled : false, autoClear = three.autoClear;
+  const restore = () => {
+    three.setRenderTarget(oldTarget);
+    if (three.setMRT) three.setMRT(mrt);
+    if (three.shadowMap) three.shadowMap.enabled = shadow;
+    three.autoClear = autoClear;
+  };
+  if (three.shadowMap) three.shadowMap.enabled = false;
+  three.autoClear = true;
+  if (three.setMRT) three.setMRT(null);
+  three.setRenderTarget(target);
+  let out;
+  try { out = fn(); } catch (e) { restore(); throw e; }
+  // an async compile takes its render list, target and shadow state in this task (three builds the pipelines
+  // afterwards): the switches go back at once, so a garage frame drawn while they build lands on the canvas
+  restore();
+  return out;
+}
+
+function renderInset(three, target, spec, pr) {
+  const w = Math.max(2, Math.round(spec.rect.w * pr)), h = Math.max(2, Math.round(spec.rect.h * pr));
+  if (target.width !== w || target.height !== h) target.setSize(w, h);
+  withInsetTarget(three, target, () => three.render(spec.scene, spec.camera));
+}
+
+/** Compile the inset's own programs (no shadows, its own target) for everything that can appear in a race. */
+export async function warmInset(three, post, scene, camera) {
+  if (!post || !post.inset || !scene || !camera) return { ms: 0 };
+  const t0 = performance.now(), saved = [], mats = [];
+  // the materials made only in a race (render/warmExtras.js) get their inset programs too
+  const late = new Group();
+  for (const m of lateWarmMaterials(GPU)) late.add(m.isSpriteNodeMaterial ? new Sprite(m) : new Mesh(new PlaneGeometry(0.01, 0.01), m));
+  scene.add(late);
+  scene.traverse((o) => {
+    saved.push([o, o.visible, o.frustumCulled, o.count]);
+    o.visible = true; o.frustumCulled = false;
+    if (o.count === 0 && (o.isInstancedMesh || o.isSprite || o.isBatchedMesh)) o.count = 1;
+    for (const m of [].concat(o.material || [])) if (m && m.visible === false) { mats.push(m); m.visible = true; }
+  });
+  const layers = camera.layers.mask;
+  // Use the inset's actual layers. Its shadowless pass cannot compile the
+  // layer-2 ShadowNodeMaterial road catchers.
+  scene.updateMatrixWorld(true);
+  try {
+    // the first real hit resizes the target; a 2 px one has the same formats, so the programs carry over
+    await withInsetTarget(three, post.inset.target, () => three.compileAsync(scene, camera));
+    withInsetTarget(three, post.inset.target, () => three.clear());
+  } catch (e) {
+    console.warn('[glassroad/renderer] hit cam warm: ' + (e && e.message));
+  } finally {
+    camera.layers.mask = layers;
+    for (const [o, v, f, n] of saved) { o.visible = v; o.frustumCulled = f; if (o.count !== n) o.count = n; }
+    for (const m of mats) m.visible = false;
+    for (const o of [...late.children]) { late.remove(o); if (o.isMesh) o.geometry.dispose(); }
+    scene.remove(late);
+    scene.updateMatrixWorld(true);
+  }
+  return { ms: Math.round(performance.now() - t0) };
+}
+
 /**
  * Build every pipeline a race can need before the start card lifts (the WebGPU countdown hitch was
  * first-use compiles: rivals, accessories, bubbles, item pools, particles and screen effects).
@@ -281,31 +378,40 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
  * each), one group shown per pass and a painted frame between passes, so the warming card's bar moves
  * and the tab never looks hung (Firefox linked every program serially in one ~7 s task). A last pass with
  * everything shown catches anything only a full frame builds. onProgress(done, total) after each group.
- * @returns {Promise<{ ms: number, objects: number, groups: number }>}
+ * Garage first: the warm can run behind the live menu. overdraw() is called in the same task as every warm
+ * frame (the garage draws its own frame over it before anything is presented, so no warm frame is ever seen)
+ * and alive() false after a pass stops the warm (a course switch mid-warm) with everything put back.
+ * @returns {Promise<{ ms: number, objects: number, groups: number, stopped: boolean }>}
  */
 export { WARM, warmGroups };
 
 // a painted frame between warm passes (the card and its bar redraw), falling back to a plain task
 const paintGap = () => new Promise((r) => (globalThis.requestAnimationFrame ? requestAnimationFrame(() => setTimeout(r, 0)) : setTimeout(r, 0)));
 
-export async function warmAll(renderer, scene, camera, extras = [], { onProgress = null, stage = null } = {}) {
+export async function warmAll(renderer, scene, camera, extras = [], { onProgress = null, stage = null, alive = null, overdraw = null } = {}) {
   const t0 = performance.now();
   const post = renderer.post(scene, camera);
   const timing = { compileMs: 0, renderMs: 0, gapMs: 0 };
-  const compile = async () => { const t = performance.now(); await post.compileAsync(); timing.compileMs += performance.now() - t; };
-  const render = () => { const t = performance.now(); post.render(); timing.renderMs += performance.now() - t; };
+  // compileStart hands the scene pass target back in this task (post.js): a frame drawn while the pipelines
+  // build (the garage behind the menu) lands on the canvas, never in the scene pass target
+  const compile = async () => { const t = performance.now(); await (post.compileStart ? post.compileStart() : post.compileAsync()); timing.compileMs += performance.now() - t; };
+  const render = () => { const t = performance.now(); post.render(); if (overdraw) overdraw(); timing.renderMs += performance.now() - t; };
   const gap = async () => { const t = performance.now(); await paintGap(); timing.gapMs += performance.now() - t; };
+  const stopped = () => !!alive && !alive();
   const temp = new Group(), plane = new PlaneGeometry(0.01, 0.01);
   temp.name = 'warm-extras';
-  for (const x of [].concat(extras || [])) {
+  for (const x of [].concat(extras || [], lateWarmMaterials(GPU))) {   // + the materials made only in a race
     const o = !x ? null : x.isObject3D ? x : x.object && x.object.isObject3D ? x.object
       : x.isMaterial ? (x.isSpriteNodeMaterial || x.type === 'SpriteNodeMaterial' ? new Sprite(x) : new Mesh(plane, x)) : null;
     if (o && !o.parent) temp.add(o);
   }
   scene.add(temp);
-  const saved = [], mats = [], items = [];
+  const saved = [], mats = [], items = [], lods = [];
   let objects = 0, groups = [];
   scene.traverse((o) => {
+    // Projection normally selects one LOD and hides the others, undoing the warm's
+    // all-visible state. Prepare every distance variant before an intro cut needs it.
+    if (o.isLOD) { lods.push([o, o.autoUpdate]); o.autoUpdate = false; }
     saved.push([o, o.visible, o.frustumCulled, o.count]);
     o.visible = true; o.frustumCulled = false;
     if (o.count === 0 && (o.isInstancedMesh || o.isSprite || o.isBatchedMesh)) o.count = 1;
@@ -338,26 +444,31 @@ export async function warmAll(renderer, scene, camera, extras = [], { onProgress
     if (later) for (const o of later) o.visible = false;
     // pass 0: the post chain and the receivers alone (the road's programs are big), then a painted frame
     await compile();
-    render();
-    await gap();
+    if (!stopped()) { render(); await gap(); }
     const shown = [];
-    for (let g = 0; g < groups.length; g++) {
+    for (let g = 0; g < groups.length && !stopped(); g++) {
       for (const o of groups[g]) for (let p = o; p && p !== scene; p = p.parent) if (!p.visible) { p.visible = true; shown.push(p); }
       await compile();
-      render();
+      if (!stopped()) render();
       for (const p of shown) p.visible = false;
       shown.length = 0;
+      if (stopped()) break;
       if (onProgress) { try { onProgress(g + 1, groups.length + 1); } catch { /* the card only */ } }
       await gap();
     }
-    // the whole scene once: anything only a full frame builds (everything above is cached by now)
-    for (const o of items) o.visible = !(later && later.has(o));
-    await compile();
-    render();
-    if (onProgress) { try { onProgress(groups.length + 1, groups.length + 1); } catch { /* the card only */ } }
+    if (!stopped()) {
+      // the whole scene once: anything only a full frame builds (everything above is cached by now)
+      for (const o of items) o.visible = !(later && later.has(o));
+      await compile();
+      if (!stopped()) {
+        render();
+        if (onProgress) { try { onProgress(groups.length + 1, groups.length + 1); } catch { /* the card only */ } }
+      }
+    }
   } catch (e) {
     console.warn('[glassroad/renderer] warm: ' + (e && e.message));
   } finally {
+    for (const [o, autoUpdate] of lods) o.autoUpdate = autoUpdate;
     if (layers !== null) camera.layers.mask = layers;
     for (const [o, v, f, n] of saved) { o.visible = v; o.frustumCulled = f; if (o.count !== n) o.count = n; }
     for (const m of mats) m.visible = false;
@@ -366,7 +477,7 @@ export async function warmAll(renderer, scene, camera, extras = [], { onProgress
     plane.dispose();
     scene.updateMatrixWorld(true);
   }
-  render();
-  return { ms: Math.round(performance.now() - t0), objects, groups: groups.length, staged: plan, all: plan ? items : null,
+  if (!stopped()) render();
+  return { ms: Math.round(performance.now() - t0), objects, groups: groups.length, staged: plan, all: plan ? items : null, stopped: stopped(),
     ...Object.fromEntries(Object.entries(timing).map(([key, value]) => [key, Math.round(value)])) };
 }

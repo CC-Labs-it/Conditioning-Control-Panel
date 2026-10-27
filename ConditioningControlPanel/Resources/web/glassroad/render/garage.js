@@ -18,6 +18,7 @@ import {loadRecord} from '../meta/record.js';
 import {unlockedSet} from '../meta/unlocks.js';
 import {warmGarageWardrobe} from './garageWarm.js';
 import {createGarageBackdrop} from './garageBackdrop.js';
+import {cascadeIn} from './worldFeel.js';
 
 /** One menu scene on the game's existing renderer, driven by the existing frame loop. */
 export async function createGarage({art,renderer,canvas,action,sound,track,laps,trackId='threshold',online=true,changeTrack}) {
@@ -86,7 +87,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
     if(layout.mobile)return {left:margin,top,width:w-margin*2,height:Math.max(60,panel.top-top-14)};
     return {left:margin,top,width:Math.max(80,panel.left-margin*2),height:Math.max(80,h-top-margin)};
   }
-  function customize(on){if(moving||on===custom)return;custom=on;gesture=null;viewBusy=true;paint();resize();ui.customFocus(on);sound(on?'menu-ok':'menu-back');}
+  function customize(on){if(moving||on===custom)return;custom=on;gesture=null;viewBusy=true;paint();resize();ui.customFocus(on);if(on)cascadeIn(ui.root.querySelectorAll('.g-outfits > *, .g-patterns > *'),entrance());sound(on?'menu-ok':'menu-back');}
   function select(value,relative=false){if(custom||viewBusy)return;if(moving){queued={value,relative};return;}
     const route=relative?stepKart(selected,value,locked):routeTo(selected,value,locked);if(!route){if(!relative&&KARTS[value]&&locked.has(KARTS[value][0]))ui.lockNote(KARTS[value][0]);sound('menu-deny');return;}
     moving={elapsed:0,duration:reduced?.32:1.12,from:orbit,to:orbit-route.steps*Math.PI/4,index:route.index,yaw,landed:false};
@@ -104,6 +105,8 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
     rider.position.set(0,0,0);if(customFrame)rider.position.fromArray(customFrame.rider).multiplyScalar(amount);
   }
   const ease=x=>x*x*(3-2*x);
+  // feel wave (lane C): list rows tween in (render/worldFeel.js cascadeIn); OS reduced motion or Gentle reads as 'less'
+  let motion='full';const entrance=()=>motion==='off'?'off':reduced&&motion==='full'?'less':motion;
   function update(dt,motionReduced,gentle=false){dt=Math.max(0,Math.min(.05,Number.isFinite(dt)?dt:0));reduced=motionReduced||gentle;ui.root.classList.toggle('g-calm',reduced);time+=dt;emiLife.beforePose();
     backdrop.update(dt,{reducedMotion:motionReduced,gentle});
     const screen=advanceGarageView(view,custom,dt,reduced),sceneProgress=screen.framing,wasBusy=viewBusy;view=screen.value;viewBusy=screen.busy;
@@ -162,7 +165,8 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
       if('sound' in next)sound=typeof next.sound==='function'?next.sound:()=>{};
       if('changeTrack' in next)changeTrack=typeof next.changeTrack==='function'?next.changeTrack:()=>{};
     },
-    setVisible(on){if(on!==visible){visible=on;gesture=null;if(on)refreshLocks();ui.setVisible(on);if(on)resize();}},
+    setVisible(on){if(on!==visible){visible=on;gesture=null;if(on)refreshLocks();ui.setVisible(on);if(on){resize();cascadeIn(ui.root.querySelectorAll('.g-menu-row'),entrance());}}},
+    setMotion(m){motion=m||'full';},
     render(dt,reduced,{gentle=false}={}){update(dt,reduced,gentle);renderer.three.render(scene,camera);},
     dispose(){canvas.style.opacity='';observer.disconnect();document.removeEventListener('keydown',keydown,true);for(const [event,fn]of [['pointerdown',down],['pointermove',move],['pointerup',up],['pointercancel',cancel],['lostpointercapture',cancel]])canvas.removeEventListener(event,fn);contactGeo.dispose();contactMat.dispose();emiLife.dispose();for(const l of vehicleLives)l.dispose();dress?.dispose();style.dispose();skin.dispose();arrows.dispose();ui.dispose();mixer.stopAllAction();environment.dispose();backdrop.dispose();particleGeo.dispose();particleMaterial.dispose();for(const m of owned)m.dispose();},
   };

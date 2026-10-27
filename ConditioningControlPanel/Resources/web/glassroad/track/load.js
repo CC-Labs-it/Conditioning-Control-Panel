@@ -14,9 +14,10 @@ import { canalProfile, canalNormal } from './canal.js';
 import { installForks } from './forks.js';
 import { movingPlan, installMovingSupport } from './movingHazards.js';
 import { buildAerials, shapeAerialNodes, aerialGapAt, aerialBoostAllowed } from './aerial.js';
+import { safeBoostTurn } from './boostSafety.js';
 
 /** @returns {object} Track; throws an Error listing the schema errors */
-export function loadTrack(json, { validate = true, aerials: includeAerials = true, moving: includeMoving = false } = {}) {
+export function loadTrack(json, { validate = true, aerials: includeAerials = true, moving: includeMoving = false, boostSafety = true } = {}) {
   if (validate) {
     const r = validateJson(json);
     if (!r.ok) throw new Error('track invalid: ' + r.errors.join('; '));
@@ -117,6 +118,9 @@ export function loadTrack(json, { validate = true, aerials: includeAerials = tru
   const moving = includeMoving ? movingPlan(track) : { traps: [], bridge: null };
   installForks(track, [...(json.forks || []), ...(moving.bridge?.fork ? [moving.bridge.fork] : [])]);
   if (includeMoving) installMovingSupport(track, moving);
+  // Every consumer, including the online authority, receives the same safe physical pads.
+  // Source generators opt out explicitly so their historical authored plans stay reproducible.
+  if (boostSafety) track.boosts = track.boosts.filter(pad => safeBoostTurn(track, pad));
   let dl = null, meshes = null;
   Object.defineProperty(track, 'driveline', { enumerable: true, get: () => {
     if (!dl) {

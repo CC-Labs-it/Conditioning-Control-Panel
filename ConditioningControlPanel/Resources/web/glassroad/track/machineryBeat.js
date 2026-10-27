@@ -1,7 +1,8 @@
 // Solo machinery follows the heard recording; online callers leave this adapter disabled.
+import { trapArrangement } from './trapArrangement.js';
 const clocks = new WeakMap();
 const finite = Number.isFinite;
-export const MACHINERY_PACE = 2;
+export const MACHINERY_PACE = 1;
 export const machineryDuration = (seconds, frame) => seconds / (frame?.pace || 1);
 export function setMachineryBeat(track, frame) {
   if (frame?.enabled && frame.fallback && finite(frame.raceS))
@@ -12,18 +13,19 @@ export function setMachineryBeat(track, frame) {
   const old = clocks.get(track), beatS = 60 / frame.bpm, offsetS = frame.offsetS || 0;
   const beat = (frame.songS - offsetS) / beatS;
   const predicted = old ? old.songS + (old.playing ? frame.raceS - old.raceS : 0) : frame.songS;
-  const jumped = old ? (frame.raceS < old.raceS || Math.abs(frame.songS - predicted) > .18 || old.bpm !== frame.bpm || !!old.fallback !== !!frame.fallback) : frame.raceS > .5;
+  const jumped = old ? (frame.raceS < old.raceS || Math.abs(frame.songS - predicted) > .18 || old.bpm !== frame.bpm || !!old.fallback !== !!frame.fallback || old.song !== frame.song) : frame.raceS > .5;
   // A seek or wrapped recording visibly opens the machinery, then grants four warning beats.
   const epochBeat = jumped ? Math.ceil(beat) + 4 : old?.epochBeat || 0;
   clocks.set(track, { ...frame, playing: frame.playing !== false, beatS, offsetS, epochBeat,
-    rearming: !!jumped || !!old?.rearming });
+    rearming: !!jumped || !!old?.rearming, arrangement: trapArrangement(frame.song, track.id) });
 }
 export function machineryBeatAt(track, raceS) {
   const c = clocks.get(track); if (!c) return null;
   const songS = c.songS + (c.playing && finite(raceS) ? raceS - c.raceS : 0);
   const beat = (songS - c.offsetS) / c.beatS - c.epochBeat;
-  // Two machinery subdivisions per heard beat. Seek grace remains four real beats.
+  // One machinery beat per heard beat. Seek grace remains four real beats.
   return { beat: beat * MACHINERY_PACE, beatS: c.beatS / MACHINERY_PACE,
+    songBeat: (songS - c.offsetS) / c.beatS, epochBeat: c.epochBeat, arrangement: c.arrangement,
     pace: MACHINERY_PACE, fallback: !!c.fallback, safe: beat < 0, rearming: c.rearming };
 }
 // A missing recording still gives every physical trap the same deterministic musical grid.

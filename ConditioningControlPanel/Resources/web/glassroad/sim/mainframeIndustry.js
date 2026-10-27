@@ -6,6 +6,8 @@ import { yawParams, calmOf } from './steer.js';
 import { machineryBeatAt, beatCycle, machineryRearming } from '../track/machineryBeat.js';
 import { makeQuery } from '../track/query.js';
 
+import { trapStroke } from '../track/trapArrangement.js';
+
 export const PRESS_BODY = Object.freeze({ height: 2.2, radius: .7, kartHeight: 1.6, repeatS: .8 });
 
 export function industryZones(track) {
@@ -32,6 +34,11 @@ export function industryZones(track) {
 }
 const ease = v => { v = clamp(v, 0, 1); return v * v * (3 - 2 * v); };
 export function industryPose(zone, timeS, beat = null) {
+  const arranged = zone.kind === 'piston' && trapStroke(zone, beat);
+  if (arranged) {
+    const lift = 7 * (1 - arranged.extension);
+    return { ...arranged, lift, active: lift < PRESS_BODY.kartHeight, travel: arranged.extension };
+  }
   if (beat?.fallback) { timeS *= beat.pace; beat = null; }
   if (zone.kind === 'piston') {
     // Silent races use the same brisk 120 BPM grid on the shared race clock.

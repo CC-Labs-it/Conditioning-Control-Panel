@@ -9,6 +9,7 @@
  */
 import { mixGet, rollTickTimes, ladderSemis } from './mix.js';
 import { pressThudGain } from './pressThud.js';
+import { trapTickGain } from '../render/trapTelegraph.js';
 import { toyLaunchPlan } from './itemFlight.js';
 
 /** Per-file level against the one loudness every file is normalised to (linear gain). */
@@ -99,6 +100,24 @@ const SELF_FIRE = {
   golden: () => [one('item-box', 0.7, 1.2), one('drift-release', 0.5, 1.3, 0.04)],
 };
 
+/**
+ * Item feel: your hit landed. A punchy impact, then a bright two-step chime that climbs semisPerCombo per extra hit
+ * in a chain (combo = 1, 2, 3 ...), distinct from the victim's own item-hit (full, lower, no chime).
+ */
+export function confirmPlan(combo = 1, semisPerCombo = 3) {
+  const n = Math.max(1, Math.min(6, combo | 0 || 1)), r = semisToRate((n - 1) * (Number(semisPerCombo) || 0));
+  const plan = [one('item-hit', 0.55, 1.12), one('bubble-pop', 0.9, 1.5 * r, 0.03), one('menu-ok', 0.6, 1.26 * r, 0.08)];
+  if (n > 1) plan.push(one('drift-release', 0.4 + 0.1 * Math.min(3, n), 1.2 * r, 0.12));
+  return plan;
+}
+
+/** Item feel: your shot connected but did not land: a dull low clank (a shield adds its glassy tick). */
+export function blockedPlan(verdict) {
+  const plan = [one('wall', 0.5, 0.7), one('bump', 0.45, 0.78, 0.02)];
+  if (verdict === 'glass' || verdict === 'golden') plan.push(one('bubble-pop', 0.35, 1.7, 0.05));
+  return plan;
+}
+
 const fg = (feel, path, def) => { try { const v = feel?.get(path); return v === undefined ? def : v; } catch (e) { return def; } };
 const one = (id, vol = 1, rate = 1, at = 0) => ({ id, vol, rate, at });
 
@@ -116,6 +135,8 @@ export function sfxPlan(name, p = {}, o = {}) {
     case 'air-word-launch':
     case 'air-word-hop': return null; // Quiet springs at both takeoffs stay on the shared synth with the bank loaded.
     case 'press-thud': return pressThudGain(p) > .01 ? [one('land-heavy', .06 * pressThudGain(p), .68)] : [];
+    // a trap's warning beats: the count sample, quiet, rising a little toward the strike (step 4..1)
+    case 'trap-tick': return trapTickGain(p) > .01 ? [one('countdown', .05 * trapTickGain(p), 1 + (4 - Math.min(4, Math.max(1, p.step || 4))) * .09)] : [];
     case 'countdown': return [one('countdown')];
     case 'go': return [one('go')];
     case 'launch-boost': return [one('launch')];
@@ -177,9 +198,11 @@ export function sfxPlan(name, p = {}, o = {}) {
       return null;
     }
     case 'item-hit': {
-      if (p.verdict && p.verdict !== 'hit') return null;       // glass, golden, decoy, mercy: synth figures
+      // item feel: the thrower's ear. A shot of yours that a shield, snap, gold, echo or mercy stopped: a dull clank
+      if (p.by === 0 && p.victim !== 0 && p.verdict && p.verdict !== 'hit') return blockedPlan(p.verdict);
+      if (p.verdict && p.verdict !== 'hit') return null;       // glass, golden, decoy, mercy on you or between bots: synth
       if (p.victim === 0) return [one('item-hit')];
-      if (p.by === 0) return [one('item-hit', 0.6, 1.08)];
+      if (p.by === 0) return confirmPlan(p.combo, fg(feel, 'itemFeel.confirmSemisPerCombo', 3));
       return [one('bubble-pop', 0.6)];
     }
     case 'bubble-pop': {

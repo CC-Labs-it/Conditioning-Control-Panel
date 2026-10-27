@@ -90,7 +90,7 @@ export function buildMainframe() {
     ai: { lines: [], pace: [1, 1.05, 1.1] }, beat: { bpm: null, offsetMs: 0, map: [] },
     reservoir: { waterY: 4 },
     limits: { fallY: -40, edgeGraceM: 1.2, edgeGraceS: 0.8 } };
-  const loaded = loadTrack(track, { aerials: false }), nearest = s => loaded.nodeS.slice(0, nodes.length).reduce((best, n, i) =>
+  const loaded = loadTrack(track, { aerials: false, boostSafety: false }), nearest = s => loaded.nodeS.slice(0, nodes.length).reduce((best, n, i) =>
     Math.abs(n - s) < Math.abs(loaded.nodeS[best] - s) ? i : best, 0);
   const at = (id, ds = 0) => loaded.nodeS[spans[id].from] + ds;
   // Two optional cuts across the descending bus. The lower turn expands outward to catch the kart.

@@ -16,6 +16,13 @@
  * the moment each change plays come from hud/slotMath.js (catch, land, use, drop). A pickup bubble answers
  * with a ring at the kart and a speed punch; a drift tier pops its pip in the tier colour and the release
  * flashes the pips out. Gentle and reduced motion keep the fades only.
+ * Item feel: the player's own shots answer on the HUD (hud/itemFeel.js): the spent bubble flies out of the slot by
+ * mode, a landed hit stamps BONK! / DOUBLE! beside the slot with a hit marker and an edge flash, a blocked one
+ * stamps BLOCKED. Toasts carry a priority (fx/itemFeelMath.js toastDecide): a hit confirm replaces a stale lap note
+ * at once and a combo updates its own toast in place; a lower one waits its turn.
+ * Feel wave (2026-10-26): the HUD turns landed item and trap hits into hitter-hit {racer, hitter, from} on the bus
+ * (sim/hitterHit.js; `racers` getter option for the bearing, else from is null); the item chip answers a hit the
+ * player lands and the lap chip pulses on every lap (hud/hudPulse.js, by the Motion option).
  */
 import { formatTime, ordinal, iconOf, itemName, rollFrame, racerLabels, ICON_IDS } from './format.js';
 import { slotState, slotMoment, gentleMoment, pipMoment, USED_S, PIP_OUT_S } from './slotMath.js';
@@ -23,6 +30,10 @@ import { createMinimap } from './minimap.js';
 import { createCards } from './cards.js';
 import { createKit, placeArt } from './kit.js';
 import { devices as sharedDevices } from '../input/device.js';
+import { createItemFeel, ITEM_FEEL_MARKUP } from './itemFeel.js';
+import { toastDecide, PRIORITY } from '../fx/itemFeelMath.js';
+import { wireHitterHit } from '../sim/hitterHit.js';
+import { playPulse } from './hudPulse.js';
 
 export { formatTime };
 
@@ -30,7 +41,7 @@ const NAMES = ['race', 'online', 'options', 'controls', 'back', 'resume', 'resta
 const TOAST_S = 1.6, TOAST_GAP_S = 0.6;
 
 /** @returns {Hud} */
-export function createHud({ root, card }, feel, bus, { doc = globalThis.document, now = () => performance.now(), devices = sharedDevices } = {}) {
+export function createHud({ root, card }, feel, bus, { doc = globalThis.document, now = () => performance.now(), devices = sharedDevices, photosafe = null, racers = null } = {}) {
   root.classList.add('hud');
   root.dataset.screen = 'race';
   root.innerHTML =
@@ -43,7 +54,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
       '<div class="hud-place" aria-live="polite" hidden><img class="hud-place-art" alt="" draggable="false" hidden><b></b><sup></sup><small></small></div>' +
       '<span class="hud-pips"><i></i><i></i><i></i></span>' +
       '<span class="hud-speed"><b>0</b> km/h</span>' +
-      '<div class="hud-toast" role="status"></div>' +
+      '<div class="hud-toast" role="status"></div>' + ITEM_FEEL_MARKUP +
       '<div class="hud-direction" role="status" aria-live="polite" aria-hidden="true"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M8 26V13a8 8 0 0 1 16 0v8m-5-5 5 5 5-5"/></svg><span>Wrong way<small>Turn around</small></span></div>' +
     '</div>' +
     '<div class="hud-count" aria-hidden="true"><img class="hud-count-flag" alt="" draggable="false" hidden><span></span></div>' +
@@ -91,7 +102,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
   el.item.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); fire('item', {}); });
 
   let labels = [], metas = null, laps = 1, leader = -1, goUntil = 0, countN = 0;
-  let toastUntil = 0, toastAt = -1e9, pending = null;
+  let toastUntil = 0, toastCur = null, pending = null;
   const last = {};
   const put = (key, node, text) => { if (last[key] !== text) { last[key] = text; node.textContent = text; } };
   const gentleOn = () => !!feel.get('gentle.on');
@@ -101,14 +112,43 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
   const play = (node, cls, all = [cls]) => { node.classList.remove(...all); void node.offsetWidth; node.classList.add(cls); };
   let usedUntil = 0, usedId = null, pipTier = 0, pipsOutUntil = 0;
 
-  function toast(text) {
+  /**
+   * A short slip under the item slot. msg: a string, or parts [{ text, cls?, colour? }] (item feel). opts.priority
+   * (fx/itemFeelMath.js PRIORITY), opts.group (the same group replaces itself at once), opts.tone (CSS look).
+   */
+  function toast(msg, { priority = PRIORITY.info, group = '', tone = '' } = {}) {
     const t = now() / 1000;
-    if (t - toastAt < TOAST_GAP_S && t < toastUntil) { pending = text; return; }
-    toastAt = t; toastUntil = t + TOAST_S; pending = null;
-    el.toast.textContent = text;
+    let minShowS = TOAST_GAP_S;
+    try { const v = Number(feel.get('itemFeel.toastMinShowS')); if (v > 0) minShowS = v; } catch (e) { /* older feel */ }
+    const showing = el.toast.classList.contains('on') && t < toastUntil ? toastCur : null;
+    if (toastDecide(showing, { priority, group }, t, { minShowS }) === 'wait') {
+      if (!pending || pending.opts.priority <= priority) pending = { msg, opts: { priority, group, tone } };
+      return;
+    }
+    if (pending && pending.opts.priority <= priority && pending.opts.group === group) pending = null;
+    toastUntil = t + TOAST_S; toastCur = { priority, group, at: t, until: toastUntil };
+    paintToast(msg, tone);
+    const bump = !!(showing && tone && !gentleOn());
+    el.toast.classList.remove('bump');
+    if (bump) { void el.toast.offsetWidth; el.toast.classList.add('bump'); }
     el.toast.classList.add('on');
   }
+  function paintToast(msg, tone) {
+    if (tone) el.toast.dataset.tone = tone; else delete el.toast.dataset.tone;
+    if (!Array.isArray(msg)) { el.toast.textContent = String(msg); return; }
+    el.toast.textContent = '';
+    for (const p of msg) {
+      if (!p || !p.text) continue;
+      const span = doc.createElement('span');
+      if (p.cls) span.className = 't-' + p.cls;
+      if (p.colour && span.style) span.style.setProperty('--who', p.colour);
+      span.textContent = p.text;
+      el.toast.appendChild ? el.toast.appendChild(span) : null;
+    }
+  }
   const nameOf = (i) => labels[i] || (i === 0 ? 'You' : 'Bot ' + i);
+  const itemFeel = createItemFeel(root, { doc, feel, now, toast, names: nameOf, itemName, photosafe,
+    tints: (i) => (metas && metas[i] && metas[i].tint) || 0 });
 
   const offs = [
     // one stamp per bell, one beat long (in, hold, shrink out); Gentle swaps the keyframes for a plain fade
@@ -135,24 +175,30 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     }),
     bus.on('drift-cancel', () => { pipsOutUntil = 0; el.pipRow.classList.remove('out', 'out-soft'); pips(0); }),
     // the player used the held item: the slot shows `used` for USED_S (the icon shrinks out, a ring flares)
-    bus.on('item-fire', ({ racer }) => { if (racer === 0) { usedUntil = now() / 1000 + USED_S; usedId = last.icon || null; } }),
+    // item feel: data-fling picks how the spent bubble leaves the slot (hud/itemFeel.js CSS)
+    bus.on('item-fire', ({ racer, mode }) => { if (racer === 0) { usedUntil = now() / 1000 + USED_S; usedId = last.icon || null; el.item.dataset.fling = mode || 'throw'; } }),
     // a pickup bubble: a ring at the kart and a speed punch (IN fast, OUT over the keyframes)
     bus.on('bubble-pop', ({ racer }) => {
       if (racer !== 0) return;
       play(el.pop, gentleOn() ? 'on-soft' : 'on', ['on', 'on-soft']);
       play(el.speedBox, gentleOn() ? 'punch-soft' : 'punch', ['punch', 'punch-soft']);
     }),
-    bus.on('lap', ({ lap }) => { if (lap > 0 && lap < laps) toast(lap === laps - 1 ? 'Final lap' : 'Lap ' + (lap + 1)); }),
+    wireHitterHit(bus, () => (typeof racers === 'function' ? racers() : racers)),
+    bus.on('hitter-hit', ({ hitter }) => { if (hitter === 0) pulse(el.item, 'hit', 'hud.hitterFlashMs'); }),
+    bus.on('lap', () => pulse(el.lap, 'lap', 'hud.lapPulseMs')),
+    bus.on('lap', ({ lap }) => { if (lap > 0 && lap < laps) toast(lap === laps - 1 ? 'Final lap' : 'Lap ' + (lap + 1), { priority: PRIORITY.note }); }),
     bus.on('slipstream', ({ racer, state }) => { if (racer === 0 && state === 'fire') toast('Slipstream'); }),
-    bus.on('race-standings', ({ order }) => { leader = order && order.length ? order[0] : -1; }),
-    bus.on('item-refused', ({ racer }) => { if (racer === 0) toast('Not by the edge'); }),
-    bus.on('item-hit', ({ victim, by, kind, verdict }) => {
-      if (victim === 0 && verdict === 'hit') toast(itemName(kind) + ' from ' + nameOf(by));
-      else if (victim === 0 && verdict === 'glass') toast('Glass held');
-      else if (by === 0 && victim !== 0 && verdict === 'hit') toast(itemName(kind) + ' on ' + nameOf(victim));
-    }),
+    bus.on('race-standings', ({ order }) => { leader = order && order.length ? order[0] : -1; itemFeel.standings(order); }),
+    bus.on('item-refused', ({ racer }) => { if (racer === 0) toast('Not by the edge', { priority: PRIORITY.note }); }),
+    // item feel: confirm, blocked and taken toasts, the hit marker, the stamp and the edge flash (hud/itemFeel.js)
+    bus.on('item-hit', (p) => itemFeel.hit(p || {})),
+    bus.on('tether-hook', (p) => itemFeel.hook(p || {})),
   ];
   const colours = () => feel.get('juice.sparkColours');
+  function pulse(node, kind, key) {
+    let ms = 0; try { ms = feel.get(key); } catch { ms = 0; }
+    playPulse(node, kind, ms, (cards.options && cards.options.motion) || 'full', gentleOn());
+  }
   function pips(tier) {
     const c = colours(), t = Math.max(0, Math.min(3, tier | 0));
     const m = pipMoment(pipTier, t);
@@ -255,7 +301,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     const t = now() / 1000;
     if (t >= toastUntil && el.toast.classList.contains('on')) {
       el.toast.classList.remove('on');
-      if (pending) { const p = pending; pending = null; toast(p); }
+      if (pending) { const p = pending; pending = null; toast(p.msg, p.opts); }
     }
   }
 
@@ -265,7 +311,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     if (kind === 'menu') root.dataset.screen = 'menu';
     else if (kind === 'results') root.dataset.screen = 'results';
     else if (!kind || kind === 'start') root.dataset.screen = 'race';
-    if (kind === 'menu' || kind === 'start') { last.place = 0; leader = -1; el.place.hidden = true; }
+    if (kind === 'menu' || kind === 'start') { last.place = 0; leader = -1; el.place.hidden = true; itemFeel.reset(); }
     cards.show(kind, data);
   }
 
@@ -276,6 +322,8 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     setReady: (r, n) => cards.setReady(r, n),
     /** The warming card's stage line and bar, p 0..1 (pass 3: boot names each stage). */
     setLoading: (stage, p) => cards.setProgress(stage, p),
+    /** Garage first: the course's lights (shaders, reflections) warm behind the menu; the Race door shows it. */
+    setLights: (s) => cards.setLights(s),
     on(name, fn) { if(disposed)return()=>{};(listeners[name] || (listeners[name] = [])).push(fn); return () => { const l = listeners[name], i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); }; },
     onStart: (fn) => {if(!disposed)fns.start.push(fn);}, onResume: (fn) => {if(!disposed)fns.resume.push(fn);}, onRestart: (fn) => {if(!disposed)fns.restart.push(fn);},
     setRacers(meta) { metas = meta || null; labels = racerLabels(meta || []); },
@@ -294,6 +342,6 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     credit: root.querySelector('.hud-credit'),
     /** A short note at the bottom, on any screen (the controller notes use it). */
     note,
-    dispose() { if(disposed)return;disposed=true;for(const list of [...Object.values(listeners),...Object.values(fns)])list.length=0;garageNav=null;cards.dispose(); offs.forEach((off) => off()); offDev(); clearTimeout(noteTimer); kit.dispose(); warm.length = 0; },
+    dispose() { if(disposed)return;disposed=true;for(const list of [...Object.values(listeners),...Object.values(fns)])list.length=0;garageNav=null;cards.dispose(); itemFeel.dispose(); offs.forEach((off) => off()); offDev(); clearTimeout(noteTimer); kit.dispose(); warm.length = 0; },
   };
 }
