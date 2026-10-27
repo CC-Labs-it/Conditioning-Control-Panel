@@ -32,6 +32,14 @@ import { finalLapMods, topSpeedShare, feelVal, WORLD_FEEL, motionMul } from './w
 
 const KIND = { streak: 0, glitter: 1, orb: 2 };
 
+/** Fade the camera field out around a busy enclosed section, then restore it outside. */
+export function speedFieldVisibility(s, quietRange = null) {
+  if (!quietRange || !Number.isFinite(s)) return 1;
+  const distance = Math.max(quietRange.s0 - s, s - quietRange.s1);
+  const t = Math.max(0, Math.min(1, distance / 20));
+  return t * t * (3 - 2 * t);
+}
+
 export function createSpeedLines(feel = null) {
   const P = p4Look(LOOK), HUES = juiceHues();
   const n = Math.max(3, Math.round(Q.speedLines * P.fieldCountMul));
@@ -102,7 +110,7 @@ export function createSpeedLines(feel = null) {
   let boost = 0, curve = 0, wake = 0, motion = 'full';
   const top = () => (feel && feel.get ? feel.get('speed.topMps') : 0) || 39;
   /** Per frame (signature kept from polish 3; obj unused, the field follows the rendering camera). */
-  function update(dt, kart, fx, obj) {
+  function update(dt, kart, fx, obj, visibility = 1) {
     const gentle = !!(feel && feel.get && feel.get('gentle.on')), pct = Math.max(0, kart[S.speedPct] || 0), mps = pct * top();
     const bk = kart[S.boostKind] | 0, rescue = kart[S.respawnPhase] > 0;
     const want = rescue ? 0 : fx ? Math.min(1, Math.max(0, fx.speedLines || 0)) : boostTarget(bk, BOOST);
@@ -120,8 +128,8 @@ export function createSpeedLines(feel = null) {
     u.lenScale.value = (0.35 + pct * P.streakSpeedLen) * (1 + boost * P.streakBoostLen) * (1 + topK * feelVal(feel, 'speedSense.topLenMul', S2.topLenMul));
     const dens = Math.min(1, fieldDensity(pct + shift, boost, P) + topK * feelVal(feel, 'speedSense.topDensity', S2.topDensity));
     u.density.value = rescue ? 0 : dens * Math.min(1, Q.speedLines * P.fieldCountMul / n);
-    u.alpha.value = P.fieldAlpha * (gentle ? P.fieldGentle : 1);
-    mesh.visible = u.density.value > 0.002;
+    u.alpha.value = P.fieldAlpha * (gentle ? P.fieldGentle : 1) * visibility;
+    mesh.visible = u.density.value > 0.002 && visibility > .002;
   }
   return { object: mesh, update, setWake(v) { wake = Math.max(0, Math.min(1, v || 0)); }, setMotion(m) { motion = m || 'full'; }, dispose() { g.dispose(); m.dispose(); } };
 }

@@ -16,7 +16,7 @@ import { helixBodyData } from './helixBody.js';
 export { HELIX_LOOK };
 
 /** @returns {{ object: Mesh, update(mf: object, ctx: { kartS: number, gentle: boolean }): void, dispose(): void }} */
-export function createHelix(track, pal, L = HELIX_LOOK, art = null) {
+export function createHelix(track, pal, L = HELIX_LOOK, art = null, quietRange = null) {
   const d = helixGeometryData(track, L);
   const g = new BufferGeometry();
   // six vertex buffers (WebGPU allows eight): the centre rides in position, the four scalars in one vec4
@@ -27,6 +27,7 @@ export function createHelix(track, pal, L = HELIX_LOOK, art = null) {
   g.setAttribute('aP', new Float32BufferAttribute(packed, 4));
   g.setAttribute('aKind', new Float32BufferAttribute(d.attrs.aKind, 1));
   g.setIndex(d.index);
+  clearTube(g, quietRange);
   const u = { weight: uniform(0), phase: uniform(0), kartS: uniform(0), kick: uniform(0), hue: uniform(0), lap: uniform(track.lengthM) };
   const C = attribute('position', 'vec3'), B = attribute('aB', 'vec3'), N = attribute('aN', 'vec3'), T = attribute('aT', 'vec3');
   const P4 = attribute('aP', 'vec4'), sA = P4.x, th0 = P4.y, w = P4.z, rr = P4.w, kind = attribute('aKind', 'float');
@@ -55,6 +56,7 @@ export function createHelix(track, pal, L = HELIX_LOOK, art = null) {
   for (const [name, values] of Object.entries(data.attrs)) bodyGeometry.setAttribute(name,
     new Float32BufferAttribute(values, name === 'aP' ? 4 : name === 'aDepth' ? 1 : 3));
   bodyGeometry.setIndex(data.index);
+  clearTube(bodyGeometry, quietRange);
   const bodyMaterial = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: DoubleSide });
   const depth = attribute('aDepth', 'float'), bodyPos = C.add(radial.mul(rad.add(depth))).add(across.mul(w));
   bodyMaterial.positionNode = bodyPos;
@@ -87,4 +89,16 @@ export function createHelix(track, pal, L = HELIX_LOOK, art = null) {
     },
     dispose() { g.dispose(); m.dispose(); bodyGeometry.dispose(); bodyMaterial.dispose(); },
   };
+}
+
+// Clear the world geometry itself so the tube stays readable from every camera.
+function clearTube(geometry, range) {
+  if (!range) return;
+  const s = geometry.getAttribute('aP'), indices = geometry.index.array, kept = [];
+  for (let i = 0; i < indices.length; i += 3) {
+    const positions = [s.getX(indices[i]), s.getX(indices[i + 1]), s.getX(indices[i + 2])];
+    if (Math.max(...positions) < range.s0 || Math.min(...positions) > range.s1)
+      kept.push(indices[i], indices[i + 1], indices[i + 2]);
+  }
+  geometry.setIndex(kept);
 }

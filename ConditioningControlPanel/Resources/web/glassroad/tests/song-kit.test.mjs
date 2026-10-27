@@ -13,6 +13,8 @@ const { createCueGantries } = await import('../render/cueGantry.js');
 const { createCueWindows } = await import('../render/cueWindows.js');
 const { createCueGiants } = await import('../render/cueGiants.js');
 const { createCueProps } = await import('../render/cueProps.js');
+const { createSpeedLines, speedFieldVisibility } = await import('../render/speedlines.js');
+const { createHelix } = await import('../render/helix.js');
 const { Scene, FogExp2, Color } = await import('three/webgpu');
 const { createState, S, setPos } = await import('../sim/state.js');
 hooks.deregister();
@@ -124,7 +126,41 @@ test('giants and props build, follow their rows and retire without leaks', () =>
   props.update(rows, { songS: 10.5, song: { bpm: 120 }, kart: kart(250), dt: .016 });
   const stats = props.stats;
   assert.ok(stats.mirror && stats.carousel && stats.bin && stats.star);
+  const posts = props.object.getObjectsByProperty('name', 'carousel-post');
+  assert.equal(posts.length, 12);
+  for (const post of posts) {
+    assert.equal(post.children.length, 2, 'only the post and cap remain');
+    assert.ok(Math.abs(post.position.x) >= 9, 'the driving corridor stays clear');
+  }
   props.update([], { songS: 30, kart: kart(250), dt: .016 });
   assert.ok(!props.stats.mirror && !props.stats.carousel && !props.stats.bin && !props.stats.star);
   props.clear(); props.dispose();
+});
+
+test('the tube fades the speed field away without suppressing it on the open course', () => {
+  const tube = { s0: 100, s1: 500 };
+  for (const s of [100, 250, 500]) assert.equal(speedFieldVisibility(s, tube), 0);
+  for (const s of [0, 80, 520, 900]) assert.equal(speedFieldVisibility(s, tube), 1);
+  assert.equal(speedFieldVisibility(90, tube), .5);
+  assert.equal(speedFieldVisibility(510, tube), .5);
+  assert.equal(speedFieldVisibility(250), 1, 'other courses keep their normal field');
+  const lines = createSpeedLines(), st = kart(250); st[S.speedPct] = 1;
+  lines.update(.1, st, { speedLines: 1 }, null, 0); assert.equal(lines.object.visible, false);
+  lines.update(0, st, { speedLines: 1 }, null, 0); assert.equal(lines.object.visible, false, 'pause keeps the clear view');
+  lines.update(.1, st, { speedLines: 1 }, null, 1); assert.equal(lines.object.visible, true);
+  lines.dispose();
+});
+
+test('both song helix layers leave a real gap through the tube from every camera', () => {
+  const tube = { s0: 100, s1: 500 }, helix = createHelix(track, null, undefined, null, tube);
+  for (const mesh of helix.object.children) {
+    const s = mesh.geometry.getAttribute('aP'), indices = mesh.geometry.index.array;
+    assert.ok(indices.length > 0, 'the helix remains outside the tube');
+    for (let i = 0; i < indices.length; i += 3) {
+      const positions = [s.getX(indices[i]), s.getX(indices[i + 1]), s.getX(indices[i + 2])];
+      assert.ok(Math.max(...positions) < tube.s0 || Math.min(...positions) > tube.s1,
+        'no glowing or solid triangle crosses the tube');
+    }
+  }
+  helix.dispose();
 });

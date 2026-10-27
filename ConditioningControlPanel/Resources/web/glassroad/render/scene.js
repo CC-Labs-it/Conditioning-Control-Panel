@@ -42,7 +42,7 @@ import { sampleTrack } from './colossiMath.js';
 import { createPropMaterial } from './materials/kart.js';
 import { createGlowMaterial } from './materials/glow.js';
 import { createParticles } from './particles.js';
-import { createSpeedLines } from './speedlines.js';
+import { createSpeedLines, speedFieldVisibility } from './speedlines.js';
 import { buildKarts } from './karts.js';
 import { createWakes } from './wakes.js';
 import { createMotes } from './motes.js';
@@ -383,7 +383,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   // the music road (handoff-1022/MUSIC-ROAD-BRIEF.md): the road, rails and helix answer the song; the
   // player's own word bubbles ride the road. No song: both rest and the race looks as before
   let musicRoad = null, wordVis = null;
-  try { musicRoad = createMusicRoad({ road, rails, track, pal, photosafe, scene, art }); } catch (e) { console.warn('[glassroad/world] music road failed: ' + (e && e.message)); }
+  try { musicRoad = createMusicRoad({ road, rails, track, pal, photosafe, scene, art,
+    helixQuietRange: goonworks?.plan.layout.tube }); } catch (e) { console.warn('[glassroad/world] music road failed: ' + (e && e.message)); }
   try { wordVis = createWordBubbles(scene, { feel, photosafe, track, pal }); } catch (e) { console.warn('[glassroad/world] word bubbles failed: ' + (e && e.message)); }
   // pass 4: the ROAD words painted on the track like road markings (render/roadWords.js, in the scene from boot for the warm)
   let roadWords = null;
@@ -703,7 +704,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (edges) edges.update(dt, { gentle, paused: !!view.paused });
     particles.update(dt);
     wakes.update(dt);
-    lines.update(dt, k, fx, kart);
+    lines.update(dt, k, fx, kart, speedFieldVisibility(k[S.s], goonworks?.plan.layout.tube));
     if (view.mode === 'menu') lines.object.visible = false;
     if (itemVis && view.items) itemVis.update(view.items, dt, racers, view.camera, view);   // visuals read racer .st (CONTRACT-B1 view.karts)
     if (wordVis) wordVis.update(view.words || [], view.song || null, dt);
