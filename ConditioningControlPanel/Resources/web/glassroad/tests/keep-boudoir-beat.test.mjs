@@ -126,7 +126,7 @@ test('physical gate contact follows the heard hold and opens through a music see
     const r={i:0,st:place(track,{s:115,speed:40}),events:recorder(),feel:makeFeel()};
     return gates.apply(r,place(track,{s:105,speed:40}),.1);
   };
-  setMachineryBeat(track,{enabled:true,songS:.55*60/96.75,raceS:.1,bpm:96.75});
+  setMachineryBeat(track,{enabled:true,songS:1.1*60/96.75,raceS:.1,bpm:96.75});
   assert.equal(crossing(createKeepGates(track,{gates:[gate]})),'gate');
   setMachineryBeat(track,{enabled:true,songS:80,raceS:.1,bpm:96.75});
   assert.equal(crossing(createKeepGates(track,{gates:[gate]})),null);

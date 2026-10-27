@@ -3,10 +3,11 @@ import { S, BOOST, RESPAWN } from './state.js';
 import { clamp, wrap } from '../core/math.js';
 import { gateSweep, createKeepGates } from './keepGates.js';
 import { machineryBeatAt, beatCycle, machineryRearming } from '../track/machineryBeat.js';
+import { trapSwing } from '../track/trapArrangement.js';
 export const KEEP_CHAIN = Object.freeze({ cycleS: 6.4, pivotM: 15.9, lengthM: 12, angleRad: .72, radiusM: 3.4, stallS: .45 });
-// A four-beat swing crosses the driving line on each alternating beat.
+// Arranged swings hold both endpoints; legacy frames retain their four-beat swing.
 export function pendulumBeatPhase(row, cycleS, beat) {
-  const period = 4;
+  const period = beat.arrangement ? 8 : 4;
   const offset = Math.round((row.offsetS || 0) / beat.beatS), safe = machineryRearming(beat, offset, period);
   const u = beatCycle(beat.beat + offset, period), rate = Math.PI * 2 / (period * beat.beatS);
   const elapsed = beat.beat - beatCycle(-offset, period), releaseBeats = Math.max(2, Math.ceil(3 / beat.beatS));
@@ -14,8 +15,9 @@ export function pendulumBeatPhase(row, cycleS, beat) {
   // The initial pickup already follows the swing. Only a seek parks and lifts it.
   const parked = safe && beat.rearming;
   const f = clamp(elapsed / releaseBeats, 0, 1), lift = parked ? 5 : releasing ? 5 * (1 - f * f * (3 - 2 * f)) : 0;
-  return { swing: parked ? 1 : Math.cos(u * Math.PI * 2 / period),
-    speed: parked ? 0 : -Math.sin(u * Math.PI * 2 / period) * rate, lift,
+  const motion = beat.arrangement ? trapSwing(beat.beat + offset, beat.beatS) : null;
+  return { swing: parked ? 1 : motion ? motion.swing : Math.cos(u * Math.PI * 2 / period),
+    speed: parked ? 0 : motion ? motion.speed : -Math.sin(u * Math.PI * 2 / period) * rate, lift,
     liftSpeed: releasing && !safe ? -30 * f * (1 - f) / (releaseBeats * beat.beatS) : 0, safe };
 }
 export function keepChainPhase(row, timeS, beat = null) {

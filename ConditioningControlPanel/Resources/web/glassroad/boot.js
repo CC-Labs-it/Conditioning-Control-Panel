@@ -1351,7 +1351,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (!paused || online) setMachineryBeat(track, { enabled: inRace && !online && (race.phase === 'racing' || race.phase === 'finished'),
       fallback: !machineryMusic?.playing || !(machinerySong?.bpm >= 40 && machinerySong?.bpm <= 240),
       songS: machineryMusic?.songS, raceS: racers.clockS + (simOn ? steps * clock.dt : 0),
-      bpm: machinerySong?.bpm, offsetS: machinerySong?.downbeatS ?? machinerySong?.downbeats?.[0] ?? 0, playing: simOn });
+      song: machinerySong, bpm: machinerySong?.bpm, offsetS: machinerySong?.downbeatS ?? machinerySong?.downbeats?.[0] ?? 0, playing: simOn });
     if (simOn) for (let i = 0; i < steps; i++) {                    // 2. sim
       if (BOT && !P.finished) {
         ai.drive(P, aiCtx, clock.dt, a); if (fall) fall.apply(a);
