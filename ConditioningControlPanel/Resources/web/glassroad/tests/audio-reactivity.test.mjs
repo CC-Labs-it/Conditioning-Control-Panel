@@ -149,5 +149,5 @@ test('boot sends sampled real music frame and picked-file song time to every wor
   assert.match(boot, /songS = inRace && music\?\.playing \? music\.songS : NaN/);
   assert.match(boot, /opts\.volMaster === 0 \|\| opts\.volMusic === 0/);
   assert.equal([...boot.matchAll(/music\.readReactivity\(/g)].length, 1);
-  assert.match(boot, /paused, song, songS, audioReactive, words:/);
+  assert.match(boot, /paused, gentle: cueSafety.on, song, songS, audioReactive, words:/);
 });

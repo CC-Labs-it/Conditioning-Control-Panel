@@ -7,7 +7,17 @@ export function evaluateColour(root, footprint = .01) {
   function run(n) {
     if (cache.has(n)) return cache.get(n);
     let v;
-    if (n.isInputNode) v = n.value?.toArray ? n.value.toArray() : [n.value];
+    if (n.isTextureNode) {
+      const { data, width, height } = n.value.image, at = run(n.uvNode);
+      const x = Math.max(0, Math.min(width - 1, at[0] * width - .5)), y = Math.max(0, Math.min(height - 1, at[1] * height - .5));
+      const a = Math.floor(x), b = Math.floor(y), fx = x - a, fy = y - b;
+      const pixel = (px, py, k) => data[(py * width + px) * 4 + k] / 255;
+      v = Array.from({ length: 4 }, (_, k) => {
+        const low = pixel(a,b,k) * (1-fx) + pixel(Math.min(a+1,width-1),b,k) * fx;
+        const high = pixel(a,Math.min(b+1,height-1),k) * (1-fx) + pixel(Math.min(a+1,width-1),Math.min(b+1,height-1),k) * fx;
+        return low * (1-fy) + high * fy;
+      });
+    } else if (n.isInputNode) v = n.value?.toArray ? n.value.toArray() : [n.value];
     else if (n.condNode) v = run(run(n.condNode)[0] ? n.ifNode : n.elseNode);
     else if (n.isSplitNode) { const x = run(n.node); v = [...n.components].map(k => x['xyzw'.indexOf(k)]); }
     else if (n.node) v = run(n.node);
