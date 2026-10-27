@@ -1,6 +1,6 @@
 // Road-level gate mist: fixed bounded batches, with motes rising along the actual road normal.
 import { Sprite, SpriteNodeMaterial, InstancedBufferAttribute, AdditiveBlending, Color } from 'three/webgpu';
-import { instancedBufferAttribute, uniform, uniformArray, int, vec3, uv, smoothstep, sin, fract, mix } from 'three/tsl';
+import { instancedBufferAttribute, uniform, vec3, uv, smoothstep, sin, fract, mix } from 'three/tsl';
 import { lensDepth, lensScale, lensAlpha } from './lens.js';
 import { makeRng } from './spiralMath.js';
 import { Q } from './quality.js';
@@ -27,10 +27,15 @@ export function cloudAnchors(track, s, count, seed = 1) {
 export function createSpiralClouds(track, gates) {
   const count = CLOUD_COUNTS[Q.name] || CLOUD_COUNTS.mid;
   const perGate = gates.map((g, i) => cloudAnchors(track, g.s, count, g.seed ?? (i + 1) * 1717)), rows = perGate.flat();
-  const attr = (width, fn) => instancedBufferAttribute(new InstancedBufferAttribute(new Float32Array(rows.flatMap(fn)), width), 'vec' + width);
+  const buffers = [];
+  const attr = (width, fn) => {
+    const buffer = new InstancedBufferAttribute(new Float32Array(rows.flatMap(fn)), width);
+    buffers.push({ buffer, width, values: buffer.array.slice() });
+    return instancedBufferAttribute(buffer, 'vec' + width);
+  };
   const base = attr(3, r => r.p), normal = attr(3, r => r.n), data = attr(2, r => [r.phase, r.size]);
-  const gateOf = instancedBufferAttribute(new InstancedBufferAttribute(new Float32Array(perGate.flatMap((g, i) => g.map(() => i))), 1), 'float');
-  const active = uniformArray(gates.map(() => 1));
+  const active = new Uint8Array(gates.length).fill(1);
+  let dirty = false;
   const time = uniform(0), strength = uniform(1), phase = fract(data.x.add(time.mul(.13)));
   const pos = base.add(normal.mul(phase.mul(1.8).add(.18))), depth = lensDepth(pos);
   const material = new SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending });
@@ -39,13 +44,35 @@ export function createSpiralClouds(track, gates) {
   material.scaleNode = lensScale(data.y.mul(phase.mul(.8).add(.8)), depth);
   material.colorNode = mix(colours[0], colours[1], data.x).mul(1.3);
   const shape = smoothstep(.04, .5, uv().sub(.5).length()).oneMinus();
-  material.opacityNode = shape.mul(sin(phase.mul(Math.PI))).mul(.48).mul(strength).mul(active.element(int(gateOf))).mul(lensAlpha(depth));
+  material.opacityNode = shape.mul(sin(phase.mul(Math.PI))).mul(.48).mul(strength).mul(lensAlpha(depth));
   const object = new Sprite(material); object.name = 'spiral-road-cloud'; object.count = rows.length;
   object.frustumCulled = false; object.renderOrder = 2;
+  // Keep one shader graph, but submit only nearby gates. Alpha zero still runs the
+  // vertex/fragment shaders for all distant gates; pack their rows out of the draw.
+  function compact() {
+    if (!dirty) return;
+    dirty = false;
+    let offset = 0;
+    for (let i = 0; i < gates.length; i++) {
+      if (!active[i]) continue;
+      for (const { buffer, width, values } of buffers) {
+        buffer.array.set(values.subarray(i * count * width, (i + 1) * count * width), offset * width);
+      }
+      offset += count;
+    }
+    object.count = offset; object.visible = offset > 0;
+    if (offset) for (const { buffer, width } of buffers) {
+      buffer.clearUpdateRanges(); buffer.addUpdateRange(0, offset * width); buffer.needsUpdate = true;
+    }
+  }
   return { object, rows, time,
-    setActive(i, on) { active.array[i] = on ? 1 : 0; },
+    setActive(i, on) {
+      const next = on ? 1 : 0;
+      if (active[i] !== next) { active[i] = next; dirty = true; }
+    },
     update(dt, { gentle = false, paused = false } = {}) {
       if (paused) return;
+      compact();
       time.value += Math.max(0, dt) * (gentle ? .5 : 1); strength.value = gentle ? .6 : 1;
     }, dispose() { material.dispose(); object.removeFromParent(); } };
 }

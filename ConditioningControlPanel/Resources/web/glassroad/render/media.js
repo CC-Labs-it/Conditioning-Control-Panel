@@ -19,7 +19,7 @@
 import {
   Group, Mesh, InstancedMesh, PlaneGeometry, CylinderGeometry, BufferGeometry, Float32BufferAttribute,
   InstancedBufferAttribute, CanvasTexture, Texture, SRGBColorSpace, LinearFilter, MeshBasicNodeMaterial, AdditiveBlending,
-  DoubleSide, FrontSide, Matrix4, Vector3, Vector4, Color, TextureNode,
+  DoubleSide, FrontSide, Matrix4, Vector3, Vector4, Color, TextureNode, NodeUpdateType,
 } from 'three/webgpu';
 import {
   texture, uv, vec2, vec3, float, uniform, instancedBufferAttribute, attribute, cos, sin, hue, mix, smoothstep,
@@ -764,6 +764,10 @@ function ownMaterial(blankTex, U, M) {
     this.value = (object && object.userData.mediaTex) || blankTex;
     TextureNode.prototype.update.call(this);
   });
+  // r186 TextureNode.setup resets updateType to NONE with explicit UVs on WebGPU.
+  // This node also swaps the sampled image per mesh, so it must update for every object
+  // even when no UV matrix or flip-Y uniform is needed by that backend.
+  tex.getUpdateType = () => NodeUpdateType.OBJECT;
   m.colorNode = mix(vec3(0.42, 0.36, 0.48), tex.rgb, U.contrast).mul(M.screenGain);
   return m;
 }

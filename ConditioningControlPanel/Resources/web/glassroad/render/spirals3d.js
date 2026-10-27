@@ -289,7 +289,7 @@ export function createSpiralGates(scene, track, { layout = null, photosafe = nul
       gate.sprite.count = Math.min(gate.n, n);
       if (gate.aura) gate.aura.mesh.visible = gate.sprite.visible;
       clouds?.setActive(j, dist < L.activeM);
-      if (dist < L.activeM && !mist) { mist = true; clouds?.update(dt, { gentle }); }
+      if (dist < L.activeM) mist = true;
       if (!gate.sprite.visible || dist > L.activeM) continue;
       // the Loom phase: one seamless loop per loopMs2, slowed by Gentle
       gate.phaseT = (gate.phaseT + dt * screenRateMul(gate.params, { gentle, speed: turn }, L)) % (gate.loop * 1000);
@@ -313,6 +313,7 @@ export function createSpiralGates(scene, track, { layout = null, photosafe = nul
         if (p) u.slots[k].value.set(p[0], p[1], p[2], 1); else u.slots[k].value.set(0, -1e5, 0, 0);
       }
     }
+    clouds?.update(mist ? dt : 0, { gentle });
     // the sparkle burst rides with the camera, a little ahead of it
     if (burst.age >= 0) {
       burst.age += dt;

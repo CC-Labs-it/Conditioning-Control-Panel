@@ -7,7 +7,7 @@ const hooks = registerHooks({ resolve(specifier, context, next) {
     : next(specifier, context);
 } });
 const { createMediaPlayback, createMediaSlots } = await import('../render/media.js');
-const { LinearFilter } = await import('three/webgpu');
+const { LinearFilter, NodeUpdateType } = await import('three/webgpu');
 hooks.deregister();
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
@@ -255,5 +255,25 @@ test('Renderer-owned video uses the same direct path and releases its decoder on
   const texture = texturesOf(h.media)[0]; assert.equal(texture.image, clip);
   h.media.setSource('card-0', null);
   assert.equal(clip.pauses, 1); assert.equal(clip.loads, 1); assert.ok(h.canvases.includes(texture.image));
+  h.media.dispose();
+});
+
+test('shared picture node keeps per-object updates after the WebGPU UV setup resets its update type', async () => {
+  const h = stagedRenderer(2), clips = [video(), video()];
+  for (let i = 0; i < clips.length; i++) h.media.setSource('card-' + i, { kind: 'video', el: clips[i], borrowed: true });
+  await settle(); h.media.update(1 / 60, { eye: [0, 8, 0] });
+  const screens = h.media.object.children.filter(o => o.name.startsWith('media-card-source'));
+  assert.equal(screens[0].material, screens[1].material, 'picture material stays shared');
+  let picture;
+  screens[0].material.colorNode.traverse(node => { if (node.isTextureNode) picture = node; });
+  assert.ok(picture);
+  // TextureNode.setup uses NONE on WebGPU when explicit UVs need neither matrix nor flip-Y.
+  picture.updateType = NodeUpdateType.NONE;
+  assert.equal(picture.getUpdateType(), NodeUpdateType.OBJECT, 'image selection must still run per draw');
+  for (const object of [screens[0], screens[1], screens[0]]) {
+    picture.update({ object });
+    assert.equal(picture.value, object.userData.mediaTex, 'each draw binds its own video texture');
+  }
+  assert.notEqual(screens[0].userData.mediaTex, screens[1].userData.mediaTex);
   h.media.dispose();
 });
