@@ -11,13 +11,20 @@ export function trackSceneResources(three) {
   if (!three?._geometries || histories.has(three)) return;
   const records = new Map(), geometries = three._geometries, update = geometries.updateAttributes;
   histories.set(three, records);
+  // This runs for every draw of every pass. A render variant keeps its scene and attribute list until three
+  // rebuilds the list (RenderObject.setGeometry and the geometry dispose listener null it), so a variant
+  // already folded into its object's record skips the Set work (~0.3 ms a frame on GOONWORKS, 2026-10-26).
   geometries.updateAttributes = function(row) {
     const result = update.call(this, row);
     let record = records.get(row.object);
-    if (!record) records.set(row.object, record = { scenes: new Set(), attributes: new Set() });
+    if (!record) records.set(row.object, record = { scenes: new Set(), attributes: new Set(), seen: new WeakMap() });
+    // The mark is the list itself (never the scene or geometry), so it can never pin a departed course.
+    const attributes = row.getAttributes();
+    if (record.seen.get(row) === attributes && record.scenes.has(row.scene)) return result;
     record.scenes.add(row.scene);
     const own = new Set(Object.values(row.geometry.attributes));
-    for (const attribute of row.getAttributes()) if (!own.has(attribute)) record.attributes.add(attribute);
+    for (const attribute of attributes) if (!own.has(attribute)) record.attributes.add(attribute);
+    record.seen.set(row, attributes);
     return result;
   };
 }

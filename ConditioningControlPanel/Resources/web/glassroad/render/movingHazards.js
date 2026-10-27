@@ -1,6 +1,7 @@
 import { Group, Mesh, InstancedMesh, Color, BoxGeometry, MeshBasicNodeMaterial, Matrix4, Vector3 } from 'three/webgpu';
 import { movingPoseAt, bridgePose, bridgeSlabX } from '../track/movingHazards.js';
 import { movingHazardColours, movingHazardFinish } from './movingHazardFinish.js';
+import { matrixInto } from './instanceWrite.js';
 
 export function createMovingHazardView(scene, track, pal) {
   const group = new Group(); group.name = 'moving-piston-traps'; scene.add(group);
@@ -72,6 +73,20 @@ export function createMovingHazardView(scene, track, pal) {
     }
     return { batch, sources, index };
   }).filter(Boolean);
+  // Only the heads, slabs and rods move, and only along their local x (position, and a rod's length). A mover
+  // whose x and length are unchanged since it was last written is skipped whole: traps hold fully out and fully
+  // in for long stretches. A moved one refreshes its own subtree once (its frame root is fixed) and rewrites
+  // just the instances under it. Housings, vents and signals are written when the whole group is primed (the
+  // first update, or whenever the group's own world matrix changes).
+  const movers = [...traps.flatMap(t => [t.head, t.rod]), ...slabs.flatMap(s => [s.slab, s.rod])]
+    .map(node => ({ node, x: NaN, sx: NaN, entries: [] }));
+  const moverOf = new Map(movers.map(m => [m.node, m])), groupWorld = new Matrix4();
+  const moverAbove = o => { for (let x = o; x && x !== group; x = x.parent) if (moverOf.has(x)) return moverOf.get(x); return null; };
+  for (const b of batches) {
+    b.sources.forEach((source, i) => { const m = moverAbove(source); if (m) m.entries.push(b, i); });
+    b.signal = null;
+  }
+  let primed = false;
   function update(timeS = 0) {
     for (const item of traps) {
       const p = movingPoseAt(track, item.row, timeS), headEdge = p.x + item.row.side * item.row.w / 2;
@@ -85,13 +100,33 @@ export function createMovingHazardView(scene, track, pal) {
       const anchor = item.side * (item.width + 1), end = x + item.side * item.width / 2;
       item.rod.position.x = (anchor + end) / 2; item.rod.scale.x = Math.max(.1, Math.abs(anchor - end));
     }
-    for (const { batch, sources, index } of batches) {
-      for (const [i, source] of sources.entries()) {
-        source.updateWorldMatrix(true, false); batch.setMatrixAt(i, source.matrixWorld);
-        if (index === 4) batch.setColorAt(i, bridgePose(bridge, timeS).remainingS > 3 ? green : amber);
+    group.updateWorldMatrix(true, false);
+    const full = !primed || !groupWorld.equals(group.matrixWorld);
+    if (full) {
+      group.updateWorldMatrix(false, true); groupWorld.copy(group.matrixWorld); primed = true;
+      for (const { batch, sources } of batches) {
+        const array = batch.instanceMatrix.array;
+        for (let i = 0; i < sources.length; i++) matrixInto(array, i, sources[i].matrixWorld);
+        batch.instanceMatrix.needsUpdate = true;
       }
-      batch.instanceMatrix.needsUpdate = true;
-      if (batch.instanceColor) batch.instanceColor.needsUpdate = true;
+    }
+    for (const m of movers) {
+      const node = m.node;
+      if (!full && node.position.x === m.x && node.scale.x === m.sx) continue;
+      m.x = node.position.x; m.sx = node.scale.x;
+      if (full) continue;
+      node.updateWorldMatrix(false, true);
+      for (let k = 0; k < m.entries.length; k += 2) {
+        const b = m.entries[k], i = m.entries[k + 1];
+        matrixInto(b.batch.instanceMatrix.array, i, b.sources[i].matrixWorld); b.batch.instanceMatrix.needsUpdate = true;
+      }
+    }
+    const clear = bridge && bridgePose(bridge, timeS).remainingS > 3;
+    for (const b of batches) {
+      if (b.index === 4 && b.signal !== clear) {
+        for (let i = 0; i < b.sources.length; i++) b.batch.setColorAt(i, clear ? green : amber);
+        b.signal = clear; b.batch.instanceColor.needsUpdate = true;
+      }
     }
   }
   update(0);
