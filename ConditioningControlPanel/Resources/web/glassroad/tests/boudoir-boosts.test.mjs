@@ -215,14 +215,22 @@ for (const [seed, gentle] of [[241024, false], [42, true]]) test('All eight race
   r.racers.step = (dt, a, race, ctx) => { original(dt, a, race, { ...ctx, hazards: h });
     if (race.phase === 'racing' || race.phase === 'finished') perfume.update(r.racers.list, r.racers.clockS, dt); };
   r.run(800, () => r.racers.list.every(k => k.finished));
-  const counts = r.racers.list.map(k => ({ racer: k.i, pads: 0, walls: 0 }));
+  const counts = r.racers.list.map(k => ({ racer: k.i, pads: 0, walls: 0, sequences: new Set() }));
   for (const event of r.log) {
     const bot = event.name === 'racer-event', i = bot ? event.payload.racer : 0, name = bot ? event.payload.name : event.name;
-    if (name === 'pad') counts[i].pads++; if (name === 'wall') counts[i].walls++;
+    if (name === 'pad') {
+      counts[i].pads++;
+      const payload = bot ? event.payload.p : event.payload;
+      const run = plan.runs.find(run => run.pads.some(pad => indexOf(pad) === payload.index));
+      if (run) counts[i].sequences.add(run.id);
+    }
+    if (name === 'wall') counts[i].walls++;
   }
-  t.diagnostic(JSON.stringify({ seed, gentle, counts, finish: r.racers.list.map(k => k.finishS), perfumeContacts: perfume.hits }));
+  t.diagnostic(JSON.stringify({ seed, gentle, counts: counts.map(k => ({ ...k, sequences: [...k.sequences] })), finish: r.racers.list.map(k => k.finishS), perfumeContacts: perfume.hits }));
   assert.ok(r.racers.list.every(k => k.finished && k.lapTimes.length === 2));
   assert.deepEqual(r.racers.list.map(k => k.falls), Array(8).fill(0));
-  assert.ok(counts.every(k => k.pads >= 6), 'every actual racing line reaches multiple boost sequences');
+  // Staggered thumpers change routes through individual pads. Count distinct sequences,
+  // so repeatedly touching one chain cannot masquerade as reaching several boost areas.
+  assert.ok(counts.every(k => k.pads >= 4 && k.sequences.size >= 2), 'every actual racing line reaches multiple distinct boost sequences');
   assert.ok(perfume.hits > 0 && h.inspect().ribbonPasses > 0, 'real environmental effects remain active');
 });
