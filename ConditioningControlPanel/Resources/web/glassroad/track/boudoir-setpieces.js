@@ -9,8 +9,31 @@ export const BOUDOIR_HAZARD = Object.freeze({ pressWidthM: 14, pressDepthM: 8, p
   brushArmM: 8.6, brushPivotY: 10.25, brushImpulseMps: 5.2,
   mirrorCycleS: 9.6, mirrorLiftM: 8.4, mirrorWidthM: 7, mirrorHeightM: 6,
   ribbonCycleS: 12, ribbonAccelMps2: 10, ribbonDragMps2: 7, ribbonMaxMps: 42 });
+export const BOUDOIR_PRESS_REVISION = 1;
+export const powderPressHeads = row => row.pressHeads || [row];
+const pressArrangements = new WeakMap();
 export function powderPressPhase(row, timeS, beat = null) {
-  return keepGatePhase(row, timeS, {}, beat);
+  if (row.pressHeads) return powderPressPhase(row.pressHeads[0], timeS, beat);
+  if (row.pressLane === undefined) return keepGatePhase(row, timeS, {}, beat);
+  if (beat?.arrangement) {
+    let lanes = pressArrangements.get(beat.arrangement);
+    if (!lanes) {
+      lanes = [0, 1, 2].map(lane => ({ ...beat.arrangement,
+        closes: beat.arrangement.closes.filter((_, i) => i % 3 === lane) }));
+      pressArrangements.set(beat.arrangement, lanes);
+    }
+    return keepGatePhase(row, timeS, {}, { ...beat, arrangement: lanes[row.pressLane] });
+  }
+  // One stroke per six heard beats, rotating through the three heads. Two lanes stay open.
+  const beatS = beat?.beatS || .625, stretch = Math.max(1, Math.ceil(.4 / beatS));
+  const offset = Math.round((row.offsetS || 0) / beatS), period = 18 * stretch;
+  const absolute = (beat?.beat ?? Math.max(0, timeS) / beatS) + offset;
+  const t = beatCycle(absolute - row.pressLane * 6 * stretch, period) / stretch;
+  const safe = beat && machineryRearming(beat, offset - row.pressLane * 6 * stretch, period);
+  const phase = safe ? 'warn' : t < 2 ? 'warn' : t < 3 ? 'lower' : t < 5 ? 'hold' : t < 6 ? 'rise' : 'clear';
+  const extension = safe ? 0 : t < 2 ? 0 : t < 3 ? ease(t - 2) : t < 5 ? 1 : t < 6 ? 1 - ease(t - 5) : 0;
+  return { phase, liftM: 8.4 * (1 - extension), blocking: extension > 1 - 1.6 / 8.4,
+    opacity: phase === 'clear' ? .035 : .62, cycleS: (t - 3) * stretch * beatS };
 }
 export function mascaraHeads(row) { return row.heads || [row]; }
 export function mascaraPhase(row, timeS, beat = null) {
@@ -111,7 +134,12 @@ export function getBoudoirSetpieces(track, layout = getBoudoirLayout(track)) {
   const find = id => layout.landmarks.find(p => p.id === id), point = (id, u) => { const p = find(id); return p.s0 + (p.s1 - p.s0) * u; };
   const presses = [['powder-return', .25], ['powder-return', .65], ['upper-gallery', .35], ['upper-gallery', .8],
     ['bath-approach', .25], ['bath-approach', .55], ['bath-approach', .8], ['compacts-exit', .4]]
-    .map(([id, u], i) => ({ id: 'powder-press-' + i, kind: 'press', s: point(id, u), x: 0, w: 14, depthM: 8, offsetS: i * 1.35 }));
+    .map(([id, u], i) => {
+      const row = { id: 'powder-press-' + i, kind: 'press', s: point(id, u), x: 0, w: 14, depthM: 8, offsetS: i * 1.35 };
+      row.pressHeads = [-5, 0, 5].map((x, lane) => ({ ...row, id: row.id + '-chess-' + lane,
+        stationId: row.id, pressLane: lane, x, w: 4, depthM: 4, heightM: 5.5 }));
+      return row;
+    });
   const sweepers = [['ribbon-weave', .3], ['ribbon-weave', .8], ['shelf-weave-cross', .3], ['shelf-weave-cross', .72], ['pearl-slalom-cross', .28], ['pearl-slalom-cross', .75],
     ['shelf-climb', .17], ['shelf-climb', .39], ['shelf-climb', .61], ['shelf-climb', .83],
     // The two drop paths use the opposite quarter of the descending helix.

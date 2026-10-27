@@ -247,7 +247,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   if (goon) applyGoonworksRails(rails);
   add(meshFrom(track.meshes.rails, rails.material));
   const boudoirForks = track.forks?.length ? buildBoudoirForks(track, { roadMaterial: road.material, railMaterial: rails.material, phone: Q.name === 'phone' }) : null;
-  const movingHazards = createMovingHazardView(scene, track, pal);
+  const movingHazards = createMovingHazardView(scene, track, pal, art);
   if (boudoirForks) scene.add(boudoirForks.group);
   // EDGES lane: open edges (hazard strip, lip, haze below) and rail end posts, one draw (render/edges.js)
   let edges = null;
@@ -564,7 +564,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const atmosphereView = { paused: false, gentle: false, reducedMotion: false,
     playerPos: null, songS: NaN, audioReactive: null };
   function update(view) {
-    movingHazards.update(view.raceTimeS ?? 0);
+    movingHazards.update(view.raceTimeS ?? 0, { gentle: !!feel.get('gentle.on'), paused: !!view.paused });
     if (keepGates) keepGates.update(view.raceTimeS ?? 0);
     if (keepChains) keepChains.update(view.raceTimeS ?? 0);
     goonworksHazards?.update(view.raceTimeS ?? 0);
