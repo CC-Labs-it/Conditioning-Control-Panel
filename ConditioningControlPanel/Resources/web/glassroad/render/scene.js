@@ -272,7 +272,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const keepChains = keep ? createKeepChainView(scene, track, { chains: getKeepLayout(track).chains }) : null;
   const goonworks = goon ? buildGoonworks(track, art, pal, samples) : null;
   if (goonworks) scene.add(goonworks.group);
-  const goonworksHazards = goon ? createGoonworksHazardView(scene, track, getGoonworksLayout(track)) : null;
+  const goonworksHazards = goon ? createGoonworksHazardView(scene, track, getGoonworksLayout(track), { merge: true }) : null;
   let colossi = null;
   try { colossi = art && !keep && !isMainframe && !goon && !boudoir ? buildColossi(art, track, pal, { samples }) : null; } catch (e) { console.warn('[glassroad/world] colossi failed: ' + (e && e.message)); }
   if (colossi) add(colossi.object);
