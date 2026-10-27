@@ -10,6 +10,7 @@ import { Q } from './quality.js';
 import { machineryBeatAt, gearBeatTravel } from '../track/machineryBeat.js';
 import { createGearSpiralPaint } from './gearSpirals.js';
 import { visualClearanceSamples, capVisualDepth } from '../track/visualDepth.js';
+import { composeInto } from './instanceWrite.js';
 export { applyGoonworksRoad, applyGoonworksRails } from './goonworksMaterials.js';
 export { goonworksMediaLayout, goonworksSpiralLayout } from './goonworksMedia.js';
 
@@ -153,15 +154,16 @@ export function buildGoonworks(track,art=null,pal=null,samples=null){
     const advance=nextBeat!==null&&lastBeat!==null&&nextBeat>=lastBeat&&nextBeat-lastBeat<2
       ?(gearBeatTravel(nextBeat)-gearBeatTravel(lastBeat))*beat.beatS:step;
     drive+=advance*speed;lastBeat=nextBeat;
-    for(const item of moving){const{row,mesh,index,hull,hullIndex}=item;axis.fromArray(row.axes[row.motion.axis??1]);spin.setFromAxisAngle(axis,drive*row.motion.spin+row.motion.phase);rotation.copy(spin).multiply(item.rest);P.fromArray(row.p);S.fromArray(row.size);mesh.setMatrixAt(index,M.compose(P,rotation,S));mesh.instanceMatrix.needsUpdate=true;
-      if(hullIndex>=0){S.set(row.size[0]+.45,row.size[1]+.45,row.size[2]+.45);hull.setMatrixAt(hullIndex,M.compose(P,rotation,S));hull.instanceMatrix.needsUpdate=true;}}
+    for(const item of moving){const{row,mesh,index,hull,hullIndex}=item;axis.fromArray(row.axes[row.motion.axis??1]);spin.setFromAxisAngle(axis,drive*row.motion.spin+row.motion.phase);rotation.copy(spin).multiply(item.rest);P.fromArray(row.p);S.fromArray(row.size);composeInto(mesh.instanceMatrix.array,index,P,rotation,S);mesh.instanceMatrix.needsUpdate=true;
+      if(hullIndex>=0){S.set(row.size[0]+.45,row.size[1]+.45,row.size[2]+.45);composeInto(hull.instanceMatrix.array,hullIndex,P,rotation,S);hull.instanceMatrix.needsUpdate=true;}}
+    const sparkleArray=sparkle.instanceMatrix.array,bubbleArray=bubbles.instanceMatrix.array;
     for(let i=0;i<sparkleCount;i++){const seed=plan.particles[Math.floor(i/11)%plan.particles.length],phase=i*2.399963+seed.phase,rise=((time*1.4+phase*2)%25+25)%25;
       P.fromArray(seed.p);P.x+=Math.sin(phase+time*.09)*seed.spread;P.z+=Math.cos(phase+time*.07)*seed.spread;P.y+=rise;
-      const fade=Math.min(1,rise/3,(25-rise)/3),size=(.22+i%4*.12)*fade;S.set(size,size*(i%4===0?3:1),size);rotation.setFromAxisAngle(Y.set(0,1,0),phase+time*.2);sparkle.setMatrixAt(i,M.compose(P,rotation,S));}
+      const fade=Math.min(1,rise/3,(25-rise)/3),size=(.22+i%4*.12)*fade;S.set(size,size*(i%4===0?3:1),size);rotation.setFromAxisAngle(Y.set(0,1,0),phase+time*.2);composeInto(sparkleArray,i,P,rotation,S);}
     sparkle.instanceMatrix.needsUpdate=true;
     for(let i=0;i<bubblesCount;i++){const seed=plan.particles[Math.floor(i/2)%plan.particles.length],phase=i*1.74,rise=((time*2+phase*4)%36+36)%36;
       P.fromArray(seed.p);P.x+=Math.sin(phase)*seed.spread;P.z+=Math.cos(phase)*seed.spread;P.y+=rise;const size=(1.4+i%3*.75)*Math.min(1,rise/3,(36-rise)/3);S.set(size,size,size);
-      rotation.setFromAxisAngle(Y.set(0,1,0),phase+time*.15);bubbles.setMatrixAt(i,M.compose(P,rotation,S));}bubbles.instanceMatrix.needsUpdate=true;
+      rotation.setFromAxisAngle(Y.set(0,1,0),phase+time*.15);composeInto(bubbleArray,i,P,rotation,S);}bubbles.instanceMatrix.needsUpdate=true;
     for(const platform of platformGroups){if(!Number.isFinite(platform.age))continue;platform.age+=step;const a=platform.age;
       const feedback=platformFeedback(a,gentle);platform.holder.position.copy(platform.rest).addScaledVector(axis.fromArray(platform.row.n),-feedback.dip);
       spin.setFromAxisAngle(axis.set(0,0,1),feedback.roll);platform.holder.quaternion.copy(platform.restRotation).multiply(spin);

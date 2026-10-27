@@ -101,6 +101,7 @@ import { buildBoudoirMirrorRoom } from './boudoirMirrorRoom.js';
 import { createBoudoirWaterPalette } from './boudoirWater.js';
 import { buildBoudoirForks } from './boudoirForks.js';
 import { padMediaSlots } from './padMedia.js';
+import { installMatrixWalk } from './matrixWalk.js';
 
 const FWD = new Vector3();
 const P4_EVENTS = new Set(['drift-start', 'drift-tier', 'drift-boost', 'trick', 'trick-land']);
@@ -202,6 +203,8 @@ function props(track) {
  */
 export function buildWorld(track, feel, { art = null, bus = null, seed = 1, count = 8, renderer = null, shadowsOn = true, photosafe = null, spiralLayout = SPIRAL_LAYOUTS.get(track.id), looks = [], kartPool = null } = {}) {
   const scene = new Scene();
+  // one matrix walk per frame over what moved and what shows (render/matrixWalk.js); the picture is unchanged
+  installMatrixWalk(scene, renderer?.three || null);
   const isMainframe = track.id === 'mainframe';
   // Fog stays in the warmed shader; its density eases as the kart dives into the coolant reservoir.
   const submerged = track.sections.find(s => s.id === 'submerged');
@@ -304,6 +307,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const karts = kartPool?.current || buildKarts(art, count, art && art.model('emi-teacup-kart') ? null : kartGeometry(), { seed, looks });
   if (kartPool) { if (kartPool.current) karts.rebind({art,seed}); kartPool.current = karts; }
   for (const k of karts.list) { if (kartPool) scene.add(k.root); else add(k.root); }
+  // the karts' marine drives draw as one fleet (render/swimPropeller.js createPropellerFleet); it travels with the karts
+  if (karts.propellers) { if (kartPool) scene.add(karts.propellers.group); else add(karts.propellers.group); }
   const kartObjs = karts.list.map((k) => k.root);
   const kart = kartObjs[0];
   const ring = createGlowMaterial(LOOK.ringColour);
@@ -734,7 +739,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (disposed) return; disposed = true;
     detachKarts?.();
     railBarrier.dispose();
-    if (kartPool) { ringMesh.removeFromParent(); for (const k of karts.list) if(k.root.parent===scene)scene.remove(k.root); }
+    if (kartPool) { ringMesh.removeFromParent(); for (const k of karts.list) if(k.root.parent===scene)scene.remove(k.root); if (karts.propellers?.group.parent === scene) scene.remove(karts.propellers.group); }
     // r186 Sprite quads are a global singleton shared with retained racer tags and stars.
     // Disposing a departing particle Sprite's geometry destroys their still-bound GPU buffers.
     for (const o of owned) o.traverse((m) => { if (m.geometry && !m.isSprite) m.geometry.dispose(); if (m.material) m.material.dispose(); });

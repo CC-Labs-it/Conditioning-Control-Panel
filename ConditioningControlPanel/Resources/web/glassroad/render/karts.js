@@ -43,7 +43,7 @@ import { KART_VIEW } from './viewMath.js';
 import { Q } from './quality.js';
 import { buildKart } from './dressing.js';
 import { createGlideCap, glideAsset } from './glideCap.js';
-import { createSwimPropeller } from './swimPropeller.js';
+import { createSwimPropeller, createPropellerFleet } from './swimPropeller.js';
 import { coolantCaustics } from './mainframeMaterials.js';
 import { createKartMaterial, createKartSurface } from './materials/kart.js';
 import {
@@ -252,6 +252,8 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
   const kartGltf = art && art.model ? art.model('emi-teacup-kart') : null;
   const auraGeo = new SphereGeometry(1, 32, 20);
   const surgeGeo = surgeGeometry();
+  // perf: every kart's marine drive draws through one fleet (one instanced draw per part, not 12 per kart)
+  const propellers = createPropellerFleet(count);
   // one head mark atlas for every kart (none without a document, e.g. under node)
   let markTex = null;
   if (typeof document !== 'undefined') {
@@ -287,7 +289,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
       if (b) bones[n] = { b, rest: b.quaternion.clone() };
     }
     body.add(model); root.add(body); root.visible = false;
-    const propeller = createSwimPropeller(body, art?.model?.(dress?.vehicle || 'emi-teacup-kart')?.scene);
+    const propeller = createSwimPropeller(body, art?.model?.(dress?.vehicle || 'emi-teacup-kart')?.scene, propellers);
     root.userData.swimPropeller = propeller.motion;
     const caustics={time:uniform(0),amount:uniform(0)};
     for(const material of mats) material.colorNode=material.colorNode.add(
@@ -567,6 +569,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     if (markTex) markTex.dispose();
     auraGeo.dispose();
     surgeGeo.dispose();
+    propellers.dispose();
     if (!kartGltf) greyGeo?.dispose();
   }
   /** Re-dress seat i (multiplayer: a remote player's { outfit, vehicle } ids; an unknown id gets the default look). */
@@ -588,5 +591,5 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
   }
   const lookOf = (k) => ({ outfit: k.dress ? k.dress.outfit : null, vehicle: k.dress ? k.dress.vehicle : null });
 
-  return { list, pose, hide, attach, rebind, resetReactions, setLook, looks: () => list.map(lookOf), dispose };
+  return { list, propellers, pose, hide, attach, rebind, resetReactions, setLook, looks: () => list.map(lookOf), dispose };
 }
