@@ -44,13 +44,19 @@ export function keepMusicFloor({ p, base, seam, reactive: u, music }) {
   // Similar-luminance jewel colours let the beat change whole tiles without a white strobe.
   const plum = vec3(.68, .04, .93), rose = vec3(.88, .046, .276);
   const brass = vec3(.45, .2, .022), jade = vec3(.016, .313, .176);
-  const jewel = mix(plum, rose, note.mul(.65).add(u.mid.mul(.25)));
-  const drum = mix(brass, jade, answer.mul(.7).add(u.snare.mul(.3)).clamp(0, 1));
-  const tint = mix(jewel, drum, fast.mul(.55).add(front.mul(.35)).clamp(0, 1));
+  // Give neighbouring frequency banks distinct identities instead of blending every slab toward pink.
+  // The actual spectrum opens its neighbouring jewel; a drum strike briefly answers across the wheel.
+  const colourAt = n => select(n.lessThan(.5), brass,
+    select(n.lessThan(1.5), jade, select(n.lessThan(2.5), plum, rose)));
+  const slot = mod(bank, 4);
+  const jewel = mix(colourAt(slot), colourAt(mod(slot.add(1), 4)),
+    spectrum.mul(.42).add(note.mul(.16)).add(u.mid.mul(.08)).clamp(0, .66));
+  const strike = hit.mul(.42).add(front.mul(.38)).add(answer.mul(.2).mul(fast)).clamp(0, .8);
+  const tint = mix(jewel, colourAt(mod(slot.add(2), 4)), strike);
   const distance = one(smoothstep(4, 12, max(fwidth(p.x), fwidth(p.y))));
   const centre = smoothstep(.7, 3, abs(tileX)).mul(.2).add(.8);
   const drop = music.waveAmp || float(0);
-  const fill = pattern.mul(.68).add(.26).add(front.mul(.25)).add(drop.mul(.16)).clamp(0, .94)
+  const fill = pattern.mul(.54).add(.42).add(front.mul(.25)).add(drop.mul(.16)).clamp(0, .96)
     .mul(distance).mul(centre).mul(one(seam.mul(.96)));
   const active = vizActivity(u, music).mul(mix(float(1), float(.32), gentle));
   return mix(base, mix(base, base.mul(.24).add(tint), fill), active);
