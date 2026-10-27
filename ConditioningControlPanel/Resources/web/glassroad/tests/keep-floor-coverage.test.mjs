@@ -29,6 +29,7 @@ function setup() {
   const music = { tileBeat: uniform(26.4), tileBar: uniform(6.6), tileOn: uniform(1) };
   for (const [key, value] of Object.entries({ energy: .28, bass: .44, mid: .36, treble: .22 })) reactive[key].value = value;
   notes.forEach((value, i) => { reactive['note' + i].value = value; });
+  for(let i=0;i<64;i++)reactive.vizTexture.image.data[i*4+1]=Math.round(notes[Math.floor(i/8)]*255);
   const root = keepMusicFloor({ p, base: vec3(...base), seam, reactive, music });
   const colour = (x, y, footprint = .2) => { p.value.set(x, y); return evaluateColour(root, footprint); };
   const capture = footprint => tiles.map(([x, y]) => colour(x, y, footprint));
@@ -54,10 +55,13 @@ for (const bar of [2, 10, 18]) test('Keep phrase at bar ' + bar + ' lights compl
 test('Keep tile choreography changes across the whole road with heard time and measured bands', () => {
   const { reactive, music, capture } = setup(), before = capture(.2);
   music.tileBar.value += .8; music.tileBeat.value += 3.2;
+  reactive.kick.value = reactive.snare.value = reactive.hitStrength.value = .9; reactive.hitAge.value = .08;
   const moved = capture(.2).filter((value, i) => delta(value, before[i]) > .018).length / tiles.length;
   assert.ok(moved > .5, 'Music motion changes most slabs rather than a few animated marks');
+  reactive.kick.value = reactive.snare.value = reactive.hitStrength.value = 0; reactive.hitAge.value = 9;
   const first = capture(.2);
   notes.forEach((_, i) => { reactive['note' + i].value = notes[(i + 3) % 8]; });
+  for(let i=0;i<64;i++)reactive.vizTexture.image.data[i*4+1]=Math.round(notes[(Math.floor(i/8)+3)%8]*255);
   const redistributed = capture(.2).filter((value, i) => delta(value, first[i]) > .01).length / tiles.length;
   assert.ok(redistributed > .5, 'Equal loudness with different frequency content gives a different tile field');
 });

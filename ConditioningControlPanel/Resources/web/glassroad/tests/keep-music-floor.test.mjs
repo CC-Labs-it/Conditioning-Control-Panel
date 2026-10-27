@@ -37,7 +37,7 @@ test('Keep visible masonry responds to all heard bands and the shared song beat,
   assert.ok(nodes.has(music.tileOn), 'the absence of a recording restores the slate finish');
   assert.ok(!nodes.has(reactive.t), 'tile groups move to the beat rather than an independent animation clock');
   assert.ok(nodes.has(mortar), 'existing dark joints mask the fills');
-  assert.ok(![...nodes].some(n => n.isTextureNode), 'patterns add no textures or decoders');
+  assert.deepEqual(new Set([...nodes].filter(n => n.isTextureNode).map(n => n.value)), new Set([reactive.vizTexture]), 'only the shared bounded PCM atlas is sampled');
   assert.ok(nodes.size < 850, 'three compositions remain bounded inside the existing floor draw');
 });
 

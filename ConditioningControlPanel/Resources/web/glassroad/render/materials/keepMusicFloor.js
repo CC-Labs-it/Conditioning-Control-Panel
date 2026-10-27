@@ -1,60 +1,57 @@
-/* Every slate tile joins the heard-song choreography; the existing joints stay fixed. */
-import { float, vec3, floor, fract, mod, abs, mix, smoothstep, step, sin, cos, select, max, fwidth } from 'three/tsl';
+/* The slate becomes a stained-glass sound mosaic. Every physical slab receives one complete fill. */
+import { float, vec3, floor, fract, mod, abs, mix, smoothstep, step, cos, select, max, fwidth } from 'three/tsl';
+import { vizSpectrum, vizHistory, vizActivity, vizHit } from './musicVisualizer.js';
 
 const TAU = Math.PI * 2, one = v => float(1).sub(v);
 
-/** Whole-tile waves, alternating steps and crossing bands use the existing song and analyser. */
 export function keepMusicFloor({ p, base, seam, reactive: u, music }) {
-  // Match the authored 12 x 16 m seam texture: widths 2/4/4/2 m, staggered 8 m rows.
+  // Match the fixed 12 x 16 m slate joints: 2/4/4/2 m slabs, staggered 8 m rows.
   const repeat = floor(p.x.div(12)), localX = fract(p.x.div(12)).mul(12);
   const within = step(2, localX).add(step(6, localX)).add(step(10, localX));
   const column = repeat.mul(4).add(within).toVar();
-  const stagger = step(6, localX).mul(.5), row = floor(p.y.div(8).add(stagger)).toVar();
+  const row = floor(p.y.div(8).add(step(6, localX).mul(.5))).toVar();
   const tileX = repeat.mul(12).add(select(within.lessThan(.5), float(1),
     select(within.lessThan(1.5), float(4), select(within.lessThan(2.5), float(8), float(11)))));
   const bank = mod(column.add(row.mul(2)), 8);
   let note = float(0);
   for (let i = 0; i < 8; i++) note = note.add(one(step(.5, abs(bank.sub(i)))).mul(u['note' + i]));
   note = note.toVar();
+  const gentle = u.gentle, fast = one(gentle), bar = music.tileBar;
+  const frequency = bank.add(.5).div(8), spectrum = vizSpectrum(frequency, u);
+  const history = vizHistory(frequency, mod(row, 12).div(12), u);
+  const hit = vizHit(u).mul(fast);
+  const beat = cos(music.tileBeat.mul(TAU).sub(column.mul(.7)).add(row.mul(.4))).mul(.5).add(.5).mul(fast);
 
-  const gentle = u.gentle, bar = music.tileBar;
-  const motion = mix(music.tileBeat.mul(.5), bar.mul(.25), gentle);
-  const beat = mix(cos(music.tileBeat.mul(TAU)).mul(.5).add(.5), float(.5), gentle);
-  const swell = u.bass.mul(.22).mul(beat).add(note.mul(.3)).add(u.mid.mul(.12));
+  // Eight musical banks light complete coloured panes; a changed spectrum rearranges the mosaic.
+  const mosaic = note.mul(.38).add(spectrum.mul(.42)).add(history.mul(.2));
+  const choir = mix(u.mid, u.treble, mod(column.add(row), 2)).mul(.25);
+  const glass = mosaic.add(choir).add(.24);
 
-  // Broad fronts roll down every column, with measured notes changing their depth and colour.
-  const wave = sin(row.mul(.72).sub(bar.mul(TAU / 2)).add(column.mul(.34)));
-  const procession = smoothstep(-.85, .7, wave).mul(.66).add(.24).add(swell.mul(.35));
+  // Onsets send a finite procession along tile rows. It expands only when the music strikes.
+  const rowDistance = abs(mod(row.add(6), 12).sub(6));
+  const front = one(smoothstep(.7, 2, abs(rowDistance.sub(u.hitAge.mul(14)))))
+    .mul(u.hitStrength).mul(fast);
+  const procession = front.mul(.65).add(note.mul(.35)).add(spectrum.mul(.4)).add(history.mul(.18)).add(.24);
 
-  // Whole rows and their alternating neighbours answer each other on the heard subdivisions.
-  const checker = cos(column.add(row).mul(Math.PI).sub(motion.mul(Math.PI)));
-  const steps = smoothstep(-.8, .8, checker).mul(.58).add(.26)
-    .add(note.mul(.18)).add(u.bass.mul(beat).mul(.12));
+  // A chessboard answer, with alternating whole slabs changing hue on heard beats and drum hits.
+  const checker = mod(column.add(row), 2);
+  const answer = mix(beat, one(beat), checker).mul(u.bass.mul(.7).add(.3));
+  const chess = answer.mul(.44).add(mosaic.mul(.36)).add(hit.mul(.18)).add(.2);
+  const phrase = bar.div(8), mode = mod(floor(phrase).add(u.section), 3);
+  const choose = n => select(n.lessThan(.5), glass, select(n.lessThan(1.5), procession, chess));
+  const pattern = mix(choose(mode), choose(mod(mode.add(1), 3)), smoothstep(.875, 1, fract(phrase)));
 
-  // Opposing diagonal bands braid through the tile field, each carried by a different band.
-  const crossingA = sin(row.add(column).mul(Math.PI / 3).sub(bar.mul(TAU / 3)));
-  const crossingB = cos(row.sub(column).mul(Math.PI / 3).add(bar.mul(TAU / 4)));
-  const woven = smoothstep(-.75, .8, crossingA).mul(u.mid.mul(.18).add(.28))
-    .add(smoothstep(-.75, .8, crossingB).mul(u.treble.mul(.16).add(.26)))
-    .add(.24).add(note.mul(.16));
-
-  // The whole field dissolves into a different arrangement over the last two of every eight bars.
-  const phrase = bar.div(8), mode = mod(floor(phrase), 3);
-  const choose = n => select(n.lessThan(.5), procession, select(n.lessThan(1.5), steps, woven));
-  const pattern = mix(choose(mode), choose(mod(mode.add(1), 3)), smoothstep(.75, 1, fract(phrase)));
-  const tintPhase = sin(column.mul(.63).add(row.mul(.47)).sub(bar.mul(TAU / 8))).mul(.5).add(.5);
-  const plum = vec3(.43, .025, .59), rose = vec3(.86, .045, .27), brass = vec3(.86, .39, .035);
-  const tintBase = mix(mix(plum, rose, tintPhase), brass, note.mul(.42).add(u.treble.mul(.12)).clamp(0, .62));
-  // The slate itself becomes a tiled equalizer: neighbouring rows answer in gold and jade.
-  // Keep joints dark and fixed so the real road silhouette stays readable.
-  const answer = cos(music.tileBeat.mul(TAU).sub(row.mul(.78)).add(column.mul(1.1))).mul(.5).add(.5);
-  const beatTint = mix(brass, vec3(.025, .62, .43), answer);
-  const tint = mix(tintBase, beatTint, float(1).sub(gentle).mul(.62));
+  // Similar-luminance jewel colours let the beat change whole tiles without a white strobe.
+  const plum = vec3(.68, .04, .93), rose = vec3(.88, .046, .276);
+  const brass = vec3(.45, .2, .022), jade = vec3(.016, .313, .176);
+  const jewel = mix(plum, rose, note.mul(.65).add(u.mid.mul(.25)));
+  const drum = mix(brass, jade, answer.mul(.7).add(u.snare.mul(.3)).clamp(0, 1));
+  const tint = mix(jewel, drum, fast.mul(.55).add(front.mul(.35)).clamp(0, 1));
   const distance = one(smoothstep(4, 12, max(fwidth(p.x), fwidth(p.y))));
   const centre = smoothstep(.7, 3, abs(tileX)).mul(.2).add(.8);
-  const active = music.tileOn.mul(mix(u.energy.mul(4).clamp(0, 1), u.energy, gentle))
-    .mul(mix(float(1), float(.32), gentle));
-  const fill = pattern.mul(note.mul(.65).add(.6)).mul(1.1).add(.16).clamp(0, .94).mul(distance).mul(centre).mul(one(seam.mul(.96)));
-  // Apply energy once, after the composition, so quiet and Gentle onset retain their smooth envelope.
-  return mix(base, mix(base, base.mul(.32).add(tint), fill), active);
+  const drop = music.waveAmp || float(0);
+  const fill = pattern.mul(.68).add(.26).add(front.mul(.25)).add(drop.mul(.16)).clamp(0, .94)
+    .mul(distance).mul(centre).mul(one(seam.mul(.96)));
+  const active = vizActivity(u, music).mul(mix(float(1), float(.32), gentle));
+  return mix(base, mix(base, base.mul(.24).add(tint), fill), active);
 }
