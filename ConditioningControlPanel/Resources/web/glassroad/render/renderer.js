@@ -18,18 +18,24 @@
  * loading card (its own target, no shadow map: a different program set from the scene pass).
  */
 import { WebGPURenderer, Group, Mesh, Sprite, PlaneGeometry } from 'three/webgpu';
+import * as threeWebgpu from 'three/webgpu';
+import * as GPU from 'three/webgpu';
 import { createPost } from './post.js';
 import { releaseSceneResources, trackSceneResources, disposeSceneResources } from './sceneResources.js';
 import { skipUnchangedInstanceUploads } from './uniformUploads.js';
 import { uploadChangedAttributeBytes } from './attributeUploads.js';
 import { uploadVideoElementsDirectly } from './videoUploads.js';
+import { uploadCanvasRegions } from './canvasRegions.js';
 import { uploadDataTextureRows } from './dataTextureRows.js';
+import { logPipelineLinks } from './linkLog.js';
+import { isFirefox, concreteFloatConstants, uploadVideoThroughExternalTexture } from './firefoxWebgpu.js';
 import { Q, TIERS, ORDER, GOVERNOR, setTier, pickTier, createGovernor, createDynRes, dynLines, shortGpu, qualityLanding } from './quality.js';
 import { createFrameGate } from '../core/clock.js';
 import { reasonOf } from '../core/failure.js';
 import { loadOptions, cleanOptions } from '../hud/options.js';
 import { WARM, warmGroups } from './warmGroups.js';
 import { createDeferredWarm } from './stagedWarm.js';
+import { lateWarmMaterials } from './warmExtras.js';
 
 /** A canvas can hold one context for life: a failed WebGPU init, or a lost context, needs a new element in its place. */
 function replaceCanvas(canvas) {
@@ -90,6 +96,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   skipUnchangedInstanceUploads(three);
   uploadChangedAttributeBytes(three);        // WebGL2: attributes re-send only their changed bytes (Firefox command-channel budget)
   uploadVideoElementsDirectly(three);
+  uploadCanvasRegions(three);
   uploadDataTextureRows(three);              // WebGL2: a marked DataTexture (the water height atlas) re-sends only its rows
   if (qs.get('census') === '1') { try { (await import('../dev/uploadCensus.js')).installUploadCensus(three); } catch (e) { console.warn('census hook failed', e); } }   // dev: ?census=1 (dev/uploadCensus.js)
   // a lost device or context: three stops drawing for good (render returns at once), so the page must rebuild;
@@ -103,12 +110,16 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     for (const fn of lostFns) { try { fn(lost); } catch (e) { console.warn('[glassroad/renderer] onLost', e); } }
   };
   let compiledGraphs;
+  if (qs.get('logLinks') === '1') logPipelineLinks(three, { Material: GPU.Material });   // dev: every program link, with its phase and pass
   if (qs.get('profileLoad') === '1') {
     compiledGraphs = 0;
     three.debug.onNodeBuilderCreated = () => { compiledGraphs++; };
   }
   three.info.autoReset = false;                    // reset once per frame here, so stats() is one whole frame
   const backend = three.backend.isWebGPUBackend ? 'webgpu' : 'webgl2';
+  // Firefox WebGPU (render/firefoxWebgpu.js): naga rejects constant builtin calls on abstract floats, and
+  // copyExternalImageToTexture refuses a <video>; concrete f32 constants and an external-texture blit there
+  if (backend === 'webgpu' && isFirefox()) { concreteFloatConstants(threeWebgpu.WGSLNodeBuilder); uploadVideoThroughExternalTexture(three); }
   if (backend === 'webgl2') {
     try { const gl = three.backend.gl, ext = gl.getExtension('WEBGL_debug_renderer_info'); gpu = shortGpu(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)); } catch (e) { /* hidden */ }
   }
@@ -323,6 +334,10 @@ function renderInset(three, target, spec, pr) {
 export async function warmInset(three, post, scene, camera) {
   if (!post || !post.inset || !scene || !camera) return { ms: 0 };
   const t0 = performance.now(), saved = [], mats = [];
+  // the materials made only in a race (render/warmExtras.js) get their inset programs too
+  const late = new Group();
+  for (const m of lateWarmMaterials(GPU)) late.add(m.isSpriteNodeMaterial ? new Sprite(m) : new Mesh(new PlaneGeometry(0.01, 0.01), m));
+  scene.add(late);
   scene.traverse((o) => {
     saved.push([o, o.visible, o.frustumCulled, o.count]);
     o.visible = true; o.frustumCulled = false;
@@ -343,6 +358,8 @@ export async function warmInset(three, post, scene, camera) {
     camera.layers.mask = layers;
     for (const [o, v, f, n] of saved) { o.visible = v; o.frustumCulled = f; if (o.count !== n) o.count = n; }
     for (const m of mats) m.visible = false;
+    for (const o of [...late.children]) { late.remove(o); if (o.isMesh) o.geometry.dispose(); }
+    scene.remove(late);
     scene.updateMatrixWorld(true);
   }
   return { ms: Math.round(performance.now() - t0) };
@@ -381,7 +398,7 @@ export async function warmAll(renderer, scene, camera, extras = [], { onProgress
   const stopped = () => !!alive && !alive();
   const temp = new Group(), plane = new PlaneGeometry(0.01, 0.01);
   temp.name = 'warm-extras';
-  for (const x of [].concat(extras || [])) {
+  for (const x of [].concat(extras || [], lateWarmMaterials(GPU))) {   // + the materials made only in a race
     const o = !x ? null : x.isObject3D ? x : x.object && x.object.isObject3D ? x.object
       : x.isMaterial ? (x.isSpriteNodeMaterial || x.type === 'SpriteNodeMaterial' ? new Sprite(x) : new Mesh(plane, x)) : null;
     if (o && !o.parent) temp.add(o);

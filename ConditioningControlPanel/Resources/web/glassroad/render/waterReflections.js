@@ -52,7 +52,7 @@ export function createWaterReflections({ scene, renderer, exclude, quality='mid'
         await withCapture(async()=>{
           for(let face=0;face<6;face++) {
             three.setRenderTarget(target,face);
-            const saved=[],materials=[],excluded=new Set(),faceCamera=camera.children[face];
+            const saved=[],materials=[],lods=[],excluded=new Set(),faceCamera=camera.children[face];
             exclude?.traverse?.(object=>excluded.add(object));
             try {
               // Cube captures have their own no-shadow/MRT pipeline. Warm its hidden,
@@ -61,6 +61,9 @@ export function createWaterReflections({ scene, renderer, exclude, quality='mid'
               // One unculled compile covers every hidden variant; orientation is camera data.
               if(face===0) scene.traverse?.(object=>{
                 if(excluded.has(object))return;
+                // The cube draw's projection selects one LOD level and hides the rest, so the far finish-portal
+                // levels linked mid-race in this pass (Firefox, 2026-10-27). Hold every level shown, as warmAll does.
+                if(object.isLOD){lods.push([object,object.autoUpdate]);object.autoUpdate=false;}
                 saved.push([object,object.visible,object.frustumCulled,object.count]);
                 object.visible=true;object.frustumCulled=false;
                 if(object.count===0&&(object.isInstancedMesh||object.isSprite||object.isBatchedMesh))object.count=1;
@@ -84,6 +87,7 @@ export function createWaterReflections({ scene, renderer, exclude, quality='mid'
                 if(overdraw){handBack();overdraw();three.setRenderTarget(target,face);}
               }
             } finally {
+              for(const [object,autoUpdate] of lods)object.autoUpdate=autoUpdate;
               for(const [object,visible,culled,count] of saved){object.visible=visible;object.frustumCulled=culled;if(object.count!==count)object.count=count;}
               for(const material of materials)material.visible=false;
               scene.updateMatrixWorld?.(true);
