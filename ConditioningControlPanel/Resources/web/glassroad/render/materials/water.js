@@ -13,7 +13,8 @@
 import { float, vec2, vec3, sin, cos, mix, smoothstep, clamp, max, abs, dot, pow, normalize, length, select, reflect, attribute, fwidth } from 'three/tsl';
 import { LOOK } from '../look.js';
 import { WATER_LOOK } from '../waterMath.js';
-import { reactiveWaterNodes, waterHelixLight } from '../audioReactive.js';
+import { reactiveWaterNodes } from '../audioReactive.js';
+import { waterMusicLight } from './waterMusic.js';
 
 const TAU = Math.PI * 2;
 
@@ -117,7 +118,7 @@ export function createWaterSurface({ surface, flow, p, trueEdge, V, N0, pal, u, 
     // displaces the physical field nor changes the kart wake, spray origin or collision surface.
     const liquidTint = pal.col(0).mul(0.55).add(pal.col(1).mul(0.45));
     colour = colour.add(liquidTint.mul(response.light)).add(white.mul(response.crest));
-    colour = colour.add(waterHelixLight(p, reactive, pal.col(0), pal.col(1)));
+    colour = colour.add(waterMusicLight(p, reactive, pal.col(0), pal.col(1)));
   }
   const alpha = deformation ? float(.52).add(pow(float(1).sub(ndv),3).mul(.34)).add(foam.mul(.06)).clamp(.52,.93)
     : clamp(float(L.alpha).add(foam.mul(0.1)).add(spec.mul(0.3)), 0, 1);

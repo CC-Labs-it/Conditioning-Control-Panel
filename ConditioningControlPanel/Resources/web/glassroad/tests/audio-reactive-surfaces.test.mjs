@@ -107,7 +107,7 @@ test('one prewarmed envelope drives real road, water skin, depth and waterfall g
     assert.ok(nodes.size < 8000, 'response stays a small addition to existing material graphs');
   }
   assert.ok(before[0].has(reactive.treble) && before[1].has(reactive.treble));
-  for (const control of ['dnaPhase', 'dnaRadius', 'dnaHue', 'dnaPulse'])
+  for (const control of ['kick', 'snare', 'hats', 'hitAge', 'hitStrength'])
     assert.ok(graph(volume.object.getObjectByName('water-surface-raised').material.colorNode).has(reactive[control]),
       'visible raised water consumes ' + control);
   const resources = before.map(nodes => [...nodes].filter(n => n.isTextureNode).length);
@@ -137,7 +137,7 @@ test('all authored track floors retain their finish and the reservoir shares the
       const world = buildMainframe(track, null, { reactive: road.uniforms.reactive }); t.after(() => world.dispose());
       const reservoir = world.group.getObjectByName('mainframe-reservoir-surface');
       const waterNodes = graph(reservoir.material.colorNode);
-      for (const band of ['bass', 'mid', 'treble', 't', 'dnaPhase', 'dnaRadius', 'dnaHue', 'dnaPulse'])
+      for (const band of ['bass', 'mid', 'treble', 't', 'kick', 'snare', 'hats', 'hitAge', 'hitStrength'])
         assert.ok(waterNodes.has(road.uniforms.reactive[band]));
       assert.equal(reservoir.material.positionNode, null, 'reservoir waterline stays shared with its contacts');
     }
