@@ -163,3 +163,19 @@ test('cameras and other nodes with their own updateMatrixWorld keep it', () => {
   assert.ok(near(cam.matrixWorldInverse, cam.matrixWorld.clone().invert()), 'camera inverse kept current');
   void Quaternion; void Euler;
 });
+
+test('the walk keeps one record per node: hidden, re-parented and shown again all still land', () => {
+  const scene = new Scene(), a = new Group(), b = new Group(), leaf = new Mesh();
+  scene.add(a, b); a.add(leaf);
+  a.position.set(1, 2, 3); b.position.set(-5, 0, 0); leaf.position.set(0, 1, 0);
+  installMatrixWalk(scene);
+  scene.updateMatrixWorld();
+  const own = (o) => Object.keys(o).filter((k) => k.startsWith('_glassroadMw'));
+  assert.deepEqual(own(leaf), ['_glassroadMw'], 'one walk property per node');
+  a.visible = false; a.position.x = 10; scene.updateMatrixWorld();
+  assert.deepEqual(own(a), ['_glassroadMw'], 'a hidden skip marks the same record');
+  a.visible = true; scene.updateMatrixWorld();
+  assert.ok(near(leaf.matrixWorld, expected(leaf)), 'shown again: stale subtree recomputed');
+  b.add(leaf); scene.updateMatrixWorld();
+  assert.ok(near(leaf.matrixWorld, expected(leaf)), 're-parented: recomputed under the new parent');
+});
