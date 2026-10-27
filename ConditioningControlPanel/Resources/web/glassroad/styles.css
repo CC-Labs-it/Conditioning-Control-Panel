@@ -345,6 +345,10 @@
   font-size: 15px; line-height: 1; }
 #card.kit-doors .c-door em { position: absolute; left: 38.3%; top: 22.6%; width: 42.6%; height: 36.3%; font-size: 11px; line-height: 1.2; overflow: hidden; }
 #card.kit-doors .c-door.soon { opacity: 0.75; color: #fff8ef; }
+/* garage first: the Race door while the course lights warm behind the menu (its note counts up; a press waits under the cover) */
+#card .c-door.c-wait { opacity: 0.82; } #card .c-door.c-wait em { animation: c-wait-pulse 1.6s ease-in-out infinite; }
+@keyframes c-wait-pulse { 0%, 100% { opacity: 0.8; } 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { #card .c-door.c-wait em { animation: none; } }
 @media (max-width: 420px) { #card.kit-doors .c-doors { grid-template-columns: 1fr; } #card.kit-doors .c-door b { font-size: 17px; } #card.kit-doors .c-door em { font-size: 12px; } }
 
 #card[data-kind="results"] .card-title { margin-bottom: 0; }

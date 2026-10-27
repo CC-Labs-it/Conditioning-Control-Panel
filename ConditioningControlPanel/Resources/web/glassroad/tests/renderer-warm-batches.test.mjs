@@ -85,6 +85,25 @@ test('covered warm freezes distance selection so the intro can cut to every LOD 
   near.material.dispose();far.material.dispose();geometry.dispose();
 });
 
+test('garage first: compileStart is preferred, every warm frame is overdrawn in the same task, a dead lifetime stops and restores',async()=>{
+  const scene=new Scene(),holder=new Group(),camera=new PerspectiveCamera(),geometry=new BoxGeometry();
+  holder.visible=false;scene.add(holder);
+  holder.add(...Array.from({length:30},()=>new Mesh(geometry,new MeshBasicNodeMaterial())));
+  const log=[];
+  const post={async compileAsync(){log.push('compileAsync');},async compileStart(){log.push('compileStart');},render(){log.push('render');}};
+  const result=await warmAll({backend:'webgpu',post:()=>post},scene,camera,[],{overdraw:()=>log.push('overdraw')});
+  assert.ok(!log.includes('compileAsync'),'the start form hands the canvas back before the pipelines build');
+  assert.ok(log.filter(e=>e==='compileStart').length>=2);
+  for(let i=0;i<log.length;i++)if(log[i]==='render')assert.equal(log[i+1],'overdraw','a warm frame is never the presented one');
+  assert.equal(result.stopped,false);assert.equal(holder.visible,false);
+  // the page went away (course switch) mid-warm: the warm stops after its current group and leaves the scene as it found it
+  let alive=true;const stopLog=[];
+  const stopped=await warmAll({backend:'webgpu',post:()=>({async compileStart(){stopLog.push('c');alive=false;},render(){stopLog.push('r');}})},scene,camera,[],{alive:()=>alive});
+  assert.equal(stopped.stopped,true);assert.ok(!stopLog.includes('r'),'nothing drawn after the stop');
+  assert.equal(holder.visible,false);scene.traverse(o=>{if(o.isMesh)assert.equal(o.frustumCulled,true);});
+  holder.children.forEach(o=>o.material.dispose());geometry.dispose();
+});
+
 test('a failed warm returns each LOD to its original automatic or manual selection policy',async()=>{
   const scene=new Scene(),camera=new PerspectiveCamera(),auto=new LOD(),manual=new LOD();
   manual.autoUpdate=false;scene.add(auto,manual);

@@ -88,6 +88,19 @@ test('reflection warm stages hidden and distant variants, then restores them eve
     assert.equal(compiles,1,'normal captures never restage or recompile hidden variants');
   }
 });
+test('garage first: the caller\'s target is handed back around every await and the staging draw is overdrawn in the same task',async t=>{
+  const exclude=new Group(),r=renderer(exclude),old={...r.state},seen=[];
+  r.api.compileAsync=async()=>{r.state.compiles++;queueMicrotask(()=>seen.push(['compile-gap',r.state.target,r.state.face,r.state.mip]));};
+  const reflection=createWaterReflections({renderer:r.api,scene:{},exclude});t.after(()=>reflection.dispose());
+  const overdraw=()=>seen.push(['overdraw',r.state.target,r.state.face,r.state.mip,r.state.renders.length]);
+  assert.equal(await reflection.warm({overdraw,onProgress:()=>seen.push(['progress',r.state.target,r.state.face,r.state.mip])}),true);
+  const gaps=seen.filter(e=>e[0]!=='overdraw');
+  assert.equal(gaps.length,7);
+  for(const [,target,face,mip] of gaps){assert.equal(target,old.target);assert.equal(face,old.face);assert.equal(mip,old.mip);}
+  const over=seen.filter(e=>e[0]==='overdraw');
+  assert.deepEqual(over,[['overdraw',old.target,old.face,old.mip,1]],'one overdraw right after the staging draw, on the caller\'s target');
+  assert.deepEqual(r.state.renders.map(x=>x.face),[0,0,1,2,3,4,5],'the staging face is still the first draw and gets its clean capture');
+});
 function track(){return {lengthM:60,nodeS:[0,60],sections:[],
   frameAt(s){return {p:[0,8,-s],b:[1,0,0],n:[0,1,0],t:[0,0,-1],w:16,surface:'stream',flow:[2,.2],flags:[]};},
   surfaceAt(s,x){return {...this.frameAt(s),p:[x,8,-s]};},

@@ -232,7 +232,9 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
   }
   updateBatches(true);
   diagnostics.baseDraws = batches.length + Object.values(rows).filter(r => r.length).length;
-  async function warmCapture(renderer, scene, camera) {
+  /** overdraw(): called in the same task as every capture frame drawn on the canvas (garage first: the menu's
+   *  own frame goes over it, so no warm frame is ever presented). */
+  async function warmCapture(renderer, scene, camera, { overdraw = null } = {}) {
     if (disposed) return;
     const quaternion = camera.quaternion.clone(), up = camera.up.clone(), raw = renderer.three;
     const renderTarget = raw.getRenderTarget(), mrt = raw.getMRT(), autoClear = raw.autoClear;
@@ -261,7 +263,9 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
             }
           });
           scene.updateMatrixWorld(true);
-          await pass.compileAsync();
+          // the target goes back in this task (post.js compileStart): a menu frame drawn while the pipelines
+          // build lands on the canvas, never in the scene pass target
+          await (pass.compileStart ? pass.compileStart() : pass.compileAsync());
           if (!side) {
             // The post quad enters depth 1, its scene depth 2, and each real mirror
             // depth 3. Prepare those target/camera variants asynchronously before
@@ -277,7 +281,10 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
                 const target = base.getRenderTarget(reflectedCamera);
                 base._updateResolution(target, raw);
                 raw.setRenderTarget(target);
-                await raw.compileAsync(scene, reflectedCamera, null, null, raw._callDepth + 3);
+                // the compile takes its render list and target in this task; the target goes back before the wait
+                const compiling = raw.compileAsync(scene, reflectedCamera, null, null, raw._callDepth + 3);
+                raw.setRenderTarget(previousTarget);
+                await compiling;
               }
             } finally {
               excluded.forEach((material, i) => { material.visible = visible[i]; });
@@ -287,6 +294,7 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
           // Reflectors update once per renderer frame. Capture at the real nested post depth.
           await new Promise(resolve => globalThis.requestAnimationFrame ? requestAnimationFrame(resolve) : setTimeout(resolve, 0));
           pass.render();
+          if (overdraw) overdraw();
         } finally {
           for (const [object, visible, culled, count] of saved) {
             object.visible = visible; object.frustumCulled = culled; if (object.count !== count) object.count = count;
