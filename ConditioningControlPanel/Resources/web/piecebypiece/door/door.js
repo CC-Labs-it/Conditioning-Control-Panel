@@ -1217,6 +1217,8 @@ export function createDoor(opts = {}) {
    *   { mode: 'join', target }          the desktop Lobby: sit at that open table (a p_ id)
    *   { mode: 'host' }                  the desktop Lobby: list a table and wait
    *   { mode: 'spectate', matchId }     the desktop Lobby: watch that public game (ten seconds behind)
+   *   { mode: 'quick' }                 a tournament page's Play: Quick match at once; the server's tournament
+   *                                     hook answers it with this round's game (any time control)
    * A live online game is never interrupted; the host hears null and says so.
    */
   function friend(intent) {
@@ -1239,6 +1241,7 @@ export function createDoor(opts = {}) {
     // The desktop Lobby: sit at one open table, or list ours. The same buttons the lobby screen has.
     if (m.mode === 'join' && m.target) { if (screen !== 'lobby') show('lobby'); act('join', String(m.target)); return; }
     if (m.mode === 'host') { if (screen !== 'lobby') show('lobby'); act('host'); return; }
+    if (m.mode === 'quick') { act('quick'); return; }
     if (m.mode === 'accept' && m.challengeId && typeof lobby.acceptChallenge === 'function') {
       gate(() => {
         if (screen !== 'lobby') show('lobby');
