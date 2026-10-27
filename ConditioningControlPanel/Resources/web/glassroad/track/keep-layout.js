@@ -80,10 +80,12 @@ export function getKeepLayout(track) {
       if (!blocked(row.s)) continue;
       const section = landmarks.find(p => row.s >= p.s0 && row.s < p.s1);
       const desired = row.s;
-      const shift = [-20, 20, -40, 40, -60, 60, -80, 80, -100, 100].find(d => {
+      const shift = Array.from({ length: 100 }, (_, i) => [-(i + 1), i + 1]).flat().find(d => {
         const s = desired + d, f = track.frameAt(s);
         return s > section.s0 + 30 && s < section.s1 - 30 && !blocked(s)
-          && f.flags.includes('rail') && f.w >= (row.id.includes('chain') ? 30 : row.w + 16);
+          && f.flags.includes('rail') && f.w >= (row.id.includes('chain') ? 30 : row.w + 16)
+          && [...gates, ...chains].every(other => other === row || !/^(ascent|descent)-/.test(other.id)
+            || !/^(ascent|descent)-/.test(row.id) || Math.abs(other.s - s) >= 160);
       });
       if (shift === undefined) throw Error('No clear worn-floor bypass for ' + row.id);
       row.s = desired + shift;
