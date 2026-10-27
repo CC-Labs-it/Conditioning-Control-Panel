@@ -48,7 +48,7 @@ mkdir "%INSTALLER_OUTPUT%" 2>nul
 echo.
 echo [2/4] Building application (Release)...
 cd %PROJECT_DIR%
-dotnet publish -c Release -r win-x64 --self-contained true
+dotnet publish -c Release -r win-x64 --self-contained true -p:CcpPublish=true
 if errorlevel 1 (
     echo ERROR: Build failed!
     pause
