@@ -7,7 +7,7 @@
  * texSubImage2D(<video>), which browsers serve GPU to GPU. Only plain 2D textures without mipmap arrays take the
  * holder; everything else, and every non-video image, goes through three untouched. A regular Texture (not a
  * VideoTexture) keeps the warmed sRGB sampler graph: the WebGL VideoTexture path changes the shader and the
- * storage. WebGPU needs nothing: copyExternalImageToTexture already accepts a video.
+ * storage. WebGPU: Chromium copyExternalImageToTexture accepts a video; Firefox does not (render/firefoxWebgpu.js).
  * Keep aligned with the vendored renderer (WebGLTextureUtils.updateTexture, getImage) when upgrading;
  * tests/video-uploads.test.mjs pins the fallback this relies on. Never edit the vendored build for this. */
 const patched = new WeakSet();
