@@ -9,6 +9,7 @@
  */
 import { mixGet, rollTickTimes, ladderSemis } from './mix.js';
 import { pressThudGain } from './pressThud.js';
+import { trapTickGain } from '../render/trapTelegraph.js';
 import { toyLaunchPlan } from './itemFlight.js';
 
 /** Per-file level against the one loudness every file is normalised to (linear gain). */
@@ -134,6 +135,8 @@ export function sfxPlan(name, p = {}, o = {}) {
     case 'air-word-launch':
     case 'air-word-hop': return null; // Quiet springs at both takeoffs stay on the shared synth with the bank loaded.
     case 'press-thud': return pressThudGain(p) > .01 ? [one('land-heavy', .06 * pressThudGain(p), .68)] : [];
+    // a trap's warning beats: the count sample, quiet, rising a little toward the strike (step 4..1)
+    case 'trap-tick': return trapTickGain(p) > .01 ? [one('countdown', .05 * trapTickGain(p), 1 + (4 - Math.min(4, Math.max(1, p.step || 4))) * .09)] : [];
     case 'countdown': return [one('countdown')];
     case 'go': return [one('go')];
     case 'launch-boost': return [one('launch')];

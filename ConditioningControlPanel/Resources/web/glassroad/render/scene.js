@@ -54,6 +54,7 @@ import { racerLabels } from '../hud/format.js';
 import { createMusicRoad } from './musicRoad.js';
 import { updateAudioReactiveUniforms } from './audioReactive.js';
 import { createPressContacts } from './pressContacts.js';
+import { createTrapTicks } from './trapTelegraph.js';
 import { createRailBarrier } from './railBarrier.js';
 import { createSpiralBeatClock } from './spiralBeat.js';
 import { largeMediaLayout } from './worldMediaScale.js';
@@ -535,6 +536,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
 
   let lastT = null, padPhase = 0, eyeSet = false;
   const pressContacts = createPressContacts(track, (name, payload) => bus?.emit(name, payload));
+  const trapTicks = createTrapTicks(track, (name, payload) => bus?.emit(name, payload));
   const padBeat = createSpiralBeatClock();
   const fwd = [0, 0, -1], head = [0, 0, -1], eye = [0, -1, 0], eR = [1, 0, 0], eU = [0, 0, -1], q = [0, 0, 0, 1], F = [0, 0, -1], UP = [0, 1, 0];
   /** The spiral eye: tilted from the nadir toward a slow (skyEyeTcS) flat heading, below the horizon ahead. */
@@ -563,12 +565,14 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const atmosphereView = { paused: false, gentle: false, reducedMotion: false,
     playerPos: null, songS: NaN, audioReactive: null };
   function update(view) {
-    movingHazards.update(view.raceTimeS ?? 0);
+    movingHazards.update(view.raceTimeS ?? 0, { gentle: !!feel.get('gentle.on') });
     if (keepGates) keepGates.update(view.raceTimeS ?? 0);
     if (keepChains) keepChains.update(view.raceTimeS ?? 0);
     goonworksHazards?.update(view.raceTimeS ?? 0);
     const { kart: k, fx } = view;
     pressContacts.update(view.raceTimeS ?? 0, [k[S.posX], k[S.posY], k[S.posZ]],
+      { active: view.mode === 'race', paused: !!view.paused, gentle: !!feel.get('gentle.on') });
+    trapTicks.update(view.raceTimeS ?? 0, [k[S.posX], k[S.posY], k[S.posZ]],
       { active: view.mode === 'race', paused: !!view.paused, gentle: !!feel.get('gentle.on') });
     solo[0].st = k;
     const racers = view.karts && view.karts.length ? view.karts : solo;
@@ -788,5 +792,5 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
-    resetReactions: () => { railBarrier.reset(); courseAtmosphere?.reset(); pinkAtmosphere?.reset(); itemVis?.clear(); marquees?.clear(); veils.clear(); for (const x of [cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps]) x?.clear(); phraseGates.clear(); airWords.clear(); if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); goonworks?.reset(); goonworksHazards?.reset(); karts.resetReactions(); skids.clear(); finalLap.reset(); glance.reset(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
+    resetReactions: () => { railBarrier.reset(); courseAtmosphere?.reset(); pinkAtmosphere?.reset(); itemVis?.clear(); marquees?.clear(); veils.clear(); for (const x of [cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps]) x?.clear(); phraseGates.clear(); airWords.clear(); if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); goonworks?.reset(); goonworksHazards?.reset(); karts.resetReactions(); skids.clear(); finalLap.reset(); glance.reset(); trapTicks.reset(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
 }

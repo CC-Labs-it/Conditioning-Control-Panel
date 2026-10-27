@@ -260,6 +260,7 @@ export const FX_CUES = {
   // The gate renderer already owns the crossing pulse and text; do not add a second camera beat.
   'phrase-gate'() {},
   'press-thud'() {},
+  'trap-tick'() {},
   // The initial lip already owns launch motion; this notification only adds its spring sound.
   'air-word-launch'() {},
   'air-word-hop'(fx) {

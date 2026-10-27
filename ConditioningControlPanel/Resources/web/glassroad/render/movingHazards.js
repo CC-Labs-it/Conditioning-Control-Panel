@@ -2,6 +2,7 @@ import { Group, Mesh, InstancedMesh, Color, BoxGeometry, MeshBasicNodeMaterial, 
 import { movingPoseAt, bridgePose, bridgeSlabX } from '../track/movingHazards.js';
 import { movingHazardColours, movingHazardFinish } from './movingHazardFinish.js';
 import { matrixInto } from './instanceWrite.js';
+import { telegraphKey, TELEGRAPH } from './trapTelegraph.js';
 
 export function createMovingHazardView(scene, track, pal) {
   const group = new Group(); group.name = 'moving-piston-traps'; scene.add(group);
@@ -10,7 +11,7 @@ export function createMovingHazardView(scene, track, pal) {
     movingHazardFinish(colours.paint),
     movingHazardFinish(colours.dark, 'rubber'),
     movingHazardFinish(colours.metal, 'metal'),
-    new MeshBasicNodeMaterial({ color: colours.accent }),
+    new MeshBasicNodeMaterial({ color: '#ffffff' }),   // the accent rides on instance colours: the telegraph recolours per trap
     new MeshBasicNodeMaterial({ color: '#ffffff' }),
     movingHazardFinish(colours.pale),
   ];
@@ -22,7 +23,7 @@ export function createMovingHazardView(scene, track, pal) {
     const basis = new Matrix4().makeBasis(new Vector3(...f.b), new Vector3(...f.n), new Vector3(...f.t).negate());
     g.quaternion.setFromRotationMatrix(basis); g.position.set(...f.p); group.add(g); return g;
   };
-  const traps = (track.moving?.traps || []).map(row => {
+  const traps = (track.moving?.traps || []).map((row, index) => {
     const root = frameGroup(row, row.id), anchor = row.side * (row.roadWidth / 2 + 1);
     part(root, 'piston-housing', [2.5, 4, row.len + 1], [anchor, 1.8, 0], 1);
     const head = new Group(); root.add(head);
@@ -37,12 +38,13 @@ export function createMovingHazardView(scene, track, pal) {
       }
       for (const x of [-1, 0, 1]) {
         const stripe = part(head, 'warning-inlay', [.32, 2.1, .06], [x * row.w * .27, 1.6, z * (row.len / 2 - .025)], 3);
-        stripe.rotation.z = row.side * -.27;
+        stripe.rotation.z = row.side * -.27; stripe.userData.telegraph = index;
       }
     }
     for (let i = 0; i < 4; i++) part(root, 'housing-vent', [2.1, .12, .10], [anchor, .9 + i * .45, -row.len / 2 - .51], 2);
     const rod = part(root, 'connected-piston-shaft', [1, .65, .65], [anchor, 1.6, 0], 2);
     const light = part(root, 'approach-warning', [row.w, .08, 1.3], [row.x - row.side * row.travelM, .065, -row.len / 2 - 5], 3);
+    light.userData.telegraph = index;
     return { row, anchor, head, rod, light };
   });
   const bridge = track.moving?.bridge, fork = track.forks?.find(f => f.id === bridge?.forkId), slabs = [];
@@ -62,7 +64,7 @@ export function createMovingHazardView(scene, track, pal) {
     for (const x of [-1, 1]) part(entry, 'bridge-signal-post', [.3, 4, .3], [x * 3.4, 2, 0], 1);
   }
   // All machinery shares one cube and a handful of instanced draws, including moving parts.
-  const green = new Color('#62db94'), amber = new Color('#e6b464');
+  const green = new Color('#62db94'), amber = new Color('#e6b464'), accent = new Color(colours.accent), tint = new Color();
   const batches = materials.map((material, index) => {
     const sources = []; group.traverse(o => { if (o.isMesh && o.geometry === box && o.material === material) sources.push(o); });
     if (!sources.length) return null;
@@ -70,6 +72,7 @@ export function createMovingHazardView(scene, track, pal) {
     for (const [i, source] of sources.entries()) {
       source.visible = false;
       if (index === 4) batch.setColorAt(i, green);
+      if (index === 3) batch.setColorAt(i, accent);
     }
     return { batch, sources, index };
   }).filter(Boolean);
@@ -86,13 +89,22 @@ export function createMovingHazardView(scene, track, pal) {
     b.sources.forEach((source, i) => { const m = moverAbove(source); if (m) m.entries.push(b, i); });
     b.signal = null;
   }
+  // Telegraph (render/trapTelegraph.js): each trap's inlays and floor lamp take one colour key; rewritten only on a change.
+  const telegraph = traps.map(() => ({ key: 'calm', slots: [] })), accentBatch = batches.find(b => b.index === 3) || null;
+  accentBatch?.sources.forEach((s, i) => { const t = s.userData.telegraph; if (t !== undefined) telegraph[t].slots.push(i); });
   let primed = false;
-  function update(timeS = 0) {
-    for (const item of traps) {
+  function update(timeS = 0, { gentle = false } = {}) {
+    for (const [index, item] of traps.entries()) {
       const p = movingPoseAt(track, item.row, timeS), headEdge = p.x + item.row.side * item.row.w / 2;
       item.head.position.x = p.x; item.rod.position.x = (item.anchor + headEdge) / 2;
       item.rod.scale.x = Math.max(.1, Math.abs(item.anchor - headEdge));
-      // Permanent inlays show the strike zone without introducing beat-rate light flashes.
+      const key = telegraphKey(p, gentle);
+      if (accentBatch && key !== telegraph[index].key) {
+        telegraph[index].key = key;
+        if (key === 'dim') tint.copy(accent).multiplyScalar(.35); else tint.set(TELEGRAPH[key] || colours.accent);
+        for (const slot of telegraph[index].slots) accentBatch.batch.setColorAt(slot, tint);
+        accentBatch.batch.instanceColor.needsUpdate = true;
+      }
     }
     for (const item of slabs) {
       const x = bridgeSlabX(bridge, timeS, item.i, item.width);
@@ -130,6 +142,6 @@ export function createMovingHazardView(scene, track, pal) {
     }
   }
   update(0);
-  return { group, update, inspect: () => ({ traps: traps.length, slabs: slabs.length, draws: batches.length, colours }),
+  return { group, update, inspect: () => ({ traps: traps.length, slabs: slabs.length, draws: batches.length, colours, telegraph: telegraph.map(t => t.key) }),
     dispose() { group.removeFromParent(); for (const { batch } of batches) batch.dispose(); box.dispose(); for (const material of materials) material.dispose(); } };
 }
