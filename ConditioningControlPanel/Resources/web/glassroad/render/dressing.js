@@ -15,7 +15,7 @@
  */
 import {
   Group, InstancedMesh, Object3D, Matrix4, Quaternion, Vector3, MeshBasicNodeMaterial, CanvasTexture,
-  SRGBColorSpace, AdditiveBlending, DoubleSide, Color, LOD, InstancedBufferAttribute, BackSide, CylinderGeometry, PlaneGeometry, BufferAttribute,
+  SRGBColorSpace, AdditiveBlending, DoubleSide, Color, LOD, InstancedBufferAttribute, BackSide, CylinderGeometry, PlaneGeometry, BufferAttribute, Sphere,
 } from 'three/webgpu';
 import { uniform, uv, vec2, vec3, texture, cos, sin, float, smoothstep, length, positionView, instancedBufferAttribute, positionLocal, normalLocal,
   cameraPosition, clamp, mix, attribute, normalWorld, positionWorld, normalize, abs, dot, pow, max } from 'three/tsl';
@@ -82,8 +82,22 @@ export function buildKart(art) {
   if (!g) return null;
   const root = cloneSkinned(g.scene);
   swapMaterials(root, { emi_screen: emiFace() });
-  root.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
+  // Skinned pieces cull per camera on one fixed kart sphere (kartCullSphere); every other piece stays unculled.
+  root.traverse((o) => { if (o.isSkinnedMesh) kartCullSphere(o); else if (o.isMesh) o.frustumCulled = false; });
   return root;
+}
+
+/**
+ * The fixed culling sphere of every racer skinned mesh, in the shared kart mesh space (identity local transform and
+ * bind, render/wardrobe.js contract). Posed extent over every R4 clip, outfit and vehicle: centre (0, .794, 0),
+ * radius 1.271 (tests/kart-cull-sphere.test.mjs); 2.0 leaves ~36% of the radius for procedural head, antenna and arm poses.
+ * The body's squash, lean and spin ride the mesh matrix, so they are covered by matrixWorld.
+ */
+export const KART_CULL = Object.freeze({ center: Object.freeze([0, .8, 0]), radius: 2 });
+export function kartCullSphere(mesh) {
+  mesh.boundingSphere = new Sphere(new Vector3(...KART_CULL.center), KART_CULL.radius);
+  mesh.frustumCulled = true;
+  return mesh;
 }
 
 /** Countdown rings standing on the road ahead of the grid; lit one per countdown pulse, opened on go. */
