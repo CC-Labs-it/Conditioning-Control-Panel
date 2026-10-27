@@ -324,7 +324,8 @@ export async function warmInset(three, post, scene, camera) {
     for (const m of [].concat(o.material || [])) if (m && m.visible === false) { mats.push(m); m.visible = true; }
   });
   const layers = camera.layers.mask;
-  camera.layers.enableAll();
+  // Use the inset's actual layers. Its shadowless pass cannot compile the
+  // layer-2 ShadowNodeMaterial road catchers.
   scene.updateMatrixWorld(true);
   try {
     // the first real hit resizes the target; a 2 px one has the same formats, so the programs carry over

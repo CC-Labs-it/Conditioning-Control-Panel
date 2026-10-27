@@ -34,6 +34,14 @@ for (const kind of ['mainframe','keep','boudoir','goonworks']) test(kind+' actua
   assert.deepEqual(capture(),authored,'no song preserves the authored finish exactly');
   music.tileOn.value=1;u.energy.value=0;
   assert.deepEqual(capture(),authored,'real silence restores the exact authored finish');u.energy.value=.6;
+  if (kind !== 'mainframe') {
+    // Hold the measured bands steady to prove the floor itself answers the heard beat.
+    // Compare spatial paint across the playable road, not a decorative edge or one bright pixel.
+    music.tileBeat.value=0; const onBeat=capture(); music.tileBeat.value=.5; const between=capture();
+    const vivid=onBeat.filter((v,j)=>Math.abs(v-between[j])>.04).length/onBeat.length;
+    assert.ok(vivid>.35, kind+' beat changes broad floor coverage: '+vivid);
+    music.tileBeat.value=0;
+  }
   const phrases=[0,8,16].map(bar=>{music.tileBar.value=bar;return capture()});
   for(const colour of phrases.flat())assert.ok(Number.isFinite(colour)&&colour>=0&&colour<=1,'bounded finite linear colour');
   for(let i=1;i<phrases.length;i++)assert.ok(phrases[i].some((v,j)=>Math.abs(v-phrases[0][j])>.04),'phrase changes the visible spatial composition');

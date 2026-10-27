@@ -43,13 +43,18 @@ export function keepMusicFloor({ p, base, seam, reactive: u, music }) {
   const choose = n => select(n.lessThan(.5), procession, select(n.lessThan(1.5), steps, woven));
   const pattern = mix(choose(mode), choose(mod(mode.add(1), 3)), smoothstep(.75, 1, fract(phrase)));
   const tintPhase = sin(column.mul(.63).add(row.mul(.47)).sub(bar.mul(TAU / 8))).mul(.5).add(.5);
-  const plum = vec3(.36, .045, .42), rose = vec3(.68, .10, .25), brass = vec3(.66, .32, .075);
-  const tint = mix(mix(plum, rose, tintPhase), brass, note.mul(.42).add(u.treble.mul(.12)).clamp(0, .62));
+  const plum = vec3(.43, .025, .59), rose = vec3(.86, .045, .27), brass = vec3(.86, .39, .035);
+  const tintBase = mix(mix(plum, rose, tintPhase), brass, note.mul(.42).add(u.treble.mul(.12)).clamp(0, .62));
+  // The slate itself becomes a tiled equalizer: neighbouring rows answer in gold and jade.
+  // Keep joints dark and fixed so the real road silhouette stays readable.
+  const answer = cos(music.tileBeat.mul(TAU).sub(row.mul(.78)).add(column.mul(1.1))).mul(.5).add(.5);
+  const beatTint = mix(brass, vec3(.025, .62, .43), answer);
+  const tint = mix(tintBase, beatTint, float(1).sub(gentle).mul(.62));
   const distance = one(smoothstep(4, 12, max(fwidth(p.x), fwidth(p.y))));
-  const centre = smoothstep(.7, 3, abs(tileX)).mul(.45).add(.55);
+  const centre = smoothstep(.7, 3, abs(tileX)).mul(.2).add(.8);
   const active = music.tileOn.mul(mix(u.energy.mul(4).clamp(0, 1), u.energy, gentle))
     .mul(mix(float(1), float(.32), gentle));
-  const fill = pattern.mul(note.mul(.65).add(.6)).mul(.83).clamp(0, .86).mul(distance).mul(centre).mul(one(seam.mul(.96)));
+  const fill = pattern.mul(note.mul(.65).add(.6)).mul(1.1).add(.16).clamp(0, .94).mul(distance).mul(centre).mul(one(seam.mul(.96)));
   // Apply energy once, after the composition, so quiet and Gentle onset retain their smooth envelope.
   return mix(base, mix(base, base.mul(.32).add(tint), fill), active);
 }

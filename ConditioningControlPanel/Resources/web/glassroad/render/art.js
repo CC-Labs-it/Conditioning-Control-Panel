@@ -10,6 +10,7 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { Q } from './quality.js';
 import { attachVertexShade } from './vertexShade.js';
 import { MATERIAL_DETAIL_IDS, materialDetailId } from './materialDetailMath.js';
+import { CHESS_TRAP_IDS } from './chessTrapIds.js';
 import { keepArtPlan } from './keepTheme.js';
 
 const BASE = new URL('../art/', import.meta.url);
@@ -71,7 +72,7 @@ function artPlan(want, trackId, materialTier) {
   const plan = trackId === 'keep' ? keepArtPlan(want, materialTier) : { ids: want, aliases: trackId === 'goonworks' ? { 'glide-keep-beanie': 'glide-threshold-beanie' } : {} };
   const waterIds = ['water-normal', 'water-foam-mask', 'waterfall-sheet', 'waterfall-phase-mask'].map(id => id + (materialTier === 'phone' ? '-phone' : ''));
   return { aliases: plan.aliases, requested: [...new Set(trackId === 'shared' ? plan.ids
-    : [...plan.ids, ...waterIds, ...MATERIAL_DETAIL_IDS.map(id => materialDetailId(id, materialTier))])] };
+    : [...plan.ids, ...CHESS_TRAP_IDS, ...waterIds, ...MATERIAL_DETAIL_IDS.map(id => materialDetailId(id, materialTier))])] };
 }
 
 /** Renderer-local public art only. Acquire the next course before releasing the old course lease.
