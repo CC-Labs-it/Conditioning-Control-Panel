@@ -130,7 +130,7 @@ export function goonworksWorldPlan(track){
       // The shell is a single swept mesh. These small fixtures sit entirely above the driving line.
       for(const side of[-1,1])local('rabbit-ceiling-conduit','white',f,side*5,44,0,[1.8,depth+1,1.8],{shape:'cylinder',basis:[f.b,f.t,f.n]});
       if(i%2===0)screen('rabbit-screen-'+i,s,1,28,10,8,-6);
-      particles.push({p:point(f,0,7),spread:f.w*.35,phase:i});
+      // The enclosed tube stays clear of floating white sparkles and bubble rings.
     }
   }
   // Dense shoulder scenery changes silhouette at each district, with no common foundation.

@@ -6,9 +6,27 @@ const hooks=registerHooks({resolve(specifier,context,next){
   const path=files[specifier]||(specifier.startsWith('three/addons/')?specifier.slice(6):null);
   return path?{url:new URL('../vendor/three/'+path,import.meta.url).href,shortCircuit:true}:next(specifier,context);
 }});
-const {warmAll,WARM}=await import('../render/renderer.js');
+const {warmAll,warmInset,WARM}=await import('../render/renderer.js');
 const {Scene,Group,LOD,Mesh,InstancedMesh,BoxGeometry,MeshBasicNodeMaterial,PerspectiveCamera}=await import('three/webgpu');
 hooks.deregister();
+
+test('shadowless hit-camera warm retains its real layers and restores renderer switches',async()=>{
+  const scene=new Scene(),camera=new PerspectiveCamera(),geometry=new BoxGeometry();
+  const road=new Mesh(geometry,new MeshBasicNodeMaterial()),catcher=new Mesh(geometry,new MeshBasicNodeMaterial());
+  catcher.layers.set(2);catcher.visible=false;scene.add(road,catcher);
+  const original={name:'main'},inset={name:'inset'};let target=original,mrt='main',compiled=0;
+  const three={shadowMap:{enabled:true},autoClear:false,getRenderTarget:()=>target,getMRT:()=>mrt,
+    setRenderTarget:value=>{target=value;},setMRT:value=>{mrt=value;},clear(){},
+    async compileAsync(){
+      assert.equal(target,inset);assert.equal(this.shadowMap.enabled,false);assert.equal(mrt,null);
+      assert.ok(road.layers.test(camera.layers));assert.equal(catcher.layers.test(camera.layers),false);
+      compiled++;
+    }};
+  await warmInset(three,{inset:{target:inset}},scene,camera);
+  assert.equal(compiled,1);assert.equal(camera.layers.mask,1);assert.equal(catcher.visible,false);
+  assert.equal(target,original);assert.equal(mrt,'main');assert.equal(three.shadowMap.enabled,true);assert.equal(three.autoClear,false);
+  geometry.dispose();road.material.dispose();catcher.material.dispose();
+});
 
 test('larger WebGPU warm batches keep every render variant and restore hidden pools, materials and layers',async()=>{
   const results={};
