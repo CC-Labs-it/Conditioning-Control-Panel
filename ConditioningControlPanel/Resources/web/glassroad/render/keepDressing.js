@@ -1,10 +1,19 @@
 /* Accepted Keep assets, placed before shader warmup. All colour is supplied by the host. */
 import { Group, Matrix4, Vector3, Color } from 'three/webgpu';
-import { vec3, texture, uv, vec2, mix, step, attribute, float, smoothstep, normalWorld, positionWorld, cameraPosition, normalize, dot, sin, cos, fwidth } from 'three/tsl';
+import { vec3, texture, uv, vec2, mix, step, attribute, float, smoothstep, normalWorld, positionWorld, cameraPosition, normalize, dot, sin, cos, fwidth, fract, abs, min, max } from 'three/tsl';
 import { getKeepLayout } from '../track/keep-layout.js';
 import { createSoftMaterial } from './materials/colossus.js';
 import { buildKeepFortress, keepStoneMaterial } from './keepFortress.js';
 import { keepMusicFloor } from './materials/keepMusicFloor.js';
+
+/** Musical mortar follows the real 2/4/4/2 m slabs, independent of the artwork's broad grey relief. */
+export function keepMusicSeam(p) {
+  const x = fract(p.x.div(12)).mul(12), y = fract(p.y.div(8).add(step(6, x).mul(.5)));
+  const dx = min(min(x, float(12).sub(x)), min(abs(x.sub(2)), min(abs(x.sub(6)), abs(x.sub(10)))));
+  const dy = min(y, float(1).sub(y)).mul(8), distance = min(dx, dy);
+  const width = max(fwidth(distance).mul(1.2), .07);
+  return float(1).sub(smoothstep(width.mul(.4), width, distance)).mul(float(.07).div(width));
+}
 
 export function applyKeepRoad(road, art) {
   const map = art?.tex('road-bands-mask');
@@ -18,7 +27,7 @@ export function applyKeepRoad(road, art) {
   const slate = sin(slatePhase).mul(.055).mul(slateDetail).add(1);
   const floor = mix(stone.colorNode.mul(slate), vec3(.006, .002, .009), cut.mul(.78)).add(original.mul(.02))
     .add(vec3(.8, .035, .31).mul(bevel).mul(road.uniforms.contrast).mul(.17));
-  const litFloor = keepMusicFloor({ p: uv(), base: floor, seam: cut, reactive: road.uniforms.reactive, music: road.uniforms.music });
+  const litFloor = keepMusicFloor({ p: uv(), base: floor, seam: keepMusicSeam(uv()), reactive: road.uniforms.reactive, music: road.uniforms.music });
   road.material.colorNode = mix(litFloor, original, step(2.5, attribute('surface', 'float')));
   road.material.color.copy(stone.color); road.material.transparent = false; road.material.opacity = 1;
   stone.dispose();
