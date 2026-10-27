@@ -15,7 +15,7 @@
  */
 import {
   Mesh, InstancedMesh, PlaneGeometry, BufferGeometry, BufferAttribute, Object3D, Quaternion, Vector3,
-  DirectionalLight, MeshBasicNodeMaterial, ShadowNodeMaterial, VSMShadowMap, Color, FrontSide,
+  DirectionalLight, MeshBasicNodeMaterial, ShadowNodeMaterial, VSMShadowMap, Color, FrontSide, ShadowNode,
 } from 'three/webgpu';
 import { uv, vec3, float, smoothstep, length, uniform, vertexColor } from 'three/tsl';
 import { LOOK } from './look.js';
@@ -83,6 +83,30 @@ function castFrom(root, on = true, minR = 0) {
  * of the registered shadow cameras (every other pass calls the original method, no wrapper in between).
  */
 const PROJECTION = new WeakMap();
+
+/**
+ * No shadow map renders while the renderer's shadows are switched off (FF60 shadows lane, Threshold 3 s stall).
+ * The hit cam inset (renderer.js withInsetTarget) and the water probe captures (waterReflections.js withCapture)
+ * draw the course with renderer.shadowMap.enabled = false. r186's ShadowNode.updateBefore does not check that
+ * switch: a camera it has not seen this frame (the inset camera) re-renders the whole shadow map and its VSM blur
+ * under the switched-off state, whose render objects are other variants. The first hit cam of a race then linked
+ * every caster's shadow program and VSMVertical again (55 links, ~3 s in Firefox), and every inset frame after
+ * that paid a second shadow pass. Off means off: the map keeps what the course view last drew.
+ */
+export function skipShadowsWhileDisabled(Node = ShadowNode) {
+  const proto = Node && Node.prototype;
+  if (!proto || typeof proto.updateBefore !== 'function' || proto.updateBefore._glassroadSkipsDisabled) return false;
+  const stock = proto.updateBefore;
+  const updateBefore = function (frame) {
+    const r = frame && frame.renderer;
+    if (r && r.shadowMap && r.shadowMap.enabled === false) return;
+    return stock.call(this, frame);
+  };
+  updateBefore._glassroadSkipsDisabled = true;
+  proto.updateBefore = updateBefore;
+  return true;
+}
+skipShadowsWhileDisabled();
 export function shadowProjectionSkips(o) {
   return !o.castShadow && !o.receiveShadow && !o.isBundleGroup && (o.isMesh === true || o.isLine === true || o.isPoints === true || o.isSprite === true);
 }

@@ -77,3 +77,18 @@ test('the filter runs only for registered shadow cameras and steps over pruned s
   rec.cameras.delete(shadowCam);
   assert.ok(three.render(scene, shadowCam).includes('plain'), 'an unregistered camera gets the stock projection');
 });
+
+test('a shadow map never renders while the renderer has shadows switched off (hit cam inset, water probes)', () => {
+  assert.equal(T.ShadowNode.prototype.updateBefore._glassroadSkipsDisabled, true, 'installed when shadows.js loads');
+  assert.equal(S.skipShadowsWhileDisabled(), false, 'installed once');
+  // a stand-in class with the stock method: the patch forwards only while shadowMap.enabled is on
+  let calls = 0;
+  class Stand { updateBefore() { calls++; } }
+  assert.equal(S.skipShadowsWhileDisabled(Stand), true);
+  const node = new Stand(), renderer = { shadowMap: { enabled: false } };
+  node.updateBefore({ renderer });
+  assert.equal(calls, 0, 'the inset and probe captures switch shadows off: no second shadow pass, no relinks');
+  renderer.shadowMap.enabled = true;
+  node.updateBefore({ renderer });
+  assert.equal(calls, 1);
+});
