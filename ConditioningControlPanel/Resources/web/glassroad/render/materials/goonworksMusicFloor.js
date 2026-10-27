@@ -54,8 +54,7 @@ export function goonworksMusicFloor({ p, base, top, edge, half, pink, accent, re
   // A broad travelling colour answer carries the beat even between the equalizer bars.
   const answer = mix(floorWave(beat.sub(p.y.div(48)).add(normalized.mul(.5))), float(.5), gentle);
   const hot = mix(pink, vec3(.94, .025, .36), .65);
-  const tint = mix(hot, cyan, mix(hue, answer, float(1).sub(gentle).mul(.72)))
-    .mul(.96).add(vec3(.015, .01, .015));
+  const tint = mix(hot, cyan, mix(hue, answer, float(1).sub(gentle).mul(.72)));
   const ink = mix(vec3(.055, .012, .075), accent.mul(.18), .35);
   const colourBed = mix(base, tint, float(1).sub(gentle).mul(.28));
   const paint = mix(mix(colourBed, ink, bed.mul(.55)), tint, shape.mul(.98));

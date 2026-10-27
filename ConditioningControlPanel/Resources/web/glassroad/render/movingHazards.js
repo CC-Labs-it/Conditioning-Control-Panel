@@ -66,7 +66,7 @@ export function createMovingHazardView(scene, track, pal, art = null) {
     light = part(entry, 'bridge-clearance-signal', [5, .35, .5], [0, 4, 0], 4);
     for (const x of [-1, 1]) part(entry, 'bridge-signal-post', [.3, 4, .3], [x * 3.4, 2, 0], 1);
   }
-  // All machinery shares one cube and a handful of instanced draws, including moving parts.
+  // Housings, rods and bridges share cube batches; chess sculptures borrow the art lease.
   const green = new Color('#62db94'), amber = new Color('#e6b464');
   const batches = materials.map((material, index) => {
     const sources = []; group.traverse(o => { if (o.isMesh && o.geometry === box && o.material === material) sources.push(o); });

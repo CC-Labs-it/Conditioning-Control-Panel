@@ -1,4 +1,4 @@
-/* Sculpted powder presses, sweeping mascara brushes and clocked satin conveyor lanes. */
+/* Staggered chess thumpers, sweeping mascara brushes and clocked satin conveyor lanes. */
 import { Group, Mesh, InstancedMesh, BoxGeometry, SphereGeometry, CylinderGeometry, TorusGeometry, BufferGeometry, Float32BufferAttribute,
   PlaneGeometry, IcosahedronGeometry, MeshBasicNodeMaterial, Matrix4, Vector3, Quaternion, Color, DoubleSide } from 'three/webgpu';
 import { vec3, uniform, normalize, normalWorld, dot, clamp } from 'three/tsl';
