@@ -33,11 +33,114 @@ const UPV = new Vector3(0, 1, 0), NV = new Vector3(), QT = new Quaternion();
 // one query record for the blobs (perf, polish 6: a fresh record per kart per frame was steady race garbage)
 const QO = makeQuery();
 
-/** Opaque meshes under root cast (tags, rings and glows stay out of the map). */
-function castFrom(root, on = true) {
+/**
+ * Kart parts smaller than this (bounding radius in metres, scales up to the kart root included) leave the map.
+ * The map is VSM with radius 20 over 2048 texels of a 190 m box: a 40-texel (3.7 m) blur, and r186's light-bleed
+ * cut (lit = (p - 0.3) / 0.65) drops any shadow covering under 5% of that kernel (about 0.68 m2) to nothing. A part
+ * this small (at most 0.28 m2 in silhouette) casts nothing on its own, and on a kart it sits inside the body's
+ * own shadow; at 0.3 m the cut keeps every shell, seat and EMI body, and takes the cups' rims, the drive's small
+ * mechanism pieces, the hydrofoils and caps. FF60 shadows lane: 20-29 shadow draws a frame with eight karts.
+ */
+export const KART_CAST_MIN_M = 0.3;
+
+/** Bounding radius of mesh o in root's space (its own and its ancestors' scales up to and including root). */
+export function castRadius(o, root) {
+  const g = o.geometry;
+  if (!g) return Infinity;
+  if (!g.boundingSphere) g.computeBoundingSphere();
+  if (!g.boundingSphere || !(g.boundingSphere.radius >= 0)) return Infinity;
+  let k = 1;
+  for (let p = o; p; p = p.parent) {
+    k *= Math.max(Math.abs(p.scale.x), Math.abs(p.scale.y), Math.abs(p.scale.z));
+    if (p === root) break;
+  }
+  return g.boundingSphere.radius * k;
+}
+
+/** Turn castShadow off on root's plain meshes smaller than minR (never turns one on). */
+export function trimSmallCasters(root, minR) {
+  if (!root) return;
+  root.traverse((o) => { if (o.isMesh && o.castShadow === true && !o.isInstancedMesh && castRadius(o, root) < minR) o.castShadow = false; });
+}
+
+/** Opaque meshes under root cast (tags, rings and glows stay out of the map); minR: smaller parts never cast. */
+function castFrom(root, on = true, minR = 0) {
   if (!root) return;
   // userData.noCast: outline hulls and glows (the hero props) never cast
-  root.traverse((o) => { if (o.isMesh && !(o.material && o.material.transparent)) o.castShadow = on && !o.userData.noCast; });
+  root.traverse((o) => {
+    if (!o.isMesh || (o.material && o.material.transparent)) return;
+    o.castShadow = on && !o.userData.noCast && !(minR > 0 && !o.isInstancedMesh && castRadius(o, root) < minR);
+  });
+}
+
+/**
+ * Shadow-pass projection filter (FF60 shadows lane). r186 projects the whole scene for the shadow camera like a
+ * normal view: every visible mesh inside the 190 m box is frustum tested, depth-projected, pushed and sorted, and
+ * only then does the shadow render-object function drop the ones that neither cast nor (VSM) receive. In Firefox
+ * that bookkeeping for hundreds of non-casting meshes cost about as much as the casters' draws. The filter skips
+ * such a mesh's own projection (its children are still walked), which is exactly the set the shadow pass would
+ * have rejected, so the map is unchanged. Installed once per renderer; active only while that renderer draws one
+ * of the registered shadow cameras (every other pass calls the original method, no wrapper in between).
+ */
+const PROJECTION = new WeakMap();
+export function shadowProjectionSkips(o) {
+  return !o.castShadow && !o.receiveShadow && !o.isBundleGroup && (o.isMesh === true || o.isLine === true || o.isPoints === true || o.isSprite === true);
+}
+export function installShadowProjection(three) {
+  if (!three || typeof three.render !== 'function' || typeof three._projectObject !== 'function') return null;
+  let rec = PROJECTION.get(three);
+  if (rec) return rec;
+  const original = three._projectObject, render = three.render;
+  const cameras = new Set();
+  function shadowProject(o, camera, groupOrder, list, clip) {
+    if (o.visible === false || o[PRUNE] === rec.epoch) return;
+    if (shadowProjectionSkips(o)) {
+      const ch = o.children;
+      for (let i = 0, n = ch.length; i < n; i++) this._projectObject(ch[i], camera, groupOrder, list, clip);
+      return;
+    }
+    original.call(this, o, camera, groupOrder, list, clip);
+  }
+  function filteredRender(scene, camera) {
+    if (!cameras.has(camera)) return render.apply(this, arguments);
+    this._projectObject = shadowProject;
+    try { return render.apply(this, arguments); } finally { this._projectObject = original; }
+  }
+  three._projectObject = original;   // an own property from the start, so the swap above never changes the shape
+  three.render = filteredRender;
+  rec = { cameras, three, epoch: 0, refresh(scene) { rec.epoch = ++EPOCH; markShadowPrune(scene, rec.epoch); } };
+  PROJECTION.set(three, rec);
+  return rec;
+}
+
+/**
+ * Subtree pruning for the same filter: a subtree with no caster, no (VSM) receiver, no light, LOD or bundle
+ * anywhere in it (hidden parts included) draws nothing into the map, so the shadow walk can step over it whole.
+ * markShadowPrune stamps such subtree roots (with children) with `epoch`; buildShadows re-marks the course every
+ * PRUNE_EVERY frames, so a stamp is at most that old (castShadow flags are set when a course is built; only the
+ * karts change theirs later, and they always cast). Returns the number of stamped roots.
+ */
+const PRUNE = '_glassroadShadowPrune';
+let EPOCH = 0;
+export const PRUNE_EVERY = 20;
+function keepsShadow(o) {
+  return o.castShadow === true || o.receiveShadow === true || o.isLight === true || o.isLOD === true || o.isBundleGroup === true || o.isScene === true;
+}
+export function markShadowPrune(root, epoch) {
+  let stamped = 0;
+  // every irrelevant subtree root with children is stamped (inner ones too: the walk stops at the highest)
+  const rel = (o) => {
+    let keep = keepsShadow(o);
+    const ch = o.children;
+    for (let i = 0; i < ch.length; i++) {
+      const c = ch[i];
+      if (rel(c)) keep = true;
+      else if (c.children.length) { c[PRUNE] = epoch; stamped++; }
+    }
+    return keep;
+  };
+  if (root) rel(root);
+  return stamped;
 }
 
 function blobMaterial(colour) {
@@ -119,8 +222,17 @@ export function buildShadows(renderer, scene, light, Q, opts = {}) {
     lamp.shadow.radius = W.shadowRadius; lamp.shadow.blurSamples = W.shadowBlurSamples; lamp.shadow.normalBias = W.shadowNormalBias;
     lamp.shadow.bias = Math.min(W.shadowBias, -D.biasM / range);
   }
+  // ?shadowcull=0 (dev A/B): the stock r186 shadow pass, every kart part casting
+  const cull = !/[?&]shadowcull=0(?:&|$)/.test((globalThis.location && globalThis.location.search) || '');
+  const projection = cull ? installShadowProjection(three) : null;
+  if (projection) projection.cameras.add(lamp.shadow.camera);
   for (const c of opts.casters || []) castFrom(c);
-  for (const k of karts) castFrom(k);
+  const kartMin = cull ? KART_CAST_MIN_M : 0;
+  for (const k of karts) castFrom(k, true, kartMin);
+  // parts a kart grows later (vehicle rebinds: vehicleLife's mechanism pieces copy the body's castShadow) are
+  // trimmed by the same rule a few times a second; this pass only ever turns a small part OFF
+  let trimTick = 0;
+  const trimKarts = () => { if (kartMin > 0) for (const k of karts) trimSmallCasters(k, kartMin); };
   const scatterCast = W.scatterCasts && Q.name === 'high';
   for (const c of opts.scatterCasters || []) castFrom(c, scatterCast);
 
@@ -173,6 +285,7 @@ export function buildShadows(renderer, scene, light, Q, opts = {}) {
   function update(cameraPos, forward = null) {
     if (disposed || mode === 'off') return;
     if (mode === 'map') {
+      if (++trimTick >= PRUNE_EVERY) { trimTick = 0; trimKarts(); if (projection) projection.refresh(scene); }
       const c = Array.isArray(cameraPos) ? cameraPos : [cameraPos.x, cameraPos.y, cameraPos.z];
       let centre = c;
       if (forward) {
@@ -219,6 +332,7 @@ export function buildShadows(renderer, scene, light, Q, opts = {}) {
     dispose() {
       if (disposed) return; disposed = true; mode = 'off';
       lamp.castShadow = false;
+      if (projection) projection.cameras.delete(lamp.shadow.camera);
       for (const o of owned) { if (o.parent) o.parent.remove(o); }
       if (addedTarget) lamp.target.removeFromParent();
       // The course lamp's dispose event releases r186 AnalyticLightNode's ShadowNode,
