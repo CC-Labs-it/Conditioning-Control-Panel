@@ -11,7 +11,7 @@ registerHooks({ resolve(s, c, next) {
 const { Matrix4, Vector3, Quaternion, Euler } = await import('three/webgpu');
 const { composeInto, matrixInto } = await import('../render/instanceWrite.js');
 const { skipUnchangedInstanceUploads } = await import('../render/uniformUploads.js');
-const { trackSceneResources } = await import('../render/sceneResources.js');
+const { trackSceneResources, releaseSceneResources, disposeSceneResources } = await import('../render/sceneResources.js');
 
 const here = (p) => new URL(p, import.meta.url);
 
@@ -70,7 +70,7 @@ test('moving machinery instances equal their source world matrices while unmoved
   assert.deepEqual(batches.map(b => b.instanceMatrix.version), versions, 'a held pose uploads nothing');
 });
 
-test('WebGL instance matrices in a uniform buffer are re-sent only when they change', () => {
+test('WebGL uniform buffers are re-sent only when their bytes or their GL buffer change', () => {
   const sent = [], gpu = new Map();
   const backend = { isWebGLBackend: true, get(b) { if (!gpu.has(b)) gpu.set(b, { bufferGPU: {} }); return gpu.get(b); }, updateBinding(b) { sent.push(b); } };
   const bindings = { updateForRender(ro) { for (const b of ro.list) backend.updateBinding(b); } };
@@ -85,10 +85,16 @@ test('WebGL instance matrices in a uniform buffer are re-sent only when they cha
   const draw = () => bindings.updateForRender({ object: mesh, list: [ubo, bones, group] });
   draw(); assert.deepEqual(sent, [ubo, bones, group], 'first draw sends all');
   sent.length = 0; draw(); assert.deepEqual(sent, [group], 'unchanged instance matrices and bones skip; groups stay with three');
-  matrices.version++; sent.length = 0; draw(); assert.deepEqual(sent, [group], 'needsUpdate with the same bytes skips (bones compare bitwise too)');
+  matrices.version++; sent.length = 0; draw(); assert.deepEqual(sent, [group], 'needsUpdate with the same bytes skips');
   matrices.array[5] = 2; matrices.version++; sent.length = 0; draw(); assert.deepEqual(sent, [ubo, group], 'changed matrices re-send');
+  bones.buffer[3] = -0; sent.length = 0; draw(); assert.deepEqual(sent, [bones, group], 'compared bitwise: -0 is not 0');
+  bones.buffer[3] = NaN; sent.length = 0; draw(); assert.deepEqual(sent, [bones, group], 'a new NaN re-sends');
+  sent.length = 0; draw(); assert.deepEqual(sent, [group], 'the same NaN bytes skip');
   gpu.get(ubo).bufferGPU = {}; sent.length = 0; draw(); assert.deepEqual(sent, [ubo, group], 'a new GL buffer re-sends');
+  bones.buffer = new Float32Array(16); sent.length = 0; draw(); assert.deepEqual(sent, [bones, group], 'a new array re-sends');
   sent.length = 0; backend.updateBinding(ubo); assert.deepEqual(sent, [], 'outside a render object the bytes decide too');
+  const ranged = { isNodeUniformBuffer: true, buffer: new Float32Array(8), updateRanges: [{ start: 0, count: 4 }] };
+  sent.length = 0; backend.updateBinding(ranged); backend.updateBinding(ranged); assert.deepEqual(sent, [ranged, ranged], 'ranged uploads stay with three');
   assert.equal(skipUnchangedInstanceUploads({ backend: { isWebGLBackend: false }, _bindings: bindings }), false, 'WebGPU untouched');
 });
 
@@ -106,6 +112,14 @@ test('scene resource tracking folds each render variant once until its attribute
   row.attributes = [own, nodeOnly, {}];
   geometries.updateAttributes(row);
   assert.equal(reads, 2, 'a rebuilt list is folded again');
+  geometries.updateAttributes(row);
+  assert.equal(reads, 2);
+  releaseSceneResources({ ...three, _objects: { _renderObjects: new Set() }, _attributes: new Map() }, {});
+  geometries.updateAttributes(row);
+  assert.equal(reads, 2, 'a release re-checks the record (the record survives: its scene was not released)');
+  disposeSceneResources(three); trackSceneResources(three);
+  geometries.updateAttributes(row);
+  assert.equal(reads, 3, 'a fresh history folds again');
 });
 
 test('the boot debug record never serialises the garage scene', () => {

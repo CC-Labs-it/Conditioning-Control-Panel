@@ -10,8 +10,12 @@
  *    unchanged pose, or several draws of one kart's skeleton, no longer pay a bufferData each (Edge census,
  *    GOONWORKS 2026-10-27: ~70 identical bufferData calls and ~270 KB a frame).
  * The comparison is bitwise (a Uint32 view), so the GPU holds exactly the same bytes either way.
- * Uniform groups with update ranges (the per-object and shared groups) take three's own upload path.
+ * Uniform groups with update ranges (the per-object and shared groups) take three's own upload path; their value
+ * check runs through render/uniformGroups.js, and NodeFrame.updateNode through render/nodeUpdates.js (both
+ * installed from here, WebGL2 only).
  * Keep aligned with the vendored renderer (Bindings.updateForRender -> backend.updateBinding) when upgrading. */
+import { fastUniformGroupUpdates, cacheGroupVersions } from './uniformGroups.js';
+import { installNodeUpdates } from './nodeUpdates.js';
 
 const patched = new WeakSet();
 
@@ -26,6 +30,9 @@ export function skipUnchangedInstanceUploads(three) {
   if (!backend || backend.isWebGLBackend !== true || !bindings || patched.has(three)) return false;
   if (typeof backend.updateBinding !== 'function' || typeof bindings.updateForRender !== 'function') return false;
   patched.add(three);
+  fastUniformGroupUpdates(three);            // the uniform groups' value check without per-uniform dispatch
+  cacheGroupVersions(three);                 // shared groups' version check without a ChainMap lookup per draw
+  installNodeUpdates(three);                    // shared node refresh without a WeakMap lookup per draw (nodeUpdates.js)
   let current = null;
   // binding -> { gpu, version, array, words, copy }: what it last uploaded (copy holds the sent words)
   const sent = new WeakMap();
