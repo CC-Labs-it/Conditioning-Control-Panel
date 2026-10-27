@@ -13,10 +13,10 @@ import { createHelix } from './helix.js';
 export const MUSIC_FLASH = Object.freeze({ shatter: 0.55, wave: 0.3 });
 
 /** @returns {{ helix: object|null, frame: object, setSong(song: object|null): void, update(song: object|null, tS: number, ctx: object): object, dispose(): void }} */
-export function createMusicRoad({ road, rails = null, track, pal, photosafe = null, scene = null, art = null }) {
+export function createMusicRoad({ road, rails = null, track, pal, photosafe = null, scene = null, art = null, helixQuietRange = null }) {
   const mf = createMusicFrame();
   let helix = null;
-  try { helix = createHelix(track, pal, undefined, art); if (scene) scene.add(helix.object); } catch (e) { console.warn('[glassroad/music] no helix: ' + (e && e.message)); }
+  try { helix = createHelix(track, pal, undefined, art, helixQuietRange); if (scene) scene.add(helix.object); } catch (e) { console.warn('[glassroad/music] no helix: ' + (e && e.message)); }
   let song = null, energy = null, granted = { shatter: -1, wave: -1 }, flashOk = { shatter: false, wave: false };
   const mu = road.uniforms.music;
 

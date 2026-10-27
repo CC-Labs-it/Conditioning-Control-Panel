@@ -383,7 +383,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   // the music road (handoff-1022/MUSIC-ROAD-BRIEF.md): the road, rails and helix answer the song; the
   // player's own word bubbles ride the road. No song: both rest and the race looks as before
   let musicRoad = null, wordVis = null;
-  try { musicRoad = createMusicRoad({ road, rails, track, pal, photosafe, scene, art }); } catch (e) { console.warn('[glassroad/world] music road failed: ' + (e && e.message)); }
+  try { musicRoad = createMusicRoad({ road, rails, track, pal, photosafe, scene, art,
+    helixQuietRange: goonworks?.plan.layout.tube }); } catch (e) { console.warn('[glassroad/world] music road failed: ' + (e && e.message)); }
   try { wordVis = createWordBubbles(scene, { feel, photosafe, track, pal }); } catch (e) { console.warn('[glassroad/world] word bubbles failed: ' + (e && e.message)); }
   // pass 4: the ROAD words painted on the track like road markings (render/roadWords.js, in the scene from boot for the warm)
   let roadWords = null;
