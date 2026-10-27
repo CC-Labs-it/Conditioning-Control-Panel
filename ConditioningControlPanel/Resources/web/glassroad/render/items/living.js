@@ -9,6 +9,7 @@
  */
 import { CanvasTexture, SRGBColorSpace } from 'three/webgpu';
 import { ITEMS } from '../../sim/itemTable.js';
+import { markRegion } from '../canvasRegions.js';
 
 const S = 256, C = 128, TAU = Math.PI * 2, GRID = 5;   // 5 x 5: 17 items + the box fit
 /** Atlas cells: the items (the toys kit after the first twelve), then the plain bubble used by boxes and pickups. */
@@ -32,7 +33,8 @@ const FILM = ['rgba(255,120,200,1)', 'rgba(120,220,255,0)', 'rgba(170,255,190,0.
 export function createLivingIcons({ px = 256, fps = 30 } = {}) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = px * GRID;
-  const ctx = canvas.getContext('2d');
+  const atlas = canvas.getContext('2d');
+  let ctx = atlas;                                  // the canvas being drawn: a cell's own while tick draws it
   const off = document.createElement('canvas'); off.width = off.height = S;
   const o = off.getContext('2d');
   const tex = new CanvasTexture(canvas);
@@ -44,7 +46,7 @@ export function createLivingIcons({ px = 256, fps = 30 } = {}) {
     img.src = new URL('../../' + file, import.meta.url).href;
     return e;
   });
-  const want = new Set(), still = new Uint8Array(CELLS.length);
+  const want = new Set(), still = new Uint8Array(CELLS.length), cells = new Array(CELLS.length).fill(null);
   let acc = 0;
 
   // the sprite's middle, redrawn moved: darken the still copy, add the moved one as light
@@ -142,12 +144,21 @@ export function createLivingIcons({ px = 256, fps = 30 } = {}) {
       for (const i of want) {
         const e = imgs[i];
         if (!e.ready) continue;
-        ctx.setTransform(k, 0, 0, k, (i % GRID) * px, Math.floor(i / GRID) * px);
+        // the cell is drawn in its own px x px canvas, then copied into the atlas: WebGL2 re-uploads just that cell
+        // (render/canvasRegions.js; a whole-atlas upload was ~1 ms a tick in Firefox), the atlas keeps every cell
+        // for a full upload (the first one, WebGPU)
+        const cell = cells[i] || (cells[i] = Object.assign(document.createElement('canvas'), { width: px, height: px }));
+        const x = (i % GRID) * px, y = Math.floor(i / GRID) * px;
+        ctx = cell.getContext('2d');
+        ctx.setTransform(k, 0, 0, k, 0, 0);
         ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
         ctx.clearRect(0, 0, S, S);
         ctx.save(); ctx.beginPath(); ctx.rect(0, 0, S, S); ctx.clip();
         try { draw(CELLS[i], e.img, t + i * 3.7, m, gentle || reducedMotion); } catch (_) { /* the still sprite stays */ }
         ctx.restore(); drew = true; still[i] = 1;
+        ctx = atlas;
+        atlas.clearRect(x, y, px, px); atlas.drawImage(cell, x, y);
+        markRegion(tex, x, y, cell);
       }
       want.clear();
       if (drew) tex.needsUpdate = true;

@@ -279,6 +279,9 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
   let song = null, run = null, cells = null, styleOf = null, keyOf = null, ready = false, rowPx = 0;
   const slotOf = new Map(), slotId = new Int32Array(P.slots).fill(-1), slotS = new Float64Array(P.slots), seen = new Uint8Array(P.slots);
   const slotLane = new Float64Array(P.slots).fill(NaN), slotScale = new Float64Array(P.slots);
+  // the footprint a slot's strip was last written with, and whether any of its vertices sits on the liquid:
+  // a strip whose footprint did not move is rewritten only while displaced water can lift it (perf, Firefox)
+  const slotW = new Float64Array(P.slots).fill(NaN), slotFoot = new Float64Array(P.slots).fill(NaN), slotWet = new Uint8Array(P.slots), wetOut = {};
   const fr = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0], w: 14 };
   const player = { s: 0, lat: 0, speedMps: 0 }, look = {}, fl = {};
   let dropIdx = -1, dropOk = false, staticDirty = false, lastSongS = NaN;
@@ -314,16 +317,22 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
     }
   }
 
-  /** The strip of one marking on the road: ROWS rows from track frames, lateral x, centred on s. */
-  function writeStrip(slot, view, laneX, scale) {
+  /** The strip of one marking on the road: ROWS rows from track frames, lateral x, centred on s.
+   *  false = the strip already sits there (same footprint, dry or still water): nothing was written. */
+  function writeStrip(slot, view, laneX, scale, force = true, waterMoves = false) {
     const c = cells.get(keyOf[view.id]), lenM = R.lenM, lap = track.lengthM;
     const footprint = letteringFootprint(track, view.s, laneX, c.wM * scale, lenM);
     const wM = footprint.width, lane = footprint.lane;
+    const same = slotS[slot] === view.s && slotW[slot] === wM && slotFoot[slot] === lane;
+    if (same && !force && !(waterMoves && slotWet[slot])) { slotLane[slot] = laneX; slotScale[slot] = scale; return false; }
+    const field = !same && waterVolume ? waterVolume.field : null;
+    if (!same) slotWet[slot] = 0;
     const P3 = a.position.array, N3 = a.normal.array, G4 = a.aGeo.array, seed = (view.id * 0.618034) % 1;
     for (let r = 0; r <= P.rows; r++) {
       const s = wrap(view.s - lenM / 2 + (lenM * r) / P.rows, lap);
       for (let col = 0; col <= P.cols; col++) {
         const x = lane + (col / P.cols - .5) * wM, v = slot * V + r * (P.cols + 1) + col;
+        if (field && !slotWet[slot] && field.sample(s, x, wetOut).wet) slotWet[slot] = 1;
         sample(s, x, fr);
         for (let j = 0; j < 3; j++) { P3[v * 3 + j] = fr.p[j] + fr.n[j] * P.liftM; N3[v * 3 + j] = fr.n[j]; }
         G4[v * 4] = wM; G4[v * 4 + 1] = lenM; G4[v * 4 + 2] = s; G4[v * 4 + 3] = seed;
@@ -331,11 +340,13 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
     }
     slotS[slot] = view.s;
     slotLane[slot] = laneX; slotScale[slot] = scale;
+    slotW[slot] = wM; slotFoot[slot] = lane;
+    return true;
   }
 
   function freeSlot(slot) {
     slotOf.delete(slotId[slot]); slotId[slot] = -1;
-    slotLane[slot] = NaN;
+    slotLane[slot] = NaN; slotW[slot] = NaN; slotFoot[slot] = NaN; slotWet[slot] = 0;
     for (let v = 0; v < V; v++) a.aState.array[(slot * V + v) * 4] = 0;
   }
 
@@ -369,7 +380,7 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
       } else {
         const lane = gentle ? slotLane[slot] : letteringLane(slotLane[slot], targetLane, dt);
         if (slotS[slot] !== v.s || lane !== slotLane[slot] || pose.scale !== slotScale[slot] || (waterVolume && !paused)) {
-          writeStrip(slot, v, lane, pose.scale); geoDirty = true;
+          if (writeStrip(slot, v, lane, pose.scale, false, !!waterVolume && !paused)) geoDirty = true;
         }
       }
       seen[slot] = 1;
