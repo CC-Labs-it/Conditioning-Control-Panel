@@ -1,3 +1,4 @@
+import { BOUDOIR_PRESS_REVISION } from '../track/boudoir-setpieces.js';
 import { AERIAL_REVISION } from '../track/aerial.js';
 import { BOOST_SAFETY_REVISION } from '../track/boostSafety.js';
 
@@ -15,5 +16,6 @@ export async function courseHash(trackJson, feelJson, runtimeCourse = null) {
  * gen-track-cards.mjs all call this, so a room card always matches a browser seat. */
 export function onlineCourseHash(trackJson, feelJson, track) {
   return courseHash(trackJson, feelJson, { aerialRevision: AERIAL_REVISION, aerials: track.aerials, moving: track.moving,
-    boostSafetyRevision: BOOST_SAFETY_REVISION, boosts: track.boosts });
+    boostSafetyRevision: BOOST_SAFETY_REVISION, boosts: track.boosts,
+    ...(track.id === 'boudoir' ? { boudoirPressRevision: BOUDOIR_PRESS_REVISION } : {}) });
 }

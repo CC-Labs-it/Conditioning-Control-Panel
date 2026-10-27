@@ -1,9 +1,10 @@
 import { Group, Mesh, InstancedMesh, Color, BoxGeometry, MeshBasicNodeMaterial, Matrix4, Vector3 } from 'three/webgpu';
 import { movingPoseAt, bridgePose, bridgeSlabX } from '../track/movingHazards.js';
 import { movingHazardColours, movingHazardFinish } from './movingHazardFinish.js';
+import { chessTrap, chessWobble } from './chessTrap.js';
 import { matrixInto } from './instanceWrite.js';
 
-export function createMovingHazardView(scene, track, pal) {
+export function createMovingHazardView(scene, track, pal, art = null) {
   const group = new Group(); group.name = 'moving-piston-traps'; scene.add(group);
   const colours = movingHazardColours(track.id, pal);
   const box = new BoxGeometry(1, 1, 1), materials = [
@@ -22,11 +23,14 @@ export function createMovingHazardView(scene, track, pal) {
     const basis = new Matrix4().makeBasis(new Vector3(...f.b), new Vector3(...f.n), new Vector3(...f.t).negate());
     g.quaternion.setFromRotationMatrix(basis); g.position.set(...f.p); group.add(g); return g;
   };
-  const traps = (track.moving?.traps || []).map(row => {
+  const traps = (track.moving?.traps || []).map((row, index) => {
     const root = frameGroup(row, row.id), anchor = row.side * (row.roadWidth / 2 + 1);
     part(root, 'piston-housing', [2.5, 4, row.len + 1], [anchor, 1.8, 0], 1);
     const head = new Group(); root.add(head);
     const slider = row.kind === 'slider';
+    const sculpture = chessTrap(art, index, [row.w, 3.2, row.len], row.side);
+    if (sculpture) head.add(sculpture);
+    if (!sculpture) {
     part(head, slider ? 'sliding-block' : 'crusher-head', [row.w, 3.2, row.len], [0, 1.6, 0], slider ? 5 : 0);
     // Recesses, seals and fasteners stay within the physical head footprint.
     for (const z of [-1, 1]) {
@@ -40,10 +44,11 @@ export function createMovingHazardView(scene, track, pal) {
         stripe.rotation.z = row.side * -.27;
       }
     }
+    }
     for (let i = 0; i < 4; i++) part(root, 'housing-vent', [2.1, .12, .10], [anchor, .9 + i * .45, -row.len / 2 - .51], 2);
     const rod = part(root, 'connected-piston-shaft', [1, .65, .65], [anchor, 1.6, 0], 2);
     const light = part(root, 'approach-warning', [row.w, .08, 1.3], [row.x - row.side * row.travelM, .065, -row.len / 2 - 5], 3);
-    return { row, anchor, head, rod, light };
+    return { row, anchor, head, rod, light, sculpture };
   });
   const bridge = track.moving?.bridge, fork = track.forks?.find(f => f.id === bridge?.forkId), slabs = [];
   let light = null;
@@ -87,9 +92,17 @@ export function createMovingHazardView(scene, track, pal) {
     b.signal = null;
   }
   let primed = false;
-  function update(timeS = 0) {
+  function update(timeS = 0, { gentle = false, paused = false } = {}) {
+    if (paused) return;
     for (const item of traps) {
       const p = movingPoseAt(track, item.row, timeS), headEdge = p.x + item.row.side * item.row.w / 2;
+      if (item.sculpture) {
+        if (timeS < item.lastTime || timeS - item.lastTime > .25) item.settleS = undefined;
+        else if (item.extension !== undefined && item.extension !== p.extension && (p.extension === 0 || p.extension === 1)) item.settleS = timeS;
+        item.sculpture.rotation.x = chessWobble(timeS - (item.settleS ?? Infinity), gentle);
+        item.sculpture.updateMatrix();
+        item.extension = p.extension; item.lastTime = timeS;
+      }
       item.head.position.x = p.x; item.rod.position.x = (item.anchor + headEdge) / 2;
       item.rod.scale.x = Math.max(.1, Math.abs(item.anchor - headEdge));
       // Permanent inlays show the strike zone without introducing beat-rate light flashes.

@@ -2,10 +2,11 @@
 import { Group, Mesh, InstancedMesh, BoxGeometry, SphereGeometry, CylinderGeometry, TorusGeometry, BufferGeometry, Float32BufferAttribute,
   PlaneGeometry, IcosahedronGeometry, MeshBasicNodeMaterial, Matrix4, Vector3, Quaternion, Color, DoubleSide } from 'three/webgpu';
 import { vec3, uniform, normalize, normalWorld, dot, clamp } from 'three/tsl';
-import { BOUDOIR_HAZARD as K, getBoudoirSetpieces, powderPressPhase as pressPose, mascaraHeads, mascaraPhase as brushPose, ribbonPhase as ribbonPose } from '../track/boudoir-setpieces.js';
+import { BOUDOIR_HAZARD as K, getBoudoirSetpieces, powderPressHeads, powderPressPhase as pressPose, mascaraHeads, mascaraPhase as brushPose, ribbonPhase as ribbonPose } from '../track/boudoir-setpieces.js';
 import { machineryBeatAt } from '../track/machineryBeat.js';
+import { chessTrap, chessWobble } from './chessTrap.js';
 import { LOOK } from './look.js';
-export function createBoudoirHazardView(scene, track) {
+export function createBoudoirHazardView(scene, track, art = null) {
   const timed = pose => (row, timeS) => pose(row, timeS, machineryBeatAt(track,timeS));
   const powderPressPhase = timed(pressPose), mascaraPhase = timed(brushPose), ribbonPhase = timed(ribbonPose);
   const plan = getBoudoirSetpieces(track), group = new Group(); group.name = 'boudoir-interactions'; scene.add(group);
@@ -33,12 +34,22 @@ export function createBoudoirHazardView(scene, track) {
     const entry = { row, holder, f, opacity, phase: null }; entries.push(entry); byId.set(row.id, entry); return entry;
   }
   for (const row of plan.presses) {
-    const entry = station(row), press = new Group(); press.name = 'powder-puff-moving'; entry.holder.add(press); entry.moving = press;
-    mesh(press, box, pink, [0, .5, 0], [14, 1, 8]);
-    mesh(press, sphere, cushion, [0, 1.65, 0], [7, 1.55, 4]);
-    mesh(press, box, satin, [0, 3.35, 0], [9, .7, 2.3]);
-    for (const side of [-1, 1]) mesh(press, sphere, pink, [side * 2.5, 3.9, 0], [2.8, 1.1, 1.8]);
-    mesh(entry.holder, cylinder, ink, [0, 13.6, 0], [.5, 5, .5]);
+    const entry = station(row); entry.pressHeads = [];
+    // The support spans the station once; each sculpture has its own shaft and floor warning.
+    entry.holder.children.find(o => o.material?.opacityNode === entry.opacity).visible = false;
+    for (const head of powderPressHeads(row)) {
+      const press = new Group(); press.name = head.id; press.position.x = head.x; entry.holder.add(press);
+      const sculpture = chessTrap(art, head.pressLane || 0, [head.w, head.heightM, head.depthM]);
+      if (sculpture) press.add(sculpture);
+      else mesh(press, box, pink, [0, head.heightM / 2, 0], [head.w, head.heightM, head.depthM]);
+      const rod = mesh(entry.holder, cylinder, gold, [head.x, 12, 0], [.18, 6, .18]);
+      const opacity = uniform(.04), material = new MeshBasicNodeMaterial({ color: '#ffd09c', transparent: true, depthWrite: false, side: DoubleSide });
+      material.opacityNode = opacity; materials.push(material);
+      const warning = mesh(entry.holder, plane, material, [head.x, .08, 0], [head.w, head.depthM + 2, 1]); warning.rotation.x = -Math.PI / 2;
+      entry.pressHeads.push({ row: head, moving: press, sculpture, rod, opacity, phase: null });
+      byId.set(head.id, entry);
+    }
+    entry.moving = entry.pressHeads[0].moving;
   }
   function brushHead(parent, head) {
     const brush = new Group(); brush.name = head.id + '-brush'; parent.add(brush);
@@ -124,11 +135,16 @@ export function createBoudoirHazardView(scene, track) {
     clock = Math.max(0, timeS);
     for (const entry of entries) {
       if (entry.row.kind === 'press') {
-        const p = powderPressPhase(entry.row, clock);
-        entry.moving.position.y = p.liftM;
-        entry.opacity.value = (.04 + p.opacity * .55) * (gentle ? .65 : 1);
-        if (active && p.phase === 'hold' && entry.phase !== 'hold') puff(entry, gentle ? 8 : 22);
-        entry.phase = p.phase;
+        for (const head of entry.pressHeads) {
+          const p = powderPressPhase(head.row, clock);
+          head.moving.position.y = p.liftM;
+          if (head.sculpture) head.sculpture.rotation.z = chessWobble(p.cycleS, gentle);
+          const top = p.liftM + head.row.heightM, ceiling = 15.5;
+          head.rod.position.y = (top + ceiling) / 2; head.rod.scale.y = Math.max(.1, ceiling - top);
+          head.opacity.value = (.04 + p.opacity * .55) * (gentle ? .65 : 1);
+          if (active && p.phase === 'hold' && head.phase !== 'hold') puff(entry, gentle ? 8 : 22, { x: head.row.x });
+          head.phase = p.phase;
+        }
       } else {
         let motion = 0;
         for (const head of entry.heads) {
@@ -158,7 +174,7 @@ export function createBoudoirHazardView(scene, track) {
       dust.setMatrixAt(i, M.compose(P, Q.identity(), Scale.setScalar(fade * (gentle ? .6 : 1))));
     }); dust.instanceMatrix.needsUpdate = true;
   }
-  function reset() { burst.length = 0; entries.forEach(e => { e.phase = null; });
+  function reset() { burst.length = 0; entries.forEach(e => { e.phase = null; e.pressHeads?.forEach(h => { h.phase = null; }); });
     belts.forEach(b => b.colour.value.set('#94e2c8')); dust.count = 0; update(0, { active: false }); }
   reset();
   return { group, plan, entries, belts, update, reset,
