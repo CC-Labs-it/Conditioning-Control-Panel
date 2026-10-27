@@ -156,12 +156,15 @@ export function createCardMedia(media, { bridge, origin = globalThis.location?.o
     if (!response.ok) throw Error('Card media unavailable');
   }) : null;
   const ready = local ? refresh() : Promise.resolve();
+  const flashable = () => order.map(key => entries.get(key)).filter(e => e?.el && live(e)
+    && e.el.readyState >= 2 && e.el.videoWidth > 0 && !e.el.error);
   return { apply, ready,
     sourceForFlash(seed = 0) {
-      const available = order.map(key => entries.get(key)).filter(e => e?.el && live(e)
-        && e.el.readyState >= 2 && e.el.videoWidth > 0 && !e.el.error);
+      const available = flashable();
       return available.length ? available[Math.abs(Math.trunc(seed)) % available.length].el : null;
     },
+    /** Distinct pictures a burst can draw from: the burst shows at most this many cards per hit. */
+    get flashCount() { return flashable().length; },
     dispose() {
     if (disposed) return;
     disposed = true; authority++; manifestController?.abort();

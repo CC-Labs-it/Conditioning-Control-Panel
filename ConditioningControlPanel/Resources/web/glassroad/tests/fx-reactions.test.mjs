@@ -25,9 +25,9 @@ function rig({ gentle = false } = {}) {
 }
 
 test('every CONTRACT event has exactly one fx registry entry and nothing else', () => {
-  // Thirty simulation events plus phrase-gate, press contact, word launch and rebound notifications.
+  // Thirty simulation events plus phrase-gate, press contact, trap tick, word launch and rebound notifications.
   const STONES = ['stone', 'void'];
-  assert.equal(EVENTS.length, 34, 'documented events');
+  assert.equal(EVENTS.length, 35, 'documented events');
   // B1: the registry may also hold CONTRACT-B1 events (its section 4), nothing else
   const b1 = readFileSync(new URL('../CONTRACT-B1.md', import.meta.url), 'utf8');
   const B1 = [...b1.slice(b1.indexOf('## 4. Events')).matchAll(/^\| `([a-z-]+)` \|/gm)].map((m) => m[1]);

@@ -536,6 +536,7 @@ async function boot(course, options, lifetime, isCurrent) {
     fade(s) { return this.on ? Math.max(1, gentle.fade(s)) : s; } };
   // The flash canvas is a plain page canvas (never a texture), so the web's display-only Scrolller stills may fill it (never its clips).
   const cueBurst = createFlashBurst({ source: seed => cardMedia?.sourceForFlash(seed) || scrolller?.stillFor(seed) || null,
+    pool: () => cardMedia?.flashCount || scrolller?.stillCount || 0,   // never the same picture twice in one burst
     photosafe, gentle: cueSafety });
   let cueRunSeen = null, cueRevision = -1;
   lifetime.defer(() => cueBurst.dispose());

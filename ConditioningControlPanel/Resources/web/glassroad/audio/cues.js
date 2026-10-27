@@ -10,6 +10,7 @@ import { SOUND, CHORDS, noiseBuffer } from './engine.js';
 import { ladderSemis } from './mix.js';
 import { playPhraseGate } from './phraseGates.js';
 import { playPressThud } from './pressThud.js';
+import { trapTickGain } from '../render/trapTelegraph.js';
 import { playAirWordHop, playAirWordLand } from './airWordHop.js';
 
 export function makeSynth(ctx, out, feel, engine) {
@@ -100,6 +101,10 @@ export const AUDIO_CUES = {
   'air-word-launch': playAirWordHop,
   'air-word-hop': playAirWordHop,
   'press-thud': playPressThud,
+  'trap-tick'(syn, p = {}) {
+    const gain = trapTickGain(p);
+    if (gain > .01) syn.tone(syn.semis(3 * (5 - Math.min(4, Math.max(1, p.step || 4)))), { dur: .07, vol: .06 * gain });
+  },
   'phrase-gate': playPhraseGate,
   countdown(syn) { syn.tone(syn.semis(0), { dur: 0.12, vol: 0.16 }); },
   go(syn) {

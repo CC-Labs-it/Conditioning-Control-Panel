@@ -107,6 +107,8 @@ export function createScrolllerFeed({ bridge, makeImage = () => new Image(), mak
     get consent() { return consent; },
     get count() { return current().length; },
     get ready() { return current().filter(loaded).length; },
+    /** Loaded stills only: the flash burst shows at most this many cards per hit. */
+    get stillCount() { return current().filter((el) => !isVideo(el) && loaded(el)).length; },
     /** A loaded display-only picture or clip (<video>) for a world panel, or null. */
     sourceFor(seed = 0) {
       const ready = current().filter(loaded);
