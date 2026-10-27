@@ -15,7 +15,6 @@ import {
   max, pow, floor, mod, normalize, cameraPosition, normalView, positionViewDirection, abs, step, dot,
 } from 'three/tsl';
 import { ITEM_LOOK as L } from './look.js';
-import { objectUniform } from '../objectUniform.js';
 import { ATLAS_GRID } from './living.js';
 import { lensDepth, lensScale, lensAlpha } from '../lens.js';
 
@@ -176,11 +175,9 @@ export function moteCloud(cap) {
 /**
  * The Melt trap puddle on a 2 x 2 plane (local xy, lay it on the road). melt = the wave 2 fx-melt-spiral
  * mask (broad warped arms with drips; preferred), mask = sky-spiral-open-mask; either may be null.
- * ONE material serves the whole puddle pool: time, alpha and seed are read per drawn object from
- * mesh.userData.fx (objectState in visuals.js), like ringGlow and blobShadow below.
  */
 export function meltPuddle(mask, melt = null) {
-  const u = { time: objectUniform('time', 0), alpha: objectUniform('alpha', 1), seed: objectUniform('seed', 0) };
+  const u = { time: uniform(0), alpha: uniform(1), seed: uniform(0) };
   const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const lp = uv().mul(2).sub(1), span = 1 + L.meltWobble * 0.5 + L.meltDripAmp;
   const r = length(lp).mul(span), a = atan(lp.y, lp.x), t = u.time.mul(L.meltHz).add(u.seed);
@@ -218,18 +215,18 @@ export function ghost(hex) {
   return { material: m, uniforms: u };
 }
 
-/** Pink wave, shockwaves, warning and landing rings: a flat additive ring drawn on a unit plane; opacity and colour per drawn object. */
+/** Pink wave, shockwaves, warning and landing rings: a flat additive ring drawn on a unit plane, opacity and colour uniforms. */
 export function ringGlow(hex) {
-  const u = { opacity: objectUniform('opacity', 0), colour: objectUniform('colour', new Color(hex)) };
+  const u = { opacity: uniform(0), colour: uniform(new Color(hex)) };
   const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide });
   const d = length(uv().sub(0.5)).mul(2);
   m.colorNode = vec3(u.colour).mul(smoothstep(0.8, 0.93, d).mul(smoothstep(0.93, 1.0, d).oneMinus())).mul(u.opacity);
   return { material: m, uniforms: u };
 }
 
-/** A soft dark ellipse on the road (the lob's landing shadow) on a unit plane, opacity per drawn object; normal blending. */
+/** A soft dark ellipse on the road (the lob's landing shadow) on a unit plane, opacity uniform; normal blending. */
 export function blobShadow(hex = '#1a0820') {
-  const u = { opacity: objectUniform('opacity', 0) };
+  const u = { opacity: uniform(0) };
   const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const d = length(uv().sub(0.5)).mul(2);
   m.colorNode = col3(hex);

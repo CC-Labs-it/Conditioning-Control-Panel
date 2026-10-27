@@ -1,6 +1,5 @@
 import { Group, Mesh, PlaneGeometry, MeshBasicNodeMaterial, DoubleSide, Color, Matrix4, Vector3 } from 'three/webgpu';
-import { uv, sin, cos, mix, smoothstep, float, vec3, positionGeometry } from 'three/tsl';
-import { objectUniform, objectState } from './objectUniform.js';
+import { uniform, uv, sin, cos, mix, smoothstep, float, vec3, positionGeometry } from 'three/tsl';
 
 const sat = x => Math.max(0, Math.min(1, Number.isFinite(x) ? x : 0));
 const smooth = x => { const n = sat(x); return n * n * (3 - 2 * n); };
@@ -10,15 +9,14 @@ export function veilSize(frame, params = {}) {
   return { width: Math.max(4, frame?.w || 4) + 8, height: Math.max(5, Math.min(9, (params.height || 4) * 1.7)) * (params.scale || 1) };
 }
 
-// One shared tessellation and ONE prebuilt material for every row (a material per row built 16 identical
-// shader graphs at load): each row's values sit on its mesh (objectState) and are written like uniforms.
+// One shared tessellation, prebuilt shader instances, no collision or per-cue texture work.
 export function createVeils(scene, track, { feel, photosafe, gentle } = {}) {
   const object = new Group(); object.name = 'song-veils'; scene.add(object);
   const geometry = new PlaneGeometry(1, 1, 48, 12), rows = [];
   const matrix = new Matrix4(), bx = new Vector3(), ny = new Vector3(), tz = new Vector3();
-  const material = (() => {
-    const u = { time: objectUniform('time', 0), bass: objectUniform('bass', 0), alpha: objectUniform('alpha', 0), motion: objectUniform('motion', 1),
-      primary: objectUniform('primary', new Color('#fa76bd')), accent: objectUniform('accent', new Color('#873e9a')) };
+  for (let i = 0; i < VEIL_CAPACITY; i++) {
+    const u = { time: uniform(0), bass: uniform(0), alpha: uniform(0), motion: uniform(1),
+      primary: uniform(new Color('#fa76bd')), accent: uniform(new Color('#873e9a')) };
     const at = uv(), wave = sin(at.x.mul(10).add(u.time)).mul(.12).add(sin(at.y.mul(7).sub(u.time.mul(.7))).mul(.06));
     const stripe = sin(at.x.mul(19).add(at.y.mul(11)).add(wave.mul(5)).sub(u.time)).mul(.5).add(.5);
     const feather = smoothstep(0, .1, at.y).mul(float(1).sub(smoothstep(.86, 1, at.y)));
@@ -32,11 +30,7 @@ export function createVeils(scene, track, { feel, photosafe, gentle } = {}) {
     material.opacityNode = feather.mul(stripe.mul(.35).add(.65)).add(rim.mul(.3)).mul(u.alpha);
     material.positionNode = positionGeometry.add(vec3(0, wave.mul(.15).mul(u.motion),
       wave.mul(u.bass.mul(1.6).add(.6)).mul(u.motion)));
-    return material;
-  })();
-  for (let i = 0; i < VEIL_CAPACITY; i++) {
     const mesh = new Mesh(geometry, material); mesh.visible = false; object.add(mesh);
-    const u = objectState(mesh, { time: 0, bass: 0, alpha: 0, motion: 1, primary: new Color('#fa76bd'), accent: new Color('#873e9a') });
     rows.push({ mesh, u, id: null, born: 0, soft: false });
   }
   let clock = 0, bassLevel = 0, visible = 0, disposed = false;
@@ -75,5 +69,5 @@ export function createVeils(scene, track, { feel, photosafe, gentle } = {}) {
     }
   }
   return { object, update, clear, get stats() { return { visible, clock, capacity: rows.length }; },
-    dispose() { if (disposed) return; clear(); disposed = true; object.removeFromParent(); geometry.dispose(); material.dispose(); } };
+    dispose() { if (disposed) return; clear(); disposed = true; object.removeFromParent(); geometry.dispose(); for (const row of rows) row.mesh.material.dispose(); } };
 }
