@@ -4,6 +4,10 @@
  * Keep this adapter aligned with the vendored renderer when upgrading three.js.
  */
 const histories = new WeakMap();
+// Per draw fast path (Firefox, 2026-10-27): a render variant remembers the attribute list it was folded with and the
+// release epoch; any course release (records deleted) bumps the epoch, so the next draw folds the variant again.
+const FOLDED = Symbol('glassroad.folded'), FOLDED_EPOCH = Symbol('glassroad.foldedEpoch');
+const epochs = new WeakMap();                  // three -> { n }
 
 /** A warm-up can replace a render variant before course teardown. Preserve ownership of
  * every node-only array it uploaded, including arrays absent from the final render variant. */
@@ -11,26 +15,32 @@ export function trackSceneResources(three) {
   if (!three?._geometries || histories.has(three)) return;
   const records = new Map(), geometries = three._geometries, update = geometries.updateAttributes;
   histories.set(three, records);
+  const epoch = epochs.get(three) || { n: 0 };
+  epoch.n++; epochs.set(three, epoch);         // a fresh history never trusts an older fold
   // This runs for every draw of every pass. A render variant keeps its scene and attribute list until three
   // rebuilds the list (RenderObject.setGeometry and the geometry dispose listener null it), so a variant
   // already folded into its object's record skips the Set work (~0.3 ms a frame on GOONWORKS, 2026-10-26).
   geometries.updateAttributes = function(row) {
     const result = update.call(this, row);
+    const list = row.getAttributes();
+    if (row[FOLDED] === list && row[FOLDED_EPOCH] === epoch.n) return result;
     let record = records.get(row.object);
     if (!record) records.set(row.object, record = { scenes: new Set(), attributes: new Set(), seen: new WeakMap() });
     // The mark is the list itself (never the scene or geometry), so it can never pin a departed course.
-    const attributes = row.getAttributes();
-    if (record.seen.get(row) === attributes && record.scenes.has(row.scene)) return result;
+    const attributes = list;
+    if (record.seen.get(row) === attributes && record.scenes.has(row.scene)) { row[FOLDED] = attributes; row[FOLDED_EPOCH] = epoch.n; return result; }
     record.scenes.add(row.scene);
     const own = new Set(Object.values(row.geometry.attributes));
     for (const attribute of attributes) if (!own.has(attribute)) record.attributes.add(attribute);
     record.seen.set(row, attributes);
+    row[FOLDED] = attributes; row[FOLDED_EPOCH] = epoch.n;
     return result;
   };
 }
 
 export function disposeSceneResources(three) {
   histories.get(three)?.clear(); histories.delete(three);
+  const epoch = epochs.get(three); if (epoch) epoch.n++;
 }
 
 /** r186 Geometries.initGeometry closes its per-geometry dispose listener over the FIRST render variant
@@ -66,6 +76,7 @@ export function releaseSceneResources(three, scene, beforeRetire = () => {}) {
   scene.traverse?.(object => members.add(object));
   const identity = attribute => attribute.isInterleavedBufferAttribute ? attribute.data : attribute;
   const records = histories.get(three);
+  const epoch = epochs.get(three); if (epoch) epoch.n++;      // every folded variant re-checks its record
   if (records) for (const [object, record] of records) {
     if (members.has(object) || record.scenes.has(scene)) {
       for (const attribute of record.attributes) candidates.add(attribute);
