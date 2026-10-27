@@ -23,6 +23,27 @@ const RUNS = [
   ['home-right', 'home', [20, 40, 60], 8, 'alternate finish line'],
 ];
 
+function runtimeRuns(track, layout) {
+  const runs = [], active = new Map(), sequences = new Map();
+  for (const source of track.boosts.slice().sort((a, b) => a.s - b.s || a.x - b.x)) {
+    const landmark = layout.landmarks.find(p => source.s >= p.s0 && source.s < p.s1)?.id;
+    if (!landmark) throw Error('Boudoir pad has no physical district');
+    const lane = source.x < 0 ? 'left' : source.x > 0 ? 'right' : 'middle';
+    const key = landmark + '/' + source.x;
+    let run = active.get(key);
+    if (!run || source.s - run.pads.at(-1).s > 32) {
+      const sequence = (sequences.get(key) || 0) + 1;
+      sequences.set(key, sequence);
+      run = { id: landmark + '-' + lane + '-' + sequence, landmark,
+        purpose: track.frameAt(source.s).surface === 'stream' ? 'flowing channel acceleration' : 'clear dry acceleration', pads: [] };
+      runs.push(run); active.set(key, run);
+    }
+    // Runtime relocation can put multiple physical pads in one original node interval.
+    run.pads.push({ ...source, runId: run.id });
+  }
+  return runs;
+}
+
 /** Shared authoring metadata lets tests drive every intended sequence and its real exclusions. */
 export function getBoudoirBoostPlan(track) {
   const layout = getBoudoirLayout(track);
@@ -48,7 +69,7 @@ export function getBoudoirBoostPlan(track) {
     for (let n = 1; n < track.nodeCount; n++) if (Math.abs(track.nodeS[n] - s) < Math.abs(track.nodeS[best] - s)) best = n;
     return best;
   };
-  const runs = RUNS.map(([id, landmark, offsets, x, purpose]) => {
+  const runs = track.courseShape ? runtimeRuns(track, layout) : RUNS.map(([id, landmark, offsets, x, purpose]) => {
     const span = layout.landmarks.find(p => p.id === landmark);
     const pads = offsets.map(offset => {
       const node = nearestNode(span.s0 + offset);
@@ -57,11 +78,11 @@ export function getBoudoirBoostPlan(track) {
     return { id, landmark, purpose, pads };
   });
   // A long-flight cut retires pads in its approach and void. Authoring without aerials keeps the source plan.
-  if (track.aerials?.length) for (let i = runs.length - 1; i >= 0; i--) {
+  if (!track.courseShape && track.aerials?.length) for (let i = runs.length - 1; i >= 0; i--) {
     runs[i].pads = runs[i].pads.filter(p => track.boosts.some(b => b.node === p.node && b.x === p.x));
     if (!runs[i].pads.length) runs.splice(i, 1);
   }
-  const pads = runs.flatMap(run => run.pads).sort((a, b) => a.s - b.s);
+  const pads = runs.flatMap(run => run.pads).sort((a, b) => a.s - b.s || (track.courseShape ? a.x - b.x : 0));
   for (const p of pads) {
     const wetRunoff = track.frameAt(p.s).surface === 'stream' ? 10 : 0;
     const hit = exclusions.find(e => p.s + p.len > e.s0 - wetRunoff && p.s < e.s1);

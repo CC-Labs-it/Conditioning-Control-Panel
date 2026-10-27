@@ -310,7 +310,7 @@
     "lineWanderS": 7,
     "cornerCutM": 2.0,
     "openEdgeMarginM": 3.5,
-    "driftCurveDegPerM": 0.5,
+    "driftCurveDegPerM": 0.3,
     "driftMinS": 0.9,
     "rubberBehindM": 110,
     "rubberAheadM": 90,

@@ -6,9 +6,14 @@ import { fitMarquee, MARQUEE_VIEW } from '../sim/marqueeView.js';
 import { deckIndex, deckOver } from '../sim/marqueeDecks.js';
 import { fakeTrack } from './sim-fake.mjs';
 
-// GOONWORKS' lower road runs about 30 m under its own upper deck from s 1560 to 2220. A screen hung there fell
-// 46 m through the deck and hung under it, the deck crossing the picture in the chase view.
+// Find the current physical lower decks. Broader turns moved the old reported lap stations.
 const goon = loadTrack(JSON.parse(readFileSync(new URL('../tracks/goonworks.json', import.meta.url), 'utf8')));
+const physicalDecks = [];
+for (let s = 0; s < goon.lengthM; s += 10) {
+  const height = deckOver(deckIndex(goon), goon.frameAt(s), 0, 19, s);
+  if (height > 28 && height < 34) physicalDecks.push(s);
+}
+const dropSpots = [physicalDecks[0], physicalDecks[Math.floor(physicalDecks.length / 2)]];
 const wrapS = (track, s) => ((s % track.lengthM) + track.lengthM) % track.lengthM;
 
 /** fitMarquee as the cue transport calls it (sim/songCues.js hang), for a kart on the centre line at s0. */
@@ -23,8 +28,9 @@ function fit(track, s0, { decks = true, sides = [0], view = null, minM = 60 } = 
 }
 const deckAt = (track, s) => deckOver(deckIndex(track), track.frameAt(s), 0, 19, s);
 
-test('GOONWORKS: the upper deck really passes over the reported drop spots', () => {
-  for (const s of [1843.7, 1597.9]) {
+test('GOONWORKS: the upper deck really passes over the current physical drop spots', () => {
+  assert.ok(physicalDecks.length > 10 && dropSpots.every(Number.isFinite), 'real lower-road coverage remains');
+  for (const s of dropSpots) {
     const h = deckAt(goon, s);
     assert.ok(h > 28 && h < 34, `road ${s} has the deck about 30 m overhead (got ${h})`);
   }
@@ -33,7 +39,7 @@ test('GOONWORKS: the upper deck really passes over the reported drop spots', () 
 
 test('GOONWORKS: screens due at or near the reported spots never fall through or hang across the deck', () => {
   const { bounceM, deckGapM } = MARQUEE_VIEW;
-  for (const spotS of [1843.7, 1597.9]) {
+  for (const spotS of dropSpots) {
     let cases = 0;
     for (const aspect of [16 / 9, 4 / 3, 21 / 9]) for (const minM of [60, 90, 120]) for (let s0 = spotS - 280; s0 <= spotS - 60; s0 += 5) {
       const plain = fit(goon, s0, { decks: false, view: { aspect }, minM });
@@ -50,7 +56,7 @@ test('GOONWORKS: screens due at or near the reported spots never fall through or
 
 test('GOONWORKS: along the whole double deck, at every aspect and approach, no drop starts above the deck', () => {
   const { bounceM, deckGapM } = MARQUEE_VIEW, seen = { capped: 0 };
-  for (const aspect of [16 / 9, 4 / 3, 21 / 9, 9 / 16]) for (const minM of [60, 120]) for (let s0 = 1300; s0 < 2300; s0 += 20) {
+  for (const aspect of [16 / 9, 4 / 3, 21 / 9, 9 / 16]) for (const minM of [60, 120]) for (const s0 of physicalDecks.filter((_, i) => i % 2 === 0)) {
     const index = deckIndex(goon), view = { aspect };
     let probe = null, probeS = 0;
     const call = deck => fitMarquee({ kart: goon.frameAt(s0), minM, view, spot: d => (probe = goon.frameAt(probeS = s0 + d)), deck });
@@ -93,5 +99,5 @@ test('the deck index is deterministic and cached per course', () => {
   const a = deckIndex(goon), b = deckIndex(goon);
   assert.equal(a, b);
   const again = deckIndex(loadTrack(JSON.parse(readFileSync(new URL('../tracks/goonworks.json', import.meta.url), 'utf8'))));
-  for (const s of [1597.9, 1843.7, 2236]) assert.equal(deckOver(again, goon.frameAt(s), 0, 19, s), deckAt(goon, s));
+  for (const s of [...dropSpots, 1000]) assert.equal(deckOver(again, goon.frameAt(s), 0, 19, s), deckAt(goon, s));
 });

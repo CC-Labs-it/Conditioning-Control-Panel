@@ -87,7 +87,7 @@ test('real grid takes the dry machine bypass and finishes without added rescues'
   const run=makeRace({track,seed:20261025}), industry=createMainframeIndustry(track,{emit(){}});
   const drive=run.ai.drive; run.ai.drive=(r,ctx,dt,a)=>{drive(r,ctx,dt,a);industry.steer(r,a);};
   const step=run.racers.step; run.racers.step=(...args)=>{step(...args);if(['racing','finished'].includes(run.race.phase))industry.update(run.racers.list,run.racers.clockS,1/60);};
-  run.run(1200,()=>run.racers.list.every(r=>r.finished));
+  run.run(60+track.lengthM*track.laps/(run.feel.get('speed.topMps')*.6),()=>run.racers.list.every(r=>r.finished));
   assert.ok(run.racers.list.every(r=>r.finished),JSON.stringify(run.racers.list.map(r=>({i:r.i,s:r.st[S.s],falls:r.falls}))));
   assert.ok(run.racers.list.every(r=>r.falls===0));
 });

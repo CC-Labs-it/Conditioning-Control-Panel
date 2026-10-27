@@ -10,16 +10,24 @@ const authors = { threshold, keep, mainframe, boudoir, goonworks };
 const clamp = v => Math.max(0, Math.min(1, v));
 const ease = v => { v = clamp(v); return v * v * (3 - 2 * v); };
 export const MOVING_REVISION = 3;
+const geometryNumber = value => Number.isFinite(value) && !Number.isInteger(value) ? Math.round(value * 1e9) / 1e9 : value;
+function canonicalGeometry(value) {
+  if (typeof value === 'number') return geometryNumber(value);
+  if (Array.isArray(value)) return value.map(canonicalGeometry);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key,v]) => [key,canonicalGeometry(v)]));
+  return value;
+}
 
 export function movingPlan(track) {
   const plan = authors[track.id]?.(track) || { traps: [], bridge: null };
-  return { ...plan, traps: plan.traps.map(row => {
+  // Physics and room identity share canonical geometry, including engine-dependent frame bases.
+  return canonicalGeometry({ ...plan, traps: plan.traps.map(row => {
     const f = track.frameAt(row.s), side = row.side === -1 ? -1 : 1;
     // Long visible heads and swept contact use the same footprint. Retain the outer bypass.
     const w = Math.min((row.w || 5) * 1.6, f.w / 2 - 4), travelM = Math.min(row.travelM || f.w * .33, f.w - w - 6);
     return { ...row, side, w, travelM, x: row.x ?? side * (f.w / 2 - w / 2 - .8),
       len: (row.len || 4) * 1.4, roadWidth: f.w, p: [...f.p], b: [...f.b], n: [...f.n], t: [...f.t] };
-  }).filter(row => row.w >= 2) };
+  }).filter(row => row.w >= 2) });
 }
 
 export function movingPose(row, timeS, beat) {
@@ -56,10 +64,10 @@ export function installMovingSupport(track, plan) {
   if (!fork) return;
   // Align the cut to render samples so the stationary road cannot bridge an open piston gap.
   const step = 4, count = Math.ceil(fork.lengthM / step), sampleM = fork.lengthM / count;
-  bridge.fromM = Math.floor(fork.lengthM * bridge.fromU / sampleM) * sampleM;
-  bridge.toM = Math.ceil(fork.lengthM * bridge.toU / sampleM) * sampleM;
+  bridge.fromM = geometryNumber(Math.floor(fork.lengthM * bridge.fromU / sampleM) * sampleM);
+  bridge.toM = geometryNumber(Math.ceil(fork.lengthM * bridge.toU / sampleM) * sampleM);
   bridge.slabs = Math.max(3, Math.ceil((bridge.toM - bridge.fromM) / 5));
-  bridge.slabM = (bridge.toM - bridge.fromM) / bridge.slabs;
+  bridge.slabM = geometryNumber((bridge.toM - bridge.fromM) / bridge.slabs);
   fork.movingBridge = bridge;
   const frames = Array.from({ length: bridge.slabs }, (_, i) => fork.frameAt(bridge.fromM + (i + .5) * bridge.slabM));
   const supported = (q, px, py, pz) => {

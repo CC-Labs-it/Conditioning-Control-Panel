@@ -2,11 +2,11 @@
   "track": "threshold",
   "note": "Hero colossi (render/colossi.js). kind arch leans across the road, crossing crossUpM above it at s; kind tower stands beside. Heights in metres; the fitter only ever raises an arch or steps a tower out. tint is each body colour (chess pieces never warm: no red, orange, gold, tan or pink); seam is kept for a later accent and is not drawn. Polish 3 review: the king is an upright tower right of the start straight (laid over the road it showed its underside, tilted toward the camera it read as a bare shaft), so its gold crown reads against the sky, the bishop arch is gone (it read as a tentacle), the watch shows its face, the knight is a tower whose head rises beside the road at eye height (knight 1150 to 1110 for the spiral gate at f 0.86), the queen crown sits lower, rook 1250 to 1268 (billboard at f 0.92). Polish 6 (the stacked course): every body refitted to a new s and side by a search over the lap (same height, lean, yaw, tint and look); the fitter then raises the watch and steps the queen, cabinet and rook out from the decks.",
   "colossi": [
-    {"id": "chess-king-lod0", "kind": "tower", "s": 700, "side": -1, "heightM": 150, "offM": 70, "upM": -70, "leanDeg": -6, "yawDeg": 0, "spinDeg": 0, "tint": "#2f6bff", "seam": "#ffd23a"},
+    {"id": "chess-king-lod0", "kind": "tower", "s": 775, "side": -1, "heightM": 150, "offM": 70, "upM": -70, "leanDeg": -6, "yawDeg": 0, "spinDeg": 0, "tint": "#2f6bff", "seam": "#ffd23a"},
     {"id": "chess-knight-lod0", "kind": "tower", "s": 2500, "side": -1, "heightM": 150, "leanDeg": 0, "yawDeg": 0, "spinDeg": 0, "tint": "#19e3ff", "seam": "#ff2fb4", "offM": 90, "upM": -110},
     {"id": "chess-queen-lod0", "kind": "tower", "s": 1600, "side": 1, "heightM": 280, "offM": 110, "upM": -200, "leanDeg": -8, "yawDeg": 10, "spinDeg": 0, "tint": "#c23dff", "seam": "#19e3ff"},
     {"id": "pocket-watch", "kind": "arch", "s": 380, "side": -1, "heightM": 110, "crossUpM": 30, "baseShare": 0.3, "leanDeg": 80, "yawDeg": -20, "spinDeg": 0, "tint": "#ffc928", "seam": "#2f6bff"},
-    {"id": "slot-cabinet-lod0", "kind": "tower", "s": 1190, "side": -1, "heightM": 110, "offM": 80, "upM": -70, "leanDeg": 12, "yawDeg": 0, "spinDeg": 200, "tint": "#8a3dff", "seam": "#7dff3a"},
-    {"id": "chess-rook-lod0", "kind": "tower", "s": 10, "side": 1, "heightM": 170, "offM": 90, "upM": -150, "leanDeg": 6, "yawDeg": -20, "spinDeg": 0, "tint": "#00d9a3", "seam": "#8a3dff"}
+    {"id": "slot-cabinet-lod0", "kind": "tower", "s": 1290, "side": -1, "heightM": 110, "offM": 80, "upM": -70, "leanDeg": 12, "yawDeg": 0, "spinDeg": 200, "tint": "#8a3dff", "seam": "#7dff3a"},
+    {"id": "chess-rook-lod0", "kind": "tower", "s": 5680, "side": 1, "heightM": 170, "offM": 90, "upM": -150, "leanDeg": 6, "yawDeg": -20, "spinDeg": 0, "tint": "#00d9a3", "seam": "#8a3dff"}
   ]
 }

@@ -180,7 +180,7 @@ test('patterns: the sweep runs from a to b across the morph window, the road edg
 });
 
 test('patterns: patternBytes decodes back to patternAt within half a metre', () => {
-  const z = patternZones(tr.sections), Lm = tr.lengthM, b = patternBytes(z, Lm), n = Math.ceil(Lm), step = Lm / n;
+  const z = patternZones(tr.sections), Lm = tr.lengthM, b = patternBytes(z, Lm), n = Math.min(8192, Math.ceil(Lm)), step = Lm / n;
   assert.equal(b.length, n * 4);
   for (let i = 0; i < n; i += 3) {
     const c = (i + 0.5) * step, p = patternAt(c, z, Lm);
