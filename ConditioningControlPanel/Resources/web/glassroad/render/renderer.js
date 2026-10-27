@@ -18,10 +18,12 @@
  * loading card (its own target, no shadow map: a different program set from the scene pass).
  */
 import { WebGPURenderer, Group, Mesh, Sprite, PlaneGeometry } from 'three/webgpu';
+import * as threeWebgpu from 'three/webgpu';
 import { createPost } from './post.js';
 import { releaseSceneResources, trackSceneResources, disposeSceneResources } from './sceneResources.js';
 import { skipUnchangedInstanceUploads } from './uniformUploads.js';
 import { uploadVideoElementsDirectly } from './videoUploads.js';
+import { isFirefox, concreteFloatConstants, uploadVideoThroughExternalTexture } from './firefoxWebgpu.js';
 import { Q, TIERS, ORDER, GOVERNOR, setTier, pickTier, createGovernor, createDynRes, dynLines, shortGpu, qualityLanding } from './quality.js';
 import { createFrameGate } from '../core/clock.js';
 import { reasonOf } from '../core/failure.js';
@@ -104,6 +106,9 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   }
   three.info.autoReset = false;                    // reset once per frame here, so stats() is one whole frame
   const backend = three.backend.isWebGPUBackend ? 'webgpu' : 'webgl2';
+  // Firefox WebGPU (render/firefoxWebgpu.js): naga rejects constant builtin calls on abstract floats, and
+  // copyExternalImageToTexture refuses a <video>; concrete f32 constants and an external-texture blit there
+  if (backend === 'webgpu' && isFirefox()) { concreteFloatConstants(threeWebgpu.WGSLNodeBuilder); uploadVideoThroughExternalTexture(three); }
   if (backend === 'webgl2') {
     try { const gl = three.backend.gl, ext = gl.getExtension('WEBGL_debug_renderer_info'); gpu = shortGpu(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)); } catch (e) { /* hidden */ }
   }
