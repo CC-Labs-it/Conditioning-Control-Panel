@@ -75,7 +75,7 @@ export function goonworksRibbonShell(track){
   return{positions:P,normals:new Float32Array(N),uvs:new Float32Array(U),indices:new Uint32Array(I)};
 }
 
-export function buildGoonworks(track,art=null,pal=null,samples=null){
+export function buildGoonworks(track,art=null,pal=null,samples=null,{shareHulls=true}={}){
   const plan=goonworksWorldPlan(track),group=new Group();group.name='goonworks-funhouse';
   if(!plan)return{group,update(){},hit(){},reset(){},dispose(){},stats:{},casters:[]};
   const geometries={box:new BoxGeometry(1,1,1),sphere:new SphereGeometry(.5,20,12),
@@ -89,18 +89,26 @@ export function buildGoonworks(track,art=null,pal=null,samples=null){
   function upload(data){const g=new BufferGeometry();g.setAttribute('position',new BufferAttribute(data.positions,3));g.setAttribute('normal',new BufferAttribute(data.normals,3));g.setAttribute('uv',new BufferAttribute(data.uvs,2));g.setIndex(new BufferAttribute(data.indices,1));g.computeBoundingSphere();extraGeometry.push(g);return g;}
   const M=new Matrix4(),B=new Matrix4(),P=new Vector3(),S=new Vector3(),rotation=new Quaternion(),X=new Vector3(),Y=new Vector3(),Z=new Vector3();
   const batches=new Map(),moving=[];
+  // Static ink hulls share one flat outline material, so one instanced draw per SHAPE carries every
+  // colour's hull (Firefox pays per draw). Moving hulls stay with their batch for the spin update.
+  const sharedHulls=new Map();
   for(const row of plan.rows){const key=row.shape+':'+row.material+(row.motion?':moving':'');if(!batches.has(key))batches.set(key,[]);batches.get(key).push(row);}
   for(const[key,rows]of batches){const[shape,material]=key.split(':'),geo=geometries[shape],mesh=new InstancedMesh(geo,materials[material],rows.length);
     mesh.name='goonworks-'+key.replaceAll(':','-');group.add(mesh);
     const outlined=rows.filter(r=>r.outline&&r.material!=='ink'&&r.material!=='distant');
-    const hull=outlined.length?new InstancedMesh(geo,ink,outlined.length):null;if(hull){hull.name=mesh.name+'-ink';group.add(hull);}
+    const share=shareHulls&&!key.endsWith(':moving');
+    const hull=outlined.length&&!share?new InstancedMesh(geo,ink,outlined.length):null;if(hull){hull.name=mesh.name+'-ink';group.add(hull);}
+    if(share&&outlined.length&&!sharedHulls.has(shape))sharedHulls.set(shape,[]);
     let h=0;
     rows.forEach((row,index)=>{B.makeBasis(X.fromArray(row.axes[0]),Y.fromArray(row.axes[1]),Z.fromArray(row.axes[2]));rotation.setFromRotationMatrix(B);P.fromArray(row.p);S.fromArray(row.size);mesh.setMatrixAt(index,M.compose(P,rotation,S));
-      let hullIndex=-1;if(row.outline&&row.material!=='ink'&&row.material!=='distant'){hullIndex=h++;S.set(row.size[0]+.45,row.size[1]+.45,row.size[2]+.45);hull.setMatrixAt(hullIndex,M.compose(P,rotation,S));}
+      let hullIndex=-1;if(row.outline&&row.material!=='ink'&&row.material!=='distant'){S.set(row.size[0]+.45,row.size[1]+.45,row.size[2]+.45);
+        if(share)sharedHulls.get(shape).push(M.compose(P,rotation,S).clone());else{hullIndex=h++;hull.setMatrixAt(hullIndex,M.compose(P,rotation,S));}}
       if(row.motion)moving.push({row,mesh,index,hull,hullIndex,rest:rotation.clone()});});
     mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();if(hull){hull.instanceMatrix.needsUpdate=true;hull.computeBoundingSphere();}
     if(key.endsWith(':moving')){mesh.boundingSphere.radius+=10;if(hull)hull.boundingSphere.radius+=10;}
   }
+  for(const[shape,list]of sharedHulls){const hull=new InstancedMesh(geometries[shape],ink,list.length);hull.name='goonworks-'+shape+'-ink-hulls';
+    list.forEach((m,i)=>hull.setMatrixAt(i,m));hull.instanceMatrix.needsUpdate=true;hull.computeBoundingSphere();group.add(hull);}
   // An opaque skirt gives the white ribbon a visible deep fuchsia thickness at every crossing.
   const data=goonworksRibbonShell(track),shell=new BufferGeometry();
   shell.setAttribute('position',new BufferAttribute(data.positions,3));shell.setAttribute('normal',new BufferAttribute(data.normals,3));shell.setAttribute('uv',new BufferAttribute(data.uvs,2));shell.setIndex(new BufferAttribute(data.indices,1));shell.computeBoundingSphere();extraGeometry.push(shell);
