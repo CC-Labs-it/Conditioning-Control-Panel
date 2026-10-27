@@ -18,6 +18,7 @@
  * loading card (its own target, no shadow map: a different program set from the scene pass).
  */
 import { WebGPURenderer, Group, Mesh, Sprite, PlaneGeometry } from 'three/webgpu';
+import * as GPU from 'three/webgpu';
 import { createPost } from './post.js';
 import { releaseSceneResources, trackSceneResources, disposeSceneResources } from './sceneResources.js';
 import { skipUnchangedInstanceUploads } from './uniformUploads.js';
@@ -30,6 +31,7 @@ import { reasonOf } from '../core/failure.js';
 import { loadOptions, cleanOptions } from '../hud/options.js';
 import { WARM, warmGroups } from './warmGroups.js';
 import { createDeferredWarm } from './stagedWarm.js';
+import { lateWarmMaterials } from './warmExtras.js';
 
 /** A canvas can hold one context for life: a failed WebGPU init, or a lost context, needs a new element in its place. */
 function replaceCanvas(canvas) {
@@ -101,7 +103,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     for (const fn of lostFns) { try { fn(lost); } catch (e) { console.warn('[glassroad/renderer] onLost', e); } }
   };
   let compiledGraphs;
-  if (qs.get('logLinks') === '1') logPipelineLinks(three);   // dev: every program link, with its phase and pass
+  if (qs.get('logLinks') === '1') logPipelineLinks(three, { Material: GPU.Material });   // dev: every program link, with its phase and pass
   if (qs.get('profileLoad') === '1') {
     compiledGraphs = 0;
     three.debug.onNodeBuilderCreated = () => { compiledGraphs++; };
@@ -321,6 +323,10 @@ function renderInset(three, target, spec, pr) {
 export async function warmInset(three, post, scene, camera) {
   if (!post || !post.inset || !scene || !camera) return { ms: 0 };
   const t0 = performance.now(), saved = [], mats = [];
+  // the materials made only in a race (render/warmExtras.js) get their inset programs too
+  const late = new Group();
+  for (const m of lateWarmMaterials(GPU)) late.add(m.isSpriteNodeMaterial ? new Sprite(m) : new Mesh(new PlaneGeometry(0.01, 0.01), m));
+  scene.add(late);
   scene.traverse((o) => {
     saved.push([o, o.visible, o.frustumCulled, o.count]);
     o.visible = true; o.frustumCulled = false;
@@ -340,6 +346,8 @@ export async function warmInset(three, post, scene, camera) {
     camera.layers.mask = layers;
     for (const [o, v, f, n] of saved) { o.visible = v; o.frustumCulled = f; if (o.count !== n) o.count = n; }
     for (const m of mats) m.visible = false;
+    for (const o of [...late.children]) { late.remove(o); if (o.isMesh) o.geometry.dispose(); }
+    scene.remove(late);
     scene.updateMatrixWorld(true);
   }
   return { ms: Math.round(performance.now() - t0) };
@@ -372,7 +380,7 @@ export async function warmAll(renderer, scene, camera, extras = [], { onProgress
   const gap = async () => { const t = performance.now(); await paintGap(); timing.gapMs += performance.now() - t; };
   const temp = new Group(), plane = new PlaneGeometry(0.01, 0.01);
   temp.name = 'warm-extras';
-  for (const x of [].concat(extras || [])) {
+  for (const x of [].concat(extras || [], lateWarmMaterials(GPU))) {   // + the materials made only in a race
     const o = !x ? null : x.isObject3D ? x : x.object && x.object.isObject3D ? x.object
       : x.isMaterial ? (x.isSpriteNodeMaterial || x.type === 'SpriteNodeMaterial' ? new Sprite(x) : new Mesh(plane, x)) : null;
     if (o && !o.parent) temp.add(o);
