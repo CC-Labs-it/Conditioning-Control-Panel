@@ -306,6 +306,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const karts = kartPool?.current || buildKarts(art, count, art && art.model('emi-teacup-kart') ? null : kartGeometry(), { seed, looks });
   if (kartPool) { if (kartPool.current) karts.rebind({art,seed}); kartPool.current = karts; }
   for (const k of karts.list) { if (kartPool) scene.add(k.root); else add(k.root); }
+  // the karts' marine drives draw as one fleet (render/swimPropeller.js createPropellerFleet); it travels with the karts
+  if (karts.propellers) { if (kartPool) scene.add(karts.propellers.group); else add(karts.propellers.group); }
   const kartObjs = karts.list.map((k) => k.root);
   const kart = kartObjs[0];
   const ring = createGlowMaterial(LOOK.ringColour);
@@ -712,7 +714,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (disposed) return; disposed = true;
     detachKarts?.();
     railBarrier.dispose();
-    if (kartPool) { ringMesh.removeFromParent(); for (const k of karts.list) if(k.root.parent===scene)scene.remove(k.root); }
+    if (kartPool) { ringMesh.removeFromParent(); for (const k of karts.list) if(k.root.parent===scene)scene.remove(k.root); if (karts.propellers?.group.parent === scene) scene.remove(karts.propellers.group); }
     // r186 Sprite quads are a global singleton shared with retained racer tags and stars.
     // Disposing a departing particle Sprite's geometry destroys their still-bound GPU buffers.
     for (const o of owned) o.traverse((m) => { if (m.geometry && !m.isSprite) m.geometry.dispose(); if (m.material) m.material.dispose(); });
