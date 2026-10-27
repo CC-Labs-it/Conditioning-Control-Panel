@@ -26,6 +26,11 @@ for (const kind of ['mainframe','keep','boudoir','goonworks']) test(kind+' actua
   };
   const root=roots[kind](), notes=Array.from({length:8},(_,i)=>'note'+i);
   for(const name of ['bass','mid','treble','energy',...notes])u[name].value=.6;
+  for(let i=0;i<64;i++) {
+    const data=u.vizTexture.image.data; data[i*4]=Math.round(128+100*Math.sin(i*.35));
+    data[i*4+1]=Math.round(80+140*(i%11)/10);
+    for(let row=1;row<18;row++)data[(row*64+i)*4]=Math.round(40+160*((i+row)%13)/12);
+  }
   const samples=[];for(const x of [.8,2.4,4.1,5.9,7.5,9.3,11.2,12.4,13.1,14.2])for(const y of [.8,3.5,6.2,8.9,11.6,14.3,17,19.7,22.4])samples.push([x,y]);
   const capture=()=>samples.flatMap(([x,y])=>{p.value.set(x,y);return evaluateColour(root)});
   const authored=samples.flatMap(()=>[.08,.10,.12]);
@@ -35,9 +40,10 @@ for (const kind of ['mainframe','keep','boudoir','goonworks']) test(kind+' actua
   music.tileOn.value=1;u.energy.value=0;
   assert.deepEqual(capture(),authored,'real silence restores the exact authored finish');u.energy.value=.6;
   if (kind !== 'mainframe') {
-    // Hold the measured bands steady to prove the floor itself answers the heard beat.
+    // Hold time and sustained bands steady: actual percussive events must change broad floor paint.
     // Compare spatial paint across the playable road, not a decorative edge or one bright pixel.
-    music.tileBeat.value=0; const onBeat=capture(); music.tileBeat.value=.5; const between=capture();
+    u.kick.value=u.snare.value=u.hats.value=u.hitStrength.value=.9;u.hitAge.value=0;
+    music.tileBeat.value=0; const onBeat=capture(); u.kick.value=u.snare.value=u.hats.value=u.hitStrength.value=0;u.hitAge.value=9; const between=capture();
     const vivid=onBeat.filter((v,j)=>Math.abs(v-between[j])>.04).length/onBeat.length;
     assert.ok(vivid>.35, kind+' beat changes broad floor coverage: '+vivid);
     music.tileBeat.value=0;

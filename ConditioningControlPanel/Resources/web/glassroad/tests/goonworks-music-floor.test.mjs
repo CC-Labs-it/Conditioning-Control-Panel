@@ -34,7 +34,7 @@ test('Goonworks jukebox floor consumes the shared bands, eight notes and heard b
   for (const value of Object.values(music)) assert.ok(nodes.has(value), 'shared phrase/beat and music gate are retained');
   assert.ok(nodes.has(top) && nodes.has(edge), 'all patterns stay inside the existing top and navigation edge');
   assert.ok(!nodes.has(reactive.t), 'no independently running animation clock');
-  assert.ok(![...nodes].some(n => n.isTextureNode), 'no new textures, uploads or media owners');
+  assert.deepEqual(new Set([...nodes].filter(n => n.isTextureNode).map(n => n.value)), new Set([reactive.vizTexture]), 'no independent textures, media owners or render targets');
   assert.ok(nodes.size < 900, 'bounded analytic graph: ' + nodes.size);
 });
 

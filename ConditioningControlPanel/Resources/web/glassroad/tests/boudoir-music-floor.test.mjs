@@ -31,7 +31,7 @@ test('Boudoir colour spectacle follows the heard beat and real bands without a t
   for (const name of Object.keys(music)) assert.ok(nodes.has(music[name]), name);
   for (const name of ['base', 'trueEdge', 'distance', 'wet']) assert.ok(nodes.has(inputs[name]), name);
   assert.ok(!nodes.has(reactive.t), 'there is no second phase clock');
-  assert.ok(![...nodes].some(n => n.isTextureNode), 'same material, no textures, media or render targets');
+  assert.deepEqual(new Set([...nodes].filter(n => n.isTextureNode).map(n => n.value)), new Set([reactive.vizTexture]), 'same material samples only the shared PCM atlas');
   assert.ok(nodes.size < 900, `bounded shader graph: ${nodes.size}`);
 });
 
