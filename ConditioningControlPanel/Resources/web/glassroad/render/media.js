@@ -19,7 +19,7 @@
 import {
   Group, Mesh, InstancedMesh, PlaneGeometry, CylinderGeometry, BufferGeometry, Float32BufferAttribute,
   InstancedBufferAttribute, CanvasTexture, Texture, SRGBColorSpace, LinearFilter, MeshBasicNodeMaterial, AdditiveBlending,
-  DoubleSide, FrontSide, Matrix4, Vector3, Vector4, Color, TextureNode, NodeUpdateType,
+  DoubleSide, FrontSide, Matrix4, Vector3, Vector4, Color,
 } from 'three/webgpu';
 import {
   texture, uv, vec2, vec3, float, uniform, instancedBufferAttribute, attribute, cos, sin, hue, mix, smoothstep,
@@ -351,6 +351,17 @@ export function createMediaSlots(scene, track, opts = {}) {
   const blankSource = opts.make ? opts.make(2, 2) : Object.assign(document.createElement('canvas'), { width: 2, height: 2 });
   const blankContext = blankSource.getContext('2d'); blankContext.fillStyle = '#15121b'; blankContext.fillRect(0, 0, 2, 2);
   const sharedVideos = new Map();
+  // Fixed image bindings: one material per preallocated video owner, not per face.
+  // Only the cover crop varies per draw; a texture never swaps under a compiled sampler.
+  const sourceMaterials = new Map();
+  function sourceMaterial(tex) {
+    let material = sourceMaterials.get(tex);
+    if (!material) { material = ownMaterial(tex, U, M); sourceMaterials.set(tex, material); }
+    return material;
+  }
+  function releaseSourceMaterial(tex) {
+    sourceMaterials.get(tex)?.dispose(); sourceMaterials.delete(tex);
+  }
   // Every owner exists before shader warmup, even on phone. Faces only change a texture binding.
   const sharedPool = Array.from({ length: MAX_MEDIA_CLIPS }, () => {
     // Frames go straight from the <video> into this regular Texture (the vendored WebGL getImage passes
@@ -388,18 +399,12 @@ export function createMediaSlots(scene, track, opts = {}) {
     return tex;
   }
 
-  // ONE source material serves every own screen (a material per screen built 252 identical shader graphs
-  // at load): the picture and its cover crop are read per drawn object from mesh.userData. Credits are plain
-  // map materials, which r186 keys by their settings, so they share one graph too.
-  const blankTex = new Texture(blankSource); blankTex.colorSpace = SRGBColorSpace; blankTex.needsUpdate = true;
-  let ownMat = null;
   function makeOwnSource(sl, persistent = false) {
     // Selected world faces and cards exist before warmAll, including their credit graphs.
     const tex = new Texture(persistent ? blankSource : null);
     tex.colorSpace = SRGBColorSpace; tex.anisotropy = 4;
     if (persistent) tex.needsUpdate = true;
-    if (!ownMat) ownMat = ownMaterial(blankTex, U, M);
-    const crop = new Vector4(0.5, 0.5, 1, 1), mesh = new Mesh(plane, ownMat);
+    const crop = new Vector4(0.5, 0.5, 1, 1), mesh = new Mesh(plane, sourceMaterial(persistent ? sharedPool[0].tex : tex));
     mesh.userData.mediaTex = tex; mesh.userData.mediaCrop = crop;
     mesh.name = persistent ? 'media-' + (sl.frame === 'card' ? 'card' : 'world') + '-source-' + sl.id : 'media-source-' + sl.id;
     mesh.matrixAutoUpdate = false; mesh.frustumCulled = true; mesh.visible = false;
@@ -421,6 +426,7 @@ export function createMediaSlots(scene, track, opts = {}) {
   for (const [i, sl] of selected.entries()) {
     const o = makeOwnSource(sl, true);
     o.mesh.userData.mediaTex = sharedPool[i % sharedPool.length].tex;
+    o.mesh.material = sourceMaterial(o.mesh.userData.mediaTex);
     persistentSources.set(sl.index, o);
   }
 
@@ -434,6 +440,7 @@ export function createMediaSlots(scene, track, opts = {}) {
       sharedVideos.set(el, owner);
     }
     owner.refs.add(index); o.shared = owner; o.tex = owner.tex; o.mesh.userData.mediaTex = owner.tex;
+    o.mesh.material = sourceMaterial(owner.tex);
     return true;
   }
   function releaseShared(o, index) {
@@ -513,10 +520,10 @@ export function createMediaSlots(scene, track, opts = {}) {
     if (src.kind === 'video' && !retainShared(o, sl.index, el)) {
       if (!o.borrowed) { try { el.pause?.(); el.removeAttribute?.('src'); el.load?.(); } catch { /* source rejected */ } }
       o.el = null; o.kind = null; o.borrowed = false;
-      if (!o.persistent) { group.remove(o.mesh); o.baseTex.dispose(); }
+      if (!o.persistent) { group.remove(o.mesh); o.baseTex.dispose(); releaseSourceMaterial(o.baseTex); }
       placeSlot(sl); flush(); return false;
     }
-    if (!o.shared) o.mesh.userData.mediaTex = o.baseTex;
+    if (!o.shared) { o.mesh.userData.mediaTex = o.baseTex; o.mesh.material = sourceMaterial(o.baseTex); }
     const { tex, crop } = o;
     const text = creditText(src.credit);
     o.creditOn = !!text;
@@ -581,7 +588,7 @@ export function createMediaSlots(scene, track, opts = {}) {
       o.mesh.visible = false; o.credit.visible = false;
       o.el = null; o.kind = null; o.borrowed = false; o.ready = false; o.creditOn = false; o.src = -1;
     } else {
-      group.remove(o.mesh); o.tex.dispose();
+      group.remove(o.mesh); o.tex.dispose(); releaseSourceMaterial(o.tex);
       if (o.credit) { group.remove(o.credit); o.credit.material.dispose(); }
     }
   }
@@ -681,8 +688,10 @@ export function createMediaSlots(scene, track, opts = {}) {
     for (const owner of sharedPool) { if (!owner.idleDisposed) owner.tex.dispose(); clearVideoCanvas(owner); }
     for (const pg of progs) pg.tex.dispose();
     if (creditTex) creditTex.tex.dispose();
-    blankTex.dispose();
-    group.traverse((o) => { if (o.material) o.material.dispose(); });
+    const pooledMaterials = new Set(sourceMaterials.values());
+    group.traverse((o) => { if (o.material && !pooledMaterials.has(o.material)) o.material.dispose(); });
+    for (const material of pooledMaterials) material.dispose();
+    sourceMaterials.clear();
     for (const g of owned) g.dispose();
     if (scene) scene.remove(group);
   }
@@ -750,25 +759,12 @@ function screenMaterial(tex, crop, info, spin, warp, U, M, palette = null) {
   return m;
 }
 
-/**
- * A real source on any own slot: the cover crop from its aspect, same contrast and gain as the placeholders.
- * ONE material serves every own screen: the picture (mesh.userData.mediaTex) and the crop (mediaCrop, a
- * Vector4 cx, cy, sx, sy) are read per drawn object, so 126 screens build one shader graph instead of 126.
- */
-function ownMaterial(blankTex, U, M) {
+/** Fixed image per video owner, shared by every borrowing face; only crop varies per draw. */
+function ownMaterial(tex, U, M) {
   const m = mediaDepthLayer(new MeshBasicNodeMaterial({ side: FrontSide }));
   const crop = uniform(new Vector4(0.5, 0.5, 1, 1)).onObjectUpdate(({ object }) => object.userData.mediaCrop);
   const tuv = crop.xy.add(uv().sub(0.5).mul(crop.zw));
-  const tex = texture(blankTex, tuv).onObjectUpdate(function ({ object }) {
-    // Swap before TextureNode's own update: its flipY and matrix uniforms read the new image.
-    this.value = (object && object.userData.mediaTex) || blankTex;
-    TextureNode.prototype.update.call(this);
-  });
-  // r186 TextureNode.setup resets updateType to NONE with explicit UVs on WebGPU.
-  // This node also swaps the sampled image per mesh, so it must update for every object
-  // even when no UV matrix or flip-Y uniform is needed by that backend.
-  tex.getUpdateType = () => NodeUpdateType.OBJECT;
-  m.colorNode = mix(vec3(0.42, 0.36, 0.48), tex.rgb, U.contrast).mul(M.screenGain);
+  m.colorNode = mix(vec3(0.42, 0.36, 0.48), texture(tex, tuv).rgb, U.contrast).mul(M.screenGain);
   return m;
 }
 

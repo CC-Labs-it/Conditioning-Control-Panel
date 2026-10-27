@@ -7,7 +7,7 @@ const hooks = registerHooks({ resolve(specifier, context, next) {
     : next(specifier, context);
 } });
 const { createMediaPlayback, createMediaSlots } = await import('../render/media.js');
-const { LinearFilter, NodeUpdateType } = await import('three/webgpu');
+const { LinearFilter } = await import('three/webgpu');
 hooks.deregister();
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
@@ -258,22 +258,23 @@ test('Renderer-owned video uses the same direct path and releases its decoder on
   h.media.dispose();
 });
 
-test('shared picture node keeps per-object updates after the WebGPU UV setup resets its update type', async () => {
-  const h = stagedRenderer(2), clips = [video(), video()];
-  for (let i = 0; i < clips.length; i++) h.media.setSource('card-' + i, { kind: 'video', el: clips[i], borrowed: true });
+test('video owners share fixed image bindings across faces and never swap a compiled sampler', async () => {
+  const h = stagedRenderer(3), clips = [video(), video()];
+  for (let i = 0; i < 3; i++) h.media.setSource('card-' + i, { kind: 'video', el: clips[i % 2], borrowed: true });
   await settle(); h.media.update(1 / 60, { eye: [0, 8, 0] });
   const screens = h.media.object.children.filter(o => o.name.startsWith('media-card-source'));
-  assert.equal(screens[0].material, screens[1].material, 'picture material stays shared');
-  let picture;
-  screens[0].material.colorNode.traverse(node => { if (node.isTextureNode) picture = node; });
-  assert.ok(picture);
-  // TextureNode.setup uses NONE on WebGPU when explicit UVs need neither matrix nor flip-Y.
-  picture.updateType = NodeUpdateType.NONE;
-  assert.equal(picture.getUpdateType(), NodeUpdateType.OBJECT, 'image selection must still run per draw');
-  for (const object of [screens[0], screens[1], screens[0]]) {
-    picture.update({ object });
-    assert.equal(picture.value, object.userData.mediaTex, 'each draw binds its own video texture');
+  assert.equal(screens[0].material, screens[2].material, 'one material per shared video owner');
+  assert.notEqual(screens[0].material, screens[1].material, 'different images keep different fixed bindings');
+  for (const screen of screens) {
+    let picture;
+    screen.material.colorNode.traverse(node => { if (node.isTextureNode) picture = node; });
+    assert.equal(picture.value, screen.userData.mediaTex, 'the shader directly references the displayed owner texture');
   }
-  assert.notEqual(screens[0].userData.mediaTex, screens[1].userData.mediaTex);
+  const former = screens[0].material;
+  h.media.setSource('card-0', null);
+  h.media.setSource('card-0', { kind: 'video', el: clips[1], borrowed: true });
+  await settle(); h.media.update(1 / 60, { eye: [0, 8, 0] });
+  assert.equal(screens[0].material, screens[1].material, 'reassignment selects an existing warmed owner material');
+  assert.notEqual(screens[0].material, former);
   h.media.dispose();
 });
