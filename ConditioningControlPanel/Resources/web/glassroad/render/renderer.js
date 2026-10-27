@@ -21,6 +21,7 @@ import { WebGPURenderer, Group, Mesh, Sprite, PlaneGeometry } from 'three/webgpu
 import { createPost } from './post.js';
 import { releaseSceneResources, trackSceneResources, disposeSceneResources } from './sceneResources.js';
 import { skipUnchangedInstanceUploads } from './uniformUploads.js';
+import { uploadVideoElementsDirectly } from './videoUploads.js';
 import { Q, TIERS, ORDER, GOVERNOR, setTier, pickTier, createGovernor, createDynRes, dynLines, shortGpu, qualityLanding } from './quality.js';
 import { createFrameGate } from '../core/clock.js';
 import { reasonOf } from '../core/failure.js';
@@ -85,6 +86,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   }
   trackSceneResources(three);
   skipUnchangedInstanceUploads(three);
+  uploadVideoElementsDirectly(three);
   // a lost device or context: three stops drawing for good (render returns at once), so the page must rebuild;
   // onLost(fn) hears it once, with the reason
   const lostFns = new Set();

@@ -18,7 +18,7 @@
  */
 import {
   Group, Mesh, InstancedMesh, PlaneGeometry, CylinderGeometry, BufferGeometry, Float32BufferAttribute,
-  InstancedBufferAttribute, CanvasTexture, Texture, SRGBColorSpace, MeshBasicNodeMaterial, AdditiveBlending,
+  InstancedBufferAttribute, CanvasTexture, Texture, SRGBColorSpace, LinearFilter, MeshBasicNodeMaterial, AdditiveBlending,
   DoubleSide, FrontSide, Matrix4, Vector3, Color,
 } from 'three/webgpu';
 import {
@@ -353,20 +353,24 @@ export function createMediaSlots(scene, track, opts = {}) {
   const sharedVideos = new Map();
   // Every owner exists before shader warmup, even on phone. Faces only change a texture binding.
   const sharedPool = Array.from({ length: MAX_MEDIA_CLIPS }, () => {
-    // r186 WebGL's regular texture upload accepts canvases, but not HTMLVideoElement.
-    // One reusable canvas per decoder keeps the warmed graph and shared upload budget.
+    // Frames go straight from the <video> into this regular Texture (the vendored WebGL getImage passes
+    // HTMLVideoElement through, vendor/three/PATCHES.md; WebGPU copies it as an external image). The old 2D
+    // canvas hop made Firefox read every decoded frame back to the CPU (~3 ms per drawImage). A regular
+    // Texture keeps the warmed sRGB sampler graph (a VideoTexture changes the WebGL shader). No mipmaps.
+    // The 2x2 canvas is only the dark placeholder before the first frame and after the last release.
     const canvas = opts.make ? opts.make(2, 2) : Object.assign(document.createElement('canvas'), { width: 2, height: 2 });
     const context = canvas.getContext('2d', { alpha: false });
     context.fillStyle = '#15121b'; context.fillRect(0, 0, 2, 2);
-    const tex = new Texture(canvas); tex.colorSpace = SRGBColorSpace; tex.anisotropy = 4; tex.needsUpdate = true;
-    const owner = { tex, canvas, context, el: null, refs: new Set(), ready: false, uploaded: false, idleDisposed: false, uploads: 0, uploadError: null };
+    const tex = new Texture(canvas); tex.colorSpace = SRGBColorSpace;
+    tex.minFilter = LinearFilter; tex.generateMipmaps = false; tex.anisotropy = 1; tex.needsUpdate = true;
+    const owner = { tex, canvas, el: null, width: 2, height: 2, refs: new Set(), ready: false, uploaded: false, idleDisposed: false, uploads: 0, uploadError: null };
     owner.src = budget.add({ every: 1 / T.videoFps, kind: 'shared-video', owner, on: false });
     return owner;
   });
   const videoCapacity = () => Math.min(sharedPool.length, mediaClipLimit(Q.name));
   function clearVideoCanvas(owner) {
-    owner.canvas.width = 2; owner.canvas.height = 2;
-    owner.context.fillStyle = '#15121b'; owner.context.fillRect(0, 0, 2, 2);
+    // Drop the decoder reference with the GPU allocation; the next clip starts from the dark placeholder.
+    owner.tex.image = owner.canvas; owner.width = 2; owner.height = 2;
     owner.uploadError = null;
   }
   let creditTex = null;
@@ -638,16 +642,15 @@ export function createMediaSlots(scene, track, opts = {}) {
       else if (x.kind === 'shared-video') {
         const owner = x.owner;
         if (owner.ready) {
-          const vw = owner.el.videoWidth || 1, vh = owner.el.videoHeight || 1, scale = Math.min(1, 640 / Math.max(vw, vh));
-          const width = Math.max(1, Math.round(vw * scale)), height = Math.max(1, Math.round(vh * scale));
-          if (owner.canvas.width !== width || owner.canvas.height !== height) {
+          const el = owner.el, width = el.videoWidth, height = el.videoHeight;
+          // Upload only a decoded frame: a loop seek or stall keeps the last frame, never a black one.
+          const copied = !el.error && el.readyState >= 2 && width > 0 && height > 0;
+          owner.uploadError = el.error ? 'MediaError' + (el.error.code ? ':' + el.error.code : '') : null;
+          if (copied && (owner.tex.image !== el || owner.width !== width || owner.height !== height)) {
             // Retain the warmed sampler graph, but release r186's old-size GPU allocation.
             if (!owner.idleDisposed) owner.tex.dispose();
-            owner.idleDisposed = true; owner.canvas.width = width; owner.canvas.height = height;
+            owner.idleDisposed = true; owner.tex.image = el; owner.width = width; owner.height = height;
           }
-          let copied = false;
-          try { owner.context.drawImage(owner.el, 0, 0, width, height); copied = true; owner.uploadError = null; }
-          catch (e) { owner.uploadError = e?.name || 'VideoCopyError'; }
           if (copied) {
             if (!owner.uploaded) {
               owner.uploaded = true;
