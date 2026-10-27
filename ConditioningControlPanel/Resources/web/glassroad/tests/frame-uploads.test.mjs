@@ -84,10 +84,11 @@ test('WebGL instance matrices in a uniform buffer are re-sent only when they cha
   const group = { isUniformsGroup: true, buffer: new Float32Array(4), updateRanges: [] };
   const draw = () => bindings.updateForRender({ object: mesh, list: [ubo, bones, group] });
   draw(); assert.deepEqual(sent, [ubo, bones, group], 'first draw sends all');
-  sent.length = 0; draw(); assert.deepEqual(sent, [bones, group], 'unchanged instance matrices skip');
-  matrices.version++; sent.length = 0; draw(); assert.deepEqual(sent, [ubo, bones, group], 'needsUpdate re-sends');
-  gpu.get(ubo).bufferGPU = {}; sent.length = 0; draw(); assert.deepEqual(sent, [ubo, bones, group], 'a new GL buffer re-sends');
-  sent.length = 0; backend.updateBinding(ubo); assert.deepEqual(sent, [ubo], 'outside a render object three decides');
+  sent.length = 0; draw(); assert.deepEqual(sent, [group], 'unchanged instance matrices and bones skip; groups stay with three');
+  matrices.version++; sent.length = 0; draw(); assert.deepEqual(sent, [group], 'needsUpdate with the same bytes skips (bones compare bitwise too)');
+  matrices.array[5] = 2; matrices.version++; sent.length = 0; draw(); assert.deepEqual(sent, [ubo, group], 'changed matrices re-send');
+  gpu.get(ubo).bufferGPU = {}; sent.length = 0; draw(); assert.deepEqual(sent, [ubo, group], 'a new GL buffer re-sends');
+  sent.length = 0; backend.updateBinding(ubo); assert.deepEqual(sent, [], 'outside a render object the bytes decide too');
   assert.equal(skipUnchangedInstanceUploads({ backend: { isWebGLBackend: false }, _bindings: bindings }), false, 'WebGPU untouched');
 });
 

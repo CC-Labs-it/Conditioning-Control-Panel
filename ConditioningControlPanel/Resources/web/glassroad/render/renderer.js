@@ -21,7 +21,9 @@ import { WebGPURenderer, Group, Mesh, Sprite, PlaneGeometry } from 'three/webgpu
 import { createPost } from './post.js';
 import { releaseSceneResources, trackSceneResources, disposeSceneResources } from './sceneResources.js';
 import { skipUnchangedInstanceUploads } from './uniformUploads.js';
+import { uploadChangedAttributeBytes } from './attributeUploads.js';
 import { uploadVideoElementsDirectly } from './videoUploads.js';
+import { uploadDataTextureRows } from './dataTextureRows.js';
 import { Q, TIERS, ORDER, GOVERNOR, setTier, pickTier, createGovernor, createDynRes, dynLines, shortGpu, qualityLanding } from './quality.js';
 import { createFrameGate } from '../core/clock.js';
 import { reasonOf } from '../core/failure.js';
@@ -86,7 +88,10 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   }
   trackSceneResources(three);
   skipUnchangedInstanceUploads(three);
+  uploadChangedAttributeBytes(three);        // WebGL2: attributes re-send only their changed bytes (Firefox command-channel budget)
   uploadVideoElementsDirectly(three);
+  uploadDataTextureRows(three);              // WebGL2: a marked DataTexture (the water height atlas) re-sends only its rows
+  if (qs.get('census') === '1') { try { (await import('../dev/uploadCensus.js')).installUploadCensus(three); } catch (e) { console.warn('census hook failed', e); } }   // dev: ?census=1 (dev/uploadCensus.js)
   // a lost device or context: three stops drawing for good (render returns at once), so the page must rebuild;
   // onLost(fn) hears it once, with the reason
   const lostFns = new Set();

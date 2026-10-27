@@ -5,6 +5,7 @@ import { ambientWaterNodes } from './waterMotion.js';
 import { WATER_VOLUME as L, waterSpills } from './waterMath.js';
 import { createWaterSurface } from './materials/water.js';
 import { createWaterField } from './waterField.js';
+import { markRows, clearRows } from './dataTextureRows.js';
 import { createWaterFoam } from './waterFoam.js';
 import { createWaterReflections } from './waterReflections.js';
 import { Q, TIERS } from './quality.js';
@@ -202,14 +203,18 @@ export function buildWaterVolume(track, pal, art = null, { quality = Q.name, sce
       if (paused) return;
       u.t.value += Math.max(0, dt) * scroll; u.motion.value = gentle ? 0.5 : 1;
       const changed = field.step(dt, { gentle, paused });
-      if (changed || uploadedVersion !== field.stats.version) { heightTexture.needsUpdate = true; uploadedVersion = field.stats.version; }
+      if (changed || uploadedVersion !== field.stats.version) {
+        // WebGL2 sends only the rows this pack wrote (render/dataTextureRows.js); a pack that wrote no row changed no pixel
+        uploadedVersion = field.stats.version;
+        if (field.stats.rowTo >= field.stats.rowFrom) { markRows(heightTexture, field.stats.rowFrom, field.stats.rowTo); heightTexture.needsUpdate = true; }
+      }
       froth.update(dt, { gentle, paused, playerS });
       if (reflections) {
         reflections.update(dt, { paused, playerPos, playerS, wet: runs.some(r => playerS >= r.fromS - 45 && playerS <= r.toS + 30) });
         u.reflectionReady.value = reflections.stats.ready ? 1 : 0;
       }
     },
-    reset() { field.reset(); heightTexture.needsUpdate = true; uploadedVersion = field.stats.version; froth.reset(); },
+    reset() { field.reset(); clearRows(heightTexture); heightTexture.needsUpdate = true; uploadedVersion = field.stats.version; froth.reset(); },
     dispose() { for (const child of object.children) { if (child === froth.object || child === transitions.object) continue; child.geometry.dispose(); child.material.dispose(); } transitions.dispose(); froth.dispose(); reflections?.dispose(); heightTexture.dispose(); field.dispose?.(); object.clear(); },
   };
 }
