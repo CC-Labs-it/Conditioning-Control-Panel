@@ -65,18 +65,27 @@ export function createMusicEdgeState({ photosafe = null } = {}) {
 /** A bounded 2D layer, clipped to the outer 16% on either side. No extra audio or GPU context. */
 export function createMusicEdges({ parent = globalThis.document?.body, doc = globalThis.document,
   photosafe = null, palette = () => ['#c9eceb', '#bca5e9'], tier = 'high' } = {}) {
-  const state = createMusicEdgeState({ photosafe }), canvas = doc?.createElement('canvas');
-  const ctx = canvas?.getContext('2d');
+  // perf (Firefox, 2026-10-27): the side wash is a horizontal gradient, the same down every row, so it is painted
+  // into a ONE-row canvas stretched to the screen (a full-height gradient fillRect was half of this layer's cost);
+  // the ribbons and particles keep the full canvas above it. Both sit in one layer whose opacity is the old
+  // canvas opacity (group opacity: the same blend as one canvas).
+  const state = createMusicEdgeState({ photosafe }), layer = doc?.createElement('div'), canvas = doc?.createElement('canvas');
+  const washCanvas = doc?.createElement('canvas');
+  const ctx = canvas?.getContext('2d'), wctx = washCanvas?.getContext('2d');
   let disposed = false, lastDraw = -Infinity, primary = '#c9eceb', accent = '#bca5e9';
   const colours = [rgb(primary), rgb(accent)];
-  if (!canvas || !ctx || !parent) return { update() {}, dispose() {}, canvas: null, get stats() { return { ...state.frame }; } };
-  canvas.className = 'music-edges'; canvas.setAttribute('aria-hidden', 'true');
-  Object.assign(canvas.style, { position: 'fixed', zIndex: '1', pointerEvents: 'none', left: '0', top: '0',
+  if (!layer || !canvas || !ctx || !wctx || !parent) return { update() {}, dispose() {}, canvas: null, get stats() { return { ...state.frame }; } };
+  layer.className = 'music-edges'; layer.setAttribute('aria-hidden', 'true');
+  Object.assign(layer.style, { position: 'fixed', zIndex: '1', pointerEvents: 'none', left: '0', top: '0',
     width: '100%', height: '100%', display: 'none' });
-  parent.appendChild(canvas);
+  for (const c of [washCanvas, canvas]) {
+    Object.assign(c.style, { position: 'absolute', zIndex: '1', pointerEvents: 'none', left: '0', top: '0', width: '100%', height: '100%' });
+    layer.appendChild(c);
+  }
+  parent.appendChild(layer);
   function update(dt, view = {}) {
     if (disposed) return;
-    if (doc.hidden) { canvas.style.display = 'none'; return; }
+    if (doc.hidden) { layer.style.display = 'none'; return; }
     if (dt > 0 && !view.paused && !view.audioReactive?.frozen && view.enabled !== false) {
       let pair; try { pair = palette(); } catch { pair = []; }
       const nextPrimary = colour(pair?.[0], primary), nextAccent = colour(pair?.[1], accent);
@@ -86,19 +95,19 @@ export function createMusicEdges({ parent = globalThis.document?.body, doc = glo
     const red = colours.some(([r, g]) => r > 100 && r > g * 1.5);
     const f = state.update(dt, view, red ? 'red' : 'music-edges');
     if (!(f.level > .0001) || !(f.visibility > .001) || view.enabled === false) {
-      canvas.style.display = 'none'; lastDraw = -Infinity; return;
+      layer.style.display = 'none'; lastDraw = -Infinity; return;
     }
     if (view.paused || view.audioReactive?.frozen || !(dt > 0)) return;
-    canvas.style.display = 'block'; canvas.style.opacity = String(f.visibility);
+    layer.style.display = 'block'; layer.style.opacity = String(f.visibility);
     const w = Math.max(1, doc.defaultView?.innerWidth || parent.clientWidth || 1280);
     const h = Math.max(1, doc.defaultView?.innerHeight || parent.clientHeight || 720);
     const limit = tier === 'phone' ? 480 : tier === 'mid' ? 768 : 960, scale = Math.min(1, limit / Math.max(w, h));
     const bw = Math.max(1, Math.round(w * scale)), bh = Math.max(1, Math.round(h * scale));
     const resized = canvas.width !== bw || canvas.height !== bh;
     if (!resized && f.clock - lastDraw < 1 / 30) return;
-    if (resized) { canvas.width = bw; canvas.height = bh; }
+    if (resized) { canvas.width = bw; canvas.height = bh; washCanvas.width = bw; washCanvas.height = 1; }
     lastDraw = f.clock;
-    ctx.clearRect(0, 0, bw, bh);
+    ctx.clearRect(0, 0, bw, bh); wctx.clearRect(0, 0, bw, 1);
     const quiet = view.gentle || view.reducedMotion;
     const band = bw * (.045 + f.level * .045), shake = f.shakePx * scale;
     const mixed = colours[0].map((v, i) => Math.round(v + (colours[1][i] - v) * f.hueMix));
@@ -106,11 +115,15 @@ export function createMusicEdges({ parent = globalThis.document?.body, doc = glo
       ctx.save();
       ctx.beginPath(); ctx.rect(side ? bw * .84 : 0, 0, bw * .16, bh); ctx.clip();
       if (side) { ctx.translate(bw, 0); ctx.scale(-1, 1); }
-      const wash = ctx.createLinearGradient(0, 0, bw * .16, 0);
+      wctx.save();
+      wctx.beginPath(); wctx.rect(side ? bw * .84 : 0, 0, bw * .16, 1); wctx.clip();
+      if (side) { wctx.translate(bw, 0); wctx.scale(-1, 1); }
+      const wash = wctx.createLinearGradient(0, 0, bw * .16, 0);
       wash.addColorStop(0, `rgba(${mixed},${.05 + f.level * .18})`);
       wash.addColorStop(.4, `rgba(${colours[side]},${f.level * .075})`);
       wash.addColorStop(1, `rgba(${mixed},0)`);
-      ctx.fillStyle = wash; ctx.globalAlpha = Math.min(1, f.level * 4); ctx.fillRect(0, 0, bw * .16, bh);
+      wctx.fillStyle = wash; wctx.globalAlpha = Math.min(1, f.level * 4); wctx.fillRect(0, 0, bw * .16, 1);
+      wctx.restore();
       // Layered gauzy ribbons carry the flex. The driving image and HUD stay still.
       for (let layer = 0; layer < 3; layer++) {
         ctx.beginPath(); ctx.moveTo(-8, 0);
@@ -136,5 +149,5 @@ export function createMusicEdges({ parent = globalThis.document?.body, doc = glo
   }
   return { update, canvas, get stats() { return { ...state.frame, primary, accent }; },
     get shiftU() { return state.frame.shakePx * state.frame.visibility / Math.max(1, doc.defaultView?.innerWidth || parent.clientWidth || 1280); },
-    dispose() { if (disposed) return; disposed = true; canvas.remove(); } };
+    dispose() { if (disposed) return; disposed = true; layer.remove(); } };
 }

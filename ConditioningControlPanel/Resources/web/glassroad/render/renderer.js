@@ -23,6 +23,7 @@ import { releaseSceneResources, trackSceneResources, disposeSceneResources } fro
 import { skipUnchangedInstanceUploads } from './uniformUploads.js';
 import { uploadVideoElementsDirectly } from './videoUploads.js';
 import { uploadCanvasRegions } from './canvasRegions.js';
+import { logPipelineLinks } from './linkLog.js';
 import { Q, TIERS, ORDER, GOVERNOR, setTier, pickTier, createGovernor, createDynRes, dynLines, shortGpu, qualityLanding } from './quality.js';
 import { createFrameGate } from '../core/clock.js';
 import { reasonOf } from '../core/failure.js';
@@ -100,6 +101,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     for (const fn of lostFns) { try { fn(lost); } catch (e) { console.warn('[glassroad/renderer] onLost', e); } }
   };
   let compiledGraphs;
+  if (qs.get('logLinks') === '1') logPipelineLinks(three);   // dev: every program link, with its phase and pass
   if (qs.get('profileLoad') === '1') {
     compiledGraphs = 0;
     three.debug.onNodeBuilderCreated = () => { compiledGraphs++; };
