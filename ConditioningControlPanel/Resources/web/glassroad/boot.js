@@ -66,6 +66,7 @@ import { viewTime } from './render/stagedWarmPlan.js';
 import { createGentle } from './fx/gentle.js';
 import { createPhotosafe } from './fx/photosafe.js';
 import { createFx } from './fx/reactions.js';
+import { createPoseLag } from './fx/trauma.js';
 import { createEffects } from './fx/effects.js';
 import { createPayoff, screenFor } from './fx/payoff.js';
 import { createAudio } from './audio/bus.js';
@@ -367,7 +368,7 @@ async function boot(course, options, lifetime, isCurrent) {
   if (BOT) Object.defineProperty(debug, 'waterTravelAudio', { get: () => audio.waterTravel });
   for (const name of ['keep-gate-hit', 'keep-chain-hit', 'boudoir-press-hit', 'boudoir-sweeper-hit', 'boudoir-mirror-hit', 'goonworks-hit']) bus.on(name, () => bus.emit('wall', { dv: 12 }));
   configureLobby({ track: track.id, trackLaps: TRACK_LAPS });
-  const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus, { photosafe });
+  const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus, { photosafe, racers: () => racers?.list });
   const directionWarning = createDirectionWarning(track);
   lifetime.defer(() => hud.dispose());
   // Host state stays live while art and shaders load behind the cover.
@@ -754,6 +755,8 @@ async function boot(course, options, lifetime, isCurrent) {
     audio.setVolumes({ master: o.volMaster, music: o.volMusic, sfx: o.volSfx });
     if (Number.isFinite(o.steerSens)) feel.set('steer.userMul', o.steerSens);   // FEEL.md: grip yaw, player only
     renderer.setOptions(o);
+    fx.setMotion?.(o.motion || 'full');                // feel wave: the Motion row (Gentle reads as 'less' inside fx)
+    garage?.setMotion?.(o.motion || 'full');
     if (world.shadows) world.shadows.setEnabled(qs.get('shadows') !== '0' && o.shadows !== false);
   }
   applyOptions(opts);
@@ -1277,6 +1280,7 @@ async function boot(course, options, lifetime, isCurrent) {
     }
   }
   let frameId = 0, lastViewTime = null;   // the drawn karts' clock at the last frame (camera follow step)
+  const poseLag = createPoseLag({ X: S.posX });   // feel wave: the finish slow frame (render-side only)
   const itemListener = { p: [0, 0, 0], right: [1, 0, 0] };
   lifetime.defer(() => cancelAnimationFrame(frameId));
   // the watchdog: a visible, uncovered page whose loop stops for STALL_MS, or a loop that throws FRAME_THROWS frames
@@ -1402,6 +1406,7 @@ async function boot(course, options, lifetime, isCurrent) {
       active: inRace, menu: state === 'menu',
       boosting: pst[S.boostKind] > 0, drifting: pst[S.driftDir] !== 0, driftTier: pst[S.driftStage],
       airborne: pst[S.airborne] > 0, onRoad: pst[S.grounded] > 0, edge: fs.edgeGlow > 0, paused: frozen, duck: fs.duck,
+      driftCharge: pst[S.driftCharge] || 0, traumaOut: fs.traumaOut ?? 0,
       submerged: inRace ? immersion(pst[S.s], cam.camera.position.y) : 0,
       ...waterContact(pst, inRace, feel.get('speed.topMps')),
     }, inRace ? racers.nearby(feel.get('ai.audibleKarts'), 80) : []);
@@ -1418,8 +1423,15 @@ async function boot(course, options, lifetime, isCurrent) {
     } else { rumbleT = 0; rumbleSent = 0; }
     if (HT) hLap('audio');
 
-    racers.interpolate(alpha);                                    // 6. camera
-    if (online) online.s.drawRemotes();                           //    remote karts at this frame's server time (100 ms back)
+    // feel wave hit-stop: while fs.holdS > 0 the drawn karts and the camera keep last frame's pose (render-only:
+    // the sim steps, renderTime, audio and the room clock above all ran on). The finish slow frame draws the karts
+    // poseLag.lagS behind the sim (fs.renderRate), closing once the rate is back to 1.
+    const holdPose = fs.holdS > 0 && !frozen;
+    if (!holdPose) racers.interpolate(alpha);                     // 6. camera
+    if (online && !holdPose) online.s.drawRemotes();              //    remote karts at this frame's server time (100 ms back)
+    poseLag.step(fxDt, fs.renderRate ?? 1);
+    if (!holdPose && (poseLag.lagS > 0 || fs.renderRate < 1)) poseLag.record(renderTime, racers.list.map(r => r.view));
+    else if (poseLag.lagS === 0) poseLag.reset();
     // Resolve authored cues before camera composition so the mirror and its dolly open together.
     const music = audio.music, song = inRace && music ? music.song : null;
     const beatSong = song || (inRace ? music?.analysis : null);
@@ -1436,10 +1448,10 @@ async function boot(course, options, lifetime, isCurrent) {
     // than frameDt, and a wall-clock prediction then bounced the eye against the exactly aimed racer
     const viewDt = lastViewTime != null && renderTime >= lastViewTime ? renderTime - lastViewTime : frameDt;
     lastViewTime = renderTime;
-    if (!frozen) cam.update(P.view, fs, track, frameDt, renderer.aspect, mode, lookInput, {
+    if (!frozen && !holdPose) cam.update(P.view, fs, track, frameDt, renderer.aspect, mode, lookInput, {
       active: state === 'race', rearView, viewDt,
       manual: cameraToggle || !!(lookInput?.x || lookInput?.y) || paused || !!hud.card,
-      gentle: cueSafety.on, cues: cueView?.live || NO_WORDS, revision: cueView?.revision, songS,
+      gentle: cueSafety.on, cues: cueView?.live || NO_WORDS, revision: cueView?.revision, songS, motion: hud.options.motion, noise: fx.noise,
     });
     if (DEV || BOT) debug.cameraView = { selected: cam.views.selected, rear: !!rearView, mirror: cam.views.mirrorActive };
     if (state === 'intro') {
@@ -1516,7 +1528,7 @@ async function boot(course, options, lifetime, isCurrent) {
       ghostToState(ghostSample(ghost, ghostT, ghostPose), ghostView.st);
       ghostKarts[0] = kartViews[0]; shownKarts = ghostKarts;
     }
-    world.update({ kart: P.view, karts: shownKarts, fx: viewFx, timeS: renderTime, beat: clock.beat,
+    world.update({ kart: P.view, karts: shownKarts, fx: viewFx, timeS: renderTime, beat: clock.beat, motion: opts?.motion || 'full',
       raceTimeS: racers.clockS, sectionIdx: viewSection, items: iv, mode, camera: cam.camera, paused, song, songS, audioReactive, words: wordLive, beatSong,
       airWords: inRace && !online ? airWords : null,
       songCues: cueView?.live || NO_WORDS, cueGentle: cueSafety.on, songCueList: songCues?.cues || NO_WORDS,
@@ -1549,7 +1561,8 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     if (HT) hLap('world');
     musicEdges.update(frameDt, { enabled: inRace && race.phase === 'racing' && !P.finished, paused,
-      gentle: reactiveOptions.gentle, reducedMotion: edgeMotion.matches, beatSong, songS, audioReactive, screen: effects.screen });
+      gentle: reactiveOptions.gentle, reducedMotion: edgeMotion.matches, beatSong, songS, audioReactive, screen: effects.screen,
+      traumaPx: fs.borderShakePx || 0 });                                           //    feel wave: the trauma border shake
     if (deferred && !deferred.done) {                                              //    staged shaders: one group in flight
       if (state === 'race' && deferred.behind(viewTime({ state, introS: intro.duration, goS, goInS: race.goInS, raceTimeS: race.timeS, phase: race.phase }), 0)) stagedLate++;
       deferred.step();

@@ -247,18 +247,8 @@ take-off, on a pad up to padLateS after entering it, or on the ground up to earl
 
 ## fov
 - `fov.baseVDeg` 60: vertical fov at 16:9, through the lifted viewport law for other aspects.
-- `fov.kickByTierDeg` [2, 4, 6, 9]: held boost fov kick by ladder step: mini-turbo, drift tier 1, 2, 3 (polish 5, was one `fov.boostKickDeg` 8 for every boost). A launch takes boost.launchTier, a trick its grade, Surge step 2; pads, bubbles, slipstreams and the clean landing sit on the ladder by amount (fx/cues.js boostLadder). The camera adds a small snap on the IN (render/cameraMath.js boostFovDeg). None under Gentle.
-- `fov.kickInS` 0.12: kick in time.
-- `fov.kickOutS` 0.45: kick out time.
 
 ## shake (off under Gentle)
-- `shake.hitAmpM` 0.12: vertical hit amplitude.
-- `shake.boostAmpM` 0.35: forward-axis boost amplitude (drift tier 3, launch). Polish 5: boosts shake only from ladder step 2 and on launch; pads, bubbles and slipstreams never.
-- `shake.tier2Mul` 0.55: share of boostAmpM a step 2 boost (drift tier 2, great trick, Surge) shakes with (added).
-- `shake.boostRepeatMul` 0.6: repeat share of a boost shake, so it dies in 0.4 s instead of 1.2 s (added).
-- `shake.periodS` 0.1: one parabola `a*t - b*t^2` lasts this long (added).
-- `shake.repeatMul` 0.85: each repeat is this much of the last.
-- `shake.stopBelowM` 0.05: repeats stop under this amplitude.
 
 ## beatShake (polish 6: the camera dips on the beat once the song's rhythm part arrives; zero under Gentle and OS reduced motion)
 audio/songShape.js bakes the plan per beat from the chart (bars, section moods, mix and drum energy) or, for a song with no chart, one analysis of the decoded samples; fx/shake.js reads it on the song clock (music.songS) and adds it to the vertical shake axis. Pink road: onset bar 34 (61.8 s, the s4 drop), every beat by about bar 49 (88 s), 6.5 cm in the late drops and peaks.
@@ -306,7 +296,6 @@ audio/songShape.js bakes the plan per beat from the chart (bars, section moods, 
 - `juice.finishOrbitDeg` 100: camera orbit at the finish over finishSwellS (halved under Gentle) (added).
 - `juice.riseS` 0.08: generic fast IN for fx envelopes (added).
 - `juice.tailTcs` 3: fx tails after a boost last this many boost.tailTcS (added).
-- `juice.launchPushM` 1.2: forward camera push on a launch boost (added).
 - `juice.padBandPeak` 0.6: band flash on a pad, inside the photosafe budget (added).
 - `juice.releasePulse` 0.25: bloom pulse on rescue release (added).
 - `juice.edgeGlowRefused` 0.3: edge glow level when photosafe refuses the full glow (added).
@@ -576,3 +565,95 @@ Keep broad platforms refresh the existing lip lift once when an early hop crosse
 - `hitCam.glowS` 0.7: the frame's pink glow pulse decay (Gentle: half).
 - `hitCam.wordS` 0.75: the comic impact word's life.
 - `hitCam.contactDelayS` 0.12: a fresh inset lands its contact beats this long after opening, as it seats.
+
+## Feel wave 2026-10-26
+
+### Lane E
+
+Drawn-only camera layers after `compose()` (`render/cameraMath.js`, applied in `render/camera.js`). The chase pose (eye, follow, yaw cap, FOV) never sees them.
+
+- `camera.hint` { shortcutDeg 4, bendDeg 6, aheadM 25, inS 0.25, outS 0.4 }: the look direction (never the eye) leads up to shortcutDeg toward the next shortcut gate or fork mouth within aheadM and up to bendDeg into the bend the road turns within aheadM (full at 30 degrees of turn). Tweens in over inS, out over outS. Chase view only; none in first person, rear view, the mirror dolly or while looking around; none under Gentle or Motion off.
+- `camera.traumaRot` { rollDeg 0, yawDeg 0, pitchDeg 0 }: rotational trauma on the drawn camera only, `fx.noise(axis, t) * fx.state.traumaOut * deg` (axes 0 pitch, 1 yaw, 2 roll). All 0 by default; owner trial values 1.5 / 0.8 / 0.6. None under Gentle; traumaOut is 0 under Motion off.
+
+### Lane C
+
+Render world (`render/worldFeel.js` holds the rules; skids, particles, speedlines, audioReactive, faces, garage read them).
+Motion 'less' halves the new effects, 'off' removes them.
+
+- `permanence.skidCapMul` skid ring size multiplier on desktop tiers (high, mid); the phone tier keeps its ring.
+- `permanence.skidLifeS` skid mark life on desktop tiers, seconds (600 = race-long; the oldest segment still recycles).
+- `permanence.scorchLenM` length of the scorch laid under a wall or trap hit, metres.
+- `permanence.scorchWidthM` width of that scorch, metres.
+- `permanence.scorchColour` scorch colour (born hot white, cools to this).
+- `permanence.debrisCount` debris chips per wall or trap hit (phone half, Gentle 0.6).
+- `permanence.debrisSettleS` seconds settled debris stays on the road.
+- `permanence.debrisFadeS` the ease out after that, seconds.
+- `permanence.debrisSizeM` debris chip size, metres.
+- `speedSense.finalLapTweenS` the final-lap wake tween in, seconds (one variable 0..1).
+- `speedSense.finalLapParticleMul` particle count share at full wake.
+- `speedSense.finalLapFieldShift` speed share the speed field threshold drops by at full wake.
+- `speedSense.finalLapReactiveMul` audio-reactive prop pulse gain at full wake.
+- `speedSense.topFromPct` speed share where top-speed streaks start.
+- `speedSense.topLenMul` added streak length at full speed (share).
+- `speedSense.topDensity` added speed field density at full speed.
+- `cascade.staggerMs` random gap between list rows, ms [min, max].
+- `cascade.durMs` one row's entrance, ms (easeOutBack).
+- `cascade.riseY` how far a row rises in, px.
+- `cascade.overshoot` easeOutBack overshoot (0 under motion less).
+- `cascade.lessMul` stagger and rise share under motion less.
+- `faces.holdS` rival glance / grin hold after an overtake, seconds.
+- `faces.cooldownS` minimum gap between face changes per racer, seconds.
+- `faces.passer` face the passing racer shows.
+- `faces.passed` face the passed racer shows.
+
+### Lane D
+
+- `launch.revFullBeats` 1: beats of held throttle that fill the count rev to 1 (rev {level, over} events). Held about one beat at go (pressed on the last bell) is the sweet spot.
+- `launch.perfectS` 0.1: +- seconds around the sweet spot that grade perfect; held longer is early (overcharge).
+- `launch.revStep` 0.05: rev level change that sends a new rev event.
+- `launch.perfectTier` 2: BOOST.LAUNCH tier paid at go for a perfect hold.
+- `launch.goodTier` 1: BOOST.LAUNCH tier for a good hold (any shorter hold, the old boost.launchWindowS press included).
+- `launch.earlyStallS` 0.4: stall at go after an overcharged hold; no boost.
+- `hud.hitterFlashMs` 300: item chip answer when the player lands a hit (hitter-hit, hitter 0).
+- `hud.lapPulseMs` 450: lap chip pulse on every lap. Motion Less / Gentle: soft swell, no scale; Off: none.
+
+### Lane B
+
+- `audio.hitThumpMin` 0.35: a wall hit under this share of `wall.cueFullDvMps` gets no sub thump.
+- `audio.hitDuckWall` 0.55: bed and music duck floor on a full wall hit (lower = deeper; scales with dv).
+- `audio.hitDuckItem` 0.45: duck floor when an item or trap lands on you (the deepest).
+- `audio.hitDuckBump` 0.8: duck floor on a full kart bump (no thump).
+- `audio.thumpHz` 72: sub thump start pitch under wall and item hits (falls to 0.62x; 4 fixed variants, +-4%; plays at once).
+- `audio.thumpGain` 0.22: sub thump level (sample gain on the sfx bus).
+- `audio.thumpDurS` 0.09: sub thump length.
+- `audio.squealGain` 0.03: drift squeal level at full charge (drift charge 0..1 is its one variable).
+- `audio.squealLowHz` 1500: drift squeal pitch at no charge.
+- `audio.squealOct` 0.75: octaves the squeal climbs to full charge. Release note per tier lands on the next 8th.
+- `audio.windFromPct` 0.3: wind layer is silent under this share of top speed.
+- `audio.windGain` 0.03: wind level at top speed (squared rise).
+- `audio.windTopHz` 3200: wind low-pass at top speed.
+- `audio.revGain` 0.045: countdown rev voice level (follows `rev {level}`).
+- `audio.finalPercGain` 0.07: final-lap percussion level (8ths on the song grid).
+- `audio.finalPercInS` 1.5: final-lap percussion fade-in.
+- `music.finalLapRate` 1.0: song playback rate on the final lap (owner call; 1.04 supported, the song clock keeps its place).
+
+### Lane A
+
+One trauma value (fx/trauma.js) drives every screen-side shake; the chase camera never reads it. Hits add trauma
+(fx/cues.js TRAUMA: hit 0.5, bump up to 0.2, landing 0.1/0.2/0.3, hit received 0.35, tier 3 drift release 0.15,
+finish 0.3, lap 0.08); channels read out = trauma^2 x the Motion multiplier. The old `shake.*`, `fov.kick*` and
+`juice.launchPushM` keys are retired (the camera never read them).
+- `trauma.decayPerS` 1.6: linear trauma decay per second.
+- `trauma.lessMul` 0.45: Motion "Less" multiplier on the trauma channels (Off = 0; Gentle reads as Less).
+- `trauma.noiseHz` 18: speed of the seeded per-axis noise the shakes follow.
+- `trauma.borderPx` 6: screen border shake at full trauma (render/musicEdges.js, capped at 6 px with the music shake).
+- `trauma.rumble` 0.8: gamepad rumble at full trauma (zero under Gentle).
+- `trauma.duck` 0.4: audio duck at full trauma (fx.state.duck).
+- `hitstop.ms` 40: render-only hit-stop on wall, trap and item hits (owner default ON); less and Gentle halve, Off 0.
+- `hitstop.bigMs` 60: hit-stop for an item hit flagged `big`.
+- `hitstop.minGapS` 0.4: least time between two hit-stops. Bumps never stop.
+- `finishHold.s` 0.5: the finish slow frame: the drawn karts run at finishHold.rate this long (owner default ON).
+- `finishHold.rate` 0.4: drawn pose speed during the finish hold (sim and clocks untouched).
+- `finishHold.backS` 0.3: ease back to 1x, then the lag closes.
+- `post.aberration` { maxPx 2.5, photosafeMul 0.5 }: trauma chromatic aberration at full trauma; a strict photosafe host halves it, Gentle 0.
+- `kart.wobble` { mul 1, maxDeg 3 }: fx.state.wobble (trauma x noise, -1..1) for the player kart wobble; maxDeg is the roll a renderer should map it to.

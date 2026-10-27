@@ -47,6 +47,7 @@ import { buildKarts } from './karts.js';
 import { createWakes } from './wakes.js';
 import { createMotes } from './motes.js';
 import { createSkids } from './skids.js';
+import { createFinalLap, finalLapMods, createFaceGlance } from './worldFeel.js';
 import { kickWobble, moteDensity, bumpCount } from './kartPose.js';
 import { setLensCamera } from './lens.js';
 import { racerLabels } from '../hud/format.js';
@@ -337,6 +338,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   try { waterfall = createWaterfall(track, waterPal, { particles, wakes, fluid: waterVolume.field, reactive: road.uniforms.reactive }); if (waterfall.object) add(waterfall.object); } catch (e) { console.warn('[glassroad/world] waterfall failed: ' + (e && e.message)); }
   // polish 4: glowing skid ribbons under a drift (one pooled draw call for every kart)
   const skids = createSkids(feel, count);
+  // feel wave 2026-10-26 (lane C rules, render/worldFeel.js): the final-lap wake, rival glances and the motion level
+  const finalLap = createFinalLap(feel), glance = createFaceGlance(feel);
+  let motionLevel = 'full', racersNow = null, nowS = 0;
   add(skids.object);
   // reactions (REACT lane): bumps, walls, the countdown glance, finishes and the head sprays
   const detachKarts = karts.attach({ bus, particles });
@@ -428,6 +432,12 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     on('bubble-pop', (p) => ['pop', p.racer, 0, p.p]);
     on('item-box', (p) => ['box', p.racer, 0, p.p]);
     on('item-hit', (p) => ['hit', p.victim, p.verdict, p.p, p.kind]);
+    // permanence (lane C): a scorch under a wall / trap hit with settling debris; a smaller debris puff on every landed hit
+    on('wall', (p) => ['scorch', 0, p.dv || 0, Array.isArray(p.p) ? p.p : null]);
+    on('moving-trap-hit', (p) => ['scorch', p.racer ?? 0, 8, null]);
+    on('hitter-hit', (p) => ['debris', p.racer ?? 0, 6, null]);
+    on('lap', (p) => ['lap', 0, 0, p]);
+    on('overtake', (p) => ['glance', 0, 0, p]);
     // water (CONTRACT splash / chute): the ring, drops and lip spray; inert until the sim emits them
     on('splash', (p) => ['splash', 0, 0, p]);
     on('water-hop', (p) => ['splash', 0, 0, p]);
@@ -471,6 +481,16 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
       return;
     }
     if (kind === 'void') return;
+    if (kind === 'lap') { finalLap.lap(p || {}); return; }
+    if (kind === 'glance') { glance.overtake(p || {}, nowS); return; }
+    if (kind === 'scorch') {
+      const r = racersNow && racersNow[i];
+      if (r && r.st) skids.scorch(r.st, a >= 10 ? 1 : 0.7);
+      const at = p || posOf(i);
+      if (at) particles.debris(at, { groundY: at[1] });
+      return;
+    }
+    if (kind === 'debris') { const at = posOf(i); if (at) particles.debris(at, { count: a }); return; }
     if (kind === 'machine') {
       if (!obj || !obj.visible) return;
       particles.burst(posOf(i), Math.round(36 * few), { colours: a ? ['#5cff9d','#c0ffe0','#40dbc5'] : ['#ffd04e','#ef9b30','#fff1b8'],
@@ -552,6 +572,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
       { active: view.mode === 'race', paused: !!view.paused, gentle: !!feel.get('gentle.on') });
     solo[0].st = k;
     const racers = view.karts && view.karts.length ? view.karts : solo;
+    racersNow = racers; nowS = view.timeS || 0;
+    if (view.motion && view.motion !== motionLevel) { motionLevel = view.motion; for (const x of [finalLap, particles, lines]) x.setMotion(motionLevel); }
     if (labelsOf !== racers || labels.length !== racers.length) {
       labelsOf = racers;
       labels = racerLabels(racers.map((r, i) => (r && r.meta) || { i, name: '', isBot: i > 0 }));
@@ -579,7 +601,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
       const d0 = i ? Math.hypot(r.st[S.posX] - k[S.posX], r.st[S.posY] - k[S.posY], r.st[S.posZ] - k[S.posZ]) : 0;
       // the HIT CAM's victim (view.focusRacer, render/hitCam.js) counts as near: full pose, face, stun stars
       const d = i && view.focusRacer === i ? Math.min(d0, Q.kartLodM) : d0;
-      karts.pose(kk, r.st, r.fxv, dt, d, { glide: !!r.glide, underwater: r.st[S.respawnPhase] ? 0 : immersion(r.st[S.s], r.st[S.posY] + 0.65), paused: !!view.paused, squash: i ? null : fx.squash || 0, gentle, topMps, name: r.meta ? labels[i] || r.meta.name : '' });
+      karts.pose(kk, r.st, r.fxv, dt, d, { glide: !!r.glide, underwater: r.st[S.respawnPhase] ? 0 : immersion(r.st[S.s], r.st[S.posY] + 0.65), paused: !!view.paused, squash: i ? null : fx.squash || 0, gentle, topMps, name: r.meta ? labels[i] || r.meta.name : '', face: glance.face(i, nowS),
+        rollAdd: i || gentle ? 0 : (fx.wobble || 0) * (feel.get('kart.wobble.maxDeg') || 0) * Math.PI / 180 });
       kk.root.updateMatrixWorld();
       const near = i === 0 || d <= Q.kartLodM;
       if (near) particles.kart(kk.root, r.st, kk.mem, dt, { mul: i ? LOOK.botSparkMul : 1, slip: (r.fxv && r.fxv.slip) || 0 });
@@ -589,6 +612,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     }
     underwaterFx.update(dt,{karts:karts.list,playerS:k[S.s],playerPos:kart.position,paused:!!view.paused,gentle});
     skids.update(dt, !!view.paused);
+    const wake = finalLap.step(dt, !!view.paused);
+    particles.setWake(finalLapMods(wake, feel).particleMul); lines.setWake(wake);
     for (const e of pending) juice(e, gentle);
     pending.length = 0;
     if (stones) stones.update(dt, { gentle, paused: !!view.paused });
@@ -608,7 +633,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     road.uniforms.phase.value = (road.uniforms.phase.value + dt * LOOK.bandScrollMps * band) % LOOK.bandLenM;
     road.uniforms.contrast.value = contrast;
     road.uniforms.sheen.value = gentle ? LOOK.sheenGentle : 1;
-    updateAudioReactiveUniforms(road.uniforms.reactive, view.audioReactive, dt, { paused: !!view.paused, gentle, song: view.beatSong || view.song });
+    updateAudioReactiveUniforms(road.uniforms.reactive, view.audioReactive, dt, { paused: !!view.paused, gentle, song: view.beatSong || view.song, finalLap: wake, feel });
     // Water and road share one measured music envelope and freeze together on pause.
     if (road.uniforms.water && !view.paused) road.uniforms.water.t.value += dt * scroll;
     if (waterfall) waterfall.update(dt, { playerPos: kart.position, gentle, paused: !!view.paused, scroll });
@@ -763,5 +788,5 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
-    resetReactions: () => { railBarrier.reset(); courseAtmosphere?.reset(); pinkAtmosphere?.reset(); itemVis?.clear(); marquees?.clear(); veils.clear(); for (const x of [cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps]) x?.clear(); phraseGates.clear(); airWords.clear(); if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); goonworks?.reset(); goonworksHazards?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
+    resetReactions: () => { railBarrier.reset(); courseAtmosphere?.reset(); pinkAtmosphere?.reset(); itemVis?.clear(); marquees?.clear(); veils.clear(); for (const x of [cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps]) x?.clear(); phraseGates.clear(); airWords.clear(); if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); goonworks?.reset(); goonworksHazards?.reset(); karts.resetReactions(); skids.clear(); finalLap.reset(); glance.reset(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
 }

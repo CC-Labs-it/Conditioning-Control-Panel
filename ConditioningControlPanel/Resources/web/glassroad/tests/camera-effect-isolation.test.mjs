@@ -25,7 +25,7 @@ for (const dt of [1 / 60, 1 / 20]) for (const aspect of [16 / 9, 390 / 844]) {
           state[S.boostKind] = BOOST.LAUNCH;
         }
         fx.update(dt, state);
-        if (fx.state.shake.some(v => Math.abs(v) > .001) || fx.state.camPush || fx.state.fovKick) effectFrames++;
+        if ((fx.state.traumaOut || 0) > .001) effectFrames++;
         if (!n) { quiet.snap(state, aspect, null, track); active.snap(state, aspect, fx.state, track); }
         else { quiet.update(state, null, dt, aspect, track); active.update(state, fx.state, dt, aspect, track); }
         assert.deepEqual(active.eye, quiet.eye, 'effect cannot change eye');

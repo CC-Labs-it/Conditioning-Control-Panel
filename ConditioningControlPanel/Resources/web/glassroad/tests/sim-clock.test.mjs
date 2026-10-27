@@ -91,10 +91,18 @@ test('race: countdown on the beat, go, launch window', () => {
   assert.deepEqual(rec.all('countdown').map((e) => e.payload.n), [3, 2, 1].slice(0, n));
   near(rec.all('countdown')[1].t, beat, DT);
   near(rec.first('go').t, goT, DT);
-  assert.deepEqual(rec.first('launch-boost').payload, { tier: feel.get('boost.launchTier') });
+  assert.deepEqual(rec.first('launch-boost').payload, { tier: feel.get('launch.goodTier') });
+  assert.deepEqual(rec.first('launch').payload, { grade: 'good', tier: feel.get('launch.goodTier') });
   assert.equal(st[S.boostKind], BOOST.LAUNCH); assert.equal(race.phase, 'racing');
-  assert.ok(!go(goT - 0.6).rec.first('launch-boost'), 'held from early: no launch');
+  // pressed on the last bell: held one beat = the sweet spot
+  assert.deepEqual(go(goT - beat).rec.first('launch').payload, { grade: 'perfect', tier: feel.get('launch.perfectTier') });
+  // held from earlier: overcharged, no boost, a short stall
+  const early = go(goT - 2 * beat);
+  assert.ok(!early.rec.first('launch-boost'), 'held from early: no launch');
+  assert.deepEqual(early.rec.first('launch').payload, { grade: 'early', tier: 0 });
+  assert.ok(early.st[S.stalled] > 0.3, 'early stalls');
   assert.ok(!go(null).rec.first('launch-boost'));
+  assert.deepEqual(go(null).rec.first('launch').payload, { grade: 'none', tier: 0 });
 });
 
 test('progress: checkpoints in order, laps, sections, finish', () => {

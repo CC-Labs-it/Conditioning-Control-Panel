@@ -73,6 +73,8 @@
     "launchTier": 2,
     "launchWindowS": 0.15
   },
+  "launch": { "revFullBeats": 1, "perfectS": 0.1, "revStep": 0.05, "perfectTier": 2, "goodTier": 1, "earlyStallS": 0.4 },
+  "hud": { "hitterFlashMs": 300, "lapPulseMs": 450 },
   "pad": { "amount": 0.2, "holdS": 1.0 },
   "trick": {
     "earlyS": 0.12,
@@ -120,10 +122,16 @@
     "yawFarGapDeg": 70,
     "driftBiasDeg": 8,
     "driftBiasOutDeg": 11,
-    "driftBiasEaseS": 0.3
+    "driftBiasEaseS": 0.3,
+    "hint": { "shortcutDeg": 4, "bendDeg": 6, "aheadM": 25, "inS": 0.25, "outS": 0.4 },
+    "traumaRot": { "rollDeg": 0, "yawDeg": 0, "pitchDeg": 0 }
   },
-  "fov": { "baseVDeg": 60, "kickByTierDeg": [2, 4, 6, 9], "kickInS": 0.12, "kickOutS": 0.45 },
-  "shake": { "hitAmpM": 0.12, "boostAmpM": 0.35, "periodS": 0.1, "repeatMul": 0.85, "boostRepeatMul": 0.6, "tier2Mul": 0.55, "stopBelowM": 0.05 },
+  "fov": { "baseVDeg": 60 },
+  "trauma": { "decayPerS": 1.6, "lessMul": 0.45, "noiseHz": 18, "borderPx": 6, "rumble": 0.8, "duck": 0.4 },
+  "hitstop": { "ms": 40, "bigMs": 60, "minGapS": 0.4 },
+  "finishHold": { "s": 0.5, "rate": 0.4, "backS": 0.3 },
+  "post": { "aberration": { "maxPx": 2.5, "photosafeMul": 0.5 } },
+  "kart": { "wobble": { "mul": 1, "maxDeg": 3 } },
   "beatShake": { "ampStartM": 0.03, "ampHalfM": 0.065, "energyMix": 0.35, "fracStart": 0.25, "fracMax": 0.9, "rampBars": 16, "onsetLevel": 0.55, "onsetHoldBars": 2, "gateGroove": 0.6, "gateBuild": 0.4, "gateLo": 0.35, "gateHi": 0.7, "riseK": 0.7, "fallK": 0.65, "outroBars": 4, "accentOff": 0.7, "inS": 0.03, "outS": 0.16, "duckInS": 0.04, "duckOutS": 0.35 },
   "stall": { "durationS": 1.2, "yawSteps": 3, "thrustMul": 0.4 },
   "juice": {
@@ -143,7 +151,6 @@
     "finishOrbitDeg": 100,
     "riseS": 0.08,
     "tailTcs": 3,
-    "launchPushM": 1.2,
     "padBandPeak": 0.6,
     "releasePulse": 0.25,
     "edgeGlowRefused": 0.3,
@@ -345,8 +352,16 @@
     "slipHoldS": 0.6,
     "slipCooldownS": 2.5
   },
+  "permanence": { "skidCapMul": 3, "skidLifeS": 600, "scorchLenM": 1.4, "scorchWidthM": 0.9, "scorchColour": "#3a1430",
+    "debrisCount": 10, "debrisSettleS": 20, "debrisFadeS": 1.5, "debrisSizeM": 0.16 },
+  "speedSense": { "finalLapTweenS": 1.5, "finalLapParticleMul": 1.5, "finalLapFieldShift": 0.12, "finalLapReactiveMul": 1.35,
+    "topFromPct": 0.85, "topLenMul": 0.6, "topDensity": 0.25 },
+  "cascade": { "staggerMs": [40, 90], "durMs": 320, "riseY": 14, "overshoot": 1.7, "lessMul": 0.5 },
+  "faces": { "holdS": 0.8, "cooldownS": 2, "passer": "grin", "passed": "determined" },
   "hitCam": { "on": true, "holdS": 2.2, "leadTimeoutS": 2.5, "minDistM": 14, "enterS": 0.34, "exitS": 0.3, "overshoot": 1.35,
     "fovDeg": 42, "backM": 3.1, "upM": 1.05, "lookUpM": 0.35, "aheadM": 0.3, "sideDeg": 32, "orbitDegps": 18, "orbitMaxDeg": 70, "followTcS": 0.1,
     "creep": 0.1, "creepS": 0.9, "punch": 0.2, "punchS": 0.45, "shakeM": 0.11, "shakeS": 0.42, "shakeHz": 19,
-    "flash": 0.55, "flashS": 0.22, "glowS": 0.7, "wordS": 0.75, "contactDelayS": 0.12 }
+    "flash": 0.55, "flashS": 0.22, "glowS": 0.7, "wordS": 0.75, "contactDelayS": 0.12 },
+  "audio": { "hitThumpMin": 0.35, "hitDuckWall": 0.55, "hitDuckItem": 0.45, "hitDuckBump": 0.8, "thumpHz": 72, "thumpGain": 0.22, "thumpDurS": 0.09, "squealGain": 0.03, "squealLowHz": 1500, "squealOct": 0.75, "windFromPct": 0.3, "windGain": 0.03, "windTopHz": 3200, "revGain": 0.045, "finalPercGain": 0.07, "finalPercInS": 1.5 },
+  "music": { "finalLapRate": 1.0 }
 }

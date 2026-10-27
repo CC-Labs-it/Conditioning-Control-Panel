@@ -4,7 +4,9 @@ import { readFileSync } from 'node:fs';
 import { createFeel } from '../core/feel.js';
 import { createPhotosafe } from '../fx/photosafe.js';
 import { createGentle } from '../fx/gentle.js';
-import { createShake, lobe } from '../fx/shake.js';
+import { createBus } from '../core/events.js';
+import { createState } from '../sim/state.js';
+import { createFx } from '../fx/reactions.js';
 
 const feelJson = JSON.parse(readFileSync(new URL('../feel.json', import.meta.url), 'utf8'));
 const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) <= e, a + ' vs ' + b);
@@ -50,37 +52,45 @@ test('gentle: off is identity, on halves contrast and scroll, removes kicks, flo
   assert.equal(createGentle(createFeel(feelJson), { search: '?x=1&gentle=1' }).on, true);
 });
 
-test('shake: lobe law peaks at amp mid-period and rests at the ends', () => {
-  near(lobe(0.12, 0, 0.1), 0); near(lobe(0.12, 0.1, 0.1), 0); near(lobe(0.12, 0.05, 0.1), 0.12);
+// feel wave 2026-10-26 (Lane A): the render-only time effects and the Motion row
+function fxRig({ gentle = false, motion } = {}) {
+  const feel = createFeel(feelJson), bus = createBus(), g = createGentle(feel, { search: '' });
+  if (gentle) g.set({ on: true });
+  const fx = createFx(bus, feel, { gentle: g, photosafe: createPhotosafe(feel) }), kart = createState();
+  if (motion) fx.setMotion(motion);
+  return { feel, bus, fx, run: (s, dt = 1 / 60) => { for (let t = 0; t < s - 1e-9; t += dt) fx.update(dt, kart); } };
+}
+
+test('hit-stop: 40 ms on a hit, at most one per 400 ms, never on a bump; less halves, off removes', () => {
+  const a = fxRig();
+  a.bus.emit('item-hit', { victim: 0, verdict: 'hit' }); near(a.fx.state.holdS, 0.04);
+  a.run(0.1); assert.equal(a.fx.state.holdS, 0, 'over by itself');
+  a.bus.emit('wall', { dv: 99 }); assert.equal(a.fx.state.holdS, 0, 'inside the 400 ms gap');
+  a.run(0.4); a.bus.emit('wall', { dv: 99 }); near(a.fx.state.holdS, 0.04);
+  const big = fxRig(); big.bus.emit('item-hit', { victim: 0, verdict: 'hit', big: true }); near(big.fx.state.holdS, 0.06);
+  const b = fxRig(); b.bus.emit('bump', { a: 0, b: 2, dv: 30 }); assert.equal(b.fx.state.holdS, 0);
+  const less = fxRig({ motion: 'less' }); less.bus.emit('moving-trap-hit', { racer: 0 }); near(less.fx.state.holdS, 0.02);
+  const gen = fxRig({ gentle: true }); gen.bus.emit('item-hit', { victim: 0, verdict: 'hit' }); near(gen.fx.state.holdS, 0.02, 1e-9);
+  const off = fxRig({ motion: 'off' }); off.bus.emit('item-hit', { victim: 0, verdict: 'hit' }); off.run(0.02);
+  assert.equal(off.fx.state.holdS, 0); assert.equal(off.fx.state.traumaOut, 0); assert.equal(off.fx.state.aberrationPx, 0);
+  const bot = fxRig(); bot.bus.emit('moving-trap-hit', { racer: 3 }); assert.equal(bot.fx.state.holdS, 0);
 });
 
-test('shake: hits are vertical, boosts forward, each lobe x0.85 until under 0.05 m', () => {
-  const feel = createFeel(feelJson);
-  const sh = createShake(feel);
-  sh.kick('hit');
-  const dt = 0.005, peaks = [];
-  let peak = 0, prevLobe = 0;
-  for (let t = dt; t < 2; t += dt) {
-    const v = sh.update(dt);
-    assert.equal(v[0], 0); assert.equal(v[2], 0);
-    const k = Math.floor((t + 1e-9) / 0.1);
-    if (k !== prevLobe) { peaks.push(peak); peak = 0; prevLobe = k; }
-    peak = Math.max(peak, Math.abs(v[1]));
-  }
-  const real = peaks.filter((p) => p > 0);
-  near(real[0], 0.12, 2e-3);
-  for (let i = 1; i < real.length; i++) near(real[i] / real[i - 1], 0.85, 0.03);
-  assert.ok(real[real.length - 1] >= 0.05 - 2e-3);
-  assert.equal(real.length, 6);   // 0.12 * 0.85^6 < 0.05
-  sh.kick('boost');
-  const v = sh.update(0.05);
-  assert.equal(v[1], 0); assert.ok(v[2] < -0.3);
+test('finish slow frame: renderRate 0.4 for finishHold.s, eased back to 1 (IN and OUT); off keeps 1', () => {
+  const a = fxRig();
+  a.bus.emit('finish', { timeS: 60 }); a.run(0.3); near(a.fx.state.renderRate, 0.4);
+  a.run(0.35); assert.ok(a.fx.state.renderRate > 0.4 && a.fx.state.renderRate < 1, 'easing ' + a.fx.state.renderRate);
+  a.run(0.3); assert.equal(a.fx.state.renderRate, 1);
+  const off = fxRig({ motion: 'off' }); off.bus.emit('finish', {}); off.run(0.2); assert.equal(off.fx.state.renderRate, 1);
 });
 
-test('shake: nothing under Gentle', () => {
-  const feel = createFeel(feelJson);
-  const sh = createShake(feel);
-  feel.set('gentle.on', true);
-  sh.kick('hit'); sh.kick('boost');
-  assert.deepEqual([...sh.update(0.05)], [0, 0, 0]);
+test('trauma channels: border shake within 6 px, aberration within 2.5 px, both 0 under Gentle; lap and launch', () => {
+  const a = fxRig(); let px = 0, ab = 0;
+  for (let i = 0; i < 4; i++) { a.bus.emit('item-hit', { victim: 0, verdict: 'hit' }); for (let k = 0; k < 30; k++) { a.run(1 / 60); px = Math.max(px, Math.abs(a.fx.state.borderShakePx)); ab = Math.max(ab, a.fx.state.aberrationPx); } }
+  assert.ok(px > 0.5 && px <= 6 && ab > 0.5 && ab <= 2.5, px + ' px, ' + ab + ' px');
+  const l = fxRig(); l.bus.emit('lap', { lap: 1 }); l.run(1 / 60); assert.ok(l.fx.state.trauma > 0.05 && l.fx.state.trauma <= 0.08);
+  const r = fxRig(); r.bus.emit('hitter-hit', { racer: 0, hitter: 2 }); r.run(1 / 60); assert.ok(r.fx.state.trauma > 0.3 && r.fx.state.trauma <= 0.35);
+  const s = fxRig(); s.bus.emit('rev', { level: 1 }); s.run(0.2); assert.ok(s.fx.state.squash > 0, 'the kart crouches on the rev');
+  s.bus.emit('launch', { grade: 'perfect' }); s.run(0.05); assert.ok(s.fx.state.squash < 0, 'a perfect launch stretches');
+  assert.ok(s.fx.state.trauma > 0);
 });

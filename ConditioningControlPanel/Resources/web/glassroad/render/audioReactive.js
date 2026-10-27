@@ -2,6 +2,7 @@
 import { uniform, float, vec2, vec3, sin, cos, abs, pow, mix, smoothstep, floor, fract, hash, length, fwidth, max, min, mod, step } from 'three/tsl';
 import { AUDIO_REACTIVE as L, stepAudioReactive } from './audioReactiveMath.js';
 import { createWaterDnaFrame, waterDnaFrame } from './waterDnaMath.js';
+import { finalLapMods } from './worldFeel.js';
 const UNIFORM_NAMES = Object.freeze(['bass', 'mid', 'treble', 'energy', 't', 'gentle', ...Array.from({ length: 8 }, (_, i) => 'note' + i)]);
 
 export function createAudioReactiveUniforms() {
@@ -33,9 +34,13 @@ export function waterHelixLight(p, u, tint, accent = tint) {
     .add(strandB.mul(b)).add(mix(strandA, strandB, .5).mul(bead).mul(.35)).mul(level).min(.7);
 }
 
+const PULSED = new Set(['bass', 'mid', 'treble', 'energy', ...Array.from({ length: 8 }, (_, i) => 'note' + i)]);
+
 export function updateAudioReactiveUniforms(u, signal, dt, options) {
   stepAudioReactive(u.state, signal, dt, options);
-  for (const name of UNIFORM_NAMES) u[name].value = u.state[name];
+  // feel wave 2026-10-26 (lane C): the final-lap wake (options.finalLap 0..1, motion share already in) pulses harder
+  const wake = finalLapMods(options?.finalLap || 0, options?.feel).reactiveMul;
+  for (const name of UNIFORM_NAMES) u[name].value = PULSED.has(name) ? u.state[name] * wake : u.state[name];
   waterDnaFrame(u.dna, u.state, signal, options?.song, options);
   u.dnaPhase.value = u.dna.phase; u.dnaRadius.value = u.dna.radius;
   u.dnaHue.value = u.dna.hue; u.dnaPulse.value = u.dna.pulse;
