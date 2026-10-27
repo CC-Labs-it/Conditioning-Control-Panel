@@ -39,7 +39,7 @@ export function createGoonworksHazardView(scene, track, layout) {
   }
   function cube(parent, mat, p, size, edge = .12) {
     const root = new Group(); root.position.set(...p); parent.add(root);
-    mesh(root, box, outline, [0, 0, 0], size.map(v => v + edge * 2)); mesh(root, box, mat, [0, 0, .015], size);
+    mesh(root, box, outline, [0, 0, 0], size.map(v => v + edge * 2)); mesh(root, box, mat, [0, 0, .015], size).castShadow = false; // the hull's shadow already covers it (VSM: coverage only)
     return root;
   }
   function sectorShape(radius, a, b, inner = 0) {
@@ -162,7 +162,7 @@ export function createGoonworksHazardView(scene, track, layout) {
       cube(root, ink, [row.x, .015, 0], [row.w + .5, .1, row.depth + .5], .03);
       const block = new Group(); block.position.x = row.x; root.add(block); entry.block = block;
       mesh(block, box, outline, [0, .5, 0], [row.w, 1, row.depth]);
-      mesh(block, box, (Number(row.id.at(-1)) % 2) ? white : pink, [0, .5, .015], [row.w - .25, .96, row.depth - .25]);
+      mesh(block, box, (Number(row.id.at(-1)) % 2) ? white : pink, [0, .5, .015], [row.w - .25, .96, row.depth - .25]).castShadow = false; // inside the outline hull above
       // Two bold upward marks identify a rising obstacle even without its warning colour.
       for (const y of [.3, .58]) mesh(block, riseGeometry, ink, [0, y, row.depth / 2 + .025], [1.45, .65, 1]);
       for (const side of [-1, 1]) mesh(block, box, candy, [side * (row.w / 2 - .35), .5, 0], [.22, .92, row.depth - .45]);
