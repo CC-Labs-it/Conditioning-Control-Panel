@@ -36,7 +36,7 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=384
         run: |
-          $tests = (Get-ChildItem tests -Filter '*.test.mjs').FullName
+          $tests = Get-ChildItem tests -Filter '*.test.mjs' | ForEach-Object { "tests/$($_.Name)" }
           node --test --test-concurrency=2 --test-timeout=180000 @tests
 
   windows:
