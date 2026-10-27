@@ -361,7 +361,8 @@ export function capsulesApart(x, y, gap = 0) {
  * until it clears the road and the bodies already placed. Returns the axis with fit info, or null.
  */
 export function fitColossus(spec, track, row, samples, placed = [], W = WORLD_DEFAULTS) {
-  const f = track.frameAt(((spec.s % track.lengthM) + track.lengthM) % track.lengthM);
+  const s = track.courseShape?.mapS?.(spec.s,track) ?? spec.s;
+  const f = track.frameAt(((s % track.lengthM) + track.lengthM) % track.lengthM);
   for (let k = 0; k <= W.fitTries; k++) {
     const sp = spec.kind === 'arch'
       ? { ...spec, crossUpM: (spec.crossUpM || 0) + k * W.fitStepM }
