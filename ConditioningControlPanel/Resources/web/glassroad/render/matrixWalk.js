@@ -24,19 +24,22 @@
 import { Object3D, Matrix4 } from 'three/webgpu';
 
 const STOCK = Object3D.prototype.updateMatrixWorld;
-const KEY = '_glassroadMw';               // per node: [px,py,pz,qx,qy,qz,qw,sx,sy,sz, matrix 16]
-const PARENT = '_glassroadMwParent';
-const STALE = '_glassroadMwStale';
+const KEY = '_glassroadMw';               // per node: one WalkRecord (a single property read per visited node)
+/** The walk's state for one node: c = [px,py,pz,qx,qy,qz,qw,sx,sy,sz, matrix 16] it last wrote, the parent it
+ * last saw (undefined = never walked) and whether a hidden walk skipped it. One class, so reads stay monomorphic. */
+class WalkRecord {
+  constructor() { this.c = new Float64Array(26); this.c[0] = NaN; this.parent = undefined; this.stale = false; }
+}
 const TMP = new Matrix4();
 const stats = { walks: 0, nestedSkips: 0, visits: 0, composes: 0, worlds: 0, hiddenSkips: 0 };
 
 /** The walk's counters since the page loaded (dev checks and tests). */
 export function matrixWalkStats() { return { ...stats }; }
 
-function cacheOf(o) {
-  let c = o[KEY];
-  if (c === undefined) { c = new Float64Array(26); c[0] = NaN; o[KEY] = c; }
-  return c;
+function recordOf(o) {
+  let r = o[KEY];
+  if (r === undefined) { r = new WalkRecord(); o[KEY] = r; }
+  return r;
 }
 
 /** True when the local matrix must be rebuilt (auto-updating node) or was changed from outside. */
@@ -68,16 +71,16 @@ function alwaysWalked(o) {
 
 function visit(o, moved, all) {
   if (o.updateMatrixWorld !== STOCK) { o.updateMatrixWorld(moved); return; }   // cameras, skinned meshes: their own rule
-  if (!all && o.visible === false && !alwaysWalked(o)) { o[STALE] = true; stats.hiddenSkips++; return; }
+  if (!all && o.visible === false && !alwaysWalked(o)) { recordOf(o).stale = true; stats.hiddenSkips++; return; }
   walkFrom(o, moved, all, false);
 }
 
 function walkFrom(o, moved, all, checkWorld) {
   stats.visits++;
-  const c = cacheOf(o);
-  let dirty = localChanged(o, c) || moved || o.matrixWorldNeedsUpdate;
-  if (o[STALE] === true) { o[STALE] = false; dirty = true; }
-  if (o[PARENT] !== o.parent) { o[PARENT] = o.parent; dirty = true; }
+  const r = recordOf(o);
+  let dirty = localChanged(o, r.c) || moved || o.matrixWorldNeedsUpdate;
+  if (r.stale === true) { r.stale = false; dirty = true; }
+  if (r.parent !== o.parent) { r.parent = o.parent; dirty = true; }
   if (!dirty && checkWorld && o.parent !== null) {
     // a subtree root: its parent may have moved since the last walk without this walk seeing it
     TMP.multiplyMatrices(o.parent.matrixWorld, o.matrix);

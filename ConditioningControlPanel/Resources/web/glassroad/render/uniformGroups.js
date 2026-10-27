@@ -138,3 +138,38 @@ export function fastUniformGroupUpdates(three) {
 export function restoreUniformGroupUpdates() {
   if (installed) { installed.proto.update = installed.stock; installed = null; }
 }
+
+/* Group versions (perf, 2026-10-27): NodeManager.updateGroup looks every shared uniform group up in a two-level
+ * ChainMap (two WeakMap gets) on every draw, ~500 times a frame on GOONWORKS high, to compare the group node's
+ * version. cacheGroupVersions() keeps the very record that ChainMap holds on the binding itself (non-enumerable, and
+ * checked against its owner, its group node and the current ChainMap, so a Binding.clone() copy or a reset map falls
+ * back to three's lookup). Same record, same version rule, same answers. Keep aligned with NodeManager.updateGroup. */
+const GROUP_REC = Symbol('glassroad.groupVersion');
+const keys = [null, null];
+
+export function cacheGroupVersions(three) {
+  const nodes = three && three._nodes;
+  if (!nodes || typeof nodes.updateGroup !== 'function' || nodes[GROUP_REC]) return false;
+  Object.defineProperty(nodes, GROUP_REC, { value: true });
+  const stock = nodes.updateGroup;
+  nodes.updateGroup = function(binding) {
+    const groupNode = binding.groupNode;
+    if (!groupNode || groupNode.updateType === 'object') return stock.call(this, binding);
+    const map = this.groupsData;
+    let rec = binding[GROUP_REC], data;
+    if (rec !== undefined && rec.owner === binding && rec.map === map && rec.groupNode === groupNode) data = rec.data;
+    else {
+      keys[0] = groupNode; keys[1] = binding;
+      data = map.get(keys);
+      if (data === undefined) map.set(keys, data = {});
+      keys[0] = null; keys[1] = null;
+      if (rec !== undefined && rec.owner === binding) { rec.map = map; rec.groupNode = groupNode; rec.data = data; }
+      else if (Object.isExtensible(binding) && !Object.prototype.hasOwnProperty.call(binding, GROUP_REC)) {
+        Object.defineProperty(binding, GROUP_REC, { value: { owner: binding, map, groupNode, data }, writable: true, configurable: true, enumerable: false });
+      }
+    }
+    if (data.version !== groupNode.version) { data.version = groupNode.version; return true; }
+    return false;
+  };
+  return true;
+}

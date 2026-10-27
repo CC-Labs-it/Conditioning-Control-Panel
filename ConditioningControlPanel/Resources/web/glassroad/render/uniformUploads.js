@@ -14,7 +14,7 @@
  * check runs through render/uniformGroups.js, and NodeFrame.updateNode through render/nodeUpdates.js (both
  * installed from here, WebGL2 only).
  * Keep aligned with the vendored renderer (Bindings.updateForRender -> backend.updateBinding) when upgrading. */
-import { fastUniformGroupUpdates } from './uniformGroups.js';
+import { fastUniformGroupUpdates, cacheGroupVersions } from './uniformGroups.js';
 import { installNodeUpdates } from './nodeUpdates.js';
 
 const patched = new WeakSet();
@@ -31,6 +31,7 @@ export function skipUnchangedInstanceUploads(three) {
   if (typeof backend.updateBinding !== 'function' || typeof bindings.updateForRender !== 'function') return false;
   patched.add(three);
   fastUniformGroupUpdates(three);            // the uniform groups' value check without per-uniform dispatch
+  cacheGroupVersions(three);                 // shared groups' version check without a ChainMap lookup per draw
   installNodeUpdates(three);                    // shared node refresh without a WeakMap lookup per draw (nodeUpdates.js)
   let current = null;
   // binding -> { gpu, version, array, words, copy }: what it last uploaded (copy holds the sent words)

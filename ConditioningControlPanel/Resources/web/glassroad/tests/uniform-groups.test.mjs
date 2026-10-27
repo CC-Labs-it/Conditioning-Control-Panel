@@ -8,7 +8,7 @@ registerHooks({ resolve(s, c, next) {
   return files[s] ? { url: new URL('../vendor/three/build/' + files[s], import.meta.url).href, shortCircuit: true } : next(s, c);
 } });
 const T = await import('three/webgpu');
-const { fastGroupUpdate, fastUniformGroupUpdates, restoreUniformGroupUpdates } = await import('../render/uniformGroups.js');
+const { fastGroupUpdate, fastUniformGroupUpdates, restoreUniformGroupUpdates, cacheGroupVersions } = await import('../render/uniformGroups.js');
 
 const SHAPES = {
   float: ['isNumberUniform', 4, 1, () => Math.random() < .5 ? 1 : Math.random()],
@@ -85,4 +85,41 @@ test('installs on the first bind group that holds a uniform group, then steps as
   assert.equal(proto.update, fastGroupUpdate, 'UniformsGroup.update swapped');
   restoreUniformGroupUpdates();
   assert.equal(proto.update, stockUpdate, 'restored');
+});
+
+/** r186 ChainMap (two keys) and NodeManager.updateGroup, transcribed from the vendored build. */
+class ChainMap2 {
+  constructor() { this.w = new WeakMap(); }
+  get(k) { const m = this.w.get(k[0]); return m === undefined ? undefined : m.get(k[1]); }
+  set(k, v) { if (!this.w.has(k[0])) this.w.set(k[0], new WeakMap()); this.w.get(k[0]).set(k[1], v); return this; }
+}
+function stockUpdateGroup(e) {
+  const t = e.groupNode; if (t.updateType === 'object') return true;
+  const k = [t, e]; let r = this.groupsData.get(k); if (r === undefined) this.groupsData.set(k, r = {});
+  return r.version !== t.version && (r.version = t.version, true);
+}
+
+test('shared group versions answer exactly like NodeManager.updateGroup, clones and map resets included', () => {
+  const { cacheGroupVersions: cache } = { cacheGroupVersions };
+  for (const seed of [3, 11, 2027]) {
+    let s = seed; const rnd = () => (s = (s * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const stockNodes = { groupsData: new ChainMap2(), updateGroup: stockUpdateGroup };
+    const fastNodes = { groupsData: new ChainMap2(), updateGroup: stockUpdateGroup };
+    assert.equal(cache({ _nodes: fastNodes }), true);
+    assert.equal(cache({ _nodes: fastNodes }), false, 'once');
+    const groups = [{ updateType: 'render', version: 0 }, { updateType: 'frame', version: 0 }, { updateType: 'object', version: 0 }, { updateType: 'none', version: 0 }];
+    const make = () => { const g = groups[Math.floor(rnd() * groups.length)]; return [{ groupNode: g }, { groupNode: g }]; };
+    const pairs = [make(), make(), make()];
+    const a = [], b = [];
+    for (let step = 0; step < 600; step++) {
+      const x = rnd();
+      if (x < .15) groups[Math.floor(rnd() * groups.length)].version++;
+      else if (x < .2) { const p = pairs[Math.floor(rnd() * pairs.length)]; pairs.push([Object.assign({}, p[0]), Object.assign({}, p[1])]); }
+      else if (x < .22) { stockNodes.groupsData = new ChainMap2(); fastNodes.groupsData = new ChainMap2(); }
+      else if (x < .25) { const p = pairs[Math.floor(rnd() * pairs.length)], g = groups[Math.floor(rnd() * groups.length)]; p[0].groupNode = g; p[1].groupNode = g; }
+      const p = pairs[Math.floor(rnd() * pairs.length)];
+      a.push(stockNodes.updateGroup(p[0])); b.push(fastNodes.updateGroup(p[1]));
+    }
+    assert.deepEqual(b, a);
+  }
 });
