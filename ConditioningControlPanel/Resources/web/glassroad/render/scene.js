@@ -42,7 +42,7 @@ import { sampleTrack } from './colossiMath.js';
 import { createPropMaterial } from './materials/kart.js';
 import { createGlowMaterial } from './materials/glow.js';
 import { createParticles } from './particles.js';
-import { createSpeedLines } from './speedlines.js';
+import { createSpeedLines, speedFieldVisibility } from './speedlines.js';
 import { buildKarts } from './karts.js';
 import { createWakes } from './wakes.js';
 import { createMotes } from './motes.js';
@@ -703,7 +703,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (edges) edges.update(dt, { gentle, paused: !!view.paused });
     particles.update(dt);
     wakes.update(dt);
-    lines.update(dt, k, fx, kart);
+    lines.update(dt, k, fx, kart, speedFieldVisibility(k[S.s], goonworks?.plan.layout.tube));
     if (view.mode === 'menu') lines.object.visible = false;
     if (itemVis && view.items) itemVis.update(view.items, dt, racers, view.camera, view);   // visuals read racer .st (CONTRACT-B1 view.karts)
     if (wordVis) wordVis.update(view.words || [], view.song || null, dt);

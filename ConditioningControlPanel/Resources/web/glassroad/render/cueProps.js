@@ -2,14 +2,14 @@ import { Group, Mesh, BoxGeometry, PlaneGeometry, CylinderGeometry, SphereGeomet
   Shape, ShapeGeometry, Vector3, Quaternion, Matrix4, Color, DoubleSide } from 'three/webgpu';
 import { acquireLoomAtlas } from './loomAtlas.js';
 import { wordTheme } from './wordTheme.js';
-import { placeOnFrame, fadeSet, labelTexture, ease, easeOut, unit, pop, beatPhase, beatKick } from './cueKit.js';
+import { placeOnFrame, fadeSet, labelTexture, ease, easeOut, unit, pop, beatKick } from './cueKit.js';
 import { S } from '../sim/state.js';
 import { mirrorOpening } from './cameraViews.js';
 
 // Course one-offs for the song cues (PROP). Spot props sit on the fixed road spot the transport gives them;
 // zone props stream fixed world dressing around the player for their span (carousel poles, spotlights) or
 // hang in the sky ahead like the sky does (star, spiral bloom). Nothing here collides or moves the camera.
-const POLES = 28, POLE_GAP = 16, SPOTS = 12, SPOT_GAP = 26;
+const POLES = 12, POLE_GAP = 32, SPOTS = 12, SPOT_GAP = 26;
 const frame = () => ({ p: [0, 0, 0], t: [0, 0, 1], n: [0, 1, 0], b: [1, 0, 0], w: 0 });
 function starGeometry(points = 5, outer = 1, inner = .45) {
   const s = new Shape();
@@ -42,21 +42,17 @@ export function createCueProps(scene, track, { make = () => document.createEleme
     g.add(rim, pane, shine); g.userData = { side, pane, rim, shine }; mirror.add(g); return g;
   });
 
-  // --- carousel: striped poles with bobbing horses down both sides, and a turning striped canopy overhead
+  // --- carousel: sparse striped posts and a turning canopy, with a clear driving corridor
   const stripeTex = labelTexture(make, 64, 256);
   stripeTex.paint('stripes', (c, w, h) => { for (let y = 0; y < h; y += 32) { c.fillStyle = (y / 32) % 2 ? '#ffffff' : theme.accent; c.fillRect(0, y, w, 32); } });
   stripeTex.texture.wrapS = stripeTex.texture.wrapT = 1000;   // RepeatWrapping
-  const poleMat = set.make({ map: stripeTex.texture }), horseMat = set.make({ color: '#fff6fb' }), saddle = set.make({ color: theme.accent });
+  const poleMat = set.make({ map: stripeTex.texture });
   const poles = Array.from({ length: POLES }, () => {
-    const g = new Group(), pole = new Mesh(cyl, poleMat), cap = new Mesh(sph, gold), horse = new Group();
-    pole.scale.set(.35, 13, .35); pole.position.y = 6.5; cap.scale.setScalar(.8); cap.position.y = 13.2;
-    const body = new Mesh(sph, horseMat); body.scale.set(.9, .9, 2.0);
-    const neck = new Mesh(box, horseMat); neck.scale.set(.6, 1.8, .7); neck.position.set(0, 1.1, -1.6); neck.rotation.x = .5;
-    const head = new Mesh(box, horseMat); head.scale.set(.6, .7, 1.3); head.position.set(0, 2, -2.3);
-    const seat = new Mesh(box, saddle); seat.scale.set(1.05, .3, 1.1); seat.position.y = .85;
-    const legs = [[-.5, -1.2], [.5, -1.2], [-.5, 1.2], [.5, 1.2]].map(([x, z]) => { const l = new Mesh(box, horseMat); l.scale.set(.25, 1.6, .25); l.position.set(x, -1.2, z); l.rotation.x = z < 0 ? -.6 : .6; return l; });
-    horse.add(body, neck, head, seat, ...legs); g.add(pole, cap, horse); g.visible = false; object.add(g);
-    return { g, horse, key: null };
+    const g = new Group(), pole = new Mesh(cyl, poleMat), cap = new Mesh(sph, gold);
+    g.name = 'carousel-post';
+    pole.scale.set(.25, 9, .25); pole.position.y = 4.5; cap.scale.setScalar(.55); cap.position.y = 9.2;
+    g.add(pole, cap); g.visible = false; object.add(g);
+    return { g };
   });
   const canopyTex = labelTexture(make, 512, 64);
   canopyTex.paint('canopy', (c, w, h) => { for (let x = 0; x < w; x += 32) { c.fillStyle = (x / 32) % 2 ? '#fff3ad' : theme.accent; c.fillRect(x, 0, 32, h); } });
@@ -141,12 +137,10 @@ export function createCueProps(scene, track, { make = () => document.createEleme
       }
     }
 
-    // carousel: poles stand from the intro, horses bob on the waltz, a jolt stops everything for one beat
+    // Keep the song's canopy cue without figurines crowding the tube.
     const intro = of('carousel-intro')[0], ride = of('carousel')[0];
     const live = ride || intro;
     canopy.visible = !!live;
-    let ph = beatPhase(song, songS) ?? songS * 2;
-    for (const t of ride?.joltTimes || []) if (songS >= t && songS < t + 60 / (song?.bpm || 120)) ph = beatPhase(song, t) ?? ph;
     const standS = (intro || ride)?.startS ?? 0, stand = live ? ease((songS - standS) / .8) : 0;
     if (live) {
       track.frameAt(at, f);
@@ -155,8 +149,6 @@ export function createCueProps(scene, track, { make = () => document.createEleme
         const idx = first + Math.floor(i / 2), side = i % 2 ? 1 : -1, s = idx * POLE_GAP + (side > 0 ? POLE_GAP / 2 : 0), p = poles[i];
         track.frameAt(s, f); placeOnFrame(p.g, f); p.g.translateX(side * (f.w / 2 - .6));
         p.g.visible = true; p.g.scale.set(1, Math.max(.01, stand), 1);
-        const bob = gentle ? 0 : Math.sin((ph / 3 + idx * .37) * Math.PI * 2) * 1.6;
-        p.horse.position.set(0, 6 + bob, 0); p.horse.rotation.set(0, side * Math.PI / 2, Math.sin(ph * Math.PI) * (gentle ? 0 : .08));
       }
       sky(canopy, kart, 0, 260, 1);
       canopy.rotation.y += step * (gentle ? .05 : .16) * (ride && songS > ride.endS ? 0 : 1);
