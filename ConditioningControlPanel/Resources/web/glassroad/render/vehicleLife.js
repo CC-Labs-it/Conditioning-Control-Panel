@@ -131,7 +131,9 @@ export function createVehicleLife(meshes, definition, { seed = 0, art = null } =
       const geometry = movingGeometry(mesh, p.vertices, inverse, pivot);
       const child = new Mesh(geometry, mesh.material); child.name = 'mechanism-' + p.id;
       child.castShadow = mesh.castShadow; child.receiveShadow = mesh.receiveShadow;
-      child.frustumCulled = false; control.node.add(child); owned.push(geometry);
+      // Rigid child with exact bounds in its own node space: three culls it per camera (main, shadow, inset),
+      // so an off-screen rival stops submitting it. Warm passes uncull everything while they compile.
+      control.node.add(child); owned.push(geometry);
       metrics.movingTriangles += p.vertices.length / 3;
     }
     mesh.geometry = cache.geometry;

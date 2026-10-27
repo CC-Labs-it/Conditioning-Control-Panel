@@ -6,8 +6,9 @@ import { goonworksSetpieces, goonworksPose } from '../track/goonworks-setpieces.
 import { GOONWORKS_PALETTE, GOONWORKS_DISTRICT_PALETTES } from './goonworksMaterials.js';
 import { machineryBeatAt } from '../track/machineryBeat.js';
 import { createGearSpiralPaint } from './gearSpirals.js';
+import { mergeStaticMeshes } from './staticMerge.js';
 
-export function createGoonworksHazardView(scene, track, layout) {
+export function createGoonworksHazardView(scene, track, layout, { merge = false } = {}) {
   const group = new Group(); group.name = 'goonworks-toys'; scene.add(group);
   const rows = goonworksSetpieces(track, layout), geometries = [], materials = [], entries = [], spiralPaint = [];
   const own = geometry => { geometries.push(geometry); return geometry; };
@@ -176,6 +177,13 @@ export function createGoonworksHazardView(scene, track, layout) {
       for (const side of [-1, 1]) {
         const hinge = mesh(root, cylinder, candy, [side * (row.w / 2 + .5), .5, row.depth / 2], [.8, 1.5, .8]); hinge.rotation.z = Math.PI / 2;
       }
+    }
+    // Runtime: fold each toy's small static parts into one draw per material and moving frame
+    // (Firefox pays ~3x per draw). Lamps keep their per-toy material, so warnings still recolour.
+    if (merge) {
+      const frames = [entry.rotor, entry.screen, entry.block, entry.crown, entry.flipper].filter(Boolean);
+      for (const frame of frames) geometries.push(...mergeStaticMeshes(frame, { name: row.id }).geometries);
+      geometries.push(...mergeStaticMeshes(root, { keep: frames, name: row.id }).geometries);
     }
     entries.push(entry);
   }

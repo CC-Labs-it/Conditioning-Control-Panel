@@ -47,7 +47,10 @@ function rebind(art, id, kartMesh, material) {
       return null;
     }
     const m = new SkinnedMesh(s.geometry, material ? material(racerFinish(s.material)) : racerFinish(s.material));
-    m.name = id; m.frustumCulled = false;
+    // Same space as the kart mesh (identity local transform and bind), so it shares the kart's culling: a racer's
+    // fixed kart sphere (render/dressing.js kartCullSphere), unculled where the kart is (garage, menu rider).
+    m.name = id; m.frustumCulled = !!(kartMesh.frustumCulled && kartMesh.boundingSphere);
+    if (m.frustumCulled) m.boundingSphere = kartMesh.boundingSphere.clone();
     m.bind(new Skeleton(names.map((n) => byName.get(n)), s.skeleton.boneInverses), I4);
     meshes.push(m);
   }
