@@ -4,10 +4,11 @@ import { AUDIO_REACTIVE as L, stepAudioReactive } from './audioReactiveMath.js';
 import { createWaterDnaFrame, waterDnaFrame } from './waterDnaMath.js';
 import { finalLapMods } from './worldFeel.js';
 import { DataTexture, RGBAFormat, UnsignedByteType, LinearFilter, ClampToEdgeWrapping, NoColorSpace } from 'three/webgpu';
-import { createMusicVisualData, stepMusicVisualData, VISUAL_DATA } from './musicVisualData.js';
+import { createMusicVisualData, stepMusicVisualData, VISUAL_DATA, INSTRUMENT_FIELDS } from './musicVisualData.js';
 import { markRows } from './dataTextureRows.js';
 const UNIFORM_NAMES = Object.freeze(['bass', 'mid', 'treble', 'energy', 't', 'gentle', ...Array.from({ length: 8 }, (_, i) => 'note' + i)]);
-const VISUAL_NAMES = Object.freeze(['drive', 'kick', 'snare', 'hats', 'onset', 'hitAge', 'hitStrength', 'section']);
+const VISUAL_NAMES = Object.freeze(['drive', 'kick', 'snare', 'hats', 'onset', 'hitAge', 'hitStrength', 'section',
+  ...INSTRUMENT_FIELDS.flatMap(fields => [fields.age, fields.strength, fields.count])]);
 
 export function createAudioReactiveUniforms() {
   const u = { bass: uniform(0), mid: uniform(0), treble: uniform(0), energy: uniform(0), t: uniform(0), gentle: uniform(0) };
