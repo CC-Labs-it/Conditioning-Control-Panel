@@ -6,7 +6,8 @@ const hooks = registerHooks({ resolve(s, c, next) {
   const files = { 'three/tsl': 'three.tsl.min.js', 'three/webgpu': 'three.webgpu.min.js' };
   return files[s] ? { url: new URL('../vendor/three/build/' + files[s], import.meta.url).href, shortCircuit: true } : next(s, c);
 } });
-const { createAirWords, AIR_WORD_CAPACITY, airWordBit, airWordPose } = await import('../render/airWords.js');
+const { createAirWords, AIR_WORD_CAPACITY, airWordBit, airWordPose, airWordSpark, AIR_WORD_MOTES, AIR_WORD_SPARKS,
+  AIR_WORD_TRAIL } = await import('../render/airWords.js');
 const { letterContours, extrudeLetters, letterCatchPoints } = await import('../render/wordSolid.js');
 const { Scene, Box3, Mesh, MeshBasicMaterial, Raycaster, Vector3, BackSide } = await import('three/webgpu');
 hooks.deregister();
@@ -83,7 +84,8 @@ test('pooled solid words keep course typography and colours with their top at th
     view.update(run, 1 / 60);
     const root = view.object.children[0], letters = root.children[0];
     assert.equal(root.visible, true); assert.deepEqual(root.position.toArray(), p.p);
-    assert.equal(root.children.length, 3, 'letters, particles and a glyph outline, never a backplate');
+    assert.equal(root.children.length, 4, 'letters, particles, an ink outline and a bright rim, never a backplate');
+    assert.equal(root.children[3].name, 'solid-letter-rim');
     assert.equal(letters.name, 'solid-letters');
     root.updateMatrixWorld(true);
     const bounds = new Box3().setFromObject(letters);
@@ -96,18 +98,18 @@ test('pooled solid words keep course typography and colours with their top at th
     assert.ok(doc.canvases[0].context.font.includes('gr-' + family));
     colors.add(letters.material[0].color.getHex());
     assert.equal(p.catchText, p.text); assert.ok(p.catchPoints.length > 0);
-    assert.equal(view.stats.solid, 1); assert.equal(view.stats.particles, 40);
+    assert.equal(view.stats.solid, 1); assert.equal(view.stats.particles, AIR_WORD_MOTES + AIR_WORD_SPARKS);
     view.dispose(); assert.equal(scene.children.length, 0);
   }
   assert.equal(colors.size, 5);
 });
 
-test('black outlines share each solid glyph and follow its tilt, compression and fade', () => {
+test('ink outlines share each solid glyph and follow its tilt, compression and fade', () => {
   const { view } = fixture(), p = platform({ catchS: 4, landedS: 4 });
   const root = view.object.children[0], letters = root.children[0], outline = root.children[2];
   const material = outline.material;
   assert.equal(outline.name, 'solid-letter-outline');
-  assert.equal(material.color.getHex(), 0x000000);
+  assert.ok(material.color.getHex() !== root.children[3].material.color.getHex(), 'a dark ink line inside a bright rim');
   assert.equal(material.side, BackSide);
   assert.ok(material.positionNode, 'expanded glyph hull is compiled during covered warmup');
   for (const timeS of [3.6, 4, 4.18, 4.4]) {
@@ -169,13 +171,13 @@ test('Gentle and refused brightness budgets retain readable words with calmer pa
   for (const options of [{ feel: { get: () => true } }, { photosafe: { request: () => false } }]) {
     const { view } = fixture('mainframe', options);
     view.update({ timeS: 3, platforms: [platform()] }, .1);
-    assert.equal(view.stats.solid, 1); assert.equal(view.stats.particles, 12);
+    assert.equal(view.stats.solid, 1); assert.equal(view.stats.particles, 20);
     view.dispose();
   }
   for (let i = 0; i < 40; i++) for (const alpha of [0, .3, 1]) {
     const v = airWordBit(i, 15, 12, 18, alpha, false);
     assert.ok(Object.values(v).every(Number.isFinite));
-    assert.ok(Math.abs(v.x) <= 6 && Math.abs(v.z) <= 9 && v.size >= 0 && v.size <= .075);
+    assert.ok(Math.abs(v.x) <= 6 && Math.abs(v.z) <= 9 && v.size >= 0 && v.size <= .11);
     if (!alpha) assert.equal(v.size, 0);
   }
 });
@@ -193,4 +195,25 @@ test('HD letters float and tilt into view, settle for the catch and compress on 
   const run = { timeS: 3.6, platforms: [p, platform({ id: 'air-word-1' }), platform({ id: 'air-word-2' })] };
   view.update(run, .1); assert.equal(view.stats.visible, 2);
   view.dispose();
+});
+
+test('sparks burst when a word appears and on contact, and the flight trail is allocated up front and freezes on pause', () => {
+  const p = platform({ bornS: 2, landedS: 4, index: 0 });
+  assert.equal(airWordSpark(3, 1.9, p, false).size, 0, 'nothing before the word appears');
+  const appear = airWordSpark(3, 2.3, p, false), contact = airWordSpark(3, 4.3, p, false), calm = airWordSpark(3, 4.3, p, true);
+  assert.ok(appear.size > .1 && contact.size > .1, 'a burst on appearance and on each landing');
+  assert.ok(calm.size < contact.size && Math.hypot(calm.x, calm.z) < Math.hypot(contact.x, contact.z), 'Gentle calms the burst');
+  assert.equal(airWordSpark(3, 5, p, false).size, 0, 'the burst is gone within a beat');
+  const { scene, view } = fixture(), trail = view.trail, matrices = trail.instanceMatrix.array;
+  assert.equal(trail.instanceMatrix.count, AIR_WORD_TRAIL); assert.ok(scene.children.includes(trail));
+  const kart = { x: 0, y: 10, z: 0 }, run = { timeS: 0, flying: true, platforms: [] };
+  for (let i = 0; i < 20; i++) { run.timeS = i / 60; kart.z = i * .4; view.update(run, 1 / 60, { kart }); }
+  assert.ok(trail.count > 8, 'a sparkle trail follows the airborne kart');
+  const frozen = trail.instanceMatrix.array.slice(), count = trail.count;
+  run.timeS = 3; view.update(run, 1 / 60, { kart, paused: true });
+  assert.equal(trail.count, count); assert.deepEqual(trail.instanceMatrix.array, frozen);
+  view.update(run, 1 / 60, { kart, motion: 'off' }); run.timeS = 3.1; view.update({ ...run, flying: false }, 1 / 60, { kart });
+  assert.equal(trail.count, 0, 'old motes fade out and motion off emits none');
+  assert.equal(trail.instanceMatrix.array, matrices, 'no reallocation');
+  view.dispose(); assert.equal(scene.children.length, 0);
 });

@@ -53,9 +53,9 @@ test('bank-loaded audio keeps a distinct contact tap and rebound spring', () => 
   assert.equal(resolvePlan(sfxPlan('air-word-hop', payload(0)), () => true), 'synth');
   assert.equal(resolvePlan(sfxPlan('land', { tier: 3, airWord: true }), () => true), 'synth');
   const { syn, sounds } = recorder();
-  AUDIO_CUES.land(syn, { tier: 3, airWord: true }); assert.equal(sounds.length, 2);
+  AUDIO_CUES.land(syn, { tier: 3, airWord: true }); assert.equal(sounds.length, 3);
   assert.ok(sounds.every(s => s.dur <= .12 && s.vol <= .075));
-  AUDIO_CUES.land(syn, { tier: 3 }); assert.equal(sounds.length, 4);
+  AUDIO_CUES.land(syn, { tier: 3 }); assert.equal(sounds.length, 5);
   const soft = recorder(true); playAirWordLand(soft.syn);
   assert.ok(soft.sounds.every((s, i) => s.vol < sounds[i].vol));
 });

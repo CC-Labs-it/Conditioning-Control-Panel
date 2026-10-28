@@ -10,7 +10,9 @@ export function playAirWordLand(syn, payload = {}) {
   const gain = gentleOn(syn) || payload.gentle ? .65 : 1;
   // A soft wooden tap marks contact before the separate spring launches.
   syn.tone(syn.semis(-12), { type: 'sine', dur: .12, vol: .075 * gain, attack: .004, glide: syn.semis(-19) });
-  syn.noise({ dur: .06, vol: .018 * gain, freq: 700, q: .7 });
+  syn.noise({ dur: .06, vol: .026 * gain, freq: 700, q: .7 });
+  // A low body under the tap gives the contact its punch without getting louder up top.
+  syn.tone(syn.semis(-24), { type: 'sine', dur: .1, vol: .06 * gain, attack: .003, glide: syn.semis(-31) });
 }
 
 export function playAirWordHop(syn, payload = {}) {
