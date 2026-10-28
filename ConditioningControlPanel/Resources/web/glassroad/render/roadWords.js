@@ -12,6 +12,9 @@
  * shader below; the per-marking state rides vertex attributes, the music frame rides uniforms, so nothing here
  * ever builds a new program mid-race (the mesh sits in the scene from boot and the warm links it).
  * Gentle: no glitch, no kick pulse, slower IN and light (roadWordsMath); the drop boost asks photosafe once.
+ * Word coins (playtest 2026-10-28, sim/wordCoins.js): while boot.js hands setCoins a sink, one marking per phrase
+ * holds the riskier line instead of following the kart, glows a little before its word (COIN_PAINT.preGlow), and a
+ * kart on it while it is lit calls the sink once; a taken coin fades out (longer under Gentle). No sink = as before.
  */
 import { Mesh, BufferGeometry, BufferAttribute, DynamicDrawUsage, MeshBasicNodeMaterial, DoubleSide, CanvasTexture, NoColorSpace,
   CustomBlending, OneFactor, OneMinusSrcAlphaFactor, Vector4 } from 'three/webgpu';
@@ -25,6 +28,7 @@ import { STYLES, STYLE, phraseStyle, packAtlas, markLook, frameLook } from './ro
 import { createDecalSampler } from './surfaceDecals.js';
 import { roadLetteringProfile, glyphFit, letteringLane, letteringFootprint } from './roadLettering.js';
 import { planRoadWordAccents, frameRoadWordMusic } from './roadWordMusic.js';
+import { coinTuning, pickCoins, coinLane, underTrap, coinLit, coinTouch } from '../sim/wordCoins.js';
 
 export const ROAD_WORD_ACCENTS = Object.freeze({
   threshold: Object.freeze({ ink: [1.12, .69, .12], glow: [1.2, .78, .22] }),
@@ -47,6 +51,13 @@ export function roadWordMusicUv(loc, geo, u) {
   return vec2(loc.x.sub(.5).div(pulse.add(1)).add(.5).sub(jitter.div(max(geo.x, .5))),
     loc.y.sub(.5).div(float(1).sub(pulse.mul(.45))).add(.5).sub(jitter.mul(.3).div(max(geo.y, .5))));
 }
+/** How a coin marking looks (render only; the rules are feel.json wordCoins). */
+export const COIN_PAINT = Object.freeze({
+  preGlow: 0.45,      // the karaoke light a coin shows before its word (a sung word reaches 1)
+  scale: 1.1,         // a coin is painted a little larger than its phrase
+  gotS: 0.25,         // a taken coin fades out this fast...
+  gentleGotS: 0.6,    // ...or this slowly under Gentle (fades only lengthen)
+});
 
 export const ROAD_PAINT = Object.freeze({
   atlasW: 2048, atlasH: 4096,      // one sheet per song; the phone tier holds half (atlasPhoneH); rows shrink to fit
@@ -316,14 +327,20 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
   const player = { s: 0, lat: 0, speedMps: 0 }, look = {}, fl = {}, wordMusic = {};
   let dropIdx = -1, dropOk = false, staticDirty = false, lastSongS = NaN;
   const pose = {};
+  // word coins: per slot 0 paint, 1 a live coin, 2 taken (its lane and the song time it was taken)
+  const C = coinTuning(feel);
+  let coinOf = null, coinSink = null, coinsGot = 0;
+  const slotCoin = new Uint8Array(P.slots), slotCoinLane = new Float64Array(P.slots), slotGotT = new Float64Array(P.slots);
+  const fade = (x) => { x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2 * x); };
 
   /** A new song: its run, a look per phrase and the atlas plan (drawn over the next frames). */
   function setSong(s) {
-    song = s; run = null; cells = null; ready = false; clear();
+    song = s; run = null; cells = null; ready = false; coinOf = null; clear();
     if (!s.words || !s.words.length) return;
     run = createRoadRun(s, track);
     const sc = run.script;
     accents = planRoadWordAccents(s, sc);
+    coinOf = pickCoins(sc, C);
     styleOf = new Uint8Array(sc.length); keyOf = new Array(sc.length);
     let ph = -1, sty = STYLE.STENCIL;
     const items = new Map();
@@ -377,7 +394,7 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
   }
 
   function freeSlot(slot) {
-    slotOf.delete(slotId[slot]); slotId[slot] = -1;
+    slotOf.delete(slotId[slot]); slotId[slot] = -1; slotCoin[slot] = 0;
     slotLane[slot] = NaN; slotW[slot] = NaN; slotFoot[slot] = NaN; slotWet[slot] = 0;
     for (let v = 0; v < V; v++) a.aState.array[(slot * V + v) * 4] = 0;
   }
@@ -405,20 +422,39 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
       if ((track.aerials || []).some(a => v.s + v.lenM / 2 > a.gapS0 && v.s - v.lenM / 2 < a.gapS1)) continue;
       let slot = slotOf.get(v.id);
       profile.pose(run.script[v.id].text, tS, mf?.beatPhase || 0, gentle, pose);
-      const targetLane = player.lat * .9 + pose.offsetM;
-      if (slot === undefined) {
+      const fresh = slot === undefined;
+      if (fresh) {
         slot = slotId.indexOf(-1);
         if (slot < 0) continue;              // the pool is full: this one waits
         slotId[slot] = v.id; slotOf.set(v.id, slot);
-        writeStatic(slot, v.id); writeStrip(slot, v, targetLane, pose.scale); staticDirty = geoDirty = true;
+      }
+      // a coin keeps the riskier line (re-aimed while the marking may still move), never on a moving trap row
+      if (coinSink && coinOf && coinOf[v.id] && slotCoin[slot] !== 2 && (fresh || !v.frozen)) {
+        slotCoin[slot] = underTrap(track, v.s, v.lenM, C) ? 0 : 1;
+        if (slotCoin[slot]) slotCoinLane[slot] = coinLane(track, v.s, v.phrase, C);
+      }
+      const coin = slotCoin[slot] > 0;
+      const targetLane = (coin ? slotCoinLane[slot] : player.lat * .9) + pose.offsetM;
+      const scale = coin ? pose.scale * COIN_PAINT.scale : pose.scale;
+      if (fresh) {
+        writeStatic(slot, v.id); writeStrip(slot, v, targetLane, scale); staticDirty = geoDirty = true;
       } else {
-        const lane = gentle ? slotLane[slot] : letteringLane(slotLane[slot], targetLane, dt);
-        if (slotS[slot] !== v.s || lane !== slotLane[slot] || pose.scale !== slotScale[slot] || (waterVolume && !paused)) {
-          if (writeStrip(slot, v, lane, pose.scale, false, !!waterVolume && !paused)) geoDirty = true;
+        const lane = gentle && !coin ? slotLane[slot] : letteringLane(slotLane[slot], targetLane, dt);
+        if (slotS[slot] !== v.s || lane !== slotLane[slot] || scale !== slotScale[slot] || (waterVolume && !paused)) {
+          if (writeStrip(slot, v, lane, scale, false, !!waterVolume && !paused)) geoDirty = true;
         }
       }
       seen[slot] = 1;
+      // on the painted coin while its word is lit: the sink decides (boot.js counts only while racing)
+      if (slotCoin[slot] === 1 && coinSink && !paused && v.state === 'live') {
+        const e = run.script[v.id];
+        if (coinLit(tS, e.startS, e.endS, C) && coinTouch(v.dS, v.lenM, slotFoot[slot], slotW[slot], player.lat, C) && coinSink(v)) {
+          slotCoin[slot] = 2; slotGotT[slot] = tS; coinsGot++;
+        }
+      }
       markLook(v, { gentle }, look);
+      if (slotCoin[slot] === 1) look.sung = Math.max(look.sung, COIN_PAINT.preGlow);
+      else if (slotCoin[slot] === 2) look.alpha *= 1 - fade((tS - slotGotT[slot]) / (gentle ? COIN_PAINT.gentleGotS : COIN_PAINT.gotS));
       for (let k = 0; k < V; k++) {
         const i = (slot * V + k) * 4;
         a.aState.array[i] = look.alpha; a.aState.array[i + 1] = look.inK; a.aState.array[i + 2] = look.sung; a.aState.array[i + 3] = look.liftM + pose.liftM;
@@ -446,14 +482,17 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
     a.aState.needsUpdate = true;
     if (run) run.reset();
     paint.mesh.visible = false;
-    dropIdx = -1; dropOk = false; lastSongS = NaN;
+    dropIdx = -1; dropOk = false; lastSongS = NaN; coinsGot = 0;
   }
 
   return {
     object: paint.mesh, update, clear, _dev: { canvas: atlas.canvas, music: wordMusic },
+    /** The sink accepts a collected marking once while racing. */
+    setCoins(sink) { coinSink = typeof sink === 'function' ? sink : null; },
     stats() { return { ready, markings: run ? run.total : 0, live: slotOf.size, shown: run ? run.shown : 0, rowPx,
       accented: accents ? accents.reduce((sum, strength) => sum + (strength > 0 ? 1 : 0), 0) : 0,
-      kick: wordMusic.kick || 0, snare: wordMusic.snare || 0, vibration: wordMusic.vibration || 0 }; },
+      kick: wordMusic.kick || 0, snare: wordMusic.snare || 0, vibration: wordMusic.vibration || 0,
+      coins: coinOf ? coinOf.reduce((n, c) => n + c, 0) : 0, coinsGot }; },
     dispose() { scene.remove(paint.mesh); paint.dispose(); atlas.dispose(); },
   };
 }

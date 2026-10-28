@@ -148,7 +148,8 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1, net = nu
       if (r.meta.isBot) o['steer.userMul'] = 1;        // steering sensitivity is the player's option only
       const flow = cleanPace(r.st, act, live ? dt : 0, feel,
         { enabled: live && !net && !!ctx.cleanPace, drive: ctx.songDrive || 0 });
-      o['speed.topMps'] = feel.get('speed.topMps') * m.capMul * pace * flow;
+      // r.topBonus: the word coins' top speed share (boot.js, sim/wordCoins.js topMul; 1 when unset)
+      o['speed.topMps'] = feel.get('speed.topMps') * m.capMul * pace * flow * (r.topBonus || 1);
       if (r.assist) o['gentle.on'] = true; else delete o['gentle.on'];
 
       if (live) {

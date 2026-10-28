@@ -39,6 +39,7 @@ import { wireHitterHit } from '../sim/hitterHit.js';
 import { playPulse } from './hudPulse.js';
 import { itemKey, itemTip } from './labels.js';
 import { P4_LOOK } from '../render/atlas.js';
+import { createCoinCount } from './wordCount.js';
 
 export { formatTime };
 
@@ -164,6 +165,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     tints: (i) => (metas && metas[i] && metas[i].tint) || 0 });
 
   const offs = [
+    createCoinCount(root.querySelector('.hud-race'), bus, { doc, motion: () => (cards.options && cards.options.motion) || 'full', gentle: gentleOn }),   // lane words
     // one stamp per bell, one beat long (in, hold, shrink out); Gentle swaps the keyframes for a plain fade
     bus.on('countdown', ({ n }) => {
       countN = n;
