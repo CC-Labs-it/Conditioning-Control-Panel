@@ -21,7 +21,7 @@ export function reasonOf(e) {
 /**
  * @param {{ kind?: string, course?: string, backend?: string, tier?: string, stage?: string, at?: number, ua?: string }} ctx
  *   kind: 'boot' (a course failed to open), 'lost' (the GPU device or context went away), 'stalled' (frames stopped),
- *   'frame' (the frame loop threw). stage: the last loading milestone reached.
+ *   'frame' (the frame loop threw), 'stall' (the loading bar stopped moving). stage: the last loading milestone reached.
  */
 export function describeFailure(e, ctx = {}) {
   const stack = e && typeof e.stack === 'string' ? e.stack.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(0, 4).join(' | ').slice(0, 600) : '';
@@ -36,7 +36,7 @@ export function describeFailure(e, ctx = {}) {
 export function failureLine(rec) {
   if (!rec) return '';
   const where = [rec.course, rec.backend, rec.tier].filter(Boolean).join(', ');
-  const what = rec.kind === 'lost' ? 'graphics device lost' : rec.kind === 'stalled' ? 'frames stopped' : rec.kind === 'frame' ? 'frame loop threw' : 'boot failed';
+  const what = rec.kind === 'lost' ? 'graphics device lost' : rec.kind === 'stalled' ? 'frames stopped' : rec.kind === 'frame' ? 'frame loop threw' : rec.kind === 'stall' ? 'loading stalled' : 'boot failed';
   return what + (rec.stage ? ' after ' + rec.stage : '') + (where ? ' (' + where + ')' : '') + ': ' + rec.reason;
 }
 
