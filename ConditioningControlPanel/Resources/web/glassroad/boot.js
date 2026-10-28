@@ -23,6 +23,7 @@ import { createHostEscape } from './host/hostEscape.js';
 import { createCardMedia, PHONE_READY_CLIPS } from './host/cardMedia.js';
 import { createScrolllerFeed } from './host/scrolllerFeed.js';
 import { nichesFor, isDefault, savePick } from './host/scrolllerNiches.js';
+import { createLocalLibrary, feedSwitch, loadFilesChoice, saveFilesChoice, sourceMode, openFilePicker } from './host/localLibrary.js';
 import { createSubliminalBurst } from './fx/subliminalBurst.js';
 import { loadFeel } from './core/feel.js';
 import { createBus, createQueue } from './core/events.js';
@@ -399,14 +400,31 @@ async function boot(course, options, lifetime, isCurrent) {
   // Online pictures: a switch in Options only where the host offers the feed (the web), moved only by its echo, and this
   // course's niches (host/scrolllerNiches.js: its default pair, or the player's own pick kept in this browser).
   const scrolller = init.caps.scrolller ? shared.scrolllerFeed : null;
+  // "My files" (host/localLibrary.js): the player's own pictures as blob urls, never uploaded; while it is on the
+  // Scrolller switch is off, so the host fetches nothing. Kept across courses; only the choice survives a reload.
+  const library = scrolller ? (shared.library ||= createLocalLibrary()) : null;
+  shared.filesOn ??= loadFilesChoice();
+  const pictures = scrolller ? feedSwitch(() => (shared.filesOn ? library : scrolller)) : null;
   if (scrolller) {
     let niches = nichesFor(track.id);
-    const view = () => ({ on: scrolller.consent ?? init.caps.scrolller.consent === true, track: trackName, niches,
-      custom: !isDefault(track.id), catalog: scrolller.catalog });
+    const consentOn = () => scrolller.consent ?? init.caps.scrolller.consent === true;
+    const view = () => ({ on: consentOn(), track: trackName, niches, custom: !isDefault(track.id), catalog: scrolller.catalog,
+      source: sourceMode({ files: shared.filesOn, consent: consentOn() }), files: library.count });
     hud.setScrolller(view());
-    scrolller.setNiches(track.id, niches);
+    if (!shared.filesOn) scrolller.setNiches(track.id, niches);
+    else if (consentOn()) scrolller.setConsent(false);
     lifetime.defer(scrolller.subscribe(() => hud.setScrolller(view())));
-    hud.on('scrolller', (e) => scrolller.setConsent(!!e?.on));
+    const pick = () => openFilePicker((files) => { library.setFiles(files); if (lifetime.alive) hud.setScrolller(view()); });
+    hud.on('scrolller-files', pick);   // inside the click: a picker needs the player's own gesture
+    hud.on('scrolller', (e) => {
+      const to = e?.source || (e?.on ? 'scrolller' : 'off'), files = to === 'files', want = to === 'scrolller';
+      if (files !== shared.filesOn) { shared.filesOn = files; saveFilesChoice(files); }
+      if (!files) library.clear();   // leaving My files revokes every url
+      if (files && !library.count) pick();
+      if (consentOn() === want) { hud.setScrolller(view()); return; }   // no echo coming: draw it now
+      scrolller.setConsent(want);
+      if (want) scrolller.setNiches(track.id, niches);
+    });
     hud.on('scrolller-niches', (e) => {
       niches = savePick(track.id, e?.niches || null);
       scrolller.setNiches(track.id, niches);
@@ -513,7 +531,7 @@ async function boot(course, options, lifetime, isCurrent) {
   // A visual review may keep the Loom faces without requesting or displaying private media.
   const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge,
     readyCount: renderer.tier === 'phone' ? PHONE_READY_CLIPS : Infinity });
-  if (scrolller && qs.get('media') !== '0') world.media?.setDisplayFeed(scrolller, renderer.canvas);
+  if (scrolller && qs.get('media') !== '0') world.media?.setDisplayFeed(pictures, renderer.canvas);
   world.setItemMediaSource(seed => cardMedia?.sourceForFlash(seed) || null);
   const subliminalBurst = createSubliminalBurst({ parent: document.body, primary: () => world.primaryColour() });
   effects.screen.params.mediaFlash = true;
@@ -523,7 +541,7 @@ async function boot(course, options, lifetime, isCurrent) {
   }
   Object.defineProperty(debug, 'cardMedia', { get: () => world.media?.stats() || null });
   Object.defineProperty(debug, 'scrolller', { get: () => (scrolller
-    ? { consent: scrolller.consent, pictures: scrolller.count, ready: scrolller.ready } : null) });
+    ? { consent: scrolller.consent, files: shared.filesOn, pictures: pictures.count, ready: pictures.ready } : null) });
   Object.defineProperty(debug, 'songGates', { get: () => world.phraseGates.stats });
   Object.defineProperty(debug, 'airWords', { get: () => world.airWords?.stats || null });
   Object.defineProperty(debug, 'songCues', { get: () => ({ total: songCues?.cues.length || 0,
@@ -560,8 +578,8 @@ async function boot(course, options, lifetime, isCurrent) {
     rise(s) { return this.on ? Math.max(.6, gentle.rise(s)) : s; },
     fade(s) { return this.on ? Math.max(1, gentle.fade(s)) : s; } };
   // The flash canvas is a plain page canvas (never a texture), so the web's display-only Scrolller stills may fill it (never its clips).
-  const cueBurst = createFlashBurst({ source: seed => cardMedia?.sourceForFlash(seed) || scrolller?.stillFor(seed) || null,
-    pool: () => cardMedia?.flashCount || scrolller?.stillCount || 0,   // never the same picture twice in one burst
+  const cueBurst = createFlashBurst({ source: seed => cardMedia?.sourceForFlash(seed) || pictures?.stillFor(seed) || null,
+    pool: () => cardMedia?.flashCount || pictures?.stillCount || 0,   // never the same picture twice in one burst
     photosafe, gentle: cueSafety });
   let cueRunSeen = null, cueRevision = -1;
   lifetime.defer(() => cueBurst.dispose());
