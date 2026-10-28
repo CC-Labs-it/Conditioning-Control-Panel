@@ -13,7 +13,7 @@ const { waterMusicLight } = await import('../render/materials/waterMusic.js');
 hooks.deregister();
 const roles = ['kick', 'snare', 'hats'];
 
-function fixture(t) {
+function fixture(t, { pcmPeak = .8 } = {}) {
   const p = uniform(new Vector2()), u = createAudioReactiveUniforms();
   t.after(() => disposeAudioReactiveUniforms(u));
   for (const role of roles) for (const suffix of ['Age', 'Strength', 'Count'])
@@ -21,7 +21,7 @@ function fixture(t) {
   u.energy.value = .4; u.drive.value = .55;
   const data = u.vizTexture.image.data;
   for (let i = 0; i < 64; i++) {
-    data[i * 4] = Math.round((.5 + .4 * Math.sin(i * .32)) * 255);
+    data[i * 4] = Math.round((.5 + pcmPeak * .5 * Math.sin(i * .32)) * 255);
     data[i * 4 + 1] = Math.round((.3 + .3 * Math.cos(i * .23)) * 255);
     for (let row = 1; row < 18; row++) data[(row * 64 + i) * 4] =
       Math.round((.3 + .25 * Math.sin(i * .19 + row * .42)) * 255);
@@ -40,15 +40,32 @@ function fixture(t) {
     }
     return values;
   };
-  const play = role => {
+  const play = (role, strength = .95) => {
     reset();
-    if (role === 'mid') u.mid.value = .8;
-    else { u[role].value = .95; u[role + 'Strength'].value = .95; u[role + 'Age'].value = role === 'hats' ? .015 : .18; u[role + 'Count'].value = 1; }
+    if (role === 'mid') u.mid.value = strength;
+    else { u[role].value = strength; u[role + 'Strength'].value = strength; u[role + 'Age'].value = role === 'hats' ? .015 : .18; u[role + 'Count'].value = 1; }
     return capture();
   };
-  reset(); return { u, root, reset, capture, play };
+  reset(); return { p, u, root, reset, capture, play };
 }
 const difference = (a, b) => a.filter((v, i) => Math.abs(v - b[i]) > .008).length;
+
+test('ordinary quiet recording levels still draw bright marks and a metre-wide PCM river', t => {
+  const f = fixture(t, { pcmPeak: .08 }); f.u.energy.value = f.u.drive.value = .25;
+  for (const role of ['kick', 'mid', 'snare', 'hats']) {
+    const values = f.play(role, .25);
+    assert.ok(Math.max(...values) > .08, role + ' remains visible at .25 measured level');
+    const lit = values.filter(v => v > .02).length;
+    assert.ok(lit > 8 && lit / values.length < .32, role + ' retains sparse high-contrast masks');
+  }
+  f.play('mid', .25);
+  let offCentrePeak = 0;
+  for (let y = 0; y <= 32; y += .25) for (const x of [-1.3, -1.05, 1.05, 1.3]) {
+    f.p.value.set(x, y); const c = evaluateColour(f.root);
+    offCentrePeak = Math.max(offCentrePeak, c[0] * .2126 + c[1] * .7152 + c[2] * .0722);
+  }
+  assert.ok(offCentrePeak > .07, 'actual +/-0.08 PCM visibly bends beyond one metre from the centre');
+});
 
 test('bass, voice, snare and high water accents have distinct sparse shapes and luminance', t => {
   const f = fixture(t), rest = f.capture();
@@ -75,7 +92,8 @@ test('bass, voice, snare and high water accents have distinct sparse shapes and 
 test('independent attack clocks move their own water marks and never restart another instrument', t => {
   const f = fixture(t);
   for (const role of roles) {
-    const before = f.play(role);
+    f.play(role); f.u[role].value = 0;
+    const before = f.capture(); // Isolate the last attack's clock from the separate live envelope.
     for (const other of roles.filter(r => r !== role)) { f.u[other + 'Age'].value = .03; f.u[other + 'Count'].value = 4; }
     assert.deepEqual(f.capture(), before, 'unheard other elements cannot move ' + role);
     f.u[role + 'Age'].value = .4;
