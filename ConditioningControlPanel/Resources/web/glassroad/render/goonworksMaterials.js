@@ -4,6 +4,7 @@ import { vec2, vec3, float, uniform, uv, positionGeometry, positionWorld, normal
 import {getGoonworksLayout} from '../track/goonworks-layout.js';
 import { goonworksMusicFloor } from './materials/goonworksMusicFloor.js';
 import { reliefNormal, reliefFootprint } from './surfaceRelief.js';
+import { trackTableWidth } from './spectrum.js';
 
 export const GOONWORKS_PALETTE = Object.freeze({ fuchsia: '#b60870', hot: '#dc4296', wine: '#661448',
   magenta:'#993e91',rose:'#ca6897',plum:'#513751',pink:'#e78eb8',
@@ -68,7 +69,7 @@ export function createGoonworksMaterial(hex, { ink = false, paper = false, unlit
 /** Apply after createRoadMaterial. Return the resource owner for scene disposal. */
 export function applyGoonworksRoad(road, art, track) {
   if (track?.id !== 'goonworks') return null;
-  const size = Math.max(2,Math.ceil(track.lengthM)), bytes = new Uint8Array(size*4*4);
+  const size = trackTableWidth(track.lengthM), bytes = new Uint8Array(size*4*4);
   const layout=getGoonworksLayout(track),halls=['mill-hall','quiz-ballroom','pinball-table'].map(id=>layout.byId[id]);
   const districtColourCache=new Map(Object.entries(GOONWORKS_DISTRICT_PALETTES).map(([id,p])=>[id,[p.road,p.pink,p.accent].map(key=>new Color(GOONWORKS_PALETTE[key]).toArray())]));
   for(let i=0;i<size;i++){const s=(i+.5)*track.lengthM/size;bytes[i*4]=Math.round(Math.min(1,track.frameAt(s).w/120)*255);
