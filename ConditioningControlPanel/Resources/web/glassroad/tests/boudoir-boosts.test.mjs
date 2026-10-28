@@ -172,7 +172,7 @@ for (const held of [false, true]) test('The original mirror flight remains landa
   }
   assert.deepEqual(contacts(events), [], 'the new aerial exit leaves a clear mirror approach');
   assert.ok(landed && st[S.s] >= layout.mirrorJump.landingS0 && st[S.s] < layout.mirrorJump.landingS1);
-  assert.ok(takeoff < 31, 'unboosted takeoff after the readable run-up');
+  assert.ok(takeoff < 34, 'unboosted takeoff after the readable run-up (top 33 = 30 x F = 1.1, plus 1)');
   assert.deepEqual(damage(events), []);
 });
 

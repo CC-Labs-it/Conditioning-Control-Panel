@@ -30,6 +30,7 @@ import { uploadDataTextureRows } from './dataTextureRows.js';
 import { logPipelineLinks } from './linkLog.js';
 import { isFirefox, concreteFloatConstants, uploadVideoThroughExternalTexture } from './firefoxWebgpu.js';
 import { Q, TIERS, ORDER, GOVERNOR, setTier, pickTier, createGovernor, createDynRes, dynLines, shortGpu, qualityLanding } from './quality.js';
+import { deviceClass, memoryGuard, setDevice } from './deviceClass.js';
 import { createFrameGate } from '../core/clock.js';
 import { reasonOf } from '../core/failure.js';
 import { loadOptions, cleanOptions } from '../hud/options.js';
@@ -49,12 +50,15 @@ function replaceCanvas(canvas) {
  * @param {{ forceRenderer?: string|null, maxDpr?: number, options?: object|null, freshCanvas?: boolean, maxTier?: string|null }} o
  *   freshCanvas: build on a new canvas element in place of the given one (a rebuild after a device loss);
  *   maxTier: a ceiling on the automatic tier (a rebuild after a loss starts one tier lower; a pinned Quality option still wins).
+ *   platform: the host caps platform ('desktop', 'web', 'phone'); with the coarse pointer it names the DEVICE
+ *     (render/deviceClass.js), which the memory protections read whatever Quality is pinned.
  */
-export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2, options = null, freshCanvas = false, maxTier = null } = {}) {
+export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2, options = null, freshCanvas = false, maxTier = null, platform = null } = {}) {
   const qs = new URLSearchParams(globalThis.location ? location.search : '');
   const force = forceRenderer || (/^(webgl2|webgpu)$/.test(qs.get('renderer') || '') ? qs.get('renderer') : null);
   const override = TIERS[qs.get('quality')] ? qs.get('quality') : null;
   const coarse = !!(globalThis.matchMedia && matchMedia('(pointer: coarse)').matches);
+  const device = setDevice(deviceClass({ coarse, platform }));
   let opts = cleanOptions(options || loadOptions());
   // ?quality= wins (dev), then a pinned Quality option, else the auto pick
   const pinOf = () => override ? null : opts.quality !== 'auto' ? opts.quality : null;
@@ -208,6 +212,14 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     /** fn(lost) once when the GPU device or the WebGL context goes away. Returns the unsubscribe. */
     onLost(fn) { lostFns.add(fn); if (lost) { try { fn(lost); } catch (e) { /* told */ } } return () => lostFns.delete(fn); },
     get tier() { return Q.name; },
+    /** The device behind the tier ('phone' or 'desktop'): no Quality pin changes it (render/deviceClass.js). */
+    get device() { return device; },
+    /** The tier a MEMORY budget reads: the phone tier on a phone whatever the look, else the live tier. */
+    get memoryTier() { return memoryGuard(device, Q.name); },
+    /** True while the tier comes from a pinned Quality option (the ?quality= dev flag is not a pin). */
+    get pinned() { return !!pinOf(); },
+    /** The automatic pick for this device and GPU, whatever is pinned. */
+    get autoTier() { return autoTier; },
     get aspect() { return Math.max(1, canvas.clientWidth) / Math.max(1, canvas.clientHeight); },
     get options() { return { ...opts }; },
     /** The adapter in use, short ('nvidia blackwell', 'Intel(R) UHD Graphics 770'), or '' when the browser hides it. */

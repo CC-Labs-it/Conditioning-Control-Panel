@@ -183,7 +183,7 @@ window.addEventListener('pagehide', () => {
 function record(kind, e) {
   const d = window.__glassroad, ms = d && d.loading && d.loading.milestones;
   const rec = describeFailure(e, { kind, course: controller.active || selectedCourse(location.search).id,
-    backend: shared.renderer?.backend || null, tier: shared.renderer?.tier || null,
+    backend: shared.renderer?.backend || null, tier: shared.renderer?.tier || null, pinned: !!shared.renderer?.pinned,
     stage: ms && ms.length ? ms[ms.length - 1].stage : null, ua: navigator.userAgent });
   rememberFailure(rec);
   if (d) d.lastFailure = rec;
@@ -382,6 +382,11 @@ async function boot(course, options, lifetime, isCurrent) {
   configureLobby({ track: track.id, trackLaps: TRACK_LAPS });
   const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus, { photosafe, racers: () => racers?.list });
   const directionWarning = createDirectionWarning(track);
+  // playtest 2026-10-28 (3 laps ran ~10 min): a solo race runs the Laps option (1 by default, the pre-race card);
+  // online runs the room cfg laps (startOnline). TRACK_LAPS stays the course's own count, the lobby's default.
+  const lapsFor = (o) => (o && o.laps > 0 ? o.laps : TRACK_LAPS);
+  function setSoloLaps(o) { laps = track.laps = lapsFor(o); audio.setLaps(laps); shared.garage?.track?.(trackName, laps); }
+  setSoloLaps(hud.options);
   lifetime.defer(() => hud.dispose());
   // Host state stays live while art and shaders load behind the cover.
   const applyHostGentle = m => {
@@ -456,9 +461,11 @@ async function boot(course, options, lifetime, isCurrent) {
   showLoading('Opening the garage', 0.04);
 
   // the saved display options (frame cap, render scale, quality, fps readout) reach the renderer at boot
-  const renderer = shared.renderer ||= await createRenderer(canvas, { forceRenderer: init.caps.forceRenderer, options: hud.options, ...(shared.rendererOpts || {}) });
+  const renderer = shared.renderer ||= await createRenderer(canvas, { forceRenderer: init.caps.forceRenderer, options: hud.options, platform: init.caps.platform, ...(shared.rendererOpts || {}) });
   if (!lifetime.alive) { renderer.dispose(); return; }
   canvas = renderer.canvas;
+  // the options card's Quality hint: a pin above the auto pick on a phone warns about memory (render/deviceClass.js)
+  hud.setDevice?.({ device: renderer.device, autoTier: renderer.autoTier });
   shared.rendererOpts = shared.rendererOpts ? { ...shared.rendererOpts, freshCanvas: false } : null;
   loaded('renderer');
   if (!shared.counts.renderer) shared.counts.renderer++;
@@ -507,7 +514,7 @@ async function boot(course, options, lifetime, isCurrent) {
   });
   // A visual review may keep the Loom faces without requesting or displaying private media.
   const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge,
-    readyCount: renderer.tier === 'phone' ? PHONE_READY_CLIPS : Infinity });
+    readyCount: renderer.device === 'phone' ? PHONE_READY_CLIPS : Infinity });   // the DEVICE, whatever Quality is pinned
   if (scrolller && qs.get('media') !== '0') world.media?.setDisplayFeed(scrolller, renderer.canvas);
   world.setItemMediaSource(seed => cardMedia?.sourceForFlash(seed) || null);
   const subliminalBurst = createSubliminalBurst({ parent: document.body, primary: () => world.primaryColour() });
@@ -620,7 +627,7 @@ async function boot(course, options, lifetime, isCurrent) {
     const log = runLog; runLog = null;
     try {
       const summary = log.finish(res), before = loadRecord();
-      const { record, diff } = applyRun(before, summary);
+      const { record, diff } = applyRun(before, summary, { fullLaps: TRACK_LAPS });   // a short race sets no whole-race best
       saveRecord(record);
       bus.emit('logbook-saved', { record, summary, diff });
       const recap = buildRecap(summary, diff, before);
@@ -657,7 +664,7 @@ async function boot(course, options, lifetime, isCurrent) {
   function prepareRunMode() {
     if (pickedMode !== runMode) { runMode = pickedMode; buildRun(); syncAssist(); }
     const trial = runMode === 'trial';
-    ghost = trial ? loadGhost(track.id) : null;
+    ghost = trial ? loadGhost(track.id, undefined, laps, TRACK_LAPS) : null;
     if (ghost && ghost.laps !== laps) ghost = null;
     ghostRec = trial ? createGhostRecorder({ track: track.id, laps }) : null;
     ghostT = 0; ghostLapN = 0; ghostLapS = 0;
@@ -755,13 +762,14 @@ async function boot(course, options, lifetime, isCurrent) {
   // ---- options: Gentle preview (never below the host's switch), steering assist and sensitivity,
   //      volumes, and the display set (frame cap, render scale, quality, fps readout, shadows) ----
   // online: { s (net/room.js session), cfg, go (race.start() done) } or null; lobbyUi = the hud/lobby.js handle
-  let opts = hud.options, assistKey = '';
+  let opts = hud.options, assistKey = '', autopilotKind = null;
   const reactiveOptions = { paused: false, gentle: false, muted: false };
-  /** The Steer assist mode: the Options pick; online it is off on a no lane keeper table and on while paused. */
+  /** The Steer assist mode: the Options pick; online it is off on a no lane keeper table and Strong while paused
+   *  (only Strong drives a hands-off kart: the paused coast needs its autopilot and cruise). */
   function syncAssist() {
     let m = opts.steerAssist;
     if (online && online.go) {
-      if (paused) m = !m || m === 'off' ? 'light' : m;
+      if (paused) m = 'strong';
       else if (!(online.cfg && online.cfg.laneKeeper)) m = 'off';
     }
     const key = String(m);
@@ -778,6 +786,7 @@ async function boot(course, options, lifetime, isCurrent) {
     renderer.setOptions(o);
     fx.setMotion?.(o.motion || 'full');                // feel wave: the Motion row (Gentle reads as 'less' inside fx)
     garage?.setMotion?.(o.motion || 'full');
+    if (!online && (state === 'menu' || state === 'boot')) setSoloLaps(o);   // a race under way keeps its laps
     if (world.shadows) world.shadows.setEnabled(qs.get('shadows') !== '0' && o.shadows !== false);
   }
   applyOptions(opts);
@@ -964,6 +973,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (warmedTier && renderer.tier !== warmedTier && state === 'menu') { void rewarmThenRace(); return; }
     closeRunLog();
     stopSong();
+    setSoloLaps(opts);
     prepareRunMode();
     const started = audio.start(); unpause(); resetAll();
     if(garage){world.setLook(0,raceLook(garage.state));debug.playerLook=world.looks()[0];}
@@ -1118,7 +1128,7 @@ async function boot(course, options, lifetime, isCurrent) {
     closeRunLog();
     if (!online) return;
     online = null;
-    track.laps = TRACK_LAPS; laps = TRACK_LAPS;
+    setSoloLaps(opts);
     stopSong(); unpause();
     buildRun();
     resetAll();
@@ -1165,7 +1175,7 @@ async function boot(course, options, lifetime, isCurrent) {
   bus.on('finish', ({ timeS } = {}) => {
     if (!ghostRec || online) return;
     const g = ghostRec.finish(timeS); ghostRec = null;
-    if (debug.trial) debug.trial.saved = saveBestGhost(g);
+    if (debug.trial) debug.trial.saved = saveBestGhost(g, undefined, TRACK_LAPS);
   });
   bus.on('go', () => { goAt = performance.now(); });
   bus.on('drop', () => { debug.drops++; });
@@ -1247,8 +1257,9 @@ async function boot(course, options, lifetime, isCurrent) {
           const hall = boudoirLayout.landmarks.find(row => row.id === 'drawer-hall');
           peekCamera(cam.camera, track, { s: hall.s0 + 80, backM: 10, upM: 5, aheadM: 40 }, renderer.aspect);
         }
-        // phone tier, no mirror hall (its captures need the whole scene): stage the warm (render/stagedWarm.js); ?stage=0 (dev) off
-        const staged = renderer.tier === 'phone' && !warmPose && qs.get('stage') !== '0';
+        // a phone DEVICE (whatever Quality is pinned), no mirror hall (its captures need the whole scene): stage the warm
+        // (render/stagedWarm.js); ?stage=0 (dev) off
+        const staged = renderer.device === 'phone' && !warmPose && qs.get('stage') !== '0';
         const stage = staged ? (a) => stagePlan({ ...a, poses: stagePoses(track, intro.shots, { introS: intro.duration, goS }), poolSpan: [1.5, intro.duration] }) : null;
         warm = await renderer.compile(world.scene, cam.camera, undefined,
           { onProgress: (k, n) => showLights('Getting the lights ready', 0.02 + 0.88 * k / n), stage, alive, overdraw });
@@ -1471,6 +1482,10 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     if (HT) hLap('sim');
     if (online) online.s.update({ paused, assist: assist.mode !== 'off' });   //    online: clock slew, pings, uploads
+    {                                                             //    the autopilot chip (hud): transitions only
+      const k = assist.view.auto > 0 ? 'auto' : assist.view.cruise > 0 ? 'cruise' : null;
+      if (k !== autopilotKind) { autopilotKind = k; bus.emit('autopilot', { on: k !== null, kind: k }); }
+    }
     queue.flush(bus);                                             // 3. events
     if (runLog && simOn && race.phase === 'racing' && !P.finished) runLog.sample(P.st, standings.placeOf(0), steps * clock.dt);
     const frozen = paused && !online;                             //    online the pause card freezes nothing

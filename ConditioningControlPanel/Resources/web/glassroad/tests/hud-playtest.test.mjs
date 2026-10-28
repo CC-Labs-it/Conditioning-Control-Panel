@@ -51,7 +51,7 @@ function rig({ opts = null, last = 'keyboard' } = {}) {
   globalThis.__hudOpts = opts;
   let t = 1000;
   const root = element(), bus = createBus();
-  const feel = { get: (k) => ({ 'gentle.on': false, 'speed.topMps': 30, 'items.rollS': 1 })[k] };
+  const feel = { get: (k) => ({ 'gentle.on': false, 'speed.topMps': 30, 'speed.shownTopMps': 30, 'items.rollS': 1 })[k] };
   const hud = createHud({ root, card: element() }, feel, bus,
     { doc: { createElement: element }, now: () => t, devices: { last, pad: null, on: () => () => {} } });
   return { hud, root, bus, q: (s) => root.querySelector(s), tick: (ms) => { t += ms; } };

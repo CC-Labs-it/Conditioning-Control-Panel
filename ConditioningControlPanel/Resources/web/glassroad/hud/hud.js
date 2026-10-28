@@ -27,7 +27,7 @@
  * first pickup of a session names both moves once (itemTip); the km/h readout shows only with the speedo option on;
  * a small Autopilot chip at the bottom centre shows while the assist drives (bus 'autopilot' { on, kind }).
  */
-import { formatTime, ordinal, iconOf, itemName, rollFrame, racerLabels, ICON_IDS } from './format.js';
+import { formatTime, ordinal, iconOf, itemName, rollFrame, racerLabels, ICON_IDS, shownKmh } from './format.js';
 import { slotState, slotMoment, gentleMoment, pipMoment, USED_S, PIP_OUT_S } from './slotMath.js';
 import { createMinimap } from './minimap.js';
 import { createCards } from './cards.js';
@@ -302,7 +302,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     // playtest 2026-10-28: a number read slower than the road felt; the readout is opt-in (Options, speedo)
     const speedo = opt('speedo') === true;
     if (last.speedo !== speedo) { last.speedo = speedo; el.speedBox.hidden = !speedo; }
-    if (speedo) put('speed', el.speed, String(Math.round(Math.max(0, speedPct) * feel.get('speed.topMps') * 3.6)));
+    if (speedo) put('speed', el.speed, String(shownKmh(speedPct, feel)));
     const n = countdown || countN;
     const countText = n > 0 ? String(n) : '';
     put('count', el.countN, countText);
@@ -360,6 +360,8 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     setTrack(t) { map.setTrack(t || {}); cards.setTrack?.(t); },
     /** The host's Gentle switch: the options card shows Gentle preview locked on. */
     setHostGentle(on) { cards.setHostGentle(on); },
+    /** The device behind the tier and its auto pick ({ device, autoTier }): the options card's Quality hint. */
+    setDevice(v) { cards.setDevice?.(v); },
     /** The host's Scrolller consent ({ on }) for the Online pictures switch; null hides it. */
     setScrolller(state) { cards.setScrolller(state); },
     /** The saved options, for boot to apply at load. */

@@ -26,7 +26,7 @@ const NONE = Object.freeze({ kind: 'none', t: 0, durS: 0, k: 0, strength: 0, pre
 
 export function createPost(three, scene, camera) {
   const pipe = new RenderPipeline(three);
-  const u = { strength: uniform(LOOK.bloomStrength), aberration: uniform(0), white: uniform(0), flash: uniform(0), edge: uniform(0), side: uniform(0), submerged: uniform(0), webPictures: uniform(1) };
+  const u = { strength: uniform(LOOK.bloomStrength), aberration: uniform(0), white: uniform(0), flash: uniform(0), edge: uniform(0), side: uniform(0), submerged: uniform(0), webPictures: uniform(1), speedBlur: uniform(0) };
   const scenePass = pass(scene, camera, { samples: Q.antialias ? 4 : 0 });
   const col = scenePass.getTextureNode('output');
   let screen = null;
@@ -36,7 +36,15 @@ export function createPost(three, scene, camera) {
   const abUv = screenUV.sub(0.5).mul(u.aberration);
   const abDelta = vec3(col.sample(screenUV.add(abUv)).r.sub(col.r), 0, col.sample(screenUV.sub(abUv)).b.sub(col.b));
   const base0 = screen ? screen.node(col) : col.rgb;
-  const base = base0.add(abDelta);
+  // speed wave: edge blur (fx.speedBlur, 0 at rest, under Motion off and on the phone tier, where it compiles out):
+  // four taps of the scene stepping toward the centre, the step growing with the distance from it past speedBlurIn
+  // of the half diagonal (the middle third stays sharp); like the aberration it is a delta over the screen effect
+  const blurDelta = Q.name === 'phone' ? null : (() => {
+    const rd = screenUV.sub(0.5), rw = smoothstep(LOOK.speedBlurIn, 1, rd.length().mul(Math.SQRT2)).mul(u.speedBlur).mul(LOOK.speedBlurUv);
+    const tap = (k) => col.sample(screenUV.sub(rd.mul(rw.mul(k)))).rgb;
+    return tap(0.25).add(tap(0.5)).add(tap(0.75)).add(tap(1)).mul(0.25).sub(col.rgb);
+  })();
+  const base = blurDelta ? base0.add(abDelta).add(blurDelta) : base0.add(abDelta);
   let bloomNode = null, builtBloom = null;
   // the hit cam inset: centre and half size in CSS px (rect), rotation (cos, sin), the CSS view size
   const insetTarget = new RenderTarget(2, 2, { type: HalfFloatType, depthBuffer: true, generateMipmaps: false, minFilter: LinearFilter, magFilter: LinearFilter });

@@ -1,5 +1,6 @@
 import {courseSketch} from './courseSketch.js';
 import {MODE_LABEL,resolveMode,saveMode} from '../meta/mode.js';
+import {loadOptions} from './options.js';
 
 const COLORS={threshold:'#ff88b5',mainframe:'#70e6c3',keep:'#ffce62',boudoir:'#e49cfa',goonworks:'#bd006e'};
 // Race / Time trial: two small pills above the grid (Logbook TRIAL lane); the pick is saved and sent as glassroad-mode
@@ -7,13 +8,18 @@ const MODE_CSS='.g-track-mode{display:flex;gap:8px;margin:0 0 14px}#race-garage 
 /** The chooser's in-game shot of a course: art/ui/course-<id>.webp (960 x 540) and a -phone variant (480 x 270). */
 export function courseShot(id){const at=name=>new URL('../art/ui/'+name+'.webp',import.meta.url).href;
   const id2=COLORS[id]?id:'threshold';return {src:at('course-'+id2),srcset:at('course-'+id2+'-phone')+' 480w, '+at('course-'+id2)+' 960w'};}
+/** A tile's details for the solo lap choice (playtest 2026-10-28): "1 lap · 5.4 km", the distance for those laps. */
+export function courseDetails(kmPerLap,laps){const n=laps>0?laps|0:1,km=Number(kmPerLap)*n;
+  return n+(n===1?' lap':' laps')+(Number.isFinite(km)&&km>0?' · '+km.toFixed(1)+' km':'');}
 /** Shows the mode on the garage Race row (the row keeps its own track line). */
 function paintMode(root,mode){const b=root.querySelector('[data-g=race] b');if(b)b.textContent=MODE_LABEL[mode]||'Race';}
 /** Native dialog supplies focus trapping and pointer isolation from the live 3D carousel. */
 export function createTrackPicker({root,courses,trackId,change}) {
   const dialog=document.createElement('dialog');dialog.className='g-track-picker';dialog.setAttribute('aria-labelledby','g-track-title');
   dialog.innerHTML='<header><div><small>YOUR NEXT RACE</small><h2 id="g-track-title">Choose track</h2></div><button type="button" class="g-track-back">Back</button></header><style>'+MODE_CSS+'</style><div class="g-track-mode" role="group" aria-label="Mode"></div><div class="g-track-grid"></div><p class="g-track-status" role="status"></p>';
-  root.append(dialog);let opener=null,loaded=false,leaving=false,timer=0,disposed=false;
+  root.append(dialog);let opener=null,loaded=false,leaving=false,timer=0,disposed=false;const kms=[];
+  // the solo Laps option, read at each show: the pre-race card may have changed it since
+  const paintDetails=()=>{const laps=loadOptions().laps;tiles.forEach((b,i)=>{if(kms[i])b.querySelector('.g-course-details').textContent=courseDetails(kms[i],laps);});};
   const here=globalThis.location;let mode=resolveMode({search:here?here.search:''});paintMode(root,mode);
   const modes=['race','trial'].map(id=>{const b=document.createElement('button');b.type='button';b.dataset.mode=id;b.textContent=MODE_LABEL[id];
     b.setAttribute('aria-pressed',String(id===mode));
@@ -48,12 +54,13 @@ export function createTrackPicker({root,courses,trackId,change}) {
       const sketch=courseSketch(await response.json());if(!sketch||disposed)return;const b=tiles[i];
       for(const path of b.querySelectorAll('path'))path.setAttribute('d',sketch.path);
       const start=b.querySelector('circle');start.setAttribute('cx',sketch.start[0]);start.setAttribute('cy',sketch.start[1]);
-      b.querySelector('.g-course-details').textContent=sketch.km+' km · '+sketch.laps+' laps';
+      kms[i]=sketch.km;
     }));
+    paintDetails();
   }
   return {
     get open(){return dialog.open;},
-    show(trigger=document.activeElement){if(dialog.open)return;opener=trigger;dialog.showModal();tiles.find(b=>b.dataset.course===trackId)?.focus();loadSketches();},
+    show(trigger=document.activeElement){if(dialog.open)return;opener=trigger;dialog.showModal();tiles.find(b=>b.dataset.course===trackId)?.focus();paintDetails();loadSketches();},
     nav(dir){if(!dialog.open)return;const buttons=[...modes,...tiles,dialog.querySelector('.g-track-back')],i=buttons.indexOf(document.activeElement);
       if(dir==='back'){close();return;}if(dir==='ok'){document.activeElement.click?.();return;}
       const step={up:-2,down:2,left:-1,right:1}[dir];if(step)buttons[(i+step+buttons.length)%buttons.length].focus();

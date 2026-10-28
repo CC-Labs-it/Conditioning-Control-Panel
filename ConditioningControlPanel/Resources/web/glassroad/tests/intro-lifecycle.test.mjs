@@ -34,6 +34,7 @@ function run(extra = '') {
     function stopSong(){events.push('song-stop')}
     function openRunLog(){} function closeRunLog(){}
     function prepareRunMode(){}
+    const opts={laps:1}; function setSoloLaps(o){events.push(['laps',o.laps])}
     ${fn('begin')}
     ${fn('startRace')}
     ${fn('setPaused')}
