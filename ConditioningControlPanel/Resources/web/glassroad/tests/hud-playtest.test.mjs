@@ -75,6 +75,10 @@ test('a held item shows its fire key; the first pickup tips once a session', () 
   r.hud.update({ item: { id: 'disc' } });
   assert.equal(key.hidden, false); assert.equal(key.textContent, 'E');
   assert.equal(toast.textContent, 'E throw. Hold S + E drop behind');
+  assert.equal(toast.dataset.at, 'slot', 'the tip hangs under the slot it explains');
+  r.tick(10000); r.bus.emit('slipstream', { racer: 0, state: 'fire' });
+  assert.equal(toast.textContent, 'Slipstream');
+  assert.equal(toast.dataset.at, undefined, 'race notices sit in the race band, clear of the slot');
   r.bus.emit('item-fire', { racer: 0, mode: 'throw' });
   r.hud.update({ item: null });
   assert.equal(key.hidden, true);

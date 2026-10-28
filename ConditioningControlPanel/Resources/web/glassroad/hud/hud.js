@@ -123,7 +123,9 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
   const motionOf = () => opt('motion') || 'full';
 
   /**
-   * A short slip under the item slot. msg: a string, or parts [{ text, cls?, colour? }] (item feel). opts.priority
+   * A short paper slip in the race band, well clear of the item slot (playtest: a "Slipstream" slip under an empty
+   * slot read as the slot's name). Only the first-pickup tip (group 'tip') sits under the slot, since it is about it.
+   * msg: a string, or parts [{ text, cls?, colour? }] (item feel). opts.priority
    * (fx/itemFeelMath.js PRIORITY), opts.group (the same group replaces itself at once), opts.tone (CSS look).
    */
   function toast(msg, { priority = PRIORITY.info, group = '', tone = '', holdS = TOAST_S } = {}) {
@@ -138,6 +140,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     if (pending && pending.opts.priority <= priority && pending.opts.group === group) pending = null;
     toastUntil = t + holdS; toastCur = { priority, group, at: t, until: toastUntil };
     paintToast(msg, tone);
+    if (group === 'tip') el.toast.dataset.at = 'slot'; else delete el.toast.dataset.at;
     const bump = !!(showing && tone && !gentleOn());
     el.toast.classList.remove('bump');
     if (bump) { void el.toast.offsetWidth; el.toast.classList.add('bump'); }
