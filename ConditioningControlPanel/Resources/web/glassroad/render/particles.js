@@ -18,8 +18,8 @@
  * hot core and a shockwave ring; landings, pops, boxes and item hits grow and take the spectrum
  * (render/spectrum.js through atlas.js juiceHues). Gentle keeps half of every growth and 0.6 of the
  * counts; mid and phone tiers scale the added counts (tierShare).
- * Polish 4 "control and payoff" (numbers in atlas.js P4_LOOK, LOOK.p4 wins): drift tiers wear blue, orange,
- * pink (atlas.js tierColour) and their sparks grow in size, rate and a share of stars per tier. event()
+ * Polish 4 "control and payoff" (numbers in atlas.js P4_LOOK, LOOK.p4 wins): drift tiers wear pink, white,
+ * gold (atlas.js tierColour, the HUD pip fills) and their sparks grow in size, rate and a share of stars per tier. event()
  * takes the FEEL lane's bus events by name: drift-start (a puff at the rear wheels), drift-tier (the tier-up
  * burst), drift-boost (the mini-turbo burst: a cone thrown back, stars round the saucer, a tier halo), trick
  * (confetti thrown up at takeoff) and trick-land (a ring and confetti). Once a kart has had drift-tier or
@@ -224,7 +224,7 @@ export function createParticles(feel, art = currentArt()) {
         star ? 'star' : 'spark', 0.4, rnd(-1, 1) * LOOK.sparkSpin);
     }
     tmp.set(0, 0.4, 0).applyMatrix4(obj.matrixWorld);
-    halo(tmp.x, tmp.y, tmp.z, J.tierRingM[tier - 1] * Math.sqrt(mul), J.tierRingS, hex, tier === 2 ? '#bfe8ff' : '#ffffff');
+    halo(tmp.x, tmp.y, tmp.z, J.tierRingM[tier - 1] * Math.sqrt(mul), J.tierRingS, hex, tier === 2 ? '#ffe0ef' : '#ffffff');
   }
 
   /** Polish 3: a boost start: flame tongues and glitter thrown back and out, stars round the saucer, a halo. */
