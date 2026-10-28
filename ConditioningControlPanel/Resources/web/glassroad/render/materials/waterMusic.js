@@ -6,14 +6,15 @@ export function waterMusicLight(p, u, tint, accent = tint) {
   const fast = float(1).sub(u.gentle), active = vizActivity(u);
   const along = fract(p.y.div(40).add(.5)).sub(.5).mul(40);
   const across = p.x.div(28).add(.5).clamp(0, 1);
-  const wave = vizWave(fract(p.y.div(32)), u);
+  // Recorded PCM is often only +/-0.08 here. Bounded display gain makes its river readable at speed.
+  const wave = vizWave(fract(p.y.div(32)), u).mul(3).clamp(-1, 1);
   const spectrum = vizSpectrum(across, u);
   const history = vizHistory(across, fract(p.y.div(40)), u);
   // Bass strikes a wide circular front, alternating its fixed source on successive kicks.
   const kickAge = u.kickAge.clamp(0, 2), kickX = mod(u.kickCount, 2).mul(6).sub(3);
   const kickRadius = kickAge.mul(17).add(.6), r = length(vec2(p.x.sub(kickX), along));
   const kickLife = exp(kickAge.div(-.4)).mul(float(1).sub(smoothstep(.8, 1.1, kickAge)));
-  const kick = max(u.kick.mul(.8), u.kickStrength.mul(kickLife));
+  const kick = max(u.kick.mul(.8), u.kickStrength.mul(kickLife)).max(0).pow(.5);
   const rings = max(vizLine(r.sub(kickRadius), .5), vizLine(r.sub(kickRadius.mul(.62)), .2).mul(.4)).mul(kick);
 
   // Mids and voice draw a narrow live PCM river, with spectral history as a dim refracted contour.
@@ -30,7 +31,7 @@ export function waterMusicLight(p, u, tint, accent = tint) {
   const rA = length(vec2(p.x.sub(side.mul(6)), along.add(4)));
   const rB = length(vec2(p.x.add(side.mul(4)), along.sub(5)));
   const snareLife = exp(snareAge.div(-.24)).mul(float(1).sub(smoothstep(.45, .7, snareAge)));
-  const snare = max(u.snare.mul(.75), u.snareStrength.mul(snareLife));
+  const snare = max(u.snare.mul(.75), u.snareStrength.mul(snareLife)).max(0).pow(.5);
   const arcs = max(vizLine(rA.sub(snareRadius), .25), vizLine(rB.sub(snareRadius.mul(.8)), .18))
     .mul(smoothstep(-2, 2, p.x.mul(side))).mul(snare);
 
@@ -41,7 +42,7 @@ export function waterMusicLight(p, u, tint, accent = tint) {
   const star = vizLine(point, .035).mul(float(1).sub(smoothstep(.12, .34, extent))).mul(step(.9, seed));
   const hatsAge = u.hatsAge.clamp(0, 2);
   const hatsLife = exp(hatsAge.div(-.065)).mul(float(1).sub(smoothstep(.12, .2, hatsAge)));
-  const hats = max(u.hats.mul(.75), u.hatsStrength.mul(hatsLife));
+  const hats = max(u.hats.mul(.75), u.hatsStrength.mul(hatsLife)).max(0).pow(.5);
   const glints = star.mul(hats).mul(spectrum.mul(.3).add(.7));
 
   const riverTint = mix(tint, accent, spectrum.mul(.4).add(.45));
