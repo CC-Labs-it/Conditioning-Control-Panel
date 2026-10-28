@@ -86,6 +86,32 @@ test('Keep uses three different spectral compositions with dark negative space',
   }
 });
 
+test('Keep quiet recording levels still light sparse slabs in all three layouts', t => {
+  const { u, music, capture, strike } = fixture(t);
+  // Native Keep evidence: drive .22, energy .32, small waveform and quiet measured bands.
+  // The atlas already stores compressed FFT/history values; do not substitute full-strength notes.
+  u.drive.value = .22; u.energy.value = .32;
+  u.bass.value = u.mid.value = .25; u.treble.value = .1;
+  for (let i = 0; i < 8; i++) u['note' + i].value = .15;
+  const data = u.vizTexture.image.data;
+  for (let row = 0; row < 18; row++) for (let i = 0; i < 64; i++)
+    data[(row * 64 + i) * 4 + (row === 0 ? 1 : 0)] = 57;
+  strike(null);
+  const masks = [];
+  for (const bar of [0, 8, 16]) {
+    music.tileBar.value = bar;
+    const levels = capture().map(luminance), dark = Math.min(...levels), bright = Math.max(...levels);
+    const mask = levels.map(v => v > dark * 2.2), coverage = mask.filter(Boolean).length / mask.length;
+    assert.ok(bright > .14, 'selected slabs remain clearly luminous at actual low levels: ' + bright);
+    assert.ok(bright > dark * 4, 'the quiet recording retains at least 4:1 lit/rest contrast');
+    assert.ok(coverage > .1 && coverage < .55, 'a distinct sparse subset lights without a floor wash: ' + coverage);
+    masks.push(mask);
+  }
+  for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++)
+    assert.ok(masks[i].filter((v, k) => v !== masks[j][k]).length > slabs.length * .15,
+      'quiet spectra still distinguish organ, choir and procession layouts');
+});
+
 test('Keep ages bass fronts independently and high glints expire promptly', t => {
   const { u, capture, strike } = fixture(t);
   strike('kick', .08); const first = capture(); u.kickAge.value = .28;

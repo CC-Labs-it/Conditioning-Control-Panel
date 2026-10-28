@@ -22,20 +22,25 @@ export function keepMusicFloor({ p, base, seam, reactive: u, music }) {
   const hats = max(u.hats, (u.hatsStrength || float(0)).mul(decay(hatsAge, .075))).mul(fast);
   const spectrum = vizSpectrum(bank.add(.5).div(8), u);
   const history = vizHistory(bank.add(.5).div(8), mod(row, 12).div(12), u);
-  const sustained = spectrum.mul(.62).add(note.mul(.38)).clamp(0, 1);
+  // Quiet real recordings still need readable lit slabs. Compress the display level once;
+  // use it for sparse occupancy, rather than multiplying quiet amplitudes into both area and light.
+  const measured = spectrum.mul(.62).add(note.mul(.38)).clamp(0, 1).toVar();
+  const sustained = measured.div(measured.add(.18)).toVar();
+  const audible = smoothstep(.015, .06, measured);
 
   // Three different spatial instruments: organ stacks, diamond choirs and broken chess processions.
   const organRow = mod(row, 8).add(.5).div(8);
-  const organ = one(smoothstep(sustained, sustained.add(.1), organRow)).mul(sustained);
+  const organHeight = sustained.mul(.65);
+  const organ = one(smoothstep(organHeight, organHeight.add(.07), organRow));
   const diamond = abs(mod(column.add(4), 8).sub(4)).mul(.16)
     .add(abs(mod(row.add(4), 8).sub(4)).mul(.12));
-  const choir = one(smoothstep(sustained.add(history.mul(.24)), sustained.add(history.mul(.24)).add(.12), diamond))
-    .mul(note.mul(.55).add(history.mul(.45)));
+  const choirHeight = sustained.mul(.85).add(history.mul(.12));
+  const choir = one(smoothstep(choirHeight, choirHeight.add(.1), diamond));
   const checker = mod(column.add(row).add(floor(music.tileBeat.div(8))), 2);
-  const procession = step(.32, sustained).mul(checker).mul(sustained.mul(.6).add(history.mul(.4)));
+  const procession = step(.22, sustained).mul(checker);
   const phrase = bar.div(8), mode = mod(floor(phrase).add(u.section), 3);
   const choose = n => select(n.lessThan(.5), organ, select(n.lessThan(1.5), choir, procession));
-  const melody = mix(choose(mode), choose(mod(mode.add(1), 3)), smoothstep(.875, 1, fract(phrase)));
+  const melody = mix(choose(mode), choose(mod(mode.add(1), 3)), smoothstep(.875, 1, fract(phrase))).mul(audible);
 
   // Bass sends wide golden rows outward; its position belongs only to the latest kick.
   const origin = mod(kickCount, 3).mul(2);
@@ -56,7 +61,8 @@ export function keepMusicFloor({ p, base, seam, reactive: u, music }) {
   const plum = vec3(.45, .045, .77), pearl = vec3(.62, .86, .68);
   const voiced = mix(plum, jade, sustained.mul(.7).add(history.mul(.3)));
   const rest = base.mul(mix(float(.22), float(.8), gentle));
-  const melodyLight = voiced.mul(melody).mul(u.mid.mul(.65).add(.35)).mul(mix(float(.82), float(.18), gentle));
+  const melodyLight = voiced.mul(melody).mul(sustained.mul(.35).add(.65))
+    .mul(u.mid.mul(.4).add(.75)).mul(mix(float(1.3), float(.18), gentle));
   const musicLight = melodyLight.add(brass.mul(bassFront).mul(.9)).add(rose.mul(snareCut.add(echoCut)).mul(.82))
     .add(pearl.mul(glints).mul(.8)).add(jade.mul(dropRows).mul(.55));
   const ink = rest.add(musicLight).clamp(0, .96);
