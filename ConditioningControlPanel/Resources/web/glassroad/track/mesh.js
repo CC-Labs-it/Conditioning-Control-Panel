@@ -103,6 +103,18 @@ export function buildMeshes(track, dl) {
   const courtHoles = (track.courts || []).flatMap((c) => c.holes);
   const row = (q) => q % Q;              // row index of the start of quad q (wrapped)
   const rowS = (q) => dl.s[row(q)] + Math.floor(q / Q) * L;
+  const edgeEndS = (q,side) => {
+    const s=rowS(q), before=q?rowS(q-1):rowS(Q-1)-L;
+    let best=Math.max(s-before,rowS(q+1)-s), result=s;
+    for (const route of track.routes || []) {
+      if ((route.side==='L'?-1:1)!==side) continue;
+      for (const bound of [route.openS0,route.openS1]) {
+        const candidate=bound+Math.round((s-bound)/L)*L, distance=Math.abs(candidate-s);
+        if (distance<best) { best=distance;result=candidate; }
+      }
+    }
+    return result;
+  };
   // stones wave: inside a field the deck is gone (no road, no hazard strip; RENDER places the stones), so the
   // road and the open-edge runs break at the field's ends. With no fields every run is as before.
   const fields = track.fields || [];
@@ -179,11 +191,13 @@ export function buildMeshes(track, dl) {
   const railEnds = [];
   for (const side of [-1, 1]) {
     for (const [q0, nq, closed] of runs(Q, (q) => railed(q, side))) {
-      if (!closed) railEnds.push([rowS(q0), side, -1], [rowS(q0 + nq), side, 1]);
+      if (!closed) railEnds.push([edgeEndS(q0,side), side, -1], [edgeEndS(q0 + nq,side), side, 1]);
       const inner = [], outer = [];
       for (let k = 0; k <= nq; k++) {
-        const r = closed && k === nq ? Q : row(q0 + k), v = closed && k === nq ? L : rowS(q0 + k);
-        const c = at(dl.c, r), n = at(dl.n, r), b = at(dl.b, r), x = side * dl.w[r] / 2;
+        const r = closed && k === nq ? Q : row(q0 + k), raw = closed && k === nq ? L : rowS(q0 + k);
+        const v = !closed && (k===0 || k===nq) ? edgeEndS(q0+k,side) : raw;
+        const f = v!==raw ? track.frameAt(v) : null;
+        const c = f?.p ?? at(dl.c, r), n = f?.n ?? at(dl.n, r), b = f?.b ?? at(dl.b, r), x = side * (f?.w ?? dl.w[r]) / 2;
         const inN = side > 0 ? neg(b) : b, outN = neg(inN);
         inner.push([rails.v(off(c, b, x, n, 0), inN, 0, v), rails.v(off(c, b, x, n, RAIL_H), inN, RAIL_H, v)]);
         const xo = x + side * RAIL_T;
@@ -226,7 +240,7 @@ export function buildMeshes(track, dl) {
   }
   for (const a of track.aerials || []) strip(jumps, a.gapS0 - LIP_M, LIP_M, 0, track.frameAt(a.gapS0).w, false);
   const { routeEdge, routeLand } = buildRouteMeshes(track, builder);
-  const { edgeStrip, edgeHaze, railCaps } = buildEdgeMeshes(track, dl, runs, railed, railEnds, row, rowS, inField);
+  const { edgeStrip, edgeHaze, railCaps } = buildEdgeMeshes(track, dl, runs, railed, railEnds, row, rowS, inField, edgeEndS);
   return { road: roadData, rails: bendCanalMesh(rails.done(), track), pads: { ...pads.done(), padDesign: new Float32Array(padDesign) }, jumps: jumps.done(), routeEdge, routeLand, edgeStrip, edgeHaze, railCaps };
 }
 
@@ -321,15 +335,17 @@ function courtWalls(m, track, depthAt) {
 
 /* EDGES lane: the open edges read "you can fall here" (a hazard strip and a lip, a haze falling away below it)
  * and every rail run ends in a tall post, so a railed edge and an open one differ in shape, not colour alone. */
-function buildEdgeMeshes(track, dl, runs, railed, railEnds, row, rowS, inField = () => false) {
+function buildEdgeMeshes(track, dl, runs, railed, railEnds, row, rowS, inField = () => false, edgeEndS = rowS) {
   const E = EDGE_MESH, Q = dl.quads, L = track.lengthM;
   const strip = builder(), haze = builder(), caps = builder();
   for (const side of [-1, 1]) {
     for (const [q0, nq, closed] of runs(Q, (q) => !dl.gap[q] && !railed(q, side) && !inField(q) && !track.mainRailOpen?.((dl.s[q] + dl.s[q + 1]) / 2, side))) {
       const sr = [], hr = [];
       for (let k = 0; k <= nq; k++) {
-        const r = closed && k === nq ? Q : row(q0 + k), v = closed && k === nq ? L : rowS(q0 + k);
-        const c = at(dl.c, r), n = at(dl.n, r), b = at(dl.b, r), h = dl.w[r] / 2, out = side > 0 ? b : neg(b);
+        const r = closed && k === nq ? Q : row(q0 + k), raw = closed && k === nq ? L : rowS(q0 + k);
+        const v = !closed && (k===0 || k===nq) ? edgeEndS(q0+k,side) : raw;
+        const f = v!==raw ? track.frameAt(v) : null;
+        const c = f?.p ?? at(dl.c, r), n = f?.n ?? at(dl.n, r), b = f?.b ?? at(dl.b, r), h = (f?.w ?? dl.w[r]) / 2, out = side > 0 ? b : neg(b);
         sr.push([strip.v(off(c, b, side * (h - E.stripM), n, DECAL_M), n, E.stripM, v), strip.v(off(c, b, side * h, n, DECAL_M), n, 0, v)]);
         const top = off(c, b, side * (h + 0.03), n, 0), low = off(c, b, side * (h + 0.03 + E.hazeOutM), n, -E.hazeM);
         hr.push([haze.v(top, out, 0, v), haze.v(low, out, E.hazeM, v)]);
@@ -349,7 +365,7 @@ function buildEdgeMeshes(track, dl, runs, railed, railEnds, row, rowS, inField =
     const x = side * (f.w / 2 + 0.04), hw = E.capW / 2;
     const P = (dx, dt, up) => [f.p[0] + f.b[0] * (x + dx) + f.t[0] * dt + f.n[0] * up, f.p[1] + f.b[1] * (x + dx) + f.t[1] * dt + f.n[1] * up,
       f.p[2] + f.b[2] * (x + dx) + f.t[2] * dt + f.n[2] * up];
-    const face = (nrm, pts, us) => { const ids = pts.map((p, i) => caps.v(p, nrm, us[i], 0)); caps.quad(ids[0], ids[1], ids[2], ids[3]); };
+    const face = (nrm, pts, us) => { const ids = pts.map((p, i) => caps.v(p, nrm, us[i], s)); caps.quad(ids[0], ids[1], ids[2], ids[3]); };
     for (const [ax, sg] of [[f.b, 1], [f.b, -1], [f.t, 1], [f.t, -1]]) {
       const nrm = [ax[0] * sg, ax[1] * sg, ax[2] * sg], onB = ax === f.b;
       const a0 = onB ? [sg * hw, -hw] : [-hw, sg * hw], a1 = onB ? [sg * hw, hw] : [hw, sg * hw];

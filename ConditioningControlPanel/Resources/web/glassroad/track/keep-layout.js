@@ -64,15 +64,40 @@ export function getKeepLayout(track) {
   // Break up the long spiral drives without shortening their climb or crowding a bend.
   // The narrow ascent keeps a 6 m bypass on the short side of every offset grille.
   const ascent = find('tower-spiral'), descent = find('north-tower');
+  const descentScale = track.courseShape ? (descent.s1 - descent.s0) / (90 * 810 * RAD) : 1;
+  const ascentSpacing = track.courseShape ? (ascent.s1 - ascent.s0 - 240) / 7 : 190;
   for (let i = 0; i < 8; i++) gates.push({ id: 'ascent-gate-' + (i + 1),
-    s: ascent.s0 + 120 + i * 190, x: i % 2 ? -2 : 2, w: 10, offsetS: i * .8 });
+    s: ascent.s0 + 120 + i * ascentSpacing, x: i % 2 ? -2 : 2, w: 10, offsetS: i * .8 });
   // These stations leave both shortcut launch windows and lower landing stretches clear.
   for (const [i, d] of [210, 430].entries()) gates.push({ id: 'descent-gate-' + (i + 1),
-    s: descent.s0 + d, x: i % 2 ? 2 : -2, w: 10, offsetS: 1.2 + i * .8 });
+    s: descent.s0 + d * descentScale, x: i % 2 ? 2 : -2, w: 10, offsetS: 1.2 + i * .8 });
   for (const [i, d] of [880, 1050].entries()) chains.push({ id: 'descent-chain-' + (i + 1),
-    s: descent.s0 + d, x: 0, w: 10, offsetS: i * .8, cycleS: 3.2 });
+    s: descent.s0 + d * descentScale, x: 0, w: 10, offsetS: i * .8, cycleS: 3.2 });
+  if (track.courseShape) {
+    const holes = (track.courts || []).flatMap(c => c.holes);
+    const blocked = s => holes.some(h => s + 45 >= h.s && s - 45 <= h.s + h.len);
+    for (const row of [...gates, ...chains]) {
+      if (!blocked(row.s)) continue;
+      const section = landmarks.find(p => row.s >= p.s0 && row.s < p.s1);
+      const desired = row.s;
+      const shift = Array.from({ length: 100 }, (_, i) => [-(i + 1), i + 1]).flat().find(d => {
+        const s = desired + d, f = track.frameAt(s);
+        return s > section.s0 + 30 && s < section.s1 - 30 && !blocked(s)
+          && f.flags.includes('rail') && f.w >= (row.id.includes('chain') ? 30 : row.w + 16)
+          && [...gates, ...chains].every(other => other === row || !/^(ascent|descent)-/.test(other.id)
+            || !/^(ascent|descent)-/.test(row.id) || Math.abs(other.s - s) >= 160);
+      });
+      if (shift === undefined) throw Error('No clear worn-floor bypass for ' + row.id);
+      row.s = desired + shift;
+    }
+  }
   const start = walkKeep(KEEP_PIECES).starts[KEEP_PIECES.findIndex((p) => p.id === 'tower-spiral')];
-  const towers = [{ x: start.x + 75, z: start.z, radiusM: 59, baseY: -25, topY: 142 }];
+  const ascentFrame = track.frameAt(ascent.s0 + (ascent.s1 - ascent.s0) / 2);
+  const ascentRadius = track.courseShape?.pieces?.find(p => p.id === 'tower-spiral')?.r;
+  const flat = Math.hypot(ascentFrame.t[0], ascentFrame.t[2]);
+  const towers = [{ x: ascentRadius ? ascentFrame.p[0] + ascentRadius * ascentFrame.t[2] / flat : start.x + 75,
+    z: ascentRadius ? ascentFrame.p[2] - ascentRadius * ascentFrame.t[0] / flat : start.z,
+    radiusM: ascentRadius ? ascentRadius - 16 : 59, baseY: -25, topY: 142 }];
   const castleBlocks = [
     { id: 'main-prison', x: 710, z: 397, w: 300, d: 140, baseY: -16, topY: 78 },
     { id: 'west-cellblock', x: 175, z: 340, w: 400, d: 220, baseY: -16, topY: 62 },
@@ -83,10 +108,39 @@ export function getKeepLayout(track) {
   const ramp = find('drawbridge-ramp'), gap = find('drawbridge-gap'), landing = find('drawbridge-landing');
   const drawbridge = { rampS0: ramp.s0, rampS1: gap.s0, gapS0: gap.s0, gapS1: landing.s0, landingS0: landing.s0, landingS1: landing.s1, widthM: 34, riseM: 10, gapM: 20 };
   const architecture = { cellblocks: castleBlocks,
-    halls: ['outer-gate', 'cell-gallery', 'chain-hall', 'high-gate'].map((id) => ({ id, s0: find(id).s0, s1: find(id).s1, heightM: 24, wingM: 28 })),
+    halls: ['outer-gate', 'cell-gallery', 'chain-hall', 'high-gate'].map((id) => {
+      // Recess the gallery's masonry corners behind the broader approach and exit sweeps.
+      const inset = track.courseShape && id === 'cell-gallery' ? 12 : 0;
+      return { id, s0: find(id).s0 + inset, s1: find(id).s1 - inset, heightM: 24, wingM: 28 };
+    }),
     courts: [{ id: 'gallows', x: 520, z: 900, w: 170, d: 65, baseY: 14, wallM: 12 }],
     ruins: [{ id: 'collapsed-north-wing', x: 475, z: 980, w: 140, d: 55, baseY: 14, topY: 42 }],
   };
+  if (track.courseShape?.mapPoint) for (const block of [...castleBlocks, ...architecture.courts, ...architecture.ruins]) {
+    const p = track.courseShape.mapPoint([block.x, block.baseY, block.z]);
+    block.x = p[0]; block.z = p[2];
+  }
+  if (track.courseShape) {
+    const road = [];
+    for (let s = 0; s < track.lengthM; s += 8) road.push(track.frameAt(s));
+    const parcels = [];
+    // A changed route can bow into an old wing footprint. Move whole wings to the
+    // nearest clear parcel so its facade, guard drums and media mounts stay together.
+    for (const block of [...castleBlocks, ...architecture.courts, ...architecture.ruins]) {
+      const clear = (x, z) => road.every(f => f.p[1] + 12 < block.baseY || f.p[1] - 12 > (block.topY ?? block.baseY + block.wallM) + 12
+        || Math.abs(f.p[0] - x) > block.w / 2 + f.w / 2 + 18 || Math.abs(f.p[2] - z) > block.d / 2 + f.w / 2 + 18)
+        && (!castleBlocks.includes(block) || parcels.every(p => Math.abs(p.x - x) > (p.w + block.w) / 2 + 12 || Math.abs(p.z - z) > (p.d + block.d) / 2 + 12));
+      if (clear(block.x, block.z)) { if (castleBlocks.includes(block)) parcels.push(block); continue; }
+      const x = block.x, z = block.z;
+      let found = false;
+      for (let r = 25; r <= 800 && !found; r += 25) for (let i = 0; i < 24; i++) {
+        const px = x + Math.cos(i * Math.PI / 12) * r, pz = z + Math.sin(i * Math.PI / 12) * r;
+        if (clear(px, pz)) { block.x = px; block.z = pz; found = true; break; }
+      }
+      if (!found) throw Error('No clear fortress parcel for ' + block.id);
+      if (castleBlocks.includes(block)) parcels.push(block);
+    }
+  }
   const stoneFields = [{ id: 'keep-stones', s0: find('stones').s0, s1: track.fields.find(f => f.id === 'keep-stones')?.toS ?? find('stones').s1, lanes: [-16, 0, 16], widthM: 72, platformWidthM: 56, platformLengthM: 52, gapM: 13.6 }];
   const bounds = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity, minY: 0, maxY: 0 };
   for (let s = 0; s < track.lengthM; s += 10) {

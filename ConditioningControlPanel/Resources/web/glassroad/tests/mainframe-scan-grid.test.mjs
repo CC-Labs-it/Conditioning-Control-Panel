@@ -22,7 +22,7 @@ for (const seed of [1, 241023, 20261024]) test('Mainframe full grid finishes wit
     const clock = scanClock(music, run.race.timeS);
     scan.update(run.racers.list, clock.timeS, clock.bpm);
   };
-  run.run(1200, () => run.racers.list.every(racer => racer.finished));
+  run.run(60 + track.lengthM * track.laps / (run.feel.get('speed.topMps') * .6), () => run.racers.list.every(racer => racer.finished));
   assert.ok(hits.length > 0, 'real driving must encounter an active scan');
   assert.ok(hits.some(hit => hit.racer > 0), 'bots receive the same contact rule');
   assert.equal(scan.hits, hits.length);

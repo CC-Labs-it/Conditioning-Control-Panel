@@ -15,7 +15,8 @@ import { qfromBasis } from '../core/math.js';
 import { gap } from '../sim/gaps.js';
 import { makeFeel, DT } from './sim-fake.mjs';
 
-const track = loadTrack(JSON.parse(readFileSync(new URL('../tracks/threshold.json', import.meta.url), 'utf8')));
+// The original r20 knee remains a demanding braking-law regression after the live road broadens.
+const track = loadTrack(JSON.parse(readFileSync(new URL('../tracks/threshold.json', import.meta.url), 'utf8')), { courseShape: false });
 const R0 = track.routes[0];
 
 function kartAt(s, lat, v) {

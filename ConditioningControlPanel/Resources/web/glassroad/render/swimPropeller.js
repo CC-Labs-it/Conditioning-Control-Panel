@@ -28,6 +28,17 @@ function metal(hex) {
   material.colorNode=vec3(c.r,c.g,c.b).mul(light.mul(.64).add(.42)).add(rim.mul(.18));
   return material;
 }
+// One material per finish for every kart's drive (a set per kart built 24 identical shader graphs at
+// load), released by the last propeller using it so a lone propeller still disposes its materials.
+const METALS=['#273a48','#9caeb9','#38c9ce'], shared=new Map();
+function acquireMetal(hex) {
+  let entry=shared.get(hex);
+  if(!entry){entry={material:metal(hex),refs:0};shared.set(hex,entry);}
+  entry.refs++;return entry.material;
+}
+function releaseMetal(material) {
+  for(const [hex,entry] of shared) if(entry.material===material&&--entry.refs<=0){shared.delete(hex);material.dispose();}
+}
 
 function bladeGeometry() {
   const s=new Shape();s.moveTo(.06,-.045);s.lineTo(.16,-.07);
@@ -44,10 +55,10 @@ function bladeGeometry() {
 
 /** The three metals and three shapes every drive is made of. */
 function createPropellerKit() {
-  const materials=[metal('#273a48'),metal('#9caeb9'),metal('#38c9ce')];
+  const materials=METALS.map(acquireMetal);
   const cylinder=new CylinderGeometry(1,1,1,12), ring=new TorusGeometry(.128,.016,5,16), blade=bladeGeometry();
   return {materials,cylinder,ring,blade,geometries:[cylinder,ring,blade],
-    dispose() {for(const g of this.geometries)g.dispose();for(const m of this.materials)m.dispose();}};
+    dispose() {for(const g of this.geometries)g.dispose();for(const m of this.materials)releaseMetal(m);}};
 }
 
 /**

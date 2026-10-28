@@ -45,6 +45,9 @@ export function createAirWords(scene, track, { feel, photosafe, doc = globalThis
   const context = canvas?.getContext?.('2d', { willReadFrequently: true });
   const bitMaterial = new MeshBasicNodeMaterial({ color: theme.echo, transparent: true, opacity: .6, depthWrite: false });
   materials.push(bitMaterial);
+  // Expand each glyph's closed hull along its normals, including the inner counters. One node for every
+  // slot's outline: a node per slot gave each outline material its own shader graph build.
+  const outlineOffset = positionLocal.add(normalLocal.mul(vec3(.012, .035, .018)));
   function geometry(text) {
     if (cache.has(text)) {
       const entry = cache.get(text); cache.delete(text); cache.set(text, entry); return entry;
@@ -72,8 +75,7 @@ export function createAirWords(scene, track, { feel, photosafe, doc = globalThis
     const side = new MeshStandardNodeMaterial({ color: new Color(theme.accent).multiplyScalar(.58),
       roughness: .34, metalness: .2, emissive: theme.accent, emissiveIntensity: .05, transparent: true, opacity: 0 });
     const outlineMaterial = new MeshBasicNodeMaterial({ color: 0x000000, side: BackSide, transparent: true, opacity: 0 });
-    // Expand each glyph's closed hull along its normals, including the inner counters.
-    outlineMaterial.positionNode = positionLocal.add(normalLocal.mul(vec3(.012, .035, .018)));
+    outlineMaterial.positionNode = outlineOffset;
     materials.push(top, side, outlineMaterial);
     const letters = new Mesh(warm.geometry, [top, side]); letters.name = 'solid-letters'; root.add(letters);
     const bits = new InstancedMesh(bitGeo, bitMaterial, BITS); bits.count = 0; bits.frustumCulled = false; root.add(bits);

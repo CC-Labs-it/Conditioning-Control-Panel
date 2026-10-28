@@ -15,7 +15,8 @@ const FR = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
 const R = makeRace({ seed: 1, track: TR });
 let railBreaches = 0;
 const done = () => !!R.standings.result && R.racers.list.every((r) => r.finished);
-for (let i = 0; i < 60 * 900 && !done(); i++) {
+const raceBudgetS = 60 + TR.lengthM * TR.laps / (R.feel.get('speed.topMps') * .6);
+for (let i = 0; i < 60 * raceBudgetS && !done(); i++) {
   R.tick();
   if (i % 6) continue;
   for (const r of R.racers.list) {

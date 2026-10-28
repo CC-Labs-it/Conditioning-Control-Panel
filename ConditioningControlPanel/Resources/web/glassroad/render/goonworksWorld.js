@@ -129,7 +129,7 @@ export function goonworksWorldPlan(track){
     for(let i=0;i<count;i++){const s=tube.s0+(i+.5)*(tube.s1-tube.s0)/count,f=track.frameAt(s),radius=Math.max(23,f.w/2+4),center=point(f,0,radius-1),depth=(tube.s1-tube.s0)/count;
       // The shell is a single swept mesh. These small fixtures sit entirely above the driving line.
       for(const side of[-1,1])local('rabbit-ceiling-conduit','white',f,side*5,44,0,[1.8,depth+1,1.8],{shape:'cylinder',basis:[f.b,f.t,f.n]});
-      if(i%2===0)screen('rabbit-screen-'+i,s,1,28,10,8,-6);
+      if(i%2===0)screen('rabbit-screen-'+i,s,i%4?-1:1,28,10,8,-6);
       // The enclosed tube stays clear of floating white sparkles and bubble rings.
     }
   }

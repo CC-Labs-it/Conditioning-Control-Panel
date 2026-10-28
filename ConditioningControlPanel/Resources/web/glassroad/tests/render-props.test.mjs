@@ -15,7 +15,7 @@ const tr = loadTrack(rd('../tracks/threshold.json'));
 const layout = rd('../tracks/threshold.colossi.json');
 const manifest = rd('../art/manifest.json');
 const rowOf = (id) => manifest.find((r) => r.id === id) || null;
-const W = worldLook(), L = tr.lengthM;
+const W = worldLook(tr), L = tr.lengthM;
 const samples = sampleTrack(tr, W.stepM);
 const placed = placeColossi(layout.colossi, tr, rowOf, W, samples);
 const kinds = W.scatterKinds.filter((k) => rowOf(k.id));
@@ -34,7 +34,7 @@ test('props: scatter counts per tier (about 70 high, 45 mid, 25 phone) and every
 });
 
 test('props: the corridor windows match the brief and nothing sits in one', () => {
-  const f = (x) => x * L;
+  const f = (x) => tr.courseShape.mapS(x*tr.courseShape.sourceLengthM,tr);
   // polish 6: refit to the stacked course
   for (const g of [0.09, 0.17, 0.315, 0.785, 0.965]) {
     assert.equal(corridorHit(f(g), L, W), 'gate');
@@ -44,7 +44,7 @@ test('props: the corridor windows match the brief and nothing sits in one', () =
   assert.equal(corridorHit(f(0.89) - 15, L, W), 'tunnel');
   assert.equal(corridorHit(f(0.79), L, W), 'loop');
   assert.equal(corridorHit(f(0.819), L, W), 'loop');
-  for (const b of [0.06, 0.2, 0.24, 0.35, 0.37, 0.575, 0.68, 0.76, 0.808, 0.99]) assert.ok(['board','loop'].includes(corridorHit(f(b) + 7, L, W)));
+  for (const b of [0.06, 0.2, 0.27, 0.35, 0.37, 0.575, 0.68, 0.76, 0.808, 0.99]) assert.ok(['board','loop'].includes(corridorHit(f(b) + 7, L, W)));
   assert.equal(corridorHit(f(0.13), L, W), null);
   // windows wrap round the line
   assert.equal(corridorHit(L - 1, L, { ...W, corridorGates: [8/L] }), 'gate');
@@ -54,7 +54,7 @@ test('props: the corridor windows match the brief and nothing sits in one', () =
   for (const tier of ['high', 'mid', 'phone']) for (const seed of [1, 7, 4242]) {
     for (const x of lay(tier, seed)) assert.equal(corridorHit(x.s, L, W), null, tier + ' ' + x.k.id + ' at s ' + x.s.toFixed(0));
   }
-  for (const c of layout.colossi) assert.equal(corridorHit(c.s, L, W), null, c.id + ' at s ' + c.s);
+  for (const c of placed) assert.equal(corridorHit(c.spec.s, L, W), null, c.id + ' at s ' + c.spec.s);
 });
 
 test('props: the scatter hangs where the chase camera looks, never empty for long', () => {
@@ -275,7 +275,7 @@ test('heroes: clear of every stretch, the corridors, the billboards, the drop sh
     assert.ok(sc.length >= Math.floor(scatterCount(tier, W) * 0.85), 'scatter still fills: ' + sc.length);
   }
   // the dare's take-off (the coil's outer turn) and landing (its inner turn) stay open (polish 6)
-  for (const s of [4410, 4450, 4510, 4600, 4680, 4720]) assert.ok(heroAvoidHit(s, L, W), 'avoid ' + s);
+  for (const s of [4410, 4450, 4510, 4600, 4680, 4720]) assert.ok(heroAvoidHit(tr.courseShape.mapS(s,tr), L, W), 'avoid authored station ' + s);
   assert.ok(heroAvoidHit(L - 5, L, W) && heroAvoidHit(5, L, W), 'the finish arch');
 });
 

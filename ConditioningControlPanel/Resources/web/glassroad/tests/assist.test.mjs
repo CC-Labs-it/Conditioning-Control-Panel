@@ -13,7 +13,7 @@ import { createAssist, ASSIST_MODES, assistMode } from '../sim/assist.js';
 import { createActions } from '../core/actions.js';
 import { cleanOptions, cycleOption, OPTION_DEFAULTS } from '../hud/options.js';
 import { howtoPanels, howtoHtml } from '../hud/howto.js';
-import { makeFeel, DT } from './sim-fake.mjs';
+import { makeFeel, place, DT } from './sim-fake.mjs';
 import { threshold } from './sim-racers-harness.mjs';
 import { fieldAtS } from '../sim/stones.js';
 import { stoneIn, stoneLaneSpan } from '../track/courts.js';
@@ -61,7 +61,8 @@ test('hands off from the grid: the autopilot and the soft cruise carry the kart 
   for (const mode of ['light', 'strong']) {
     const r = solo({ mode });
     const L = r.track.lengthM;
-    r.run(240, () => r.P.st[S.lap] >= 1);
+    const capS = 80 * Math.max(1, L / 1350); // Same minimum average pace on every course length.
+    r.run(capS, () => r.P.st[S.lap] >= 1);
     assert.ok(r.P.st[S.lap] >= 1, mode + ': a lap done hands off (lap ' + r.P.st[S.lap] + ', s ' + r.P.st[S.s].toFixed(0) + ' of ' + L.toFixed(0) + ')');
     assert.equal(r.events('drop').length, 0, mode + ': never off the road');
     const hard = r.events('wall').filter((e) => e.payload.dv > 6);
@@ -77,7 +78,6 @@ test('hands off from the grid: the autopilot and the soft cruise carry the kart 
     assert.equal(r.events('launch-boost').length, 0, mode + ': never takes the launch boost');
     assert.equal(r.events('drift-start').length, 0, mode + ': never drifts');
     const lapS = r.t;
-    const capS = 80 * Math.max(1, L / 1350);           // 80 s on the 1350 m ring; polish 6 courses run longer
     assert.ok(lapS < capS, mode + ': rolls with the song, lap in ' + lapS.toFixed(1) + ' s (cap ' + capS.toFixed(0) + ')');
     // nothing at all before go plus cruiseAfterS
     const cruiseAt = r.trace.find((x) => x.cruise > 0);
@@ -96,7 +96,7 @@ test('throttle held with player jumps and hat holds: assist steers and the lap h
     const hat = r.track.aerials.some(j => st[S.s] >= j.rampS0 && st[S.s] < j.landingS1);
     return { throttle: 1, hop: !!jump || hat, hopPressed: !!jump };
   } });
-  r.run(200, () => r.P.st[S.lap] >= 1);
+  r.run(80 * Math.max(1, r.track.lengthM / 1350), () => r.P.st[S.lap] >= 1);
   assert.ok(r.P.st[S.lap] >= 1, 'a lap with the throttle held');
   assert.equal(r.events('drop').length, 0, 'never off the road');
   const autoAt = r.trace.find((x) => x.auto > 0);
@@ -132,9 +132,23 @@ test('a player who steers is never fought: their side always wins and the assist
 test('any input takes over the same step: autopilot and cruise drop to zero at once', () => {
   let grab = Infinity;
   const r = solo({ hands: (t) => (t >= grab ? { steer: -0.2 } : {}) });
-  r.run(9);     // on the start straight, before the stream (its current adds steer the step the hands arrive)
+  // Take over as soon as both assists finish easing in, before the first bend/current.
+  const startupS = r.feel.get('juice.countdownPulses') * 60 / r.feel.get('clock.bpm')
+    + Math.max(r.feel.get('assist.autoSteerAfterS'), r.feel.get('assist.cruiseAfterS'))
+    + Math.max(r.feel.get('assist.autoEaseS'), r.feel.get('assist.cruiseEaseS')) + 1;
+  r.run(startupS, () => r.assist.view.auto === 1 && r.assist.view.cruise === 1);
   const before = r.trace[r.trace.length - 1];
   assert.ok(before.auto === 1 && before.cruise === 1, 'hands off: both eased in');
+  // Isolate takeover on the physical start straight. A previous approach can leave a
+  // legitimate heading/centre correction which this test is not asking the player to make.
+  const tangent = r.track.frameAt(0).t;
+  let straightM = 0;
+  for (; straightM < 200; straightM += 2) {
+    const f = r.track.frameAt(straightM);
+    if (f.surface !== 'glass' || f.t.reduce((sum,v,k) => sum+v*tangent[k],0) < .9999) break;
+  }
+  assert.ok(straightM > 40, 'actual start has room for the isolated input sample');
+  r.P.st.set(place(r.track, { s: straightM / 3, lateral: 0, speed: 20 }));
   grab = r.t;
   r.run(DT);
   const x = r.trace[r.trace.length - 1];

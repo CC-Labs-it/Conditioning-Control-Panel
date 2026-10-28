@@ -187,9 +187,8 @@ function stagedRenderer(count = 8) {
 }
 function texturesOf(media) {
   const textures = new Set();
-  for (const o of media.object.children) if (o.name.startsWith('media-card-source')) {
-    o.material.colorNode.traverse(n => { if (n.isTextureNode && n.value) textures.add(n.value); });
-  }
+  // Every own screen shares one material; the picture it shows is the mesh's userData.mediaTex.
+  for (const o of media.object.children) if (o.name.startsWith('media-card-source') && o.userData.mediaTex) textures.add(o.userData.mediaTex);
   return [...textures];
 }
 test('Shared video textures take the decoded <video> directly, bounded and budgeted across eight faces', async () => {
@@ -256,5 +255,26 @@ test('Renderer-owned video uses the same direct path and releases its decoder on
   const texture = texturesOf(h.media)[0]; assert.equal(texture.image, clip);
   h.media.setSource('card-0', null);
   assert.equal(clip.pauses, 1); assert.equal(clip.loads, 1); assert.ok(h.canvases.includes(texture.image));
+  h.media.dispose();
+});
+
+test('video owners share fixed image bindings across faces and never swap a compiled sampler', async () => {
+  const h = stagedRenderer(3), clips = [video(), video()];
+  for (let i = 0; i < 3; i++) h.media.setSource('card-' + i, { kind: 'video', el: clips[i % 2], borrowed: true });
+  await settle(); h.media.update(1 / 60, { eye: [0, 8, 0] });
+  const screens = h.media.object.children.filter(o => o.name.startsWith('media-card-source'));
+  assert.equal(screens[0].material, screens[2].material, 'one material per shared video owner');
+  assert.notEqual(screens[0].material, screens[1].material, 'different images keep different fixed bindings');
+  for (const screen of screens) {
+    let picture;
+    screen.material.colorNode.traverse(node => { if (node.isTextureNode) picture = node; });
+    assert.equal(picture.value, screen.userData.mediaTex, 'the shader directly references the displayed owner texture');
+  }
+  const former = screens[0].material;
+  h.media.setSource('card-0', null);
+  h.media.setSource('card-0', { kind: 'video', el: clips[1], borrowed: true });
+  await settle(); h.media.update(1 / 60, { eye: [0, 8, 0] });
+  assert.equal(screens[0].material, screens[1].material, 'reassignment selects an existing warmed owner material');
+  assert.notEqual(screens[0].material, former);
   h.media.dispose();
 });
