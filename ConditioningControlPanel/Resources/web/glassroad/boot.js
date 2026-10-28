@@ -757,13 +757,14 @@ async function boot(course, options, lifetime, isCurrent) {
   // ---- options: Gentle preview (never below the host's switch), steering assist and sensitivity,
   //      volumes, and the display set (frame cap, render scale, quality, fps readout, shadows) ----
   // online: { s (net/room.js session), cfg, go (race.start() done) } or null; lobbyUi = the hud/lobby.js handle
-  let opts = hud.options, assistKey = '';
+  let opts = hud.options, assistKey = '', autopilotKind = null;
   const reactiveOptions = { paused: false, gentle: false, muted: false };
-  /** The Steer assist mode: the Options pick; online it is off on a no lane keeper table and on while paused. */
+  /** The Steer assist mode: the Options pick; online it is off on a no lane keeper table and Strong while paused
+   *  (only Strong drives a hands-off kart: the paused coast needs its autopilot and cruise). */
   function syncAssist() {
     let m = opts.steerAssist;
     if (online && online.go) {
-      if (paused) m = !m || m === 'off' ? 'light' : m;
+      if (paused) m = 'strong';
       else if (!(online.cfg && online.cfg.laneKeeper)) m = 'off';
     }
     const key = String(m);
@@ -1474,6 +1475,10 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     if (HT) hLap('sim');
     if (online) online.s.update({ paused, assist: assist.mode !== 'off' });   //    online: clock slew, pings, uploads
+    {                                                             //    the autopilot chip (hud): transitions only
+      const k = assist.view.auto > 0 ? 'auto' : assist.view.cruise > 0 ? 'cruise' : null;
+      if (k !== autopilotKind) { autopilotKind = k; bus.emit('autopilot', { on: k !== null, kind: k }); }
+    }
     queue.flush(bus);                                             // 3. events
     if (runLog && simOn && race.phase === 'racing' && !P.finished) runLog.sample(P.st, standings.placeOf(0), steps * clock.dt);
     const frozen = paused && !online;                             //    online the pause card freezes nothing

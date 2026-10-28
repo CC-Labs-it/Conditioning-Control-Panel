@@ -9,7 +9,7 @@ import { S, RESPAWN, createState } from '../sim/state.js';
 import { createRace } from '../sim/race.js';
 import { createRacers } from '../sim/racers.js';
 import { step as kartStep } from '../sim/kart.js';
-import { createAssist, ASSIST_MODES, assistMode } from '../sim/assist.js';
+import { createAssist, ASSIST_MODES, assistMode, assistDrives } from '../sim/assist.js';
 import { createActions } from '../core/actions.js';
 import { cleanOptions, cycleOption, OPTION_DEFAULTS } from '../hud/options.js';
 import { howtoPanels, howtoHtml } from '../hud/howto.js';
@@ -57,8 +57,16 @@ test('options: Steer assist is Off / Light / Strong, Light by default, a bad val
   assert.equal(OPTION_DEFAULTS.howtoOff, false, 'the how-to card shows until the player says no');
 });
 
-test('hands off from the grid: the autopilot and the soft cruise carry the kart a whole lap, on the road', () => {
-  for (const mode of ['light', 'strong']) {
+test('Light (Help) never takes the wheel: hands off from the grid, no autopilot, no cruise, the kart waits', () => {
+  assert.equal(assistDrives('light'), false); assert.equal(assistDrives('off'), false); assert.equal(assistDrives('strong'), true);
+  const r = solo({ mode: 'light' });
+  r.run(20);
+  assert.ok(r.trace.every((x) => x.auto === 0 && x.cruise === 0 && x.throttle === 0 && !x.hop), 'light: no autopilot, no cruise, no hop');
+  assert.ok(r.P.st[S.speedPct] < 0.01, 'light, hands off: the kart is not driven');
+});
+
+test('hands off from the grid (Strong, Trance): the autopilot and the soft cruise carry the kart a whole lap, on the road', () => {
+  for (const mode of ['strong']) {
     const r = solo({ mode });
     const L = r.track.lengthM;
     const capS = 80 * Math.max(1, L / 1350); // Same minimum average pace on every course length.
@@ -86,9 +94,9 @@ test('hands off from the grid: the autopilot and the soft cruise carry the kart 
   }
 });
 
-test('throttle held with player jumps and hat holds: assist steers and the lap has no fall', () => {
+test('throttle held with player jumps and hat holds (Strong): assist steers and the lap has no fall', () => {
   let r;
-  r = solo({ hands: (t, st) => {
+  r = solo({ mode: 'strong', hands: (t, st) => {
     const field = fieldAtS(r.track, st[S.s]);
     const stone = field?.platforming && stoneIn(field, st[S.s], st[S.lateral]);
     const span = stone && stoneLaneSpan(stone, st[S.lateral]);
@@ -131,7 +139,7 @@ test('a player who steers is never fought: their side always wins and the assist
 
 test('any input takes over the same step: autopilot and cruise drop to zero at once', () => {
   let grab = Infinity;
-  const r = solo({ hands: (t) => (t >= grab ? { steer: -0.2 } : {}) });
+  const r = solo({ mode: 'strong', hands: (t) => (t >= grab ? { steer: -0.2 } : {}) });
   // Take over as soon as both assists finish easing in, before the first bend/current.
   const startupS = r.feel.get('juice.countdownPulses') * 60 / r.feel.get('clock.bpm')
     + Math.max(r.feel.get('assist.autoSteerAfterS'), r.feel.get('assist.cruiseAfterS'))
