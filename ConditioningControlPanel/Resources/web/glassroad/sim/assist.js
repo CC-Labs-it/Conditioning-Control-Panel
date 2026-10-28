@@ -2,7 +2,7 @@
  * CENTRE of the track, a slight tendency to AUTOPILOT, in case they trance"). Pure: no DOM, no three.js.
  *
  * It reshapes the PLAYER's actions only, between the input sample and the sim (boot.js), never a bot's and never
- * the sim law. Four layers, all off in mode 'off':
+ * the sim law. Four layers, all off in mode 'off'; Light runs PULL + EASE only, Strong all four:
  *   PULL    a gentle steer back toward the centre that grows with |lateral| past assist.pullFromHalf of the half
  *           width, plus a little heading alignment with the road a short way ahead.
  *   AUTO    no steer input for assist.autoSteerAfterS: steering that follows the drive line (pure pursuit on the
@@ -31,12 +31,16 @@ import { stoneIn, stoneLaneSpan } from '../track/courts.js';
 
 /** The option values in the order the Options card cycles them (the first is the default). */
 export const ASSIST_MODES = Object.freeze(['light', 'strong', 'off']);
-/** Per mode: pull, align and cap multipliers on the feel numbers (light = 1). */
+/** Per mode: pull, align and cap multipliers on the feel numbers (light = 1), and `hands`: AUTO + CRUISE may take
+ *  the wheel. Playtest 2026-10-28 (owner): Light ("Help") is PULL + EASE only, a hands-off kart is never driven;
+ *  Strong ("Trance") keeps the autopilot and the cruise. */
 const MODE = Object.freeze({
-  off: Object.freeze({ on: false, pull: 0, align: 0, cap: 0 }),
-  light: Object.freeze({ on: true, pull: 1, align: 1, cap: 1 }),
-  strong: Object.freeze({ on: true, pull: 1.9, align: 1.7, cap: 1.8 }),
+  off: Object.freeze({ on: false, pull: 0, align: 0, cap: 0, hands: false }),
+  light: Object.freeze({ on: true, pull: 1, align: 1, cap: 1, hands: false }),
+  strong: Object.freeze({ on: true, pull: 1.9, align: 1.7, cap: 1.8, hands: true }),
 });
+/** True when this mode's autopilot and cruise may drive a hands-off kart (Strong only). */
+export const assistDrives = (m) => MODE[assistMode(m)].hands;
 export const assistMode = (m) => (Object.prototype.hasOwnProperty.call(MODE, m) ? m : ASSIST_MODES[0]);
 
 const STEP = 2;                                   // m between bend table samples
@@ -124,8 +128,9 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
     // the timers: any input zeroes its ease at once (the player takes over the same step)
     if (steerIn) { view.steerIdleS = 0; view.auto = 0; } else view.steerIdleS += dt;
     if (anyIn) { view.idleS = 0; view.cruise = 0; } else view.idleS += dt;
-    if (view.steerIdleS >= g('autoSteerAfterS')) view.auto = Math.min(1, view.auto + dt / Math.max(1e-3, g('autoEaseS')));
-    if (view.idleS >= g('cruiseAfterS')) view.cruise = Math.min(1, view.cruise + dt / Math.max(1e-3, g('cruiseEaseS')));
+    if (!m.hands) { view.auto = 0; view.cruise = 0; }
+    else if (view.steerIdleS >= g('autoSteerAfterS')) view.auto = Math.min(1, view.auto + dt / Math.max(1e-3, g('autoEaseS')));
+    if (m.hands && view.idleS >= g('cruiseAfterS')) view.cruise = Math.min(1, view.cruise + dt / Math.max(1e-3, g('cruiseEaseS')));
 
     const ph = st[S.respawnPhase];
     const owned = ph === RESPAWN.PULL || ph === RESPAWN.HOVER || ph === RESPAWN.RELEASE;
