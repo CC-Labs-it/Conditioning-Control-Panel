@@ -144,14 +144,37 @@
 /* touch: the throw button owns the bottom right corner (input/touch.js THROW_CSS, 64 px); speed and the media credit sit above it */
 .gr-touch-on .hud-speed { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 76px); }
 .gr-touch-on .hud-credit { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 116px); }
+/* playtest 2026-10-28: the km/h readout is opt-in (the speedo option); hud.js sets [hidden] */
+.hud-speed[hidden] { display: none; }
+/* the fire key, a paper keycap on the slot's lower rim, only while an item is held (hud/labels.js itemKey) */
+.hud-item-key { position: absolute; left: 50%; bottom: -11px; transform: translateX(-50%); z-index: 1; min-width: 14px;
+  padding: 1px 6px; border-radius: 5px; background: var(--paper); color: var(--paper-ink); border: 1.5px solid var(--paper-ink);
+  box-shadow: 2px 2px 0 var(--shade); font: 800 12px/16px var(--font); text-align: center; text-shadow: none; white-space: nowrap;
+  pointer-events: none; animation: hud-key-in 0.3s ease-out; }
+.hud-item-key[hidden] { display: none; }
+@keyframes hud-key-in { from { opacity: 0; } }
+/* the Autopilot chip, bottom centre above the note line, while the assist drives (bus 'autopilot'); IN rises and
+ * fades, OUT sinks and fades; Motion Less / Off and Gentle keep a longer fade only */
+.hud-auto { position: absolute; left: 50%; bottom: calc(max(18px, calc(env(safe-area-inset-bottom) + 12px)) + 36px);
+  transform: translate(-50%, 8px) scale(0.92); padding: 3px 10px; border-radius: 999px; background: var(--paper-ink);
+  color: var(--paper); border: 1.5px solid var(--pink); font: 700 12px/1.2 var(--font); letter-spacing: 0.06em;
+  text-transform: uppercase; text-shadow: none; white-space: nowrap; opacity: 0; transition: opacity 0.22s, transform 0.22s; }
+.hud-auto.on { opacity: 0.92; transform: translate(-50%, 0) scale(1); }
+.hud-auto[data-motion="less"], .hud-auto[data-motion="off"], .hud.gentle .hud-auto { transform: translate(-50%, 0); transition: opacity 0.45s; }
+.hud.finished .hud-auto { opacity: 0; }
+/* touch: View / Rear own the bottom centre (input/touch.js, 48 px tall); the chip sits above them */
+.gr-touch-on .hud-auto { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 60px); }
+@media (prefers-reduced-motion: reduce) { .hud-auto { transform: translate(-50%, 0); transition: opacity 0.45s; } .hud-item-key { animation: none; } }
 
-/* toast: a paper slip under the item slot */
-.hud-toast { position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 84px); left: 50%; transform: translate(-50%, -4px);
+/* toast: a paper slip in the race band, above the road's vanishing point and well clear of the item slot (playtest
+ * 2026-10-28); only the first-pickup tip ([data-at="slot"]) hangs under the slot it explains */
+.hud-toast { position: absolute; top: max(30%, calc(max(12px, env(safe-area-inset-top)) + 120px)); left: 50%; transform: translate(-50%, -4px);
   padding: 5px 12px; border-radius: 4px; background: var(--paper); color: var(--paper-ink); border: 1.5px solid var(--paper-ink);
   box-shadow: 3px 3px 0 var(--shade); font: 700 13px/1.2 var(--font); text-shadow: none; white-space: nowrap;
   opacity: 0; transition: opacity 0.22s, transform 0.22s; }
 .hud-toast.on { opacity: 1; transform: translate(-50%, 0); }
 .hud.gentle .hud-toast { transition: opacity 0.4s; transform: translate(-50%, 0); }
+.hud-toast[data-at="slot"] { top: calc(max(12px, env(safe-area-inset-top)) + 84px); }
 
 /* polish 5 (J2): each bell stamps a big digit in and shrinks it out over one beat; Go bursts at your kart */
 .hud-count { position: absolute; top: 24%; left: 0; right: 0; text-align: center; font: 900 clamp(110px, 24vh, 270px)/1 var(--font);
@@ -249,7 +272,7 @@
   .hud-place-art { height: 56px; }
   .hud.kit-divider .hud-div { width: 84px; }
   .hud-item { width: 58px; height: 58px; margin-left: -29px; border-width: 3px; }
-  .hud-toast { top: calc(max(12px, env(safe-area-inset-top)) + 68px); }
+  .hud-toast[data-at="slot"] { top: calc(max(12px, env(safe-area-inset-top)) + 68px); }
   .hud-lap { font-size: 15px; }
   .hud-time { font-size: 16px; }
 }
@@ -433,6 +456,15 @@
 .hw-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 #card .hw-go { padding: 9px 18px; font-size: 15px; }
 #card .hw-off { min-height: 32px; padding: 4px 12px; font-size: 13px; border-color: rgba(28, 23, 34, 0.35); }
+/* the pre-race rows (playtest 2026-10-28): an ink icon, one word and the chips; the picked chip is pressed in */
+.pr-rows { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 0 0 14px 2px; }
+.pr-row { display: flex; align-items: center; gap: 8px; }
+.pr-i { width: 28px; height: 28px; color: var(--paper-ink); flex: none; }
+.pr-i .pk-line { stroke: var(--paper-pink); }
+.pr-l { font: 800 13px/1 var(--font); letter-spacing: 0.04em; text-transform: uppercase; }
+#card .pr-row .c-chip { min-width: 40px; font-size: 14px; }
+.pr-row { flex-wrap: wrap; }
+.pr-h { flex-basis: 100%; padding-left: 36px; font: 600 12px/1.2 var(--mono); opacity: 0.75; }
 #card .card-body.out { animation: hw-out 0.2s ease-in forwards; pointer-events: none; }
 @keyframes hw-out { to { opacity: 0; transform: translateY(-12px) scale(0.98); } }
 #card.c-gentle .hw-key .hw-top { animation-name: hw-press-soft; animation-duration: calc(var(--hw-beat) * 2); }

@@ -93,7 +93,7 @@ export async function runNetBot({ lobbyBase, uid, auth = 'Bearer jwt-', mode = '
       if (!track.forkAtSeg?.(r.st[S.seg])) hazards?.steer(r, out);
       if (track.id === 'mainframe') industry.steer(r, out);
     };
-    const assist = createAssist(track, feel);
+    const assist = createAssist(track, feel, { mode: 'strong' });   // the paused coast (boot.js syncAssist): Strong drives hands off
     const contact = createContact(track, feel, q);
     const standings = createStandings(track, feel, q);
     const items = s.mount(racers, race, q);

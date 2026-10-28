@@ -138,6 +138,6 @@ test('a gap route keeps its speed (no soft catch); a drop route still catches', 
     const r = run(t, st, { hop: true, until: (ev) => ev.some((e) => e.name === 'route-land' || e.name === 'drop') });
     assert.ok(r.names.includes('route-land'), kind + ': ' + r.names.join(','));
     if (kind === 'gap') assert.ok(st[S.engineV] > 15, 'gap keeps speed ' + st[S.engineV]);
-    else assert.ok(st[S.engineV] <= 0.25 * 30 + 1e-6, 'drop catches ' + st[S.engineV]);
+    else assert.ok(st[S.engineV] <= 0.25 * 33 + 1e-6, 'drop catches ' + st[S.engineV]);   // route.catchPct x top 33 (30 x the 2026-10-28 speed factor F = 1.1)
   }
 });

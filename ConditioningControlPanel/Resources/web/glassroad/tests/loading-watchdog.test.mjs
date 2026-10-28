@@ -78,6 +78,6 @@ test('boot.js: a stall is recorded and fails the cover with Retry; phones wait f
   assert.match(st, /const rec = record\('stall', new Error\(/);
   assert.match(st, /LOAD_STALL_MS/);
   assert.match(st, /loading\.fail\(failureLine\(rec\)\);\s*loading\.onRetry\(\(\) => void retry\(rec\.course\)\);/);
-  assert.match(b, /createCardMedia\(world\.media, \{ bridge,\s*readyCount: renderer\.tier === 'phone' \? PHONE_READY_CLIPS : Infinity \}\)/);
+  assert.match(b, /createCardMedia\(world\.media, \{ bridge,\s*readyCount: renderer\.device === 'phone' \? PHONE_READY_CLIPS : Infinity \}\)/);   // the DEVICE, whatever Quality is pinned
   assert.match(b, /if \(cardMedia\) await cardMedia\.ready;/);
 });

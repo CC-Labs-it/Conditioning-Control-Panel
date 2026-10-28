@@ -5,6 +5,7 @@ import { reflector, vec2, vec3, vec4, positionWorld, uniform, mix } from 'three/
 import { getBoudoirLayout } from '../track/boudoir-layout.js';
 import { getBoudoirSetpieces, mirrorGatePhase, releasedMirrorGatePhase, BOUDOIR_HAZARD } from '../track/boudoir-setpieces.js';
 import { Q } from './quality.js';
+import { memoryTier } from './deviceClass.js';
 import { machineryBeatAt } from '../track/machineryBeat.js';
 
 export const MIRROR_ROOM = Object.freeze({ sideM: 19.5, heightM: 20, facetWidthM: 15.5, facetHeightM: 15,
@@ -20,7 +21,9 @@ function facetGeometry(w, h, cut = 1) {
   shape.moveTo(...points[0]); points.slice(1).forEach(p => shape.lineTo(...p)); shape.closePath(); return new ShapeGeometry(shape);
 }
 
-export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {}) {
+/** quality sizes the capture targets (maxTexturePx, resolutionScale): a MEMORY budget, so it defaults to the DEVICE's
+ *  tier (render/deviceClass.js memoryTier), the phone tier on a phone whatever Quality is pinned. */
+export function buildBoudoirMirrorRoom(track, art, pal, { quality = memoryTier(Q.name) } = {}) {
   const group = new Group(); group.name = 'boudoir-mirror-room';
   const hall = getBoudoirLayout(track)?.landmarks.find(p => p.id === 'drawer-hall');
   if (!hall) return { group, update() {}, dispose() {}, diagnostics: { mirrors: 0, passes: 0 } };

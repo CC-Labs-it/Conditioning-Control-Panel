@@ -9,7 +9,7 @@ import { S, RESPAWN, createState } from '../sim/state.js';
 import { createRace } from '../sim/race.js';
 import { createRacers } from '../sim/racers.js';
 import { step as kartStep } from '../sim/kart.js';
-import { createAssist, ASSIST_MODES, assistMode } from '../sim/assist.js';
+import { createAssist, ASSIST_MODES, assistMode, assistDrives } from '../sim/assist.js';
 import { createActions } from '../core/actions.js';
 import { cleanOptions, cycleOption, OPTION_DEFAULTS } from '../hud/options.js';
 import { howtoPanels, howtoHtml } from '../hud/howto.js';
@@ -57,8 +57,16 @@ test('options: Steer assist is Off / Light / Strong, Light by default, a bad val
   assert.equal(OPTION_DEFAULTS.howtoOff, false, 'the how-to card shows until the player says no');
 });
 
-test('hands off from the grid: the autopilot and the soft cruise carry the kart a whole lap, on the road', () => {
-  for (const mode of ['light', 'strong']) {
+test('Light (Help) never takes the wheel: hands off from the grid, no autopilot, no cruise, the kart waits', () => {
+  assert.equal(assistDrives('light'), false); assert.equal(assistDrives('off'), false); assert.equal(assistDrives('strong'), true);
+  const r = solo({ mode: 'light' });
+  r.run(20);
+  assert.ok(r.trace.every((x) => x.auto === 0 && x.cruise === 0 && x.throttle === 0 && !x.hop), 'light: no autopilot, no cruise, no hop');
+  assert.ok(r.P.st[S.speedPct] < 0.01, 'light, hands off: the kart is not driven');
+});
+
+test('hands off from the grid (Strong, Trance): the autopilot and the soft cruise carry the kart a whole lap, on the road', () => {
+  for (const mode of ['strong']) {
     const r = solo({ mode });
     const L = r.track.lengthM;
     const capS = 80 * Math.max(1, L / 1350); // Same minimum average pace on every course length.
@@ -86,9 +94,9 @@ test('hands off from the grid: the autopilot and the soft cruise carry the kart 
   }
 });
 
-test('throttle held with player jumps and hat holds: assist steers and the lap has no fall', () => {
+test('throttle held with player jumps and hat holds (Strong): assist steers and the lap has no fall', () => {
   let r;
-  r = solo({ hands: (t, st) => {
+  r = solo({ mode: 'strong', hands: (t, st) => {
     const field = fieldAtS(r.track, st[S.s]);
     const stone = field?.platforming && stoneIn(field, st[S.s], st[S.lateral]);
     const span = stone && stoneLaneSpan(stone, st[S.lateral]);
@@ -131,7 +139,7 @@ test('a player who steers is never fought: their side always wins and the assist
 
 test('any input takes over the same step: autopilot and cruise drop to zero at once', () => {
   let grab = Infinity;
-  const r = solo({ hands: (t) => (t >= grab ? { steer: -0.2 } : {}) });
+  const r = solo({ mode: 'strong', hands: (t) => (t >= grab ? { steer: -0.2 } : {}) });
   // Take over as soon as both assists finish easing in, before the first bend/current.
   const startupS = r.feel.get('juice.countdownPulses') * 60 / r.feel.get('clock.bpm')
     + Math.max(r.feel.get('assist.autoSteerAfterS'), r.feel.get('assist.cruiseAfterS'))
@@ -242,13 +250,13 @@ test('how-to card: three picture panels named for the device in use, plain copy,
   assert.ok(!/[–—]/.test(html) && !/[!][^=]/.test(html.replace(/<!--[^]*?-->/g, '')), 'plain copy');
 });
 
-test('how-to card: Throttle dismisses it, the Race door opens it once a session, and boot passes the throttle edge', async () => {
+test('how-to card: Throttle dismisses it, the Race door opens it as the pre-race card, and boot passes the throttle edge', async () => {
   const { readFileSync } = await import('node:fs');
   const cards = readFileSync(new URL('../hud/cards.js', import.meta.url), 'utf8');
   const boot = readFileSync(new URL('../boot.js', import.meta.url), 'utf8');
   assert.ok(/dir === 'throttle'/.test(cards) && /howtoGo\(\)/.test(cards), 'nav(throttle) leaves the card');
   assert.ok(/a === 'race' && kind === 'menu' && howtoDue\(\)/.test(cards), 'the Race door opens it before the first race');
-  assert.ok(/howtoSeen = true/.test(cards) && /opts\.howtoOff/.test(cards), 'once a session, never with the switch on');
+  assert.ok(!/howtoSeen/.test(cards) && /const howtoDue = \(\) => !opts\.howtoOff && !howtoSkip/.test(cards), 'before every race from the door, never with the switch on');
   assert.ok(/hud\.nav\('throttle'\)/.test(boot) && /!cardThrottle/.test(boot), 'boot: a throttle press, an edge, reaches the card');
   assert.ok(/assist\.apply\(a, P\.st, clock\.dt, race\.phase\)/.test(boot), 'boot: the assist sits between the input and the sim');
   assert.ok(/racers\.step\(clock\.dt, pa,/.test(boot) && /race\.update\(clock\.dt, pa,/.test(boot), 'boot: the sim reads the assisted hands');
