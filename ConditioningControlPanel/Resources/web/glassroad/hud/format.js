@@ -101,7 +101,7 @@ export function pauseLine({ track = '', lap = 0, laps = 0, place = 0, count = 0 
   return parts.join(', ');
 }
 
-/** Top speed the km/h readout shows (speed.shownTopMps), else the real top. The real top moved (37.5 m/s) while the
+/** Top speed the km/h readout shows (speed.shownTopMps), else the real top. The real top moved (33 m/s, F = 1.1) while the
  * numbers a player reads stay the ones of before; a feel never gains keys, so a miss is remembered per feel. */
 const SHOWN_MISS = new WeakSet();
 export function shownTopMps(feel) {
