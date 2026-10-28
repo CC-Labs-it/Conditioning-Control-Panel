@@ -25,6 +25,7 @@ import { createLobby } from './lobby.js';
 import { actSound } from './sounds.js';
 import { recapState, dotsHtml, runPageHtml, stampsPageHtml, PAGE_TITLES, RECAP_FIXTURE } from './recap.js';
 import { togglePick, MAX_NICHES } from '../host/scrolllerNiches.js';
+import { qualityHint } from '../render/deviceClass.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const btn = (act, label, cls = '', extra = '') => '<button type="button" class="c-btn ' + cls + '" data-act="' + act + '"' + extra + '>' + label + '</button>';
@@ -51,7 +52,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
 
   let kind = 'start', data = {}, ready = false, waitNote = note?.textContent || '';
   const sound = (name) => { if (name) emit('sound', { name }); };
-  let opts = loadOptions(), host = { gentle: false, scrolller: null };   // scrolller: { on } where the host offers its feed
+  let opts = loadOptions(), host = { gentle: false, scrolller: null, device: 'desktop', autoTier: null };   // scrolller: { on } where the host offers its feed
   const load = { p: 0 };
   // garage first: the course's lights warm behind the menu; until they are ready the Race door says so (a press
   // still works: boot covers the garage and starts the race the moment the lights are ready)
@@ -218,8 +219,10 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
         STEER_SENS.max + '" step="' + STEER_SENS.step + '" data-key="steerSens" value="' + opts.steerSens + '" aria-label="Steering"></label>' +
       VOL_ROWS.map(([key, label]) => '<label class="c-opt"><span>' + label + '</span><input type="range" min="0" max="1" step="0.05" data-key="' +
         key + '" value="' + opts[key] + '" aria-label="' + label + '"></label>').join('') +
-      // mid-race the Quality step waits for the race to end (render/quality.js qualityLanding), and the hint says so
-      CYCLE_ROWS.map(([key, label, hint]) => '<div class="c-opt"><span>' + label + '<small>' + (key === 'quality' && data.from === 'pause' ? QUALITY_LATER : hint) + '</small></span>' +
+      // mid-race the Quality step waits for the race to end (render/quality.js qualityLanding), and the hint says so;
+      // in the garage a phone pinned above its auto pick is warned about memory (render/deviceClass.js qualityHint)
+      CYCLE_ROWS.map(([key, label, hint]) => '<div class="c-opt"><span>' + label + '<small>' +
+        (key === 'quality' ? data.from === 'pause' ? QUALITY_LATER : qualityHint(opts.quality, host, hint) : hint) + '</small></span>' +
         btn('cycle', choiceLabel(key, opts[key]), 'c-tog', ' data-key="' + key + '" aria-label="' + label + '"') + '</div>').join('') +
       tog('shadows', 'Shadows', opts.shadows, 'Off is lighter on the GPU', false) +
       tog('showFps', 'Show fps', opts.showFps, 'A small counter in the corner', false) +
@@ -451,6 +454,8 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       paintLoad();
     },
     setHostGentle(on) { host.gentle = !!on; },
+    /** The device behind the tier and the auto pick ({ device, autoTier }, renderer.device / autoTier): the Quality hint. */
+    setDevice(v) { host.device = v && v.device === 'phone' ? 'phone' : 'desktop'; host.autoTier = (v && v.autoTier) || null; },
     /** The host's Scrolller state ({ on, track, niches, custom, catalog }), or null where the host has no feed (nothing
      * drawn). An open Options card redraws its pictures rows in place and keeps the focused control. */
     setScrolller(state) {

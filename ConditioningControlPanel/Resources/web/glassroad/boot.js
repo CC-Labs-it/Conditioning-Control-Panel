@@ -183,7 +183,7 @@ window.addEventListener('pagehide', () => {
 function record(kind, e) {
   const d = window.__glassroad, ms = d && d.loading && d.loading.milestones;
   const rec = describeFailure(e, { kind, course: controller.active || selectedCourse(location.search).id,
-    backend: shared.renderer?.backend || null, tier: shared.renderer?.tier || null,
+    backend: shared.renderer?.backend || null, tier: shared.renderer?.tier || null, pinned: !!shared.renderer?.pinned,
     stage: ms && ms.length ? ms[ms.length - 1].stage : null, ua: navigator.userAgent });
   rememberFailure(rec);
   if (d) d.lastFailure = rec;
@@ -456,9 +456,11 @@ async function boot(course, options, lifetime, isCurrent) {
   showLoading('Opening the garage', 0.04);
 
   // the saved display options (frame cap, render scale, quality, fps readout) reach the renderer at boot
-  const renderer = shared.renderer ||= await createRenderer(canvas, { forceRenderer: init.caps.forceRenderer, options: hud.options, ...(shared.rendererOpts || {}) });
+  const renderer = shared.renderer ||= await createRenderer(canvas, { forceRenderer: init.caps.forceRenderer, options: hud.options, platform: init.caps.platform, ...(shared.rendererOpts || {}) });
   if (!lifetime.alive) { renderer.dispose(); return; }
   canvas = renderer.canvas;
+  // the options card's Quality hint: a pin above the auto pick on a phone warns about memory (render/deviceClass.js)
+  hud.setDevice?.({ device: renderer.device, autoTier: renderer.autoTier });
   shared.rendererOpts = shared.rendererOpts ? { ...shared.rendererOpts, freshCanvas: false } : null;
   loaded('renderer');
   if (!shared.counts.renderer) shared.counts.renderer++;
@@ -507,7 +509,7 @@ async function boot(course, options, lifetime, isCurrent) {
   });
   // A visual review may keep the Loom faces without requesting or displaying private media.
   const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge,
-    readyCount: renderer.tier === 'phone' ? PHONE_READY_CLIPS : Infinity });
+    readyCount: renderer.device === 'phone' ? PHONE_READY_CLIPS : Infinity });   // the DEVICE, whatever Quality is pinned
   if (scrolller && qs.get('media') !== '0') world.media?.setDisplayFeed(scrolller, renderer.canvas);
   world.setItemMediaSource(seed => cardMedia?.sourceForFlash(seed) || null);
   const subliminalBurst = createSubliminalBurst({ parent: document.body, primary: () => world.primaryColour() });
@@ -1247,8 +1249,9 @@ async function boot(course, options, lifetime, isCurrent) {
           const hall = boudoirLayout.landmarks.find(row => row.id === 'drawer-hall');
           peekCamera(cam.camera, track, { s: hall.s0 + 80, backM: 10, upM: 5, aheadM: 40 }, renderer.aspect);
         }
-        // phone tier, no mirror hall (its captures need the whole scene): stage the warm (render/stagedWarm.js); ?stage=0 (dev) off
-        const staged = renderer.tier === 'phone' && !warmPose && qs.get('stage') !== '0';
+        // a phone DEVICE (whatever Quality is pinned), no mirror hall (its captures need the whole scene): stage the warm
+        // (render/stagedWarm.js); ?stage=0 (dev) off
+        const staged = renderer.device === 'phone' && !warmPose && qs.get('stage') !== '0';
         const stage = staged ? (a) => stagePlan({ ...a, poses: stagePoses(track, intro.shots, { introS: intro.duration, goS }), poolSpan: [1.5, intro.duration] }) : null;
         warm = await renderer.compile(world.scene, cam.camera, undefined,
           { onProgress: (k, n) => showLights('Getting the lights ready', 0.02 + 0.88 * k / n), stage, alive, overdraw });
