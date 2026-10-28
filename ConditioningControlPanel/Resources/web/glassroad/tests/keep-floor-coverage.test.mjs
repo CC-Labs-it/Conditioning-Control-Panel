@@ -36,13 +36,14 @@ function setup() {
   return { base, reactive, music, seam, colour, capture };
 }
 
-for (const bar of [2, 10, 18]) test('Keep phrase at bar ' + bar + ' lights complete slabs throughout the floor', () => {
+for (const bar of [2, 10, 18]) test('Keep phrase at bar ' + bar + ' preserves complete slabs and visible lit/rest contrast', () => {
   const { base, music, colour, capture } = setup(); music.tileBar.value = bar;
   for (const footprint of [.01, .2, 1, 2]) {
     const colours = capture(footprint);
     assert.ok(colours.flat().every(v => Number.isFinite(v) && v >= 0 && v <= 1));
-    const covered = colours.filter(value => delta(value, base) > .035).length / tiles.length;
-    assert.ok(covered > .9, 'The full tile field participates at ordinary music energy; coverage ' + covered);
+    const light=colours.map(c=>c[0]*.2126+c[1]*.7152+c[2]*.0722).sort((a,b)=>a-b);
+    assert.ok(light[Math.floor(light.length*.9)]>light[Math.floor(light.length*.1)]*2,
+      'Musical tile groups stand out against resting slabs at ordinary energy');
   }
   for (const [x, y] of tiles) {
     const middle = colour(x, y);
@@ -55,15 +56,17 @@ for (const bar of [2, 10, 18]) test('Keep phrase at bar ' + bar + ' lights compl
 test('Keep tile choreography changes across the whole road with heard time and measured bands', () => {
   const { reactive, music, capture } = setup(), before = capture(.2);
   music.tileBar.value += .8; music.tileBeat.value += 3.2;
-  reactive.kick.value = reactive.snare.value = reactive.hitStrength.value = .9; reactive.hitAge.value = .08;
+  reactive.kick.value = reactive.snare.value = .9;
+  reactive.kickStrength.value = reactive.snareStrength.value = .9; reactive.kickAge.value = reactive.snareAge.value = .08;
   const moved = capture(.2).filter((value, i) => delta(value, before[i]) > .018).length / tiles.length;
   assert.ok(moved > .5, 'Music motion changes most slabs rather than a few animated marks');
-  reactive.kick.value = reactive.snare.value = reactive.hitStrength.value = 0; reactive.hitAge.value = 9;
+  reactive.kick.value = reactive.snare.value = reactive.kickStrength.value = reactive.snareStrength.value = 0;
+  reactive.kickAge.value = reactive.snareAge.value = 9;
   const first = capture(.2);
   notes.forEach((_, i) => { reactive['note' + i].value = notes[(i + 3) % 8]; });
   for(let i=0;i<64;i++)reactive.vizTexture.image.data[i*4+1]=Math.round(notes[(Math.floor(i/8)+3)%8]*255);
   const redistributed = capture(.2).filter((value, i) => delta(value, first[i]) > .01).length / tiles.length;
-  assert.ok(redistributed > .5, 'Equal loudness with different frequency content gives a different tile field');
+  assert.ok(redistributed > .2, 'Equal loudness moves the lit subset to different tile banks, leaving rest space');
 });
 
 test('Keep tile fill preserves its mortar, exact silence and stopped-song finish', () => {

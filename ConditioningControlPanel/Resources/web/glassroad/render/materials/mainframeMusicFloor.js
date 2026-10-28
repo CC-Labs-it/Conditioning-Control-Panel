@@ -1,49 +1,43 @@
-/* A phosphor instrument deck: the recording writes its waveform, spectrum and history into graphite. */
-import { float, vec2, vec3, floor, fract, mod, abs, mix, smoothstep, step, cos, select, length, max, fwidth } from 'three/tsl';
-import { vizWave, vizSpectrum, vizHistory, vizLine, vizActivity, vizHit } from './musicVisualizer.js';
-
-const TAU = Math.PI * 2, one = v => float(1).sub(v);
+/* Graphite instruments: bass reactors, melodic phosphor, snare scans and high LED sparks. */
+import { float, vec2, vec3, floor, fract, mod, abs, mix, smoothstep, step, length, max, fwidth } from 'three/tsl';
+import { floorPhrase, floorSpectrum } from './floorSpectrum.js';
+import { vizWave, vizSpectrum, vizHistory, vizLine, vizActivity } from './musicVisualizer.js';
+const one = v => float(1).sub(v);
 
 export function mainframeTileLight(p, u, music, trueEdge, base) {
-  const gentle = u.gentle, fast = one(gentle), beat = music.tileBeat;
-  const bank = mod(floor(abs(p.x).div(1.65)), 8);
-  let note = float(0);
-  for (let i = 0; i < 8; i++) note = note.add(one(step(.5, abs(bank.sub(i)))).mul(u['note' + i]));
-  note = note.toVar();
-  const frequency = bank.add(.5).div(8), spectrum = vizSpectrum(frequency, u);
-  const hit = vizHit(u).mul(fast), grid = cos(beat.mul(TAU)).mul(.5).add(.5).mul(u.bass).mul(fast);
-
-  // An actual PCM trace, with a dim phosphor skirt. No synthetic sine pretends to be the waveform.
-  const sampleAt = fract(p.y.div(24));
-  const trace = vizWave(sampleAt, u).mul(u.mid.mul(1.8).add(1.3)).mul(fast);
-  const traceX = trace.add(3.2).add(u.kick.mul(.8).mul(fast));
-  const traceDistance = abs(abs(p.x).sub(traceX));
-  const scope = vizLine(traceDistance, .18).add(vizLine(traceDistance, .7).mul(.17));
-
-  // Stationary spectrum teeth change height immediately; the past sound remains in the panel beneath.
-  const stripe = one(smoothstep(.29, .44, abs(fract(abs(p.x).div(1.65)).sub(.5))));
-  const row = fract(p.y.div(18)), height = spectrum.mul(.65).add(note.mul(.2)).add(.05);
-  const teeth = stripe.mul(one(smoothstep(height, height.add(.045), row)))
-    .mul(smoothstep(0, .07, row));
-  const history = vizHistory(frequency, row, u).mul(.65).add(note.mul(.16));
-  const spectral = teeth.mul(.68).add(history.mul(.42));
-
-  // Each detected hit launches a finite front out of repeated reactor cores, then leaves the deck.
+  const fast = one(u.gentle), at = abs(p.x).div(15).clamp(0, 1);
+  const note = floorSpectrum(at, u), spectrum = vizSpectrum(at, u).mul(fast).add(note.mul(.35));
+  const row = fract(p.y.div(24)), bank = fract(abs(p.x).div(1.65));
+  // Voice and sustained notes draw phosphor traces, spectrum teeth or the recorded spectral waterfall.
+  const pcm = vizWave(row, u).mul(fast).mul(3.8);
+  const scope = vizLine(abs(p.x).sub(pcm.add(4)), .28).mul(u.mid.mul(.9).add(.12));
+  const teeth = one(smoothstep(.29, .43, abs(bank.sub(.5))))
+    .mul(one(smoothstep(spectrum.mul(.72), spectrum.mul(.72).add(.045), row)))
+    .mul(smoothstep(0, .08, row)).mul(spectrum);
+  const history = vizHistory(at, row, u).mul(fast).mul(note.mul(.3).add(.7));
+  const phrase = music.tileBar.add(u.section.mul(8));
+  const melody = floorPhrase([scope, teeth, history.mul(teeth.mul(.7).add(.12))], phrase);
+  // Only a bass attack launches a reactor front. Snares cannot restart its radius.
   const core = vec2(p.x, fract(p.y.div(32).add(.5)).sub(.5).mul(32));
-  const radius = length(core), front = u.hitAge.mul(22).add(1.5);
-  const ring = vizLine(radius.sub(front), .7).mul(u.hitStrength).mul(fast);
-  const reactor = ring.add(spectral.mul(.38)).add(scope.mul(u.snare.mul(fast).mul(.5).add(.15)));
-
-  const phrase = music.tileBar.div(8), mode = mod(floor(phrase).add(u.section), 3);
-  const choose = n => select(n.lessThan(.5), scope.add(spectral.mul(.24)), select(n.lessThan(1.5), spectral, reactor));
-  const pattern = mix(choose(mode), choose(mod(mode.add(1), 3)), smoothstep(.875, 1, fract(phrase)))
-    .add(ring.mul(.65)).add(grid.mul(.1));
+  const bass = vizLine(length(core).sub(u.kickAge.mul(22).add(1.5)), .85)
+    .mul(u.kickStrength).mul(one(smoothstep(.3, .85, u.kickAge))).mul(fast);
+  // Each snare alternates the scan direction and opens a narrow diagonal slash.
+  const direction = mod(u.snareCount, 2).mul(2).sub(1);
+  const diagonal = fract(p.y.div(22).add(p.x.mul(direction).div(18)).sub(u.snareAge.mul(1.1)));
+  const snare = vizLine(diagonal.sub(.5), .035).mul(u.snare).mul(fast);
+  // Sparse LED intersections have their own short high-frequency envelope.
+  const cell = floor(p.div(1.8));
+  const sparse = step(.68, fract(cell.x.mul(.37).add(cell.y.mul(.61)).add(u.hatsCount.mul(.17))));
+  const dots = vizLine(fract(p.x.div(1.8)).sub(.5), .075)
+    .mul(vizLine(fract(p.y.div(1.8)).sub(.5), .075)).mul(sparse);
+  const highs = dots.mul(u.hats).mul(fast);
+  const edge = smoothstep(.8, 2.4, trueEdge), centre = smoothstep(.75, 2, abs(p.x)).mul(.6).add(.4);
   const detail = one(smoothstep(.6, 2, max(fwidth(p.x), fwidth(p.y))));
-  const edge = smoothstep(.8, 2.4, trueEdge), centre = smoothstep(.75, 2, abs(p.x)).mul(.5).add(.5);
-  const active = vizActivity(u, music).mul(mix(float(1), float(.32), gentle));
-  const fill = pattern.mul(active).mul(edge).mul(centre).mul(detail).clamp(0, .85);
-  const emerald = vec3(.018, .37, .08), lime = vec3(.38, .31, .025), cyan = vec3(.025, .32, .52);
-  const green = mix(mix(emerald, lime, note.mul(.55).add(u.treble.mul(.35))), cyan,
-    hit.mul(.55).add(u.hats.mul(fast).mul(.2)).clamp(0, 1));
-  return mix(base, base.mul(.4).add(green), fill);
+  const active = vizActivity(u, music).mul(mix(float(1), float(.32), u.gentle)).mul(edge).mul(centre).mul(detail);
+  const rest = base.mul(.28);
+  const voiceLight = vec3(.025, .62, .2).mul(melody).mul(u.mid.mul(.5).add(.65));
+  const bassLight = vec3(.35, .9, .055).mul(bass).mul(1.2);
+  const snareLight = vec3(.025, .57, .9).mul(snare);
+  const highLight = vec3(.72, .96, .46).mul(highs);
+  return mix(base, rest.add(voiceLight).add(bassLight).add(snareLight).add(highLight).clamp(0, 1), active);
 }

@@ -50,11 +50,12 @@ test('actual water shader independently draws measured waveform, spectrum and sp
 
 test('real attacks make travelling water fronts that settle instead of looping on a timer', t => {
   const f = fixture(t); f.setData({ wave: .3, spectrum: .2, history: .2 });
-  f.u.hitAge.value = .1; const strike = f.capture();
-  f.u.hitAge.value = .4; const crossing = f.capture();
+  f.u.kick.value = 0; f.u.kickStrength.value = .9;
+  f.u.kickAge.value = .1; const strike = f.capture();
+  f.u.kickAge.value = .4; const crossing = f.capture();
   assert.ok(changed(strike, crossing) > 12, 'a real hit moves broad physical-metre rings');
-  f.u.hitAge.value = 2; const settled = f.capture();
-  f.u.hitAge.value = 9;
+  f.u.kickAge.value = 2; const settled = f.capture();
+  f.u.kickAge.value = 9;
   assert.deepEqual(f.capture(), settled, 'the front dies rather than replaying on elapsed song time');
   const nodes = new Set(), queue = [f.root];
   while (queue.length) { const n = queue.pop(); if (nodes.has(n)) continue; nodes.add(n); queue.push(...n.getChildren()); }
