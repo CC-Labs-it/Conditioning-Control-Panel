@@ -49,6 +49,26 @@ export function deviceView(d = {}) {
   return { last, family, profile, padName: padLabels(family, profile).name };
 }
 
+/**
+ * The fire key shown under the item slot while an item is held (playtest 2026-10-28: the slot was not read as an
+ * item). Keyboard E, the pad's West button, touch the Throw button (input/touch.js; the touch layer sits over the
+ * slot, so the slot itself never takes a tap there).
+ */
+export function itemKey(d = {}) {
+  const v = deviceView(d);
+  if (v.last === 'touch') return 'Throw';
+  if (v.last === 'pad') return padLabels(v.family, v.profile).west;
+  return KEY_LABELS.item;
+}
+
+/** The one-time tip on the first pickup of a session. No dash in the copy: a dot splits the two moves. */
+export function itemTip(d = {}) {
+  const v = deviceView(d);
+  if (v.last === 'touch') return 'Tap Throw to use it';
+  if (v.last === 'pad') { const w = padLabels(v.family, v.profile).west; return w + ' throw. Stick down + ' + w + ' drop behind'; }
+  return 'E throw. Hold S + E drop behind';
+}
+
 /** The pause card hint line for the device used last: '' on touch (the buttons speak for themselves). */
 export function pauseHint(d = {}) {
   const v = deviceView(d);
