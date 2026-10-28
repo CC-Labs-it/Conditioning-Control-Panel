@@ -25,6 +25,7 @@ import { createLobby } from './lobby.js';
 import { actSound } from './sounds.js';
 import { recapState, dotsHtml, runPageHtml, stampsPageHtml, PAGE_TITLES, RECAP_FIXTURE } from './recap.js';
 import { togglePick, MAX_NICHES } from '../host/scrolllerNiches.js';
+import { SOURCES, sourceLabel } from '../host/localLibrary.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const btn = (act, label, cls = '', extra = '') => '<button type="button" class="c-btn ' + cls + '" data-act="' + act + '"' + extra + '>' + label + '</button>';
@@ -189,9 +190,12 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   function scrolllerHtml() {
     const s = host.scrolller;
     if (!s) return '';
-    let html = '<div class="c-opt"><span>Online pictures<small>From Scrolller, on screens and in flashes</small></span>' +
-      btn('scrolller', s.on ? 'On' : 'Off', 'c-tog' + (s.on ? ' on' : ''), ' aria-pressed="' + s.on + '"') + '</div>';
-    if (s.on && s.catalog) {
+    const src = s.source || (s.on ? 'scrolller' : 'off');   // host/localLibrary.js: Scrolller, My files or Off
+    let html = '<div class="c-opt c-niches"><span>Pictures<small>On screens and in flashes</small></span><div class="c-chips">' +
+      SOURCES.map((id) => btn('scrolller', sourceLabel(id), 'c-chip' + (src === id ? ' on' : ''), ' data-source="' + id + '" aria-pressed="' + (src === id) + '"')).join('') + '</div></div>';
+    if (src === 'files') html += '<div class="c-opt"><span>Your files<small>' + (s.files ? s.files + ' picked. ' : '') + 'They stay on this device</small></span>' +
+      btn('scrolller-files', s.files ? 'Change' : 'Choose', 'c-tog') + '</div>';
+    if (src === 'scrolller' && s.catalog) {
       html += '<div class="c-opt c-niches"><span>Pictures on ' + esc(s.track) + '<small>' +
         (s.custom ? 'Your pick for this track' : 'This track\'s picks') + ', up to ' + MAX_NICHES + '</small></span><div class="c-chips">' +
         s.catalog.map((c) => {
@@ -282,7 +286,12 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     if (a === 'rc-next') { if (rc) rc.at = 0; recapNext(); return; }   // a click is never a held throttle
     if (!(a === 'back' && BACKS.includes(kind))) sound(actSound(a));   // back() plays its own
     if (a === 'scrolller') {   // the host stores consent; only its echo (setScrolller) moves the switch
-      if (host.scrolller) { el.classList.add('pending'); emit('scrolller', { on: !host.scrolller.on }); }
+      const to = el.dataset.source || (host.scrolller?.on ? 'off' : 'scrolller');   // My files is local: boot draws it at once
+      if (host.scrolller) { el.classList.add('pending'); emit('scrolller', { on: to === 'scrolller', source: to }); }
+      return;
+    }
+    if (a === 'scrolller-files') {   // the device's file picker opens inside this click; files never leave the device
+      if (host.scrolller) emit('scrolller-files');
       return;
     }
     if (a === 'niche' && host.scrolller) {   // this track's pick: at least one, at most four
@@ -455,10 +464,12 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
      * drawn). An open Options card redraws its pictures rows in place and keeps the focused control. */
     setScrolller(state) {
       host.scrolller = state ? { on: state.on === true, track: String(state.track || ''), niches: [...(state.niches || [])],
-        custom: !!state.custom, catalog: Array.isArray(state.catalog) ? state.catalog : null } : null;
+        custom: !!state.custom, catalog: Array.isArray(state.catalog) ? state.catalog : null,
+        source: SOURCES.includes(state.source) ? state.source : null, files: Math.max(0, state.files | 0) } : null;
       const box = card.querySelector('.c-scrolller');
       if (!box || !host.scrolller) return;
-      const f = doc.activeElement, keep = f && box.contains(f) ? (f.dataset.niche ? '[data-niche="' + f.dataset.niche + '"]' : '[data-act="' + f.dataset.act + '"]') : null;
+      const f = doc.activeElement, keep = f && box.contains(f) ? (f.dataset.niche ? '[data-niche="' + f.dataset.niche + '"]'
+        : f.dataset.source ? '[data-source="' + f.dataset.source + '"]' : '[data-act="' + f.dataset.act + '"]') : null;
       box.innerHTML = scrolllerHtml();
       if (keep) (box.querySelector(keep) || box.querySelector('[data-act="scrolller"]'))?.focus?.({ preventScroll: true });
     },
