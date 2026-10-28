@@ -33,6 +33,15 @@ test('a last-bit engine wobble in the runtime course keeps the seat; a real move
   assert.notEqual(await courseHash(track, feel, moved), hash);
 });
 
+test('?join=<roomId> from a CCP lobby row: only the lobby room id shape, dropped after use', async () => {
+  const { joinParam, dropLinkParam } = await import('../hud/lobbyMath.js');
+  assert.equal(joinParam('?join=abc123def456'), 'abc123def456');
+  assert.equal(joinParam('?track=keep&join=abc123def456'), 'abc123def456');
+  for (const bad of ['', '?join=', '?join=ABC123DEF456', '?join=abc123', '?join=abc123def456x', '?join=abc123def45%2F']) assert.equal(joinParam(bad), null, bad);
+  assert.equal(dropLinkParam('https://x.test/glassroad/index.html?track=keep&join=abc123def456', 'join'), '/glassroad/index.html?track=keep');
+  assert.equal(dropLinkParam('https://x.test/g/?r=tok&join=abc123def456'), '/g/?join=abc123def456');
+});
+
 test('a refused seat says why instead of "No connection"', async () => {
   const { connectFailCopy } = await import('../hud/lobbyMath.js');
   assert.equal(connectFailCopy({ reason: 'version', closeCode: 4003 }), 'This build is out of date');

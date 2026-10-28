@@ -90,7 +90,7 @@ import { onlineCourseHash as onlineHash } from './net/courseHash.js';
 import { createLobbyApi, fetchTransport, hostTransport } from './net/lobbyApi.js';
 import { createProfileSync } from './meta/profileSync.js';
 import { configureLobby } from './hud/lobby.js';
-import { linkToken, dropLinkParam } from './hud/lobbyMath.js';
+import { linkToken, dropLinkParam, joinParam } from './hud/lobbyMath.js';
 import { poseOf } from './hud/presets.js';
 import { createDevHook, devAllowed } from './dev/hook.js';
 import { chipAlpha, kartPoint } from './hud/countdown.js';
@@ -1327,7 +1327,10 @@ async function boot(course, options, lifetime, isCurrent) {
   void warmLights();
   // ?r=<token>: a friend's race link goes straight to the lobby card, which claims it (seated, waiting or refused)
   const linkTok = course.online ? linkToken(location.search) : null;
-  const pendingRoom = sessionStorage.getItem('glassroad.pendingRoom');
+  // ?join=<roomId>: a CCP lobby row; taken once (dropped from the address so a reload does not seat us again)
+  const joinId = course.online && link && !linkTok ? joinParam(location.search) : null;
+  if (joinId) { const to = dropLinkParam(location.href, 'join'); if (to) history.replaceState(history.state, '', to); }
+  const pendingRoom = sessionStorage.getItem('glassroad.pendingRoom') || joinId;
   sessionStorage.removeItem('glassroad.pendingRoom');
   if (options.join) { hud.setCard('lobby', { join: options.join }); lobbyUi = hud.lobby || lobbyUi; }
   else if (pendingRoom) { hud.setCard('lobby', { roomId: pendingRoom }); lobbyUi = hud.lobby || lobbyUi; }
