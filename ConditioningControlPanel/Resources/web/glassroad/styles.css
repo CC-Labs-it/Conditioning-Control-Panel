@@ -166,13 +166,15 @@
 .gr-touch-on .hud-auto { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 60px); }
 @media (prefers-reduced-motion: reduce) { .hud-auto { transform: translate(-50%, 0); transition: opacity 0.45s; } .hud-item-key { animation: none; } }
 
-/* toast: a paper slip under the item slot */
-.hud-toast { position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 84px); left: 50%; transform: translate(-50%, -4px);
+/* toast: a paper slip in the race band, above the road's vanishing point and well clear of the item slot (playtest
+ * 2026-10-28); only the first-pickup tip ([data-at="slot"]) hangs under the slot it explains */
+.hud-toast { position: absolute; top: max(30%, calc(max(12px, env(safe-area-inset-top)) + 120px)); left: 50%; transform: translate(-50%, -4px);
   padding: 5px 12px; border-radius: 4px; background: var(--paper); color: var(--paper-ink); border: 1.5px solid var(--paper-ink);
   box-shadow: 3px 3px 0 var(--shade); font: 700 13px/1.2 var(--font); text-shadow: none; white-space: nowrap;
   opacity: 0; transition: opacity 0.22s, transform 0.22s; }
 .hud-toast.on { opacity: 1; transform: translate(-50%, 0); }
 .hud.gentle .hud-toast { transition: opacity 0.4s; transform: translate(-50%, 0); }
+.hud-toast[data-at="slot"] { top: calc(max(12px, env(safe-area-inset-top)) + 84px); }
 
 /* polish 5 (J2): each bell stamps a big digit in and shrinks it out over one beat; Go bursts at your kart */
 .hud-count { position: absolute; top: 24%; left: 0; right: 0; text-align: center; font: 900 clamp(110px, 24vh, 270px)/1 var(--font);
@@ -270,7 +272,7 @@
   .hud-place-art { height: 56px; }
   .hud.kit-divider .hud-div { width: 84px; }
   .hud-item { width: 58px; height: 58px; margin-left: -29px; border-width: 3px; }
-  .hud-toast { top: calc(max(12px, env(safe-area-inset-top)) + 68px); }
+  .hud-toast[data-at="slot"] { top: calc(max(12px, env(safe-area-inset-top)) + 68px); }
   .hud-lap { font-size: 15px; }
   .hud-time { font-size: 16px; }
 }
