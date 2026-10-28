@@ -20,7 +20,7 @@
  * Music road pass 2 (render/items/status.js): every racer under an effect wears that effect's look for all to
  * see, throws fly as comets with a trail and sparks, launches puff and landings burst with a shock ring.
  */
-import { Group, Mesh, PlaneGeometry, SphereGeometry, Vector3, Quaternion } from 'three/webgpu';
+import { Group, Mesh, PlaneGeometry, SphereGeometry, Vector3, Quaternion, Color } from 'three/webgpu';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { S } from '../../sim/state.js';
 import { ITEM_IDS } from '../../sim/itemTable.js';
@@ -33,6 +33,7 @@ import {
 } from './fxmath.js';
 import { createLivingIcons, cellOf } from './living.js';
 import { bubbleCloud, toyIconCloud, moteCloud, meltPuddle, ghost, ringGlow, shellCloud, shieldCloud, blobShadow, confettiCloud } from './materials.js';
+import { objectState } from '../objectUniform.js';
 import { createPickupCards, PICKUP_CARD } from './pickupCards.js';
 import { createItemStatus } from './status.js';
 import { advanceRibbon, flightSpark, launchSpark } from './flight.js';
@@ -120,26 +121,29 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
 
   // ---- pooled meshes: melt puddles, pink waves, echo copies ----
   const plane = new PlaneGeometry(2, 2).rotateX(-Math.PI / 2);
+  // One material per pool (a material per entry built 128 identical shader graphs at load); each entry's
+  // values live on its mesh (objectState) and are written exactly like the old per-entry uniforms.
+  const puddleLook = meltPuddle(mask, meltTex), waveLook = ringGlow(L.waveColour), markLook = ringGlow(L.markColour), shadowLook = blobShadow();
   const puddles = createPool(top.puddles, () => {
-    const pm = meltPuddle(mask, meltTex), mesh = new Mesh(plane, pm.material);
+    const mesh = new Mesh(plane, puddleLook.material);
     mesh.frustumCulled = false; mesh.renderOrder = 1; root.add(mesh);
-    return { mesh, u: pm.uniforms };
+    return { mesh, u: objectState(mesh, { time: 0, alpha: 1, seed: 0 }) };
   }, (e) => { e.mesh.visible = false; });
   const waves = createPool(4, () => {
-    const g = ringGlow(L.waveColour), mesh = new Mesh(plane, g.material);
+    const mesh = new Mesh(plane, waveLook.material);
     mesh.frustumCulled = false; root.add(mesh);
-    return { mesh, u: g.uniforms };
+    return { mesh, u: objectState(mesh, { opacity: 0, colour: new Color(L.waveColour) }) };
   }, (e) => { e.mesh.visible = false; });
   // polish 2: flat rings (shockwaves, trap warnings, lob landing marks) and soft landing shadows
   const marks = createPool(48, () => {
-    const g = ringGlow(L.markColour), mesh = new Mesh(plane, g.material);
+    const mesh = new Mesh(plane, markLook.material);
     mesh.frustumCulled = false; mesh.renderOrder = 1; root.add(mesh);
-    return { mesh, u: g.uniforms };
+    return { mesh, u: objectState(mesh, { opacity: 0, colour: new Color(L.markColour) }) };
   }, (e) => { e.mesh.visible = false; });
   const shadows = createPool(6, () => {
-    const g = blobShadow(), mesh = new Mesh(plane, g.material);
+    const mesh = new Mesh(plane, shadowLook.material);
     mesh.frustumCulled = false; root.add(mesh);
-    return { mesh, u: g.uniforms };
+    return { mesh, u: objectState(mesh, { opacity: 0 }) };
   }, (e) => { e.mesh.visible = false; });
   /** A flat ring at p (normal n or up), radius rM, colour hex, opacity a. */
   function mark(p, n, rM, hex, a, lift = 0.06) {
@@ -571,8 +575,8 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
       status.dispose(); tethers.dispose(); toys.dispose(); icons.dispose(); bubbles.dispose(); toyIcons.dispose(); motes.dispose(); plane.dispose(); ghostGeo.dispose(); shields.dispose();
       if (shells) shells.dispose();
       pickupCards.dispose();
-      puddles.each((e) => e.mesh.material.dispose()); waves.each((e) => e.mesh.material.dispose());
-      marks.each((e) => e.mesh.material.dispose()); shadows.each((e) => e.mesh.material.dispose()); confetti.dispose();
+      for (const look of [puddleLook, waveLook, markLook, shadowLook]) look.material.dispose();
+      confetti.dispose();
       ghostLook.material.dispose();
     },
   };

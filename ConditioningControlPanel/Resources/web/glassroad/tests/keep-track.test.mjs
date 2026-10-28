@@ -16,7 +16,9 @@ test('Keep regenerates exactly and is a closed, two-lap fortress course with a l
   assert.ok(formatKeep(json).split('\n').length < 300);
   const t = keep(), end = walkKeep(KEEP_PIECES);
   assert.equal(t.id, 'keep'); assert.equal(t.laps, 2);
-  assert.ok(t.lengthM >= 7000 && t.lengthM <= 8200);
+  const source = loadTrack(json, { courseShape: false });
+  assert.ok(source.lengthM >= 7000 && source.lengthM <= 8200, 'original authored plan remains reproducible');
+  assert.ok(t.lengthM > 9000 && t.lengthM < 10000, 'broad runtime road stays under ten kilometres');
   assert.ok(Math.hypot(end.x, end.z) < 1e-7);
   assert.ok(json.nodes.every((n) => n.w >= 26 && n.w <= 72));
   assert.ok(Math.max(...json.nodes.map((n) => n.p[1])) >= 58);
@@ -65,7 +67,7 @@ for (const seed of [1, 241023, 20261024]) test('Keep: all eight racers finish tw
   r.ai.drive = (kart, ctx, dt, out) => { drive(kart, ctx, dt, out); if (ctx.race.phase === 'racing') hazards.steer(kart, out); };
   r.racers.step = (dt, actions, race, ctx) => step(dt, actions, race, { ...ctx, hazards });
   hazards.reset();
-  r.run(650, () => r.racers.list.every((x) => x.finished));
+  r.run(800, () => r.racers.list.every((x) => x.finished));
   assert.ok(r.racers.list.every((x) => x.finished), 'finish times ' + r.racers.list.map((x) => x.finishS));
   assert.deepEqual(r.racers.list.map((x) => x.falls), Array(8).fill(0));
   assert.ok(r.racers.list.every((x) => x.lapTimes.length === 2));
@@ -74,14 +76,15 @@ for (const seed of [1, 241023, 20261024]) test('Keep: all eight racers finish tw
 
 
 
-test('Keep tower wraps three and a half turns with 32m vertical separation and a clear solid core', () => {
+test('Keep tower uses one and a half broad turns with generous vertical separation and a clear solid core', () => {
   const t = keep(), layout = getKeepLayout(t), spiral = layout.landmarks.find((p) => p.id === 'tower-spiral');
-  const tower = layout.towers[0], turnM = (spiral.s1 - spiral.s0) / 3.5;
+  const tower = layout.towers[0], turnNodes = Math.round((spiral.to - spiral.node) / 1.5);
   assert.equal(KEEP_PIECES.find((p) => p.id === 'tower-spiral').turn, -1260);
-  for (let s = spiral.s0 + 12; s < spiral.s1 - turnM - 12; s += 10) {
-    const a = t.frameAt(s).p, b = t.frameAt(s + turnM).p;
+  assert.equal(t.courseShape.pieces.find(p => p.id === 'tower-spiral').turn, -540);
+  for (let node = spiral.node + 8; node < spiral.to - turnNodes - 8; node += 3) {
+    const a = t.frameAt(t.nodeS[node]).p, b = t.frameAt(t.nodeS[node + turnNodes]).p;
     assert.ok(Math.hypot(a[0] - b[0], a[2] - b[2]) < .2, 'stacked road station');
-    assert.ok(b[1] - a[1] >= 31.9, '32m between revolutions');
+    assert.ok(b[1] - a[1] >= 74, 'broad ascent clears the preceding revolution');
   }
   for (let s = spiral.s0 + 2; s < spiral.s1 - 2; s += 5) {
     const f = t.frameAt(s), q = t.query(...f.p, f.seg);
@@ -112,7 +115,8 @@ test('Keep prison blocks clear the road and exposed sections preserve the inner 
   assert.equal(layout.castleBlocks.length, 4);
   for (const b of layout.castleBlocks) for (let s = 0; s < t.lengthM; s += 5) {
     const f = t.frameAt(s), dx = Math.max(0, Math.abs(f.p[0] - b.x) - b.w / 2), dz = Math.max(0, Math.abs(f.p[2] - b.z) - b.d / 2);
-    assert.ok(Math.hypot(dx, dz) > f.w / 2 + 2, b.id + ' clear at ' + s);
+    if (f.p[1] + 12 >= b.baseY && f.p[1] - 12 <= b.topY + 12)
+      assert.ok(Math.hypot(dx, dz) > f.w / 2 + 2, b.id + ' clear at driving height ' + s);
   }
   assert.equal(layout.brokenEdges.length, 3);
   for (const edge of layout.brokenEdges) {

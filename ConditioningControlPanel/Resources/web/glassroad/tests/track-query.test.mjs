@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 import { loadTrack } from '../track/load.js';
 
 const json = JSON.parse(readFileSync(new URL('../tracks/threshold.json', import.meta.url), 'utf8'));
-const tr = loadTrack(json);
+// Keep exact historical stacked-deck coordinates as regression fixtures.
+const tr = loadTrack(json, { courseShape: false });
 const L = tr.lengthM;
 const sDiff = (a, b) => { const d = Math.abs(a - b) % L; return Math.min(d, L - d); };
 const place = (s, lat, h) => {

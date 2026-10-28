@@ -90,7 +90,7 @@ test('idle fields sleep, disturbances wake them and reset publishes neutral pixe
   assert.equal(f.step(1/60),false);
 });
 test('table-driven solver keeps the reference bytes on the real course (pinned before the perf pass)',()=>{
-  const tr=loadTrack(JSON.parse(readFileSync(new URL('../tracks/threshold.json',import.meta.url))),{moving:true}),f=createWaterField(tr,{quality:'phone'});
+  const tr=loadTrack(JSON.parse(readFileSync(new URL('../tracks/threshold.json',import.meta.url))),{moving:true,courseShape:false}),f=createWaterField(tr,{quality:'phone'});
   let sum=0;
   for(let k=0;k<300;k++){
     f.runs.forEach((r,j)=>{if((k+j)%2===0)f.disturb({s:r.fromS+((k*7.3+j*11)%Math.max(1,r.toS-r.fromS)),x:((k%5)-2)*.4,strength:.3,dirX:1,dirS:.5});});

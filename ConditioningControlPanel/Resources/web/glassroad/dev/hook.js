@@ -44,7 +44,7 @@ export function turnAt(track, s, spanM) {
  * The first bend ahead of fromS: { s (entry), endS, dir (+1 right, -1 left), deg } or null.
  * A bend = heading change over spanM of at least minDeg; it ends where the change drops under half that.
  */
-export function nextBend(track, fromS, { minAheadM = 20, spanM = 24, minDeg = 18, stepM = 4, maxScanM = 900 } = {}) {
+export function nextBend(track, fromS, { minAheadM = 20, spanM = 60, minDeg = 18, stepM = 4, maxScanM = 900 } = {}) {
   const L = track.lengthM, lim = minDeg * Math.PI / 180;
   for (let d = minAheadM; d <= Math.min(maxScanM, L); d += stepM) {
     const s = fromS + d, yaw = turnAt(track, s, spanM);

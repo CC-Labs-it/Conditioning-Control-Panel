@@ -21,7 +21,7 @@ import { placeOnFork } from './forks-fixture.mjs';
 const json = JSON.parse(readFileSync(new URL('../tracks/boudoir.json', import.meta.url), 'utf8'));
 const track = loadTrack(json), plan = getBoudoirBoostPlan(track), layout = getBoudoirLayout(track);
 const speed = st => Math.hypot(st[S.velX], st[S.velY], st[S.velZ]);
-const indexOf = pad => track.boosts.findIndex(p => p.node === pad.node && p.x === pad.x);
+const indexOf = pad => track.boosts.findIndex(p => p.s === pad.s && p.x === pad.x);
 const contacts = events => events.all('pad').map(e => e.payload.index);
 const damage = events => events.list.filter(e => ['wall', 'bump', 'drop', 'rescue-pull'].includes(e.name)).map(e => e.name);
 const intersects = (a0, a1, b0, b1) => a1 > b0 && a0 < b1;
@@ -67,14 +67,17 @@ const detail = (run, result) => JSON.stringify({ run: run.id, contacts: contacts
   maxError: result.maxError, minMargin: result.minMargin, maxSpeed: result.maxSpeed, brakeDistance: result.brakeDistance });
 
 test('Dense authored sequences are real distinct triggers with supported full footprints', () => {
-  assert.ok(track.boosts.length >= 20 && track.boosts.length <= 60);
-  const authoredPlan = getBoudoirBoostPlan(loadTrack(json, { aerials: false, boostSafety: false }));
+  assert.ok(track.boosts.length >= 6 && track.boosts.length <= 60);
+  assert.ok(plan.runs.length >= 3, 'distinct physical run choices survive the high-speed guard');
+  assert.ok(plan.runs.some(r => track.frameAt(r.pads[0].s).surface === 'stream'));
+  assert.ok(plan.runs.some(r => track.frameAt(r.pads[0].s).surface !== 'stream'));
+  const authoredPlan = getBoudoirBoostPlan(loadTrack(json, { aerials: false, boostSafety: false, courseShape: false }));
   assert.deepEqual(authoredPlan.pads.map(({ node, x, w, len }) => ({ node, x, w, len })), json.boosts);
   assert.deepEqual(plan.pads.map(({ node, x, w, len }) => ({ node, x, w, len })),
     track.boosts.map(({ node, x, w, len }) => ({ node, x, w, len })));
-  assert.equal(new Set(track.boosts.map(p => p.node + '/' + p.x)).size, track.boosts.length);
+  assert.equal(new Set(track.boosts.map(p => p.s + '/' + p.x)).size, track.boosts.length);
   for (const run of plan.runs) {
-    assert.ok(run.pads.length >= 1 && run.pads.length <= 4, run.id);
+    assert.ok(run.pads.length >= 1 && run.pads.length <= 8, run.id);
     for (let i = 1; i < run.pads.length; i++) {
       const gap = run.pads[i].s - run.pads[i - 1].s;
       assert.ok(gap >= run.pads[i - 1].len + 5 && gap <= 32, run.id + ' readable, separate entries');
@@ -132,8 +135,10 @@ test('Full brake reaches approach speed within dry and flowing-water runoff marg
 });
 
 test('Gentle changes no boost contact, control input or physical acceleration on dry and wet sequences', () => {
-  for (const id of ['vanity-left', 'bath-entry']) {
-    const run = plan.runs.find(r => r.id === id), ordinary = driveRun(run), gentle = driveRun(run, { gentle: true });
+  for (const wet of [false, true]) {
+    const run = plan.runs.find(r => (track.frameAt(r.pads[0].s).surface === 'stream') === wet);
+    assert.ok(run, wet ? 'wet run' : 'dry run');
+    const ordinary = driveRun(run), gentle = driveRun(run, { gentle: true });
     assert.deepEqual([...gentle.st], [...ordinary.st]);
     assert.deepEqual(gentle.events.list, ordinary.events.list);
   }
@@ -176,7 +181,8 @@ function followAfterRun(run, { fork = null, stopS }) {
   const ai = createAi(track, feel, { seed: 42, forkChoice: fork ? 'all' : 'none' }), h = createBoudoirHazards(track);
   const racer = { i: 0, kind: 'local', st, feel, events, meta: { isBot: false } }, race = { phase: 'racing', timeS: 0 }, action = acts();
   let used = false;
-  for (let tick = 0; tick < 60 * 200; tick++) {
+  const maxS = Math.max(200, (stopS - run.pads[0].s) / feel.get('speed.topMps') * 2 + 30);
+  for (let tick = 0; tick < 60 * maxS; tick++) {
     const previous = cloneState(st), final = run.pads.at(-1);
     if (st[S.s] <= final.s + final.len) Object.assign(action, acts({ throttle: 1, steer: steerTo(st, track, st[S.s] + 18, run.pads[0].x) }));
     else { ai.drive(racer, { race, racers: [racer] }, DT, action); h.steer(racer, action); }
@@ -199,7 +205,7 @@ for (const fork of track.forks) test('Boosted approach still permits a physical 
 });
 
 test('Channel boosts still allow the complete compact platform route and exit', () => {
-  const run = plan.runs.find(r => r.id === 'bath-entry'), field = track.fields[0];
+  const run = plan.runs.find(r => r.landmark === 'bath-stream'), field = track.fields[0];
   const result = followAfterRun(run, { stopS: field.toS + 20 });
   assert.ok(result.done);
   for (const pad of run.pads) assert.ok(contacts(result.events).includes(indexOf(pad)));

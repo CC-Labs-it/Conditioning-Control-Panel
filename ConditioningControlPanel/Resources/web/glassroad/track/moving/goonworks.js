@@ -31,6 +31,6 @@ export function movingStations(track) {
   const fork = { id: 'goonworks-piston-bridge', label: 'Piston bridge', kind: 'timed', from, to,
     points: [point(first.p), point(first.p.map((v, j) => v + first.t[j] * 12)),
       point(last.p.map((v, j) => v - last.t[j] * 12)), point(last.p)] };
-  return { traps, bridge: { forkId: fork.id, fork, fromU: .3, toU: .65,
+  return { traps, bridge: { forkId: fork.id, fork, fromU: .42, toU: .58,
     periodS: 14, openS: 8, transitionS: .8 } };
 }

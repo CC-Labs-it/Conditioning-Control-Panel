@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { loadTrack } from '../track/load.js';
 import { safeBoostTurn } from '../track/boostSafety.js';
+import { safeBoostCorridor } from '../track/boostCorridor.js';
 
 const json = JSON.parse(readFileSync(new URL('../tracks/threshold.json', import.meta.url), 'utf8'));
 const tr = loadTrack(json);
@@ -16,14 +17,14 @@ test('track: length and node arc lengths', () => {
   assert.equal(tr.nodeS.length, N + 1);
   assert.equal(tr.nodeS[0], 0);
   assert.equal(tr.nodeS[N], tr.lengthM);
-  for (let i = 0; i < N; i++) assert.ok(tr.nodeS[i + 1] > tr.nodeS[i] + 5, 'node ' + i);
-  // polish 6: the stacked course, within +-25% of the 1350 m ring it replaced (water wave 1: + the chute and pool)
-  assert.ok(tr.lengthM > 5000 && tr.lengthM < 6500, 'length ' + tr.lengthM);
-  const authored = loadTrack(json, { aerials: false });
+  for (let i = 0; i < N; i++) assert.ok(tr.nodeS[i + 1] > tr.nodeS[i], 'runtime node order ' + i);
+  assert.ok(tr.lengthM > 8000 && tr.lengthM < 8600, 'broad course length ' + tr.lengthM);
+  const authored = loadTrack(json, { aerials: false, courseShape: false });
+  assert.ok(authored.lengthM > 5000 && authored.lengthM < 6500, 'original authoring length retained');
   for (let i = 0; i < N; i++) {
+    assert.ok(authored.nodeS[i + 1] > authored.nodeS[i] + 5, 'authored node spacing ' + i);
     assert.ok(dist(authored.frameAt(authored.nodeS[i]).p, json.nodes[i].p) < 1e-6, 'passes authored node ' + i);
-    const p = tr.frameAt(tr.nodeS[i]).p, original = json.nodes[i].p;
-    assert.ok(Math.hypot(p[0] - original[0], p[2] - original[2]) < 1e-6, 'runtime keeps node footprint ' + i);
+    assert.ok(dist(tr.frameAt(tr.nodeS[i]).p, tr.courseShapeNodes[i]) < 1e-6, 'passes actual shared physical node ' + i);
   }
 });
 
@@ -56,8 +57,9 @@ test('track: frames orthonormal and continuous, no flips', () => {
 });
 
 test('track: roll honoured, right edge low on positive roll, flat when roll is 0', () => {
+  const authored = loadTrack(json, { courseShape: false });
   json.nodes.forEach((nd, i) => {
-    const f = tr.frameAt(tr.nodeS[i]);
+    const f = authored.frameAt(authored.nodeS[i]);
     assert.ok(Math.abs(f.roll - nd.roll * DEG) < 1e-9, 'roll at node ' + i);
     if (Math.abs(f.t[1]) < 0.05) assert.ok(Math.abs(Math.asin(-f.b[1]) - nd.roll * DEG) < 0.5 * DEG, 'bank at node ' + i);
     assert.ok(Math.abs(f.w - nd.w) < 1e-9, 'width at node ' + i);
@@ -66,8 +68,12 @@ test('track: roll honoured, right edge low on positive roll, flat when roll is 0
   for (let i = 0; i < N; i++) {
     const a = json.nodes[i].roll * DEG, b = json.nodes[(i + 1) % N].roll * DEG;
     for (let k = 1; k < 8; k++) {
-      const r = tr.frameAt(tr.nodeS[i] + (tr.nodeS[i + 1] - tr.nodeS[i]) * k / 8).roll;
+      const r = authored.frameAt(authored.nodeS[i] + (authored.nodeS[i + 1] - authored.nodeS[i]) * k / 8).roll;
       assert.ok(r >= Math.min(a, b) - 1e-9 && r <= Math.max(a, b) + 1e-9, 'roll overshoot in segment ' + i);
+      const liveA = tr.frameAt(tr.nodeS[i]).roll, liveB = tr.frameAt(tr.nodeS[i + 1]).roll;
+      const live = tr.frameAt(tr.nodeS[i] + (tr.nodeS[i + 1] - tr.nodeS[i]) * k / 8).roll;
+      assert.ok(live >= Math.min(liveA, liveB) - 1e-9 && live <= Math.max(liveA, liveB) + 1e-9,
+        'runtime bank never overshoots its physical endpoint banks');
     }
   }
 });
@@ -79,11 +85,20 @@ test('track: derived lists', () => {
   assert.equal(tr.sectionAt(0), 0);
   for (const [k, sec] of json.sections.entries()) assert.equal(tr.sectionAt(tr.nodeS[Math.floor((sec.from + sec.to) / 2)]), k);
   assert.equal(tr.sectionAt(tr.lengthM + 1), 0);
-  const offline = loadTrack(json, { aerials: false, boostSafety: false });
+  const offline = loadTrack(json, { aerials: false, boostSafety: false, courseShape: false });
   assert.deepEqual(offline.boosts, json.boosts.map(pad => ({ ...pad, s: offline.nodeS[pad.node] })));
-  const unfiltered = loadTrack(json, { boostSafety: false });
-  assert.deepEqual(tr.boosts, unfiltered.boosts.filter(pad => safeBoostTurn(unfiltered, pad)));
-  for (const pad of tr.boosts) assert.equal(pad.s, tr.nodeS[pad.node]);
+  assert.ok(tr.boosts.length >= 6);
+  assert.equal(new Set(tr.boosts.map(pad => pad.s + '/' + pad.x)).size, tr.boosts.length, 'unique physical pad entries');
+  for (const pad of tr.boosts) assert.ok(safeBoostCorridor(tr, pad), 'supported derived pad ' + pad.s);
+  for (const pad of tr.boosts) {
+    assert.ok(pad.s >= tr.nodeS[pad.node] - 1e-9 && pad.s <= tr.nodeS[pad.node + 1] + 1e-9,
+      'fractional train station lies within its actual road segment');
+    const surface = tr.surfaceAt(pad.s, pad.x), probe = tr.query(...surface.p, surface.seg);
+    const boundary = Math.abs(pad.s - tr.nodeS[pad.node]) < 1e-6;
+    assert.ok(probe.seg === pad.node || boundary && (probe.seg + 1) % N === pad.node,
+      'physical probe uses the owning segment or its exact shared endpoint');
+    assert.ok(Math.abs(probe.s - pad.s) < 1e-6, 'the physical station agrees across shared node endpoints');
+  }
   const j = tr.jumps[0];
   assert.equal(j.s, tr.nodeS[json.jumps[0].node]);
   assert.equal(j.landS, tr.nodeS[json.jumps[0].node + 1]);

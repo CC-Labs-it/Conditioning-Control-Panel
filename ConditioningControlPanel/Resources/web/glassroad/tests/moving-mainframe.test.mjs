@@ -7,7 +7,8 @@ import { movingStations } from '../track/moving/mainframe.js';
 import { industryZones, industryPose } from '../sim/mainframeIndustry.js';
 import { scanZones, scanPose } from '../sim/mainframeScan.js';
 
-const track = loadTrack(JSON.parse(readFileSync(new URL('../tracks/mainframe.json', import.meta.url), 'utf8')));
+const source = JSON.parse(readFileSync(new URL('../tracks/mainframe.json', import.meta.url), 'utf8'));
+const track = loadTrack(source);
 const { traps, bridge } = movingStations(track);
 
 test('Mainframe rams occupy supported dry lanes with broad permanent bypasses', () => {
@@ -37,7 +38,11 @@ test('Mainframe piston bridge is shorter than its permanent dry gantry bypass', 
   if (!track.forks?.some(f => f.id === fork.id)) installForks(track, [fork]);
   const branch = track.forks.find(f => f.id === fork.id);
   assert.ok((toS - fromS) / branch.lengthM > 1.1, 'a closed bridge always has a longer usable route');
-  assert.ok(branch.lengthM < 200, 'the eight-second open window comfortably fits ordinary driving');
+  assert.ok(bridge.openS > branch.lengthM*(bridge.toU-bridge.fromU)/12+2,
+    'the actual moving cut comfortably fits ordinary driving in the unchanged open window');
+  const physical = loadTrack(source,{moving:true}).moving.bridge;
+  assert.ok(physical.openS > (physical.toM-physical.fromM)/12+2,
+    'render-aligned slab endpoints preserve the same safe crossing margin');
   for (let s = fromS; s < toS; s += 3) {
     const f = track.frameAt(s), q = track.query(...f.p, f.seg);
     assert.ok(q.onRoad && !q.hole, 'original gantry road stays supported');

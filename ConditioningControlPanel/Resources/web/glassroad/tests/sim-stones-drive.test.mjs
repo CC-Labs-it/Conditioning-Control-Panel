@@ -68,7 +68,10 @@ function drive({ seed = 1, racer = 1, speed = 30, boost = false }) {
 }
 
 test('the field is on the bridge, after its pad, with a stone in some lane at every s', () => {
-  const pad = TRACK.boosts.find((b) => b.x === -3);
+  const authored = loadTrack(JSON.parse(readFileSync(new URL('../tracks/threshold.json', import.meta.url), 'utf8')),
+    { boostSafety: false });
+  const pad = authored.boosts.find((b) => b.x === -3);
+  assert.ok(!TRACK.boosts.some(b => b.node === pad.node && b.x === pad.x), 'the unsafe forced boost before the manual field stays retired');
   assert.ok(FIELD.fromS - (pad.s + pad.len) >= 35, 'the enlarged approach leaves room after the pad: ' + JSON.stringify({ pad, fromS: FIELD.fromS }));
   assert.ok(FIELD.toS - FIELD.fromS >= 55 && FIELD.toS - FIELD.fromS <= 60, 'shortened stepping district');
   // the last stones end 2 m before the deck resumes (the brief), so the check stops there
@@ -123,7 +126,8 @@ function gridRun(seed) {
   const race = makeRace({ track: TRACK, seed }), list = race.racers.list;
   const fieldBad = list.map(() => []), worstLane = list.map(() => 0), minSpeed = list.map(() => Infinity), entered = new Set();
   let logged = 0;
-  for (let i = 0; i < 500 / DT; i++) {
+  const budgetS = 60 + TRACK.lengthM * 2 / (30 * .6);
+  for (let i = 0; i < budgetS / DT; i++) {
     const before = list.map((r) => r.st[S.s]);
     race.tick();
     for (let k = logged; k < race.log.length; k++) {
@@ -153,7 +157,7 @@ for (const seed of SEEDS) test('eight racers from the grid cross the stones twic
   const g = gridRun(seed);
   const label = JSON.stringify({ laps: g.laps, worstLane: g.worstLane.map((v) => +v.toFixed(2)), minSpeed: g.minSpeed.map((v) => +v.toFixed(1)), bad: g.fieldBad });
   assert.equal(g.entered.size, 8, 'everybody reached the field: ' + label);
-  assert.ok(g.laps.every((n) => n >= 2), 'two laps each within 500 s: ' + label);
+  assert.ok(g.laps.every((n) => n >= 2), 'two laps each within the course-length driving budget: ' + label);
   assert.deepEqual(g.fieldBad, g.fieldBad.map(() => []), 'no void drop, no fall inside the field: ' + label);
   for (let i = 0; i < 8; i++) {
     assert.ok(g.worstLane[i] <= 1.5, 'racer ' + i + ' within 1.5 m of a lane centre: ' + label);

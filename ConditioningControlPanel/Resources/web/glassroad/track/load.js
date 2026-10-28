@@ -15,9 +15,13 @@ import { installForks } from './forks.js';
 import { movingPlan, installMovingSupport } from './movingHazards.js';
 import { buildAerials, shapeAerialNodes, aerialGapAt, aerialBoostAllowed } from './aerial.js';
 import { safeBoostTurn } from './boostSafety.js';
+import { shapeCourseNodes } from './courseShape.js';
+import { extendBoostRuns } from './boostRuns.js';
+import { safeBoostCorridor } from './boostCorridor.js';
+import { mapSpillStations } from './shapeWaterSpills.js';
 
 /** @returns {object} Track; throws an Error listing the schema errors */
-export function loadTrack(json, { validate = true, aerials: includeAerials = true, moving: includeMoving = false, boostSafety = true } = {}) {
+export function loadTrack(json, { validate = true, aerials: includeAerials = true, moving: includeMoving = false, boostSafety = true, courseShape: includeShape = true } = {}) {
   if (validate) {
     const r = validateJson(json);
     if (!r.ok) throw new Error('track invalid: ' + r.errors.join('; '));
@@ -25,7 +29,10 @@ export function loadTrack(json, { validate = true, aerials: includeAerials = tru
   if (json.loop !== true) throw new Error('track invalid: only closed loops are supported');
   // water wave 1: a stream node's flow ([along, lat] m/s) rides along for the query and the road mesh
   const nodes = json.nodes.map((n) => ({ p: n.p.slice(), roll: n.roll * DEG, w: n.w, flags: n.flags.slice(), speed: n.speed, surface: n.surface, flow: n.flow ? n.flow.slice() : null }));
+  const courseShape = includeShape ? shapeCourseNodes(json, nodes) : null;
   const aerialDrops = includeAerials ? shapeAerialNodes(json.id, nodes) : null;
+  // Transcendental remaps differ by a few ULPs across engines. Share the same physical micrometre grid.
+  if (courseShape) for (const node of nodes) for (let k = 0; k < 3; k++) node.p[k] = Math.round(node.p[k] * 1e6) / 1e6;
   const N = nodes.length;
   const sp = createSpline(nodes.map((n) => n.p), nodes.map((n) => n.flags.includes('jump')));
   const refN = buildRefNormals(sp, nodes.map((n) => n.flags.includes('magnet')));
@@ -77,7 +84,7 @@ export function loadTrack(json, { validate = true, aerials: includeAerials = tru
     return { node: j.node, airLen: j.airLen, height: j.height, s: nodeS[j.node], landS: nodeS[land % N] };
   });
   // polish 4 drop shortcuts: the open edge (fromS..toS on `side`), the landing stretch and its pad
-  const routes = (json.routes || []).map((r, idx) => {
+  const routes = (courseShape?.routes ?? json.routes ?? []).map((r, idx) => {
     const padS = wrap(nodeS[r.pad.node] + (r.pad.ds || 0), lengthM), pf = frameAt(padS);
     const openS0 = nodeS[r.from] + (r.open ? r.open.ds : 0), openS1 = r.open ? openS0 + r.open.len : nodeS[r.to];
     return { idx, id: r.id, kind: r.kind, side: r.side, from: r.from, to: r.to, fromS: nodeS[r.from], toS: nodeS[r.to], openS0, openS1,
@@ -102,8 +109,10 @@ export function loadTrack(json, { validate = true, aerials: includeAerials = tru
   };
 
   const track = {
-    id: json.id, name: json.name, laps: json.laps, loop: true, lengthM, nodeCount: N, nodeS,
-    sections, sectionAt, boosts, jumps, items, routes, courts, fields, aerials, reservoir: json.reservoir, waterSpills: json.waterSpills,
+    id: json.id, name: json.name, laps: json.laps, loop: true, lengthM, nodeCount: N, nodeS, courseShape,
+    courseShapeNodes: courseShape ? nodes.map(n => n.p.slice()) : null,
+    sections, sectionAt, boosts, jumps, items, routes, courts, fields, aerials, reservoir: json.reservoir,
+    waterSpills: courseShape ? mapSpillStations(json, nodeS) : json.waterSpills,
     limits: { fallY: lm.fallY, edgeGraceM: lm.edgeGraceM, edgeGraceS: lm.edgeGraceS },
     spawnPose,
     nodeFlags: (i) => nodes[((i % N) + N) % N].flags,
@@ -111,16 +120,20 @@ export function loadTrack(json, { validate = true, aerials: includeAerials = tru
     /** Water flow at (seg, segT) into out, see track/query.js flowAt. */
     flowAt: (seg, segT, out) => flowAt(nodes, ((seg % N) + N) % N, segT, out),
     frameAt, surfaceAt, canalProfile: profile,
-    query: createQuery(sp, refN, rollAt, widthAt, nodes, courts, fields, profile, aerials),
+    query: createQuery(sp, refN, rollAt, widthAt, nodes, courts, fields, profile, aerials, routes),
     checklines: null,
   };
   track.checklines = buildChecklines(track, json.checkpoints);
   const moving = includeMoving ? movingPlan(track) : { traps: [], bridge: null };
-  installForks(track, [...(json.forks || []), ...(moving.bridge?.fork ? [moving.bridge.fork] : [])]);
+  installForks(track, [...(courseShape?.forks ?? json.forks ?? []), ...(moving.bridge?.fork ? [moving.bridge.fork] : [])]);
   if (includeMoving) installMovingSupport(track, moving);
   // Every consumer, including the online authority, receives the same safe physical pads.
   // Source generators opt out explicitly so their historical authored plans stay reproducible.
-  if (boostSafety) track.boosts = track.boosts.filter(pad => safeBoostTurn(track, pad));
+  if (boostSafety) {
+    const authored = track.boosts;
+    track.boosts = track.boosts.filter(pad => safeBoostTurn(track, pad) && safeBoostCorridor(track, pad));
+    if (courseShape) track.boosts = extendBoostRuns(track, track.boosts, authored);
+  }
   let dl = null, meshes = null;
   Object.defineProperty(track, 'driveline', { enumerable: true, get: () => {
     if (!dl) {

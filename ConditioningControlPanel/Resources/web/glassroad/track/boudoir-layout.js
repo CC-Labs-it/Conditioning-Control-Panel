@@ -68,6 +68,14 @@ export function getBoudoirLayout(track) {
     const i = BOUDOIR_PIECES.findIndex(p => p.id === id), p = BOUDOIR_PIECES[i], start = plan.starts[i];
     return { id, x: start.x - Math.sign(p.turn) * p.r * Math.sin(start.heading), z: start.z + Math.sign(p.turn) * p.r * Math.cos(start.heading), radiusM: p.r - 27, baseY: -24, topY: 136 };
   });
+  if (track.courseShape?.pieces) for (const item of furniture) {
+    const piece = track.courseShape.pieces.find(p => p.id === item.id), range = find(item.id);
+    const f = track.frameAt((range.s0 + range.s1) / 2), flat = Math.hypot(f.t[0], f.t[2]);
+    const radius = Math.sign(piece.turn) * piece.r;
+    item.x = f.p[0] - radius * f.t[2] / flat;
+    item.z = f.p[2] + radius * f.t[0] / flat;
+    item.radiusM = piece.r - 27;
+  }
   const ramp = find('mirror-ramp'), gap = find('mirror-gap'), landing = find('mirror-landing');
   const mirrorJump = { rampS0: ramp.s0, rampS1: gap.s0, gapS0: gap.s0, gapS1: landing.s0, landingS0: landing.s0, landingS1: landing.s1, widthM: 40, riseM: 14, gapM: 24 };
   const stoneFields = [{ id: 'boudoir-compacts', s0: find('compacts').s0, s1: track.fields.find(f => f.id === 'boudoir-compacts')?.toS ?? find('compacts').s1, lanes: [-9, 0, 9], widthM: 40, platformWidthM: 32, platformLengthM: 26, gapM: 3 }];

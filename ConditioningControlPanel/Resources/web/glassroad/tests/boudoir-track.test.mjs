@@ -16,7 +16,9 @@ const course = () => loadTrack(json);
 test('Boudoir regenerates a closed substantial two-lap course with a level eight-racer grid', () => {
   assert.deepEqual(buildBoudoir(), json); assert.deepEqual(validate(json), { ok: true, errors: [], warnings: [] });
   const track = course(), end = walkBoudoir(BOUDOIR_PIECES);
-  assert.equal(track.laps, 2); assert.ok(track.lengthM > 6000 && track.lengthM < 8000);
+  const source = loadTrack(json, { courseShape: false });
+  assert.equal(track.laps, 2); assert.ok(source.lengthM > 6000 && source.lengthM < 8000);
+  assert.ok(track.lengthM > 10000 && track.lengthM < 11000, 'wide curves, long bath boost runout and a single shelf circuit');
   assert.ok(Math.hypot(end.x, end.z) < 1e-7);
   assert.ok(json.nodes.every(n => n.w >= 28));
   for (let i = 0; i < 8; i++) assert.ok(Math.abs(track.spawnPose(i).p[1]) < .001);
@@ -33,7 +35,7 @@ test('Vanity and galleries vary the physical drive with smooth crests, a broad S
     if (id === 'shelf-gallery') {
       const end = track.frameAt(span.s1), dx = end.p[0] - start.p[0], dz = end.p[2] - start.p[2];
       const offset = frames.map(f => ((f.p[0] - start.p[0]) * dz - (f.p[2] - start.p[2]) * dx) / Math.hypot(dx, dz));
-      assert.ok(Math.max(...offset) > 7 && Math.min(...offset) < -7, 'two distinct S-bend turns');
+      assert.ok(Math.max(...offset) > 1.5 && Math.min(...offset) < -1.5, 'two gentler S-bend turns remain');
     }
   }
   for (let s = 0; s < 60; s += 3) assert.ok(Math.abs(track.frameAt(s).p[1]) < .001, 'grid remains flat');
@@ -47,7 +49,8 @@ test('Perfume courts have long visible flat approaches and an always-open eight-
       const f = track.frameAt(s), left = z.x - z.w / 2 + f.w / 2, right = f.w / 2 - z.x - z.w / 2;
       assert.ok(Math.max(left, right) >= 8);
       assert.ok(Math.abs(f.p[1] - first.p[1]) < .001);
-      assert.ok(f.t.reduce((sum, v, i) => sum + v * first.t[i], 0) > .9999);
+      const heading = f.t.reduce((sum, v, i) => sum + v * first.t[i], 0);
+      assert.ok(heading > .9999, z.id + ' approach heading at ' + s + ': ' + heading);
     }
   }
 });
@@ -82,7 +85,7 @@ test('Seven compact islands have broad coherent landing surfaces and close clean
 });
 for (const seed of [1, 241023, 20261024]) test('Boudoir eight-racer two-lap race completes without falls, seed ' + seed, () => {
   const r = makeRace({ track: course(), seed, items: createItems });
-  r.run(750, () => r.racers.list.every(k => k.finished));
+  r.run(60 + r.track.lengthM * r.track.laps / (r.feel.get('speed.topMps') * .6), () => r.racers.list.every(k => k.finished));
   assert.ok(r.racers.list.every(k => k.finished), JSON.stringify(r.racers.list.map(k => ({ s: k.st[S.s], laps: k.lapTimes.length, finish: k.finishS }))));
   assert.deepEqual(r.racers.list.map(k => k.falls), Array(8).fill(0));
   assert.ok(r.racers.list.every(k => k.lapTimes.length === 2));

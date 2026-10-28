@@ -7,6 +7,7 @@ const hooks=registerHooks({resolve(specifier,context,next){
 }});
 const {WebGLCoordinateSystem,Group,Scene,Mesh,PlaneGeometry,MeshBasicNodeMaterial,Renderer,DoubleSide,BackSide,FrontSide}=await import('three/webgpu');
 const {createWaterReflections}=await import('../render/waterReflections.js');
+const {REFLECT_LAYER}=await import('../render/reflectionLayer.js');
 const {createWaterFoam}=await import('../render/waterFoam.js');
 const {createWaterField}=await import('../render/waterField.js');
 hooks.deregister();
@@ -62,7 +63,7 @@ test('reflection warm stages hidden and distant variants, then restores them eve
     r.api.compileAsync=async(_,camera)=>{
       compiles++;assert.equal(hidden.visible,true);assert.equal(hidden.frustumCulled,false);assert.equal(hidden.count,1);
       assert.equal(hidden.material.visible,true);assert.equal(exclude.visible,false);assert.equal(waterChild.visible,false);
-      assert.equal(camera.layers.mask,1);
+      assert.equal(camera.layers.mask,1<<REFLECT_LAYER,'the probe sees the reflection layer only');
       assert.equal(camera.layers.test(shadowCatcher.layers),false,'no-shadow cube variants exclude shadow-only catcher materials');
       if(fail)throw Error('compile failure');
     };
@@ -73,7 +74,7 @@ test('reflection warm stages hidden and distant variants, then restores them eve
       } else {
         clean++;assert.equal(hidden.frustumCulled,true);assert.equal(hidden.count,0);assert.equal(hidden.material.visible,false);
       }
-      assert.equal(camera.layers.mask,1);normalRender(sc,camera);
+      assert.equal(camera.layers.mask,1<<REFLECT_LAYER,'the probe sees the reflection layer only');normalRender(sc,camera);
     };
     const reflection=createWaterReflections({scene,renderer:r.api,exclude});t.after(()=>reflection.dispose());
     t.mock.method(console,'warn',()=>{});
