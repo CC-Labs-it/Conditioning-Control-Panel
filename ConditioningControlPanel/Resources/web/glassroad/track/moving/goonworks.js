@@ -20,7 +20,7 @@ export function movingStations(track) {
       if (track.fields.some(row => s > row.fromS - 30 && s < row.toS + 30)) continue;
       if (!track.query(...f.p, f.seg).onRoad) continue;
       traps.push({ id: 'goonworks-sidewinder-' + (i + 1), s, kind: i % 2 ? 'piston' : 'slider',
-        side: i % 2 ? -1 : 1, w: 5, len: 4, periodBeats: 2, offsetBeats: i % 2 });
+        side: i % 2 ? -1 : 1, w: 5, len: 4, hitboxScale: .72, periodBeats: 2, offsetBeats: i % 2 });
       break;
     }
   }

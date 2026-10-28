@@ -1,3 +1,4 @@
+import { GOONWORKS_CONTACT } from '../track/goonworks-setpieces.js';
 import { BOUDOIR_PRESS_REVISION } from '../track/boudoir-setpieces.js';
 import { AERIAL_REVISION } from '../track/aerial.js';
 import { BOOST_SAFETY_REVISION } from '../track/boostSafety.js';
@@ -18,5 +19,6 @@ export function onlineCourseHash(trackJson, feelJson, track) {
   return courseHash(trackJson, feelJson, { aerialRevision: AERIAL_REVISION, aerials: track.aerials, moving: track.moving,
     courseShapeRevision: track.courseShape?.revision ?? 0, courseShapeNodes: track.courseShapeNodes ?? null,
     boostSafetyRevision: BOOST_SAFETY_REVISION, boosts: track.boosts,
+    ...(track.id === 'goonworks' ? { goonworksContact: GOONWORKS_CONTACT } : {}),
     ...(track.id === 'boudoir' ? { boudoirPressRevision: BOUDOIR_PRESS_REVISION } : {}) });
 }

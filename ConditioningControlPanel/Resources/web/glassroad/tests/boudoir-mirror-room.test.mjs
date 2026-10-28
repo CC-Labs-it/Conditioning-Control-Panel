@@ -21,15 +21,38 @@ function setup() {
   return { room, scene, camera };
 }
 
-test('three non-bouncing reflection nodes serve every warmable wall, ceiling and gate pane', () => {
+test('three non-bouncing reflection nodes serve walls and gates while ceiling facets stay porcelain', () => {
   const { room } = setup();
   assert.equal(room.reflections.length, 3); assert.equal(room.diagnostics.shutters, 9); assert.ok(room.diagnostics.mirrors >= 20);
   const reflected = [], materials = new Set();
   room.group.traverse(o => { if (o.isMesh && o.material.name?.startsWith('mirror-live-scene:')) { reflected.push(o); materials.add(o.material); } });
-  assert.ok(reflected.reduce((n, m) => n + (m.count || 1), 0) > 50); assert.equal(materials.size, 2);
+  assert.equal(reflected.reduce((n, m) => n + (m.count || 1), 0), room.diagnostics.mirrors); assert.equal(materials.size, 2);
+  assert.ok(room.group.children.some(o => o.material?.name === 'mirror-ceiling-porcelain'));
   assert.ok(room.diagnostics.baseDraws <= 40, 'static frames and moving shutters share batches');
   for (const r of room.reflections) assert.equal(r.reflector.bounces, false);
   room.dispose();
+});
+
+test('budgeted reflection UVs stay anchored to their captured world view between captures', () => {
+  const { room, scene, camera } = setup(); let target = null, mrt = null;
+  const renderer = { autoClear: false, coordinateSystem: WebGLCoordinateSystem,
+    getDrawingBufferSize: out => out.set(1280,720), getRenderTarget: () => target, getMRT: () => mrt,
+    setRenderTarget: value => { target=value; }, setMRT: value => { mrt=value; }, render() {} };
+  room.update(.1, { camera, raceTimeS: 1 });
+  const node = room.reflections[1], base = node.reflector;
+  const material = room.group.children.find(o => o.material?.name === 'mirror-live-scene:1').material;
+  base.updateBefore({ scene, camera, renderer, material });
+  const matrix = node.userData.captureMatrix.value, held = matrix.clone();
+  const point = room.group.localToWorld(new Vector3(19.5,9,-45));
+  const expected = point.clone().project(base.getVirtualCamera(camera));
+  assert.ok(point.clone().applyMatrix4(matrix).distanceTo(expected) < 1e-8);
+  camera.position.add(new Vector3(1,0,2)); camera.updateMatrixWorld(true);
+  base.updateBefore({ scene, camera, renderer, material });
+  assert.deepEqual(matrix.elements, held.elements, 'A skipped capture retains its exact projection');
+  room.update(.1, { camera, raceTimeS: 1.1 });
+  base.updateBefore({ scene, camera, renderer, material });
+  assert.notDeepEqual(matrix.elements, held.elements, 'Only a fresh capture changes the projection');
+  assert.notEqual(node.uvNode, undefined); room.dispose();
 });
 
 test('physical shutters share collision poses, preserve a clear lane, and freeze on pause', () => {

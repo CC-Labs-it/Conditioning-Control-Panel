@@ -173,8 +173,8 @@ export function createGoonworksTubeMaterial(outer=false){
   const tubeGrain=filteredWave(p.y.mul(23).add(p.x.mul(67))).mul(outer?.005:.012).add(1);
   colour=colour.mul(tubeGrain);
   colour=mix(colour,rgb(outer?GOONWORKS_PALETTE.rose:GOONWORKS_PALETTE.warmgray),seam.mul(outer?.16:.1));
-  colour=mix(colour,rgb(GOONWORKS_PALETTE.cream),ribLip.mul(outer?.18:.42));
-  colour=mix(colour,rgb(GOONWORKS_PALETTE.ivory),enamel);
+  if(outer)colour=mix(colour,rgb(GOONWORKS_PALETTE.cream),ribLip.mul(.18));
+  if(outer)colour=mix(colour,rgb(GOONWORKS_PALETTE.ivory),enamel);
   colour=mix(colour,rgb(GOONWORKS_PALETTE.ink),max(rim,ribInk));
   material.colorNode=colour;return material;
 }
