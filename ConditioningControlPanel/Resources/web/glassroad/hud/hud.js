@@ -330,6 +330,8 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     setTrack(t) { map.setTrack(t || {}); cards.setTrack?.(t); },
     /** The host's Gentle switch: the options card shows Gentle preview locked on. */
     setHostGentle(on) { cards.setHostGentle(on); },
+    /** The device behind the tier and its auto pick ({ device, autoTier }): the options card's Quality hint. */
+    setDevice(v) { cards.setDevice?.(v); },
     /** The host's Scrolller consent ({ on }) for the Online pictures switch; null hides it. */
     setScrolller(state) { cards.setScrolller(state); },
     /** The saved options, for boot to apply at load. */
