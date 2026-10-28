@@ -141,6 +141,9 @@
 @keyframes hud-pip-out { 0% { transform: scale(1); opacity: 1; } 35% { transform: scale(1.45); opacity: 1; } 100% { transform: scale(1.9) translateY(-6px); opacity: 0; } }
 .hud-speed { position: absolute; right: max(16px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); color: var(--ink-dim); }
 .hud-speed b { font-size: 28px; color: var(--ink); }
+/* touch: the throw button owns the bottom right corner (input/touch.js THROW_CSS, 64 px); speed and the media credit sit above it */
+.gr-touch-on .hud-speed { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 76px); }
+.gr-touch-on .hud-credit { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 116px); }
 
 /* toast: a paper slip under the item slot */
 .hud-toast { position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 84px); left: 50%; transform: translate(-50%, -4px);

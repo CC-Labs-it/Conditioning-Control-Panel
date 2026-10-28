@@ -16,6 +16,10 @@
  * Polish 6 (BEAT): the voice registers itself as the live music (audio/songShape.js setLiveMusic) so the beat
  * shake reads songS and the song with no extra wiring. A picked file has no chart: its decoded samples get one
  * analysis (songShape.analyzeBuffer: tempo, beats, bar energy), cached per buffer, exposed as `analysis`.
+ * Phones (opts.lowRateDecode(), boot: a coarse pointer): the song decodes through an OfflineAudioContext at HALF the
+ * live rate (a 4-5 min song is ~100 MB of float32 at 48 kHz; iOS ran out of memory on load). The source resamples on
+ * playback; every clock here is seconds (buffer.duration, source.start offsets, the context clock) and the analysis
+ * reads the buffer's own sampleRate, so timing holds. No OfflineAudioContext, or its decode fails: the full-rate decode.
  */
 import { mixGet } from './mix.js';
 import { normalizeChart } from './chart.js';
@@ -99,7 +103,14 @@ export function validChart(c) {
 }
 
 /** @returns {Music} */
-export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {}) {
+/** The half-rate decode context for a live context, or null (no constructor, or the rate refused). */
+export function halfRateContext(ctx, Offline = globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext) {
+  const rate = Math.round((Number(ctx && ctx.sampleRate) || 0) / 2);
+  if (typeof Offline !== 'function' || !(rate >= 8000)) return null;
+  try { return new Offline(2, 1, rate); } catch (e) { return null; }
+}
+
+export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch, lowRateDecode = null, Offline = undefined } = {}) {
   const gain = ctx.createGain();
   gain.gain.value = 0;
   gain.connect(out);
@@ -161,12 +172,20 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
     return true;
   }
 
+  // the promise form, with the callback form for old Safari
+  const decodeOn = (c, bytes) => new Promise((res, rej) => {
+    const p = c.decodeAudioData(bytes, res, rej);
+    if (p && typeof p.then === 'function') p.then(res, rej);
+  });
   async function decode(bytes) {
-    // the promise form, with the callback form for old Safari
-    return await new Promise((res, rej) => {
-      const p = ctx.decodeAudioData(bytes, res, rej);
-      if (p && typeof p.then === 'function') p.then(res, rej);
-    });
+    let low = false;
+    try { low = typeof lowRateDecode === 'function' && !!lowRateDecode(); } catch (e) { low = false; }
+    const half = low ? halfRateContext(ctx, Offline) : null;
+    if (half) {
+      // a copy: decodeAudioData detaches its bytes, and a failed half-rate decode still owes the full-rate one
+      try { return await decodeOn(half, typeof bytes.slice === 'function' ? bytes.slice(0) : bytes); } catch (e) { console.warn('[music] half-rate decode', e); }
+    }
+    return await decodeOn(ctx, bytes);
   }
 
   const api = {

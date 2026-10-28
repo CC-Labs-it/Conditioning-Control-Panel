@@ -367,7 +367,8 @@ async function boot(course, options, lifetime, isCurrent) {
   fx.state.screen = effects.screen;
   fx.state.fog = payoff.fog; fx.state.fogTheme = track.id;
   const audio = shared.audio ||= (() => {
-    shared.counts.audio++; return createAudio(feel, shared.bus, { gentle, musicFetchFn: songCache.fetch });
+    shared.counts.audio++; return createAudio(feel, shared.bus, { gentle, musicFetchFn: songCache.fetch,
+      lowRateDecode: () => !!globalThis.matchMedia?.('(pointer: coarse)').matches });   // phones (pickTier's coarse rule): half-rate song
   })();
   audio.setLaps(laps); audio.setPaused(false); audio.reset();
   audio.music?.stop();
