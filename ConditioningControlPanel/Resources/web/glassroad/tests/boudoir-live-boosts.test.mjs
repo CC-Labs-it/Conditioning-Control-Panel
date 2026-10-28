@@ -24,8 +24,8 @@ const indexOf = p => track.boosts.findIndex(b => b.s === p.s && b.x === p.x);
 
 test('live Boudoir moving layout exposes every real dry and wet boost with its full support guard', t => {
   assert.ok(track.moving && track.forks.some(f => f.movingBridge), 'use the boot layout, including its timed bridge');
-  assert.ok(Math.abs(speeds[0] - 64.584) < 1e-9 && Math.abs(speeds[1] - 66.7368) < 1e-9);
-  assert.equal(Math.round(BOOST_TURN.rolloutM), 333, 'retain the maximum-speed carry and braking envelope');
+  assert.ok(Math.abs(speeds[0] - 71.0424) < 1e-9 && Math.abs(speeds[1] - 73.41048) < 1e-9);   // 64.584 and 66.7368 x the 2026-10-28 speed factor F = 1.1
+  assert.equal(Math.round(BOOST_TURN.rolloutM), 334, 'retain the maximum-speed carry and braking envelope (333 before F = 1.1: holds over F and brake x F^2 keep the carry and braking metres, only the reaction share grows)');
   const actual = track.boosts.map(identity).sort(), planned = plan.runs.flatMap(r => r.pads).map(identity).sort();
   assert.deepEqual(planned, actual, 'every moving-layout pad belongs to exactly one tested physical train');
   assert.equal(new Set(planned).size, actual.length);

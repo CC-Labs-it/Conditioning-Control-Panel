@@ -4,11 +4,11 @@ import { makeFrame } from './frames.js';
 export const BOOST_SAFETY_REVISION = 2;
 // Browser-free loaders also build room cards. Tests pin these defaults to feel.json.
 export const BOOST_FEEL = Object.freeze({
-  speed: { topMps: 37.5 }, cleanPace: { cleanGain: .3, musicGain: .26 },
-  pad: { amount: .2, holdS: 1 }, boost: { riseS: .1, tailTcS: .5 }, engine: { brakeMps2: 27.5 },
+  speed: { topMps: 33 }, cleanPace: { cleanGain: .3, musicGain: .26 },
+  pad: { amount: .2, holdS: .9 }, boost: { riseS: .0833, tailTcS: .4545 }, engine: { brakeMps2: 26.62 },
   items: { tetherTowCap: 1.15 },
-  steer: { yawRateDegps: 171.875, yawSpeedRefMps: 31.25, calmFromMps: 10, cruiseMps: 25,
-    cruiseYawMul: .46, topCalmMps: 37.5, topYawMul: .45, boostCalmMps: 48.75, boostYawMul: .35, userMul: 1 },
+  steer: { yawRateDegps: 151.25, yawSpeedRefMps: 27.5, calmFromMps: 8.8, cruiseMps: 22,
+    cruiseYawMul: .46, topCalmMps: 33, topYawMul: .45, boostCalmMps: 42.9, boostYawMul: .35, userMul: 1 },
 });
 const accessor = feel => typeof feel?.get === 'function' ? feel
   : { get: path => path.split('.').reduce((v, key) => v?.[key], feel || BOOST_FEEL) };

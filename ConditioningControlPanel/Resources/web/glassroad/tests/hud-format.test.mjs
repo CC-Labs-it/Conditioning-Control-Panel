@@ -131,7 +131,7 @@ test('speed readout: shownTopMps keeps the km/h a player sees while the real top
   const { createFeel } = await import('../core/feel.js');
   const feelJson = JSON.parse(readFileSync(G + 'feel.json', 'utf8'));
   const feel = createFeel(feelJson);
-  assert.equal(feel.get('speed.topMps'), 37.5);
+  assert.equal(feel.get('speed.topMps'), 33);   // 30 x F = 1.1
   assert.equal(shownTopMps(feel), 30);
   assert.equal(shownKmh(1, feel), 108);
   assert.equal(shownKmh(0.5, feel), 54);

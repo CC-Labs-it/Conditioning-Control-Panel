@@ -59,12 +59,12 @@ test('solo racer engine reaches the raised ceiling, wall/reset remove it, online
   assert.ok(racers.player.st[S.engineV] > 42, 'real engine uses the higher cap');
   racers.player.events.emit('wall', { dv: 2 });
   racers.step(DT, actions, race, { cleanPace: true, songDrive: 1 });
-  assert.equal(racers.player.feel.get('speed.topMps'), 37.5);
-  racers.place(); assert.equal(racers.player.feel.get('speed.topMps'), 37.5);
+  assert.equal(racers.player.feel.get('speed.topMps'), 33);
+  racers.place(); assert.equal(racers.player.feel.get('speed.topMps'), 33);
   const online = createRacers(track, feel, queue, { net: [{ seat: 0, kind: 'player', local: true }] });
   online.player.st[S.engineV] = 30;
   for (let i = 0; i < 1200; i++) online.step(DT, actions, race, { cleanPace: true, songDrive: 1 });
-  assert.equal(online.player.feel.get('speed.topMps'), 37.5);
+  assert.equal(online.player.feel.get('speed.topMps'), 33);
 });
 
 test('physical racer contact clears both clean streaks, including contacts below cue threshold', () => {
