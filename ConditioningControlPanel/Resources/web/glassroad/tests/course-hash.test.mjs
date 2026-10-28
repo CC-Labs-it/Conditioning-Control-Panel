@@ -20,3 +20,23 @@ test('course fingerprint ignores whitespace and changes with geometry or feel', 
   feel.speed.topMps += 1;
   assert.notEqual(await courseHash(track, feel), hash);
 });
+
+test('a last-bit engine wobble in the runtime course keeps the seat; a real move still refuses it', async () => {
+  // Safari's Math.hypot / sin are not V8's: the same course can come out a few ulps apart (2026-10-28 "No connection")
+  const track = JSON.parse(readFileSync(new URL('../tracks/threshold.json', import.meta.url), 'utf8'));
+  const feel = JSON.parse(readFileSync(new URL('../feel.json', import.meta.url), 'utf8'));
+  const base = { aerials: [{ gapS0: 1400.123456789, gapS1: 1510.5, y: -3.25 }] };
+  const hash = await courseHash(track, feel, base);
+  const wobble = { aerials: [{ gapS0: 1400.123456789 + 4e-12, gapS1: 1510.5 - 2e-12, y: -3.25 + 1e-13 }] };
+  assert.equal(await courseHash(track, feel, wobble), hash);
+  const moved = { aerials: [{ gapS0: 1400.124, gapS1: 1510.5, y: -3.25 }] };
+  assert.notEqual(await courseHash(track, feel, moved), hash);
+});
+
+test('a refused seat says why instead of "No connection"', async () => {
+  const { connectFailCopy } = await import('../hud/lobbyMath.js');
+  assert.equal(connectFailCopy({ reason: 'version', closeCode: 4003 }), 'This build is out of date');
+  assert.equal(connectFailCopy({ reason: null, closeCode: 4004 }), 'The room is full');
+  assert.equal(connectFailCopy({ reason: null, closeCode: 1006 }), 'No connection');
+  assert.equal(connectFailCopy(null), 'No connection');
+});

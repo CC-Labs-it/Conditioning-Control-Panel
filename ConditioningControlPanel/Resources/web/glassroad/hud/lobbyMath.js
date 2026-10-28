@@ -257,6 +257,12 @@ const ABORT = {
 export const abortCopy = (reason) => ABORT[reason] || 'The room closed';
 const CLOSE = { 4000: 'Race over', 4001: ABORT.hello, 4002: 'The room hung up', 4003: ABORT.ticket, 4004: ABORT.full, 4009: 'Opened somewhere else', 4010: ABORT.closed, 4011: ABORT.server };
 export const closeCopy = (code) => CLOSE[code] || 'Lost the room';
+/** A seat that never got its welcome: the room's abort reason, else its 4xxx close, else the network. */
+export function connectFailCopy(e) {
+  if (e && e.reason && ABORT[e.reason]) return ABORT[e.reason];
+  if (e && CLOSE[e.closeCode]) return CLOSE[e.closeCode];
+  return ERR.net;
+}
 export const BADGE_COPY = Object.freeze({ host: 'host', bot: 'bot', ready: 'ready', paused: 'paused', away: 'away', left: 'left' });
 
 // ---- race a friend through a link (NET.md section 13) -----------------------------------------
