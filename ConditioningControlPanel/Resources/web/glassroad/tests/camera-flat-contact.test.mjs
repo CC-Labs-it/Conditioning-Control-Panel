@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { loadTrack } from '../track/load.js';
 import { step } from '../sim/kart.js';
 import { S } from '../sim/state.js';
-import { createCamRig, createKick } from '../render/cameraMath.js';
+import { createCamRig, createKick, speedFov } from '../render/cameraMath.js';
 import { registerHooks } from 'node:module';
 import { createBus } from '../core/events.js';
 import { createFx } from '../fx/reactions.js';
@@ -72,7 +72,8 @@ test('hard racer and wall events through the actual FX bus never create floor st
       assert.equal(st[S.posY], 0); assert.equal(st[S.airborne], 0);
       assert.ok(Math.abs(cam.camera.position.y - eyeY) < 1e-7, 'flat support keeps a constant camera height');
       assert.ok(Math.abs(cam.camera.position.y - clean.camera.position.y) < 1e-7, 'actual FX never add height to the clean road pose');
-      assert.equal(cam.camera.fov, clean.camera.fov, 'actual FX never add camera zoom');
+      // speed wave: the drawn copy wears the continuous speed widen (fx.speedFeel); hits add nothing on top of it
+      assert.ok(Math.abs(cam.camera.fov - (clean.camera.fov + speedFov(fx.state.speedFeel))) < 1e-9, 'actual FX never add camera zoom beyond the speed widen');
       assert.deepEqual(cam.rig.focus, clean.rig.focus, 'actual FX never feed back into road follow');
       maxStep = Math.max(maxStep, Math.abs(cam.camera.position.y - lastY)); lastY = cam.camera.position.y;
       maxSide = Math.max(maxSide, Math.abs(cam.rig.kick.out.x)); thud = Math.max(thud, fx.state.rumble);
