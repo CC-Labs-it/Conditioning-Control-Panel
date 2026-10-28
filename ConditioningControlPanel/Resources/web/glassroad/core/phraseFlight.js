@@ -2,6 +2,8 @@
 const clamp01 = x => Math.max(0, Math.min(1, x));
 export const phraseEase = x => { x = clamp01(x); return x * x * (3 - 2 * x); };
 export const PHRASE_FRACTION = .42;
+/** The phrase floats clearly above the gap's grade line (owner 2026-10-28: it used to sit 2 m below it). */
+export const PHRASE_LIFT_M = 1.2;
 const frames = new WeakMap();
 export function phraseFlightPoints(track, zone) {
   let cache = frames.get(track);
@@ -10,7 +12,7 @@ export function phraseFlightPoints(track, zone) {
     const a = track.frameAt(zone.gapS0).p[1], b = track.frameAt(zone.gapS1).p[1];
     cache.set(zone, [{ s: zone.gapS0, y: a },
       { s: zone.gapS0 + (zone.gapS1 - zone.gapS0) * PHRASE_FRACTION,
-        y: a + (b - a) * PHRASE_FRACTION - 2 * Math.sin(PHRASE_FRACTION * Math.PI) },
+        y: a + (b - a) * PHRASE_FRACTION + PHRASE_LIFT_M * Math.sin(PHRASE_FRACTION * Math.PI) },
       { s: zone.gapS1 + 8, y: track.frameAt(zone.gapS1 + 8).p[1] }]);
   }
   return cache.get(zone);

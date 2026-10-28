@@ -24,8 +24,8 @@ export function phraseReboundPose(timeS, gentle = false, out = {}) {
   const gain = gentle ? .3 : 1;
   if (timeS < 0) out.squash = .10 * Math.sin(Math.PI * (timeS + .16) / .32) * gain;
   else {
-    const compress = timeS < .12 ? .24 * Math.sin(Math.PI * (timeS + .04) / .16) : 0;
-    const stretch = timeS >= .12 && timeS < .48 ? .20 * Math.sin(Math.PI * (timeS - .12) / .36) : 0;
+    const compress = timeS < .12 ? .30 * Math.sin(Math.PI * (timeS + .04) / .16) : 0;
+    const stretch = timeS >= .12 && timeS < .48 ? .26 * Math.sin(Math.PI * (timeS - .12) / .36) : 0;
     out.squash = (compress - stretch) * gain;
     const u = clamp((timeS - .10) / .95, 0, 1), split = Math.sin(Math.PI * u) ** 2 * gain;
     out.cupM = .10 * split; out.riderM = .37 * split; out.saucerM = -.08 * split;
