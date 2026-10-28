@@ -100,3 +100,13 @@ export function pauseLine({ track = '', lap = 0, laps = 0, place = 0, count = 0 
   if (place > 0) { const o = ordinal(place); parts.push(o.n + o.suf + (count > 0 ? ' of ' + count : '')); }
   return parts.join(', ');
 }
+
+/** Top speed the km/h readout shows (speed.shownTopMps), else the real top. The real top moved (37.5 m/s) while the
+ * numbers a player reads stay the ones of before; a feel never gains keys, so a miss is remembered per feel. */
+const SHOWN_MISS = new WeakSet();
+export function shownTopMps(feel) {
+  if (!SHOWN_MISS.has(feel)) { try { return feel.get('speed.shownTopMps'); } catch { SHOWN_MISS.add(feel); } }
+  return feel.get('speed.topMps');
+}
+/** The HUD km/h figure for a share of top speed. */
+export const shownKmh = (speedPct, feel) => Math.round(Math.max(0, speedPct) * shownTopMps(feel) * 3.6);

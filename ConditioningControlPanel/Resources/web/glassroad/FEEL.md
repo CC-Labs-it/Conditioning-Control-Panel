@@ -6,9 +6,10 @@ sheet and an edit applies next tick. Units sit in the key name. "(added)" = not 
 default so the code has no hidden number.
 
 ## speed
-- `speed.topMps` 30: class A cruise top speed (B 36 and C 42 come later).
-- `speed.reverseMps` 6: top reverse speed.
-- `speed.minMps` 3: crawl floor while throttle is held (plan "min").
+- `speed.topMps` 37.5: class A cruise top speed (30 until the 2026-10-28 speed wave; B and C classes come later).
+- `speed.shownTopMps` 30: top speed the HUD km/h readout assumes, so the figures a player reads stayed the same when the real top rose (hud/format.js shownKmh).
+- `speed.reverseMps` 7.5: top reverse speed.
+- `speed.minMps` 3.75: crawl floor while throttle is held (plan "min").
 - `speed.maxPct` 1.3: ceiling of speedPct (forward speed / topMps) with every boost stacked (added).
 
 ## cleanPace
@@ -22,12 +23,12 @@ The `cleanPace` group holds these values. Online keeps the authority's existing 
 - `cleanPace.buildS` 12: clean-driving seconds to earn the full streak.
 - `cleanPace.releaseS` 3: seconds for braking/coasting to release the streak.
 - `cleanPace.musicEaseS` 2: time constant for music-driven changes to the ceiling.
-- `cleanPace.minMps` 8: minimum engine speed for earning a clean streak.
+- `cleanPace.minMps` 10: minimum engine speed for earning a clean streak.
 
 ## engine
 - `engine.bandGains` [0.9, 0.8, 0.55, 0.35, 0.25]: five equal bands over 0..top; engineV gains `gain * top` per second in its band. The last two bands are the weight.
 - `engine.chaseTcS` 0.15: velocity chases engineV, `v += (engineV - v) * dt / 0.15`.
-- `engine.brakeMps2` 22: engineV loss per second under full brake (added).
+- `engine.brakeMps2` 27.5: engineV loss per second under full brake (added).
 - `engine.coastMps2` 4: engineV loss per second with no throttle (added).
 
 ## steer
@@ -45,14 +46,14 @@ drift), the 38 to 49 m bends and the helix (r about 36 m on the road plane, 47 d
 - `steer.slewFullS` 0.18: calm onset toward full lock; unchanged so tight-track line tracking stays responsive.
 - `steer.releaseS` 0.055: prompt release and opposite-side correction, including older feel files missing this key.
   Grip yaw and bot bend planning stay unchanged; full-lock reversal crosses zero within 50 ms.
-- `steer.yawRateDegps` 137.5: yaw rate at full lock and zero speed (2.4 rad/s), before the calm.
-- `steer.yawSpeedRefMps` 25: speed that halves the base yaw rate.
-- `steer.calmFromMps` 8: below this the base law is untouched (nimble when slow).
-- `steer.cruiseMps` 20: cruise point of the calm ...
+- `steer.yawRateDegps` 171.875: yaw rate at full lock and zero speed (3 rad/s; x1.25 with the top speed so a turn at the same share of top keeps its radius), before the calm.
+- `steer.yawSpeedRefMps` 31.25: speed that halves the base yaw rate.
+- `steer.calmFromMps` 10: below this the base law is untouched (nimble when slow).
+- `steer.cruiseMps` 25: cruise point of the calm ...
 - `steer.cruiseYawMul` 0.46: ... grip yaw multiplier there (smoothstep from 1 at calmFromMps; 0.67 before polish 4).
-- `steer.topCalmMps` 30: top-speed point of the calm ...
+- `steer.topCalmMps` 37.5: top-speed point of the calm ...
 - `steer.topYawMul` 0.45: ... grip yaw multiplier there (0.64 before polish 4).
-- `steer.boostCalmMps` 39: boosted-top point of the calm (speed.topMps x speed.maxPct) ...
+- `steer.boostCalmMps` 48.75: boosted-top point of the calm (speed.topMps x speed.maxPct) ...
 - `steer.boostYawMul` 0.35: ... grip yaw multiplier there and above (0.5 before polish 4).
 - `steer.userMul` 1: steering sensitivity, the player's Options `steerSens` (0.6 to 1.4 in 0.1 steps). The integrator
   wires it with `feel.set('steer.userMul', opts.steerSens)`. Scales grip and drift yaw; bots hold it at 1
@@ -152,7 +153,7 @@ the 36 m Threshold helix; countersteer opens the arc substantially. Charging rem
 Events: `drift-start { dir, via: 'hop' | 'brake' }`, `drift-tier { tier, dir }`, `drift-release { tier }`,
 `drift-boost { tier, dir }` (every paid release, tier 0 = mini-turbo), `drift-cancel { reason }`; a bot's arrive as
 `racer-event { racer, name, p }`. Skid flag: `skidOf(st)` in `sim/drift.js` (drifting and grounded).
-- `drift.minSpeedMps` 8: a hop or a brake starts a drift only above this speed; dropping under it cancels.
+- `drift.minSpeedMps` 10: a hop or a brake starts a drift only above this speed; dropping under it cancels.
 - `drift.tightMin` 0.35: drift yaw share with the stick away from the turn (0.5 before).
 - `drift.tightMax` 1.0: drift yaw share with the stick into the turn.
 - `drift.yawMul` 1.75: max drift yaw as a multiple of the speed-calmed grip yaw (previously 1.45 times uncalmed yaw).

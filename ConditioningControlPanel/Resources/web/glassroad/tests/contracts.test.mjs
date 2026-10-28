@@ -44,14 +44,14 @@ test('events: bus is synchronous, queue flushes in order', () => {
 
 test('feel: get, rad, set, subscribe, reset', () => {
   const feel = createFeel(feelJson), seen = [];
-  near(feel.get('speed.topMps'), 30);
+  near(feel.get('speed.topMps'), 37.5);
   near(feel.rad('fov.baseVDeg'), Math.PI / 3);
   const un = feel.subscribe((p, v) => seen.push(p + '=' + v));
   assert.equal(feel.set('speed.topMps', 36), true);
   assert.equal(feel.set('speed.nope', 1), false);
   near(feel.get('speed.topMps'), 36);
   un(); feel.reset();
-  near(feel.get('speed.topMps'), 30);
+  near(feel.get('speed.topMps'), 37.5);
   assert.deepEqual(seen, ['speed.topMps=36']);
   assert.throws(() => feel.get('missing.key'));
 });

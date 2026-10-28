@@ -18,26 +18,26 @@ test('calm: base law when slow, then the feel multipliers at cruise, top and boo
   const f = makeFeel();
   assert.equal(calmMul(0, f), 1);
   assert.equal(calmMul(f.get('steer.calmFromMps'), f), 1, 'nimble when slow');
-  near(calmMul(20, f), f.get('steer.cruiseYawMul'), 1e-9, 'cruise');
-  near(calmMul(30, f), f.get('steer.topYawMul'), 1e-9, 'top');
-  near(calmMul(39, f), f.get('steer.boostYawMul'), 1e-9, 'boosted top');
-  near(calmMul(60, f), f.get('steer.boostYawMul'), 1e-9, 'held above');
-  near(calmMul(-20, f), calmMul(20, f), 1e-12, 'reverse reads |v|');
+  near(calmMul(25, f), f.get('steer.cruiseYawMul'), 1e-9, 'cruise');
+  near(calmMul(37.5, f), f.get('steer.topYawMul'), 1e-9, 'top');
+  near(calmMul(48.75, f), f.get('steer.boostYawMul'), 1e-9, 'boosted top');
+  near(calmMul(70, f), f.get('steer.boostYawMul'), 1e-9, 'held above');
+  near(calmMul(-25, f), calmMul(25, f), 1e-12, 'reverse reads |v|');
   let last = 1;
-  for (let v = 0; v <= 45; v += 0.5) { const m = calmMul(v, f); assert.ok(m <= last + 1e-12, 'never rises with speed at ' + v); last = m; }
-  assert.ok(gripYaw(30, f) < f.get('steer.cruiseYawMul') * baseYaw(30, f), 'top is calmer than cruise');
+  for (let v = 0; v <= 56; v += 0.5) { const m = calmMul(v, f); assert.ok(m <= last + 1e-12, 'never rises with speed at ' + v); last = m; }
+  assert.ok(gripYaw(37.5, f) < f.get('steer.cruiseYawMul') * baseYaw(37.5, f), 'top is calmer than cruise');
 });
 
-test('polish 4: full-lock grip yaw is about a third under polish 3 at 20, 30 and 39 m/s', () => {
+test('polish 4: full-lock grip yaw is about a third under polish 3 at 25, 37.5 and 48.75 m/s (speeds and yaw x1.25 since the speed wave)', () => {
   const f = makeFeel(), deg = (r) => r * 180 / Math.PI;
-  // polish 3 full-lock deg/s: 51.2, 40.0, 26.9
-  for (const [v, was] of [[20, 51.2], [30, 40.0], [39, 26.9]]) {
+  // polish 3 full-lock deg/s x1.25: 64, 50, 33.6
+  for (const [v, was] of [[25, 64], [37.5, 50], [48.75, 33.6]]) {
     const now = deg(gripYaw(v, f));
     assert.ok(now < was * 0.75 && now > was * 0.6, `${v} m/s: ${now.toFixed(1)} deg/s vs ${was}`);
   }
-  near(deg(gripYaw(8, f)), 104.2, 0.1, 'slow is still nimble');
+  near(deg(gripYaw(10, f)), 130.25, 0.2, 'slow is still nimble');
   // full lock at top is a wide arc: over 55 m
-  assert.ok(30 / gripYaw(30, f) > 55);
+  assert.ok(37.5 / gripYaw(37.5, f) > 55);
 });
 
 test('every Threshold bend remains makeable at top speed with the calmed drift', () => {

@@ -24,7 +24,7 @@
  * (sim/hitterHit.js; `racers` getter option for the bearing, else from is null); the item chip answers a hit the
  * player lands and the lap chip pulses on every lap (hud/hudPulse.js, by the Motion option).
  */
-import { formatTime, ordinal, iconOf, itemName, rollFrame, racerLabels, ICON_IDS } from './format.js';
+import { formatTime, ordinal, iconOf, itemName, rollFrame, racerLabels, ICON_IDS, shownKmh } from './format.js';
 import { slotState, slotMoment, gentleMoment, pipMoment, USED_S, PIP_OUT_S } from './slotMath.js';
 import { createMinimap } from './minimap.js';
 import { createCards } from './cards.js';
@@ -272,7 +272,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     put('lap', el.lap, 'Lap ' + Math.min(lap + 1, L) + '/' + L);
     put('time', el.time, formatTime(timeS));
     put('best', el.best, bestLapS > 0 ? 'best ' + formatTime(bestLapS) : '');
-    put('speed', el.speed, String(Math.round(Math.max(0, speedPct) * feel.get('speed.topMps') * 3.6)));
+    put('speed', el.speed, String(shownKmh(speedPct, feel)));
     const n = countdown || countN;
     const countText = n > 0 ? String(n) : '';
     put('count', el.countN, countText);

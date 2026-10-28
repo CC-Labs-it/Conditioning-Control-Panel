@@ -125,3 +125,19 @@ test('options: a record saved before mixV 2 keeps its other options and takes th
   saveOptions({ ...o, volSfx: 0.3 }, storage);
   assert.equal(loadOptions(storage).volSfx, 0.3, 'a choice made after the reset is kept');
 });
+
+test('speed readout: shownTopMps keeps the km/h a player sees while the real top moves', async () => {
+  const { shownTopMps, shownKmh } = await import('../hud/format.js');
+  const { createFeel } = await import('../core/feel.js');
+  const feelJson = JSON.parse(readFileSync(G + 'feel.json', 'utf8'));
+  const feel = createFeel(feelJson);
+  assert.equal(feel.get('speed.topMps'), 37.5);
+  assert.equal(shownTopMps(feel), 30);
+  assert.equal(shownKmh(1, feel), 108);
+  assert.equal(shownKmh(0.5, feel), 54);
+  assert.equal(shownKmh(-0.2, feel), 0);
+  const bare = createFeel({ speed: { topMps: 30 } });
+  assert.equal(shownTopMps(bare), 30);
+  assert.equal(shownTopMps(bare), 30);
+  assert.equal(shownKmh(1, bare), 108);
+});
