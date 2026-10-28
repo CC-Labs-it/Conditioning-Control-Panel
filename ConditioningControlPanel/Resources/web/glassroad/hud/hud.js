@@ -38,6 +38,7 @@ import { toastDecide, PRIORITY } from '../fx/itemFeelMath.js';
 import { wireHitterHit } from '../sim/hitterHit.js';
 import { playPulse } from './hudPulse.js';
 import { itemKey, itemTip } from './labels.js';
+import { P4_LOOK } from '../render/atlas.js';
 
 export { formatTime };
 
@@ -208,7 +209,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     bus.on('autopilot', ({ on } = {}) => setAuto(!!on)),
     bus.on('tether-hook', (p) => itemFeel.hook(p || {})),
   ];
-  const colours = () => feel.get('juice.sparkColours');
+  const colours = () => P4_LOOK.tierColours;   // the wheel sparks' tier colours (pink, white, gold), so pips and sparks agree
   function pulse(node, kind, key) {
     let ms = 0; try { ms = feel.get(key); } catch { ms = 0; }
     playPulse(node, kind, ms, motionOf(), gentleOn());
@@ -226,7 +227,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     const m = pipMoment(pipTier, t);
     pipTier = t;
     if (t > 0) { pipsOutUntil = 0; el.pipRow.classList.remove('out', 'out-soft'); }
-    // every lit pip wears the CURRENT tier colour (the spark colour), so the row reads blue, orange, pink
+    // every lit pip wears the CURRENT tier colour (the spark colour), so the row reads pink, white, gold
     el.pipRow.style.setProperty('--tier', c[t - 1] || '#fff');
     el.pips.forEach((p, i) => { p.classList.toggle('on', i < t); p.style.setProperty('--pip', c[i] || '#fff'); });
     if (m.pop >= 0 && el.pips[m.pop]) play(el.pips[m.pop], gentleOn() ? 'pop-soft' : 'pop', ['pop', 'pop-soft']);
