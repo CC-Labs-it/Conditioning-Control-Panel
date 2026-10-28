@@ -22,7 +22,7 @@ for (const route of track.routes) for (const speed of [20, 30, 40]) test(route.i
   assert.equal(events.all('drop').length, 0);
   assert.ok(events.all('route-land').length, 'physical landing');
   assert.ok(events.all('route-skip').length, 'honest race progress');
-  assert.ok(state[S.s] - s > 500 && state[S.s] - s < 800);
+  assert.ok(state[S.s] >= route.land.fromS && state[S.s] <= route.land.toS, 'skip ends on the actual widened landing stretch');
   assert.equal(registeredSkip(track, route.land.fromS, route.fromS), null, 'backwards traversal is not a skip');
 });
 test('Keep descending stack queries its own road at every lane', () => {

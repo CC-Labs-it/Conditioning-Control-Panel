@@ -13,6 +13,6 @@
     { "id": "bb-81", "f": 0.808, "side": 1, "kind": "landscape", "heightM": 9.5, "offM": 11, "liftM": 3, "angleDeg": 30, "program": 3, "phone": false },
     { "id": "bb-99", "f": 0.99, "side": -1, "kind": "portrait", "heightM": 12, "offM": 10, "liftM": 2.5, "angleDeg": 30, "program": 2, "phone": true }
   ],
-  "halo": { "f": 0, "count": 10, "kind": "landscape", "heightM": 6, "radiusM": 20, "upM": 20, "tiltDeg": 40, "orbitRadps": 0.05 },
+  "halo": { "f": 0, "count": 10, "kind": "landscape", "heightM": 6, "radiusM": 20, "upM": 34, "tiltDeg": 40, "orbitRadps": 0.05 },
   "tunnel": { "from": 0.89, "to": 0.93, "stepM": 9, "padM": 3.5, "heightM": 11, "wallDeg": 30, "facingDeg": 28, "wallKind": "landscape", "wallHeightM": 3.6, "ceilKind": "landscape", "ceilHeightM": 4.4 }
 }

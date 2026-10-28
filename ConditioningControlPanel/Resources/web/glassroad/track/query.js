@@ -44,7 +44,7 @@ export function flowAt(nodes, seg, segT, out = [0, 0]) {
   return out;
 }
 
-export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = [], fields = [], profile = null, aerials = []) {
+export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = [], fields = [], profile = null, aerials = [], routes = []) {
   const { N, SUB, samplePos: S } = sp;
   // bounding sphere per segment over its samples
   const centre = new Float64Array(N * 3), radius = new Float64Array(N);
@@ -140,7 +140,10 @@ export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = [], field
     out.flags = fl;
     if (!out.flow) out.flow = [0, 0];
     flowAt(nodes, seg, fr.segT, out.flow);
-    out.railed = !gap && (fl.includes('rail') || fl.includes(lat >= 0 ? 'railR' : 'railL'));
+    // A physical route opening can occupy only part of its coarse authored node range.
+    // Match the real rail mesh and edgeAt on the remainder of that range.
+    const restored = routes.some(r => seg >= r.from && seg < r.to && (r.side === 'L' ? lat < 0 : lat >= 0) && (at < r.openS0 || at > r.openS1));
+    out.railed = !gap && (restored || fl.includes('rail') || fl.includes(lat >= 0 ? 'railR' : 'railL'));
     out.p[0] = fr.p[0] + fr.b[0] * lat; out.p[1] = fr.p[1] + fr.b[1] * lat; out.p[2] = fr.p[2] + fr.b[2] * lat;
     if (profile && profile(out.s, lat, curved).blend) {
       canalNormal(fr, curved, out.normal);

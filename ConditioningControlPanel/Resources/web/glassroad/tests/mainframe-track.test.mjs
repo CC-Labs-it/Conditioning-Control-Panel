@@ -14,7 +14,10 @@ const track = loadTrack(json);
 test('Mainframe is reproducible, closed, spacious and has three distinct acts', () => {
   assert.deepEqual(json, built.track);
   assert.deepEqual(validate(json), { ok: true, errors: [], warnings: [] });
-  assert.ok(track.lengthM >= 8220 && track.lengthM <= 8370);
+  const source = loadTrack(json, { courseShape: false });
+  assert.ok(source.lengthM >= 8220 && source.lengthM <= 8370);
+  assert.ok(track.lengthM > 11500 && track.lengthM < 12500, 'broad runtime bus and switchbacks');
+  assert.equal(track.laps, 3, 'the authored three-lap race remains');
   assert.equal(new Set(track.sections.map(section => section.act)).size, 3);
   assert.ok(json.nodes.every(n => n.w >= 24));
   assert.ok(Math.max(...json.nodes.map(n => n.p[1])) >= 86);
@@ -30,7 +33,7 @@ test('Mainframe is reproducible, closed, spacious and has three distinct acts', 
 });
 test('Mainframe six scan approaches stay wide and clear of stepping gaps', () => {
   assert.equal(built.scanHalls.length, 6);
-  const authored = loadTrack(json, { aerials: false });
+  const authored = loadTrack(json, { aerials: false, courseShape: false });
   assert.deepEqual(scanZones(authored).map(zone => zone.s), built.scanHalls.map(hall => hall.s));
   for (const hall of scanZones(track)) {
     for (let s = hall.s - 35; s <= hall.s + 25; s += 5) {
@@ -93,9 +96,9 @@ test('Mainframe jumps retain their physical gallery path above both landings and
     }
   }
 });
-for (const seed of [1, 241023, 20261024]) test('Mainframe full starting grid finishes all three laps, seed ' + seed, () => {
+for (const seed of [1, 241023, 20261024]) test('Mainframe full starting grid finishes all three broad laps, seed ' + seed, () => {
   const run = makeRace({ track, seed });
   run.run(1400, () => run.racers.list.every(racer => racer.finished));
-  assert.ok(run.racers.list.every(racer => racer.finished && racer.st[S.lap] === 3), JSON.stringify(run.racers.list.map(r => ({ i: r.i, s: r.st[S.s], lap: r.st[S.lap], falls: r.falls }))));
+  assert.ok(run.racers.list.every(racer => racer.finished && racer.st[S.lap] === track.laps), JSON.stringify(run.racers.list.map(r => ({ i: r.i, s: r.st[S.s], lap: r.st[S.lap], falls: r.falls }))));
   assert.ok(run.racers.list.every(r => r.falls === 0), 'no rescues needed by the starting grid');
 });

@@ -15,6 +15,7 @@ import { buildMainframeRooms, mainframeRoomWindows } from './mainframeRooms.js';
 import { buildMainframeHazards } from './mainframeHazards.js';
 import { createAudioReactiveUniforms, reactiveWaterNodes } from './audioReactive.js';
 import { waterMusicLight } from './materials/waterMusic.js';
+import { boudoirSegmentBlocked } from './boudoirMedia.js';
 
 const point = (f, x, y, z = 0) => f.p.map((v, i) => v + f.b[i] * x + f.n[i] * y + f.t[i] * z);
 
@@ -49,7 +50,17 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
     const section = track.sections.find(s => s.id === id);
     return section ? id === 'boot-hall' ? section.fromS + (section.toS - section.fromS) * 0.7 : section.toS - 25 : 0;
   }).filter(s => s > 0);
-  const add = (kind, f, x, y, z, size) => rows[kind].push({ p: point(f, x, y, z), b: [...f.b], n: [...f.n], t: [...f.t], size });
+  const add = (kind, f, x, y, z, size) => {
+    const row = { p: point(f, x, y, z), b: [...f.b], n: [...f.n], t: [...f.t], size };
+    // Window openings follow the full picture and its approach, including banked cross-deck views.
+    if (track.courseShape && ['rib', 'wall', 'tank', 'slot'].includes(kind)) {
+      const box = { ...row, axes: [row.b, row.n, row.t] };
+      const radius = Math.hypot(...size) / 2;
+      if (pictureRays.some(r => row.p.every((v, k) => v + radius >= r.low[k] && v - radius <= r.high[k])
+        && boudoirSegmentBlocked(r.from, r.to, box))) return;
+    }
+    rows[kind].push(row);
+  };
   const length = track.lengthM, count = Q.name === 'phone' ? 34 : 60;
   const roomWindows = mainframeRoomWindows(track);
   const roomBay = s => roomWindows.some(room => s >= room.fromS && s <= room.toS);
@@ -58,6 +69,13 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
   const mediaLookNow = mediaLook();
   const billboards = (mediaLayout?.billboards || []).map(b => fitMainframeBillboard(b, track, samples, mediaLookNow)).filter(Boolean)
     .map(b => motionEnvelope(b, mediaLookNow));
+  const pictureRays = billboards.flatMap(b => [30, 45, 60].flatMap(lead => {
+    const from = point(track.frameAt(b.s - lead), 0, 3);
+    return [-.35, 0, .35].flatMap(u => [-.3, 0, .3].map(v => {
+      const to = b.C.map((x, k) => x + b.X[k] * b.w * u + b.Y[k] * b.h * v);
+      return { from, to, low: to.map((x, k) => Math.min(x, from[k])), high: to.map((x, k) => Math.max(x, from[k])) };
+    }));
+  }));
   const displayBay = (s, side) => billboards.find(b => {
     const d = ((s - b.s + length * 1.5) % length) - length / 2;
     return b.side === side && d >= -80 - b.w / 2 && d <= b.w / 2 + 16;
