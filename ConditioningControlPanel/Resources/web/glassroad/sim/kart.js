@@ -72,6 +72,9 @@ const qOut = () => ({ normal: [0, 0, 0], p: [0, 0, 0] }), fOut = () => ({ p: [0,
 const QA = qOut(), QB = qOut(), QR = qOut(), QD = qOut(), FR = fOut(), FL = fOut();
 const FWD = [0, 0, -1], UP = [0, 1, 0];
 const HOLE_FALL = new WeakSet(), HOLE_GRACE_S = 0.45;
+// Playtest #6: a rail never turns a moving kart round. Travel along the road above this (m/s) picks which way the
+// nose is laid along the rail, so a nose-in or past-square hit keeps going the way the kart was going.
+export const RAIL_TRAVEL_MPS = 3;
 const has = (flags, f) => !!flags && flags.indexOf(f) >= 0;
 
 /** At rest on track.spawnPose(slot). @returns {Float32Array} state */
@@ -124,7 +127,10 @@ export function step(st, a, track, feel, dt, ev) {
   v3norm(F, v3reject(F, F, U));
   const fwd0 = v3dot(V, F);
   // Both steering modes share speed calm; a drift adds a bounded stronger turn.
-  let yaw = st[S.driftDir] ? driftYaw(st, steer, feel, gripYaw(fwd0, feel)) : steer * gripYaw(fwd0, feel) * (fwd0 < 0 ? -1 : 1);
+  // The wheel mirrors only in a deliberate reverse (engine in reverse and rolling back). A kart knocked backwards
+  // with the throttle held (a bump, a rail) keeps stick right = nose right, so steering never feels inverted.
+  const reversing = fwd0 < 0 && st[S.engineV] < 0;
+  let yaw = st[S.driftDir] ? driftYaw(st, steer, feel, gripYaw(fwd0, feel)) : steer * gripYaw(fwd0, feel) * (reversing ? -1 : 1);
   if (stalled) yaw = 0;
   yaw *= W.steerMul;                               // a chute steers less (wave 1 WATER)
   st[S.yawRate] = yaw;
@@ -315,7 +321,7 @@ export function step(st, a, track, feel, dt, ev) {
     if (into > 0) {
       const keep = feel.get('wall.normalKeep');
       v3addScaled(V, V, b, -side * into * (1 + keep));
-      if (v3dot(F, b) * side > 0) v3norm(F, v3reject(F, F, b));   // the nose turns along the rail
+      if (v3dot(F, b) * side > 0) railNose(F, V, b, frame.t, st[S.engineV] >= 0);   // the nose turns along the rail
       if (into >= gap(feel, 'wall.minHitMps')) {
         st[S.engineV] *= 1 - feel.get('wall.engineLoss');
         if (!grace) { cancelDrift(st, 'wall', ev); endBoost(st, feel, ev); }
@@ -369,6 +375,22 @@ export function step(st, a, track, feel, dt, ev) {
   st[S.height] = ground ? 0 : qb.height;
   if (st[S.grounded]) st[S.latchSeg] = qb.seg;     // frozen from take-off until the next touch-down
   st[S.speedPct] = clamp(v3dot(V, F) / top, 0, feel.get('speed.maxPct'));
+}
+
+/**
+ * Lay the nose F along a rail (b = the road's sideways axis, t = its forward axis, V = velocity after the bounce).
+ * Plain projection kept the nose's own side of square: a kart spun past square (or hitting exactly square) that was
+ * still travelling up the road got its nose laid back down the road and drove itself to a stop and round. A kart
+ * not in reverse that travels forward along the road above RAIL_TRAVEL_MPS keeps facing forward; a square hit with
+ * no travel to read takes the road's forward. Writes F in place.
+ */
+export function railNose(F, V, b, t, notReversing = true) {
+  v3reject(F, F, b);
+  const along = v3dot(V, t), flat = Math.hypot(F[0], F[1], F[2]) < 1e-4;
+  if (notReversing && along > RAIL_TRAVEL_MPS && (flat || v3dot(F, t) < 0)) {
+    if (flat) v3copy(F, t); else v3scale(F, F, -1);
+  } else if (flat) v3scale(F, t, along < -RAIL_TRAVEL_MPS ? -1 : 1);
+  return v3norm(F, v3reject(F, F, b));
 }
 
 /* Engine value: five-band ramp under throttle (crawl floor speed.minMps), brake then reverse, coast.
