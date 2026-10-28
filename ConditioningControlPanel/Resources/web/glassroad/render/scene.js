@@ -713,7 +713,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (itemVis && view.items) itemVis.update(view.items, dt, racers, view.camera, view);   // visuals read racer .st (CONTRACT-B1 view.karts)
     if (wordVis) wordVis.update(view.words || [], view.song || null, dt);
     if (wordFx) wordFx.update(dt, view.camera);
-    if (roadWords) roadWords.update(view.song || null, view.songS, k, mf, { gentle, paused: !!view.paused });
+    if (roadWords) roadWords.update(view.song || null, view.songS, k, mf, {
+      gentle: gentle || !!view.gentle || !!view.reducedMotion, paused: !!view.paused,
+      reactive: road.uniforms.reactive, motion: view.motion || motionLevel });
     if (wordRush) wordRush.update(dt, !!view.paused);
     phraseGates.update(k, dt, { paused: !!view.paused, mode: view.mode, song: view.song, songS: view.songS });
     airWords.update(view.airWords, dt, { paused: !!view.paused, mode: view.mode, gentle });
