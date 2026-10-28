@@ -211,7 +211,13 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
       leaving = false;
       return new Promise((res, rej) => {
         connectWait = { res, rej };
-        const stop = on('closed', (m) => { stop(); if (connectWait) { connectWait = null; rej(new Error('net: closed ' + m.code)); } });
+        // the room's abort comes just before its close: keep the reason so the lobby can say why, not "No connection"
+        let reason = null;
+        const offAbort = on('abort', (m) => { reason = m.reason || null; });
+        const stop = on('closed', (m) => {
+          stop(); offAbort();
+          if (connectWait) { connectWait = null; rej(Object.assign(new Error('net: closed ' + m.code), { reason, closeCode: m.code })); }
+        });
         open(j);
       });
     },
