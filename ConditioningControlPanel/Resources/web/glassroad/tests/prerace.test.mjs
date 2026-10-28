@@ -8,6 +8,14 @@ import { preraceHtml } from '../hud/howto.js';
 import { emptyRecord } from '../meta/record.js';
 import { applyRun, fullLength } from '../meta/applyRun.js';
 import { ghostKey, loadGhost, saveBestGhost } from '../meta/ghost.js';
+import { courseDetails } from '../hud/trackPicker.js';
+
+test('track picker: the tile reads the solo lap choice and the distance for it', () => {
+  assert.equal(courseDetails('5.4', 1), '1 lap · 5.4 km');
+  assert.equal(courseDetails('5.4', 2), '2 laps · 10.8 km');
+  assert.equal(courseDetails('4.3', 3), '3 laps · 12.9 km');
+  assert.equal(courseDetails('x', 0), '1 lap', 'no distance, no km; a bad count reads as 1');
+});
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 
