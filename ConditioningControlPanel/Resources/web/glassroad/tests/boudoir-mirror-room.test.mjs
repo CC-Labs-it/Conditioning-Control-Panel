@@ -34,23 +34,25 @@ test('three non-bouncing reflection nodes serve walls and gates while ceiling fa
 });
 
 test('budgeted reflection UVs stay anchored to their captured world view between captures', () => {
-  const { room, scene, camera } = setup(); let target = null, mrt = null;
+  const { room, scene, camera } = setup(); let target = null, mrt = null, captureFrame;
   const renderer = { autoClear: false, coordinateSystem: WebGLCoordinateSystem,
     getDrawingBufferSize: out => out.set(1280,720), getRenderTarget: () => target, getMRT: () => mrt,
-    setRenderTarget: value => { target=value; }, setMRT: value => { mrt=value; }, render() {} };
+    setRenderTarget: value => { target=value; }, setMRT: value => { mrt=value; },
+    render(_scene, nestedCamera) { captureFrame.camera = nestedCamera; } };
   room.update(.1, { camera, raceTimeS: 1 });
   const node = room.reflections[1], base = node.reflector;
   const material = room.group.children.find(o => o.material?.name === 'mirror-live-scene:1').material;
-  base.updateBefore({ scene, camera, renderer, material });
+  const capture = () => { captureFrame = { scene, camera, renderer, material }; base.updateBefore(captureFrame); };
+  capture();
   const matrix = node.userData.captureMatrix.value, held = matrix.clone();
   const point = room.group.localToWorld(new Vector3(19.5,9,-45));
   const expected = point.clone().project(base.getVirtualCamera(camera));
   assert.ok(point.clone().applyMatrix4(matrix).distanceTo(expected) < 1e-8);
   camera.position.add(new Vector3(1,0,2)); camera.updateMatrixWorld(true);
-  base.updateBefore({ scene, camera, renderer, material });
+  capture();
   assert.deepEqual(matrix.elements, held.elements, 'A skipped capture retains its exact projection');
   room.update(.1, { camera, raceTimeS: 1.1 });
-  base.updateBefore({ scene, camera, renderer, material });
+  capture();
   assert.notDeepEqual(matrix.elements, held.elements, 'Only a fresh capture changes the projection');
   assert.notEqual(node.uvNode, undefined); room.dispose();
 });

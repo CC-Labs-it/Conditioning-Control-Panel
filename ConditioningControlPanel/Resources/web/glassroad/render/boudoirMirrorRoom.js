@@ -102,10 +102,11 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
       const cubeFace = renderer.getActiveCubeFace?.() ?? 0, mipLevel = renderer.getActiveMipmapLevel?.() ?? 0;
       // Both mirror banks and all shutter glass leave the reflected pass. Frames and racers remain.
       excluded.forEach(m => { m.visible = false; });
+      // Nested rendering mutates the shared NodeFrame camera. Keep the actual capture owner.
+      const capturedCamera = base.getVirtualCamera(frame.camera);
       try {
         nativeUpdate(frame);
         if (base.hasOutput) {
-          const capturedCamera = base.getVirtualCamera(frame.camera);
           captureMatrix.value.multiplyMatrices(capturedCamera.projectionMatrix, capturedCamera.matrixWorldInverse);
           diagnostics.reflectionPasses++;
         }
