@@ -23,7 +23,7 @@
  */
 import { S, RESPAWN, BOOST } from './state.js';
 import { clamp, wrap } from '../core/math.js';
-import { bendSpeed, yawParams, calmOf } from './steer.js';
+import { bendSpeed, yawParams, calmOf, gripYaw } from './steer.js';
 import { gap } from './gaps.js';
 import { createCourtPaths } from './court-paths.js';
 import { fieldAtS } from './stones.js';
@@ -46,6 +46,13 @@ const PAD_RISK_M = 140, PAD_RISK_PCT = 0.85, PAD_CLEAR_M = 1.2, PAD_RAIL_M = 2, 
 // polish 6 EASE: the bend limit (sim/steer.js bendSpeed at this grip share), how far ahead (s of speed), the lift band
 // (m/s over the limit from full throttle to none), and the brake dab cap (light; Strong x its cap multiplier)
 const EASE_SHARE = 1, EASE_LOOK_S = 1.6, EASE_LIFT_MPS = 3, EASE_BRAKE = 0.15;
+// route COMMIT: the stick toward an opening that counts as going for it, the aim (this many seconds of speed ahead, at
+// least AIM_MIN m, kept MOUTH_END m short of the mouth's far end): LINE_IN m inside the open edge before the mouth,
+// PAST_EDGE m beyond it inside the mouth; and the grip share the lift plans the arc with
+const ROUTE_COMMIT_STICK = 0.12, ROUTE_AIM_S = 0.55, ROUTE_AIM_MIN_M = 10, ROUTE_MOUTH_END_M = 6, ROUTE_PAST_EDGE_M = 1.5;
+const ROUTE_LINE_IN_M = 1.5;
+const ROUTE_COMMIT_SHARE = 0.9, ROUTE_COMMIT_BRAKE = 0.4, ROUTE_COMMIT_LEAD_S = 3, ROUTE_PORTAL_CLEAR_M = 30;
+const ROUTE_INTENT_STICK = 0.2, ROUTE_INTENT_NOSE = 0.07;   // stick share past the road's own, rad of nose out
 const YP = {};
 
 export function createAssist(track, feel, { mode = 'light' } = {}) {
@@ -189,10 +196,46 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
         out.hop = true; out.hopPressed = true;
       }
     }
+    // COMMIT (owner 2026-10-28, "shortcuts at a sharp angle, hard to catch going fast"): a clear steer toward the
+    // opening is carried into it. The stick toward the open side becomes at least the pursuit steer onto the open edge
+    // inside the mouth, and when that arc needs more yaw than the grip law gives at this speed, the throttle lifts
+    // (a light brake dab past that) so the turn becomes possible. Never acts without the player steering for it.
+    // It starts ROUTE_COMMIT_LEAD_S of speed out (at least assist.routeApproachM) and stays off beside a fork portal
+    // on the same side, where that stick means the branch road.
+    const zc = !fork && steerIn && zones.length ? zoneAt(s, Math.max(g('routeApproachM'), speed * ROUTE_COMMIT_LEAD_S)) : null;
+    // Going for it = the stick toward the open side beyond what following the road there needs (an opening on the
+    // inside of a bend sees every kart steer its way), or the nose already turned out toward it.
+    const follow = zc ? bend[at(s)] * zc.side * Math.PI / 180 * speed / Math.max(1e-3, gripYaw(speed, feel)) : 0;
+    const noseOut = zc ? Math.atan2(ax.fx * f0.b[0] + ax.fy * f0.b[1] + ax.fz * f0.b[2], ft) * zc.side : 0;
+    const zr = zc && a.steer * zc.side >= ROUTE_COMMIT_STICK && (a.steer * zc.side >= follow + ROUTE_INTENT_STICK || noseOut > ROUTE_INTENT_NOSE) &&
+      !(track.forkPortals || []).some(p => p.side === zc.side && s >= p.s0 - ROUTE_PORTAL_CLEAR_M && s <= p.s1) ? zc : null;
+    if (zr) {
+      // the line runs along the open side's edge before the mouth and just past it inside the mouth
+      const into = wrap(s - zr.from, L), ahead = into <= zr.len ? into : into - L;
+      const aim = Math.min(ahead + Math.max(ROUTE_AIM_MIN_M, speed * ROUTE_AIM_S), zr.len - ROUTE_MOUTH_END_M);
+      const f = track.frameAt(zr.from + aim, FA), lat = zr.side * (f.w / 2 + (aim >= 0 ? ROUTE_PAST_EDGE_M : -ROUTE_LINE_IN_M));
+      const tx = f.p[0] + f.b[0] * lat - st[S.posX], ty = f.p[1] + f.b[1] * lat - st[S.posY], tz = f.p[2] + f.b[2] * lat - st[S.posZ];
+      const x = tx * ax.rx + ty * ax.ry + tz * ax.rz, fz = Math.max(tx * ax.fx + ty * ax.fy + tz * ax.fz, 0.1);
+      yawParams(feel, YP);
+      const soft = Math.max(0.2, calmOf(speed, YP) * YP.user);
+      const pursuit = clamp(Math.atan2(x, fz) * feel.get('ai.steerGain') / soft, -1, 1);
+      out.steer = pursuit * zr.side > Math.abs(a.steer) ? pursuit : a.steer;
+      // the pure pursuit arc to that point has curvature 2x / d^2 (rad/m): lift for it the way EASE lifts for a bend
+      const kDeg = 2 * Math.abs(x) / Math.max(x * x + fz * fz, 1) * 180 / Math.PI;
+      if (x * zr.side > 0 && st[S.boostKind] === BOOST.NONE && a.brake <= dead) {
+        const over = speed - bendSpeed(kDeg, YP, ROUTE_COMMIT_SHARE);
+        if (over > 0) {
+          out.throttle = a.throttle * clamp(1 - over / EASE_LIFT_MPS, 0, 1);
+          if (over > EASE_LIFT_MPS) out.brake = clamp((over - EASE_LIFT_MPS) / 6, 0, ROUTE_COMMIT_BRAKE * m.cap);
+        }
+      }
+      view.active = true; view.pull = out.steer - a.steer;
+      return out;
+    }
+    if (steerIn && !fork && (track.forks || []).some(f => s >= f.fromS - 30 && s <= f.fromS + 55)) return out;
     // the player steering for a drop shortcut's opening (stick toward it, or the nose already turned out that way
     // with the stick not held the other way: polish 6, an opening on the OUTSIDE of a turn sees every kart's nose
     // point out while it turns in, and the lip holds a kart turning away, sim/routes.js turnsAway)
-    if (steerIn && !fork && (track.forks || []).some(f => s >= f.fromS - 30 && s <= f.fromS + 55)) return out;
     const z = !fork && steerIn && zones.length ? zoneAt(s, g('routeApproachM')) : null;
     if (z && (Math.sign(a.steer) === z.side || (a.steer * z.side > -gap(feel, 'route.holdSteer') &&
       Math.atan2(ax.fx * f0.b[0] + ax.fy * f0.b[1] + ax.fz * f0.b[2], ft) * z.side > ROUTE_NOSE))) {
