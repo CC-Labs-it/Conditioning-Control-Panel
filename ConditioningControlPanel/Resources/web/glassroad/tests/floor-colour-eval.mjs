@@ -28,7 +28,7 @@ export function evaluateColour(root, footprint = .01) {
       v = apply(operations[n.op], run(n.aNode), run(n.bNode));
     } else if (n.isMathNode) {
       const a = run(n.aNode), b = n.bNode && run(n.bNode), c = n.cNode && run(n.cNode);
-      const unary = { sin: Math.sin, cos: Math.cos, abs: Math.abs, floor: Math.floor, fract: x => x-Math.floor(x), fwidth: () => footprint };
+      const unary = { sin: Math.sin, cos: Math.cos, exp: Math.exp, abs: Math.abs, floor: Math.floor, fract: x => x-Math.floor(x), fwidth: () => footprint };
       const binary = { max: Math.max, min: Math.min, step: (edge,x) => x<edge?0:1, pow: Math.pow };
       if (unary[n.method]) v = apply(unary[n.method], a);
       else if (binary[n.method]) v = apply(binary[n.method], a, b);

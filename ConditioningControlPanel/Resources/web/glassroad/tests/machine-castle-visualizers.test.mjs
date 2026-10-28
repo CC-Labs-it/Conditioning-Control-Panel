@@ -52,7 +52,9 @@ for (const kind of ['mainframe', 'keep']) test(kind + ' distinguishes frequency 
 });
 
 for (const kind of ['mainframe', 'keep']) test(kind + ' shows a bounded spectral trail without allocating another texture', t => {
-  const { u, root, capture } = setup(kind, t), before = capture(), data = u.vizTexture.image.data;
+  const { u, music, root, capture } = setup(kind, t);
+  music.tileBar.value=16;audioRow(u,()=>128,()=>100);
+  const before = capture(), data = u.vizTexture.image.data;
   for (let row = 1; row < 18; row++) for (let i = 0; i < 64; i++) data[(row * 64 + i) * 4] = (row + i) % 2 ? 235 : 50;
   assert.ok(changed(before, capture()), 'past measured frequencies visibly remain behind the current sound');
   const nodes = new Set(), pending = [root];
