@@ -15,6 +15,7 @@ import {
   max, pow, floor, mod, normalize, cameraPosition, normalView, positionViewDirection, abs, step, dot,
 } from 'three/tsl';
 import { ITEM_LOOK as L } from './look.js';
+import { PICKUP_BOX } from './pickupCardMath.js';
 import { objectUniform } from '../objectUniform.js';
 import { ATLAS_GRID } from './living.js';
 import { lensDepth, lensScale, lensAlpha } from '../lens.js';
@@ -262,5 +263,30 @@ export function confettiCloud(cap) {
     },
     end() { mesh.count = n; mesh.visible = n > 0; mesh.instanceMatrix.needsUpdate = true; aCol.needsUpdate = true; },
     dispose() { m.dispose(); mesh.geometry.dispose(); },
+  };
+}
+
+/** The item-box bubbles (render/items/pickupCards.js): one chartreuse glass sphere per visible card, one draw. */
+export function boxBubbleCloud(cap) {
+  const u = { pulse: uniform(1) };
+  const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, toneMapped: false });
+  const fres = pow(float(1).sub(abs(dot(normalView, positionViewDirection))), PICKUP_BOX.rimPow);
+  const spec = pow(max(dot(normalView, normalize(vec3(-.45, .6, .7))), 0), 40);
+  const c = new Color(PICKUP_BOX.colour);
+  m.colorNode = mix(vec3(c.r, c.g, c.b), vec3(1, 1, 1), max(fres.pow(4).mul(.45), spec));
+  m.opacityNode = max(fres.mul(.95).mul(u.pulse).add(PICKUP_BOX.body), spec.mul(.8));
+  const geometry = new SphereGeometry(1, 28, 16), mesh = new InstancedMesh(geometry, m, cap);
+  mesh.name = 'item-box-bubbles'; mesh.count = 0; mesh.frustumCulled = false; mesh.renderOrder = 4;
+  const M = new Matrix4(), P = new Vector3(), Qi = new Quaternion(), Sc = new Vector3();
+  let n = 0;
+  return {
+    mesh, uniforms: u, cap,
+    begin() { n = 0; },
+    push(x, y, z, R) {
+      if (n >= cap || !(R > .001)) return false;
+      mesh.setMatrixAt(n++, M.compose(P.set(x, y, z), Qi, Sc.setScalar(R))); return true;
+    },
+    end() { mesh.count = n; mesh.visible = n > 0; mesh.instanceMatrix.needsUpdate = true; },
+    dispose() { m.dispose(); geometry.dispose(); mesh.dispose(); },
   };
 }
