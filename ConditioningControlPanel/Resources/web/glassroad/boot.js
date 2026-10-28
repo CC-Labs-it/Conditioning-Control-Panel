@@ -20,7 +20,7 @@
  */
 import { createBridge, songCharts, isLocalSongHost, wantLobbySongs, lobbySongCharts, ROOM_ORIGIN } from './host/bridge.js';
 import { createHostEscape } from './host/hostEscape.js';
-import { createCardMedia } from './host/cardMedia.js';
+import { createCardMedia, PHONE_READY_CLIPS } from './host/cardMedia.js';
 import { createScrolllerFeed } from './host/scrolllerFeed.js';
 import { nichesFor, isDefault, savePick } from './host/scrolllerNiches.js';
 import { createSubliminalBurst } from './fx/subliminalBurst.js';
@@ -94,7 +94,7 @@ import { linkToken, dropLinkParam } from './hud/lobbyMath.js';
 import { poseOf } from './hud/presets.js';
 import { createDevHook, devAllowed } from './dev/hook.js';
 import { chipAlpha, kartPoint } from './hud/countdown.js';
-import { createLoading } from './hud/loading.js';
+import { createLoading, LOAD_STALL_MS } from './hud/loading.js';
 import { describeFailure, rememberFailure, failureLine, isStalled, blockedTick, STALL_MS, WATCH_MS, FRAME_THROWS } from './core/failure.js';
 import { ORDER as TIER_ORDER } from './render/quality.js';
 import { dismantleScene } from './render/sceneResources.js';
@@ -230,6 +230,17 @@ async function recover(kind, e, { race = false } = {}) {
   } finally { shared.recovering = false; }
 }
 shared.recover = recover;
+/** The loading watchdog (hud/loading.js): a visible cover whose bar has not moved for LOAD_STALL_MS (iOS killed the
+ *  GPU process, a compile that never answers, a rebuild after a lost device that hangs) ends on the reason and Retry. */
+loading.onStall(({ stage, progress }) => {
+  if (shared.closed) return;
+  const rec = record('stall', new Error('stuck at ' + (stage || 'the start') + ' (' + Math.round(progress * 100) + '%) for ' + Math.round(LOAD_STALL_MS / 1000) + ' s'));
+  console.error('[glassroad] ' + failureLine(rec));
+  shared.recovering = false;   // a hung rebuild never finished; the next loss may rebuild again
+  if (window.__glassroad) window.__glassroad.phase = 'failed';
+  loading.fail(failureLine(rec));
+  loading.onRetry(() => void retry(rec.course));
+});
 
 /** ?botFall=1: once, steer the player to the outside of the first open stretch (a rescue to look at). */
 function createFallSteer(track, st, feel) {
@@ -494,7 +505,8 @@ async function boot(course, options, lifetime, isCurrent) {
     dismantleScene(world.scene);
   });
   // A visual review may keep the Loom faces without requesting or displaying private media.
-  const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge });
+  const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge,
+    readyCount: renderer.tier === 'phone' ? PHONE_READY_CLIPS : Infinity });
   if (scrolller && qs.get('media') !== '0') world.media?.setDisplayFeed(scrolller, renderer.canvas);
   world.setItemMediaSource(seed => cardMedia?.sourceForFlash(seed) || null);
   const subliminalBurst = createSubliminalBurst({ parent: document.body, primary: () => world.primaryColour() });
@@ -1188,8 +1200,9 @@ async function boot(course, options, lifetime, isCurrent) {
     if (state === 'race') Promise.resolve(audio.start()).then(() => playSong(() => -race.goInS)).catch((err) => console.warn('[glassroad] song', err));
   });
 
-  // Clip transport overlaps garage setup. The same complete, consent-valid sources still
-  // settle before shader preparation and the cover lifting; no streaming shortcut is used.
+  // Clip transport overlaps garage setup. Complete, consent-valid sources settle before shader preparation and the
+  // cover lifting; no streaming shortcut is used. A phone waits for its first PHONE_READY_CLIPS only, the rest arrive
+  // behind the menu (all of them peaking with the warm ran iOS out of memory, 2026-10-28).
   if (cardMedia) await cardMedia.ready;
   if (!lifetime.alive) return;
   loaded('media');
