@@ -44,7 +44,7 @@ export const WIND_LOOK = Object.freeze({
   count: Object.freeze({ high: 40, mid: 28, phone: 16 }),
   nearM: 18, farM: 44, ndcX: Object.freeze([0.55, 0.92]), ndcY: Object.freeze([-0.8, 0.7]),
   lenM: Object.freeze([3, 6]), widthM: Object.freeze([0.05, 0.11]), boostLen: 0.5,
-  alpha: 0.5, alphaFrom: 0.35, tint: 0.2,
+  alpha: 0.6, alphaFrom: 0.4, tint: 0.2,
 });
 
 /** Wind line share 0..1: 0 below fromPct of top speed, eased up to 1 - boostAdd at fullPct, the boost adds the rest. */
@@ -107,7 +107,8 @@ export function createSpeedLines(feel = null) {
   const travel = a.z.sub(P.fieldEndM);
   const t = fract(a.w.add(u.dist.div(travel)));
   const d = a.z.sub(t.mul(travel));                                   // head depth, metres ahead of the camera
-  const len = select(isWind, mix(W.lenM[0], W.lenM[1], b.y).mul(u.windLen), mix(P.streakLenM[0], P.streakLenM[1], b.y).mul(u.lenScale));
+  // float(): a whole-number JS constant becomes an int node and mix(int, int, float) fails TSL codegen
+  const len = select(isWind, mix(float(W.lenM[0]), float(W.lenM[1]), b.y).mul(u.windLen), mix(P.streakLenM[0], P.streakLenM[1], b.y).mul(u.lenScale));
   const dd = d.add(select(isStreak, c.y.mul(len), float(0)));         // the tail runs back toward the vanishing point
   const tanH = float(1).div(cameraProjectionMatrix.element(0).x), tanV = float(1).div(cameraProjectionMatrix.element(1).y);
   const sg = select(a.x.lessThan(0), float(-1), float(1));
@@ -116,7 +117,7 @@ export function createSpeedLines(feel = null) {
   const bend = clamp(dd.mul(dd).mul(0.5 * P.curveGain).mul(u.curve), lim.negate(), lim);
   const xs = sg.mul(max(x0.add(bend).mul(sg), dd.mul(tanH).mul(P.fieldCentre)));   // never inside the centre third
   const rad = normalize(vec2(x0, ys)), tang = vec2(rad.y.negate(), rad.x);
-  const wS = select(isWind, mix(W.widthM[0], W.widthM[1], b.z), mix(P.streakWidthM[0], P.streakWidthM[1], b.z))
+  const wS = select(isWind, mix(float(W.widthM[0]), float(W.widthM[1]), b.z), mix(P.streakWidthM[0], P.streakWidthM[1], b.z))
     .mul(c.y.mul(P.streakTaper).oneMinus()).mul(u.boost.mul(0.4).add(1));
   const size = select(isOrb, mix(P.orbSizeM[0], P.orbSizeM[1], b.z), mix(P.glitterSizeM[0], P.glitterSizeM[1], b.z));
   const streakP = vec3(xs.add(tang.x.mul(c.x).mul(wS)), ys.add(tang.y.mul(c.x).mul(wS)), dd.negate());
