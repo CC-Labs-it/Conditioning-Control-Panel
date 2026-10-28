@@ -10,10 +10,28 @@ const hooks = registerHooks({ resolve(s, c, next) {
   const files = { three: 'three.webgpu.min.js', 'three/webgpu': 'three.webgpu.min.js', 'three/tsl': 'three.tsl.min.js' };
   return files[s] ? { url: new URL('../vendor/three/build/' + files[s], import.meta.url).href, shortCircuit: true } : next(s, c);
 } });
-const { Scene, Vector2 } = await import('three');
-const { uniform } = await import('three/tsl');
-const { createRoadWords, roadWordMusicUv, ROAD_WORD_ACCENTS, ROAD_PAINT } = await import('../render/roadWords.js');
+const { Scene, Vector2, Vector3 } = await import('three');
+const { uniform, vec3 } = await import('three/tsl');
+const { createRoadWords, roadWordMusicUv, roadWordAccentColour, ROAD_WORD_ACCENTS, ROAD_PAINT } = await import('../render/roadWords.js');
 hooks.deregister();
+
+test('selected accent survives white gloss and shatter, while ordinary and spent words keep their exact legacy ink', () => {
+  const base = uniform(new Vector3(2, 2, 2)), strength = uniform(0), sung = uniform(1);
+  for (const course of ['boudoir', 'mainframe']) {
+    const target = ROAD_WORD_ACCENTS[course].ink.map(v => Math.min(1, v));
+    const root = roadWordAccentColour(base, vec3(...ROAD_WORD_ACCENTS[course].ink), strength, sung);
+    for (const legacy of [[2, 2, 2], [2.3, .3, 1.7], [.1, 2, .7]]) {
+      base.value.set(...legacy); strength.value = 0; sung.value = 1;
+      assert.deepEqual(evaluateColour(root), legacy, 'ordinary ink stays exactly as authored');
+      for (const selected of [.65, 1]) {
+        strength.value = selected;
+        assert.deepEqual(evaluateColour(root), target, 'selected full-sung hue survives white gloss and every shatter palette');
+      }
+      strength.value = .65; sung.value = .22;
+      assert.deepEqual(evaluateColour(root), legacy, 'spent words return to the exact original style');
+    }
+  }
+});
 
 test('the actual whole-glyph UV graph is identity at rest and bounded inside its atlas padding', () => {
   const loc = uniform(new Vector2()), geo = uniform(new Vector2(11, 11.4));

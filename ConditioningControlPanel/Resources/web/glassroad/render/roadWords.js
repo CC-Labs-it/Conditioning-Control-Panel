@@ -34,6 +34,12 @@ export const ROAD_WORD_ACCENTS = Object.freeze({
   goonworks: Object.freeze({ ink: [.06, .85, 1.1], glow: [.06, .95, 1.25] }),
 });
 
+/** Selected sung words own their final hue, after the legacy gloss, hot core and shatter palette. */
+export function roadWordAccentColour(base, accent, strength, sung) {
+  const amount = smoothstep(.16, .6, clamp(strength.mul(sung), 0, 1));
+  return mix(base, clamp(accent, 0, 1), amount);
+}
+
 /** One transform for the complete fill AND contour. Atlas padding contains the bounded pulse. */
 export function roadWordMusicUv(loc, geo, u) {
   const pulse = clamp(u.musicKick.mul(.028).add(u.musicSnare.mul(.012)), 0, .04);
@@ -258,17 +264,19 @@ function createPaint(atlasTex, P = ROAD_PAINT, pal = null, styles = STYLES, them
   // the gloss: a slow diagonal light running over the letters (the song clock; Gentle runs it slower)
   const sweepAt = fract(u.time.mul(u.sweep).add(geo.w)).mul(2.4).sub(0.7);
   const gloss = exp(loc.x.mul(0.5).add(loc.y).sub(sweepAt).div(0.09).pow(2).negate()).mul(fx2.y).mul(0.9);
-  const wordAccent = clamp(loc.w.mul(sung), 0, 1);
-  const themedInk = mix(ink.xyz, u.accentInk.xyz, wordAccent);
-  const themedGlow = mix(glowC.xyz, u.accentGlow.xyz, wordAccent);
+  const themedInk = ink.xyz;
+  const themedGlow = glowC.xyz;
   const themedEdge = edgeC.xyz;
   const hot = mix(themedInk, vec3(1.4), .48);
   // the shard hue: every shard takes a hue of its own between pink, cyan and gold (the road shatter's colours)
   const tint = mix(mix(vec3(1.25, 0.42, 0.95), vec3(0.42, 0.95, 1.25), sid2), vec3(1.25, 0.95, 0.4), step(0.72, sid));
   const turn = sh.mul(0.75);
   const inkCol0 = mix(themedInk, themedInk.mul(pal ? mix(pal.col(0), pal.col(1), sid2) : tint), turn);
-  const inkCol = mix(inkCol0.mul(bright), hot, sung.mul(0.45)).add(vec3(1.2, 1.1, 1.15).mul(gloss));
-  const glowCol = mix(themedGlow, pal ? pal.col(1) : tint, turn).mul(float(1).add(sung.mul(0.5)).add(u.musicHats.mul(.15)));
+  const legacyInk = mix(inkCol0.mul(bright), hot, sung.mul(0.45)).add(vec3(1.2, 1.1, 1.15).mul(gloss));
+  const inkCol = roadWordAccentColour(legacyInk, u.accentInk.xyz, loc.w, sung);
+  const legacyGlow = mix(themedGlow, pal ? pal.col(1) : tint, turn);
+  const glowCol = roadWordAccentColour(legacyGlow, u.accentGlow.xyz, loc.w, sung)
+    .mul(float(1).add(sung.mul(0.5)).add(u.musicHats.mul(.15)));
   // premultiplied: the fill and the contour cover the road, the glow and the wipe line mostly ADD light (a dark
   // halo over the bright glass read as a shadow), so a neon marking glows and the bloom pass picks up its core
   const fA = fill.mul(ink.w).mul(reveal);
