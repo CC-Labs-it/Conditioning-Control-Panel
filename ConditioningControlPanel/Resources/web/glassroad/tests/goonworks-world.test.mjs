@@ -105,6 +105,12 @@ test('GOONWORKS decorative gears tile each colored cap once and form one closed 
   }
   geometry.dispose();
 });
+test('GOONWORKS road table stays under the 8192 texel WebGPU limit on the reshaped 9.7 km course',()=>{
+  const road={material:new MeshBasicNodeMaterial({side:DoubleSide})},owner=applyGoonworksRoad(road,null,track);
+  assert.ok(track.lengthM>8192,'the reshaped course is longer than 8192 m');
+  assert.ok(owner.texture.image.width<=8192&&owner.texture.image.width>=2,'width '+owner.texture.image.width);
+  owner.dispose();road.material.dispose();
+});
 test('GOONWORKS opaque road and tube skins cull hidden faces and keep outward triangle winding',()=>{
   const road={material:new MeshBasicNodeMaterial({side:DoubleSide})},owner=applyGoonworksRoad(road,null,track);
   assert.equal(road.material.side,FrontSide);assert.equal(road.material.depthWrite,true);owner.dispose();road.material.dispose();
