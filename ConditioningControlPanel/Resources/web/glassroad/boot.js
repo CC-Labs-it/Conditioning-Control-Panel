@@ -382,6 +382,11 @@ async function boot(course, options, lifetime, isCurrent) {
   configureLobby({ track: track.id, trackLaps: TRACK_LAPS });
   const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus, { photosafe, racers: () => racers?.list });
   const directionWarning = createDirectionWarning(track);
+  // playtest 2026-10-28 (3 laps ran ~10 min): a solo race runs the Laps option (1 by default, the pre-race card);
+  // online runs the room cfg laps (startOnline). TRACK_LAPS stays the course's own count, the lobby's default.
+  const lapsFor = (o) => (o && o.laps > 0 ? o.laps : TRACK_LAPS);
+  function setSoloLaps(o) { laps = track.laps = lapsFor(o); audio.setLaps(laps); shared.garage?.track?.(trackName, laps); }
+  setSoloLaps(hud.options);
   lifetime.defer(() => hud.dispose());
   // Host state stays live while art and shaders load behind the cover.
   const applyHostGentle = m => {
@@ -620,7 +625,7 @@ async function boot(course, options, lifetime, isCurrent) {
     const log = runLog; runLog = null;
     try {
       const summary = log.finish(res), before = loadRecord();
-      const { record, diff } = applyRun(before, summary);
+      const { record, diff } = applyRun(before, summary, { fullLaps: TRACK_LAPS });   // a short race sets no whole-race best
       saveRecord(record);
       bus.emit('logbook-saved', { record, summary, diff });
       const recap = buildRecap(summary, diff, before);
@@ -657,7 +662,7 @@ async function boot(course, options, lifetime, isCurrent) {
   function prepareRunMode() {
     if (pickedMode !== runMode) { runMode = pickedMode; buildRun(); syncAssist(); }
     const trial = runMode === 'trial';
-    ghost = trial ? loadGhost(track.id) : null;
+    ghost = trial ? loadGhost(track.id, undefined, laps, TRACK_LAPS) : null;
     if (ghost && ghost.laps !== laps) ghost = null;
     ghostRec = trial ? createGhostRecorder({ track: track.id, laps }) : null;
     ghostT = 0; ghostLapN = 0; ghostLapS = 0;
@@ -779,6 +784,7 @@ async function boot(course, options, lifetime, isCurrent) {
     renderer.setOptions(o);
     fx.setMotion?.(o.motion || 'full');                // feel wave: the Motion row (Gentle reads as 'less' inside fx)
     garage?.setMotion?.(o.motion || 'full');
+    if (!online && (state === 'menu' || state === 'boot')) setSoloLaps(o);   // a race under way keeps its laps
     if (world.shadows) world.shadows.setEnabled(qs.get('shadows') !== '0' && o.shadows !== false);
   }
   applyOptions(opts);
@@ -965,6 +971,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (warmedTier && renderer.tier !== warmedTier && state === 'menu') { void rewarmThenRace(); return; }
     closeRunLog();
     stopSong();
+    setSoloLaps(opts);
     prepareRunMode();
     const started = audio.start(); unpause(); resetAll();
     if(garage){world.setLook(0,raceLook(garage.state));debug.playerLook=world.looks()[0];}
@@ -1119,7 +1126,7 @@ async function boot(course, options, lifetime, isCurrent) {
     closeRunLog();
     if (!online) return;
     online = null;
-    track.laps = TRACK_LAPS; laps = TRACK_LAPS;
+    setSoloLaps(opts);
     stopSong(); unpause();
     buildRun();
     resetAll();
@@ -1166,7 +1173,7 @@ async function boot(course, options, lifetime, isCurrent) {
   bus.on('finish', ({ timeS } = {}) => {
     if (!ghostRec || online) return;
     const g = ghostRec.finish(timeS); ghostRec = null;
-    if (debug.trial) debug.trial.saved = saveBestGhost(g);
+    if (debug.trial) debug.trial.saved = saveBestGhost(g, undefined, TRACK_LAPS);
   });
   bus.on('go', () => { goAt = performance.now(); });
   bus.on('drop', () => { debug.drops++; });

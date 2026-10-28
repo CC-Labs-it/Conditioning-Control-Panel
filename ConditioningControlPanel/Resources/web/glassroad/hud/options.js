@@ -3,7 +3,8 @@
  * Gentle preview, steering assist, steering sensitivity, three volumes and the display rows (polish 2):
  * frame cap, render scale, quality, shadows and the fps readout. Music road pass 4: Steer assist (Light, Strong,
  * Off; sim/assist.js) and the how-to card's "don't show again" (howtoOff). Feel wave: Motion (Full, Less, Off), read by
- * fx (shake, hit-stop, pulses) and the HUD; an unknown value reads as Full. Stored under 'glassroad.options.v1';
+ * fx (shake, hit-stop, pulses) and the HUD; an unknown value reads as Full. Playtest 2026-10-28: Laps (1, 2, 3; solo
+ * only, default 1) and Speedo (the km/h readout, off by default); Steer assist reads Help, Trance, Off. Stored under 'glassroad.options.v1';
  * every storage access sits in try/catch (private windows, blocked storage, previews), and a bad or
  * missing record reads as the defaults. Pure apart from the injected storage.
  */
@@ -12,13 +13,13 @@ export const OPTIONS_KEY = 'glassroad.options.v1';
 export const OPTION_DEFAULTS = Object.freeze({
   gentlePreview: false, assist: false, volMaster: 0.8, volMusic: 1, volSfx: 0.55, mixV: 2,
   frameCap: 'display', renderScale: 'auto', quality: 'auto', showFps: false, steerSens: 1, shadows: true,
-  steerAssist: 'light', howtoOff: false, motion: 'full',
+  steerAssist: 'light', howtoOff: false, motion: 'full', laps: 1, speedo: false,
 });
 const VOLS = ['volMaster', 'volMusic', 'volSfx'];
 // mixV 2 (owner, 2026-10-22: effects too loud, the song and its voice too quiet): a record saved before it keeps
 // every other option and takes the new volume defaults once
 const MIX_V = 2;
-const BOOLS = ['gentlePreview', 'assist', 'showFps', 'shadows', 'howtoOff'];
+const BOOLS = ['gentlePreview', 'assist', 'showFps', 'shadows', 'howtoOff', 'speedo'];
 
 /** The choice rows: allowed values in cycle order (the first is the default). */
 export const OPTION_CHOICES = Object.freeze({
@@ -27,8 +28,12 @@ export const OPTION_CHOICES = Object.freeze({
   quality: Object.freeze(['auto', 'high', 'mid', 'phone']),
   steerAssist: Object.freeze(['light', 'strong', 'off']),   // sim/assist.js ASSIST_MODES, the same order
   motion: Object.freeze(['full', 'less', 'off']),           // fx.setMotion; Gentle forces 'less' at read time, never here
+  laps: Object.freeze([1, 2, 3]),                           // solo races only (playtest 2026-10-28: 3 laps ran ~10 min); online keeps the room's
 });
 export const STEER_SENS = Object.freeze({ min: 0.6, max: 1.4, step: 0.1 });
+/** What each Steer assist mode does, one short line (the Options row and the pre-race card). */
+export const ASSIST_HINTS = Object.freeze({ light: 'Leans to the middle', strong: 'Drives itself when you let go', off: 'All yours' });
+export const assistHint = (v) => ASSIST_HINTS[choice('steerAssist', v)];
 
 /** A choice value from anything: numbers may arrive as strings (a select, a stored record). */
 function choice(key, v) {
@@ -71,7 +76,7 @@ export function choiceLabel(key, v) {
   if (key === 'frameCap') return c === 'display' ? 'Off' : String(c);
   if (key === 'renderScale') return c === 'auto' ? 'Auto' : Math.round(c * 100) + '%';
   if (key === 'quality') return { auto: 'Auto', high: 'High', mid: 'Mid', phone: 'Low' }[c];
-  if (key === 'steerAssist') return { off: 'Off', light: 'Light', strong: 'Strong' }[c];
+  if (key === 'steerAssist') return { off: 'Off', light: 'Help', strong: 'Trance' }[c];   // stored ids stay light / strong / off
   if (key === 'motion') return { full: 'Full', less: 'Less', off: 'Off' }[c];
   return String(c);
 }

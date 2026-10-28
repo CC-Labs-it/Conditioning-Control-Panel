@@ -113,6 +113,28 @@ export function howtoPanels(devices = {}) {
   ];
 }
 
+/** A row of chips for one option: the picked chip is pressed in (act 'pick', hud/cards.js stores it). */
+function chips(key, icon, label, list, now, hint = '') {
+  return '<div class="pr-row" role="group" aria-label="' + label + '">' + icon + '<span class="pr-l">' + label + '</span><div class="c-chips">' +
+    list.map(([v, t]) => '<button type="button" class="c-btn c-chip' + (v === now ? ' on' : '') + '" data-act="pick" data-key="' + key +
+      '" data-val="' + v + '" aria-pressed="' + (v === now) + '">' + esc(t) + '</button>').join('') + '</div>' +
+    (hint ? '<small class="pr-h">' + esc(hint) + '</small>' : '') + '</div>';
+}
+const ICON = (body) => '<svg class="pr-i" viewBox="0 0 32 32" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' + body + '</svg>';
+/** A closed loop with a flag at the line, and a wheel. */
+const LAP_ICON = ICON('<path d="M8 22 C 2 18, 3 8, 12 8 H20 C 29 8, 30 18, 24 22 C 20 25, 12 25, 8 22 Z"/><path d="M16 4 v8 M16 4 h6 l-2 2 l2 2 h-6" class="pk-line"/>');
+const WHEEL_ICON = ICON('<circle cx="16" cy="16" r="11"/><circle cx="16" cy="16" r="3" class="pk-line"/><path d="M5 16 h8 M19 16 h8 M16 19 v8"/>');
+
+/** The pre-race rows (playtest 2026-10-28): Laps 1 / 2 / 3 and Steer assist, above the how-to panels.
+ * opts: the hud/options.js record; label(key, value): the chip text (options.js choiceLabel); hint(mode): the
+ * assist line under its chips (options.js assistHint). */
+export function preraceHtml(opts = {}, label = (k, v) => String(v), hint = () => '') {
+  const lapRow = chips('laps', LAP_ICON, 'Laps', [1, 2, 3].map((n) => [n, String(n)]), Number(opts.laps) || 1);
+  const assistRow = chips('steerAssist', WHEEL_ICON, 'Assist', ['light', 'strong', 'off'].map((m) => [m, label('steerAssist', m)]), opts.steerAssist || 'light',
+    hint(opts.steerAssist || 'light'));
+  return '<div class="pr-rows">' + lapRow + assistRow + '</div>';
+}
+
 /** The card's inner html: three panels, camera hint, the go line and don't-show-again switch. */
 export function howtoHtml(devices = {}, { off = false } = {}) {
   const v = deviceView(devices || {}), p = padLabels(v.family, v.profile);

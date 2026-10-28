@@ -6,7 +6,9 @@
  * speed on a smooth bend costs about a byte a channel), base64 inside a small JSON wrapper. sample(ghost, t)
  * interpolates between samples (positions linear, the quat normalised linear; the recorder keeps the quat
  * on one hemisphere so a lerp never flips). One best per course in localStorage `glassroad.ghost.v1.<track>`,
- * only a finished trial, only when faster (or the laps differ), never over GHOST_MAX_CHARS.
+ * only a finished trial, only when faster, never over GHOST_MAX_CHARS. A ghost of the course's own laps (fullLaps)
+ * keeps that key; any other lap count (playtest 2026-10-28: solo races default to 1 lap) has its own,
+ * `<track>.l<laps>`, so neither replaces the other. Without fullLaps every ghost shares the plain key (the old rule).
  * Pure: no DOM, no three.js; storage always in try/catch.
  */
 import { S } from '../sim/state.js';
@@ -20,7 +22,8 @@ const CH = 9;                                          // x y z (cm), qx qy qz q
 const Q = 32767;
 const ID_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 
-export const ghostKey = (track) => GHOST_KEY_PREFIX + track;
+export const ghostKey = (track, laps = 0, fullLaps = 0) => GHOST_KEY_PREFIX + track +
+  (laps > 0 && fullLaps > 0 && laps !== fullLaps ? '.l' + (laps | 0) : '');
 
 /** A recorder for one run: tick(raceTimeS, st) every sim step while racing, lap(cumulativeS) on each lap line. */
 export function createGhostRecorder({ track, laps, hz = GHOST_HZ } = {}) {
@@ -136,20 +139,20 @@ export function lapGap(g, lap, cumS) {
 export const formatGap = (d) => (d < 0 ? '-' : '+') + Math.abs(d).toFixed(2);
 
 // ---- storage ------------------------------------------------------------------------------------
-export function loadGhost(track, storage = defaultStorage()) {
-  try { const s = storage && storage.getItem(ghostKey(track)); return s ? decodeGhost(s) : null; } catch (e) { return null; }
+export function loadGhost(track, storage = defaultStorage(), laps = 0, fullLaps = 0) {
+  try { const s = storage && storage.getItem(ghostKey(track, laps, fullLaps)); return s ? decodeGhost(s) : null; } catch (e) { return null; }
 }
 
 /** Keeps only the best finished trial per course (and laps). @returns {boolean} true when written */
-export function saveBestGhost(g, storage = defaultStorage()) {
+export function saveBestGhost(g, storage = defaultStorage(), fullLaps = 0) {
   if (!g || !ID_RE.test(g.track) || !(g.timeS > 0)) return false;
   try {
     if (!storage) return false;
-    const old = loadGhost(g.track, storage);
+    const old = loadGhost(g.track, storage, g.laps, fullLaps);
     if (old && old.laps === g.laps && old.timeS <= g.timeS) return false;
     const str = encodeGhost(g);
     if (str.length > GHOST_MAX_CHARS) return false;
-    storage.setItem(ghostKey(g.track), str);
+    storage.setItem(ghostKey(g.track, g.laps, fullLaps), str);
     return true;
   } catch (e) { return false; }
 }

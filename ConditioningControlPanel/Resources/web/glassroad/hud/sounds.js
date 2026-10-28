@@ -9,7 +9,7 @@ export const UI_SOUNDS = Object.freeze(['menu-move', 'menu-ok', 'menu-back', 'me
   'seat-in', 'seat-out', 'ready-on', 'ready-off', 'lobby-tick']);
 
 /** Card button actions that are a toggle or a step, not a confirm. */
-const TOGGLE_ACTS = new Set(['toggle', 'cycle', 'howto-off', 'layout', 'lb-hstep', 'lb-lstep']);
+const TOGGLE_ACTS = new Set(['toggle', 'cycle', 'pick', 'howto-off', 'layout', 'lb-hstep', 'lb-lstep']);
 const BACK_ACTS = new Set(['back', 'quit', 'menu', 'lb-back', 'lb-exit', 'lb-leave', 'lb-home']);
 
 /** The sound for pressing a card button by its data-act. lb-ready plays nothing: the seat update answers it. */

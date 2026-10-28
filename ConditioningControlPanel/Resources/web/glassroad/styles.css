@@ -454,6 +454,15 @@
 .hw-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 #card .hw-go { padding: 9px 18px; font-size: 15px; }
 #card .hw-off { min-height: 32px; padding: 4px 12px; font-size: 13px; border-color: rgba(28, 23, 34, 0.35); }
+/* the pre-race rows (playtest 2026-10-28): an ink icon, one word and the chips; the picked chip is pressed in */
+.pr-rows { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 0 0 14px 2px; }
+.pr-row { display: flex; align-items: center; gap: 8px; }
+.pr-i { width: 28px; height: 28px; color: var(--paper-ink); flex: none; }
+.pr-i .pk-line { stroke: var(--paper-pink); }
+.pr-l { font: 800 13px/1 var(--font); letter-spacing: 0.04em; text-transform: uppercase; }
+#card .pr-row .c-chip { min-width: 40px; font-size: 14px; }
+.pr-row { flex-wrap: wrap; }
+.pr-h { flex-basis: 100%; padding-left: 36px; font: 600 12px/1.2 var(--mono); opacity: 0.75; }
 #card .card-body.out { animation: hw-out 0.2s ease-in forwards; pointer-events: none; }
 @keyframes hw-out { to { opacity: 0; transform: translateY(-12px) scale(0.98); } }
 #card.c-gentle .hw-key .hw-top { animation-name: hw-press-soft; animation-duration: calc(var(--hw-beat) * 2); }

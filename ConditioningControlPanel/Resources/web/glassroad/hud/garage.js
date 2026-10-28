@@ -54,7 +54,7 @@ export function garageUi({change,select,customize,action,hover,trackId='threshol
       for(const el of root.querySelectorAll('[data-g=race],[data-g=online],[data-g=tracks]'))el.disabled=busy;
       $('.g-announce').textContent=custom?'Customize EMI':KARTS.find(k=>k[0]===s.kart)[1]+' selected';
     },
-    track(name,laps){$('.g-track').textContent=name+' · '+laps+' laps';},
+    track(name,laps){$('.g-track').textContent=name+' · '+laps+(laps===1?' lap':' laps');},
     setCourse(course){
       trackId=course.trackId;online=course.online!==false;
       // Replace only the tiny picker. Its previous selection, pending sketches and delayed
@@ -62,7 +62,7 @@ export function garageUi({change,select,customize,action,hover,trackId='threshol
       picker.dispose();picker=createTrackPicker({root,courses:COURSES,trackId,change:id=>changeTrack?.(id)});
       $('[data-g=online]').hidden=!online;
       $('.g-course-name').textContent=COURSES.find(c=>c.id===trackId)?.name||course.track||'Threshold';
-      $('.g-track').textContent=course.track+' · '+course.laps+' laps';
+      $('.g-track').textContent=course.track+' · '+course.laps+(course.laps===1?' lap':' laps');
       root.classList.remove('g-course-leaving');
     },
     setVisible(on){if(root.hidden===!on)return;if(!on)record.close();root.hidden=!on;document.body.classList.toggle('garage-open',on);if(on)$('[data-g=race]').focus({preventScroll:true});},
