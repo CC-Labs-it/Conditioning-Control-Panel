@@ -23,7 +23,7 @@ for (const route of track.routes) for (const speed of [20, 30, 40]) test(route.i
   assert.equal(events.all('drop').length, 0);
   assert.ok(events.all('route-land').length, 'physical landing ' + JSON.stringify(events.list));
   assert.ok(events.all('route-skip').length, 'honest progress');
-  assert.ok(st[S.s] - s > 500 && st[S.s] - s < 750);
+  assert.ok(st[S.s] >= route.land.fromS && st[S.s] <= route.land.toS, 'skip ends on the physical widened landing stretch');
   assert.equal(registeredSkip(track, route.land.fromS, route.fromS), null);
 });
 test('Shelf ascent and wardrobe descent keep all lanes attached to their correct vertical layer', () => {

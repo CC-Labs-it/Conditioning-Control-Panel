@@ -117,7 +117,8 @@ export function tubeClash(points, samples, M = MEDIA_DEFAULTS, skip = null) {
  * stepOutM until the board and its stalk clear every road stretch. Returns the slot or null.
  */
 export function placeBillboard(spec, track, samples, M = MEDIA_DEFAULTS) {
-  const s = ((spec.f % 1) + 1) % 1 * track.lengthM;
+  const authored = ((spec.f % 1) + 1) % 1 * (track.courseShape?.sourceLengthM ?? track.lengthM);
+  const s = track.courseShape?.mapS?.(authored,track) ?? authored;
   const f = frameCopy(track.frameAt(s));
   const side = spec.side < 0 ? -1 : 1;
   const { w, h } = sizeOf(spec.kind, spec.heightM, M);
@@ -173,7 +174,9 @@ export function archAt(f, th, halfW, heightM, sinkM = 0) {
  * ribs are plain mesh arrays ({ positions, uvs, indices } and { positions, hues, indices }).
  */
 export function tunnelLayout(spec, track, M = MEDIA_DEFAULTS, stepMul = 1) {
-  const L = track.lengthM, fromS = spec.from * L, toS = spec.to * L;
+  const L = track.courseShape?.sourceLengthM ?? track.lengthM;
+  const fromS = track.courseShape?.mapS?.(spec.from*L,track) ?? spec.from*L;
+  const toS = track.courseShape?.mapS?.(spec.to*L,track) ?? spec.to*L;
   const f0 = track.frameAt(fromS), halfW = f0.w / 2 + (spec.padM ?? 3.5), H = spec.heightM ?? 11;
   const step = (spec.stepM ?? 9) * stepMul, rings = [], slots = [];
   const face = (spec.facingDeg ?? 28) * Math.PI / 180, wallTh = (spec.wallDeg ?? 30) * Math.PI / 180;

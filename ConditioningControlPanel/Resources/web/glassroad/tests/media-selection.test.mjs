@@ -55,7 +55,7 @@ test('invalid shares retain the default and bounded shares cannot overallocate',
   assert.deepEqual(selectScrolllerSlots([], { share: .6 }), []);
 });
 
-test('GOONWORKS warms its 47 eligible media faces while unavailable sources leave all 78 procedural screens intact', async t => {
+test('GOONWORKS warms its actual eligible media faces while unavailable sources retain every procedural screen', async t => {
   const hooks = registerHooks({ resolve(specifier, context, next) {
     const files = { 'three/webgpu': 'three.webgpu.min.js', 'three/tsl': 'three.tsl.min.js' };
     return files[specifier] ? { url: new URL('../vendor/three/build/' + files[specifier], import.meta.url).href, shortCircuit: true }
@@ -67,12 +67,15 @@ test('GOONWORKS warms its 47 eligible media faces while unavailable sources leav
   const gradient = { addColorStop() {} }, context = new Proxy({}, { get: (o, k) => k in o ? o[k]
     : /Gradient/.test(k) ? () => gradient : () => {} });
   const make = (width, height) => ({ width, height, getContext: () => context });
-  const media = createMediaSlots(null, track, { layout: goonworksMediaLayout(track), make, scrolllerShare: .6 });
+  const layout = goonworksMediaLayout(track), expectedFaces = Math.round(layout.slots.length * .6);
+  assert.ok(layout.slots.length >= 78 && expectedFaces >= 47, 'broader districts preserve the established coverage floor');
+  const media = createMediaSlots(null, track, { layout, make, scrolllerShare: .6 });
   t.after(() => media.dispose());
-  assert.equal(media.slots.length, 78); assert.equal(media.scrolllerShare, .6);
-  assert.equal(media.stats().selectedMediaFaces, 47); assert.equal(media.stats().readyMediaVideos, 0);
+  assert.equal(media.slots.length, layout.slots.length); assert.equal(media.scrolllerShare, .6);
+  assert.equal(media.stats().selectedMediaFaces, expectedFaces); assert.equal(media.stats().readyMediaVideos, 0);
   assert.equal(media.stats().prewarmedVideoTextures, 6, 'more faces do not add decoder textures');
-  assert.equal(media.object.children.filter(o => o.name.startsWith('media-world-source-')).length, 47);
+  assert.equal(media.object.children.filter(o => o.name.startsWith('media-world-source-')).length, expectedFaces);
   assert.ok(media.object.children.filter(o => o.name.startsWith('media-world-source-')).every(o => !o.visible));
-  assert.equal(media.slots.length - selectScrolllerSlots(media.slots, { share: media.scrolllerShare }).length, 31);
+  assert.equal(media.slots.length - selectScrolllerSlots(media.slots, { share: media.scrolllerShare }).length, layout.slots.length - expectedFaces);
+  assert.ok(layout.slots.length - expectedFaces >= 31, 'procedural coverage grows with the real layout');
 });

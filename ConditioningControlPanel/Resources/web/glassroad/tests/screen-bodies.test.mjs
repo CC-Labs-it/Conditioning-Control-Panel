@@ -11,6 +11,7 @@ import { largeMediaLayout } from '../render/worldMediaScale.js';
 import { worldScreenSolids, worldScreenLayout, worldScreenExistingSlots } from '../render/worldScreens.js';
 import { goonworksBoxesIntersect } from '../render/goonworksWorld.js';
 import { goonworksScreenVisibility } from '../render/goonworksVisibility.js';
+import { getGoonworksLayout } from '../track/goonworks-layout.js';
 
 const hooks = registerHooks({ resolve(specifier, context, next) {
   const files = { three: 'three.webgpu.min.js', 'three/webgpu': 'three.webgpu.min.js', 'three/tsl': 'three.tsl.min.js' };
@@ -104,13 +105,17 @@ test('fitted GOONWORKS screens carry one white and wine enclosure without leavin
   const layout = largeMediaLayout(track, authored, { solids });
   assert.ok(layout.slots.length >= authored.slots.length * .8, 'Real scene bounds retain the authored screen coverage');
   const walls = solids.filter(row => row.id?.startsWith('rabbit-wall-'));
-  assert.ok(walls.length > 100 && walls.length < 5000, 'Tube uses bounded wall patches rather than a filled volume');
+  const sourceTrack = loadTrack(JSON.parse(readFileSync(new URL('../tracks/goonworks.json', import.meta.url), 'utf8')), { courseShape: false });
+  const tube = getGoonworksLayout(track).tube, sourceTube = getGoonworksLayout(sourceTrack).tube;
+  const wallBudget = 5000 * (tube.s1 - tube.s0) / (sourceTube.s1 - sourceTube.s0);
+  assert.ok(walls.length > 100 && walls.length < wallBudget, 'longer tube retains the same bounded wall-patch density and open volume');
   const extra = worldScreenLayout(track, { solids, existingSlots: worldScreenExistingSlots(track, layout) });
   assert.ok(extra.slots.length > 100, 'Tube clearance retains lap coverage');
   for (const slot of [...layout.slots, ...extra.slots])
     assert.ok(!walls.some(wall => goonworksBoxesIntersect(screenBodyBox(slot), wall)), slot.id + ' enclosure clears the opaque tube skin');
   const report = goonworksScreenVisibility(track, { ...world.plan, mounts: extra.slots });
-  assert.ok(report.every(row => !row.blockers.some(([id]) => id === 'rabbit-shell')), 'Exact rendered tube triangles never hide supplemental faces');
+  assert.ok(report.every(row => !row.blockers.some(([id]) => id === 'rabbit-shell')),
+    'Exact rendered tube triangles never hide supplemental faces: ' + JSON.stringify(report.filter(row => row.blockers.some(([id]) => id === 'rabbit-shell'))));
   for (const id of ['world-goonworks-3-left', 'world-goonworks-3-right']) {
     const row = report.find(row => row.id === id);
     assert.ok(!row || row.visible >= .5, 'Previously 0% and 5% visible faces must move into view or be omitted');

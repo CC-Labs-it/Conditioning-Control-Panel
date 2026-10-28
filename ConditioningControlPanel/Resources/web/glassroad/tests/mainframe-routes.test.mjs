@@ -40,7 +40,8 @@ test('Mainframe optional descent cuts physically land and credit the skipped tur
     assert.ok(landed, JSON.stringify({ id: route.id, v, yaw, events: events.filter(e => /route|drop|fall|wall/.test(e.name)), s: st[S.s] }));
     assert.ok(events.some(e => e.name === 'route-skip'));
     assert.ok(!events.some(e => e.name === 'drop'));
-    assert.ok(landed.skipM > 400 && landed.skipM < 700);
+    assert.ok(landed.skipM >= route.land.fromS - route.openS1 - 1
+      && landed.skipM <= route.land.toS - route.openS0 + 1, 'skip remains inside the physically landed route range');
     assert.equal(registeredSkip(track, route.openS0, landed.s)?.id, route.id);
   }
 });

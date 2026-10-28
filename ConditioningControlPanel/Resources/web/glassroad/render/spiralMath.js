@@ -367,7 +367,8 @@ export function toWorld(gf, l) {
 /** Gate frames on a track: the road frame at s = f * length, centre lifted upM along the road normal. */
 export function gateFrames(track, gates, L = SPIRAL_LOOK) {
   return gates.map((g) => {
-    const s = (((g.f % 1) + 1) % 1) * track.lengthM, f = track.frameAt(s), up = g.upM ?? L.upM;
+    const authored = (((g.f % 1) + 1) % 1) * (track.courseShape?.sourceLengthM ?? track.lengthM);
+    const s = track.courseShape?.mapS?.(authored,track) ?? authored, f = track.frameAt(s), up = g.upM ?? L.upM;
     return {
       s, w: f.w, t: f.t.slice(), b: f.b.slice(), n: f.n.slice(),
       c: [f.p[0] + f.n[0] * up, f.p[1] + f.n[1] * up, f.p[2] + f.n[2] * up],

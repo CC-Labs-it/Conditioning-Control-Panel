@@ -62,7 +62,7 @@ export function safeBoostStation(track, s, { x = 0, w = BOOST_PLAN.widthM, len =
 
 /** Deterministic runs of 2-4 actual boost entries, with a visible gap between each pad. */
 export function densifyBoosts(json) {
-  const track = loadTrack(json, { aerials: false, boostSafety: false }), originals = json.boosts.map((p) => ({ ...p }));
+  const track = loadTrack(json, { aerials: false, boostSafety: false, courseShape: false }), originals = json.boosts.map((p) => ({ ...p }));
   const exclusions = boostExclusions(track), candidates = [];
   const compact = track.id === 'threshold', spacing = compact ? 10 : BOOST_PLAN.spacingM;
   for (let node = 0; node < track.nodeCount; node++) {

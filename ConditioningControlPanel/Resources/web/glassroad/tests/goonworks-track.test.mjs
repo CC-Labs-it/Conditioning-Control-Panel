@@ -30,14 +30,14 @@ const padRuns = track.boosts.reduce((runs, pad, index) => {
   return runs;
 }, []);
 
-test('GOONWORKS is reproducible, closed, substantial and compact with a level eight-kart grid', () => {
+test('GOONWORKS is reproducible, closed and broad with a level eight-kart grid', () => {
   assert.deepEqual(buildGoonworks(), json);
   assert.deepEqual(validate(json), { ok: true, errors: [], warnings: [] });
   const end = walkGoonworks(GOONWORKS_PIECES);
   assert.ok(Math.hypot(end.x, end.z) < 1e-6);
-  assert.equal(track.laps, 2); assert.ok(track.lengthM > 5500 && track.lengthM < 7000);
-  assert.ok(layout.bounds.maxX-layout.bounds.minX < 1000);
-  assert.ok(layout.bounds.maxZ-layout.bounds.minZ < 1000);
+  assert.equal(track.laps, 2); assert.ok(track.lengthM > 9400 && track.lengthM < 9900);
+  assert.ok(layout.bounds.maxX-layout.bounds.minX < 1600);
+  assert.ok(layout.bounds.maxZ-layout.bounds.minZ < 1800);
   assert.ok(json.nodes.every(n => n.w >= 32));
   for (let i=0;i<8;i++) assert.ok(Math.abs(track.spawnPose(i).p[1])<.001);
   assert.deepEqual(layout.sections.map(s=>s.id), ['start','rabbit-hole','screen-grotto','aperture-mill','pop-quiz','ribbon-helix','leapfrog','pinball-launch','grand-fold','finish']);
@@ -58,7 +58,8 @@ test('mechanics halls expose straight broad stations and no jump or stone gaps',
 test('boost chains offer supported side lines and a clear coast line with recovery space before toys and jumps', () => {
   assert.ok(json.boosts.length >= 20 && json.boosts.length <= 28, 'authored side-chain plan retained');
   assert.ok(track.boosts.length >= 6 && track.boosts.length <= 28, 'retain steerable acceleration choices after the flight and turn filters');
-  assert.ok(padRuns.length >= 2 && padRuns.every(run => run.length >= 2 && run.length <= 4));
+  assert.ok(padRuns.length >= 2 && padRuns.every(run => run.length >= 2 && run.at(-1).s-run[0].s < 160),
+    'short distinct trains retain readable recovery gaps after generated prefixes');
   assert.ok(padRuns.every(run => Math.abs(run[0].x) > 0), 'side trains preserve the unboosted centre line');
   const toys = goonworksSetpieces(track, layout);
   const approaches = [...toys.map(row => row.s - row.depth / 2), layout.field.s0, layout.launch.rampS0,
@@ -126,12 +127,12 @@ test('boost recovery leaves physical braking distance before the earliest timed 
   }
 });
 
-test('ribbon braid makes two real turns across three visible heights', () => {
+test('ribbon braid makes one broad turn across three visible heights', () => {
   const r=layout.byId['ribbon-braid'], length=r.s1-r.s0;
   assert.equal(GOONWORKS_PIECES.find(p=>p.id==='ribbon-braid').turn,720);
   for(let s=r.s0+40;s<r.s0+length/2-40;s+=10) {
     const a=track.frameAt(s),b=track.frameAt(s+length/2);
-    assert.ok(Math.hypot(a.p[0]-b.p[0],a.p[2]-b.p[2])<.5);
+    assert.ok(Math.hypot(a.p[0]-b.p[0],a.p[2]-b.p[2])>650, 'opposite half of the broad circle');
     assert.ok(b.p[1]-a.p[1]>31.5);
     const q=track.query(...a.p,a.seg); assert.ok(q.onRoad&&Math.abs(q.s-s)<.05);
   }
@@ -243,7 +244,9 @@ test('both Grand Fold cuts land physically before receiving shortcut progress',(
     const {events,st}=driveCut(route,speed,yaw),land=events.find(e=>e.name==='route-land');
     assert.ok(land,JSON.stringify({route:route.id,speed,yaw,s:st[S.s],events:events.filter(e=>/route|drop|fall|wall/.test(e.name))}));
     assert.ok(events.findIndex(e=>e.name==='route-skip')>events.findIndex(e=>e.name==='route-land'));
-    assert.ok(!events.some(e=>e.name==='drop'));assert.ok(land.skipM>450&&land.skipM<750);
+    assert.ok(!events.some(e=>e.name==='drop'));
+    assert.ok(land.skipM > route.land.fromS-route.openS1-1 && land.skipM < route.land.toS-route.openS0+31,
+      'skip remains bounded by the real landing district and its 30m physical runout');
     assert.equal(registeredSkip(track,route.openS0,land.s)?.id,route.id);
   }
 });

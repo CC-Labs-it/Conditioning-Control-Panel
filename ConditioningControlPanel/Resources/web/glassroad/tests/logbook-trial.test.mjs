@@ -51,10 +51,10 @@ test('ghost: malformed strings decode to null', () => {
   }
 });
 
-test('ghost: a whole solo Threshold trial fits well under the cap', () => {
+test('ghost: a whole broad-course trial fits the real storage cap and preserves its full recording', () => {
   const r = makeRace({ count: 1, seed: 3 }), P = r.racers.player, rec = createGhostRecorder({ track: 'threshold', laps: r.track.laps });
   let cum = 0, seen = 0;
-  r.run(900, () => {
+  r.run(60 + r.track.lengthM * r.track.laps / (r.feel.get('speed.topMps') * .6), () => {
     if (r.race.phase === 'racing') rec.tick(r.race.timeS, P.st);
     while (seen < P.lapTimes.length) { cum += P.lapTimes[seen++]; rec.lap(cum); }
     return P.finished;
@@ -63,9 +63,12 @@ test('ghost: a whole solo Threshold trial fits well under the cap', () => {
   const g = rec.finish(P.finishS), str = encodeGhost(g);
   assert.equal(g.splits.length, r.track.laps);
   assert.ok(Math.abs(g.splits[g.splits.length - 1] - P.finishS) < 0.05);
-  assert.ok(str.length < GHOST_MAX_CHARS / 2, 'size ' + str.length);
+  assert.ok(str.length < GHOST_MAX_CHARS, 'production storage cap, size ' + str.length);
+  assert.ok(str.length < g.n * 18 + 1024, 'bounded encoded bytes per physical sample');
+  assert.ok(g.n >= Math.floor(P.finishS * GHOST_HZ) - 1, 'the finished course is recorded through its last frame');
   // the decoded ghost lands where the kart was (cm quantised, 10 Hz)
   const back = decodeGhost(str), p = sample(back, 0);
+  assert.deepEqual(back.rows, g.rows, 'every recorded physical sample survives the full-course round trip');
   assert.ok(Math.abs(p.x - back.rows[0] / 100) < 1e-9);
 });
 

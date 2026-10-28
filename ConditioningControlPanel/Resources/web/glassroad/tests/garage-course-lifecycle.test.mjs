@@ -12,12 +12,13 @@ export class WebGPURenderer {
   async init(){} setPixelRatio(){} setSize(){} dispose(){this.disposals++;}
 }
 export class Group {} export class Mesh {} export class Sprite {} export class PlaneGeometry {}
+export class NodeBuilder { getUniformBufferLimit(){return 65536;} }
 `);
 const hooks=registerHooks({resolve(specifier,context,next){
   const parent=context.parentURL||'';
   if(parent.endsWith('/hud/garage.js')&&specifier==='./trackPicker.js')return{url:pickerModule,shortCircuit:true};
   if(parent.endsWith('/render/renderer.js')&&specifier==='./post.js')return{url:postModule,shortCircuit:true};
-  if(parent.endsWith('/render/renderer.js')&&specifier==='three/webgpu')return{url:gpuModule,shortCircuit:true};
+  if((parent.endsWith('/render/renderer.js')||parent.endsWith('/render/instancePrograms.js'))&&specifier==='three/webgpu')return{url:gpuModule,shortCircuit:true};
   return next(specifier,context);
 }});
 const {garageUi}=await import('../hud/garage.js');

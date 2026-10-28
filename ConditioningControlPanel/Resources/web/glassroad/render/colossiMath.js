@@ -96,7 +96,7 @@ export const WORLD_DEFAULTS = Object.freeze({
   corridorTunnel: Object.freeze([0.89, 0.93]), corridorTunnelPadM: 20,
   // the wheel and the hoop (vertical loops, polish 6): nothing stands in a loop window (padM either side)
   corridorLoops: Object.freeze([Object.freeze([0.781, 0.802]), Object.freeze([0.809, 0.829])]), corridorLoopPadM: 12,
-  corridorBoards: Object.freeze([0.06, 0.2, 0.24, 0.35, 0.37, 0.575, 0.68, 0.76, 0.808, 0.99]), corridorBoardHalfM: 7.5,
+  corridorBoards: Object.freeze([0.06, 0.2, 0.27, 0.35, 0.37, 0.575, 0.68, 0.76, 0.808, 0.99]), corridorBoardHalfM: 7.5,
   // soft shading (materials/colossus.js): wrap, floor, rim, sheen, aerial haze (polish 3: full colour inside
   // hazeNearM, no low haze) and the prop tint: a saturated hue over the paint's luminance, mixed in whole
   // (tintMix 1) with a high floor so the sculpted paint never shows through as a skin tone
@@ -115,8 +115,21 @@ export const WORLD_DEFAULTS = Object.freeze({
   blobR: 1.0, blobAlpha: 0.55, blobMapAlpha: 0.4, blobFadeUpM: 4, spotAlpha: 0.38, spotStepM: 1.5, spotCols: 8,
 });
 
-export function worldLook() {
-  return { ...WORLD_DEFAULTS, ...((LOOK && LOOK.world) || {}) };
+export function worldLook(track) {
+  return worldForTrack({ ...WORLD_DEFAULTS, ...((LOOK && LOOK.world) || {}) },track);
+}
+
+function worldForTrack(W,track) {
+  const shape=track?.courseShape;
+  if (!shape?.mapS || W.corridorMap===shape.mapS) return W;
+  const fraction=f=>shape.mapS(f*shape.sourceLengthM,track)/track.lengthM;
+  return {...W,corridorMap:shape.mapS,
+    corridorGates:W.corridorGates.map(fraction),corridorBoards:W.corridorBoards.map(fraction),
+    corridorTunnel:W.corridorTunnel.map(fraction),corridorLoops:W.corridorLoops.map(pair=>pair.map(fraction)),
+    heroAvoidS:W.heroAvoidS.map(pair=>{
+      const [a,b]=pair.map(s=>shape.mapS(s,track));
+      return [b<a?a-track.lengthM:a,b];
+    })};
 }
 
 /** Scatter count for a tier name (high, mid, phone); an unknown tier gets the high count. */
@@ -361,11 +374,12 @@ export function capsulesApart(x, y, gap = 0) {
  * until it clears the road and the bodies already placed. Returns the axis with fit info, or null.
  */
 export function fitColossus(spec, track, row, samples, placed = [], W = WORLD_DEFAULTS) {
-  const f = track.frameAt(((spec.s % track.lengthM) + track.lengthM) % track.lengthM);
+  const s = track.courseShape?.mapS?.(spec.s,track) ?? spec.s;
+  const f = track.frameAt(((s % track.lengthM) + track.lengthM) % track.lengthM);
   for (let k = 0; k <= W.fitTries; k++) {
     const sp = spec.kind === 'arch'
-      ? { ...spec, crossUpM: (spec.crossUpM || 0) + k * W.fitStepM }
-      : { ...spec, offM: (spec.offM || 0) + k * W.fitStepM };
+      ? { ...spec, s, crossUpM: (spec.crossUpM || 0) + k * W.fitStepM }
+      : { ...spec, s, offM: (spec.offM || 0) + k * W.fitStepM };
     const ax = axisOf(sp, f, row);
     // fitted with a padded radius, so a finer sampling of the same layout still clears
     if (!bodyClear({ ...ax, r: ax.r + W.fitPadM }, samples, W).ok) continue;
@@ -439,6 +453,7 @@ export function scatterBasis(x, ang = 0, W = WORLD_DEFAULTS) {
  * Returns [{ k, p, R, scale, pose, Y, F, body, s, over, colour, rot, spin, ang, upright }].
  */
 export function placeScatter(track, kinds, rowOf, seed, { want, avoid = [], W = WORLD_DEFAULTS, samples = sampleTrack(track, W.stepM), sectionOf = null } = {}) {
+  W=worldForTrack(W,track);
   if (!kinds.length) return [];
   let st = (seed >>> 0) % 2147483646 + 1;
   const rnd = (a, b) => { st = (st * 16807) % 2147483647; return a + (st / 2147483647) * (b - a); };
@@ -542,6 +557,7 @@ export function heroLook(kind, i, section, W = WORLD_DEFAULTS) {
  * lean, bare (a leaning hero: no plinth drawn), rLat, pose, spin, ang, look, body, plinth: { p, r, hM } }].
  */
 export function placeHeroes(track, kinds, rowOf, seed, { want, avoid = [], W = WORLD_DEFAULTS, samples = sampleTrack(track, W.stepM), sectionOf = null } = {}) {
+  W=worldForTrack(W,track);
   if (!kinds.length) return [];
   let st = ((seed * 7919 + 13) >>> 0) % 2147483646 + 1;
   const rnd = (a, b) => { st = (st * 16807) % 2147483647; return a + (st / 2147483647) * (b - a); };
