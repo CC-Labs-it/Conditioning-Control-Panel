@@ -242,13 +242,13 @@ test('how-to card: three picture panels named for the device in use, plain copy,
   assert.ok(!/[–—]/.test(html) && !/[!][^=]/.test(html.replace(/<!--[^]*?-->/g, '')), 'plain copy');
 });
 
-test('how-to card: Throttle dismisses it, the Race door opens it once a session, and boot passes the throttle edge', async () => {
+test('how-to card: Throttle dismisses it, the Race door opens it as the pre-race card, and boot passes the throttle edge', async () => {
   const { readFileSync } = await import('node:fs');
   const cards = readFileSync(new URL('../hud/cards.js', import.meta.url), 'utf8');
   const boot = readFileSync(new URL('../boot.js', import.meta.url), 'utf8');
   assert.ok(/dir === 'throttle'/.test(cards) && /howtoGo\(\)/.test(cards), 'nav(throttle) leaves the card');
   assert.ok(/a === 'race' && kind === 'menu' && howtoDue\(\)/.test(cards), 'the Race door opens it before the first race');
-  assert.ok(/howtoSeen = true/.test(cards) && /opts\.howtoOff/.test(cards), 'once a session, never with the switch on');
+  assert.ok(!/howtoSeen/.test(cards) && /const howtoDue = \(\) => !opts\.howtoOff && !howtoSkip/.test(cards), 'before every race from the door, never with the switch on');
   assert.ok(/hud\.nav\('throttle'\)/.test(boot) && /!cardThrottle/.test(boot), 'boot: a throttle press, an edge, reaches the card');
   assert.ok(/assist\.apply\(a, P\.st, clock\.dt, race\.phase\)/.test(boot), 'boot: the assist sits between the input and the sim');
   assert.ok(/racers\.step\(clock\.dt, pa,/.test(boot) && /race\.update\(clock\.dt, pa,/.test(boot), 'boot: the sim reads the assisted hands');
