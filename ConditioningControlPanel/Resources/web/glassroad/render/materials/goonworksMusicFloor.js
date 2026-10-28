@@ -1,65 +1,45 @@
-/* Broad soundstage graphics printed into the enamel, driven by the heard music. */
-import { float, vec2, vec3, fract, abs, max, mix, smoothstep, sin, fwidth, atan } from 'three/tsl';
+/* Comic instruments on ink: bass starbursts, melodic ribbons, snare cuts and high pinpricks. */
+import { float, vec2, vec3, fract, floor, mod, abs, max, mix, smoothstep, sin, step, fwidth, atan } from 'three/tsl';
 import { floorSpectrum, floorPhrase } from './floorSpectrum.js';
-import { vizWave, vizSpectrum, vizHistory, vizLine, vizActivity, vizHit } from './musicVisualizer.js';
+import { vizWave, vizSpectrum, vizHistory, vizLine, vizActivity } from './musicVisualizer.js';
 
 export function goonworksMusicFloor({ p, base, top, edge, half, pink, accent, reactive: u, music }) {
-  const gentle = u.gentle, fast = float(1).sub(gentle), beat = music.tileBeat, bar = music.tileBar;
-  const active = vizActivity(u, music).mul(mix(float(1), float(.28), gentle));
-  const playable = smoothstep(.8, 2.4, edge).mul(top);
-  // Keep the centre lettering clear without erasing the whole driving view.
-  const centreRoom = smoothstep(.8, 2.2, abs(p.x)).mul(.3).add(.7);
-  // These are metre-wide graphics. Only the far horizon loses them, not normal chase distance.
-  const visibility = float(1).sub(smoothstep(4, 10, max(fwidth(p.x), fwidth(p.y))));
-  const span = max(half.sub(2), 1), normalized = abs(p.x).div(span).clamp(0, 1);
-  const band = floorSpectrum(normalized, u).mul(.55).add(vizSpectrum(normalized, u).mul(.45).mul(fast)).toVar();
-  const hit = vizHit(u).mul(fast).toVar();
-  const wave = vizWave(fract(p.y.div(32)), u).mul(fast).toVar();
-  const history = vizHistory(normalized, fract(p.y.div(24)), u).mul(fast).toVar();
-
-  // Eight mirrored columns grow in the road direction, like a giant equalizer under the kart.
-  const column = fract(normalized.mul(8)), row = fract(p.y.div(24));
-  const gutter = smoothstep(.04, .12, column).mul(float(1).sub(smoothstep(.88, .96, column)));
-  const level = band.mul(.72).add(u.kick.mul(fast).mul(.18)).add(u.bass.mul(.14)).add(.06);
-  const barFill = float(1).sub(smoothstep(level, level.add(.06), row));
-  const cap = float(1).sub(smoothstep(.025, .07, abs(row.sub(level))));
-  const equalizer = barFill.mul(.98).add(cap.mul(.5)).mul(gutter);
-  const barBed = gutter.mul(float(1).sub(smoothstep(.92, .98, row)));
-
-  // Comic starbursts stamp the kick. Their spectral outline answers the recording, never a spin timer.
-  const q = vec2(abs(p.x).sub(span.mul(.48)).div(span.mul(.5)),
-    fract(p.y.div(30).add(.5)).sub(.5).mul(2));
+  const fast = float(1).sub(u.gentle), span = max(half.sub(2), 1), across = abs(p.x);
+  const normalized = across.div(span).clamp(0, 1), row = fract(p.y.div(24));
+  const band = floorSpectrum(normalized, u).mul(.45).add(vizSpectrum(normalized, u).mul(.55).mul(fast)).toVar();
+  const wave = vizWave(fract(p.y.div(32)), u).mul(fast).mul(4.2);
+  // Three true musical silhouettes: bars, a spectral rosette and paired sound ribbons.
+  const column = fract(normalized.mul(8)), gutter = smoothstep(.06, .14, column)
+    .mul(float(1).sub(smoothstep(.86, .94, column)));
+  const bars = float(1).sub(smoothstep(band.mul(.8), band.mul(.8).add(.05), row))
+    .mul(smoothstep(0, .07, row)).mul(gutter).mul(band);
+  const q = vec2(across.sub(span.mul(.48)).div(span.mul(.5)), fract(p.y.div(30).add(.5)).sub(.5).mul(2));
   const radius = q.length(), angle = atan(q.x, q.y);
-  const spokeBand = vizSpectrum(abs(sin(angle.mul(.5))), u).mul(fast).add(band.mul(.25));
   const spikes = sin(angle.mul(8)).mul(.5).add(.5);
-  const reach = spokeBand.mul(.38).add(.25).add(u.kick.mul(fast).mul(.32))
-    .add(spikes.mul(u.snare.mul(fast).mul(.12).add(.13)));
-  const disc = float(1).sub(smoothstep(reach, reach.add(.1), radius));
-  const ring = vizLine(radius.sub(u.hitAge.mul(1.2)), .07).mul(u.hitStrength).mul(fast);
-  const pinwheel = disc.mul(spikes.mul(.64).add(.26)).add(ring)
-    .add(vizLine(radius.sub(reach), .035).mul(.45));
-  const record = float(1).sub(smoothstep(.93, 1.03, radius));
-
-  // Actual PCM writes fat mirrored ribbons, with spectral history printed behind in halftone rows.
-  const riverAt = span.mul(.32).add(wave.mul(4.2)).add(u.mid.mul(1.8)), distance = abs(abs(p.x).sub(riverAt));
-  const width = u.bass.mul(1.8).add(hit.mul(1.4)).add(1.2);
-  const river = float(1).sub(smoothstep(width, width.add(.65), distance));
-  const stereo = river.mul(.8).add(history.mul(.65)).add(vizLine(distance.sub(width), .18).mul(.45));
-  const riverBed = float(1).sub(smoothstep(width.add(.7), width.add(1.5), distance));
-
-  const phrase = bar.add(u.section.mul(8));
-  const shape = floorPhrase([equalizer, pinwheel, stereo], phrase).clamp(0, 1).toVar();
-  const bed = floorPhrase([barBed, record, riverBed], phrase).clamp(0, 1);
-  const hue = band.mul(.75).add(history.mul(.25)).add(u.treble.mul(.2)).clamp(0, 1);
-  const cyan = mix(accent, vec3(.025, .72, .78), u.hats.mul(fast).mul(.15).add(.7));
-  // Sound paints the whole graphic; the small beat-grid accent only bridges the gaps between attacks.
-  const answer = hit.mul(.7).add(sin(beat.mul(Math.PI * 2).sub(p.y.div(8)))
-    .mul(.5).add(.5).mul(.3)).mul(fast);
-  const hot = mix(pink, vec3(.94, .025, .36), .65);
-  const tint = mix(hot, cyan, mix(hue, answer, fast.mul(.5)).clamp(0, 1));
-  const ink = mix(vec3(.055, .012, .075), accent.mul(.18), .35);
-  const colourBed = mix(base, tint, fast.mul(.28));
-  const paint = mix(mix(colourBed, ink, bed.mul(.55)), tint, shape.mul(.98));
-  // Apply energy once, after composition, so Gentle keeps the full slow envelope rise.
-  return mix(base, paint, active.mul(playable).mul(centreRoom).mul(visibility));
+  const rosette = vizLine(radius.sub(band.mul(.42).add(spikes.mul(.14)).add(.33)), .075).mul(band);
+  const ribbonAt = across.sub(span.mul(.32).add(wave).add(u.mid.mul(1.2)));
+  const ribbons = float(1).sub(smoothstep(.65, 1.3, abs(ribbonAt)))
+    .mul(u.mid.mul(.65).add(.25)).add(vizHistory(normalized, row, u).mul(fast).mul(gutter).mul(.17));
+  const melody = floorPhrase([bars, rosette, ribbons], music.tileBar.add(u.section.mul(8)));
+  // Bass alone stamps and expands a jagged comic burst, leaving ink between attacks.
+  const burstAt = u.kickAge.mul(1.3).add(.12).add(spikes.mul(.18));
+  const bass = vizLine(radius.sub(burstAt), .12).mul(u.kickStrength)
+    .mul(float(1).sub(smoothstep(.3, .9, u.kickAge))).mul(fast);
+  // Snare cuts travel in alternating directions; halftone teeth give them a separate silhouette.
+  const direction = mod(u.snareCount, 2).mul(2).sub(1);
+  const slash = fract(p.y.div(21).add(p.x.mul(direction).div(19)).sub(u.snareAge));
+  const teeth = step(.3, fract(p.x.div(.9).add(p.y.div(1.4))));
+  const snare = vizLine(slash.sub(.5), .055).mul(teeth).mul(u.snare).mul(fast);
+  const cell = floor(p.div(2)), sparse = step(.73, fract(cell.x.mul(.39).add(cell.y.mul(.57)).add(u.hatsCount.mul(.17))));
+  const highs = vizLine(fract(p.x.div(2)).sub(.5), .075)
+    .mul(vizLine(fract(p.y.div(2)).sub(.5), .075)).mul(sparse).mul(u.hats).mul(fast);
+  const ink = vec3(.035, .006, .055), hot = mix(pink, vec3(.98, .025, .3), .7);
+  const cyan = mix(accent, vec3(.035, .7, .9), .8);
+  const rest = base.mul(.16).add(ink.mul(.5));
+  const light = hot.mul(melody).add(hot.mul(bass).mul(1.25))
+    .add(cyan.mul(snare)).add(vec3(.72, .96, .25).mul(highs));
+  const visibility = float(1).sub(smoothstep(4, 10, max(fwidth(p.x), fwidth(p.y))));
+  const active = vizActivity(u, music).mul(mix(float(1), float(.28), u.gentle))
+    .mul(smoothstep(.8, 2.4, edge)).mul(top).mul(smoothstep(.8, 2.2, across).mul(.6).add(.4)).mul(visibility);
+  return mix(base, rest.add(light).clamp(0, 1), active);
 }
