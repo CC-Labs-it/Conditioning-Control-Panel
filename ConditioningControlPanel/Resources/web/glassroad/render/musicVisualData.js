@@ -3,17 +3,23 @@ import { hitEnv, sectionOf, lastAtOrBefore } from '../audio/chart.js';
 export const VISUAL_DATA = Object.freeze({ width: 64, height: 18, historyHz: 20 });
 const unit = v => Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0;
 const EVENTS = ['kick', 'snare', 'hats'];
+export const INSTRUMENT_FIELDS = Object.freeze(EVENTS.map(name => Object.freeze({ age: name + 'Age', strength: name + 'Strength', count: name + 'Count' })));
+const REFRACTORY = [.16, .14, .055];
 export function createMusicVisualData() {
   const data = new Uint8Array(64 * 18 * 4);
   for (let i = 0; i < 64; i++) data[i * 4] = 128;
-  return { data, drive: 0, kick: 0, snare: 0, hats: 0, onset: 0, hitAge: 9, hitStrength: 0,
+  const v = { data, drive: 0, kick: 0, snare: 0, hats: 0, onset: 0, hitAge: 9, hitStrength: 0,
     section: 0, lastS: NaN, historyS: NaN, lastHitS: -9, song: null, active: false,
-    baseline: new Float32Array(3), flux: new Float32Array(3), chartHit: new Float64Array(3).fill(-9), peaks: new Float32Array(64) };
+    baseline: new Float32Array(3), flux: new Float32Array(3), chartHit: new Float64Array(3).fill(-9), eventS: new Float64Array(3).fill(-9), peaks: new Float32Array(64) };
+  for (const fields of INSTRUMENT_FIELDS) { v[fields.age] = 9; v[fields.strength] = v[fields.count] = 0; }
+  return v;
 }
 function reset(v) {
   v.data.fill(0); for (let i = 0; i < 64; i++) v.data[i * 4] = 128;
   v.baseline.fill(0); v.flux.fill(0); v.chartHit.fill(-9); v.peaks.fill(0); v.drive = v.kick = v.snare = v.hats = v.onset = 0;
   v.hitAge = 9; v.hitStrength = 0; v.historyS = NaN; v.lastHitS = -9; v.section = 0;
+  v.eventS.fill(-9);
+  for (const fields of INSTRUMENT_FIELDS) { v[fields.age] = 9; v[fields.strength] = v[fields.count] = 0; }
 }
 /** True means the 4.5 KB atlas changed. Pause is a complete hold; mute/silence clears it once. */
 export function stepMusicVisualData(v, signal, dt, { paused = false, gentle = false, song = null } = {}) {
@@ -35,7 +41,15 @@ export function stepMusicVisualData(v, signal, dt, { paused = false, gentle = fa
     const chart = song?.hits ? hitEnv(song, EVENTS[i], t, .012, i === 2 ? .065 : .13) : 0;
     const times = song?.hits?.[EVENTS[i]]?.t, index = times ? lastAtOrBefore(times, t + .012) : -1;
     const eventT = index >= 0 ? times[index] : -9;
-    if ((flux > .08 && v.flux[i] <= .08) || (chart > .22 && eventT !== v.chartHit[i])) struck = Math.max(struck, unit(flux * 3.5), chart);
+    const attack = (flux > .08 && v.flux[i] <= .08) || (chart > .22 && eventT !== v.chartHit[i]);
+    if (attack) struck = Math.max(struck, unit(flux * 3.5), chart);
+    const fields = INSTRUMENT_FIELDS[i];
+    // A hat never steals the bass ring's origin; close attacks keep their own short clocks.
+    if (!gentle && attack && t - v.eventS[i] > REFRACTORY[i]) {
+      v.eventS[i] = t; v[fields.strength] = Math.max(unit(flux * 3.5), chart);
+      v[fields.count] = (v[fields.count] + 1) % 4096;
+    }
+    v[fields.age] = Math.max(0, Math.min(9, t - v.eventS[i]));
     v.flux[i] = flux; if (chart > .22) v.chartHit[i] = eventT;
     v[EVENTS[i]] = gentle ? 0 : Math.max(unit(flux * 3.5), chart, v[EVENTS[i]] * Math.exp(-step / .11));
   }
