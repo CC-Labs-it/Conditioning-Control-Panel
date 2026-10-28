@@ -270,9 +270,21 @@ namespace ConditioningControlPanel
                         try { await ClaimRemoteSubjectAsync(row.Key); }
                         finally { button.IsEnabled = true; }
                         break;
+                    case LobbyGame.Race:
+                        OpenRaceJoin(row.Key);
+                        break;
                 }
             }
             catch (Exception ex) { App.Logger?.Warning(ex, "[Lobby] join {Game} failed", row.Game); }
+        }
+
+        /// <summary>A race runs on the web only: open its room in the browser. A malformed room id
+        /// never becomes a URL.</summary>
+        internal static void OpenRaceJoin(string? roomId)
+        {
+            var uri = RaceJoinLink.For(roomId);
+            if (uri == null) { App.Logger?.Warning("[Lobby] race join refused: bad room id"); return; }
+            Helpers.BrowserLauncher.TryOpenUrl(uri.AbsoluteUri);
         }
 
         /// <summary>The host bar (and the empty state's buttons): each game's own host door.</summary>
