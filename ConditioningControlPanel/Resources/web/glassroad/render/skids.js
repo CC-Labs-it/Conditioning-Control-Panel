@@ -5,7 +5,7 @@
  * karts share one pooled ring buffer of quads (atlas.js createSkidBuffer, the oldest segment is reused), so
  * it is ONE draw call and a flat cost. Each vertex keeps its birth time: a mark rises in skidRiseS, holds
  * skidHoldS, then eases out by skidLifeS (3.6 s); its fresh end burns white-hot for skidHotS. Hue from the
- * drift tier: blue, orange, pink (atlas.js tierColour); a slide with no tier yet leaves a pale, dimmer mark.
+ * drift tier: pink, white, gold (atlas.js tierColour); a slide with no tier yet leaves a pale, dimmer mark.
  * The clock only moves through update(dt, paused), so a paused race freezes every mark. Gentle halves the
  * alpha. Small area, no luminance step: the fade is smooth.
  *
