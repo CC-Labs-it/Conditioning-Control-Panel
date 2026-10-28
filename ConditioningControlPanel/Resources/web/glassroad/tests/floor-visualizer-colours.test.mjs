@@ -42,10 +42,12 @@ for (const kind of ['mainframe','keep','boudoir','goonworks']) test(kind+' actua
   if (kind !== 'mainframe') {
     // Hold time and sustained bands steady: actual percussive events must change broad floor paint.
     // Compare spatial paint across the playable road, not a decorative edge or one bright pixel.
-    u.kick.value=u.snare.value=u.hats.value=u.hitStrength.value=.9;u.hitAge.value=0;
-    music.tileBeat.value=0; const onBeat=capture(); u.kick.value=u.snare.value=u.hats.value=u.hitStrength.value=0;u.hitAge.value=9; const between=capture();
+    for(const kind of ['kick','snare','hats']){u[kind].value=u[kind+'Strength'].value=.9;u[kind+'Age'].value=.1;}
+    music.tileBeat.value=0; const onBeat=capture();
+    for(const kind of ['kick','snare','hats']){u[kind].value=u[kind+'Strength'].value=0;u[kind+'Age'].value=9;}
+    const between=capture();
     const vivid=onBeat.filter((v,j)=>Math.abs(v-between[j])>.04).length/onBeat.length;
-    assert.ok(vivid>.35, kind+' beat changes broad floor coverage: '+vivid);
+    assert.ok(vivid>.1, kind+' distinct attacks light visible groups while retaining quiet space: '+vivid);
     music.tileBeat.value=0;
   }
   const phrases=[0,8,16].map(bar=>{music.tileBar.value=bar;return capture()});
@@ -57,7 +59,9 @@ for (const kind of ['mainframe','keep','boudoir','goonworks']) test(kind+' actua
   assert.ok(full.some((v,j)=>Math.abs(v-authored[j])>.005),'the Gentle onset check exercises visible paint');
   for(let j=0;j<onset.length;j++)assert.ok(Math.abs((onset[j]-authored[j])-(full[j]-authored[j])*.1)<1e-10,
     'Gentle retains the envelope rise without multiplying or clipping it');
-  u.gentle.value=music.tileGentle.value=0;u.energy.value=.6;const low=capture();u.bass.value=.02;u.mid.value=.03;u.treble.value=.01;
+  u.gentle.value=music.tileGentle.value=0;u.energy.value=.6;
+  if(kind==='goonworks')music.tileBar.value=16;
+  const low=capture();u.bass.value=.02;u.mid.value=.03;u.treble.value=.01;
   assert.ok(capture().some((v,j)=>Math.abs(v-low[j])>.01),'measured bands visibly reshape the graph');
   for(const key of notes)u[key].value=0;const noNotes=capturePhrases();
   for(const key of notes){

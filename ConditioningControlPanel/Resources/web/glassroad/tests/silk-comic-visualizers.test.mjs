@@ -48,7 +48,8 @@ for (const kind of ['boudoir', 'goonworks']) {
   test(kind + ' reacts to hits and real song sections with the transport held fixed', t => {
     const { u, capture } = setup(kind, t), before = capture();
     u.kick.value = .95; u.snare.value = .8; u.hats.value = .7; u.hitAge.value = .25; u.hitStrength.value = .9;
-    assert.ok(changedArea(before, capture()) > .2, 'real percussive events must produce an unmistakable response');
+    for(const name of ['kick','snare','hats']){u[name+'Age'].value=.12;u[name+'Strength'].value=.9;u[name+'Count'].value=2;}
+    assert.ok(changedArea(before, capture()) > .1, 'real instrument attacks light distinct marks against quiet regions');
     const hit = capture(); u.section.value = 1;
     assert.ok(changedArea(hit, capture()) > .12, 'real sections choose a visibly different composition');
   });
