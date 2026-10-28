@@ -1,7 +1,7 @@
 /* Two wall views and one approaching shutter view share a two-capture runtime budget. */
 import { Group, Mesh, InstancedMesh, MeshBasicNodeMaterial, BoxGeometry, SphereGeometry, Shape, ShapeGeometry, BufferGeometry, Float32BufferAttribute,
   Matrix4, Vector2, Vector3, Quaternion, Color } from 'three/webgpu';
-import { reflector, vec3, uniform, mix } from 'three/tsl';
+import { reflector, vec2, vec3, vec4, positionWorld, uniform, mix } from 'three/tsl';
 import { getBoudoirLayout } from '../track/boudoir-layout.js';
 import { getBoudoirSetpieces, mirrorGatePhase, releasedMirrorGatePhase, BOUDOIR_HAZARD } from '../track/boudoir-setpieces.js';
 import { Q } from './quality.js';
@@ -59,6 +59,11 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
     target.position.set(side * MIRROR_ROOM.sideM, 0, side ? 0 : -(gateRows[0].s - hall.s0) + .04);
     target.rotation.y = side ? side < 0 ? Math.PI / 2 : -Math.PI / 2 : 0; group.add(target);
     const node = reflector({ target, resolutionScale: quality === 'phone' ? .25 : .5, bounces: false, samples: 0 });
+    // Captures are budgeted, so their UVs must use the captured camera, not the moving screen.
+    const captureMatrix = uniform(new Matrix4());
+    const clip = captureMatrix.mul(vec4(positionWorld, 1));
+    node.uvNode = vec2(clip.x.div(clip.w).mul(.5).add(.5), clip.y.div(clip.w).mul(-.5).add(.5));
+    node.userData = { captureMatrix };
     const mat = material((side ? 'mirror-live-scene:' : 'mirror-prismatic-shutter:') + side, '#ffffff');
     mat.colorNode = node.rgb.mul(.96).add(vec3(.012, .008, .016));
     (side ? mirrorMaterials : shutterMaterials).push(mat);
@@ -94,10 +99,20 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
       if (!warming && captureView.dot(captureNormal) <= .01) return;
       const excluded = [...mirrorMaterials, ...shutterMaterials, backingMat], saved = excluded.map(m => m.visible), renderer = frame.renderer;
       const renderTarget = renderer.getRenderTarget(), mrt = renderer.getMRT(), autoClear = renderer.autoClear;
+      const cubeFace = renderer.getActiveCubeFace?.() ?? 0, mipLevel = renderer.getActiveMipmapLevel?.() ?? 0;
       // Both mirror banks and all shutter glass leave the reflected pass. Frames and racers remain.
       excluded.forEach(m => { m.visible = false; });
-      try { nativeUpdate(frame); if (base.hasOutput) diagnostics.reflectionPasses++; lastCapture = elapsed; }
-      finally { excluded.forEach((m, i) => { m.visible = saved[i]; }); renderer.setMRT(mrt); renderer.setRenderTarget(renderTarget); renderer.autoClear = autoClear; }
+      // Nested rendering mutates the shared NodeFrame camera. Keep the actual capture owner.
+      const capturedCamera = base.getVirtualCamera(frame.camera);
+      try {
+        nativeUpdate(frame);
+        if (base.hasOutput) {
+          captureMatrix.value.multiplyMatrices(capturedCamera.projectionMatrix, capturedCamera.matrixWorldInverse);
+          diagnostics.reflectionPasses++;
+        }
+        lastCapture = elapsed;
+      }
+      finally { excluded.forEach((m, i) => { m.visible = saved[i]; }); renderer.setMRT(mrt); renderer.setRenderTarget(renderTarget, cubeFace, mipLevel); renderer.autoClear = autoClear; }
     };
     reflections.push(node);
     if (!side) continue;
@@ -111,10 +126,12 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
     }
   }
   const ceiling = facetGeometry(10, 13.5, 1.5); geometries.push(ceiling);
+  // These horizontal facets cannot reuse vertical wall captures. Keep a quiet porcelain inlay.
+  const ceilingMat = material('mirror-ceiling-porcelain', '#e8d6df');
   for (let z = -10; z > -length; z -= 18) {
     block('ink', 0, 20.4, z, 43, .55, .9); block('gold', 0, 20, z, 41.5, .2, .26);
     for (const x of [-13, 0, 13]) {
-      const pane = new Mesh(ceiling, mirrorMaterials[x > 0 ? 1 : 0]); pane.name = 'ceiling-mirror-facet';
+      const pane = new Mesh(ceiling, ceilingMat); pane.name = 'ceiling-porcelain-facet';
       pane.position.set(x, 20.15, z - 7); pane.rotation.x = Math.PI / 2; pane.rotation.z = x ? Math.sign(x) * .12 : 0; group.add(pane);
       block('rose', x, 20.4, z - 7, 10.8, .3, 14.3);
       for (const edge of [-1, 1]) block('gold', x + edge * 5.25, 20.05, z - 7, .16, .2, 14);
