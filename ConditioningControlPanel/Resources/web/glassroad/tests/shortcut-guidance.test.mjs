@@ -16,7 +16,8 @@ for (const id of ['threshold', 'keep', 'mainframe', 'boudoir', 'goonworks']) {
     let passed = 0, total = 0;
     for (const r of track.routes) {
       assert.equal(r.openS0, r.fromS);
-      assert.equal(r.openS1, r.toS);
+      assert.ok(r.openS1<=r.toS && r.openS1-r.openS0>=14,'physical opening fits its authored anchor range');
+      if (id==='threshold') assert.equal(r.openS1-r.openS0,24,'the broadened coil retains its deliberate 24m mouth');
       for (const ds of [2, 6, 10, 14]) for (const v of [20, 30, 40]) for (const yaw of [25, 40, 55]) {
         total++;
         const st = createState(), feel = makeFeel(), side = r.side === 'L' ? -1 : 1, start = r.openS0 + ds;

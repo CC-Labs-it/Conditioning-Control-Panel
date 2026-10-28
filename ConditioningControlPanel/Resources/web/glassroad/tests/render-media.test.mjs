@@ -75,7 +75,7 @@ test('media: the tunnel lines its corridor with screens facing in, and its glass
   const L = tr.lengthM;
   assert.ok(T.rings.length >= 6 && T.slots.length === T.rings.length * 3);
   for (const sl of T.slots) {
-    assert.ok(sl.s > layout.tunnel.from * L && sl.s < layout.tunnel.to * L);
+    assert.ok(sl.s > T.fromS && sl.s < T.toS, 'screen lies inside the actual mapped tunnel corridor');
     const f = tr.frameAt(sl.s), axis = V3.add(f.p, V3.mul(f.n, T.heightM * 0.4));
     assert.ok(V3.dot(sl.Z, V3.sub(axis, sl.C)) > 0, sl.id + ' faces in');
     assert.ok(V3.dot(sl.Z, f.t) < 0, sl.id + ' turned toward oncoming karts');

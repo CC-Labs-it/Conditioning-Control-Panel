@@ -13,9 +13,20 @@ export function movingStations(track) {
     ['outer-rampart', 106, 'slider', -1],
   ];
   const traps = stations.map(([name, ds, kind, side], i) => {
-    const s = landmark(name).s0 + ds, frame = track.frameAt(s);
-    return { id: 'keep-iron-' + (i + 1), s, kind, side, w: 5, len: 4,
-      x: side * Math.min(9, frame.w / 2 - 5), periodBeats: 2, offsetBeats: i % 2 };
+    const district = landmark(name), target = district.s0+ds;
+    for (let radius=0;radius<=80;radius+=2) for (const sign of radius?[1,-1]:[1]) {
+      const s=target+radius*sign, frame=track.frameAt(s), x=side*Math.min(9,frame.w/2-5);
+      if (s<district.s0+14 || s>district.s1-14 || frame.flags.includes('jump') || frame.n[1]<.99
+        || frame.w/2-Math.abs(x)-2.5<1 || frame.w/2+Math.abs(x)-2.5<4) continue;
+      if (track.aerials.some(a=>s>a.rampS0-20&&s<a.landingS1+20)
+        || track.boosts.some(b=>Math.abs(s-b.s)<b.len/2+12)
+        || [...layout.gates,...layout.chains].some(g=>Math.abs(s-g.s)<30)
+        || track.courts.some(c=>c.holes.some(h=>s+12>h.s&&s-12<h.s+h.len))) continue;
+      const q=track.query(...frame.p,frame.seg);
+      if (!q.onRoad || Math.abs(q.height)>.05) continue;
+      return { id:'keep-iron-'+(i+1),s,kind,side,w:5,len:4,x,periodBeats:2,offsetBeats:i%2 };
+    }
+    throw new Error('No clear Keep ironwork station in '+name);
   });
 
   // The chord passes below the raised serpentine, saving 43 m of the open main road.

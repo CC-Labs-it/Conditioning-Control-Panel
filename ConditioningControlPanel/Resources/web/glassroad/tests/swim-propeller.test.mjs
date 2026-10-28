@@ -53,7 +53,8 @@ test('prebuilt real foils fit variant bounds, inherit kart scale, reset and disp
   assert.deepEqual(model.geometry.attributes.position.array,sourcePositions);assert.equal(other.motion.progress,0);
   p.update(1,3);p.reset();assert.deepEqual(p.motion,createPropellerMotion());
   let gd=0,md=0;for(const g of geometries)g.addEventListener('dispose',()=>gd++);for(const m of materials)m.addEventListener('dispose',()=>md++);
-  p.dispose();assert.equal(body.children.length,0);assert.equal(gd,geometries.size);assert.equal(md,materials.size);
+  // the finishes are shared by every drive and go with the last one released
+  other.dispose();p.dispose();assert.equal(body.children.length,0);assert.equal(gd,geometries.size);assert.equal(md,materials.size);
 });
 
 test('all kart poses expose diagnostics and own propeller lifecycle',()=>{

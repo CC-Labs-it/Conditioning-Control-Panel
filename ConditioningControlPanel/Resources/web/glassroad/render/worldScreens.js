@@ -116,6 +116,17 @@ export function worldScreenSolids(roots = []) {
 /** Sightlines must expose the whole centre and four inner picture corners on two approaches. */
 export function worldScreenSightlines(track, slot, solids) {
   const points = [slot.C, ...[-.34, .34].flatMap(x => [-.34, .34].map(y => add(add(slot.C, mul(slot.X, slot.w * x)), mul(slot.Y, slot.h * y))))];
+  if (track.id === 'goonworks' && slot.worldScreen) {
+    const walls = solids.filter(row => row.id?.startsWith('rabbit-wall-'));
+    const probes = [[0,0],[-.3,0],[.3,0],[0,-.3],[0,.3]].map(([x,y]) => add(add(slot.C, mul(slot.X, slot.w*x)), mul(slot.Y, slot.h*y)));
+    for (const lead of [16,32,56,84]) {
+      const f = track.frameAt(slot.s-lead);
+      for (const lane of [-.22,0,.22]) {
+        const surface = track.surfaceAt(slot.s-lead,f.w*lane), eye = add(surface.p,mul(surface.n,3.2));
+        if (probes.some(p => walls.some(row => boudoirSegmentBlocked(eye,p,row)))) return 0;
+      }
+    }
+  }
   let clear = 0;
   for (const lead of [22, 38, 58]) {
     const f = track.frameAt(slot.s - lead), eye = local(f, 0, 3);
@@ -180,7 +191,8 @@ export function worldScreenLayout(track, { tier = 'high', samples = null, solids
     }
   }
   // Keep pairs together and space the full lap before adding taller accents.
-  for (let i = 0; i < count && slots.length < maxSlots - 1; i++) { fit(i, -1); fit(i, 1); }
+  const crownReserve = track.id === 'mainframe' && maxSlots >= 4 ? 2 : 0;
+  for (let i = 0; i < count && slots.length < maxSlots - 1 - crownReserve; i++) { fit(i, -1); fit(i, 1); }
   for (let i = 2; i < count && slots.length < maxSlots; i += tier === 'phone' ? 12 : 7) fit(i, i % 2 ? 1 : -1, true);
   // A short department can fall between the regular stations after a course grows.
   // Fill its remaining budget with the same solid and sightline checks as every other picture.

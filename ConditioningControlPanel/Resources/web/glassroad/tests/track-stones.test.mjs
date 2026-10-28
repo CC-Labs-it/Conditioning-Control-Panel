@@ -8,7 +8,8 @@ import { fieldAt, stoneAt, fieldSupport, buildFields, holeDistance } from '../tr
 import { build, checks, FIELDS } from '../dev/gen-threshold.mjs';
 
 const json = JSON.parse(readFileSync(new URL('../tracks/threshold.json', import.meta.url), 'utf8'));
-const tr = loadTrack(json);
+// Authoring dimensions stay pinned; live crossings are exercised by sim-stones-drive.
+const tr = loadTrack(json, { courseShape: false, boostSafety: false });
 const place = (s, lat, h) => {
   const f = tr.frameAt(s);
   return [0, 1, 2].map((k) => f.p[k] + f.b[k] * lat + f.n[k] * h);
