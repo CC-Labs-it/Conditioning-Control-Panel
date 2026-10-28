@@ -10,7 +10,7 @@
  * parallax. Density and streak length grow with speed and the eased boost (a drift tier boost by its tier;
  * polish 5: with an fx state the boost size is its speedLines, which climbs the boost ladder of fx/cues.js, mini
  * to tier 3; without one, atlas.js boostTarget by kind);
- * the boost tints the field in its colour (drift tiers blue, orange, pink). Each element has a seed and shows
+ * the boost tints the field in its colour (drift tiers pink, white, gold). Each element has a seed and shows
  * when its seed is under the density, so density changes the count and never flickers one.
  * Photosafe: thin, small-area elements at the screen sides, the boost eases in over boostRiseS (no step).
  * Gentle halves the alpha, the flow and the curve. Pause: dt 0 freezes the flow and the twinkle.
@@ -18,6 +18,11 @@
  * Feel wave 2026-10-26 (lane C, render/worldFeel.js): speed sense without the camera. Near top speed the
  * streaks grow longer and the field thicker (topSpeedShare); the final-lap wake (setWake 0..1) lowers the
  * speed threshold. Both scale with the motion level (setMotion) and are gone under 'off'.
+ * Wind lines (playtest 2026-10-28, "108 km/h feels like 30"): a fourth kind in the same mesh and draw call,
+ * thin streaks born deep at the screen edges (WIND_LOOK) that whip outward past the frame. None below
+ * WIND_LOOK.fromPct of top speed; count and opacity climb with speed above it and again under boost
+ * (windAmount). Motion Less halves them, Off and Gentle remove them. Static geometry: the frame cost is
+ * three uniforms, no attribute upload.
  */
 import { Mesh, BufferGeometry, BufferAttribute, MeshBasicNodeMaterial, AdditiveBlending, DoubleSide, Color } from 'three/webgpu';
 import {
@@ -30,7 +35,31 @@ import { Q } from './quality.js';
 import { juiceHues, p4Look, fieldBirth, fieldDensity, boostTarget, tierColour } from './atlas.js';
 import { finalLapMods, topSpeedShare, feelVal, WORLD_FEEL, motionMul } from './worldFeel.js';
 
-const KIND = { streak: 0, glitter: 1, orb: 2 };
+// wind is negative so every `kind < 0.5` streak rule (tail, taper, head-bright shape) covers it too
+const KIND = { wind: -1, streak: 0, glitter: 1, orb: 2 };
+
+/** Wind line numbers (not feel.json: that file feeds the online course hash). */
+export const WIND_LOOK = Object.freeze({
+  fromPct: 0.7, fullPct: 1.15, boostAdd: 0.45, lessMul: 0.5,
+  count: Object.freeze({ high: 40, mid: 28, phone: 16 }),
+  nearM: 18, farM: 44, ndcX: Object.freeze([0.55, 0.92]), ndcY: Object.freeze([-0.8, 0.7]),
+  lenM: Object.freeze([3, 6]), widthM: Object.freeze([0.05, 0.11]), boostLen: 0.5,
+  alpha: 0.5, alphaFrom: 0.35, tint: 0.2,
+});
+
+/** Wind line share 0..1: 0 below fromPct of top speed, eased up to 1 - boostAdd at fullPct, the boost adds the rest. */
+export function windAmount(pct, boost = 0, { motion = 'full', gentle = false } = {}, W = WIND_LOOK) {
+  if (gentle || !(pct >= W.fromPct)) return 0;
+  const t = Math.min(1, (pct - W.fromPct) / (W.fullPct - W.fromPct)), e = t * t * (3 - 2 * t);
+  const b = Math.max(0, Math.min(1, boost || 0));
+  return Math.min(1, e * (1 - W.boostAdd) + b * W.boostAdd) * motionMul(motion, W.lessMul);
+}
+
+/** A wind line's birth: deep, at one screen edge, never inside the field's centre third. */
+export function windBirth(r1, r2, r3, side, W = WIND_LOOK) {
+  const lerp = (a, r) => a[0] + (a[1] - a[0]) * r;
+  return { nx: (side < 0 ? -1 : 1) * lerp(W.ndcX, r1), ny: lerp(W.ndcY, r2), depth: W.nearM + (W.farM - W.nearM) * r3 };
+}
 
 /** Fade the camera field out around a busy enclosed section, then restore it outside. */
 export function speedFieldVisibility(s, quietRange = null) {
@@ -42,13 +71,15 @@ export function speedFieldVisibility(s, quietRange = null) {
 
 export function createSpeedLines(feel = null) {
   const P = p4Look(LOOK), HUES = juiceHues();
-  const n = Math.max(3, Math.round(Q.speedLines * P.fieldCountMul));
-  const A = new Float32Array(n * 16), B = new Float32Array(n * 16), corner = new Float32Array(n * 8), tint = new Float32Array(n * 12), idx = new Uint32Array(n * 6);
+  const W = WIND_LOOK, windN = (name) => W.count[name] || W.count.high;
+  const n = Math.max(3, Math.round(Q.speedLines * P.fieldCountMul)), nw = windN(Q.name), N = n + nw;
+  const A = new Float32Array(N * 16), B = new Float32Array(N * 16), corner = new Float32Array(N * 8), tint = new Float32Array(N * 12), idx = new Uint32Array(N * 6);
   const cc = new Color(), sh = P.fieldShare, sum = sh.streak + sh.glitter + sh.orb;
-  for (let i = 0; i < n; i++) {
-    const f = (i + 0.5) / n * sum, kind = f < sh.streak ? KIND.streak : f < sh.streak + sh.glitter ? KIND.glitter : KIND.orb;
-    const e = fieldBirth(Math.random(), Math.random(), Math.random(), i & 1 ? 1 : -1, P);
-    const a = [e.nx, e.ny, e.depth, Math.random()], b = [kind, Math.random(), Math.random(), Math.random()];
+  for (let i = 0; i < N; i++) {
+    const wind = i >= n, f = (i + 0.5) / n * sum, kind = wind ? KIND.wind : f < sh.streak ? KIND.streak : f < sh.streak + sh.glitter ? KIND.glitter : KIND.orb;
+    const e = (wind ? windBirth : fieldBirth)(Math.random(), Math.random(), Math.random(), i & 1 ? 1 : -1, wind ? W : P);
+    // a wind line's show seed is its rank, so the share switches lines on in a fixed order and never flickers one
+    const a = [e.nx, e.ny, e.depth, Math.random()], b = [kind, Math.random(), Math.random(), wind ? (i - n + 0.5) / nw : Math.random()];
     cc.set(HUES[(i * 7 + ((Math.random() * 3) | 0)) % HUES.length]);
     for (let k = 0; k < 4; k++) {
       const v = i * 4 + k;
@@ -59,7 +90,7 @@ export function createSpeedLines(feel = null) {
     idx.set([0, 1, 2, 2, 1, 3].map((v) => v + i * 4), i * 6);
   }
   const g = new BufferGeometry();
-  g.setAttribute('position', new BufferAttribute(new Float32Array(n * 12), 3));
+  g.setAttribute('position', new BufferAttribute(new Float32Array(N * 12), 3));
   g.setAttribute('aField', new BufferAttribute(A, 4));
   g.setAttribute('aKind', new BufferAttribute(B, 4));
   g.setAttribute('aCorner', new BufferAttribute(corner, 2));
@@ -69,13 +100,14 @@ export function createSpeedLines(feel = null) {
   const u = {
     dist: uniform(0), density: uniform(0), boost: uniform(0), curve: uniform(0), alpha: uniform(P.fieldAlpha),
     lenScale: uniform(1), time: uniform(0), boostCol: uniform(new Color('#ffffff')),
+    wind: uniform(0), windAlpha: uniform(0), windLen: uniform(1),
   };
   const a = attribute('aField', 'vec4'), b = attribute('aKind', 'vec4'), c = attribute('aCorner', 'vec2'), tn = attribute('aTint', 'vec3');
-  const isStreak = b.x.lessThan(0.5), isOrb = b.x.greaterThan(1.5);
+  const isStreak = b.x.lessThan(0.5), isOrb = b.x.greaterThan(1.5), isWind = b.x.lessThan(-0.5);
   const travel = a.z.sub(P.fieldEndM);
   const t = fract(a.w.add(u.dist.div(travel)));
   const d = a.z.sub(t.mul(travel));                                   // head depth, metres ahead of the camera
-  const len = mix(P.streakLenM[0], P.streakLenM[1], b.y).mul(u.lenScale);
+  const len = select(isWind, mix(W.lenM[0], W.lenM[1], b.y).mul(u.windLen), mix(P.streakLenM[0], P.streakLenM[1], b.y).mul(u.lenScale));
   const dd = d.add(select(isStreak, c.y.mul(len), float(0)));         // the tail runs back toward the vanishing point
   const tanH = float(1).div(cameraProjectionMatrix.element(0).x), tanV = float(1).div(cameraProjectionMatrix.element(1).y);
   const sg = select(a.x.lessThan(0), float(-1), float(1));
@@ -84,7 +116,8 @@ export function createSpeedLines(feel = null) {
   const bend = clamp(dd.mul(dd).mul(0.5 * P.curveGain).mul(u.curve), lim.negate(), lim);
   const xs = sg.mul(max(x0.add(bend).mul(sg), dd.mul(tanH).mul(P.fieldCentre)));   // never inside the centre third
   const rad = normalize(vec2(x0, ys)), tang = vec2(rad.y.negate(), rad.x);
-  const wS = mix(P.streakWidthM[0], P.streakWidthM[1], b.z).mul(c.y.mul(P.streakTaper).oneMinus()).mul(u.boost.mul(0.4).add(1));
+  const wS = select(isWind, mix(W.widthM[0], W.widthM[1], b.z), mix(P.streakWidthM[0], P.streakWidthM[1], b.z))
+    .mul(c.y.mul(P.streakTaper).oneMinus()).mul(u.boost.mul(0.4).add(1));
   const size = select(isOrb, mix(P.orbSizeM[0], P.orbSizeM[1], b.z), mix(P.glitterSizeM[0], P.glitterSizeM[1], b.z));
   const streakP = vec3(xs.add(tang.x.mul(c.x).mul(wS)), ys.add(tang.y.mul(c.x).mul(wS)), dd.negate());
   const billP = vec3(xs.add(c.x.mul(size)), ys.add(c.y.mul(2).sub(1).mul(size)), d.negate());
@@ -99,10 +132,10 @@ export function createSpeedLines(feel = null) {
   const glitA = smoothstep(0, 0.55, r).oneMinus().max(arms.mul(0.8)).mul(twinkle);
   const orbA = smoothstep(0, 1, r).oneMinus().pow(2).mul(P.orbAlpha);
   const shape = select(isStreak, streakA, select(isOrb, orbA, glitA));
-  const show = step(fract(a.w.mul(7.31).add(b.x.mul(0.37))), u.density);
+  const show = select(isWind, step(b.w, u.wind), step(fract(a.w.mul(7.31).add(b.x.mul(0.37))), u.density));
   const fade = smoothstep(0, 0.12, t).mul(smoothstep(P.fieldEndM, P.fieldEndM * 2.2, d));
-  m.opacityNode = show.mul(fade).mul(shape).mul(u.alpha);
-  const core = select(isStreak, abs(c.x).mul(0.5).add(0.5), select(isOrb, float(1), float(0.35))).mul(P.fieldTint);
+  m.opacityNode = show.mul(fade).mul(shape).mul(select(isWind, u.windAlpha, u.alpha));
+  const core = select(isWind, float(W.tint), select(isStreak, abs(c.x).mul(0.5).add(0.5), select(isOrb, float(1), float(0.35))).mul(P.fieldTint));
   m.colorNode = mix(mix(vec3(1, 1, 1), tn, core), vec3(u.boostCol), u.boost.mul(P.fieldBoostTint)).mul(u.boost.mul(0.35).add(1));
   const mesh = new Mesh(g, m);
   mesh.frustumCulled = false; mesh.renderOrder = 3; mesh.castShadow = false; mesh.receiveShadow = false;
@@ -129,7 +162,11 @@ export function createSpeedLines(feel = null) {
     const dens = Math.min(1, fieldDensity(pct + shift, boost, P) + topK * feelVal(feel, 'speedSense.topDensity', S2.topDensity));
     u.density.value = rescue ? 0 : dens * Math.min(1, Q.speedLines * P.fieldCountMul / n);
     u.alpha.value = P.fieldAlpha * (gentle ? P.fieldGentle : 1) * visibility;
-    mesh.visible = u.density.value > 0.002 && visibility > .002;
+    const wa = rescue ? 0 : windAmount(pct, boost, { motion, gentle });
+    u.wind.value = wa * Math.min(1, windN(Q.name) / nw);           // a quality step down drops lines, never adds
+    u.windAlpha.value = W.alpha * (W.alphaFrom + (1 - W.alphaFrom) * wa) * visibility;
+    u.windLen.value = 1 + boost * W.boostLen;
+    mesh.visible = (u.density.value > 0.002 || u.wind.value > 0.002) && visibility > .002;
   }
   return { object: mesh, update, setWake(v) { wake = Math.max(0, Math.min(1, v || 0)); }, setMotion(m) { motion = m || 'full'; }, dispose() { g.dispose(); m.dispose(); } };
 }
