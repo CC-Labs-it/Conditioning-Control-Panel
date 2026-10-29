@@ -157,7 +157,15 @@ shared.feelTask = Promise.all([loadFeel(), loadFonts()]).then(([feel]) => {
 shared.bridge.on('gentle', m => { shared.hostGentle = m; });
 // SPARKLES BY PLACE (B1 W7): the desktop host's receipt for a finished race, bottom left of the results card
 // (styles.css moves it off the card); a new run takes it away. The website never sends one.
-shared.bridge.on('sparkles-receipt', showSlip);
+// A receipt that lands once the next run is under way is dropped rather than covering the race; the
+// Motion row plays it calm when it is not Full (shared.slipGate is set per course).
+function receiptSlip(m) {
+  let gate = null;
+  try { gate = shared.slipGate?.(); } catch (e) { /* no course yet */ }
+  if (gate?.blocked) return;
+  showSlip(m, { calm: !!gate?.calm });
+}
+shared.bridge.on('sparkles-receipt', receiptSlip);
 // The web host's Scrolller pictures (host/scrolllerFeed.js): display only. Built once so a feed
 // that lands before the first course is kept; the desktop host never sends one.
 shared.scrolllerFeed = createScrolllerFeed({ bridge: shared.bridge });
@@ -510,6 +518,8 @@ async function boot(course, options, lifetime, isCurrent) {
   if (!shared.counts.renderer) shared.counts.renderer++;
   renderer.beginCourse(); renderer.setHold(true);
   const racing = () => !online && (state === 'intro' || state === 'race');
+  shared.slipGate = () => ({ blocked: state === 'intro' || (state === 'race' && !!race && race.phase !== 'finished'),
+    calm: (hud.options?.motion || 'full') !== 'full' });
   lifetime.defer(renderer.onLost((lost) => {
     if (isCurrent()) void recover('lost', new Error((lost.api ? lost.api + ' ' : '') + (lost.message || 'device lost') + (lost.reason ? ' (' + lost.reason + ')' : '')), { race: racing() });
   }));
