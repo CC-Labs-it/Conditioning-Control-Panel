@@ -115,6 +115,36 @@ public sealed class CloudSettingsBackupTests : IDisposable
         Assert.Single(sent["AssetPresets"]!);
     }
 
+    /// <summary>R2-3 (port review 7.2): the Core list said "copied unchanged from WPF" and had gone stale. Every
+    /// property the WPF head keeps out of its backup is kept out here too, so a Linux backup never uploads
+    /// conversion state or playlist paths, and a restore never wipes the once-ever inbox rows.</summary>
+    [Fact]
+    public void ExcludesEverythingTheWpfBackupExcludesAndKeepsItLocalOnRestore()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel.sln"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        var wpf = File.ReadAllText(Path.Combine(dir!.FullName, "ConditioningControlPanel", "Services", "Settings", "ProfileSyncService.cs"));
+        int start = wpf.IndexOf("HashSet<string> ExcludedBackupProperties", StringComparison.Ordinal);
+        Assert.True(start >= 0, "WPF ExcludedBackupProperties not found");
+        var block = wpf.Substring(start, wpf.IndexOf("};", start, StringComparison.Ordinal) - start);
+        var names = System.Text.RegularExpressions.Regex.Matches(block, @"nameof\(AppSettings\.(\w+)\)").Select(m => m.Groups[1].Value).ToList();
+        Assert.Contains("InboxStamps", names);
+        foreach (var name in names) Assert.True(CloudSettingsBackup.IsExcludedFromBackup(name), name + " is uploaded");
+        Assert.True(CloudSettingsBackup.IsExcludedFromBackup("AudioPlaylistPaths"));
+        Assert.True(CloudSettingsBackup.IsExcludedFromBackup(nameof(AppSettings.ConsentOwnedFields)));
+
+        var current = new AppSettings { ScrolllerOfficialNoteSeen = true, ConsentOwnedFields = 3 };
+        current.PostGrants["code1"] = "g";
+        current.InboxStamps["welcome"] = "2026-10-01";
+        var restored = new AppSettings();
+        CloudSettingsBackup.PreserveLocalOnlyFields(current, restored);
+        Assert.Equal("2026-10-01", restored.InboxStamps["welcome"]);
+        Assert.Equal("g", restored.PostGrants["code1"]);
+        Assert.True(restored.ScrolllerOfficialNoteSeen);
+        Assert.Equal(3, restored.ConsentOwnedFields);
+    }
+
     [Fact]
     public async Task AWindowsBackupRestoredHereKeepsThisMachinesPathsAndProgression()
     {
