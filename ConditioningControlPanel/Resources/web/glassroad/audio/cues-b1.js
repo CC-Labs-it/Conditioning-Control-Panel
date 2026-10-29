@@ -156,6 +156,15 @@ export const B1_CUES = {
     if (mine || (by === 0 && kind === 'shatter')) HIT[kind]?.(syn);
     else if (by === 0) syn.tone(syn.semis(24), { type: 'sine', dur: 0.15, vol: 0.05, at: 0.06 });   // yours landed
   },
+  // Road contact has a rounded pop plus a short rising chime, including at the count cap.
+  'word-pickup'(syn, { count = 1 } = {}) {
+    const state = st(syn), t = now(syn);
+    if (t - (state.wordPickupT ?? -1e9) < .085) return;
+    state.wordPickupT = t;
+    const note = 19 + ladderSemis(Math.max(0, (count | 0) - 1) % 5);
+    pop(syn, note, .09);
+    syn.tone(syn.semis(note + 7), { type: 'sine', dur: .18, vol: .045, attack: .008, at: .035 });
+  },
   // a word bubble taken (sim/words.js): the synth twin of sfxmap.js wordPopPlan
   'word-pop'(syn, { streak = 1, row = 0, lineDone = false }) {
     const s = 12 + ladderSemis(Math.max(0, (streak | 0) - 1) % m(syn, 'popRungs'));

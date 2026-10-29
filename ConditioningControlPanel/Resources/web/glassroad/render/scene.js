@@ -722,12 +722,16 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     lines.update(dt, k, fx, kart, speedFieldVisibility(k[S.s], goonworks?.plan.layout.tube));
     if (view.mode === 'menu') lines.object.visible = false;
     if (itemVis && view.items) itemVis.update(view.items, dt, racers, view.camera, view);   // visuals read racer .st (CONTRACT-B1 view.karts)
-    if (wordVis) wordVis.update(view.words || [], view.song || null, dt);
+    if (wordVis) wordVis.update(view.words || [], view.song || null, dt, {
+      paused: !!view.paused, motion: view.motion || motionLevel, gentle: gentle || !!view.gentle || !!view.reducedMotion });
     if (wordFx) wordFx.update(dt, view.camera);
-    if (roadWords) roadWords.update(view.song || null, view.songS, k, mf, { gentle, paused: !!view.paused });
+    if (roadWords) roadWords.update(view.song || null, view.songS, k, mf, {
+      gentle: gentle || !!view.gentle || !!view.reducedMotion, paused: !!view.paused,
+      reactive: road.uniforms.reactive, motion: view.motion || motionLevel });
     if (wordRush) wordRush.update(dt, !!view.paused);
-    phraseGates.update(k, dt, { paused: !!view.paused, mode: view.mode, song: view.song, songS: view.songS });
-    airWords.update(view.airWords, dt, { paused: !!view.paused, mode: view.mode, gentle });
+    phraseGates.update(k, dt, { paused: !!view.paused, mode: view.mode, song: view.song, songS: view.songS,
+      motion: view.motion || motionLevel, gentle: gentle || !!view.gentle || !!view.reducedMotion });
+    airWords.update(view.airWords, dt, { paused: !!view.paused, mode: view.mode, gentle, kart: kart.position, motion: motionLevel });
     veils.update(view.songCues, dt, { paused: !!view.paused, gentle: view.cueGentle ?? gentle,
       bass: view.audioReactive?.bass || 0, palette: [pal.primaryHex(), pal.accentHex()] });
     marquees?.update(view.songCues, dt, { paused: !!view.paused, gentle: view.cueGentle ?? gentle, songS: view.songS, song: view.song });

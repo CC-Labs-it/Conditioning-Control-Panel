@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { loadTrack } from '../track/load.js';
+import { ROAD_LOOK } from '../sim/roadWords.js';
 const hooks = registerHooks({ resolve(specifier, context, next) {
   const name = { 'three/tsl': 'three.tsl.min.js', three: 'three.webgpu.min.js', 'three/webgpu': 'three.webgpu.min.js' }[specifier];
   return name ? { url: new URL('../vendor/three/build/' + name, import.meta.url).href, shortCircuit: true } : next(specifier, context);
@@ -14,9 +15,9 @@ test('full strip and its outline fit every sampled road row, including lap wrap 
   for (const id of ['threshold', 'keep', 'mainframe', 'boudoir', 'goonworks']) {
     const track = loadTrack(JSON.parse(readFileSync(new URL('../tracks/' + id + '.json', import.meta.url), 'utf8')));
     for (let s = 0; s < track.lengthM; s += 17) for (const lane of [-9, 0, 9]) {
-      const f = letteringFootprint(track, s, lane, 14, 10.2);
+      const f = letteringFootprint(track, s, lane, 14, ROAD_LOOK.lenM);
       for (let row = 0; row <= 8; row++) {
-        const w = track.frameAt((s + 10.2 * (row / 8 - .5) + track.lengthM) % track.lengthM).w;
+        const w = track.frameAt((s + ROAD_LOOK.lenM * (row / 8 - .5) + track.lengthM) % track.lengthM).w;
         assert.ok(Math.abs(f.lane) + f.width / 2 <= w / 2 - .64, id + ' ' + s);
       }
     }

@@ -1,4 +1,5 @@
-import { Group, Mesh, InstancedMesh, Object3D, OctahedronGeometry, BoxGeometry, TorusGeometry, PlaneGeometry, CanvasTexture, DoubleSide, MeshBasicNodeMaterial, Matrix4, Vector3 } from 'three/webgpu';
+import { Group, Mesh, InstancedMesh, Object3D, OctahedronGeometry, BoxGeometry, TorusGeometry, PlaneGeometry, CanvasTexture, DoubleSide, MeshBasicNodeMaterial, Matrix4, Vector3, Vector4 } from 'three/webgpu';
+import { uniform, uv, texture, clamp, dot, vec3, mix, smoothstep, materialOpacity, length, abs, max } from 'three/tsl';
 import { phraseGateLayout } from '../track/phraseGates.js';
 import { createPhraseGateContact } from '../sim/phraseGates.js';
 import { S } from '../sim/state.js';
@@ -6,6 +7,9 @@ import { phraseLook, gatePulse, gateMote, GATE_CAPACITY } from './phraseGateMoti
 import { createSongGateRun } from '../sim/songGates.js';
 import { wordTheme, wordFace } from './wordTheme.js';
 import { FACES } from './fonts.js';
+import { phraseWordIdentity } from '../sim/wordIdentity.js';
+import { roadWordIdentityUv, WORD_IDENTITY_COLLECT_SECONDS } from './roadWordIdentity.js';
+import { wordPickupPose } from './wordBubbles.js';
 
 export function phraseEnvelope(age, gentle = false) {
   return phraseLook(age, gentle).alpha;
@@ -21,7 +25,7 @@ export function createPhraseGates(scene, track, { feel, photosafe, bus = null, d
   const ink = new MeshBasicNodeMaterial({ color: '#192332', transparent: true, depthWrite: false });
   const light = new MeshBasicNodeMaterial({ color, transparent: true, depthWrite: false });
   const sparkle = new MeshBasicNodeMaterial({ color, transparent: true, opacity: .72, depthWrite: false });
-  const moteGeometry = new OctahedronGeometry(1), dummy = new Object3D(), pose = {};
+  const moteGeometry = new OctahedronGeometry(1), dummy = new Object3D(), pose = {}, pickupPose = {};
   const materialList = [ink, light, sparkle], animated = [];
   const theme = wordTheme(track), face = wordFace(theme, 5), textures = [], signGeometry = new PlaneGeometry(1, 1);
   for (const gate of gates) {
@@ -52,16 +56,27 @@ export function createPhraseGates(scene, track, { feel, photosafe, bus = null, d
     const pulseMaterial = new MeshBasicNodeMaterial({ color, transparent: true, opacity: 0, depthWrite: false });
     materialList.push(pulseMaterial);
     const pulse = new Mesh(ring, pulseMaterial); pulse.position.y = 3.6; root.add(pulse);
-    let sign = null, canvas = null, context = null;
+    let sign = null, canvas = null, context = null, identity = null, identityMotion = null, pickup = null;
     if (doc?.createElement) {
       canvas = doc.createElement('canvas'); canvas.width = 1024; canvas.height = 160; context = canvas.getContext?.('2d');
       if (context) {
-        const texture = new CanvasTexture(canvas); textures.push(texture);
-        const material = new MeshBasicNodeMaterial({ map: texture, transparent: true, depthWrite: false, side: DoubleSide }); materialList.push(material);
+        const signTexture = new CanvasTexture(canvas); textures.push(signTexture);
+        const material = new MeshBasicNodeMaterial({ map: signTexture, transparent: true, depthWrite: false, side: DoubleSide }); materialList.push(material);
+        identity = uniform(new Vector4(0, 0, -1, 1)); identityMotion = uniform(1);
+        pickup = uniform(new Vector4(0, .55, 0, 0));
+        const semantic = roadWordIdentityUv(uv(), identity, { identityMotion });
+        const source = texture(signTexture, clamp(semantic.uv, .002, .998));
+        // The sign's existing bright fill drains separately from its dark outline. The gate never deforms.
+        const interior = smoothstep(.3, .55, dot(source.rgb, vec3(.299, .587, .114)));
+        const coverage = source.a.mul(semantic.mask).mul(mix(1, semantic.coreMask, interior));
+        const halo = smoothstep(.015, .045, abs(length(uv().sub(.5)).mul(2).sub(pickup.y))).oneMinus().mul(pickup.x);
+        material.colorNode = mix(mix(source.rgb, semantic.tint, semantic.tintMix.mul(interior)), vec3(.9, 1, .93), halo.mul(source.a.oneMinus()));
+        material.opacityNode = max(coverage, halo).mul(materialOpacity);
         sign = new Mesh(signGeometry, material); sign.position.set(0, 6, -.08); sign.scale.set(f.w * .85, 2.3, 1); sign.visible = false; root.add(sign);
+        sign.name = 'phrase-gate-word';
       }
     }
-    animated.push({ gate, base: gate, root, gateInk, gateLight, sign, canvas, context, caption: '', motes, pulse, hitAge: -1, soft: false });
+    animated.push({ gate, base: gate, root, gateInk, gateLight, sign, identity, identityMotion, pickup, canvas, context, caption: '', motes, pulse, hitAge: -1, soft: false });
     object.add(root);
   }
   scene.add(object);
@@ -114,13 +129,17 @@ export function createPhraseGates(scene, track, { feel, photosafe, bus = null, d
   function clear() {
     age = -1; last = null; clock = 0; contact.reset();
     songRun?.reset(); songTime = null;
-    for (const row of animated) { row.hitAge = -1; row.pulse.material.opacity = 0; row.motes.count = 0; position(row, row.base); row.root.visible = !activeSong; }
+    for (const row of animated) {
+      row.hitAge = -1; row.pulse.material.opacity = 0; row.motes.count = 0; position(row, row.base); row.root.visible = !activeSong;
+      row.identity?.value.set(0, 0, -1, 1); row.pickup?.value.set(0, .55, 0, 0);
+      if (row.sign) { row.sign.position.y = 6; row.sign.scale.set(row.base.frame.w * .85, 2.3, 1); }
+    }
     if (label) label.style.display = 'none';
   }
-  function update(st, dt, { paused = false, mode = 'race', song = null, songS = NaN } = {}) {
+  function update(st, dt, { paused = false, mode = 'race', song = null, songS = NaN, motion = 'full', gentle: gentleView = false } = {}) {
     if (mode !== 'race') { clear(); return; }
     if (paused) return;
-    const softNow = !!feel?.get('gentle.on');
+    const softNow = !!feel?.get('gentle.on') || gentleView || motion === 'off';
     if (song !== activeSong) { activeSong = song; songRun = song ? createSongGateRun(song, track, { events: bus }) : null; clear(); }
     if (songRun) {
       if (songTime !== null && Number.isFinite(songS) && Math.abs(songS - songTime) > .5) {
@@ -154,6 +173,18 @@ export function createPhraseGates(scene, track, { feel, photosafe, bus = null, d
     for (const row of animated) {
       if (row.hitAge >= 0 && row.gate !== gate) row.hitAge += Math.max(0, dt);
       const soft = softNow || row.soft, p = gatePulse(row.hitAge, soft);
+      if (row.identity) {
+        const elapsed = Number.isFinite(songS) && Number.isFinite(row.gate.startS) ? songS - row.gate.startS : 0;
+        const collected = row.gate.state === 'hit' && Number.isFinite(row.gate.hitS) ?
+          Math.max(0, Math.min(1, (songS - row.gate.hitS) / (soft ? .85 : WORD_IDENTITY_COLLECT_SECONDS))) : -1;
+        row.identity.value.set(phraseWordIdentity(row.gate.text), elapsed, collected, row.gate.text.length);
+        row.identityMotion.value = soft ? 0 : motion === 'less' ? .5 : 1;
+        const ageS = row.identity.value.x && row.gate.state === 'hit' ? songS - row.gate.hitS : -1;
+        wordPickupPose(ageS, { gentle: soft, motion }, pickupPose);
+        row.sign.scale.set(row.base.frame.w * .85 * pickupPose.x, 2.3 * pickupPose.y, 1);
+        row.sign.position.y = 6 + pickupPose.lift;
+        row.pickup.value.set(pickupPose.halo, .55 + (pickupPose.spread - 1) * .35, 0, 0);
+      }
       row.pulse.material.opacity = p.alpha;
       row.pulse.scale.set(row.base.frame.w * .5 * p.spread, 3.6 * p.spread, 1);
       row.pulse.position.z = -p.travel;
@@ -186,6 +217,10 @@ export function createPhraseGates(scene, track, { feel, photosafe, bus = null, d
     }
   }
   return { gates, update, clear,
+    _dev: { live: () => animated.filter(row => row.root.visible && row.sign?.visible).map(row => ({
+      id: row.gate.id, text: row.caption, state: row.gate.state, s: row.gate.s, startS: row.gate.startS,
+      hitS: row.gate.hitS, alpha: row.sign.material.opacity, identity: row.identity.value.toArray(), motion: row.identityMotion.value,
+      pickup: { halo: row.pickup.value.x, width: row.sign.scale.x / (row.base.frame.w * .85), height: row.sign.scale.y / 2.3, lift: row.sign.position.y - 6 } })) },
     get stats() { return { song: !!songRun, gates: songRun ? songRun.cues.length : gates.length, hits: songRun ? songRun.hits : contact.count, active: age >= 0, age, text: last?.text || '', clock,
       particles: animated.reduce((sum, row) => sum + (row.motes.visible ? row.motes.count : 0), 0), pulses: animated.filter(row => row.pulse.material.opacity > .001).length }; },
     dispose() { clear(); object.removeFromParent(); animated.forEach(row => row.motes.dispose()); textures.forEach(t => t.dispose()); signGeometry.dispose(); moteGeometry.dispose(); box.dispose(); ring.dispose(); materialList.forEach(m => m.dispose()); label?.remove(); } };

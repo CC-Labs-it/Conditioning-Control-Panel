@@ -161,6 +161,9 @@
   "clock": { "hz": 60, "maxSubsteps": 6, "bpm": 96 },
   "photosafe": { "windowS": 1, "maxTransitions": 3, "redMax": 1, "patternMaxFrac": 0.25 },
   "gentle": { "on": false, "fadeMs": 600, "riseMs": 300, "contrastMul": 0.5, "scrollMul": 0.5 },
+  "wordCoins": { "on": true, "online": true, "cap": 10, "topPctPer": 0.009, "hitDrop": 3, "litPreS": 0.6, "litPostS": 0.9,
+    "laneShare": 0.55, "edgeMarginM": 1.4, "bendM": 30, "straightM": 0.4, "trapClearM": 8, "touchSlackM": 0.6, "kartHalfM": 0.6,
+    "minChars": 3, "popBubbles": true },
   "items": {
     "boxRadiusM": 1.8,
     "pickHeightM": 2.5,

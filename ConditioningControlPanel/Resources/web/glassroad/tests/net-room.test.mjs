@@ -5,13 +5,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRoomSession } from '../net/room.js';
 import { createLobbyApi, hostTransport, fetchTransport } from '../net/lobbyApi.js';
-import { encodeFrame, decodeFrame, createKart, BIN, NET_V } from '../net/protocol.js';
+import { encodeFrame, decodeFrame, createKart, BIN, NET_V, PULSE } from '../net/protocol.js';
 import { createRacers } from '../sim/racers.js';
 import { createAi } from '../sim/ai.js';
 import { createStandings } from '../sim/standings.js';
 import { S } from '../sim/state.js';
 import { threshold, DT } from './sim-racers-harness.mjs';
 import { makeFeel } from './sim-fake.mjs';
+import { createWordCoins, coinTuning } from '../sim/wordCoins.js';
 
 const track = threshold();
 const look = { outfit: null, vehicle: 'emi-teacup-kart' };
@@ -111,6 +112,40 @@ test('pause only pauses you: records keep flowing with the paused and assist fla
   const k = ws.frames().at(-1).karts[0];
   assert.equal(k.paused, true);
   assert.equal(k.assist, true);
+});
+
+test('online lyric catches share the existing cumulative record while inventory losses change local speed', async () => {
+  const r = rig(), { ws, racers, race, feel } = await racing(r);
+  const coins = createWordCoins(coinTuning(feel));
+  for (let i = 0; i < 12; i++) { coins.add(); r.session.wordPop(coins.total); }
+  racers.player.topBonus = coins.topMul();
+  racers.step(DT, {}, race, {});
+  assert.equal(racers.player.feel.get('speed.topMps'), feel.get('speed.topMps') * 1.09);
+  r.t += 100; r.session.update();
+  let kart = ws.frames().at(-1).karts[0];
+  assert.equal(kart.pops, 12, 'floor, bubble and gate catches use the same total, including cap catches');
+  assert.equal(kart.pulses & PULSE.WORD, PULSE.WORD);
+  coins.hit(); racers.player.topBonus = coins.topMul();
+  racers.step(DT, {}, race, {});
+  assert.equal(racers.player.feel.get('speed.topMps'), feel.get('speed.topMps') * 1.063);
+  r.t += 100; r.session.update(); kart = ws.frames().at(-1).karts[0];
+  assert.equal(kart.pops, 12); assert.equal(kart.pulses & PULSE.WORD, 0, 'a loss is not another catch');
+  coins.add(false); r.session.wordPop(coins.total);
+  r.t += 100; r.session.update();
+  assert.equal(ws.frames().at(-1).karts[0].pops, 13, 'disabled bubble credit still reports the actual catch');
+  assert.equal(coins.count, 7);
+});
+
+test('word totals cannot regress or wrap on the existing unsigned wire field', async () => {
+  const r = rig(), { ws } = await racing(r);
+  r.session.wordPop(25);
+  r.session.wordPop(2);
+  r.session.wordPop(NaN);
+  r.t += 100; r.session.update();
+  assert.equal(ws.frames().at(-1).karts[0].pops, 25);
+  r.session.wordPop(100000);
+  r.t += 100; r.session.update();
+  assert.equal(ws.frames().at(-1).karts[0].pops, 65535);
 });
 
 test('remote karts are written by the remote racer kind from batches, 100 ms in the past', async () => {

@@ -14,6 +14,16 @@ const FALLBACK = ['LET GO', 'DRIFT AWAY', 'BREATHE SLOW', 'FLOAT ON'];
 const APPEAR_S = .64, FADE_S = .65;
 const FLIGHT_PACE = 1.6;
 const LYRIC_WINDOW_S = 1.25;
+// Owner 2026-10-28: bigger letters, a higher springier arc with a small hang at the apex, and the
+// word spawns under the kart instead of on the road centre. Solo-only tuning: never in feel.json.
+export const WORD_SCALE = 1.5, WORD_LENGTH_M = 3.2 * WORD_SCALE, WORD_MAX_WIDTH_M = 8.5 * WORD_SCALE;
+export const ARC_M = [2.6, 3.2];
+const HANG = .3, EDGE_M = 1.2;
+/** Word centre offset from the road centre: under the kart, with the whole word kept over the road. */
+export function airWordLateral(lateral, halfRoadM, widthM) {
+  const room = Math.max(0, halfRoadM - widthM / 2 - EDGE_M);
+  return clamp(Number(lateral) || 0, -room, room);
+}
 export function bindAirWords(st, run) { runs.set(st, run); held.delete(st); }
 export function phraseBounceActive(st) { return !!runs.get(st)?.bouncing; }
 export function phraseBouncePhase(st) { return runs.get(st)?.bouncePhase ?? null; }
@@ -30,11 +40,12 @@ export function createAirWordRun(song, track) {
   }
   setSong(song);
   const pool = Array.from({ length: 1 }, (_, i) => ({ id: `air-word-${i}`, text: '', s: 0, ...frame(),
-    widthM: 8.5, lengthM: 3.2, alpha: 0, solid: false, bornS: Infinity, endS: -1 }));
+    widthM: WORD_MAX_WIDTH_M, lengthM: WORD_LENGTH_M, lateral: 0, shift: [0, 0, 0], alpha: 0, solid: false, bornS: Infinity, endS: -1 }));
   const platforms = [], f = frame(), q = [0, 0, 0, 1];
   let clock = 0, songS = 0, rider = null, previous = null, route = null, paused = false, enabled = true;
   const run = { platforms, timeS: 0, activeSection: null, update, reset, step, setSong,
     get bouncing() { return route?.stage === 'flight' && route.leg === 1; },
+    get flying() { return route?.stage === 'flight'; },
     get bouncePhase() { return route?.stage === 'flight' ? (route.leg === 0 ? route.elapsed - route.duration : route.elapsed) : null; } };
   function reset() {
     platforms.length = 0;
@@ -88,7 +99,13 @@ export function createAirWordRun(song, track) {
   }
   function lettering(row, at) {
     row.text = lyric(at, row.phraseIndex ?? row.index);
-    row.widthM = Math.min(row.maxWidthM, clamp(row.text.length * .98, 4.4, 8.5));
+    row.widthM = Math.min(row.maxWidthM, clamp(row.text.length * .98 * WORD_SCALE, 4.4 * WORD_SCALE, WORD_MAX_WIDTH_M));
+  }
+  // Slide the word sideways along the road's binormal at its own station. Height never changes.
+  function placeRow(row, lateral) {
+    row.lateral = airWordLateral(lateral, row.halfRoadM, row.widthM);
+    row.shift = [row.across[0] * row.lateral, 0, row.across[2] * row.lateral];
+    row.p = [row.base[0] + row.shift[0], row.p[1], row.base[2] + row.shift[2]];
   }
   function begin(st, zone, events) {
     const start = track.frameAt(zone.gapS0, frame());
@@ -98,21 +115,24 @@ export function createAirWordRun(song, track) {
       const s = guide[1].s;
       track.frameAt(s, f);
       const row = pool[i], h = Math.hypot(f.t[0], f.t[2]) || 1;
-      row.s = s; row.p = [f.p[0], guide[1].y, f.p[2]];
+      row.s = s; row.p = [f.p[0], guide[1].y, f.p[2]]; row.base = [...f.p]; row.across = [...f.b];
+      // The narrowest road between the word and the far deck bounds how far it may slide.
+      row.halfRoadM = Math.min(f.w, track.frameAt(guide[2].s).w, zone.widthM) / 2;
       const yaw = (i % 2 ? 1 : -1) * .085, c = Math.cos(yaw), sn = Math.sin(yaw);
       const tx = f.t[0] / h, tz = f.t[2] / h;
       row.t = [tx * c - tz * sn, 0, tz * c + tx * sn]; row.b = [-row.t[2], 0, row.t[0]]; row.n = [0, 1, 0];
-      row.maxWidthM = Math.min(zone.widthM * .55, 8.5); row.lengthM = 3.2;
+      row.maxWidthM = Math.min(zone.widthM * .55, WORD_MAX_WIDTH_M); row.lengthM = WORD_LENGTH_M;
       row.bornS = Infinity; row.endS = Infinity; row.landedS = Infinity; row.catchS = Infinity;
       row.index = i; row.section = zone.id;
       row.phraseIndex = track.aerials.indexOf(zone) + Math.max(0, st[S.lap] | 0) * 2;
-      lettering(row, songS + (s - st[S.s]) / 24);
+      lettering(row, songS + (s - st[S.s]) / 24); placeRow(row, st[S.lateral]);
       points.push({ s, y: row.p[1], row });
     }
     points.push({ ...guide[2], row: null });
     track.frameAt(st[S.s], f);
     const speed = Math.max(0, st[S.velX] * f.t[0] + st[S.velY] * f.t[1] + st[S.velZ] * f.t[2]);
-    route = { zone, points, s: st[S.s], speed: clamp(speed, 4, 50), lateral: st[S.lateral],
+    // The steering corridor is centred on the word's spawn lane, so a racer near an edge stays over it.
+    route = { zone, points, s: st[S.s], speed: clamp(speed, 4, 50), lateral: st[S.lateral], centre: pool[0].lateral,
       stage: 'ramp', leg: 0, elapsed: 0, age: 0,
       entry: [st[S.posX] - f.p[0] - f.b[0] * st[S.lateral], st[S.posY] - f.p[1] - f.b[1] * st[S.lateral], st[S.posZ] - f.p[2] - f.b[2] * st[S.lateral]] };
     run.activeSection = zone;
@@ -126,7 +146,7 @@ export function createAirWordRun(song, track) {
     track.frameAt(to.s, f); to.defaultOffset = f.b.map(v => v * r.lateral);
     to.offset = [...to.defaultOffset]; to.catchU = null;
     if (to.row) {
-      lettering(to.row, songS + r.duration);
+      lettering(to.row, songS + r.duration); placeRow(to.row, r.lateral);
       to.row.catchPoints = null; to.row.catchText = null;
       to.row.bornS = clock + r.duration - APPEAR_S; to.row.endS = Infinity;
       to.row.catchS = clock + r.duration;
@@ -141,7 +161,7 @@ export function createAirWordRun(song, track) {
   function contact(point) {
     const row = point.row;
     return { id: row.id, section: route.zone.id, index: row.index, text: row.text, s: point.s,
-      p: row.p.map((v, i) => i === 1 ? v : v + point.offset[i]), n: [...row.n], b: [...row.b] };
+      p: row.p.map((v, i) => i === 1 ? v : v - row.shift[i] + point.offset[i]), n: [...row.n], b: [...row.b] };
   }
   function step(st, action, feel, dt, events) {
     if (!enabled || !(dt > 0)) return false;
@@ -159,8 +179,11 @@ export function createAirWordRun(song, track) {
     const old = [st[S.posX], st[S.posY], st[S.posZ]], steering = clamp(Number(action.steer) || 0, -1, 1);
     const limit = Math.min(2.6, r.zone.widthM * .18);
     // Steering changes the actual flight lane and stays there when released.
-    const target = clamp(r.lateral + steering * 4 * dt, -limit, limit);
+    const target = clamp(r.lateral + steering * 4 * dt, r.centre - limit, r.centre + limit);
     r.lateral += clamp(target - r.lateral, -4 * dt, 4 * dt);
+    // Until it materialises the approaching word keeps sliding under the racer's chosen lane.
+    const coming = r.points[r.leg + 1]?.row;
+    if (coming && clock < coming.bornS) placeRow(coming, r.lateral);
     let y = null, onGround = false, end = false, offset = null;
     if (r.stage === 'ramp' || r.stage === 'exit') {
       r.speed += clamp(24 - r.speed, -14 * dt, 14 * dt);
@@ -175,11 +198,11 @@ export function createAirWordRun(song, track) {
         let best = null, score = Infinity;
         for (const point of candidates) {
           if (!Number.isFinite(point.x) || !Number.isFinite(point.z) || Math.abs(point.x) > .5 || Math.abs(point.z) > .5) continue;
-          const distance = (point.x * to.row.widthM - r.lateral) ** 2 + (point.z * to.row.lengthM) ** 2;
+          const distance = (point.x * to.row.widthM - (r.lateral - to.row.lateral)) ** 2 + (point.z * to.row.lengthM) ** 2;
           if (distance < score) { best = point; score = distance; }
         }
         if (best) {
-          to.offset = to.row.b.map((v, i) => v * best.x * to.row.widthM + to.row.t[i] * best.z * to.row.lengthM);
+          to.offset = to.row.b.map((v, i) => to.row.shift[i] + v * best.x * to.row.widthM + to.row.t[i] * best.z * to.row.lengthM);
           to.catchU = u;
         }
       }
@@ -191,7 +214,9 @@ export function createAirWordRun(song, track) {
       if (!to.row) to.offset = [...offset];
       r.s = from.s + (to.s - from.s) * u;
       // A real descending arc meets the late phrase with momentum. The next leg springs at once.
-      const arc = 2.2 * 4 * u * (1 - u);
+      // The warp leaves faster (pop), lingers at the apex (hang) and drops into contact (punch).
+      const warp = u + HANG * Math.sin(2 * Math.PI * u) / (2 * Math.PI);
+      const arc = ARC_M[Math.min(1, r.leg)] * 4 * warp * (1 - warp);
       y = from.y + (to.y - from.y) * smooth(u) + arc;
       st[S.airTime] += dt;
       if (u >= 1) {
