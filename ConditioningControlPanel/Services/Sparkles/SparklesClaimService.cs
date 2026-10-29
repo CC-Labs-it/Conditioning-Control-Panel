@@ -24,8 +24,9 @@ public sealed record SparklesClaimOutcome(SparklesReceipt? Receipt, string? Reas
 /// SPARKLES BY PLACE (B1), client half: <c>POST /v2/sparkles/claim</c> through the stakes door
 /// (identity, base url, reply reading). A 202 pending is asked again with the SAME claimId (the
 /// server replays the same receipt), at most <see cref="MaxAttempts"/> sends; 401 = signed out.
-/// WALLET RULE: only <c>credited &gt; 0</c> and not <c>shadow</c> is adopted, as a settlement
-/// (<see cref="V2WalletAdoption.Decide"/> <c>fromBuy: true</c>), account re-checked in the write.
+/// WALLET RULE: only <c>credited &gt; 0</c> and not <c>shadow</c> is adopted, and only ever RAISES
+/// the wallet (<see cref="V2WalletAdoption.Decide"/> <c>fromBuy: false</c>: a credit is not a debited
+/// receipt), account re-checked in the write.
 /// </summary>
 public sealed class SparklesClaimService
 {
@@ -64,13 +65,15 @@ public sealed class SparklesClaimService
     public static bool ShouldAdopt(SparklesReceipt? r) =>
         r != null && !r.Shadow && r.Credited > 0 && r.Sp is int sp && sp >= 0;
 
-    /// <summary>The whole wallet decision for one receipt: <see cref="ShouldAdopt"/>, then the
-    /// settlement rule. <paramref name="next"/> is only meaningful when this answers true.</summary>
+    /// <summary>The whole wallet decision for one receipt: <see cref="ShouldAdopt"/>, then RAISE
+    /// ONLY. A place receipt is a credit, never a debit, and only a debited receipt may lower the
+    /// wallet (AGENTS.md wallet rule), so unsynced local level-up points are never wiped.
+    /// <paramref name="next"/> is only meaningful when this answers true.</summary>
     public static bool DecideWallet(bool sameAccount, SparklesReceipt? r, int localSp, out int next)
     {
         next = localSp;
         if (!ShouldAdopt(r)) return false;
-        return V2WalletAdoption.Decide(sameAccount, fromBuy: true, r!.Sp!.Value, localSp, out next);
+        return V2WalletAdoption.Decide(sameAccount, fromBuy: false, r!.Sp!.Value, localSp, out next);
     }
 
     /// <summary>How long to wait before asking again, from a 202's <c>retryAfterMs</c>.</summary>
@@ -177,7 +180,7 @@ public sealed class SparklesClaimService
             // somebody else by the time the reply lands.
             var same = string.Equals(BackRoomApi.AppIdentity()?.UnifiedId, account, StringComparison.Ordinal);
             var before = s.SkillPoints;
-            if (!V2WalletAdoption.Decide(same, fromBuy: true, sp, before, out var next)) return;
+            if (!V2WalletAdoption.Decide(same, fromBuy: false, sp, before, out var next)) return;
             s.SkillPoints = next;
             App.Settings.Save();
             SparklePointRewards.PublishCredit(before, next, SparklePointSource.Place);

@@ -99,14 +99,15 @@ public class SparklesClaimServiceTests
     }
 
     [Fact]
-    public void APayingReceiptAdoptsItsBalanceBothWays()
+    public void APayingReceiptOnlyRaisesTheWallet()
     {
         var r = SparklesReceipt.Parse(JObject.Parse(FullReceipt))!;
         Assert.True(SparklesClaimService.DecideWallet(true, r, 4000, out var up));
         Assert.Equal(4310, up);
-        // A receipt is settled money: it may lower a wallet too (the settlement rule).
-        Assert.True(SparklesClaimService.DecideWallet(true, r, 5000, out var down));
-        Assert.Equal(4310, down);
+        // A credit is not a debited receipt: it never lowers a wallet ahead of the server
+        // (unsynced level-up points stay).
+        Assert.False(SparklesClaimService.DecideWallet(true, r, 5000, out var kept));
+        Assert.Equal(5000, kept);
     }
 
     [Fact]
