@@ -5,6 +5,8 @@ import { readState, createShop, TAB_ORDER, windowShelves, WINDOW_BAYS } from '..
 import { createMockServer } from '../mock/server.js';
 
 const SAMPLE = JSON.parse(readFileSync(new URL('../mock/state.sample.json', import.meta.url), 'utf8'));
+// The walk tests want a last slot left empty: rain-clothes cut back to its first eight rows (catalog v2 has nine).
+const SAMPLE8 = { ...SAMPLE, tabs: SAMPLE.tabs.map((t) => (t.id !== 'rain-clothes' ? t : { ...t, shelves: [{ rows: t.shelves[0].rows.slice(0, 8) }] })) };
 const row = (id, extra = {}) => ({ id, tier: 'S', priceSp: 10, grants: [`cos.${id}`], owned: null, sale: 'on', ...extra });
 const body = (tabs) => ({ ...structuredClone(SAMPLE), tabs });
 
@@ -38,7 +40,7 @@ test('readState: house tab order, unknown tabs dropped, bad rows kept as holes, 
 });
 
 test('focus walk: columns, rows, the empty last slot, edges stay put', async () => {
-  const { shop } = rig();
+  const { shop } = rig(SAMPLE8);
   await shop.load();
   assert.equal(shop.tabId(), 'rain-clothes');
   assert.deepEqual(at(shop), [0, 0, 'rain.dress.midnight-cocktail']);
@@ -81,7 +83,7 @@ test('focus walk: crosses bays, skips holes and an empty bay, single-item tab ne
 });
 
 test('pick: a tap focuses, a tap on the focused item opens its card, an empty slot does nothing', async () => {
-  const { shop } = rig();
+  const { shop } = rig(SAMPLE8);
   await shop.load();
   assert.deepEqual(shop.intent({ type: 'pick', bay: 0, slot: 8 }), {});
   assert.equal(shop.intent({ type: 'pick', bay: 0, slot: 3 }).focus.row.id, 'rain.dress.plum-asymmetric');
@@ -200,7 +202,7 @@ test('stock_changed: the fresh state replaces the shelf, focus keeps the same it
   const out = await r.shop.confirm();
   assert.deepEqual(at(r.shop), [0, 2, 'rain.dress.plum-asymmetric']);
   assert.deepEqual(out.focus.slot, 2);
-  assert.equal(out.tab.shelves[0].rows.length, 7);
+  assert.equal(out.tab.shelves[0].rows.length, 8);
   assert.equal((await r.shop.confirm()).effects[0].sp, 1120, 'the reopened card buys at the new week');
   assert.equal(r.buys()[1].body.week, '2026-W45');
   r.shop.intent({ type: 'back' });

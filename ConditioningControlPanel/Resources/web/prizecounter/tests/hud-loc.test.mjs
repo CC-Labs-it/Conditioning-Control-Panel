@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { LEX, tabKey, itemKey } from '../state/strings.js';
+import { LEX, tabKey, itemKey, itemDesc, makeT } from '../state/strings.js';
 import { TAB_ORDER } from '../state/shop.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url)), page = path.join(here, '..');
@@ -14,13 +14,15 @@ const LANGS = ['de', 'en', 'es', 'fr', 'it', 'ja', 'ko', 'pt-BR', 'ru', 'zh-CN']
 const read = (lang) => fs.readFileSync(path.join(LANG_DIR, `${lang}.json`), 'utf8');
 const shopKeys = (text) => Object.keys(JSON.parse(text)).filter((k) => k.startsWith('shop_')).sort();
 const sample = JSON.parse(fs.readFileSync(path.join(page, 'mock/state.sample.json'), 'utf8'));
+// Retired ids (catalog revision 2) lose their name keys: an owner's stamped row falls back to the id's words.
+const retired = JSON.parse(fs.readFileSync(path.join(page, 'assets/manifest.json'), 'utf8')).retired;
 
 function usedKeys() {
   const files = ['main.js', ...['hud', 'state', 'scene'].filter((d) => fs.existsSync(path.join(page, d))).flatMap((d) => fs.readdirSync(path.join(page, d)).filter((f) => f.endsWith('.js')).map((f) => `${d}/${f}`))];
   const keys = new Set();
   for (const f of files) for (const m of fs.readFileSync(path.join(page, f), 'utf8').matchAll(/'(shop_[a-z0-9_]+)'/g)) keys.add(m[1]);
   TAB_ORDER.forEach((id) => keys.add(tabKey(id)));
-  sample.tabs.forEach((tab) => tab.shelves.forEach((s) => s.rows.forEach((r) => r && keys.add(itemKey(r.id)))));
+  sample.tabs.forEach((tab) => tab.shelves.forEach((s) => s.rows.forEach((r) => r && !(r.id in retired) && keys.add(itemKey(r.id)))));
   return [...keys];
 }
 
@@ -29,6 +31,17 @@ test('every shop_* key used in code, every tab and every sample row name is in e
   const used = usedKeys();
   assert.ok(used.length > 60, `found ${used.length}`);
   assert.deepEqual(used.filter((k) => !(k in en)), []);
+});
+
+test('every item with art has a name in en.json, and no retired id keeps one', () => {
+  const en = JSON.parse(read('en')), items = JSON.parse(fs.readFileSync(path.join(page, 'assets/manifest.json'), 'utf8')).items;
+  assert.deepEqual(items.map((i) => itemKey(i.id)).filter((k) => !(k in en)), []);
+  assert.deepEqual(Object.keys(retired).map(itemKey).filter((k) => k in en), []);
+});
+
+test('every item with art has a description', () => {
+  const t = makeT(JSON.parse(read('en'))), items = JSON.parse(fs.readFileSync(path.join(page, 'assets/manifest.json'), 'utf8')).items;
+  assert.deepEqual(items.filter((i) => !itemDesc(t, i.id)).map((i) => i.id), []);
 });
 
 test('all ten language files carry the same shop_* key set, once each, no BOM', () => {

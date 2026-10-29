@@ -54,6 +54,7 @@ html, body { margin: 0; height: 100%; background: #140d19; color: var(--ink); fo
 .pc-peek-view { height: 150px; border-bottom: 2px dashed var(--ink-soft); margin-bottom: 8px; }
 .pc-peek-name { margin: 0; font: 700 24px/1.1 var(--hand); }
 .pc-peek-price { margin: 6px 0 0; display: flex; align-items: center; gap: 6px; font-size: 20px; }
+.pc-peek-desc { margin: 6px 0 0; font-size: 14px; line-height: 1.3; color: var(--ink-soft); }
 .pc-peek.pc-swap { animation: pc-swap .26s cubic-bezier(.3,1.6,.5,1); }
 @keyframes pc-swap { from { transform: rotate(1deg) scale(.94); opacity: .4; } }
 .pc-red { color: var(--red); }
@@ -79,6 +80,7 @@ html, body { margin: 0; height: 100%; background: #140d19; color: var(--ink); fo
 .pc-card-name { margin: 0; font: 700 30px/1.05 var(--hand); }
 .pc-card-price { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 30px; }
 .pc-card-price .pc-star { width: 22px; height: 22px; }
+.pc-card-desc { margin: 0; font-size: 15px; line-height: 1.35; color: var(--ink-soft); }
 .pc-line { margin: 0; font-size: 15px; color: var(--ink-soft); }
 .pc-line-short { color: var(--red); }
 .pc-note { margin: 0; font-size: 14px; color: var(--pink); border-left: 3px solid var(--pink); padding-left: 8px; }
@@ -132,6 +134,7 @@ html, body { margin: 0; height: 100%; background: #140d19; color: var(--ink); fo
   .pc-peek-view { flex-basis: 100%; height: 96px; }
   .pc-peek-name { font-size: 20px; }
   .pc-peek-price { margin: 0; }
+  .pc-peek-desc { flex-basis: 100%; margin: 4px 0 0; font-size: 13px; }
   .pc-list { inset: 112px 12px 12px; }
 }
 @media (pointer: coarse) { .pc-hint { display: none; } }
