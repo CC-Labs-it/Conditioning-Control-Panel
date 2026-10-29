@@ -40,7 +40,7 @@ public static class SparklesGameEnd
     }
 
     /// <summary>Claim a finished game. Never throws; null when there is no claim service.
-    /// <paramref name="proof"/> names the server's own record of an online game (wire section 5).</summary>
+    /// <paramref name="proof"/> rides only on an online claim (the server's own record of it).</summary>
     public static Task<SparklesClaimOutcome?> Claim(string game, string mode, SparklesResult result,
         TimeSpan duration, JObject? detail = null, JObject? proof = null)
     {
