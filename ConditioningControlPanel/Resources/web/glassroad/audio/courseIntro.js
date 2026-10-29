@@ -97,15 +97,17 @@ export function createCourseIntroAudio(ctx, out) {
     if (voice === v) voice = null;
     if (retiring === v) retiring = null;
   }
+  // a retiring voice finishes its own fade and scheduled stop (#3084: a per-frame stop cut it ~16 ms in = a click);
+  // it is dropped once the clock passes its stop time even if onended never arrives
+  function settle() { if (retiring && ctx.currentTime >= retiring.endsAt) drop(retiring); }
   function stop(immediate = false) {
-    if (retiring) { try { retiring.source.stop(); } catch { /* ended */ } drop(retiring); }
+    if (immediate) { for (const v of [retiring, voice]) if (v) { try { v.source.stop(); } catch { /* ended */ } drop(v); } return; }
+    settle();
     if (!voice) return;
-    const v = voice; voice = null;
-    if (immediate) { try { v.source.stop(); } catch { /* ended */ } drop(v); return; }
-    retiring = v;
+    const v = voice; voice = null; retiring = v; v.endsAt = ctx.currentTime + INTRO_SOUND.fadeS;
     v.gain.gain.cancelScheduledValues(ctx.currentTime);
     v.gain.gain.setTargetAtTime(0, ctx.currentTime, INTRO_SOUND.fadeS / 4);
-    v.source.stop(ctx.currentTime + INTRO_SOUND.fadeS);
+    v.source.stop(v.endsAt);
   }
   return {
     prepare,
@@ -113,7 +115,10 @@ export function createCourseIntroAudio(ctx, out) {
       if (dead) return;
       if (!active || paused || ctx.state !== 'running' || !Number.isFinite(elapsed) || elapsed < 0 || elapsed >= INTRO_SOUND.seconds) { stop(); return; }
       const course = COURSES.has(courseId) ? courseId : 'threshold';
+      settle();
       if (voice && (course !== voice.course || Math.abs(voice.offset + ctx.currentTime - voice.started - elapsed) > .12)) stop();
+      // one voice at a time: a re-entry waits out the retiring fade (a frame or two), then starts at the live offset
+      if (!voice && retiring) return;
       if (!voice) {
         prepare(course);
         const source = ctx.createBufferSource(), gain = ctx.createGain();
