@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { emptyRecord, cleanRecord } from '../meta/record.js';
 import { COURSES } from '../track/catalog.js';
 import { courseRows, totalRows, recentRows, placeLine, achievementStamps, formatDate, formatSpan, TABS } from '../hud/record.js';
-import { KARTS, LOCKED, DEFAULT, cleanGarage, stepKart, routeTo, lockedKarts, lockLine } from '../hud/garageState.js';
+import { KARTS, LOCKED, DEFAULT, FREE_KART, COUNTER_LINE, cleanGarage, stepKart, routeTo, lockedKarts, lockLine, ownedKarts, kartGrant } from '../hud/garageState.js';
 import { UNLOCKS, unlockedSet } from '../meta/unlocks.js';
 
 const BANNED = /[–—!]/;
@@ -72,32 +72,44 @@ test('record ui: tab labels and fixed copy carry no dashes or exclamation marks'
   for (const kart of LOCKED) assert.ok(!BANNED.test(lockLine(kart) || ''));
 });
 
-test('garage locks: the dark set is the catalog list minus unlocked karts', () => {
+test('garage locks: the dark set is every body but the free one, minus earned and owned karts', () => {
   assert.deepEqual([...lockedKarts()].sort(), [...LOCKED].sort());
+  assert.equal(LOCKED.size, KARTS.length - 1);
+  assert.equal(LOCKED.has(FREE_KART), false);
   const r = emptyRecord(); r.unlocks = ['kart:undertow', 'hat:umbrella'];
   const dark = lockedKarts(unlockedSet(r));
-  assert.deepEqual([...dark], ['velvet-lock']);
+  assert.equal(dark.has('undertow'), false);
+  assert.equal(dark.size, LOCKED.size - 1);
   assert.equal(LOCKED.has('undertow'), true, 'the catalog list never changes');
   assert.equal(lockedKarts(new Set(['kart:nope', 'junk'])).size, LOCKED.size);
+  const bought = lockedKarts(unlockedSet(r), ownedKarts(['cos.kart.body.velvet-lock', 'cos.kart.body.petal']));
+  assert.equal(bought.has('velvet-lock') || bought.has('petal') || bought.has('undertow'), false, 'earned or bought, either opens it');
   for (const id of ['kart:velvet-lock', 'kart:undertow', 'hat:umbrella']) assert.ok(UNLOCKS[id] && UNLOCKS[id].label && UNLOCKS[id].by);
 });
 
 test('garage locks: an unlocked kart can be saved, stepped onto and routed to', () => {
   const open = lockedKarts(new Set(['kart:undertow'])), undertow = KARTS.findIndex((k) => k[0] === 'undertow');
+  const free = KARTS.findIndex((k) => k[0] === FREE_KART);
   assert.equal(cleanGarage({ kart: 'undertow' }).kart, DEFAULT.kart);
   assert.equal(cleanGarage({ kart: 'undertow' }, open).kart, 'undertow');
   assert.equal(cleanGarage({ kart: 'velvet-lock' }, open).kart, DEFAULT.kart);
-  assert.equal(routeTo(0, undertow), null);
-  assert.deepEqual(routeTo(0, undertow, open), { index: undertow, steps: -1 });
-  assert.deepEqual(stepKart(0, -1, open), { index: undertow, steps: -1 });
-  assert.equal(stepKart(5, 1, open).index, undertow, 'Velvet Lock stays skipped');
-  const all = lockedKarts(new Set(['kart:undertow', 'kart:velvet-lock']));
+  assert.equal(routeTo(free, undertow), null);
+  assert.deepEqual(routeTo(free, undertow, open), { index: undertow, steps: undertow - free });
+  assert.equal(stepKart(free, 1, open).index, undertow, 'every dark kart between is skipped');
+  assert.equal(stepKart(free, -1, open).index, undertow);
+  const all = lockedKarts(new Set(['kart:undertow', 'kart:velvet-lock']), ownedKarts(KARTS.map(([id]) => kartGrant(id))));
+  assert.equal(all.size, 0);
   const seen = new Set(); let index = 0;
   for (let i = 0; i < KARTS.length; i++) { index = stepKart(index, 1, all).index; seen.add(index); }
   assert.equal(seen.size, KARTS.length);
 });
 
-test('garage locks: a dark kart names what unlocks it, a hidden achievement stays unnamed', () => {
-  for (const kart of LOCKED) assert.match(lockLine(kart), /^Unlocks with /);
+test('garage locks: a dark kart points at the Prize Counter, the logbook karts name their achievement too', () => {
+  for (const kart of LOCKED) {
+    if (Object.values(UNLOCKS).some((u) => u.garage === kart)) assert.match(lockLine(kart), /^Unlocks with .+, or in the Prize Counter$/);
+    else assert.equal(lockLine(kart), COUNTER_LINE);
+  }
+  assert.equal(COUNTER_LINE, 'In the Prize Counter');
   assert.equal(lockLine('lovebomb'), null);
+  assert.equal(lockLine('nope'), null);
 });
