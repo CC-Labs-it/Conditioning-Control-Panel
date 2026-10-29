@@ -105,13 +105,28 @@ test('larger WebGPU warm batches keep every render variant and restore hidden po
     const result=await warmAll({backend,post:()=>post},scene,camera,[],{onProgress:(done,total)=>progress.push([done,total])});
     const limit=backend==='webgpu'?WARM.webgpuPerGroup:WARM.perGroup;
     assert.equal(result.groups,Math.ceil(131/limit));assert.equal(warmed.size,131);
-    assert.ok(groups.every(n=>n<=limit));assert.deepEqual(progress.at(-1),[result.groups+1,result.groups+1]);
+    assert.ok(groups.every(n=>n<=limit));assert.deepEqual(progress.at(-1),[result.groups+2,result.groups+2]);
     assert.equal(holder.visible,false);assert.equal(pooled.visible,false);assert.equal(pooled.material.visible,false);
     assert.equal(pooled.count,0);assert.equal(camera.layers.mask,16);assert.equal(scene.children.length,3);
     for(const object of [...objects,receiver,pooled]){assert.equal(object.frustumCulled,true);object.material.dispose();}
     pooled.dispose();geometry.dispose();results[backend]=result.groups;
   }
   assert.ok(results.webgpu<results.webgl2);assert.equal(results.unknown,results.webgl2,'unknown backends retain the serial budget');
+});
+
+test('preparation reports real shader completions within each pass and waits for its draw before completing',async()=>{
+  const scene=new Scene(),camera=new PerspectiveCamera(),progress=[];let pass=0;
+  const mesh=new Mesh(new BoxGeometry(),new MeshBasicNodeMaterial());scene.add(mesh);
+  const post={async compileStart(onProgress){
+    for(let done=1;done<=4;done++)onProgress({loaded:done,total:4});
+    assert.ok(progress.at(-1)<(pass+1)/3,'shader completion reserves room for the draw');
+  },render(){pass++;}};
+  const result=await warmAll({backend:'webgpu',post:()=>post},scene,camera,[],{onProgress:(done,total)=>progress.push(done/total)});
+  assert.equal(result.groups,1);
+  assert.equal(progress.at(-1),1);
+  assert.ok(progress.length>=15,'progress includes intermediate shader completions');
+  assert.ok(progress.every((p,i)=>p>=0&&p<=1&&(!i||p>=progress[i-1])));
+  mesh.geometry.dispose();mesh.material.dispose();
 });
 
 test('covered warm freezes distance selection so the intro can cut to every LOD without a new shader',async()=>{

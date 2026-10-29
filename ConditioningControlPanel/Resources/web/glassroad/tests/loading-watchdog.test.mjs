@@ -54,6 +54,18 @@ test('loading watchdog: a slow load that keeps moving never stalls; a finished c
   assert.equal(stalls.length, 1, 'no watch once the cover is finishing');
 });
 
+test('a new loading phase resets the visible bar instead of keeping the previous 100%', (t) => {
+  const { loading, nodes } = cover(t);
+  loading.start(); loading.set('Ready to roll', 1);
+  loading.start();
+  assert.equal(nodes['.boot-percent'].textContent, '0%');
+  assert.equal(nodes['.boot-fill'].style.transform, 'scaleX(0)');
+  loading.set('Getting the lights ready', .24);
+  loading.set('Getting the lights ready', .20);
+  assert.equal(nodes['.boot-percent'].textContent, '24%', 'real progress remains monotonic inside a phase');
+  loading.dispose();
+});
+
 test('loading watchdog: the clock pauses while the tab is hidden, and one long blocked task counts two ticks at most', (t) => {
   const { loading, doc, stalls, pass, jump } = cover(t);
   loading.start(); loading.set('Getting the lights ready', 0.3);

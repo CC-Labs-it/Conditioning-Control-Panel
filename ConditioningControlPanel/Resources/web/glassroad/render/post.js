@@ -95,14 +95,14 @@ export function createPost(three, scene, camera) {
     },
     detachScene(){scene=null;camera=null;scenePass.scene=null;scenePass.camera=null;},
     /** Compile every visible scene object for the scene pass target (no draw). */
-    async compileAsync() {
+    async compileAsync(onProgress = null) {
       const target = three.getRenderTarget(), mrt = three.getMRT();
       try {
         three.setRenderTarget(scenePass.renderTarget);
         three.setMRT(scenePass.getMRT());
         // The pipeline quad renders at depth +1, its scene pass at +2. Match that
         // cache context without changing the shared recursion counter across awaits.
-        await three.compileAsync(scene, camera, null, null, three._callDepth + 2);
+        await three.compileAsync(scene, camera, null, onProgress, three._callDepth + 2);
       } finally {
         three.setRenderTarget(target);
         three.setMRT(mrt);
@@ -110,12 +110,12 @@ export function createPost(three, scene, camera) {
     },
     /** compileAsync for frames that keep running (render/stagedWarm.js): the render list is taken and the target
      *  handed back in this task, so a frame drawn while the pipelines build never lands in the scene pass target. */
-    compileStart() {
+    compileStart(onProgress = null) {
       const target = three.getRenderTarget(), mrt = three.getMRT();
       try {
         three.setRenderTarget(scenePass.renderTarget);
         three.setMRT(scenePass.getMRT());
-        return three.compileAsync(scene, camera, null, null, three._callDepth + 2);
+        return three.compileAsync(scene, camera, null, onProgress, three._callDepth + 2);
       } finally {
         three.setRenderTarget(target);
         three.setMRT(mrt);
