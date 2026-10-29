@@ -19,7 +19,8 @@ test('Boudoir is a complete dressing room with clear furniture, drawer interiors
   assert.equal(boudoirWorldPlan({ id: 'threshold' }), null);
   assert.ok(plan.rows.length > 600);
   assert.equal(plan.interiors.length, 2);
-  for (const name of ['dressing-room-parquet', 'dressing-room-ceiling', 'wardrobe-descent-crown', 'shelf-climb-crown',
+  assert.ok(!plan.rows.some(r => ['dressing-room-wall', 'dressing-room-ceiling'].includes(r.name)), 'distant panels leave the sky open');
+  for (const name of ['dressing-room-parquet', 'ceiling-coffer', 'wardrobe-descent-crown', 'shelf-climb-crown',
     'drawer-lacquer-wall', 'drawer-ceiling', 'vanity-tabletop', 'lipstick-colour', 'perfume-flacon', 'vanity-mirror-frame'])
     assert.ok(plan.rows.some(r => r.name === name), name);
   const hits = [];
