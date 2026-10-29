@@ -210,12 +210,15 @@ public class LauncherBootTests
     }
 
     [Fact]
-    public void Race_tile_has_a_reveal_probe_and_stays_available()
+    public void Race_tile_is_always_revealed_and_available()
     {
+        // 7.2: the tile opens Racing Thoughts 3D for everyone; the purchase reveal went with the 2D race.
         var race = LauncherCatalogue.Find("race");
         Assert.NotNull(race);
-        Assert.NotNull(race!.IsRevealed);
+        Assert.Null(race!.IsRevealed);
+        Assert.True(race.Revealed);
         Assert.True(race.Available);
+        Assert.False(race.Locked);
     }
 
     [Fact]

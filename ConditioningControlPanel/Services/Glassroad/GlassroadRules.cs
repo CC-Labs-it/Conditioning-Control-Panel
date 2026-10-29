@@ -5,32 +5,18 @@ using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Services.Glassroad;
 
 /// <summary>
-/// The pure half of the Glassroad host (<see cref="GlassroadHostService"/>): the hidden door, the
-/// host init frame and the net relay's signing rule. No I/O, no App statics, so every rule here is
-/// tested without a window.
+/// The pure half of the Glassroad host (<see cref="GlassroadHostService"/>): the host init frame
+/// and the net relay's signing rule. No I/O, no App statics, so every rule here is tested without
+/// a window. The door is open for everyone since 7.2 (LauncherCatalogue "race").
 /// </summary>
 internal static class GlassroadRules
 {
-    /// <summary>The env switch that turns the Racing Thoughts doors into Glassroad doors. Preview only:
-    /// without it nothing changes for anyone.</summary>
-    public const string DoorEnv = "CCP_GLASSROAD";
-
     /// <summary>The only prefix the relay forwards (the race lobby). Judged on the built Uri by
     /// <see cref="HostNetPathRule"/>.</summary>
     public const string AllowedPathPrefix = HostNetPathRule.RacePrefix;
 
     /// <summary>The web courier's body cap, kept the same here.</summary>
     public const int MaxBodyBytes = 16 * 1024;
-
-    /// <summary>True when the env value opens the Glassroad door: exactly "1".</summary>
-    public static bool DoorOpen(string? envValue) => string.Equals(envValue?.Trim(), "1", StringComparison.Ordinal);
-
-    /// <summary>The live read of the door switch. Never throws.</summary>
-    public static bool DoorOpenNow()
-    {
-        try { return DoorOpen(Environment.GetEnvironmentVariable(DoorEnv)); }
-        catch { return false; }
-    }
 
     /// <summary>
     /// The host init frame (host protocol v2, glassroad CONTRACT.md section 7). <c>caps.net</c> is
