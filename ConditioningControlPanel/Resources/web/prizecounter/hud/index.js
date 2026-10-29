@@ -5,7 +5,7 @@
  *   const hud = createHud(root, { t, send, goTab, signIn, motion, gentle, list });
  *   hud.paint(view); hud.receipt(sp, {x, y}); hud.previewSlot   // lane B3-W5 fills the slot */
 
-import { tabKey, itemName } from '../state/strings.js';
+import { tabKey, itemName, itemDesc } from '../state/strings.js';
 import { TAB_ICONS, STAR, LOCK, BACK } from './icons.js';
 import { cardModel, renderCard } from './card.js';
 import { countDown, weekNo } from './wallet.js';
@@ -37,8 +37,8 @@ export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'f
 
   const listEl = el('div', 'pc-list');
   const peek = el('aside', 'pc-peek'), previewSlot = el('div', 'pc-peek-view');
-  const peekName = el('p', 'pc-peek-name'), peekPrice = el('p', 'pc-peek-price');
-  peek.append(previewSlot, peekName, peekPrice);
+  const peekName = el('p', 'pc-peek-name'), peekPrice = el('p', 'pc-peek-price'), peekDesc = el('p', 'pc-peek-desc');
+  peek.append(previewSlot, peekName, peekPrice, peekDesc);
   peek.onclick = () => send({ type: 'select' });
   const status = el('p', 'pc-status');
   status.setAttribute('role', 'status');
@@ -100,6 +100,9 @@ export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'f
     if (!peekKey.startsWith(row.id + '|')) pulse(peek, 'pc-swap');
     peekKey = key;
     peekName.textContent = itemName(t, row.id);
+    const desc = itemDesc(t, row.id);
+    peekDesc.textContent = desc || '';
+    peekDesc.hidden = !desc;
     fillPrice(peekPrice, rowLook(row, v));
   }
 
