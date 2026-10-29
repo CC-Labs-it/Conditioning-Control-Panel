@@ -8,7 +8,7 @@ using static ConditioningControlPanel.Services.Safety.PanicPolicy;
 
 namespace ConditioningControlPanel.Tests;
 
-/// <summary>The Glassroad desktop host (Racing Thoughts 3D): the open race doors, the init frame,
+/// <summary>The Glassroad desktop host (Racing Thoughts 3D): the Prime-only race doors, the init frame,
 /// the relay's signing rule and its path gate, the kept Escape and the panic registry.</summary>
 [Collection(GameSurfacesCollection.Name)]
 public class GlassroadHostTests
@@ -45,8 +45,52 @@ public class GlassroadHostTests
 
     // ---- the door ----
 
+    // Owner 2026-10-29: "THE whole feature is for primes". Solo included.
     [Fact]
-    public void TheRaceDoor_OpensGlassroadForEveryone_The2dRaceIsRetired()
+    public void Launch_AsksThePrimeBarFirst()
+    {
+        var host = Read("Services", "Glassroad", "GlassroadHostService.cs");
+        int start = host.IndexOf("public static void Launch(", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        int gate = host.IndexOf("if (!DemandPrime()) return;", start, StringComparison.Ordinal);
+        int window = host.IndexOf("new ChaosWebViewHost(", start, StringComparison.Ordinal);
+        int refocus = host.IndexOf("_host.FocusWeb()", start, StringComparison.Ordinal);
+        Assert.True(gate > start && gate < window && gate < refocus, "the Prime gate must come before any window opens");
+        Assert.Contains("TierGate.RequiresLab(FeatureName)", host);   // the app's tier 2 bar
+        Assert.Contains("TierGate.DemandLab(FeatureName)", host);     // and its Prime refusal toast
+    }
+
+    [Fact]
+    public void Launch_BelowPrime_OpensNothing_SignedOutReadsLocked()
+    {
+        // The test host has no Patreon service: TierGate fails closed, exactly as signed out.
+        Assert.False(GlassroadHostService.PrimeAllowed);
+        GlassroadHostService.Launch();
+        GlassroadHostService.Launch("abc123def456");
+        Assert.False(GlassroadHostService.IsActive);
+    }
+
+    [Fact]
+    public void TheRaceInvite_BelowPrime_ShowsTheLockAndNeverJoins()
+    {
+        var landing = Read("Services", "Friends", "FriendsLanding.cs");
+        int gate = landing.IndexOf("item.Destination == InviteDestination.Race", StringComparison.Ordinal);
+        Assert.True(gate >= 0);
+        var body = landing.Substring(gate, landing.IndexOf("return;", gate, StringComparison.Ordinal) - gate);
+        Assert.Contains("GlassroadHostService.DemandPrime()", body);
+        Assert.Contains("ReceiptState.Declined", body);
+        Assert.True(gate < landing.IndexOf("ReceiptState.Joined", StringComparison.Ordinal), "the gate runs before the Joined receipt");
+    }
+
+    [Fact]
+    public void ThePlayCard_WearsThePrimeLock()
+    {
+        var play = Read("MainWindow", "MainWindow.PlayTab.cs");
+        Assert.Contains("SetLockband(tab.PlayLockRacingThoughts, TierGate.RequiresLab(Loc.Get(\"launcher_game_race_title\")));", play);
+    }
+
+    [Fact]
+    public void TheRaceDoor_OpensGlassroad_PrimeLocked_The2dRaceIsRetired()
     {
         var catalogue = Read("Services", "Launcher", "LauncherCatalogue.cs");
         int race = catalogue.IndexOf("G(\"race\"", StringComparison.Ordinal);
@@ -54,8 +98,9 @@ public class GlassroadHostTests
         var entry = catalogue.Substring(race, catalogue.IndexOf(");", race, StringComparison.Ordinal) - race);
         Assert.Contains("GlassroadHostService.Launch()", entry);
         Assert.Contains("GlassroadHostService.IsActive", entry);
+        Assert.Contains("!Glassroad.GlassroadHostService.PrimeAllowed", entry);   // padlock below Prime
         Assert.DoesNotContain("CaucusHostService", entry);   // no 2D door
-        Assert.DoesNotContain("revealed:", entry);           // always revealed, no switch, no purchase
+        Assert.DoesNotContain("revealed:", entry);           // always revealed (locked stays visible), no purchase
         Assert.DoesNotContain("CCP_GLASSROAD", catalogue);
         // The Play card reaches the same entry.
         Assert.Contains("LaunchPlayLauncherGame(\"race\")", Read("Views", "Tabs", "PlayTabView.Cards.cs"));
@@ -70,6 +115,11 @@ public class GlassroadHostTests
         var body = room.Substring(start, room.IndexOf("\n    }", start, StringComparison.Ordinal) - start);
         Assert.Contains("GlassroadHostService.Launch()", body);
         Assert.Contains("ok = false, reason = \"elsewhere\"", body);   // releases the page's portal
+        // Below Prime: a release reason the page never walks to the counter, then the Prime toast.
+        int prime = body.IndexOf("if (!Glassroad.GlassroadHostService.PrimeAllowed)", StringComparison.Ordinal);
+        Assert.True(prime >= 0 && prime < body.IndexOf("GlassroadHostService.Launch()", StringComparison.Ordinal));
+        Assert.Contains("ok = false, reason = \"prime\"", body);
+        Assert.Contains("GlassroadHostService.DemandPrime()", body);
         Assert.DoesNotContain("RequestClose(\"race\")", body);         // the room stays up
         Assert.DoesNotContain("_openingRace = true", body);
     }

@@ -466,6 +466,14 @@ internal static class BackRoomHostService
         // 2D race in this window is retired (OnRoomClosed's race branch stays, unreached). The
         // room stays up: a not-ok answer with reason "elsewhere" releases the page's portal and
         // its scene (race-portal.js refused), and only "locked" walks to the counter.
+        // Prime only: below tier 2 the answer is reason "prime" (also a release, never the counter)
+        // and the app's Prime refusal shows; the race never opens.
+        if (!Glassroad.GlassroadHostService.PrimeAllowed)
+        {
+            Post(new { type = "game-open-result", game = "race", ok = false, reason = "prime" });
+            Glassroad.GlassroadHostService.DemandPrime();
+            return;
+        }
         Post(new { type = "game-open-result", game = "race", ok = false, reason = "elsewhere" });
         Glassroad.GlassroadHostService.Launch();
     }

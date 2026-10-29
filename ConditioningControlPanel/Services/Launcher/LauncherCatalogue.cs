@@ -237,11 +237,12 @@ public static class LauncherCatalogue
             () => PieceByPiece.PieceByPieceHostService.Launch(),
             () => PieceByPiece.PieceByPieceHostService.IsActive, requiresAccount: false, isNew: true);
 
-        // Racing Thoughts is the 3D race (Glassroad) for everyone since 7.2 (owner, 2026-10-29):
-        // this tile and the Play card open it, always revealed, no switch. The 2D race is RETIRED:
-        // no door opens it (the code stays). Online stays tier 2+, judged by the server
-        // (RACE_ACCESS=prime); the page asks, the tile never does.
-        G("race", "features/race.png", "☕", Tile(0xFF, 0xB3, 0x6B), Always, Never,
+        // Racing Thoughts is the 3D race (Glassroad), PRIME ONLY, solo included (owner, 2026-10-29:
+        // "THE whole feature is for primes"). Always revealed: below Prime the tile wears the
+        // padlock and the click goes to Launch, whose DemandPrime paints the refusal. The 2D race
+        // is RETIRED: no door opens it (the code stays). Online is tier 2+ on the server too.
+        G("race", "features/race.png", "☕", Tile(0xFF, 0xB3, 0x6B), Always,
+            () => !Glassroad.GlassroadHostService.PrimeAllowed,
             () => Glassroad.GlassroadHostService.Launch(),
             () => Glassroad.GlassroadHostService.IsActive);
 
