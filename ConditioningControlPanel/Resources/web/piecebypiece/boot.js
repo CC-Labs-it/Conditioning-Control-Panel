@@ -22,6 +22,7 @@ import { createDriverSwitch, startOnlineMatch, startWatchMatch } from './net/onl
 import { setWatchPolicy } from './net/api.js';
 import { DEFAULT_MS } from './game/clock.js';
 import { postToHost, onHostMessage, onIdentity, signalReady } from './bridge.js';
+import { showSlip } from './sparkles-slip.js';
 import { createPauseHush } from './ui/pause-hush.js';
 import { createHostEscape, HOST_ESCAPE } from './ui/host-escape.js';
 import { presentation } from './game/preferences.js';
@@ -427,6 +428,9 @@ function main() {
   });
   // The kept press plays through the listener above (and every other Escape listener), once.
   onHostMessage((m) => { if (m.type === HOST_ESCAPE) hostEscape.kept(); });
+  // SPARKLES BY PLACE (B1 W6): the host's receipt for a finished game, over the game-over card.
+  const onType = (type, fn) => onHostMessage((m) => { if (m && m.type === type) fn(m); });
+  onType('sparkles-receipt', showSlip);
   // --- Q: a capture animation is never a hostage ---
   // A tap on the board or a Space/Enter while the bishop is mid-whip lands
   // everything at once: no animation debt, the next move is already yours.

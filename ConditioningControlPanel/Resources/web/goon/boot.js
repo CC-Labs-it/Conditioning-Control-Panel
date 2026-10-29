@@ -34,6 +34,9 @@ import * as bridge from './bridge.js';
 import { createHostEscape, HOST_ESCAPE } from './host-escape.js';
 const hostEscape = createHostEscape();
 bridge.on(HOST_ESCAPE, () => hostEscape.kept());
+// SPARKLES BY PLACE (B1 W6): the host's receipt for a finished duel or practice, over the recap.
+import { showSlip } from './sparkles-slip.js';
+bridge.on('sparkles-receipt', showSlip);
 import { media } from './exec/media.js';
 import { pageMark } from './exec/scrolllerMark.js';
 import * as layers from './exec/layers.js';

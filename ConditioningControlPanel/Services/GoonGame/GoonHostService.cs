@@ -773,7 +773,10 @@ namespace ConditioningControlPanel.Services.GoonGame
                     // SPARKLES BY PLACE (B1): a duel claims online with its room code (the server
                     // reads the two agreeing ledger claims), practice claims practice. A leave,
                     // a mercy or a cancel claims nothing (SparklesPageResults.Goon).
-                    _ = Sparkles.SparklesPageResults.Send(Sparkles.SparklesPageResults.Goon(o));
+                    // The results slip (W6) lands on the result card that is up when the receipt comes in.
+                    var slipHost = _host;
+                    _ = Sparkles.SparklesSlip.Deliver(Sparkles.SparklesPageResults.Send(Sparkles.SparklesPageResults.Goon(o)),
+                        json => slipHost?.Post(new JRaw(json)));
                     // The last-opponent record is written HERE, by the host, from the peer card it
                     // already fetched — no page-supplied data and no extra verb (contract §4).
                     // Practice has no opponent card.
