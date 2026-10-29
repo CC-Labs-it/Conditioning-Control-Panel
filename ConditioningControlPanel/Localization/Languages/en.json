@@ -15,6 +15,7 @@
   "Sparkles_Slip_CeilingToday": "Ceiling reached. Fee only until tomorrow",
   "Sparkles_Slip_Short": "Too short to pay",
   "Sparkles_Slip_Offline": "Offline, no Sparkles",
+  "Sparkles_Slip_Unreachable": "Bank closed, no Sparkles this time",
   "Sparkles_Slip_Pair": "Same pair again today. Solo rate",
   "Sparkles_Slip_Young": "New account. Solo rate online for now",
   "Sparkles_Slip_SoloRoom": "Fewer than 2 players. Solo rate",
