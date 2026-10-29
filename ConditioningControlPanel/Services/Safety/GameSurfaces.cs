@@ -61,6 +61,9 @@ internal static class GameSurfaces
         new("goon", () => GoonGame.GoonHostService.IsActive, GoonGame.GoonHostService.CloseActive),
         new("piecebypiece", () => PieceByPiece.PieceByPieceHostService.IsActive, PieceByPiece.PieceByPieceHostService.Close),
         new("intake", () => Quiz.IntakeHostService.IsActive, Quiz.IntakeHostService.CloseActive),
+        // The 7.2 shop. Not a launcher tile (its door is the Sparkle wallet), but a window the
+        // player sits in all the same: panic closes it at once.
+        new(PrizeCounter.PrizeCounterHostService.GameId, () => PrizeCounter.PrizeCounterHostService.IsActive, PrizeCounter.PrizeCounterHostService.Close),
     };
 
     /// <summary>True while any of them is on screen. Read BEFORE the stop pass closes them. Never
