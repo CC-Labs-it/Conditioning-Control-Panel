@@ -65,6 +65,28 @@ public class PrizeCounterHostTests
         Assert.Contains("PrizeCounterHostService.Launch(from: \"wallet\")", src);
     }
 
+    [Theory]
+    [InlineData(null, null, false)]       // still signed out: the dialog was cancelled
+    [InlineData(null, "u1", true)]        // signed in from a signed-out counter: pin and reload
+    [InlineData("u1", "u1", false)]       // same account: nothing to do
+    [InlineData("u1", "u2", true)]        // switched account: the new one is pinned
+    [InlineData("u1", "", false)]
+    public void SignIn_ReloadsOnlyForANewAccount(string? pinned, string? now, bool reload)
+        => Assert.Equal(reload, PrizeCounterHostService.SignedInSince(pinned, now));
+
+    [Fact]
+    public void ThePagesSignIn_OpensTheAccountDialogOverTheCounter_Queued()
+    {
+        var src = Read("ConditioningControlPanel", "Services", "PrizeCounter", "PrizeCounterHostService.cs");
+        Assert.Contains("case \"signin\":", src);
+        Assert.Contains("Dispatcher.BeginInvoke(new Action(SignInFromPage))", src);
+        Assert.Contains("OpenUnifiedLoginDialog(owner)", src);
+        Assert.Contains("RequestSignIn(_host.Window)", src);
+        // The page's frame is the one CONTRACT.md names.
+        var host = Read("ConditioningControlPanel", "Resources", "web", "prizecounter", "host.js");
+        Assert.Contains("post({ type: 'signin' })", host);
+    }
+
     private static string Read(params string[] parts)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

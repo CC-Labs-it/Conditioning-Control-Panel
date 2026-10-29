@@ -13,8 +13,9 @@ namespace ConditioningControlPanel.Services.PrizeCounter;
 /// <summary>
 /// Host for THE PRIZE COUNTER (<c>Resources/web/prizecounter</c>, the 7.2 shop): its own
 /// <see cref="ChaosWebViewHost"/>, windowed and owned by MainWindow. The page speaks the seam in
-/// its CONTRACT.md (<c>ready / request / reply / wallet / close / log</c> out, <c>init</c> in); every
-/// request goes through <see cref="PrizeCounterRelay"/>.
+/// its CONTRACT.md (<c>ready / request / reply / wallet / close / signin / log</c> out, <c>init</c> in);
+/// every request goes through <see cref="PrizeCounterRelay"/>. Signed out, the page shows one "Sign in
+/// to shop" button whose <c>signin</c> frame opens the panel's sign-in over the counter.
 ///
 /// <para>Safety: panic closes it at once (<c>GameSurfaces</c> id <see cref="GameId"/>). With the
 /// panic key on Escape, a first Escape in front of the counter is the page's back (its Esc ladder:
@@ -42,6 +43,25 @@ internal static class PrizeCounterHostService
     private static string? _tab;
     private static int _generation;
     private static bool _disposing;
+    private static string? _opener;
+    private static bool _signingIn;
+
+    /// <summary>The panel's account sign-in, centred over the counter (the launcher's and the Back
+    /// Room's flow). Settable so a test can answer without a dialog.</summary>
+    internal static Action<Window?> RequestSignIn { get; set; } = owner =>
+        // MainWindowRef, not Application.Current.MainWindow: that can be the launcher or null in the tray.
+        (App.MainWindowRef ?? Application.Current?.MainWindow as MainWindow)?.OpenUnifiedLoginDialog(owner);
+
+    /// <summary>True when somebody is signed in now who is not the account the counter is pinned to:
+    /// the counter must pin them and load again (a signed-out counter has no pin).</summary>
+    internal static bool SignedInSince(string? pinned, string? now)
+        => !string.IsNullOrEmpty(now) && !string.Equals(pinned, now, StringComparison.Ordinal);
+
+    private static PrizeCounterRelay NewRelay() => new(null,
+        () => BackRoomApi.AppIdentity() is { } id && id.UnifiedId == _opener ? id : null,
+        () => App.Settings?.Current?.OfflineMode == true,
+        AdoptOnUi,
+        (account, revision, grants) => App.Ownership?.ApplySnapshot(account, revision, grants));
 
     public static bool IsActive => _host != null;
     public static bool IsInFront => _host?.IsForeground == true;
@@ -58,13 +78,10 @@ internal static class PrizeCounterHostService
             _tab = tab;
             var generation = ++_generation;
             // The identity pin: the counter speaks only for the account that opened it. A sign-out or
-            // a switch under a live counter answers signed_out instead of moving another wallet.
-            var opener = BackRoomApi.AppIdentity()?.UnifiedId;
-            _relay = new PrizeCounterRelay(null,
-                () => BackRoomApi.AppIdentity() is { } id && id.UnifiedId == opener ? id : null,
-                () => App.Settings?.Current?.OfflineMode == true,
-                AdoptOnUi,
-                (account, revision, grants) => App.Ownership?.ApplySnapshot(account, revision, grants));
+            // a switch under a live counter answers signed_out instead of moving another wallet. Only
+            // the page's own "Sign in to shop" moves the pin (SignInFromPage), and it reloads the page.
+            _opener = BackRoomApi.AppIdentity()?.UnifiedId;
+            _relay = NewRelay();
 
             var webRoot = Path.Combine(AppContext.BaseDirectory, "Resources", "web");
             var mappings = new List<(string, string, CoreWebView2HostResourceAccessKind)>
@@ -126,6 +143,7 @@ internal static class PrizeCounterHostService
             try { _host?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _host = null;
             _relay = null;
+            _opener = null;
             if (had) App.Logger?.Information("PrizeCounterHostService: closed");
         }
         catch (Exception ex) { App.Logger?.Debug("PrizeCounterHostService.Close: {E}", ex.Message); }
@@ -157,6 +175,42 @@ internal static class PrizeCounterHostService
                 App.Logger?.Information("PrizeCounter: page closed ({Reason})", (string?)m["reason"] ?? "back");
                 OnUi(Close);
                 break;
+            case "signin":
+                // Queued, never inside the WebView2 message callback: the dialog runs its own loop.
+                if (generation == _generation) Application.Current?.Dispatcher.BeginInvoke(new Action(SignInFromPage));
+                break;
+        }
+    }
+
+    /// <summary>The page's "Sign in to shop" (CONTRACT "Host seam" signIn, owner 2026-10-29). Opens the
+    /// sign-in over the counter; once somebody is signed in the counter pins that account and reloads the
+    /// page in place, so a fresh init and shop-state follow. Cancelled leaves everything as it was.</summary>
+    private static void SignInFromPage()
+    {
+        if (_signingIn || _host == null) return;
+        if (!SignedInSince(_opener, BackRoomApi.AppIdentity()?.UnifiedId))
+        {
+            _signingIn = true;
+            try { RequestSignIn(_host.Window); }
+            catch (Exception ex) { Diag.Swallowed(ex, "prizecounter sign-in"); }
+            finally { _signingIn = false; }
+        }
+        var now = BackRoomApi.AppIdentity()?.UnifiedId;
+        // Cancelled, or panic closed the counter while the dialog was up.
+        if (_host == null || !SignedInSince(_opener, now)) return;
+        _opener = now;
+        _relay = NewRelay();
+        var generation = ++_generation;
+        try
+        {
+            _host.NavigatePage(StartUrl, () => Post(BuildInit()), m => OnPageMessage(m, generation));
+            _host.FocusWeb();
+            App.Logger?.Information("PrizeCounterHostService: signed in, counter reloaded");
+        }
+        catch (Exception ex)
+        {
+            App.Logger?.Warning(ex, "PrizeCounter: reload after sign-in failed, closing");
+            Close();
         }
     }
 
