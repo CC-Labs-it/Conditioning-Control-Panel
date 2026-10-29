@@ -7,7 +7,7 @@ export const NOTE_BANDS = Object.freeze(Array.from({ length: 8 }, (_, i) => 250 
 const clamp01 = (v) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
 
 export function createMusicReactivity(ctx, input) {
-  const frame = { active: false, frozen: false, bass: 0, mid: 0, treble: 0, energy: 0, songS: 0 };
+  const frame = { active: false, frozen: false, muted: false, silent: false, bass: 0, mid: 0, treble: 0, energy: 0, songS: 0 };
   // The display reads PCM and log-frequency samples from this same tap, without another analyser.
   frame.waveform = new Float32Array(64); frame.spectrum = new Float32Array(64);
   frame.rawBass = frame.rawMid = frame.rawTreble = frame.rawEnergy = 0;
@@ -33,9 +33,10 @@ export function createMusicReactivity(ctx, input) {
     analyser = null;
   }
 
-  function clear(songS = 0) {
+  function clear(songS = 0, muted = false, silent = false) {
     frame.active = false;
     frame.frozen = false;
+    frame.muted = !!muted; frame.silent = !!silent;
     frame.bass = frame.mid = frame.treble = frame.energy = 0;
     frame.rawBass = frame.rawMid = frame.rawTreble = frame.rawEnergy = 0;
     frame.waveform.fill(0); frame.spectrum.fill(0);
@@ -61,7 +62,7 @@ export function createMusicReactivity(ctx, input) {
     clear,
     /** sample once per render; options is a caller-owned reusable object. */
     read(dt, opts = NONE) {
-      if (!opts.playing || opts.muted || ctx.state === 'closed') return clear(opts.songS);
+      if (!opts.playing || opts.muted || ctx.state === 'closed') return clear(opts.songS, opts.muted);
       if (opts.paused || ctx.state === 'suspended' || ctx.state === 'interrupted') { frame.frozen = true; return frame; }
       if (!analyser || ctx.state !== 'running') return clear(opts.songS);
       frame.frozen = false;
@@ -74,11 +75,12 @@ export function createMusicReactivity(ctx, input) {
       }
       const rms = Math.sqrt(power / waveform.length);
       // Gate from current samples, never the FFT's residual tail or a synthetic song clock.
-      if (!(rms > 0.00002)) return clear(frame.songS);
+      if (!(rms > 0.00002)) return clear(frame.songS, false, true);
       analyser.getFloatFrequencyData(spectrum);
       const step = Math.max(0, Math.min(0.1, Number(dt) || 0));
       const gentle = !!opts.gentle, scale = gentle ? 0.55 : 1;
       frame.active = true;
+      frame.muted = frame.silent = false;
       frame.rawBass = band(bass0, bass1); frame.rawMid = band(bass1, mid1);
       frame.rawTreble = band(mid1, treble1); frame.rawEnergy = clamp01(rms * 3);
       frame.bass = smooth(frame.bass, band(bass0, bass1) * scale, step, gentle);
