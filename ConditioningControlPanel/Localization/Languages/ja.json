@@ -5840,7 +5840,7 @@
   "hm3_audio_sync_tuning": "🎚 オーディオ同期の調整",
   "hm3_rail_lock_t1": "支援者限定",
   "hm3_rail_lock_pass": "週間パス",
-  "hm3_rail_lock_t2": "ラボ限定",
+  "hm3_rail_lock_t2": "Prime限定",
   "cp5_awareness_custom_triggers_header": "カスタムトリガー（上級）",
   "cp5_awareness_custom_triggers_note": "あなただけのキーワードリスト。トリガーごとに音声・エフェクト・クールダウンを設定できるよ。",
   "cp5_ocr_detail_needs_source": "画面OCRはオフだよ。Signal Sources でオンにするとスキャン間隔を設定できるの。",
