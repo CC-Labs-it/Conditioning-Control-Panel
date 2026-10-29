@@ -243,6 +243,12 @@ Browser defaults (unhosted): `gentle.on` from `?gentle=1`, fadeMs 600, riseMs 30
 caps platform 'web', net false, relayBase null, texturableRemote false, gamepad true, touch from
 `(pointer: coarse)`, forceRenderer from `?renderer=webgl2|webgpu` else null, songs `[]`, the rest false; identity null.
 Host -> page used in A: `init`, `pause {on}`, `kept-escape`, `gentle {...}`, `focus`, `ping`.
+Host -> page (7.2, desktop): `join-room { roomId }` = a CCP Lobby row or a friend's race invite while the window is up;
+the page takes it on the menu only (a cold start uses `?join=<roomId>` instead).
+Friends invite (7.2, `host/friendInvite.js`): a host that sets `caps.friendInvite: true` owns the pre-race room's
+"Invite a friend" (room host only, lobby phase): page -> host `friends-list { id }` and `invite-friend { id, friendUid,
+roomId }`; host -> page `friends-list-reply { id, friends: [{ uid, name }] }` and `invite-friend-reply { id, sent, note }`
+(note = the host's worded result in the player's language). Hosts without the cap (web, phone) keep the button hidden.
 Page -> host in A: `ready`, `heartbeat`, `pong`, `run-started`, `run-ended { timeS, laps }`, `telemetry`.
 Escape only pauses; the page never sends `exit` on Escape.
 Web Scrolller pictures (2026-10-26, `host/scrolllerFeed.js`): a host that can feed them sets `caps.scrolller:
