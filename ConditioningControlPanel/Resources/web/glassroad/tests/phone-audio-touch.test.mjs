@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createFeel } from '../core/feel.js';
 import { createMusic, halfRateContext, analyzeAudioBuffer } from '../audio/music.js';
-import { createTouch, THROW_CSS } from '../input/touch.js';
+import { createTouch, THROW_CSS, DROP_CSS } from '../input/touch.js';
 
 const feelJson = JSON.parse(readFileSync(new URL('../feel.json', import.meta.url), 'utf8'));
 const chart = { bpm: 120, downbeatS: 0.5, sections: [{ id: 'a', startS: 0 }], audio: 'song.mp3' };
@@ -132,6 +132,32 @@ test('touch: the throw button sits bottom right in the safe area, fires one item
   touch.dispose();
   assert.equal(root.classes.has('gr-touch-on'), false);
   const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
-  assert.match(css, /\.gr-touch-on \.hud-speed \{ bottom: calc\(max\(14px, env\(safe-area-inset-bottom\)\) \+ 76px\); \}/, 'speed lifts over the button');
+  assert.match(css, /\.gr-touch-on \.hud-speed \{ bottom: calc\(max\(14px, env\(safe-area-inset-bottom\)\) \+ 136px\); \}/, 'speed lifts over both buttons');
   assert.match(css, /\.gr-touch-on \.hud-credit \{ bottom: calc\(/, 'the media credit lifts too');
+});
+
+test('touch: Drop leaves an item behind once, keeps driving, and clears on blur', () => {
+  const root = new Node(), win = new Node(), doc = { createElement: () => new Node() };
+  win.location = { search: '?touch=1' }; win.document = doc;
+  const touch = createTouch({ root, win, doc }), into = {};
+  try {
+    const drop = touch.el.children.find(n => n.className?.includes('gr-touch-drop'));
+    const forward = touch.el.children.find(n => n.className?.includes('gr-touch-item'));
+    assert.equal(drop.style.cssText, DROP_CSS);
+    assert.equal(drop.attrs['aria-label'], 'Drop item behind');
+    touch.el.emit('pointerdown', { pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 100 });
+    drop.emit('pointerdown', { pointerId: 2 }); touch.poll(into);
+    assert.equal(into.item, true); assert.equal(into.back, true);
+    assert.equal(into.throttle, 1); assert.equal(into.hop, false); assert.equal(into.steer, 0);
+    touch.poll(into); assert.equal(into.item, false); assert.equal(into.back, false);
+    forward.emit('pointerdown', { pointerId: 3 }); touch.poll(into);
+    assert.equal(into.item, true); assert.equal(into.back, false, 'forward stays forward after a drop');
+    drop.emit('click', { detail: 0 }); touch.poll(into);
+    assert.equal(into.item, true); assert.equal(into.back, true, 'accessible activation also drops');
+    drop.emit('pointerdown', { pointerId: 4 }); win.emit('blur'); touch.poll(into);
+    assert.equal(into.item, false); assert.equal(into.back, false);
+    touch.dispose();
+    drop.emit('pointerdown', { pointerId: 5 }); touch.poll(into);
+    assert.equal(into.item, false, 'disposed button is disconnected');
+  } finally { touch.dispose(); }
 });

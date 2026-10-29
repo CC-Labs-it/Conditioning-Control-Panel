@@ -9,7 +9,7 @@
  *   3  drive through the pink word bubbles (the words on the road are the song) and throw an item
  * Ink is currentColor, the spot colour is the `pk` class (styles.css); keys carry `hw-key` so they press on the beat.
  */
-import { deviceView, padLabels, KEY_LABELS } from './labels.js';
+import { deviceView, padLabels, KEY_LABELS, itemTip } from './labels.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -145,6 +145,7 @@ export function howtoHtml(devices = {}, { off = false } = {}) {
   const rearLabel = v.last === 'pad' ? v.family === 'xbox' ? 'Hold left stick in' : 'Hold ' + p.ls
     : v.last === 'touch' ? 'Hold Rear' : 'Hold V';
   return '<ol class="hw-panels" data-last="' + v.last + '">' + panels + '</ol>' +
+    '<p class="c-hint hw-items" style="margin:0 0 10px">' + esc(itemTip(devices)) + '.</p>' +
     '<p class="c-hint hw-camera" style="margin:0 0 14px"><strong>' + esc(viewLabel) + '</strong>: chase / first person. ' +
     '<strong>' + esc(rearLabel) + '</strong>: look behind.</p>' +
     '<div class="hw-foot"><button type="button" class="c-btn hot hw-go" data-act="howto-go">' + esc(goLabel) + '</button>' +
