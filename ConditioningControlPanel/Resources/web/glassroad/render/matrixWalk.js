@@ -28,13 +28,29 @@ const KEY = '_glassroadMw';               // per node: one WalkRecord (a single 
 /** The walk's state for one node: c = [px,py,pz,qx,qy,qz,qw,sx,sy,sz, matrix 16] it last wrote, the parent it
  * last saw (undefined = never walked) and whether a hidden walk skipped it. One class, so reads stay monomorphic. */
 class WalkRecord {
-  constructor() { this.c = new Float64Array(26); this.c[0] = NaN; this.parent = undefined; this.stale = false; }
+  constructor() { this.c = new Float64Array(26); this.c[0] = NaN; this.parent = undefined; this.stale = false; this.staticChildren = false; this.staticReady = false; }
 }
 const TMP = new Matrix4();
 const stats = { walks: 0, nestedSkips: 0, visits: 0, composes: 0, worlds: 0, hiddenSkips: 0 };
 
 /** The walk's counters since the page loaded (dev checks and tests). */
 export function matrixWalkStats() { return { ...stats }; }
+
+/** Opt in only after construction: descendants keep their local transforms and hierarchy.
+ * The root may still move, hide or reparent; materials and instance buffers may still animate.
+ * Call with false BEFORE changing a descendant's transform/hierarchy. Special matrix owners
+ * (bones, cameras, lights, LODs) refuse this shortcut and retain the ordinary walk. */
+export function setStaticSubtree(root, enabled = true) {
+  if (!root) return false;
+  if (enabled) {
+    let safe = true;
+    root.traverse(o => { if (o.updateMatrixWorld !== STOCK || o.isBone || o.isLight || o.isLOD) safe = false; });
+    if (!safe) return false;
+  }
+  const r = recordOf(root);
+  r.staticChildren = enabled; r.staticReady = false; r.stale = true;
+  return true;
+}
 
 function recordOf(o) {
   let r = o[KEY];
@@ -93,8 +109,14 @@ function walkFrom(o, moved, all, checkWorld) {
     }
     o.matrixWorldNeedsUpdate = false;
   }
-  const children = o.children;
-  for (let i = 0, n = children.length; i < n; i++) visit(children[i], dirty, all);
+  // Immutable scenery needs one root check, rather than 26 comparisons per descendant
+  // on every race frame. A moved/revealed root still refreshes the complete subtree.
+  if (!dirty && !all && r.staticChildren && r.staticReady) return;
+  const children = o.children, descendAll = all || r.staticChildren;
+  // Initialize hidden static descendants too, so showing a fixed prop later does
+  // not require polling its visibility from the race loop.
+  for (let i = 0, n = children.length; i < n; i++) visit(children[i], dirty, descendAll);
+  r.staticReady = true;
 }
 
 /** World matrices of `root` and its subtree, current for this moment (the root follows its parent's present
@@ -126,7 +148,13 @@ export function installMatrixWalk(scene, three = null) {
     return after.call(this, renderer, ...rest);
   };
   scene.updateMatrixWorld = function (force) {
-    if (force) { outerDepth = Infinity; return STOCK.call(this, true); }
+    if (force) {
+      outerDepth = Infinity;
+      STOCK.call(this, true);
+      // Warm-up may temporarily move ancestors. Refresh cached static worlds afterward.
+      this.traverse(o => { const r = o[KEY]; if (r?.staticChildren) r.stale = true; });
+      return;
+    }
     // a pass nested inside this scene's own render (shadow map, reflector capture): the outer walk holds
     if (three && typeof three._callDepth === 'number' && three._callDepth > outerDepth) { stats.nestedSkips++; return; }
     stats.walks++;

@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { createLobbyApi } from '../net/lobbyApi.js';
 import { lobbySongCharts, wantLobbySongs, songCharts, ROOM_ORIGIN } from '../host/bridge.js';
 import { courseSongRows, courseSongs } from '../track/selection.js';
+import vm from 'node:vm';
 
 const NOW = 1792699000000;
 const SIG = 'A'.repeat(21) + '_-' + 'b'.repeat(20);
@@ -93,6 +94,20 @@ test('boot memoizes the song fallback and starts recordings that arrive after ra
   assert.ok(src.includes('fallback ||='), 'one memoized request also serves a failed host chart');
   assert.ok(!src.includes("courseSongs(TRACK_ID, '', ['recording'])"), 'course-specific filtering must not prevent catalog discovery');
   assert.match(src.slice(at, at + 300), /lobbySongCharts\(/);
-  assert.ok(src.includes('if (!CHARTS.length) CHARTS = list;'));
+  assert.ok(src.includes('if (!wantLobbySongs({ search: location.search, charts: CHARTS })) return;'));
   assert.ok(src.includes("else if (state === 'race') void playSong"), 'a late song no longer leaves a silent race');
+});
+
+test('catalog discovery does not download a second recording when a host chart is already selected', async () => {
+  const src = readFileSync(new URL('../boot.js', import.meta.url), 'utf8');
+  const start = src.indexOf('    extraSongs().then(list => {');
+  const code = src.slice(start, src.indexOf('\n    });', start) + 8);
+  for (const charts of [['host-chart'], []]) {
+    const downloads = [];
+    const sandbox = { extraSongs:()=>Promise.resolve(['signed-chart']), lifetime:{alive:true},
+      location:{search:''}, CHARTS:charts, wantLobbySongs, songCache:{preload:url=>downloads.push(url)},
+      audio:{state:'suspended'}, debug:{}, state:'menu' };
+    await vm.runInNewContext(code, sandbox);
+    assert.deepEqual(downloads, charts.length ? [] : ['signed-chart']);
+  }
 });

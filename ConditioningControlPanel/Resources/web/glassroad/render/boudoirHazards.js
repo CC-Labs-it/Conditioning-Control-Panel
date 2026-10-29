@@ -1,6 +1,6 @@
 /* Staggered chess thumpers, sweeping mascara brushes and clocked satin conveyor lanes. */
 import { Group, Mesh, InstancedMesh, BoxGeometry, SphereGeometry, CylinderGeometry, TorusGeometry, BufferGeometry, Float32BufferAttribute,
-  PlaneGeometry, IcosahedronGeometry, MeshBasicNodeMaterial, Matrix4, Vector3, Quaternion, Color, DoubleSide } from 'three/webgpu';
+  PlaneGeometry, IcosahedronGeometry, MeshBasicNodeMaterial, Matrix4, Box3, Vector3, Quaternion, Color, DoubleSide } from 'three/webgpu';
 import { vec3, uniform, normalize, normalWorld, dot, clamp } from 'three/tsl';
 import { BOUDOIR_HAZARD as K, getBoudoirSetpieces, powderPressHeads, powderPressPhase as pressPose, mascaraHeads, mascaraPhase as brushPose, ribbonPhase as ribbonPose } from '../track/boudoir-setpieces.js';
 import { machineryBeatAt } from '../track/machineryBeat.js';
@@ -39,14 +39,25 @@ export function createBoudoirHazardView(scene, track, art = null) {
     entry.holder.children.find(o => o.material?.opacityNode === entry.opacity).visible = false;
     for (const head of powderPressHeads(row)) {
       const press = new Group(); press.name = head.id; press.position.x = head.x; entry.holder.add(press);
+      let visualHeight = head.heightM;
       const sculpture = chessTrap(art, head.pressLane || 0, [head.w, head.heightM, head.depthM]);
+      // Attach the original base to the shaft. The crown strikes downward inside the same lane.
+      if (sculpture) {
+        const body = sculpture.children[0]; body.rotation.z += Math.PI;
+        body.scale.x *= 1.15; body.scale.y *= 1.35; body.scale.z *= 1.15;
+        body.updateMatrixWorld(true);
+        const bounds = new Box3().setFromObject(body), center = bounds.getCenter(new Vector3());
+        body.position.sub(center);
+        visualHeight = bounds.max.y - bounds.min.y;
+        sculpture.position.y = visualHeight / 2;
+      }
       if (sculpture) press.add(sculpture);
       else mesh(press, box, pink, [0, head.heightM / 2, 0], [head.w, head.heightM, head.depthM]);
       const rod = mesh(entry.holder, cylinder, gold, [head.x, 12, 0], [.18, 6, .18]);
       const opacity = uniform(.04), material = new MeshBasicNodeMaterial({ color: '#ffd09c', transparent: true, depthWrite: false, side: DoubleSide });
       material.opacityNode = opacity; materials.push(material);
       const warning = mesh(entry.holder, plane, material, [head.x, .08, 0], [head.w, head.depthM + 2, 1]); warning.rotation.x = -Math.PI / 2;
-      entry.pressHeads.push({ row: head, moving: press, sculpture, rod, opacity, phase: null });
+      entry.pressHeads.push({ row: head, moving: press, sculpture, visualHeight, rod, opacity, phase: null });
       byId.set(head.id, entry);
     }
     entry.moving = entry.pressHeads[0].moving;
@@ -139,7 +150,7 @@ export function createBoudoirHazardView(scene, track, art = null) {
           const p = powderPressPhase(head.row, clock);
           head.moving.position.y = p.liftM;
           if (head.sculpture) head.sculpture.rotation.z = chessWobble(p.cycleS, gentle);
-          const top = p.liftM + head.row.heightM, ceiling = 15.5;
+          const top = p.liftM + head.visualHeight, ceiling = 17;
           head.rod.position.y = (top + ceiling) / 2; head.rod.scale.y = Math.max(.1, ceiling - top);
           head.opacity.value = (.04 + p.opacity * .55) * (gentle ? .65 : 1);
           if (active && p.phase === 'hold' && head.phase !== 'hold') puff(entry, gentle ? 8 : 22, { x: head.row.x });

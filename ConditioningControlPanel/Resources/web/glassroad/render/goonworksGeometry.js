@@ -5,9 +5,12 @@ import {V3} from './mediaMath.js';
 /** Shared longitudinal rings make the rabbit shell continuous through every bend. */
 export function goonworksTubeShell(track, outer=false){
   const range=getGoonworksLayout(track)?.tube;if(!range)return null;
-  const P=[],N=[],U=[],I=[],rings=Math.ceil((range.s1-range.s0)/2),sectors=72,radius=outer?24.25:23.5;
+  const P=[],N=[],U=[],I=[],rings=Math.ceil((range.s1-range.s0)/2),sectors=72;
   for(let i=0;i<=rings;i++){
     const s=range.s0+(range.s1-range.s0)*i/rings,f=track.frameAt(s);
+    // The whole painted lane must fit inside the tube, including its lower curved wall.
+    // A fixed 23.5 m radius cut upward through both sides of the 36 m road.
+    const radius=Math.hypot(f.w/2+6,26)+(outer?.75:0);
     for(let j=0;j<=sectors;j++){
       const a=j/sectors*Math.PI*2,c=Math.cos(a),q=Math.sin(a),normal=f.b.map((v,k)=>v*c+f.n[k]*q);
       P.push(...f.p.map((v,k)=>v+f.n[k]*22+normal[k]*radius));

@@ -25,7 +25,7 @@
 import {
   hostGate, signedIn, tableRows, quickDelay, cleanHost, stepHost, hostBody, HOST_DEFAULTS, applySeats, applySeat,
   seatRows, raceTags, readyCount, humans, canStart, lookChoices, cycleLook, lookLabel, loadLook, saveLook, countdown,
-  serverNow, resultLines, popsLabel, errorCopy, abortCopy, closeCopy, trackName, startsLabel, rowStartsIn, BADGE_COPY,
+  serverNow, resultLines, popsLabel, errorCopy, abortCopy, closeCopy, connectFailCopy, trackName, startsLabel, rowStartsIn, BADGE_COPY,
   linkButton, linkNote, claimStep, pollNow, pollStep, pollReset, listKey,
 } from './lobbyMath.js';
 import { PRESETS, presetOf, poseOf, poseHoldS, emoteAllowed, EMOTE_GAP_MS, EMOTE_SHOW_MS } from './presets.js';
@@ -394,9 +394,9 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     paint(); startTicker();
     const connect = deps().connect;
     if (typeof connect !== 'function') { st.msg = errorCopy('off'); st.view = 'msg'; st.join = null; paint(); return; }
-    let room;
-    try { room = await connect({ ...join, look: normLook(st.look) }); } catch (e) { room = null; }
-    if (!room || st.join !== join) { if (room && st.join !== join) room.close?.(); if (st.join === join) { st.msg = errorCopy('net'); st.view = 'msg'; st.join = null; paint(); } return; }
+    let room, why = null;
+    try { room = await connect({ ...join, look: normLook(st.look) }); } catch (e) { room = null; why = e; }
+    if (!room || st.join !== join) { if (room && st.join !== join) room.close?.(); if (st.join === join) { st.msg = connectFailCopy(why); st.view = 'msg'; st.join = null; paint(); } return; }
     st.room = room;
     const on = (t, fn) => { const off = room.on(t, m => { if(alive() && st.room===room)fn(m); }); if (typeof off === 'function') st.offs.push(off); };
     on('welcome', onWelcome); on('seats', (m) => { const was = st.seats; st.seats = applySeats(m.seats, st.seats); seatSay(was); seatsChanged(); });

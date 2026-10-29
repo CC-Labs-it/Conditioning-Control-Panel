@@ -46,7 +46,7 @@ function segmentMeshBlocker(from,to,index){
 }
 
 /** Conservative boxes cover solid room dressing. Hollow ring centers are intentionally not filled. */
-export function goonworksScreenVisibility(track,plan){
+export function goonworksScreenVisibility(track,plan,{cache=true}={}){
   const solids=plan.rows.filter(r=>!['torus','arch','star'].includes(r.shape)&&!r.id.startsWith('horizon-')&&!r.id.startsWith('white-cartoon'));
   const index=meshOccluders(track),report=[];
   for(const mount of plan.mounts){let total=0,visible=0;const blockers=new Map(),approaches=[];
@@ -67,5 +67,6 @@ export function goonworksScreenVisibility(track,plan){
     }
     report.push({id:mount.id,visible:visible/total,approaches,blockers:[...blockers].sort((a,b)=>b[1]-a[1])});
   }
+  if(!cache)CACHE.delete(track);
   return report;
 }

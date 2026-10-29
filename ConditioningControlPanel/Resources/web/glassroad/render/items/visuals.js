@@ -5,7 +5,8 @@
  * that shrink into a bubble when driven through; the Melt trap is a wobbling spiral puddle; the
  * Pink wave a ring; Echo three rim-lit copies. Pools and per-tier caps from render/items/look.js.
  * Gentle: half speed, no Echo flicker. Reads ItemsView only; ages (t) are seconds since spawn.
- * Pickups share four moving-picture faces and the owner-selected Drop Duel back. Held, thrown,
+ * Pickups share four "?" faces (a picture only as a small inset) and the owner-selected Drop Duel back, each
+ * card inside a chartreuse glass bubble (one instanced draw) so it never reads as a screen. Held, thrown,
  * trap and box-turn bubbles are the effect-bubble GLB shell (instanced)
  * round the living icon; the Melt puddle samples fx-melt-spiral.
  * Polish 2: icons breathe inside glass that catches a drifting light; throws trail a sparkling ribbon,
@@ -34,7 +35,7 @@ import {
 import { createLivingIcons, cellOf } from './living.js';
 import { bubbleCloud, toyIconCloud, moteCloud, meltPuddle, ghost, ringGlow, shellCloud, shieldCloud, blobShadow, confettiCloud } from './materials.js';
 import { objectState } from '../objectUniform.js';
-import { createPickupCards, PICKUP_CARD } from './pickupCards.js';
+import { createPickupCards, PICKUP_CARD, PICKUP_BOX, pickupBoxPose } from './pickupCards.js';
 import { createItemStatus } from './status.js';
 import { advanceRibbon, flightSpark, launchSpark } from './flight.js';
 import { createTethers } from './tethers.js';
@@ -110,6 +111,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
   if (shells) root.add(shells.mesh);
   const shields = shieldCloud(), shieldRows = [], shieldState = {}, underlayState = {}; root.add(shields.mesh);
   const pickupCards = createPickupCards();
+  root.add(pickupCards.bubbles.mesh);
 
   // ---- boxes: one card per track box, built on first sight ----
   const boxes = [], prevAlive = [], turnT = [], boxOwners = new Map();
@@ -254,8 +256,8 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     toys.begin(view, dt, karts, camera, soft || reduced);
     if (shells) { shells.uniforms.time.value = timeS; shells.begin(); }
     bubbles.begin(); toyIcons.begin(); motes.begin(); puddles.begin(); waves.begin(); copies.begin(); marks.begin(); shadows.begin(); confetti.begin(); drawn = 0;
-    shields.begin();
-    const endAll = () => { bubbles.end(); toyIcons.end(); motes.end(); puddles.end(); waves.end(); copies.end(); marks.end(); shadows.end(); confetti.end(); shields.end(); if (shells) shells.end(); };
+    shields.begin(); pickupCards.bubbles.begin();
+    const endAll = () => { bubbles.end(); pickupCards.bubbles.end(); toyIcons.end(); motes.end(); puddles.end(); waves.end(); copies.end(); marks.end(); shadows.end(); confetti.end(); shields.end(); if (shells) shells.end(); };
     if (!view) {
       toys.clear(); tethers.clear(); status.clear();
       boxOwners.clear();
@@ -265,20 +267,21 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     }
     const tier = tierOf(Q.name), moteK = tier.motes / top.motes;
     const showS = feel.get('items.popShowS') || 0.6;
-    const mid = PICKUP_CARD.height / 2;
+    const CS = PICKUP_BOX.cardScale, mid = PICKUP_CARD.height * CS / 2;
 
-    // boxes: spinning cards; driven through, the card spins away and a bubble rises out of it
+    // boxes: spinning cards in chartreuse bubbles; driven through, the card spins away and a bubble rises out of it
     (view.boxes || []).forEach((b, i) => {
       const o = boxes[i] || (boxes[i] = buildBox(i));
       if (prevAlive[i] && !b.alive) { turnT[i] = 0; confT[i] = 0; }
       prevAlive[i] = b.alive;
       const turning = turnT[i] !== undefined && turnT[i] < L.boxTurnS + showS;
       const bob = Math.sin(timeS * L.boxBobHz * 6.283 + i) * PICKUP_CARD.bob;
-      lay(o, b.p, b.n, timeS * PICKUP_CARD.spin + i, PICKUP_CARD.hover + bob);
+      lay(o, b.p, b.n, timeS * PICKUP_CARD.spin + i, pickupBoxPose(bob).lift);
+      const nx = N.x, ny = N.y, nz = N.z;
       if (turning) {
         turnT[i] += dt;
         const q = Math.min(1, turnT[i] / L.boxTurnS), rise = Math.max(0, turnT[i] - L.boxTurnS) / showS;
-        o.visible = q < 1; o.scale.setScalar(1 - q);
+        o.visible = q < 1; o.scale.setScalar(CS * (1 - q));
         o.quaternion.multiply(QS.setFromAxisAngle(UP, q * q * 9));
         const up = rise + mid * (1 - q);
         const held = view.held?.find(h => h.racer === boxOwners.get(i));
@@ -287,7 +290,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
       } else {
         turnT[i] = undefined;
         boxOwners.delete(i);
-        o.visible = !!b.alive; o.scale.setScalar(Math.max(0.01, b.k === undefined ? 1 : b.k));
+        o.visible = !!b.alive; o.scale.setScalar(CS * Math.max(0.01, b.k === undefined ? 1 : b.k));
         // a glint sweeps the card's face corner to corner now and then
         const gl = o.visible ? boxGlint(timeS, i, soft) : null;
         if (gl && gl.alpha > 0.01) {
@@ -296,6 +299,11 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
           motes.push(W.x, W.y, W.z, L.glintSizeM * (0.6 + 0.4 * gl.alpha), 1, 0.97, 1, gl.alpha);
           motes.push(W.x, W.y, W.z, L.glintSizeM * 2.2, 1, 0.75, 0.9, gl.alpha * 0.25);
         }
+      }
+      if (o.visible) {
+        // the glass round the card, sized with it (a taken box's bubble shrinks away with its card)
+        const f = o.scale.x / CS, up = mid * f;
+        pickupCards.bubbles.push(o.position.x + nx * up, o.position.y + ny * up, o.position.z + nz * up, PICKUP_BOX.bubbleR * f);
       }
       if (o.visible && iconSeen(o.position.x, o.position.y + mid, o.position.z, mid)) pickupCards.use(i);
       // taken: confetti cards burst out of the card, tumble and fall
@@ -552,7 +560,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     for (const [k, g] of glows) if (g.f !== frame) glows.delete(k);
     frame++;
 
-    pickupCards.update(dt, soft);
+    pickupCards.update(dt, soft, soft || reduced);
     icons.tick(dt, timeS, soft, reduced);
     endAll();
   }

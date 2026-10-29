@@ -257,6 +257,12 @@ const ABORT = {
 export const abortCopy = (reason) => ABORT[reason] || 'The room closed';
 const CLOSE = { 4000: 'Race over', 4001: ABORT.hello, 4002: 'The room hung up', 4003: ABORT.ticket, 4004: ABORT.full, 4009: 'Opened somewhere else', 4010: ABORT.closed, 4011: ABORT.server };
 export const closeCopy = (code) => CLOSE[code] || 'Lost the room';
+/** A seat that never got its welcome: the room's abort reason, else its 4xxx close, else the network. */
+export function connectFailCopy(e) {
+  if (e && e.reason && ABORT[e.reason]) return ABORT[e.reason];
+  if (e && CLOSE[e.closeCode]) return CLOSE[e.closeCode];
+  return ERR.net;
+}
 export const BADGE_COPY = Object.freeze({ host: 'host', bot: 'bot', ready: 'ready', paused: 'paused', away: 'away', left: 'left' });
 
 // ---- race a friend through a link (NET.md section 13) -----------------------------------------
@@ -266,8 +272,12 @@ export function linkToken(search) {
   try { const t = new URLSearchParams(search || '').get('r'); return t && LINK_TOKEN.test(t) ? t : null; } catch (e) { return null; }
 }
 /** The address without its `r` (boot hands it to history.replaceState after the first claim). */
-export function dropLinkParam(href) {
-  try { const u = new URL(href); u.searchParams.delete('r'); return u.pathname + u.search + u.hash; } catch (e) { return null; }
+export function dropLinkParam(href, key = 'r') {
+  try { const u = new URL(href); u.searchParams.delete(key); return u.pathname + u.search + u.hash; } catch (e) { return null; }
+}
+/** `?join=<roomId>` from the CCP lobby's open-race rows (the lobby mints 12 chars of a-z0-9), or null. */
+export function joinParam(search) {
+  try { const t = new URLSearchParams(search || '').get('join'); return t && /^[a-z0-9]{12}$/.test(t) ? t : null; } catch (e) { return null; }
 }
 /** Server ms of a link's `exp` (seconds are taken for seconds). */
 const expMs = (exp) => { const n = Number(exp); return !(n > 0) ? 0 : n < 1e11 ? n * 1000 : n; };

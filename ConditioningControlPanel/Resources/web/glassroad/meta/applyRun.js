@@ -4,22 +4,28 @@
  * trialBestS / trialBestLapS / bestSectorsS and the medal (medals.js). Totals take every run. An unfinished run
  * counts a race but sets no bests. A pb flag means an existing best was beaten (a first time is not a pb).
  * Achievements evaluate on the updated record; their rewards become unlocks.
+ * Playtest 2026-10-28 (solo races default to 1 lap): Record v1 is frozen and shared with the server, so it has no
+ * lap count. Whole-race bests (bestRaceS, trialBestS) and the trial medal (medals.js times are for the course's own
+ * laps) only come from a run of opts.fullLaps (boot passes the course's laps); per-lap bests, sectors, counts and
+ * totals take every run. Without fullLaps, or a summary without laps, every run counts (the old rule).
  */
 import { cleanRecord, RECENT_MAX } from './record.js';
 import { medalFor, medalRank } from './medals.js';
 import { evaluate, ACHIEVEMENT_BY_ID } from './achievements.js';
 
 const better = (t, old) => t > 0 && (!(old > 0) || t < old);
+/** A run as long as the course's own race (fullLaps): only those set whole-race bests and medals. */
+export const fullLength = (s, fullLaps) => !(fullLaps > 0) || !(s && s.laps > 0) || s.laps === fullLaps;
 
 /** @returns {{record: object, diff: {pbRace: boolean, pbLap: boolean, pbTrial: boolean, medal: null|{from, to},
  *   newAchievements: string[], newUnlocks: string[]}}} */
-export function applyRun(record, summary) {
+export function applyRun(record, summary, { fullLaps = 0 } = {}) {
   const r = cleanRecord(record);          // a fresh deep copy (and a valid shape)
   const diff = { pbRace: false, pbLap: false, pbTrial: false, medal: null, newAchievements: [], newUnlocks: [] };
   const s = summary;
   const c = s && r.courses[s.track];
   if (!c) return { record: r, diff };
-  const trial = s.mode === 'trial', fin = !!s.finished, t = r.totals;
+  const trial = s.mode === 'trial', fin = !!s.finished, t = r.totals, full = fullLength(s, fullLaps);
 
   if (trial) c.trials++;
   else {
@@ -34,12 +40,12 @@ export function applyRun(record, summary) {
 
   if (fin) {
     if (trial) {
-      if (better(s.timeS, c.trialBestS)) { diff.pbTrial = c.trialBestS > 0; c.trialBestS = s.timeS; }
+      if (full && better(s.timeS, c.trialBestS)) { diff.pbTrial = c.trialBestS > 0; c.trialBestS = s.timeS; }
       if (better(s.bestLapS, c.trialBestLapS)) { diff.pbLap = c.trialBestLapS > 0; c.trialBestLapS = s.bestLapS; }
-      const got = medalFor(s.track, s.timeS);
+      const got = full ? medalFor(s.track, s.timeS) : null;
       if (got && medalRank(got) > medalRank(c.medal)) { diff.medal = { from: c.medal, to: got }; c.medal = got; }
     } else {
-      if (better(s.timeS, c.bestRaceS)) { diff.pbRace = c.bestRaceS > 0; c.bestRaceS = s.timeS; }
+      if (full && better(s.timeS, c.bestRaceS)) { diff.pbRace = c.bestRaceS > 0; c.bestRaceS = s.timeS; }
       if (better(s.bestLapS, c.bestLapS)) { diff.pbLap = c.bestLapS > 0; c.bestLapS = s.bestLapS; }
     }
     for (const lap of s.sectorsS || []) for (let i = 0; i < 3; i++) if (better(lap?.[i], c.bestSectorsS[i])) c.bestSectorsS[i] = lap[i];

@@ -7,25 +7,72 @@ const hooks=registerHooks({resolve(specifier,context,next){
   return path?{url:new URL('../vendor/three/'+path,import.meta.url).href,shortCircuit:true}:next(specifier,context);
 }});
 const {warmAll,warmInset,WARM}=await import('../render/renderer.js');
-const {Scene,Group,LOD,Mesh,InstancedMesh,BoxGeometry,MeshBasicNodeMaterial,PerspectiveCamera}=await import('three/webgpu');
+const {Scene,Group,LOD,Mesh,InstancedMesh,BoxGeometry,MeshBasicNodeMaterial,PerspectiveCamera,Lighting}=await import('three/webgpu');
 hooks.deregister();
 
 test('shadowless hit-camera warm retains its real layers and restores renderer switches',async()=>{
   const scene=new Scene(),camera=new PerspectiveCamera(),geometry=new BoxGeometry();
   const road=new Mesh(geometry,new MeshBasicNodeMaterial()),catcher=new Mesh(geometry,new MeshBasicNodeMaterial());
   catcher.layers.set(2);catcher.visible=false;scene.add(road,catcher);
-  const original={name:'main'},inset={name:'inset'};let target=original,mrt='main',compiled=0;
-  const three={shadowMap:{enabled:true},autoClear:false,getRenderTarget:()=>target,getMRT:()=>mrt,
-    setRenderTarget:value=>{target=value;},setMRT:value=>{mrt=value;},clear(){},
+  const original={name:'main'},inset={name:'inset'},lighting=new Lighting();let target=original,mrt='main',compiled=0,drawn=0,deferredShadows,preparedLight;
+  const three={lighting,shadowMap:{enabled:true},autoClear:false,getRenderTarget:()=>target,getMRT:()=>mrt,
+    setRenderTarget:value=>{target=value;},setMRT:value=>{mrt=value;},render(s,c){
+      drawn++;assert.equal(s,scene);assert.equal(c,camera);assert.equal(target,inset);assert.equal(this.shadowMap.enabled,false);
+      assert.equal(this.lighting.getNode(scene),preparedLight,'warm and live draws share one inset lighting scope');
+    },
     async compileAsync(){
       assert.equal(target,inset);assert.equal(this.shadowMap.enabled,false);assert.equal(mrt,null);
       assert.ok(road.layers.test(camera.layers));assert.equal(catcher.layers.test(camera.layers),false);
       compiled++;
+      preparedLight=this.lighting.getNode(scene);
+      assert.notEqual(preparedLight,lighting.getNode(scene),'cube and inset passes must not evict each other');
+      await Promise.resolve();
+      deferredShadows=this.shadowMap.enabled;
     }};
   await warmInset(three,{inset:{target:inset}},scene,camera);
   assert.equal(compiled,1);assert.equal(camera.layers.mask,1);assert.equal(catcher.visible,false);
+  assert.equal(deferredShadows,false,'deferred shader building must use the same shadow policy as the live inset');
+  assert.equal(drawn,1,'draw-time variants must be prepared offscreen before first use');
   assert.equal(target,original);assert.equal(mrt,'main');assert.equal(three.shadowMap.enabled,true);assert.equal(three.autoClear,false);
+  assert.equal(three.lighting,lighting,'hand the main lighting scope back');
+  const firstLight=preparedLight;
+  await warmInset(three,{inset:{target:inset}},scene,camera);
+  assert.equal(preparedLight,firstLight,'retain inset lighting across repeated preparation');
   geometry.dispose();road.material.dispose();catcher.material.dispose();
+});
+
+test('hit-camera warm prepares every distance variant before its first rival cut',async()=>{
+  const scene=new Scene(),camera=new PerspectiveCamera(),geometry=new BoxGeometry(),lod=new LOD();
+  const near=new Mesh(geometry,new MeshBasicNodeMaterial()),far=new Mesh(geometry,new MeshBasicNodeMaterial());
+  lod.addLevel(near,0);lod.addLevel(far,200);scene.add(lod);lod.update(camera);
+  const seen=new Set(),target={};
+  const three={getRenderTarget:()=>null,setRenderTarget(){},render(){},async compileAsync(){
+    // Three's projection selects the current LOD during compileAsync, just as it does in render.
+    if(lod.autoUpdate)lod.update(camera);
+    scene.traverseVisible(o=>{if(o.isMesh)seen.add(o);});
+  }};
+  await warmInset(three,{inset:{target}},scene,camera);
+  assert.ok(seen.has(near));
+  assert.ok(seen.has(far),'the first distant hit must not link a new inset program');
+  assert.equal(lod.autoUpdate,true);assert.equal(near.visible,true);assert.equal(far.visible,false);
+  camera.position.z=300;camera.updateMatrixWorld();lod.update(camera);
+  assert.equal(near.visible,false);assert.equal(far.visible,true);
+  near.material.dispose();far.material.dispose();geometry.dispose();
+});
+
+test('a failed hit-camera warm restores automatic and manual LOD policies',async()=>{
+  const scene=new Scene(),camera=new PerspectiveCamera(),auto=new LOD(),manual=new LOD();
+  manual.autoUpdate=false;scene.add(auto,manual);
+  const warn=console.warn;let during;
+  try{
+    console.warn=()=>{};
+    await warmInset({getRenderTarget:()=>null,setRenderTarget(){},async compileAsync(){
+      during=[auto.autoUpdate,manual.autoUpdate];
+      throw Error('test inset compilation failure');
+    }},{inset:{target:{}}},scene,camera);
+  }finally{console.warn=warn;}
+  assert.deepEqual(during,[false,false]);
+  assert.equal(auto.autoUpdate,true);assert.equal(manual.autoUpdate,false);
 });
 
 test('larger WebGPU warm batches keep every render variant and restore hidden pools, materials and layers',async()=>{

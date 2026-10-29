@@ -303,3 +303,23 @@ test('failed bridge sources retry on their own timer without new messages', asyn
   t.mock.timers.tick(1); await Promise.resolve(); assert.equal(calls, 2);
   await adapter.apply(m); assert.equal(active.size, 8);
 });
+
+test('a phone readyCount settles ready after the first complete clips; the rest keep arriving and desktop waits for all', async t => {
+  for (const readyCount of [2, Infinity]) await t.test(String(readyCount), async t => {
+    localLocation(t);
+    const late = [deferred(), deferred()]; let lateIdx = 0;
+    t.mock.method(globalThis, 'fetch', url => {
+      if (url.endsWith('manifest.json')) return Promise.resolve({ ok: true, json: async () => manifest(source('a'), source('b'), source('c'), source('d')) });
+      if (url.endsWith('/start')) return Promise.resolve(response());
+      return url.endsWith('/a') || url.endsWith('/b') ? Promise.resolve(response()) : late[lateIdx++].promise;
+    });
+    const { adapter, videos } = mediaFixture(t, { readyCount });
+    const settled = await Promise.race([adapter.ready.then(() => 'ready'), new Promise(r => setTimeout(r, 50, 'waiting'))]);
+    assert.equal(settled, readyCount === 2 ? 'ready' : 'waiting');
+    assert.equal(videos.length, 2, 'only complete downloads are attached, never a half clip');
+    late.forEach(d => d.resolve(response()));
+    await adapter.ready;
+    await new Promise(r => setTimeout(r, 10));
+    assert.equal(videos.length, 4, 'the rest arrive behind the menu');
+  });
+});

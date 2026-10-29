@@ -4,6 +4,10 @@ import { beatCycle, gearBeatTravel, machineryRearming } from './machineryBeat.js
 
 import { trapStroke } from './trapArrangement.js';
 
+// Contact is deliberately inset from the visible toy. Grazing a bevel is a near miss.
+export const GOONWORKS_CONTACT = Object.freeze({ revision: 1, radius: .4, widthScale: .72,
+  depthScale: .7, heightInset: .35, wheelInset: .7, gapPadding: 6 * Math.PI / 180 });
+
 export const GOONWORKS_TOYS = Object.freeze({ kartRadius: .7, kartHeight: 1.6, stallS: .28, repeatS: 1.1,
   wheelRadius: 20, wheelCenterY: 12.5, wheelDepth: 2.4, wheelGap: 50 * Math.PI / 180, wheelOpenings: 4,
   cycleBeats: 4, wheelRadiansPerBeat: Math.PI / 2 });
@@ -29,8 +33,6 @@ export function goonworksSetpieces(track, layout = getGoonworksLayout(track)) {
   for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) add('block', 'quiz-block-' + j + '-' + i,
     part('quiz-ballroom'), .23 + j * .18, { x: -15 + i * 10, w: 8, depth: 6,
       height: 4.6, offsetS: -j * .72 - i * .16, periodS: 8.8, bypass: 23 });
-  add('flipper', 'pinball-flipper', part('pinball-table'), .8,
-    { x: 0, w: 13, depth: 14, height: 3.2, periodS: 6.8, offsetS: 0, bypass: 14 });
   for (const row of rows) {
     // A raised wheel's full radius is at hub height. Reserve its actual sweep through a ground kart.
     const extent = row.kind === 'wheel' ? Math.abs(row.x) + Math.sqrt(Math.max(0, row.radius ** 2 - Math.max(0, row.centerY - GOONWORKS_TOYS.kartHeight) ** 2))
@@ -120,11 +122,11 @@ export function apertureAngle(row, angle) {
 }
 
 /** A point is solid only inside a real spoke, never inside any of its four cutouts. */
-export function apertureContains(row, pose, x, height) {
+export function apertureContains(row, pose, x, height, inset = 0, gapPadding = 0) {
   const dx = x - row.x, dy = height - row.centerY;
-  if (dx * dx + dy * dy > row.radius * row.radius) return false;
+  if (dx * dx + dy * dy > (row.radius - inset) ** 2) return false;
   const angle = Math.atan2(dy, dx) - pose.angle;
-  return apertureAngle(row, angle) >= row.gap / 2;
+  return apertureAngle(row, angle) >= row.gap / 2 + gapPadding;
 }
 
 export function goonworksLocal(st, row, positionIndex = 0) {
