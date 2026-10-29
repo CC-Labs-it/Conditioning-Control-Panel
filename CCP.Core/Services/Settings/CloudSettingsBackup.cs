@@ -155,9 +155,10 @@ namespace ConditioningControlPanel.Services
         // ---- new: absolute paths are machine-local ----
 
         /// <summary>Settings that hold an absolute path, a list of them, or list items carrying one
-        /// (AudioLayerTrack.Path, CornerGifOverlaySetting.GifPath, PlayAudioAction.FilePath). Never uploaded; a
-        /// restore keeps this machine's values, whatever the backup carries (frozen WPF still uploads its Windows
-        /// paths). Whole lists, so a restore never drops this machine's file from an item.
+        /// (AudioLayerTrack.Path, CornerGifOverlaySetting.GifPath, PlayAudioAction.FilePath). This machine's values are
+        /// never uploaded: the upload carries the SLOT's values unchanged (<see cref="CarryPathFields"/>), so a Windows
+        /// restore of a backup made here keeps its own paths. A restore keeps this machine's values, whatever the backup
+        /// carries (frozen WPF still uploads its Windows paths). Whole lists, so a restore never drops this machine's file from an item.
         /// The asset lists are NOT here: they are relative and forward-slashed, so they travel.</summary>
         public static readonly IReadOnlyList<string> AbsolutePathFields = new[]
         {
@@ -247,6 +248,15 @@ namespace ConditioningControlPanel.Services
             try
             {
                 var obj = StripForUpload(settings);
+                // The slot is shared with Windows, and frozen WPF restores the whole blob: a path field missing from
+                // it comes back EMPTY there. So the slot's own path fields ride along unchanged (review R3).
+                var slot = await FetchSlotAsync(settings);
+                if (!slot.Ok)
+                {
+                    Log.Warning("Settings backup skipped: the current backup could not be read, so its file paths could not be kept");
+                    return false;
+                }
+                CarryPathFields(obj, SlotSettings(slot.Backup));
                 var encoded = SettingsBackupBudget.Encode(obj);
                 if (!encoded.Fits)
                 {
@@ -297,11 +307,7 @@ namespace ConditioningControlPanel.Services
             {
                 var data = (string?)(await FetchAsync(current))?["settings_data"];
                 if (data == null) return null;
-                string json;
-                using (var input = new MemoryStream(Convert.FromBase64String(data)))
-                using (var gzip = new GZipStream(input, CompressionMode.Decompress))
-                using (var reader = new StreamReader(gzip, Encoding.UTF8))
-                    json = await reader.ReadToEndAsync();
+                var json = Unpack(data);
                 var restored = JsonConvert.DeserializeObject<AppSettings>(json,
                     new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace });
                 if (restored == null) return null;
@@ -316,14 +322,48 @@ namespace ConditioningControlPanel.Services
             }
         }
 
-        private async Task<JObject?> FetchAsync(AppSettings settings)
+        /// <summary>The slot's <see cref="AbsolutePathFields"/> keys, copied into <paramref name="upload"/> as they are
+        /// (WPF's Windows paths, or nothing when the last backup came from this head). This head's own paths never go up.</summary>
+        internal static void CarryPathFields(JObject upload, JObject? slotSettings)
+        {
+            if (slotSettings == null) return;
+            foreach (var p in slotSettings.Properties())
+                if (AbsolutePathFields.Contains(p.Name, StringComparer.OrdinalIgnoreCase)
+                    || AbsolutePathFields.Contains(PropertyNameOfJsonKey(p.Name), StringComparer.OrdinalIgnoreCase))
+                    upload[p.Name] = p.Value.DeepClone();
+        }
+
+        /// <summary>The slot's settings JSON; null when there is none or it cannot be read (nothing to carry then).</summary>
+        private static JObject? SlotSettings(JObject? backup)
+        {
+            if ((string?)backup?["settings_data"] is not { } data) return null;
+            try { return JObject.Parse(Unpack(data)); }
+            catch (Exception ex)
+            {
+                Log.Warning("Settings backup: the current backup is unreadable ({Error}); no file paths to keep", ex.Message);
+                return null;
+            }
+        }
+
+        private static string Unpack(string base64)
+        {
+            using var input = new MemoryStream(Convert.FromBase64String(base64));
+            using var gzip = new GZipStream(input, CompressionMode.Decompress);
+            using var reader = new StreamReader(gzip, Encoding.UTF8);
+            return reader.ReadToEnd();
+        }
+
+        private async Task<JObject?> FetchAsync(AppSettings settings) => (await FetchSlotAsync(settings)).Backup;
+
+        /// <summary>Ok = the server answered (Backup null: there is no backup yet); not Ok = refused or failed.</summary>
+        private async Task<(bool Ok, JObject? Backup)> FetchSlotAsync(AppSettings settings)
         {
             using var response = await PostAsync("/v2/user/settings-backup", settings, new { unified_id = settings.UnifiedId });
-            if (!await SucceededAsync(response, "Settings backup fetch")) return null;
+            if (!await SucceededAsync(response, "Settings backup fetch")) return (false, null);
             // Dates stay strings (WPF read backed_up_at as a string and parsed it itself).
             var root = JsonConvert.DeserializeObject<JObject>(await response.Content.ReadAsStringAsync(),
                 new JsonSerializerSettings { DateParseHandling = DateParseHandling.None });
-            return root?["backup"] as JObject;
+            return (true, root?["backup"] as JObject);
         }
 
         private Task<HttpResponseMessage> PostAsync(string path, AppSettings settings, object body)

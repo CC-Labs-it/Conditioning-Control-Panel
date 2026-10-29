@@ -1216,6 +1216,9 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   upload, and every restore copies this machine's values back. KeywordTriggers go as a whole list, not just the file
   field: blanking only the field would make a restore of this machine's own backup drop each trigger's sound file. The restore rule is the guard that matters: frozen WPF keeps uploading Windows paths.
   The asset lists (DisabledAssetPaths, ActiveAssetPaths, AssetPresets) stay in the backup: they are relative.
+- 2026-10-29 (port review R3): stripping alone wiped Windows. Frozen WPF restores the whole blob, so a path field
+  missing from a backup made here came back empty on Windows. A backup now reads the slot first and carries the slot's
+  own path fields unchanged (`CarryPathFields`); when the slot cannot be read, nothing is uploaded.
 - Option B (rejected): a path translation table; drive letters and home folders cannot be mapped reliably.
 - Option C (rejected): per-OS sections; WPF restores the whole blob and the server keeps one opaque slot.
 - Shape: Core `CloudSettingsBackup` carries WPF's ExcludedBackupProperties / IsExcludedFromBackup / PreserveLocalOnlyFields
