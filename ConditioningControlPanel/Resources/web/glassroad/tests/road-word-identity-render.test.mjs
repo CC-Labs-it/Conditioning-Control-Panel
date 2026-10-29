@@ -22,6 +22,13 @@ function fixture() {
 }
 const scalar = (node) => evaluateColour(node)[0];
 const near = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-8, `${message}: ${actual} != ${expected}`);
+const KINDS = Object.values(ROAD_WORD_IDENTITY).filter(kind => kind > 0);
+
+test('every declared mechanism has one distinct stable id', () => {
+  assert.equal(KINDS.length, 36);
+  assert.equal(new Set(KINDS).size, KINDS.length);
+  assert.deepEqual([...KINDS].sort((a, b) => a - b), Array.from({ length: 36 }, (_, i) => i + 1));
+});
 
 test('unassigned markings retain the exact original source, including after a pickup', () => {
   const { loc, identity, graph } = fixture();
@@ -38,7 +45,7 @@ test('unassigned markings retain the exact original source, including after a pi
 
 test('all identities settle to a complete readable source before the collectible window', () => {
   const { loc, identity, graph } = fixture();
-  for (let kind = 1; kind <= 10; kind++) for (const point of [[.18, .3], [.37, .62], [.76, .8]]) {
+  for (const kind of KINDS) for (const point of [[.18, .3], [.37, .62], [.76, .8]]) {
     loc.value.set(...point); identity.value.set(kind, -.65, -1, 6);
     const uv = evaluateColour(graph.uv);
     near(uv[0], point[0], `${kind} ready u`); near(uv[1], point[1], `${kind} ready v`);
@@ -50,7 +57,7 @@ test('all identities settle to a complete readable source before the collectible
 test('Gentle freezes the original source pose but keeps the real collection lifetime', () => {
   const { loc, identity, u, graph } = fixture();
   u.identityMotion.value = 0;
-  for (let kind = 1; kind <= 10; kind++) for (const age of [-.3, .45, 2]) {
+  for (const kind of KINDS) for (const age of [-.3, .45, 2]) {
     for (const taken of [-1, .2, .8, 1]) {
       identity.value.set(kind, age, taken, 6);
       const uv = evaluateColour(graph.uv);
@@ -67,7 +74,7 @@ test('Gentle freezes the original source pose but keeps the real collection life
 
 test('all collected source layers disappear, even for long words and reduced motion', () => {
   const { loc, identity, u, graph } = fixture();
-  for (const motion of [0, .5, 1]) for (let kind = 1; kind <= 10; kind++) {
+  for (const motion of [0, .5, 1]) for (const kind of KINDS) {
     u.identityMotion.value = motion;
     for (const point of [[.01, .01], [.25, .75], [.5, .5], [.99, .99]]) {
       loc.value.set(...point); identity.value.set(kind, 1, 1, 18);
@@ -106,9 +113,9 @@ test('GLASS and BURN remove actual source regions during collection', () => {
 
 test('identity graphs remain finite and bounded throughout entry, hold and pickup', () => {
   const { loc, identity, graph } = fixture();
-  for (let kind = 1; kind <= 10; kind++) {
+  for (const kind of KINDS) {
     for (const [age, taken] of [[-2.4, -1], [-1.7, -1], [-.65, -1], [0, -1], [.5, -1], [2, .35], [3, .85], [4, 1]]) {
-      loc.value.set(.13 + kind * .065, .24 + kind * .044);
+      loc.value.set(.13 + (kind % 11) * .065, .24 + (kind % 11) * .044);
       identity.value.set(kind, age, taken, kind % 3 === 0 ? 1 : 12);
       for (const node of [graph.uv, graph.mask, graph.coreMask, graph.tint, graph.tintMix, graph.lift]) {
         assert.ok(evaluateColour(node).every(Number.isFinite), `${kind} finite at ${age}/${taken}`);
@@ -117,6 +124,80 @@ test('identity graphs remain finite and bounded throughout entry, hold and picku
         const value = scalar(node); assert.ok(value >= 0 && value <= 1);
       }
       assert.ok(Math.abs(scalar(graph.lift)) <= .15, `${kind} road clearance`);
+    }
+  }
+});
+
+test('expanded destructive families remove source regions before their final fade', () => {
+  const { loc, identity, graph } = fixture();
+  for (const kind of [ROAD_WORD_IDENTITY.fragment, ROAD_WORD_IDENTITY.fade, ROAD_WORD_IDENTITY.code,
+    ROAD_WORD_IDENTITY.fold, ROAD_WORD_IDENTITY.split, ROAD_WORD_IDENTITY.rain]) {
+    identity.value.set(kind, 1, .58, 6);
+    let cleared = 0;
+    for (let x = 1; x <= 8; x++) for (let y = 1; y <= 8; y++) {
+      loc.value.set(x / 10, y / 10);
+      if (scalar(graph.mask) < .2) cleared++;
+    }
+    assert.ok(cleared > 0, `${kind} removes its source, not just an unrelated overlay`);
+  }
+});
+
+test('each additional family has a distinct source performance', () => {
+  const { loc, identity, graph } = fixture();
+  const signatures = new Map();
+  for (const kind of KINDS.filter(value => value >= 11)) {
+    const values = [];
+    for (const [x, y, age, taken] of [[.28, .42, .45, -1], [.69, .73, .7, -1], [.36, .58, 1, .48]]) {
+      loc.value.set(x, y); identity.value.set(kind, age, taken, 6);
+      values.push(...evaluateColour(graph.uv), scalar(graph.mask), scalar(graph.coreMask),
+        ...evaluateColour(graph.tint), scalar(graph.tintMix));
+    }
+    const key = values.map(value => value.toFixed(5)).join(',');
+    assert.equal(signatures.has(key), false, `${kind} duplicates ${signatures.get(key)}`);
+    signatures.set(key, kind);
+  }
+});
+
+test('literal green retains green pigment instead of a travelling spectrum', () => {
+  const { identity, graph } = fixture();
+  for (const age of [-.65, .1, 1, 4]) {
+    identity.value.set(ROAD_WORD_IDENTITY.green, age, -1, 5);
+    const color = evaluateColour(graph.tint);
+    assert.ok(color[1] > color[0] && color[1] > color[2]);
+  }
+});
+
+test('echo keeps one filled source and two hollow source impressions', () => {
+  const { loc, identity, graph } = fixture();
+  identity.value.set(ROAD_WORD_IDENTITY.echo, 1, -1, 5);
+  for (const [y, filled] of [[.16, 0], [.5, 1], [.84, 0]]) {
+    loc.value.set(.37, y);
+    assert.equal(scalar(graph.coreMask), filled);
+    assert.equal(scalar(graph.mask), 1);
+  }
+});
+
+test('rain and slide source columns never borrow their neighbouring column on pickup', () => {
+  const { loc, identity, graph } = fixture();
+  for (const kind of [ROAD_WORD_IDENTITY.slide, ROAD_WORD_IDENTITY.rain]) {
+    for (const taken of [.1, .4, .7]) for (const x of [.12, .39, .78]) {
+      loc.value.set(x, .6); identity.value.set(kind, 1, taken, 6);
+      near(evaluateColour(graph.uv)[0], x, `${kind} source column`);
+    }
+  }
+});
+
+test('vapour and digital erase never restore a source region after clearing it', () => {
+  const { loc, identity, graph } = fixture();
+  for (const kind of [ROAD_WORD_IDENTITY.fade, ROAD_WORD_IDENTITY.code]) {
+    for (const [x, y] of [[.18, .4], [.46, .6], [.75, .3]]) {
+      loc.value.set(x, y); let previous = 1;
+      for (let i = 0; i <= 20; i++) {
+        identity.value.set(kind, 1, i / 20, 6);
+        const alpha = scalar(graph.mask);
+        assert.ok(alpha <= previous + 1e-8, `${kind} reappeared at pickup ${i / 20}`);
+        previous = alpha;
+      }
     }
   }
 });
