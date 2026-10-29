@@ -28,7 +28,7 @@ const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < .0001
 
 test('RESET and EMPTY keep every trigger bubble and carry their exact shared material identity', () => {
   const { view } = fixture();
-  for (const [word, kind] of [['RESET', 7], ['EMPTY', 8], ['"pink,"', 3], ['reset now', 0], ['unlocked', 0]]) {
+  for (const [word, kind] of [['RESET', 7], ['EMPTY', 8], ['"pink,"', 3], ['reset now', 7], ['quiet and empty', 8], ['unlocked', 0]]) {
     const v = bubble(word); view.update([v]);
     assert.equal(view.object.count, 5, 'the existing trigger row remains five bubbles');
     const ids = view._dev.attributes.identity.array;

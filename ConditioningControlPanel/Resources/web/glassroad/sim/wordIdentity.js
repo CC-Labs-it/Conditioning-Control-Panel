@@ -32,3 +32,12 @@ export function wordIdentityExact(text) {
   const token = wordToken(text), id = IDENTITY.get(token) || 0;
   return id && FORMS[id][0] === token ? id : 0;
 }
+
+/** A trigger keeps its complete phrase, while its first supported whole word supplies the material. */
+export function phraseWordIdentity(text) {
+  for (const token of String(text || '').split(/\s+/)) {
+    const id = wordIdentity(token);
+    if (id) return id;
+  }
+  return 0;
+}

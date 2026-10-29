@@ -1,12 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { wordIdentity, wordIdentityExact } from '../sim/wordIdentity.js';
+import { wordIdentity, wordIdentityExact, phraseWordIdentity } from '../sim/wordIdentity.js';
 import { scriptRoad, createRoadRun, ROAD_LOOK } from '../sim/roadWords.js';
 import { pickCoins } from '../sim/wordCoins.js';
 import { fakeTrack } from './sim-fake.mjs';
 
 const TERMS = ['SLIDE', 'SPARK', 'PINK', 'SINK', 'GLASS', 'ROLLING', 'RESET', 'EMPTY', 'LOCKED', 'BURN'];
 const word = (w, startS, extra = {}) => ({ w, startS, endS: startS + .08, line: 0, ...extra });
+
+test('trigger phrases retain context while matching supported complete words', () => {
+  assert.equal(phraseWordIdentity('quiet and empty'), 8);
+  assert.equal(phraseWordIdentity('please reset'), 7);
+  assert.equal(phraseWordIdentity('unlocked compartment'), 0);
+  assert.equal(wordIdentity('quiet and empty'), 0, 'road tokens remain individual words');
+});
 
 test('ten stable identities match complete words with normal speech punctuation', () => {
   TERMS.forEach((term, i) => {
