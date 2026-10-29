@@ -208,7 +208,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
           (me.host ? btn('lb-start', 'Start', 'hot', canStart(st.seats, st.seat, st.phase) ? '' : ' disabled') : '') + '</div>' : '') +
         '<div class="lb-chat" role="group" aria-label="Say">' + PRESETS.map((p) => btn('lb-emote', esc(p.text), '', ' data-id="' + p.code + '"' + (chatOff ? ' disabled' : ''))).join('') + '</div>' +
         (linkOn && st.link && !st.linkCopied ? '<p class="lb-url" aria-label="Race link">' + esc(st.link.url) + '</p>' : '') +
-        '<div class="c-links">' + (lobby && deps().friends && st.join ? btn('lb-invite', 'Invite a friend', 'c-link') : '') +
+        '<div class="c-links">' + (lobby && me.host && deps().friends && st.join ? btn('lb-invite', 'Invite a friend', 'c-link') : '') +
         (linkOn ? btn('lb-link', 'Invite link', 'c-link', st.linkBusy ? ' disabled' : '') + (st.link ? btn('lb-unlink', 'Revoke', 'c-link') : '') : '') +
         btn('lb-leave', 'Leave', 'c-link') + '</div>';
     },
@@ -562,7 +562,12 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
       const i = Number(id), f = st.friends && st.friends[i], api = deps().api;
       if (!f || !st.join || !api) return false;
       st.sent.add(i); paint();
-      call(() => api.invite(f.uid, st.join.roomId)).then((r) => { if (!r) { st.sent.delete(i); } if (st.view === 'invite') paint(); });
+      // a host invite answers { sent, note }: a refusal frees the row again and the note says why (the host's words)
+      call(() => api.invite(f.uid, st.join.roomId)).then((r) => {
+        if (!r || r.sent === false) st.sent.delete(i);
+        if (r && typeof r.note === 'string' && r.note) st.msg = r.note;
+        if (st.view === 'invite') paint();
+      });
       return;
     }
     if (a === 'lb-leave') { leave(); st.view = 'home'; st.msg = ''; st.listAt = -1e9; paint(); return; }
