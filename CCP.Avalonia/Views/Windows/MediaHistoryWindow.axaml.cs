@@ -398,23 +398,44 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private static readonly System.Net.Http.HttpClient Http = CreateClient();
 
-        // WPF RemoteMediaCache.CreateClient's headers: CDNs that refuse a request without a User-Agent must not
-        // drop this head to the streamed-only card.
+        // WPF RemoteMediaCache.CreateClient (Core ScrolllerDiskCache.CreateClient): the app's own honest
+        // user-agent and no Referer, never a browser's (owner 2026-10-17). The user-agent is set per request
+        // because it reads the version the head seeds at startup.
         private static System.Net.Http.HttpClient CreateClient()
         {
             var c = new System.Net.Http.HttpClient(ConditioningControlPanel.Services.Deeper.UrlSafety.CreateGuardedHandler()) { Timeout = TimeSpan.FromSeconds(20) };
-            c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36");
-            c.DefaultRequestHeaders.TryAddWithoutValidation("Referer", "https://scrolller.com/");
             c.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "image/webp,image/jpeg,image/png,video/*,*/*;q=0.8");
             return c;
         }
 
+        /// <summary>Test seam: one direct GET (never used for a Scrolller url).</summary>
+        internal static Func<Uri, System.Threading.CancellationToken, System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage>> DirectGet = GetHonestAsync;
+
+        private static System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> GetHonestAsync(Uri url, System.Threading.CancellationToken token)
+        {
+            var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, url);
+            request.Headers.TryAddWithoutValidation("User-Agent", ConditioningControlPanel.Services.Fyp.Online.ScrolllerSource.HonestUserAgent);
+            return Http.SendAsync(request, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, token);
+        }
+
         /// <summary>Test seam: the bytes behind an online still (WPF RemoteMediaCache.OpenAsync), at most
-        /// <see cref="WelcomeShow.FirstShowStageWindow.MaxPictureBytes"/>; null when the host refused or sent no image.</summary>
+        /// <see cref="WelcomeShow.FirstShowStageWindow.MaxPictureBytes"/>; null when the host refused or sent no image.
+        /// A Scrolller url only ever comes through the device cache (charged against the daily share, refused while
+        /// the remote switch is off); never a direct fetch.</summary>
         internal static Func<string, System.Threading.CancellationToken, System.Threading.Tasks.Task<byte[]?>> FetchRemote =
-            (url, token) => FetchFollowingRedirectsAsync(
-                (u, t) => Http.GetAsync(u, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, t), url, token);
+            (url, token) => ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.IsScrolllerUrl(url)
+                ? FetchScrolllerAsync(url, token)
+                : FetchFollowingRedirectsAsync(DirectGet, url, token);
+
+        private static async System.Threading.Tasks.Task<byte[]?> FetchScrolllerAsync(string url, System.Threading.CancellationToken token)
+        {
+            var path = await ConditioningControlPanel.Services.Fyp.Online.ScrolllerDiskCache.GetOrFetchAsync(
+                url, null, WelcomeShow.FirstShowStageWindow.MaxPictureBytes, token);
+            if (path == null) return null;
+            var info = new FileInfo(path);
+            if (!info.Exists || info.Length > WelcomeShow.FirstShowStageWindow.MaxPictureBytes) return null;
+            return await File.ReadAllBytesAsync(path, token);
+        }
 
         /// <summary>WPF RemoteMediaCache follows redirects (CDNs answer 302). The guarded handler cannot, so each
         /// hop is followed here and re-runs the handler's connect-time private-IP guard; http(s) only, 5 hops.</summary>

@@ -14,6 +14,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Fyp.Online;
 using App = ConditioningControlPanel.Avalonia.App;
 using Xunit;
 
@@ -247,6 +248,43 @@ public sealed class MediaHistoryWindowTests
         }
         Assert.Null(await MediaHistoryWindow.FetchFollowingRedirectsAsync(Downgrade, "https://cdn.example.com/x.jpg", default));
         Assert.Single(hops);
+    }
+
+    /// <summary>R2-1 (port review 7.2): Load preview on a Scrolller row goes through the device cache (charged, off
+    /// switch, consent), never a direct fetch; any other online still is fetched with the app's honest user-agent,
+    /// never a browser's, and no scrolller.com Referer.</summary>
+    [Fact]
+    public async Task Online_preview_fetch_is_honest_and_never_fetches_Scrolller_directly()
+    {
+        var (get, consent) = (MediaHistoryWindow.DirectGet, ScrolllerDiskCache.RemoteConsent);
+        try
+        {
+            var direct = new System.Collections.Generic.List<string>();
+            MediaHistoryWindow.DirectGet = (u, _) =>
+            {
+                direct.Add(u.Host);
+                return Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new System.Net.Http.ByteArrayContent(new byte[] { 1 }) });
+            };
+            ScrolllerDiskCache.RemoteConsent = () => false;   // the cache refuses: nothing else may fetch it instead
+            Assert.Null(await MediaHistoryWindow.FetchRemote("https://images.scrolller.com/a/b.jpg", default));
+            Assert.Empty(direct);
+            Assert.Equal(new byte[] { 1 }, await MediaHistoryWindow.FetchRemote("https://cdn.example.com/x.jpg", default));
+            Assert.Equal(new[] { "cdn.example.com" }, direct);
+        }
+        finally { (MediaHistoryWindow.DirectGet, ScrolllerDiskCache.RemoteConsent) = (get, consent); }
+
+        var src = SourceText("CCP.Avalonia", "Views", "Windows", "MediaHistoryWindow.axaml.cs");
+        Assert.DoesNotContain("Chrome/", src);
+        Assert.DoesNotContain("\"Referer\"", src);
+        Assert.Contains("ScrolllerSource.HonestUserAgent", src);
+    }
+
+    private static string SourceText(params string[] parts)
+    {
+        var dir = new DirectoryInfo(System.AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel.sln"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        return File.ReadAllText(Path.Combine(new[] { dir!.FullName }.Concat(parts).ToArray()));
     }
 
     /// <summary>WPF MediaHistoryWindow.xaml.cs:35/192/394: "via Scrolller" sits on the preview of a Scrolller
