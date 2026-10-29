@@ -19,6 +19,7 @@ import { S } from '../sim/state.js';
 import { racerLabels, itemName } from '../hud/format.js';
 import { createHitCamChrome } from '../hud/hitCamChrome.js';
 import { Q } from './quality.js';
+import { CATCH_LAYER } from './shadows.js';
 import { hitCamNumbers, hitCamFrame, isPlayerHit, pickVictim, hitWord, hitCamRect, orbitAz, rigOffsets, fovFor, shakeAt, hitCamAllowed } from './hitCamMath.js';
 
 const TILT_DEG = -1.5;
@@ -32,6 +33,14 @@ export function createHitCam({ bus, feel, renderer, world, doc = globalThis.docu
   const eyeOff = [0, 0, 0], lookOff = [0, 0, 0], upSm = [0, 1, 0];
   const P = new Vector3(), Qk = new Quaternion(), F = new Vector3(), U = new Vector3(), V = new Vector3(), R = new Vector3(), T = new Vector3();
   const stats = { opened: 0, shown: 0, skipped: 0, victim: -1, phase: 'idle' };
+  function matchView(mainCamera) {
+    if (mainCamera) {
+      camera.far = mainCamera.far; camera.near = Math.max(0.05, mainCamera.near);
+      camera.layers.mask = mainCamera.layers.mask;
+    }
+    // The inset is shadowless. Keep the same layers during preparation and every live hit.
+    camera.layers.disable(CATCH_LAYER);
+  }
   const offs = [
     bus.on('item-hit', (e) => { if (isPlayerHit(e, me)) hits.push(e); }),
     bus.on('item-fire', (e) => {
@@ -160,7 +169,7 @@ export function createHitCam({ bus, feel, renderer, world, doc = globalThis.docu
     const dx = -(seat.x + seat.w + 28) * f.slide;
     camera.fov = fovFor(K.fovDeg, f.zoom);
     camera.aspect = seat.w / seat.h;
-    if (ctx.mainCamera) { camera.far = ctx.mainCamera.far; camera.near = Math.max(0.05, ctx.mainCamera.near); camera.layers.mask = ctx.mainCamera.layers.mask; }
+    matchView(ctx.mainCamera);
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
     const rotDeg = gentle ? 0 : TILT_DEG;
@@ -180,7 +189,8 @@ export function createHitCam({ bus, feel, renderer, world, doc = globalThis.docu
     reset() { hits.length = 0; leads.length = 0; if (s) close(); },
     /** Compile the inset's programs behind the loading card. */
     warm(mainCamera) {
-      if (mainCamera) { camera.far = mainCamera.far; camera.near = Math.max(0.05, mainCamera.near); camera.position.copy(mainCamera.position); camera.quaternion.copy(mainCamera.quaternion); camera.updateMatrixWorld(); }
+      matchView(mainCamera);
+      if (mainCamera) { camera.position.copy(mainCamera.position); camera.quaternion.copy(mainCamera.quaternion); camera.updateMatrixWorld(); }
       return renderer.warmInset ? renderer.warmInset(world.scene, camera, mainCamera) : null;
     },
     dispose() { for (const off of offs) off(); hits.length = 0; leads.length = 0; renderer.setInset(null); chrome.dispose(); },

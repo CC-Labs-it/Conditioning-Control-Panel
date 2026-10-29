@@ -237,14 +237,14 @@ test('how-to card: three picture panels named for the device in use, plain copy,
       assert.ok(!/<image|<img|url\(/.test(p.art), 'inline drawings, no image files');
     }
   }
-  assert.equal(kb[0].cap, 'Hold W on GO');
+  assert.equal(kb[0].cap, 'Hold W / Up on GO');
   assert.ok(kb[1].cap.includes('Space') && kb[2].cap.includes('E'));
   assert.equal(xb[0].cap, 'Hold RT on GO'); assert.ok(xb[1].cap.includes('A') && xb[2].cap.includes('X'));
   assert.equal(ps[0].cap, 'Hold R2 on GO'); assert.ok(ps[1].cap.includes('Cross') && ps[2].cap.includes('Square'));
   assert.equal(tc[0].cap, 'Touch on GO'); assert.ok(tc[2].cap.includes('tap'));
   assert.ok(kb[0].art.includes('>W<') && xb[0].art.includes('>RT<'), 'the drawing shows the real key');
   const html = howtoHtml({ last: 'keyboard' }, { off: true });
-  assert.ok(html.includes('data-act="howto-go"') && html.includes('Press W to start'));
+  assert.ok(html.includes('data-act="howto-go"') && html.includes('Press W / Up to start'));
   assert.ok(/data-act="howto-off"[^>]*aria-pressed="true"/.test(html) || /aria-pressed="true"[^>]*>Don/.test(html), 'the switch shows its state');
   assert.ok(howtoHtml({ last: 'touch' }).includes('>Start<'), 'touch: a Start button (the throttle is automatic)');
   assert.ok(!/[–—]/.test(html) && !/[!][^=]/.test(html.replace(/<!--[^]*?-->/g, '')), 'plain copy');

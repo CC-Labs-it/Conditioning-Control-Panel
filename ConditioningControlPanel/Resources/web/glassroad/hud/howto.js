@@ -9,7 +9,7 @@
  *   3  drive through the pink word bubbles (the words on the road are the song) and throw an item
  * Ink is currentColor, the spot colour is the `pk` class (styles.css); keys carry `hw-key` so they press on the beat.
  */
-import { deviceView, padLabels } from './labels.js';
+import { deviceView, padLabels, KEY_LABELS } from './labels.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -99,7 +99,7 @@ function artWords(v, p) {
 }
 
 /** What the throttle is called on the device in use. */
-export function throttleName(v, p) { return v.last === 'pad' ? p.rt : v.last === 'touch' ? 'Touch' : 'W'; }
+export function throttleName(v, p) { return v.last === 'pad' ? p.rt : v.last === 'touch' ? 'Touch' : 'W / Up'; }
 
 /** The three panels for a device: { n, art, cap }. */
 export function howtoPanels(devices = {}) {
@@ -108,8 +108,8 @@ export function howtoPanels(devices = {}) {
   const pad = v.last === 'pad', touch = v.last === 'touch';
   return [
     { n: 1, art: artLaunch(v, p), cap: touch ? 'Touch on GO' : 'Hold ' + thr + ' on GO' },
-    { n: 2, art: artDrift(v, p), cap: touch ? 'Drag steers, hold drifts' : 'Steer, ' + (pad ? p.south : 'Space') + ' drifts' },
-    { n: 3, art: artWords(v, p), cap: 'Pop pink words, ' + (pad ? p.west : touch ? 'tap' : 'E') + ' throws' },
+    { n: 2, art: artDrift(v, p), cap: touch ? 'Drag steers, hold drifts' : 'Steer, ' + (pad ? p.south : 'Space / Shift') + ' drifts' },
+    { n: 3, art: artWords(v, p), cap: 'Pop pink words, ' + (pad ? p.west : touch ? 'tap' : KEY_LABELS.item) + ' throws' },
   ];
 }
 
