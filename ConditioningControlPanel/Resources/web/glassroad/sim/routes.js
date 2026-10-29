@@ -7,9 +7,9 @@
  * holds off the edge drop; touching it lands the kart there, which moves `s` forward by the skip.
  * Nothing beneath (a miss) lets the normal edge drop and rescue run, anchored at the take-off.
  *
- * Balance: the landing stretch is a soft catch. A route landing keeps route.catchPct of top speed and
- * caps thrust there for route.catchHoldS; a clean landing (inside the pad ring, nose along the road)
- * then pays a short boost. Progress credits a skip only when it matches a registered route
+ * Route landings carry momentum onto the lower road. A clean drop landing (inside the pad ring,
+ * nose along the road) pays a short boost after route.catchHoldS, without capping speed or thrust.
+ * Progress credits a skip only when it matches a registered route
  * (`registeredSkip`), so a teleport anywhere else never counts a checkpoint.
  * Per-kart route memory lives in a WeakMap on the state array (the state layout is frozen).
  */
@@ -184,8 +184,8 @@ export function firstBeneath(st, r) {
 }
 
 /**
- * The kart touched the landing road of route r (q = its query, V the velocity, F the nose). Applies the
- * catch and decides clean. Emits route-land { id, clean, skipM }.
+ * The kart touched the landing road of route r (q = its query, F the nose). Keeps its momentum and
+ * decides clean. Emits route-land { id, clean, skipM }.
  */
 export function landRoute(track, st, r, q, F, feel, ev, prevS) {
   const m = memOf(st), L = track.lengthM;
@@ -193,11 +193,9 @@ export function landRoute(track, st, r, q, F, feel, ev, prevS) {
   const ds = Math.abs(wrap(q.s - r.pad.s + L / 2, L) - L / 2);
   const clean = ds <= gap(feel, 'route.cleanLenM') / 2 && Math.abs(q.lateral - r.pad.x) <= gap(feel, 'route.cleanLatM') &&
     along >= Math.cos(gap(feel, 'route.cleanDeg') * Math.PI / 180);
-  const top = feel.get('speed.topMps'), keep = gap(feel, 'route.catchPct') * top;
-  // polish 6: a 'gap' route (a sideways hop across to a road alongside) keeps its speed: no soft catch, no clean boost
-  const soft = r.kind !== 'gap';
-  if (soft && st[S.engineV] > keep) st[S.engineV] = keep;
-  m.hold = soft ? gap(feel, 'route.catchHoldS') : 0; m.clean = soft && clean; m.air = -1; m.route = -1;
+  // Gap routes have no clean bonus. Drops retain their bonus timing without the old landing brake.
+  const reward = r.kind !== 'gap';
+  m.hold = reward ? gap(feel, 'route.catchHoldS') : 0; m.clean = reward && clean; m.air = -1; m.route = -1;
   m.guide = gap(feel, 'route.alignHoldS');
   const fromS = track.nodeS[st[S.latchSeg] | 0];
   st[S.latchSeg] = q.seg;                            // a landing bounce now belongs to the lower road
@@ -205,16 +203,16 @@ export function landRoute(track, st, r, q, F, feel, ev, prevS) {
   return clean;
 }
 
-/** Thrust cap share while a catch holds (1 with none). Counts the hold down; returns 'boost' when a clean hold ends. */
+/** Full thrust throughout the landing rollout; returns 'boost' when the clean-landing delay ends. */
 export function catchCap(st, feel, dt) {
   const m = MEM.get(st);
   if (!m || m.hold <= 0) return 1;
   m.hold -= dt;
   if (m.hold <= 0) { m.hold = 0; return m.clean ? 'boost' : 1; }
-  return gap(feel, 'route.catchPct');
+  return 1;
 }
 
-/** Seconds of catch left (0 with none), for fx and tests. */
+/** Seconds until the clean-landing reward (0 with none), for fx and tests. */
 export function catchLeftS(st) { const m = MEM.get(st); return m ? m.hold : 0; }
 
 /**
