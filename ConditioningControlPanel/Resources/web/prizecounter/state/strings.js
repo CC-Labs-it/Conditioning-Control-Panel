@@ -1,5 +1,5 @@
 /* strings.js - every user-facing string of the Prize Counter, as `shop_*` loc keys with the English fallback.
- * The host's `init.lexicon` wins; the WPF lane carries these keys into the ten language files. */
+ * The host's `init.lexicon` wins. The ten language files carry the same keys; tests/hud-loc.test.mjs keeps them in step. */
 
 export const LEX = {
   shop_title: 'Prize Counter',
@@ -8,6 +8,7 @@ export const LEX = {
   shop_signed_out: 'Sign in to shop at the counter.',
   shop_wallet: '{0} Sparkles',
   shop_price: '{0} Sparkles',
+  shop_after: 'Balance after: {0}',
   shop_buy: 'Buy',
   shop_keep_looking: 'Keep looking',
   shop_wear: 'Wear',
@@ -17,10 +18,14 @@ export const LEX = {
   shop_short: 'Short by {0} Sparkles',
   shop_soon: 'On the shelf soon.',
   shop_gone: 'Gone from this week\'s shelf.',
+  shop_pending: 'Ringing it up.',
   shop_note_retry: 'The counter did not answer. Confirm again to retry.',
   shop_note_signed_out: 'Signed out. Sign in and confirm again.',
   shop_note_changed: 'The shelf changed. Check the price and confirm again.',
   shop_note_try_again: 'That did not go through. Confirm again.',
+  shop_week: 'wk {0}',
+  shop_back: 'Back',
+  shop_tabs: 'Shelves',
   shop_tab_rain_clothes: 'Rain: clothes',
   shop_tab_rain_hair: 'Rain: hair',
   shop_tab_kart: 'Kart',
@@ -31,6 +36,29 @@ export const LEX = {
   shop_tab_backroom: 'Back Room',
 };
 
+export const itemKey = (id) => `shop_item_${String(id).replace(/[.-]/g, '_')}_name`;
+const ITEM_NAMES = {
+  'rain.dress.midnight-cocktail': 'Midnight cocktail', 'rain.dress.rose-flare': 'Rose flare', 'rain.dress.ivory-midi': 'Ivory midi',
+  'rain.dress.plum-asymmetric': 'Plum asymmetric', 'rain.dress.scarlet-bell': 'Scarlet bell', 'rain.dress.teal-tulip': 'Teal tulip',
+  'rain.dress.black-highlow': 'Black high-low', 'rain.suit.hazmat-yellow': 'Yellow hazmat suit', 'rain.hair.chestnut-bob': 'Chestnut bob',
+  'rain.hair.copper-lob': 'Copper lob', 'rain.hair.ink-sleek': 'Sleek ink', 'rain.hair.rose-waves': 'Rose waves',
+  'rain.hair.platinum-long': 'Long platinum', 'rain.hair.auburn-volume': 'Auburn volume', 'rain.acc.silver-drops': 'Silver drops',
+  'rain.acc.cat-eye-frames': 'Cat-eye frames', 'kart.body.glass-slipper': 'Glass slipper kart', 'kart.body.candy-tin': 'Candy tin kart',
+  'kart.outfit.pit-crew': 'Pit crew outfit', 'kart.outfit.ringmaster': 'Ringmaster outfit', 'kart.outfit.ballerina': 'Ballerina outfit',
+  'kart.paint.hearts': 'Heart paint', 'kart.paint.pink-checker': 'Pink checker paint', 'kart.paint.spiral': 'Spiral paint',
+  'kart.umbrella.lace': 'Lace umbrella', 'chess.set.royal-capes': 'Royal capes set', 'chess.set.velvet-court': 'Velvet court set',
+  'chess.banner.house-pink': 'House pink banner', 'chess.banner.crest': 'Crest banner', 'chess.insignia.heart': 'Heart insignia',
+  'chess.insignia.star': 'Star insignia', 'profile.frame.lace': 'Lace frame', 'profile.frame.ink-stamp': 'Ink stamp frame',
+  'profile.frame.gilt': 'Gilt frame', 'profile.frame.polaroid': 'Polaroid frame', 'profile.avatar.emi-pixel': 'Pixel EMI',
+  'profile.avatar.rain-portrait': 'Rain portrait', 'desk.hat.top-hat': 'Top hat', 'desk.hat.party': 'Party hat',
+  'desk.toy.rubber-duck': 'Rubber duck', 'desk.toy.snow-globe': 'Snow globe', 'prime.paint.host-gold': 'Host gold paint',
+  'prime.trail.podium': 'Podium trail', 'prime.frame.room-host': 'Room host frame', 'prime.banner.arena': 'Arena banner',
+  jackpot_remix: 'Jackpot Remix', rt_demo: 'Racing Thoughts Demo', high_roller: 'High Roller', flashes_v2: 'Flashes v2',
+  bubbles_v2: 'Bubbles v2', rt_bundle_1: 'Racing Thoughts Bundle 1', rt_bundle_2: 'Racing Thoughts Bundle 2',
+  rt_bundle_3: 'Racing Thoughts Bundle 3',
+};
+for (const [id, name] of Object.entries(ITEM_NAMES)) LEX[itemKey(id)] = name;
+
 /** A translator over the host lexicon: t(key, ...args) fills {0}, {1}. Unknown keys answer the key itself. */
 export function makeT(lexicon) {
   const lex = lexicon && typeof lexicon === 'object' ? lexicon : {};
@@ -38,9 +66,9 @@ export function makeT(lexicon) {
 }
 
 export const tabKey = (id) => `shop_tab_${String(id).replace(/-/g, '_')}`;
-/** An item name: `shop_item_<id>` when the lexicon has it, else the last part of the id in plain words. */
+/** An item name: `shop_item_<id>_name` when the lexicon has it, else the last part of the id in plain words. */
 export function itemName(t, id) {
-  const key = `shop_item_${String(id).replace(/[.-]/g, '_')}`;
+  const key = itemKey(id);
   const v = t(key);
   return v !== key ? v : String(id).split('.').pop().replace(/[-_]/g, ' ');
 }

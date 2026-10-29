@@ -13,6 +13,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { layoutTab, slotIndex, usedBays } from './layout.js';
 import { motionAmp, damp, fitFov, emptyToCameraQuat, forwardOf, lookPoint, follow, dipFor, bob } from './camera-math.js';
 import { keyIntent, padIntent, stickIntent, swipeIntent } from './intents.js';
+import { createTags } from './tags.js';
 
 const PINK = 0xff3d9a;
 // What each camera must keep in frame (width, height in metres around its look point).
@@ -51,6 +52,7 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
     return cache.get(file);
   };
   const cloneOf = async (file) => (await load(file)).clone(true);
+  const tags = createTags(T);   // prices drawn on the blank price tags (scene/tags.js)
   const manifest = await (await fetch(base + 'manifest.json')).json();
   const items = new Map(manifest.items.map((i) => [i.id, i]));
   const [counter, shelfProto] = await Promise.all([load(manifest.scene.file), load(manifest.shelf.file)]);
@@ -90,7 +92,8 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
       anchor.add(holder);
       const entry = { holder, lod: null, full: null, id: p.id, meta, tagNode: node(group, p.tagNode) };
       slots.set(p.slot, entry);
-      if (p.tag) entry.tagNode?.add(await cloneOf(`props/${p.tag === 'owned' ? 'owned_stamp' : 'price_tag'}.glb`));
+      const prop = p.tag && entry.tagNode && await cloneOf(`props/${p.tag === 'owned' ? 'owned_stamp' : 'price_tag'}.glb`);
+      if (prop) { entry.tagNode.add(prop); if (p.tag === 'price') tags.attach(prop, p.row); }
       if (!meta) { console.warn('prizecounter: no art for', p.id); return; }
       entry.lod = await cloneOf(meta.lod1 || meta.file);
       holder.add(entry.lod);
@@ -122,10 +125,10 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
   // A receipt landed: that item's price tag becomes the OWNED stamp in place (no shelf swap).
   async function stamp(itemId) {
     const hits = [...shelves.values()].flatMap((s) => [...s.slots.values()]).filter((e) => e.id === itemId && e.tagNode);
-    for (const e of hits) { e.tagNode.clear(); e.tagNode.add(await cloneOf('props/owned_stamp.glb')); }
+    for (const e of hits) { tags.drop(e.tagNode); e.tagNode.clear(); e.tagNode.add(await cloneOf('props/owned_stamp.glb')); }
   }
   // Clones share geometry and materials with the cache, so a shelf leaving only drops its nodes.
-  const disposeShelf = (s) => s.group.removeFromParent();
+  const disposeShelf = (s) => { tags.drop(s.group); s.group.removeFromParent(); };
 
   // Focus feedback: an ink loop drawn on the back panel behind the item, plus the bob.
   const ring = makeRing();
@@ -171,6 +174,14 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
     ring.scale.set(Math.max(0.5, size.x + 0.2) / 2, Math.max(0.55, size.y + 0.16) / 2, 1);
     ring.position.set(c.x, c.y + Math.max(0.55, size.y + 0.16) / 2 - 0.05, c.z - 0.24);
     ring.visible = true;
+  }
+
+  // Where a slot's item sits on screen, in CSS px from the canvas's top left (the HUD flies sparkles there), or null.
+  function screenPos(bay, slot) {
+    const e = shelves.get(bay)?.slots.get(slotIndex(slot));
+    if (!e) return null;
+    const v = worldPos(e.holder).add(new T.Vector3(0, 0.39, 0)).project(camera);
+    return { x: ((v.x + 1) / 2) * canvas.clientWidth, y: ((1 - v.y) / 2) * canvas.clientHeight };
   }
 
   // ---- input -> intents
@@ -275,11 +286,12 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
     listeners.clear();
     scene.traverse((o) => { o.geometry?.dispose(); [].concat(o.material || []).forEach((m) => { for (const v of Object.values(m)) if (v?.isTexture) v.dispose(); m.dispose(); }); });
     scene.environment?.dispose();
+    tags.dispose();
     renderer.dispose();
   }
 
   return {
-    showTab, focus, stamp, resize, dispose, hooks,
+    showTab, focus, stamp, resize, dispose, hooks, screenPos, setWallet: tags.setWallet,
     onIntent(cb) { listeners.add(cb); return () => listeners.delete(cb); },
     setMotion(m) { motion = m; },
     parts: { renderer, scene, camera, counter, shelves: () => shelves, dust: (bay) => ['l', 'c', 'r'].map((s) => shelves.get(bay) && node(shelves.get(bay).group, 'dust_' + s)) },
