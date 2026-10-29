@@ -7820,6 +7820,7 @@
   "shop_loading": "Abriendo el mostrador.",
   "shop_offline": "El mostrador no respondió. Inténtalo de nuevo en un momento.",
   "shop_signed_out": "Inicia sesión para comprar en el mostrador.",
+  "shop_sign_in": "Inicia sesión para comprar",
   "shop_wallet": "{0} brillos",
   "shop_price": "{0} brillos",
   "shop_after": "Saldo después: {0}",

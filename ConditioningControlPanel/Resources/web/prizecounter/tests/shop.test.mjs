@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { readState, createShop, TAB_ORDER } from '../state/shop.js';
+import { readState, createShop, TAB_ORDER, windowShelves, WINDOW_BAYS } from '../state/shop.js';
 import { createMockServer } from '../mock/server.js';
 
 const SAMPLE = JSON.parse(readFileSync(new URL('../mock/state.sample.json', import.meta.url), 'utf8'));
@@ -221,7 +221,8 @@ test('Esc ladder: card, then preview, then close', async () => {
 test('load: the host refusal shows as a status, the init tab is honoured', async () => {
   const off = createShop({ request: async () => ({ ok: false, reason: 'signed_out' }), newIdem: () => 'x' });
   assert.deepEqual(await off.load(), { status: 'signed_out' });
-  assert.deepEqual(off.intent({ type: 'select' }), {});
+  assert.deepEqual(off.intent({ type: 'select' }), { signIn: true }, 'signed out: select asks for the sign-in');
+
   const thrown = createShop({ request: () => { throw new Error('gone'); }, newIdem: () => 'x' });
   assert.equal((await thrown.load()).status, 'offline');
   const { shop } = rig(SAMPLE, { tab: 'chess' });
@@ -229,4 +230,33 @@ test('load: the host refusal shows as a status, the init tab is honoured', async
   assert.deepEqual([first.tab.id, first.focus.row.id], ['chess', 'chess.set.royal-capes']);
   const wrapped = createShop({ request: async () => ({ ok: true, status: 200, body: structuredClone(SAMPLE) }), newIdem: () => 'x' });
   assert.equal((await wrapped.load()).status, 'ready', 'a relay {ok,status,body} is unwrapped');
+});
+
+test('signed out: back still leaves, select asks for the sign-in, the rest does nothing', async () => {
+  const off = createShop({ request: async () => ({ ok: false, reason: 'signed_out' }), newIdem: () => 'x' });
+  assert.deepEqual(off.intent({ type: 'select' }), {}, 'before the load answers there is nothing to sign in to');
+  await off.load();
+  assert.deepEqual(off.intent({ type: 'select' }), { signIn: true });
+  assert.deepEqual(off.intent({ type: 'right' }), {});
+  assert.deepEqual(off.intent({ type: 'back' }), { close: { reason: 'back' } });
+  const offline = createShop({ request: async () => ({ ok: false, reason: 'offline' }), newIdem: () => 'x' });
+  await offline.load();
+  assert.deepEqual(offline.intent({ type: 'select' }), {});
+  assert.deepEqual(offline.intent({ type: 'back' }), { close: { reason: 'back' } });
+});
+
+test('windowShelves: the art in four bays by family, no Back Room rows, no prices, at most nine a bay', () => {
+  const items = JSON.parse(readFileSync(new URL('../assets/manifest.json', import.meta.url), 'utf8')).items;
+  const shelves = windowShelves(items);
+  assert.equal(shelves.length, 4);
+  const fam = new Map(items.map((i) => [i.id, i.family]));
+  shelves.forEach((s, bay) => {
+    assert.ok(s.rows.length > 0 && s.rows.length <= 9, `bay ${bay}`);
+    for (const r of s.rows) {
+      assert.ok(WINDOW_BAYS[bay].includes(fam.get(r.id)), r.id);
+      assert.deepEqual([r.sale, r.owned, r.priceSp], ['soon', null, 0]);
+    }
+  });
+  assert.deepEqual(shelves[2].rows.map((r) => fam.get(r.id)), ['chess', 'chess', 'chess', 'chess', 'chess', 'chess', 'desk', 'desk', 'desk']);
+  assert.deepEqual(windowShelves(null).map((s) => s.rows.length), [0, 0, 0, 0]);
 });

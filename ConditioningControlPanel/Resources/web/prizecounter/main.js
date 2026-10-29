@@ -3,7 +3,7 @@
  * the HUD draws a plain list of the shelves and the page still buys. index.html mounts it on the real host, dev.html
  * on the mock. */
 
-import { createShop } from './state/shop.js';
+import { createShop, windowShelves } from './state/shop.js';
 import { makeT } from './state/strings.js';
 import { createHud } from './hud/index.js';
 import { asHost } from './host.js';
@@ -17,6 +17,7 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
   const init = (await host.ready()) || {};
   const t = makeT(init.lexicon), motion = init.motion || 'full';
   root.classList.add('pc');
+  root.dataset.motion = motion;
   root.replaceChildren();
   const canvas = document.createElement('canvas');
   canvas.className = 'pc-canvas';
@@ -31,7 +32,7 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
   if (scene) scene.fx = await import('./fx/index.js').then((m) => m.installFx(scene, init)).catch((e) => host.log(`prizecounter: no juice (${(e && e.message) || e})`));
   canvas.hidden = !scene;
 
-  const hud = createHud(root, { t, send: (i) => intent(i), goTab, list: !scene, gentle: !!init.gentle,
+  const hud = createHud(root, { t, send: (i) => intent(i), goTab, signIn: () => host.signIn(), list: !scene, gentle: !!init.gentle,
     motion: motion === 'full' && init.reducedMotion ? 'less' : motion });
   const tier = () => (shop.state() ? shop.state().tier : 0);
   const paint = () => hud.paint({ status: shop.status(), sp: shop.sp(), week: shop.state() && shop.state().week, tier: tier(),
@@ -47,6 +48,13 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
     if (ch.owned && scene && !ch.tab) scene.stamp?.(ch.owned);
     for (const e of ch.effects || []) if (e.type === 'wallet') { host.wallet(e.sp); hud.receipt(e.sp, itemPos()); }
     if (ch.close) host.close(ch.close.reason);
+    if (ch.signIn) host.signIn();
+    if (ch.status) {
+      const out = ch.status === 'signed_out';
+      root.classList.toggle('pc-signed-out', out);
+      // Signed out: the art hangs as a window display (no prices) behind the sign-in button.
+      if (out && scene) scene.showTab('window', windowShelves(scene.items)).catch((e) => host.log(`prizecounter: no window display (${(e && e.message) || e})`));
+    }
     if (ch.buy) ch.buy.then(apply);
     paint();
   }

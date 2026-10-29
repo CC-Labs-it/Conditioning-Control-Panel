@@ -95,6 +95,17 @@ html, body { margin: 0; height: 100%; background: #140d19; color: var(--ink); fo
 .pc-status { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%) rotate(-1deg); margin: 0; max-width: 300px;
   background: var(--paper); border: 2.5px solid var(--ink); padding: 10px 16px; box-shadow: 4px 5px 0 rgba(0,0,0,.4); text-align: center; }
 .pc-fx { position: absolute; inset: 0; overflow: hidden; }
+
+/* signed out: the counter greys out behind one sign-in button (IN: the grey fades in, the button pops; OUT: both fade) */
+.pc-canvas { transition: filter .6s ease; }
+.pc.pc-signed-out .pc-canvas { filter: grayscale(.9) brightness(.5) contrast(.92); }
+.pc[data-motion="off"] .pc-canvas { transition: none; }
+.pc-gate { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-1.5deg); pointer-events: auto;
+  transition: opacity .16s, transform .16s; }
+.pc-gate .pc-btn { font-size: 22px; padding: 10px 28px; white-space: nowrap; box-shadow: 3px 4px 0 var(--ink); }
+.pc-gate.pc-in { animation: pc-gate-in .3s cubic-bezier(.3,1.5,.5,1); }
+@keyframes pc-gate-in { from { transform: translate(-50%, -50%) rotate(-5deg) scale(.85); opacity: 0; } }
+.pc-gate.pc-out { opacity: 0; transform: translate(-50%, -44%) rotate(2deg) scale(.94); }
 .pc-fly { position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; will-change: transform; }
 
 /* the plain list when the scene cannot load */
@@ -131,5 +142,7 @@ html, body { margin: 0; height: 100%; background: #140d19; color: var(--ink); fo
 [data-gentle] .pc-modal.pc-out .pc-card { transform: rotate(-1deg); }
 [data-gentle] .pc-peek.pc-swap { animation-name: pc-fade; }
 [data-gentle] .pc-card[aria-busy="true"] .pc-main { animation: none; }
+[data-gentle] .pc-gate.pc-in { animation-name: pc-fade; }
+[data-gentle] .pc-gate.pc-out { transform: translate(-50%, -50%) rotate(-1.5deg); }
 [data-motion="off"] *, [data-motion="off"] *::before { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) { .pc-hud *, .pc-hud *::before { animation-duration: .01ms !important; transition-duration: .01ms !important; } }

@@ -39,3 +39,13 @@ test('standalone with no host answers offline at once; a mounted object never re
   host.wallet(7); host.close(); host.log('x');
   assert.deepEqual(seen, [7]);
 });
+
+test('sign-in: standalone posts a signin frame, a mounted object calls its signIn', () => {
+  const w = fakeWebview();
+  createHost(w.win).signIn();
+  assert.deepEqual(w.posted, [{ type: 'signin' }]);
+  let asked = 0;
+  asHost({ signIn: () => asked++ }).signIn();
+  asHost({}).signIn();
+  assert.equal(asked, 1);
+});

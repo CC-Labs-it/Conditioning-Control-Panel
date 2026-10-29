@@ -52,12 +52,16 @@ The page talks to whoever hosts it through `host.js`, never `fetch` to the serve
   or `{ ok:false, reason:'offline'|'signed_out' }` from the host itself.
 - out: `wallet { sp }` after a receipt (the WPF host adopts it with `V2WalletAdoption`, `fromBuy = true`).
 - out: `close { reason:'back'|'panic' }`. Esc ladder: confirm card -> preview -> close.
+- out: `signIn()` when `shop-state` answered `signed_out` (owner 2026-10-29): the page greys a window display of the
+  art (no prices, no tabs, no wallet) behind one "Sign in to shop" button; the button, or select/Enter/A, asks the host.
+  The host opens its own sign-in and, once someone is signed in, loads the page again with a fresh `init`
+  (WPF: the panel's account dialog over the counter, then the page reloads in place). Cancelled = nothing changes.
 - Desktop relays to the server with the identity; web and phone fetch with the session token. Echo law: nothing moves
   until the receipt lands.
 
 Mounted inside a game (`mountPrizeCounter(host, opts)`), the same seam is an object; standalone it is `postMessage`.
 Standalone frames (`host.js`): out `{type:'ready', protocol:1}`, `{type:'request', reqId, op, body, idem}`, `{type:'wallet', sp}`,
-`{type:'close', reason}`, `{type:'log', level, msg}`; in `{type:'init', ...}`, `{type:'reply', reqId, body}` (body = the server body).
+`{type:'close', reason}`, `{type:'signin'}`, `{type:'log', level, msg}`; in `{type:'init', ...}`, `{type:'reply', reqId, body}` (body = the server body).
 `stock_changed` / `catalog_changed` carry the fresh state as `state` (the page also reads it inline).
 
 ## Rules

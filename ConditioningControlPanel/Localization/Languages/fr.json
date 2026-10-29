@@ -7820,6 +7820,7 @@
   "shop_loading": "Le comptoir ouvre.",
   "shop_offline": "Le comptoir n'a pas répondu. Réessaie dans un instant.",
   "shop_signed_out": "Connecte-toi pour acheter au comptoir.",
+  "shop_sign_in": "Connecte-toi pour acheter",
   "shop_wallet": "{0} paillettes",
   "shop_price": "{0} paillettes",
   "shop_after": "Solde après : {0}",

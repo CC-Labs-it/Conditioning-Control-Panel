@@ -86,3 +86,22 @@ test('the HUD opens the card with focus on Buy, traps Tab, Esc keeps looking, an
   assert.equal(modal.hidden, true);
   assert.notEqual(doc.activeElement.textContent, 'Buy');
 });
+
+test('signed out: one Sign in to shop button, no wallet, no tabs; it asks for the sign-in and leaves when signed in', () => {
+  const doc = fakeDocument(), root = doc.createElement('main');
+  let asked = 0;
+  const hud = createHud(root, { t, send: () => {}, goTab: () => {}, signIn: () => asked++, motion: 'off' });
+  const view = (status) => ({ status, sp: 0, week: '', tier: 0, tabs: [], tabId: null, shelves: [], focus: null, card: null });
+  hud.paint(view('signed_out'));
+  const gate = root.querySelectorAll('.pc-gate')[0];
+  assert.equal(gate.hidden, false);
+  const [btn] = gate.querySelectorAll('button');
+  assert.equal(btn.textContent, 'Sign in to shop');
+  assert.equal(root.querySelectorAll('.pc-wallet')[0].hidden, true);
+  assert.equal(root.querySelectorAll('.pc-status')[0].hidden, true, 'the button is the whole message');
+  btn.onclick();
+  assert.equal(asked, 1);
+  hud.paint(view('ready'));
+  assert.equal(gate.hidden, true);
+  assert.equal(root.querySelectorAll('.pc-wallet')[0].hidden, false);
+});

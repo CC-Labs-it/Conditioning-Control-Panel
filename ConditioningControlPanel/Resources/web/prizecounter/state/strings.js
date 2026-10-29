@@ -6,6 +6,7 @@ export const LEX = {
   shop_loading: 'Opening the counter.',
   shop_offline: 'The counter did not answer. Try again in a moment.',
   shop_signed_out: 'Sign in to shop at the counter.',
+  shop_sign_in: 'Sign in to shop',
   shop_wallet: '{0} Sparkles',
   shop_price: '{0} Sparkles',
   shop_after: 'Balance after: {0}',

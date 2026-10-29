@@ -10,7 +10,8 @@
   </script>
 </head>
 <body>
-  <!-- The mock host on mock/state.sample.json. Knobs: ?fail=<reason> refuses the first buy, ?tier=2, ?sp=50, ?tab=kart.
+  <!-- The mock host on mock/state.sample.json. Knobs: ?fail=<reason> refuses the first buy, ?tier=2, ?sp=50, ?tab=kart,
+       ?signedout (the sign-in button; pressing it reloads signed in).
        The console has window.mock (the mock server: fail, setSp, setTier, setWeek, reprice). -->
   <main id="pc"></main>
   <script type="module">
@@ -22,8 +23,10 @@
     if (q.has('tier')) server.setTier(Number(q.get('tier')));
     if (q.has('sp')) server.setSp(Number(q.get('sp')));
     if (q.has('fail')) server.fail(q.get('fail'));
+    if (q.has('signedout')) server.setSignedOut(true);
+    const onSignIn = () => { q.delete('signedout'); location.search = q.toString(); };
     window.mock = server;
-    window.page = await mountPrizeCounter(createMockHost(server, { tab: q.get('tab') }), { root: document.getElementById('pc') });
+    window.page = await mountPrizeCounter(createMockHost(server, { tab: q.get('tab'), onSignIn }), { root: document.getElementById('pc') });
   </script>
 </body>
 </html>

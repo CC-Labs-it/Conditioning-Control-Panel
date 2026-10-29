@@ -8575,6 +8575,7 @@
   "shop_loading": "Il banco apre.",
   "shop_offline": "Il banco non ha risposto. Riprova tra un momento.",
   "shop_signed_out": "Accedi per comprare al banco.",
+  "shop_sign_in": "Accedi per comprare",
   "shop_wallet": "{0} Sparkle",
   "shop_price": "{0} Sparkle",
   "shop_after": "Saldo dopo: {0}",
