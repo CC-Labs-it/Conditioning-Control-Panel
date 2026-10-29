@@ -28,7 +28,7 @@ import { createSubliminalBurst } from './fx/subliminalBurst.js';
 import { loadFeel } from './core/feel.js';
 import { createBus, createQueue } from './core/events.js';
 import { createClock } from './core/clock.js';
-import { createActionMap, createEdgeLatch } from './core/actions.js';
+import { createActionMap, createEdgeLatch, createItemLatch } from './core/actions.js';
 import { clamp, v3, qrotate } from './core/math.js';
 import { createKeyboard } from './input/keyboard.js';
 import { createGamepad } from './input/gamepad.js';
@@ -774,7 +774,7 @@ async function boot(course, options, lifetime, isCurrent) {
   const tapSource = { poll(into) { into.item = tapItem; tapItem = false; }, dispose() {} };
   const actions = createActionMap([createKeyboard({ target: window }), padSource, createTouch({ root: document.body }), tapSource], { items: true, camera: true, feel });
   lifetime.defer(() => actions.dispose());
-  const hopLatch = createEdgeLatch('hopPressed'), itemLatch = createEdgeLatch('item');
+  const hopLatch = createEdgeLatch('hopPressed'), itemLatch = createItemLatch();
 
 
   // ---- options: Gentle preview (never below the host's switch), steering assist and sensitivity,

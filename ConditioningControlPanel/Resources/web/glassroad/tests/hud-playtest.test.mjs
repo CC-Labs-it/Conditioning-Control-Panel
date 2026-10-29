@@ -9,15 +9,15 @@ import { createBus } from '../core/events.js';
 import { itemKey, itemTip } from '../hud/labels.js';
 
 test('itemKey names the fire control for the device used last', () => {
-  assert.equal(itemKey({ last: 'keyboard' }), 'E');
-  assert.equal(itemKey({}), 'E');
+  assert.equal(itemKey({ last: 'keyboard' }), 'E / Enter');
+  assert.equal(itemKey({}), 'E / Enter');
   assert.equal(itemKey({ last: 'pad', pad: { family: 'xbox' } }), 'X');
   assert.equal(itemKey({ last: 'pad', pad: { family: 'ps' } }), 'Square');
   assert.equal(itemKey({ last: 'touch' }), 'Throw');
 });
 
 test('itemTip names both moves, with no dash and no exclamation mark', () => {
-  assert.equal(itemTip({ last: 'keyboard' }), 'E throw. Hold S + E drop behind');
+  assert.equal(itemTip({ last: 'keyboard' }), 'E / Enter throw. R / Backspace behind');
   assert.equal(itemTip({ last: 'pad', pad: { family: 'xbox' } }), 'X throw. Stick down + X drop behind');
   assert.match(itemTip({ last: 'touch' }), /Throw/);
   for (const last of ['keyboard', 'pad', 'touch']) assert.doesNotMatch(itemTip({ last }), /[-–—!]/);
@@ -73,8 +73,8 @@ test('a held item shows its fire key; the first pickup tips once a session', () 
   r.hud.update({ item: null });
   assert.equal(key.hidden, true);
   r.hud.update({ item: { id: 'disc' } });
-  assert.equal(key.hidden, false); assert.equal(key.textContent, 'E');
-  assert.equal(toast.textContent, 'E throw. Hold S + E drop behind');
+  assert.equal(key.hidden, false); assert.equal(key.textContent, 'E / Enter');
+  assert.equal(toast.textContent, 'E / Enter throw. R / Backspace behind');
   assert.equal(toast.dataset.at, 'slot', 'the tip hangs under the slot it explains');
   r.tick(10000); r.bus.emit('slipstream', { racer: 0, state: 'fire' });
   assert.equal(toast.textContent, 'Slipstream');

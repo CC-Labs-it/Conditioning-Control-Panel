@@ -17,8 +17,9 @@ node dev/serve.mjs            # http://127.0.0.1:8790/ (port: first argument or 
 Open http://127.0.0.1:8790/?feel=1 in Edge or Chrome and press Race.
 
 Keys: W / Up throttle, S / Down brake (reverse when stopped), A / D or Left / Right steer,
-Shift or Space hop and drift (hold through a turn, let go for the boost), E item (hold S / Down with E
-to drop it behind as a trap), Escape pause. A standard gamepad works too (left stick, RT, LT, A, X item,
+Either Shift or Space hops and drifts (hold through a turn, let go for the boost), E / Enter throws an item,
+R / Backspace throws behind without braking (S / Down + E still works), Escape pauses. Right-hand controls:
+arrows drive, right Shift drifts, Enter throws, Backspace throws behind. A standard gamepad works too (left stick, RT, LT, A, X item,
 stick down + X drops, Start; the d-pad, A and B work the cards). Touch: tap the round item slot.
 
 The garage offers The Keep beside Threshold. Open `?track=keep` for its 4.3 km ruined prison circuit:
