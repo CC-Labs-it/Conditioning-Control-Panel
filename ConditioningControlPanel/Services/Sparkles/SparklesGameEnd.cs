@@ -39,14 +39,15 @@ public static class SparklesGameEnd
         return pct >= topMarksPercent ? "gold" : pct >= 70 ? "silver" : pct >= 50 ? "bronze" : "none";
     }
 
-    /// <summary>Claim a finished solo game. Never throws; null when there is no claim service.</summary>
+    /// <summary>Claim a finished game. Never throws; null when there is no claim service.
+    /// <paramref name="proof"/> names the server's own record of an online game (wire section 5).</summary>
     public static Task<SparklesClaimOutcome?> Claim(string game, string mode, SparklesResult result,
-        TimeSpan duration, JObject? detail = null)
+        TimeSpan duration, JObject? detail = null, JObject? proof = null)
     {
         var svc = App.Sparkles;
         if (svc == null) return Task.FromResult<SparklesClaimOutcome?>(null);
         SparklesClaim claim;
-        try { claim = SparklesClaim.Create(game, mode, result, (long)Math.Max(0, duration.TotalMilliseconds), detail); }
+        try { claim = SparklesClaim.Create(game, mode, result, (long)Math.Max(0, duration.TotalMilliseconds), detail, proof); }
         catch (Exception ex)
         {
             App.Logger?.Debug("Sparkles: claim not built for {Game}: {E}", game, ex.Message);

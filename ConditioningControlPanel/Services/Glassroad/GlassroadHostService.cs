@@ -190,6 +190,9 @@ internal static class GlassroadHostService
                 case "net":
                     OnNetRequest(o);
                     break;
+                case "race-result":
+                    OnRaceResult(o);
+                    break;
                 case "exit":
                 case "menu-back":
                     // The page's own Leave / the menu's Back link. Escape never sends these.
@@ -205,6 +208,20 @@ internal static class GlassroadHostService
         {
             App.Logger?.Warning("Glassroad: message handler threw ({Type}): {E}", (string?)o["type"], ex.Message);
         }
+    }
+
+    /// <summary>SPARKLES BY PLACE (B1): a finished race claims; the server prices it, tapers repeats
+    /// and, online, reads the room's signed result instead of ours. Fire and forget.</summary>
+    private static void OnRaceResult(JObject o)
+    {
+        var claim = GlassroadRules.SparklesClaimFor(o);
+        if (claim == null)
+        {
+            App.Logger?.Debug("Glassroad: race-result earns no Sparkles claim (mode {Mode})", (string?)o["mode"]);
+            return;
+        }
+        _ = Sparkles.SparklesGameEnd.Claim(GlassroadRules.SparklesGame, claim.Mode, claim.Result, claim.Duration,
+            claim.Detail, claim.Proof);
     }
 
     /// <summary><c>net { id, method, path, body }</c> -&gt; <c>net-reply { id, status, body }</c>. A

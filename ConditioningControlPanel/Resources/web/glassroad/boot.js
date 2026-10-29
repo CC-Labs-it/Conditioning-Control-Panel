@@ -38,6 +38,7 @@ import { createTouch } from './input/touch.js';
 import { glideActive, resetGlide } from './sim/glide.js';
 import { S, RESPAWN, createState } from './sim/state.js';
 import { resolveMode } from './meta/mode.js';
+import { medalFor } from './meta/medals.js';
 import { createGhostRecorder, loadGhost, saveBestGhost, sample as ghostSample, toState as ghostToState, lapGap, formatGap } from './meta/ghost.js';
 import { createImmersion } from './track/immersion.js';
 import { createWaterContact } from './audio/water-travel.js';
@@ -1301,7 +1302,10 @@ async function boot(course, options, lifetime, isCurrent) {
     const me = (res && res.me) || {}, row = (res.rows || []).find((r) => r.me) || {};
     debug.result = { place: me.place, of: (res.rows || []).length, timeS: me.timeS, bestLapS: me.bestLapS };
     bridge.send({ type: 'race-result', v: 1, track: track.id, laps, place: me.place, of: (res.rows || []).length,
-      timeS: me.timeS, bestLapS: me.bestLapS, finished: row.finished !== false, items: runMode !== 'trial', xp: null });
+      timeS: me.timeS, bestLapS: me.bestLapS, finished: row.finished !== false, items: runMode !== 'trial', xp: null,
+      // Sparkles by place (B1): the host claims from these; online the server reads the room's signed result instead
+      mode: online ? 'online' : runMode, fullLaps: TRACK_LAPS, roomId: online ? online.s.roomId : null,
+      medal: !online && runMode === 'trial' && laps >= TRACK_LAPS ? medalFor(track.id, me.timeS) : null });
   });
 
   bridge.on('pause', (m) => setPaused(m.on));

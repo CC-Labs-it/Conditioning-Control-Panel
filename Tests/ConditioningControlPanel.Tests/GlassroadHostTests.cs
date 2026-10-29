@@ -179,6 +179,108 @@ public class GlassroadHostTests
     public void Panic_ClosesGlassroad()
         => Assert.Contains("glassroad", GameSurfaces.Ids());
 
+    // ---- Sparkles by place (B1 W4): race-result -> claim ----
+
+    private static JObject Result(string mode, int place = 2, int of = 8, int laps = 3, int fullLaps = 3,
+        double timeS = 612.4, bool finished = true, string? medal = null, string? roomId = null) => new()
+    {
+        ["type"] = "race-result", ["v"] = 1, ["track"] = "threshold", ["laps"] = laps, ["place"] = place, ["of"] = of,
+        ["timeS"] = timeS, ["bestLapS"] = 200.1, ["finished"] = finished, ["items"] = mode != "trial", ["xp"] = null,
+        ["mode"] = mode, ["fullLaps"] = fullLaps, ["roomId"] = roomId, ["medal"] = medal,
+    };
+
+    [Fact]
+    public void Solo_ClaimsItsPlace_WithLapsAndDuration()
+    {
+        var c = GlassroadRules.SparklesClaimFor(Result("race", place: 3, of: 8, laps: 1))!;
+        Assert.Equal("rt3d", GlassroadRules.SparklesGame);
+        Assert.Equal("solo", c.Mode);
+        Assert.Equal(new JObject { ["kind"] = "place", ["place"] = 3, ["of"] = 8 }.ToString(), c.Result.ToJson().ToString());
+        Assert.Equal(1, (int)c.Detail["laps"]!);
+        Assert.Equal("threshold", (string?)c.Detail["track"]);
+        Assert.Equal(612400, c.Duration.TotalMilliseconds, 0);
+        Assert.Null(c.Proof);
+    }
+
+    [Theory]
+    [InlineData("glass", "gold")]
+    [InlineData("gold", "gold")]
+    [InlineData("silver", "silver")]
+    [InlineData("bronze", "bronze")]
+    [InlineData(null, "none")]
+    public void Trial_ClaimsItsMedal_GlassIsGold(string? medal, string expected)
+    {
+        var c = GlassroadRules.SparklesClaimFor(Result("trial", place: 1, of: 1, medal: medal))!;
+        Assert.Equal("trial", c.Mode);
+        Assert.Equal("medal", c.Result.Kind);
+        Assert.Equal(expected, c.Result.Medal);
+    }
+
+    [Fact]
+    public void Trial_ShortOfFullLength_ClaimsNothing()
+        => Assert.Null(GlassroadRules.SparklesClaimFor(Result("trial", place: 1, of: 1, laps: 1, medal: "gold")));
+
+    [Fact]
+    public void Online_CarriesTheRoomAsProof()
+    {
+        var c = GlassroadRules.SparklesClaimFor(Result("online", place: 1, of: 6, roomId: "abc123def456"))!;
+        Assert.Equal("online", c.Mode);
+        Assert.Equal("abc123def456", (string?)c.Proof!["roomId"]);
+        Assert.Equal("place", c.Result.Kind);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("../evil")]
+    public void Online_WithoutAGoodRoom_ClaimsNothing(string? roomId)
+        => Assert.Null(GlassroadRules.SparklesClaimFor(Result("online", roomId: roomId)));
+
+    [Fact]
+    public void Ghost_IsADuel_OnlyAtFullLength()
+    {
+        var win = Result("ghost", place: 1, of: 1);
+        win["ghost"] = "win";
+        var c = GlassroadRules.SparklesClaimFor(win)!;
+        Assert.Equal("ghost", c.Mode);
+        Assert.Equal("win", c.Result.Outcome);
+        win["laps"] = 1;
+        Assert.Null(GlassroadRules.SparklesClaimFor(win));
+        Assert.Null(GlassroadRules.SparklesClaimFor(Result("ghost", place: 1, of: 1)));   // no outcome
+    }
+
+    [Fact]
+    public void Unfinished_Flagged_OrMalformed_ClaimsNothing()
+    {
+        Assert.Null(GlassroadRules.SparklesClaimFor(Result("race", finished: false)));
+        var flagged = Result("race");
+        flagged["flagged"] = true;
+        Assert.Null(GlassroadRules.SparklesClaimFor(flagged));
+        Assert.Null(GlassroadRules.SparklesClaimFor(Result("race", place: 9, of: 8)));
+        Assert.Null(GlassroadRules.SparklesClaimFor(Result("race", place: 0)));
+        Assert.Null(GlassroadRules.SparklesClaimFor(Result("race", laps: 0)));
+        Assert.Null(GlassroadRules.SparklesClaimFor(Result("race", timeS: 0)));
+        Assert.Null(GlassroadRules.SparklesClaimFor(Result("bogus")));
+        Assert.Null(GlassroadRules.SparklesClaimFor(new JObject { ["type"] = "run-ended", ["laps"] = 3 }));
+        Assert.Null(GlassroadRules.SparklesClaimFor(null));
+        var noFinished = Result("race");
+        noFinished.Remove("finished");
+        Assert.Null(GlassroadRules.SparklesClaimFor(noFinished));
+    }
+
+    [Fact]
+    public void ThePage_SendsTheClaimFields_AndTheHostClaims()
+    {
+        var boot = Read("Resources", "web", "glassroad", "boot.js");
+        var send = boot.IndexOf("bridge.send({ type: 'race-result'", StringComparison.Ordinal);
+        Assert.True(send > 0);
+        var frame = boot.Substring(send, 700);
+        foreach (var field in new[] { "mode:", "fullLaps:", "roomId:", "medal:" }) Assert.Contains(field, frame);
+        var host = Read("Services", "Glassroad", "GlassroadHostService.cs");
+        Assert.Contains("case \"race-result\":", host);
+        Assert.Contains("SparklesGameEnd.Claim(GlassroadRules.SparklesGame", host);
+    }
+
     private static string Read(params string[] parts)
         => File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", Path.Combine(parts)));
 
