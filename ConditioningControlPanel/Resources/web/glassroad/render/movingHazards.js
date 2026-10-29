@@ -4,8 +4,9 @@ import { movingHazardColours, movingHazardFinish } from './movingHazardFinish.js
 import { chessTrap, chessWobble } from './chessTrap.js';
 import { matrixInto } from './instanceWrite.js';
 import { telegraphKey, TELEGRAPH } from './trapTelegraph.js';
+import { createPistonPocketRoad } from './pistonPocketRoad.js';
 
-export function createMovingHazardView(scene, track, pal, art = null) {
+export function createMovingHazardView(scene, track, pal, art = null, roadMaterial = null) {
   const group = new Group(); group.name = 'moving-piston-traps'; scene.add(group);
   const colours = movingHazardColours(track.id, pal);
   const box = new BoxGeometry(1, 1, 1), materials = [
@@ -25,11 +26,13 @@ export function createMovingHazardView(scene, track, pal, art = null) {
     g.quaternion.setFromRotationMatrix(basis); g.position.set(...f.p); group.add(g); return g;
   };
   const traps = (track.moving?.traps || []).map((row, index) => {
-    const root = frameGroup(row, row.id), anchor = row.side * (row.roadWidth / 2 + 1);
-    part(root, 'piston-housing', [2.5, 4, row.len + 1], [anchor, 1.8, 0], 1);
+    const root = frameGroup(row, row.id), anchor = row.side * (row.roadWidth / 2 + (row.pocket ? row.w + 1.2 : 1));
+    const recess = row.pocket?.baseM || 0;
+    part(root, 'piston-housing', [2.5, 4, row.len + 1], [anchor, 1.8 + recess, 0], 1);
     const head = new Group(); root.add(head);
+    head.name = 'recessed-piston-head'; head.position.y = recess;
     const slider = row.kind === 'slider';
-    const modelScale = track.id === 'goonworks' ? 1.35 : 1;
+    const modelScale = !row.pocket && track.id === 'goonworks' ? 1.35 : 1;
     const sculpture = chessTrap(art, index, [row.w, 3.2, row.len].map(v => v * modelScale), row.side);
     if (sculpture) head.add(sculpture);
     if (!sculpture) {
@@ -47,8 +50,18 @@ export function createMovingHazardView(scene, track, pal, art = null) {
       }
     }
     }
-    for (let i = 0; i < 4; i++) part(root, 'housing-vent', [2.1, .12, .10], [anchor, .9 + i * .45, -row.len / 2 - .51], 2);
-    const rod = part(root, 'connected-piston-shaft', [1, .65, .65], [anchor, 1.6, 0], 2);
+    for (let i = 0; i < 4; i++) part(root, 'housing-vent', [2.1, .12, .10], [anchor, .9 + i * .45 + recess, -row.len / 2 - .51], 2);
+    const rod = part(root, 'connected-piston-shaft', [1, .65, .65], [anchor, 1.6 + recess, 0], 2);
+    if (row.pocket) {
+      const p = row.pocket;
+      // The open shaft remains a real fall. Its outside mouth must also clear the entering head.
+      for (const side of [-1, 1]) {
+        part(root, 'piston-pocket-rim', [p.w + .3, .08, .14], [p.x, .015, side * (p.len / 2 + .07)], 2);
+        part(root, 'piston-well-end', [p.w, 2.5, .14], [p.x, -1.3, side * p.len / 2], 1);
+      }
+      part(root, 'piston-well-wall', [.14, 2.5, p.len], [p.x - row.side * p.w / 2, -1.3, 0], 2);
+      part(root, 'piston-pocket-inner-rim', [.14, .08, p.len], [p.x - row.side * p.w / 2, .015, 0], 2);
+    }
     const light = part(root, 'approach-warning', [row.w, .08, 1.3], [row.x - row.side * row.travelM, .065, -row.len / 2 - 5], 3);
     light.userData.telegraph = index;
     return { row, anchor, head, rod, light, sculpture };
@@ -82,6 +95,8 @@ export function createMovingHazardView(scene, track, pal, art = null) {
     }
     return { batch, sources, index };
   }).filter(Boolean);
+  const pocketRoad = createPistonPocketRoad(track, roadMaterial || materials[5]);
+  if (pocketRoad.panels.length) group.add(pocketRoad.mesh);
   // Only the heads, slabs and rods move, and only along their local x (position, and a rod's length). A mover
   // whose x and length are unchanged since it was last written is skipped whole: traps hold fully out and fully
   // in for long stretches. A moved one refreshes its own subtree once (its frame root is fixed) and rewrites
@@ -101,6 +116,7 @@ export function createMovingHazardView(scene, track, pal, art = null) {
   let primed = false;
   function update(timeS = 0, { gentle = false, paused = false } = {}) {
     if (paused) return;
+    pocketRoad.update(timeS);
     for (const [index, item] of traps.entries()) {
       const p = movingPoseAt(track, item.row, timeS), headEdge = p.x + item.row.side * item.row.w / 2;
       if (item.sculpture) {
@@ -156,6 +172,7 @@ export function createMovingHazardView(scene, track, pal, art = null) {
     }
   }
   update(0);
-  return { group, update, inspect: () => ({ traps: traps.length, slabs: slabs.length, draws: batches.length, colours, telegraph: telegraph.map(t => t.key) }),
-    dispose() { group.removeFromParent(); for (const { batch } of batches) batch.dispose(); box.dispose(); for (const material of materials) material.dispose(); } };
+  return { group, update, inspect: () => ({ traps: traps.length, slabs: slabs.length, pockets: pocketRoad.panels.length,
+    draws: batches.length + Number(pocketRoad.panels.length > 0), colours, telegraph: telegraph.map(t => t.key) }),
+    dispose() { group.removeFromParent(); pocketRoad.dispose(); for (const { batch } of batches) batch.dispose(); box.dispose(); for (const material of materials) material.dispose(); } };
 }
