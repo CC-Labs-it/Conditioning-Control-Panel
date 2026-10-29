@@ -7,7 +7,7 @@ const hooks = registerHooks({ resolve(specifier, context, next) {
   return files[specifier] ? { url: new URL('../vendor/three/build/' + files[specifier], import.meta.url).href, shortCircuit: true } : next(specifier, context);
 } });
 const { Scene } = await import('three/webgpu');
-const { createWordBubbles } = await import('../render/wordBubbles.js');
+const { createWordBubbles, wordPickupPose } = await import('../render/wordBubbles.js');
 hooks.deregister();
 
 function fixture(options = {}) {
@@ -25,6 +25,44 @@ function fixture(options = {}) {
 const bubble = (word, overrides = {}) => ({ id: 1, w: word, row: 5, n: 5, p: Array.from({ length: 5 }, (_, i) => [i * 2, 1.5, 30]),
   state: 'live', inT: 2, outT: -1, remainS: -.25, lenS: .5, hit: 2, ...overrides });
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < .0001, `${actual} != ${expected}`);
+
+test('collection compresses then releases, with bounded lift and a slow static Gentle halo', () => {
+  const press = wordPickupPose(.06), release = wordPickupPose(.24);
+  assert.ok(press.x > 1.15 && press.y < .83); assert.ok(release.y > 1.17);
+  near(release.lift, .45); assert.ok(release.halo > 0);
+  for (let t = 0; t <= 1; t += .01) {
+    const full = wordPickupPose(t), less = wordPickupPose(t, { motion: 'less' });
+    assert.ok(full.lift >= -1e-8 && full.lift <= .45001);
+    near(less.lift, full.lift * .5);
+    assert.deepEqual(wordPickupPose(t, { motion: 'off' }), { x: 1, y: 1, lift: 0, halo: 0, spread: 1 });
+  }
+  const early = wordPickupPose(.15, { gentle: true }), peak = wordPickupPose(.3, { gentle: true });
+  near(early.halo, peak.halo * .5); near(peak.halo, .3);
+  assert.equal(peak.x, 1); assert.equal(peak.y, 1); assert.equal(peak.lift, 0); assert.equal(peak.spread, 1);
+  assert.equal(wordPickupPose(.9, { gentle: true }).halo, 0);
+  assert.equal(wordPickupPose(-1).halo, 0); assert.equal(wordPickupPose(.6).halo, 0);
+});
+
+test('only a collected semantic row gets source compression and exactly one hit-local halo', () => {
+  const { view } = fixture({ photosafe: { request: () => false } });
+  const attrs = view._dev.attributes;
+  const haloRows = () => Array.from({ length: view.object.count }, (_, i) => i).filter(i => attrs.values.array[i * 4 + 2] > 2.5);
+  for (const state of ['live', 'missed']) {
+    view.update([bubble('RESET', { state, outT: .06 })]); assert.equal(haloRows().length, 0);
+    for (let i = 0; i < view.object.count; i++) assert.deepEqual(Array.from(attrs.pickup.array.slice(i * 3, i * 3 + 3)), [1, 1, 0]);
+  }
+  view.update([bubble('RESET', { state: 'popped', outT: .06 })]);
+  const [halo] = haloRows(); assert.equal(haloRows().length, 1);
+  near(attrs.position.array[halo * 3], 4); near(attrs.position.array[halo * 3 + 1], 1.5);
+  assert.ok(attrs.pickup.array[0] > 1.15 && attrs.pickup.array[1] < .83);
+  view.update([bubble('RESET', { state: 'popped', outT: .06 })], null, .1, { motion: 'off' });
+  assert.equal(haloRows().length, 0); assert.equal(view.object.count, 5);
+  for (let i = 0; i < 5; i++) {
+    assert.deepEqual(Array.from(attrs.pickup.array.slice(i * 3, i * 3 + 3)), [1, 1, 0]);
+    near(attrs.position.array[i * 3 + 1], 1.5);
+  }
+  view.dispose();
+});
 
 test('RESET and EMPTY keep every trigger bubble and carry their exact shared material identity', () => {
   const { view } = fixture();
@@ -75,7 +113,7 @@ test('Gentle and motion off keep the semantic source still with a longer real co
 
 test('pause freezes source attributes, glass, text clock and atlas without new materials or canvases', () => {
   const { view, canvases, scene } = fixture(), material = view.object.material;
-  view.update([bubble('RESET')]);
+  view.update([bubble('RESET', { state: 'popped', outT: .16 })]);
   const attrs = view._dev.attributes, buffers = Object.fromEntries(Object.entries(attrs).map(([key, attr]) => [key, attr.array]));
   const snapshots = Object.fromEntries(Object.entries(attrs).map(([key, attr]) => [key, attr.array.slice()]));
   const time = view._dev.uniforms.time.value, count = view.object.count;

@@ -12,7 +12,7 @@
  * shader below; the per-marking state rides vertex attributes, the music frame rides uniforms, so nothing here
  * ever builds a new program mid-race (the mesh sits in the scene from boot and the warm links it).
  * Gentle: no glitch, no kick pulse, slower IN and light (roadWordsMath); the drop boost asks photosafe once.
- * Word coins (playtest 2026-10-28, sim/wordCoins.js): while boot.js hands setCoins a sink, one marking per phrase
+ * Word coins (sim/wordCoins.js): while boot.js hands setCoins a sink, each semantic marking
  * holds the riskier line instead of following the kart, glows a little before its word (COIN_PAINT.preGlow), and a
  * kart on it while it is lit calls the sink once; a taken coin fades out (longer under Gentle). No sink = as before.
  */
@@ -30,6 +30,7 @@ import { roadLetteringProfile, glyphFit, letteringLane, letteringFootprint } fro
 import { planRoadWordAccents, frameRoadWordMusic } from './roadWordMusic.js';
 import { coinTuning, pickCoins, coinLane, underTrap, coinCrossing } from '../sim/wordCoins.js';
 import { roadWordIdentityUv } from './roadWordIdentity.js';
+import { wordPickupPop } from './wordPickupPop.js';
 
 export const ROAD_WORD_ACCENTS = Object.freeze({
   threshold: Object.freeze({ ink: [1.12, .69, .12], glow: [1.2, .78, .22] }),
@@ -251,9 +252,10 @@ function createPaint(atlasTex, P = ROAD_PAINT, pal = null, styles = STYLES, them
   }
   const sh = u.shatter;
   const slide = vec2(sid.sub(0.5).div(max(geo.x, 0.5)), sid2.sub(0.5).div(max(geo.y, 0.5))).mul(sh).mul(P.shardSlideM * 2);
-  const semantic = roadWordIdentityUv(roadWordMusicUv(loc, geo, u), identity, u);
+  const pickup = wordPickupPop(loc.xy, identity.z, u.identityMotion);
+  const semantic = roadWordIdentityUv(roadWordMusicUv(pickup.uv, geo, u), identity, u);
   const glyphUv = semantic.uv;
-  m.positionNode = positionLocal.add(normalLocal.mul(st.w.add(waveLift).add(semantic.lift)));
+  m.positionNode = positionLocal.add(normalLocal.mul(st.w.add(waveLift).add(semantic.lift).add(pickup.lift)));
   const lx = glyphUv.x.add(gx).add(slide.x), ly = glyphUv.y.add(slide.y);
   const tuv = vec2(mix(rect.x, rect.z, clamp(lx, 0.002, 0.998)), mix(rect.y, rect.w, clamp(ly, 0.002, 0.998)));
   // Only the decorative glow splits. The complete core and its outline share one bounded transform.
@@ -300,8 +302,9 @@ function createPaint(atlasTex, P = ROAD_PAINT, pal = null, styles = STYLES, them
   const crackL = crack.mul(tx.b).mul(0.9);
   const lit = inkCol.mul(fA).add(themedEdge.mul(eA)).add(glowCol.mul(gL)).add(hot.mul(lA)).add(glowCol.mul(1.3).mul(crackL));
   const cover = clamp(fA.add(eA).add(gL.mul(P.glowCover)).add(lA.mul(0.3)), 0, 1);
-  m.colorNode = lit.mul(st.x).mul(semantic.mask);
-  m.opacityNode = cover.mul(st.x).mul(semantic.mask);
+  const pickupInk = mix(themedGlow, vec3(1, .95, .76), .6);
+  m.colorNode = lit.mul(float(1).add(pickup.shine.mul(.45))).mul(st.x).mul(semantic.mask).add(pickupInk.mul(pickup.glow));
+  m.opacityNode = max(cover.mul(st.x).mul(semantic.mask), pickup.glow.mul(.7));
   const mesh = new Mesh(g, m);
   mesh.frustumCulled = false; mesh.renderOrder = 5; mesh.castShadow = false; mesh.receiveShadow = false;
   mesh.visible = false;
@@ -465,7 +468,7 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
       if (slotCoin[slot] === 1) look.sung = Math.max(look.sung, COIN_PAINT.preGlow);
       const collected = slotCoin[slot] === 2 ? Math.min(1, Math.max(0, (tS - slotGotT[slot]) / (gentle ? COIN_PAINT.gentleGotS : COIN_PAINT.gotS))) : -1;
       // The semantic source owns its complete out. Ordinary words retain the soft dissolve.
-      if (collected >= 0) look.alpha *= 1 - fade(collected);
+      if (collected >= 0) look.alpha *= 1 - fade(gentle ? collected : Math.max(0, (collected - .25) / .75));
       const entry = run.script[v.id];
       for (let k = 0; k < V; k++) {
         const i = (slot * V + k) * 4;
