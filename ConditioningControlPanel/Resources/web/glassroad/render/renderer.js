@@ -21,6 +21,7 @@ import { WebGPURenderer, Group, Mesh, Sprite, PlaneGeometry } from 'three/webgpu
 import * as threeWebgpu from 'three/webgpu';
 import * as GPU from 'three/webgpu';
 import { createPost } from './post.js';
+import { createViewportResize } from './viewportResize.js';
 import { releaseSceneResources, trackSceneResources, disposeSceneResources } from './sceneResources.js';
 import { skipUnchangedInstanceUploads } from './uniformUploads.js';
 import { uploadChangedAttributeBytes } from './attributeUploads.js';
@@ -146,14 +147,14 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   const meter = { n: 0, t: 0, fps: 0, el: null, art: '' }, LF = String.fromCharCode(10);
 
   const scale = () => opts.renderScale === 'auto' ? dyn.scale : opts.renderScale;
-  function resize() {
-    const w = Math.max(1, canvas.clientWidth), h = Math.max(1, canvas.clientHeight);
-    three.setPixelRatio(Math.min(globalThis.devicePixelRatio || 1, maxDpr, Q.dprMax) * scale());
-    three.setSize(w, h, false);
-  }
-  const ro = globalThis.ResizeObserver ? new ResizeObserver(resize) : null;
+  const viewport = createViewportResize({ renderer: three,
+    size: () => ({ width: canvas.clientWidth, height: canvas.clientHeight }),
+    ratio: () => Math.min(globalThis.devicePixelRatio || 1, maxDpr, Q.dprMax) * scale(),
+    delayMs: device === 'phone' ? 120 : 0 });
+  const resize = () => viewport.request();
+  const ro = globalThis.ResizeObserver ? new ResizeObserver(() => viewport.request()) : null;
   if (ro) ro.observe(canvas);
-  resize();
+  viewport.apply();
 
   function postFor(scene, camera) {
     if (!post || post.antialias !== Q.antialias) {
@@ -306,6 +307,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     },
     dispose() {
       if (ro) ro.disconnect();
+      viewport.dispose();
       lostFns.clear();
       // a dead device throws from anywhere: each step on its own, the page is rebuilding anyway
       for (const step of [() => post && post.dispose(), () => readout(false), () => disposeSceneResources(three), () => three.dispose()]) {

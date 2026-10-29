@@ -21,7 +21,7 @@ import {createGarageBackdrop} from './garageBackdrop.js';
 import {cascadeIn} from './worldFeel.js';
 
 /** One menu scene on the game's existing renderer, driven by the existing frame loop. */
-export async function createGarage({art,renderer,canvas,action,sound,track,laps,trackId='threshold',online=true,changeTrack}) {
+export async function createGarage({art,renderer,canvas,action,sound,track,laps,trackId='threshold',online=true,changeTrack,onProgress}) {
   const base=art?.model('emi-teacup-kart');
   if(!base||KARTS.some(([id])=>!art.model('emi-vehicle-'+id)))return null;
   let storage;try{storage=localStorage;}catch{}
@@ -154,7 +154,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
     outfits:OUTFITS.filter(([id])=>id!=='none').map(([id])=>id),
     attach:id=>dressKart(art,model,{outfit:raceLook({...state,outfit:id}).outfit,vehicle:null}),
     measure(){style.apply(model);customBounds=null;return riderBounds();},
-    compile:()=>renderer.three.compileAsync(scene,camera),
+    compile:()=>renderer.three.compileAsync(scene,camera,null,event=>onProgress?.(event.loaded,event.total)),
     restore(){redress();paint();},
   });
   return {
