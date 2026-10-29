@@ -42,6 +42,27 @@ export function follow(bayLook, item, amp = 1) {
   };
 }
 
+/* Portrait (a phone): the whole bay fits by width and leaves the shelf small and low under a tall empty band. So a
+ * portrait view frames the shelf's item block instead (three columns edge to edge), looks at its middle rather than
+ * the empty's look point, and drops the lazy follow (the columns already fill the width). `share` blends in from
+ * aspect 1 to fully portrait at 0.65, so a landscape screen keeps the bay pose exactly. */
+export const PORTRAIT = { frame: [2.62, 3.1], below: 1.45, from: 1, full: 0.65 };
+export const portraitShare = (aspect) => Math.min(1, Math.max(0, (PORTRAIT.from - aspect) / (PORTRAIT.from - PORTRAIT.full)));
+export function bayView(pose, item, bayTop, aspect, amp = 1) {
+  const p = portraitShare(aspect), mix = (a, b) => a + (b - a) * p;
+  const f = follow(pose.look, item, amp * Math.min(1, aspect) * (1 - p));
+  return { look: [f.look[0], mix(f.look[1], bayTop - PORTRAIT.below), f.look[2]], eyeShift: f.eyeShift,
+    frame: [mix(pose.frame[0], PORTRAIT.frame[0]), mix(pose.frame[1], PORTRAIT.frame[1])], share: p };
+}
+
+/* Fit a w x h box into the band a HUD leaves free (top / bottom insets in px of a view viewH px tall): the full view's
+ * fov, and the vertical view offset in px (three's setViewOffset y) that puts the look point in the band's middle. */
+export function bandFit(aspect, w, h, d, viewH, top = 0, bottom = 0) {
+  const band = Math.max(1, viewH - top - bottom), k = viewH / band;
+  const half = Math.tan((fitFov(aspect * k, w, h, d) * Math.PI) / 360) * k;
+  return { fov: (2 * Math.atan(half) * 180) / Math.PI, offsetY: (bottom - top) / 2 };
+}
+
 // Zoom-out dip while a jump pan is still far from home: grows with the distance left, capped; 0 once close.
 export const DIP = { perMetre: 0.32, max: 1.4, settle: 0.12 };
 export function dipFor(distLeft, amp = 1) {

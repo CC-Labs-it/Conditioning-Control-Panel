@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { motionAmp, damp, fitFov, emptyToCameraQuat, forwardOf, lookPoint, follow, dipFor, bob, DIP, BOB } from '../scene/camera-math.js';
+import { motionAmp, damp, fitFov, emptyToCameraQuat, forwardOf, lookPoint, follow, dipFor, bob, DIP, BOB, bayView, bandFit, portraitShare, PORTRAIT } from '../scene/camera-math.js';
 
 const near = (a, b, eps = 1e-3) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
 
@@ -53,4 +53,33 @@ test('jump dip grows with distance, is capped, and is gone when close or off', (
 test('bob rests at zero and peaks at half a period', () => {
   near(bob(0), 0); near(bob(BOB.period / 2), BOB.height); near(bob(BOB.period / 2, 0.5), BOB.height / 2);
   assert.equal(bob(1, 0), 0);
+});
+
+test('portrait framing: landscape keeps the bay pose, a phone frames the item block in the HUD band', () => {
+  const pose = { look: [1.55, 3.2, -0.1], frame: [3.3, 3.55], dist: 5.7 };
+  const item = [2.39, 3.55, -0.1];
+  // Landscape: exactly the old follow and frame.
+  const wide = bayView(pose, item, 4.055, 16 / 9, 1);
+  assert.equal(wide.share, 0);
+  assert.deepEqual(wide.look, follow(pose.look, item, 1).look);
+  assert.deepEqual(wide.frame, pose.frame);
+  // 390x844: no drift, the look sits on the shelf's middle, the box is the three item columns.
+  const phone = bayView(pose, item, 4.055, 390 / 844, 1);
+  assert.equal(phone.share, 1);
+  near(phone.look[0], 1.55); near(phone.look[1], 4.055 - PORTRAIT.below);
+  assert.deepEqual(phone.eyeShift, [0, 0, 0]);
+  assert.deepEqual(phone.frame, PORTRAIT.frame);
+  near(portraitShare(0.825), 0.5);
+  // The phone's shelf is bigger on screen than the old whole-bay fit.
+  assert.ok(bandFit(390 / 844, ...phone.frame, 5.7, 844, 110, 60).fov < fitFov(390 / 844, ...pose.frame, 5.7));
+});
+
+test('bandFit: no insets is fitFov; insets narrow the band and move the look point into its middle', () => {
+  near(bandFit(16 / 9, 3.3, 3.55, 5.7, 900).fov, fitFov(16 / 9, 3.3, 3.55, 5.7), 1e-9);
+  assert.equal(bandFit(16 / 9, 3.3, 3.55, 5.7, 900).offsetY, 0);
+  const h = 844, top = 110, bottom = 60, f = bandFit(0.46, 1, 3, 5, h, top, bottom);
+  // The box's height fills the band exactly: tan(half fov) scales by the band's share of the view.
+  const half = Math.tan((f.fov * Math.PI) / 360);
+  near(half * ((h - top - bottom) / h), 1.5 / 5, 1e-9);
+  assert.equal(f.offsetY, (bottom - top) / 2, 'negative: the picture moves down, under the tabs');
 });
