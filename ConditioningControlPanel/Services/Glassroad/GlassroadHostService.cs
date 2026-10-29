@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
+using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.Safety;
 using Microsoft.Web.WebView2.Core;
@@ -198,6 +199,14 @@ internal static class GlassroadHostService
                 case "net":
                     OnNetRequest(o);
                     break;
+                case "friends-list":
+                    // The pre-race room's invite view (host/friendInvite.js): online friends, uid + name only.
+                    _host?.Post(new { type = "friends-list-reply", id = (string?)o["id"] ?? "",
+                        friends = GlassroadRules.FriendRows(App.Friends?.Snapshot.Friends) });
+                    break;
+                case "invite-friend":
+                    _ = OnInviteFriendAsync(o);
+                    break;
                 case "exit":
                 case "menu-back":
                     // The page's own Leave / the menu's Back link. Escape never sends these.
@@ -257,6 +266,38 @@ internal static class GlassroadHostService
                 App.Logger?.Debug("Glassroad: net {Method} {Path} failed: {E}", method, path, ex.Message);
             }
             ReplyNet(id, status, reply);
+        });
+    }
+
+    /// <summary><c>invite-friend { id, friendUid, roomId }</c> -&gt; <c>invite-friend-reply { id, sent, note }</c>.
+    /// Only a friend on this account's list and a well-formed room id leave; the server checks the room
+    /// (host only, open until the race starts) and answers a fixed reason, worded here in the player's language.</summary>
+    private static async Task OnInviteFriendAsync(JObject o)
+    {
+        var id = (string?)o["id"] ?? "";
+        var uid = (string?)o["friendUid"];
+        var room = (string?)o["roomId"];
+        var outcome = new SendOutcome(SendResult.Refused, null);
+        try
+        {
+            var svc = App.Friends;
+            bool known = svc != null && !string.IsNullOrEmpty(uid)
+                && System.Linq.Enumerable.Any(svc.Snapshot.Friends, f => f.Id == uid);
+            if (svc != null && known && InviteDestination.IsRoomId(room))
+                outcome = await svc.InviteToRaceAsync(uid!, room!);
+        }
+        catch (Exception ex)
+        {
+            outcome = new SendOutcome(SendResult.TryLater, null);
+            App.Logger?.Debug("Glassroad: race invite failed: {E}", ex.Message);
+        }
+        bool sent = Controls.Friends.FriendsDrawerRules.IsGood(outcome.Result);
+        var note = GlassroadRules.Sentence(Localization.Loc.Get(GlassroadRules.InviteNoteKey(outcome)));
+        App.Logger?.Information("Glassroad: race invite {Result} {Reason}", outcome.Result, outcome.Reason ?? "");
+        RunOnUi(() =>
+        {
+            try { _host?.Post(new { type = "invite-friend-reply", id, sent, note }); }
+            catch (Exception ex) { App.Logger?.Debug("Glassroad.ReplyInvite: {E}", ex.Message); }
         });
     }
 

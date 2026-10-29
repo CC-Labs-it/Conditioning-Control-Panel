@@ -49,6 +49,11 @@ public interface IFriendsApi
         WatchRef? watch, CancellationToken ct = default)
         => new(await SendAsync(to, kind, poke, destination, code, watch, ct).ConfigureAwait(true), null);
 
+    /// <summary>A race invite carrying the sender's Glassroad room (server FRIENDS-CONTRACT "Race
+    /// rooms"). Default: try later (fakes and old servers know nothing of rooms).</summary>
+    Task<SendOutcome> SendRaceInviteAsync(string to, string room, CancellationToken ct = default)
+        => Task.FromResult(new SendOutcome(SendResult.TryLater, null));
+
     /// <summary>accept, decline, cancel, remove, block, unblock, squelch, report. True only on <c>ok</c>.</summary>
     Task<bool> ActAsync(string op, string id, JObject? extra = null, CancellationToken ct = default);
 
@@ -244,6 +249,12 @@ public sealed class FriendsApi : IFriendsApi
         return SendOutcomeFromReply(o);
     }
 
+    public async Task<SendOutcome> SendRaceInviteAsync(string to, string room, CancellationToken ct = default)
+    {
+        var body = new JObject { ["to"] = to, ["kind"] = "invite", ["destination"] = InviteDestination.Race, ["room"] = room };
+        return SendOutcomeFromReply(await CallAsync("send", body, ct));
+    }
+
     /// <summary>A send reply worded, with its <c>item_id</c> kept only when it is a real id on a <c>sent</c>.</summary>
     internal static SendOutcome SendOutcomeFromReply(JObject? o)
     {
@@ -251,7 +262,11 @@ public sealed class FriendsApi : IFriendsApi
         if (!Ok(o)) return new SendOutcome(SendFromWire(o.Value<string?>("reason")), null);
         var result = SendFromWire(o.Value<string?>("status"));
         var id = result == SendResult.Sent ? Str(o["item_id"]) : null;
-        return new SendOutcome(result, FriendReceipts.IsItemId(id) ? id : null);
+        var reason = result == SendResult.Refused ? Str(o["reason"]) : null;
+        return new SendOutcome(result, FriendReceipts.IsItemId(id) ? id : null)
+        {
+            Reason = reason != null && InviteDestination.RaceReasons.Contains(reason) ? reason : null,
+        };
     }
 
     public async Task<bool> ActAsync(string op, string id, JObject? extra = null, CancellationToken ct = default)
@@ -441,7 +456,7 @@ public sealed class FriendsApi : IFriendsApi
         if (at == DateTimeOffset.MinValue) return null;
 
         SendKind kind;
-        string? poke = null, destination = null, code = null;
+        string? poke = null, destination = null, code = null, room = null;
         WatchRef? watch = null;
         TimeSpan life;
         switch (Str(o["kind"]))
@@ -462,6 +477,8 @@ public sealed class FriendsApi : IFriendsApi
                     if (!InviteDestination.IsChallengeId(code)) return null;
                 }
                 else if (code != null && !IsJoinCode(code)) return null;
+                // A race room the grammar does not admit is dropped: the invite stays a bare "come race".
+                if (destination == InviteDestination.Race && Str(o["room"]) is { } r && InviteDestination.IsRoomId(r)) room = r;
                 life = TimeSpan.FromSeconds(InviteDestination.LifetimeSeconds);
                 break;
             case "watch":
@@ -484,7 +501,7 @@ public sealed class FriendsApi : IFriendsApi
         }
         var expires = ParseTime(o["expires_at"], at + life);
         return new InboxItem(id, kind, from, Str(o["from_name"]) ?? "", Str(o["from_avatar"]), poke, destination, code, watch,
-            at, expires);
+            at, expires) { Room = room };
     }
 
     internal static bool IsJoinCode(string s)

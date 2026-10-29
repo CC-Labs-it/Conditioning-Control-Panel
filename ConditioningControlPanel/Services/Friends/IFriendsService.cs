@@ -52,6 +52,11 @@ public interface IFriendsService
 
     Task<SendResult> SendWatchAsync(string friendId, WatchRef watch);
 
+    /// <summary>Invite a friend into the Racing Thoughts room this account hosts (<paramref name="roomId"/>,
+    /// 12 a-z0-9). The outcome carries the room's fixed refusal reason. Default: try later (fakes).</summary>
+    Task<SendOutcome> InviteToRaceAsync(string friendId, string roomId)
+        => Task.FromResult(new SendOutcome(SendResult.TryLater, null));
+
     Task<AddResult> AddByCodeAsync(string code);
 
     // ---- friend links (CONTRACT.md "Links"). Defaults know nothing, for fakes ----

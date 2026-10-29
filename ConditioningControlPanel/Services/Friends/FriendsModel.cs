@@ -162,8 +162,9 @@ public static class InviteDestination
     /// <summary>Piece by Piece. The code is the server's challenge id (<c>c_</c> + 16 hex),
     /// minted by <c>/v2/pbp/challenge</c> with the friend as target.</summary>
     public const string Chess = "chess";
-    /// <summary>Racing Thoughts, sent from the web (Friends Everywhere W4). No code; Join opens the
-    /// web race in the browser.</summary>
+    /// <summary>Racing Thoughts 3D. No code; since 7.2 a race invite may carry the host's room id
+    /// (<see cref="InboxItem.Room"/>, server FRIENDS-CONTRACT "Race rooms") and Join opens the race
+    /// in the app on <c>?join=&lt;room&gt;</c>. A bare one (an old client) opens Racing Thoughts.</summary>
     public const string Race = "race";
     /// <summary>Breakout, sent from the web demo (Friends Everywhere W4). No code; Join opens the
     /// Breakout station.</summary>
@@ -187,6 +188,22 @@ public static class InviteDestination
     public static bool IsValid(string? id) => id != null && All.Contains(id);
 
     public static bool IsSendable(string? id) => id != null && Sendable.Contains(id);
+
+    /// <summary>The fixed reasons a race-room invite is refused with (server FRIENDS-CONTRACT "Race
+    /// rooms"). Each has a loc key <c>friends_race_&lt;id&gt;</c>; any other reason is a bare refusal.</summary>
+    public static readonly IReadOnlyList<string> RaceReasons = new[]
+    {
+        "bad_room", "room_gone", "not_host", "room_started", "room_full", "needs_prime", "no_access",
+    };
+
+    /// <summary>A Glassroad room id: 12 of a-z0-9, the same id the page joins with <c>?join=</c>.</summary>
+    public static bool IsRoomId(string? s)
+    {
+        if (s == null || s.Length != 12) return false;
+        foreach (var c in s)
+            if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))) return false;
+        return true;
+    }
 
     /// <summary>The chess invite's code: a Piece by Piece challenge id, <c>c_</c> + 16 lowercase hex.</summary>
     public static bool IsChallengeId(string? s)
@@ -245,6 +262,9 @@ public sealed record InboxItem(
     DateTimeOffset ExpiresAt)
 {
     public bool IsExpired(DateTimeOffset now) => now >= ExpiresAt;
+
+    /// <summary>The Glassroad room a <c>race</c> invite carries (12 a-z0-9), else null.</summary>
+    public string? Room { get; init; }
 }
 
 /// <summary>What a send came back with. Only <see cref="Sent"/> did anything.</summary>
@@ -252,7 +272,11 @@ public enum SendResult { Sent, Squelched, TooFast, NotFriends, Offline, Refused,
 
 /// <summary>A send's result plus the item id the server gave it (<c>item_id</c>, only with
 /// <c>sent</c>; null from a server that predates receipts). The id is what receipts name.</summary>
-public sealed record SendOutcome(SendResult Result, string? ItemId);
+public sealed record SendOutcome(SendResult Result, string? ItemId)
+{
+    /// <summary>A race-room refusal's fixed reason (<see cref="InviteDestination.RaceReasons"/>), else null.</summary>
+    public string? Reason { get; init; }
+}
 
 /// <summary>What adding by code came back with.</summary>
 public enum AddResult { Sent, Accepted, Already, NotFound, Blocked, Self, Full, TryLater }
