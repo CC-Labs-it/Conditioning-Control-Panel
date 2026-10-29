@@ -9,6 +9,6 @@ test('a dry road-word strip with an unchanged footprint is not rewritten each fr
   assert.match(src, /const same = slotS\[slot\] === view\.s && slotW\[slot\] === wM && slotFoot\[slot\] === lane;/);
   assert.match(src, /if \(same && !force && !\(waterMoves && slotWet\[slot\]\)\) \{ slotLane\[slot\] = laneX; slotScale\[slot\] = scale; return false; \}/);
   assert.match(src, /field\.sample\(s, x, wetOut\)\.wet\) slotWet\[slot\] = 1;/, 'wetness is found while the strip is sampled');
-  assert.match(src, /if \(writeStrip\(slot, v, lane, pose\.scale, false, !!waterVolume && !paused\)\) geoDirty = true;/);
+  assert.match(src, /if \(writeStrip\(slot, v, lane, scale, false, !!waterVolume && !paused\)\) geoDirty = true;/);
   assert.match(src, /slotW\[slot\] = NaN; slotFoot\[slot\] = NaN; slotWet\[slot\] = 0;/, 'a freed slot forgets its footprint');
 });

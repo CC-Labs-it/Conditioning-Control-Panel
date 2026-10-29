@@ -28,7 +28,8 @@ import { STYLES, STYLE, phraseStyle, packAtlas, markLook, frameLook } from './ro
 import { createDecalSampler } from './surfaceDecals.js';
 import { roadLetteringProfile, glyphFit, letteringLane, letteringFootprint } from './roadLettering.js';
 import { planRoadWordAccents, frameRoadWordMusic } from './roadWordMusic.js';
-import { coinTuning, pickCoins, coinLane, underTrap, coinLit, coinTouch } from '../sim/wordCoins.js';
+import { coinTuning, pickCoins, coinLane, underTrap, coinCrossing } from '../sim/wordCoins.js';
+import { roadWordIdentityUv } from './roadWordIdentity.js';
 
 export const ROAD_WORD_ACCENTS = Object.freeze({
   threshold: Object.freeze({ ink: [1.12, .69, .12], glow: [1.2, .78, .22] }),
@@ -55,8 +56,8 @@ export function roadWordMusicUv(loc, geo, u) {
 export const COIN_PAINT = Object.freeze({
   preGlow: 0.45,      // the karaoke light a coin shows before its word (a sung word reaches 1)
   scale: 1.1,         // a coin is painted a little larger than its phrase
-  gotS: 0.25,         // a taken coin fades out this fast...
-  gentleGotS: 0.6,    // ...or this slowly under Gentle (fades only lengthen)
+  gotS: 0.68,         // the semantic out has time to read as the kart crosses
+  gentleGotS: 0.85,   // Gentle keeps a soft, longer fade
 });
 
 export const ROAD_PAINT = Object.freeze({
@@ -199,9 +200,9 @@ function createAtlas(P = ROAD_PAINT, styles = STYLES) {
 function createPaint(atlasTex, P = ROAD_PAINT, pal = null, styles = STYLES, theme = 'threshold') {
   const n = P.slots, V = VERTS;
   const buf = (k) => new BufferAttribute(new Float32Array(n * V * k), k).setUsage(DynamicDrawUsage);
-  // six vertex buffers (WebGPU allows eight per pipeline): the per-look constants live in a uniform array
+  // Seven vertex buffers (WebGPU allows eight): the per-look constants live in a uniform array
   // indexed by the look id riding aLoc.z, never in attributes
-  const a = { position: buf(3), normal: buf(3), aLoc: buf(4), aRect: buf(4), aGeo: buf(4), aState: buf(4) };
+  const a = { position: buf(3), normal: buf(3), aLoc: buf(4), aRect: buf(4), aGeo: buf(4), aState: buf(4), aIdentity: buf(4) };
   const g = new BufferGeometry();
   for (const k in a) g.setAttribute(k, a[k]);
   const idx = new Uint16Array(n * P.rows * P.cols * 6), stride = P.cols + 1;
@@ -215,10 +216,10 @@ function createPaint(atlasTex, P = ROAD_PAINT, pal = null, styles = STYLES, them
   const accent = ROAD_WORD_ACCENTS[theme] || ROAD_WORD_ACCENTS.threshold;
   const u = { kartS: uniform(0), lapM: uniform(1000), wave: uniform(0), waveD: uniform(0), pulse: uniform(0), glitch: uniform(0),
     glow: uniform(0.5), shatter: uniform(0), beat: uniform(0), time: uniform(0), calm: uniform(0), sweep: uniform(0),
-    musicKick: uniform(0), musicSnare: uniform(0), musicHats: uniform(0), vibration: uniform(0),
+    musicKick: uniform(0), musicSnare: uniform(0), musicHats: uniform(0), vibration: uniform(0), identityMotion: uniform(1),
     accentInk: uniform(new Vector4(...accent.ink, 1)), accentGlow: uniform(new Vector4(...accent.glow, 1)) };
   const loc = attribute('aLoc', 'vec4'), rect = attribute('aRect', 'vec4'), geo = attribute('aGeo', 'vec4');
-  const st = attribute('aState', 'vec4');
+  const st = attribute('aState', 'vec4'), identity = attribute('aIdentity', 'vec4');
   // per look, LOOK_VEC4 vec4s: ink (rgb, alpha), edge, glow, fx (stencil, wear, kick, glitch), fx2 (energy, gloss)
   const looks = uniformArray(styles.flatMap((x) => [new Vector4(...x.ink, x.inkA), new Vector4(...x.edge, x.edgeA),
     new Vector4(...x.glow, x.glowA), new Vector4(x.stencil, x.wear, x.kick, x.glitch), new Vector4(x.energy, x.gloss, 0, 0)]), 'vec4');
@@ -250,7 +251,9 @@ function createPaint(atlasTex, P = ROAD_PAINT, pal = null, styles = STYLES, them
   }
   const sh = u.shatter;
   const slide = vec2(sid.sub(0.5).div(max(geo.x, 0.5)), sid2.sub(0.5).div(max(geo.y, 0.5))).mul(sh).mul(P.shardSlideM * 2);
-  const glyphUv = roadWordMusicUv(loc, geo, u);
+  const semantic = roadWordIdentityUv(roadWordMusicUv(loc, geo, u), identity, u);
+  const glyphUv = semantic.uv;
+  m.positionNode = positionLocal.add(normalLocal.mul(st.w.add(waveLift).add(semantic.lift)));
   const lx = glyphUv.x.add(gx).add(slide.x), ly = glyphUv.y.add(slide.y);
   const tuv = vec2(mix(rect.x, rect.z, clamp(lx, 0.002, 0.998)), mix(rect.y, rect.w, clamp(ly, 0.002, 0.998)));
   // Only the decorative glow splits. The complete core and its outline share one bounded transform.
@@ -262,7 +265,7 @@ function createPaint(atlasTex, P = ROAD_PAINT, pal = null, styles = STYLES, them
   const grain = hash(floor(loc.x.mul(geo.x).mul(9)).add(floor(loc.y.mul(geo.y).mul(5)).mul(91.7)).add(geo.w));
   const worn = step(0.8, grain).mul(fx.y).mul(0.75);
   const crack = float(1).sub(smoothstep(0.03, 0.09, F2.sub(F1))).mul(sh);
-  const fill = tx.r.mul(float(1).sub(gap.mul(.25))).mul(float(1).sub(worn.mul(.2)));
+  const fill = tx.r.mul(semantic.coreMask).mul(float(1).sub(gap.mul(.25))).mul(float(1).sub(worn.mul(.2)));
   const edge = tx.b.mul(float(1).sub(tx.r));
   const glowM = glowTx.g.mul(inBox);
   // IN: the paint wipes in from a glow line, near end to far
@@ -284,7 +287,7 @@ function createPaint(atlasTex, P = ROAD_PAINT, pal = null, styles = STYLES, them
   const turn = sh.mul(0.75);
   const inkCol0 = mix(themedInk, themedInk.mul(pal ? mix(pal.col(0), pal.col(1), sid2) : tint), turn);
   const legacyInk = mix(inkCol0.mul(bright), hot, sung.mul(0.45)).add(vec3(1.2, 1.1, 1.15).mul(gloss));
-  const inkCol = roadWordAccentColour(legacyInk, u.accentInk.xyz, loc.w, sung);
+  const inkCol = mix(roadWordAccentColour(legacyInk, u.accentInk.xyz, loc.w, sung), semantic.tint, semantic.tintMix);
   const legacyGlow = mix(themedGlow, pal ? pal.col(1) : tint, turn);
   const glowCol = roadWordAccentColour(legacyGlow, u.accentGlow.xyz, loc.w, sung)
     .mul(float(1).add(sung.mul(0.5)).add(u.musicHats.mul(.15)));
@@ -297,8 +300,8 @@ function createPaint(atlasTex, P = ROAD_PAINT, pal = null, styles = STYLES, them
   const crackL = crack.mul(tx.b).mul(0.9);
   const lit = inkCol.mul(fA).add(themedEdge.mul(eA)).add(glowCol.mul(gL)).add(hot.mul(lA)).add(glowCol.mul(1.3).mul(crackL));
   const cover = clamp(fA.add(eA).add(gL.mul(P.glowCover)).add(lA.mul(0.3)), 0, 1);
-  m.colorNode = lit.mul(st.x);
-  m.opacityNode = cover.mul(st.x);
+  m.colorNode = lit.mul(st.x).mul(semantic.mask);
+  m.opacityNode = cover.mul(st.x).mul(semantic.mask);
   const mesh = new Mesh(g, m);
   mesh.frustumCulled = false; mesh.renderOrder = 5; mesh.castShadow = false; mesh.receiveShadow = false;
   mesh.visible = false;
@@ -331,6 +334,7 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
   const C = coinTuning(feel);
   let coinOf = null, coinSink = null, coinsGot = 0;
   const slotCoin = new Uint8Array(P.slots), slotCoinLane = new Float64Array(P.slots), slotGotT = new Float64Array(P.slots);
+  let previousKart = null;
   const fade = (x) => { x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2 * x); };
 
   /** A new song: its run, a look per phrase and the atlas plan (drawn over the next frames). */
@@ -414,6 +418,9 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
     lastSongS = tS;
     player.s = kart[S.s] || 0; player.lat = kart[S.lateral] || 0;
     player.speedMps = Math.hypot(kart[S.velX] || 0, kart[S.velY] || 0, kart[S.velZ] || 0);
+    const contact = { tS, s: player.s, lat: player.lat, grounded: kart[S.grounded], airborne: kart[S.airborne],
+      respawn: kart[S.respawnPhase], height: kart[S.height] };
+    const signedDistance = (s) => wrap(s + track.lengthM / 2, track.lengthM) - track.lengthM / 2;
     const live = run.update(tS, player);
     seen.fill(0);
     let geoDirty = false;
@@ -446,18 +453,25 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
       }
       seen[slot] = 1;
       // on the painted coin while its word is lit: the sink decides (boot.js counts only while racing)
-      if (slotCoin[slot] === 1 && coinSink && !paused && v.state === 'live') {
+      if (slotCoin[slot] === 1 && coinSink && !paused) {
         const e = run.script[v.id];
-        if (coinLit(tS, e.startS, e.endS, C) && coinTouch(v.dS, v.lenM, slotFoot[slot], slotW[slot], player.lat, C) && coinSink(v)) {
+        const now = { ...contact, dS: v.dS };
+        const before = previousKart && !fresh ? { ...previousKart, dS: signedDistance(v.s - previousKart.s) } : null;
+        if (coinCrossing(before, now, { lenM: v.lenM, lane: slotFoot[slot], widthM: slotW[slot], startS: e.startS, endS: e.endS }, C) && coinSink(v)) {
           slotCoin[slot] = 2; slotGotT[slot] = tS; coinsGot++;
         }
       }
       markLook(v, { gentle }, look);
       if (slotCoin[slot] === 1) look.sung = Math.max(look.sung, COIN_PAINT.preGlow);
-      else if (slotCoin[slot] === 2) look.alpha *= 1 - fade((tS - slotGotT[slot]) / (gentle ? COIN_PAINT.gentleGotS : COIN_PAINT.gotS));
+      const collected = slotCoin[slot] === 2 ? Math.min(1, Math.max(0, (tS - slotGotT[slot]) / (gentle ? COIN_PAINT.gentleGotS : COIN_PAINT.gotS))) : -1;
+      // The semantic source owns its complete out. Ordinary words retain the soft dissolve.
+      if (collected >= 0) look.alpha *= 1 - fade(collected);
+      const entry = run.script[v.id];
       for (let k = 0; k < V; k++) {
         const i = (slot * V + k) * 4;
         a.aState.array[i] = look.alpha; a.aState.array[i + 1] = look.inK; a.aState.array[i + 2] = look.sung; a.aState.array[i + 3] = look.liftM + pose.liftM;
+        a.aIdentity.array[i] = entry.identity || 0; a.aIdentity.array[i + 1] = tS - entry.startS;
+        a.aIdentity.array[i + 2] = collected; a.aIdentity.array[i + 3] = entry.chars;
       }
     }
     for (let sl = 0; sl < P.slots; sl++) if (!seen[sl] && slotId[sl] >= 0) freeSlot(sl);
@@ -470,7 +484,9 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
     u.kartS.value = player.s; u.wave.value = fl.wave; u.waveD.value = fl.waveD; u.pulse.value = fl.pulse;
     u.glitch.value = paused ? u.glitch.value : fl.glitch; u.glow.value = fl.glow; u.shatter.value = fl.shatter; u.beat.value = fl.beat;
     u.time.value = tS; u.calm.value = fl.calm; u.sweep.value = gentle ? 0.12 : 0.3;
-    a.aState.needsUpdate = true;
+    u.identityMotion.value = gentle ? 0 : motion === 'less' ? .5 : 1;
+    previousKart = contact;
+    a.aState.needsUpdate = a.aIdentity.needsUpdate = true;
     if (geoDirty) { a.position.needsUpdate = a.normal.needsUpdate = a.aGeo.needsUpdate = true; }
     if (staticDirty) { a.aRect.needsUpdate = a.aLoc.needsUpdate = true; staticDirty = false; }
     paint.mesh.visible = live.length > 0;
@@ -482,15 +498,17 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
     a.aState.needsUpdate = true;
     if (run) run.reset();
     paint.mesh.visible = false;
-    dropIdx = -1; dropOk = false; lastSongS = NaN; coinsGot = 0;
+    dropIdx = -1; dropOk = false; lastSongS = NaN; coinsGot = 0; previousKart = null;
   }
 
   return {
-    object: paint.mesh, update, clear, _dev: { canvas: atlas.canvas, music: wordMusic },
+    object: paint.mesh, update, clear, _dev: { canvas: atlas.canvas, music: wordMusic,
+      live: () => [...slotOf].map(([id, slot]) => ({ ...run.script[id], s: slotS[slot], lane: slotFoot[slot], width: slotW[slot], coin: slotCoin[slot] })) },
     /** The sink accepts a collected marking once while racing. */
     setCoins(sink) { coinSink = typeof sink === 'function' ? sink : null; },
     stats() { return { ready, markings: run ? run.total : 0, live: slotOf.size, shown: run ? run.shown : 0, rowPx,
       accented: accents ? accents.reduce((sum, strength) => sum + (strength > 0 ? 1 : 0), 0) : 0,
+      identities: run ? run.script.filter(e => e.identity).length : 0,
       kick: wordMusic.kick || 0, snare: wordMusic.snare || 0, vibration: wordMusic.vibration || 0,
       coins: coinOf ? coinOf.reduce((n, c) => n + c, 0) : 0, coinsGot }; },
     dispose() { scene.remove(paint.mesh); paint.dispose(); atlas.dispose(); },
