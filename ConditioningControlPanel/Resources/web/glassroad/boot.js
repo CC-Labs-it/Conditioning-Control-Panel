@@ -18,7 +18,7 @@
  * ?lobby=http://127.0.0.1:8811&uid=<id>&name=<n> talks to a local race-local.mjs lobby with the fake identity
  * (&tier=N also goes to the lobby as x-dev-tier). ?r=<token>: a friend's race link, claimed on the lobby card.
  */
-import { createBridge, songCharts, isLocalSongHost, wantLobbySongs, lobbySongCharts, ROOM_ORIGIN } from './host/bridge.js';
+import { createBridge, songCharts, isPreviewSongHost, wantLobbySongs, lobbySongCharts, ROOM_ORIGIN } from './host/bridge.js';
 import { createHostEscape } from './host/hostEscape.js';
 import { createCardMedia, PHONE_READY_CLIPS } from './host/cardMedia.js';
 import { createScrolllerFeed } from './host/scrolllerFeed.js';
@@ -135,8 +135,8 @@ let profilePulled = false;   // the account record is pulled once per page, not 
 const hLap = (k) => { const t = performance.now(); HT[k] = t - hT; hT = t; };
 // the race song (handoff-1022/MUSIC-ROAD-BRIEF.md): ?chart=<url> plays that chart, ?chart=0 none; the dev
 // loopback server tries the private song folder it mounts at /private-audio/; a host names its own charts in
-// init.caps.songs (host/bridge.js songCharts). Set once the init lands, before any race can start.
-const DEV_HOST = isLocalSongHost(location);
+// init.caps.songs (host/bridge.js songCharts). Set once the init lands, before any race can start. The phone app's
+// own loopback server is a host, not the preview server (isPreviewSongHost).
 
 const COUNT = 8;                                   // offline grid (and the kart slots the world builds); online = the room's seats
 const LOCAL_URL = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/;
@@ -333,7 +333,7 @@ async function boot(course, options, lifetime, isCurrent) {
   if (!lifetime.alive) return;
   loaded('host');
   let CHARTS = courseSongs(TRACK_ID, location.search,
-    songCharts({ search: location.search, devHost: DEV_HOST, songs: init.caps.songs }));
+    songCharts({ search: location.search, devHost: isPreviewSongHost(location, init.caps.platform), songs: init.caps.songs }));
   const soloCharts = () => selectedSongCharts(shared.coursePicks[TRACK_ID]?.songId, shared.songRows, CHARTS);
   const songCache = shared.songCache;
   for (const url of CHARTS) void songCache.preload(url);

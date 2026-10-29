@@ -14,8 +14,8 @@ using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Services.Glassroad;
 
 /// <summary>
-/// Host for GLASSROAD (<c>Resources/web/glassroad/index.html</c>), private preview behind
-/// <see cref="GlassroadRules.DoorEnv"/>. A sibling of <see cref="PieceByPieceHostService"/>: one
+/// Host for GLASSROAD (<c>Resources/web/glassroad/index.html</c>), Racing Thoughts 3D, open to
+/// everyone since 7.2 (every race door). A sibling of <see cref="PieceByPieceHostService"/>: one
 /// windowed <see cref="ChaosWebViewHost"/> (it attaches ScrolllerWebGate), own profile, host
 /// protocol v2 (host/bridge.js). INIT GOES OUT BEFORE READY: the page awaits init at boot (3 s,
 /// then defaults with no net) but says ready only once shaders are warm, and Post queues until

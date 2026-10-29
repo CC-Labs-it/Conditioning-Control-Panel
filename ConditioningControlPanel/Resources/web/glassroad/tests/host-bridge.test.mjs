@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createBridge, defaultInit, mergeInit, songCharts, isLocalSongHost } from '../host/bridge.js';
+import { createBridge, defaultInit, mergeInit, songCharts, isLocalSongHost, isPreviewSongHost, wantLobbySongs } from '../host/bridge.js';
 import { createHostEscape } from '../host/hostEscape.js';
 import { formatTime } from '../hud/hud.js';
 import { applyKept, rangeFor } from '../hud/feelSheet.js';
@@ -100,4 +100,13 @@ test('private preview songs are available on alternate loopback ports without le
     assert.equal(devHost,false,origin);
     assert.deepEqual(songCharts({devHost}),[]);
   }
+});
+
+test('the phone app\'s own loopback server is a host, so the lobby songs are not shadowed there',()=>{
+  const phone=new URL('http://127.0.0.1:17617/glassroad/index.html');
+  assert.equal(isPreviewSongHost(phone,'phone'),false);
+  assert.deepEqual(songCharts({devHost:isPreviewSongHost(phone,'phone')}),[]);
+  assert.equal(wantLobbySongs({search:phone.search,charts:songCharts({devHost:isPreviewSongHost(phone,'phone')})}),true);
+  for(const platform of ['web','desktop',undefined]) assert.equal(isPreviewSongHost(new URL('http://127.0.0.1:8790'),platform),true,String(platform));
+  assert.equal(isPreviewSongHost(new URL('https://app.cclabs.app'),'web'),false);
 });

@@ -38,6 +38,15 @@ export function isLocalSongHost({ hostname = '', protocol = '' } = {}) {
 }
 
 /**
+ * The private song list applies on the preview server only. The phone app serves the pack from its OWN loopback
+ * server (127.0.0.1), which mounts no private recordings: there a loopback origin must not shadow the lobby's
+ * signed songs, or every phone race runs silent.
+ */
+export function isPreviewSongHost(loc, platform) {
+  return platform !== 'phone' && isLocalSongHost(loc);
+}
+
+/**
  * The race song charts to try, in order: `?chart=0` none, `?chart=<url>` that one, the loopback dev host its
  * private list, else the host's `caps.songs` (each checked against SONG_URL, at most 8), else none.
  */

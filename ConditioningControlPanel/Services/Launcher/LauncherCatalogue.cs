@@ -237,19 +237,13 @@ public static class LauncherCatalogue
             () => PieceByPiece.PieceByPieceHostService.Launch(),
             () => PieceByPiece.PieceByPieceHostService.IsActive, requiresAccount: false, isNew: true);
 
-        // Racing Thoughts: a Back Room unlock since 2026-09-18. Without a track the tile is the
-        // mystery card pointing at the counter; the entry stays Available so a shortcut still
-        // reaches Launch, where CaucusHostService refuses on the same door (RacingAccess).
-        // Hidden preview door (CCP_GLASSROAD=1): the same tile and the Play card open Glassroad, the
-        // 3D race, instead. Without the switch nothing changes (GlassroadRules.DoorOpen).
+        // Racing Thoughts is the 3D race (Glassroad) for everyone since 7.2 (owner, 2026-10-29):
+        // this tile and the Play card open it, always revealed, no switch. The 2D race is RETIRED:
+        // no door opens it (the code stays). Online stays tier 2+, judged by the server
+        // (RACE_ACCESS=prime); the page asks, the tile never does.
         G("race", "features/race.png", "☕", Tile(0xFF, 0xB3, 0x6B), Always, Never,
-            () =>
-            {
-                if (Glassroad.GlassroadRules.DoorOpenNow()) Glassroad.GlassroadHostService.Launch();
-                else Chaos.CaucusHostService.Launch();
-            },
-            () => Chaos.CaucusHostService.IsActive || Glassroad.GlassroadHostService.IsActive,
-            revealed: () => Glassroad.GlassroadRules.DoorOpenNow() || Race.RacingAccess.CanLaunch);
+            () => Glassroad.GlassroadHostService.Launch(),
+            () => Glassroad.GlassroadHostService.IsActive);
 
         // Down the Rabbit Hole: Lab tier. The Play handler gates it; Launch does not, so the tile
         // asks the gate itself and lets DemandLab paint the refusal.
