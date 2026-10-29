@@ -41,6 +41,7 @@ import { createPhrasePieces } from './phrasePieces.js';
 import { LOOK } from './look.js';
 import { KART_VIEW } from './viewMath.js';
 import { Q } from './quality.js';
+import { createKartLods } from './phoneModels.js';
 import { buildKart } from './dressing.js';
 import { createGlideCap, glideAsset } from './glideCap.js';
 import { createSwimPropeller, createPropellerFleet } from './swimPropeller.js';
@@ -265,6 +266,7 @@ const urlSeed = () => { try { return new URLSearchParams(globalThis.location.sea
 export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] } = {}) {
   const R = rivalNumbers(LOOK), RR = reactNumbers(LOOK), RN = rigNumbers(LOOK), list = [];
   const kartGltf = art && art.model ? art.model('emi-teacup-kart') : null;
+  const lods = createKartLods(art?.model?.('emi-teacup-kart-lod1'));
   const auraGeo = new SphereGeometry(1, 32, 20);
   const surgeGeo = surgeGeometry();
   // perf: every kart's marine drive draws through one fleet (one instanced draw per part, not 12 per kart)
@@ -282,6 +284,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     root.scale.setScalar(KS);
     const art3d = buildKart(art);
     const model = art3d || new Mesh(greyGeo, createKartMaterial(look ? look.cup : [1, 1, 1]).material);
+    const lod = lods.bind(model, i);
     const mats = [], rims = [];
     if (!art3d) mats.push(model.material);
     model.traverse((o) => {
@@ -321,7 +324,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     const surgeMesh = new Mesh(surgeGeo, surgeMaterial); surgeMesh.name = 'surge-chevrons'; surgeMesh.visible = false; root.add(surgeMesh);
     const surge = { mesh: surgeMesh, material: surgeMaterial, alpha: 0, time: 0 };
     list.push({
-      i, root, body, model, mats, bones, look, accessory, face, head, tint: look ? look.cup : [1, 1, 1], tagHex: look ? look.hex : '#fff4fa',
+      i, root, body, model, lod, mats, bones, look, accessory, face, head, tint: look ? look.cup : [1, 1, 1], tagHex: look ? look.hex : '#fff4fa',
       dress, skin, rig, glideCap, propeller, caustics, phrasePieces: art3d ? createPhrasePieces(model) : null, phrasePose: {}, underwater:0, life: art3d ? createEmiLife(model, {seed:i}) : null, lifeSignals:{}, lifeAir:0, dir: createDirector(),
       tag: null, tagName: '', pose: createPose(), react: Object.assign(createReact(i), { rig: !!rig }), pend: [], mem: {}, ghost: 0, mark,
       rims, rimBase: look ? look.rimLin.slice() : [0, 0, 0], rimSet: false, stars, aura, surge,
@@ -403,6 +406,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
    * opts: { squash (the player's fx.squash; the reaction layer now owns squash), gentle, topMps, name }.
    */
   function pose(k, st, fxv, dt, distM, { squash = null, gentle = false, topMps = 30, name = '', glide = false, underwater = 0, paused = false, face = null, rollAdd = 0 } = {}) {
+    k.lod?.update(distM);
     k.underwater=underwater;
     if(!paused){k.caustics.time.value+=dt*(gentle?.5:1);k.caustics.amount.value+=(underwater*(gentle?.5:1)-k.caustics.amount.value)*Math.min(1,dt/.35);}
     const { root, body, pose: p, react: r } = k;
@@ -553,6 +557,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
   /** A fresh reaction state on every kart (Again, Restart, Menu): no cheer, sulk or daze carries over. */
   function resetReactions() {
     for (const k of list) {
+      k.lod?.reset();
       k.phrasePieces?.beforePose();
       k.react = Object.assign(createReact(k.i), { rig: !!k.rig }); k.pend.length = 0; k.dir = createDirector();
       if (k.glideCap) k.glideCap.reset();
@@ -565,6 +570,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
 
   function dispose() {
     if (disposed) return; disposed = true;
+    lods.dispose();
     detach();
     for (const k of list) {
       k.phrasePieces?.beforePose();

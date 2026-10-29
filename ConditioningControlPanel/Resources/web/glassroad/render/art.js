@@ -12,6 +12,7 @@ import { attachVertexShade } from './vertexShade.js';
 import { MATERIAL_DETAIL_IDS, materialDetailId } from './materialDetailMath.js';
 import { CHESS_TRAP_IDS } from './chessTrapIds.js';
 import { keepArtPlan } from './keepTheme.js';
+import { phoneModels, phoneModelId } from './phoneModels.js';
 
 const BASE = new URL('../art/', import.meta.url);
 const TRANSCODER = new URL('../vendor/three/addons/libs/basis/', import.meta.url).href;
@@ -71,8 +72,14 @@ function artPlan(want, trackId, materialTier) {
     .concat('glide-threshold-beanie');
   const plan = trackId === 'keep' ? keepArtPlan(want, materialTier) : { ids: want, aliases: trackId === 'goonworks' ? { 'glide-keep-beanie': 'glide-threshold-beanie' } : {} };
   const waterIds = ['water-normal', 'water-foam-mask', 'waterfall-sheet', 'waterfall-phase-mask'].map(id => id + (materialTier === 'phone' ? '-phone' : ''));
-  return { aliases: plan.aliases, requested: [...new Set(trackId === 'shared' ? plan.ids
-    : [...plan.ids, ...CHESS_TRAP_IDS, ...waterIds, ...MATERIAL_DETAIL_IDS.map(id => materialDetailId(id, materialTier))])] };
+  let ids = trackId === 'shared' ? plan.ids
+    : [...plan.ids, ...CHESS_TRAP_IDS, ...waterIds, ...MATERIAL_DETAIL_IDS.map(id => materialDetailId(id, materialTier))];
+  if (phoneModels()) {
+    for (const id of ids) { const low = phoneModelId(id); if (low !== id) plan.aliases[id] = low; }
+    ids = ids.map(id => plan.aliases[id] || id);
+    if (ids.includes('emi-teacup-kart')) ids.push('emi-teacup-kart-lod1');
+  }
+  return { aliases: plan.aliases, requested: [...new Set(ids)] };
 }
 
 /** Renderer-local public art only. Acquire the next course before releasing the old course lease.
@@ -137,6 +144,11 @@ export function createArtLibrary(renderer) {
   }
   async function decode(r, rows, aniso, entry) {
     const url = new URL(r.file, BASE).href;
+      if (r.kind === 'index-lod') {
+        const response = await fetch(url);
+        if (!response.ok) throw Error('index LOD HTTP ' + response.status);
+        return response.json();
+      }
       if (r.kind === 'texture') {
         const t = await ktx2.loadAsync(url);
         const [ws, wt] = r.wrap || ['repeat', 'repeat'];
@@ -213,7 +225,7 @@ export function createArtLibrary(renderer) {
             }, error => { entry.error = error; entry.settled = true; evict(entry, disposed); return null; });
           }
           if (!used.has(entry)) { used.add(entry); entry.refs++; }
-          if (GARAGE_ART_IDS.includes(id)) entry.retained = true;
+          if (GARAGE_ART_IDS.includes(id) || id === 'emi-teacup-kart-lod1') entry.retained = true;
           const value = await entry.pending;
           if (released || disposed) return;
           if (!value) { failed.push(id); console.warn('[glassroad/art] ' + id + ' failed: ' + entry.error?.message); return; }

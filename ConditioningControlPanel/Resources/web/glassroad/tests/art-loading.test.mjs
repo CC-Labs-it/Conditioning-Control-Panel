@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import { setTier } from '../render/quality.js';
+import { setDevice } from '../render/deviceClass.js';
 
 const moduleUrl = source => 'data:text/javascript,' + encodeURIComponent(source);
 const modules = {
@@ -25,6 +26,24 @@ const { loadArt } = await import('../render/art.js');
 hooks.deregister();
 const originalFetch = globalThis.fetch;
 const manifest = rows => ({ ok: true, json: async () => rows });
+
+test('phone devices load the simpler scenery once and retain base kart plus optional distant indices', async t => {
+  t.after(() => { globalThis.fetch = originalFetch; setTier('high'); setDevice('desktop'); });
+  const want = ['chess-knight-lod0', 'toy-pendulum-lod0', 'toy-pendulum-lod1', 'emi-teacup-kart'];
+  const ids = [...want, 'chess-knight-lod1', 'emi-teacup-kart-lod1'];
+  const rows = ids.map(id => ({ id, kind: id === 'emi-teacup-kart-lod1' ? 'index-lod' : 'model', file: id + '.glb' }));
+  for (const tier of ['phone', 'high']) {
+    setDevice('phone'); setTier(tier);
+    globalThis.fetch = async url => String(url).endsWith('manifest.json') ? manifest(rows) : manifest({ meshes: [] });
+    const art = await loadArt({}, { want });
+    assert.equal(art.model('chess-knight-lod0'), art.model('chess-knight-lod1'));
+    assert.ok(!art.requested.includes('chess-knight-lod0'));
+    assert.equal(art.requested.filter(id => id.startsWith('toy-pendulum')).length, 1);
+    assert.ok(art.model('emi-teacup-kart'));
+    assert.deepEqual(art.model('emi-teacup-kart-lod1'), { meshes: [] });
+    art.dispose();
+  }
+});
 
 test('art loads only the selected Threshold terrace LOD and preserves both runtime finish LODs', async t => {
   t.after(() => { globalThis.fetch = originalFetch; setTier('high'); });

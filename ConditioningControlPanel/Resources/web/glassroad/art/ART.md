@@ -2004,3 +2004,14 @@ Held Snap, Surge and Melt badges use a separate bare sprite material and one sha
 instance draw, sampling the same 5 x 5 living atlas. Each instance contributes two
 triangles; no new texture is allocated. The legacy glass material is not used for
 these directional frames. Native captures verify their alpha and visibility.
+
+### Phone model detail
+
+Phone devices and the Low tier select existing LOD1 scenery through `render/phoneModels.js`.
+The original model ids remain aliases, including chess traps and their vertex paint sidecars.
+`models/emi-teacup-kart-lod1.json` supplies 1,956 triangles versus the base kart's 4,892.
+It changes indices only, retaining original vertex attributes, joints, paint and animations.
+The player never uses it. Rivals enter reduced detail 8 m beyond `kartLodM` and return to full
+detail at `kartLodM`, including hit-camera focus. Outfits, vehicle swaps and effects are unchanged.
+Regenerate after changing the base GLB with `node dev/gen-kart-lod.mjs <meshoptimizer-package-dir>`
+(meshoptimizer 1.3.0). The regression test pins its source hash. Missing data keeps full detail.
