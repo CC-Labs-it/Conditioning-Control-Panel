@@ -6,14 +6,14 @@
  * row (underTrap), and lights while its word is sung (the karaoke light, render/roadWordsMath.js). Driving over it
  * while it is lit (coinLit + coinTouch) is +1 on the count (createWordCoins), capped; each point raises the
  * player's top speed a little (topMul); a landed hit (item or trap, sim/hitterHit.js) drops a few.
- * Numbers live in feel.json group `wordCoins` (FEEL.md). Solo only unless `wordCoins.online` (boot.js gates it):
- * online stays on today's rules until the room rollout. Pure: no three.js, no DOM.
+ * Numbers live in feel.json group `wordCoins` (FEEL.md), shared by hash-matched solo and online races.
+ * Online carries cumulative catches separately from the capped inventory. Pure: no three.js, no DOM.
  */
 import { clamp, wrap } from '../core/math.js';
 import { wordIdentity } from './wordIdentity.js';
 
 const DEFAULTS = Object.freeze({
-  on: true, online: false, cap: 10, topPctPer: 0.009, hitDrop: 3, litPreS: 0.6, litPostS: 0.9,
+  on: true, online: true, cap: 10, topPctPer: 0.009, hitDrop: 3, litPreS: 0.6, litPostS: 0.9,
   laneShare: 0.55, edgeMarginM: 1.4, bendM: 30, straightM: 0.4, trapClearM: 8, touchSlackM: 0.6, kartHalfM: 0.6,
   minChars: 3, popBubbles: true,
 });
@@ -125,17 +125,19 @@ export function coinCrossing(previous, current, marking, C = DEFAULTS) {
 }
 
 /**
- * The player's count. add() -> true when it rose (false at the cap); hit() -> points lost; topMul() the top speed
- * multiplier the count buys (1 + count x topPctPer).
+ * The player's inventory and cumulative catches. add(credit) records a catch, returning whether the inventory
+ * rose. credit=false records an uncredited bubble/gate catch. Hit losses never lower the cumulative total.
+ * topMul() is the top speed multiplier the inventory buys (1 + count x topPctPer).
  */
 export function createWordCoins(C = DEFAULTS) {
-  let count = 0;
+  let count = 0, total = 0;
   return {
     get count() { return count; },
+    get total() { return total; },
     get cap() { return C.cap; },
-    add() { if (count >= C.cap) return false; count++; return true; },
+    add(credit = true) { total++; if (!credit || count >= C.cap) return false; count++; return true; },
     hit() { const lost = Math.min(count, C.hitDrop); count -= lost; return lost; },
     topMul() { return 1 + clamp(count, 0, C.cap) * C.topPctPer; },
-    reset() { count = 0; },
+    reset() { count = 0; total = 0; },
   };
 }

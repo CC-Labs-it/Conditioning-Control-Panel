@@ -322,10 +322,10 @@ audio/songShape.js bakes the plan per beat from the chart (bars, section moods, 
 - `gentle.scrollMul` 0.5: band and spiral scroll share.
 
 ## wordCoins (playtest fix 2026-10-28: road words as coins; `sim/wordCoins.js`, `render/roadWords.js`, `hud/wordCount.js`, boot.js)
-Up to two distinct keyword identities per phrase are coins on the riskier line; a phrase without one offers one filler word. Drive over a lit word for +1. Solo only
-unless `online` (the room rollout decides). Any edit here changes `onlineCourseHash`.
+Every semantic lyric occurrence is a coin on the riskier line; a phrase without one offers one filler word.
+Drive over a lit word for +1 in solo or online. Any edit here changes `onlineCourseHash` and needs matching room cards.
 - `wordCoins.on` true: coins at all (off = road words are paint only, as before).
-- `wordCoins.online` false: coins also count in online races when enabled (false keeps existing online rules).
+- `wordCoins.online` true: online uses the same capped inventory and top-speed bonus as solo.
 - `wordCoins.cap` 10: the count never goes past this.
 - `wordCoins.topPctPer` 0.009: top speed share each point adds (10 points = +9%).
 - `wordCoins.hitDrop` 3: points a landed hit (item or trap, `sim/hitterHit.js`) takes away.
@@ -339,7 +339,12 @@ unless `online` (the room rollout decides). Any edit here changes `onlineCourseH
 - `wordCoins.touchSlackM` 0.6: extra road along the marking that still counts as on it.
 - `wordCoins.kartHalfM` 0.6: the kart's half width added across the marking.
 - `wordCoins.minChars` 3: a filler coin uses the shortest word with at least this many letters.
-- `wordCoins.popBubbles` true: a popped song word bubble (`sim/words.js`) is +1 too.
+- `wordCoins.popBubbles` true: a popped song word bubble or song gate is +1 too, once per owned phrase.
+
+Online `pops` is cumulative lyric catches across floor words, bubbles and song gates, including catches at the
+inventory cap. Hits lower inventory and its speed bonus immediately, never this cumulative count. The room's
+movement envelope allows the configured maximum bonus; it does not verify private chart contact positions.
+Pickup item bubbles keep `items.bubbleAmount` and are separate from lyric catches. No extra wire fields are used.
 
 ## items (B1 effect bubbles, design board section 03; read by sim/items.js, sim/itemTable.js, fx/effects.js)
 Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = never in that bucket.

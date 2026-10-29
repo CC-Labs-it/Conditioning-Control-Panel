@@ -10,9 +10,9 @@ import { coinFrames } from '../hud/wordCount.js';
 const feelJson = JSON.parse(readFileSync(new URL('../feel.json', import.meta.url), 'utf8'));
 const C = coinTuning(createFeel(feelJson));
 
-test('feel.json carries the wordCoins group: solo only, cap 10, about +9% at the cap, a hit drops 3', () => {
+test('feel.json carries shared online word coins: cap 10, about +9% at the cap, a hit drops 3', () => {
   assert.equal(C.on, true);
-  assert.equal(C.online, false);                       // online keeps today's rules until the room rollout
+  assert.equal(C.online, true);
   assert.equal(C.cap, 10);
   assert.equal(C.hitDrop, 3);
   const atCap = C.cap * C.topPctPer;
@@ -23,7 +23,7 @@ test('feel.json carries the wordCoins group: solo only, cap 10, about +9% at the
 
 test('coinTuning falls back to defaults on an older feel', () => {
   const c = coinTuning(createFeel({ speed: { topMps: 30 } }));
-  assert.equal(c.cap, 10); assert.equal(c.on, true);
+  assert.equal(c.cap, 10); assert.equal(c.on, true); assert.equal(c.online, true);
   assert.equal(coinTuning(null).hitDrop, 3);
 });
 
@@ -118,9 +118,14 @@ test('the count caps, a hit drops a few, top speed follows the count', () => {
   for (let i = 0; i < 14; i++) c.add();
   assert.equal(c.count, C.cap);
   assert.equal(c.add(), false);
+  assert.equal(c.total, 15, 'catches at the inventory cap still count for the race');
   assert.ok(Math.abs(c.topMul() - (1 + C.cap * C.topPctPer)) < 1e-12);
   assert.equal(c.hit(), 3); assert.equal(c.count, 7);
+  assert.equal(c.total, 15, 'a hit cannot undo previously collected words');
+  assert.equal(c.add(false), false, 'an uncredited bubble still records a catch');
+  assert.equal(c.count, 7); assert.equal(c.total, 16);
   c.reset(); c.add(); assert.equal(c.hit(), 1); assert.equal(c.count, 0); assert.equal(c.hit(), 0);
+  assert.equal(c.total, 1, 'only a fresh race resets the cumulative tally');
 });
 
 test('the HUD count obeys motion and Gentle', () => {
