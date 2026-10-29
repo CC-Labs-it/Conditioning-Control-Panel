@@ -335,7 +335,7 @@ public class GlassroadHostTests
     [Fact]
     public void ThePage_SendsTheClaimFields_AndTheHostClaims()
     {
-        var boot = Read("Resources", "web", "glassroad", "boot.js");
+        var boot = File.ReadAllText(Path.Combine(RepoRoot(), "Assets", "web", "glassroad", "boot.js"));   // the web tree lives in Assets/web
         var send = boot.IndexOf("bridge.send({ type: 'race-result'", StringComparison.Ordinal);
         Assert.True(send > 0);
         var frame = boot.Substring(send, 700);

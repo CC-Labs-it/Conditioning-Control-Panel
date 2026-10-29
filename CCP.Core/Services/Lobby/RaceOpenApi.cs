@@ -66,7 +66,7 @@ public sealed class RaceOpenApi
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("RaceOpen: fetch failed: {E}", ex.Message);
+            Serilog.Log.Debug("RaceOpen: fetch failed: {E}", ex.Message);
             return RaceOpenReply.Empty;
         }
     }

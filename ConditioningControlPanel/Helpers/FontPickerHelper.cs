@@ -27,6 +27,12 @@ namespace ConditioningControlPanel.Helpers
         /// <summary>Stored value that means "the Fredoka face bundled with the app".</summary>
         public const string BundledFredoka = "Fredoka (bundled)";
 
+        /// <summary>Core SubliminalLayer.BundledFaceStream: the bundled Fredoka file off its pack:// resource.</summary>
+        public static System.IO.Stream? BundledFaceStream(string name) =>
+            string.Equals(name, BundledFredoka, StringComparison.OrdinalIgnoreCase)
+                ? System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/Fonts/Fredoka.ttf"))?.Stream
+                : null;
+
         /// <summary>
         /// Last-resort list when font enumeration throws (it reads the font directory, which can
         /// fail on a locked-down or mid-install machine). Faces every Windows install has.

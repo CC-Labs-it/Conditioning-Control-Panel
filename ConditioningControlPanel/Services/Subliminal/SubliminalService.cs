@@ -20,6 +20,10 @@ namespace ConditioningControlPanel.Services
     /// </summary>
     public class SubliminalService : IDisposable
     {
+        // The Core card layer (ccp-bugs #1493) loads the bundled Fredoka through the head.
+        static SubliminalService() =>
+            Compositor.SubliminalLayer.BundledFaceStream ??= ConditioningControlPanel.Helpers.FontPickerHelper.BundledFaceStream;
+
         private readonly Random _random = new();
 
         // KEEP-ALIVE windows, one per screen: a subliminal "show" swaps the text content and

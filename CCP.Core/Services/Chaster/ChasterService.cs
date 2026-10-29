@@ -625,7 +625,7 @@ public sealed partial class ChasterService : IDisposable
         }
         if (released > 0)
         {
-            App.Logger?.Information("[Chaster] the push cannot land ({Outcome}); {Seconds}s of set-aside credit is back on the tab", outcome, released);
+            Serilog.Log.Information("[Chaster] the push cannot land ({Outcome}); {Seconds}s of set-aside credit is back on the tab", outcome, released);
             try { LockChanged?.Invoke(); } catch (Exception ex) { Diag.Swallowed(ex, "chaster parked credit repaint"); }
         }
         return outcome;

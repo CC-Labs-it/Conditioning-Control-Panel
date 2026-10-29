@@ -36,10 +36,10 @@ public class SparklesSlipParityTests
     private static string WebDir()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources", "web")))
+        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "Assets", "web")))
             dir = dir.Parent;
         Assert.NotNull(dir);
-        return Path.Combine(dir!.FullName, "ConditioningControlPanel", "Resources", "web");
+        return Path.Combine(dir!.FullName, "Assets", "web");
     }
 
     private static string Read(string path) => File.ReadAllText(path).Replace("\r\n", "\n");

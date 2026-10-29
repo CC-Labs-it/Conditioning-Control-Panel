@@ -622,12 +622,12 @@ internal static class DtrhHostService
 
             // SPARKLES BY PLACE (B1): a descent that reached its own ending claims a medal against
             // this run's XP ceiling. A left descent pays nothing (owner: quitting early pays nothing).
-            if (!abandoned && !_testMode)
+            if (!((bool?)o["abandoned"] ?? false) && !_testMode)
             {
                 var slipHost = _host;
                 _ = Sparkles.SparklesSlip.Deliver(Sparkles.SparklesGameEnd.Claim("dtrh", "solo",
-                    Sparkles.SparklesResult.ForMedal(Sparkles.SparklesGameEnd.RatioMedal(score, capBase)),
-                    TimeSpan.FromSeconds(durationSec), new JObject { ["difficulty"] = diff }),
+                    Sparkles.SparklesResult.ForMedal(Sparkles.SparklesGameEnd.RatioMedal(booking.Score, 250.0 * (booking.DurationSec / 60.0) * booking.DiffMult)),
+                    TimeSpan.FromSeconds(booking.DurationSec), new JObject { ["difficulty"] = diff }),
                     json => slipHost?.Post(new JRaw(json)));
             }
 

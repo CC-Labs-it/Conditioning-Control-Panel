@@ -35,8 +35,12 @@ public sealed class SubliminalLayer : BaseLayer
     private static readonly Dictionary<string, SKTypeface> _faces = new(StringComparer.OrdinalIgnoreCase);
     private static readonly object _facesSync = new();
 
+    /// <summary>Head hook: the font file for a bundled picker name (WPF: "Fredoka (bundled)" off its
+    /// pack:// resource, FontPickerHelper.BundledFaceStream), or null when the name is not bundled.</summary>
+    public static Func<string, System.IO.Stream?>? BundledFaceStream { get; set; }
+
     /// <summary>
-    /// The bold Skia face for a stored font picker value (<see cref="Helpers.FontPickerHelper"/>).
+    /// The bold Skia face for a stored font picker value (the head's font picker).
     /// Empty, unknown or uninstalled names fall back to Arial Bold, the WPF Resolve fallback.
     /// Skia hands back the default family for a name it cannot find, so a face whose family name
     /// does not match the request counts as missing.
@@ -55,12 +59,10 @@ public sealed class SubliminalLayer : BaseLayer
             SKTypeface? face = null;
             try
             {
-                if (string.Equals(name, Helpers.FontPickerHelper.BundledFredoka, StringComparison.OrdinalIgnoreCase))
+                var bundled = BundledFaceStream?.Invoke(name);
+                if (bundled != null)
                 {
-                    var info = System.Windows.Application.GetResourceStream(
-                        new Uri("pack://application:,,,/Fonts/Fredoka.ttf"));
-                    if (info?.Stream != null)
-                        using (var s = info.Stream) face = SKTypeface.FromStream(s);
+                    using (bundled) face = SKTypeface.FromStream(bundled);
                 }
                 else
                 {
@@ -71,7 +73,7 @@ public sealed class SubliminalLayer : BaseLayer
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("SubliminalLayer: font {N} failed, using Arial: {E}", name, ex.Message);
+                Serilog.Log.Debug("SubliminalLayer: font {N} failed, using Arial: {E}", name, ex.Message);
             }
 
             face ??= BoldArial;
