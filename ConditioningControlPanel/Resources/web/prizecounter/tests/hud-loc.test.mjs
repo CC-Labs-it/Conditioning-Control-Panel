@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { LEX, tabKey, itemKey } from '../state/strings.js';
+import { LEX, tabKey, itemKey, itemDesc, makeT } from '../state/strings.js';
 import { TAB_ORDER } from '../state/shop.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url)), page = path.join(here, '..');
@@ -37,6 +37,11 @@ test('every item with art has a name in en.json, and no retired id keeps one', (
   const en = JSON.parse(read('en')), items = JSON.parse(fs.readFileSync(path.join(page, 'assets/manifest.json'), 'utf8')).items;
   assert.deepEqual(items.map((i) => itemKey(i.id)).filter((k) => !(k in en)), []);
   assert.deepEqual(Object.keys(retired).map(itemKey).filter((k) => k in en), []);
+});
+
+test('every item with art has a description', () => {
+  const t = makeT(JSON.parse(read('en'))), items = JSON.parse(fs.readFileSync(path.join(page, 'assets/manifest.json'), 'utf8')).items;
+  assert.deepEqual(items.filter((i) => !itemDesc(t, i.id)).map((i) => i.id), []);
 });
 
 test('all ten language files carry the same shop_* key set, once each, no BOM', () => {
