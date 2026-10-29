@@ -101,6 +101,8 @@ export function buildMeshes(track, dl) {
     return uv0 + shift < p.s + p.len && uv1 + shift > p.s;
   };
   const courtHoles = (track.courts || []).flatMap((c) => c.holes);
+  const pocketHoles = (track.moving?.traps || []).flatMap(row => row.pocket ? [{ ...row.pocket, s: row.pocket.s - row.pocket.len / 2, pistonSide: row.side }] : []);
+  const roadHoles = [...courtHoles, ...pocketHoles];
   const row = (q) => q % Q;              // row index of the start of quad q (wrapped)
   const rowS = (q) => dl.s[row(q)] + Math.floor(q / Q) * L;
   const edgeEndS = (q,side) => {
@@ -111,6 +113,13 @@ export function buildMeshes(track, dl) {
       for (const bound of [route.openS0,route.openS1]) {
         const candidate=bound+Math.round((s-bound)/L)*L, distance=Math.abs(candidate-s);
         if (distance<best) { best=distance;result=candidate; }
+      }
+    }
+    for (const pocket of pocketHoles) {
+      if (pocket.pistonSide !== side) continue;
+      for (const bound of [pocket.s, pocket.s + pocket.len]) {
+        const candidate = bound + Math.round((s - bound) / L) * L, distance = Math.abs(candidate - s);
+        if (distance < best) { best = distance; result = candidate; }
       }
     }
     return result;
@@ -152,7 +161,7 @@ export function buildMeshes(track, dl) {
     for (let k = 0; k < nq; k++) {
       const rawS = rowS(q0 + k), offsetS = Math.floor(rawS / L) * L;
       const s0 = rawS - offsetS, s1 = rowS(q0 + k + 1) - offsetS;
-      const holes = courtHoles.filter((h) => h.s < s1 && h.s + h.len > s0);
+      const holes = roadHoles.filter((h) => h.s < s1 && h.s + h.len > s0);
       const underCurvedPad = curvedPadList.some(p => padOverlaps(p, rawS, rowS(q0 + k + 1)));
       if (holes.length) courtStrip(road, track, s0, s1, holes, offsetS, depthAt);
       else for (let i = 0; i < columns; i++) {
@@ -161,8 +170,21 @@ export function buildMeshes(track, dl) {
         if (underCurvedPad) padRoadFaces.push(...(forward ? [[a, b, d], [a, d, c]] : [[a, d, b], [a, c, d]]));
         road.quad(bot[k][i], bot[k][i + 1], bot[k + 1][i], bot[k + 1][i + 1]);
       }
-      road.quad(el[k][0], el[k][1], el[k + 1][0], el[k + 1][1]);
-      road.quad(er[k][0], er[k][1], er[k + 1][0], er[k + 1][1]);
+      for (const [side, edge] of [[-1, el], [1, er]]) {
+        const mouths = holes.filter(h => h.pistonSide === side);
+        if (!mouths.length) { road.quad(edge[k][0], edge[k][1], edge[k + 1][0], edge[k + 1][1]); continue; }
+        const ends = [s0, s1, ...mouths.flatMap(h => [h.s, h.s + h.len]).filter(s => s > s0 && s < s1)].sort((a,b)=>a-b);
+        for (let j = 1; j < ends.length; j++) {
+          const a = ends[j-1], b = ends[j], mid = (a+b)/2;
+          if (mouths.some(h => mid >= h.s && mid <= h.s+h.len)) continue;
+          const ids = [a,b].map(s => {
+            const f = track.frameAt(s), normal = f.b.map(v=>v*side), x = side*f.w/2;
+            const water = [surfaceId(f.surface), ...track.flowAt(f.seg,f.segT,[0,0])];
+            return [0,-depthAt(s)].map(d=>road.v(off(f.p,f.b,x,f.n,d),normal,-d,s+offsetS,...water));
+          });
+          road.quad(ids[0][0],ids[0][1],ids[1][0],ids[1][1]);
+        }
+      }
     }
     if (!closed) {
       for (const [k, sign] of [[0, -1], [nq, 1]]) {
@@ -175,12 +197,14 @@ export function buildMeshes(track, dl) {
       }
     }
   }
-  courtWalls(road, track, depthAt);
+  courtWalls(road, track, depthAt, roadHoles);
 
   // rails
   const rails = builder();
   const railed = (q, side) => {
     if (dl.gap[q]) return false;
+    const middle = (dl.s[q] + dl.s[q + 1]) / 2;
+    if (pocketHoles.some(p => p.pistonSide === side && middle >= p.s && middle <= p.s + p.len)) return false;
     if (track.mainRailOpen?.((dl.s[q] + dl.s[q + 1]) / 2, side)) return false;
     const fl = track.nodeFlags(dl.seg[q]);
     if (fl.includes('rail') || fl.includes(side > 0 ? 'railR' : 'railL')) return true;
@@ -291,7 +315,7 @@ function courtStrip(m, track, s0, s1, holes, offsetS, depthAt) {
     if (b - a < 1e-8) continue;
     const f0 = track.frameAt(a), f1 = track.frameAt(b), fm = track.frameAt((a + b) / 2), half = fm.w / 2;
     const w0 = [surfaceId(f0.surface), ...track.flowAt(f0.seg, f0.segT, [0, 0])], w1 = [surfaceId(f1.surface), ...track.flowAt(f1.seg, f1.segT, [0, 0])];
-    for (const [lo, hi] of supportIntervals(track.courts, (a + b) / 2, half)) {
+    for (const [lo, hi] of supportIntervals([{ holes }], (a + b) / 2, half)) {
       const left0 = Math.abs(lo + half) < 1e-6 ? -f0.w / 2 : lo, left1 = Math.abs(lo + half) < 1e-6 ? -f1.w / 2 : lo;
       const right0 = Math.abs(hi - half) < 1e-6 ? f0.w / 2 : hi, right1 = Math.abs(hi - half) < 1e-6 ? f1.w / 2 : hi;
       const cols = Math.max(1, Math.ceil((hi - lo) / 4));
@@ -310,9 +334,10 @@ function courtStrip(m, track, s0, s1, holes, offsetS, depthAt) {
 }
 
 /** The exposed glass thickness inside each opening; no bottom cap spans a hole. */
-function courtWalls(m, track, depthAt) {
-  for (const c of track.courts || []) for (const h of c.holes) {
+function courtWalls(m, track, depthAt, holes) {
+  for (const h of holes) {
     for (const side of [-1, 1]) {
+      if (h.pistonSide === side) continue;
       let prev = null;
       const n = Math.max(1, Math.ceil(h.len / STRIP_STEP_M)), x = h.x + side * h.w / 2;
       for (let k = 0; k <= n; k++) {

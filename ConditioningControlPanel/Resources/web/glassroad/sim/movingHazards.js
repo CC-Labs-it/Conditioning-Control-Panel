@@ -9,7 +9,7 @@ const local = (st, row) => {
 export function movingOverlap(row, pose, p) {
   const scale = row.hitboxScale ?? 1, radius = scale < 1 ? .4 : .7;
   return pose.active && Math.abs(p.x - pose.x) <= row.w * scale / 2 + radius
-    && Math.abs(p.z) <= row.len * scale / 2 + radius && p.h > -1 && p.h < 3.2;
+    && Math.abs(p.z) <= row.len * scale / 2 + radius && p.h > -1 && p.h < (row.pocket?.topM ?? 3.2) - .03;
 }
 
 export function createMovingHazards(track) {
@@ -51,7 +51,13 @@ export function createMovingHazards(track) {
   }
   function steer(r, actions) {
     if (r.finished || r.kind === 'remote' || r.st[S.respawnPhase] !== RESPAWN.NONE || track.forkAtSeg?.(r.st[S.seg]) || r.st[S.airborne]) return false;
-    const row = rows.find(row => { const d = (row.s - r.st[S.s] + track.lengthM) % track.lengthM; return d < 65; });
+    // Stay in the bypass until the complete recess is behind us, not merely its centre.
+    let row = null, nearest = Infinity;
+    for (const candidate of rows) {
+      const d = ((candidate.s - r.st[S.s] + track.lengthM * 1.5) % track.lengthM) - track.lengthM / 2;
+      if (d < -(candidate.pocket?.len ?? candidate.len) / 2 - 10 || d >= 65) continue;
+      if (d < nearest) { nearest = d; row = candidate; }
+    }
     // Plan slate openings before an upstream boost can lock in the approach speed.
     const hole = holes.find(h => { const d = h.s - r.st[S.s]; return d >= -h.len - 20 && d < 160; });
     if (!row && !hole) return false;
@@ -60,10 +66,14 @@ export function createMovingHazards(track) {
     const sideV = dot([st[S.velX], st[S.velY], st[S.velZ]], here.b);
     const halfWidth = Math.min(row?.roadWidth || here.w, here.w, f.w) / 2;
     const margin = Math.max(0, halfWidth - 3.5);
-    const clearLane = hole ? Math.abs(hole.x) < .1
+    let clearLane = hole ? Math.abs(hole.x) < .1
       ? (Math.sign(st[S.lateral]) || (r.i % 2 ? 1 : -1)) * (hole.w / 2 + 4)
       : -Math.sign(hole.x) * Math.min(7, margin)
       : -row.side * margin;
+    // A downstream missing slab must not steer us through the nearer piston recess.
+    if (row?.pocket) clearLane = row.side > 0
+      ? Math.min(clearLane, row.pocket.minX - 2)
+      : Math.max(clearLane, row.pocket.maxX + 2);
     const target = Math.max(-margin, Math.min(margin, clearLane)) - Math.max(-1, Math.min(1, sideV * .45));
     const d = f.p.map((v, j) => v + f.b[j] * target - st[S.posX + j]);
     const x = st[S.quatX], y = st[S.quatY], z = st[S.quatZ], w = st[S.quatW];
