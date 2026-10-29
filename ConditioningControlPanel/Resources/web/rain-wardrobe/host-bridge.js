@@ -15,8 +15,8 @@ const params = new URLSearchParams(location.search);
 export const hosted = params.get('host') === 'ccp';
 
 /** Where avatar.glb and pelvis-data.js live: never in the repo. In the app the host maps
- *  https://rain.assets/ to a local folder (CCP_RAIN_ASSETS_DIR or <user data>/rain-assets). */
-export const BIG_ASSETS = hosted ? 'https://rain.assets/' : '/rain-assets/';
+ *  https://ccp.rain-assets/ to a local folder (CCP_RAIN_ASSETS_DIR or <user data>/rain-assets). */
+export const BIG_ASSETS = hosted ? 'https://ccp.rain-assets/' : '/rain-assets/';
 
 export const reviewAllowed = !hosted && params.get('review') === '1';
 export const qaAllowed = !hosted && params.get('qa') === '1';
