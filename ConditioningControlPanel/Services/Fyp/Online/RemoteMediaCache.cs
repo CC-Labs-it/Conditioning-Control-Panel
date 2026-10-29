@@ -269,15 +269,11 @@ internal static class RemoteMediaCache
         return deleted;
     }
 
-    /// <summary>The day limit on one temp copy, pure: due once its creation time (its download
-    /// time) is <paramref name="age"/> old, always for age zero (the off switch), and also when the
-    /// creation time is more than an hour AHEAD of now (the clock went back, or was wrong when the
-    /// copy was made): the same guard as <see cref="ScrolllerCacheBook.IsExpiredAt"/>. Without it a
-    /// copy stamped "next week" stayed on disk until the clock caught up.</summary>
+    /// <summary>The day limit on one temp copy (Core <see cref="ScrolllerDiskCache.TempCopyDue"/>, shared with
+    /// the Avalonia head): due at <paramref name="age"/>, always for age zero, and when the creation time is
+    /// more than an hour AHEAD of now (the clock went back).</summary>
     internal static bool TempCopyDue(DateTime createdUtc, DateTime nowUtc, TimeSpan age)
-        => age <= TimeSpan.Zero
-           || createdUtc - nowUtc > TimeSpan.FromHours(1)
-           || nowUtc - createdUtc >= age;
+        => ScrolllerDiskCache.TempCopyDue(createdUtc, nowUtc, age);
 
     /// <summary>When the in-memory copy of <paramref name="url"/> was downloaded, or null.</summary>
     private static DateTime? DownloadedUtcOfMemory(string url)

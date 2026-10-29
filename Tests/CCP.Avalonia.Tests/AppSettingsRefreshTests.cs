@@ -29,6 +29,7 @@ public sealed class AppSettingsRefreshTests
             var root = Directory.CreateTempSubdirectory("ccp-settings-refresh-").FullName;
             var oldCameras = V4l2Cameras.Root;
             var oldStartup = XdgAutostart.DirectoryOverride;
+            var oldWinStartup = WindowsStartupShortcut.DirectoryOverride;
             var oldAvailable = CoreWebcam.IsAvailableProvider;
             var oldMics = CoreSpeech.EnumerateInputDevicesProvider;
             var mics = new[] { new SpeechInputDevice(-1, "System default") };
@@ -40,6 +41,7 @@ public sealed class AppSettingsRefreshTests
             {
                 V4l2Cameras.Root = root;
                 XdgAutostart.DirectoryOverride = Path.Combine(root, "autostart");
+                WindowsStartupShortcut.DirectoryOverride = Path.Combine(root, "startup");   // Windows reads a Startup .lnk (port/7.2)
                 CoreWebcam.IsAvailableProvider = () => true;
                 CoreSpeech.EnumerateInputDevicesProvider = () => mics;
                 s.RunOnStartup = false;
@@ -65,7 +67,7 @@ public sealed class AppSettingsRefreshTests
                 s.PerformanceMode = true;
                 s.SuppressPerkNotifications = true;
                 mics = new[] { new SpeechInputDevice(-1, "System default"), new SpeechInputDevice(7, "New microphone") };
-                Assert.True(XdgAutostart.SetStartupState(true));
+                Assert.True(SessionAutostart.SetStartupState(true));   // the platform's own registration
                 var camera = Directory.CreateDirectory(Path.Combine(root, "video4")).FullName;
                 File.WriteAllText(Path.Combine(camera, "name"), "New camera\n");
                 File.WriteAllText(Path.Combine(camera, "index"), "0\n");
@@ -91,6 +93,7 @@ public sealed class AppSettingsRefreshTests
                 shell?.Close();
                 V4l2Cameras.Root = oldCameras;
                 XdgAutostart.DirectoryOverride = oldStartup;
+                WindowsStartupShortcut.DirectoryOverride = oldWinStartup;
                 CoreWebcam.IsAvailableProvider = oldAvailable;
                 CoreSpeech.EnumerateInputDevicesProvider = oldMics;
                 (s.RunOnStartup, s.StartupVideoPath, s.PerformanceMode, s.SuppressPerkNotifications) =

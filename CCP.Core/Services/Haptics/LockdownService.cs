@@ -281,7 +281,7 @@ public class LockdownService : IDisposable
                 state = null;
             }
             // An empty or broken file (a kill mid-write) still means a lockdown was interrupted, and
-            // the settings on disk may carry its panic-off. Fail open rather than leave them stuck.
+            // the settings on disk may carry its panic-off. Fail OPEN (WPF 605c451ae): panic on, strict off.
             if (state == null)
             {
                 var (strict, panic) = LockdownExitRule.UnreadableRecovery;

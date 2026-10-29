@@ -26,9 +26,9 @@ namespace ConditioningControlPanel.Services.Speech
         public Func<IReadOnlyList<string>, RecognizeOptions, Task<PhraseResult>> Recognize = (_, _) => Task.FromResult(PhraseResult.NotAvailable);
         /// <summary>Intent name -> the head's action; null = this head cannot run it (left out of the grammar).</summary>
         public Func<string, Action?> ActionFor = _ => null;
-        /// <summary>In place of <see cref="ActionFor"/> for a command that applies its own safety rule:
-        /// false = it did nothing on purpose (panic where the panic key cannot run), so no confirmation
-        /// is spoken. Null = run <see cref="ActionFor"/> (which still decides whether the intent is offered).</summary>
+        /// <summary>In place of <see cref="ActionFor"/> for an intent that applies its own safety rule
+        /// (WPF 769373c28, the voice panic): false = it did nothing on purpose (the panic key could not
+        /// run either), so no confirmation is spoken. Null = use <see cref="ActionFor"/>.</summary>
         public Func<string, Func<bool>?> RunFor = _ => null;
         public Func<VoiceGuard, bool> IsBlocked = _ => false;
         /// <summary>A refused command: the lockdown escape tripwire (EscapeKinds.Stop).</summary>
@@ -182,7 +182,8 @@ namespace ConditioningControlPanel.Services.Speech
         {
             // ── Safety ────────────────────────────────────────────────────────────
             // Routes to the exact panic-key teardown. A false positive just stops things. Where the
-            // panic key cannot run it says nothing and stops nothing (bar a leash task).
+            // panic key cannot run (Lockdown, panic off) it says nothing and stops nothing bar a leash
+            // task (hard rule 6, VoicePanicReach): each head hands it in through RunFor.
             new VoiceCommandIntent
             {
                 Name = "panic",
@@ -856,7 +857,7 @@ namespace ConditioningControlPanel.Services.Speech
         /// <summary>The intents this head can run: it has an action for them, or they need none
         /// (help, "again"). A head without spoken mantras returns no action for "mantra".</summary>
         public IEnumerable<VoiceCommandIntent> Available
-            => Intents.Where(i => i.IsReplay || i.Name == "help" || Host.ActionFor(i.Name) != null);
+            => Intents.Where(i => i.IsReplay || i.Name == "help" || Host.ActionFor(i.Name) != null || Host.RunFor(i.Name) != null);
 
         /// <summary>The closed command grammar (every alias this head can act on).</summary>
         public List<string> Grammar() => Available.SelectMany(i => i.Aliases).Distinct().ToList();
@@ -1185,9 +1186,8 @@ namespace ConditioningControlPanel.Services.Speech
                 return;
             }
 
-            // A command that applies its own safety rule (the panic, VoiceCommandHost.RunFor) reports
-            // whether it ran; false = it did nothing on purpose, so no confirmation is spoken.
-            if (Host.RunFor(intent.Name) is { } run)
+            var run = Host.RunFor(intent.Name);
+            if (run != null)
             {
                 bool ran = true;
                 try { ran = run(); }

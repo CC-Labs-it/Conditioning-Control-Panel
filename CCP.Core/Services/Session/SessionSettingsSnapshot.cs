@@ -25,6 +25,10 @@ namespace ConditioningControlPanel.Services
 
         public void RestoreTo(AppSettings current) => Copy(_saved, current);
 
+        /// <summary>The captured values, read by the crash journal (SessionSettingsJournal.Build). Never
+        /// write to it.</summary>
+        internal AppSettings Saved => _saved;
+
         private static void Copy(AppSettings from, AppSettings to)
         {
             to.FlashEnabled = from.FlashEnabled;

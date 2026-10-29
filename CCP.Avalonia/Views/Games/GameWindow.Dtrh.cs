@@ -61,17 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             lock (Open) return Open.FirstOrDefault(w => w.IsDtrh && w.IsActive);
         }
 
-        /// <summary>WPF PostKeptEscape (:119): hand the page the Escape the panel kept as its pause
-        /// (engine/scene.js plays it once unless the real key reached it too) and give it the keyboard back.</summary>
-        internal void PostKeptEscape()
-        {
-            try
-            {
-                Post(new { type = "kept-escape" });   // WPF CaucusHostService.KeptEscapeType
-                Web.Focus();
-            }
-            catch (Exception ex) { Log.Debug("DtrhHost: kept Escape post failed: {E}", ex.Message); }
-        }
+        // WPF PostKeptEscape (:119): GameWindow.Escape.cs, shared with the race, the board and Breakout.
 
         /// <summary>WPF OnPageMessage (:321). True = claimed; false falls through to the shell frames.</summary>
         private bool HandleDtrh(JObject o)

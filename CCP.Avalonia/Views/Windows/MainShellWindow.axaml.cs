@@ -168,6 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Opened += (_, _) => PollCatalogueStatuses(force: true);
             // WPF MainWindow.xaml.cs:3837 (end of MainWindow_Loaded): MainShellWindow.PendingRegistration.cs.
             Opened += (_, _) => ArmPendingRegistration();
+            Opened += (_, _) => WireOnlineMeterPill();   // MainShellWindow.OnlineMeter.cs (WPF WireOnlineMeter)
         }
 
         /// <summary>Uses an already-loaded catalogue without making the parameterless shell open

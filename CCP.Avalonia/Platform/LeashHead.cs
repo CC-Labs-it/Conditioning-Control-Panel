@@ -193,7 +193,8 @@ internal static class LeashHead
             catch (Exception ex) { Serilog.Log.Warning("[Leash] Panic-key UI sync failed: {Error}", ex.Message); }
         }
 
-        /// <summary>OWED, as on WPF (LeashCutSafetyApp AppTargets): the tab keeps one pooled balance.</summary>
-        public bool DropUnpushedLeashBookings() => false;
+        /// <summary>WPF LeashCutSafetyApp: only the holder's leash time not on the lock yet goes
+        /// (CircesTab.DropUnpushedLeash, owner 2026-10-22). False when there is no tab or nothing was dropped.</summary>
+        public bool DropUnpushedLeashBookings() => (ChasterHead.Service?.DropUnpushedLeash() ?? 0) > 0;
     }
 }

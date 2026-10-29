@@ -85,7 +85,7 @@ public class ChasterHooksTests
     [Fact]
     public void One_failed_video_attention_check_books_the_attention_row_once()
     {
-        // Bug hunt 2026-10-22: the video's end calls TrackAttentionCheckFailed AND
+        // Bug hunt 2026-10-22 (main 7e14c2870): the video's end calls TrackAttentionCheckFailed AND
         // TrackVideoAttentionCheckFailed for one failed check, and both booked "attention", so one
         // failure put +10:00 on the lock (+12:30 with heat on) instead of +5:00.
         var app = Path.Combine(RepoRoot(), "ConditioningControlPanel");
@@ -96,18 +96,27 @@ public class ChasterHooksTests
         var achievements = File.ReadAllText(Path.Combine(app, "Services", "Progression", "AchievementService.cs"));
         Assert.Contains("App.Chaster?.Note(\"attention\")", Body(achievements, "public void TrackAttentionCheckFailed()"));
         Assert.DoesNotContain("App.Chaster", Body(achievements, "public void TrackVideoAttentionCheckFailed()"));
+
+        // The Avalonia head books it in its attention provider: once.
+        var ava = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "App.axaml.cs"));
+        var at = ava.IndexOf("CoreProgression.TrackAttentionCheckProvider", StringComparison.Ordinal);
+        Assert.True(at > 0, "attention provider not found");
+        var provider = ava.Substring(at, ava.IndexOf("};", at, StringComparison.Ordinal) - at);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(provider, "ChasterNote\\(\"attention\"\\)"));
     }
 
     [Theory]
-    [InlineData("MainWindow.RemoteControl.cs", "internal bool TriggerPanicFromRemote()")]
-    [InlineData("MainWindow.xaml.cs", "private void HandlePanicKeyPress()")]
-    [InlineData("MainWindow.xaml.cs", "private void RunEmergencyPanicTeardown()")]
+    [InlineData("MainWindow/MainWindow.RemoteControl.cs", "internal bool TriggerPanicFromRemote()")]
+    [InlineData("MainWindow/MainWindow.xaml.cs", "private void HandlePanicKeyPress()")]
+    [InlineData("MainWindow/MainWindow.xaml.cs", "private void RunEmergencyPanicTeardown()")]
+    [InlineData("Services/RemoteControlService.cs", "private void StopAllRemoteEffects(RemoteEndCause cause)")]
     public void Every_panic_path_opens_the_chaster_safety_hold(string file, string signature)
     {
-        // Bug hunt 2026-10-22: the voice panic ("red", "safe word", "make it stop") runs
-        // TriggerPanicFromRemote, which never opened the hold, so prices kept booking for the ten
-        // minutes the panic key would have held them. The off-thread fallback skipped it too.
-        var source = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "MainWindow", file));
+        // Bug hunt 2026-10-22 (main 7e14c2870): the voice panic ("red", "safe word", "make it stop")
+        // runs TriggerPanicFromRemote, which never opened the hold, so prices kept booking for the ten
+        // minutes the panic key would have held them. The off-thread fallback skipped it too. Port 7.2
+        // fix wave: a controller's trigger_panic (StopAllRemoteEffects with force) opens it as well.
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", file));
         Assert.Contains("App.Chaster?.NoteSafetyExit()", Body(source, signature));
     }
 

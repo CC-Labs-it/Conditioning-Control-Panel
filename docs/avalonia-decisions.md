@@ -69,6 +69,10 @@ here record where and why the port chose something, and who advised.
 | 2026-09-30 | MemorySignalWriter head sources | Core writer reads App.* via one seam per service; new Core events per feature; one SourcesHook the head seeds | `SourcesHook`/`DeferredSourcesHook` (WPF seeds its original bodies verbatim); settings mirror in Core over CoreSettings; Avalonia raises `App.FeatureUsed` from its flash/subliminal/bubble surfaces and Core `MandatoryVideoScheduler.VideoStarted` (mirrors WPF VideoService.VideoStarted) | worker |
 | 2026-10-01 | getbacktome follow-ups and the AI effect gate | keep WPF behaviour as frozen reference; fix on Avalonia only; fix in Core for both heads | Option A, fix in Core for both heads: getbacktome follow-ups ran nested effects without the AI-effects switch, Lab access, per-effect toggles or the 3-command cap, and panic couldn't cancel them, contradicting the shipped help text and the user's explicit consent choices. Frozen-reference status doesn't protect a consent/panic bypass, so the fix lives in Core for both heads: re-gated at fire time, refusals logged, 3-per-follow-up cap, panic or switch-off cancels everything pending. | oracle-deep |
 | 2026-10-12 | Do WPF `SessionEngine` and the Core session runner keep separate copies of the pure session rules? (supersedes the 2026-09-28 "port, duplication acceptable" row for those rules) | keep both copies; route WPF to Core | Route (session-core-a): `SessionEngine` calls `SessionClock.Elapsed`, `SessionXp.Compute`/`PausePenalty`, `SessionTimeline.PhaseIndexAt`, `DeferredStartQueue` (new optional `started` callback carries WPF's EMI "sessionFeatureArrived"), `PhrasePoolCustody.FoldUserPoolEdit` and `SessionRunner.RandomizedStart`; `ProgressionService.GetSessionXPMultiplier` returns `SessionXp.Multiplier`. The engine itself stays on WPF (MainWindow, DispatcherTimer, Win32). Not routed: save/restore of settings (Core `SessionSettingsSnapshot` restores SubliminalDuration, WPF leaks it - 2026-09-29 row) and pool reapply/restore (D1 differences). Proof: `SessionRulesTests.WpfSessionEngine_RoutesToTheCoreRules_InsteadOfCopyingThem` fails on the base engine. | session-core-a brief |
+| 2026-10-23 | Windows installer for 7.2 (port72/pack) | keep packaging WPF; package the Avalonia head | Package the Avalonia head: `build-installer.bat` runs `dotnet publish CCP.Avalonia/CCP.Avalonia.csproj -c Release -p:PublishProfile=win-x64` on the .NET 10 SDK, the signer signs `CCP.Avalonia.exe` before staging (unsigned = refused), `installer.iss` installs it with `DestName: ConditioningControlPanel.exe` and excludes the original name. AppId, folder, mutex, Setup asset name, shortcuts, taskkill and the updater relaunch are unchanged (the five-point contract above). Upgrade drops WPF's loose `WebView2Loader.dll`. | lane E brief |
+| 2026-10-23 | Installer "Open with CCP" (`--play` / `--edit`) | port the flags; drop the task | Drop: the head has no `--play` / `--edit` entry point (arg parse, second-instance handoff file, EnhancementPlayerWindow / DeeperEditorWindow open). Every install now removes the CCPanel.Player.1 / Editor.1 ProgIDs and OpenWithProgids values an earlier install wrote. Re-add the task with the flags. | lane E brief |
+| 2026-10-23 | Run on startup on Windows | XDG entry on every OS (port); Startup-folder .lnk | Startup-folder `ConditioningControlPanel.lnk` with `--startup` on Windows (WPF StartupManager, `Platform/SessionAutostart.cs`), XDG autostart elsewhere. Same file name as WPF, so a WPF entry is adopted and removed. A CCP_USERDATA_DIR sandbox writes `<sandbox>/shortcuts/Startup` instead. | lane E brief, Win11 run |
+| 2026-10-23 | WebView2 user-data folder | default `<exe>.WebView2` beside the exe; WPF's `browser_data`; own folder under UserData | `CorePaths.UserData/browser_data_avalonia` via `WindowsWebView2EnvironmentRequestedEventArgs.UserDataFolder` in WebHost's EnvironmentRequested (`Platform/WebViewProfile.cs`); every WebHost uses it with default arguments. Never WPF's shared `browser_data` (other browser arguments). Linux keeps the engine default. | lane E brief, Win11 run |
 
 ## 2026-09-29: flashing line after moving the window on KDE
 - Question: the user saw a thin purple line flash where the window's top edge had been after moving it. Can the app fix it?
@@ -172,7 +176,7 @@ Remote Control – escape integrity. A remote controller may never remove the su
 - Advisor: supervisor.
 
 ## 2026-09-30: Panic ↔ mic (avalonia-port/voice-commands)
-Panic ↔ mic: panic aborts in-flight speech capture/command chain (SpeechEngine cancel) but leaves the wake-word loop and PTT armed; mic teardown stays with She's Listening, the privacy pill and shutdown. Rationale: under Lockdown the spoken 'panic' is the only repeatable in-app exit; disarming the mic would violate escape integrity. Voice 'panic' stays unguarded by Lockdown/StrictLock (WPF parity, VoiceCommands.cs:108-109); only the global panic hotkey is suppressed under Lockdown.
+Panic ↔ mic: panic aborts in-flight speech capture/command chain (SpeechEngine cancel) but leaves the wake-word loop and PTT armed; mic teardown stays with She's Listening, the privacy pill and shutdown. Rationale: under Lockdown the spoken 'panic' is the only repeatable in-app exit; disarming the mic would violate escape integrity. Voice 'panic' stays unguarded by Lockdown/StrictLock (WPF parity, VoiceCommands.cs:108-109); only the global panic hotkey is suppressed under Lockdown. SUPERSEDED 2026-10-23 (hard rule 6, owner 2026-10-22): the voice panic reaches exactly as far as the panic key; see "Voice panic obeys the panic key" below.
 - Test: `Tests/CCP.Avalonia.Tests/VoiceCommandsTests.cs` (PanicAbortsTheCaptureButTheLoopStaysArmed, TheSpokenSafeWordWorksUnderLockdown; fail-proven).
 - Advisor: oracle-deep.
 
@@ -611,7 +615,7 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   (`CCP.Avalonia/Views/Windows/PanicSurfaces.cs`). As a result the safe word now also stops a Chaos run and the
   camera, and the tray now also stops the lock-card scheduler and the Blink Trainer.
 - Deliberate deviation from WPF (whose routes each stop a hand-written subset): the safe word is the only exit under
-  Lockdown, so it must end everything the panic key would. Reviewer-checked (safety review, 2026-10-08).
+  Lockdown, so it must end everything the panic key would. (The "only exit under Lockdown" half is SUPERSEDED 2026-10-23: under Lockdown the safe word does nothing, as the key does.) Reviewer-checked (safety review, 2026-10-08).
 - Tests: `Tests/CCP.Avalonia.Tests/PanicSurfacesTests.cs` (routes call StopAll once, exact surface order, safe word
   stops chaos and the camera, starter scan); each fail-proven.
 ## 2026-10-08: Phrase import confirm matches WPF's two buttons (avalonia-port/rows-settings-data)
@@ -1418,3 +1422,42 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - This lane adds the Avalonia flag, the JSON shape and the report-only Linux job (`perf-bench-linux`); the WPF flag, the
   Windows job and the comparison script come with `perf-bench-wpf-compare`. The gate starts report-only and becomes required
   after 3 consecutive stable runs. Table: `docs/avalonia-perf.md`.
+## 2026-10-23: Scrolller web gate = a loopback relay, the same on Windows and Linux (port72/scrolller-2)
+- Question: WPF 7.1.14 gates every Scrolller request a page makes inside WebView2 (ScrolllerWebGate: honest
+  user-agent, answers from the device cache, refuses uncached media when the share is spent or the switch is off,
+  charges real bytes, clears Chromium's disk cache under the 24 h rule). The licence makes that an obligation on
+  every OS. Avalonia.Controls.WebView 12.1 cannot answer a request on WebKitGTK (no `webkit_uri_scheme_request_finish`,
+  see "web-assets-host" above), and its per-request headers are not reliable there either.
+- Options: (a) WebResourceRequested gate on Windows only, nothing on Linux; (b) set the whole web view's user-agent
+  and let pages fetch the CDN; (c) the host never hands a page a Scrolller url: it rewrites them to a loopback relay
+  path the app answers itself.
+- Choice: (c), identical on both OSes. `GameWindow.Post`, `IntakeHostWindow.Post` and `WebHost.PostJsonAsync` pass
+  every frame through Core `ScrolllerRelay.RewriteJson`: each Scrolller MEDIA url (a `*.scrolller.com` CDN host, not
+  api/www, with a media extension) becomes `/scrolller-media/<sub>/<path>`, the Discord Activity's shape, so every
+  page's "via Scrolller" mark (`isScrolllerUrl` knows that path) still shows. `WebAssetServer` answers that path
+  (same token cookie, loopback, GET/HEAD) through `ScrolllerRelay.Decide`: switch off = 403; a cached copy is served
+  from `ScrolllerDiskCache` with Range; else, only when `ScrolllerPolicyService.MayFetchFresh`, the device cache
+  downloads it whole (honest user-agent, charged by the bytes that arrive, born at download for the 24 h sweep) and
+  it is served; else 403 and the page falls back. Every relayed answer is `no-store` (no engine copy, licence 3.4).
+  The relay maps back only onto Scrolller media: it is never an open proxy. A top-level navigation to a Scrolller
+  host is refused in every web host while the switch is off.
+- Trade-off vs WPF: a clip is fetched whole before it plays (WPF passes clips through to the network and charges
+  them by DevTools byte counts). The download is single-flight per url and charged as bytes arrive; the clip is then
+  cached and plays from disk, so a replay is free. A clip the user skips before it lands is still paid in full.
+- Not covered: a page that fetches Scrolller ITSELF from script. None of the pages this head hosts does (fyp, intake,
+  dtrh incl. race, piecebypiece, breakout demo, first-show; race/feedGroup.js is web-only and inert here, the host
+  sends no remoteCatalog); `ScrolllerRelayServerTests.No_page_this_head_hosts_fetches_scrolller_itself` fails if one starts. Goon and Arcademy (which do) have
+  no host on this head yet: their hosts must keep this rule. The in-app browser loading scrolller.com while the
+  switch is on is the user's own browsing (no app fetch); owner call if that must change.
+- Advisor: lane D (fix wave 2026-10-23); owner rule "Scrolller on par with WPF 7.1.14 on Windows and Linux".
+## 2026-10-23: Voice panic obeys the panic key; Escape pauses every hosted game (port72/panic)
+- Hard rule 6 (owner 2026-10-22, WPF 769373c28): the spoken safe word reaches exactly as far as the panic key (Core
+  `VoicePanicReach`, shared with `BlinkStopGate`). Under Lockdown or with panic off it does nothing and says nothing, except
+  the leash part while leashed (WPF `LeashPanicKeyWhilePanicOff`); the panic key gets the same leash part on this head
+  (`MainShellWindow.PanicKeyLeashOnly` -> `LeashTaskHost.OnPanicPress(panicRuns: false)`). Strict Lock alone leaves both whole.
+  Core `VoiceCommandHost.RunFor`: an intent with its own safety rule returns false to keep its confirmation unsaid.
+- Escape pause (owner 2026-10-12, WPF 251b60807): the race, the board, the Breakout demo, DtRH and the Graded Intake keep a
+  first Escape as their pause (`GameWindow.Escape.cs`, `IntakeHostWindow.KeptEscapeReady`) only once their page is up; a
+  booting page's Escape is a full panic. Not hosted here yet: the full Breakout, the Arcademy, the Back Room room, Goon.
+- A preset or recalled config loaded mid-Lockdown never changes the panic key (Core `LockdownPanicHold`); the Lockdown
+  padlock never covers a running lockdown, and an unreadable recovery file fails open (Core `LockdownExitRule`).

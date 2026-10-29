@@ -14,6 +14,10 @@ namespace ConditioningControlPanel
         /// </summary>
         private static void SeedAiEffectSurfaces()
         {
+            // Main 61eeb4d0d: no AI effect inside the post-panic quiet, and a follow-up a panic overtook
+            // while it waited never fires.
+            AiCommandService.PanicQuietProvider = () => Services.Safety.PanicAftermath.TriggersSilenced();
+            AiCommandService.PanicCountProvider = () => Services.Safety.PanicAftermath.PanicCount;
             AiCommandService.LiveActionSink = line =>
             {
                 var dispatcher = Current?.Dispatcher;
@@ -45,8 +49,8 @@ namespace ConditioningControlPanel
             };
             MantraLockScreenCommand.Surface = (phrase, repeats) =>
             {
-                // Strict follows the user's own Lock Card switch, which asks twice before it
-                // turns on (no Esc). An AI card used to force strict on every player (61eeb4d0d).
+                // Strict follows the user's own Lock Card switch, which asks twice before it turns on
+                // (no Esc). An AI card used to force strict on every player (owner 2026-10-22).
                 Current.Dispatcher.Invoke(() => LockCard?.ShowLockCard(phrase, repeats, customStrict: false));
                 return true;
             };
@@ -55,8 +59,9 @@ namespace ConditioningControlPanel
                 Current.Dispatcher.Invoke(() => { if (on) BouncingText?.Start(true, words); else BouncingText?.Stop(); });
                 return true;
             };
-            SpiralCommand.Surface = (on, intensity) => ApplyOverlay(s => { s.SpiralOpacity = intensity; s.SpiralEnabled = on; });
-            PinkCommand.Surface = (on, intensity) => ApplyOverlay(s => { s.PinkFilterOpacity = intensity; s.PinkFilterEnabled = on; });
+            // Null opacity for "off" (and an "on" with no intensity): the saved opacity is the user's.
+            SpiralCommand.Surface = (on, opacity) => ApplyOverlay(settings => { if (opacity is int o) settings.SpiralOpacity = o; settings.SpiralEnabled = on; });
+            PinkCommand.Surface = (on, opacity) => ApplyOverlay(settings => { if (opacity is int o) settings.PinkFilterOpacity = o; settings.PinkFilterEnabled = on; });
 
             MediaCommand.VideoSurface = path => Current.Dispatcher.Invoke(() =>
             {

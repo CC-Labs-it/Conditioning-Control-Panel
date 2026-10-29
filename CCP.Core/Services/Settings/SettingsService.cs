@@ -901,7 +901,8 @@ namespace ConditioningControlPanel.Services
             }
             // A save that passed its seal check before the flag was set may still be writing. Wait
             // it out here: it re-checks the seal inside this lock, so once this returns no write is
-            // in flight and none can start, and the reset's move and sweep are the last word.
+            // in flight and none can start, and the reset's move and sweep are the last word
+            // (main baf86f0ac).
             lock (_saveLock) { }
             Log.Warning("Settings sealed for factory reset — every further save is a no-op");
         }

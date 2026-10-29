@@ -245,7 +245,8 @@
                   </Border>
                   <TextBlock Grid.Row="1" Text="{loc:Str launcher_game_breakoutdemo_title}" Theme="{StaticResource PlayCardTitle}" Margin="0,0,0,6"/>
                   <TextBlock Grid.Row="2" Text="{loc:Str launcher_game_breakoutdemo_blurb}" Theme="{StaticResource PlayCardBlurb}" Margin="0,0,0,14"/>
-                  <Button Grid.Row="3" x:Name="BtnPlayBreakoutDemo" Cursor="Hand" Click="BtnPlayBreakoutDemo_Click" HorizontalAlignment="Left" Padding="16,8" CornerRadius="10" Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13">
+                  <Button Grid.Row="3" x:Name="BtnPlayBreakoutDemo" Cursor="Hand" HorizontalAlignment="Left" Padding="16,8" CornerRadius="10" Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13"
+                          Click="BtnPlayBreakoutDemo_Click">
                     <TextBlock Text="{loc:Str launcher_play}"/>
                   </Button>
                 </Grid>
@@ -308,7 +309,8 @@
                   </Border>
                   <TextBlock Grid.Row="1" Text="{loc:Str launcher_game_piecebypiece_title}" Theme="{StaticResource PlayCardTitle}" Margin="0,0,0,6"/>
                   <TextBlock Grid.Row="2" Text="{loc:Str launcher_game_piecebypiece_blurb}" Theme="{StaticResource PlayCardBlurb}" Margin="0,0,0,14"/>
-                  <Button Grid.Row="3" x:Name="BtnPlayChess" Cursor="Hand" Click="BtnPlayChess_Click" HorizontalAlignment="Left" Padding="16,8" CornerRadius="10" Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13">
+                  <Button Grid.Row="3" x:Name="BtnPlayChess" Cursor="Hand" HorizontalAlignment="Left" Padding="16,8" CornerRadius="10" Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13"
+                          Click="BtnPlayChess_Click">
                     <TextBlock Text="{loc:Str launcher_play}"/>
                   </Button>
                 </Grid>

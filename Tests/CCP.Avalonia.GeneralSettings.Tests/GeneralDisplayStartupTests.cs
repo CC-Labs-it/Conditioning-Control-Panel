@@ -79,13 +79,13 @@ public sealed class GeneralDisplayStartupTests
             var s = CoreSettings.Current;
             var win = section.FindControl<CheckBox>("ChkWinStart")!;
             var hidden = section.FindControl<CheckBox>("ChkStartHidden")!;
-            Assert.False(XdgAutostart.IsRegistered());
+            Assert.False(SessionAutostart.IsRegistered());
 
             // Plain enable: the entry is written with WPF's --startup argument and the flag saved.
             Click(host, win);   // a real pointer click: IsChecked flips, then the Click handler
             Assert.True(win.IsChecked);
-            Assert.True(XdgAutostart.IsRegistered());
-            Assert.Contains("--startup", File.ReadAllText(XdgAutostart.EntryPath));
+            Assert.True(SessionAutostart.IsRegistered());
+            Assert.Contains("--startup", EntryArguments());
             Assert.True(s.RunOnStartup);
             Assert.Empty(asked);
 
@@ -98,25 +98,25 @@ public sealed class GeneralDisplayStartupTests
 
             // Disable, then enable with hidden on and decline: box reverts, nothing registered.
             Click(host, win);
-            Assert.False(XdgAutostart.IsRegistered());
+            Assert.False(SessionAutostart.IsRegistered());
             Click(host, hidden);   // startup off: no warning
             Assert.True(s.StartMinimized);
             asked.Clear();
             Click(host, win);
             Assert.Single(asked);
             Assert.False(win.IsChecked);
-            Assert.False(XdgAutostart.IsRegistered());
+            Assert.False(SessionAutostart.IsRegistered());
             Assert.False(s.RunOnStartup);
 
             // Reconcile on show: an externally added entry is adopted ...
-            XdgAutostart.SetStartupState(true);
+            SessionAutostart.SetStartupState(true);
             section.OnSectionShown();
             Assert.True(s.RunOnStartup);
             Assert.True(win.IsChecked);
             // ... and a stored ON whose entry vanished is re-created, not erased.
-            File.Delete(XdgAutostart.EntryPath);
+            File.Delete(SessionAutostart.EntryPath);
             section.OnSectionShown();
-            Assert.True(XdgAutostart.IsRegistered());
+            Assert.True(SessionAutostart.IsRegistered());
             Assert.True(s.RunOnStartup);
         });
     }
@@ -128,6 +128,51 @@ public sealed class GeneralDisplayStartupTests
         Assert.StartsWith(Path.GetFullPath(TestXdgConfigSandbox.Root) + Path.DirectorySeparatorChar,
             Path.GetFullPath(XdgAutostart.EntryPath));
     }
+
+    /// <summary>Windows: run on startup is a Startup-folder .lnk (WPF StartupManager), never the XDG entry
+    /// (Windows ignores ~/.config/autostart), and a sandboxed host keeps it inside its own profile.</summary>
+    [Fact]
+    public void WindowsRunOnStartupIsTheStartupFolderShortcutInsideTheSandbox()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        Assert.Null(WindowsStartupShortcut.DirectoryOverride);
+        Assert.Equal(WindowsStartupShortcut.ShortcutPath, SessionAutostart.EntryPath);
+        Assert.Equal("ConditioningControlPanel.lnk", Path.GetFileName(SessionAutostart.EntryPath));   // WPF's name
+        Assert.StartsWith(Path.GetFullPath(GeneralSettingsTestProfile.Root) + Path.DirectorySeparatorChar,
+            Path.GetFullPath(SessionAutostart.EntryPath));
+    }
+
+    /// <summary>Windows: a shortcut WPF left in the Startup folder is adopted on show and removed by
+    /// switching the box off.</summary>
+    [Fact]
+    public async Task WindowsAdoptsAndRemovesAWpfStartupShortcut()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        await RunWithSection(async (section, _, host) =>
+        {
+            var win = section.FindControl<CheckBox>("ChkWinStart")!;
+            // What WPF StartupManager.Register wrote: same folder, same name, "--startup".
+            Directory.CreateDirectory(WindowsStartupShortcut.StartupFolder);
+            ShellLinkFile.Save(WindowsStartupShortcut.ShortcutPath, Environment.ProcessPath!, AppContext.BaseDirectory,
+                "Conditioning Control Panel", "--startup");
+            section.OnSectionShown();
+            Assert.True(CoreSettings.Current.RunOnStartup);
+            Assert.True(win.IsChecked);
+
+            Click(host, win);
+            Assert.False(win.IsChecked);
+            Assert.False(File.Exists(WindowsStartupShortcut.ShortcutPath));
+            Assert.False(CoreSettings.Current.RunOnStartup);
+            Assert.False(XdgAutostart.IsRegistered());   // nothing Windows ignores was written either
+            await Task.CompletedTask;
+        });
+    }
+
+    /// <summary>The registration's arguments: the .lnk's on Windows, the desktop entry's text elsewhere.</summary>
+    private static string EntryArguments() =>
+        OperatingSystem.IsWindows()
+            ? ShellLinkFile.Read(SessionAutostart.EntryPath).Arguments
+            : File.ReadAllText(SessionAutostart.EntryPath);
 
     /// <summary>Headless pointer press+release at the control's centre - what a user's click does.</summary>
     private static void Click(Window host, Control control)
@@ -151,6 +196,7 @@ public sealed class GeneralDisplayStartupTests
             var previousProvider = CoreSettings.ServiceProvider;
             var previousDialog = GeneralSettingsSection.DialogOverride;
             var previousDir = XdgAutostart.DirectoryOverride;
+            var previousStartup = OperatingSystem.IsWindows() ? WindowsStartupShortcut.DirectoryOverride : null;
             var dir = Path.Combine(Path.GetTempPath(), "ccp-autostart-" + Guid.NewGuid().ToString("N"));
             var asked = new List<string>();
             Window? host = null;
@@ -163,6 +209,7 @@ public sealed class GeneralDisplayStartupTests
                 CoreSettings.Current.DualMonitorEnabled = false;
                 CoreSettings.Current.GlobalTargetMonitor = -1;
                 XdgAutostart.DirectoryOverride = dir;
+                if (OperatingSystem.IsWindows()) WindowsStartupShortcut.DirectoryOverride = Path.Combine(dir, "Startup");
                 GeneralSettingsSection.DialogOverride = (_, message, confirm) =>
                 {
                     asked.Add(message);
@@ -180,6 +227,7 @@ public sealed class GeneralDisplayStartupTests
                 try { host?.Close(); } catch { }
                 GeneralSettingsSection.DialogOverride = previousDialog;
                 XdgAutostart.DirectoryOverride = previousDir;
+                if (OperatingSystem.IsWindows()) WindowsStartupShortcut.DirectoryOverride = previousStartup;
                 CoreSettings.Current.RunOnStartup = false;
                 CoreSettings.Current.StartMinimized = false;
                 CoreSettings.Current.ShowSessionCountdown = true;

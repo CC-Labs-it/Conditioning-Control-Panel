@@ -21,8 +21,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
     /// The language combo is populated for real from <see cref="LocalizationManager.AvailableLanguages"/>
     /// (Core). The settings logic is restored against <see cref="CoreSettings"/>: the live editors
     /// compare before writing, as on WPF, because the section is seeded from outside and an echo
-    /// must not save. Run-on-startup is the XDG autostart entry (<see cref="XdgAutostart"/>, WPF's
-    /// Startup-folder shortcut), with WPF's start-hidden warning; the Deeper switch drives the
+    /// must not save. Run-on-startup is <see cref="SessionAutostart"/> (WPF's Startup-folder shortcut on Windows,
+    /// the XDG autostart entry elsewhere), with WPF's start-hidden warning; the Deeper switch drives the
     /// shell's rail door. The startup-video
     /// picker is wired to Avalonia's native <c>StorageProvider</c>; choosing a file only stores
     /// the path, playback of it stays with the video engine.
@@ -70,10 +70,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 var s = CoreSettings.Current;
                 // WPF reconciles RunOnStartup against the OS registration; settings stay the
                 // authority: stored ON + entry missing is re-created, an externally added entry adopted.
-                var registered = XdgAutostart.IsRegistered();
+                var registered = SessionAutostart.IsRegistered();
                 if (s.RunOnStartup && !registered)
                 {
-                    if (XdgAutostart.SetStartupState(true)) registered = true;
+                    if (SessionAutostart.SetStartupState(true)) registered = true;
                     else
                     {
                         s.RunOnStartup = false;
@@ -161,10 +161,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             }
 
             var s = CoreSettings.Current;
-            if (!XdgAutostart.SetStartupState(isEnabled))
+            if (!SessionAutostart.SetStartupState(isEnabled))
             {
                 await AskAsync(owner, "title_startup_error", "msg_failed_to_update_startup", confirm: false);
-                ChkWinStart.IsChecked = XdgAutostart.IsRegistered();
+                ChkWinStart.IsChecked = SessionAutostart.IsRegistered();
                 s.RunOnStartup = ChkWinStart.IsChecked ?? false;
                 CoreSettings.Save();
                 return;

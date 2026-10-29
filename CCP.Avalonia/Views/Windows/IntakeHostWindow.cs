@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Quiz;
+using ConditioningControlPanel.Services.Fyp.Online;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
@@ -250,7 +251,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Host -&gt; page (WPF ChaosWebViewHost.Post): the page's string carrier entry point.</summary>
         internal void Post(object message)
         {
-            var json = JsonConvert.SerializeObject(message);
+            // Scrolller media: raw urls for a Windows view WPF's gate answers, the loopback relay otherwise (WebHost.ScrolllerFrame).
+            var json = Web.ScrolllerFrame(JsonConvert.SerializeObject(message), PageUrl);
             Posted?.Invoke(json);
             var literal = JsonConvert.SerializeObject(json);
             _ = Web.InvokeScriptAsync($"window.__ccpRnPush && window.__ccpRnPush({literal})");

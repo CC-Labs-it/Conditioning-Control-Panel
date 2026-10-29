@@ -9,6 +9,9 @@ namespace ConditioningControlPanel.Services;
 ///
 /// <para>Held both ways: a preset cannot switch panic off mid-Lockdown either, since the value
 /// Lockdown hands back at the end would undo it anyway. Outside a Lockdown the preset wins.</para>
+///
+/// <para>Moved to Core with WPF 769373c28 so both heads (WPF presets/recall, Avalonia PresetsTabView
+/// and MainShellWindow.Remember) share one rule.</para>
 /// </summary>
 public static class LockdownPanicHold
 {
@@ -18,5 +21,5 @@ public static class LockdownPanicHold
     /// <summary>Put the panic key back after a wholesale write (Preset.ApplyTo). Pass the value read
     /// before the write.</summary>
     public static void RestoreAfterApply(Models.AppSettings s, bool panicBefore)
-        => s.PanicKeyEnabled = Keep(App.Lockdown?.IsActive == true, panicBefore, s.PanicKeyEnabled);
+        => s.PanicKeyEnabled = Keep(LockdownService.Current?.IsActive == true, panicBefore, s.PanicKeyEnabled);
 }

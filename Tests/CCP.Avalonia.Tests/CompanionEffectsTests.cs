@@ -78,6 +78,9 @@ public sealed class CompanionEffectsTests
                 Assert.False(PinkCommand.Surface!(true, 25));   // no host here: the tint cannot show
                 Assert.False(service.Current.PinkFilterEnabled);
                 Assert.Equal(10, service.Current.PinkFilterOpacity);
+                // Main bafe52cfc: an AI "off" carries no opacity and never zeroes the user's.
+                PinkCommand.Surface!(false, null);
+                Assert.Equal(10, service.Current.PinkFilterOpacity);
             }
             finally
             {
@@ -86,7 +89,7 @@ public sealed class CompanionEffectsTests
         });
     }
 
-    /// <summary>The AI's lock card is strict and reports "fired" only when a card really came up: a
+    /// <summary>The AI's lock card follows the user's strict switch and reports "fired" only when a card really came up: a
     /// second request while one is open never stacks, so it is reported as not fired.</summary>
     [Fact]
     public void LockCardSurfaceReportsOnlyACardThatShowed()
@@ -119,6 +122,17 @@ public sealed class CompanionEffectsTests
                 held!();
                 Assert.False(LockCardWindow.IsAnyOpen());
                 CompanionEffects.StartEffect = MainShellWindow.StartEffect;
+
+                // Owner 2026-10-22 (main 61eeb4d0d): an AI card follows the user's own Strict Lock Card
+                // switch, never forced strict.
+                service.Current.LockCardStrict = false;
+                Assert.True(MantraLockScreenCommand.Surface!("not strict", 1));
+                Assert.False(LockCardWindow.Primary!.IsStrict);
+                LockCardWindow.ForceCloseAll();
+                service.Current.LockCardStrict = true;
+                Assert.True(MantraLockScreenCommand.Surface!("strict", 1));
+                Assert.True(LockCardWindow.Primary!.IsStrict);
+                LockCardWindow.ForceCloseAll();
 
                 service.Current.CompanionPrompt.AllowAiToControlEffects = false;
                 Assert.False(MantraLockScreenCommand.Surface!("no consent", 1));

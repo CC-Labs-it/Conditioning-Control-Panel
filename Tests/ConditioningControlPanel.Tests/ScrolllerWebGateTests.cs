@@ -141,7 +141,7 @@ public class ScrolllerWebGateTests
     [Fact]
     public void A_failed_clear_goes_through_the_forget_rule()
     {
-        var src = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "Fyp", "Online", "ScrolllerWebGate.CacheClears.cs"));
+        var src = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Core", "Services", "Fyp", "Online", "ScrolllerWebGate.CacheClears.cs"));
         var at = src.IndexOf("private static async Task<bool> ClearOneAsync", StringComparison.Ordinal);
         Assert.True(at >= 0);
         var end = src.IndexOf("private static void Forget(", at, StringComparison.Ordinal);
@@ -202,7 +202,7 @@ public class ScrolllerWebGateTests
             .ToList();
         Assert.NotEmpty(hosts);
 
-        var gate = File.ReadAllText(Path.Combine(app, "Services", "Fyp", "Online", "ScrolllerWebGate.cs"));
+        var gate = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Core", "Services", "Fyp", "Online", "ScrolllerWebGate.cs"));
         int start = gate.IndexOf("public static void Attach(CoreWebView2? core)", StringComparison.Ordinal);
         Assert.True(start >= 0, "Attach not found");
         int end = gate.IndexOf("private static void Handle(", start, StringComparison.Ordinal);

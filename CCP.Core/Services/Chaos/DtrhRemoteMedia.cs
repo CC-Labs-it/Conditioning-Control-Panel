@@ -189,6 +189,8 @@ namespace ConditioningControlPanel.Services.Chaos
                 int copies = 0;
                 foreach (var e in pool)
                 {
+                    // The licence switch is off: no Scrolller entry reaches the page, copied or not.
+                    if (ScrolllerPolicyService.Blocks(e.Url)) continue;
                     var url = e.Url;
                     if (LocalCopies.TryGetValue(e.Url, out var copy) && File.Exists(copy)
                         && !DropStaleCopy(e.Url, copy, DateTime.UtcNow, copier.Release)) { url = copyUrl(copy); copies++; }
@@ -258,13 +260,14 @@ namespace ConditioningControlPanel.Services.Chaos
             });
         }
 
-        /// <summary>The day limit on one copy (WPF DtrhAssetManifest.DropStaleCopy): a file whose creation time (its
-        /// download time) is a day old at <paramref name="nowUtc"/> leaves the map and is released. True when it went.</summary>
+        /// <summary>The day limit on one copy (WPF DtrhAssetManifest.DropStaleCopy): a file whose download time
+        /// (either stamp, <see cref="ScrolllerDiskCache.CopyDue"/>: right on Linux too) is a day old at <paramref name="nowUtc"/>
+        /// leaves the map and is released. True when it went.</summary>
         private static bool DropStaleCopy(string url, string path, DateTime nowUtc, Action<string> release)
         {
-            DateTime born;
-            try { born = File.GetCreationTimeUtc(path); } catch { born = DateTime.MinValue; }
-            if (!ScrolllerCacheBook.IsExpiredAt(born, nowUtc)) return false;
+            bool due;
+            try { due = ScrolllerDiskCache.CopyDue(path, t => ScrolllerCacheBook.IsExpiredAt(t, nowUtc)); } catch { due = true; }
+            if (!due) return false;
             if (LocalCopies.TryRemove(new KeyValuePair<string, string>(url, path))) release(path);
             return true;
         }
@@ -401,27 +404,29 @@ namespace ConditioningControlPanel.Services.Chaos
 
         private static readonly HttpClient Http = CreateClient();
 
-        /// <summary>WPF RemoteMediaCache.CreateClient: the browser-ish headers the CDN's own site sends, and redirects
-        /// followed. Each hop still connects through the guarded handler's connect-time check.</summary>
+        /// <summary>The app's own identity (honest user-agent, no Referer: the licence forbids spoofing a browser or
+        /// the CDN's own site), and redirects followed. Each hop still connects through the guarded handler's
+        /// connect-time check. Scrolller urls never use it: they go through the device cache.</summary>
         private static HttpClient CreateClient()
         {
             var handler = UrlSafety.CreateGuardedHandler();
             handler.AllowAutoRedirect = true;
             handler.MaxAutomaticRedirections = 5;
             var c = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
-            c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36");
-            c.DefaultRequestHeaders.TryAddWithoutValidation("Referer", "https://scrolller.com/");
             c.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "image/webp,image/jpeg,image/png,video/*,*/*;q=0.8");
             return c;
         }
 
         /// <summary>The Avalonia head's copier (WPF uses RemoteMediaCache.MaterializeAsync(ownerReleases: true)):
         /// provider -> <c>&lt;assets&gt;/.temp/ccp_temp_remote_&lt;guid&gt;&lt;ext&gt;</c>, a remote image/video url only,
-        /// at most 24 MB, nothing left behind on failure.</summary>
+        /// at most 24 MB, nothing left behind on failure. A Scrolller url goes through the device cache, as WPF's.</summary>
         internal static readonly Copier AssetsTempCopier = new(CopyToAssetsTempAsync, ReleaseCopy);
 
         internal static bool IsCopyFile(string path) => Path.GetFileName(path).StartsWith(CopyPrefix, StringComparison.Ordinal);
+
+        /// <summary>Test seam: the device cache read-or-fetch (default <see cref="ScrolllerDiskCache.GetOrFetchAsync(string, ScrolllerCacheMeta?, long, CancellationToken)"/>).</summary>
+        internal static Func<string, long, CancellationToken, Task<string?>> DeviceCacheFetch =
+            (url, max, ct) => ScrolllerDiskCache.GetOrFetchAsync(url, null, max, ct);
 
         private static async Task<string?> CopyToAssetsTempAsync(string url, CancellationToken ct)
         {
@@ -429,10 +434,13 @@ namespace ConditioningControlPanel.Services.Chaos
             if (!RemoteMediaFormats.IsRemoteImage(url) && !RemoteMediaFormats.IsRemoteVideo(url)) return null;
             var assets = CorePaths.EffectiveAssets;
             if (string.IsNullOrEmpty(assets)) return null;
+            if (ScrolllerPolicy.IsScrolllerUrl(url)) return await CopyScrolllerAsync(url, Path.Combine(assets, ".temp"), ct).ConfigureAwait(false);
             string? path = null;
             try
             {
-                using var response = await Http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+                request.Headers.TryAddWithoutValidation("User-Agent", ScrolllerSource.HonestUserAgent);
+                using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > MaxCopyBytes) return null;
                 var dir = Path.Combine(assets, ".temp");
                 Directory.CreateDirectory(dir);
@@ -445,6 +453,37 @@ namespace ConditioningControlPanel.Services.Chaos
             {
                 if (path != null) ReleaseCopy(path);
                 Log.Debug("DtrhRemoteMedia: copy failed: {E}", ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// A Scrolller url (WPF RemoteMediaCache.FromScrolllerCacheAsync): refused while the licence switch is off;
+        /// a cached copy costs nothing; a fresh one only when <see cref="ScrolllerPolicyService.MayFetchFresh"/> allows
+        /// it, fetched by the device cache (honest user-agent, charged against the daily share as bytes arrive). The
+        /// page's copy is born at the DOWNLOAD time, so the hourly sweep honours the day limit on it too.
+        /// </summary>
+        internal static async Task<string?> CopyScrolllerAsync(string url, string dir, CancellationToken ct)
+        {
+            if (ScrolllerPolicyService.Blocks(url)) return null;
+            string? path = null;
+            try
+            {
+                var cached = await DeviceCacheFetch(url, MaxCopyBytes, ct).ConfigureAwait(false);
+                if (cached == null) return null;
+                var info = new FileInfo(cached);
+                if (!info.Exists || info.Length > MaxCopyBytes) return null;
+                Directory.CreateDirectory(dir);
+                path = Path.Combine(dir, $"{CopyPrefix}{Guid.NewGuid():N}{ScrolllerDiskCache.ExtensionOf(url)}");
+                File.Copy(cached, path);
+                var born = ScrolllerDiskCache.DownloadedUtcOf(url) ?? info.CreationTimeUtc;
+                ScrolllerDiskCache.StampBorn(path, born);
+                return path;
+            }
+            catch (Exception ex)
+            {
+                if (path != null) ReleaseCopy(path);
+                Log.Debug("DtrhRemoteMedia: Scrolller copy failed: {E}", ex.Message);
                 return null;
             }
         }

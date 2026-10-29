@@ -1166,6 +1166,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The card that owns the keyboard, and what it has counted. Tests read these.</summary>
         internal int RequiredRepeats => _requiredRepeats;
         internal static LockCardWindow? Primary => _allWindows.FirstOrDefault(w => w._isPrimary);
+
+        /// <summary>This card is strict (Esc does not close it). Read by tests.</summary>
+        internal bool IsStrict => _strictMode;
         internal int TotalErrors => _totalErrors;
         internal int CompletedRepeats => _completedRepeats;
         internal bool IsCompleted => _isCompleted;

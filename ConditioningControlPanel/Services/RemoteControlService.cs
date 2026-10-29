@@ -954,6 +954,9 @@ namespace ConditioningControlPanel.Services
         {
             var force = cause == RemoteEndCause.Panic;
             if (force) MainWindow.CancelPendingAi();   // a remote panic cancels pending AI follow-ups too
+            // Circe's tab: a controller's trigger_panic is a way out like the key, so it opens the same
+            // ten-minute safety hold (port 7.2 fix wave; main armed it on key, voice and fallback only).
+            if (force) { try { App.Chaster?.NoteSafetyExit(); } catch (Exception ex) { Diag.Swallowed(ex); } }
             // The controller's panic is a panic: Trigger Mode and keyword triggers stay quiet and
             // the Lockdown keeper holds the engine, as after the panic key (PanicAftermath). It only
             // ever refuses; no pause mark, so the controller may still resume (owner, 2026-10-19).

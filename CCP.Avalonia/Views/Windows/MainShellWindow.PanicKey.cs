@@ -27,7 +27,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// press is a rebind, never a panic.</summary>
         internal static bool CapturingPanicKey { get; set; }
 
-        private DateTime? _lastPbpEscapeClaimUtc;
         private int _panicPressCount;
         private DateTime _lastPanicTime = DateTime.MinValue;
 
@@ -36,6 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal bool StartPanicKey()
         {
             _portalAllowed = true;
+            SeedPanicAftermath();
             // WPF EscapeClaim surfaces (TAB-8 / DESK-3): the focus snapshot the hook thread reads.
             EscapeClaim.MarkType(typeof(Views.Controls.FriendsDrawer));
             EscapeClaim.StartTracking();
@@ -63,17 +63,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var s = CoreSettings.Current;
             // WPF MainWindow.xaml.cs:914: a Pause-key capture takes the press before the panic branch, so the
             // Escape that unbinds Pause (the default panic key) is never also a panic.
-            if (CapturingPanicKey || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey || !s.PanicKeyEnabled) return;
+            if (CapturingPanicKey || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey) return;
             // WPF MainWindow.xaml.cs:888: Lockdown ignores every GLOBAL key, whatever LockdownDisablePanicKey
             // says. Only this listener layer: window and TextBox input (the secret phrase) are untouched.
-            if (LockdownActive) { Serilog.Log.Information("Panic key ignored under Lockdown"); return; }
+            // Panic off is the same refusal. Both share Core VoicePanicReach.PanicKeyRuns with the voice
+            // panic and the blink stop (hard rule 6: no stop is more permissive than this key).
+            if (!VoicePanicReach.PanicKeyRuns(LockdownActive, s.PanicKeyEnabled))
+            {
+                if (LockdownActive) Serilog.Log.Information("Panic key ignored under Lockdown");
+                // WPF LeashPanicKeyWhilePanicOff: panic always works on a leash. The leash part alone runs
+                // (the task parks, a lines card it opened closes, its window closes, the gate stands back);
+                // the session, effects and exit ladder are untouched. The hold-to-cut rides LeashHoldPressed.
+                if (LeashHoldLeashed) PanicKeyLeashOnly(fromKey: true);
+                return;
+            }
             // WPF MainWindow.xaml.cs:1557: a game's pause, BEFORE everything below: a pause is not a panic.
-            if (TryPbpPauseOnEscape(now.ToUniversalTime()) || TryGamePauseOnEscape(now)) return;
+            if (TryGamePauseOnEscape(now)) return;
             IntakeHostWindow.StopMicsForPanic();   // every press, before the lock-card stop or the capture abort reads as silence
             CancelPendingAi();   // every press, even one a lock card or the palette consumes
+            // WPF MainWindow.xaml.cs:1620: Circe's Tab safety hold, armed up here because the lock-card, palette and
+            // grace-pause rungs below return before the stop pass ("chaster-hold"). A game's pause above is no panic.
+            PanicChasterHold.Open("panic key");
             // WPF MainWindow.xaml.cs:1567 LeashOnPanicPress, before the lock-card rung: the leash task parks first,
-            // or a Lines task reopens the card the press just dismissed.
-            try { Platform.LeashTaskHost.OnPanicPress(this); } catch (Exception ex) { Serilog.Log.Warning("Leash panic failed: {E}", ex.Message); }
+            // or a Lines task reopens the card the press just dismissed. fromKey: only this physical press may be the
+            // Escape that closes the Ctrl+K palette (the stop pass's own "leash-task" never skips).
+            try { Platform.LeashTaskHost.OnPanicPress(this, fromKey: true); } catch (Exception ex) { Serilog.Log.Warning("Leash panic failed: {E}", ex.Message); }
 
             // Same evaluation order as WPF: asking the palette closes it, so never ask with a card up.
             bool lockCardOpen = LockCardWindow.IsAnyOpen();
@@ -82,6 +96,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 && SettingsPaletteWindow.TryConsumeEscape();
             var rung = PanicPolicy.Decide(lockCardOpen, paletteClaimed, PanicPolicy.OverrideEnabled(s));
             Serilog.Log.Information("Panic key pressed ({Rung})", rung);
+            // WPF MainWindow.xaml.cs:1662: the post-panic quiet (PanicAftermath), armed before any rung can return
+            // (lock card, grace pause). Not for an Escape that only closed the Ctrl+K palette: it stops nothing.
+            if (rung != PanicPolicy.Rung.DismissSettingsPalette) PanicAftermath.ArmQuiet();
             if (rung == PanicPolicy.Rung.DismissLockCard) { StopLockCards(); StopCameraForPanic(); }
             if (!PanicPolicy.StopsSurfaces(rung)) return;
             // WPF MainWindow.xaml.cs:1709: close the game surface that owns the screen, then the normal
@@ -115,57 +132,66 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        // WPF TryRacePauseOnEscape: keep the first foreground board Escape, but a quick
-        // second press must reach the ordinary stop pass. Never queue a pause during boot.
-        private bool TryPbpPauseOnEscape(DateTime nowUtc)
+        /// <summary>WPF App.AiEffects.cs:19-20: the AI command gate reads the post-panic quiet and the panic count
+        /// (Core PanicAftermath, armed by every panic route on this head). Desktop path only, like the listener.</summary>
+        internal static void SeedPanicAftermath()
         {
-            try
-            {
-                var board = Views.Games.GameWindow.ForegroundPbp();
-                if (!PanicPolicy.GameClaimsEscapeAsPause(CoreSettings.Current.PanicKey,
-                    board != null, CoreEngine.IsRunning, LockCardWindow.IsAnyOpen(),
-                    _lastPbpEscapeClaimUtc, nowUtc))
-                {
-                    _lastPbpEscapeClaimUtc = null;
-                    return false;
-                }
-                _lastPbpEscapeClaimUtc = nowUtc;
-                if (PanicPolicy.KeptEscapeGoesTo(claimed: true,
-                        raceInFront: false, raceReady: false,
-                        boardInFront: true, boardReady: board!.IsReady,
-                        breakoutInFront: false, breakoutReady: false)
-                    == PanicPolicy.KeptEscapePage.Board) board.PostPbpKeptEscape();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Serilog.Log.Warning(ex, "PieceByPiece Escape handoff failed; continuing panic");
-                return false;
-            }
+            ConditioningControlPanel.Services.Commands.AiCommandService.PanicQuietProvider = () => PanicAftermath.TriggersSilenced();
+            ConditioningControlPanel.Services.Commands.AiCommandService.PanicCountProvider = () => PanicAftermath.PanicCount;
+        }
+
+        /// <summary>WPF LeashPanicKeyWhilePanicOff (MainWindow.Leash.cs): the panic key while leashed when the
+        /// panic itself cannot run (switched off, or Lockdown holding the keys). Also the voice panic's
+        /// <see cref="VoicePanicReach.Reach.LeashOnly"/>, which never skips for the palette (<paramref name="fromKey"/>
+        /// false: "red" is no Escape). Never throws.</summary>
+        internal void PanicKeyLeashOnly(bool fromKey = false)
+        {
+            Serilog.Log.Information("Panic while leashed with the panic unable to run - leash safety only");
+            try { Platform.LeashTaskHost.OnPanicPress(this, panicRuns: false, fromKey: fromKey); }
+            catch (Exception ex) { Serilog.Log.Warning("Leash panic-off stop failed: {E}", ex.Message); }
         }
 
         private DateTime? _lastGameEscapeClaim;
 
-        /// <summary>WPF TryRacePauseOnEscape (MainWindow.xaml.cs:1505): Escape in front of Down the Rabbit Hole
-        /// is its pause, not a panic (owner, 2026-10-12: Escape only pauses the game). Every condition is Core
+        /// <summary>WPF TryRacePauseOnEscape (MainWindow.xaml.cs:1505): Escape in front of Racing Thoughts, Piece by
+        /// Piece, Breakout (the demo on this head), Down the Rabbit Hole or the Graded Intake is its pause, not a
+        /// panic (owner, 2026-10-12: Escape only pauses the game). Every condition is Core
         /// PanicPolicy.GameClaimsEscapeAsPause, including a second Escape within 2 s being a full panic (which
-        /// closes the game through PanicSurfaces "games"). The kept press is handed to the page as well
-        /// (KeptEscapePage.Dtrh), since its own keydown never comes while the web view is out of focus.
-        /// ponytail: race and Breakout keep closing on Escape here until their hosts post kept-escape (board: TryPbpPauseOnEscape).</summary>
+        /// closes the game through PanicSurfaces "games" / "intake"), and main 251b60807's frontGameReady: a game
+        /// whose page is still booting (or on its way out) cannot pause, so its Escape is a full panic. The kept
+        /// press is handed to the page as well (each page's host-escape.js), since its own keydown never comes
+        /// while the web view is out of focus. Only a real key press reaches here (the HUD and leash gate buttons
+        /// call PanicSurfaces directly), so fromPanicKey is always true on this head.
+        /// Not hosted on this head yet, so never in front: the full Breakout, the Arcademy, the Back Room room, Goon.</summary>
         internal bool TryGamePauseOnEscape(DateTime now)
         {
             try
             {
-                var dtrh = Games.GameWindow.DtrhInFront();
+                var game = Games.GameWindow.EscapePauseInFront();
+                var page = game?.KeptEscapePage ?? PanicPolicy.KeptEscapePage.None;
+                bool ready = game?.KeptEscapeReady == true;
+                var intake = game == null ? IntakeHostWindow.InFront() : null;
+                bool intakeReady = intake?.KeptEscapeReady == true;
+                bool In(PanicPolicy.KeptEscapePage p) => page == p;
+                PanicPolicy.KeptEscapePage Route(bool claimed) => PanicPolicy.KeptEscapeGoesTo(claimed,
+                    In(PanicPolicy.KeptEscapePage.Race), ready, In(PanicPolicy.KeptEscapePage.Board), ready,
+                    In(PanicPolicy.KeptEscapePage.Breakout), ready, In(PanicPolicy.KeptEscapePage.Dtrh), ready,
+                    intakeInFront: intake != null, intakeReady: intakeReady,
+                    glassroadInFront: In(PanicPolicy.KeptEscapePage.Glassroad), glassroadReady: ready);
                 bool claim = PanicPolicy.GameClaimsEscapeAsPause(CoreSettings.Current.PanicKey,
-                    gameInFront: dtrh != null, engineRunning: CoreEngine.IsRunning,
-                    lockCardOpen: LockCardWindow.IsAnyOpen(), lastClaimUtc: _lastGameEscapeClaim, nowUtc: now);
+                    gameInFront: game != null || intake != null, engineRunning: CoreEngine.IsRunning,
+                    lockCardOpen: LockCardWindow.IsAnyOpen(), lastClaimUtc: _lastGameEscapeClaim, nowUtc: now,
+                    frontGameReady: Route(true) != PanicPolicy.KeptEscapePage.None, fromPanicKey: true);
                 if (!claim) { _lastGameEscapeClaim = null; return false; }
                 _lastGameEscapeClaim = now;
-                Serilog.Log.Information("Panic: Escape kept by Down the Rabbit Hole as its pause (again within 2 s = full panic)");
-                if (PanicPolicy.KeptEscapeGoesTo(claim, false, false, false, false, false, false,
-                        dtrhInFront: dtrh != null, dtrhReady: dtrh?.DtrhReady == true) == PanicPolicy.KeptEscapePage.Dtrh)
-                    dtrh!.PostKeptEscape();
+                Serilog.Log.Information("Panic: Escape kept by {Game} as its pause (again within 2 s = full panic)",
+                    game?.Spec.Id ?? "intake");
+                switch (Route(claim))
+                {
+                    case PanicPolicy.KeptEscapePage.Intake: intake!.PostKeptEscape(); break;
+                    case PanicPolicy.KeptEscapePage.None: break;
+                    default: game!.PostKeptEscape(); break;
+                }
                 return true;
             }
             catch (Exception ex)

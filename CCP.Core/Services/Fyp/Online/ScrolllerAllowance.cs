@@ -53,7 +53,7 @@ internal sealed class ScrolllerLedger
 
     /// <summary>A clock this far behind the ledger's day was wrong before (a PC that ran days
     /// ahead, then synced). Without this the later day was kept, so the share never reset at a
-    /// real midnight until the PC's clock caught up with the wrong date (bug hunt 2026-10-22).
+    /// real midnight until the PC's clock caught up with the wrong date (main 251b60807).
     /// A day or two back (travel west, a clock nudged back) still keeps the later day.</summary>
     public static readonly TimeSpan ClockErrorBack = TimeSpan.FromDays(2);
 

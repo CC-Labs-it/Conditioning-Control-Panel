@@ -112,7 +112,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RefreshPremiumGate(haptics, "HapticsGate", "haptics");
             RefreshPremiumGate(Named<Control>("RemoteControlTab"), "RemoteControlGate", "remote");
             RefreshPremiumGate(Named<Control>("AwarenessTab"), "AwarenessGate", "awareness");
-            RefreshPremiumGate(Named<Control>("LockdownTab"), "LockdownGate");
+            RefreshLockdownGate();
             RefreshPremiumGate(Named<Control>("SheListeningTab"), "SheListeningGate", "voice");
             try { Named<Tabs.PlayTabView>("PlayTab")?.RefreshPlayCards(); }
             catch (System.Exception ex) { Serilog.Log.Debug("RefreshPlayCards: {E}", ex.Message); } // WPF MainWindow.PlayTab.cs:121
@@ -152,6 +152,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 RefreshSheListeningTab();   // "voice" / "voice-mic" may just have been cleared
             }
             catch (System.Exception ex) { Serilog.Log.Warning(ex, "EnforceEntitlementLapse failed"); }
+        }
+
+        /// <summary>WPF RefreshLockdownGate (main 605c451ae / 2b3e44432): the Lockdown page's padlock veil is never
+        /// drawn over a RUNNING lockdown (Core LockdownExitRule.ShowsPremiumVeil). It covers the timer's five-click
+        /// handle and the Emergency Exit, so a sign-out mid-lockdown left no way out but the clock. Repainted on
+        /// every entitlement pass and on each Lockdown start/end (InitializeLockdownGreys), so it returns after.</summary>
+        internal void RefreshLockdownGate()
+        {
+            var tab = Named<Control>("LockdownTab");
+            RefreshPremiumGate(tab, "LockdownGate");
+            if (tab?.FindControl<Control>("LockdownGate") is { } g
+                && !ConditioningControlPanel.Services.LockdownExitRule.ShowsPremiumVeil(CoreEntitlement.HasPremium, LockdownActive))
+                g.IsVisible = false;
         }
 
         /// <summary>WPF MainWindow.Patreon.cs:144, with its PremiumGateFx decoration (fog, padlock

@@ -491,6 +491,9 @@ namespace ConditioningControlPanel.Avalonia
                 // callback, so a CI render cannot touch a user's profile. Unseeded, Core hands
                 // out one default instance, which is what the renders bind against.
                 await step(0.2, "Loading settings...");
+                // WPF AudioService.RecoverFromCrash: apps a dead run (WPF or this head) left ducked get their volume
+                // back; the Windows ducker queues behind it. Linux recovers on the pactl queue after vlc.Seed below.
+                if (OperatingSystem.IsWindows()) Platform.DuckRecovery.RecoverWpfJournalAtLaunch(CorePaths.UserData);
                 // Secrets first: SettingsService's auth-token migration asks CoreSecrets.HasStore on load.
                 Platform.SecretStore.Seed();
                 Settings = new SettingsService();
@@ -499,6 +502,18 @@ namespace ConditioningControlPanel.Avalonia
                 // the ledger starts when awareness turns on. No observer feeds it on this head yet.
                 InstallPrivacyLedger(new ConditioningControlPanel.Services.Awareness.ActivityLedger());
 
+                // Main 8a89eaeb0 / 36370021a: a session or intensity ramp that crashed or was killed before
+                // it handed the user's settings back gets them back now, before anything reads them.
+                try
+                {
+                    if (SessionSettingsJournal.HealOnLaunch(CorePaths.UserData, Settings.Current))
+                        Settings.Save();
+                }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Session settings heal failed (non-fatal)"); }
+                // WPF App.xaml.cs:2571-2577: the installer's Content Folder pick (Windows), then the custom
+                // folder's subdirs (#391), before anything resolves the assets folder.
+                Platform.InstallerAssetsPath.Apply(Settings);
+                CorePaths.EnsureCustomAssetsDirectories(Settings.Current.CustomAssetsPath);
                 // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
                 global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
@@ -510,6 +525,11 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:3088: a run killed mid-lockdown gets its real panic key and Strict
                 // Lock back from lockdown_recovery.json before anything reads them.
                 LockdownService.RecoverIfNeeded();
+                // WPF App.xaml.cs (main 4adc4c476): a Remote Control session the app died in hands the
+                // controller's strict lock (and any held value) back to the wearer's own. After Lockdown's
+                // recovery, which can put a controller's strict lock back first (RemoteHoldings).
+                try { ConditioningControlPanel.Services.Remote.RemoteWearer.HealOnLaunch(); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Remote holdings heal failed (non-fatal)"); }
                 LockdownService.Current = new LockdownService();
                 // WPF App.xaml.cs:3295: quest credit for each completed lockdown of 20+ minutes.
                 // LastActiveDuration is set in Deactivate before the event fires.
@@ -599,6 +619,10 @@ namespace ConditioningControlPanel.Avalonia
                 var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
                 CoreReleaseContent.AppVersionProvider = () =>
                     version is null ? null : $"{version.Major}.{version.Minor}.{version.Build}";
+                // WPF App.xaml.cs:2567-2576, after the version seed (the honest user-agent carries it): the Scrolller
+                // licence switch (launch + every 30 min), the device cache's books, and the hourly 24 h sweep.
+                Platform.ScrolllerHead.Start();
+                Platform.ScrolllerAwayHost.Start();   // WPF App.xaml.cs:2587: no fresh Scrolller fetch while the room is empty
                 // WPF App.xaml.cs:490/2549: the ? box's daily-free rotation that TierGate ORs in.
                 // Pure ctor; the override fetch is fire-and-forget and falls back to the seeded pick.
                 // A sandbox never reaches the real proxy (the SkipStartupFetch rule); the seeded pick still works.
@@ -665,6 +689,9 @@ namespace ConditioningControlPanel.Avalonia
                 }
                 // After the version seed: installing / loading a mod checks its MinAppVersion.
                 StartMods();
+                // Every panic opens Circe's Tab safety hold through this one seam (PanicSurfaces, PanicWatchdog,
+                // a controller's trigger_panic in Core RemoteCommands).
+                ConditioningControlPanel.Services.Safety.PanicChasterHold.Service = () => Platform.ChasterHead.Service;
                 // WPF App.xaml.cs:2513 (App.Chaster). After the version seed: it is the User-Agent.
                 try
                 {
@@ -754,6 +781,8 @@ namespace ConditioningControlPanel.Avalonia
                 {
                     var vlc = new Platform.LibVlcAudio();
                     vlc.Seed();
+                    // Ducking crash journal (Linux): restore what a dead run left ducked, then journal every duck.
+                    vlc.StartDuckJournal(Path.Combine(CorePaths.UserData, Platform.DuckRecovery.PulseFileName));
                     // Mind wipe plays through the same LibVLC (WPF App.MindWipe, App.xaml.cs:385).
                     new Platform.MindWipePlayer(vlc.PlayVoice) { CleanSlate = secs => Achievements?.TrackMindWipeDuration(secs) }.Seed();
                     Console.WriteLine("[Audio] LibVLC seeded CoreAudio");
@@ -773,7 +802,13 @@ namespace ConditioningControlPanel.Avalonia
                 // The plain engine (Start/Stop) is CoreEngine; the one SessionRunner seeds
                 // IsSessionRunningProvider, so the feature lock fires for a session, not a plain Start.
                 CoreSession.IsEngineRunningProvider = () => CoreEngine.IsRunning;
-                Sessions = new SessionRunner(new SessionLogService());
+                Sessions = new SessionRunner(new SessionLogService())
+                {
+                    // Main 8a89eaeb0: the crash journal (healed above at the next launch).
+                    JournalDir = CorePaths.UserData,
+                    // Main 8fe2a80a0: a Takeover pulse hands its boosted tint back before the snapshot.
+                    SettleBeforeSnapshot = () => Views.Windows.MainShellWindow.Current?.SettleAutonomyPulses(),
+                };
                 // WPF App.xaml.cs:2566: the media recap. FlashOverlay feeds images; the video scheduler feeds clips.
                 MediaHistory = new MediaHistoryService();
                 if (CoreEngine.Video is { } recapVideo)
@@ -837,11 +872,11 @@ namespace ConditioningControlPanel.Avalonia
                 CoreProgression.TrackAttentionCheckProvider = passed =>
                 {
                     if (passed) { Achievements?.TrackAttentionCheckPassed(isVideo: true); return; }
-                    // WPF: TrackAttentionCheckFailed and TrackVideoAttentionCheckFailed each note "attention".
+                    // WPF (7e14c2870): one failed check books "attention" ONCE. Booking it for both
+                    // trackers charged one failure twice (+10:00, more with heat on).
                     Achievements?.TrackAttentionCheckFailed();
                     ChasterNote("attention");
                     Achievements?.TrackVideoAttentionCheckFailed();
-                    ChasterNote("attention");
                     // WPF App.Companion?.OnAttentionCheckFailed(): the Trainer's -25 XP.
                     if (Services.Companion.CompanionPerks.ApplyAttentionFailPenalty(CoreSettings.Current))
                     {
@@ -1253,6 +1288,8 @@ namespace ConditioningControlPanel.Avalonia
             try { FeatureDayLog?.Dispose(); } catch (Exception ex) { Serilog.Log.Debug(ex, "FeatureDayLog flush on shutdown failed"); } // WPF App.OnExit:6270
             try { Programs?.Dispose(); } catch { /* WPF App.OnExit:6309; flushes unsaved program state */ }
             try { MediaHistory?.Dispose(); } catch { /* WPF App.OnExit:6231; flushes the final entries */ }
+            Platform.ScrolllerHead.Stop();   // WPF App.OnExit:6284-6285: the share's ledger and the cache index
+            try { Platform.ScrolllerAwayHost.Stop(); } catch { /* WPF App.OnExit:6308 */ }
             try { Platform.LeashTaskHost.Stop(); } catch { /* WPF App.OnExit: the task and its window go first */ }
             try { Platform.LeashHead.Stop(); } catch { /* WPF App.OnExit:6289-6292, before the friends poll it rides */ }
             try { DiscordRpc?.Dispose(); } catch { /* WPF App.OnExit:6296 */ }

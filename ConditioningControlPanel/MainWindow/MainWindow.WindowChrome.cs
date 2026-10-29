@@ -390,17 +390,11 @@ namespace ConditioningControlPanel
 
         /// <summary>
         /// Exit while something still holds a TEMPORARY value in the saved settings: hand each one
-        /// back before the last save, the way its own stop would. The final saves (SaveSettings here,
-        /// SaveImmediate in App.OnExit) used to write them as the user's own, and the restores that
-        /// run later in teardown (Autonomy.Dispose, the remote's Dispose) are never saved:
-        /// <list type="bullet">
-        /// <item>the intensity ramp: OnClosing stopped only its timer, so the ramped flash / spiral /
-        /// pink opacity, master and whisper volume and blur were kept;</item>
-        /// <item>a Takeover spiral / pink pulse (30 s): the boosted opacity and the switch it turned
-        /// on were kept;</item>
-        /// <item>a connected remote controller: the strict lock it switched on, the Brain Drain it
-        /// switched on and the opacities Easy faded were kept.</item>
-        /// </list>
+        /// back before the last save, the way its own stop would (main bafe52cfc). The final saves
+        /// (SaveSettings here, SaveImmediate in App.OnExit) used to write them as the user's own, and
+        /// the restores that run later in teardown (Autonomy.Dispose, the remote's Dispose) are never
+        /// saved: the intensity ramp, a Takeover spiral / pink pulse (30 s), and a connected remote
+        /// controller's strict lock, Brain Drain and eased opacities.
         /// Called again from App.OnExit for a shutdown that skips this window's close. Idempotent.
         /// </summary>
         internal void SettleTemporarySettingsForExit()

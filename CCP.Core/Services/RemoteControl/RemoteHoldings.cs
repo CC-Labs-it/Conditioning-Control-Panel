@@ -156,13 +156,13 @@ namespace ConditioningControlPanel.Services.Remote
                 File.WriteAllText(tmp, h.ToJson());
                 File.Move(tmp, path, overwrite: true);
             }
-            catch (Exception ex) { App.Logger?.Warning(ex, "[RemoteControl] Could not write {File}", FileName); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] Could not write {File}", FileName); }
         }
 
         public static void Clear(string dir)
         {
             try { File.Delete(Path.Combine(dir, FileName)); }
-            catch (Exception ex) { App.Logger?.Debug("[RemoteControl] Could not delete {File}: {E}", FileName, ex.Message); }
+            catch (Exception ex) { Serilog.Log.Debug("[RemoteControl] Could not delete {File}: {E}", FileName, ex.Message); }
         }
 
         /// <summary>Launch, after Lockdown's own recovery: a file left behind means the app died with a
@@ -182,12 +182,12 @@ namespace ConditioningControlPanel.Services.Remote
                     Write(current, RemoteHeld.StrictLock, v);
                     n++;
                 }
-                App.Logger?.Information("[RemoteControl] The last remote session did not end cleanly; handed back {Count} of the wearer's settings", n);
+                Serilog.Log.Information("[RemoteControl] The last remote session did not end cleanly; handed back {Count} of the wearer's settings", n);
                 return n;
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "[RemoteControl] {File} could not be read; left as is", FileName);
+                Serilog.Log.Warning(ex, "[RemoteControl] {File} could not be read; left as is", FileName);
                 return 0;
             }
             finally { Clear(dir); }

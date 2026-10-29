@@ -76,6 +76,17 @@ internal sealed partial class FirstShowStageWindow : Window
     private double _last, _moveAt, _showStart = double.NaN, _showFrozen, _settledAt, _x, _y;
     private int _beat = -1;
     private static readonly HttpClient Http = new(UrlSafety.CreateGuardedHandler()) { Timeout = TimeSpan.FromSeconds(20) };
+    /// <summary>"via Scrolller" while a Scrolller show plays (WPF FirstShowDesktopWindow._credit, ScrolllerCreditBadge).
+    /// Brand text, not a loc key, as on every page's mark.</summary>
+    private readonly Border _credit = new()
+    {
+        IsVisible = false, IsHitTestVisible = false, CornerRadius = new CornerRadius(4), Padding = new Thickness(7, 2, 7, 2),
+        Background = new SolidColorBrush(Color.FromArgb(0x73, 0, 0, 0)),
+        Child = new TextBlock { Text = ScrolllerCreditText, Foreground = Brushes.White, FontSize = 11, FontWeight = FontWeight.Medium },
+    };
+    internal const string ScrolllerCreditText = "via Scrolller";
+    /// <summary>The credit is up (tests read it).</summary>
+    internal bool CreditShown => Credit.Shown;   // one badge (Mich's ScrolllerCreditBadge); _credit is unused
     /// <summary>Seconds since the stage was built. Tests step it (P08).</summary>
     internal Func<double> Clock;
     /// <summary>Test seams: the feed page for (preset, attempt), and the bundled pictures.</summary>
@@ -202,12 +213,48 @@ internal sealed partial class FirstShowStageWindow : Window
     internal static void SweepTemp() { try { if (Directory.Exists(TempDir)) foreach (var f in Directory.GetFiles(TempDir)) Release(f); } catch (IOException) { } }
     private static async Task<string?> DownloadAsync(string url, CancellationToken token)
     {
-        using var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token);
+        // WPF downloads through RemoteMediaCache: a Scrolller picture goes through the device cache (honest UA, charged).
+        if (ScrolllerPolicy.IsScrolllerUrl(url)) return await CopyFromDeviceCacheAsync(url, token);
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.TryAddWithoutValidation("User-Agent", ScrolllerSource.HonestUserAgent);
+        using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
         var head = response.Content.Headers;
         if (!response.IsSuccessStatusCode || head.ContentType?.MediaType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) != true
             || head.ContentLength > MaxPictureBytes) return null;
         return await SaveCapped(await response.Content.ReadAsStreamAsync(token), token);
     }
+    /// <summary>Test seam: the device cache read-or-fetch (refused while the share is spent or consent is missing).</summary>
+    internal static Func<string, long, CancellationToken, Task<string?>> DeviceCacheFetch =
+        (url, max, token) => ScrolllerDiskCache.GetOrFetchAsync(url, null, max, token);
+
+    /// <summary>
+    /// A Scrolller picture for the show (WPF RemoteMediaCache.MaterializeAsync): nothing while the licence switch is off;
+    /// a cached copy is free, a fresh one only when the share allows it, downloaded by the device cache with the honest
+    /// user-agent and charged. The show's copy carries the remote-copy prefix and is born at the download time, so the
+    /// hourly sweep (Platform.ScrolllerHead) and the off switch reach it too.
+    /// </summary>
+    internal static async Task<string?> CopyFromDeviceCacheAsync(string url, CancellationToken token)
+    {
+        if (ScrolllerPolicyService.Blocks(url)) return null;
+        var cached = await DeviceCacheFetch(url, MaxPictureBytes, token);
+        if (cached == null) return null;
+        var info = new FileInfo(cached);
+        if (!info.Exists || info.Length > MaxPictureBytes) return null;
+        Directory.CreateDirectory(TempDir);
+        var path = Path.Combine(TempDir, ScrolllerDiskCache.TempPrefix + Guid.NewGuid().ToString("N") + ScrolllerDiskCache.ExtensionOf(url));
+        try
+        {
+            File.Copy(cached, path);
+            ScrolllerDiskCache.StampBorn(path, ScrolllerDiskCache.DownloadedUtcOf(url) ?? info.CreationTimeUtc);
+            return path;
+        }
+        catch (IOException) { Release(path); return null; }
+        catch (UnauthorizedAccessException) { Release(path); return null; }
+    }
+
+    /// <summary>A show copy made from Scrolller (WPF ScrolllerCredit.IsScrolllerMedia on the temp copy).</summary>
+    internal static bool IsScrolllerCopy(string path) => Path.GetFileName(path).StartsWith(ScrolllerDiskCache.TempPrefix, StringComparison.Ordinal);
+
     /// <summary>Copies at most <see cref="MaxPictureBytes"/> into <see cref="TempDir"/>; null (and no file) past the cap.</summary>
     internal static async Task<string?> SaveCapped(Stream body, CancellationToken token)
     {

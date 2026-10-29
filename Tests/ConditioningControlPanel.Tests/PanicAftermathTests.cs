@@ -27,7 +27,10 @@ public class PanicAftermathTests
         Assert.False(PanicAftermath.IsQuiet(Panic + 300_000, until));
         Assert.False(PanicAftermath.IsQuiet(Panic, 0));                 // never armed
 
-        var src = Source("Services", "Safety", "PanicAftermath.cs");
+        // In Core since the 7.2 port: one quiet for both heads.
+        var src = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Core", "Services", "Safety", "PanicAftermath.cs"));
+        Assert.False(File.Exists(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "Safety", "PanicAftermath.cs")),
+            "a second PanicAftermath in the WPF head would split the quiet in two");
         Assert.Contains("Environment.TickCount64", src);
         Assert.DoesNotContain("UtcNow", src);
     }
@@ -118,6 +121,8 @@ public class PanicAftermathTests
         }
         Assert.Equal(new System.Collections.Generic.SortedDictionary<string, int>(StringComparer.Ordinal)
         {
+            ["CCP.Avalonia/Views/Windows/MainShellWindow.SessionRun.cs"] = 1,     // Avalonia: the user's Resume (WPF BtnPauseSession_Click)
+            ["CCP.Avalonia/Views/Windows/MainShellWindow.StartStop.cs"] = 1,      // Avalonia StartEngineFromUser
             ["ConditioningControlPanel/MainWindow/MainWindow.Presets.cs"] = 1,     // the user's Resume with the engine on
             ["ConditioningControlPanel/MainWindow/MainWindow.StartStop.cs"] = 1,   // StartEngineFromUser
         }, found);
@@ -312,5 +317,14 @@ public class PanicAftermathTests
             else if (source[i] == '}' && --depth == 0) return source.Substring(at, i - at + 1);
         }
         throw new Xunit.Sdk.XunitException("unclosed method: " + signature);
+    }
+
+    private static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
+            dir = dir.Parent;
+        Assert.True(dir != null, "could not locate the repo root from " + AppContext.BaseDirectory);
+        return dir!.FullName;
     }
 }

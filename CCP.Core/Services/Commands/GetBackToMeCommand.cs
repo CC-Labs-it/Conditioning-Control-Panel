@@ -81,11 +81,11 @@ namespace ConditioningControlPanel.Services.Commands
                         ?? (fired >= AiCommandService.MaxCommandsPerResponse ? $"follow-up cap reached ({AiCommandService.MaxCommandsPerResponse})" : null);
                     if (why != null)
                     {
-                        Log.Information("GetBackToMeCommand: {Reason} - nested {Cmd} blocked", why, subCommand.Command);
-                        AiCommandService.NoteBlockedFollowUp(subCommand.Command);
+                        Log.Information("GetBackToMeCommand: {Reason} - nested {Cmd} blocked", why, subCommand?.Command);   // a null entry is logged, never thrown on
+                        if (subCommand != null) AiCommandService.NoteBlockedFollowUp(subCommand.Command);
                         continue;
                     }
-                    var cmd = CommandFactory.CreateCommand(subCommand, _cancellationToken, _depth + 1);
+                    var cmd = CommandFactory.CreateCommand(subCommand!, _cancellationToken, _depth + 1);
                     if (cmd == null) continue;
                     fired++;
                     await cmd.ExecuteAsync();
@@ -108,7 +108,7 @@ namespace ConditioningControlPanel.Services.Commands
             if (!string.IsNullOrEmpty(text))
             {
                 // The model wrote this line inside its getbacktome command, so it wears the AI
-                // badge (it passed output moderation with the command).
+                // badge (it passed output moderation with the command; main 61eeb4d0d).
                 ShowAvatarMessage(text, aiGenerated: true);
             }
             // R2-NEW-H-1: migrate to typed AI API. Refusals are silently dropped on
@@ -118,7 +118,7 @@ namespace ConditioningControlPanel.Services.Commands
             // the AI badge.
             if (AiProvider?.Invoke() is not { } ai) return;
             // The reply's own commands dispatch one level deeper, so a getbacktome in it counts
-            // against the depth cap instead of starting a fresh chain.
+            // against the depth cap instead of starting a fresh chain (main 61eeb4d0d).
             AiCommandAdmission.EnterFollowUp(_depth + 1);
             // Scoped to this async method: the reply's own commands, executed inside the call, see this
             // follow-up's token and are dropped if a panic cancels it meanwhile (audit #1987).

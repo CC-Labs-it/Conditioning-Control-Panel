@@ -183,6 +183,34 @@ public class ChasterServiceTests : IDisposable
         Assert.Equal(30, after.AppliedSeconds);
     }
 
+    /// <summary>Port 7.2 fix wave: every panic reaches the hold through one Core seam. The Avalonia stop
+    /// pass, its fallback and a controller's trigger_panic call it; a head with no tab is a no-op.</summary>
+    [Fact]
+    public void The_panic_seam_opens_the_hold_and_every_avalonia_panic_path_calls_it()
+    {
+        using var service = Make();
+        var seeded = ConditioningControlPanel.Services.Safety.PanicChasterHold.Service;
+        try
+        {
+            ConditioningControlPanel.Services.Safety.PanicChasterHold.Service = () => null;
+            ConditioningControlPanel.Services.Safety.PanicChasterHold.Open("test");   // no tab: quiet
+            ConditioningControlPanel.Services.Safety.PanicChasterHold.Service = () => service;
+            ConditioningControlPanel.Services.Safety.PanicChasterHold.Open("test");
+            Assert.Equal(ChasterService.SafetyHold, service.SafetyHoldRemaining);
+            Assert.Equal(TabRefusal.SafetyExit, service.Note("typo").Refusal);
+        }
+        finally { ConditioningControlPanel.Services.Safety.PanicChasterHold.Service = seeded; }
+
+        string Src(params string[] p) => File.ReadAllText(Path.Combine(new[] { RepoRoot() }.Concat(p).ToArray()));
+        var commands = Src("CCP.Core", "Services", "RemoteControl", "RemoteCommands.cs");
+        var stop = commands.Substring(commands.IndexOf("public static void StopEffects(bool force)", StringComparison.Ordinal));
+        Assert.Contains("if (force) Safety.PanicChasterHold.Open(", stop);
+        Assert.Contains("new(\"chaster-hold\", _ => ConditioningControlPanel.Services.Safety.PanicChasterHold.Open(",
+            Src("CCP.Avalonia", "Views", "Windows", "PanicSurfaces.cs"));
+        Assert.Contains("PanicChasterHold.Open(\"panic fallback\")", Src("CCP.Avalonia", "Platform", "PanicWatchdog.cs"));
+        Assert.Contains("PanicChasterHold.Service = () => Platform.ChasterHead.Service;", Src("CCP.Avalonia", "App.axaml.cs"));
+    }
+
     /// <summary>DESK-6. The rail chip counts a hold down instead of the lock, and with no lock
     /// running its clock ticks once a minute, so a panic must repaint it at once: the hold is
     /// raised as a lock change, which the chip already repaints on (marshalled to its dispatcher).</summary>

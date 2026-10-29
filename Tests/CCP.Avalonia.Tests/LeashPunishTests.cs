@@ -131,15 +131,26 @@ public sealed class LeashPunishTests
             w.OnMessage("leash-error");
             Dispatcher.UIThread.RunJobs();
             Assert.Equal((1, 1), (finished, failed));
-            // Panic and Cut close a LOCKED window; a palette-closing Escape does not (WPF MainWindow.Leash.cs:382).
+            // Panic and Cut close a LOCKED window; a palette-closing Escape KEY does not (WPF MainWindow.Leash.cs:382).
             int cuts = 0;
             (LeashPunishWindow.CutLeash, CoreSettings.Current.PanicKey) = (() => cuts++, "Escape");
             SettingsPaletteWindow.Toggle(w);
-            LeashTaskHost.OnPanicPress(shell);
+            LeashTaskHost.OnPanicPress(shell, fromKey: true);
             Assert.True(SettingsPaletteWindow.IsOpen && ReferenceEquals(w, LeashPunishWindow.Current));
             SettingsPaletteWindow.CloseIfOpen(); Dispatcher.UIThread.RunJobs();
-            LeashTaskHost.OnPanicPress(shell);
+            LeashTaskHost.OnPanicPress(shell, fromKey: true);
             Assert.Null(LeashPunishWindow.Current);
+            // Fix wave 2 #5: the voice panic (and the tray, the leash gate, a remote) is no Escape, so the palette
+            // never holds it back, with the panic running or not (Lockdown's "red" is panicRuns: false).
+            foreach (var panicRuns in new[] { true, false })
+            {
+                Assert.True(host.OpenWatch(new LeashWatch("ht", "123", null)) && LeashPunishWindow.Current!.Locked);
+                SettingsPaletteWindow.Toggle(LeashPunishWindow.Current);
+                Assert.True(SettingsPaletteWindow.IsOpen);
+                LeashTaskHost.OnPanicPress(shell, panicRuns);
+                Assert.Null(LeashPunishWindow.Current);
+                SettingsPaletteWindow.CloseIfOpen(); Dispatcher.UIThread.RunJobs();
+            }
             Assert.True(host.OpenWatch(new LeashWatch("ht", "123", null)) && LeashPunishWindow.Current!.Locked);
             LeashPunishWindow.Current.CutFromWindow();
             Assert.True(LeashPunishWindow.Current == null && cuts == 1);

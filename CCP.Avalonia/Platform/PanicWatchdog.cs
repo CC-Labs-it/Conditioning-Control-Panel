@@ -108,7 +108,11 @@ internal static class PanicWatchdog
     {
         Step("haptics", () => CoreHaptics.Service?.PanicStop());
         Step("remote haptics", RemoteCommands.StopHaptics);
+        // WPF RunEmergencyPanicTeardown (main 7e14c2870): the hold the real handler would open first; thread-safe.
+        Step("chaster hold", () => ConditioningControlPanel.Services.Safety.PanicChasterHold.Open("panic fallback"));
         Step("ai follow-ups", () => ConditioningControlPanel.Services.Commands.AiCommandService.CancelAll());
+        // The quiet the real handler arms (PanicAftermath, thread-safe): nothing AI-driven starts meanwhile.
+        Step("panic quiet", () => ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet());
         // Conditional, as WPF (#668): with the standalone Audio Layers master on, the bed is the user's.
         Step("audio layers", () => { if (!CoreSettings.Current.AudioLayersEnabled) LayeredAudio.Instance?.Stop(); });
         Step("mind wipe", () => CoreMindWipe.StopProvider?.Invoke());

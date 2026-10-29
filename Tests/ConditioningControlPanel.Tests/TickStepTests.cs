@@ -95,11 +95,11 @@ public class TickStepTests
     [Theory]
     [InlineData("Services/AttentionCheckService.cs", "_dwellMs += TickMs")]
     [InlineData("Lab/GazeMinigame/GazeMinigameWindow.xaml.cs", "_correctMs += tickMs")]
-    // The calibration window's bubble dwell is Core BubbleAccuracyTest.Dwell since the split (both heads run it).
-    [InlineData("Services/Webcam/BubbleAccuracyTest.cs", "DwellMs += TickMs")]
+    [InlineData("../CCP.Core/Services/Webcam/BubbleAccuracyTest.cs", "DwellMs += TickMs")]   // the port: both heads' calibration dwell
+    [InlineData("../CCP.Avalonia/Views/Lab/GazeMinigame/GazeMinigameWindow.axaml.cs", "_correctMs += tickMs")]
     public void Gaze_dwells_count_real_time(string file, string oldCount)
     {
-        var src = SourceRoots.ReadProductFile(file.Split('/'));
+        var src = ReadSource(file.Split('/'));
         Assert.DoesNotContain(oldCount, src);
         Assert.Contains("TickStep.Ms(ref ", src);
     }

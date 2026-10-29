@@ -39,7 +39,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
             if (CoreEngine.IsRunning) { Serilog.Log.Information("Start button: stopping the engine"); StopEngine(); }
-            else StartEngine();
+            else StartEngineFromUser();
+        }
+
+        /// <summary>WPF StartEngineFromUser: only the user's own START ends the post-panic quiet early
+        /// (Core PanicAftermath); the scheduler, programs, a remote or the Lockdown keeper never do.</summary>
+        internal void StartEngineFromUser()
+        {
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            StartEngine();
         }
 
         private void MenuJumpRightIn_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => RandomizeAndStart();
@@ -60,12 +68,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             s.SpiralEnabled = rng.Next(2) == 0;
             s.PinkFilterEnabled = rng.Next(2) == 0;
             CoreSettings.Save();
-            if (!CoreEngine.IsRunning) StartEngine();
+            if (!CoreEngine.IsRunning) StartEngineFromUser();
         }
 
         private void MenuStartNormal_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
-            if (!CoreEngine.IsRunning) StartEngine();
+            if (!CoreEngine.IsRunning) StartEngineFromUser();
         }
 
         /// <summary>WPF StartEngine, through the portal wrapper so the panic key is bound first.</summary>

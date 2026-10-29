@@ -5,6 +5,7 @@ using System.Linq;
 using ConditioningControlPanel.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services
 {
@@ -12,19 +13,22 @@ namespace ConditioningControlPanel.Services
     /// The user's own values from before a session or an intensity ramp, kept on disk while it runs
     /// (ccp-bugs #1488 and perly, 2026-10-21: "Audio Ducking turns itself on, flash opacity and pink
     /// filter get stronger, subliminal volume never adjusts back, Hydra mode turns itself on").
+    /// Main 8a89eaeb0 + 36370021a, moved to Core so both heads use it.
     ///
-    /// ApplySessionSettings and the engine's intensity ramp (MainWindow RampTimer_Tick) both write
-    /// their values straight into AppSettings, which auto-saves, and hand the user's back only on a
-    /// clean stop. A crash, a kill or a hang the user ends from Task Manager left them in
-    /// settings.json for good. Each writes its journal right after its snapshot and deletes it after
-    /// its own restore; a journal still there at the next launch is applied before anything reads
-    /// the settings, newest first, so two of them unwind in the right order.
+    /// A session (WPF SessionEngine.ApplySessionSettings, Core SessionRunner.Apply) and the engine's
+    /// intensity ramp (WPF MainWindow RampTimer_Tick) write their values straight into AppSettings,
+    /// which auto-saves, and hand the user's back only on a clean stop. A crash, a kill or a hang the
+    /// user ends from Task Manager left them in settings.json for good. Each writes its journal right
+    /// after its snapshot and deletes it after its own restore; a journal still there at the next
+    /// launch is applied before anything reads the settings, newest first, so two of them unwind in
+    /// the right order.
     ///
-    /// <see cref="Fields"/> is exactly what RestoreSettings restores and <see cref="RampFields"/>
-    /// exactly what the ramp stores (SessionSettingsJournalTests). The three phrase pools come back
-    /// only when the same mod is still active.
+    /// <see cref="Fields"/> is exactly what a session restores (WPF RestoreSettings and Core
+    /// SessionSettingsSnapshot) and <see cref="RampFields"/> exactly what the ramp stores
+    /// (SessionSettingsJournalTests). The three phrase pools come back only when the same mod is
+    /// still active.
     /// </summary>
-    internal static class SessionSettingsJournal
+    public static class SessionSettingsJournal
     {
         public const string FileName = "session_restore.json";
         public const string RampFileName = "ramp_restore.json";
@@ -137,13 +141,13 @@ namespace ConditioningControlPanel.Services
                 File.WriteAllText(tmp, json);
                 File.Move(tmp, path, overwrite: true);
             }
-            catch (Exception ex) { App.Logger?.Warning(ex, "[Session] Could not write {Journal}", name); }
+            catch (Exception ex) { Log.Warning(ex, "[Session] Could not write {Journal}", name); }
         }
 
         private static void ClearFile(string dir, string name)
         {
             try { File.Delete(Path.Combine(dir, name)); }
-            catch (Exception ex) { App.Logger?.Debug("[Session] Could not delete {Journal}: {E}", name, ex.Message); }
+            catch (Exception ex) { Log.Debug("[Session] Could not delete {Journal}: {E}", name, ex.Message); }
         }
 
         /// <summary>Launch: a journal left behind means a session or a ramp never stopped cleanly.
@@ -162,7 +166,7 @@ namespace ConditioningControlPanel.Services
                     var o = JObject.Parse(File.ReadAllText(path));
                     found.Add((name, o, (long?)o["at"] ?? 0));
                 }
-                catch (Exception ex) { App.Logger?.Warning(ex, "[Session] {Journal} could not be read; left as is", name); }
+                catch (Exception ex) { Log.Warning(ex, "[Session] {Journal} could not be read; left as is", name); }
                 finally { ClearFile(dir, name); }
             }
 
@@ -175,9 +179,9 @@ namespace ConditioningControlPanel.Services
                         ? Apply(j.Json, current, null, RampFields)
                         : Apply(j.Json, current, current.ActiveModId, Fields);
                     healed += n;
-                    App.Logger?.Information("[Session] {Journal}: the last run did not stop cleanly; restored {Count} of the user's settings", j.Name, n);
+                    Log.Information("[Session] {Journal}: the last run did not stop cleanly; restored {Count} of the user's settings", j.Name, n);
                 }
-                catch (Exception ex) { App.Logger?.Warning(ex, "[Session] {Journal} could not be applied", j.Name); }
+                catch (Exception ex) { Log.Warning(ex, "[Session] {Journal} could not be applied", j.Name); }
             }
             return healed > 0;
         }

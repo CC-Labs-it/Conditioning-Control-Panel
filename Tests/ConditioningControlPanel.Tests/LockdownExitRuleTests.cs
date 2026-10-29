@@ -121,7 +121,7 @@ public class LockdownExitRuleTests
     [Fact]
     public void LockdownService_UsesTheRules()
     {
-        // CCP.Core since the split, where the UTC clock is the UtcNow() seam (DateTime.UtcNow unless a test swaps it).
+        // Moved to CCP.Core on the port; its clock is the swappable UtcNow() (tests drive it).
         var src = SourceRoots.ReadProductFile("Services", "Haptics", "LockdownService.cs");
         Assert.Contains("LockdownExitRule.PhraseMatches(phrase)", src);
         Assert.Contains("LockdownExitRule.Remaining(_activatedAt, _duration, UtcNow())", src);

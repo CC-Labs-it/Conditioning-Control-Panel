@@ -18,14 +18,15 @@ namespace ConditioningControlPanel.Services.Audio
     /// matches the way the retry already did: same PID and same name, else the same name
     /// (<see cref="Match"/>).</item>
     /// </list>
-    /// Pure, pinned by DuckRecoveryRuleTests.
+    /// Pure, pinned by DuckRecoveryRuleTests. In Core since 7.2: the Avalonia head journals its own ducks
+    /// with it (Platform/DuckRecovery.cs); the stored value is a volume (WPF) or a stream record (pactl).
     /// </summary>
     public static class DuckRecoveryRule
     {
         /// <summary>The originals to keep on disk: live ducks win over parked entries for one PID.</summary>
-        public static Dictionary<int, float> ToPersist(IReadOnlyDictionary<int, float> ducked, IReadOnlyDictionary<int, float> parked)
+        public static Dictionary<int, T> ToPersist<T>(IReadOnlyDictionary<int, T> ducked, IReadOnlyDictionary<int, T> parked)
         {
-            var all = new Dictionary<int, float>();
+            var all = new Dictionary<int, T>();
             foreach (var kv in parked) all[kv.Key] = kv.Value;
             foreach (var kv in ducked) all[kv.Key] = kv.Value;
             return all;

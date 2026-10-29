@@ -21,8 +21,9 @@ namespace ConditioningControlPanel.Services.Commands
     /// <para>2. Nothing AI-driven listened to a panic. A follow-up scheduled up to ten minutes
     /// earlier still fired after the panic and could start the spiral, flashes or a lock card
     /// again; an unprompted Takeover comment could do the same inside the five-minute quiet.
-    /// AI effects now stay off for the post-panic quiet (<see cref="Safety.PanicAftermath"/>), and
-    /// a follow-up that a panic overtook while it waited never fires.</para>
+    /// AI effects now stay off for the post-panic quiet (the head's PanicAftermath, through
+    /// AiCommandService.PanicQuietProvider), and a follow-up that a panic overtook while it waited never
+    /// fires (on the port: the panic cancels it, AiCommandService.CancelAll).</para>
     ///
     /// <para>3. Text the model puts INSIDE an effect (a subliminal, a lock card phrase the user
     /// has to type, bouncing words, a follow-up line) never met output moderation, which only
@@ -32,6 +33,8 @@ namespace ConditioningControlPanel.Services.Commands
     /// new getbacktome (the reply path dispatched at depth 0), so one command could keep the
     /// model calling itself every second forever. The chain depth now rides along the async
     /// flow of the follow-up's reply.</para>
+    ///
+    /// <para>Main 61eeb4d0d, in Core so both heads' AiCommandService and command executors share it.</para>
     /// </summary>
     internal static class AiCommandAdmission
     {

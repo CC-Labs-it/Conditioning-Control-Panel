@@ -47,6 +47,7 @@ namespace ConditioningControlPanel.Services
         private readonly Action _save;
         private readonly Func<string, string> _loadManifest;
         private readonly Func<string, byte[]> _decryptFile;
+        private readonly Action<string, string> _decryptFileToFile;
         private readonly Func<string>? _tempDir;
         private readonly object _gate = new();
         private readonly Dictionary<string, InstalledPackManifest> _manifests = new(StringComparer.Ordinal);
@@ -75,6 +76,12 @@ namespace ConditioningControlPanel.Services
             _save = save ?? (() => CoreSettings.Save());
             _loadManifest = loadManifest ?? PackEncryptionService.LoadEncryptedManifest;
             _decryptFile = decryptFile ?? PackEncryptionService.DecryptFile;
+            // PACK DECRYPT TRAP (ccp-bugs #1441/#1442): a temp decrypt (a pack VIDEO) streams to disk a
+            // megabyte at a time, never the whole file in memory. A test that seams decryptFile keeps
+            // its bytes on this path too.
+            _decryptFileToFile = decryptFile == null
+                ? PackEncryptionService.DecryptFileToFile
+                : (encrypted, dest) => File.WriteAllBytes(dest, decryptFile(encrypted));
             _tempDir = tempDir;
             Rescan();
         }
@@ -364,7 +371,7 @@ namespace ConditioningControlPanel.Services
                 var encrypted = GetEncryptedPath(packId, file);
                 if (encrypted == null) return null;
                 var temp = Path.GetFullPath(Path.Combine(MediaTempDir(), $"ccp_temp_{Guid.NewGuid():N}{file.Extension}"));
-                File.WriteAllBytes(temp, _decryptFile(encrypted));
+                _decryptFileToFile(encrypted, temp);   // streamed: never the whole video in memory
                 _tempIdentity[temp] = SourceKey(packId, file);
                 return temp;
             }

@@ -16,6 +16,8 @@ namespace ConditioningControlPanel.Services.Timing
     /// <para>CAP: one step credits at most <c>maxMs</c>. A gaze dwell reads a single sample per
     /// tick, so a UI stall of two seconds must not turn one on-target sample into two seconds of
     /// stare. Pure, pinned by TickStepTests.</para>
+    ///
+    /// <para>Main a4a5aa43b, in Core so both heads' dwells (and Core BubbleAccuracyTest) share it.</para>
     /// </summary>
     public static class TickStep
     {
@@ -37,14 +39,16 @@ namespace ConditioningControlPanel.Services.Timing
             return Math.Min(gap, maxMs);
         }
 
-        /// <summary>The same step on a millisecond counter (Core BubbleAccuracyTest.Dwell's time since
-        /// the bubble showed, where 0 is a real start, not "unset"): between 0 and
-        /// <paramref name="maxMs"/>, zero when the counter went backwards.</summary>
+        /// <summary>
+        /// The same step on a millisecond clock that starts at 0 (elapsed since the dwell began, as the
+        /// calibration bubbles feed it): <paramref name="lastMs"/> 0 is the start, not "unset".
+        /// </summary>
         public static double Ms(ref long lastMs, long nowMs, double maxMs)
         {
-            var gap = nowMs - lastMs;
+            var last = lastMs;
             lastMs = nowMs;
-            if (gap <= 0 || !(maxMs > 0)) return 0;
+            var gap = (double)(nowMs - last);
+            if (!(gap > 0) || !(maxMs > 0)) return 0;
             return Math.Min(gap, maxMs);
         }
     }

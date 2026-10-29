@@ -8,6 +8,8 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Views.Games;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -81,19 +83,31 @@ public sealed class PlayWallTests
                 Assert.False(band.IsVisible);
                 Assert.False(line.IsVisible);
 
-                // The two unregistered hosts still refuse honestly; the two free hosts are reachable.
+                // GAMES: the full Breakout and Goon have no host on this head, so their Play button
+                // refuses honestly; the Breakout demo and Piece by Piece open their game as the launcher does.
                 foreach (var n in new[] { "BtnPlayBreakout", "BtnPlayGoon" })
                 {
                     var b = C<Button>(n);
                     Assert.False(b.IsEnabled, n);
                     Assert.Equal(Loc.Get("exclusives_not_on_this_build"), ToolTip.GetTip(b));
                 }
-                foreach (var n in new[] { "BtnPlayBreakoutDemo", "BtnPlayChess" })
+                var launched = new System.Collections.Generic.List<string>();
+                var previousLaunch = PlayTabView.LaunchGame;
+                PlayTabView.LaunchGame = launched.Add;
+                try
                 {
-                    Assert.True(C<Button>(n).IsEnabled, n);
-                    Assert.Null(ToolTip.GetTip(C<Button>(n)));
-                    Assert.NotNull(C<Button>(n).Cursor); // WPF PlayTabView.xaml:365/:453 Cursor="Hand"
+                    foreach (var n in new[] { "BtnPlayBreakoutDemo", "BtnPlayChess" })
+                    {
+                        var b = C<Button>(n);
+                        Assert.True(b.IsEnabled, n);
+                        Assert.Null(ToolTip.GetTip(b));
+                        b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    }
                 }
+                finally { PlayTabView.LaunchGame = previousLaunch; }
+                Assert.Equal(new[] { "breakoutdemo", "piecebypiece" }, launched);
+                // Both ids are launcher destinations with a GameWindow host on this head.
+                Assert.All(launched, id => Assert.True(LauncherWindow.CanStartGame(id) && GameWindow.Games.ContainsKey(id), id));
                 Assert.NotNull(C<Image>("PlayBreakoutArt").Source);
 
                 // "Configure in settings" lands on the Devices section (WPF OpenDeviceSettings).

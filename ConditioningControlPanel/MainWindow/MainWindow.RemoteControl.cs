@@ -1470,9 +1470,9 @@ namespace ConditioningControlPanel
                     App.Logger?.Information("[Panic] Voice panic refused: the panic key cannot run (Lockdown or panic off)");
                     return false;
                 }
-                // Pending AI follow-ups never outlive a panic that ran (as far as the panic key reaches).
-                CancelPendingAi();
 
+                // Pending AI follow-ups never outlive a panic, as on the key path (after its reach check).
+                CancelPendingAi();
                 // EMI Desk (MOMENTS 4.B): the second panic entry point. Nothing else hooks it - the
                 // bark's Panic trigger is raised from the key path only - so without this a voice
                 // panic would leave her chatting.

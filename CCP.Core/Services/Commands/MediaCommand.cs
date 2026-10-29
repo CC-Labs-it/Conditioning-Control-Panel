@@ -385,7 +385,7 @@ namespace ConditioningControlPanel.Services.Commands
                 // (a bare prefix test let a sibling folder such as "assets-old" through).
                 if (!AiCommandAdmission.IsUnderRoot(assetsRoot, fullPath)) return null;
                 if (!File.Exists(fullPath)) return null;
-                // A file the user switched off never plays because the AI named it.
+                // A file the user switched off never plays because the AI named it (main 61eeb4d0d).
                 var settings = CoreSettings.Current;
                 if (AiCommandAdmission.IsSwitchedOff(Path.GetRelativePath(assetsRoot, fullPath),
                         settings?.DisabledAssetPaths, settings?.DisabledAssetFolders?.ToArray()))

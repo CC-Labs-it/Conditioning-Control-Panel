@@ -21,6 +21,16 @@
     <AssemblyName>CCP.Avalonia</AssemblyName>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <WarningsAsErrors>$(WarningsAsErrors);CA1416</WarningsAsErrors>
+    <!-- What Windows shows for the exe (taskbar, Task Manager, file properties): WPF's values
+         (ConditioningControlPanel.csproj:15-19, 36-39), not "CCP.Avalonia". AssemblyTitle is the
+         FileDescription the taskbar names the app by; AssemblyName stays CCP.Avalonia (avares:// URIs). -->
+    <ApplicationIcon>..\Assets\app.ico</ApplicationIcon>
+    <Company>CodeBambi</Company>
+    <Product>Conditioning Control Panel</Product>
+    <AssemblyTitle>Conditioning Control Panel</AssemblyTitle>
+    <Description>A professional visual conditioning application with gamification features.</Description>
+    <Copyright>Copyright © 2024-2026 CodeBambi</Copyright>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>

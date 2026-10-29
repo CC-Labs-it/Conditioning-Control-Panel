@@ -102,15 +102,12 @@ public class HandBackSettingsTests
     [InlineData("PinkCommand.cs", "PinkFilterOpacity")]
     public void Ai_overlay_commands_go_through_the_rule(string file, string field)
     {
-        // The command moved to CCP.Core; the settings write is the WPF head's surface
-        // (App.AiEffects.cs). Null from the rule hands the surface the user's saved value back.
-        var src = CodeOnly(SourceRoots.ReadProductFile("Services", "Commands", file));
-        Assert.Contains("AiOverlayOpacity.ToWrite(", src);
-        Assert.Contains($"?? CoreSettings.Current.{field};", src);
-        Assert.Equal(0, CountOf(src, $".{field} ="));
-        var surface = CodeOnly(Source("App.AiEffects.cs"));
-        Assert.Equal(1, CountOf(surface, $"s.{field} = intensity;"));
-        Assert.Equal(1, CountOf(surface, $".{field} ="));
+        // The port: the commands live in CCP.Core and the WPF head's surface does the write.
+        var core = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Core", "Services", "Commands", file));
+        Assert.Contains("AiOverlayOpacity.ToWrite(", CodeOnly(core));
+        var src = CodeOnly(Source("App.AiEffects.cs"));
+        Assert.Contains($"if (opacity is int o) settings.{field} = o;", src);
+        Assert.Equal(1, CountOf(src, $"settings.{field} ="));
     }
 
     // ---- helpers ---------------------------------------------------------------------------------

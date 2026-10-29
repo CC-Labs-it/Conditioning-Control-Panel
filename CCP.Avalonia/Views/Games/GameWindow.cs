@@ -9,6 +9,7 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.JustDrop;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Services.Fyp.Online;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
@@ -53,6 +54,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             ["race"] = new("race", "launcher_game_race_title", "dtrh/race.html", RaceGate),
             // WPF DtrhHostService.cs:196 StartUrl behind the Lab door (GameWindow.Dtrh.cs).
             [DtrhId] = new(DtrhId, "launcher_game_dtrh_title", "dtrh/index.html", DtrhGate),
+            // WPF GlassroadHostService (feat/glassroad-a): the 3D race behind CCP_GLASSROAD=1 (GameWindow.Glassroad.cs).
+            [GlassroadId] = new(GlassroadId, "launcher_game_race_title", "glassroad/index.html", GlassroadGate),
         };
 
         private static readonly List<GameWindow> Open = new();
@@ -70,6 +73,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
         internal static GameWindow? Launch(string id)
         {
+            id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
@@ -106,6 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 JustDropOrdersService.Invalidate();
                 Windows.MainShellWindow.Current?.RefreshTakeawayShelf();
             };
+            if (spec.Id == GlassroadId) Opened += (_, _) => OpenGlassroad();
         }
 
         private WebAssetServer? _server;
@@ -142,6 +147,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (Spec.Id == PbpId && HandlePbp(o)) return;
             if (IsRace && HandleRace(o)) return;
             if (IsDtrh && HandleDtrh(o)) return;
+            if (IsGlassroad && HandleGlassroad(o)) return;
             switch ((string?)o["type"])
             {
                 case "ready":
@@ -183,6 +189,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     break;
                 case "exit":
                     // The page winds down and answers exit-done; WPF's ArmExitWatchdog closes it anyway.
+                    _shellExiting = true;   // on its way out: it no longer keeps an Escape (GameWindow.Escape.cs)
                     DispatcherTimer.RunOnce(Close, TimeSpan.FromMilliseconds(1200));
                     break;
                 case "exit-done":
@@ -236,7 +243,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>Host -&gt; page (WPF ChaosWebViewHost.Post) through the page's string carrier.</summary>
         internal void Post(object message)
         {
-            var json = JsonConvert.SerializeObject(message);
+            // Scrolller media: raw urls for a Windows view WPF's gate answers, the loopback relay otherwise (WebHost.ScrolllerFrame).
+            var json = Web.ScrolllerFrame(JsonConvert.SerializeObject(message), PageUrl);
             Posted?.Invoke(json);
             if (_closing) return;
             _ = Web.PostJsonAsync(json);

@@ -85,6 +85,62 @@ public sealed class FirstShowStageTests
         Assert.False(stage.Credit.Shown);   // WPF :264: the mark goes when the show ends
     });
 
+    /// <summary>WPF FirstShowDesktopWindow Start :236: a show of Scrolller pictures carries the "via Scrolller" credit
+    /// (never the bundled one); the copies come from the device cache, carry the remote-copy prefix the 24 h sweep
+    /// knows, and nothing is asked of Scrolller while the switch is off.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task AScrolllerShowIsCreditedAndItsCopiesComeFromTheDeviceCache(bool bundled) => Run(async stage =>
+    {
+        var pics = Enumerable.Range(0, 4).Select(i => ContentLocator.Resolve(Path.Combine("Resources", "web", "backroom", "stations", "slot", "fallback", $"gif{i}.webp"))).ToArray();
+        var real = FirstShowStageWindow.DeviceCacheFetch;
+        int i = 0;
+        FirstShowStageWindow.DeviceCacheFetch = (_, _, _) => Task.FromResult<string?>(pics[i++ % pics.Length]);
+        try
+        {
+            stage.BundledPictures = () => pics;
+            stage.FetchFeed = (_, _, _) => Task.FromResult<IReadOnlyList<FypAssetManifest.Entry>>(
+                Enumerable.Range(0, 4).Select(n => new FypAssetManifest.Entry { Url = $"https://images.scrolller.com/x/{n}.webp" }).ToList());
+            double t = S.GreetAfter + .1; stage.Clock = () => t; stage.Frame();
+            await (bundled ? stage.Bundled() : stage.Load("censored"));
+            stage.ChoiceButtons[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));   // "ready"
+            Assert.True(stage.Playing);
+            Assert.Equal(!bundled, stage.CreditShown);
+            t += S.Length + 1; stage.Frame();
+            Assert.False(stage.CreditShown);
+        }
+        finally { FirstShowStageWindow.DeviceCacheFetch = real; }
+    });
+
+    [Fact]
+    public Task AScrolllerCopyIsRefusedWhileTheSwitchIsOffAndPrefixedWhenOn() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var src = Path.Combine(Path.GetTempPath(), "ccp-fs-src-" + Guid.NewGuid().ToString("N") + ".jpg");
+        File.WriteAllBytes(src, new byte[] { 0xFF, 0xD8, 0xFF, 0 });
+        var real = FirstShowStageWindow.DeviceCacheFetch;
+        int asked = 0;
+        FirstShowStageWindow.DeviceCacheFetch = (_, max, _) => { asked++; Assert.Equal(FirstShowStageWindow.MaxPictureBytes, max); return Task.FromResult<string?>(src); };
+        try
+        {
+            ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Apply(false, null);
+            Assert.Null(await FirstShowStageWindow.CopyFromDeviceCacheAsync("https://images.scrolller.com/a/1.jpg", default));
+            Assert.Equal(0, asked);
+            ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Apply(true, null);
+            var copy = await FirstShowStageWindow.CopyFromDeviceCacheAsync("https://images.scrolller.com/a/1.jpg", default);
+            Assert.NotNull(copy);
+            Assert.True(FirstShowStageWindow.IsScrolllerCopy(copy!));
+            Assert.Equal(FirstShowStageWindow.TempDir, Path.GetDirectoryName(copy));
+            File.Delete(copy!);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Apply(true, null);
+            FirstShowStageWindow.DeviceCacheFetch = real;
+            File.Delete(src);
+        }
+    });
+
     [Fact]
     public Task APictureOverTheCapIsDroppedAndLeavesNoFile() => AvaloniaTestDispatcher.RunAsync(async () =>
     {

@@ -19,9 +19,7 @@ namespace ConditioningControlPanel.Services
         {
             Recognize = (grammar, opts) => App.Speech?.RecognizeOneOfAsync(grammar, opts) ?? Task.FromResult(PhraseResult.NotAvailable),
             ActionFor = VoiceAction,
-            // The panic reaches exactly as far as the panic key and reports whether it ran (769373c28):
-            // refused, nothing is confirmed.
-            RunFor = name => name == "panic" ? () => App.MainWindowRef?.TriggerPanicFromRemote() == true : null,
+            RunFor = VoiceRun,
             IsBlocked = g => g == VoiceGuard.Lockdown ? App.Lockdown?.IsActive == true : StopLocked(),
             OnRefused = () => App.Lockdown?.NotifyEscapeAttempt(Possession.EscapeKinds.Stop),
             ShowListening = line => OnUi(() => App.AvatarWindow?.ShowListeningBubble(line)),
@@ -54,10 +52,21 @@ namespace ConditioningControlPanel.Services
             App.Video?.IsStrictActive == true ||
             (App.BubbleCount?.IsBusy == true && App.Settings?.Current?.BubbleCountStrictLock == true);
 
+        /// <summary>
+        /// Intents that apply their own safety rule (Core VoiceCommandHost.RunFor). The panic reaches
+        /// exactly as far as the panic key (hard rule 6, owner 2026-10-22): under Lockdown or with panic
+        /// off it does nothing but the leash part (VoicePanicReach, asked inside TriggerPanicFromRemote),
+        /// and false keeps the "everything's off" line unsaid. Strict Lock alone leaves it whole.
+        /// </summary>
+        private static Func<bool>? VoiceRun(string name) => name switch
+        {
+            "panic" => () => App.MainWindowRef?.TriggerPanicFromRemote() == true,
+            _ => null,
+        };
+
         /// <summary>What each intent does on this head (the old Execute closures, by intent name).</summary>
         private static Action? VoiceAction(string name) => name switch
         {
-            "panic" => () => App.MainWindowRef?.TriggerPanicFromRemote(),
             "bubbles_on" => () => App.Bubbles?.Start(bypassLevelCheck: true),
             "bubbles_off" => () => App.Bubbles?.Stop(),
             "video_on" => () => App.Video?.TriggerVideo(),

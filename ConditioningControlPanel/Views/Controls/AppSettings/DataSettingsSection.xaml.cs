@@ -130,8 +130,8 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
         /// <para><b>What goes:</b> <c>settings.json</c> (moved aside to
         /// <c>settings.pre-reset-&lt;stamp&gt;.json</c>, not deleted - a reset the user regrets has to
         /// be recoverable by hand), any leftover <c>settings.json*.tmp</c> from an interrupted save,
-        /// the <c>.restored</c> cloud-restore marker and the session / ramp journals
-        /// (<see cref="Services.FactoryResetSweep"/>). The temps and the marker MUST go with it:
+        /// the <c>.restored</c> cloud-restore marker, the session / ramp journals and the remote / Lockdown
+        /// recovery files (<see cref="Services.FactoryResetSweep"/>). The temps and the marker MUST go with it:
         /// <c>SettingsService.RecoverAndCleanTempFiles</c> promotes a surviving temp to
         /// <c>settings.json</c> when the real file is missing, which would quietly undo the reset.</para>
         ///
@@ -186,8 +186,8 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
                     App.Logger?.Warning("[RESET] no settings.json to move aside (already at defaults)");
                 }
 
-                // Temps, the cloud-restore marker and the session / ramp journals: each would hand
-                // old settings back on the next launch (FactoryResetSweep).
+                // Temps, the cloud-restore marker, the session / ramp journals and the remote / Lockdown
+                // recovery files: each would hand old settings back on the next launch (FactoryResetSweep).
                 Services.FactoryResetSweep.Delete(dir, LogSweep);
 
                 // Tell the next launch that the missing settings.json is DELIBERATE. Without this,
@@ -220,8 +220,7 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
             // Belt and braces: a temp created by a save that was already mid-flight when the sweep
             // above ran would be promoted to settings.json by
             // SettingsService.RecoverAndCleanTempFiles on the next launch, undoing the reset.
-            // SealForReset waited out any write already in flight, so this sweep is the last word:
-            // every deletion is done before the exit begins.
+            // SealForReset waited out any write already in flight, so this sweep is the last word.
             Services.FactoryResetSweep.Delete(dir, LogSweep);
 
             // The window stays up for the exit's few seconds: nothing in it may be pressed meanwhile.
@@ -235,12 +234,6 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
             Services.Diagnostics.UiThreadExit.Begin(0);
         }
 
-        private static void LogSweep(string path, string? error)
-        {
-            if (error == null) App.Logger?.Information("[RESET] deleted {Path}", path);
-            else App.Logger?.Warning("[RESET] could not delete {Path}: {E}", path, error);
-        }
-
         /// <summary>
         /// MessageBox with an owner only when there is one. Passing a null Window to the owned
         /// overload throws, and this control can legitimately be off-window (render tests, a
@@ -252,6 +245,11 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
             else MessageBox.Show(message, title, MessageBoxButton.OK, icon);
         }
 
+        private static void LogSweep(string path, string? error)
+        {
+            if (error == null) App.Logger?.Information("[RESET] deleted {Path}", path);
+            else App.Logger?.Warning("[RESET] could not delete {Path}: {E}", path, error);
+        }
 
         /// <summary>
         /// Schedules "wait a few seconds, then start this exe again" in a detached shell.

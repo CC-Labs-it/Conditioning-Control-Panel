@@ -218,6 +218,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PulseTimer(() => { if (gen == _pulseGen) end(); }, TimeSpan.FromSeconds(30));
         }
 
+        /// <summary>WPF AutonomyService.SettleSettingPulses (main 8fe2a80a0): a session is about to snapshot
+        /// the settings, so a running pink pulse hands its boosted values back first, or the session's
+        /// restore made them the user's for good. Only the settings-writing pulse; bubbles and bouncing
+        /// text write nothing.</summary>
+        internal void SettleAutonomyPulses() => EndPinkPulse(cancelled: true);
+
         /// <summary>WPF CancelActivePulses: stop only what a Takeover pulse started.</summary>
         internal void CancelAutonomyPulses()
         {

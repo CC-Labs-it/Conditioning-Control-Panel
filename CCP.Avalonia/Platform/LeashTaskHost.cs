@@ -2,7 +2,7 @@
 // LeashOnPanicPress/EndLeashTask: lock cards (never strict), a leash session, bubbles and a caged video under the Core
 // LeashTaskRunner. Head differences: completed cards are counted from LockCardWindow.Completed; the video clock is a
 // 1 s script poll; the Deeper player raises no completion event, so a catalogue watch there never finishes by itself.
-// ponytail: WPF LeashPanicKeyWhilePanicOff (panic key off / Lockdown while leashed) is not on this head's key route.
+// WPF LeashPanicKeyWhilePanicOff (panic key off / Lockdown while leashed): HandlePanicKeyPress -> PanicKeyLeashOnly -> OnPanicPress(panicRuns: false).
 using System;
 using System.Globalization;
 using System.IO;
@@ -59,19 +59,39 @@ internal sealed class LeashTaskHost : ILeashTaskHost, IDisposable
         try { (shell ?? MainShellWindow.Current)?.OnLeashTaskEnded(); } catch { }   // WPF: unplayable cleared, gate hidden
     }
     /// <summary>The "leash-task" panic surface (WPF LeashOnPanicPress, the first thing a panic press does): the
-    /// runner parks with its progress, the video window closes, the gate stands back. The punishment stays pending.</summary>
-    internal static void OnPanicPress(MainShellWindow? shell)
+    /// runner parks with its progress, the video window closes, the gate stands back. The punishment stays pending.
+    /// <paramref name="panicRuns"/> false = WPF LeashOnPanicPress(panicRuns: false), LeashPanicKeyWhilePanicOff: the
+    /// panic itself will not run (switched off, or Lockdown holding the keys), but panic always works on a leash. Then
+    /// the runner also stops its OWN session, a lines task closes its own card (nothing else takes it down), and an
+    /// up gate stands back even with no task running.
+    /// <paramref name="fromKey"/> true only for a physical panic-key press: that Escape may be the one closing the
+    /// Ctrl+K palette, which is no panic. The voice panic, the tray, the leash gate and a remote never skip (fix wave 2
+    /// #5: "red" under Lockdown with the palette open used to leave the leash task running).</summary>
+    internal static void OnPanicPress(MainShellWindow? shell, bool panicRuns = true, bool fromKey = false)
     {
         var r = Runner;
-        if (r?.IsRunning != true && LeashPunishWindow.Current == null) return;
-        if (SettingsPaletteWindow.IsOpen && !LockCardWindow.IsAnyOpen()   // WPF MainWindow.Leash.cs:382: an Escape
-            && string.Equals(CoreSettings.Current?.PanicKey, "Escape", StringComparison.OrdinalIgnoreCase)) return;   // closing the palette is no panic
-        Serilog.Log.Information("Leash: panic press stops the running task (kept pending)");
-        try { r?.Park(); } catch (Exception ex) { Serilog.Log.Debug("Leash park failed: {E}", ex.Message); }
+        shell ??= MainShellWindow.Current;
+        var gateUp = !panicRuns && shell?.LeashGate?.IsUp == true;
+        if (r?.IsRunning != true && LeashPunishWindow.Current == null && !gateUp) return;
+        if (PaletteTakesPress(fromKey, SettingsPaletteWindow.IsOpen, LockCardWindow.IsAnyOpen(), CoreSettings.Current?.PanicKey)) return;
+        Serilog.Log.Information("Leash: panic press stops the running task (kept pending, panic runs={Runs})", panicRuns);
+        var linesCard = !panicRuns && (r as LeashTaskRunner)?.RunningKind == PunishKind.Lines;
+        try
+        {
+            // Panic off: the leash's own session stops too, a session the player started does not.
+            if (panicRuns) r?.Park();
+            else r?.ParkAndStopItsSession();
+        }
+        catch (Exception ex) { Serilog.Log.Debug("Leash park failed: {E}", ex.Message); }
+        if (linesCard) { try { LockCardWindow.ForceCloseAll(); } catch (Exception ex) { Serilog.Log.Debug("Leash lines card close failed: {E}", ex.Message); } }
         LeashPunishWindow.CloseNow();
-        try { (shell ?? MainShellWindow.Current)?.LeashStandBack(); }
+        try { shell?.LeashStandBack(); }
         catch (Exception ex) { Serilog.Log.Debug("Leash gate stand-back failed: {E}", ex.Message); }
     }
+    /// <summary>WPF MainWindow.Leash.cs LeashOnPanicPress: TRUE when the press is an Escape aimed at closing the Ctrl+K
+    /// palette (the panic ladder's rung 2), so the leash part stands aside. Only a physical key press can be that.</summary>
+    internal static bool PaletteTakesPress(bool fromKey, bool paletteOpen, bool lockCardOpen, string? panicKey) =>
+        fromKey && paletteOpen && !lockCardOpen && string.Equals(panicKey, "Escape", StringComparison.OrdinalIgnoreCase);
     // ---- the host -----------------------------------------------------------------------------
     private bool _windowed;
     private LeashWatch? _watching;

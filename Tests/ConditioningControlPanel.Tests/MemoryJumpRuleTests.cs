@@ -113,7 +113,8 @@ public class MemoryJumpRuleTests
         Assert.Contains("catch { }", start);
         Assert.Contains("VideoDiag.Log(\"RES-JUMP\"", start);
 
-        string bug = SourceRoots.ReadProductFile("Services", "BugReportService.cs");   // CCP.Core since the split
+        // The port: BugReportService lives in CCP.Core.
+        string bug = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Core", "Services", "BugReportService.cs"));
         Assert.Contains("\"[RES-JUMP]\", \"[Res-jump \"", bug);
     }
 
