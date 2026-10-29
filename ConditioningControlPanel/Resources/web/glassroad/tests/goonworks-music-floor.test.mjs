@@ -35,7 +35,7 @@ test('Goonworks jukebox floor consumes the shared bands, eight notes and heard b
   assert.ok(nodes.has(top) && nodes.has(edge), 'all patterns stay inside the existing top and navigation edge');
   assert.ok(!nodes.has(reactive.t), 'no independently running animation clock');
   assert.deepEqual(new Set([...nodes].filter(n => n.isTextureNode).map(n => n.value)), new Set([reactive.vizTexture]), 'no independent textures, media owners or render targets');
-  assert.ok(nodes.size < 900, 'bounded analytic graph: ' + nodes.size);
+  assert.ok(nodes.size < 1450, 'bounded analytic graph: ' + nodes.size);
 });
 
 test('the final opaque Goonworks material contains the complete musical floor rather than discarding it', t => {

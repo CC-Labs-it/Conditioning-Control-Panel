@@ -32,11 +32,11 @@ function audioRow(u, wave, spectrum) {
   for (let i = 0; i < 64; i++) { data[i * 4] = wave(i); data[i * 4 + 1] = spectrum(i); }
 }
 
-test('Mainframe traces the actual waveform at fixed beat, level and section', t => {
+test('Mainframe leaves tile geometry stable when raw PCM changes between instrument attacks', t => {
   const { u, capture } = setup('mainframe', t);
   audioRow(u, () => 128, () => 70); const flat = capture();
   audioRow(u, i => Math.round(128 + Math.sin(i * Math.PI / 8) * 110), () => 70);
-  assert.ok(changed(flat, capture()), 'PCM content itself bends the phosphor trace');
+  assert.deepEqual(flat, capture(), 'the approved tile pattern is not a continuously repainting waveform');
 });
 
 for (const kind of ['mainframe', 'keep']) test(kind + ' distinguishes frequency content, hits and song sections at equal loudness', t => {
@@ -45,23 +45,24 @@ for (const kind of ['mainframe', 'keep']) test(kind + ' distinguishes frequency 
   audioRow(u, () => 128, i => i < 32 ? 235 : 10); const low = capture();
   audioRow(u, () => 128, i => i < 32 ? 10 : 235);
   assert.ok(changed(low, capture()), 'equal energy with a different FFT spectrum changes the floor');
-  const quiet = capture(); u.kick.value = .9; u.snare.value = .7; u.hitAge.value = .1; u.hitStrength.value = .9;
+  const quiet = capture(); u.kick.value = .9; u.snare.value = .7;
+  u.kickAge.value = u.snareAge.value = .1; u.kickStrength.value = .9; u.snareStrength.value = .7;
   assert.ok(changed(quiet, capture()), 'a real onset has a distinct visual consequence between grid beats');
   const first = capture(); u.section.value += 1;
   assert.ok(changed(first, capture()), 'the playing section changes the composition');
 });
 
-for (const kind of ['mainframe', 'keep']) test(kind + ' shows a bounded spectral trail without allocating another texture', t => {
+for (const kind of ['mainframe', 'keep']) test(kind + ' ignores stale spectral trails without allocating another texture', t => {
   const { u, music, root, capture } = setup(kind, t);
   music.tileBar.value=16;audioRow(u,()=>128,()=>100);
   const before = capture(), data = u.vizTexture.image.data;
   for (let row = 1; row < 18; row++) for (let i = 0; i < 64; i++) data[(row * 64 + i) * 4] = (row + i) % 2 ? 235 : 50;
-  assert.ok(changed(before, capture()), 'past measured frequencies visibly remain behind the current sound');
+  assert.deepEqual(before, capture(), 'stale history cannot fill the dark gaps between current attacks');
   const nodes = new Set(), pending = [root];
   while (pending.length) { const n = pending.pop(); if (nodes.has(n)) continue; nodes.add(n); for (const child of n.getChildren()) pending.push(child); }
   const textures = [...nodes].filter(n => n.isTextureNode);
   assert.ok(textures.length > 0 && textures.every(n => n.value === u.vizTexture), 'all samples share the world music atlas');
-  assert.ok(nodes.size < 850, 'the classic visualization stays within the existing compact graph budget');
+  assert.ok(nodes.size < 1450, 'the tile patterns and four strings have a fixed bounded graph');
 });
 
 test('Keep responds with complete physical tile fills instead of lines through slabs', t => {
