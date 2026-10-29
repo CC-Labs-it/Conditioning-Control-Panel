@@ -1,15 +1,15 @@
 /* The retained dense Afterimage atlas, 29 October 2026. Background art only. */
 export const AFTERIMAGE_STYLES = Object.freeze([
-  ['velvet-aurora', 'Velvet aurora', '#e9a0ce', '#82cfeb', '#8a74d1'],
-  ['mercury-tides', 'Mercury tides', '#dfb0df', '#91e8de', '#72a1bb'],
-  ['neon-mycelium', 'Neon mycelium', '#8debe5', '#a7a5fa', '#6659be'],
-  ['moire-drift', 'Moire drift', '#d2b5ed', '#a5d2fa', '#b37ada'],
-  ['spectral-shear', 'Spectral shear', '#86dfcd', '#b1e1d9', '#7190ce'],
-  ['phase-textile', 'Phase textile', '#e5a6d8', '#9eb9e9', '#bc88de'],
-  ['chromatic-turbulence', 'Chromatic turbulence', '#34c2dc', '#df5199', '#7786e8'],
-  ['caustic-drift', 'Caustic drift', '#b7a2e5', '#76c2cf', '#7267ae'],
-  ['curl-diffusion', 'Curl diffusion', '#85dace', '#b3a0bb', '#41a9b4'],
-  ['granular-current', 'Granular current', '#a9cad8', '#d1c3d9', '#708eaa'],
+  ['velvet-aurora', 'Velvet aurora', '#ff5bc8', '#3fd7ff', '#9b54f2'],
+  ['mercury-tides', 'Mercury tides', '#f278ed', '#46efce', '#419edb'],
+  ['neon-mycelium', 'Neon mycelium', '#3dffe0', '#ac7bff', '#7652ed'],
+  ['moire-drift', 'Moire drift', '#d479ff', '#70c5ff', '#f16bd9'],
+  ['spectral-shear', 'Spectral shear', '#48edb5', '#75ffe1', '#6488f4'],
+  ['phase-textile', 'Phase textile', '#ff6dc8', '#85adff', '#d268ee'],
+  ['chromatic-turbulence', 'Chromatic turbulence', '#25d9f1', '#ff4aa7', '#8b72ff'],
+  ['caustic-drift', 'Caustic drift', '#c67dff', '#49dbd5', '#9067eb'],
+  ['curl-diffusion', 'Curl diffusion', '#4df0bd', '#ed8ed2', '#26b8dd'],
+  ['granular-current', 'Granular current', '#7cdbff', '#f1a4ef', '#7c9ee5'],
 ].map(([id, name, ...colours]) => Object.freeze({ id, name, colours: Object.freeze(colours) })));
 
 const sat = value => Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));

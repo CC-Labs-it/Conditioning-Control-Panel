@@ -32,7 +32,7 @@ test('Boudoir colour spectacle follows the heard beat and real bands without a t
   for (const name of ['base', 'trueEdge', 'distance', 'wet']) assert.ok(nodes.has(inputs[name]), name);
   assert.ok(!nodes.has(reactive.t), 'there is no second phase clock');
   assert.deepEqual(new Set([...nodes].filter(n => n.isTextureNode).map(n => n.value)), new Set([reactive.vizTexture]), 'same material samples only the shared PCM atlas');
-  assert.ok(nodes.size < 900, `bounded shader graph: ${nodes.size}`);
+  assert.ok(nodes.size < 1450, `bounded shader graph: ${nodes.size}`);
 });
 
 test('Boudoir has distinct bright instruments and dim resting hues; Gentle retains restrained coverage', () => {

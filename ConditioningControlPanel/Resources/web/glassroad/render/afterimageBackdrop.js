@@ -189,12 +189,13 @@ export function createAfterimageBackdrop({ theme = 'threshold', phone = false, r
   // Cartesian direction charts have no longitude cut or polar pinch while taking a banked bend.
   const x = d.x.mul(.82).add(d.z.mul(.57)).add(.5), y = d.y.mul(.8).add(.48);
   const field = denseField(style.id, x, y, uniforms.time, uniforms.bass, uniforms.mid, uniforms.high, phone);
-  const tint = mix(rgb(style.colours[0]), rgb(style.colours[1]), field.tint);
-  const ink = mix(tint, rgb(style.colours[2]), wave(x.mul(3).add(y.mul(2))).mul(.35));
+  const tint = mix(rgb(style.colours[0]), rgb(style.colours[1]), smoothstep(.15, .85, field.tint));
+  const ink = mix(tint, rgb(style.colours[2]), wave(x.mul(3).add(y.mul(2))).mul(.22));
   const fine = granules(field.p, phone, min(field.grains, 1.5));
   const glow = field.lines.mul(.5).add(field.mass).add(fine.mul(uniforms.high.mul(.22).add(.7)));
-  const horizon = smoothstep(.015, .35, abs(d.y)).mul(.62).add(.3);
-  const quiet = uniforms.gentle.mul(-.25).add(1);
+  const horizon = smoothstep(.008, .28, abs(d.y)).mul(.62).add(.36);
+  // Vivid detail keeps its dark resting field. Gentle retains the previous light budget.
+  const quiet = uniforms.gentle.mul(-.74).add(1.3);
   const ground = rgb(theme === 'mainframe' ? '#071719' : theme === 'goonworks' ? '#160a18' : '#0c0b1b');
   const material = new MeshBasicNodeMaterial({ side: BackSide, depthWrite: false, fog: false });
   material.name = `afterimage-${style.id}`;

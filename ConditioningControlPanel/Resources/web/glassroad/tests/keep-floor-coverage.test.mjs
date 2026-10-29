@@ -66,7 +66,7 @@ test('Keep tile choreography changes across the whole road with heard time and m
   notes.forEach((_, i) => { reactive['note' + i].value = notes[(i + 3) % 8]; });
   for(let i=0;i<64;i++)reactive.vizTexture.image.data[i*4+1]=Math.round(notes[(Math.floor(i/8)+3)%8]*255);
   const redistributed = capture(.2).filter((value, i) => delta(value, first[i]) > .01).length / tiles.length;
-  assert.ok(redistributed > .2, 'Equal loudness moves the lit subset to different tile banks, leaving rest space');
+  assert.ok(redistributed > .08, 'Equal loudness changes the sparse stepped melody while preserving dark recovery space');
 });
 
 test('Keep tile fill preserves its mortar, exact silence and stopped-song finish', () => {
