@@ -7820,6 +7820,7 @@
   "shop_loading": "Abrindo o balcão.",
   "shop_offline": "O balcão não respondeu. Tente de novo daqui a pouco.",
   "shop_signed_out": "Entre na conta para comprar no balcão.",
+  "shop_sign_in": "Entre para comprar",
   "shop_wallet": "{0} brilhos",
   "shop_price": "{0} brilhos",
   "shop_after": "Saldo depois: {0}",

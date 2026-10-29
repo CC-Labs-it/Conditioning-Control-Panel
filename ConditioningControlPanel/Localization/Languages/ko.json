@@ -7820,6 +7820,7 @@
   "shop_loading": "카운터를 여는 중이에요.",
   "shop_offline": "카운터가 응답하지 않았어요. 잠시 후 다시 시도해 주세요.",
   "shop_signed_out": "카운터에서 사려면 로그인하세요.",
+  "shop_sign_in": "로그인하고 사기",
   "shop_wallet": "{0} 반짝임",
   "shop_price": "{0} 반짝임",
   "shop_after": "구매 후 잔액: {0}",

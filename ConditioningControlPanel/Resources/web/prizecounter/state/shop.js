@@ -2,7 +2,8 @@
  *   readState   the /v2/shop/state body -> tabs in house order, shelves of at most 4 bays x 9 slots
  *   faceOf      which face a confirm card shows
  *   createShop  load, tabs, the focus walk, the confirm card, one idem per card, receipts and refusals
- * intent() and confirm() answer what changed: { tab, focus, card, close, effects, owned, buy, wear, prime }. */
+ *   windowShelves  what a signed-out counter shows behind its sign-in button (the art, greyed, no prices)
+ * intent() and confirm() answer what changed: { tab, focus, card, close, effects, owned, buy, wear, prime, signIn }. */
 
 export const TAB_ORDER = ['rain-clothes', 'rain-hair', 'kart', 'chess', 'profile', 'desk', 'prime', 'backroom'];
 export const BAYS = 4, SLOTS = 9;
@@ -73,6 +74,17 @@ export function walk(shelves, f, dir) {
   return null;
 }
 
+/* The window display a signed-out player sees behind the sign-in button: the art itself, greyed, no prices.
+ * One family set per bay; Back Room rows stay off it (they are the account's counter). items = manifest items. */
+export const WINDOW_BAYS = [['rain'], ['kart'], ['chess', 'desk'], ['profile', 'prime']];
+export function windowShelves(items) {
+  const list = Array.isArray(items) ? items.filter((i) => obj(i) && typeof i.id === 'string' && i.id) : [];
+  return WINDOW_BAYS.map((fams) => ({
+    rows: list.filter((i) => fams.includes(i.family)).sort((a, b) => fams.indexOf(a.family) - fams.indexOf(b.family))
+      .slice(0, SLOTS).map((i) => readRow({ id: i.id, sale: 'soon' })),
+  }));
+}
+
 const RETRY = { busy: 'shop_note_retry', offline: 'shop_note_retry', timeout: 'shop_note_retry', signed_out: 'shop_note_signed_out' };
 
 /** deps: { request(op, body, idem) -> body, newIdem(), tab? (init.tab), now? }. request may answer {ok,status,body} too. */
@@ -136,7 +148,9 @@ export function createShop({ request, newIdem, tab: startTab = null, now = () =>
     },
 
     intent(i) {
-      if (!st || !i) return {};
+      if (!i) return {};
+      // No shelf yet (signed out, offline): back still leaves, and select on a signed-out counter asks for the sign-in.
+      if (!st) return i.type === 'back' ? { close: { reason: 'back' } } : i.type === 'select' && status === 'signed_out' ? { signIn: true } : {};
       const type = i.type;
       if (type === 'back') { if (card) { card = null; return { card: null }; } return { close: { reason: 'back' } }; }
       if (type === 'select') { if (card) return act(); return foc && focusView().row ? { card: openCard(focusView().row.id) } : {}; }

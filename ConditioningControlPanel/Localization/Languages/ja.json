@@ -7820,6 +7820,7 @@
   "shop_loading": "カウンターを開いています。",
   "shop_offline": "カウンターから応答がありません。少ししてからもう一度どうぞ。",
   "shop_signed_out": "カウンターで買うにはサインインしてください。",
+  "shop_sign_in": "サインインして買う",
   "shop_wallet": "{0} きらめき",
   "shop_price": "{0} きらめき",
   "shop_after": "購入後の残高: {0}",

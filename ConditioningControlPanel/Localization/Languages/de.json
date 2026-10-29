@@ -7820,6 +7820,7 @@
   "shop_loading": "Die Theke öffnet.",
   "shop_offline": "Die Theke hat nicht geantwortet. Versuch es gleich noch mal.",
   "shop_signed_out": "Melde dich an, um an der Theke einzukaufen.",
+  "shop_sign_in": "Anmelden und einkaufen",
   "shop_wallet": "{0} Funkeln",
   "shop_price": "{0} Funkeln",
   "shop_after": "Guthaben danach: {0}",

@@ -1,7 +1,7 @@
 /* host.js - the seam between the page and whoever hosts it (CONTRACT.md "Host seam").
- * Every host answers the same shape: { ready() -> init, request(op, body, idem) -> body, wallet(sp), close(reason), log(msg) }.
+ * Every host answers the same shape: { ready() -> init, request(op, body, idem) -> body, wallet(sp), close(reason), signIn(), log(msg) }.
  *   createHost(win)  standalone: frames over window.chrome.webview (WPF) or postMessage to the parent (web, phone).
- *                    out { type:'ready' } { type:'request', reqId, op, body, idem } { type:'wallet', sp } { type:'close', reason }
+ *                    out { type:'ready' } { type:'request', reqId, op, body, idem } { type:'wallet', sp } { type:'close', reason } { type:'signin' }
  *                    in  { type:'init', ... } { type:'reply', reqId, body }
  *   asHost(obj)      mounted inside a game: a plain object with the same methods (missing ones are no-ops).
  * request() never rejects: a missing reply answers { ok:false, reason:'offline' }. */
@@ -42,6 +42,7 @@ export function createHost(win = window, { timeoutMs = 15000 } = {}) {
     },
     wallet(sp) { post({ type: 'wallet', sp }); },
     close(reason = 'back') { post({ type: 'close', reason }); },
+    signIn() { post({ type: 'signin' }); },
     log(msg) { post({ type: 'log', level: 'debug', msg: String(msg).slice(0, 400) }); },
   };
 }
@@ -54,6 +55,7 @@ export function asHost(o = {}) {
     request: (op, body = {}, idem) => Promise.resolve().then(() => o.request(op, body, idem)).catch(() => OFFLINE).then((r) => r || OFFLINE),
     wallet: (sp) => call(o.wallet, sp),
     close: (reason = 'back') => call(o.close, reason),
+    signIn: () => call(o.signIn),
     log: (msg) => call(o.log, msg),
   };
 }

@@ -292,6 +292,7 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
 
   return {
     showTab, focus, stamp, resize, dispose, hooks, screenPos, setWallet: tags.setWallet,
+    items: manifest.items.map((i) => ({ id: i.id, family: i.family })),
     onIntent(cb) { listeners.add(cb); return () => listeners.delete(cb); },
     setMotion(m) { motion = m; },
     parts: { renderer, scene, camera, counter, shelves: () => shelves, dust: (bay) => ['l', 'c', 'r'].map((s) => shelves.get(bay) && node(shelves.get(bay).group, 'dust_' + s)) },

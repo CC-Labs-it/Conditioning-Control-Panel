@@ -2,7 +2,7 @@
  * and the plain list when the scene cannot load. It draws what the state model says and sends intents back; it never
  * decides. Every effect has an IN and an OUT; Gentle drops movement, motion 'off' cuts.
  *
- *   const hud = createHud(root, { t, send, goTab, motion, gentle, list });
+ *   const hud = createHud(root, { t, send, goTab, signIn, motion, gentle, list });
  *   hud.paint(view); hud.receipt(sp, {x, y}); hud.previewSlot   // lane B3-W5 fills the slot */
 
 import { tabKey, itemName } from '../state/strings.js';
@@ -10,10 +10,10 @@ import { TAB_ICONS, STAR, LOCK, BACK } from './icons.js';
 import { cardModel, renderCard } from './card.js';
 import { countDown, weekNo } from './wallet.js';
 
-const STATUS = { loading: 'shop_loading', offline: 'shop_offline', signed_out: 'shop_signed_out' };
+const STATUS = { loading: 'shop_loading', offline: 'shop_offline' };
 const OUT_MS = 160;
 
-export function createHud(root, { t, send, goTab, motion = 'full', gentle = false, list = false }) {
+export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'full', gentle = false, list = false }) {
   const doc = root.ownerDocument;
   const el = (tag, cls, text) => { const n = doc.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
   const hud = el('div', 'pc-hud');
@@ -47,7 +47,13 @@ export function createHud(root, { t, send, goTab, motion = 'full', gentle = fals
   modal.append(scrim);
   modal.hidden = true;
   const fx = el('div', 'pc-fx');
-  hud.append(top, tabs, listEl, peek, status, modal, fx);
+  // Signed out: the shelves sit greyed behind one button that asks the host for its sign-in.
+  const gate = el('div', 'pc-gate'), gateBtn = el('button', 'pc-btn pc-main', t('shop_sign_in'));
+  gateBtn.type = 'button'; gateBtn.title = t('shop_signed_out');
+  gateBtn.onclick = () => { gateBtn.blur(); signIn(); };
+  gate.append(gateBtn);
+  gate.hidden = true;
+  hud.append(top, tabs, listEl, peek, status, gate, modal, fx);
   root.append(hud);
 
   let shown = 0, counting = null, tabIds = '', peekKey = '', cardKey = null, card = null, outTimer = 0;
@@ -113,6 +119,17 @@ export function createHud(root, { t, send, goTab, motion = 'full', gentle = fals
       });
       return ul;
     }));
+  }
+
+  let gateTimer = 0;
+  function paintGate(on) {
+    if (on === !gate.hidden && !gate.classList.contains('pc-out')) return;
+    clearTimeout(gateTimer);
+    if (on) { gate.classList.remove('pc-out'); gate.hidden = false; pulse(gate, 'pc-in'); return; }
+    if (gate.hidden) return;
+    if (motion === 'off') { gate.hidden = true; return; }
+    gate.classList.add('pc-out');
+    gateTimer = setTimeout(() => { gate.hidden = true; gate.classList.remove('pc-out', 'pc-in'); }, OUT_MS);
   }
 
   const buttons = () => (card ? [...card.querySelectorAll('button')].filter((b) => !b.disabled) : []);
@@ -182,6 +199,8 @@ export function createHud(root, { t, send, goTab, motion = 'full', gentle = fals
       status.textContent = STATUS[v.status] ? t(STATUS[v.status]) : '';
       status.hidden = !STATUS[v.status];
       tabs.hidden = !v.tabs.length;
+      paintGate(v.status === 'signed_out');
+      wallet.hidden = v.status === 'signed_out';
       paintTabs(v);
       paintPeek(v);
       paintList(v);
@@ -196,6 +215,6 @@ export function createHud(root, { t, send, goTab, motion = 'full', gentle = fals
       fly(pos);
       return run.done.then(() => { if (counting === run) counting = null; wallet.classList.remove('pc-hit'); });
     },
-    dispose() { clearTimeout(outTimer); if (counting) counting.stop(); hud.remove(); },
+    dispose() { clearTimeout(outTimer); clearTimeout(gateTimer); if (counting) counting.stop(); hud.remove(); },
   };
 }

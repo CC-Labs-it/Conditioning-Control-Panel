@@ -7,6 +7,7 @@ const clone = (v) => structuredClone(v);
 
 export function createMockServer(sample, { now = () => new Date().toISOString() } = {}) {
   const st = clone(sample), receipts = new Map(), faults = [], log = [];
+  let signedOut = false;
   const rows = () => st.tabs.flatMap((t) => t.shelves.flatMap((s) => s.rows));
   const state = () => clone(st);
   const prizes = () => clone(st.prizes);
@@ -47,6 +48,7 @@ export function createMockServer(sample, { now = () => new Date().toISOString() 
 
   async function handle(op, body = {}, idem) {
     log.push({ op, idem, body: clone(body) });
+    if (signedOut) return { ok: false, reason: 'signed_out' };   // the host answers this itself, before any route
     if (op === 'shop-state') return state();
     if (op !== 'shop-buy') return { ok: false, reason: 'bad_input' };
     const f = faults.shift();
@@ -61,6 +63,8 @@ export function createMockServer(sample, { now = () => new Date().toISOString() 
     fail(reason, { apply = false } = {}) { faults.push({ reason, apply }); },
     setSp(v) { st.sp = v; },
     setTier(v) { st.tier = v; },
+    /** Nobody signed in: every request answers the host's signed_out. */
+    setSignedOut(v) { signedOut = !!v; },
     /** A new week of stock: the old week's buys answer stock_changed. */
     setWeek(w, drop = []) { st.week = w; for (const s of st.tabs.flatMap((t) => t.shelves)) s.rows = s.rows.filter((r) => !drop.includes(r.id)); },
     /** A price change bumps catalogVersion (derived on the server). */

@@ -8332,6 +8332,7 @@
   "shop_loading": "柜台正在开门。",
   "shop_offline": "柜台没有回应。稍后再试。",
   "shop_signed_out": "登录后即可在柜台购买。",
+  "shop_sign_in": "登录后购物",
   "shop_wallet": "{0} 闪光",
   "shop_price": "{0} 闪光",
   "shop_after": "购买后余额：{0}",
