@@ -444,6 +444,12 @@ internal static class CaucusHostService
             double durMin = durationSec / 60.0;
             double capBase = 250.0 * durMin;
             int baseXp = (int)Math.Min(score / 5.0, capBase);
+            // SPARKLES BY PLACE (B1): the race runs against the track, not rivals, so it claims a
+            // medal against its own XP ceiling (same scale as baseXp).
+            var slipHost = _host;
+            _ = Sparkles.SparklesSlip.Deliver(Sparkles.SparklesGameEnd.Claim("caucus", "solo",
+                Sparkles.SparklesResult.ForMedal(Sparkles.SparklesGameEnd.RatioMedal(score / 5.0, capBase)),
+                TimeSpan.FromSeconds(durationSec)), json => slipHost?.Post(new JRaw(json)));
             double skillMult = App.SkillTree?.GetTotalXpMultiplier() ?? 1.0;
             int finalXp = (int)Math.Round(baseXp * skillMult);
 

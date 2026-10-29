@@ -550,6 +550,9 @@
          the direct play page, engine and ending assets must reach both output and publish. -->
     <!-- Piece by Piece: its node smokes, the dev pages (only ever opened with ?media=fixture
          from a checkout), its design notes and the node-only package.json. -->
+    <!-- Racing Thoughts 3D (Glassroad, 7.2) ships. Only its node tests, the node dev tools
+         (dev\*.mjs; dev\hook.js and dev\uploadCensus.js are page modules and stay) and its notes
+         are left out. -->
     <ArcademyHarnessExclude>
       ..\Assets\web\arcademy\annex\demo.html;
       ..\Assets\web\arcademy\vn\demo.html;
@@ -557,6 +560,9 @@
       ..\Assets\web\arcademy\shell\recordsroom.demo.html;
       ..\Assets\web\arcademy\games\**\smoke\**\*;
       ..\Assets\web\backroom\smoke\**\*;
+      ..\Assets\web\glassroad\tests\**\*;
+      ..\Assets\web\glassroad\dev\**\*.mjs;
+      ..\Assets\web\glassroad\**\*.md;
       ..\Assets\web\backroom\**\tests\**\*;
       ..\Assets\web\backroom\shared\hypno\tests\**\*;
       ..\Assets\web\backroom\stations\breakout\**\*.test.js;
@@ -587,6 +593,9 @@
       $(MSBuildProjectDirectory)\..\Assets\web\arcademy\shell\recordsroom.demo.html;
       $(MSBuildProjectDirectory)\..\Assets\web\arcademy\games\**\smoke\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\smoke\**\*;
+      $(MSBuildProjectDirectory)\..\Assets\web\glassroad\tests\**\*;
+      $(MSBuildProjectDirectory)\..\Assets\web\glassroad\dev\**\*.mjs;
+      $(MSBuildProjectDirectory)\..\Assets\web\glassroad\**\*.md;
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\**\tests\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\shared\hypno\tests\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\stations\breakout\**\*.test.js;

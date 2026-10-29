@@ -47,6 +47,9 @@ namespace ConditioningControlPanel.Services.Quiz
 
         private const int Protocol = 1;
 
+        /// <summary>When this intake opened: the Sparkles claim's duration (B1).</summary>
+        private static DateTime _openedUtc;
+
         /// <summary>AI server proxy base. MUST match <c>AiService.ProxyBaseUrl</c> — the server's
         /// <c>POST /intake/ai</c> gate (Agent H) expects the same Patreon bearer the app already
         /// uses for <c>/ai/chat</c>. Kept as a local constant to avoid taking a dependency on the
@@ -116,6 +119,7 @@ namespace ConditioningControlPanel.Services.Quiz
                 RequestAudioPack();
 
                 _run = new IntakeRun();
+                _openedUtc = DateTime.UtcNow;
                 _testMode = testMode;
                 _duckPreference = duckMainWindow;
 
@@ -492,8 +496,19 @@ namespace ConditioningControlPanel.Services.Quiz
         private static void OnQuizResult(JObject o)
         {
             // Parses and latches: from here on, leaving the window is a wind-down, not a walk-out.
+            bool firstResult = !_run.ResultReceived;
             var run = _run.AcceptResult(o);
             if (run == null) return;
+
+            // SPARKLES BY PLACE (B1): one claim per opened intake, graded by its marks.
+            if (firstResult && !_testMode && _openedUtc != default)
+            {
+                var slipHost = _host;
+                _ = Sparkles.SparklesSlip.Deliver(Sparkles.SparklesGameEnd.Claim("intake", "solo",
+                    Sparkles.SparklesResult.ForMedal(
+                        Sparkles.SparklesGameEnd.IntakeMedal(run.TotalScore, run.MaxScore, IntakeRun.TopMarksPercent)),
+                    DateTime.UtcNow - _openedUtc), json => slipHost?.Post(new JRaw(json)));
+            }
 
             App.Logger?.Information(
                 "IntakeHostService: quiz-result (niche={N}, peakDepth={D:0.00}, band={B}, mantras={M})",

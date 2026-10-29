@@ -228,13 +228,14 @@ public static class LauncherCatalogue
                 () => PieceByPiece.PieceByPieceHostService.Launch(),
                 () => PieceByPiece.PieceByPieceHostService.IsActive, null),
 
-            // Racing Thoughts: a Back Room unlock since 2026-09-18. Without a track the tile is the
-            // mystery card pointing at the counter; the entry stays Available so a shortcut still
-            // reaches Launch, where CaucusHostService refuses on the same door (RacingAccess).
-            ["race"] = (Always, Never,
-                () => Chaos.CaucusHostService.Launch(),
-                () => Chaos.CaucusHostService.IsActive,
-                () => Race.RacingAccess.CanLaunch),
+            // Racing Thoughts is the 3D race (Glassroad), PRIME ONLY, solo included (owner, 2026-10-29:
+            // "THE whole feature is for primes"). Always revealed: below Prime the tile wears the
+            // padlock and the click goes to Launch, whose DemandPrime paints the refusal. The 2D race
+            // is RETIRED: no door opens it (the code stays). Online is tier 2+ on the server too.
+            ["race"] = (Always,
+                () => !Glassroad.GlassroadHostService.PrimeAllowed,
+                () => Glassroad.GlassroadHostService.Launch(),
+                () => Glassroad.GlassroadHostService.IsActive, null),
 
             // Down the Rabbit Hole: Lab tier. The Play handler gates it; Launch does not, so the tile
             // asks the gate itself and lets DemandLab paint the refusal.

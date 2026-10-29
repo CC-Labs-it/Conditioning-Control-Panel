@@ -46,6 +46,15 @@ test('native game-open sends no URL or balance and a refusal rearms the same por
   assert.equal(portal.open(), true); portal.dispose(); assert.equal(stopped, 1); assert.equal(portal.open(), false);
 });
 
+test('a Prime refusal (reason prime) releases the portal like elsewhere, never the counter', () => {
+  const store = storage(); let listener, refused = '';
+  const portal = createRacePortal({ hosted: true, storage: store, send: () => {}, on: (_, fn) => { listener = fn; return () => {}; },
+    onRefused: m => { refused = m.reason; } });
+  assert.equal(portal.open(), true);
+  listener({ game: 'race', ok: false, reason: 'prime' });
+  assert.equal(portal.pending, false); assert.equal(refused, 'prime'); assert.equal(portal.open(), true);
+});
+
 test('host denial and broken navigation never leave a stale saved camera', () => {
   const store = storage(); let reason;
   const portal = createRacePortal({ location: loc, storage: store, getPose: () => pose,
