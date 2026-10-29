@@ -9,7 +9,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>ConditioningControlPanel</AssemblyName>
     <RootNamespace>ConditioningControlPanel</RootNamespace>
-    <Version>7.1.14</Version>
+    <Version>7.1.15</Version>
     <Company>CodeBambi</Company>
     <Product>Conditioning Control Panel</Product>
     <Description>A professional visual conditioning application with gamification features.</Description>
@@ -566,6 +566,9 @@
          the direct play page, engine and ending assets must reach both output and publish. -->
     <!-- Piece by Piece: its node smokes, the dev pages (only ever opened with ?media=fixture
          from a checkout), its design notes and the node-only package.json. -->
+    <!-- Racing Thoughts 3D (Glassroad, 7.2) ships. Only its node tests, the node dev tools
+         (dev\*.mjs; dev\hook.js and dev\uploadCensus.js are page modules and stay) and its notes
+         are left out. -->
     <ArcademyHarnessExclude>
       Resources\web\arcademy\annex\demo.html;
       Resources\web\arcademy\vn\demo.html;
@@ -573,6 +576,9 @@
       Resources\web\arcademy\shell\recordsroom.demo.html;
       Resources\web\arcademy\games\**\smoke\**\*;
       Resources\web\backroom\smoke\**\*;
+      Resources\web\glassroad\tests\**\*;
+      Resources\web\glassroad\dev\**\*.mjs;
+      Resources\web\glassroad\**\*.md;
       Resources\web\backroom\**\tests\**\*;
       Resources\web\backroom\shared\hypno\tests\**\*;
       Resources\web\backroom\stations\breakout\**\*.test.js;
@@ -602,6 +608,9 @@
       $(MSBuildProjectDirectory)\Resources\web\arcademy\shell\recordsroom.demo.html;
       $(MSBuildProjectDirectory)\Resources\web\arcademy\games\**\smoke\**\*;
       $(MSBuildProjectDirectory)\Resources\web\backroom\smoke\**\*;
+      $(MSBuildProjectDirectory)\Resources\web\glassroad\tests\**\*;
+      $(MSBuildProjectDirectory)\Resources\web\glassroad\dev\**\*.mjs;
+      $(MSBuildProjectDirectory)\Resources\web\glassroad\**\*.md;
       $(MSBuildProjectDirectory)\Resources\web\backroom\**\tests\**\*;
       $(MSBuildProjectDirectory)\Resources\web\backroom\shared\hypno\tests\**\*;
       $(MSBuildProjectDirectory)\Resources\web\backroom\stations\breakout\**\*.test.js;

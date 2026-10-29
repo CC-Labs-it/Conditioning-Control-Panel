@@ -22,6 +22,23 @@ on:
   pull_request:
 
 jobs:
+  glassroad:
+    if: github.base_ref == 'feat/glassroad-a' || startsWith(github.head_ref, 'codex/glassroad-smooth-')
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test Glassroad
+        working-directory: ConditioningControlPanel/Resources/web/glassroad
+        env:
+          NODE_OPTIONS: --max-old-space-size=384
+        run: |
+          $tests = Get-ChildItem tests -Filter '*.test.mjs' | ForEach-Object { "tests/$($_.Name)" }
+          node --test --test-concurrency=2 --test-timeout=180000 @tests
+
   windows:
     runs-on: windows-latest
     steps:

@@ -643,6 +643,7 @@ export function createGame({ w = W, h = H, rng = Math.random, audio = null, onEv
     emit('breakout', { x: g.breakoutAt.x, y: g.breakoutAt.y, sat: g.sat, count:breakouts });
   }
   function lostAll(last) {
+    g.wallLost = (g.wallLost || 0) + 1;   // a miss that empties the field: the wall's Sparkles medal (B1)
     g.rally = 0;
     powers.reset();
     if (g.finale && g.finale.phase !== 'released') { respawn(g.state === 'grey'); return; }
@@ -949,19 +950,22 @@ export function createGame({ w = W, h = H, rng = Math.random, audio = null, onEv
     g.stats.walls++; g.stats.sp = Math.min(20, g.stats.sp + 1);
     addSat(0.1);
     au('wallCleared');
+    // Sparkles by place (B1): the balls lost on this wall and how long it stood ride on the event.
+    const ballsLost = g.wallLost || 0, wallMs = Math.round(Math.max(0, g.wallAge) * 1000);
+    g.wallLost = 0;
     if (!g.endless && g.storyLimit < 8 && g.stats.walls >= g.storyLimit) {
       g.demoComplete = true;
       powers.reset(); wordSim.endAll();
       g.balls = []; g.pops = []; g.colliders = []; g.well = null;
       g.transition = null; g.clearing = null; g.freeze = 0; g.hitStopMs = 0; g.acc = 0;
       g.pendingBreakout = false; g.breakoutShield = null; setTimeScale(1);
-      emit('wall', { walls: g.stats.walls, sp: g.stats.sp, mantra: g.mantra });
+      emit('wall', { walls: g.stats.walls, sp: g.stats.sp, mantra: g.mantra, ballsLost, wallMs });
       emit('demoComplete', { levels: g.storyLimit, walls: g.stats.walls });
       return;
     }
     buildWall(); g.wallAge = 0; g.landRow = 0; g.tail = 0; g.tailDrop = 0;
     if (g.endless) { respawn(g.state === 'grey'); g.launchTimer = 0; }
-    emit('wall', { walls: g.stats.walls, sp: g.stats.sp, mantra: g.mantra });
+    emit('wall', { walls: g.stats.walls, sp: g.stats.sp, mantra: g.mantra, ballsLost, wallMs });
   }
 
   /* ------------------------------------------------------------ payloads: the GIF brick pops out into a bubble */
@@ -1538,7 +1542,7 @@ export function createGame({ w = W, h = H, rng = Math.random, audio = null, onEv
       if (!g.endless || g.demoComplete) return false;
       wordSim.endAll(); g.colliders = []; g.pops = []; g.well = null;
       g.hitStopMs = 0; g.freeze = 0; g.pendingBreakout = false; g.transition = null; g.clearing = null; g.lastBrickDone = false;
-      g.stats.walls++;
+      g.stats.walls++; g.wallLost = 0;
       buildWall(); g.wallAge = 0; g.landRow = 0; g.tail = 0; g.tailDrop = 0;
       respawn(g.state === 'grey'); g.launchTimer = 0;
       emit('wall', { walls: g.stats.walls, sp: g.stats.sp, mantra: g.mantra, skipped: true });
