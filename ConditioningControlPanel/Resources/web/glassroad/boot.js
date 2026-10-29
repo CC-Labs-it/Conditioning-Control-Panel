@@ -92,6 +92,7 @@ import { createRoomSession } from './net/room.js';
 import { onlineCourseHash as onlineHash } from './net/courseHash.js';
 import { createLobbyApi, fetchTransport, hostTransport } from './net/lobbyApi.js';
 import { createProfileSync } from './meta/profileSync.js';
+import { createOwned } from './meta/owned.js';
 import { configureLobby } from './hud/lobby.js';
 import { hostInvites, createHostInvite } from './host/friendInvite.js';
 import { linkToken, dropLinkParam, joinParam } from './hud/lobbyMath.js';
@@ -154,6 +155,11 @@ shared.feelTask = Promise.all([loadFeel(), loadFonts()]).then(([feel]) => {
   shared.baseFeel = feel.toJSON(); shared.feel = feel; shared.gentle = createGentle(feel); return feel;
 });
 shared.bridge.on('gentle', m => { shared.hostGentle = m; });
+// THE PRIZE COUNTER'S KART BODIES (meta/owned.js): the garage offers the free kart, the earned ones and the owned
+// ones. The desktop host pushes `owned { grants }` after a buy; the profile pull answers the same list everywhere.
+shared.owned = createOwned();
+const adoptOwned = list => { if (shared.owned.adopt(list)) shared.garage?.refreshLocks?.(); };
+shared.bridge.on('owned', m => adoptOwned(m?.grants));
 // The web host's Scrolller pictures (host/scrolllerFeed.js): display only. Built once so a feed
 // that lands before the first course is kept; the desktop host never sends one.
 shared.scrolllerFeed = createScrolllerFeed({ bridge: shared.bridge });
@@ -332,6 +338,8 @@ async function boot(course, options, lifetime, isCurrent) {
   const init = await bridge.init;
   if (!lifetime.alive) return;
   loaded('host');
+  shared.owned.setAccount(init.identity?.unifiedId);
+  if (Array.isArray(init.identity?.grants)) shared.owned.adopt(init.identity.grants);
   let CHARTS = courseSongs(TRACK_ID, location.search,
     songCharts({ search: location.search, devHost: isPreviewSongHost(location, init.caps.platform), songs: init.caps.songs }));
   const soloCharts = () => selectedSongCharts(shared.coursePicks[TRACK_ID]?.songId, shared.songRows, CHARTS);
@@ -606,7 +614,7 @@ async function boot(course, options, lifetime, isCurrent) {
   await paintGap();
   if (!lifetime.alive) return;
   const garage = shared.garage ||= await createGarage({ art: shared.garageArt, renderer, canvas,
-    track: trackName, laps, trackId: track.id, online: course.online,
+    track: trackName, laps, trackId: track.id, online: course.online, owned: () => shared.owned.grants,
     onProgress: (d, n) => showLoading('Getting the garage ready', 0.56 + 0.36 * d / Math.max(1, n)) });
   if (!lifetime.alive) { garage?.dispose(); return; }
   loaded('garage');
@@ -1120,7 +1128,7 @@ async function boot(course, options, lifetime, isCurrent) {
   const link = lobbyLink();
   const lobbyApi = link ? createLobbyApi(link.transport) : null;
   // the account record (CONTRACT-LOGBOOK.md section 8): pull once per page, push after each saved run; silent offline
-  const profileSync = link ? createProfileSync({ request: link.transport }) : null;
+  const profileSync = link ? createProfileSync({ request: link.transport, onGrants: adoptOwned }) : null;
   if (profileSync && !profilePulled) {
     profilePulled = true;
     void profileSync.pull().then(record => { if (lifetime.alive) bus.emit('logbook-pulled', { record }); });

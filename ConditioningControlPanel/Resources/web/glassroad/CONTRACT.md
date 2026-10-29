@@ -230,7 +230,7 @@ export function createBridge({ win = window } = {}) /* -> Bridge */
 ```
 `Init`: `{ v: 2, gentle: { on, fadeMs, riseMs, speed }, caps: { platform: 'desktop'|'web'|'phone', net,
 relayBase, texturableRemote, gamepad, touch, forceRenderer: 'webgpu'|'webgl2'|null, hostSfx, trackPick,
-canSurface, mediaControls, songs }, identity: { unifiedId, displayName, tier } | null }`.
+canSurface, mediaControls, songs }, identity: { unifiedId, displayName, tier, grants? } | null }`.
 `caps.songs`: same-origin race song chart urls, each a plain path to a .json file (`host/bridge.js` SONG_URL, no
 `..`, at most 8), tried in order until one loads. Web sends `['/glassroad-audio/pink-road/chart.json']`, desktop `[]`
 (the private song never ships in the public repo or the installer). Absent or empty = no song. `?chart=<url>` /
@@ -251,6 +251,16 @@ roomId }`; host -> page `friends-list-reply { id, friends: [{ uid, name }] }` an
 (note = the host's worded result in the player's language). Hosts without the cap (web, phone) keep the button hidden.
 Page -> host in A: `ready`, `heartbeat`, `pong`, `run-started`, `run-ended { timeS, laps }`, `telemetry`.
 Escape only pauses; the page never sends `exit` on Escape.
+Owned kart bodies (owner 2026-10-29, `meta/owned.js`): the ten kart bodies are sold in the Prize Counter (CCP-Server
+proxy/shop.js rows `kart.body.<id>`, grants `cos.kart.body.<id>`), so the garage offers only the free kart
+(`FREE_KART`, lovebomb), the bodies the account owns and the two the logbook earns (velvet-lock, undertow: earned
+stays earned, buying opens them too); the rest stay visible, dark, with "In the Prize Counter". Sources, each a full
+snapshot of the account's `cos.kart.*` grants (anything else is dropped): `identity.grants` in the init (desktop:
+`App.Ownership`), host -> page `owned { grants }` when they change while the window is up (desktop), and `grants` on
+GET /v2/race/profile (every platform, through the same lobby transport). The last snapshot is kept per account under
+`glassroad.owned.v1`; signed out owns nothing. A saved pick that is locked now falls back to the free kart.
+CLIENT LOCK ONLY: a room seat's `look.vehicle` is checked against `LOOK_VEHICLES`, never against ownership. Looks
+never reach the sim, `onlineCourseHash` or room validation, so no room redeploy follows a lock change.
 Web Scrolller pictures (2026-10-26, `host/scrolllerFeed.js`): a host that can feed them sets `caps.scrolller:
 { consent: boolean }` (the web shim; the desktop never does). Host -> page `scrolller-feed { v: 1, rows: [{ url, kind:
 'image' }] }` (https on a scrolller.com host, at most 12 used; an empty list when consent is off) and the `setting

@@ -7,6 +7,7 @@
  *   push(record)  POST /v2/race/profile { record }, debounced, one call in flight, a later push folds into the
  *                 waiting one. POST (the server takes PUT too) because the desktop host relay forwards GET and
  *                 POST only.
+ * onGrants(list) gets the `grants` array a GET answers (the Prize Counter's `cos.kart.*`, meta/owned.js).
  * Never throws, never blocks a race. Offline (status 0) drops the call; signed out or no access (401, 403,
  * 404) switches the sync off for the page's life, so the logbook stays local only.
  */
@@ -20,7 +21,7 @@ export const MAX_PUSH_BYTES = 15 * 1024;
 const OFF_STATUS = new Set([401, 403, 404]);
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-export function createProfileSync({ request, storage, timers = globalThis, debounceMs = PUSH_DEBOUNCE_MS } = {}) {
+export function createProfileSync({ request, storage, timers = globalThis, debounceMs = PUSH_DEBOUNCE_MS, onGrants = null } = {}) {
   let off = typeof request !== 'function';
   let pending = null, timer = null, flight = null;
   const stats = { pulls: 0, pushes: 0, failures: 0 };
@@ -29,7 +30,10 @@ export function createProfileSync({ request, storage, timers = globalThis, debou
     try {
       const r = await request(method, PROFILE_PATH, body);
       const status = (r && r.status) | 0;
-      if (status >= 200 && status < 300 && r.body && r.body.record) return r.body.record;
+      if (status >= 200 && status < 300 && r.body && r.body.record) {
+        if (method === 'GET' && Array.isArray(r.body.grants) && typeof onGrants === 'function') try { onGrants(r.body.grants); } catch (e) { /* the garage is optional */ }
+        return r.body.record;
+      }
       if (OFF_STATUS.has(status)) off = true;
     } catch (e) { /* offline or a broken bridge: silent */ }
     stats.failures++;

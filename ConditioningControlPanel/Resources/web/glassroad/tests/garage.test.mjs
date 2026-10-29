@@ -9,12 +9,15 @@ test('garage: invalid saved state cannot select locked karts, unknown outfits or
   assert.equal(loadGarage({getItem(){throw Error('denied');}}).kart,DEFAULT.kart);
 });
 test('garage: arrows skip both locks in either direction and a direct click uses the shorter arc',()=>{
-  const feedback=KARTS.findIndex(k=>k[0]==='feedback');
-  assert.deepEqual(stepKart(feedback,1),{index:0,steps:3});
-  assert.deepEqual(stepKart(0,-1),{index:feedback,steps:-3});
-  assert.equal(routeTo(0,6),null);assert.equal(routeTo(0,0),null);assert.deepEqual(routeTo(5,1),{index:1,steps:4});
-  let index=0;const seen=new Set();for(let i=0;i<6;i++){index=stepKart(index,1).index;seen.add(KARTS[index][0]);}
-  assert.equal(seen.size,6);assert.ok([...seen].every(id=>!LOCKED.has(id)));
+  const dark=new Set(['velvet-lock','undertow']),feedback=KARTS.findIndex(k=>k[0]==='feedback'),petal=KARTS.findIndex(k=>k[0]==='petal');
+  assert.deepEqual(stepKart(feedback,1,dark),{index:petal,steps:3});
+  assert.deepEqual(stepKart(petal,-1,dark),{index:feedback,steps:-3});
+  assert.equal(routeTo(0,6,dark),null);assert.equal(routeTo(0,0,dark),null);assert.deepEqual(routeTo(5,1,dark),{index:1,steps:-4});
+  let index=0;const seen=new Set();for(let i=0;i<8;i++){index=stepKart(index,1,dark).index;seen.add(KARTS[index][0]);}
+  assert.equal(seen.size,8);assert.ok([...seen].every(id=>!dark.has(id)));
+  // nothing owned: only the free kart, so every arrow and click is refused
+  const free=KARTS.findIndex(k=>!LOCKED.has(k[0]));
+  assert.equal(stepKart(free,1),null);assert.equal(stepKart(free,-1),null);assert.equal(routeTo(free,0),null);
 });
 test('garage: six colors and patterns round-trip in a fixed 37-character appearance field',()=>{
   const s={...DEFAULT,original:false,pattern:3,outfit:'builder'},look=raceLook(s);
