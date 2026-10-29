@@ -8,7 +8,7 @@ import { createMusicVisualData, stepMusicVisualData, VISUAL_DATA, INSTRUMENT_FIE
 import { createMusicPerformance, stepMusicPerformance, PERFORMANCE_FIELDS } from './musicPerformance.js';
 import { markRows } from './dataTextureRows.js';
 const UNIFORM_NAMES = Object.freeze(['bass', 'mid', 'treble', 'energy', 't', 'gentle', ...Array.from({ length: 8 }, (_, i) => 'note' + i)]);
-const VISUAL_NAMES = Object.freeze(['drive', 'kick', 'snare', 'hats', 'onset', 'hitAge', 'hitStrength', 'section',
+const VISUAL_NAMES = Object.freeze(['drive', 'kick', 'snare', 'hats', 'onset', 'hitAge', 'hitStrength', 'section', 'gentleMix',
   ...INSTRUMENT_FIELDS.flatMap(fields => [fields.age, fields.strength, fields.count])]);
 
 export function createAudioReactiveUniforms() {

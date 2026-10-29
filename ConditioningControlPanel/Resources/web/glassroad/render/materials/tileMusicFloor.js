@@ -13,7 +13,12 @@ export function tileInstrument({ p, column, row, columns = 12, halfSpan = float(
   const gentle = u.gentle, fast = one(gentle), col = mod(column, columns).toVar();
   const middle = (columns - 1) / 2, count = field(u, 'kickCount');
   const note = mix(count, floor(music.tileBar), gentle).toVar();
+  // Gentle moves the bank once a bar: its layer fades out before the boundary and back in after (a quarter
+  // bar each way, never a snap), and fades in over gentleMix when Gentle is switched on.
+  const barAt = fract(music.tileBar), barGate = smoothstep(0, .25, barAt).mul(one(smoothstep(.75, 1, barAt)));
+  const gentleBass = (u.gentleMix ? u.gentleMix.mul(gentle) : gentle).mul(barGate).toVar();
   const drop = field(u, 'drop').mul(fast).toVar(), lead = field(u, 'lead').toVar();
+  // Section walks smoothly under Gentle (musicVisualData), so floorPhrase crossfades instead of swapping.
   const phase = music.tileBar.add(field(u, 'section').mul(8)).toVar();
   const zigSpan = columns - 4;
   const zig = abs(mod(floor(row.div(2)), zigSpan * 2).sub(zigSpan)).add(1.5).toVar();
@@ -42,7 +47,7 @@ export function tileInstrument({ p, column, row, columns = 12, halfSpan = float(
   const kick = smoothstep(0, .018, kickAge).mul(decay(kickAge, .16))
     .mul(display(max(field(u, 'kickStrength'), field(u, 'kick')))).mul(fast);
   const bass = bassMask.mul(kick.mul(1.55).add(drop.mul(.64)))
-    .add(bassMask.mul(u.bass).mul(gentle).mul(.24)).clamp(0, 1).toVar();
+    .add(bassMask.mul(u.bass).mul(gentleBass).mul(.24)).clamp(0, 1).toVar();
   const at = mod(abs(column).add(row), 8).div(7);
   const measured = floorSpectrum(at, u).mul(.4).add(vizSpectrum(at, u).mul(.6).mul(fast)).toVar();
   const held = display(measured, .18).toVar();
