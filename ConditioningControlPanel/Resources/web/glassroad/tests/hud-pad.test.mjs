@@ -9,6 +9,7 @@ import { createGamepad } from '../input/gamepad.js';
 import { createActionMap } from '../core/actions.js';
 import { padLabels, controlRows, pauseHint, deviceView } from '../hud/labels.js';
 import { placeArt, KIT_GROUPS } from '../hud/kit.js';
+import { howtoHtml } from '../hud/howto.js';
 
 const buttons = (n) => Array.from({ length: n }, () => ({ value: 0, pressed: false }));
 const mkPad = (o = {}) => ({ connected: true, mapping: '', id: 'USB Gamepad (Vendor: 0079 Product: 0006)', axes: [0, 0, 0, 0], buttons: buttons(12), ...o });
@@ -86,10 +87,50 @@ test('label sets: Xbox and PlayStation names, generic button numbers through the
   assert.equal(padLabels('generic').start, 'Button 10');
   const rows = controlRows('ps');
   assert.equal(rows.find((r) => r[0] === 'Use item')[2], 'Square or R1');
+  assert.equal(rows.find((r) => r[0] === 'Drop it behind')[2], 'Triangle, or stick down + Square');
+  assert.equal(rows.find((r) => r[0] === 'Drop it behind')[3], 'Drop button');
   assert.equal(rows.find((r) => r[0] === 'Pause')[2], 'Options');
   assert.equal(rows.find((r) => r[0] === 'Pause')[1], 'Esc');
   assert.equal(controlRows('xbox').find((r) => r[0] === 'Hop and drift')[2], 'A, hold');
   for (const r of [...controlRows('xbox'), ...controlRows('generic', 'dinput')]) for (const c of r) assert.ok(![...c].some((ch) => ch === '!' || ch.charCodeAt(0) === 0x2013 || ch.charCodeAt(0) === 0x2014), c);
+});
+
+test('how to play explains the direct rear-drop control for every device', () => {
+  for (const [device, copy] of [
+    [{ last: 'keyboard' }, 'R / Backspace behind'],
+    [{ last: 'touch' }, 'Drop leaves it behind'],
+    [{ last: 'pad', pad: { family: 'xbox' } }, 'Y drop behind'],
+    [{ last: 'pad', pad: { family: 'ps' } }, 'Triangle drop behind'],
+    [{ last: 'pad', pad: { family: 'generic', profile: 'dinput' } }, 'Button 4 drop behind'],
+  ]) assert.ok(howtoHtml(device).includes(copy), copy);
+});
+
+test('gamepad: north drops directly once while throttle remains held, west and RB still launch forward', () => {
+  for (const [mapping, face, trigger] of [['standard', 3, 7], ['', 3, 7]]) {
+    const pad = mkPad({ mapping, index: 0, buttons: buttons(mapping ? 17 : 12) });
+    let live = [pad];
+    const gp = createGamepad({ nav: { getGamepads: () => live }, devices: createDevices(), choices: {} });
+    const map = createActionMap([gp], { items: true });
+    try {
+      pad.buttons[trigger].value = 1;
+      let a = map.sample();
+      assert.equal(a.throttle, 1); assert.equal(a.item, false, 'throttle never fires an item');
+      pad.buttons[face].value = 1;
+      a = map.sample();
+      assert.equal(a.item, true); assert.equal(a.back, true); assert.equal(a.throttle, 1);
+      a = map.sample(); assert.equal(a.item, false, 'held north is one edge');
+      pad.buttons[face].value = 0; map.sample();
+      for (const forward of [mapping ? 2 : 0, 5]) {
+        pad.buttons[forward].value = 1; a = map.sample();
+        assert.equal(a.item, true); assert.equal(a.back, false, 'separate forward button');
+        pad.buttons[forward].value = 0; map.sample();
+      }
+      pad.axes[1] = .8; pad.buttons[mapping ? 2 : 0].value = 1;
+      a = map.sample(); assert.equal(a.item, true); assert.equal(a.back, true, 'legacy down modifier works');
+      live = []; a = map.sample();
+      assert.equal(a.item, false); assert.equal(a.back, false); assert.equal(a.throttle, 0); assert.equal(a.pause, true);
+    } finally { map.dispose(); }
+  }
 });
 
 test('pause hint and device view follow the device used last', () => {

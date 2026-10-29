@@ -13,6 +13,7 @@ import { grantBoost } from './grant.js';
 import { cancelDrift } from './drift.js';
 import { endBoost } from './boost.js';
 import { ITEMS, bucketOf, rollItem, durationOf, makeRand, BUCKETS, SPIN_KINDS } from './itemTable.js';
+import { itemUseMode } from './itemUse.js';
 
 const GROW_S = 0.4;          // feel gap: a respawned box or bubble grows in over this
 const WAVE_S = 1.2;          // feel gap: a Pink wave stays in the view this long
@@ -185,11 +186,11 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
   }
 
   function use(r, standings) {
-    const id = r.item.id, it = ITEMS[id], st = r.st, s = st[S.s], x = st[S.lateral];
-    let mode = it.use === 'trap' || (r.input.back && (it.use === 'throw' || it.use === 'lob' || it.use === 'bounce')) ? 'drop' : it.use;
+    const id = r.item.id, st = r.st, s = st[S.s], x = st[S.lateral];
+    const mode = itemUseMode(id, r.input.back);
     const fork = track.forkAtSeg?.(st[S.seg]), seg = fork ? st[S.seg] : -1;
     const dropped = advance(s, seg, -g('dropBehindM')), dropS = dropped.s;
-    if (id === 'shatter' && nearOpenEdge(mode === 'drop' ? dropS : s, g('shatterEdgeSafeM'), mode === 'drop' ? dropped.seg : seg)) {
+    if ((id === 'shatter' || (mode === 'drop' && SPIN_KINDS.includes(id))) && nearOpenEdge(mode === 'drop' ? dropS : s, g('shatterEdgeSafeM'), mode === 'drop' ? dropped.seg : seg)) {
       events.emit('item-refused', { racer: r.i, id, reason: 'edge' });
       return;
     }
