@@ -46,14 +46,19 @@ public sealed class CloudSettingsBackupTests : IDisposable
         public readonly List<(string Url, string? Token, string Body)> Seen = new();
         public HttpStatusCode Status = HttpStatusCode.OK;
         public string Body = "{\"success\":true}";
+        public Func<string, string?>? BodyFor;   // per url; null falls back to Body
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             Seen.Add((r.RequestUri!.AbsoluteUri, r.Headers.TryGetValues("X-Auth-Token", out var t) ? t.Single() : null,
                 await r.Content!.ReadAsStringAsync(ct)));
-            return new HttpResponseMessage(Status) { Content = new StringContent(Body) };
+            return new HttpResponseMessage(Status) { Content = new StringContent(BodyFor?.Invoke(r.RequestUri.AbsoluteUri) ?? Body) };
         }
     }
+
+    /// <summary>The uploads only (a backup reads the slot first, to keep its path fields).</summary>
+    private List<(string Url, string? Token, string Body)> Uploads =>
+        _fake.Seen.Where(s => s.Url == Url + "/v2/user/backup-settings").ToList();
 
     private AppSettings Signed()
     {
@@ -97,7 +102,7 @@ public sealed class CloudSettingsBackupTests : IDisposable
 
         Assert.True(await new CloudSettingsBackup(_fake).BackupAsync(s));
 
-        var (url, token, body) = Assert.Single(_fake.Seen);
+        var (url, token, body) = Assert.Single(Uploads);
         Assert.Equal(Url + "/v2/user/backup-settings", url);
         Assert.Equal("TOK", token);
         var req = JObject.Parse(body);
@@ -211,7 +216,7 @@ public sealed class CloudSettingsBackupTests : IDisposable
         var s = Signed();
         s.DisabledAssetPaths = new HashSet<string>(Enumerable.Range(0, 60_000).Select(_ => Guid.NewGuid() + ".png"));
         Assert.True(await new CloudSettingsBackup(_fake).BackupAsync(s));
-        var data = (string)JObject.Parse(_fake.Seen.Single().Body)["settings_data"]!;
+        var data = (string)JObject.Parse(Uploads.Single().Body)["settings_data"]!;
         Assert.True(data.Length <= SettingsBackupBudget.MaxEncodedBytes);
         Assert.Null(Unpack(data)["DisabledAssetPaths"]);
         Assert.NotNull(Unpack(data)["AssetPresets"]);
@@ -219,7 +224,47 @@ public sealed class CloudSettingsBackupTests : IDisposable
         _fake.Seen.Clear();
         s.BannerSeenIds = Enumerable.Range(0, 60_000).Select(_ => Guid.NewGuid().ToString()).ToList();   // not trimmable
         Assert.False(await new CloudSettingsBackup(_fake).BackupAsync(s));
-        Assert.Empty(_fake.Seen);
+        Assert.Empty(Uploads);
+    }
+
+    /// <summary>Review R3 (fix-before-latest): the slot is shared with Windows and frozen WPF restores the whole blob,
+    /// so a path field missing from a backup made here came back EMPTY on Windows (keyword triggers, audio layers,
+    /// corner GIFs, spiral, wallpapers wiped). A backup made here carries the slot's own path fields unchanged.</summary>
+    [Fact]
+    public async Task ABackupMadeHereKeepsTheWindowsPathsAlreadyInTheSlot()
+    {
+        var windows = new AppSettings
+        {
+            SpiralPath = @"C:\Users\me\spiral.gif", StartupVideoPath = @"C:\v.mp4",
+            AudioLayers = new List<AudioLayerTrack> { new() { Path = @"C:\Users\me\layer.mp3" } },
+            KeywordTriggers = new List<KeywordTrigger> { new() { Keyword = "w", Actions = new List<KeywordAction> { new PlayAudioAction { FilePath = @"C:\k.mp3" } } } },
+            FlashEnabled = true,
+        };
+        _fake.BodyFor = u => u.EndsWith("/v2/user/settings-backup")
+            ? new JObject { ["backup"] = new JObject { ["settings_data"] = Pack(JsonConvert.SerializeObject(windows)) } }.ToString()
+            : null;
+        var here = Signed();
+        here.FlashEnabled = false;
+
+        Assert.True(await new CloudSettingsBackup(_fake).BackupAsync(here));
+
+        var sent = Unpack((string)JObject.Parse(Assert.Single(Uploads).Body)["settings_data"]!);
+        Assert.DoesNotContain("/home/me", sent.ToString());                 // this machine's paths stay here
+        Assert.Equal(@"C:\Users\me\spiral.gif", (string?)sent["SpiralPath"]);
+        Assert.Equal(@"C:\v.mp4", (string?)sent["StartupVideoPath"]);
+        var back = sent.ToObject<AppSettings>(JsonSerializer.Create(new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace }))!;
+        Assert.Equal(@"C:\Users\me\layer.mp3", Assert.Single(back.AudioLayers).Path);
+        Assert.Equal(@"C:\k.mp3", ((PlayAudioAction)Assert.Single(Assert.Single(back.KeywordTriggers).Actions)).FilePath);
+        Assert.False(back.FlashEnabled);                                    // everything else is this machine's
+    }
+
+    /// <summary>When the slot cannot be read its paths cannot be kept: nothing is uploaded rather than wiping them.</summary>
+    [Fact]
+    public async Task ASlotThatCannotBeReadIsNeverOverwritten()
+    {
+        _fake.Status = HttpStatusCode.InternalServerError;
+        Assert.False(await new CloudSettingsBackup(_fake).BackupAsync(Signed()));
+        Assert.Empty(Uploads);
     }
 
     [Fact]
