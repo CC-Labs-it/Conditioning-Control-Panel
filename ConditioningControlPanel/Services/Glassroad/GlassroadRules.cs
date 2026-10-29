@@ -26,7 +26,7 @@ internal static class GlassroadRules
     /// them to sign in. <c>songs</c> stays empty: the private race song never ships in the app.
     /// </summary>
     public static JObject InitFrame(string? unifiedId, string? displayName, int tier,
-        bool gentleOn, double gentleFadeSeconds, double gentleSpeed)
+        bool gentleOn, double gentleFadeSeconds, double gentleSpeed, IEnumerable<string>? grants = null)
     {
         bool signedIn = !string.IsNullOrWhiteSpace(unifiedId);
         return new JObject
@@ -44,10 +44,29 @@ internal static class GlassroadRules
             },
             ["identity"] = signedIn
                 ? new JObject { ["unifiedId"] = unifiedId, ["tier"] = Math.Clamp(tier, 0, 2),
-                    ["displayName"] = string.IsNullOrWhiteSpace(displayName) ? "Player" : displayName }
+                    ["displayName"] = string.IsNullOrWhiteSpace(displayName) ? "Player" : displayName,
+                    // the garage offers only the kart bodies the account owns (meta/owned.js)
+                    ["grants"] = KartGrants(grants) }
                 : JValue.CreateNull(),
         };
     }
+
+    /// <summary>The Prize Counter grants the garage reads: <c>cos.kart.*</c> only, sorted, at most 64
+    /// (glassroad CONTRACT.md section 7 "Owned kart bodies"). Everything else the account owns stays home.</summary>
+    public static JArray KartGrants(IEnumerable<string>? grants)
+    {
+        var list = new SortedSet<string>(StringComparer.Ordinal);
+        if (grants != null)
+            foreach (var g in grants)
+                if (g is { Length: <= 64 } && g.StartsWith("cos.kart.", StringComparison.Ordinal)) list.Add(g);
+        var rows = new JArray();
+        foreach (var g in list) { if (rows.Count >= 64) break; rows.Add(g); }
+        return rows;
+    }
+
+    /// <summary>The host -> page push when the account's grants change while the window is up.</summary>
+    public static JObject OwnedFrame(IEnumerable<string>? grants)
+        => new JObject { ["type"] = "owned", ["grants"] = KartGrants(grants) };
 
     /// <summary>The page's invite list (<c>friends-list-reply</c>): online friends with a name, as
     /// <c>{ uid, name }</c>, at most 50. Offline friends are left out: the server refuses them anyway.</summary>

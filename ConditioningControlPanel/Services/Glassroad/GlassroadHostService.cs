@@ -124,6 +124,7 @@ internal static class GlassroadHostService
             _host.Show();
             if (_host.Window != null) _host.Window.Closed += (_, _) => Close();
             StartWatch();
+            if (App.Ownership != null) { App.Ownership.OwnershipChanged -= OnOwnershipChanged; App.Ownership.OwnershipChanged += OnOwnershipChanged; }
             _host.FocusWeb();
             try { App.Friends?.EnterActivity(Friends.PresenceActivity.Race); } catch (Exception ex) { Diag.Swallowed(ex); }
             App.Logger?.Information("GlassroadHostService: launched");
@@ -148,6 +149,7 @@ internal static class GlassroadHostService
             bool had = _host != null;
             try { if (_core != null) _core.DOMContentLoaded -= OnDomContentLoaded; } catch (Exception ex) { Diag.Swallowed(ex); }
             _core = null;
+            try { if (App.Ownership != null) App.Ownership.OwnershipChanged -= OnOwnershipChanged; } catch (Exception ex) { Diag.Swallowed(ex); }
             try { _host?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _host = null;
             if (had)
@@ -175,10 +177,19 @@ internal static class GlassroadHostService
             int tier = 0;
             try { tier = EntitlementTierSync.EffectiveTierNow(); } catch (Exception ex) { Diag.Swallowed(ex); }
             var init = GlassroadRules.InitFrame(online ? uid : null, s?.UserDisplayName, tier, GentleVisuals.On,
-                s?.GentleFadeSeconds ?? GentleVisuals.DefaultFadeSeconds, s?.GentleSpeed ?? GentleVisuals.DefaultSpeed);
+                s?.GentleFadeSeconds ?? GentleVisuals.DefaultFadeSeconds, s?.GentleSpeed ?? GentleVisuals.DefaultSpeed,
+                App.Ownership?.Grants);
             _core?.PostWebMessageAsJson(init.ToString(Newtonsoft.Json.Formatting.None));
         }
         catch (Exception ex) { App.Logger?.Debug("Glassroad: init post failed: {E}", ex.Message); }
+    }
+
+    /// <summary>A Prize Counter buy (or any new snapshot) while the race is up: the garage lifts the
+    /// kart bodies it now owns (host -> page <c>owned</c>, glassroad CONTRACT.md section 7).</summary>
+    private static void OnOwnershipChanged(object? sender, Prizes.OwnershipChangedEventArgs e)
+    {
+        try { _host?.Post(GlassroadRules.OwnedFrame(App.Ownership?.Grants)); }
+        catch (Exception ex) { App.Logger?.Debug("Glassroad: owned post failed: {E}", ex.Message); }
     }
 
     private static void OnPageReady()
