@@ -93,7 +93,7 @@ namespace ConditioningControlPanel.Services.Safety
         }
 
         /// <summary>Which game page an Escape the panel kept as its pause is handed to.</summary>
-        internal enum KeptEscapePage { None, Race, Board, Breakout, Dtrh, Arcademy, Goon, Room, Intake, Glassroad }
+        internal enum KeptEscapePage { None, Race, Board, Breakout, Dtrh, Arcademy, Goon, Room, Intake, Glassroad, Counter }
 
         /// <summary>
         /// Where an Escape a game kept as its pause is handed as well. Each of these games pauses on
@@ -114,7 +114,8 @@ namespace ConditioningControlPanel.Services.Safety
             bool goonInFront = false, bool goonReady = false,
             bool roomInFront = false, bool roomReady = false,
             bool intakeInFront = false, bool intakeReady = false,
-            bool glassroadInFront = false, bool glassroadReady = false)
+            bool glassroadInFront = false, bool glassroadReady = false,
+            bool counterInFront = false, bool counterReady = false)
         {
             if (!claimed) return KeptEscapePage.None;
             if (raceInFront) return raceReady ? KeptEscapePage.Race : KeptEscapePage.None;
@@ -126,6 +127,8 @@ namespace ConditioningControlPanel.Services.Safety
             if (roomInFront) return roomReady ? KeptEscapePage.Room : KeptEscapePage.None;
             if (intakeInFront) return intakeReady ? KeptEscapePage.Intake : KeptEscapePage.None;
             if (glassroadInFront) return glassroadReady ? KeptEscapePage.Glassroad : KeptEscapePage.None;
+            // The Prize Counter keeps Escape as its back (confirm card, preview, leave), never a close.
+            if (counterInFront) return counterReady ? KeptEscapePage.Counter : KeptEscapePage.None;
             return KeptEscapePage.None;
         }
 

@@ -63,6 +63,9 @@ internal static class GameSurfaces
         new("intake", () => Quiz.IntakeHostService.IsActive, Quiz.IntakeHostService.CloseActive),
         // Glassroad (Racing Thoughts 3D, every race door since 7.2): its own window, so panic closes it.
         new("glassroad", () => Glassroad.GlassroadHostService.IsActive, Glassroad.GlassroadHostService.Close),
+        // The 7.2 shop. Not a launcher tile (its door is the Sparkle wallet), but a window the
+        // player sits in all the same: panic closes it at once.
+        new(PrizeCounter.PrizeCounterHostService.GameId, () => PrizeCounter.PrizeCounterHostService.IsActive, PrizeCounter.PrizeCounterHostService.Close),
     };
 
     /// <summary>True while any of them is on screen. Read BEFORE the stop pass closes them. Never
