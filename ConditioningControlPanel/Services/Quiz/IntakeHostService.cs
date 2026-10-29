@@ -56,6 +56,9 @@ namespace ConditioningControlPanel.Services.Quiz
         /// </summary>
         private const double TopMarksPercent = 90.0;
 
+        /// <summary>When this intake opened: the Sparkles claim's duration (B1).</summary>
+        private static DateTime _openedUtc;
+
         /// <summary>AI server proxy base. MUST match <c>AiService.ProxyBaseUrl</c> — the server's
         /// <c>POST /intake/ai</c> gate (Agent H) expects the same Patreon bearer the app already
         /// uses for <c>/ai/chat</c>. Kept as a local constant to avoid taking a dependency on the
@@ -128,6 +131,7 @@ namespace ConditioningControlPanel.Services.Quiz
 
                 _exiting = false;
                 _resultReceived = false;
+                _openedUtc = DateTime.UtcNow;
                 _testMode = testMode;
                 _duckPreference = duckMainWindow;
 
@@ -507,7 +511,17 @@ namespace ConditioningControlPanel.Services.Quiz
             try { run = o["result"]?.ToObject<QuizRunResult>(); }
             catch (Exception ex) { App.Logger?.Warning("IntakeHostService: bad quiz-result: {E}", ex.Message); }
             if (run == null) return;
+            bool firstResult = !_resultReceived;
             _resultReceived = true;   // from here on, leaving the window is a wind-down, not a walk-out
+
+            // SPARKLES BY PLACE (B1): one claim per opened intake, graded by its marks.
+            if (firstResult && !_testMode && _openedUtc != default)
+            {
+                _ = Sparkles.SparklesGameEnd.Claim("intake", "solo",
+                    Sparkles.SparklesResult.ForMedal(
+                        Sparkles.SparklesGameEnd.IntakeMedal(run.TotalScore, run.MaxScore, TopMarksPercent)),
+                    DateTime.UtcNow - _openedUtc);
+            }
 
             App.Logger?.Information(
                 "IntakeHostService: quiz-result (niche={N}, peakDepth={D:0.00}, band={B}, mantras={M})",
