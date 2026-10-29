@@ -517,10 +517,11 @@ namespace ConditioningControlPanel.Services.Quiz
             // SPARKLES BY PLACE (B1): one claim per opened intake, graded by its marks.
             if (firstResult && !_testMode && _openedUtc != default)
             {
-                _ = Sparkles.SparklesGameEnd.Claim("intake", "solo",
+                var slipHost = _host;
+                _ = Sparkles.SparklesSlip.Deliver(Sparkles.SparklesGameEnd.Claim("intake", "solo",
                     Sparkles.SparklesResult.ForMedal(
                         Sparkles.SparklesGameEnd.IntakeMedal(run.TotalScore, run.MaxScore, TopMarksPercent)),
-                    DateTime.UtcNow - _openedUtc);
+                    DateTime.UtcNow - _openedUtc), json => slipHost?.Post(new JRaw(json)));
             }
 
             App.Logger?.Information(

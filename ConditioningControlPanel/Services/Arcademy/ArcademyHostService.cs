@@ -3811,9 +3811,11 @@ internal static class ArcademyHostService
             // checks the length. No class-started seen = no duration = the server's floor refuses it.
             var classLength = _classStartedUtc == default ? TimeSpan.Zero : DateTime.UtcNow - _classStartedUtc;
             _classStartedUtc = default;
-            _ = Sparkles.SparklesGameEnd.Claim("arcademy", "solo",
+            // The results slip (W5) lands on the report card that is up when the receipt comes in.
+            var slipHost = _host;
+            _ = Sparkles.SparklesSlip.Deliver(Sparkles.SparklesGameEnd.Claim("arcademy", "solo",
                 Sparkles.SparklesResult.ForMedal(Sparkles.SparklesGameEnd.ArcademyMedal(grade)), classLength,
-                new JObject { ["grade"] = grade });
+                new JObject { ["grade"] = grade }), json => slipHost?.Post(new JRaw(json)));
             double flavor = Math.Clamp(ReadDouble(o, "flavorXp", 0), 0, FlavorXpCap);
 
             // THE FARM GUARD: one payout per class per UTC day. Replaying a class is a supported,
