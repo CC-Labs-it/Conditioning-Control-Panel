@@ -25,6 +25,8 @@ import { bubbleLook, fitFontPx, letterLayout, asciiWord, BUBBLE_LOOK as BL, BUBB
 import { FACES } from './fonts.js';
 import { scriptBubbles } from '../sim/words.js';
 import { wordTheme, wordFace, wordAccent } from './wordTheme.js';
+import { wordIdentity } from '../sim/wordIdentity.js';
+import { roadWordIdentityUv } from './roadWordIdentity.js';
 
 const GRID = 8, CELL = 256;
 const MODE = { bubble: 0, ring: 1, flash: 2 };
@@ -171,11 +173,13 @@ function bubbleCloud(cap, atlas, theme) {
   const aPos = new InstancedBufferAttribute(new Float32Array(cap * 3), 3).setUsage(DynamicDrawUsage);
   const aSize = new InstancedBufferAttribute(new Float32Array(cap), 1).setUsage(DynamicDrawUsage);
   const aV = new InstancedBufferAttribute(new Float32Array(cap * 4), 4).setUsage(DynamicDrawUsage);
+  const aIdentity = new InstancedBufferAttribute(new Float32Array(cap * 4), 4).setUsage(DynamicDrawUsage);
   const pos = instancedDynamicBufferAttribute(aPos, 'vec3'), size = instancedDynamicBufferAttribute(aSize, 'float');
   const v = instancedDynamicBufferAttribute(aV, 'vec4');
+  const identity = instancedDynamicBufferAttribute(aIdentity, 'vec4');
   // the shimmer clock and its strengths (uniforms: a Gentle switch never builds a new program)
   const u = { time: uniform(0), sweepHz: uniform(BT.sweepHz), sweepGain: uniform(BT.sweepGain), twinkle: uniform(1),
-    tint: uniform(new Color(theme.accent)), sung: uniform(new Color(theme.echo)) };
+    tint: uniform(new Color(theme.accent)), sung: uniform(new Color(theme.echo)), identityMotion: uniform(1) };
   const m = new SpriteNodeMaterial({ transparent: true, depthWrite: false });
   m.positionNode = pos;
   m.scaleNode = size;
@@ -189,8 +193,14 @@ function bubbleCloud(cap, atlas, theme) {
   const inside = float(1).sub(smoothstep(0.97, 1.0, d));
   const rim = smoothstep(0.72, 0.95, d).mul(inside);
   const spot = float(1).sub(smoothstep(0, 0.16, length(p.sub(vec2(0.34, 0.68)))));
-  const auv = vec2(p.x.add(mod(slot, GRID)), p.y.add(float(GRID - 1).sub(floor(slot.div(GRID))))).div(GRID);
-  const tex = texture(atlas, auv), word = vec4(tex.rgb, tex.a.mul(textA));
+  // Only source lettering deforms. The glass, rim, ring and flash keep their original coordinates.
+  const semantic = roadWordIdentityUv(p, identity, u), glyphUv = clamp(semantic.uv, .002, .998);
+  const auv = vec2(glyphUv.x.add(mod(slot, GRID)), glyphUv.y.add(float(GRID - 1).sub(floor(slot.div(GRID))))).div(GRID);
+  const tex = texture(atlas, auv);
+  // The existing colour atlas has bright interiors and dark outlines. EMPTY drains only the interiors.
+  const interior = smoothstep(.3, .55, dot(tex.rgb, vec3(.299, .587, .114)));
+  const sourceCoverage = semantic.mask.mul(mix(1, semantic.coreMask, interior));
+  const word = vec4(mix(tex.rgb, semantic.tint, semantic.tintMix.mul(interior)), tex.a.mul(textA).mul(sourceCoverage));
   // the lettering's life: a slow diagonal shimmer band runs across the pink fill (never the plum stroke), and
   // the white glitter twinkles, each speck on its own phase
   const diag = p.x.add(p.y.mul(0.45));
@@ -216,19 +226,22 @@ function bubbleCloud(cap, atlas, theme) {
   m.colorNode = bubbleCol.mul(isBubble).add(rimTint.mul(isRing)).add(vec3(1, 0.97, 0.99).mul(isFlash));
   m.opacityNode = bubbleA.mul(isBubble).add(ringA.mul(isRing)).add(flashA.mul(isFlash)).mul(alpha);
   const sprite = new Sprite(m);
+  sprite.name = 'word-bubbles';
   sprite.count = 0; sprite.frustumCulled = false; sprite.renderOrder = 4;
   let n = 0;
   return {
-    sprite, u,
+    sprite, u, attributes: { position: aPos, size: aSize, values: aV, identity: aIdentity },
     begin() { n = 0; },
-    push(x, y, z, s, a, b, c, e) {
+    push(x, y, z, s, a, b, c, e, kind = 0, elapsed = 0, collected = -1, chars = 1) {
       if (n >= cap) return false;
       const P = aPos.array, Q = aV.array;
       P[n * 3] = x; P[n * 3 + 1] = y; P[n * 3 + 2] = z; aSize.array[n] = s;
-      Q[n * 4] = a; Q[n * 4 + 1] = b; Q[n * 4 + 2] = c; Q[n * 4 + 3] = e; n++;
+      Q[n * 4] = a; Q[n * 4 + 1] = b; Q[n * 4 + 2] = c; Q[n * 4 + 3] = e;
+      aIdentity.array[n * 4] = kind; aIdentity.array[n * 4 + 1] = elapsed;
+      aIdentity.array[n * 4 + 2] = collected; aIdentity.array[n * 4 + 3] = chars; n++;
       return true;
     },
-    end() { sprite.count = n; sprite.visible = n > 0; aPos.needsUpdate = aSize.needsUpdate = aV.needsUpdate = true; },
+    end() { sprite.count = n; sprite.visible = n > 0; aPos.needsUpdate = aSize.needsUpdate = aV.needsUpdate = aIdentity.needsUpdate = true; },
     dispose() { m.dispose(); },
   };
 }
@@ -238,7 +251,7 @@ const sizeOf = (v) => (v.row === 5 ? BL.triggerSizeM : v.row === 3 ? BL.gateSize
 /**
  * @param scene the world scene
  * @param opts { feel (gentle.on), photosafe (request('pop')), cap (bubbles + rings + flashes on screen) }
- * @returns {{ update(live: object[], song?: object, dt?: number): void, prepare(song: object): void, clear(): void,
+ * @returns {{ update(live: object[], song?: object, dt?: number, context?: object): void, prepare(song: object): void, clear(): void,
  *   dispose(): void, object: object }}
  */
 export function createWordBubbles(scene, { feel = null, photosafe = null, cap = 128, track = null, pal = null } = {}) {
@@ -256,28 +269,34 @@ export function createWordBubbles(scene, { feel = null, photosafe = null, cap = 
     try { queue = scriptBubbles(song); } catch (e) { queue = []; console.warn('[glassroad/words] lettering failed: ' + (e && e.message)); }
   }
 
-  function update(live, song = null, dt = 1 / 60) {
+  function update(live, song = null, dt = 1 / 60, { paused = false, motion = 'full', gentle: gentleView = false } = {}) {
+    if (paused) return;
     if (song) prepare(song);
     if (qi < queue.length) { const b = queue[qi++]; atlas.slotOf(b.w, b.row); if (qi >= queue.length) atlas.flush(); }
     atlas.frame();
     cloud.begin();
-    const g = gentle();
+    const g = gentle() || gentleView || motion === 'off';
     clock = (clock + Math.min(0.1, Math.max(0, dt || 0))) % 3600;
     cloud.u.time.value = clock;
     cloud.u.sweepHz.value = g ? BT.gentleSweepHz : BT.sweepHz;
     cloud.u.sweepGain.value = g ? BT.gentleSweepGain : BT.sweepGain;
     cloud.u.twinkle.value = g ? 0 : 1;
+    cloud.u.identityMotion.value = g ? 0 : motion === 'less' ? .5 : 1;
     cloud.u.tint.value.set(wordAccent(theme, pal));
     for (const v of live) {
       const seed = ((v.id * 0.618034) % 1);
       if (v.state === 'popped' && !flashed.has(v.id)) flashed.set(v.id, !g && (!photosafe || photosafe.request('pop')));
       if (v.state === 'live') flashed.delete(v.id);   // the song looped: the word may pop again
       bubbleLook(v, { gentle: g, flashOk: !!flashed.get(v.id), seed }, look);
+      const kind = wordIdentity(v.w), popS = g ? BL.gentlePopS : BL.popS;
+      const collected = v.state === 'popped' ? Math.max(0, Math.min(1, v.outT / popS)) : -1;
+      if (kind && collected >= 0) look.text = 1 - collected * collected * (3 - 2 * collected);
       const slot = atlas.slotOf(v.w, v.row || 0), size = sizeOf(v);
       if (atlas.unsent(slot)) atlas.flush();   // on screen before the queue finished: upload now
       for (let k = 0; k < v.n; k++) {
         const p = v.p[k], y = p[1] + look.lift;
-        if (look.alpha > 0.002) cloud.push(p[0], y, p[2], size * look.scale, slot + (1 - look.text) * TEXT_OUT, look.alpha, MODE.bubble + look.sung * SUNG_MAX, seed + k * 0.31);
+        if (look.alpha > 0.002) cloud.push(p[0], y, p[2], size * look.scale, slot + (1 - look.text) * TEXT_OUT, look.alpha, MODE.bubble + look.sung * SUNG_MAX, seed + k * 0.31,
+          kind, -v.remainS, collected, asciiWord(v.w).length);
         if (look.ring > 0.002) cloud.push(p[0], y, p[2], size * look.ringScale, slot, look.ring, MODE.ring, seed);
         if (look.flash > 0.002 && k === v.hit) cloud.push(p[0], y, p[2], size * BL.flashSize, slot, look.flash, MODE.flash, seed);
       }
@@ -288,6 +307,7 @@ export function createWordBubbles(scene, { feel = null, photosafe = null, cap = 
 
   return {
     object: cloud.sprite,
+    _dev: { attributes: cloud.attributes, uniforms: cloud.u },
     update, prepare,
     /** The lettering atlas canvas (dev probes look at it). */
     get atlasCanvas() { return atlas.texture.image; },
