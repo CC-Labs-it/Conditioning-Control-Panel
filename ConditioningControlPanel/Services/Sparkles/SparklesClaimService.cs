@@ -12,8 +12,9 @@ using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Services.Sparkles;
 
 /// <summary>What one claim came to: a receipt (paid, zero-pay or shadow) or a reason. Reasons are the
-/// server's refusals plus ours: <c>offline</c> (no answer), <c>pending</c> (an online result never
-/// came in), <c>invalid</c> (not sent). <c>Adopted</c>: the receipt went to the wallet.</summary>
+/// server's refusals plus ours: <c>unreachable</c> (no answer, a 5xx or a 404: the server is down, the
+/// slip says the bank is closed), <c>pending</c> (an online result never came in), <c>invalid</c> (not
+/// sent). <c>Adopted</c>: the receipt went to the wallet.</summary>
 public sealed record SparklesClaimOutcome(SparklesReceipt? Receipt, string? Reason, bool Adopted = false)
 {
     public bool Ok => Receipt != null;
@@ -99,7 +100,7 @@ public sealed class SparklesClaimService
         var sentFor = id.Value.UnifiedId;
         var body = claim.ToJson(sentFor).ToString(Formatting.None);
 
-        var last = "offline";
+        var last = "unreachable";
         for (var attempt = 1; attempt <= MaxAttempts; attempt++)
         {
             if (ct.IsCancellationRequested) break;
@@ -134,7 +135,7 @@ public sealed class SparklesClaimService
             }
             else
             {
-                last = "offline";
+                last = "unreachable";
                 wait = DefaultRetryWait;
             }
 
