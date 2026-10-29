@@ -276,7 +276,9 @@ Queue = emitted in sim steps, flushed once per frame. Bus = emitted synchronousl
 | `boost-start` | adds kinds `'slip'\|'surge'\|'bubble'` (tier 0) | grant.js | fx, audio |
 
 Phase A events stay racer-0 only. Host message (integrator): `{ type: 'race-result', v: 1, track, laps, place, of,
-timeS, bestLapS, finished, items: true, xp: null }` (the desktop adds XP later); `run-ended` stays.
+timeS, bestLapS, finished, items: true, xp: null, mode, fullLaps, roomId, medal }` (the desktop adds XP later);
+`run-ended` stays. `mode` is `race`, `trial` or `online`; `roomId` is set online only; `medal` is the Time Trial
+medal (`meta/medals.js medalFor`, full length only, else null). The host claims Sparkles by place from it (B1).
 
 ## 5. B1 frame loop (boot.js)
 

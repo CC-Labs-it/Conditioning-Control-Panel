@@ -88,4 +88,80 @@ internal static class GlassroadRules
         signedPath = path + (path.Contains('?') ? "&" : "?") + "unified_id=" + Uri.EscapeDataString(unifiedId);
         return true;
     }
+
+    // ============================ Sparkles by place (B1 W4) ============================
+
+    /// <summary>The server's game id for Racing Thoughts 3D.</summary>
+    public const string SparklesGame = "rt3d";
+
+    /// <summary>
+    /// The Sparkles claim a page <c>race-result</c> frame earns, or null when it earns nothing
+    /// (unfinished, flagged, malformed, a short Time Trial, an online result with no room).
+    /// Page modes: <c>race</c> = solo vs bots (place, the server pays laps/3), <c>trial</c> =
+    /// medal, full length only (glass counts as gold), <c>ghost</c> = a duel against a friend's
+    /// ghost, full length only (no page sends it yet), <c>online</c> = place plus <c>proof.roomId</c>;
+    /// the server reads the room's signed result and ignores the client place. Pure: the host
+    /// only fires what this returns.
+    /// </summary>
+    public static GlassroadSparklesClaim? SparklesClaimFor(JObject? m)
+    {
+        if (m == null || (string?)m["type"] != "race-result") return null;
+        if (m["finished"]?.Type != JTokenType.Boolean || !(bool)m["finished"]!) return null;
+        if (m["flagged"]?.Type == JTokenType.Boolean && (bool)m["flagged"]!) return null;
+        int laps = ReadInt(m, "laps"), fullLaps = ReadInt(m, "fullLaps"), place = ReadInt(m, "place"), of = ReadInt(m, "of");
+        double timeS = m["timeS"]?.Type is JTokenType.Float or JTokenType.Integer ? (double)m["timeS"]! : 0;
+        if (laps < 1 || !(timeS > 0) || double.IsInfinity(timeS)) return null;
+        // Exactly full length: the medal times are the course's full-length times, so a longer
+        // Time Trial or ghost race cannot be judged and claims nothing.
+        bool fullLength = fullLaps > 0 && laps == fullLaps;
+        bool placed = of >= 1 && place >= 1 && place <= of;
+
+        // A solo race set longer than full length pays full length (the server caps laps/3 too).
+        var detail = new JObject { ["laps"] = fullLaps > 0 ? Math.Min(laps, fullLaps) : laps };
+        if (m["track"]?.Type == JTokenType.String) detail["track"] = (string?)m["track"];
+        var duration = TimeSpan.FromSeconds(Math.Min(timeS, TimeSpan.FromDays(1).TotalSeconds));
+
+        switch ((string?)m["mode"] ?? "race")
+        {
+            case "race":
+                return placed ? new("solo", Sparkles.SparklesResult.ForPlace(place, of), duration, detail, null) : null;
+            case "trial":
+                if (!fullLength) return null;
+                var medal = ((string?)m["medal"] ?? "") switch
+                {
+                    "glass" or "gold" => "gold",
+                    "silver" => "silver",
+                    "bronze" => "bronze",
+                    _ => "none",
+                };
+                return new("trial", Sparkles.SparklesResult.ForMedal(medal), duration, detail, null);
+            case "ghost":
+                var outcome = (string?)m["ghost"];
+                if (!fullLength || outcome is not ("win" or "loss")) return null;
+                return new("ghost", Sparkles.SparklesResult.ForDuel(outcome), duration, detail, null);
+            case "online":
+                var roomId = m["roomId"]?.Type == JTokenType.String ? (string?)m["roomId"] : null;
+                if (!placed || !IsRoomId(roomId)) return null;
+                return new("online", Sparkles.SparklesResult.ForPlace(place, of), duration, detail,
+                    new JObject { ["roomId"] = roomId });
+            default:
+                return null;
+        }
+    }
+
+    private static bool IsRoomId(string? id)
+    {
+        if (string.IsNullOrEmpty(id) || id.Length > 64) return false;
+        foreach (var c in id)
+            if (!(c is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9' or '_' or '-')) return false;
+        return true;
+    }
+
+    private static int ReadInt(JObject m, string key) =>
+        m[key] is JValue { Type: JTokenType.Integer or JTokenType.Float } v && v.Value<double>() is var d
+            && d >= 0 && d <= 10_000 && d == Math.Floor(d) ? (int)d : 0;
 }
+
+/// <summary>What one finished race claims (game <see cref="GlassroadRules.SparklesGame"/>).</summary>
+internal sealed record GlassroadSparklesClaim(string Mode, Sparkles.SparklesResult Result, TimeSpan Duration,
+    JObject Detail, JObject? Proof);
