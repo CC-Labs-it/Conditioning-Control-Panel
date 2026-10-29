@@ -8,6 +8,9 @@ const clamp01 = (v) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
 
 export function createMusicReactivity(ctx, input) {
   const frame = { active: false, frozen: false, bass: 0, mid: 0, treble: 0, energy: 0, songS: 0 };
+  // The display reads PCM and log-frequency samples from this same tap, without another analyser.
+  frame.waveform = new Float32Array(64); frame.spectrum = new Float32Array(64);
+  frame.rawBass = frame.rawMid = frame.rawTreble = frame.rawEnergy = 0;
   for (let i = 0; i < 8; i++) frame['note' + i] = 0;
   let analyser = null, spectrum = null, waveform = null;
   let bass0 = 0, bass1 = 0, mid1 = 0, treble1 = 0;
@@ -34,6 +37,8 @@ export function createMusicReactivity(ctx, input) {
     frame.active = false;
     frame.frozen = false;
     frame.bass = frame.mid = frame.treble = frame.energy = 0;
+    frame.rawBass = frame.rawMid = frame.rawTreble = frame.rawEnergy = 0;
+    frame.waveform.fill(0); frame.spectrum.fill(0);
     for (let i = 0; i < 8; i++) frame['note' + i] = 0;
     frame.songS = Number.isFinite(songS) ? songS : 0;
     return frame;
@@ -74,12 +79,24 @@ export function createMusicReactivity(ctx, input) {
       const step = Math.max(0, Math.min(0.1, Number(dt) || 0));
       const gentle = !!opts.gentle, scale = gentle ? 0.55 : 1;
       frame.active = true;
+      frame.rawBass = band(bass0, bass1); frame.rawMid = band(bass1, mid1);
+      frame.rawTreble = band(mid1, treble1); frame.rawEnergy = clamp01(rms * 3);
       frame.bass = smooth(frame.bass, band(bass0, bass1) * scale, step, gentle);
       frame.mid = smooth(frame.mid, band(bass1, mid1) * scale, step, gentle);
       frame.treble = smooth(frame.treble, band(mid1, treble1) * scale, step, gentle);
       frame.energy = smooth(frame.energy, clamp01(rms * 3) * scale, step, gentle);
       // Eight measured half-octaves reveal melodic movement without another analyser or stems.
       const hz = ctx.sampleRate / analyser.fftSize;
+      // Trigger the oscilloscope at a rising zero crossing so a steady tone holds a readable shape.
+      let start = 0;
+      for (let i = 1; i < waveform.length / 2; i++) if (waveform[i - 1] <= 0 && waveform[i] > 0) { start = i; break; }
+      for (let i = 0; i < 64; i++) {
+        const sample = waveform[start + Math.floor(i * (waveform.length / 2 - 1) / 63)];
+        frame.waveform[i] = Number.isFinite(sample) ? Math.max(-1, Math.min(1, sample * 2.5)) : 0;
+        const low = 30 * (16000 / 30) ** (i / 64), high = 30 * (16000 / 30) ** ((i + 1) / 64);
+        const from = Math.max(1, Math.floor(low / hz)), to = Math.min(spectrum.length, Math.max(from + 1, Math.ceil(high / hz)));
+        frame.spectrum[i] = band(from, to);
+      }
       for (let i = 0; i < 8; i++) frame['note' + i] = smooth(frame['note' + i],
         band(Math.ceil(NOTE_BANDS[i] / hz), Math.min(spectrum.length, Math.ceil(NOTE_BANDS[i] * Math.SQRT2 / hz))) * scale, step, gentle);
       return frame;

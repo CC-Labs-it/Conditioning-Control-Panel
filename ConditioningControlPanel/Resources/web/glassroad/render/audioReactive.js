@@ -3,7 +3,12 @@ import { uniform, float, vec2, vec3, sin, cos, abs, pow, mix, smoothstep, floor,
 import { AUDIO_REACTIVE as L, stepAudioReactive } from './audioReactiveMath.js';
 import { createWaterDnaFrame, waterDnaFrame } from './waterDnaMath.js';
 import { finalLapMods } from './worldFeel.js';
+import { DataTexture, RGBAFormat, UnsignedByteType, LinearFilter, ClampToEdgeWrapping, NoColorSpace } from 'three/webgpu';
+import { createMusicVisualData, stepMusicVisualData, VISUAL_DATA, INSTRUMENT_FIELDS } from './musicVisualData.js';
+import { markRows } from './dataTextureRows.js';
 const UNIFORM_NAMES = Object.freeze(['bass', 'mid', 'treble', 'energy', 't', 'gentle', ...Array.from({ length: 8 }, (_, i) => 'note' + i)]);
+const VISUAL_NAMES = Object.freeze(['drive', 'kick', 'snare', 'hats', 'onset', 'hitAge', 'hitStrength', 'section',
+  ...INSTRUMENT_FIELDS.flatMap(fields => [fields.age, fields.strength, fields.count])]);
 
 export function createAudioReactiveUniforms() {
   const u = { bass: uniform(0), mid: uniform(0), treble: uniform(0), energy: uniform(0), t: uniform(0), gentle: uniform(0) };
@@ -12,8 +17,16 @@ export function createAudioReactiveUniforms() {
   for (let i = 0; i < 8; i++) { u['note' + i] = uniform(0); u.state['note' + i] = 0; }
   u.dna = createWaterDnaFrame();
   u.dnaPhase = uniform(0); u.dnaRadius = uniform(2.1); u.dnaHue = uniform(.5); u.dnaPulse = uniform(0);
+  u.visual = createMusicVisualData();
+  for (const key of VISUAL_NAMES) u[key] = uniform(u.visual[key]);
+  u.motion = uniform(1);
+  const tex = new DataTexture(u.visual.data, VISUAL_DATA.width, VISUAL_DATA.height, RGBAFormat, UnsignedByteType);
+  tex.minFilter = tex.magFilter = LinearFilter; tex.wrapS = tex.wrapT = ClampToEdgeWrapping;
+  tex.colorSpace = NoColorSpace; tex.generateMipmaps = false; tex.needsUpdate = true;
+  u.vizTexture = tex;
   return u;
 }
+export function disposeAudioReactiveUniforms(u) { u?.vizTexture?.dispose(); }
 
 export { mainframeTileLight } from './materials/mainframeMusicFloor.js';
 
@@ -44,6 +57,9 @@ export function updateAudioReactiveUniforms(u, signal, dt, options) {
   waterDnaFrame(u.dna, u.state, signal, options?.song, options);
   u.dnaPhase.value = u.dna.phase; u.dnaRadius.value = u.dna.radius;
   u.dnaHue.value = u.dna.hue; u.dnaPulse.value = u.dna.pulse;
+  if (stepMusicVisualData(u.visual, signal, dt, options)) { markRows(u.vizTexture, 0, VISUAL_DATA.height - 1); u.vizTexture.needsUpdate = true; }
+  for (const key of VISUAL_NAMES) u[key].value = u.visual[key];
+  if (!options?.paused && !signal?.frozen) u.motion.value = options?.motion === 'off' ? 0 : options?.motion === 'less' ? .5 : 1;
 }
 
 const gain = u => mix(float(1), float(L.gentleGain), u.gentle);
