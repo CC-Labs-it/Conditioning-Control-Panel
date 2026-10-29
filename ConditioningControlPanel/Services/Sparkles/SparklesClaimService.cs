@@ -11,12 +11,9 @@ using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Services.Sparkles;
 
-/// <summary>What one claim came to. Exactly one of a receipt or a reason.</summary>
-/// <param name="Receipt">The server's receipt (paid, zero-pay or shadow), or null when refused.</param>
-/// <param name="Reason">A server refusal (<c>disabled</c>, <c>signin</c>, <c>too_fast</c>, <c>busy</c>,
-/// <c>unproven</c>, <c>game</c>, <c>mode</c>, <c>result</c>, <c>claim_id</c>, <c>bad</c>), or one of ours:
-/// <c>offline</c> (no answer), <c>pending</c> (an online result never came in), <c>invalid</c> (not sent).</param>
-/// <param name="Adopted">The receipt moved the wallet (handed to the adopt callback).</param>
+/// <summary>What one claim came to: a receipt (paid, zero-pay or shadow) or a reason. Reasons are the
+/// server's refusals plus ours: <c>offline</c> (no answer), <c>pending</c> (an online result never
+/// came in), <c>invalid</c> (not sent). <c>Adopted</c>: the receipt went to the wallet.</summary>
 public sealed record SparklesClaimOutcome(SparklesReceipt? Receipt, string? Reason, bool Adopted = false)
 {
     public bool Ok => Receipt != null;
@@ -24,19 +21,11 @@ public sealed record SparklesClaimOutcome(SparklesReceipt? Receipt, string? Reas
 }
 
 /// <summary>
-/// SPARKLES BY PLACE (B1), the client half: post a finished game to
-/// <c>POST /v2/sparkles/claim</c> with the account token (the stakes / friends door, base url and
-/// reply reading), and hand a paying receipt's balance to the wallet.
-///
-/// <para>Wire: 200 <c>{ok:true, receipt}</c>; 200 <c>{ok:false, reason}</c>; 202
-/// <c>{ok:false, pending:true, retryAfterMs}</c> while an online result is not in yet (asked again
-/// with the SAME claimId, at most <see cref="MaxAttempts"/> times in all); 401 = signed out. The
-/// claimId replays the same receipt, so a retry never pays twice.</para>
-///
-/// <para>THE WALLET RULE: only a receipt with <c>credited &gt; 0</c> and <c>shadow == false</c> is
-/// adopted, as a settlement (<see cref="V2WalletAdoption.Decide"/> with <c>fromBuy: true</c>), for
-/// the account the claim was sent for, checked again inside the write. Refusals, zero-pay and
-/// shadow receipts never touch it.</para>
+/// SPARKLES BY PLACE (B1), client half: <c>POST /v2/sparkles/claim</c> through the stakes door
+/// (identity, base url, reply reading). A 202 pending is asked again with the SAME claimId (the
+/// server replays the same receipt), at most <see cref="MaxAttempts"/> sends; 401 = signed out.
+/// WALLET RULE: only <c>credited &gt; 0</c> and not <c>shadow</c> is adopted, as a settlement
+/// (<see cref="V2WalletAdoption.Decide"/> <c>fromBuy: true</c>), account re-checked in the write.
 /// </summary>
 public sealed class SparklesClaimService
 {

@@ -68,22 +68,9 @@ public class SparklesClaimServiceTests
     public void AFullReceiptReadsEveryField()
     {
         var r = SparklesReceipt.Parse(JObject.Parse(FullReceipt))!;
-        Assert.Equal("spr_1", r.Id);
-        Assert.Equal("abcdef0123456789abcdef", r.ClaimId);
-        Assert.Equal("place", r.Kind);
-        Assert.Equal("rt3d", r.Game);
-        Assert.Equal("online", r.Mode);
-        Assert.Equal(2, r.Place);
-        Assert.Equal(8, r.Of);
-        Assert.Equal(16, r.Base);
-        Assert.Equal(5.0, r.Online);
-        Assert.Equal(80, r.Paid);
-        Assert.Equal(80, r.Credited);
-        Assert.Null(r.Reason);
-        Assert.Equal(4310, r.Sp);
-        Assert.False(r.Shadow);
-        Assert.False(r.Fee);
-        Assert.Equal(1793283205000, r.At);
+        Assert.Equal(("spr_1", "abcdef0123456789abcdef", "place", "rt3d", "online"), (r.Id, r.ClaimId, r.Kind, r.Game, r.Mode));
+        Assert.Equal((2, 8, 16, 5.0, 80, 80), (r.Place, r.Of, r.Base, r.Online, r.Paid, r.Credited));
+        Assert.Equal((null, 4310, false, false, 1793283205000L), (r.Reason, r.Sp, r.Shadow, r.Fee, r.At));
         Assert.Equal(new SparklesDaySide(40, 150, 2, 30), r.Day!.Solo);
         Assert.Equal(new SparklesDaySide(180, 600, 0, 60), r.Day.Online);
         Assert.Equal(3, r.Day.Games["rt3d"]);
@@ -94,29 +81,22 @@ public class SparklesClaimServiceTests
     public void AThinReceiptFallsBackWithoutThrowing()
     {
         var r = SparklesReceipt.Parse(JObject.Parse("""{ "receipt": { "paid": "lots", "credited": 12.6, "reason": "taper" } }"""))!;
-        Assert.Equal(0, r.Paid);
-        Assert.Equal(13, r.Credited);
-        Assert.Equal("taper", r.Reason);
-        Assert.Null(r.Sp);
+        Assert.Equal((0, 13, "taper", (int?)null, 1.0, false), (r.Paid, r.Credited, r.Reason, r.Sp, r.Taper, r.Shadow));
         Assert.Null(r.Day);
-        Assert.Equal(1.0, r.Taper);
-        Assert.False(r.Shadow);
         Assert.Null(SparklesReceipt.Parse(new JArray()));
         Assert.Null(SparklesReceipt.Parse(null));
     }
+
+    // ------------------------------------------------------------------ the wallet rule
 
     [Fact]
     public void AShadowReceiptIsReadButNeverAdopted()
     {
         var r = SparklesReceipt.Parse(JObject.Parse("""{ "receipt": { "paid": 80, "credited": 0, "sp": 4230, "shadow": true } }"""))!;
-        Assert.True(r.Shadow);
-        Assert.Equal(80, r.Paid);
+        Assert.Equal((true, 80), (r.Shadow, r.Paid));
         Assert.False(SparklesClaimService.ShouldAdopt(r));
-        // Even a shadow receipt that claims a credit stays off the wallet.
         Assert.False(SparklesClaimService.ShouldAdopt(r with { Credited = 80 }));
     }
-
-    // ------------------------------------------------------------------ the wallet rule
 
     [Fact]
     public void APayingReceiptAdoptsItsBalanceBothWays()
@@ -179,11 +159,8 @@ public class SparklesClaimServiceTests
         Assert.Equal(
             new[] { "unified_id", "claimId", "game", "mode", "result", "durationMs", "detail", "endedAt", "proof" }.OrderBy(x => x),
             body.Properties().Select(p => p.Name).OrderBy(x => x));
-        Assert.Equal(Me, (string?)body["unified_id"]);
-        Assert.Equal("online", (string?)body["mode"]);
-        Assert.Equal(612000, (long)body["durationMs"]!);
-        Assert.Equal(1793283204000, (long)body["endedAt"]!);
-        Assert.Equal("r1", (string?)body["proof"]!["roomId"]);
+        Assert.Equal((Me, "online", "r1"), ((string?)body["unified_id"], (string?)body["mode"], (string?)body["proof"]!["roomId"]));
+        Assert.Equal((612000L, 1793283204000L), ((long)body["durationMs"]!, (long)body["endedAt"]!));
         Assert.True(JToken.DeepEquals(JObject.Parse("""{"kind":"place","place":2,"of":8}"""), body["result"]));
     }
 
@@ -200,9 +177,7 @@ public class SparklesClaimServiceTests
         Assert.False((Claim() with { Game = "pong" }).IsWellFormed);
         Assert.False((Claim() with { Mode = "ranked" }).IsWellFormed);
         var fresh = SparklesClaim.Create("chess", "online", SparklesResult.ForDuel("draw"), -5);
-        Assert.True(fresh.IsWellFormed);
-        Assert.Equal(0, fresh.DurationMs);
-        Assert.True(fresh.EndedAt > 0);
+        Assert.True(fresh.IsWellFormed && fresh.DurationMs == 0 && fresh.EndedAt > 0);
     }
 
     [Fact]
@@ -213,15 +188,10 @@ public class SparklesClaimServiceTests
         rig.Identity = null;
         Assert.Equal("signin", (await rig.Service.ClaimAsync(Claim())).Reason);
         Assert.Empty(rig.Handler.Seen);
-    }
-
-    [Fact]
-    public async Task ABadTokenIsSigninAndIsNotRetried()
-    {
-        var rig = new Rig();
+        // A bad token (401) is signin too, and is not asked again.
+        rig.Identity = (Me, "tok");
         rig.Handler.Default = (HttpStatusCode.Unauthorized, """{"error":"bad token"}""");
-        var outcome = await rig.Service.ClaimAsync(Claim());
-        Assert.Equal("signin", outcome.Reason);
+        Assert.Equal("signin", (await rig.Service.ClaimAsync(Claim())).Reason);
         Assert.Single(rig.Handler.Seen);
     }
 
