@@ -119,3 +119,12 @@ export function request(msg, replyType, match, timeoutMs, fallback) {
 
 export const bridge = { send, on, off, once, log, request, mintId, get initialized() { return initialized; } };
 export default bridge;
+
+/* SPARKLES BY PLACE (B1 W6): the host's receipt for a cleared Breakout wall. Play goes on and holds pointer
+ * lock, so here the slip is passive: it never takes the pointer and leaves on its own timer. */
+import { showSlip } from './sparkles-slip.js';
+on('sparkles-receipt', showSlip);
+on('sparkles-receipt', () => {
+  const slip = typeof document !== 'undefined' && document.querySelector ? document.querySelector('.sps-slip') : null;
+  if (slip) { slip.style.pointerEvents = 'none'; slip.style.cursor = 'default'; }
+});

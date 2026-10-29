@@ -17,6 +17,7 @@ public class SparklesSlipParityTests
     public static readonly string[] Trees =
     {
         "arcademy",
+        "backroom",
         "dtrh",
         "goon",
         "piecebypiece",

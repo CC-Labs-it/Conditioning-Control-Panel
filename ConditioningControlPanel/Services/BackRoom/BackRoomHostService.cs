@@ -454,7 +454,10 @@ internal static class BackRoomHostService
         if (message["type"]?.Type == JTokenType.String && (string?)message["type"] == "breakout-wall")
         {
             // SPARKLES BY PLACE (B1): one medal per cleared wall, the Story Demo included.
-            _ = Sparkles.SparklesPageResults.Send(Sparkles.SparklesPageResults.BreakoutWall(message));
+            // The results slip (W6) lands over the play field when the receipt comes in.
+            var slipHost = _host;
+            _ = Sparkles.SparklesSlip.Deliver(Sparkles.SparklesPageResults.Send(Sparkles.SparklesPageResults.BreakoutWall(message)),
+                json => slipHost?.Post(new JRaw(json)));
             return;
         }
         if ((string?)message["type"] != "game-open") { _bridge?.Handle(message); return; }
