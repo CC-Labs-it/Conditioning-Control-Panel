@@ -49,6 +49,8 @@ test('boot: Race and the room go wait for the lights under the cover; the frame 
   assert.doesNotMatch(mf, /world\.update|renderer\.render\(|racers\.step|deferred\.step|renderer\.setHold/);
   assert.match(mf, /audio\.update\(0, \{ active: false, menu: state === 'menu'/);
   assert.match(mf, /garageFrame\(frameDt\)/);
+  assert.ok(mf.indexOf('garage?.setVisible(') < mf.indexOf('if (lights.quiet'), 'card ownership updates even while the inset warm holds rendering');
+  assert.ok(src('hud/garage.css').includes('body:has(#card:not([hidden]):not([data-kind=menu])) #race-garage{display:none!important}'), 'a card hides stale garage controls without waiting for a frame');
   assert.match(boot, /busy = rewarmBusy \|\| controller\.busy \|\| lights\.busy/);
 });
 
@@ -73,7 +75,7 @@ test('render: every warm hands the canvas back before its await (warm frames are
   assert.doesNotMatch(inset, /\.finally\(restore\)/);
   assert.match(inset, /try \{ out = fn\(\); \} catch \(e\) \{ restore\(\); throw e; \}\r?\n[\s\S]*restore\(\);\r?\n\s*return out;/);
   const warm = r.slice(r.indexOf('export async function warmAll('));
-  assert.match(warm, /post\.compileStart \? post\.compileStart\(\) : post\.compileAsync\(\)/);
+  assert.match(warm, /post\.compileStart \? post\.compileStart\(progress\) : post\.compileAsync\(progress\)/);
   assert.match(warm, /post\.render\(\); if \(overdraw\) overdraw\(\);/);
   assert.match(warm, /stopped: stopped\(\)/);
   const water = src('render/waterReflections.js');

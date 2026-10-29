@@ -513,13 +513,19 @@ async function boot(course, options, lifetime, isCurrent) {
   }
   // Both leases share in-flight decodes. Course-only textures start while the garage's
   // models arrive, without decoding the common racers twice or retaining another world.
+  const assetProgress = { course: 0, garage: shared.garageArt ? 1 : 0 };
+  const assetDone = (part, done, total) => {
+    assetProgress[part] = total > 0 ? done / total : 1;
+    showLoading('Bringing the racers in', 0.08 + 0.2 * (assetProgress.course + assetProgress.garage));
+  };
   const garageArtTask = shared.garageArt || (shared.artLibrary
-    ? shared.artLibrary.acquire({ trackId: 'shared', want: GARAGE_ART_IDS }) : null);
+    ? shared.artLibrary.acquire({ trackId: 'shared', want: GARAGE_ART_IDS,
+      onProgress: (d, n) => assetDone('garage', d, n) }) : null);
   // wave 1 art (never blocks: a missing asset keeps its greybox); ?art=0 races the greybox
   showLoading('Bringing the racers in', 0.08);
   const [art, garageArt] = await Promise.all([
     qs.get('art') === '0' ? null : shared.artLibrary.acquire({ trackId: track.id,
-      onProgress: (d, n) => showLoading('Bringing the racers in', 0.08 + 0.4 * d / n) }),
+      onProgress: (d, n) => assetDone('course', d, n) }),
     garageArtTask,
   ]);
   if (!lifetime.alive) { art?.release(); garageArt?.release(); return; }
@@ -569,10 +575,15 @@ async function boot(course, options, lifetime, isCurrent) {
     wordCount.pop(!!feel.get('gentle.on'), { gate: true });
     if (online) online.s.wordPop(words.pops + world.phraseGates.stats.hits);
   });
+  showLoading('Getting the garage ready', 0.56);
+  await paintGap();
+  if (!lifetime.alive) return;
   const garage = shared.garage ||= await createGarage({ art: shared.garageArt, renderer, canvas,
-    track: trackName, laps, trackId: track.id, online: course.online });
+    track: trackName, laps, trackId: track.id, online: course.online,
+    onProgress: (d, n) => showLoading('Getting the garage ready', 0.56 + 0.36 * d / Math.max(1, n)) });
   if (!lifetime.alive) { garage?.dispose(); return; }
   loaded('garage');
+  showLoading('Getting the pictures ready', 0.94);
   if (garage) {
     if (!shared.counts.garage) shared.counts.garage++;
     garage.setCourse({ trackId: track.id, track: trackName, laps, online: course.online });
@@ -1310,7 +1321,7 @@ async function boot(course, options, lifetime, isCurrent) {
    *  the cover, its bar), then the mirrors, the water probe, the hit cam and the gate screen. */
   async function warmLights() {
     lights.busy = true;
-    const showLights = (stage, p) => { lights.stage = stage; lights.p = Math.max(lights.p, p); showLoading(stage, p); hud.setLights({ ready: false, stage, p }); };
+    const showLights = (stage, p) => { lights.stage = stage; lights.p = Math.max(lights.p, p); if (lights.covered) showLoading(stage, p); hud.setLights({ ready: false, stage, p }); };
     const overdraw = () => garageFrame(0);
     const alive = () => lifetime.alive;
     try {
@@ -1796,12 +1807,12 @@ async function boot(course, options, lifetime, isCurrent) {
     cardThrottle = a.throttle >= 0.5;
     hopLatch.clear(); itemLatch.clear();
     if (BOT && botT && now >= botT) { botT = 0; if (state === 'menu') startRace(); }
+    garage?.setVisible(!!garage && state === 'menu' && hud.card === 'menu' && !lights.covered);
     if (lights.quiet || now - menuDrawMs < 1000 / WARM_MENU_FPS) return;
     menuDrawMs = now;
     const pst = P.st;
     audio.update(0, { active: false, menu: state === 'menu', boosting: false, drifting: false, driftTier: 0, airborne: false, onRoad: true,
       edge: false, paused: false, duck: fx.state.duck, submerged: 0, ...waterContact(pst, false, feel.get('speed.topMps')) }, []);
-    garage?.setVisible(!!garage && state === 'menu' && hud.card === 'menu' && !lights.covered);
     garageFrame(frameDt);
   }
   frameId = requestAnimationFrame(frame);

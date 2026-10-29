@@ -21,6 +21,7 @@ import { WebGPURenderer, Group, Mesh, Sprite, PlaneGeometry } from 'three/webgpu
 import * as threeWebgpu from 'three/webgpu';
 import * as GPU from 'three/webgpu';
 import { createPost } from './post.js';
+import { createViewportResize } from './viewportResize.js';
 import { releaseSceneResources, trackSceneResources, disposeSceneResources } from './sceneResources.js';
 import { skipUnchangedInstanceUploads } from './uniformUploads.js';
 import { uploadChangedAttributeBytes } from './attributeUploads.js';
@@ -146,14 +147,14 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   const meter = { n: 0, t: 0, fps: 0, el: null, art: '' }, LF = String.fromCharCode(10);
 
   const scale = () => opts.renderScale === 'auto' ? dyn.scale : opts.renderScale;
-  function resize() {
-    const w = Math.max(1, canvas.clientWidth), h = Math.max(1, canvas.clientHeight);
-    three.setPixelRatio(Math.min(globalThis.devicePixelRatio || 1, maxDpr, Q.dprMax) * scale());
-    three.setSize(w, h, false);
-  }
-  const ro = globalThis.ResizeObserver ? new ResizeObserver(resize) : null;
+  const viewport = createViewportResize({ renderer: three,
+    size: () => ({ width: canvas.clientWidth, height: canvas.clientHeight }),
+    ratio: () => Math.min(globalThis.devicePixelRatio || 1, maxDpr, Q.dprMax) * scale(),
+    delayMs: device === 'phone' ? 120 : 0 });
+  const resize = () => viewport.request();
+  const ro = globalThis.ResizeObserver ? new ResizeObserver(() => viewport.request()) : null;
   if (ro) ro.observe(canvas);
-  resize();
+  viewport.apply();
 
   function postFor(scene, camera) {
     if (!post || post.antialias !== Q.antialias) {
@@ -306,6 +307,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     },
     dispose() {
       if (ro) ro.disconnect();
+      viewport.dispose();
       lostFns.clear();
       // a dead device throws from anywhere: each step on its own, the page is rebuilding anyway
       for (const step of [() => post && post.dispose(), () => readout(false), () => disposeSceneResources(three), () => three.dispose()]) {
@@ -427,7 +429,14 @@ export async function warmAll(renderer, scene, camera, extras = [], { onProgress
   const timing = { compileMs: 0, renderMs: 0, gapMs: 0 };
   // compileStart hands the scene pass target back in this task (post.js): a frame drawn while the pipelines
   // build (the garage behind the menu) lands on the canvas, never in the scene pass target
-  const compile = async () => { const t = performance.now(); await (post.compileStart ? post.compileStart() : post.compileAsync()); timing.compileMs += performance.now() - t; };
+  const report = (done, total) => { if (!stopped()) { try { onProgress?.(done, total); } catch { /* the card only */ } } };
+  const compile = async (pass, total) => {
+    const t = performance.now();
+    // The last tenth of each pass belongs to its first draw and uploads.
+    const progress = event => report(pass + 0.9 * event.loaded / Math.max(1, event.total), total);
+    await (post.compileStart ? post.compileStart(progress) : post.compileAsync(progress));
+    timing.compileMs += performance.now() - t;
+  };
   const render = () => { const t = performance.now(); post.render(); if (overdraw) overdraw(); timing.renderMs += performance.now() - t; };
   const gap = async () => { const t = performance.now(); await paintGap(); timing.gapMs += performance.now() - t; };
   const stopped = () => !!alive && !alive();
@@ -476,26 +485,27 @@ export async function warmAll(renderer, scene, camera, extras = [], { onProgress
     for (const o of casting) o.visible = false;
     if (later) for (const o of later) o.visible = false;
     // pass 0: the post chain and the receivers alone (the road's programs are big), then a painted frame
-    await compile();
-    if (!stopped()) { render(); await gap(); }
+    const passes = groups.length + 2;
+    await compile(0, passes);
+    if (!stopped()) { render(); report(1, passes); await gap(); }
     const shown = [];
     for (let g = 0; g < groups.length && !stopped(); g++) {
       for (const o of groups[g]) for (let p = o; p && p !== scene; p = p.parent) if (!p.visible) { p.visible = true; shown.push(p); }
-      await compile();
+      await compile(g + 1, passes);
       if (!stopped()) render();
       for (const p of shown) p.visible = false;
       shown.length = 0;
       if (stopped()) break;
-      if (onProgress) { try { onProgress(g + 1, groups.length + 1); } catch { /* the card only */ } }
+      report(g + 2, passes);
       await gap();
     }
     if (!stopped()) {
       // the whole scene once: anything only a full frame builds (everything above is cached by now)
       for (const o of items) o.visible = !(later && later.has(o));
-      await compile();
+      await compile(passes - 1, passes);
       if (!stopped()) {
         render();
-        if (onProgress) { try { onProgress(groups.length + 1, groups.length + 1); } catch { /* the card only */ } }
+        report(passes, passes);
       }
     }
   } catch (e) {
