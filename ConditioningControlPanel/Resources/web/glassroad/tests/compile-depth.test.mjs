@@ -67,3 +67,15 @@ for (const failure of [false, true]) test('real post compiler restores target/MR
     assert.equal(renderer._callDepth, 3);
   } finally { post.dispose(); }
 });
+
+test('speed wave edge blur: post.update drives the speedBlur uniform from fx.speedBlur (#3063 left it at 0)', () => {
+  const renderer = { _callDepth: 0, getRenderTarget() { return null; }, setRenderTarget() {}, getMRT() { return null; }, setMRT() {} };
+  const originalWarn = console.warn; let post;
+  try { console.warn = () => {}; post = createPost(renderer, new Scene(), new PerspectiveCamera()); } finally { console.warn = originalWarn; }
+  try {
+    assert.equal(post.uniforms.speedBlur.value, 0);
+    post.update({ speedBlur: 0.6 }); assert.equal(post.uniforms.speedBlur.value, 0.6);
+    post.update({ speedBlur: 1 }); assert.equal(post.uniforms.speedBlur.value, 1);
+    post.update({}); assert.equal(post.uniforms.speedBlur.value, 0, 'no speed: sharp');
+  } finally { post.dispose(); }
+});

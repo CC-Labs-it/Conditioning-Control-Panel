@@ -132,12 +132,15 @@ export function createPost(three, scene, camera) {
       u.edge.value = fx.edgeGlow || 0;
       u.side.value = fx.edgeSide || 0;
       u.submerged.value = fx.submerged || 0;
+      u.speedBlur.value = fx.speedBlur || 0;
       // px -> uv per unit of centre distance (aberrationPx at the edge of a 1280 px wide frame); 0 = no shift
       u.aberration.value = Math.min(2.5, fx.aberrationPx || 0) / 640;
       const scr = fx.screen;
       u.webPictures.value = Math.max(scr?.k || 0, scr?.prevK || 0, fx.whiteFade || 0,
         fx.submerged || 0, fx.fog?.k || 0) > .0001 ? 0 : 1;
     },
+    /** The composite uniforms (tests read them). */
+    uniforms: u,
     /** The hit cam's render target (its picture is drawn into it before render()). */
     inset: { target: insetTarget },
     /** r = { cx, cy, w, h, rotRad } in CSS px with the CSS view size, or null to turn the inset off. */
