@@ -7,12 +7,14 @@ import { createKartLods, phoneModels, phoneModelId } from '../render/phoneModels
 import { setTier } from '../render/quality.js';
 import { setDevice } from '../render/deviceClass.js';
 const hooks = registerHooks({ resolve(specifier, context, next) {
-  return specifier === 'three' ? { url: new URL('../vendor/three/build/three.webgpu.min.js', import.meta.url).href, shortCircuit: true } : next(specifier, context);
+  const file = specifier === 'three/tsl' ? 'three.tsl.min.js' : ['three', 'three/webgpu'].includes(specifier) ? 'three.webgpu.min.js' : null;
+  return file ? { url: new URL('../vendor/three/build/' + file, import.meta.url).href, shortCircuit: true } : next(specifier, context);
 } });
 const { GLTFLoader } = await import('../vendor/three/addons/loaders/GLTFLoader.js');
 const { MeshoptDecoder } = await import('../vendor/three/addons/libs/meshopt_decoder.module.js');
 const { clone } = await import('../vendor/three/addons/utils/SkeletonUtils.js');
 const { AnimationMixer, Vector3 } = await import('../vendor/three/build/three.webgpu.min.js');
+const { createEmiSkin } = await import('../render/emiSkin.js');
 hooks.deregister();
 await MeshoptDecoder.ready;
 const bytes = readFileSync(new URL('../art/models/emi-teacup-kart.glb', import.meta.url));
@@ -49,6 +51,8 @@ test('reduced kart indices match the accepted source and cut triangles by at lea
 test('player stays full detail; rival transitions preserve rig, materials and effects with hysteresis', () => {
   setTier('phone');
   const fleet = createKartLods(data), player = clone(gltf.scene), rival = clone(gltf.scene);
+  const skin = createEmiSkin(rival, { cloneMaterials: false });
+  assert.ok(meshes(rival).some(m => m.geometry.hasAttribute('garageShell')), 'test the customized runtime geometry');
   assert.equal(fleet.bind(player, 0), null);
   const original = meshes(rival).map(m => ({ mesh: m, geometry: m.geometry, material: m.material, skeleton: m.skeleton }));
   const lod = fleet.bind(rival, 1);
@@ -68,6 +72,7 @@ test('player stays full detail; rival transitions preserve rig, materials and ef
   lod.update(60); setTier('high'); lod.update(60); assert.equal(lod.reduced, false);
   setDevice('phone'); lod.update(100); assert.ok(lod.reduced);
   fleet.dispose(); for (const p of original) assert.equal(p.mesh.geometry, p.geometry);
+  skin.dispose();
 });
 
 test('all animation clips keep low-detail vertices at their original skinned positions', () => {

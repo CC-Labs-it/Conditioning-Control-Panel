@@ -284,7 +284,6 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     root.scale.setScalar(KS);
     const art3d = buildKart(art);
     const model = art3d || new Mesh(greyGeo, createKartMaterial(look ? look.cup : [1, 1, 1]).material);
-    const lod = lods.bind(model, i);
     const mats = [], rims = [];
     if (!art3d) mats.push(model.material);
     model.traverse((o) => {
@@ -298,6 +297,8 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     const want = lookForTier(lookForSeat(i, seed, looks[i]), Q.name);
     const face = art3d ? faceScreen(art, model, look ? look.hex : LOOK.emiColour) : null;
     const skin = art3d ? createEmiSkin(model,{cloneMaterials:false}) : null;
+    // Skin customization adds geometry attributes. Capture them before building the reduced variant.
+    const lod = lods.bind(model, i);
     const dress = art3d ? dressKart(art, model, want, { tint: look ? look.cup : null, tintMix: LOOK.vehicleTintMix }) : null;
     const accessory = art3d && look && !(dress && dress.outfit) ? attachAccessory(art, model, look.accessory) : null;
     const glideCap = art3d ? createGlideCap(art, model) : null;
