@@ -58,6 +58,8 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
   const items = new Map(manifest.items.map((i) => [i.id, i]));
   // A retired id (catalog revision 2) an account still owns draws its stand-in art: the five patterns live in the bundle.
   const artOf = (id) => items.get(id) || items.get(manifest.retired?.[id]);
+  // Hair heads rest on their full model: their LOD1 faces collapse (owner, 2026-10-30), and nine heads stay ~42k tris.
+  const restFile = (id, meta) => (id.startsWith('rain.hair.') ? meta.file : meta.lod1 || meta.file);
   // The OWNED stamp hangs from the tag hinge like the name tag does.
   const stampOf = async () => { const s = await cloneOf('props/owned_stamp.glb'); s.position.y = STAMP_DROP; return s; };
   const [counter, shelfProto] = await Promise.all([load(manifest.scene.file), load(manifest.shelf.file)]);
@@ -100,7 +102,7 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
       const prop = p.tag && entry.tagNode && await (p.tag === 'owned' ? stampOf() : cloneOf('props/price_tag.glb'));
       if (prop) { entry.tagNode.add(prop); if (p.tag === 'price') tags.attach(prop, p.row); }
       if (!meta) { console.warn('prizecounter: no art for', p.id); return; }
-      entry.lod = await cloneOf(meta.lod1 || meta.file);
+      entry.lod = await cloneOf(restFile(p.id, meta));
       holder.add(entry.lod);
     }));
     return { group, slots };
