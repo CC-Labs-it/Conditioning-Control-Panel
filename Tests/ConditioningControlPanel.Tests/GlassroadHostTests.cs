@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using ConditioningControlPanel.Services.Glassroad;
 using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
@@ -140,6 +141,19 @@ public class GlassroadHostTests
         Assert.Equal(2, (int)f["identity"]!["tier"]!);   // clamped
         Assert.Equal(600, (int)f["gentle"]!["fadeMs"]!);
         Assert.Equal("Player", (string?)GlassroadRules.InitFrame("u_1", " ", 0, false, 1, 1)["identity"]!["displayName"]);
+    }
+
+    [Fact]
+    public void Init_CarriesOnlyKartGrants_AndTheOwnedPushMatches()
+    {
+        var owned = new[] { "cos.rain.hair.ink-sleek", "cos.kart.body.petal", "cos.kart.body.petal", "cos.kart.umbrella.lace", "backroom.x", "cos.kart." + new string('a', 60) };
+        var grants = (JArray)GlassroadRules.InitFrame("u_1", "Kit", 2, false, 1, 1, owned)["identity"]!["grants"]!;
+        Assert.Equal(new[] { "cos.kart.body.petal", "cos.kart.umbrella.lace" }, grants.Select(g => (string)g!).ToArray());
+        Assert.Empty((JArray)GlassroadRules.InitFrame("u_1", "Kit", 2, false, 1, 1)["identity"]!["grants"]!);
+        var push = GlassroadRules.OwnedFrame(owned);
+        Assert.Equal("owned", (string?)push["type"]);
+        Assert.Equal(grants.ToString(), push["grants"]!.ToString());
+        Assert.Empty((JArray)GlassroadRules.OwnedFrame(null)["grants"]!);
     }
 
     [Fact]

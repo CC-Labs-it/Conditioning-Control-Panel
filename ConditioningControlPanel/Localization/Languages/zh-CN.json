@@ -6352,7 +6352,7 @@
   "hm3_audio_sync_tuning": "🎚 音频同步微调",
   "hm3_rail_lock_t1": "赞助者专享",
   "hm3_rail_lock_pass": "每周通行证",
-  "hm3_rail_lock_t2": "实验室专享",
+  "hm3_rail_lock_t2": "Prime专享",
   "cp5_awareness_custom_triggers_header": "自定义触发词（高级）",
   "cp5_awareness_custom_triggers_note": "你自己的关键词清单，每条触发词都能单独设置音频、特效和冷却。",
   "cp5_ocr_detail_needs_source": "屏幕 OCR 已关闭。在 Signal Sources 里打开后就能设置扫描间隔啦。",
