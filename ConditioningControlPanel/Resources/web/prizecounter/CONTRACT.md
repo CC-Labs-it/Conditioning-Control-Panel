@@ -17,7 +17,7 @@ Scope and owner calls: `handoff-1029/B3-SHOP-DECISIONS.md` (sections 5 and 6 are
 | `hud/` | B3-W4 | tabs, wallet, preview box, confirm card, stamps. |
 | `preview/` | B3-W5 | per-family preview in the HUD box. |
 | `index.html`, `main.js`, `dev.html` | B3-W1 creates, others add one line each | page entry; `dev.html` runs on the mock with no host. |
-| `tests/*.test.mjs` | every lane | `node --test tests/` from this folder. Every lane runs the whole folder. |
+| `tests/*.test.mjs` | every lane | `node --test tests/*.test.mjs` from this folder (the bare folder form fails on Node 24). Every lane runs the whole folder. |
 
 ## Assets (glTF Y up, front +Z, metres)
 
