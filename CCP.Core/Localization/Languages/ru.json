@@ -5897,7 +5897,7 @@
   "hm3_audio_sync_tuning": "🎚 Настройка аудиосинхронизации",
   "hm3_rail_lock_t1": "Для спонсоров",
   "hm3_rail_lock_pass": "Пропуск недели",
-  "hm3_rail_lock_t2": "Лаборатория",
+  "hm3_rail_lock_t2": "Только Prime",
   "cp5_awareness_custom_triggers_header": "Свои триггеры (продвинутое)",
   "cp5_awareness_custom_triggers_note": "Твой собственный список ключевых слов, со звуком, эффектами и откатом для каждого триггера.",
   "cp5_ocr_detail_needs_source": "OCR экрана выключен. Включи его в разделе Signal Sources, чтобы задать интервал сканирования.",

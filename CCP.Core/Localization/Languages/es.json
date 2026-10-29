@@ -5897,7 +5897,7 @@
   "hm3_audio_sync_tuning": "🎚 Ajuste de sincronía de audio",
   "hm3_rail_lock_t1": "Solo patrons",
   "hm3_rail_lock_pass": "Pase semanal",
-  "hm3_rail_lock_t2": "Solo Lab",
+  "hm3_rail_lock_t2": "Solo Prime",
   "cp5_awareness_custom_triggers_header": "Disparadores personalizados (avanzado)",
   "cp5_awareness_custom_triggers_note": "Tu propia lista de palabras clave, con audio, efectos y enfriamiento por cada disparador.",
   "cp5_ocr_detail_needs_source": "El OCR de pantalla está apagado. Actívalo en Signal Sources para ajustar el intervalo de escaneo.",

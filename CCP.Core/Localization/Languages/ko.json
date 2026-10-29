@@ -5897,7 +5897,7 @@
   "hm3_audio_sync_tuning": "🎚 오디오 동기화 조절",
   "hm3_rail_lock_t1": "후원자 전용",
   "hm3_rail_lock_pass": "주간 패스",
-  "hm3_rail_lock_t2": "연구소 전용",
+  "hm3_rail_lock_t2": "Prime 전용",
   "cp5_awareness_custom_triggers_header": "커스텀 트리거 (고급)",
   "cp5_awareness_custom_triggers_note": "너만의 키워드 목록이야. 트리거마다 오디오, 효과, 쿨다운을 따로 정할 수 있어요.",
   "cp5_ocr_detail_needs_source": "화면 OCR이 꺼져 있어요. Signal Sources에서 켜면 스캔 간격을 정할 수 있어요.",

@@ -5897,7 +5897,7 @@
   "hm3_audio_sync_tuning": "🎚 Audio-Sync einstellen",
   "hm3_rail_lock_t1": "Nur Patrons",
   "hm3_rail_lock_pass": "Wochenpass",
-  "hm3_rail_lock_t2": "Nur Labor",
+  "hm3_rail_lock_t2": "Nur Prime",
   "cp5_awareness_custom_triggers_header": "Eigene Trigger (erweitert)",
   "cp5_awareness_custom_triggers_note": "Deine eigene Keyword-Liste, mit Audio, Effekten und Cooldowns pro Trigger.",
   "cp5_ocr_detail_needs_source": "Bildschirm-OCR ist aus. Schalte es unter Signal Sources ein, um das Scan-Intervall zu setzen.",

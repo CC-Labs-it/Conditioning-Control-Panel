@@ -5897,7 +5897,7 @@
   "hm3_audio_sync_tuning": "🎚 Ajuste da sincronia de áudio",
   "hm3_rail_lock_t1": "Só apoiadores",
   "hm3_rail_lock_pass": "Passe semanal",
-  "hm3_rail_lock_t2": "Só no Lab",
+  "hm3_rail_lock_t2": "Só no Prime",
   "cp5_awareness_custom_triggers_header": "Gatilhos personalizados (avançado)",
   "cp5_awareness_custom_triggers_note": "Sua própria lista de palavras-chave, com áudio, efeitos e recarga pra cada gatilho.",
   "cp5_ocr_detail_needs_source": "O OCR de tela está desligado. Ligue em Signal Sources pra definir o intervalo de escaneamento.",
