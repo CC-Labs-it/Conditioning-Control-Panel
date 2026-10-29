@@ -57,6 +57,7 @@ export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'f
   root.append(hud);
 
   let shown = 0, counting = null, tabIds = '', peekKey = '', cardKey = null, card = null, outTimer = 0;
+  let peekBand = 0;   // the preview strip's last height: it hides between items, the framing should not jump
   const setN = (n) => { shown = n; walletN.textContent = String(n); wallet.setAttribute('aria-label', t('shop_wallet', n)); };
   const pulse = (node, cls) => { if (motion === 'off') return; node.classList.remove(cls); void node.offsetWidth; node.classList.add(cls); };
 
@@ -191,6 +192,12 @@ export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'f
 
   return {
     el: hud, previewSlot,
+    /** The bands (px from the HUD's top and bottom) a phone keeps the shelf out of: under the tabs, over the preview strip. */
+    insets() {
+      const box = hud.getBoundingClientRect(), above = (tabs.hidden ? top : tabs).getBoundingClientRect();
+      if (!peek.hidden) peekBand = Math.max(0, box.bottom - peek.getBoundingClientRect().top);
+      return { top: Math.max(0, above.bottom - box.top), bottom: peekBand };
+    },
     paint(v) {
       if (!counting) setN(v.sp);
       const wk = weekNo(v.week);

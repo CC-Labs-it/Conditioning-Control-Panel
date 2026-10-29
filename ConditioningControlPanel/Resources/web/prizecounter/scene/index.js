@@ -11,7 +11,7 @@
 import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { layoutTab, slotIndex, usedBays } from './layout.js';
-import { motionAmp, damp, fitFov, emptyToCameraQuat, forwardOf, lookPoint, follow, dipFor, bob } from './camera-math.js';
+import { motionAmp, damp, emptyToCameraQuat, forwardOf, lookPoint, bayView, bandFit, dipFor, bob } from './camera-math.js';
 import { keyIntent, padIntent, stickIntent, swipeIntent } from './intents.js';
 import { createTags } from './tags.js';
 
@@ -73,7 +73,7 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
 
   const amp = () => motionAmp(motion);
   const cam = { eye: new T.Vector3(...wide.eye), look: new T.Vector3(...wide.look), fov: 30, dip: 0, jumping: false,
-    pose: wide, eyeShift: [0, 0, 0], aim: new T.Vector3(...wide.look), bay: -1 };
+    pose: wide, eyeShift: [0, 0, 0], aim: new T.Vector3(...wide.look), bay: -1, item: null, bayTop: 0, off: 0 };
   let opened = 0, t = 0;
 
   // Shelves on the counter now, by bay: { group, slots: Map slot -> { holder, lod, full, id } }.
@@ -158,12 +158,21 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
       }, () => {});
       fitRing(e);
     }
-    const target = bayPose[bay];
+    // The middle of the slot box, not the base. The frame loop turns it into the look (bayView), so a resize reframes.
+    aimAt(bay, worldPos(e.holder).add(new T.Vector3(0, 0.39, 0)).toArray());
+    return true;
+  }
+  function aimAt(bay, item) {
     if (cam.bay !== bay) { if (cam.bay >= 0 && amp() > 0) cam.jumping = true; cam.bay = bay; }
-    cam.pose = target;
-    const mid = worldPos(e.holder).add(new T.Vector3(0, 0.39, 0));      // the middle of the slot box, not the base
-    const f = follow(target.look, mid.toArray(), amp() * Math.min(1, camera.aspect));   // a phone keeps the shelf whole
-    cam.aim.set(...f.look); cam.eyeShift = f.eyeShift;
+    cam.pose = bayPose[bay];
+    cam.item = item;
+    cam.bayTop = node(counter, 'bay_' + bay).getWorldPosition(new T.Vector3()).y;
+  }
+  // Frame a bay with nothing focused (the signed-out window display on a phone).
+  function frameBay(bay) {
+    if (!bayPose[bay]) return false;
+    wanted = null; clearFocus();
+    aimAt(bay, bayPose[bay].look);
     return true;
   }
 
@@ -236,8 +245,10 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
   }
 
   // ---- frame
+  let viewW = 1, viewH = 1, insets = { top: 0, bottom: 0 };
   function resize() {
     const w = canvas.clientWidth || canvas.width, h = canvas.clientHeight || canvas.height;
+    viewW = Math.max(1, w); viewH = Math.max(1, h);
     renderer.setSize(w, h, false);
     camera.aspect = w / Math.max(1, h);
     camera.updateProjectionMatrix();
@@ -252,21 +263,29 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
     pollPads();
     const a = amp(), holding = !opened || t - opened < WIDE_HOLD;
     const pose = holding ? wide : cam.pose;
-    const aim = holding || pose === wide ? new T.Vector3(...wide.look) : cam.aim;
-    const shift = holding || pose === wide ? [0, 0, 0] : cam.eyeShift;
+    const view = holding || pose === wide || !cam.item ? null : bayView(pose, cam.item, cam.bayTop, camera.aspect, a);
+    const aim = view ? cam.aim.set(...view.look) : cam.aim.set(...wide.look);
+    const shift = view ? view.eyeShift : [0, 0, 0];
     const eyeT = new T.Vector3(pose.eye[0] + shift[0], pose.eye[1] + shift[1], pose.eye[2] + shift[2]);
-    const fovT = fitFov(camera.aspect, pose.frame[0], pose.frame[1], pose.dist);
-    if (a === 0) { cam.eye.copy(eyeT); cam.look.copy(aim); cam.fov = fovT; cam.dip = 0; }
+    // A phone keeps the HUD's top and bottom bands off the shelf; a landscape screen (share 0) frames as before.
+    const share = view ? view.share : 0, box = view ? view.frame : pose.frame;
+    const fit = bandFit(camera.aspect, box[0], box[1], pose.dist, viewH, insets.top * share, insets.bottom * share);
+    const fovT = fit.fov;
+    if (a === 0) { cam.eye.copy(eyeT); cam.look.copy(aim); cam.fov = fovT; cam.dip = 0; cam.off = fit.offsetY; }
     else {
       const k = damp(dt, 3.2), left = cam.look.distanceTo(aim);
       if (cam.jumping && left < 0.12) cam.jumping = false;
       const dipT = cam.jumping ? dipFor(left, a) : 0;
       cam.dip += (dipT - cam.dip) * damp(dt, 6);
       cam.eye.lerp(eyeT, k); cam.look.lerp(aim, damp(dt, 2.6)); cam.fov += (fovT - cam.fov) * k;
+      cam.off += (fit.offsetY - cam.off) * k;
     }
     const back = new T.Vector3().subVectors(cam.eye, cam.look).normalize().multiplyScalar(cam.dip);
     camera.position.copy(cam.eye).add(back);
-    camera.fov = cam.fov; camera.updateProjectionMatrix();
+    camera.fov = cam.fov;
+    if (Math.abs(cam.off) > 0.25) camera.setViewOffset(viewW, viewH, 0, cam.off, viewW, viewH);
+    else if (camera.view && camera.view.enabled) camera.clearViewOffset();
+    camera.updateProjectionMatrix();
     camera.lookAt(cam.look);
     if (focused) {
       focused.holder.position.y = bob(t, a);
@@ -291,7 +310,9 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
   }
 
   return {
-    showTab, focus, stamp, resize, dispose, hooks, screenPos, setWallet: tags.setWallet,
+    showTab, focus, frameBay, stamp, resize, dispose, hooks, screenPos, setWallet: tags.setWallet,
+    /** The HUD bands (px) a portrait view keeps the shelf out of. */
+    setInsets(i) { insets = { top: Math.max(0, +i?.top || 0), bottom: Math.max(0, +i?.bottom || 0) }; },
     items: manifest.items.map((i) => ({ id: i.id, family: i.family })),
     onIntent(cb) { listeners.add(cb); return () => listeners.delete(cb); },
     setMotion(m) { motion = m; },

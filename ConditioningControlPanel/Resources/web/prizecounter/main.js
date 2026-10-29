@@ -35,8 +35,11 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
   const hud = createHud(root, { t, send: (i) => intent(i), goTab, signIn: () => host.signIn(), list: !scene, gentle: !!init.gentle,
     motion: motion === 'full' && init.reducedMotion ? 'less' : motion });
   const tier = () => (shop.state() ? shop.state().tier : 0);
-  const paint = () => hud.paint({ status: shop.status(), sp: shop.sp(), week: shop.state() && shop.state().week, tier: tier(),
-    tabs: shop.tabs(), tabId: shop.tabId(), shelves: shop.shelves(), focus: shop.focus(), card: shop.card() });
+  const paint = () => {
+    hud.paint({ status: shop.status(), sp: shop.sp(), week: shop.state() && shop.state().week, tier: tier(),
+      tabs: shop.tabs(), tabId: shop.tabId(), shelves: shop.shelves(), focus: shop.focus(), card: shop.card() });
+    if (scene) scene.setInsets(hud.insets());   // a phone frames the shelf between the tabs and the preview strip
+  };
   const itemPos = () => { const f = shop.focus(); return f && scene ? scene.screenPos(f.bay, f.slot) : null; };
 
   function apply(ch) {
@@ -53,7 +56,9 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
       const out = ch.status === 'signed_out';
       root.classList.toggle('pc-signed-out', out);
       // Signed out: the art hangs as a window display (no prices) behind the sign-in button.
-      if (out && scene) scene.showTab('window', windowShelves(scene.items)).catch((e) => host.log(`prizecounter: no window display (${(e && e.message) || e})`));
+      // A portrait view frames one bay of it; the whole counter would be a strip across the middle.
+      if (out && scene) scene.showTab('window', windowShelves(scene.items))
+        .then(() => { if (canvas.clientWidth < canvas.clientHeight) scene.frameBay(0); }).catch((e) => host.log(`prizecounter: no window display (${(e && e.message) || e})`));
     }
     if (ch.buy) ch.buy.then(apply);
     paint();
@@ -65,7 +70,7 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
     const k = KEYS[e.key] || KEYS[e.key.toLowerCase()];
     if (k && !(e.target && e.target.tagName === 'BUTTON' && k === 'select')) { e.preventDefault(); intent({ type: k }); }
   };
-  const onResize = () => scene && scene.resize();
+  const onResize = () => { if (scene) { scene.resize(); scene.setInsets(hud.insets()); } };
   if (scene) scene.onIntent(intent); else window.addEventListener('keydown', onKey);
   window.addEventListener('resize', onResize);
   paint();
