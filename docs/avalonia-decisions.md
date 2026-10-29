@@ -177,7 +177,7 @@ Remote Control – escape integrity. A remote controller may never remove the su
 
 ## 2026-09-30: Panic ↔ mic (avalonia-port/voice-commands)
 Panic ↔ mic: panic aborts in-flight speech capture/command chain (SpeechEngine cancel) but leaves the wake-word loop and PTT armed; mic teardown stays with She's Listening, the privacy pill and shutdown. Rationale: under Lockdown the spoken 'panic' is the only repeatable in-app exit; disarming the mic would violate escape integrity. Voice 'panic' stays unguarded by Lockdown/StrictLock (WPF parity, VoiceCommands.cs:108-109); only the global panic hotkey is suppressed under Lockdown. SUPERSEDED 2026-10-23 (hard rule 6, owner 2026-10-22): the voice panic reaches exactly as far as the panic key; see "Voice panic obeys the panic key" below.
-- Test: `Tests/CCP.Avalonia.Tests/VoiceCommandsTests.cs` (PanicAbortsTheCaptureButTheLoopStaysArmed, TheSpokenSafeWordWorksUnderLockdown; fail-proven).
+- Test: `Tests/CCP.Avalonia.Tests/VoiceCommandsTests.cs` (PanicAbortsTheCaptureButTheLoopStaysArmed, TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown; fail-proven).
 - Advisor: oracle-deep.
 
 ## 2026-09-30: Panic vs Takeover (avalonia-port/autonomy-core)
