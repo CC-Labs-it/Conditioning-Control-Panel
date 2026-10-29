@@ -26,11 +26,22 @@ export function goonworksSegmentBlocked(from,to,row){
 export function goonworksWorldPlan(track){
   if(track?.id!=='goonworks')return null;if(CACHE.has(track))return CACHE.get(track);
   const layout=getGoonworksLayout(track),samples=roadSamples(track,7),rows=[],mounts=[],particles=[],features=[],rooms=[];
-  const corridor=samples.map(f=>({p:point(f,0,6),size:[f.w+6,16,9],axes:axes(f)}));
+  const routes=[...samples];
+  for(const fork of track.forks||[]){const count=Math.max(1,Math.ceil(fork.lengthM/7));
+    for(let i=0;i<=count;i++){const f=fork.frameAt(i*fork.lengthM/count);
+      routes.push({p:[...f.p],b:[...f.b],n:[...f.n],t:[...f.t],w:f.w});}
+  }
+  const corridor=routes.map(f=>({p:point(f,0,6),size:[f.w+6,16,9],axes:axes(f)}));
   const grid=new Map(),cell=64;
   for(const c of corridor){const radius=Math.hypot(...c.size)/2;for(let x=Math.floor((c.p[0]-radius)/cell);x<=Math.floor((c.p[0]+radius)/cell);x++)for(let z=Math.floor((c.p[2]-radius)/cell);z<=Math.floor((c.p[2]+radius)/cell);z++){const key=x+':'+z;if(!grid.has(key))grid.set(key,[]);grid.get(key).push(c);}}
   const nearby=row=>{const r=Math.hypot(...row.size)/2,found=new Set();for(let x=Math.floor((row.p[0]-r)/cell);x<=Math.floor((row.p[0]+r)/cell);x++)for(let z=Math.floor((row.p[2]-r)/cell);z<=Math.floor((row.p[2]+r)/cell);z++)for(const c of grid.get(x+':'+z)||[])found.add(c);return found;};
-  const clear=row=>![...nearby(row)].some(c=>goonworksBoxesIntersect(row,c));
+  const clear=row=>{
+    // Reserve visible ink and the complete rotational sweep, not just the resting mesh.
+    const size=row.size.map(v=>v+(row.outline?.45:0));
+    if(row.motion){const a=row.motion.axis??1,b=(a+1)%3,c=(a+2)%3,r=['gear','spiral','star','torus','sphere'].includes(row.shape)?Math.max(size[b],size[c]):Math.hypot(size[b],size[c]);size[b]=size[c]=r;}
+    const volume={...row,size};
+    return ![...nearby(volume)].some(c=>goonworksBoxesIntersect(volume,c));
+  };
   let rejected=0;
   const put=(id,material,p,size,{shape='box',basis=WORLD,check=true,outline=true,motion=null}={})=>{
     if(!finite(p)||!finite(size)||size.some(v=>v<=0))throw Error('Invalid GOONWORKS part '+id);
@@ -87,7 +98,7 @@ export function goonworksWorldPlan(track){
         }
         if(id==='pinball-launch'){
           local('pinball-balcony-star','white',f,x-side*6.4,34,0,[1.5,8,8],{shape:'star',basis:[f.t,f.n,f.b]});
-          for(const z of[-.2,0,.2])local('pinball-lamp','hot',f,x-side*6,12,z*step,[1.8,2,2],{shape:'sphere'});
+          for(const z of[-.2,0,.2])local('pinball-lamp','hot',f,x-side*4,12,z*step,[1.8,2,2],{shape:'sphere'});
         }
       }
       if(i%2===0){screen(id+'-screen-'+i,s,-1,22,Math.min(20,step*.76),10,-7);screen(id+'-screen-'+i+'b',s,1,22,Math.min(20,step*.76),10,-7);}
@@ -126,9 +137,8 @@ export function goonworksWorldPlan(track){
   }
   const tube=range('rabbit-hole');
   if(tube){features.push('windowed-rabbit-tube');const step=38,count=Math.ceil((tube.s1-tube.s0)/step);
-    for(let i=0;i<count;i++){const s=tube.s0+(i+.5)*(tube.s1-tube.s0)/count,f=track.frameAt(s),radius=Math.max(23,f.w/2+4),center=point(f,0,radius-1),depth=(tube.s1-tube.s0)/count;
-      // The shell is a single swept mesh. These small fixtures sit entirely above the driving line.
-      for(const side of[-1,1])local('rabbit-ceiling-conduit','white',f,side*5,44,0,[1.8,depth+1,1.8],{shape:'cylinder',basis:[f.b,f.t,f.n]});
+    for(let i=0;i<count;i++){const s=tube.s0+(i+.5)*(tube.s1-tube.s0)/count;
+      // Only the picture mounts dress the tunnel; the swept shell owns its quiet panels.
       if(i%2===0)screen('rabbit-screen-'+i,s,i%4?-1:1,28,10,8,-6);
       // The enclosed tube stays clear of floating white sparkles and bubble rings.
     }

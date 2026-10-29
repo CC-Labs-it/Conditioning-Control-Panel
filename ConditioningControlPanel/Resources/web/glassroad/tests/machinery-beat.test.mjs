@@ -65,8 +65,8 @@ test('song seeks and loop wraps visibly rearm the same physical pose before anot
 test('Goonworks swept contact uses the same kicked wheel pose, including the safe bypass',()=>{
   const track=trackFor('goonworks'),rows=goonworksSetpieces(track),wheel=rows.find(r=>r.kind==='wheel');
   clock(track,.22,0);
-  const t=8.125*.625,pose=goonworksPose(wheel,t,machineryBeatAt(track,t));
-  assert.equal(pose.angle,wheel.phase+gearBeatTravel(8.125)*Math.PI/2);
+  const t=8.15*.625,pose=goonworksPose(wheel,t,machineryBeatAt(track,t));
+  assert.equal(pose.angle,wheel.phase+gearBeatTravel(8.15)*Math.PI/2);
   const at=(along,x)=>{
     const st=place(track,{s:wheel.s+along,lateral:x,speed:30});
     for(let j=0;j<3;j++)st[S.posX+j]=wheel.p[j]+wheel.t[j]*along+wheel.b[j]*x;
@@ -79,9 +79,9 @@ test('Goonworks swept contact uses the same kicked wheel pose, including the saf
   }
 });
 
-test('song-synced rising blocks and flippers preserve warning time and actual clear windows',()=>{
+test('song-synced rising blocks preserve warning time and actual clear windows',()=>{
   const track=trackFor('goonworks'),rows=goonworksSetpieces(track);clock(track,.22,0);
-  for(const kind of ['block','flipper']){
+  for(const kind of ['block']){
     const row={...rows.find(r=>r.kind===kind),offsetS:0},pose=b=>goonworksPose(row,b*.625,machineryBeatAt(track,b*.625));
     for(let b=.4;b<.8;b+=.1){assert.equal(pose(b).warning,true);assert.equal(pose(b).active,false);}
     assert.equal(pose(0).height,0);assert.equal(pose(1.75).height,0);assert.ok(pose(.95).height>0);

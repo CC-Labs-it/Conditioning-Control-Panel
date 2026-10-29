@@ -54,7 +54,7 @@ test('the deferred runner shows one group for the synchronous part of a compile,
 
 test('boot stages the warm on the phone tier only, steps the runner each frame and holds the intro clock', () => {
   const boot = src('boot.js');
-  assert.match(boot, /const staged = renderer\.tier === 'phone' && !warmPose && qs\.get\('stage'\) !== '0';/);
+  assert.match(boot, /const staged = renderer\.device === 'phone' && !warmPose && qs\.get\('stage'\) !== '0';/);   // the DEVICE, whatever Quality is pinned
   assert.match(boot, /deferred = renderer\.deferredWarm\(warm, world\.scene\);/);
   assert.match(boot, /if \(!frozen && !\(deferred && deferred\.behind\(introElapsed \+ frameDt\)\)\) introElapsed = Math\.min/);
   assert.match(boot, /if \(deferred && !deferred\.done\) \{[\s\S]{0,400}deferred\.step\(\);/);

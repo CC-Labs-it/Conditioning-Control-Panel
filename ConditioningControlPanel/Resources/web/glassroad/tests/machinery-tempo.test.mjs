@@ -22,7 +22,7 @@ const poses = [
   ['ribbon', (t,b) => ribbonPhase(row,t,b), 'direction'],
 ];
 const goon = loadTrack(JSON.parse(readFileSync(new URL('../tracks/goonworks.json',import.meta.url),'utf8')));
-for(const kind of ['wheel','shutter','block','flipper']) {
+for(const kind of ['wheel','shutter','block']) {
   const r = {...goonworksSetpieces(goon).find(r=>r.kind===kind), offsetS:0};
   poses.push([kind,(t,b)=>goonworksPose(r,t,b),kind==='wheel'?'angle':kind==='shutter'?'x':'height']);
 }

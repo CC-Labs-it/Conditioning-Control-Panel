@@ -14,17 +14,21 @@
  * Throttle dismisses it (boot.js passes a throttle press as nav('throttle')), so the card teaches the launch;
  * the Go button does the same for a tap or Enter. ?howto=0 skips it, and so does ?bot=1 unless ?howto=1.
  * Options gains Steer assist (Light, Strong, Off; sim/assist.js); the old assist toggle reads Soft rails.
+ * Playtest 2026-10-28: the Race door opens it as the PRE-RACE card every time (Laps 1 / 2 / 3 and Steer assist chips
+ * over the panels, act 'pick'), not once a session; "Don't show again" and ?howto=0 still skip it; Again skips it.
  * Polish 5 (S4): every move, confirm, back, toggle and refusal emits `sound` { name } (hud/sounds.js); boot plays it.
  */
 import { formatTime, ordinal, pauseLine, resultRows } from './format.js';
-import { howtoHtml } from './howto.js';
-import { cleanOptions, loadOptions, saveOptions, stepOption, cycleOption, choiceLabel, STEER_SENS } from './options.js';
+import { howtoHtml, preraceHtml } from './howto.js';
+import { cleanOptions, loadOptions, saveOptions, stepOption, cycleOption, choiceLabel, assistHint, STEER_SENS } from './options.js';
 import { controlRows, deviceView, pauseHint } from './labels.js';
 import { PROFILES, nextProfile } from '../input/padmap.js';
 import { createLobby } from './lobby.js';
 import { actSound } from './sounds.js';
 import { recapState, dotsHtml, runPageHtml, stampsPageHtml, PAGE_TITLES, RECAP_FIXTURE } from './recap.js';
 import { togglePick, MAX_NICHES } from '../host/scrolllerNiches.js';
+import { SOURCES, sourceLabel } from '../host/localLibrary.js';
+import { qualityHint } from '../render/deviceClass.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const btn = (act, label, cls = '', extra = '') => '<button type="button" class="c-btn ' + cls + '" data-act="' + act + '"' + extra + '>' + label + '</button>';
@@ -51,7 +55,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
 
   let kind = 'start', data = {}, ready = false, waitNote = note?.textContent || '';
   const sound = (name) => { if (name) emit('sound', { name }); };
-  let opts = loadOptions(), host = { gentle: false, scrolller: null };   // scrolller: { on } where the host offers its feed
+  let opts = loadOptions(), host = { gentle: false, scrolller: null, device: 'desktop', autoTier: null };   // scrolller: { on } where the host offers its feed
   const load = { p: 0 };
   // garage first: the course's lights warm behind the menu; until they are ready the Race door says so (a press
   // still works: boot covers the garage and starts the race the moment the lights are ready)
@@ -65,8 +69,8 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     if (bar) bar.setAttribute('aria-valuenow', String(Math.round(load.p * 100)));
   }
   const stack = { options: null, controls: null, howto: null };
-  // the how-to card: once a session before the first race, never in a dev bot run unless asked for
-  let howtoSeen = false, leaving = 0;
+  // the pre-race card: before every race from the Race door, never in a dev bot run unless asked for
+  let leaving = 0;
   const howtoSkip = (() => {
     try { const q = new URLSearchParams(doc.defaultView.location.search); return q.get('howto') === '0' || (q.get('bot') === '1' && q.get('howto') !== '1'); }
     catch (e) { return false; }
@@ -77,7 +81,11 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     try { const q = new URLSearchParams(doc.defaultView.location.search); return q.get('dev') === '1' && q.get('recap') === 'fixture'; }
     catch (e) { return false; }
   })();
-  const howtoDue = () => !howtoSeen && !opts.howtoOff && !howtoSkip;
+  const howtoDue = () => !opts.howtoOff && !howtoSkip;
+  /** The how-to card's inner html: the pre-race rows when it opens before a race (data.then). */
+  const hwInner = () => '<div class="hw-wrap">' + (data.then === 'race' ? preraceHtml(opts, choiceLabel, assistHint) : '') +
+    howtoHtml(devices || {}, { off: opts.howtoOff }) + '</div>';
+  const lapsLine = (n) => n + (n === 1 ? ' lap' : ' laps');
   const BACKS = ['options', 'controls', 'howto'];
   // B2-d: the online lobby draws in this card as kind 'lobby' (hud/lobby.js); its Back returns to the opener
   const lobby = createLobby({ doc, card, title, note, extra, emit, focusFirst: () => focusFirst(), exit: () => {
@@ -112,7 +120,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       go.textContent = 'Again'; go.disabled = false;
     } else if (k === 'menu') {
       title.innerHTML = esc(data.title || 'Racing Thoughts') + '<small>A CC Labs game</small>';
-      note.textContent = (data.track || 'Threshold') + ', ' + (data.laps || 3) + ' laps';
+      note.textContent = (data.track || 'Threshold') + ', ' + lapsLine(data.laps || 3);
       extra.innerHTML = '<div class="c-doors">' +
         btn('race', '<b>Race</b><em>' + raceDoorNote() + '</em>', 'c-door' + (lights.ready ? ' hot' : ' c-wait')) +
         (data.online === false ? '' : btn('online', '<b>Race online</b><em>Tables and friends</em>', 'c-door')) +
@@ -135,9 +143,9 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       note.hidden = true;
       extra.innerHTML = '<div class="c-keyswrap">' + keysHtml() + '</div><div class="c-list">' + btn('howto', 'How to play') + btn('back', 'Back', 'quiet') + '</div>';
     } else if (k === 'howto') {
-      title.textContent = 'How to race';
+      title.textContent = data.then === 'race' ? 'Ready' : 'How to race';
       note.hidden = true;
-      extra.innerHTML = '<div class="hw-wrap">' + howtoHtml(devices || {}, { off: opts.howtoOff }) + '</div>';
+      extra.innerHTML = hwInner();
     } else if (k === 'lobby') {
       lobby.show(data);                              // draws and focuses itself
       return;
@@ -189,9 +197,12 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   function scrolllerHtml() {
     const s = host.scrolller;
     if (!s) return '';
-    let html = '<div class="c-opt"><span>Online pictures<small>From Scrolller, on screens and in flashes</small></span>' +
-      btn('scrolller', s.on ? 'On' : 'Off', 'c-tog' + (s.on ? ' on' : ''), ' aria-pressed="' + s.on + '"') + '</div>';
-    if (s.on && s.catalog) {
+    const src = s.source || (s.on ? 'scrolller' : 'off');   // host/localLibrary.js: Scrolller, My files or Off
+    let html = '<div class="c-opt c-niches"><span>Pictures<small>On screens and in flashes</small></span><div class="c-chips">' +
+      SOURCES.map((id) => btn('scrolller', sourceLabel(id), 'c-chip' + (src === id ? ' on' : ''), ' data-source="' + id + '" aria-pressed="' + (src === id) + '"')).join('') + '</div></div>';
+    if (src === 'files') html += '<div class="c-opt"><span>Your files<small>' + (s.files ? s.files + ' picked. ' : '') + 'They stay on this device</small></span>' +
+      btn('scrolller-files', s.files ? 'Change' : 'Choose', 'c-tog') + '</div>';
+    if (src === 'scrolller' && s.catalog) {
       html += '<div class="c-opt c-niches"><span>Pictures on ' + esc(s.track) + '<small>' +
         (s.custom ? 'Your pick for this track' : 'This track\'s picks') + ', up to ' + MAX_NICHES + '</small></span><div class="c-chips">' +
         s.catalog.map((c) => {
@@ -209,8 +220,10 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       btn('toggle', lock ? 'On' : on ? 'On' : 'Off', 'c-tog' + (on || lock ? ' on' : ''), ' data-key="' + key + '" aria-pressed="' + !!(on || lock) + '"' + (lock ? ' disabled' : '')) + '</div>';
     return '<div class="c-opts">' +
       tog('gentlePreview', 'Gentle preview', opts.gentlePreview, g ? 'Set in CCP, stays on' : 'Softer effects, no flicker', g) +
-      '<div class="c-opt"><span>Steer assist<small>Leans to the middle, drives hands off</small></span>' +
+      '<div class="c-opt"><span>Steer assist<small class="c-assist-hint">' + assistHint(opts.steerAssist) + '</small></span>' +
         btn('cycle', choiceLabel('steerAssist', opts.steerAssist), 'c-tog', ' data-key="steerAssist" aria-label="Steer assist"') + '</div>' +
+      '<div class="c-opt"><span>Laps<small>Solo races</small></span>' +
+        btn('cycle', choiceLabel('laps', opts.laps), 'c-tog', ' data-key="laps" aria-label="Laps"') + '</div>' +
       '<div class="c-opt"><span>Motion<small>Shake, pulses and hit pauses</small></span>' +
         btn('cycle', choiceLabel('motion', opts.motion), 'c-tog', ' data-key="motion" aria-label="Motion"') + '</div>' +
       tog('assist', 'Soft rails', opts.assist, 'Open edges hold you in', false) +
@@ -218,11 +231,14 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
         STEER_SENS.max + '" step="' + STEER_SENS.step + '" data-key="steerSens" value="' + opts.steerSens + '" aria-label="Steering"></label>' +
       VOL_ROWS.map(([key, label]) => '<label class="c-opt"><span>' + label + '</span><input type="range" min="0" max="1" step="0.05" data-key="' +
         key + '" value="' + opts[key] + '" aria-label="' + label + '"></label>').join('') +
-      // mid-race the Quality step waits for the race to end (render/quality.js qualityLanding), and the hint says so
-      CYCLE_ROWS.map(([key, label, hint]) => '<div class="c-opt"><span>' + label + '<small>' + (key === 'quality' && data.from === 'pause' ? QUALITY_LATER : hint) + '</small></span>' +
+      // mid-race the Quality step waits for the race to end (render/quality.js qualityLanding), and the hint says so;
+      // in the garage a phone pinned above its auto pick is warned about memory (render/deviceClass.js qualityHint)
+      CYCLE_ROWS.map(([key, label, hint]) => '<div class="c-opt"><span>' + label + '<small>' +
+        (key === 'quality' ? data.from === 'pause' ? QUALITY_LATER : qualityHint(opts.quality, host, hint) : hint) + '</small></span>' +
         btn('cycle', choiceLabel(key, opts[key]), 'c-tog', ' data-key="' + key + '" aria-label="' + label + '"') + '</div>').join('') +
       tog('shadows', 'Shadows', opts.shadows, 'Off is lighter on the GPU', false) +
       tog('showFps', 'Show fps', opts.showFps, 'A small counter in the corner', false) +
+      tog('speedo', 'Speed readout', opts.speedo, 'km/h on the race screen', false) +
       (host.scrolller ? '<div class="c-scrolller">' + scrolllerHtml() + '</div>' : '') +
       '</div>';
   }
@@ -251,7 +267,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     if (card.hidden) return;
     if (kind === 'pause') { hint(); return; }
     const hw = kind === 'howto' && extra.querySelector('.hw-wrap');
-    if (hw) { hw.innerHTML = howtoHtml(devices || {}, { off: opts.howtoOff }); focusFirst(); return; }
+    if (hw) { hw.outerHTML = hwInner(); focusFirst(); return; }
     const wrap = kind === 'controls' && extra.querySelector('.c-keyswrap');
     if (!wrap) return;
     const focusAct = wrap.contains(doc.activeElement) && doc.activeElement.dataset ? doc.activeElement.dataset.act : null;
@@ -282,7 +298,12 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     if (a === 'rc-next') { if (rc) rc.at = 0; recapNext(); return; }   // a click is never a held throttle
     if (!(a === 'back' && BACKS.includes(kind))) sound(actSound(a));   // back() plays its own
     if (a === 'scrolller') {   // the host stores consent; only its echo (setScrolller) moves the switch
-      if (host.scrolller) { el.classList.add('pending'); emit('scrolller', { on: !host.scrolller.on }); }
+      const to = el.dataset.source || (host.scrolller?.on ? 'off' : 'scrolller');   // My files is local: boot draws it at once
+      if (host.scrolller) { el.classList.add('pending'); emit('scrolller', { on: to === 'scrolller', source: to }); }
+      return;
+    }
+    if (a === 'scrolller-files') {   // the device's file picker opens inside this click; files never leave the device
+      if (host.scrolller) emit('scrolller-files');
       return;
     }
     if (a === 'niche' && host.scrolller) {   // this track's pick: at least one, at most four
@@ -298,6 +319,16 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       return;
     }
     if (a === 'cycle') { cycle(el, 1); return; }
+    if (a === 'pick') {   // a pre-race chip: store it, press it in, release its row mates
+      setOption(el.dataset.key, el.dataset.val);
+      const now = String(opts[el.dataset.key]);
+      for (const c of el.parentElement?.querySelectorAll('[data-act="pick"]') || []) {
+        const on = c.dataset.val === now; c.classList.toggle('on', on); c.setAttribute('aria-pressed', String(on));
+      }
+      const h = el.dataset.key === 'steerAssist' && el.closest?.('.pr-row')?.querySelector('.pr-h');
+      if (h) h.textContent = assistHint(opts.steerAssist);
+      return;
+    }
     if (a === 'race' && kind === 'menu' && howtoDue()) { openHowto({ then: 'race' }); return; }
     if (a === 'howto') { openHowto({}); return; }
     if (a === 'howto-go') { howtoGo(); return; }
@@ -338,7 +369,6 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   /** Throttle or Go: the card leaves (its OUT), then the race starts or the opener comes back. */
   function howtoGo() {
     if (kind !== 'howto' || card.hidden || leaving) return;
-    howtoSeen = true;
     const then = data.then, gentle = card.classList.contains('c-gentle');
     body.classList.remove('in'); body.classList.add('out');
     leaving = setTimeout(() => {
@@ -353,6 +383,8 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     const key = el.dataset.key;
     setOption(key, cycleOption(key, opts[key], dir));
     el.textContent = choiceLabel(key, opts[key]);
+    const h = key === 'steerAssist' && el.parentElement?.querySelector('.c-assist-hint');
+    if (h) h.textContent = assistHint(opts[key]);
   }
 
   function back() {
@@ -451,14 +483,18 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       paintLoad();
     },
     setHostGentle(on) { host.gentle = !!on; },
+    /** The device behind the tier and the auto pick ({ device, autoTier }, renderer.device / autoTier): the Quality hint. */
+    setDevice(v) { host.device = v && v.device === 'phone' ? 'phone' : 'desktop'; host.autoTier = (v && v.autoTier) || null; },
     /** The host's Scrolller state ({ on, track, niches, custom, catalog }), or null where the host has no feed (nothing
      * drawn). An open Options card redraws its pictures rows in place and keeps the focused control. */
     setScrolller(state) {
       host.scrolller = state ? { on: state.on === true, track: String(state.track || ''), niches: [...(state.niches || [])],
-        custom: !!state.custom, catalog: Array.isArray(state.catalog) ? state.catalog : null } : null;
+        custom: !!state.custom, catalog: Array.isArray(state.catalog) ? state.catalog : null,
+        source: SOURCES.includes(state.source) ? state.source : null, files: Math.max(0, state.files | 0) } : null;
       const box = card.querySelector('.c-scrolller');
       if (!box || !host.scrolller) return;
-      const f = doc.activeElement, keep = f && box.contains(f) ? (f.dataset.niche ? '[data-niche="' + f.dataset.niche + '"]' : '[data-act="' + f.dataset.act + '"]') : null;
+      const f = doc.activeElement, keep = f && box.contains(f) ? (f.dataset.niche ? '[data-niche="' + f.dataset.niche + '"]'
+        : f.dataset.source ? '[data-source="' + f.dataset.source + '"]' : '[data-act="' + f.dataset.act + '"]') : null;
       box.innerHTML = scrolllerHtml();
       if (keep) (box.querySelector(keep) || box.querySelector('[data-act="scrolller"]'))?.focus?.({ preventScroll: true });
     },

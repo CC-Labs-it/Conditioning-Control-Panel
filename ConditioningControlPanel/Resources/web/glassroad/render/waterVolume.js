@@ -9,6 +9,7 @@ import { markRows, clearRows } from './dataTextureRows.js';
 import { createWaterFoam } from './waterFoam.js';
 import { createWaterReflections } from './waterReflections.js';
 import { Q, TIERS } from './quality.js';
+import { memoryTier } from './deviceClass.js';
 import { createAudioReactiveUniforms, reactiveWaterNodes } from './audioReactive.js';
 import { buildWaterTransitions, waterJoinWeight, transitionSupport, transitionOutlets } from './waterTransitions.js';
 
@@ -40,7 +41,9 @@ function runUV(field, run, s, lateral) {
     v: (run.rowOffset + along * (run.ny - 1) + 0.5) / field.height };
 }
 
-export function buildWaterVolume(track, pal, art = null, { quality = Q.name, scene = null, renderer = null, reactive = createAudioReactiveUniforms() } = {}) {
+/** quality: the LOOK tier (field resolution, foam counts); memoryQuality: the tier the probe budgets read, the phone tier on a
+ *  phone DEVICE whatever Quality is pinned (render/deviceClass.js). */
+export function buildWaterVolume(track, pal, art = null, { quality = Q.name, memoryQuality = memoryTier(quality), scene = null, renderer = null, reactive = createAudioReactiveUniforms() } = {}) {
   const object = new Group(); object.name = 'water-volume';
   const field = createWaterField(track, { quality });
   const runs = field.runs.map(r => ({ fromS: r.fromS, toS: r.toS })), spills = waterSpills(track, runs), top = data(), wall = data(), fall = data();
@@ -58,9 +61,10 @@ export function buildWaterVolume(track, pal, art = null, { quality = Q.name, sce
   const join = attribute('aWaterJoin', 'vec3');
   const fieldHeight = heightSample.r.mul(2).sub(1).clamp(-0.8, 0.8).add(wind.height).mul(join.x);
   // PHONE WATER (owner 2026-10-26): the phone tier builds no live probe (no warm-up, no in-race cube captures);
-  // the surface wears a palette sheen instead. Decided once per course build, like the field resolution.
-  const liveReflections = (TIERS[quality] || TIERS.high).sceneReflections !== false;
-  const reflections = liveReflections ? createWaterReflections({ scene, renderer, exclude: object, quality, track }) : null;
+  // the surface wears a palette sheen instead. Decided once per course build, like the field resolution; keyed on the
+  // DEVICE (memoryQuality), so a phone pinned to High keeps its sheen and never warms a probe.
+  const liveReflections = (TIERS[memoryQuality] || TIERS.high).sceneReflections !== false;
+  const reflections = liveReflections ? createWaterReflections({ scene, renderer, exclude: object, quality: memoryQuality, track }) : null;
   const froth = createWaterFoam(track, field, spills, { quality });
   const tex = id => art?.detail?.(id) || art?.tex?.(id + (Q.name === 'phone' ? '-phone' : '')) || null;
   const normal = tex('water-normal'), foam = tex('water-foam-mask'), sheet = tex('waterfall-sheet'), phase = tex('waterfall-phase-mask');

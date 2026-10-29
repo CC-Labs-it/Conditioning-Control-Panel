@@ -383,7 +383,7 @@ function buildEdgeMeshes(track, dl, runs, railed, railEnds, row, rowS, inField =
  * floor chevrons leading to the opening from LEAD_M before it (EDGES lane: "I never made it to the shortcut").
  * routeLand: the soft catch zone, a ring round the landing pad and forward arrows inside it. */
 const KICK_W = 1.4, KICK_UP = 0.18, POST_H = 4, POST_W = 0.5, CHEV_STEP_M = 4, CHEV_ARM = 1.5, CHEV_W = 0.45;
-const ARCH_RISE = 1.6, ARCH_W = 0.8, ARCH_SEGS = 16, LEAD_M = 80, LEAD_STEP_M = 8, LEAD_ARM = 1.7, LEAD_W = 0.55, LEAD_TURN = 0.4, LEAD_DOUBLE_M = 1.5;
+const ARCH_RISE = 1.6, ARCH_W = 0.8, ARCH_SEGS = 16, LEAD_M = 130, LEAD_STEP_M = 8, LEAD_ARM = 1.7, LEAD_W = 0.55, LEAD_TURN = 0.4, LEAD_DOUBLE_M = 1.5;
 const RING_R = 4.6, RING_W = 0.45, RING_SEGS = 48, ZONE_LEN = 24, ZONE_HALF = 3.5, ZONE_LINE = 0.25;
 
 function buildRouteMeshes(track, builder) {

@@ -507,7 +507,7 @@ export function createAi(track, feel, { seed = 1, forkChoice = null } = {}) {
 
     // facing the wrong way: brake, then reverse with the wheel turned the other way, until the nose comes round
     const fwdV = st[S.velX] * fx + st[S.velY] * fy + st[S.velZ] * fz;
-    if (fwdV < -0.5) out.steer = -out.steer;        // rolling backwards: the yaw law flips, so does the wheel
+    if (fwdV < -0.5 && st[S.engineV] < 0) out.steer = -out.steer;   // reversing: the yaw law flips (sim/kart.js), so does the wheel
     if (ft < -0.1 && ph === RESPAWN.NONE) {
       const turn = x >= 0 ? 1 : -1;
       out.throttle = 0; out.brake = 1; out.steer = fwdV > 1 ? turn : -turn;

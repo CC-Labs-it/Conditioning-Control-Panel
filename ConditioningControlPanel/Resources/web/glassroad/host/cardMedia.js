@@ -10,13 +10,20 @@ export function validCardSource(src, origin, now = Date.now()) {
     && urlAllowed(src.url, origin) && Number.isFinite(src.expiresAt) && src.expiresAt > now
     && src.expiresAt <= now + 86400000;
 }
-export function createCardMedia(media, { bridge, origin = globalThis.location?.origin || '',
+/** Clips a phone waits for before its cover lifts (createCardMedia readyCount). The rest keep arriving behind the
+ *  menu: on iPhone every download and decode peaking with the shader warm killed Safari's GPU process (2026-10-28). */
+export const PHONE_READY_CLIPS = 2;
+/** readyCount: ready settles once this many complete, consent-valid clips are attached, or when every wanted source
+ *  has settled, whichever comes first. Only the wait changes; what may be shown stays exactly as strict. */
+export function createCardMedia(media, { bridge, origin = globalThis.location?.origin || '', readyCount = Infinity,
   makeVideo = url => Object.assign(document.createElement('video'), { muted: true, loop: true, playsInline: true, src: url }),
 } = {}) {
   const slots = selectScrolllerSlots(media?.slots || [], { share: media?.scrolllerShare }), entries = new Map();
   const shown = slots.map(() => null);
   let order = [], disposed = false, authority = 0, refreshTimer = 0, retryTimer = 0, expiryTimer = 0;
-  let manifestController = null;
+  let manifestController = null, enough = null;
+  const firstClips = new Promise(resolve => { enough = resolve; });
+  const counted = () => { if (order.filter(key => { const e = entries.get(key); return e?.el && live(e); }).length >= readyCount) enough(); };
   const live = e => !disposed && entries.get(e.key) === e && validCardSource(e.source, origin);
 
   function syncSlots() {
@@ -87,7 +94,7 @@ export function createCardMedia(media, { bridge, origin = globalThis.location?.o
         const el = makeVideo(blob);
         e.el = el; e.blob = blob; blob = null; e.failures = 0; e.retryAt = 0;
         // Every source is checked again here. A peer may have expired during this download.
-        prune();
+        prune(); counted();
       } catch {
         if (live(e)) {
           e.failures++;
@@ -155,7 +162,7 @@ export function createCardMedia(media, { bridge, origin = globalThis.location?.o
     const response = await fetch('/__card-media/start', { method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(10000) });
     if (!response.ok) throw Error('Card media unavailable');
   }) : null;
-  const ready = local ? refresh() : Promise.resolve();
+  const ready = local ? Promise.race([refresh(), firstClips]) : Promise.resolve();
   const flashable = () => order.map(key => entries.get(key)).filter(e => e?.el && live(e)
     && e.el.readyState >= 2 && e.el.videoWidth > 0 && !e.el.error);
   return { apply, ready,
@@ -167,7 +174,7 @@ export function createCardMedia(media, { bridge, origin = globalThis.location?.o
     get flashCount() { return flashable().length; },
     dispose() {
     if (disposed) return;
-    disposed = true; authority++; manifestController?.abort();
+    disposed = true; authority++; manifestController?.abort(); enough();
     clearTimeout(refreshTimer); clearTimeout(retryTimer); clearTimeout(expiryTimer);
     off?.(); stopActivation?.(); globalThis.document?.removeEventListener?.('visibilitychange', visible);
     const removed = [...entries.values()]; entries.clear(); order = [];

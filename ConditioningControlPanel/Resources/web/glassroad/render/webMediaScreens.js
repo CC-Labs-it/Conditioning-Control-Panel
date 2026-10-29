@@ -71,7 +71,7 @@ export function createWebMediaScreens({ scene, slots, canvas, isVisible = () => 
       video.style.cssText = 'width:100%;height:100%;object-fit:cover;display:none';
       const label = doc.createElement('span'); label.textContent = 'via Scrolller';
       label.style.cssText = 'position:absolute;left:2%;bottom:1%;font:600 12px/1.2 sans-serif;color:white;text-shadow:0 0 2px black';
-      el.append(img, video, label); root.append(el); row.image = img; row.video = video;
+      el.append(img, video, label); root.append(el); row.image = img; row.video = video; row.label = label;
     }
   }
   /** Let go of a face's clip: no src, load() frees the decoder. */
@@ -101,6 +101,9 @@ export function createWebMediaScreens({ scene, slots, canvas, isVisible = () => 
     }
     ensureRoot();
     if (!root) return;
+    // Scrolller pictures keep "via Scrolller"; the player's own files (host/localLibrary.js) carry no credit.
+    const credit = typeof feed.credit === 'string' ? feed.credit : 'via Scrolller';
+    for (const row of rows) if (row.label && row.label.textContent !== credit) { row.label.textContent = credit; row.label.style.display = credit ? '' : 'none'; }
     const width = canvas.clientWidth, height = canvas.clientHeight, turn = Math.floor(age / 7);
     const hold = !!view.paused || !!doc?.hidden, rate = (view.gentle || motion?.matches) ? GENTLE_RATE : 1;
     camera.getWorldPosition(eye);

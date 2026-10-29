@@ -7,6 +7,7 @@ import { getKeepLayout } from '../track/keep-layout.js';
 import { prisonPlan } from './keepPrison.js';
 import { spatialCandidates } from './spatialCandidates.js';
 import { screenBodyBox } from './screenBodyMath.js';
+import { goonworksScreenVisibility } from './goonworksVisibility.js';
 
 const { add, sub, mul, dot, norm } = V3;
 const WORLD = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
@@ -203,6 +204,13 @@ export function worldScreenLayout(track, { tier = 'high', samples = null, solids
       for (const side of [-1,1]) if (slots.length < maxSlots) fit(count+index,side,false,s);
       if (slots.length > before) break;
     }
+  }
+  // A curved tube can clear a cabinet while the road itself still hides its picture.
+  // Check the actual rendered triangles before handing these faces to the media pool.
+  if(track.id==='goonworks'){
+    const visible=new Set(goonworksScreenVisibility(track,{rows:[],mounts:slots},{cache:false})
+      .filter(row=>row.visible>=.5&&row.approaches.filter(a=>a.visible>=.5).length>=2).map(row=>row.id));
+    for(let i=slots.length-1;i>=0;i--)if(!visible.has(slots[i].id)){slots.splice(i,1);rejected++;}
   }
   // The shared allocator alternates world faces. Even cohorts keep the added split exact.
   if (slots.length % 2) {

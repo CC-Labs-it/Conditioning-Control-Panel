@@ -19,24 +19,25 @@ export function reasonOf(e) {
 }
 
 /**
- * @param {{ kind?: string, course?: string, backend?: string, tier?: string, stage?: string, at?: number, ua?: string }} ctx
+ * @param {{ kind?: string, course?: string, backend?: string, tier?: string, pinned?: boolean, stage?: string, at?: number, ua?: string }} ctx
  *   kind: 'boot' (a course failed to open), 'lost' (the GPU device or context went away), 'stalled' (frames stopped),
- *   'frame' (the frame loop threw). stage: the last loading milestone reached.
+ *   'frame' (the frame loop threw), 'stall' (the loading bar stopped moving). stage: the last loading milestone reached.
+ *   pinned: the tier came from a pinned Quality option (a phone pinned above its auto pick is the usual memory death).
  */
 export function describeFailure(e, ctx = {}) {
   const stack = e && typeof e.stack === 'string' ? e.stack.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(0, 4).join(' | ').slice(0, 600) : '';
   return {
     v: 1, kind: ctx.kind || 'boot', at: Number.isFinite(ctx.at) ? ctx.at : Date.now(),
-    course: ctx.course || null, backend: ctx.backend || null, tier: ctx.tier || null, stage: ctx.stage || null,
+    course: ctx.course || null, backend: ctx.backend || null, tier: ctx.tier || null, pinned: ctx.pinned === true, stage: ctx.stage || null,
     reason: reasonOf(e), stack, ua: typeof ctx.ua === 'string' ? ctx.ua.slice(0, 200) : null,
   };
 }
 
-/** The cover's small line: the kind, the course and the reason. */
+/** The cover's small line: the kind, the course and the reason; a pinned tier says so ("high pinned"). */
 export function failureLine(rec) {
   if (!rec) return '';
-  const where = [rec.course, rec.backend, rec.tier].filter(Boolean).join(', ');
-  const what = rec.kind === 'lost' ? 'graphics device lost' : rec.kind === 'stalled' ? 'frames stopped' : rec.kind === 'frame' ? 'frame loop threw' : 'boot failed';
+  const where = [rec.course, rec.backend, rec.tier && rec.pinned ? rec.tier + ' pinned' : rec.tier].filter(Boolean).join(', ');
+  const what = rec.kind === 'lost' ? 'graphics device lost' : rec.kind === 'stalled' ? 'frames stopped' : rec.kind === 'frame' ? 'frame loop threw' : rec.kind === 'stall' ? 'loading stalled' : 'boot failed';
   return what + (rec.stage ? ' after ' + rec.stage : '') + (where ? ' (' + where + ')' : '') + ': ' + rec.reason;
 }
 

@@ -9,7 +9,7 @@
  * copy written into the three.js camera only; the rig keeps the clean pose its follow integrates.
  */
 import { PerspectiveCamera, Quaternion } from 'three/webgpu';
-import { createCamRig, vFovForAspect, createHint, rotateLook, traumaRot, offsetQuat } from './cameraMath.js';
+import { createCamRig, vFovForAspect, createHint, rotateLook, traumaRot, offsetQuat, speedFov } from './cameraMath.js';
 import { S } from '../sim/state.js';
 import { LOOK } from './look.js';
 import { createCameraViews } from './cameraViews.js';
@@ -25,7 +25,10 @@ export function createChaseCamera(feel, { bus = null } = {}) {
     const gentle = !!options.gentle || !!feel.get('gentle.on'), still = gentle || options.motion === 'off';
     const chase = options.active !== false && views.selected === 'chase' && !options.rearView && !views.mirrorActive && !options.manual;
     const lead = hint.update(options.track, kart, dt, still ? 'off' : chase ? 'on' : 'out');
-    apply(aspect, pose.eye, lead ? rotateLook(hintLook, pose.eye, pose.look, pose.up, lead) : pose.look, pose.up, pose.vFov);
+    // speed wave: the widen rides on the drawn copy only (fx.speedFeel is already settled and wears the motion / Gentle
+    // share in fx/reactions.js); the pose and rig.vFov never see it, and a still camera (motion off) adds nothing
+    const widen = options.motion === 'off' ? 0 : speedFov(fx?.speedFeel, 'full', false);
+    apply(aspect, pose.eye, lead ? rotateLook(hintLook, pose.eye, pose.look, pose.up, lead) : pose.look, pose.up, pose.vFov + widen);
     if (dt > 0) shakeT += dt;
     traumaRot(rot, feel, fx, options.noise ?? fx?.noise, shakeT, gentle);
     if (rot.pitch || rot.yaw || rot.roll) camera.quaternion.multiply(offQ.fromArray(offsetQuat(rq, rot.pitch, rot.yaw, rot.roll)));
