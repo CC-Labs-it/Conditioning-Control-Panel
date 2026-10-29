@@ -5,11 +5,14 @@ const unit = v => Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0;
 const EVENTS = ['kick', 'snare', 'hats'];
 export const INSTRUMENT_FIELDS = Object.freeze(EVENTS.map(name => Object.freeze({ age: name + 'Age', strength: name + 'Strength', count: name + 'Count' })));
 const REFRACTORY = [.16, .14, .055];
+// Gentle: a section change walks the floor phrase over GENTLE_SECTION_S, so floorPhrase crossfades the patterns
+// (about 1 s) instead of swapping the whole floor in one frame. gentleMix fades the Gentle bass layer in.
+export const GENTLE_SECTION_S = 8, GENTLE_RISE_S = .5;
 export function createMusicVisualData() {
   const data = new Uint8Array(64 * 18 * 4);
   for (let i = 0; i < 64; i++) data[i * 4] = 128;
   const v = { data, drive: 0, kick: 0, snare: 0, hats: 0, onset: 0, hitAge: 9, hitStrength: 0,
-    section: 0, lastS: NaN, historyS: NaN, lastHitS: -9, song: null, active: false,
+    section: 0, sectionTarget: 0, gentleMix: 0, lastS: NaN, historyS: NaN, lastHitS: -9, song: null, active: false,
     baseline: new Float32Array(3), flux: new Float32Array(3), chartHit: new Float64Array(3).fill(-9), eventS: new Float64Array(3).fill(-9), peaks: new Float32Array(64) };
   for (const fields of INSTRUMENT_FIELDS) { v[fields.age] = 9; v[fields.strength] = v[fields.count] = 0; }
   return v;
@@ -17,9 +20,17 @@ export function createMusicVisualData() {
 function reset(v) {
   v.data.fill(0); for (let i = 0; i < 64; i++) v.data[i * 4] = 128;
   v.baseline.fill(0); v.flux.fill(0); v.chartHit.fill(-9); v.peaks.fill(0); v.drive = v.kick = v.snare = v.hats = v.onset = 0;
-  v.hitAge = 9; v.hitStrength = 0; v.historyS = NaN; v.lastHitS = -9; v.section = 0;
+  v.hitAge = 9; v.hitStrength = 0; v.historyS = NaN; v.lastHitS = -9;
   v.eventS.fill(-9);
   for (const fields of INSTRUMENT_FIELDS) { v[fields.age] = 9; v[fields.strength] = v[fields.count] = 0; }
+}
+/** Full snaps to a new section (strong accents); Gentle, or Full still catching up after Gentle, walks there. */
+function stepSection(v, target, step, gentle, restarted) {
+  const settled = v.section === v.sectionTarget;
+  v.sectionTarget = target;
+  if (!gentle && (restarted || settled)) { v.section = target; return; }
+  const gap = target - v.section, walk = step / GENTLE_SECTION_S;
+  v.section = Math.abs(gap) <= walk ? target : v.section + Math.sign(gap) * walk;
 }
 /** True means the 4.5 KB atlas changed. Pause is a complete hold; mute/silence clears it once. */
 export function stepMusicVisualData(v, signal, dt, { paused = false, gentle = false, song = null } = {}) {
@@ -28,7 +39,8 @@ export function stepMusicVisualData(v, signal, dt, { paused = false, gentle = fa
     const changed = v.active; if (changed) reset(v); v.active = false; v.lastS = NaN; return changed;
   }
   const t = Math.max(0, signal.songS), elapsed = Number.isFinite(v.lastS) ? t - v.lastS : 0;
-  if (v.song !== song || elapsed < 0 || elapsed > .5) reset(v);
+  const restarted = v.song !== song || elapsed < 0 || elapsed > .5;
+  if (restarted) reset(v);
   v.song = song; v.lastS = t; v.active = true;
   const step = Math.max(0, Math.min(.1, Number(dt) || 0));
   const target = unit(signal.rawEnergy ?? signal.energy);
@@ -58,7 +70,9 @@ export function stepMusicVisualData(v, signal, dt, { paused = false, gentle = fa
     v.lastHitS = t; v.hitStrength = struck;
   }
   v.hitAge = Math.max(0, Math.min(9, t - v.lastHitS));
-  if (song?.sections) v.section = Math.max(0, song.sections.indexOf(sectionOf(song, t)));
+  const sectionNow = song?.sections ? Math.max(0, song.sections.indexOf(sectionOf(song, t))) : v.sectionTarget;
+  stepSection(v, sectionNow, step, gentle, restarted);
+  v.gentleMix = gentle ? Math.min(1, v.gentleMix + step / GENTLE_RISE_S) : 0;
   // Gentle holds the fast PCM/history picture; its slow level/tint controls remain live.
   if (gentle) return false;
   if (!Number.isFinite(v.historyS) || t - v.historyS >= 1 / VISUAL_DATA.historyHz) {
