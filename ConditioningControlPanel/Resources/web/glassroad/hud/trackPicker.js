@@ -1,6 +1,7 @@
 import {courseSketch} from './courseSketch.js';
 import {MODE_LABEL,resolveMode,saveMode} from '../meta/mode.js';
 import {loadOptions} from './options.js';
+import {courseTheme} from '../track/themes.js';
 
 const COLORS={threshold:'#ff88b5',mainframe:'#70e6c3',keep:'#ffce62',boudoir:'#e49cfa',goonworks:'#bd006e'};
 // Race / Time trial: two small pills above the grid (Logbook TRIAL lane); the pick is saved and sent as glassroad-mode
@@ -40,6 +41,12 @@ export function createTrackPicker({root,courses,trackId,change}) {
     b.innerHTML='<img class="g-course-shot" alt="" aria-hidden="true" width="960" height="540" loading="lazy" decoding="async" draggable="false" sizes="(max-width:699px) 46vw, 340px"><span class="g-course-mode"></span><span class="g-course-map" aria-hidden="true"><svg viewBox="0 0 180 88"><path class="g-route-shadow"/><path class="g-route"/><circle r="3"/></svg></span><span class="g-course-text"><strong></strong><small class="g-course-details"></small></span><span class="g-course-selected" aria-hidden="true">Selected</span>';
     const img=b.querySelector('.g-course-shot');img.setAttribute('srcset',shot.srcset);img.setAttribute('src',shot.src);
     b.querySelector('strong').textContent=course.name;b.querySelector('.g-course-mode').textContent=course.online?'Solo / online':'Solo';
+    const theme=courseTheme(course.id);
+    if(theme){
+      const badge=document.createElement('span');badge.className='g-course-theme';badge.textContent='Theme: '+theme.label;
+      const lyrics=document.createElement('small');lyrics.className='g-course-lyrics';lyrics.textContent='Default lyrics: '+theme.lyrics;
+      b.querySelector('.g-course-text').append(badge,lyrics);
+    }
     b.onclick=()=>{if(leaving)return;if(course.id===trackId){close();return;}leaving=true;
       for(const tile of tiles)tile.disabled=true;
       dialog.querySelector('.g-track-status').textContent='Opening '+course.name;
