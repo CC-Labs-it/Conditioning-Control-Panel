@@ -75,7 +75,7 @@ test('render: every warm hands the canvas back before its await (warm frames are
   assert.doesNotMatch(inset, /\.finally\(restore\)/);
   assert.match(inset, /try \{ out = fn\(\); \} catch \(e\) \{ restore\(\); throw e; \}\r?\n[\s\S]*restore\(\);\r?\n\s*return out;/);
   const warm = r.slice(r.indexOf('export async function warmAll('));
-  assert.match(warm, /post\.compileStart \? post\.compileStart\(\) : post\.compileAsync\(\)/);
+  assert.match(warm, /post\.compileStart \? post\.compileStart\(progress\) : post\.compileAsync\(progress\)/);
   assert.match(warm, /post\.render\(\); if \(overdraw\) overdraw\(\);/);
   assert.match(warm, /stopped: stopped\(\)/);
   const water = src('render/waterReflections.js');

@@ -62,7 +62,7 @@ test('boot stages the warm on the phone tier only, steps the runner each frame a
   const renderer = src('render/renderer.js');
   assert.match(renderer, /deferredWarm\(warm, scene\)/);
   assert.match(renderer, /casting = items\.filter\(\(o\) => !o\.receiveShadow && !\(later && later\.has\(o\)\)\)/);
-  assert.match(src('render/post.js'), /compileStart\(\) \{/);
+  assert.match(src('render/post.js'), /compileStart\(onProgress = null\) \{/);
   assert.ok(!/from 'three/.test(src('render/stagedWarm.js')), 'the runner has no three import (renderer test stubs)');
 });
 
