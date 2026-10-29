@@ -45,7 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         public static SingleInstance? Claim(string suffix, Func<string?, Task> show, string? payload = null)
         {
             var pipe = "ConditioningControlPanel_ShowWindow_Signal_" + Environment.UserName + suffix;
-            var mutex = new Mutex(true, MutexName + suffix, out bool owned);
+            var mutex = CreateMutex(MutexName + suffix, out bool owned);
             if (!owned)
             {
                 bool? acked = RequestShow(pipe, payload);
@@ -59,6 +59,19 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
             return new SingleInstance(mutex, owned, pipe, show);
         }
+
+        /// <summary>The options of the instance mutex on Unix, null on Windows. Windows keeps WPF's plain
+        /// name (session-local there, which is what the installer's AppMutex looks for). On Unix a plain name
+        /// is scoped to the Unix SESSION, so an autostart launch and a menu launch (different sessions, or a
+        /// <c>setsid</c> start) each got their own mutex and two instances ran on one profile (review R4).
+        /// Per user across every session: one app per user, never blocked by another user's.</summary>
+        internal static NamedWaitHandleOptions? UnixMutexOptions() =>
+            OperatingSystem.IsWindows() ? null : new NamedWaitHandleOptions { CurrentUserOnly = true, CurrentSessionOnly = false };
+
+        static Mutex CreateMutex(string name, out bool owned) =>
+            UnixMutexOptions() is { } options
+                ? new Mutex(true, name, options, out owned)
+                : new Mutex(true, name, out owned);
 
         /// <summary>true = acked, false = connected but no ack in time, null = nobody listening.</summary>
         static bool? RequestShow(string pipe, string? payload)

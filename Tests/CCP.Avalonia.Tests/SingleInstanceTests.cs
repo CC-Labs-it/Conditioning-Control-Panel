@@ -88,5 +88,22 @@ namespace CCP.Avalonia.Tests
             }
             finally { Environment.SetEnvironmentVariable("CCP_USERDATA_DIR", saved); }
         }
+
+        /// <summary>Review R4: on Unix a plain mutex name is per Unix session, so an autostart launch and a
+        /// menu launch ran as two instances on one profile. Unix claims one mutex per user for every session;
+        /// Windows keeps WPF's plain name for the installer's AppMutex.</summary>
+        [Fact]
+        public void UnixClaimsOneInstancePerUserAcrossSessions()
+        {
+            var options = SingleInstance.UnixMutexOptions();
+            if (OperatingSystem.IsWindows())
+            {
+                Assert.Null(options);
+                return;
+            }
+            Assert.NotNull(options);
+            Assert.False(options!.Value.CurrentSessionOnly);
+            Assert.True(options.Value.CurrentUserOnly);
+        }
     }
 }
