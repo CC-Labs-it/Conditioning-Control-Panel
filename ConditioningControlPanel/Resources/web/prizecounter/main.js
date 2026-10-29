@@ -28,6 +28,7 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
     const m = await import('./scene/index.js');
     scene = await m.createScene(canvas, { base: './assets/', motion });
   } catch (e) { host.log(`prizecounter: scene unavailable, plain list (${(e && e.message) || e})`); }
+  if (scene) scene.fx = await import('./fx/index.js').then((m) => m.installFx(scene, init)).catch((e) => host.log(`prizecounter: no juice (${(e && e.message) || e})`));
   canvas.hidden = !scene;
 
   function paint() {
