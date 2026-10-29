@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prize Counter (dev)</title>
+  <link rel="stylesheet" href="./page.css">
+  <script type="importmap">
+    { "imports": { "three": "../vendor/three/three.module.min.js", "three/addons/": "../vendor/three/addons/" } }
+  </script>
+</head>
+<body>
+  <!-- The mock host on mock/state.sample.json. Knobs: ?fail=<reason> refuses the first buy, ?tier=2, ?sp=50, ?tab=kart.
+       The console has window.mock (the mock server: fail, setSp, setTier, setWeek, reprice). -->
+  <main id="pc"></main>
+  <script type="module">
+    import { createMockServer } from './mock/server.js';
+    import { createMockHost } from './mock/host.js';
+    import { mountPrizeCounter } from './main.js';
+    const q = new URLSearchParams(location.search);
+    const server = createMockServer(await (await fetch('./mock/state.sample.json')).json());
+    if (q.has('tier')) server.setTier(Number(q.get('tier')));
+    if (q.has('sp')) server.setSp(Number(q.get('sp')));
+    if (q.has('fail')) server.fail(q.get('fail'));
+    window.mock = server;
+    window.page = await mountPrizeCounter(createMockHost(server, { tab: q.get('tab') }), { root: document.getElementById('pc') });
+  </script>
+</body>
+</html>

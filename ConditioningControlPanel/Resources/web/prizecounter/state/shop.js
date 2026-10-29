@@ -2,7 +2,7 @@
  *   readState   the /v2/shop/state body -> tabs in house order, shelves of at most 4 bays x 9 slots
  *   faceOf      which face a confirm card shows
  *   createShop  load, tabs, the focus walk, the confirm card, one idem per card, receipts and refusals
- * intent() and confirm() answer what changed: { tab, focus, card, close, effects, buy, wear, prime }. */
+ * intent() and confirm() answer what changed: { tab, focus, card, close, effects, owned, buy, wear, prime }. */
 
 export const TAB_ORDER = ['rain-clothes', 'rain-hair', 'kart', 'chess', 'profile', 'desk', 'prime', 'backroom'];
 export const BAYS = 4, SLOTS = 9;
@@ -174,11 +174,12 @@ export function createShop({ request, newIdem, tab: startTab = null, now = () =>
         for (const r of rowsOf(c.itemId)) r.owned = { at: now(), paidSp: int(res.paidSp, r.priceSp) };
         if (obj(res.prizes)) st.prizes = { revision: int(res.prizes.revision), grants: strs(res.prizes.grants) };
         out.effects = [{ type: 'wallet', sp: st.sp }];
+        out.owned = c.itemId;
       } else {
         const reason = String(res.reason || 'offline');
         const row = rowsOf(c.itemId)[0];
         if (RETRY[reason]) { c.retry = true; c.noteKey = RETRY[reason]; }
-        else if (reason === 'owned') { for (const r of rowsOf(c.itemId)) if (!r.owned) r.owned = { at: now(), paidSp: 0 }; }
+        else if (reason === 'owned') { for (const r of rowsOf(c.itemId)) if (!r.owned) r.owned = { at: now(), paidSp: 0 }; out.owned = c.itemId; }
         else if (reason === 'needs_prime') c.forced = { face: 'prime', action: 'prime', reasonKey: 'shop_prime_reason' };
         else if (reason === 'not_in_stock') c.forced = { face: 'gone', action: null };
         else if (reason === 'unavailable') c.forced = { face: 'soon', action: null };
