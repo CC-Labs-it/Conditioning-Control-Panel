@@ -65,6 +65,7 @@ import { createRoadWords } from './roadWords.js';
 import { createNearDressing } from './nearDressing.js';
 import { createThresholdAtmosphere } from './thresholdAtmosphere.js';
 import { createCourseAtmosphere } from './courseAtmosphere.js';
+import { createAfterimageBackdrop } from './afterimageBackdrop.js';
 import { createWordRush } from './wordRush.js';
 import { createPhraseGates } from './phraseGates.js';
 import { createAirWords } from './airWords.js';
@@ -228,8 +229,12 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   }
   const sky = createSkyMaterial(pal, art);
   const skyMesh = add(new Mesh(new SphereGeometry(LOOK.skyRadiusM, 48, 32), sky.material));
-  skyMesh.renderOrder = -1; skyMesh.frustumCulled = false; skyMesh.visible = !keep && !goon;
+  skyMesh.renderOrder = -1; skyMesh.frustumCulled = false; skyMesh.visible = false;
+  const afterimageBackdrop = createAfterimageBackdrop({ theme: track.id, phone: Q.name === 'phone', radius: LOOK.skyRadiusM });
+  scene.add(afterimageBackdrop.object);
   const keepBackdrop = keep ? createKeepBackdrop(scene, track) : null;
+  const keepSky = keepBackdrop?.group.getObjectByName('keep-overcast-sky');
+  if (keepSky) keepSky.visible = false;
   const keepDrawbridge = keep ? createKeepDrawbridge(scene, track, art) : null;
   const road = createRoadMaterial(pal, art, track);
   if (keep) applyKeepRoad(road, art);
@@ -283,6 +288,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   if (pinkAtmosphere) scene.add(pinkAtmosphere.object);
   const courseAtmosphere = createCourseAtmosphere(track, { phone: Q.name === 'phone' });
   if (courseAtmosphere) scene.add(courseAtmosphere.object);
+  const goonSky = courseAtmosphere?.object.getObjectByName('goonworks-expanding-whole-sky-spiral');
+  if (goonSky) goonSky.visible = false;
   if (!keep && !isMainframe && !goon && !boudoir) add(scatter ? scatter.object : props(track));
   if (!keep && !isMainframe && !goon && !boudoir) add(createNearDressing(track, { phone: Q.name === 'phone' }).object);
   let terrace = null, terraceScreen = null;
@@ -688,6 +695,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     atmosphereView.songS = view.songS;
     atmosphereView.audioReactive = view.audioReactive;
     courseAtmosphere?.update(dt, atmosphereView);
+    atmosphereView.reducedMotion = atmosphereView.reducedMotion || view.motion === 'off';
+    afterimageBackdrop.update(dt, atmosphereView);
     if (colossi) colossi.update(dt, scroll);
     if (mainframe) mainframe.update(dt, view, gentle);
     goonworks?.update(dt, view, gentle);
@@ -754,6 +763,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (colossi && colossi.dispose) colossi.dispose();
     pinkAtmosphere?.dispose();
     courseAtmosphere?.dispose();
+    afterimageBackdrop.dispose();
     if (spirals) spirals.dispose();
     if (media) media.dispose();
     if (routes) routes.dispose();
@@ -790,9 +800,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { courseAtmosphere, pinkAtmosphere, veils, marquees, cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps, setItemMediaSource: source => { cueMediaSource = source; itemVis?.setMediaSource(source); }, primaryColour: () => pal.primaryHex(), musicColours: () => [pal.primaryHex(), pal.accentHex()], scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, worldScreens, musicRoad, reactive: road.uniforms.reactive, roadWords, wordRush, phraseGates, airWords, terrace, court, stones, mainframe, boudoirDressing, boudoirForks, perfumeView, boudoirHazardView, mirrorRoom, waterVolume, underwaterFx, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge, goonworks, goonworksHazards,
+  return { afterimageBackdrop, courseAtmosphere, pinkAtmosphere, veils, marquees, cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps, setItemMediaSource: source => { cueMediaSource = source; itemVis?.setMediaSource(source); }, primaryColour: () => pal.primaryHex(), musicColours: () => [pal.primaryHex(), pal.accentHex()], scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, worldScreens, musicRoad, reactive: road.uniforms.reactive, roadWords, wordRush, phraseGates, airWords, terrace, court, stones, mainframe, boudoirDressing, boudoirForks, perfumeView, boudoirHazardView, mirrorRoom, waterVolume, underwaterFx, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge, goonworks, goonworksHazards,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
-    resetReactions: () => { railBarrier.reset(); courseAtmosphere?.reset(); pinkAtmosphere?.reset(); itemVis?.clear(); marquees?.clear(); veils.clear(); for (const x of [cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps]) x?.clear(); phraseGates.clear(); airWords.clear(); if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); goonworks?.reset(); goonworksHazards?.reset(); karts.resetReactions(); skids.clear(); finalLap.reset(); glance.reset(); trapTicks.reset(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
+    resetReactions: () => { afterimageBackdrop.reset(); railBarrier.reset(); courseAtmosphere?.reset(); pinkAtmosphere?.reset(); itemVis?.clear(); marquees?.clear(); veils.clear(); for (const x of [cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps]) x?.clear(); phraseGates.clear(); airWords.clear(); if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); goonworks?.reset(); goonworksHazards?.reset(); karts.resetReactions(); skids.clear(); finalLap.reset(); glance.reset(); trapTicks.reset(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
 }
