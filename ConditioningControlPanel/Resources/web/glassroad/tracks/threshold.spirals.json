@@ -1,0 +1,46 @@
+{
+  "track": "threshold",
+  "note": "Spiral gates (polish 3; polish 6 refit to the stacked course: hairpin, bridge foot, mid column, the descent to the ground lane, the home straight). Each gate is a Loom field (schema v2 params, or a seed for the Loom's seeded surprise-me) stood up across the road at lap fraction f. radiusM is the field's r = 1 (polish 4: open arms, 0.75 to 1.5 turns, so a driver reads a spiral from 100 m, not rings); depthM > 0 makes a short helix tunnel turning helixTurns along it, taper widens the far end.",
+  "gates": [
+    {
+      "id": "dawn-eye", "f": 0.09, "radiusM": 30, "depthM": 0, "upM": 3.5,
+      "loom": {
+        "schema": 2, "speed": 3,
+        "layer": { "arms": 4, "turns": 1.25, "duty": 0.42, "style": "log", "direction": 1, "colors": ["#00e5ff", "#ff2fb3", "#ffd21f"], "bandMode": "hard", "speedMul": 1 },
+        "layer2": { "enabled": true, "arms": 2, "turns": 0.75, "duty": 0.2, "style": "arch", "direction": 1, "colors": ["#9dff2f"], "bandMode": "hard", "speedMul": 1 },
+        "glow": 0.5, "pulse": { "amp": 0.06, "cycles": 1 }, "wobble": { "amp": 0, "freq": 3, "cycles": 1 }, "hueCycles": 0
+      }
+    },
+    {
+      "id": "dawn-coil", "f": 0.17, "radiusM": 30, "depthM": 24, "helixTurns": 0.12, "taper": 0.15, "upM": 3.5,
+      "seed": 204
+    },
+    {
+      "id": "deep-well", "f": 0.315, "radiusM": 26, "depthM": 20, "helixTurns": 0.2, "taper": 0.35, "upM": 3.5,
+      "loom": {
+        "schema": 2, "speed": 2,
+        "layer": { "arms": 4, "turns": 3.5, "duty": 0.42, "style": "tunnel", "direction": 1, "colors": ["#00e5ff", "#9dff2f", "#ffd21f"], "bandMode": "gradient", "speedMul": 1 },
+        "layer2": { "enabled": false },
+        "glow": 0.3, "pulse": { "amp": 0, "cycles": 1 }, "wobble": { "amp": 0.12, "freq": 3, "cycles": 1 }, "hueCycles": 0
+      }
+    },
+    {
+      "id": "deep-bloom", "f": 0.785, "radiusM": 22, "depthM": 6, "helixTurns": 0.15, "upM": 3.5,
+      "loom": {
+        "schema": 2, "speed": 3,
+        "layer": { "arms": 5, "turns": 2, "duty": 0.45, "style": "petal", "direction": 1, "colors": ["#ffd21f", "#ff7a1a", "#ff2f4f", "#ff2fb3"], "bandMode": "hard", "speedMul": 1 },
+        "layer2": { "enabled": true, "arms": 3, "turns": 1, "duty": 0.25, "style": "log", "direction": 1, "colors": ["#00e5ff"], "bandMode": "hard", "speedMul": 1 },
+        "glow": 0.6, "pulse": { "amp": 0.05, "cycles": 2 }, "wobble": { "amp": 0, "freq": 3, "cycles": 1 }, "hueCycles": 0
+      }
+    },
+    {
+      "id": "afterglow-gyre", "f": 0.965, "radiusM": 24, "depthM": 16, "helixTurns": -0.1, "taper": 0.2, "upM": 3.5,
+      "loom": {
+        "schema": 2, "speed": 3,
+        "layer": { "arms": 3, "turns": 1.5, "duty": 0.5, "style": "golden", "direction": 1, "colors": ["#ff7a1a", "#ff2fb3", "#00e5ff", "#9dff2f"], "bandMode": "gradient", "speedMul": 1 },
+        "layer2": { "enabled": true, "arms": 3, "turns": 1, "duty": 0.18, "style": "ribbon", "direction": 1, "colors": ["#ffd21f"], "bandMode": "hard", "speedMul": 1 },
+        "glow": 0.4, "pulse": { "amp": 0, "cycles": 1 }, "wobble": { "amp": 0.1, "freq": 2, "cycles": 1 }, "hueCycles": 1
+      }
+    }
+  ]
+}

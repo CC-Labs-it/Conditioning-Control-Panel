@@ -240,10 +240,16 @@ public static class LauncherCatalogue
         // Racing Thoughts: a Back Room unlock since 2026-09-18. Without a track the tile is the
         // mystery card pointing at the counter; the entry stays Available so a shortcut still
         // reaches Launch, where CaucusHostService refuses on the same door (RacingAccess).
+        // Hidden preview door (CCP_GLASSROAD=1): the same tile and the Play card open Glassroad, the
+        // 3D race, instead. Without the switch nothing changes (GlassroadRules.DoorOpen).
         G("race", "features/race.png", "☕", Tile(0xFF, 0xB3, 0x6B), Always, Never,
-            () => Chaos.CaucusHostService.Launch(),
-            () => Chaos.CaucusHostService.IsActive,
-            revealed: () => Race.RacingAccess.CanLaunch);
+            () =>
+            {
+                if (Glassroad.GlassroadRules.DoorOpenNow()) Glassroad.GlassroadHostService.Launch();
+                else Chaos.CaucusHostService.Launch();
+            },
+            () => Chaos.CaucusHostService.IsActive || Glassroad.GlassroadHostService.IsActive,
+            revealed: () => Glassroad.GlassroadRules.DoorOpenNow() || Race.RacingAccess.CanLaunch);
 
         // Down the Rabbit Hole: Lab tier. The Play handler gates it; Launch does not, so the tile
         // asks the gate itself and lets DemandLab paint the refusal.
