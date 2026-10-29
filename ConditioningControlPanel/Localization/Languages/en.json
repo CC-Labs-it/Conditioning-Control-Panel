@@ -6400,7 +6400,7 @@
   "hm3_audio_sync_tuning": "🎚 Audio sync tuning",
   "hm3_rail_lock_t1": "Patron only",
   "hm3_rail_lock_pass": "Weekly pass",
-  "hm3_rail_lock_t2": "Lab only",
+  "hm3_rail_lock_t2": "Prime only",
   "cp5_awareness_custom_triggers_header": "Custom triggers (advanced)",
   "cp5_awareness_custom_triggers_note": "Your own keyword list, with per-trigger audio, effects and cooldowns.",
   "cp5_ocr_detail_needs_source": "Screen OCR is off. Turn it on under Signal Sources to set the scan interval.",

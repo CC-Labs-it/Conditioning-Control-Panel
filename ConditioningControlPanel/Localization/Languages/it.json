@@ -6146,7 +6146,7 @@
   "hm3_audio_sync_tuning": "🎚 Regolazione sincronia audio",
   "hm3_rail_lock_t1": "Solo con abbonamento",
   "hm3_rail_lock_pass": "Pass settimanale",
-  "hm3_rail_lock_t2": "Solo Lab",
+  "hm3_rail_lock_t2": "Solo Prime",
   "cp5_awareness_custom_triggers_header": "Trigger personalizzati (avanzati)",
   "cp5_awareness_custom_triggers_note": "La tua lista di parole chiave, con audio, effetti e cooldown per ogni trigger.",
   "cp5_ocr_detail_needs_source": "L'OCR dello schermo è disattivo. Attivalo in Fonti dei segnali per impostare l'intervallo di scansione.",

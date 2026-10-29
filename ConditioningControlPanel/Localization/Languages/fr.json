@@ -5840,7 +5840,7 @@
   "hm3_audio_sync_tuning": "🎚 Réglage de la sync audio",
   "hm3_rail_lock_t1": "Aux mécènes",
   "hm3_rail_lock_pass": "Pass hebdo",
-  "hm3_rail_lock_t2": "Labo requis",
+  "hm3_rail_lock_t2": "Prime requis",
   "cp5_awareness_custom_triggers_header": "Déclencheurs personnalisés (avancé)",
   "cp5_awareness_custom_triggers_note": "Ta propre liste de mots-clés, avec audio, effets et temps de recharge pour chaque déclencheur.",
   "cp5_ocr_detail_needs_source": "L’OCR d’écran est désactivé. Active-le dans Signal Sources pour régler l’intervalle de scan.",
