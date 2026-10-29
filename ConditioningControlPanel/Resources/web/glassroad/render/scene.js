@@ -253,7 +253,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   if (goon) applyGoonworksRails(rails);
   add(meshFrom(track.meshes.rails, rails.material));
   const boudoirForks = track.forks?.length ? buildBoudoirForks(track, { roadMaterial: road.material, railMaterial: rails.material, phone: Q.name === 'phone' }) : null;
-  const movingHazards = createMovingHazardView(scene, track, pal, art);
+  const movingHazards = createMovingHazardView(scene, track, pal, art, road.material);
   if (boudoirForks) scene.add(boudoirForks.group);
   // EDGES lane: open edges (hazard strip, lip, haze below) and rail end posts, one draw (render/edges.js)
   let edges = null;

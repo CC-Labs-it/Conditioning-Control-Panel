@@ -6,10 +6,11 @@ import { movingStations as boudoir } from './moving/boudoir.js';
 import { movingStations as goonworks } from './moving/goonworks.js';
 import { hazardBeatAt, beatCycle, machineryRearming } from './machineryBeat.js';
 import { trapStroke } from './trapArrangement.js';
+import { pistonPocket, pistonPocketPose, pistonPocketContains } from './pistonPocket.js';
 const authors = { threshold, keep, mainframe, boudoir, goonworks };
 const clamp = v => Math.max(0, Math.min(1, v));
 const ease = v => { v = clamp(v); return v * v * (3 - 2 * v); };
-export const MOVING_REVISION = 3;
+export const MOVING_REVISION = 4;
 const geometryNumber = value => Number.isFinite(value) && !Number.isInteger(value) ? Math.round(value * 1e9) / 1e9 : value;
 function canonicalGeometry(value) {
   if (typeof value === 'number') return geometryNumber(value);
@@ -25,14 +26,21 @@ export function movingPlan(track) {
     const f = track.frameAt(row.s), side = row.side === -1 ? -1 : 1;
     // Long visible heads and swept contact use the same footprint. Retain the outer bypass.
     const w = Math.min((row.w || 5) * 1.6, f.w / 2 - 4), travelM = Math.min(row.travelM || f.w * .33, f.w - w - 6);
-    return { ...row, side, w, travelM, x: row.x ?? side * (f.w / 2 - w / 2 - .8),
+    const result = { ...row, side, w, travelM, pocketClearM: track.id === 'threshold' ? 5.15 : 3,
+      x: row.x ?? side * (f.w / 2 - w / 2 - .8),
       len: (row.len || 4) * 1.4, roadWidth: f.w, p: [...f.p], b: [...f.b], n: [...f.n], t: [...f.t] };
+    return { ...result, pocket: pistonPocket(result) };
   }).filter(row => row.w >= 2) });
 }
 
 export function movingPose(row, timeS, beat) {
   const arranged = trapStroke(row, beat);
-  if (arranged) return { ...arranged, x: row.x - row.side * row.travelM * arranged.extension, active: !arranged.safe };
+  const finish = pose => {
+    if (!row.pocket) return pose;
+    const pocket = pistonPocketPose(row, pose.extension);
+    return { ...pose, ...pocket, x: pocket.headX };
+  };
+  if (arranged) return finish({ ...arranged, x: row.x - row.side * row.travelM * arranged.extension, active: !arranged.safe });
   const period = row.periodBeats || 2, offset = row.offsetBeats || 0;
   const safe = machineryRearming(beat, offset, period) || (beat?.beat || 0) < beatCycle(-offset, period);
   const u = beatCycle((beat?.beat || 0) + offset, period) / period;
@@ -40,7 +48,7 @@ export function movingPose(row, timeS, beat) {
   const extension = safe ? 0 : u < .35 ? 0 : u < .5 ? ease((u - .35) / .15)
     : u < .6 ? 1 : u < .8 ? 1 - ease((u - .6) / .2) : 0;
   const x = row.x - row.side * row.travelM * extension;
-  return { x, extension, warning: safe || (u >= .15 && u < .5), safe, active: !safe };
+  return finish({ x, extension, warning: safe || (u >= .15 && u < .5), safe, active: !safe });
 }
 
 export function bridgePose(bridge, timeS, index = 0, count = 1) {
@@ -60,6 +68,7 @@ export function bridgeSlabX(bridge, timeS, index, width) {
 
 export function installMovingSupport(track, plan) {
   track.moving = { ...plan, revision: MOVING_REVISION, timeS: 0 };
+  installPistonSupport(track, plan.traps);
   const bridge = plan.bridge, fork = track.forks?.find(f => f.id === bridge?.forkId);
   if (!fork) return;
   // Align the cut to render samples so the stationary road cannot bridge an open piston gap.
@@ -97,3 +106,63 @@ export function installMovingSupport(track, plan) {
 }
 
 export function movingPoseAt(track, row, timeS) { return movingPose(row, timeS, hazardBeatAt(track, timeS)); }
+
+function installPistonSupport(track, rows) {
+  const original = track.query;
+  function supported(q, px, py, pz) {
+    if (!q) return q;
+    delete q.piston;
+    if (!q.onRoad || q.forkId) return q;
+    for (const row of rows) {
+      const pocket = row.pocket;
+      if (!pocket || !pistonPocketContains(pocket, q.s, q.lateral, track.lengthM)) continue;
+      q.railed = false;
+      const pose = movingPoseAt(track, row, track.moving.timeS);
+      // The translated cover carries its source road profile, including a curved canal bank.
+      if (q.lateral >= pocket.minX + pose.panelShift && q.lateral <= pocket.maxX + pose.panelShift) {
+        if ((pose.panelShift || pose.panelY) && track.surfaceAt) {
+          const source = track.surfaceAt(q.s, q.lateral - pose.panelShift);
+          const position = [px, py, pz];
+          q.height = position.reduce((sum, v, j) => sum + (v - source.p[j] - row.b[j] * pose.panelShift - row.n[j] * pose.panelY) * source.n[j], 0);
+          for (let j = 0; j < 3; j++) { q.p[j] = position[j] - source.n[j] * q.height; q.normal[j] = source.n[j]; }
+        } else if (pose.panelY) {
+          q.height -= pose.panelY;
+          for (let j = 0; j < 3; j++) q.p[j] += row.n[j] * pose.panelY;
+        }
+        return q;
+      }
+      const d = [px - row.p[0], py - row.p[1], pz - row.p[2]];
+      const dot = axis => d[0] * axis[0] + d[1] * axis[1] + d[2] * axis[2];
+      const x = dot(row.b), z = dot(row.t), h = dot(row.n);
+      // A descending jump can land on the exposed crown. Approaching its side cannot snap a grounded kart up.
+      if (Math.abs(x - pose.x) <= row.w / 2 && Math.abs(z) <= row.len / 2 && h >= pose.topM - .35) {
+        q.height = h - pose.topM;
+        for (let j = 0; j < 3; j++) { q.p[j] = [px, py, pz][j] - row.n[j] * q.height; q.normal[j] = row.n[j]; }
+        q.onRoad = true; q.railed = false; q.hole = null; q.piston = row.id;
+        return q;
+      }
+      q.onRoad = false; q.railed = false; q.hole = 'piston-pocket'; q.stone = null;
+      return q;
+    }
+    return q;
+  }
+  function query(...args) { return supported(original(...args), ...args); }
+  if (original.below) query.below = (...args) => { const q = supported(original.below(...args), ...args); return q?.onRoad ? q : null; };
+  track.query = query;
+}
+
+// The normal drift hop stays small. A deliberate approach to an exposed head gets enough clearance to cross it.
+export function pistonHopUp(track, query, speed, normalUp, velocity = null) {
+  if (query.forkId || !query.onRoad || query.piston) return normalUp;
+  for (const row of track.moving?.traps || []) {
+    if (!row.pocket) continue;
+    const pose = movingPoseAt(track, row, track.moving.timeS);
+    if (pose.safe || pose.open < .99 || Math.abs(pose.x) - row.w / 2 >= row.roadWidth / 2) continue;
+    const ds = ((row.s - query.s + track.lengthM * 1.5) % track.lengthM) - track.lengthM / 2;
+    const along = velocity ? velocity[0] * row.t[0] + velocity[1] * row.t[1] + velocity[2] * row.t[2] : speed;
+    const ahead = ds * (along < 0 ? -1 : 1);
+    if (ahead < -row.len / 2 || ahead > Math.max(12, Math.abs(speed) * .55) + row.len / 2) continue;
+    if (Math.abs(query.lateral - pose.x) <= row.w / 2 + .7) return Math.max(normalUp, 10.8);
+  }
+  return normalUp;
+}
