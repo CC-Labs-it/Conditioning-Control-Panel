@@ -53,6 +53,17 @@ public class SparklesSlipTests
     }
 
     [Theory]
+    [InlineData(4400, 4400)]   // unsynced local credit: the chip shows the app's wallet
+    [InlineData(4000, 4310)]   // never lower than the server's balance
+    public void The_chip_counts_to_the_higher_wallet(int local, int shown)
+    {
+        var msg = SparklesSlip.WithWallet(SparklesSlip.Build(Receipt(
+            "{\"ok\":true,\"receipt\":{\"kind\":\"place\",\"place\":1,\"of\":8,\"paid\":20,\"credited\":20,\"online\":1,\"taper\":1,\"sp\":4310}}"),
+            gentle: false, Loc), local);
+        Assert.Equal(shown, (int)msg!["sp"]!);
+    }
+
+    [Theory]
     [InlineData("{\"place\":2,\"of\":8,\"paid\":80,\"credited\":80,\"online\":5}", "Place 2 of 8|Online x5")]
     [InlineData("{\"result\":{\"kind\":\"medal\",\"medal\":\"gold\"},\"paid\":8,\"credited\":8,\"taper\":0.5}", "Gold|Half rate after 5 games")]
     [InlineData("{\"result\":{\"kind\":\"medal\",\"medal\":\"none\"},\"paid\":2,\"credited\":2,\"fee\":true}", "Finished|Fee only today for this game")]
