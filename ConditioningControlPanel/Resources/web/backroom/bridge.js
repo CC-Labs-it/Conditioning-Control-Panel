@@ -23,9 +23,13 @@ const outQueue = [];
 const BOOT_LANE = new Set(['ready', 'log', 'exit']);
 const MAX_BUFFER = 200;
 let initialized = false;
+// Read in passing, never as a handler: a handler here would take init/settings from the pre-buffer
+// before the room or station subscribes (the Sparkles slip below plays calm under Back Room Calm).
+let slipCalm = false;
 
 function dispatch(m) {
   if (!m || typeof m.type !== 'string') return;
+  if ((m.type === 'init' || m.type === 'settings') && typeof m.intensity === 'string') slipCalm = m.intensity === 'calm';
   const set = handlers.get(m.type);
   if (!set || !set.size) {
     if (preBuffer.length < MAX_BUFFER) preBuffer.push(m);
@@ -120,11 +124,8 @@ export function request(msg, replyType, match, timeoutMs, fallback) {
 export const bridge = { send, on, off, once, log, request, mintId, get initialized() { return initialized; } };
 export default bridge;
 
-/* SPARKLES BY PLACE (B1 W6): the host's receipt for a cleared Breakout wall. Play goes on and holds pointer
- * lock, so here the slip is passive: it never takes the pointer and leaves on its own timer. */
+/* SPARKLES BY PLACE (B1 W6): the host's receipt for a cleared Breakout wall. Play goes on under pointer lock;
+ * the slip never takes the pointer and leaves on its own timer. Back Room Calm (init/settings `intensity`)
+ * plays it calm, as the Back Room's own switch. */
 import { showSlip } from './sparkles-slip.js';
-on('sparkles-receipt', showSlip);
-on('sparkles-receipt', () => {
-  const slip = typeof document !== 'undefined' && document.querySelector ? document.querySelector('.sps-slip') : null;
-  if (slip) { slip.style.pointerEvents = 'none'; slip.style.cursor = 'default'; }
-});
+on('sparkles-receipt', (m) => showSlip(m, { calm: slipCalm }));
