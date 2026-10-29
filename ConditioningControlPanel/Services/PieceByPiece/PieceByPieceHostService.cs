@@ -427,6 +427,12 @@ internal static partial class PieceByPieceHostService
                     OnFriendChallenge(o);
                     break;
 
+                case "pbp:game-over":
+                    // SPARKLES BY PLACE (B1): vs Computer claims solo, an online or tournament game
+                    // claims online with its pbp match id. A watched, hotseat or left game claims nothing.
+                    _ = Sparkles.SparklesPageResults.Send(Sparkles.SparklesPageResults.Chess(o));
+                    break;
+
                 case PbpWatchRules.SettingFrame:
                     OnPageSetting(o);
                     break;

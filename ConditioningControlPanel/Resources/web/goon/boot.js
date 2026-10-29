@@ -1610,6 +1610,19 @@ function attachMatch(match, transport) {
         .then((r) => { if (!r.ok) logger.warn('stake claim not recorded (status ' + r.status + ')'); });
     } catch (e) { logger.warn('stake claim threw: ' + ((e && e.message) || e)); }
   }));
+  /* SPARKLES BY PLACE (B1). The final result goes to the host, which claims it: a duel by its
+   * room code (the server reads the two ledger claims above), practice as practice. The host
+   * decides what claims nothing (a leave, a mercy, a cancel). */
+  phaseUnsubs.push(match.onResultFinalized(() => {
+    try {
+      const r = match.result;
+      if (!r) return;
+      const code = (session.room && session.room.code) || (currentTransport && currentTransport.code) || '';
+      bridge.send({ type: 'match-result', practice: !!soloPair, code: String(code),
+        result: { endReason: r.endReason, winnerIsHost: r.winnerIsHost, localIsHost: r.localIsHost,
+          survivedMs: r.survivedMs, agreed: !!r.agreed, disputed: !!r.disputed, countsForLedger: r.countsForLedger !== false } });
+    } catch (e) { logger.warn('match-result send threw: ' + ((e && e.message) || e)); }
+  }));
   onPhase(match.phase);
   paintProbe();
 }

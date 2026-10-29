@@ -45,7 +45,7 @@ namespace ConditioningControlPanel.Services.GoonGame
     ///                  heartbeat { t, paint, vis } · pong · boot-error · fullscreen-set
     ///                  exit · exit-done
     ///                  toy-pattern · toy-stop   (GoonToyDirector)
-    ///                  match-result             (STUB — XP wiring comes later)
+    ///                  match-result { practice, code, result }   (Sparkles by place, B1)
     ///                  net-post { id, path, body }
     ///                  cache-req { op } · cache-put · encode-done
     ///                                           (transfer cache — <see cref="GoonCacheBridge"/>)
@@ -767,13 +767,17 @@ namespace ConditioningControlPanel.Services.GoonGame
                     GoonToyDirector.Stop();
                     break;
                 case "match-result":
-                    // STUB. XP / progression wiring comes with the client ledger; log it so a
-                    // play-test can see the duel actually ended and with what.
-                    App.Logger?.Information("GoonHostService: match-result (stub, not scored yet): {R}",
+                    // Sent once the result is final (both claims in, or the handshake timed out).
+                    App.Logger?.Information("GoonHostService: match-result: {R}",
                         o["result"]?.ToString(Newtonsoft.Json.Formatting.None));
+                    // SPARKLES BY PLACE (B1): a duel claims online with its room code (the server
+                    // reads the two agreeing ledger claims), practice claims practice. A leave,
+                    // a mercy or a cancel claims nothing (SparklesPageResults.Goon).
+                    _ = Sparkles.SparklesPageResults.Send(Sparkles.SparklesPageResults.Goon(o));
                     // The last-opponent record is written HERE, by the host, from the peer card it
                     // already fetched — no page-supplied data and no extra verb (contract §4).
-                    WriteLastOpponentRecord();
+                    // Practice has no opponent card.
+                    if (!(o["practice"]?.Type == JTokenType.Boolean && (bool)o["practice"]!)) WriteLastOpponentRecord();
                     break;
                 case "net-post":
                     OnNetPost(o);
