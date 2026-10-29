@@ -1,7 +1,7 @@
 /* sim/wordCoins.js - road words as coins (playtest fix 2026-10-28, lane words; handoff-1028/GLASSROAD-PLAYTEST-FIXES.md).
  *
- * Tester: "road lyric words do nothing; no reason to catch anything". One painted marking per phrase is a COIN
- * (pickCoins: the shortest real word of the phrase, a small target): it holds a fixed spot on the riskier line
+ * Tester: "road lyric words do nothing; no reason to catch anything". Up to two distinct semantic identities per
+ * phrase are COINS (pickCoins: one each, otherwise one short real word): each holds a fixed spot on the riskier line
  * (coinLane: the inside of the bend it sits in, or a side picked by phrase on a straight), never on a moving trap
  * row (underTrap), and lights while its word is sung (the karaoke light, render/roadWordsMath.js). Driving over it
  * while it is lit (coinLit + coinTouch) is +1 on the count (createWordCoins), capped; each point raises the
@@ -10,6 +10,7 @@
  * online stays on today's rules until the room rollout. Pure: no three.js, no DOM.
  */
 import { clamp, wrap } from '../core/math.js';
+import { wordIdentity, wordIdentityExact } from './wordIdentity.js';
 
 const DEFAULTS = Object.freeze({
   on: true, online: false, cap: 10, topPctPer: 0.009, hitDrop: 3, litPreS: 0.6, litPostS: 0.9,
@@ -30,8 +31,9 @@ export function coinTuning(feel = null) {
 }
 
 /**
- * One coin per phrase of the painted script (sim/roadWords.js scriptRoad): the marking with the fewest letters
- * among those with at least minChars (ties: the first); a phrase with none takes its longest marking.
+ * Up to two distinct identities per eligible phrase (sim/roadWords.js scriptRoad), in first-identity order.
+ * Each gets one coin, preferring its exact display word over inflections (ties: first). With no identity, choose
+ * one fallback: the fewest letters with at least minChars (ties: first), otherwise the longest marking.
  * @returns {Uint8Array} 1 = coin, by script index
  */
 export function pickCoins(script, C = DEFAULTS) {
@@ -39,13 +41,24 @@ export function pickCoins(script, C = DEFAULTS) {
   let i = 0;
   while (script && i < script.length) {
     const ph = script[i].phrase;
+    const identities = new Map();
     let best = -1, longest = i, j = i;
     for (; j < script.length && script[j].phrase === ph; j++) {
       const c = script[j].chars;
+      const material = script[j].identity ?? wordIdentity(script[j].text);
+      if (Number.isInteger(material) && material > 0 && material <= 10) {
+        const selected = identities.get(material);
+        if (selected === undefined) {
+          if (identities.size < 2) identities.set(material, j);
+        } else if (wordIdentityExact(script[j].text) === material && wordIdentityExact(script[selected].text) !== material) {
+          identities.set(material, j);
+        }
+      }
       if (c >= C.minChars && (best < 0 || c < script[best].chars)) best = j;
       if (c > script[longest].chars) longest = j;
     }
-    out[best >= 0 ? best : longest] = 1;
+    if (identities.size) for (const selected of identities.values()) out[selected] = 1;
+    else out[best >= 0 ? best : longest] = 1;
     i = j;
   }
   return out;
@@ -88,6 +101,36 @@ export const coinLit = (tS, startS, endS, C = DEFAULTS) => tS >= startS - C.litP
 /** The kart (lateral lat) is on the painted marking: dS = marking centre minus kart s, lane + width as painted. */
 export const coinTouch = (dS, lenM, lane, widthM, lat, C = DEFAULTS) =>
   Math.abs(dS) <= lenM / 2 + C.touchSlackM && Math.abs((lat || 0) - lane) <= widthM / 2 + C.kartHalfM;
+
+const roadContact = point => point && point.grounded && !point.airborne && !point.respawn &&
+  Number.isFinite(point.height) && Math.abs(point.height) <= 1.2 &&
+  Number.isFinite(point.dS) && Number.isFinite(point.lat) && Number.isFinite(point.tS);
+
+/**
+ * Contact with a fixed marking, including short frame gaps. dS is already signed and wrapped by the caller.
+ * Samples are {dS, lat, grounded, airborne, respawn, height, tS}; height is distance from this road deck.
+ * A seek, teleport or landing cannot invent a swept pickup. Ordinary current-position contact still works.
+ */
+export function coinCrossing(previous, current, marking, C = DEFAULTS) {
+  if (!roadContact(current) || !marking) return false;
+  const { lenM, lane, widthM, startS, endS } = marking;
+  if (coinLit(current.tS, startS, endS, C) && coinTouch(current.dS, lenM, lane, widthM, current.lat, C)) return true;
+  if (!roadContact(previous)) return false;
+  const dt = current.tS - previous.tS;
+  if (dt <= 0 || dt > .15 || Math.hypot(current.dS - previous.dS, current.lat - previous.lat) > 15) return false;
+  let enter = 0, exit = 1;
+  const clip = (from, to, low, high) => {
+    if (from === to) return from >= low && from <= high;
+    const a = (low - from) / (to - from), b = (high - from) / (to - from);
+    enter = Math.max(enter, Math.min(a, b));
+    exit = Math.min(exit, Math.max(a, b));
+    return enter <= exit;
+  };
+  const halfLength = lenM / 2 + C.touchSlackM, halfWidth = widthM / 2 + C.kartHalfM;
+  return clip(previous.dS, current.dS, -halfLength, halfLength) &&
+    clip(previous.lat, current.lat, lane - halfWidth, lane + halfWidth) &&
+    clip(previous.tS, current.tS, startS - C.litPreS, Math.max(startS, endS) + C.litPostS);
+}
 
 /**
  * The player's count. add() -> true when it rose (false at the cap); hit() -> points lost; topMul() the top speed

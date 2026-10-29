@@ -579,8 +579,9 @@ async function boot(course, options, lifetime, isCurrent) {
     bus.emit('word-coins', { count: coins.count, cap: coins.cap, delta, show: coinsLive() && !!words });
   }
   function coinSink() {
-    if (!coinsLive() || !race || race.phase !== 'racing' || !coins.add()) return false;
-    coinNote(1); return true;
+    if (!coinsLive() || !race || race.phase !== 'racing') return false;
+    const rose = coins.add();
+    coinNote(rose ? 1 : 0); return true;
   }
   bus.on('hitter-hit', ({ racer } = {}) => { if (coinsLive() && P && racer === P.i && coins.hit()) coinNote(-1); });
   Object.defineProperty(debug, 'wordCoins', { get: () => ({ count: coins.count, live: coinsLive(), top: coins.topMul(),

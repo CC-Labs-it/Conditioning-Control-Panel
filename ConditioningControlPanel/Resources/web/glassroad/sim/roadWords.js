@@ -20,6 +20,7 @@
  */
 import { clamp, wrap } from '../core/math.js';
 import { pickWords, ROAD } from './wordPick.js';
+import { wordIdentity } from './wordIdentity.js';
 
 export const ROAD_LOOK = Object.freeze({
   leadS: 2.9,          // a marking is painted this long before its word is sung
@@ -59,7 +60,7 @@ export function markText(w) {
 const SCRIPTS = new WeakMap();
 
 /**
- * The painted script in sung order: [{ i, text, startS, endS, phrase, first, last, chars }].
+ * The painted script in sung order: [{ i, text, identity, startS, endS, phrase, first, last, chars }].
  * `phrase` is the phrase index, `first` / `last` mark a phrase's ends, `chars` the letters (width estimate).
  * Also returns bubble moment times in `script.bubbles` (Float64Array) for the clear stretches.
  */
@@ -78,16 +79,17 @@ export function scriptRoad(song, L = ROAD_LOOK, kinds = null) {
   let prev = null, phrase = -1, prevEnd = -Infinity, prevLine = null;
   for (let i = 0; i < words.length; i++) {
     if (kind[i] !== ROAD) { prevEnd = Math.max(prevEnd, words[i].endS); prev = null; prevLine = null; continue; }
-    const w = words[i], text = markText(w.w);
+    const w = words[i], text = markText(w.w), identity = wordIdentity(w.w);
     if (!text || nearBubble(w.startS)) continue;
     const gap = w.startS - prevEnd;
     const newPhrase = phrase < 0 || prevLine === null || w.line !== prevLine || gap > L.phraseGapS;
-    if (!newPhrase && prev && w.startS - prev.startS < L.mergeS && prev.n < 2 && prev.text.length + 1 + text.length <= L.mergeMaxChars) {
+    // A semantic word owns its complete glyphs; joining filler would erase that identity.
+    if (!newPhrase && prev && !identity && !prev.identity && w.startS - prev.startS < L.mergeS && prev.n < 2 && prev.text.length + 1 + text.length <= L.mergeMaxChars) {
       prev.text += ' ' + text; prev.n = 2; prev.endS = Math.max(prev.endS, w.endS); prevEnd = Math.max(prevEnd, w.endS);
       continue;
     }
     if (newPhrase) phrase++;
-    prev = { text, startS: w.startS, endS: Math.max(w.endS, w.startS), phrase, n: 1 };
+    prev = { text, identity, startS: w.startS, endS: Math.max(w.endS, w.startS), phrase, n: 1 };
     out.push(prev);
     prevEnd = Math.max(prevEnd, w.endS); prevLine = w.line;
   }
@@ -114,7 +116,7 @@ export function createRoadRun(song, track, { look = ROAD_LOOK, script = null } =
   const S = script || scriptRoad(song, L);
   const fr = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0], w: 14 };
   const E = S.map((e) => ({ e, state: 'wait', s: 0, x: 0, frozen: false, inS: 0, outS: 0,
-    view: { id: e.i, text: e.text, phrase: e.phrase, state: 'wait', s: 0, x: 0, lenM: L.lenM, inT: 0, outT: -1,
+    view: { id: e.i, text: e.text, identity: e.identity || 0, phrase: e.phrase, state: 'wait', s: 0, x: 0, lenM: L.lenM, inT: 0, outT: -1,
       remainS: 0, lenS: Math.max(0.08, e.endS - e.startS), dS: 0, frozen: false } }));
   const live = [];
   let lastT = null, lastS = null, rate = -1, first = 0, shown = 0, phraseX = 0, phraseOf = -1, prevPlaced = null;

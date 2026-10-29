@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fakeTrack } from './sim-fake.mjs';
 import { createFeel } from '../core/feel.js';
-import { coinTuning, pickCoins, coinLane, underTrap, coinLit, coinTouch, createWordCoins } from '../sim/wordCoins.js';
+import { coinTuning, pickCoins, coinLane, underTrap, coinLit, coinTouch, coinCrossing, createWordCoins } from '../sim/wordCoins.js';
 import { coinFrames } from '../hud/wordCount.js';
 
 const feelJson = JSON.parse(readFileSync(new URL('../feel.json', import.meta.url), 'utf8'));
@@ -17,8 +17,8 @@ test('feel.json carries the wordCoins group: solo only, cap 10, about +9% at the
   assert.equal(C.hitDrop, 3);
   const atCap = C.cap * C.topPctPer;
   assert.ok(atCap >= 0.08 && atCap <= 0.1, 'cap buys 8-10% top speed, got ' + atCap);
-  assert.ok(feelJson.wordCoins.bubbleAmount >= 0.12 && feelJson.wordCoins.bubbleHoldS >= 0.6, 'the solo bubble kick is felt');
-  assert.equal(feelJson.items.bubbleAmount, 0.05, 'online bubbles keep their number');
+  assert.equal(feelJson.items.bubbleAmount, 0.05, 'pickup bubbles retain the validated boost');
+  assert.equal(feelJson.items.bubbleHoldS, 0.35);
 });
 
 test('coinTuning falls back to defaults on an older feel', () => {
@@ -27,7 +27,7 @@ test('coinTuning falls back to defaults on an older feel', () => {
   assert.equal(coinTuning(null).hitDrop, 3);
 });
 
-test('one coin per phrase: the shortest word with enough letters, else the longest', () => {
+test('a phrase without semantic identities gets one coin: shortest with enough letters, else longest', () => {
   const sc = [
     { phrase: 0, chars: 2 }, { phrase: 0, chars: 6 }, { phrase: 0, chars: 4 }, { phrase: 0, chars: 4 },
     { phrase: 1, chars: 1 }, { phrase: 1, chars: 2 },
@@ -72,6 +72,44 @@ test('touch: the kart must be on the painted word, along and across', () => {
   assert.equal(coinTouch(0, len, lane, w, lane - w / 2 - C.kartHalfM + 0.05, C), true);
   assert.equal(coinTouch(0, len, lane, w, lane - w / 2 - C.kartHalfM - 0.05, C), false);
   assert.equal(coinTouch(0, len, lane, w, -3, C), false, 'the other side of the road misses it');
+});
+
+const marking = { lenM: 2, widthM: 2, lane: 3, startS: 10, endS: 10.1 };
+const contact = (dS, tS = 10, extra = {}) => ({ dS, tS, lat: 3, grounded: true, airborne: false, respawn: false, height: 0, ...extra });
+
+test('crossing catches a skipped footprint only when longitudinal and lateral contact coincide', () => {
+  assert.equal(coinCrossing(contact(4, 9.95), contact(-4, 10.05), marking, C), true);
+  assert.equal(coinCrossing(contact(4, 9.95, { lat: 0 }), contact(-4, 10.05, { lat: 6 }), marking, C), true);
+  assert.equal(coinCrossing(contact(4, 9.95, { lat: -5 }), contact(-4, 10.05, { lat: 0 }), marking, C), false);
+  assert.equal(coinCrossing(null, contact(0), marking, C), true, 'first sample can touch directly');
+});
+
+test('crossing requires grounded contact on this road deck', () => {
+  for (const invalid of [{ grounded: false }, { airborne: true }, { respawn: true }, { respawn: 1 },
+    { height: 1.21 }, { height: -1.21 }, { height: NaN }]) {
+    assert.equal(coinCrossing(null, contact(0, 10, invalid), marking, C), false, JSON.stringify(invalid));
+    assert.equal(coinCrossing(contact(4, 9.95, invalid), contact(-4, 10.05), marking, C), false, 'no sweep from invalid previous contact');
+  }
+  assert.equal(coinCrossing(null, contact(0, 10, { height: 1.2 }), marking, C), true);
+  assert.equal(coinCrossing(contact(4, 9.95, { airborne: true }), contact(0), marking, C), true, 'landing on a lit footprint is direct contact');
+});
+
+test('swept contact uses the lit time at the crossing, not only the current time', () => {
+  const narrow = { ...C, litPreS: 0, litPostS: 0 };
+  const shortWord = { ...marking, startS: 10, endS: 10.02 };
+  assert.equal(coinCrossing(contact(4, 9.95), contact(-4, 10.09), shortWord, narrow), true, 'lit during crossing, dark by current sample');
+  assert.equal(coinCrossing(contact(4, 9.89), contact(-4, 10.03), shortWord, narrow), false, 'word lights after the kart left');
+  assert.equal(coinCrossing(contact(4, 10.03), contact(-4, 10.12), shortWord, narrow), false, 'word already ended');
+});
+
+test('seeks, pauses, long frame gaps and teleports never sweep a pickup', () => {
+  for (const [previous, current] of [
+    [contact(4, 10.1), contact(-4, 10)],
+    [contact(4, 10), contact(-4, 10)],
+    [contact(4, 9.8), contact(-4, 10)],
+    [contact(8, 9.95), contact(-8, 10.05)],
+  ]) assert.equal(coinCrossing(previous, current, marking, C), false);
+  assert.equal(coinCrossing(contact(4, 20), contact(0, 10), marking, C), true, 'seek falls back to current contact');
 });
 
 test('the count caps, a hit drops a few, top speed follows the count', () => {
