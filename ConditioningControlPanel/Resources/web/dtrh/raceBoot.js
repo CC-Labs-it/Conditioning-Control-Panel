@@ -298,8 +298,8 @@ bridge.on('fullscreen', (m) => host.send({ type: 'fullscreen-set', on: !!(m && m
 bridge.on('exit-request', surface);
 // The kept press plays through input.js's Brake (and the menu's own Escape), once.
 bridge.on(HOST_ESCAPE, () => hostEscape.kept());
-// SPARKLES BY PLACE (B1 W5): the Caucus receipt, under the results card.
-bridge.on('sparkles-receipt', showSlip);
+// SPARKLES BY PLACE (B1 W5): the Caucus receipt, under the results card, calm like the descent.
+bridge.on('sparkles-receipt', (m) => showSlip(m, { calm: true }));
 // THE LOOM (crafting Part 2): the host's saved-spiral library, the same frame boot.js takes.
 // An entry carrying `params` is woven live by race/loomSpiralFx.js; one without is still its
 // gif. The host pushes this on `ready` and again after every save or delete, so a spiral woven

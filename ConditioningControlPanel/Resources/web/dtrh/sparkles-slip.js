@@ -3,14 +3,15 @@
  * The host claims, localises every line and posts { type: 'sparkles-receipt', credited, lines, stamp, sp,
  * gentle }; a tree wires bridge.on('sparkles-receipt', showSlip). No imports, no fetch, nothing at import.
  * IN and OUT for every piece: the slip slides up, the PAID stamp lands, Sparkles fly to the wallet chip and
- * it bumps; the slip leaves after 6 s or on a click. Zero pay: lines only. Gentle: the amount counts up
- * only (fades, no flight, no slam, no shake). Reduced motion: static. Only the slip takes the pointer. */
+ * it bumps; the slip leaves after 6 s. Zero pay: lines only. Gentle: the amount counts up only (fades, no
+ * flight, no slam, no shake); a tree whose own motion switch is calmer passes showSlip(m, { calm: true })
+ * for the same. Reduced motion: static. Nothing takes the pointer: clicks reach the end card under it. */
 
 const HOLD_MS = 6000;
 const SPARK = String.fromCharCode(0x2726); // the four-point spark, kept ASCII in source
 const CSS = `
 .sps-slip{position:fixed;left:50%;bottom:7vh;z-index:2147483000;width:min(300px,86vw);box-sizing:border-box;
- transform:translate(-50%,0);padding:14px 18px 16px;color:#2a2420;pointer-events:auto;cursor:pointer;
+ transform:translate(-50%,0);padding:14px 18px 16px;color:#2a2420;pointer-events:none;
  background:#f4ecd8 linear-gradient(180deg,rgba(255,255,255,.35),rgba(120,90,50,.08));
  font:14px/1.5 ui-monospace,Consolas,"Courier New",monospace;filter:drop-shadow(0 6px 10px rgba(30,20,10,.35))}
 .sps-slip::after{content:"";position:absolute;left:0;right:0;bottom:-6px;height:6px;
@@ -31,9 +32,9 @@ const CSS = `
 let live = null;
 
 /** What one receipt plays. Pure (tests): motion is 'full', 'gentle' or 'static'. */
-export function slipPlan(m, reduced) {
+export function slipPlan(m, reduced, calm) {
   const amount = Math.max(0, Math.round(Number(m && m.credited) || 0));
-  const motion = reduced ? 'static' : (m && m.gentle) ? 'gentle' : 'full';
+  const motion = reduced ? 'static' : ((m && m.gentle) || calm) ? 'gentle' : 'full';
   const lines = Array.isArray(m && m.lines) ? m.lines.filter((l) => typeof l === 'string' && l) : [];
   return { amount, lines, motion, stamp: amount > 0, chip: amount > 0 && Number.isFinite(m.sp),
     flight: amount > 0 && motion === 'full', sparks: Math.min(8, Math.max(3, Math.round(amount / 10))) };
@@ -76,11 +77,11 @@ export function hideSlip() {
     : [{ transform: 'translateY(0)' }, { transform: 'translateY(-160%)' }], 260, 220);
 }
 
-/** Show one receipt. A newer receipt replaces the one on screen. */
-export function showSlip(m) {
+/** Show one receipt. A newer receipt replaces the one on screen. opts.calm: the tree's motion is calmer. */
+export function showSlip(m, opts) {
   if (!m || m.type !== 'sparkles-receipt' || typeof document === 'undefined') return;
   const reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  const plan = slipPlan(m, reduced);
+  const plan = slipPlan(m, reduced, !!(opts && opts.calm));
   if (!plan.lines.length && !plan.amount) return;
   if (live) { clearTimeout(live.timer); live.slip.remove(); if (live.chip) live.chip.remove(); live = null; }
   if (!document.getElementById('sps-css')) {
@@ -97,7 +98,6 @@ export function showSlip(m) {
   const ul = el('ul', 'sps-lines');
   plan.lines.forEach((l) => ul.appendChild(el('li', null, l)));
   slip.appendChild(ul);
-  slip.addEventListener('click', hideSlip);
   document.body.appendChild(slip);
   let chip = null, chipNum = null;
   if (plan.chip) {
