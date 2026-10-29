@@ -1429,6 +1429,9 @@ namespace ConditioningControlPanel
         public void UpdateQuickMenuState()
         {
             if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(UpdateQuickMenuState)); return; }
+            // Rain's wardrobe door: only while the tube plays Rain (the V2 avatar).
+            if (MenuItemRainWardrobe != null)
+                MenuItemRainWardrobe.Visibility = IsRainLookActive ? Visibility.Visible : Visibility.Collapsed;
             // Talk to companion - mode-aware label
             var talkToLabel = App.Mods?.GetTalkToLabel() ?? Loc.Get("menu_talk_to_companion");
             var chatAvailable = App.Ai?.IsAvailable == true;

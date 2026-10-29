@@ -276,6 +276,20 @@ namespace ConditioningControlPanel
             return null;
         }
 
+        /// <summary>The embedded folder name of Rain's clips (the v2 generation on BambiSleep, Sissy, CCP Default).</summary>
+        internal const string RainEmoteFolder = "rain_emotes";
+
+        /// <summary>True for Rain's clip folder: the embedded name, or an absolute path ending in it.</summary>
+        internal static bool IsRainFolder(string? folder) =>
+            !string.IsNullOrEmpty(folder)
+            && string.Equals(System.IO.Path.GetFileName(folder.TrimEnd('/', System.IO.Path.DirectorySeparatorChar)), RainEmoteFolder, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>True while the tube plays Rain (the wardrobe door shows only then).</summary>
+        internal bool IsRainLookActive => _circeEmoteMode && IsRainFolder(_emoteFolder);
+
+        private void MenuItemRainWardrobe_Click(object sender, RoutedEventArgs e)
+            => Services.Companion.RainWardrobeHostService.Open();
+
         private static List<(string modId, int set, string folder)> LoadEmoteRegistry()
         {
             if (_emoteRegistry != null) return _emoteRegistry;
