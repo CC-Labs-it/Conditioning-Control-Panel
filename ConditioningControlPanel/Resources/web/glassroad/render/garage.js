@@ -159,6 +159,8 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   });
   return {
     scene,camera,nav,backdrop,life:{emi:emiLife.metrics,vehicles:vehicleLives.map(l=>l.metrics)},get state(){return {...state};},get yaw(){return yaw;},get custom(){return custom;},get busy(){return !!moving||viewBusy;},get transition(){return {progress:view,busy:viewBusy,framing:customFrame};},get selected(){return KARTS[selected][0];},select,customize,change,
+    setMedia(getter){ui.setMedia(getter);},
+    refreshMedia(){ui.refreshMedia();},
     setCourse(course){ui.setCourse(course);},
     track(name,laps){ui.track(name,laps);},
     setHandlers(next={}){

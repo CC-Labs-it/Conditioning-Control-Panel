@@ -93,6 +93,6 @@ test('boot memoizes the song fallback and starts recordings that arrive after ra
   assert.ok(src.includes('fallback ||='), 'one memoized request also serves a failed host chart');
   assert.ok(!src.includes("courseSongs(TRACK_ID, '', ['recording'])"), 'course-specific filtering must not prevent catalog discovery');
   assert.match(src.slice(at, at + 300), /lobbySongCharts\(/);
-  assert.ok(src.includes('if (!CHARTS.length) CHARTS = list;'));
+  assert.ok(src.includes('if (wantLobbySongs({ search: location.search, charts: CHARTS })) CHARTS = list;'));
   assert.ok(src.includes("else if (state === 'race') void playSong"), 'a late song no longer leaves a silent race');
 });

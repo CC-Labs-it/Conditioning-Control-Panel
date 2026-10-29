@@ -22,8 +22,9 @@ import { createBridge, songCharts, isLocalSongHost, wantLobbySongs, lobbySongCha
 import { createHostEscape } from './host/hostEscape.js';
 import { createCardMedia, PHONE_READY_CLIPS } from './host/cardMedia.js';
 import { createScrolllerFeed } from './host/scrolllerFeed.js';
+import { loadCustomization, saveCustomization, selectedSongCharts } from './host/courseCustomization.js';
 import { nichesFor, isDefault, savePick } from './host/scrolllerNiches.js';
-import { createLocalLibrary, feedSwitch, loadFilesChoice, saveFilesChoice, sourceMode, openFilePicker } from './host/localLibrary.js';
+import { createLocalLibrary, pickFiles, feedSwitch, loadFilesChoice, saveFilesChoice, openFilePicker } from './host/localLibrary.js';
 import { createSubliminalBurst } from './fx/subliminalBurst.js';
 import { loadFeel } from './core/feel.js';
 import { createBus, createQueue } from './core/events.js';
@@ -144,7 +145,7 @@ const loading=createLoading();
 /** Read-only status for the boot check (dev/boot-check.mjs) and the console. */
 const shared = { bridge: createBridge(), hostEscape: createHostEscape(), bus: createBus(),
   songCache: createSongCache(), renderer: null, artLibrary: null, garageArt: null, garage: null,
-  kartPool: { current: null }, retiredArt: [], pickedSong: null, audio: null,
+  kartPool: { current: null }, retiredArt: [], pickedSong: null, coursePicks: loadCustomization(), legacyFilesOn: loadFilesChoice(), initialCourse: selectedCourse(location.search).id, courseFiles: {}, courseSongs: {}, songRows: [], audio: null,
   closed: false, counts: { renderer: 0, audio: 0, garage: 0, courses: 0 },
   failures: [], rendererOpts: null, recovering: false };
 shared.feelTask = Promise.all([loadFeel(), loadFonts()]).then(([feel]) => {
@@ -177,6 +178,7 @@ window.addEventListener('pagehide', () => {
   shared.closed = true;
   controller.dispose(); shared.garage?.dispose(); shared.kartPool.current?.dispose();
   shared.artLibrary?.dispose(); shared.renderer?.dispose(); shared.audio?.dispose();
+  shared.library?.dispose(); shared.courseFiles = {}; shared.courseSongs = {};
   shared.songCache.clear(); shared.hostEscape.dispose?.(); shared.bridge.dispose(); loading.dispose();
 }, { once: true });
 
@@ -330,6 +332,7 @@ async function boot(course, options, lifetime, isCurrent) {
   loaded('host');
   let CHARTS = courseSongs(TRACK_ID, location.search,
     songCharts({ search: location.search, devHost: DEV_HOST, songs: init.caps.songs }));
+  const soloCharts = () => selectedSongCharts(shared.coursePicks[TRACK_ID]?.songId, shared.songRows, CHARTS);
   const songCache = shared.songCache;
   for (const url of CHARTS) void songCache.preload(url);
   const [feel, trackJson] = await Promise.all([
@@ -402,35 +405,42 @@ async function boot(course, options, lifetime, isCurrent) {
   const scrolller = init.caps.scrolller ? shared.scrolllerFeed : null;
   // "My files" (host/localLibrary.js): the player's own pictures as blob urls, never uploaded; while it is on the
   // Scrolller switch is off, so the host fetches nothing. Kept across courses; only the choice survives a reload.
-  const library = scrolller ? (shared.library ||= createLocalLibrary()) : null;
-  shared.filesOn ??= loadFilesChoice();
-  const pictures = scrolller ? feedSwitch(() => (shared.filesOn ? library : scrolller)) : null;
-  if (scrolller) {
-    let niches = nichesFor(track.id);
-    const consentOn = () => scrolller.consent ?? init.caps.scrolller.consent === true;
-    const view = () => ({ on: consentOn(), track: trackName, niches, custom: !isDefault(track.id), catalog: scrolller.catalog,
-      source: sourceMode({ files: shared.filesOn, consent: consentOn() }), files: library.count });
-    hud.setScrolller(view());
-    if (!shared.filesOn) scrolller.setNiches(track.id, niches);
-    else if (consentOn()) scrolller.setConsent(false);
-    lifetime.defer(scrolller.subscribe(() => hud.setScrolller(view())));
-    const pick = () => openFilePicker((files) => { library.setFiles(files); if (lifetime.alive) hud.setScrolller(view()); });
-    hud.on('scrolller-files', pick);   // inside the click: a picker needs the player's own gesture
-    hud.on('scrolller', (e) => {
-      const to = e?.source || (e?.on ? 'scrolller' : 'off'), files = to === 'files', want = to === 'scrolller';
-      if (files !== shared.filesOn) { shared.filesOn = files; saveFilesChoice(files); }
-      if (!files) library.clear();   // leaving My files revokes every url
-      if (files && !library.count) pick();
-      if (consentOn() === want) { hud.setScrolller(view()); return; }   // no echo coming: draw it now
-      scrolller.setConsent(want);
-      if (want) scrolller.setNiches(track.id, niches);
-    });
-    hud.on('scrolller-niches', (e) => {
-      niches = savePick(track.id, e?.niches || null);
-      scrolller.setNiches(track.id, niches);
-      hud.setScrolller(view());
-    });
+  const library = shared.library ||= createLocalLibrary();
+  library.setFiles(shared.courseFiles[TRACK_ID] || []);
+  const coursePick = shared.coursePicks[TRACK_ID] ||= {};
+  if (!coursePick.source) coursePick.source = TRACK_ID === shared.initialCourse && shared.legacyFilesOn ? 'files' : 'scrolller';
+  shared.filesOn = coursePick.source === 'files';
+  const consentOn = () => scrolller?.consent ?? init.caps.scrolller?.consent === true;
+  const pictures = feedSwitch(() => shared.filesOn ? library : coursePick.source === 'off' ? null : scrolller);
+  const view = () => ({ on: consentOn(), track: trackName, niches: nichesFor(track.id), custom: !isDefault(track.id),
+    catalog: scrolller?.catalog, source: shared.filesOn ? 'files' : consentOn() ? 'scrolller' : 'off', files: library.count });
+  const refreshMedia = () => { hud.setScrolller(view()); shared.garage?.refreshMedia?.(); };
+  function setSource(to, choose = true) {
+    if (!['scrolller', 'files', 'off'].includes(to) || (to === 'scrolller' && !scrolller)) return;
+    coursePick.source = to; shared.filesOn = to === 'files'; saveCustomization(shared.coursePicks);
+    saveFilesChoice(shared.filesOn);
+    if (!shared.filesOn) { library.clear(); delete shared.courseFiles[TRACK_ID]; }
+    if (shared.filesOn && !library.count && choose) pick();
+    if (scrolller) {
+      scrolller.setConsent(to === 'scrolller');
+      if (to === 'scrolller') scrolller.setNiches(track.id, nichesFor(track.id));
+    }
+    refreshMedia();
   }
+  const pick = () => openFilePicker(files => { shared.courseFiles[TRACK_ID] = pickFiles(files); library.setFiles(shared.courseFiles[TRACK_ID]); if (lifetime.alive) refreshMedia(); });
+  hud.setScrolller(view());
+  if (scrolller) {
+    if (coursePick.source === 'scrolller') scrolller.setNiches(track.id, nichesFor(track.id));
+    else if (consentOn()) scrolller.setConsent(false);
+    lifetime.defer(scrolller.subscribe(refreshMedia));
+  }
+  hud.on('scrolller-files', pick);
+  hud.on('scrolller', e => setSource(e?.source || (e?.on ? 'scrolller' : 'off')));
+  hud.on('scrolller-niches', e => {
+    savePick(track.id, e?.niches || null);
+    if (!shared.filesOn && coursePick.source === 'scrolller') scrolller?.setNiches(track.id, nichesFor(track.id));
+    refreshMedia();
+  });
   lifetime.listen(cardEl, 'click', e => {
     const anchor = e.target.closest?.('a.c-link[href]');
     if (!anchor) return;
@@ -464,7 +474,7 @@ async function boot(course, options, lifetime, isCurrent) {
   const lights = { ready: false, busy: false, covered: false, want: null, quiet: false, stage: 'Getting the lights ready', p: 0 };
   const WARM_MENU_FPS = 30; let menuDrawMs = 0;   // the garage's pace while the lights warm
   let online = null, lobbyUi = null;
-  let songToken = 0, pickedSong = shared.pickedSong;
+  let songToken = 0, pickedSong = shared.courseSongs[TRACK_ID] || null;
   lifetime.defer(() => { songToken++; });
   let extraSongs = async () => [];
   audio.setVolumes({ master: hud.options.volMaster, music: hud.options.volMusic, sfx: hud.options.volSfx });
@@ -533,7 +543,7 @@ async function boot(course, options, lifetime, isCurrent) {
   // A visual review may keep the Loom faces without requesting or displaying private media.
   const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge,
     readyCount: renderer.device === 'phone' ? PHONE_READY_CLIPS : Infinity });   // the DEVICE, whatever Quality is pinned
-  if (scrolller && qs.get('media') !== '0') world.media?.setDisplayFeed(pictures, renderer.canvas);
+  if (qs.get('media') !== '0') world.media?.setDisplayFeed(pictures, renderer.canvas);
   world.setItemMediaSource(seed => cardMedia?.sourceForFlash(seed) || null);
   const subliminalBurst = createSubliminalBurst({ parent: document.body, primary: () => world.primaryColour() });
   effects.screen.params.mediaFlash = true;
@@ -563,6 +573,37 @@ async function boot(course, options, lifetime, isCurrent) {
     garage.setCourse({ trackId: track.id, track: trackName, laps, online: course.online });
     garage.setHandlers({ changeTrack: id => void selectCourse(id, { race: true }),
       action: name => hud.menuAction(name), sound: name => { audio.start(); audio.cue(name); } });
+    const mediaFor = id => {
+      const saved = shared.coursePicks[id] || {}, local = shared.courseSongs[id];
+      return { source: id === TRACK_ID ? view().source : saved.source || 'scrolller',
+        files: id === TRACK_ID ? library.count : Math.min(24, shared.courseFiles[id]?.length || 0), catalog: scrolller?.catalog || [], scrolllerAvailable: !!scrolller,
+        niches: nichesFor(id), custom: !isDefault(id), songs: shared.songRows.map(({id,label}) => ({id,label})),
+        songId: local ? 'file' : saved.songId || 'default',
+        songName: local?.name || shared.songRows.find(row => row.id === ((saved.songId && saved.songId !== 'default' ? saved.songId : null) || ({threshold:'pink-road',mainframe:'mainframe',keep:'keep',boudoir:'boudoir',goonworks:'goonworks'})[id]))?.label || 'Track default' };
+    };
+    garage.setMedia(mediaFor);
+    lifetime.listen(document, 'glassroad-course-media', e => {
+      const d = e.detail || {}, id = d.trackId;
+      if (!COURSES.some(c => c.id === id) || !['menu', 'boot'].includes(state)) return;
+      const saved = shared.coursePicks[id] ||= {};
+      if (d.kind === 'niches') {
+        savePick(id, d.niches);
+        if (id === TRACK_ID && coursePick.source === 'scrolller') scrolller?.setNiches(id, nichesFor(id));
+      } else if (d.kind === 'source' && ['scrolller', 'files', 'off'].includes(d.source)) {
+        if (id === TRACK_ID) setSource(d.source, false); else { saved.source = d.source; if (d.source !== 'files') delete shared.courseFiles[id]; }
+      } else if (d.kind === 'files' && d.files?.length) {
+        shared.courseFiles[id] = pickFiles(d.files); saved.source = 'files';
+        if (id === TRACK_ID) library.setFiles(shared.courseFiles[id]);
+        if (id === TRACK_ID) setSource('files', false);
+      } else if (d.kind === 'song' && (d.songId === 'default' || shared.songRows.some(row => row.id === d.songId))) {
+        delete shared.courseSongs[id]; saved.songId = d.songId;
+        if (id === TRACK_ID) { pickedSong = null; stopSong(); void menuSong(); }
+      } else if (d.kind === 'song-file' && /^audio\//.test(d.file?.type || '')) {
+        shared.courseSongs[id] = d.file; saved.songId = 'default';
+        if (id === TRACK_ID) { pickedSong = d.file; stopSong(); void menuSong(); }
+      }
+      saveCustomization(shared.coursePicks); refreshMedia();
+    });
     garage.setVisible(false);
     lifetime.defer(() => { garage.setVisible(false); garage.setHandlers({ action: null, sound: null, changeTrack: null }); });
     // not enumerable: the garage holds its three.js scene, and every status JSON.stringify of the debug
@@ -891,7 +932,7 @@ async function boot(course, options, lifetime, isCurrent) {
       }
       if (my !== songToken) return;
     }
-    for (const url of CHARTS) {
+    for (const url of (online ? CHARTS : soloCharts())) {
       if (my !== songToken || !audio.music) return;
       if (await audio.music.playChart(url, { align })) {
         if (my !== songToken) return;
@@ -920,7 +961,7 @@ async function boot(course, options, lifetime, isCurrent) {
     debug.songLoading = true;
     try {
       if (pickedSong) { await audio.music.playFile(pickedSong, { prepareOnly: true }); return; }
-      for (const url of CHARTS) {
+      for (const url of soloCharts()) {
         if (my !== songToken || !lifetime.alive || !['boot', 'menu'].includes(state)) return;
         if (await audio.music.playChart(url, { prepareOnly: true })) return;
       }
@@ -956,7 +997,7 @@ async function boot(course, options, lifetime, isCurrent) {
     // ?dev=1&songAt=N (dev only): the recording starts N seconds in at GO, for cue checks.
     const songAt = DEV ? Math.max(0, Number(qs.get('songAt')) || 0) : 0;
     const align = () => songAt - race.goInS;
-    if (pickedSong || CHARTS.length) Promise.resolve(raceAudioStart).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
+    if (pickedSong || soloCharts().length) Promise.resolve(raceAudioStart).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
   }
   /** Rebuild the course's programs at the current tier behind the loading cover (renderer.compile, in groups with
    *  painted frames between them), then start the race. Frames pause meanwhile: the warm owns the scene. */
@@ -1047,10 +1088,17 @@ async function boot(course, options, lifetime, isCurrent) {
     const devLobby = LOCAL_URL.test(qs.get('lobby') || '') && /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
     const roomOrigin = !devLobby ? ROOM_ORIGIN : (LOCAL_URL.test(qs.get('room') || '') ? qs.get('room') : null);
     let fallback;
-    extraSongs = () => fallback ||= lobbyApi.songs().then(r => lobbySongCharts(courseSongRows(TRACK_ID, r?.songs), { roomOrigin })).catch(() => []);
-    if (wantLobbySongs({ search: location.search, charts: CHARTS })) extraSongs().then(list => {
+    extraSongs = () => fallback ||= lobbyApi.songs().then(r => {
+      shared.songRows = (r?.songs || []).flatMap(row => {
+        const url = lobbySongCharts([row], { roomOrigin })[0];
+        return url ? [{ id: row.id, label: row.title || row.name || row.id, url }] : [];
+      });
+      refreshMedia();
+      return lobbySongCharts(courseSongRows(TRACK_ID, r?.songs), { roomOrigin });
+    }).catch(() => []);
+    extraSongs().then(list => {
       if (!lifetime.alive || !list.length) return;
-      if (!CHARTS.length) CHARTS = list;
+      if (wantLobbySongs({ search: location.search, charts: CHARTS })) CHARTS = list;
       for (const url of list) void songCache.preload(url);
       if (audio.state !== 'running' || debug.songLoading || audio.music?.playing) return;
       if (state === 'boot' || state === 'menu') void menuSong();
@@ -1225,7 +1273,7 @@ async function boot(course, options, lifetime, isCurrent) {
     const f = online ? null : audioFile(e);
     if (!f) return;
     e.preventDefault();
-    pickedSong = shared.pickedSong = f;
+    pickedSong = shared.courseSongs[TRACK_ID] = f; refreshMedia();
     if (state === 'race') Promise.resolve(audio.start()).then(() => playSong(() => -race.goInS)).catch((err) => console.warn('[glassroad] song', err));
   });
 

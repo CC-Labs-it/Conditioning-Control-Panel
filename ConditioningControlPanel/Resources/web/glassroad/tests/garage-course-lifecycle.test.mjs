@@ -30,7 +30,7 @@ function element(){
   const selectors=new Map(),classes=new Set();
   return {hidden:false,dataset:{},style:{setProperty(){}},children:[],listeners:{},
     classList:{add:k=>classes.add(k),remove:k=>classes.delete(k),contains:k=>classes.has(k),toggle(k,on){on?classes.add(k):classes.delete(k);}},
-    setAttribute(){},append(child){this.children.push(child);},remove(){this.removed=true;},focus(){},
+    setAttribute(){},append(child){this.children.push(child);},after(){},remove(){this.removed=true;},focus(){},
     querySelector(selector){if(!selectors.has(selector))selectors.set(selector,element());return selectors.get(selector);},
     addEventListener(name,callback){this.listeners[name]=callback;},
   };
@@ -40,7 +40,7 @@ test('course replacement keeps wardrobe DOM, updates course controls and retires
   const oldDocument=globalThis.document,pickers=[];
   globalThis.document={createElement:element,body:element()};
   globalThis.__coursePicker=options=>{
-    const picker={options,open:false,disposed:false,nav(){},show(){this.open=true;},dispose(){this.disposed=true;}};
+    const picker={options,open:false,disposed:false,refreshMedia(){},nav(){},show(){this.open=true;},dispose(){this.disposed=true;}};
     pickers.push(picker);return picker;
   };
   t.after(()=>{globalThis.document=oldDocument;delete globalThis.__coursePicker;});

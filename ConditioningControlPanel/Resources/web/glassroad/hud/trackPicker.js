@@ -1,6 +1,7 @@
 import {courseSketch} from './courseSketch.js';
 import {MODE_LABEL,resolveMode,saveMode} from '../meta/mode.js';
 import {loadOptions} from './options.js';
+import {mediaRecap} from './courseMedia.js';
 
 const COLORS={threshold:'#ff88b5',mainframe:'#70e6c3',keep:'#ffce62',boudoir:'#e49cfa',goonworks:'#bd006e'};
 // Race / Time trial: two small pills above the grid (Logbook TRIAL lane); the pick is saved and sent as glassroad-mode
@@ -14,7 +15,7 @@ export function courseDetails(kmPerLap,laps){const n=laps>0?laps|0:1,km=Number(k
 /** Shows the mode on the garage Race row (the row keeps its own track line). */
 function paintMode(root,mode){const b=root.querySelector('[data-g=race] b');if(b)b.textContent=MODE_LABEL[mode]||'Race';}
 /** Native dialog supplies focus trapping and pointer isolation from the live 3D carousel. */
-export function createTrackPicker({root,courses,trackId,change}) {
+export function createTrackPicker({root,courses,trackId,change,mediaFor=()=>({}),customize=()=>{}}) {
   const dialog=document.createElement('dialog');dialog.className='g-track-picker';dialog.setAttribute('aria-labelledby','g-track-title');
   dialog.innerHTML='<header><div><small>YOUR NEXT RACE</small><h2 id="g-track-title">Choose track</h2></div><button type="button" class="g-track-back">Back</button></header><style>'+MODE_CSS+'</style><div class="g-track-mode" role="group" aria-label="Mode"></div><div class="g-track-grid"></div><p class="g-track-status" role="status"></p>';
   root.append(dialog);let opener=null,loaded=false,leaving=false,timer=0,disposed=false;const kms=[];
@@ -46,8 +47,16 @@ export function createTrackPicker({root,courses,trackId,change}) {
       // The opaque loading cover takes over after navigation. The selected look is already saved on this origin.
       root.classList.add('g-course-leaving');timer=setTimeout(()=>change(course.id),350);
     };
-    dialog.querySelector('.g-track-grid').append(b);return b;
+    const wrap=document.createElement('article');wrap.className='g-course-card';wrap.append(b);
+    const footer=document.createElement('div');footer.className='g-course-media';
+    const pictures=document.createElement('p');pictures.className='g-course-pictures';
+    const song=document.createElement('p');song.className='g-course-song';
+    const custom=document.createElement('button');custom.type='button';custom.className='g-course-customize';custom.textContent='Customize';
+    custom.setAttribute('aria-label','Customize '+course.name);custom.onclick=()=>customize(course,custom);
+    footer.append(pictures,song,custom);wrap.append(footer);dialog.querySelector('.g-track-grid').append(wrap);return b;
   });
+  function refreshMedia(){for(const [i,b]of tiles.entries()){const recap=mediaRecap(mediaFor(courses[i].id)||{},courses[i].id),wrap=b.parentElement;
+    wrap.querySelector('.g-course-pictures').textContent=recap.pictures;wrap.querySelector('.g-course-song').textContent='Music: '+recap.song;}}
   async function loadSketches(){if(loaded)return;loaded=true;
     await Promise.allSettled(courses.map(async(course,i)=>{
       const response=await fetch(new URL('../tracks/'+course.id+'.json',import.meta.url));if(!response.ok)return;
@@ -60,8 +69,9 @@ export function createTrackPicker({root,courses,trackId,change}) {
   }
   return {
     get open(){return dialog.open;},
-    show(trigger=document.activeElement){if(dialog.open)return;opener=trigger;dialog.showModal();tiles.find(b=>b.dataset.course===trackId)?.focus();paintDetails();loadSketches();},
-    nav(dir){if(!dialog.open)return;const buttons=[...modes,...tiles,dialog.querySelector('.g-track-back')],i=buttons.indexOf(document.activeElement);
+    refreshMedia,
+    show(trigger=document.activeElement){if(dialog.open)return;opener=trigger;refreshMedia();dialog.showModal();tiles.find(b=>b.dataset.course===trackId)?.focus();paintDetails();loadSketches();},
+    nav(dir){if(!dialog.open)return;const buttons=[...dialog.querySelectorAll('button')],i=buttons.indexOf(document.activeElement);
       if(dir==='back'){close();return;}if(dir==='ok'){document.activeElement.click?.();return;}
       const step={up:-2,down:2,left:-1,right:1}[dir];if(step)buttons[(i+step+buttons.length)%buttons.length].focus();
     },
