@@ -19,7 +19,8 @@ test('the chooser discloses every course theme and its default lyrics before rac
   t.after(()=>{globalThis.document=previous;});
   const root=element(), picker=createTrackPicker({root,courses:COURSES,trackId:'threshold',change(){}});
   const tiles=root.children[0].querySelector('.g-track-grid').children;
-  for(const [i,tile] of tiles.entries()) {
+  for(const [i,entry] of tiles.entries()) {
+    const tile=entry.innerHTML ? entry : entry.children[0];
     const theme=courseTheme(COURSES[i].id);
     const [badge,lyrics]=tile.querySelector('.g-course-text').children;
     assert.equal(badge.textContent,'Theme: '+theme.label);
