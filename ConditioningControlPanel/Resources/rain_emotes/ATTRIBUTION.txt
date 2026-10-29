@@ -1,0 +1,40 @@
+Rain Rig (CC) Blender Foundation | studio.blender.org
+October 14, 2026 wardrobe prototype polish: runtime garment and hair silhouette derivatives, modular footwear and legwear, themed yellow outfits, fitted accessory variants, and an evaluated unmasked native body for continuous garments. Original Rain attribution and licenses remain in force. Film references inform costume styling only; no reference image pixels or film assets are redistributed.
+Source: https://studio.blender.org/characters/rain/v3/
+License: https://creativecommons.org/licenses/by/4.0/
+V2 adaptation: loose blonde hair, warm peach skin, makeup and slimmer brows; fuller figure and fitted pink dress; gold hoops, stockings and heeled ankle boots; authored idle and greeting; studio lighting.
+V3 changes: sculpted hair channels, smaller layered locks and varied tips; slightly lower hairline; clearer turquoise irises and reflective corneas; modest bust increase and hip reduction; fitted waist seam and clasp; constructed boot uppers, soles, cuffs and zip details. Original source and preceding revisions retained.
+CloudRig embedded UI script: GPL-3.0-or-later. Original notices retained.
+This adaptation is not endorsed by the Blender Foundation.
+
+V4: additional lower hairline, keyed independent hair follow-through, modest extra bust fullness, three-percent taller assembly, four coordinated eight-second native-rig cycles (idle, greeting, listening, conversational gesture) with facial performance. Silent speech-like movement is not phoneme lip-sync. Original source and V3 checkpoint retained.
+
+V5: five twelve-second whole-body performances with planted footwork, staggered shoulder/elbow/wrist timing, a shared softly lidded knowing expression, one playful wink, and hair follow-through driven by evaluated motion. Native Blender authoring only. Silent mouth study is not audio-aligned lip-sync. V4 retained.
+
+V6: six twelve-second whole-body performances with planted footwork, staggered shoulder/elbow/wrist timing, varied expressions with a relaxed common baseline, one playful wink, and hair follow-through driven by evaluated motion. Native Blender authoring only. Silent mouth study is not audio-aligned lip-sync. V5 retained.
+
+V6: eye spacing reduced about seven percent using native eye-ring and brow controls. Six coordinated body and varied facial performances, relaxed shared rest, occasional knowing beat only, reference-informed heel lift and asymmetric delighted reaction. Independently layered motion-driven hair. V5 retained.
+
+V6 blink/breathing correction: progressive closure and reopening with surrounding facial participation; subtle native ribcage expansion, sternum and shoulder rise; hair re-baked after breathing.
+
+V7: gentle semantic lip-width reduction, slight lower-cheek taper across native head shape keys, smaller smile spread and native lip/jaw/roll controls for less tooth exposure. V6 blink, breathing, eye spacing and body/hair performances preserved.
+
+V8: additional coherent eye-spacing reduction and front-hair sculpt channels, eight separate layered forelocks with fine strand shading and baked head-driven spring response. V7 mouth, cheek taper, blink, breathing and body motion retained.
+
+V9: reconstructed swept forehead locks over a fitted underlayer, stronger baked head-driven secondary hair motion, a localized 14.5 percent nose-width reduction, 22 mm native chest extension, modest bust projection and forward-only lip fullness. V8 eye spacing and earlier facial, body and breathing actions retained.
+
+V10: lifted crown and fuller upper hair volume over the separate moving V9 locks; soft mesh-carried rose-peach blush, native-deforming mascara details and copied brow-only expression actions. V9 anatomy, clothing, body motion and existing hair animation retained.
+
+V11: eye and brow size adjustment, foxy outer-corner sweep with more visible mascara, parted layered curtain bangs with softer directional finish, revised weight-transfer timing and subtler tilted greeting foot lift. Original Rain and prior adaptation credits retained.
+
+V12: original swept V10 hair restored at owner request with lower forehead edge; six distinct eight-second full-body performances with coordinated facial acting and head-driven secondary hair motion; a subtle curtsy added to a preserved copy of the earlier greeting. Prior adaptation and native rig notices retained.
+
+V13 October 3, 2026: legacy-reference emotion library with 27 new body/facial/hair actions and the preserved tiny-curtsy greeting.
+
+Repertoire 1, October 12, 2026: five new six-second native body, face and secondary hair performances (greeting, giggle, listening, smirk, idle), plus the accepted cheer jump. Lower outer hair narrowed by up to five percent, crown and fringe preserved. Derived oral material cleanup retained. Original geometry, rig notices and prior actions preserved except for the documented hair mesh copies. This adaptation is not endorsed by the Blender Foundation.
+
+October 12, 2026 repertoire revision 2: derived native-rig arm and finger animation with overlapping joints, independently articulated fingers and native 50 fps rendering. Accepted character appearance, prior slim hair and source attribution preserved. All changes remain adaptations of the credited source assets.
+
+Shy repertoire, October 13, 2026: three six-second native performances (shy_hold, shy_glance, shy_sway) on the revision 2 appearance.
+
+Tube clips, October 24, 2026: the accepted performances pre-rendered unchanged (same source file, materials and camera direction) as transparent 192x309 animated WebP at 15 fps for the companion tube. talk_a, talk_b and talk_c layer the V13 library's silent speech-like mouth controls over the accepted idle and listening bodies; this is not phoneme lip-sync. Original Rain attribution and licenses remain in force. This adaptation is not endorsed by the Blender Foundation.

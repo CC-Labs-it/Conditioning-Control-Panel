@@ -386,6 +386,12 @@
     <Resource Include="Resources\avatar0_emotes\*.gif" />
     <Resource Include="Resources\avatar0_emotes\emotes.json" Condition="Exists('Resources\avatar0_emotes\emotes.json')" />
     <Resource Include="Resources\avatar0_emotes\clip_timing.json" Condition="Exists('Resources\avatar0_emotes\clip_timing.json')" />
+    <!-- Rain (7.2, the V2 avatar generation on BambiSleep, Sissy and CCP Default): animated WebP with real
+         alpha, played by the tube's SkiaSharp lane (AvatarTube\EmoteClipPlayer.cs). CC BY 4.0: ATTRIBUTION.txt. -->
+    <Resource Include="Resources\rain_emotes\*.webp" />
+    <Resource Include="Resources\rain_emotes\emotes.json" />
+    <Resource Include="Resources\rain_emotes\clip_timing.json" />
+    <Content Include="Resources\rain_emotes\ATTRIBUTION.txt" CopyToOutputDirectory="PreserveNewest" />
 
     <!-- Achievement images -->
     <Resource Include="Resources\achievements\*.png" />
