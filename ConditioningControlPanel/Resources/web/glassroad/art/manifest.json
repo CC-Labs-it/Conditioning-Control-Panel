@@ -7763,5 +7763,6 @@
   {"id":"toy-snap-guard","file":"../render/items/toys.js","kind":"procedural","tris":96,"draws":1,"texBytes":0,"boundRadiusM":1.5255,"materialSlots":["toy_runtime"],"palette":"all"},
   {"id":"toy-landing-marker","file":"../render/items/toys.js","kind":"procedural","tris":224,"draws":2,"texBytes":0,"boundRadiusM":1.8645,"materialSlots":["toy_runtime"],"palette":"all"},
   {"id":"toy-leader-slow","file":"../render/items/toys.js","kind":"procedural","tris":48,"draws":1,"texBytes":0,"boundRadiusM":1.7,"materialSlots":["toy_runtime"],"palette":"all"},
-  {"id":"toy-surge-chevrons","file":"../render/karts.js","kind":"procedural","tris":12,"draws":1,"texBytes":0,"boundRadiusM":2.8888,"materialSlots":["toy_runtime"],"palette":"all"}
+  {"id":"toy-surge-chevrons","file":"../render/karts.js","kind":"procedural","tris":12,"draws":1,"texBytes":0,"boundRadiusM":2.8888,"materialSlots":["toy_runtime"],"palette":"all"},
+  {"id":"emi-teacup-kart-lod1","file":"models/emi-teacup-kart-lod1.json","kind":"index-lod","tris":1956,"texBytes":0,"boundRadiusM":2,"materialSlots":[],"palette":"all"}
 ]
