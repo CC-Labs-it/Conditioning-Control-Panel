@@ -38,3 +38,10 @@ test('no balance, no chip; bad lines are dropped; nothing runs without a documen
   assert.deepEqual(p.lines, ['Gold']);
   assert.doesNotThrow(() => showSlip({ type: 'sparkles-receipt', credited: 5, lines: ['Gold'] }));
 });
+
+test('a calm tree plays the receipt gentle, and reduced motion still wins', () => {
+  const calm = slipPlan({ credited: 20, sp: 100, lines: ['Gold'] }, false, true);
+  assert.equal(calm.motion, 'gentle');
+  assert.equal(calm.flight, false);
+  assert.equal(slipPlan({ credited: 20, sp: 100, lines: ['Gold'] }, true, true).motion, 'static');
+});
