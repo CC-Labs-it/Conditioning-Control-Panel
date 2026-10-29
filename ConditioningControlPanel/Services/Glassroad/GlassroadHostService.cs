@@ -1,0 +1,306 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Threading;
+using ConditioningControlPanel.Services.PieceByPiece;
+using ConditioningControlPanel.Services.Safety;
+using Microsoft.Web.WebView2.Core;
+using Newtonsoft.Json.Linq;
+
+namespace ConditioningControlPanel.Services.Glassroad;
+
+/// <summary>
+/// Host for GLASSROAD (<c>Resources/web/glassroad/index.html</c>), private preview behind
+/// <see cref="GlassroadRules.DoorEnv"/>. A sibling of <see cref="PieceByPieceHostService"/>: one
+/// windowed <see cref="ChaosWebViewHost"/> (it attaches ScrolllerWebGate), own profile, host
+/// protocol v2 (host/bridge.js). INIT GOES OUT BEFORE READY: the page awaits init at boot (3 s,
+/// then defaults with no net) but says ready only once shaders are warm, and Post queues until
+/// ready, so init goes straight to the core at DOMContentLoaded, on the first message and on ready
+/// (a repeat is a no-op). The relay signs as the player, so it forwards ONLY <c>/v2/race/</c>,
+/// judged on the built Uri (<see cref="HostNetPathRule"/>). Every exit is <see cref="Close"/>.
+/// </summary>
+internal static class GlassroadHostService
+{
+    public const string ProductName = "Racing Thoughts";
+    private const string ProxyBaseUrl = "https://codebambi-proxy.vercel.app";
+    private static readonly TimeSpan BootDeadline = TimeSpan.FromSeconds(45);
+
+    /// <summary>The page's kept-Escape frame (host/hostEscape.js HOST_ESCAPE).</summary>
+    internal const string KeptEscapeType = "kept-escape";
+
+    private static readonly HttpClient Http = BuildHttpClient();
+
+    private static HttpClient BuildHttpClient()
+    {
+        var c = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+        try { c.DefaultRequestHeaders.UserAgent.ParseAdd($"ConditioningControlPanel/{UpdateService.AppVersion}"); }
+        catch (Exception ex) { Diag.Swallowed(ex); }
+        return c;
+    }
+
+    private static ChaosWebViewHost? _host;
+    private static CoreWebView2? _core;
+    private static DispatcherTimer? _watch;
+    private static DateTime _lastHeartbeatUtc, _lastProgressUtc;
+    private static bool _pinged, _earlyInitSent, _disposing;
+
+    public static bool IsActive => _host != null;
+
+    /// <summary>The window is in front: the panel lets the page keep a first Escape as its pause.</summary>
+    public static bool IsInFront => _host?.IsForeground == true;
+
+    public static bool IsReady => _host?.IsReady == true;
+
+    /// <summary>Hand the page an Escape the panel kept as its pause (pause, never leave).</summary>
+    public static void PostKeptEscape()
+    {
+        try { _host?.Post(new { type = KeptEscapeType }); _host?.FocusWeb(); }
+        catch (Exception ex) { App.Logger?.Debug("Glassroad: kept Escape post failed: {E}", ex.Message); }
+    }
+
+    /// <summary>Open the race window. Idempotent: a live window is only re-focused.</summary>
+    public static void Launch()
+    {
+        if (_host != null) { _host.FocusWeb(); return; }
+        try
+        {
+            _pinged = _earlyInitSent = false;
+            _lastProgressUtc = _lastHeartbeatUtc = DateTime.UtcNow;
+            var webRoot = Path.Combine(AppContext.BaseDirectory, "Resources", "web");
+            _host = new ChaosWebViewHost(new ChaosWebViewHost.Options
+            {
+                StartUrl = "https://ccp.game/glassroad/index.html",
+                PrimaryHost = "ccp.game",
+                Mappings = new List<(string, string, CoreWebView2HostResourceAccessKind)>
+                {
+                    // The page, three.js and the Arcademy Loom it imports; never read cross-origin.
+                    ("ccp.game", webRoot, CoreWebView2HostResourceAccessKind.Deny),
+                    // Local media copies, drawn into canvases: Allow, as every host.
+                    ("ccp.assets", App.EffectiveAssetsPath, CoreWebView2HostResourceAccessKind.Allow),
+                },
+                // Own profile; the argument string is a constant, as WebView2 needs per folder.
+                UserDataFolderName = "browser_data_glassroad",
+                InputEnabled = true,
+                IsGame = true,
+                StartFullscreen = false,
+                OwnedByMainWindow = true,
+                WindowTitle = ProductName,
+                LogTag = "Glassroad",
+                ExtraBrowserArguments = "--autoplay-policy=no-user-gesture-required",
+                OnCoreCreated = core => { _core = core; core.DOMContentLoaded += OnDomContentLoaded; },
+                OnReady = OnPageReady,
+                OnMessage = OnPageMessage,
+                OnProcessFailed = kind =>
+                {
+                    App.Logger?.Warning("Glassroad: browser process failed ({Kind}) - closing", kind);
+                    RunOnUi(Close);
+                },
+            });
+            _host.Show();
+            if (_host.Window != null) _host.Window.Closed += (_, _) => Close();
+            StartWatch();
+            _host.FocusWeb();
+            try { App.Friends?.EnterActivity(Friends.PresenceActivity.Race); } catch (Exception ex) { Diag.Swallowed(ex); }
+            App.Logger?.Information("GlassroadHostService: launched");
+        }
+        catch (Exception ex)
+        {
+            App.Logger?.Error(ex, "GlassroadHostService.Launch failed");
+            Close();
+        }
+    }
+
+    /// <summary>The one funnel for every exit (page, title-bar X, panic, boot failure, dead render
+    /// process, watchdog, shutdown). Idempotent and direct.</summary>
+    public static void Close()
+    {
+        if (_disposing) return;
+        _disposing = true;
+        try
+        {
+            try { _watch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            _watch = null;
+            bool had = _host != null;
+            try { if (_core != null) _core.DOMContentLoaded -= OnDomContentLoaded; } catch (Exception ex) { Diag.Swallowed(ex); }
+            _core = null;
+            try { _host?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            _host = null;
+            if (had)
+            {
+                try { App.Friends?.LeaveActivity(Friends.PresenceActivity.Race); } catch (Exception ex) { Diag.Swallowed(ex); }
+                App.Logger?.Information("GlassroadHostService: closed");
+            }
+        }
+        catch (Exception ex) { App.Logger?.Debug("GlassroadHostService.Close: {E}", ex.Message); }
+        finally { _disposing = false; }
+    }
+
+    // ============================ init ============================
+
+    private static void OnDomContentLoaded(object? sender, CoreWebView2DOMContentLoadedEventArgs e) => PostInitNow();
+
+    /// <summary>Straight to the core, past the ready queue (see the class remarks).</summary>
+    private static void PostInitNow()
+    {
+        try
+        {
+            var s = App.Settings?.Current;
+            var uid = App.UnifiedUserId;
+            bool online = !string.IsNullOrEmpty(uid) && !string.IsNullOrEmpty(SafeAuthToken());
+            int tier = 0;
+            try { tier = EntitlementTierSync.EffectiveTierNow(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            var init = GlassroadRules.InitFrame(online ? uid : null, s?.UserDisplayName, tier, GentleVisuals.On,
+                s?.GentleFadeSeconds ?? GentleVisuals.DefaultFadeSeconds, s?.GentleSpeed ?? GentleVisuals.DefaultSpeed);
+            _core?.PostWebMessageAsJson(init.ToString(Newtonsoft.Json.Formatting.None));
+        }
+        catch (Exception ex) { App.Logger?.Debug("Glassroad: init post failed: {E}", ex.Message); }
+    }
+
+    private static void OnPageReady()
+    {
+        _lastHeartbeatUtc = _lastProgressUtc = DateTime.UtcNow;
+        _pinged = false;
+        PostInitNow();
+        _host?.FocusWeb();
+    }
+
+    // ============================ page messages ============================
+
+    private static void OnPageMessage(JObject o)
+    {
+        _lastProgressUtc = DateTime.UtcNow;
+        try
+        {
+            if (!_earlyInitSent && _host is { IsReady: false })
+            {
+                _earlyInitSent = true;
+                PostInitNow();   // backstop for a DOMContentLoaded that beat the bridge
+            }
+            switch ((string?)o["type"])
+            {
+                case "heartbeat":
+                case "pong":
+                    _lastHeartbeatUtc = DateTime.UtcNow;
+                    _pinged = false;
+                    break;
+                case "net":
+                    OnNetRequest(o);
+                    break;
+                case "exit":
+                case "menu-back":
+                    // The page's own Leave / the menu's Back link. Escape never sends these.
+                    RunOnUi(Close);
+                    break;
+                case "boot-error":
+                    App.Logger?.Warning("Glassroad: page boot-error: {Msg}", (string?)o["message"] ?? (string?)o["msg"]);
+                    RunOnUi(Close);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            App.Logger?.Warning("Glassroad: message handler threw ({Type}): {E}", (string?)o["type"], ex.Message);
+        }
+    }
+
+    /// <summary><c>net { id, method, path, body }</c> -&gt; <c>net-reply { id, status, body }</c>. A
+    /// refusal or failure answers status 0 (the page's "no answer"); no id goes unanswered.</summary>
+    private static void OnNetRequest(JObject o)
+    {
+        var id = (string?)o["id"] ?? "";
+        var path = (string?)o["path"] ?? "";
+        var method = ((string?)o["method"] ?? "GET").Trim().ToUpperInvariant();
+        var b = o["body"];
+        var body = b == null || b.Type == JTokenType.Null ? ""
+            : b.Type == JTokenType.String ? (string?)b ?? "" : b.ToString(Newtonsoft.Json.Formatting.None);
+
+        if (method != "GET" && method != "POST") { ReplyNet(id, 0, "forbidden_method"); return; }
+        // Signed first (the host names the caller), then the SIGNED path is judged on its built Uri.
+        if (!GlassroadRules.TrySign(method, path, body, App.UnifiedUserId, out var signedPath, out var signedBody)
+            || !HostNetPathRule.TryBuild(ProxyBaseUrl, signedPath, GlassroadRules.AllowedPathPrefix, out var target)
+            || target is null)
+        {
+            App.Logger?.Warning("Glassroad: net REJECTED for path '{Path}'", path);
+            ReplyNet(id, 0, "forbidden_path");
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            int status = 0;
+            string reply = "";
+            try
+            {
+                using var request = PbpNetRelay.Build(target, method, signedPath, signedBody,
+                    SafeAuthToken(), UpdateService.AppVersion);
+                using var response = await Http.SendAsync(request, CancellationToken.None).ConfigureAwait(false);
+                status = (int)response.StatusCode;
+                reply = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                MergedAccountRecovery.TryHandle(status, reply);
+            }
+            catch (Exception ex)
+            {
+                status = 0;
+                reply = "";
+                App.Logger?.Debug("Glassroad: net {Method} {Path} failed: {E}", method, path, ex.Message);
+            }
+            ReplyNet(id, status, reply);
+        });
+    }
+
+    private static void ReplyNet(string id, int status, string body) => RunOnUi(() =>
+    {
+        try { _host?.Post(new { type = "net-reply", id, status, body }); }
+        catch (Exception ex) { App.Logger?.Debug("Glassroad.ReplyNet: {E}", ex.Message); }
+    });
+
+    private static string SafeAuthToken()
+    {
+        try { return App.Settings?.Current?.AuthToken ?? string.Empty; }
+        catch { return string.Empty; }
+    }
+
+    // ============================ plumbing ============================
+
+    private static void RunOnUi(Action act)
+    {
+        var disp = Application.Current?.Dispatcher;
+        if (disp == null) { try { act(); } catch (Exception ex) { Diag.Swallowed(ex); } return; }
+        if (disp.HasShutdownStarted) return;
+        disp.BeginInvoke(act, DispatcherPriority.Normal);
+    }
+
+    /// <summary>One 5 s watchdog. Before ready: close after 45 s with no page message at all (the
+    /// bridge beats every 2 s, so only a page that never ran fails). After ready: silent past 20 s
+    /// gets one ping, then the window closes on the next tick.</summary>
+    private static void StartWatch()
+    {
+        _watch = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromSeconds(5) };
+        _watch.Tick += (_, _) =>
+        {
+            if (_host == null) return;
+            var now = DateTime.UtcNow;
+            if (!_host.IsReady)
+            {
+                if (now - _lastProgressUtc < BootDeadline) return;
+                App.Logger?.Warning("Glassroad: no page progress for {S}s - closing", BootDeadline.TotalSeconds);
+                Close();
+                return;
+            }
+            if ((now - _lastHeartbeatUtc).TotalSeconds <= 20) return;
+            if (!_pinged)
+            {
+                _pinged = true;
+                try { _host.Post(new { type = "ping", t = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }); } catch (Exception ex) { Diag.Swallowed(ex); }
+                return;
+            }
+            App.Logger?.Warning("Glassroad: page heartbeat silent >20s and no pong - closing");
+            Close();
+        };
+        _watch.Start();
+    }
+}
