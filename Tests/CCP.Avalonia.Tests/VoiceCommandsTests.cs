@@ -20,8 +20,8 @@ namespace CCP.Avalonia.Tests;
 
 /// <summary>She's Listening's consumer on this head (WPF AutonomyService.Voice/VoiceCommands): the
 /// wake loop opens the mic only when armed + consented + entitled, Stop / revoke / lapse close it,
-/// panic aborts the capture in flight but leaves the loop armed, and the spoken safe word works
-/// under Lockdown (decisions "Panic ↔ mic"). Fed by Vosk's test.wav through a fake mic, never a
+/// panic aborts the capture in flight but leaves the loop armed, and the spoken safe word reaches exactly
+/// as far as the panic key (hard rule 6, owner 2026-10-22: refused under Lockdown, whole once it ends). Fed by Vosk's test.wav through a fake mic, never a
 /// real microphone. The WAV says "one zero zero zero one", which the user sets as the wake phrase.</summary>
 public sealed class VoiceCommandsTests
 {
@@ -141,10 +141,11 @@ public sealed class VoiceCommandsTests
     });
 
     [Fact]
-    public Task TheSpokenSafeWordWorksUnderLockdown() => Run(async (shell, mic, engine) =>
+    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(async (shell, mic, engine) =>
     {
         var s = CoreSettings.Current;
         s.AutonomyConsentGiven = true;
+        s.PanicKeyEnabled = true;
         using var ld = LockdownService.Current = new LockdownService();
         try
         {
@@ -159,9 +160,18 @@ public sealed class VoiceCommandsTests
             Assert.True(shell.Autonomy.IsEnabled);       // refused (#514) ...
             Assert.Equal(1, escapes);                    // ... and it trips the escape wire
 
+            // Hard rule 6 (owner 2026-10-22, supersedes the 2026-09-30 "voice panic stays unguarded"):
+            // the spoken safe word is never more permissive than the panic key, which Lockdown ignores.
             Assert.True(shell.VoiceCmds.TryHandleInlineCommand("hey bambi red", wake));
             Dispatcher.UIThread.RunJobs();
-            Assert.False(shell.Autonomy.IsEnabled);      // the safe word is never refused
+            Assert.True(shell.Autonomy.IsEnabled);
+            Assert.False(shell.RunVoicePanic());
+
+            ld.Deactivate();                             // the key runs again, so does the safe word
+            Assert.True(s.PanicKeyEnabled);
+            Assert.True(shell.VoiceCmds.TryHandleInlineCommand("hey bambi red", wake));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(shell.Autonomy.IsEnabled);
         }
         finally
         {

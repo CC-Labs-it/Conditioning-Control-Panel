@@ -64,6 +64,20 @@ namespace ConditioningControlPanel.Services
             // Documented local only: a restore on another PC must not switch presence sharing on.
             nameof(AppSettings.FriendsPresenceShared),
             nameof(AppSettings.ModPersonalityPreset),
+            // Conversion rows (C9): machine-local stamps and the last server tier reading.
+            // A restore must not bring back a stale reading or re-open a once-ever row.
+            nameof(AppSettings.ServerTierSeen),
+            nameof(AppSettings.InboxStamps),
+            nameof(AppSettings.LastKnownEffectiveTier),
+            // Free member fields mirror the server profile; the next profile read refills them.
+            nameof(AppSettings.PatreonMember),
+            nameof(AppSettings.PostGrants),
+            nameof(AppSettings.ServerPaidUntil),
+            // The one-time "online media is official" note: this PC saw it, not the account.
+            nameof(AppSettings.ScrolllerOfficialNoteSeen),
+            // ---- not in WPF (no WPF reader): which privacy switches this install owns (SyncPush) ----
+            nameof(AppSettings.ConsentOwnedAccount),
+            nameof(AppSettings.ConsentOwnedFields),
         };
 
         /// <summary>
@@ -82,7 +96,17 @@ namespace ConditioningControlPanel.Services
         /// <summary>True when a backup must not carry this property.</summary>
         internal static bool IsExcludedFromBackup(string name) =>
             ExcludedBackupProperties.Contains(name)
-            || (name != null && name.StartsWith("Chaster", StringComparison.OrdinalIgnoreCase));
+            || (name != null && name.StartsWith("Chaster", StringComparison.OrdinalIgnoreCase))
+            // The audio player's playlist is file paths on this machine: never uploaded.
+            || (name != null && name.StartsWith("AudioPlaylist", StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>The audio player's settings (playlist paths, volume, loop, shuffle), found by name.</summary>
+        internal static readonly System.Reflection.PropertyInfo[] AudioPlaylistLocalProperties =
+            typeof(AppSettings).GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+                .Where(p => p.Name.StartsWith("AudioPlaylist", StringComparison.Ordinal)
+                            && p.CanRead && p.CanWrite && p.GetIndexParameters().Length == 0
+                            && !Attribute.IsDefined(p, typeof(JsonIgnoreAttribute)))
+                .ToArray();
 
         /// <summary>
         /// The other half of <see cref="ExcludedBackupProperties"/>. A backup never carries these,
@@ -101,7 +125,17 @@ namespace ConditioningControlPanel.Services
             restored.DiscordWebhookUrl = current.DiscordWebhookUrl;
             restored.LastSeenUtc = current.LastSeenUtc;
             restored.FriendsPresenceShared = current.FriendsPresenceShared;
+            // Conversion state lives on this PC only (it is left out of the backup): a restore must
+            // not wipe it, or the once-ever rows post again and a post-code grant goes missing.
+            restored.InboxStamps = current.InboxStamps;
+            restored.ServerTierSeen = current.ServerTierSeen;
+            restored.PatreonMember = current.PatreonMember;
+            restored.PostGrants = current.PostGrants;
+            restored.ServerPaidUntil = current.ServerPaidUntil;
             restored.ModPersonalityPreset = current.ModPersonalityPreset; // the setter copies
+            restored.ScrolllerOfficialNoteSeen = current.ScrolllerOfficialNoteSeen;
+            restored.ConsentOwnedAccount = current.ConsentOwnedAccount;
+            restored.ConsentOwnedFields = current.ConsentOwnedFields;
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so
             // an empty list in the restore may just mean "not carried": keep this PC's own.
             if (restored.DisabledAssetPaths.Count == 0 && current.DisabledAssetPaths.Count > 0)
@@ -110,7 +144,7 @@ namespace ConditioningControlPanel.Services
                 restored.ActiveAssetPaths = new HashSet<string>(current.ActiveAssetPaths);
             if (restored.AssetPresets.Count == 0 && current.AssetPresets.Count > 0)
                 restored.AssetPresets = new List<AssetPreset>(current.AssetPresets);
-            foreach (var p in ChasterLocalProperties)
+            foreach (var p in ChasterLocalProperties.Concat(AudioPlaylistLocalProperties))
             {
                 var v = p.GetValue(current);
                 if (v is List<string> list) v = new List<string>(list);
@@ -142,12 +176,27 @@ namespace ConditioningControlPanel.Services
             var obj = JObject.Parse(JsonConvert.SerializeObject(settings, Formatting.None));
             foreach (var key in obj.Properties().Select(p => p.Name).ToList())
             {
-                // JSON names may differ in case from the C# names; match case-insensitively.
-                if (IsExcludedFromBackup(key) || AbsolutePathFields.Contains(key, StringComparer.OrdinalIgnoreCase))
+                // The lists hold C# names; a [JsonProperty] key (server_tier_seen, inbox_stamps) is matched
+                // through the property it serializes, the bare key too (case-insensitive).
+                var name = PropertyNameOfJsonKey(key);
+                if (IsExcludedFromBackup(key) || IsExcludedFromBackup(name)
+                    || AbsolutePathFields.Contains(key, StringComparer.OrdinalIgnoreCase)
+                    || AbsolutePathFields.Contains(name, StringComparer.OrdinalIgnoreCase))
                     obj.Remove(key);
             }
             return obj;
         }
+
+        private static readonly Lazy<Dictionary<string, string>> JsonKeyToProperty = new(() =>
+            ((Newtonsoft.Json.Serialization.JsonObjectContract)JsonSerializer.CreateDefault().ContractResolver
+                .ResolveContract(typeof(AppSettings))).Properties
+                .Where(p => p.PropertyName != null && p.UnderlyingName != null)
+                .GroupBy(p => p.PropertyName!, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First().UnderlyingName!, StringComparer.Ordinal));
+
+        /// <summary>The C# property a JSON key of <see cref="AppSettings"/> serializes; the key itself when unknown.</summary>
+        internal static string PropertyNameOfJsonKey(string key)
+            => JsonKeyToProperty.Value.TryGetValue(key, out var name) ? name : key;
 
         /// <summary>
         /// What a restore keeps from this machine: WPF's manual-restore identity/progression list
