@@ -56,6 +56,9 @@ The page talks to whoever hosts it through `host.js`, never `fetch` to the serve
   until the receipt lands.
 
 Mounted inside a game (`mountPrizeCounter(host, opts)`), the same seam is an object; standalone it is `postMessage`.
+Standalone frames (`host.js`): out `{type:'ready', protocol:1}`, `{type:'request', reqId, op, body, idem}`, `{type:'wallet', sp}`,
+`{type:'close', reason}`, `{type:'log', level, msg}`; in `{type:'init', ...}`, `{type:'reply', reqId, body}` (body = the server body).
+`stock_changed` / `catalog_changed` carry the fresh state as `state` (the page also reads it inline).
 
 ## Rules
 
