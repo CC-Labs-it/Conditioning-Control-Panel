@@ -29,12 +29,12 @@ test('Goonworks jukebox floor consumes the shared bands, eight notes and heard b
   const reactive = createAudioReactiveUniforms(), music = musicUniforms(), top = float(.8), edge = float(7);
   const floor = goonworksMusicFloor({ p: uv(), base: vec3(.6), top, edge, half: float(18), pink: vec3(.8,.1,.4), accent: vec3(.2,.7,.6), reactive, music });
   const nodes = graph(floor);
-  for (const name of ['bass', 'mid', 'treble', 'energy', 'gentle', ...Array.from({length:8}, (_,i) => 'note'+i)])
+  for (const name of ['kickAge','kickStrength','snareAge','snare','hatsCount','hats','mid','energy','gentle', ...Array.from({length:8}, (_,i) => 'note'+i)])
     assert.ok(nodes.has(reactive[name]), 'visible pattern consumes '+name);
-  for (const value of Object.values(music)) assert.ok(nodes.has(value), 'shared phrase/beat and music gate are retained');
+  for (const key of ['tileBar','tileOn']) assert.ok(nodes.has(music[key]), 'shared phrase and audible music gate are retained');
   assert.ok(nodes.has(top) && nodes.has(edge), 'all patterns stay inside the existing top and navigation edge');
   assert.ok(!nodes.has(reactive.t), 'no independently running animation clock');
-  assert.ok(![...nodes].some(n => n.isTextureNode), 'no new textures, uploads or media owners');
+  assert.deepEqual(new Set([...nodes].filter(n => n.isTextureNode).map(n => n.value)), new Set([reactive.vizTexture]), 'no independent textures, media owners or render targets');
   assert.ok(nodes.size < 900, 'bounded analytic graph: ' + nodes.size);
 });
 
@@ -45,7 +45,8 @@ test('the final opaque Goonworks material contains the complete musical floor ra
   t.after(() => { owner.dispose(); road.material.dispose(); });
   const nodes = graph(road.material.colorNode);
   for (let i=0; i<8; i++) assert.ok(nodes.has(road.uniforms.reactive['note'+i]));
-  for (const name of ['tileBeat','tileBar','tileOn']) assert.ok(nodes.has(road.uniforms.music[name]));
+  for (const name of ['tileBar','tileOn']) assert.ok(nodes.has(road.uniforms.music[name]));
+  for (const name of ['kickAge','snareAge','hatsCount']) assert.ok(nodes.has(road.uniforms.reactive[name]));
   assert.ok(nodes.has(road.uniforms.reactive.energy));
   assert.equal(road.material.transparent, false); assert.equal(road.material.opacity, 1);
   assert.equal(road.material.side, FrontSide); assert.equal(road.material.positionNode, null);
