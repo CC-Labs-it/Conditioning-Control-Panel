@@ -5,6 +5,7 @@ import { createWaterDnaFrame, waterDnaFrame } from './waterDnaMath.js';
 import { finalLapMods } from './worldFeel.js';
 import { DataTexture, RGBAFormat, UnsignedByteType, LinearFilter, ClampToEdgeWrapping, NoColorSpace } from 'three/webgpu';
 import { createMusicVisualData, stepMusicVisualData, VISUAL_DATA, INSTRUMENT_FIELDS } from './musicVisualData.js';
+import { createMusicPerformance, stepMusicPerformance, PERFORMANCE_FIELDS } from './musicPerformance.js';
 import { markRows } from './dataTextureRows.js';
 const UNIFORM_NAMES = Object.freeze(['bass', 'mid', 'treble', 'energy', 't', 'gentle', ...Array.from({ length: 8 }, (_, i) => 'note' + i)]);
 const VISUAL_NAMES = Object.freeze(['drive', 'kick', 'snare', 'hats', 'onset', 'hitAge', 'hitStrength', 'section',
@@ -19,6 +20,8 @@ export function createAudioReactiveUniforms() {
   u.dnaPhase = uniform(0); u.dnaRadius = uniform(2.1); u.dnaHue = uniform(.5); u.dnaPulse = uniform(0);
   u.visual = createMusicVisualData();
   for (const key of VISUAL_NAMES) u[key] = uniform(u.visual[key]);
+  u.performance = createMusicPerformance();
+  for (const key of PERFORMANCE_FIELDS) u[key] = uniform(u.performance[key]);
   u.motion = uniform(1);
   const tex = new DataTexture(u.visual.data, VISUAL_DATA.width, VISUAL_DATA.height, RGBAFormat, UnsignedByteType);
   tex.minFilter = tex.magFilter = LinearFilter; tex.wrapS = tex.wrapT = ClampToEdgeWrapping;
@@ -59,6 +62,8 @@ export function updateAudioReactiveUniforms(u, signal, dt, options) {
   u.dnaHue.value = u.dna.hue; u.dnaPulse.value = u.dna.pulse;
   if (stepMusicVisualData(u.visual, signal, dt, options)) { markRows(u.vizTexture, 0, VISUAL_DATA.height - 1); u.vizTexture.needsUpdate = true; }
   for (const key of VISUAL_NAMES) u[key].value = u.visual[key];
+  stepMusicPerformance(u.performance, signal, dt, options);
+  for (const key of PERFORMANCE_FIELDS) u[key].value = u.performance[key];
   if (!options?.paused && !signal?.frozen) u.motion.value = options?.motion === 'off' ? 0 : options?.motion === 'less' ? .5 : 1;
 }
 
