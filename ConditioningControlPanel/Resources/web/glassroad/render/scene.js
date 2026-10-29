@@ -52,7 +52,7 @@ import { kickWobble, moteDensity, bumpCount } from './kartPose.js';
 import { setLensCamera } from './lens.js';
 import { racerLabels } from '../hud/format.js';
 import { createMusicRoad } from './musicRoad.js';
-import { updateAudioReactiveUniforms } from './audioReactive.js';
+import { updateAudioReactiveUniforms, disposeAudioReactiveUniforms } from './audioReactive.js';
 import { createPressContacts } from './pressContacts.js';
 import { createTrapTicks } from './trapTelegraph.js';
 import { createRailBarrier } from './railBarrier.js';
@@ -638,7 +638,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     road.uniforms.phase.value = (road.uniforms.phase.value + dt * LOOK.bandScrollMps * band) % LOOK.bandLenM;
     road.uniforms.contrast.value = contrast;
     road.uniforms.sheen.value = gentle ? LOOK.sheenGentle : 1;
-    updateAudioReactiveUniforms(road.uniforms.reactive, view.audioReactive, dt, { paused: !!view.paused, gentle, song: view.beatSong || view.song, finalLap: wake, feel });
+    updateAudioReactiveUniforms(road.uniforms.reactive, view.audioReactive, dt, { paused: !!view.paused, gentle: gentle || !!view.gentle, song: view.beatSong || view.song, motion: view.motion, finalLap: wake, feel });
     // Water and road share one measured music envelope and freeze together on pause.
     if (road.uniforms.water && !view.paused) road.uniforms.water.t.value += dt * scroll;
     if (waterfall) waterfall.update(dt, { playerPos: kart.position, gentle, paused: !!view.paused, scroll });
@@ -770,6 +770,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     for (const x of [cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps]) x?.dispose();
     if (waterfall) waterfall.dispose();
     waterVolume.dispose();
+    disposeAudioReactiveUniforms(road.uniforms.reactive);
     underwaterFx.dispose();
     if (showcaseDressing) showcaseDressing.dispose();
     boudoirDressing?.dispose(); boudoirForks?.dispose(); perfumeView?.dispose(); boudoirHazardView?.dispose(); mirrorRoom?.dispose();

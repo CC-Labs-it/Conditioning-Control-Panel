@@ -27,21 +27,23 @@ test('Boudoir colour spectacle follows the heard beat and real bands without a t
   const reactive = createAudioReactiveUniforms(), music = musicUniforms();
   const inputs = { p: uv(), base: vec3(.2, .1, .1), trueEdge: uniform(8), distance: uniform(20), wet: uniform(0), reactive, music, lapM: 4380 };
   const nodes = graph(boudoirMusicFloor(inputs));
-  for (const name of ['bass', 'mid', 'treble', 'energy', ...Array.from({length: 8}, (_, i) => 'note' + i)]) assert.ok(nodes.has(reactive[name]), name);
-  for (const name of Object.keys(music)) assert.ok(nodes.has(music[name]), name);
+  for (const name of ['kickAge', 'kickStrength', 'snareAge', 'snare', 'hatsCount', 'hats', 'mid', 'energy', ...Array.from({length: 8}, (_, i) => 'note' + i)]) assert.ok(nodes.has(reactive[name]), name);
+  for (const name of ['tileBar','tileOn','big','calm']) assert.ok(nodes.has(music[name]), name);
   for (const name of ['base', 'trueEdge', 'distance', 'wet']) assert.ok(nodes.has(inputs[name]), name);
   assert.ok(!nodes.has(reactive.t), 'there is no second phase clock');
-  assert.ok(![...nodes].some(n => n.isTextureNode), 'same material, no textures, media or render targets');
+  assert.deepEqual(new Set([...nodes].filter(n => n.isTextureNode).map(n => n.value)), new Set([reactive.vizTexture]), 'same material samples only the shared PCM atlas');
   assert.ok(nodes.size < 900, `bounded shader graph: ${nodes.size}`);
 });
 
-test('broad shifting hues share luminance and Gentle keeps less than half the normal coverage', () => {
+test('Boudoir has distinct bright instruments and dim resting hues; Gentle retains restrained coverage', () => {
   const colours = Object.values(BOUDOIR_MUSIC_COLOURS), L = BOUDOIR_MUSIC_FLOOR;
+  const lights=[];
   for (const colour of colours) {
     assert.ok(colour.every(v => Number.isFinite(v) && v >= 0 && v <= 1));
     const light = colour[0] * .2126 + colour[1] * .7152 + colour[2] * .0722;
-    assert.ok(Math.abs(light - L.luminance) < 1e-12);
+    lights.push(light);assert.ok(light<.65,'palette accents remain bounded rather than full white');
   }
+  assert.ok(Math.max(...lights)>Math.min(...lights)*4,'luminous accents visibly separate from resting plum');
   assert.equal(new Set(colours.map(c => c.join(','))).size, 4);
   assert.ok(L.gentleCoverage < L.coverage / 2);
   assert.ok(L.wetCoverage < .5, 'water keeps its visible character');
@@ -52,8 +54,8 @@ test('final Boudoir road and forks use the new paint without moving the physical
   const road = createRoadMaterial({ col: i => vec3(.2 + i * .1, .3, .4) }, null, track);
   t.after(() => road.material.dispose());
   const nodes = graph(road.material.colorNode);
-  for (const name of ['tileBeat', 'tileBar', 'tileOn', 'tileGentle', 'big', 'calm']) assert.ok(nodes.has(road.uniforms.music[name]), name);
-  for (const name of ['bass', 'mid', 'treble', 'energy']) assert.ok(nodes.has(road.uniforms.reactive[name]), name);
+  for (const name of ['tileBar', 'tileOn', 'big', 'calm']) assert.ok(nodes.has(road.uniforms.music[name]), name);
+  for (const name of ['kickAge', 'snareAge', 'hatsCount', 'mid', 'energy']) assert.ok(nodes.has(road.uniforms.reactive[name]), name);
   assert.ok(nodes.has(road.uniforms.water.t), 'shared water remains rendered');
   assert.equal(road.material.positionNode, null, 'patterns are paint, not extra physical obstacles');
   const forks = readFileSync(new URL('../render/boudoirForks.js', import.meta.url), 'utf8');

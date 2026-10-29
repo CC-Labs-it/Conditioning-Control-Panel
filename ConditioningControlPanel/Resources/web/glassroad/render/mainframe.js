@@ -13,7 +13,8 @@ import { mediaLook, placeBillboard, rectPoints } from './mediaMath.js';
 import { fitMainframeBillboard, motionEnvelope } from './mainframeMediaMotion.js';
 import { buildMainframeRooms, mainframeRoomWindows } from './mainframeRooms.js';
 import { buildMainframeHazards } from './mainframeHazards.js';
-import { createAudioReactiveUniforms, reactiveWaterNodes, waterHelixLight } from './audioReactive.js';
+import { createAudioReactiveUniforms, reactiveWaterNodes } from './audioReactive.js';
+import { waterMusicLight } from './materials/waterMusic.js';
 import { boudoirSegmentBlocked } from './boudoirMedia.js';
 
 const point = (f, x, y, z = 0) => f.p.map((v, i) => v + f.b[i] * x + f.n[i] * y + f.t[i] * z);
@@ -300,7 +301,7 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
     const response = reactiveWaterNodes(positionWorld.xz, reactive);
     mat.colorNode = vec3(0.025, 0.25, 0.39).add(vec3(0.07, 0.26, 0.34).mul(coolantCaustics(positionWorld.xz, coolantTime)))
       .add(vec3(0.14, 0.66, 0.64).mul(response.light)).add(vec3(0.7, 0.9, 1).mul(response.crest))
-      .add(waterHelixLight(positionWorld.xz, reactive, vec3(.18,.85,.65), vec3(.65,.95,.24)));
+      .add(waterMusicLight(positionWorld.xz, reactive, vec3(.18,.85,.65), vec3(.65,.95,.24)));
     mat.opacityNode = smoothstep(0, 0.035, uv().y).mul(float(1).sub(smoothstep(0.965, 1, uv().y))).mul(0.38);
     const surface = new Mesh(g, mat); surface.name = 'mainframe-reservoir-surface'; group.add(surface);
   }

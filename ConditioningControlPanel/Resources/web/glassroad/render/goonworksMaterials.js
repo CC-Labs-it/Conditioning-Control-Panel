@@ -5,6 +5,7 @@ import {getGoonworksLayout} from '../track/goonworks-layout.js';
 import { trackTableWidth } from './spectrum.js';
 import { goonworksMusicFloor } from './materials/goonworksMusicFloor.js';
 import { reliefNormal, reliefFootprint } from './surfaceRelief.js';
+import { trackTableWidth } from './spectrum.js';
 
 export const GOONWORKS_PALETTE = Object.freeze({ fuchsia: '#b60870', hot: '#dc4296', wine: '#661448',
   magenta:'#993e91',rose:'#ca6897',plum:'#513751',pink:'#e78eb8',
