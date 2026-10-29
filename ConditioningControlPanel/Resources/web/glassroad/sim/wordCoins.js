@@ -1,7 +1,7 @@
 /* sim/wordCoins.js - road words as coins (playtest fix 2026-10-28, lane words; handoff-1028/GLASSROAD-PLAYTEST-FIXES.md).
  *
- * Tester: "road lyric words do nothing; no reason to catch anything". Up to two distinct semantic identities per
- * phrase are COINS (pickCoins: one each, otherwise one short real word): each holds a fixed spot on the riskier line
+ * Tester: "road lyric words do nothing; no reason to catch anything". Every semantic lyric occurrence is a COIN
+ * (pickCoins: otherwise one short real word per phrase): each holds a fixed spot on the riskier line
  * (coinLane: the inside of the bend it sits in, or a side picked by phrase on a straight), never on a moving trap
  * row (underTrap), and lights while its word is sung (the karaoke light, render/roadWordsMath.js). Driving over it
  * while it is lit (coinLit + coinTouch) is +1 on the count (createWordCoins), capped; each point raises the
@@ -10,7 +10,7 @@
  * online stays on today's rules until the room rollout. Pure: no three.js, no DOM.
  */
 import { clamp, wrap } from '../core/math.js';
-import { wordIdentity, wordIdentityExact } from './wordIdentity.js';
+import { wordIdentity } from './wordIdentity.js';
 
 const DEFAULTS = Object.freeze({
   on: true, online: false, cap: 10, topPctPer: 0.009, hitDrop: 3, litPreS: 0.6, litPostS: 0.9,
@@ -31,8 +31,8 @@ export function coinTuning(feel = null) {
 }
 
 /**
- * Up to two distinct identities per eligible phrase (sim/roadWords.js scriptRoad), in first-identity order.
- * Each gets one coin, preferring its exact display word over inflections (ties: first). With no identity, choose
+ * Every semantic occurrence in the eligible road script is collectible, including repeated and related forms.
+ * Vocabulary breadth never changes the count cap or speed bonus. With no identity in a phrase, choose
  * one fallback: the fewest letters with at least minChars (ties: first), otherwise the longest marking.
  * @returns {Uint8Array} 1 = coin, by script index
  */
@@ -41,24 +41,16 @@ export function pickCoins(script, C = DEFAULTS) {
   let i = 0;
   while (script && i < script.length) {
     const ph = script[i].phrase;
-    const identities = new Map();
+    let semantic = false;
     let best = -1, longest = i, j = i;
     for (; j < script.length && script[j].phrase === ph; j++) {
       const c = script[j].chars;
       const material = script[j].identity ?? wordIdentity(script[j].text);
-      if (Number.isInteger(material) && material > 0 && material <= 10) {
-        const selected = identities.get(material);
-        if (selected === undefined) {
-          if (identities.size < 2) identities.set(material, j);
-        } else if (wordIdentityExact(script[j].text) === material && wordIdentityExact(script[selected].text) !== material) {
-          identities.set(material, j);
-        }
-      }
+      if (Number.isInteger(material) && material > 0) { out[j] = 1; semantic = true; }
       if (c >= C.minChars && (best < 0 || c < script[best].chars)) best = j;
       if (c > script[longest].chars) longest = j;
     }
-    if (identities.size) for (const selected of identities.values()) out[selected] = 1;
-    else out[best >= 0 ? best : longest] = 1;
+    if (!semantic) out[best >= 0 ? best : longest] = 1;
     i = j;
   }
   return out;
