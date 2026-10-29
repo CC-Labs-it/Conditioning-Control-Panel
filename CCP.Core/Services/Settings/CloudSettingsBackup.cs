@@ -176,12 +176,27 @@ namespace ConditioningControlPanel.Services
             var obj = JObject.Parse(JsonConvert.SerializeObject(settings, Formatting.None));
             foreach (var key in obj.Properties().Select(p => p.Name).ToList())
             {
-                // JSON names may differ in case from the C# names; match case-insensitively.
-                if (IsExcludedFromBackup(key) || AbsolutePathFields.Contains(key, StringComparer.OrdinalIgnoreCase))
+                // The lists hold C# names; a [JsonProperty] key (server_tier_seen, inbox_stamps) is matched
+                // through the property it serializes, the bare key too (case-insensitive).
+                var name = PropertyNameOfJsonKey(key);
+                if (IsExcludedFromBackup(key) || IsExcludedFromBackup(name)
+                    || AbsolutePathFields.Contains(key, StringComparer.OrdinalIgnoreCase)
+                    || AbsolutePathFields.Contains(name, StringComparer.OrdinalIgnoreCase))
                     obj.Remove(key);
             }
             return obj;
         }
+
+        private static readonly Lazy<Dictionary<string, string>> JsonKeyToProperty = new(() =>
+            ((Newtonsoft.Json.Serialization.JsonObjectContract)JsonSerializer.CreateDefault().ContractResolver
+                .ResolveContract(typeof(AppSettings))).Properties
+                .Where(p => p.PropertyName != null && p.UnderlyingName != null)
+                .GroupBy(p => p.PropertyName!, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First().UnderlyingName!, StringComparer.Ordinal));
+
+        /// <summary>The C# property a JSON key of <see cref="AppSettings"/> serializes; the key itself when unknown.</summary>
+        internal static string PropertyNameOfJsonKey(string key)
+            => JsonKeyToProperty.Value.TryGetValue(key, out var name) ? name : key;
 
         /// <summary>
         /// What a restore keeps from this machine: WPF's manual-restore identity/progression list

@@ -134,6 +134,22 @@ public sealed class CloudSettingsBackupTests : IDisposable
         Assert.True(CloudSettingsBackup.IsExcludedFromBackup("AudioPlaylistPaths"));
         Assert.True(CloudSettingsBackup.IsExcludedFromBackup(nameof(AppSettings.ConsentOwnedFields)));
 
+        // The real upload, not just the predicate: several of these serialize under a [JsonProperty] name.
+        var all = Signed();
+        all.InboxStamps["welcome"] = "2026-10-01";
+        all.PostGrants["code1"] = "g";
+        all.ServerTierSeen = 2;
+        all.PatreonMember = true;
+        all.LastKnownEffectiveTier = 2;
+        all.ServerPaidUntil = DateTime.UtcNow;
+        all.ScrolllerOfficialNoteSeen = true;
+        all.ConsentOwnedAccount = "u_abc";
+        all.ConsentOwnedFields = 3;
+        var sentKeys = CloudSettingsBackup.StripForUpload(all).Properties()
+            .Select(p => CloudSettingsBackup.PropertyNameOfJsonKey(p.Name)).ToList();
+        foreach (var name in names.Concat(new[] { nameof(AppSettings.ConsentOwnedAccount), nameof(AppSettings.ConsentOwnedFields), "AudioPlaylistPaths" }))
+            Assert.DoesNotContain(name, sentKeys, StringComparer.OrdinalIgnoreCase);
+
         var current = new AppSettings { ScrolllerOfficialNoteSeen = true, ConsentOwnedFields = 3 };
         current.PostGrants["code1"] = "g";
         current.InboxStamps["welcome"] = "2026-10-01";
