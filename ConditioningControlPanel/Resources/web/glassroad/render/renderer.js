@@ -316,17 +316,30 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   return api;
 }
 
+const insetLighting = new WeakMap();
+
 /** Shadowless, MRT-less, straight into the inset target; every renderer switch it touches is put back. */
 function withInsetTarget(three, target, fn) {
   const oldTarget = three.getRenderTarget(), mrt = three.getMRT ? three.getMRT() : null;
+  const lighting = three.lighting;
   const shadow = three.shadowMap ? three.shadowMap.enabled : false, autoClear = three.autoClear;
   const restore = () => {
     three.setRenderTarget(oldTarget);
     if (three.setMRT) three.setMRT(mrt);
     if (three.shadowMap) three.shadowMap.enabled = shadow;
+    if (lighting) three.lighting = lighting;
     three.autoClear = autoClear;
   };
   if (three.shadowMap) three.shadowMap.enabled = false;
+  // Cube probes can share this target's render context but see a different set of
+  // lights. Give the inset its own stable lights node so neither pass evicts the
+  // other's prepared render objects and shaders.
+  if (lighting) {
+    let scope = insetLighting.get(three);
+    if (!scope) { scope = new GPU.Lighting(); insetLighting.set(three, scope); }
+    scope.enabled = lighting.enabled;
+    three.lighting = scope;
+  }
   three.autoClear = true;
   if (three.setMRT) three.setMRT(null);
   three.setRenderTarget(target);
@@ -360,17 +373,22 @@ export async function warmInset(three, post, scene, camera) {
     if (o.count === 0 && (o.isInstancedMesh || o.isSprite || o.isBatchedMesh)) o.count = 1;
     for (const m of [].concat(o.material || [])) if (m && m.visible === false) { mats.push(m); m.visible = true; }
   });
-  const layers = camera.layers.mask;
+  const layers = camera.layers.mask, shadows = three.shadowMap?.enabled;
   // Use the inset's actual layers. Its shadowless pass cannot compile the
   // layer-2 ShadowNodeMaterial road catchers.
   scene.updateMatrixWorld(true);
   try {
+    // Shader building can yield after taking the render list. Keep the shadowless
+    // policy until it settles; the target itself is still returned before awaiting.
+    if (three.shadowMap) three.shadowMap.enabled = false;
     // the first real hit resizes the target; a 2 px one has the same formats, so the programs carry over
     await withInsetTarget(three, post.inset.target, () => three.compileAsync(scene, camera));
-    withInsetTarget(three, post.inset.target, () => three.clear());
+    // A real covered draw also prepares draw-time material variants and uploads.
+    withInsetTarget(three, post.inset.target, () => three.render(scene, camera));
   } catch (e) {
     console.warn('[glassroad/renderer] hit cam warm: ' + (e && e.message));
   } finally {
+    if (three.shadowMap) three.shadowMap.enabled = shadows;
     for (const [o, autoUpdate] of lods) o.autoUpdate = autoUpdate;
     camera.layers.mask = layers;
     for (const [o, v, f, n] of saved) { o.visible = v; o.frustumCulled = f; if (o.count !== n) o.count = n; }
