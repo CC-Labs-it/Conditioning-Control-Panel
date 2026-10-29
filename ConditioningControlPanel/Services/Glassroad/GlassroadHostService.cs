@@ -15,8 +15,9 @@ using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Services.Glassroad;
 
 /// <summary>
-/// Host for GLASSROAD (<c>Resources/web/glassroad/index.html</c>), Racing Thoughts 3D, open to
-/// everyone since 7.2 (every race door). A sibling of <see cref="PieceByPieceHostService"/>: one
+/// Host for GLASSROAD (<c>Resources/web/glassroad/index.html</c>), Racing Thoughts 3D, PRIME ONLY
+/// (tier 2, solo included; owner 2026-10-29: "THE whole feature is for primes"). Every race door
+/// reaches <see cref="Launch"/>, which asks <see cref="DemandPrime"/> first. A sibling of <see cref="PieceByPieceHostService"/>: one
 /// windowed <see cref="ChaosWebViewHost"/> (it attaches ScrolllerWebGate), own profile, host
 /// protocol v2 (host/bridge.js). INIT GOES OUT BEFORE READY: the page awaits init at boot (3 s,
 /// then defaults with no net) but says ready only once shaders are warm, and Post queues until
@@ -51,6 +52,15 @@ internal static class GlassroadHostService
 
     public static bool IsActive => _host != null;
 
+    /// <summary>The Prime bar (tier 2, whitelist and grace folded in), the same TierGate read every
+    /// other Prime door makes. Fails closed: signed out or no Patreon service reads as locked.</summary>
+    public static bool PrimeAllowed => TierGate.RequiresLab(FeatureName).Allowed;
+
+    /// <summary>Gate-and-tell: true to open, false after the Prime refusal toast (See tiers).</summary>
+    internal static bool DemandPrime() => TierGate.DemandLab(FeatureName);
+
+    private static string FeatureName => Localization.Loc.Get("launcher_game_race_title");
+
     /// <summary>The window is in front: the panel lets the page keep a first Escape as its pause.</summary>
     public static bool IsInFront => _host?.IsForeground == true;
 
@@ -68,6 +78,8 @@ internal static class GlassroadHostService
     /// window gets the id as a <c>join-room</c> frame, which the page takes only on its menu.</summary>
     public static void Launch(string? joinRoomId = null)
     {
+        // Prime only: below tier 2 no door opens the race; the refusal is the app's Prime toast.
+        if (!DemandPrime()) return;
         var join = Lobby.RaceJoinLink.For(joinRoomId);
         if (_host != null)
         {

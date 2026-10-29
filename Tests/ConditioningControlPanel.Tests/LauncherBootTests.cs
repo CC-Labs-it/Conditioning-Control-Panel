@@ -210,15 +210,17 @@ public class LauncherBootTests
     }
 
     [Fact]
-    public void Race_tile_is_always_revealed_and_available()
+    public void Race_tile_is_always_revealed_and_available_and_Prime_locked()
     {
-        // 7.2: the tile opens Racing Thoughts 3D for everyone; the purchase reveal went with the 2D race.
+        // 7.2: the tile opens Racing Thoughts 3D, Prime only (owner 2026-10-29). Locked stays
+        // visible: always revealed, padlocked below Prime. The test host has no Patreon service,
+        // so the gate fails closed, as signed out.
         var race = LauncherCatalogue.Find("race");
         Assert.NotNull(race);
         Assert.Null(race!.IsRevealed);
         Assert.True(race.Revealed);
         Assert.True(race.Available);
-        Assert.False(race.Locked);
+        Assert.True(race.Locked);
     }
 
     [Fact]
