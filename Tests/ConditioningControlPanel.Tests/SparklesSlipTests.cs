@@ -96,6 +96,7 @@ public class SparklesSlipTests
 
     [Theory]
     [InlineData("offline", "Offline, no Sparkles")]
+    [InlineData("unreachable", "Bank closed, no Sparkles this time")]
     [InlineData("signin", "Sign in to earn Sparkles")]
     [InlineData("short", "Too short to pay")]
     [InlineData("pending", null)]

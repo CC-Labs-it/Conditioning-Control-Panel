@@ -15,6 +15,7 @@
   "Sparkles_Slip_CeilingToday": "已达上限。明天前仅发参与奖",
   "Sparkles_Slip_Short": "时间太短，不发放",
   "Sparkles_Slip_Offline": "离线，没有闪耀点数",
+  "Sparkles_Slip_Unreachable": "银行已关门，这次没有闪耀点数",
   "Sparkles_Slip_Pair": "今天同一对玩家重复对局。按单人费率",
   "Sparkles_Slip_Young": "新账号。在线暂按单人费率",
   "Sparkles_Slip_SoloRoom": "玩家少于 2 人。按单人费率",

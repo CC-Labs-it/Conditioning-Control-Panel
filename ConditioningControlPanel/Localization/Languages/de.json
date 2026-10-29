@@ -15,6 +15,7 @@
   "Sparkles_Slip_CeilingToday": "Tageslimit erreicht. Bis morgen nur Antrittsgeld",
   "Sparkles_Slip_Short": "Zu kurz für eine Auszahlung",
   "Sparkles_Slip_Offline": "Offline, keine Sparkles",
+  "Sparkles_Slip_Unreachable": "Bank geschlossen, diesmal keine Sparkles",
   "Sparkles_Slip_Pair": "Heute wieder dasselbe Paar. Solo-Satz",
   "Sparkles_Slip_Young": "Neues Konto. Online vorerst Solo-Satz",
   "Sparkles_Slip_SoloRoom": "Weniger als 2 Spieler. Solo-Satz",

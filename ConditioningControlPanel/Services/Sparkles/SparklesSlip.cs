@@ -27,6 +27,7 @@ public static class SparklesSlip
     {
         ["short"] = "Sparkles_Slip_Short",
         ["offline"] = "Sparkles_Slip_Offline",
+        ["unreachable"] = "Sparkles_Slip_Unreachable",
         ["pair"] = "Sparkles_Slip_Pair",
         ["young"] = "Sparkles_Slip_Young",
         ["solo_room"] = "Sparkles_Slip_SoloRoom",
