@@ -28,7 +28,7 @@ test('every face shows its buttons and nothing more', () => {
     const { el, buttons } = draw(CARDS[face]);
     assert.deepEqual(buttons.map((b) => b.textContent), labels, face);
     assert.equal(el.getAttribute('role'), 'dialog', face);
-    assert.match(el.text(), /Scarlet bell/, face);
+    assert.match(el.text(), /The Flustered Frock/, face);
   }
 });
 
