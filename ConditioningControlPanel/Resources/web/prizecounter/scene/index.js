@@ -16,6 +16,7 @@ import { keyIntent, padIntent, stickIntent, swipeIntent } from './intents.js';
 import { createTags } from './tags.js';
 
 const PINK = 0xff3d9a;
+const STAMP_DROP = -0.14;    // owned_stamp's card centre (+0.058) lands on the name tag face (-0.082) under the hinge
 // What each camera must keep in frame (width, height in metres around its look point).
 const FRAME = { wide: [15.4, 6.2], bay: [3.3, 3.55] };
 const WIDE_HOLD = 0.7;       // seconds on cam_wide before the first ease in
@@ -55,6 +56,10 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
   const tags = createTags(T);   // prices drawn on the blank price tags (scene/tags.js)
   const manifest = await (await fetch(base + 'manifest.json')).json();
   const items = new Map(manifest.items.map((i) => [i.id, i]));
+  // A retired id (catalog revision 2) an account still owns draws its stand-in art: the five patterns live in the bundle.
+  const artOf = (id) => items.get(id) || items.get(manifest.retired?.[id]);
+  // The OWNED stamp hangs from the tag hinge like the name tag does.
+  const stampOf = async () => { const s = await cloneOf('props/owned_stamp.glb'); s.position.y = STAMP_DROP; return s; };
   const [counter, shelfProto] = await Promise.all([load(manifest.scene.file), load(manifest.shelf.file)]);
   scene.add(counter);
   counter.updateMatrixWorld(true);
@@ -86,13 +91,13 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
     group.userData.bay = bay;
     const slots = new Map();
     await Promise.all(places.map(async (p) => {
-      const meta = items.get(p.id), anchor = node(group, p.slotNode);
+      const meta = artOf(p.id), anchor = node(group, p.slotNode);
       const holder = new T.Group();
       holder.userData.pick = { bay, slot: p.slot };
       anchor.add(holder);
       const entry = { holder, lod: null, full: null, id: p.id, meta, tagNode: node(group, p.tagNode) };
       slots.set(p.slot, entry);
-      const prop = p.tag && entry.tagNode && await cloneOf(`props/${p.tag === 'owned' ? 'owned_stamp' : 'price_tag'}.glb`);
+      const prop = p.tag && entry.tagNode && await (p.tag === 'owned' ? stampOf() : cloneOf('props/price_tag.glb'));
       if (prop) { entry.tagNode.add(prop); if (p.tag === 'price') tags.attach(prop, p.row); }
       if (!meta) { console.warn('prizecounter: no art for', p.id); return; }
       entry.lod = await cloneOf(meta.lod1 || meta.file);
@@ -125,7 +130,7 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
   // A receipt landed: that item's price tag becomes the OWNED stamp in place (no shelf swap).
   async function stamp(itemId) {
     const hits = [...shelves.values()].flatMap((s) => [...s.slots.values()]).filter((e) => e.id === itemId && e.tagNode);
-    for (const e of hits) { tags.drop(e.tagNode); e.tagNode.clear(); e.tagNode.add(await cloneOf('props/owned_stamp.glb')); }
+    for (const e of hits) { tags.drop(e.tagNode); e.tagNode.clear(); e.tagNode.add(await stampOf()); }
   }
   // Clones share geometry and materials with the cache, so a shelf leaving only drops its nodes.
   const disposeShelf = (s) => { tags.drop(s.group); s.group.removeFromParent(); };

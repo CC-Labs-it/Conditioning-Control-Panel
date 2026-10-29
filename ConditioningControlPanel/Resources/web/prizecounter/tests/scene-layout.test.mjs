@@ -39,11 +39,20 @@ test('shelf i hangs in bay_i, extra shelves and rows are dropped', () => {
   assert.deepEqual(layoutTab(null), []);
 });
 
-test('every mock row has art and lands on a real slot and tag', () => {
+test('retired ids (catalog revision 2) point at live art or at none, never at another retired id', () => {
+  const ids = new Set(manifest.items.map((i) => i.id));
+  assert.ok(Object.keys(manifest.retired).length >= 5);
+  for (const [id, to] of Object.entries(manifest.retired)) {
+    assert.ok(!ids.has(id), `${id} is retired but still has art`);
+    assert.ok(to === null || ids.has(to), `${id} -> ${to}`);
+  }
+});
+
+test('every mock row has art (or is a retired id) and lands on a real slot and tag', () => {
   const ids = new Set(manifest.items.map((i) => i.id));
   for (const tab of state.tabs) {
     for (const p of layoutTab(tab.shelves)) {
-      assert.ok(ids.has(p.id), `${tab.id}: no art for ${p.id}`);
+      assert.ok(ids.has(p.id) || p.id in manifest.retired, `${tab.id}: no art for ${p.id}`);
       assert.ok(manifest.shelf.nodes.includes(p.slotNode));
       assert.ok(manifest.shelf.nodes.includes(p.tagNode));
     }
