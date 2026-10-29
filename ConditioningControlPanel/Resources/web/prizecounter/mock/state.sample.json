@@ -1,0 +1,135 @@
+{
+ "ok": true,
+ "sp": 1850,
+ "catalogVersion": "cv-sample-1",
+ "week": "2026-W44",
+ "tier": 1,
+ "prizes": {"revision":3,"grants":["cos.rain.dress.rose-flare","cos.kart.paint.hearts","cos.jackpot_remix"]},
+ "tabs": [
+  {
+   "id": "rain-clothes",
+   "shelves": [
+    {
+     "rows": [
+      {"id":"rain.dress.midnight-cocktail","tier":"L","priceSp":730,"grants":["cos.rain.dress.midnight-cocktail"],"owned":null,"sale":"on"},
+      {"id":"rain.dress.rose-flare","tier":"L","priceSp":730,"grants":["cos.rain.dress.rose-flare"],"owned":{"at":"2026-10-27T20:14:00Z","paidSp":730},"sale":"on"},
+      {"id":"rain.dress.ivory-midi","tier":"L","priceSp":730,"grants":["cos.rain.dress.ivory-midi"],"owned":null,"sale":"on"},
+      {"id":"rain.dress.plum-asymmetric","tier":"L","priceSp":730,"grants":["cos.rain.dress.plum-asymmetric"],"owned":null,"sale":"on"},
+      {"id":"rain.dress.scarlet-bell","tier":"L","priceSp":730,"grants":["cos.rain.dress.scarlet-bell"],"owned":null,"sale":"on"},
+      {"id":"rain.dress.teal-tulip","tier":"L","priceSp":730,"grants":["cos.rain.dress.teal-tulip"],"owned":null,"sale":"on"},
+      {"id":"rain.dress.black-highlow","tier":"L","priceSp":730,"grants":["cos.rain.dress.black-highlow"],"owned":null,"sale":"on"},
+      {"id":"rain.suit.hazmat-yellow","tier":"XL","priceSp":2540,"grants":["cos.rain.suit.hazmat-yellow"],"owned":null,"sale":"on"}
+     ]
+    }
+   ]
+  },
+  {
+   "id": "rain-hair",
+   "shelves": [
+    {
+     "rows": [
+      {"id":"rain.hair.chestnut-bob","tier":"M","priceSp":360,"grants":["cos.rain.hair.chestnut-bob"],"owned":null,"sale":"on"},
+      {"id":"rain.hair.copper-lob","tier":"M","priceSp":360,"grants":["cos.rain.hair.copper-lob"],"owned":null,"sale":"on"},
+      {"id":"rain.hair.ink-sleek","tier":"M","priceSp":360,"grants":["cos.rain.hair.ink-sleek"],"owned":null,"sale":"on"},
+      {"id":"rain.hair.rose-waves","tier":"M","priceSp":360,"grants":["cos.rain.hair.rose-waves"],"owned":null,"sale":"on"},
+      {"id":"rain.hair.platinum-long","tier":"M","priceSp":360,"grants":["cos.rain.hair.platinum-long"],"owned":null,"sale":"on"},
+      {"id":"rain.hair.auburn-volume","tier":"M","priceSp":360,"grants":["cos.rain.hair.auburn-volume"],"owned":null,"sale":"on"},
+      {"id":"rain.acc.silver-drops","tier":"S","priceSp":120,"grants":["cos.rain.acc.silver-drops"],"owned":null,"sale":"on"},
+      {"id":"rain.acc.cat-eye-frames","tier":"S","priceSp":120,"grants":["cos.rain.acc.cat-eye-frames"],"owned":null,"sale":"on"}
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kart",
+   "shelves": [
+    {
+     "rows": [
+      {"id":"kart.body.glass-slipper","tier":"XL","priceSp":2540,"grants":["cos.kart.body.glass-slipper"],"owned":null,"sale":"on"},
+      {"id":"kart.body.candy-tin","tier":"L","priceSp":730,"grants":["cos.kart.body.candy-tin"],"owned":null,"sale":"on"},
+      {"id":"kart.outfit.pit-crew","tier":"L","priceSp":730,"grants":["cos.kart.outfit.pit-crew"],"owned":null,"sale":"on"},
+      {"id":"kart.outfit.ringmaster","tier":"L","priceSp":730,"grants":["cos.kart.outfit.ringmaster"],"owned":null,"sale":"on"},
+      {"id":"kart.outfit.ballerina","tier":"L","priceSp":730,"grants":["cos.kart.outfit.ballerina"],"owned":null,"sale":"on"},
+      {"id":"kart.paint.hearts","tier":"S","priceSp":120,"grants":["cos.kart.paint.hearts"],"owned":{"at":"2026-10-27T20:14:00Z","paidSp":120},"sale":"on"},
+      {"id":"kart.paint.pink-checker","tier":"S","priceSp":120,"grants":["cos.kart.paint.pink-checker"],"owned":null,"sale":"on"},
+      {"id":"kart.paint.spiral","tier":"S","priceSp":120,"grants":["cos.kart.paint.spiral"],"owned":null,"sale":"on"},
+      {"id":"kart.umbrella.lace","tier":"M","priceSp":360,"grants":["cos.kart.umbrella.lace"],"owned":null,"sale":"on"}
+     ]
+    }
+   ]
+  },
+  {
+   "id": "chess",
+   "shelves": [
+    {
+     "rows": [
+      {"id":"chess.set.royal-capes","tier":"XL","priceSp":2540,"grants":["cos.chess.set.royal-capes"],"owned":null,"sale":"on"},
+      {"id":"chess.set.velvet-court","tier":"XL","priceSp":2540,"grants":["cos.chess.set.velvet-court"],"owned":null,"sale":"on"},
+      {"id":"chess.banner.house-pink","tier":"M","priceSp":360,"grants":["cos.chess.banner.house-pink"],"owned":null,"sale":"on"},
+      {"id":"chess.banner.crest","tier":"M","priceSp":360,"grants":["cos.chess.banner.crest"],"owned":null,"sale":"on"},
+      {"id":"chess.insignia.heart","tier":"S","priceSp":120,"grants":["cos.chess.insignia.heart"],"owned":null,"sale":"on"},
+      {"id":"chess.insignia.star","tier":"S","priceSp":120,"grants":["cos.chess.insignia.star"],"owned":null,"sale":"on"}
+     ]
+    }
+   ]
+  },
+  {
+   "id": "profile",
+   "shelves": [
+    {
+     "rows": [
+      {"id":"profile.frame.lace","tier":"S","priceSp":120,"grants":["cos.profile.frame.lace"],"owned":null,"sale":"on"},
+      {"id":"profile.frame.ink-stamp","tier":"S","priceSp":120,"grants":["cos.profile.frame.ink-stamp"],"owned":null,"sale":"on"},
+      {"id":"profile.frame.gilt","tier":"M","priceSp":360,"grants":["cos.profile.frame.gilt"],"owned":null,"sale":"on"},
+      {"id":"profile.frame.polaroid","tier":"M","priceSp":360,"grants":["cos.profile.frame.polaroid"],"owned":null,"sale":"on"},
+      {"id":"profile.avatar.emi-pixel","tier":"M","priceSp":360,"grants":["cos.profile.avatar.emi-pixel"],"owned":null,"sale":"on"},
+      {"id":"profile.avatar.rain-portrait","tier":"M","priceSp":360,"grants":["cos.profile.avatar.rain-portrait"],"owned":null,"sale":"on"}
+     ]
+    }
+   ]
+  },
+  {
+   "id": "desk",
+   "shelves": [
+    {
+     "rows": [
+      {"id":"desk.hat.top-hat","tier":"M","priceSp":360,"grants":["cos.desk.hat.top-hat"],"owned":null,"sale":"on"},
+      {"id":"desk.hat.party","tier":"M","priceSp":360,"grants":["cos.desk.hat.party"],"owned":null,"sale":"on"},
+      {"id":"desk.toy.rubber-duck","tier":"S","priceSp":120,"grants":["cos.desk.toy.rubber-duck"],"owned":null,"sale":"on"},
+      {"id":"desk.toy.snow-globe","tier":"S","priceSp":120,"grants":["cos.desk.toy.snow-globe"],"owned":null,"sale":"on"}
+     ]
+    }
+   ]
+  },
+  {
+   "id": "prime",
+   "shelves": [
+    {
+     "rows": [
+      {"id":"prime.paint.host-gold","tier":"L","priceSp":730,"grants":["cos.prime.paint.host-gold"],"owned":null,"sale":"on","needs":"prime"},
+      {"id":"prime.trail.podium","tier":"L","priceSp":730,"grants":["cos.prime.trail.podium"],"owned":null,"sale":"on","needs":"prime"},
+      {"id":"prime.frame.room-host","tier":"M","priceSp":360,"grants":["cos.prime.frame.room-host"],"owned":null,"sale":"on","needs":"prime"},
+      {"id":"prime.banner.arena","tier":"M","priceSp":360,"grants":["cos.prime.banner.arena"],"owned":null,"sale":"on","needs":"prime"}
+     ]
+    }
+   ]
+  },
+  {
+   "id": "backroom",
+   "shelves": [
+    {
+     "rows": [
+      {"id":"jackpot_remix","tier":null,"priceSp":15,"grants":["fx.jackpot_remix"],"owned":{"at":"2026-10-20T19:02:00Z","paidSp":15},"sale":"on"},
+      {"id":"rt_demo","tier":null,"priceSp":20,"grants":["rt.original.00"],"owned":null,"sale":"soon"},
+      {"id":"high_roller","tier":null,"priceSp":40,"grants":["discord.high_roller"],"owned":null,"sale":"on"},
+      {"id":"flashes_v2","tier":null,"priceSp":30,"grants":["fx.flash.drift_bounce","fx.flash.pendulum"],"owned":null,"sale":"on"},
+      {"id":"bubbles_v2","tier":null,"priceSp":30,"grants":["fx.bubble.rain","fx.bubble.spiral_in"],"owned":null,"sale":"on"},
+      {"id":"rt_bundle_1","tier":null,"priceSp":1200,"grants":["rt.original.01","rt.original.02","rt.original.03"],"owned":null,"sale":"soon"},
+      {"id":"rt_bundle_2","tier":null,"priceSp":3600,"grants":["rt.original.00","rt.original.04","rt.original.05","rt.original.06"],"owned":null,"sale":"soon"},
+      {"id":"rt_bundle_3","tier":null,"priceSp":9000,"grants":["rt.original.00","rt.original.07","rt.original.08","rt.original.09","rt.original.10"],"owned":null,"sale":"soon"}
+     ]
+    }
+   ]
+  }
+ ]
+}
