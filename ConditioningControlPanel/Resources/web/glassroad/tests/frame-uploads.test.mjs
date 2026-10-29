@@ -60,7 +60,7 @@ test('moving machinery instances equal their source world matrices while unmoved
   const check = () => {
     scene.updateMatrixWorld(true);
     for (const batch of batches) {
-      const sources = []; view.group.traverse(o => { if (o.isMesh && !o.isInstancedMesh && o.material === batch.material) sources.push(o); });
+      const sources = []; view.group.traverse(o => { if (o.isMesh && !o.isInstancedMesh && o.geometry === batch.geometry && o.material === batch.material) sources.push(o); });
       sources.forEach((src, i) => assert.deepEqual([...batch.instanceMatrix.array.subarray(i * 16, i * 16 + 16)], [...new Float32Array(src.matrixWorld.elements)]));
     }
   };
