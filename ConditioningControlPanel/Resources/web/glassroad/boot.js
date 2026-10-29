@@ -76,6 +76,7 @@ import { createSongCache } from './audio/songCache.js';
 import { createHud } from './hud/hud.js';
 import { createDirectionWarning } from './hud/direction.js';
 import { createWordRun } from './sim/words.js';
+import { createWordCoins, coinTuning } from './sim/wordCoins.js';
 import { createAirWordRun, bindAirWords } from './sim/airWords.js';
 import { createSongCueRun } from './sim/songCues.js';
 import { createFlashBurst } from './fx/flashBurst.js';
@@ -566,7 +567,24 @@ async function boot(course, options, lifetime, isCurrent) {
     if (!e.song || !words) return;
     wordCount.pop(!!feel.get('gentle.on'), { gate: true });
     if (online) online.s.wordPop(words.pops + world.phraseGates.stats.hits);
+    if (coinC.popBubbles) coinSink();
   });
+  // WORD COINS (playtest 2026-10-28, sim/wordCoins.js): lit road words driven over count up to the cap, each point a
+  // little top speed (P.topBonus, sim/racers.js), a landed hit drops a few. Solo only unless feel wordCoins.online:
+  // online keeps today's rules until the room rollout. render/roadWords.js calls coinSink; hud/wordCount.js draws.
+  const coinC = coinTuning(feel), coins = createWordCoins(coinC);
+  const coinsLive = () => !!coinC.on && (!online || !!coinC.online);
+  function coinNote(delta) {
+    if (P) P.topBonus = coins.topMul();
+    bus.emit('word-coins', { count: coins.count, cap: coins.cap, delta, show: coinsLive() && !!words });
+  }
+  function coinSink() {
+    if (!coinsLive() || !race || race.phase !== 'racing' || !coins.add()) return false;
+    coinNote(1); return true;
+  }
+  bus.on('hitter-hit', ({ racer } = {}) => { if (coinsLive() && P && racer === P.i && coins.hit()) coinNote(-1); });
+  Object.defineProperty(debug, 'wordCoins', { get: () => ({ count: coins.count, live: coinsLive(), top: coins.topMul(),
+    road: world.roadWords?.stats?.() || null }) });
   const garage = shared.garage ||= await createGarage({ art: shared.garageArt, renderer, canvas,
     track: trackName, laps, trackId: track.id, online: course.online });
   if (!lifetime.alive) { garage?.dispose(); return; }
@@ -892,6 +910,7 @@ async function boot(course, options, lifetime, isCurrent) {
     racers.interpolate(1);
     cam.snap(P.view, track, renderer.aspect);
     finishAt = 0; result = null; debug.result = null; debug.place = 0;
+    coins.reset();
     armWords();
   }
   /** Song lettering when available; the automatic aerial route also works without a recording. */
@@ -905,15 +924,17 @@ async function boot(course, options, lifetime, isCurrent) {
     } else if (airSong !== song) {
       airSong = song; airWords.setSong(song);
     }
-    if (!song || !song.words.length) { words = null; wordCount.show(false); return; }
+    if (!song || !song.words.length) { words = null; wordCount.show(false); coinNote(0); return; }
     if (!words || words.song !== song) {
       words = createWordRun(song, track, { seed, songGates: true }); words.song = song;
       words.onPop((e) => {
         bus.emit('word-pop', e); wordCount.pop(!!feel.get('gentle.on'), e);
         if (online && words) online.s.wordPop(words.pops + world.phraseGates.stats.hits);
+        if (coinC.popBubbles) coinSink();
       });
     } else words.reset(seed);
-    wordCount.show(true);
+    wordCount.show(!coinsLive());                 // word coins replace the "7 / 20 words" counter while they count
+    coinNote(0);
   }
   /**
    * Start the race song: the first chart in CHARTS that loads. align(song) -> the song position to hear now, so
@@ -954,7 +975,7 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     } finally { if (my === songToken) debug.songLoading = false; }
   }
-  function stopSong() { songToken++; debug.songLoading = false; if (audio.music) audio.music.stop(); words = null; airWords?.reset(); songCues?.dispose(); songCues = null; wordCount.show(false); }
+  function stopSong() { songToken++; debug.songLoading = false; if (audio.music) audio.music.stop(); words = null; airWords?.reset(); songCues?.dispose(); songCues = null; wordCount.show(false); coinNote(0); }
   // Unlock and decode silently behind the cover. Only the race schedules a music voice.
   async function menuSong() {
     if (!lifetime.alive || !['boot', 'menu'].includes(state) || debug.songLoading) return;
@@ -1693,6 +1714,7 @@ async function boot(course, options, lifetime, isCurrent) {
       ghostToState(ghostSample(ghost, ghostT, ghostPose), ghostView.st);
       ghostKarts[0] = kartViews[0]; shownKarts = ghostKarts;
     }
+    world.roadWords?.setCoins?.(coinsLive() ? coinSink : null);   // word coins: solo unless wordCoins.online
     world.update({ kart: P.view, karts: shownKarts, fx: viewFx, timeS: renderTime, beat: clock.beat, motion: opts?.motion || 'full',
         raceTimeS: racers.clockS, sectionIdx: viewSection, items: iv, mode, camera: cam.camera, paused, gentle: cueSafety.on, song, songS, audioReactive, words: wordLive, beatSong,
       airWords: inRace && !online ? airWords : null,

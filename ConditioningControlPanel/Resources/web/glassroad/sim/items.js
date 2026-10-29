@@ -26,6 +26,8 @@ const VIEW_KINDS = { full: 1, mild: 1 };
 export function createItems(track, feel, events, { seed = 1 } = {}) {
   const L = track.lengthM;
   const g = (k) => feel.get('items.' + k);
+  // solo pickup-bubble kick (playtest 2026-10-28, sim/wordCoins.js): [amount, holdS] or null for the items.* numbers
+  const coinKick = () => { try { return feel.get('wordCoins.on') ? [feel.get('wordCoins.bubbleAmount'), feel.get('wordCoins.bubbleHoldS')] : null; } catch { return null; } };
   const pathFrame = (s, seg, out) => track.pathFrameAt ? track.pathFrameAt(s, seg, out) : track.frameAt(s, out);
   const forkOf = seg => track.forkAtSeg?.(seg) || null;
   function pathGap(s, seg, targetS, targetSeg) {
@@ -306,7 +308,8 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
         events.emit('item-box', { racer: r.i, box: i, p: b.v.p.slice() });
       } else if (near(r, b.s, b.x, bubbleR)) {
         b.downT = g('bubbleRespawnS'); b.upT = 0;
-        grantBoost(r.st, g('bubbleAmount'), g('bubbleHoldS'), 'bubble', feel, sink(r.i));
+        const kick = coinKick();   // playtest 2026-10-28: the solo kick is felt (feel.json wordCoins)
+        grantBoost(r.st, kick ? kick[0] : g('bubbleAmount'), kick ? kick[1] : g('bubbleHoldS'), 'bubble', feel, sink(r.i));
         pop('bubble', 'bubble', b.s, b.x);
         events.emit('bubble-pop', { racer: r.i, i, p: b.v.p.slice() });
       }
