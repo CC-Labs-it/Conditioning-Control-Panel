@@ -221,6 +221,14 @@ public class GlassroadHostTests
         => Assert.Null(GlassroadRules.SparklesClaimFor(Result("trial", place: 1, of: 1, laps: 1, medal: "gold")));
 
     [Fact]
+    public void Trial_LongerThanFullLength_ClaimsNothing()
+        => Assert.Null(GlassroadRules.SparklesClaimFor(Result("trial", place: 1, of: 1, laps: 5, medal: "gold")));
+
+    [Fact]
+    public void Race_LongerThanFullLength_ClaimsFullLength()
+        => Assert.Equal(3, (int)GlassroadRules.SparklesClaimFor(Result("race", laps: 5))!.Detail["laps"]!);
+
+    [Fact]
     public void Online_CarriesTheRoomAsProof()
     {
         var c = GlassroadRules.SparklesClaimFor(Result("online", place: 1, of: 6, roomId: "abc123def456"))!;
