@@ -98,15 +98,22 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
     return { group, slots };
   }
 
-  let swapSeq = 0;
+  // `wanted` is the model's last focus. While a tab is still loading, focus() only records it (the old shelves must
+  // not take it), and showTab applies it once the new shelves exist.
+  let swapSeq = 0, swapping = false, wanted = null;
   async function showTab(tabId, tabShelves) {
     const seq = ++swapSeq, places = layoutTab(tabShelves);
-    const built = await Promise.all(usedBays(tabShelves).map((b) => buildShelf(b, places.filter((p) => p.bay === b))));
+    swapping = true;
+    let built;
+    try { built = await Promise.all(usedBays(tabShelves).map((b) => buildShelf(b, places.filter((p) => p.bay === b)))); }
+    catch (e) { if (seq === swapSeq) swapping = false; throw e; }
     if (seq !== swapSeq) { built.forEach((s) => disposeShelf(s)); return; }     // a newer tab won the race
+    swapping = false;
     const outgoing = [...shelves.values()];
     clearFocus();
     shelves = new Map(built.map((s) => [s.group.userData.bay, s]));
     built.forEach((s) => scene.add(s.group));
+    if (wanted) focus(wanted.bay, wanted.slot);
     if (!opened) opened = t || 1e-6;
     const leave = () => outgoing.forEach((s) => { scene.remove(s.group); disposeShelf(s); });
     const wait = hooks.onShelvesSwap?.({ tabId, outgoing: outgoing.map((s) => s.group), incoming: built.map((s) => s.group) });
@@ -135,6 +142,8 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
   }
 
   function focus(bay, slot) {
+    wanted = bay == null ? null : { bay, slot };
+    if (swapping) return false;
     const s = shelves.get(bay), j = slotIndex(slot), e = s?.slots.get(j);
     if (!e) return false;
     if (focused !== e) {
