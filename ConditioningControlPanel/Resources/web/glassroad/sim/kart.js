@@ -47,6 +47,7 @@ import { lipLeave, broadPlatformEdgeKick, platformHopUp, fieldAtS } from './ston
 import { armGlide, glideGravity, resetGlide } from './glide.js';
 import { aerialGapAt } from '../track/aerial.js';
 import { airWordQuery, resetAirWords, stepAirWords } from './airWords.js';
+import { pistonHopUp } from '../track/movingHazards.js';
 
 export { applyBoost };
 
@@ -197,7 +198,7 @@ export function step(st, a, track, feel, dt, ev) {
     // Large challenge islands give a deliberate jump more hang time; coasting keeps its small lip kick.
     const platformUp = qa.airWord ? Math.max(10.5, feel.get('hop.upMps'))
       : platformHopUp(track, qa, Math.abs(speed), feel.get('hop.upMps'), feel.get('hop.gravityMps2'));
-    v3addScaled(V, V, qa.normal, platformUp - feel.get('hop.upMps'));
+    v3addScaled(V, V, qa.normal, pistonHopUp(track, qa, speed, platformUp, V) - feel.get('hop.upMps'));
     if (st[S.airborne] && (qa.surface === 'stream' || qa.surface === 'pool')) ev.emit('water-hop', { s: qa.s, x: qa.lateral, speed: Math.abs(speed), down: 0, kind: 'hop', p: [...P], normal: [...qa.normal] });
     armGlide(st, track, qa, V);
     maybeStartDrift(st, a, feel, speed, ev);
