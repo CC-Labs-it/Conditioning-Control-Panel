@@ -130,3 +130,16 @@ body.garage-open .gr-touch{display:none}
 /* phone: the map sits in the shot's bottom-right corner, clear of the mode pill (margin % is of the tile width) */
 @media(max-width:699px){#race-garage .g-track-tile{padding:0}.g-track-tile .g-course-text{padding:7px 9px 9px}.g-course-map{width:42%;right:6px;top:0;margin-top:calc(35.72% - 16px)}.g-track-tile .g-course-mode{left:6px;top:6px;font-size:8px;padding:2px 6px}}
 @media(max-height:580px) and (min-width:700px){.g-course-shot{aspect-ratio:21/9}.g-track-tile .g-course-text{padding:7px 12px 9px}}
+
+/* Theme and default lyrics remain readable before picking a course. */
+#race-garage .g-course-theme{display:table;margin-top:6px;padding:3px 8px;border:1px solid currentColor;border-radius:999px;font-size:12px;line-height:1.3;color:#fff4df;background:#123541}
+#race-garage .g-course-lyrics{display:block;margin-top:5px;white-space:normal;font-size:11px;line-height:1.4;color:#b7e7dc}
+/* Course media lives beside the race choice, with independent buttons below each preview. */
+.g-course-card{min-width:0;border-radius:13px;background:#102d39;box-shadow:0 4px #091522;overflow:hidden}.g-course-card .g-track-tile{width:100%;box-sizing:border-box;box-shadow:none!important}.g-course-media{padding:9px 13px 13px}.g-course-media p{margin:0 0 7px;font-size:12px;line-height:1.4;color:#b1ded8;overflow-wrap:anywhere}.g-course-media .g-course-song{color:#fff4df}
+#race-garage .g-course-customize{min-height:38px;width:100%;padding:8px 12px;background:#8ee8d1;color:#102d39;border:2px solid #0b1420;border-radius:8px;font-size:13px}
+#race-garage .g-main-media{grid-column:1/-1;min-height:65px;background:#173c49;border:2px solid #8ee8d1;grid-template-columns:1fr auto}.g-main-media small{display:block!important;white-space:normal;overflow-wrap:anywhere}.g-main-media b{color:#8ee8d1}
+.g-media-picker{width:min(650px,calc(100vw - 24px))}.g-media-picker section{padding:12px 0;border-top:1px solid #53838b}.g-media-picker h3{margin:0 0 9px;font-size:17px}.g-media-picker p{color:#b1ded8;font-size:12px;line-height:1.5}.g-media-sources,.g-media-chips,.g-media-songs{display:flex;gap:8px;flex-wrap:wrap}.g-media-songs p{width:100%;margin:0}.g-media-picker .g-media-song-note{margin-bottom:0}
+#race-garage .g-media-picker section button{min-height:40px;padding:8px 12px;border:2px solid #0b1420;border-radius:999px;background:#102d39;color:#fff4df;font-size:13px;box-shadow:0 2px #091522}#race-garage .g-media-picker section button[aria-pressed=true]{background:#8ee8d1;color:#102d39}#race-garage .g-media-picker button:focus-visible,#race-garage .g-course-customize:focus-visible{outline:3px solid #ffce62;outline-offset:2px}
+@media(max-width:699px){.g-course-media{padding:8px}.g-course-media p{font-size:11px}#race-garage .g-main-media{min-height:58px;padding:7px 10px}.g-main-media small{font-size:10px}}
+.g-main-media small{max-width:none;line-height:1.3}#race-garage .g-media-picker section button:disabled{opacity:.45;cursor:default}
+@media(max-width:699px) and (orientation:portrait){.g-selector{bottom:calc(354px + env(safe-area-inset-bottom))}.g-main-media small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.g-main-media>span{min-width:0}}

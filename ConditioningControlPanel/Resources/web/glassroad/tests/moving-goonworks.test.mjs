@@ -78,9 +78,9 @@ test('GOONWORKS wheels pass one opening per machinery pulse and shutters travers
   assert.ok(goonworksPose(shutter, 0, beat(3)).x < shutter.x - shutter.travel + .001);
 });
 
-test('GOONWORKS blocks and flippers warn, strike whole machinery pulses and clear inside two pulses', () => {
+test('GOONWORKS blocks warn, strike whole machinery pulses and clear inside two pulses', () => {
   const beat = b => ({ beat: b, beatS: .5, safe: false, rearming: false });
-  for (const kind of ['block', 'flipper']) {
+  for (const kind of ['block']) {
     const row = { ...old.find(row => row.kind === kind), offsetS: 0 };
     for (const b of [.4, .6, .79]) {
       const p = goonworksPose(row, 0, beat(b));

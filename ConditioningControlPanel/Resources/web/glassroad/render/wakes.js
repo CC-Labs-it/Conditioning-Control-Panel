@@ -63,7 +63,7 @@ export function createWakes(feel, count = 8, art = currentArt(), { waterAt = nul
   const tmp = new Vector3(), right = new Vector3(), cc = new Color();
 
   function colourOf(bk) {
-    // polish 4: drift tier boosts wear the tier colour (blue, orange, pink) like the sparks and skid marks
+    // polish 4: drift tier boosts wear the tier colour (pink, white, gold) like the sparks and skid marks
     return bk >= BOOST.DRIFT1 && bk <= BOOST.DRIFT3 ? tierColour(bk - BOOST.DRIFT1 + 1, p4Look(LOOK)) : bk === BOOST.LAUNCH ? LOOK.launchTrail : LOOK.padTrail;
   }
 

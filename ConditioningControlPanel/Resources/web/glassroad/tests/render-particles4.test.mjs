@@ -33,11 +33,14 @@ test('lens: the player aura is a see-through shell; speed streaks are short dash
 });
 const tanV = Math.tan((62 / 2) * Math.PI / 180), tanH = tanV * 16 / 9;
 
-test('p4: drift tiers wear blue, orange, pink; a slide with no tier is pale', () => {
-  const [b, o, p] = [1, 2, 3].map((t) => hueOf(tierColour(t)));
-  assert.ok(b > 190 && b < 240, 'blue ' + b);
-  assert.ok(o > 15 && o < 45, 'orange ' + o);
-  assert.ok(p > 290 && p < 340, 'pink ' + p);
+test('p4: drift tiers wear the HUD pip fills in the kit order, pink, white, gold; a slide with no tier is pale', () => {
+  const kit = readFileSync(new URL('../hud/kit.js', import.meta.url), 'utf8').match(/pips: \[([^\]]+)\]/)[1].match(/drift-pip-\w+/g);
+  const pip = (id) => readFileSync(new URL('../art/ui/' + id + '.svg', import.meta.url), 'utf8').match(/fill="(#[0-9a-f]{6})"/i)[1].toLowerCase();
+  assert.equal(kit.length, 3);
+  assert.deepEqual([1, 2, 3].map((t) => tierColour(t).toLowerCase()), kit.map(pip), 'sparks match the pip each tier lights');
+  const [p, g] = [1, 3].map((t) => hueOf(tierColour(t)));
+  assert.ok(p > 300 && p < 345, 'pink ' + p);
+  assert.ok(g > 30 && g < 55, 'gold ' + g);
   assert.equal(tierColour(0), P.slideColour);
   assert.equal(tierColour(7), tierColour(3));
   assert.equal(p4Look({ p4: { slideColour: '#000000' } }).slideColour, '#000000');

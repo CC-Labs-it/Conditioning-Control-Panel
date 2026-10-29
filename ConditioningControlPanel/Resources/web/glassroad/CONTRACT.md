@@ -261,6 +261,10 @@ has a default pick (`TRACK_NICHES`, one to four catalog ids); the player's own p
 `glassroad.niches.v1`. Page -> host `scrolller-niches { track, niches: [id] }` on every course load and every chip
 press; the host answers with a fresh `scrolller-feed` drawn from those subs and may add `catalog: [{ id, label }]`
 (the chips the Options card draws while the switch is on). No catalog, no chips.
+My files (2026-10-28, `host/localLibrary.js`): the Options Pictures row picks Scrolller, My files or Off. My files
+turns the race's Scrolller switch off (`set-setting` false, so the host fetches nothing) and shows the player's own
+pictures and clips as `blob:` urls on the same display-only screens and flash stills, with no credit. No new
+message: files never cross the bridge or the room. Only the choice is kept (`glassroad.mediaSource.v1`).
 
 ## 8. Events (the 10 juice beats)
 

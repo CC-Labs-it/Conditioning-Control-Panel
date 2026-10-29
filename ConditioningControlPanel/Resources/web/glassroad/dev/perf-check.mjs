@@ -176,7 +176,7 @@ async function run(backend, httpPort) {
       await sleep(1000);
       const s = await state();
       const n = await ev('window.__perf.gaps.length');
-      if (s) stats.push({ dc: s.drawCalls, tri: s.triangles, n, gpu: s.gpu, tier: s.tier, scale: s.renderScale, phase: s.phase });
+      if (s) stats.push({ dc: s.drawCalls, tri: s.triangles, n, gpu: s.gpu, tier: s.tier, scale: s.renderScale, phase: s.phase, s: s.s, lap: s.lap, lengthM: s.lengthM });
       if (s && s.phase === 'failed') break;
       prev = s;
     }
@@ -190,6 +190,8 @@ async function run(backend, httpPort) {
       gapMedianMs: r1(fpsGap), gapP95Ms: r1(pct(m.gaps, 0.95)), fpsUncapped: fpsGap ? Math.round(1000 / fpsGap) : 0,
       fpsMean: m.gaps.length ? Math.round(m.gaps.length * 1000 / m.gaps.reduce((x, y) => x + y, 0)) : 0,
       drawCalls: Math.round(dc), triangles: Math.round(tri), gpu: stats.length ? stats[stats.length - 1].gpu : null, tier: prev && prev.tier, renderScale: prev && prev.renderScale, phase: prev && prev.phase,
+      // metres along the course in the measured window (lap wraps counted by the course length the page reports)
+      ...(stats.length > 1 && stats[0].s != null ? { sFromM: Math.round(stats[0].s), sToM: Math.round(stats[stats.length - 1].s), metresM: Math.round(stats[stats.length - 1].s - stats[0].s + ((stats[stats.length - 1].lap || 0) - (stats[0].lap || 0)) * (stats[0].lengthM || 0)), windowS: stats.length - 1 } : {}),
     };
     try { await c.send('Browser.close'); } catch (e) { /* closing */ }
   } catch (e) {

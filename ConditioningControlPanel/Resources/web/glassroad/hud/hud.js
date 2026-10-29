@@ -23,8 +23,11 @@
  * Feel wave (2026-10-26): the HUD turns landed item and trap hits into hitter-hit {racer, hitter, from} on the bus
  * (sim/hitterHit.js; `racers` getter option for the bearing, else from is null); the item chip answers a hit the
  * player lands and the lap chip pulses on every lap (hud/hudPulse.js, by the Motion option).
+ * Playtest fixes (2026-10-28): a held item shows its fire key on the slot (hud/labels.js itemKey, by device) and the
+ * first pickup of a session names both moves once (itemTip); the km/h readout shows only with the speedo option on;
+ * a small Autopilot chip at the bottom centre shows while the assist drives (bus 'autopilot' { on, kind }).
  */
-import { formatTime, ordinal, iconOf, itemName, rollFrame, racerLabels, ICON_IDS } from './format.js';
+import { formatTime, ordinal, iconOf, itemName, rollFrame, racerLabels, ICON_IDS, shownKmh } from './format.js';
 import { slotState, slotMoment, gentleMoment, pipMoment, USED_S, PIP_OUT_S } from './slotMath.js';
 import { createMinimap } from './minimap.js';
 import { createCards } from './cards.js';
@@ -34,11 +37,15 @@ import { createItemFeel, ITEM_FEEL_MARKUP } from './itemFeel.js';
 import { toastDecide, PRIORITY } from '../fx/itemFeelMath.js';
 import { wireHitterHit } from '../sim/hitterHit.js';
 import { playPulse } from './hudPulse.js';
+import { itemKey, itemTip } from './labels.js';
+import { P4_LOOK } from '../render/atlas.js';
 
 export { formatTime };
 
 const NAMES = ['race', 'online', 'options', 'controls', 'back', 'resume', 'restart', 'quit', 'again', 'menu', 'option', 'item', 'start'];
 const TOAST_S = 1.6, TOAST_GAP_S = 0.6;
+/** The first-pickup tip stays up longer than a race toast: it is read, not glanced at. */
+const TIP_S = 3.2;
 
 /** @returns {Hud} */
 export function createHud({ root, card }, feel, bus, { doc = globalThis.document, now = () => performance.now(), devices = sharedDevices, photosafe = null, racers = null } = {}) {
@@ -48,13 +55,14 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     '<div class="hud-race">' +
       '<div class="hud-tl"><span class="hud-lap"></span><i class="hud-div" aria-hidden="true"></i><span class="hud-time"></span><span class="hud-best"></span></div>' +
       '<button type="button" class="hud-item empty" data-state="empty" tabindex="-1" aria-label="Item"><i class="hud-item-core"></i><i class="hud-item-ring"></i>' +
-        '<img class="hud-item-icon" alt="" draggable="false" hidden><img class="hud-item-ghost" alt="" draggable="false" hidden><i class="hud-item-flare"></i></button>' +
+        '<img class="hud-item-icon" alt="" draggable="false" hidden><img class="hud-item-ghost" alt="" draggable="false" hidden><i class="hud-item-flare"></i><b class="hud-item-key" aria-hidden="true" hidden></b></button>' +
       '<div class="hud-pop" aria-hidden="true"><i></i><i class="r2"></i></div>' +
       '<div class="hud-mapbox"><canvas class="hud-map" aria-hidden="true"></canvas></div>' +
       '<div class="hud-place" aria-live="polite" hidden><img class="hud-place-art" alt="" draggable="false" hidden><b></b><sup></sup><small></small></div>' +
       '<span class="hud-pips"><i></i><i></i><i></i></span>' +
-      '<span class="hud-speed"><b>0</b> km/h</span>' +
+      '<span class="hud-speed" hidden><b>0</b> km/h</span>' +
       '<div class="hud-toast" role="status"></div>' + ITEM_FEEL_MARKUP +
+      '<div class="hud-auto" role="status" aria-hidden="true"><span>Autopilot</span></div>' +
       '<div class="hud-direction" role="status" aria-live="polite" aria-hidden="true"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M8 26V13a8 8 0 0 1 16 0v8m-5-5 5 5 5-5"/></svg><span>Wrong way<small>Turn around</small></span></div>' +
     '</div>' +
     '<div class="hud-count" aria-hidden="true"><img class="hud-count-flag" alt="" draggable="false" hidden><span></span></div>' +
@@ -66,7 +74,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     lap: $('.hud-lap'), time: $('.hud-time'), best: $('.hud-best'), count: $('.hud-count'), countN: $('.hud-count span'),
     flag: $('.hud-count-flag'), speed: $('.hud-speed b'), go: $('.hud-go'),
     pips: [...root.querySelectorAll('.hud-pips i')], pipRow: $('.hud-pips'), item: $('.hud-item'), icon: $('.hud-item-icon'), ghost: $('.hud-item-ghost'),
-    pop: $('.hud-pop'), speedBox: $('.hud-speed'),
+    pop: $('.hud-pop'), speedBox: $('.hud-speed'), itemKey: $('.hud-item-key'), auto: $('.hud-auto'),
     place: $('.hud-place'), placeArt: $('.hud-place-art'), placeN: $('.hud-place b'), placeSuf: $('.hud-place sup'), placeOf: $('.hud-place small'),
     toast: $('.hud-toast'), note: $('.hud-note'), direction: $('.hud-direction'),
   };
@@ -110,24 +118,29 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
   // a one-shot class (polish 6): removed and re-added so the same moment can play twice in a row
   const MOMENTS = ['m-catch', 'm-land', 'm-use', 'm-drop', 'm-soft', 'm-use-soft'];
   const play = (node, cls, all = [cls]) => { node.classList.remove(...all); void node.offsetWidth; node.classList.add(cls); };
-  let usedUntil = 0, usedId = null, pipTier = 0, pipsOutUntil = 0;
+  let usedUntil = 0, usedId = null, pipTier = 0, pipsOutUntil = 0, tipShown = false;
+  const opt = (k) => { const o = cards.options; return o ? o[k] : undefined; };
+  const motionOf = () => opt('motion') || 'full';
 
   /**
-   * A short slip under the item slot. msg: a string, or parts [{ text, cls?, colour? }] (item feel). opts.priority
+   * A short paper slip in the race band, well clear of the item slot (playtest: a "Slipstream" slip under an empty
+   * slot read as the slot's name). Only the first-pickup tip (group 'tip') sits under the slot, since it is about it.
+   * msg: a string, or parts [{ text, cls?, colour? }] (item feel). opts.priority
    * (fx/itemFeelMath.js PRIORITY), opts.group (the same group replaces itself at once), opts.tone (CSS look).
    */
-  function toast(msg, { priority = PRIORITY.info, group = '', tone = '' } = {}) {
+  function toast(msg, { priority = PRIORITY.info, group = '', tone = '', holdS = TOAST_S } = {}) {
     const t = now() / 1000;
     let minShowS = TOAST_GAP_S;
     try { const v = Number(feel.get('itemFeel.toastMinShowS')); if (v > 0) minShowS = v; } catch (e) { /* older feel */ }
     const showing = el.toast.classList.contains('on') && t < toastUntil ? toastCur : null;
     if (toastDecide(showing, { priority, group }, t, { minShowS }) === 'wait') {
-      if (!pending || pending.opts.priority <= priority) pending = { msg, opts: { priority, group, tone } };
+      if (!pending || pending.opts.priority <= priority) pending = { msg, opts: { priority, group, tone, holdS } };
       return;
     }
     if (pending && pending.opts.priority <= priority && pending.opts.group === group) pending = null;
-    toastUntil = t + TOAST_S; toastCur = { priority, group, at: t, until: toastUntil };
+    toastUntil = t + holdS; toastCur = { priority, group, at: t, until: toastUntil };
     paintToast(msg, tone);
+    if (group === 'tip') el.toast.dataset.at = 'slot'; else delete el.toast.dataset.at;
     const bump = !!(showing && tone && !gentleOn());
     el.toast.classList.remove('bump');
     if (bump) { void el.toast.offsetWidth; el.toast.classList.add('bump'); }
@@ -192,19 +205,29 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     bus.on('item-refused', ({ racer }) => { if (racer === 0) toast('Not by the edge', { priority: PRIORITY.note }); }),
     // item feel: confirm, blocked and taken toasts, the hit marker, the stamp and the edge flash (hud/itemFeel.js)
     bus.on('item-hit', (p) => itemFeel.hit(p || {})),
+    // the assist took the wheel or the throttle (boot.js, transitions only): a chip says so while it lasts
+    bus.on('autopilot', ({ on } = {}) => setAuto(!!on)),
     bus.on('tether-hook', (p) => itemFeel.hook(p || {})),
   ];
-  const colours = () => feel.get('juice.sparkColours');
+  const colours = () => P4_LOOK.tierColours;   // the wheel sparks' tier colours (pink, white, gold), so pips and sparks agree
   function pulse(node, kind, key) {
     let ms = 0; try { ms = feel.get(key); } catch { ms = 0; }
-    playPulse(node, kind, ms, (cards.options && cards.options.motion) || 'full', gentleOn());
+    playPulse(node, kind, ms, motionOf(), gentleOn());
+  }
+  /** The Autopilot chip: IN rises and fades, OUT sinks and fades; Motion Less / Off and Gentle keep the fade only. */
+  function setAuto(on) {
+    if (last.auto === on) return;
+    last.auto = on;
+    el.auto.dataset.motion = gentleOn() ? 'off' : motionOf();
+    if (on) el.auto.classList.add('on'); else el.auto.classList.remove('on');
+    el.auto.setAttribute('aria-hidden', String(!on));
   }
   function pips(tier) {
     const c = colours(), t = Math.max(0, Math.min(3, tier | 0));
     const m = pipMoment(pipTier, t);
     pipTier = t;
     if (t > 0) { pipsOutUntil = 0; el.pipRow.classList.remove('out', 'out-soft'); }
-    // every lit pip wears the CURRENT tier colour (the spark colour), so the row reads blue, orange, pink
+    // every lit pip wears the CURRENT tier colour (the spark colour), so the row reads pink, white, gold
     el.pipRow.style.setProperty('--tier', c[t - 1] || '#fff');
     el.pips.forEach((p, i) => { p.classList.toggle('on', i < t); p.style.setProperty('--pip', c[i] || '#fff'); });
     if (m.pop >= 0 && el.pips[m.pop]) play(el.pips[m.pop], gentleOn() ? 'pop-soft' : 'pop', ['pop', 'pop-soft']);
@@ -237,6 +260,10 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
       el.icon.hidden = !id;
       el.item.setAttribute('aria-label', state === 'ready' && id ? 'Use ' + itemName(id) : 'Item');
     }
+    // the fire key rides on the slot only while there is something to fire; the device used last names it
+    const key = state === 'ready' && id ? itemKey(devices) : '';
+    if (key !== last.key) { last.key = key; el.itemKey.textContent = key; el.itemKey.hidden = !key; }
+    if (key && !tipShown) { tipShown = true; toast(itemTip(devices), { priority: PRIORITY.note, group: 'tip', holdS: TIP_S }); }
   }
 
   function setPlace(place, count) {
@@ -272,7 +299,10 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     put('lap', el.lap, 'Lap ' + Math.min(lap + 1, L) + '/' + L);
     put('time', el.time, formatTime(timeS));
     put('best', el.best, bestLapS > 0 ? 'best ' + formatTime(bestLapS) : '');
-    put('speed', el.speed, String(Math.round(Math.max(0, speedPct) * feel.get('speed.topMps') * 3.6)));
+    // playtest 2026-10-28: a number read slower than the road felt; the readout is opt-in (Options, speedo)
+    const speedo = opt('speedo') === true;
+    if (last.speedo !== speedo) { last.speedo = speedo; el.speedBox.hidden = !speedo; }
+    if (speedo) put('speed', el.speed, String(shownKmh(speedPct, feel)));
     const n = countdown || countN;
     const countText = n > 0 ? String(n) : '';
     put('count', el.countN, countText);
@@ -311,7 +341,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     if (kind === 'menu') root.dataset.screen = 'menu';
     else if (kind === 'results') root.dataset.screen = 'results';
     else if (!kind || kind === 'start') root.dataset.screen = 'race';
-    if (kind === 'menu' || kind === 'start') { last.place = 0; leader = -1; el.place.hidden = true; itemFeel.reset(); }
+    if (kind === 'menu' || kind === 'start') { last.place = 0; leader = -1; el.place.hidden = true; itemFeel.reset(); setAuto(false); }
     cards.show(kind, data);
   }
 
@@ -330,6 +360,8 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     setTrack(t) { map.setTrack(t || {}); cards.setTrack?.(t); },
     /** The host's Gentle switch: the options card shows Gentle preview locked on. */
     setHostGentle(on) { cards.setHostGentle(on); },
+    /** The device behind the tier and its auto pick ({ device, autoTier }): the options card's Quality hint. */
+    setDevice(v) { cards.setDevice?.(v); },
     /** The host's Scrolller consent ({ on }) for the Online pictures switch; null hides it. */
     setScrolller(state) { cards.setScrolller(state); },
     /** The saved options, for boot to apply at load. */
