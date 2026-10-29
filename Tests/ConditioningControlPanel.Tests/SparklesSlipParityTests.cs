@@ -19,6 +19,7 @@ public class SparklesSlipParityTests
         "arcademy",
         "dtrh",
         "intake",
+        "glassroad",
     };
 
     private const string File_ = "sparkles-slip.js";

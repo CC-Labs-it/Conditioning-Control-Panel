@@ -20,6 +20,7 @@
  */
 import { createBridge, songCharts, isLocalSongHost, wantLobbySongs, lobbySongCharts, ROOM_ORIGIN } from './host/bridge.js';
 import { createHostEscape } from './host/hostEscape.js';
+import { showSlip, hideSlip } from './sparkles-slip.js';
 import { createCardMedia, PHONE_READY_CLIPS } from './host/cardMedia.js';
 import { createScrolllerFeed } from './host/scrolllerFeed.js';
 import { loadCustomization, saveCustomization, selectedSongCharts } from './host/courseCustomization.js';
@@ -154,6 +155,9 @@ shared.feelTask = Promise.all([loadFeel(), loadFonts()]).then(([feel]) => {
   shared.baseFeel = feel.toJSON(); shared.feel = feel; shared.gentle = createGentle(feel); return feel;
 });
 shared.bridge.on('gentle', m => { shared.hostGentle = m; });
+// SPARKLES BY PLACE (B1 W7): the desktop host's receipt for a finished race, bottom left of the results card
+// (styles.css moves it off the card); a new run takes it away. The website never sends one.
+shared.bridge.on('sparkles-receipt', showSlip);
 // The web host's Scrolller pictures (host/scrolllerFeed.js): display only. Built once so a feed
 // that lands before the first course is kept; the desktop host never sends one.
 shared.scrolllerFeed = createScrolllerFeed({ bridge: shared.bridge });
@@ -1088,6 +1092,7 @@ async function boot(course, options, lifetime, isCurrent) {
     garage?.setVisible(false); hud.setCard(null);
     introHud.style.visibility = 'hidden';
     canvas.focus({ preventScroll: true });
+    hideSlip();
     bridge.runStarted({ track: track.id, laps });
   }
   function toMenu() {
@@ -1233,6 +1238,7 @@ async function boot(course, options, lifetime, isCurrent) {
     // The song's zero is startAt for every seat; late joiners follow the shared race clock.
     const align = () => (s.serverNow() - s.startAt) / 1000;
     if (CHARTS.length) Promise.resolve(started).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
+    hideSlip();
     bridge.runStarted({ track: track.id, laps });
   }
   /** Back to the solo run (left, closed or aborted). showLobby: put the lobby card back when no card is up. */
