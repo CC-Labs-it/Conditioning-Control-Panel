@@ -70,12 +70,9 @@ export function boudoirWorldPlan(track) {
   const groundY = pointBounds.min[1] - 55, ceilingY = pointBounds.max[1] + 145;
   const roomW = pointBounds.max[0] - pointBounds.min[0] + 440, roomD = pointBounds.max[2] - pointBounds.min[2] + 440;
   const roomH = ceilingY - groundY;
-  // The whole course is inside a real room. Distant wall panels and a coffered ceiling give scale.
+  // Open the distant room panels to the musical sky, keeping the gold frame and local interiors.
   put('dressing-room-parquet', 'floor', [center[0], groundY - 4, center[2]], [roomW, 8, roomD]);
-  put('dressing-room-ceiling', 'cream', [center[0], ceilingY + 4, center[2]], [roomW, 8, roomD]);
   for (const side of [-1, 1]) {
-    put('dressing-room-wall', 'rose', [center[0] + side * roomW / 2, groundY + roomH / 2, center[2]], [8, roomH, roomD]);
-    put('dressing-room-wall', 'rose', [center[0], groundY + roomH / 2, center[2] + side * roomD / 2], [roomW, roomH, 8]);
     for (const y of [groundY + 18, groundY + 76, ceilingY - 17]) {
       put('room-gold-moulding', 'gold', [center[0] + side * (roomW / 2 - 6), y, center[2]], [3, 3, roomD]);
       put('room-gold-moulding', 'gold', [center[0], y, center[2] + side * (roomD / 2 - 6)], [roomW, 3, 3]);

@@ -248,7 +248,7 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
     pillar.position.set(Math.cos(a) * 39, 0, Math.sin(a) * 39); pillar.scale.set(2, 111, 2); core.add(pillar);
   }
   // The foundation opens below the islands: a textured floor, even far below, flattens their silhouette.
-  const low = Math.min(...samples.map((f) => f.p[1])) - 45, high = Math.max(...samples.map((f) => f.p[1])) + 65;
+  const low = Math.min(...samples.map((f) => f.p[1])) - 45;
   const boundaryPoints = [...samples.map(f => f.p), ...billboards.flatMap(b => rectPoints(b, 1)), ...landmarks.map(r => r.capsule.B)];
   const minX = Math.min(...boundaryPoints.map(p => p[0])) - 70, maxX = Math.max(...boundaryPoints.map(p => p[0])) + 70;
   const minZ = Math.min(...boundaryPoints.map(p => p[2])) - 70, maxZ = Math.max(...boundaryPoints.map(p => p[2])) + 70;
@@ -264,9 +264,7 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
   }
   const base = new Mesh(keepGeo(new ShapeGeometry(foundation).rotateX(-Math.PI / 2)), dark);
   base.name = 'mainframe-foundation'; base.position.y = low; group.add(base);
-  for (const [px, pz, sx, sz] of [[minX, (minZ + maxZ) / 2, 3, maxZ - minZ], [maxX, (minZ + maxZ) / 2, 3, maxZ - minZ], [(minX + maxX) / 2, minZ, maxX - minX, 3], [(minX + maxX) / 2, maxZ, maxX - minX, 3]]) {
-    const wall = new Mesh(geometry, dark); wall.position.set(px, (low + high) / 2, pz); wall.scale.set(sx, high - low, sz); group.add(wall);
-  }
+  // The outer enclosure stays open to the musical sky; local machine walls still frame the road.
   const tubes = track.sections.filter((s) => /canal|submerged|emerge/.test(s.id));
   const bubbleRows = [], bubbleGeo = keepGeo(new SphereGeometry(0.10, 10, 7));
   for (const section of tubes) {
