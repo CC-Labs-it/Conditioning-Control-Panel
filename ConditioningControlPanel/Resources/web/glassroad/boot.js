@@ -407,10 +407,10 @@ async function boot(course, options, lifetime, isCurrent) {
   // Scrolller switch is off, so the host fetches nothing. Kept across courses; only the choice survives a reload.
   const library = shared.library ||= createLocalLibrary();
   library.setFiles(shared.courseFiles[TRACK_ID] || []);
-  const coursePick = shared.coursePicks[TRACK_ID] ||= {};
-  if (!coursePick.source) coursePick.source = TRACK_ID === shared.initialCourse && shared.legacyFilesOn ? 'files' : 'scrolller';
-  shared.filesOn = coursePick.source === 'files';
   const consentOn = () => scrolller?.consent ?? init.caps.scrolller?.consent === true;
+  const coursePick = shared.coursePicks[TRACK_ID] ||= {};
+  if (!coursePick.source) coursePick.source = TRACK_ID === shared.initialCourse && shared.legacyFilesOn ? 'files' : consentOn() ? 'scrolller' : 'off';
+  shared.filesOn = coursePick.source === 'files';
   const pictures = feedSwitch(() => shared.filesOn ? library : coursePick.source === 'off' ? null : scrolller);
   const view = () => ({ on: consentOn(), track: trackName, niches: nichesFor(track.id), custom: !isDefault(track.id),
     catalog: scrolller?.catalog, source: shared.filesOn ? 'files' : consentOn() ? 'scrolller' : 'off', files: library.count });
@@ -430,7 +430,10 @@ async function boot(course, options, lifetime, isCurrent) {
   const pick = () => openFilePicker(files => { shared.courseFiles[TRACK_ID] = pickFiles(files); library.setFiles(shared.courseFiles[TRACK_ID]); if (lifetime.alive) refreshMedia(); });
   hud.setScrolller(view());
   if (scrolller) {
-    if (coursePick.source === 'scrolller') scrolller.setNiches(track.id, nichesFor(track.id));
+    if (coursePick.source === 'scrolller') {
+      scrolller.setNiches(track.id, nichesFor(track.id));
+      if (!consentOn()) scrolller.setConsent(true);
+    }
     else if (consentOn()) scrolller.setConsent(false);
     lifetime.defer(scrolller.subscribe(refreshMedia));
   }
@@ -575,7 +578,7 @@ async function boot(course, options, lifetime, isCurrent) {
       action: name => hud.menuAction(name), sound: name => { audio.start(); audio.cue(name); } });
     const mediaFor = id => {
       const saved = shared.coursePicks[id] || {}, local = shared.courseSongs[id];
-      return { source: id === TRACK_ID ? view().source : saved.source || 'scrolller',
+      return { source: id === TRACK_ID ? view().source : saved.source || (consentOn() ? 'scrolller' : 'off'),
         files: id === TRACK_ID ? library.count : Math.min(24, shared.courseFiles[id]?.length || 0), catalog: scrolller?.catalog || [], scrolllerAvailable: !!scrolller,
         niches: nichesFor(id), custom: !isDefault(id), songs: shared.songRows.map(({id,label}) => ({id,label})),
         songId: local ? 'file' : saved.songId || 'default',
@@ -1098,7 +1101,8 @@ async function boot(course, options, lifetime, isCurrent) {
     }).catch(() => []);
     extraSongs().then(list => {
       if (!lifetime.alive || !list.length) return;
-      if (wantLobbySongs({ search: location.search, charts: CHARTS })) CHARTS = list;
+      if (!wantLobbySongs({ search: location.search, charts: CHARTS })) return;
+      CHARTS = list;
       for (const url of list) void songCache.preload(url);
       if (audio.state !== 'running' || debug.songLoading || audio.music?.playing) return;
       if (state === 'boot' || state === 'menu') void menuSong();
