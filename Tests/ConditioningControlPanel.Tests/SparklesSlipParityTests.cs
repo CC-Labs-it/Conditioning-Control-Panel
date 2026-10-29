@@ -14,7 +14,12 @@ namespace ConditioningControlPanel.Tests;
 /// </summary>
 public class SparklesSlipParityTests
 {
-    public static readonly string[] Trees = { "arcademy", "dtrh", "intake" };
+    public static readonly string[] Trees =
+    {
+        "arcademy",
+        "dtrh",
+        "intake",
+    };
 
     private const string File_ = "sparkles-slip.js";
 
