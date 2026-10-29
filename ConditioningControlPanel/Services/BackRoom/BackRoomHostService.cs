@@ -453,9 +453,8 @@ internal static class BackRoomHostService
         if (_breakoutPage && (string?)message["type"] == "game-open") return;
         if (message["type"]?.Type == JTokenType.String && (string?)message["type"] == "breakout-wall")
         {
-            // SPARKLES BY PLACE (B1): one medal per cleared wall; the Story Demo claims nothing.
-            _ = Sparkles.SparklesPageResults.Send(Sparkles.SparklesPageResults.BreakoutWall(message,
-                demo: BreakoutAccess.Current(_breakoutPage && _breakoutDemo).Demo));
+            // SPARKLES BY PLACE (B1): one medal per cleared wall, the Story Demo included.
+            _ = Sparkles.SparklesPageResults.Send(Sparkles.SparklesPageResults.BreakoutWall(message));
             return;
         }
         if ((string?)message["type"] != "game-open") { _bridge?.Handle(message); return; }

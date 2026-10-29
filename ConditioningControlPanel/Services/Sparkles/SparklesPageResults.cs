@@ -13,7 +13,7 @@ public sealed record SparklesPageClaim(string Game, string Mode, SparklesResult 
 /// SPARKLES BY PLACE (B1 W3): the games whose pages tell the host how a game ended. Each reader
 /// takes the page's frame as untrusted (any field may be missing or the wrong type) and answers the
 /// claim, or null when nothing is claimed: a watched or two-players-here chess game, a game someone
-/// left, a Breakout demo or skipped board. The server checks every claim again; online truth comes
+/// left, a skipped Breakout board. The server checks every claim again; online truth comes
 /// from its own record (the proof), never from the page.
 /// </summary>
 public static class SparklesPageResults
@@ -70,10 +70,11 @@ public static class SparklesPageResults
     }
 
     /// <summary>Breakout <c>breakout-wall { walls, ballsLost, wallMs, skipped }</c>: one claim per
-    /// cleared wall, medal by the balls lost on it. The demo and a skipped board claim nothing.</summary>
-    public static SparklesPageClaim? BreakoutWall(JObject? o, bool demo)
+    /// cleared wall, medal by the balls lost on it. The Story Demo pays like the full game (same rate
+    /// for every tier, the daily taper caps replays); a skipped board claims nothing.</summary>
+    public static SparklesPageClaim? BreakoutWall(JObject? o)
     {
-        if (o == null || demo || Bool(o["skipped"]) == true) return null;
+        if (o == null || Bool(o["skipped"]) == true) return null;
         var lost = Num(o["ballsLost"]);
         if (double.IsNaN(lost)) return null;
         int ballsLost = (int)Math.Clamp(lost, 0, 999);

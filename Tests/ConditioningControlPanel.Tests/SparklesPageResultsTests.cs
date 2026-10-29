@@ -102,17 +102,16 @@ public class SparklesPageResultsTests
     public void BreakoutWallClaimsAMedalPerWall()
     {
         var c = SparklesPageResults.BreakoutWall(JObject.Parse(
-            "{\"type\":\"breakout-wall\",\"walls\":3,\"ballsLost\":1,\"wallMs\":42000}"), demo: false);
+            "{\"type\":\"breakout-wall\",\"walls\":3,\"ballsLost\":1,\"wallMs\":42000}"));
         Assert.Equal(("breakout", "solo", "silver"), (c!.Game, c.Mode, c.Result.Medal));
         Assert.Equal(1, (int)c.Detail!["ballsLost"]!);
         Assert.Equal(42, c.Duration.TotalSeconds);
     }
 
     [Theory]
-    [InlineData("{\"ballsLost\":0,\"wallMs\":1000}", true)]
-    [InlineData("{\"ballsLost\":0,\"skipped\":true}", false)]
-    [InlineData("{\"ballsLost\":\"0\"}", false)]
-    [InlineData("{\"walls\":2}", false)]
-    public void BreakoutClaimsNothingForTheseWalls(string json, bool demo) =>
-        Assert.Null(SparklesPageResults.BreakoutWall(JObject.Parse(json), demo));
+    [InlineData("{\"ballsLost\":0,\"skipped\":true}")]
+    [InlineData("{\"ballsLost\":\"0\"}")]
+    [InlineData("{\"walls\":2}")]
+    public void BreakoutClaimsNothingForTheseWalls(string json) =>
+        Assert.Null(SparklesPageResults.BreakoutWall(JObject.Parse(json)));
 }
