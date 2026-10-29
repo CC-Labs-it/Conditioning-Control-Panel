@@ -56,7 +56,9 @@ test('boot stages the warm on the phone tier only, steps the runner each frame a
   const boot = src('boot.js');
   assert.match(boot, /const staged = renderer\.device === 'phone' && !warmPose && qs\.get\('stage'\) !== '0';/);   // the DEVICE, whatever Quality is pinned
   assert.match(boot, /deferred = renderer\.deferredWarm\(warm, world\.scene\);/);
-  assert.match(boot, /if \(!frozen && !\(deferred && deferred\.behind\(introElapsed \+ frameDt\)\)\) introElapsed = Math\.min/);
+  assert.match(boot, /const introHeld = frozen \|\| !!\(deferred && deferred\.behind\(introElapsed \+ frameDt\)\);/);
+  assert.match(boot, /if \(!introHeld\) introElapsed = Math\.min/);
+  assert.match(boot, /audio\.updateIntro\(track\.id, introElapsed, \{ active: !done, paused: introHeld, gentle: gentleIntro \}\)/);
   assert.match(boot, /if \(deferred && !deferred\.done\) \{[\s\S]{0,400}deferred\.step\(\);/);
   assert.match(boot, /lifetime\.defer\(\(\) => \{ deferred\?\.dispose\(\); deferred = null; \}\);/);
   const renderer = src('render/renderer.js');

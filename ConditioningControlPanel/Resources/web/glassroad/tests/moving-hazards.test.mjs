@@ -45,7 +45,7 @@ test('bridge timer ignores tempo, has a warned exit and extends continuously acr
 });
 
 test('long horizontal heads extend their real contact while retaining permanent bypasses', () => {
-  assert.equal(MOVING_REVISION, 3);
+  assert.equal(MOVING_REVISION, 4);
   for (const id of courses) {
     const track = loadTrack(jsonFor(id), { moving: true });
     for (const row of track.moving.traps) {
@@ -135,7 +135,7 @@ test('visible heads, connected rods and bridge slabs share physical poses and di
     for (const id of courses) {
       const track = loadTrack(jsonFor(id), { moving: true }), scene = new Scene(), view = createMovingHazardView(scene, track,
         { primaryHex: () => '#8f969e', accentHex: () => '#e6b464' });
-      assert.ok(view.inspect().draws <= 6, 'all detailed pieces share bounded instanced draws');
+      assert.ok(view.inspect().draws <= 7, 'all detailed pieces stay batched, with one shared draw for sliding road covers');
       if (id === 'threshold') assert.deepEqual(view.inspect().colours, {
         paint: '#ff91cc', pale: '#fff5fc', accent: '#e60087', metal: '#bfc2d3', dark: '#38213b',
       });

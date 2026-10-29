@@ -376,6 +376,7 @@ async function boot(course, options, lifetime, isCurrent) {
       lowRateDecode: () => !!globalThis.matchMedia?.('(pointer: coarse)').matches });   // phones (pickTier's coarse rule): half-rate song
   })();
   audio.setLaps(laps); audio.setPaused(false); audio.reset();
+  audio.prepareIntro(track.id);
   audio.music?.stop();
   lifetime.defer(() => { audio.music?.stop(); audio.setPaused(false); audio.reset(); });
   lifetime.defer(() => { effects.dispose(); payoff.dispose(); fx.dispose(); });
@@ -383,6 +384,7 @@ async function boot(course, options, lifetime, isCurrent) {
   const waterContact = createWaterContact(track);
   if (BOT) Object.defineProperty(debug, 'underwaterAudio', { get: () => audio.underwater });
   if (BOT) Object.defineProperty(debug, 'waterTravelAudio', { get: () => audio.waterTravel });
+  if (BOT) Object.defineProperty(debug, 'introSound', { get: () => audio.introSound });
   for (const name of ['keep-gate-hit', 'keep-chain-hit', 'boudoir-press-hit', 'boudoir-sweeper-hit', 'boudoir-mirror-hit', 'goonworks-hit']) bus.on(name, () => bus.emit('wall', { dv: 12 }));
   configureLobby({ track: track.id, trackLaps: TRACK_LAPS });
   const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus, { photosafe, racers: () => racers?.list });
@@ -1646,7 +1648,8 @@ async function boot(course, options, lifetime, isCurrent) {
     if (DEV || BOT) debug.cameraView = { selected: cam.views.selected, rear: !!rearView, mirror: cam.views.mirrorActive };
     if (state === 'intro') {
       // the intro clock waits for a deferred group its next frames need (no first-view compile on screen)
-      if (!frozen && !(deferred && deferred.behind(introElapsed + frameDt))) introElapsed = Math.min(intro.duration, introElapsed + frameDt);
+      const introHeld = frozen || !!(deferred && deferred.behind(introElapsed + frameDt));
+      if (!introHeld) introElapsed = Math.min(intro.duration, introElapsed + frameDt);
       const gentleIntro = hostGentle || !!feel.get('gentle.on') || !!hud.options.gentlePreview || matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (!frozen) introTarget.copy(cam.camera);
       const done = intro.apply(cam.camera, introElapsed, { gentle: gentleIntro, target: introTarget });
@@ -1657,8 +1660,9 @@ async function boot(course, options, lifetime, isCurrent) {
       }
       introVeil.style.opacity = String(curtain);
       debug.intro = { elapsed: introElapsed, shot: intro.shotAt(introElapsed) };
+      audio.updateIntro(track.id, introElapsed, { active: !done, paused: introHeld, gentle: gentleIntro });
       if (done && !frozen) begin();
-    }
+    } else audio.updateIntro(track.id, introElapsed);
     if (HT) hLap('cam');
     if (BOT && debug.peek) peekCamera(cam.camera, track, debug.peek, renderer.aspect);
     const iv = items.view();
