@@ -18,6 +18,8 @@ public class SparklesSlipParityTests
     {
         "arcademy",
         "dtrh",
+        "goon",
+        "piecebypiece",
         "intake",
     };
 

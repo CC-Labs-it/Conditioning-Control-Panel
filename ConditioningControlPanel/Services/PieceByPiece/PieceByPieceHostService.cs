@@ -430,7 +430,10 @@ internal static partial class PieceByPieceHostService
                 case "pbp:game-over":
                     // SPARKLES BY PLACE (B1): vs Computer claims solo, an online or tournament game
                     // claims online with its pbp match id. A watched, hotseat or left game claims nothing.
-                    _ = Sparkles.SparklesPageResults.Send(Sparkles.SparklesPageResults.Chess(o));
+                    // The results slip (W6) lands on the game-over card that is up when the receipt comes in.
+                    var slipHost = _host;
+                    _ = Sparkles.SparklesSlip.Deliver(Sparkles.SparklesPageResults.Send(Sparkles.SparklesPageResults.Chess(o)),
+                        json => slipHost?.Post(new JRaw(json)));
                     break;
 
                 case PbpWatchRules.SettingFrame:
