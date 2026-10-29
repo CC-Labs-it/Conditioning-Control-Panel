@@ -30,6 +30,11 @@ Scope and owner calls: `handoff-1029/B3-SHOP-DECISIONS.md` (sections 5 and 6 are
   `assets/manifest.json slotBox` (0.72 x 0.78 x 0.52). Items carry their own display support: never add a plinth.
   Shelf draws LOD1; the focused item swaps to the full GLB.
 - `props/price_tag.glb`, `props/owned_stamp.glb` sit on `tag_r?c?`. The other props are Astra's kit, kept for later drops.
+  Art pass 2: `tag_r?c?` is the tag's top hinge; the enamel face `tag_face` (0.694 x 0.118 m) hangs under `tag_pivot`,
+  and the price plane rides on `tag_pivot` (clips `tag_approach` / `tag_retreat` ship in the GLB, unused yet). The
+  stamp hangs 0.14 m under the hinge. Use the shelf and the tag from the same export.
+- Catalog revision 2 (`assets/manifest.json catalogRevision`): `retired` maps each withdrawn id to its stand-in art
+  (`null` = none; an owner still gets the OWNED stamp). Retired ids never return to sale and are never reused.
 
 ## Server body (read only, CCP-Server is the authority)
 
