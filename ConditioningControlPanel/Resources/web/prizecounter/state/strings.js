@@ -67,6 +67,38 @@ const ITEM_NAMES = {
 };
 for (const [id, name] of Object.entries(ITEM_NAMES)) LEX[itemKey(id)] = name;
 
+export const descKey = (id) => itemKey(id).replace(/_name$/, '_desc');
+/* One short factual line per item (Astra's item-info.json, trimmed), shown on the preview strip and the confirm card.
+ * A family + slot key (`shop_item_kart_body_desc`) covers every row of that slot without a key of its own. */
+const ITEM_DESCS = {
+  "shop_item_kart_body_desc": "A kart body for EMI in Racing Thoughts. Outfits and paint equip separately.",
+  "shop_item_kart_outfit_pit_crew_desc": "Pit crew uniform with a cap for EMI in Racing Thoughts. The kart is separate.",
+  "shop_item_kart_outfit_ringmaster_desc": "Ringmaster outfit with a top hat for EMI in Racing Thoughts. The kart is separate.",
+  "shop_item_kart_outfit_ballerina_desc": "Ballet outfit with a tutu for EMI in Racing Thoughts. The kart is separate.",
+  "shop_item_kart_paint_pattern_bundle_desc": "Five paint patterns for EMI in one item: stripes, polka dots, checks, hearts and spirals.",
+  "shop_item_kart_umbrella_lace_desc": "Lace parasol for the kart in Racing Thoughts.",
+  "shop_item_rain_dress_midnight_cocktail_desc": "Blue cocktail dress for Rain.",
+  "shop_item_rain_dress_rose_flare_desc": "Pink flared dress for Rain.",
+  "shop_item_rain_dress_ivory_midi_desc": "Ivory midi dress for Rain.",
+  "shop_item_rain_dress_plum_asymmetric_desc": "Plum asymmetric dress for Rain.",
+  "shop_item_rain_dress_scarlet_bell_desc": "Scarlet bell dress for Rain.",
+  "shop_item_rain_dress_teal_tulip_desc": "Teal tulip dress for Rain.",
+  "shop_item_rain_dress_black_highlow_desc": "Black dress with a high-low hem for Rain.",
+  "shop_item_rain_suit_hazmat_yellow_desc": "Yellow hazmat suit for Rain. The respirator is a separate item.",
+  "shop_item_rain_suit_action_yellow_desc": "Yellow suit with black side stripes for Rain. The katana is a separate item.",
+  "shop_item_rain_acc_back_katana_desc": "Katana and scabbard worn on Rain's back. Equips separately from clothing.",
+  "shop_item_rain_acc_hazmat_mask_desc": "Respirator mask for Rain. Equips separately from the hazmat suit.",
+  "shop_item_rain_acc_cat_eye_frames_desc": "Cat-eye glasses for Rain.",
+  "shop_item_rain_acc_silver_drops_desc": "Silver drop earrings for Rain.",
+  "shop_item_rain_hair_chestnut_bob_desc": "Chestnut bob for Rain. Shown on a display head.",
+  "shop_item_rain_hair_copper_lob_desc": "Copper long bob for Rain. Shown on a display head.",
+  "shop_item_rain_hair_ink_sleek_desc": "Sleek black hairstyle for Rain. Shown on a display head.",
+  "shop_item_rain_hair_rose_waves_desc": "Pink wavy hairstyle for Rain. Shown on a display head.",
+  "shop_item_rain_hair_platinum_long_desc": "Long platinum hairstyle for Rain. Shown on a display head.",
+  "shop_item_rain_hair_auburn_volume_desc": "Full auburn hairstyle for Rain. Shown on a display head.",
+};
+Object.assign(LEX, ITEM_DESCS);
+
 /** A translator over the host lexicon: t(key, ...args) fills {0}, {1}. Unknown keys answer the key itself. */
 export function makeT(lexicon) {
   const lex = lexicon && typeof lexicon === 'object' ? lexicon : {};
@@ -75,6 +107,15 @@ export function makeT(lexicon) {
 
 export const tabKey = (id) => `shop_tab_${String(id).replace(/-/g, '_')}`;
 /** An item name: `shop_item_<id>_name` when the lexicon has it, else the last part of the id in plain words. */
+/** An item's description, or null: `shop_item_<id>_desc`, else the family + slot key. */
+export function itemDesc(t, id) {
+  for (const key of [descKey(id), descKey(String(id).split('.').slice(0, 2).join('.'))]) {
+    const v = t(key);
+    if (v !== key) return v;
+  }
+  return null;
+}
+
 export function itemName(t, id) {
   const key = itemKey(id);
   const v = t(key);

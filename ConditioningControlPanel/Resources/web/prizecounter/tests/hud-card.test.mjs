@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cardModel, renderCard } from '../hud/card.js';
 import { createHud } from '../hud/index.js';
-import { makeT } from '../state/strings.js';
+import { makeT, itemDesc } from '../state/strings.js';
 import { fakeDocument } from './fake-dom.mjs';
 
 const t = makeT({});
@@ -104,4 +104,14 @@ test('signed out: one Sign in to shop button, no wallet, no tabs; it asks for th
   hud.paint(view('ready'));
   assert.equal(gate.hidden, true);
   assert.equal(root.querySelectorAll('.pc-wallet')[0].hidden, false);
+});
+
+test('the card carries the item description: its own key, else the family + slot key, else none', () => {
+  assert.match(draw(CARDS.buy).el.text(), /Scarlet bell dress for Rain/);
+  assert.equal(draw(CARDS.buy).el.querySelectorAll('.pc-card-desc').length, 1);
+  assert.match(draw({ ...CARDS.owned, itemId: 'kart.body.petal' }).el.text(), /A kart body for EMI/);
+  assert.equal(itemDesc(t, 'kart.body.velvet-lock'), itemDesc(t, 'kart.body.petal'));
+  assert.equal(itemDesc(t, 'kart.paint.hearts'), null);
+  assert.equal(draw({ ...CARDS.soon, itemId: 'kart.paint.hearts' }).el.querySelectorAll('.pc-card-desc').length, 0);
+  assert.equal(itemDesc(makeT({ shop_item_rain_dress_teal_tulip_desc: 'Lexicon wins.' }), 'rain.dress.teal-tulip'), 'Lexicon wins.');
 });
