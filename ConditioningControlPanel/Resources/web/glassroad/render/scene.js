@@ -729,7 +729,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
       reactive: road.uniforms.reactive, motion: view.motion || motionLevel });
     if (wordRush) wordRush.update(dt, !!view.paused);
     phraseGates.update(k, dt, { paused: !!view.paused, mode: view.mode, song: view.song, songS: view.songS });
-    airWords.update(view.airWords, dt, { paused: !!view.paused, mode: view.mode, gentle });
+    airWords.update(view.airWords, dt, { paused: !!view.paused, mode: view.mode, gentle, kart: kart.position, motion: motionLevel });
     veils.update(view.songCues, dt, { paused: !!view.paused, gentle: view.cueGentle ?? gentle,
       bass: view.audioReactive?.bass || 0, palette: [pal.primaryHex(), pal.accentHex()] });
     marquees?.update(view.songCues, dt, { paused: !!view.paused, gentle: view.cueGentle ?? gentle, songS: view.songS, song: view.song });

@@ -139,7 +139,10 @@ export const FX_CUES = {
     const gone = j(fx, 'landGoneS');
     fx.release('stretch', rise(fx));
     if (airWord) {
-      fx.fire('squash', fx.gentle.scroll(.24), .04, .08, .16);
+      // A word contact is a springy punch: a deep squash, a small trauma and a short thump (Gentle drops the thump).
+      fx.fire('squash', fx.gentle.scroll(.34), .03, .07, .16);
+      fx.fire('thud', fx.gentle.kick(rumbleOf(fx, 1)), 0, 0, j(fx, 'landGoneS'));
+      fx.shock?.(TRAUMA.land[0]);
       return;
     }
     if (tier < 1) return;
@@ -262,10 +265,11 @@ export const FX_CUES = {
   'press-thud'() {},
   'trap-tick'() {},
   // The initial lip already owns launch motion; this notification only adds its spring sound.
-  'air-word-launch'() {},
+  // The lip's airborne hold owns the first launch; this adds a quick extra stretch for the pop.
+  'air-word-launch'(fx) { fx.fire('stretch', fx.gentle.scroll(.2), .08, .1, .24); },
   'air-word-hop'(fx) {
     // The landing squash finishes while the kart is already moving into its rebound.
-    fx.fire('stretch', fx.gentle.scroll(.2), .14, .12, .28);
+    fx.fire('stretch', fx.gentle.scroll(.32), .14, .14, .3);
   },
   pause(fx, { on = false }) { fx.paused = !!on; },
 };

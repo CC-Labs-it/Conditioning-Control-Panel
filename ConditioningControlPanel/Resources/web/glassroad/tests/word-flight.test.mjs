@@ -6,7 +6,8 @@ import { S, RESPAWN } from '../sim/state.js';
 import { step, spawn } from '../sim/kart.js';
 import { glideActive } from '../sim/glide.js';
 import { phraseFlightPoints, phraseEase } from '../core/phraseFlight.js';
-import { createAirWordRun, bindAirWords, airWordQuery, phraseBounceActive } from '../sim/airWords.js';
+import { createAirWordRun, bindAirWords, airWordQuery, phraseBounceActive, airWordLateral, ARC_M,
+  WORD_LENGTH_M, WORD_MAX_WIDTH_M } from '../sim/airWords.js';
 import { DT, place, makeFeel, recorder, acts } from './sim-fake.mjs';
 
 test('interpolated kart views share contact squash state and detach on run replacement', () => {
@@ -142,7 +143,7 @@ test('one phrase rescues a fast visible fall and sends the kart across the rest 
     if (run.platforms.length && firstSeen === null) {
       firstSeen = ev.t;
       assert.ok(st[S.airborne], 'the phrase arrives while approaching the catch');
-      assert.ok(st[S.velY] < -2, 'the kart is already falling fast before the phrase reveals');
+      assert.ok(st[S.velY] < 0, 'the word appears under the kart as it starts to drop from the apex');
     }
     if (firstContact === null && ev.all('air-word-land').length) firstContact = ev.t;
     if (st[S.s] > f.zone.gapS1 + 12) break;
@@ -161,10 +162,10 @@ test('the first arc remains within 2.2 metres of the steady camera grade on ever
       const u = Math.min(1, (f.st[S.s] - start.s) / (catchPoint.s - start.s));
       const baseline = start.y + (catchPoint.y - start.y) * phraseEase(u);
       const above = f.st[S.posY] - baseline;
-      assert.ok(above <= 2.201, tr.id + ': first jump left the stable framing envelope');
+      assert.ok(above <= ARC_M[0] + .001, tr.id + ': first jump left the stable framing envelope');
       peak = Math.max(peak, above);
     }
-    assert.ok(peak > 2.15, tr.id + ': first arc still has a visible jump');
+    assert.ok(peak > ARC_M[0] * .97, tr.id + ': first arc still has a visible jump');
   }
 });
 
@@ -181,11 +182,11 @@ test('the higher rebound clears the far lip and lands well onto the deck sooner 
       const u = Math.min(1, (f.st[S.s] - start.s) / (end.s - start.s));
       const baseline = start.y + (end.y - start.y) * phraseEase(u);
       const above = f.st[S.posY] - baseline;
-      assert.ok(above <= 2.201, tr.id + ': rebound remains within its bounded height envelope');
+      assert.ok(above <= ARC_M[1] + .001, tr.id + ': rebound remains within its bounded height envelope');
       peak = Math.max(peak, above);
       if (previousS < zone.gapS1 && f.st[S.s] >= zone.gapS1) lipClearance = f.st[S.posY] - tr.frameAt(f.st[S.s]).p[1];
     }
-    assert.ok(peak > 2.15, tr.id + ': visibly higher spring');
+    assert.ok(peak > ARC_M[1] * .97 && ARC_M[1] > ARC_M[0], tr.id + ': visibly higher spring');
     assert.ok(lipClearance > .6, `${tr.id}: clear the far edge instead of skimming it (${lipClearance})`);
     assert.ok(end.s >= zone.gapS1 + 7.9 && end.s < zone.landingS1, 'catch safely onto the landing deck');
     assert.ok(f.ev.t - catchTime <= oldDuration * .9 + DT, tr.id + ': quicker rebound despite the longer clear landing');
@@ -271,8 +272,8 @@ test('quiet song sections get compact trigger words, with only two supports visi
       tick(f);
       assert.ok(f.run.platforms.length <= 2);
       for (const row of f.run.platforms) {
-        assert.ok(row.widthM <= 8.5 && row.lengthM <= 3.2, 'larger letters leave the chase view open');
-        assert.ok(row.widthM >= 4.4 && row.lengthM >= 3.1, 'phrases gain about a quarter in glyph size');
+        assert.ok(row.widthM <= WORD_MAX_WIDTH_M && row.lengthM <= WORD_LENGTH_M, 'big letters stay inside their caps');
+        assert.ok(row.widthM >= 6.6 && row.lengthM >= 4.7, 'phrases read about one and a half times the old glyph size');
         assert.ok(['LET GO', 'DRIFT AWAY', 'BREATHE SLOW', 'FLOAT ON'].includes(row.text));
         seen.add(row.text);
       }
@@ -330,4 +331,32 @@ test('long lyric lines choose complete short phrase windows instead of squeezing
   assert.ok(text.length <= 26);
   assert.ok(text.split(' ').length >= 2 && text.split(' ').length <= 4);
   assert.ok('follow the gentle light across the water'.includes(text));
+});
+
+test('the word spawns under the racer near either edge, clamped so the whole phrase stays over the road', () => {
+  assert.equal(airWordLateral(3, 14, 8), 3);
+  assert.equal(airWordLateral(13, 14, 8), 14 - 4 - 1.2);
+  assert.equal(airWordLateral(-13, 14, 8), -(14 - 4 - 1.2));
+  assert.equal(airWordLateral(5, 3, 8), 0, 'a road too narrow to slide keeps the centre');
+  for (const tr of tracks) for (const zone of tr.aerials) for (const side of [-1, 0, 1]) {
+    const s = zone.rampS0 + .5, f = setup(tr, zone), lateral = side * (tr.frameAt(s).w / 2 - 1);
+    f.st.set(place(tr, { s, lateral, speed: 26 }));
+    let seen = null, contact = null;
+    for (let i = 0; i < 1000 && f.st[S.s] < zone.gapS1 + 12; i++) {
+      tick(f);
+      if (!seen && f.run.platforms.length) seen = { row: f.run.platforms[0], lane: f.st[S.lateral] };
+      if (!contact && f.ev.all('air-word-land').length) contact = f.st[S.lateral];
+    }
+    assert.ok(seen && contact !== null, zone.id);
+    const { row } = seen, half = Math.min(tr.frameAt(row.s).w, zone.widthM) / 2;
+    const centre = row.p.reduce((v, x, i) => v + (x - tr.frameAt(row.s).p[i]) * tr.frameAt(row.s).b[i], 0) - row.shift[1];
+    assert.ok(Math.abs(centre - row.lateral) < .01, zone.id + ' the platform sits at its lateral offset');
+    assert.ok(Math.abs(row.lateral) + row.widthM / 2 <= half, zone.id + ' the whole word stays over the road');
+    if (!side) assert.ok(Math.abs(row.lateral) < .01, zone.id + ' a centred racer keeps a centred word');
+    else assert.ok(Math.sign(row.lateral) === side && Math.abs(row.lateral) > 3, zone.id + ' the word follows the racer toward the edge');
+    const room = half - row.widthM / 2 - 1.2, under = Math.max(-room, Math.min(room, seen.lane));
+    assert.ok(Math.abs(under - row.lateral) < .05, zone.id + ' the word materialises right under the kart (or at its clamp)');
+    if (Math.abs(seen.lane) <= room + 2.6) assert.ok(Math.abs(contact - row.lateral) < row.widthM / 2, zone.id + ' the catch lands on the shifted word');
+    assert.equal(f.st[S.respawnPhase], RESPAWN.NONE);
+  }
 });
