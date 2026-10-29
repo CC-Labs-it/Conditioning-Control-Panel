@@ -15,6 +15,7 @@ import { grantBoost } from '../sim/grant.js';
 import { cancelDrift } from '../sim/drift.js';
 import { endBoost } from '../sim/boost.js';
 import { ITEMS, bucketOf, BUCKETS, SPIN_KINDS } from '../sim/itemTable.js';
+import { itemUseMode } from '../sim/itemUse.js';
 
 const GROW_S = 0.4, WAVE_S = 1.2, THROW_LEAD_M = 2.5, ARC_S = 0.5, PENDING_S = 2, ORPHAN_S = 3;   // as sim/items.js
 
@@ -139,9 +140,9 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
 
   // ---- local racers -----------------------------------------------------------------------------
   function use(r, standings) {
-    const id = r.item.id, it = ITEMS[id], st = r.st, s = st[S.s], x = st[S.lateral];
-    const mode = it.use === 'trap' || (r.input.back && (it.use === 'throw' || it.use === 'lob' || it.use === 'bounce')) ? 'drop' : it.use;
-    if (id === 'shatter' && nearOpenEdge(mode === 'drop' ? wrap(s - g('dropBehindM'), L) : s, g('shatterEdgeSafeM'))) {
+    const id = r.item.id, st = r.st, s = st[S.s], x = st[S.lateral];
+    const mode = itemUseMode(id, r.input.back);
+    if ((id === 'shatter' || (mode === 'drop' && SPIN_KINDS.includes(id))) && nearOpenEdge(mode === 'drop' ? wrap(s - g('dropBehindM'), L) : s, g('shatterEdgeSafeM'))) {
       events.emit('item-refused', { racer: r.i, id, reason: 'edge' });
       return;
     }

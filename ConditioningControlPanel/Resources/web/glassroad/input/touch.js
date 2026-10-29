@@ -10,6 +10,7 @@
  *              never cruises on its own).
  *   PAUSE      one 48 px button (Escape does not exist on glass; the phone panic is the host's).
  *   THROW      one 64 px button in the bottom right corner, under the right thumb: the item edge (`item`).
+ *   DROP       a separate button above Throw leaves an attack behind without braking or changing steering.
  *              The HUD slot stays the item card at top centre (this layer sits over the HUD, so a tap
  *              there never reached it); the root wears `gr-touch-on` so styles.css lifts the speed
  *              readout and the media credit clear of the button.
@@ -26,6 +27,8 @@ export const STEER_SIDE = 0.55;
 /** The throw button: the bottom right corner inside the safe area, clear of View / Rear (bottom centre) and pause (top right). */
 export const THROW_CSS = 'position:absolute;right:max(16px,env(safe-area-inset-right));bottom:max(14px,env(safe-area-inset-bottom));' +
   'width:64px;height:64px;border:3px solid #fff;border-radius:50%;background:#201b29;color:#fff;font:700 13px sans-serif;touch-action:none';
+export const DROP_CSS = 'position:absolute;right:max(16px,env(safe-area-inset-right));bottom:calc(max(14px,env(safe-area-inset-bottom)) + 72px);' +
+  'width:64px;height:52px;border:2px solid #fff;border-radius:18px;background:#201b29;color:#fff;font:700 13px sans-serif;touch-action:none';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -76,10 +79,15 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
   itemBtn.setAttribute('aria-label', 'Use item');
   itemBtn.style.cssText = THROW_CSS;
   layer.appendChild(itemBtn);
+  const dropBtn = d.createElement('button');
+  dropBtn.type = 'button'; dropBtn.className = 'gr-touch-btn gr-touch-drop'; dropBtn.textContent = 'Drop';
+  dropBtn.setAttribute('aria-label', 'Drop item behind');
+  dropBtn.style.cssText = DROP_CSS;
+  layer.appendChild(dropBtn);
   root.classList?.add('gr-touch-on');
 
   let steerId = -1, steerX0 = 0, steer = 0, actId = -1, touched = false, disposed = false;
-  let hopEdge = false, pauseEdge = false, cameraEdge = false, itemEdge = false, rearId = -1;
+  let hopEdge = false, pauseEdge = false, cameraEdge = false, itemEdge = false, itemBack = false, rearId = -1;
   const onBtn = (t) => !!(t && typeof t.closest === 'function' && t.closest('.gr-touch-btn'));
   const sideOf = (x) => { const r = layer.getBoundingClientRect(); return x - r.left < (r.width || 1) * STEER_SIDE ? 'left' : 'right'; };
 
@@ -96,10 +104,18 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
     try { rearBtn.setPointerCapture(rearId); } catch (err) { /* window release still clears it */ }
   };
   const onViewClick = (e) => { if (e.detail === 0) onView(e); };
-  const onItem = (e) => { if (e.cancelable) e.preventDefault(); e.stopPropagation(); itemEdge = true; devices.use('touch'); };
+  const onItem = (e, back = false) => {
+    if (e.cancelable) e.preventDefault(); e.stopPropagation();
+    if (!itemEdge) { itemEdge = true; itemBack = back; }
+    devices.use('touch');
+  };
   const onItemClick = (e) => { if (e.detail === 0) onItem(e); };
+  const onDrop = (e) => onItem(e, true);
+  const onDropClick = (e) => { if (e.detail === 0) onDrop(e); };
   itemBtn.addEventListener('pointerdown', onItem);
   itemBtn.addEventListener('click', onItemClick);
+  dropBtn.addEventListener('pointerdown', onDrop);
+  dropBtn.addEventListener('click', onDropClick);
   viewBtn.addEventListener('pointerdown', onView);
   viewBtn.addEventListener('click', onViewClick);
   rearBtn.addEventListener('pointerdown', onRear);
@@ -108,7 +124,7 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
   function endSteer() { steerId = -1; steer = 0; pad.style.display = 'none'; }
   function onBlur() {
     const id = steerId, rear = rearId;
-    endSteer(); actId = rearId = -1; hopEdge = pauseEdge = cameraEdge = itemEdge = false;
+    endSteer(); actId = rearId = -1; hopEdge = pauseEdge = cameraEdge = itemEdge = itemBack = false;
     try { if (id >= 0) layer.releasePointerCapture(id); } catch (err) { /* already gone */ }
     try { if (rear >= 0) rearBtn.releasePointerCapture(rear); } catch (err) { /* already gone */ }
   }
@@ -190,7 +206,8 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
     into.cameraPressed = cameraEdge;
     into.rearView = rearId >= 0;
     into.item = itemEdge;
-    hopEdge = false; pauseEdge = false; cameraEdge = false; itemEdge = false;
+    into.back = itemBack;
+    hopEdge = false; pauseEdge = false; cameraEdge = false; itemEdge = false; itemBack = false;
   }
   function dispose() {
     disposed = true;
@@ -202,6 +219,8 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
     rearBtn.removeEventListener('lostpointercapture', onUp);
     itemBtn.removeEventListener('pointerdown', onItem);
     itemBtn.removeEventListener('click', onItemClick);
+    dropBtn.removeEventListener('pointerdown', onDrop);
+    dropBtn.removeEventListener('click', onDropClick);
     root.classList?.remove('gr-touch-on');
     layer.removeEventListener('pointerdown', onDown);
     layer.removeEventListener('pointermove', onMove);

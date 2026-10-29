@@ -32,8 +32,8 @@ export function controlRows(family = 'xbox', profile = 'standard') {
     ['Throttle', k.throttle, p.rt, 'Automatic'],
     ['Brake', k.brake, p.lt, ''],
     ['Hop and drift', k.hop, p.south + ', hold', 'Hold the right half'],
-    ['Use item', k.item, p.west + ' or ' + p.rb, 'Tap the item'],
-    ['Drop it behind', k.drop, 'Stick down, then ' + p.west, ''],
+    ['Use item', k.item, p.west + ' or ' + p.rb, 'Throw button'],
+    ['Drop it behind', k.drop, p.north + ', or stick down + ' + p.west, 'Drop button'],
     ['Pause', k.pause, p.start, 'Pause button'],
   ];
 }
@@ -64,8 +64,8 @@ export function itemKey(d = {}) {
 /** The one-time tip on the first pickup of a session. No dash in the copy: a dot splits the two moves. */
 export function itemTip(d = {}) {
   const v = deviceView(d);
-  if (v.last === 'touch') return 'Tap Throw to use it';
-  if (v.last === 'pad') { const w = padLabels(v.family, v.profile).west; return w + ' throw. Stick down + ' + w + ' drop behind'; }
+  if (v.last === 'touch') return 'Throw uses it. Drop leaves it behind';
+  if (v.last === 'pad') { const p = padLabels(v.family, v.profile); return p.west + ' throw. ' + p.north + ' drop behind'; }
   return 'E / Enter throw. R / Backspace behind';
 }
 

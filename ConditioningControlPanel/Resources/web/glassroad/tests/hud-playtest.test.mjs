@@ -18,7 +18,10 @@ test('itemKey names the fire control for the device used last', () => {
 
 test('itemTip names both moves, with no dash and no exclamation mark', () => {
   assert.equal(itemTip({ last: 'keyboard' }), 'E / Enter throw. R / Backspace behind');
-  assert.equal(itemTip({ last: 'pad', pad: { family: 'xbox' } }), 'X throw. Stick down + X drop behind');
+  assert.equal(itemTip({ last: 'pad', pad: { family: 'xbox' } }), 'X throw. Y drop behind');
+  assert.equal(itemTip({ last: 'pad', pad: { family: 'ps' } }), 'Square throw. Triangle drop behind');
+  assert.equal(itemTip({ last: 'pad', pad: { family: 'generic', profile: 'dinput' } }), 'Button 1 throw. Button 4 drop behind');
+  assert.match(itemTip({ last: 'touch' }), /Drop.*behind/);
   assert.match(itemTip({ last: 'touch' }), /Throw/);
   for (const last of ['keyboard', 'pad', 'touch']) assert.doesNotMatch(itemTip({ last }), /[-–—!]/);
 });

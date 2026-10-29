@@ -158,7 +158,7 @@ export function createToyProps(root, art, feel, { photosafe = null, palette = ()
   function event(name, e = {}) {
     if (!['disc-bounce', 'snap-burst', 'item-hit', 'item-fire', 'item-flyby', 'tether-hook'].includes(name) || !e.p) return;
     if (name === 'item-fire' && !TOYS.has(e.id)) return;
-    if (name === 'item-hit' && !['pendulum','disc','bigSpiral','melt','snap','surge'].includes(e.kind)) return;
+    if (name === 'item-hit' && !['pendulum','disc','tether','bigSpiral','melt','snap','surge'].includes(e.kind)) return;
     const quiet = !!feel.get('gentle.on') || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
     const bright = !quiet && !!photosafe?.request('item-toy');
     if (effects.length >= 16) effects.shift();

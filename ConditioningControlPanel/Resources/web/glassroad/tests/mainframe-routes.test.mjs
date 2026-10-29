@@ -12,7 +12,7 @@ import { registeredSkip } from '../sim/routes.js';
 import { makeFeel, DT } from './sim-fake.mjs';
 
 const track = loadTrack(buildMainframe().track);
-function cut(route, v, yaw) {
+function cut(route, v, yaw, { followS = 0, brakeOnLand = false } = {}) {
   const st = createState(), s = route.openS0 + 3, f = track.frameAt(s);
   const side = route.side === 'L' ? -1 : 1, lat = side * (f.w / 2 - 4);
   const c = Math.cos(yaw * Math.PI / 180), sn = Math.sin(yaw * Math.PI / 180) * side;
@@ -20,17 +20,49 @@ function cut(route, v, yaw) {
   setPos(st, f.p.map((n, k) => n + f.b[k] * lat));
   setQuat(st, qfromBasis([0, 0, 0, 1], b, f.n, t.map(n => -n))); setVel(st, t.map(n => n * v));
   st[S.engineV] = v; st[S.grounded] = 1; st[S.seg] = st[S.latchSeg] = f.seg; st[S.s] = s; st[S.lateral] = lat; st[S.hopT] = 1e3;
-  const events = [], sink = { emit(name, data) { events.push({ name, ...data }); } };
+  const events = [], rollout = [], sink = { emit(name, data) { events.push({ name, ...data }); } };
+  let landedAt = -1;
   const feel = makeFeel(), actions = createActions(), progress = createProgress(track, sink), race = { phase: 'racing', timeS: 0 };
   progress.reset(st); st[S.checkpoint] = track.checklines.filter(c => c.s <= s).length - 1;
   for (let i = 0; i < 6 / DT; i++) {
-    actions.throttle = 1;
+    const braking = brakeOnLand && landedAt >= 0;
+    actions.throttle = braking ? 0 : 1; actions.brake = braking ? 1 : 0;
     step(st, actions, track, feel, DT, sink); updateRespawn(st, track, feel, DT, sink);
     race.timeS += DT; progress.update(st, race);
-    if (events.some(e => e.name === 'route-skip' || e.name === 'drop')) break;
+    if (landedAt < 0 && events.some(e => e.name === 'route-land')) landedAt = i;
+    if (landedAt >= 0) {
+      const f = track.frameAt(st[S.s]);
+      rollout.push({ engine: st[S.engineV], grounded: st[S.grounded],
+        forward: [st[S.velX], st[S.velY], st[S.velZ]].reduce((sum, v, k) => sum + v * f.t[k], 0) });
+    }
+    if (events.some(e => e.name === 'drop') || (followS ? landedAt >= 0 && (i - landedAt) * DT >= followS : events.some(e => e.name === 'route-skip'))) break;
   }
-  return { events, st };
+  return { events, st, rollout };
 }
+
+test('Mainframe descents preserve momentum through landing and the next second', () => {
+  for (const route of track.routes) for (const [v, yaw] of [[24, 25], [30, 30], [34, 25]]) {
+    const { events, rollout } = cut(route, v, yaw, { followS: 1 });
+    assert.ok(events.some(e => e.name === 'route-skip'));
+    assert.ok(!events.some(e => e.name === 'drop' || e.name === 'wall'));
+    assert.ok(rollout.length >= 60);
+    for (const r of rollout) {
+      assert.equal(r.grounded, 1, 'the lower road immediately restores grip');
+      assert.ok(r.engine >= v * .8, `${route.id}: engine ${r.engine} after ${v} m/s approach`);
+      assert.ok(r.forward >= v * .8, `${route.id}: forward ${r.forward} after ${v} m/s approach`);
+    }
+  }
+});
+
+test('Mainframe descent rollout still obeys the player brake', () => {
+  for (const route of track.routes) {
+    const { events, rollout } = cut(route, 30, 30, { followS: 1, brakeOnLand: true });
+    assert.ok(events.some(e => e.name === 'route-skip'));
+    assert.ok(!events.some(e => e.name === 'drop'));
+    assert.ok(rollout.at(-1).engine < rollout[0].engine * .5);
+    assert.ok(rollout.at(-1).forward < rollout[0].forward * .5);
+  }
+});
 
 test('Mainframe optional descent cuts physically land and credit the skipped turn', () => {
   assert.equal(track.routes.length, 2);

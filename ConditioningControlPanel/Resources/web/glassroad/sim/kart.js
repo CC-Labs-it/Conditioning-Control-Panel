@@ -149,7 +149,7 @@ export function step(st, a, track, feel, dt, ev) {
     }
   }
 
-  // a drop shortcut's soft catch caps thrust for a moment; a clean landing pays its boost as it ends
+  // A clean drop landing pays its delayed boost while the kart carries its speed through the rollout.
   const cc = catchCap(st, feel, dt);
   if (cc === 'boost' && !stalled) {
     applyBoost(st, BOOST.PAD, 0, feel, ev, { amount: gap(feel, 'route.cleanAmount'), holdS: gap(feel, 'route.cleanHoldS') });

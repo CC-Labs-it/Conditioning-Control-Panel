@@ -130,14 +130,13 @@ function gapCourse() {
   };
 }
 
-test('a gap route keeps its speed (no soft catch); a drop route still catches', () => {
+test('gap and drop routes both carry speed onto the lower road', () => {
   for (const kind of ['gap', 'drop']) {
     const json = gapCourse();
     json.routes[0].kind = kind;
     const t = loadTrack(json, { validate: false }), st = kartAt(t, 185, 4, 24, 40);
     const r = run(t, st, { hop: true, until: (ev) => ev.some((e) => e.name === 'route-land' || e.name === 'drop') });
     assert.ok(r.names.includes('route-land'), kind + ': ' + r.names.join(','));
-    if (kind === 'gap') assert.ok(st[S.engineV] > 15, 'gap keeps speed ' + st[S.engineV]);
-    else assert.ok(st[S.engineV] <= 0.25 * 33 + 1e-6, 'drop catches ' + st[S.engineV]);   // route.catchPct x top 33 (30 x the 2026-10-28 speed factor F = 1.1)
+    assert.ok(st[S.engineV] > 24, kind + ' keeps speed ' + st[S.engineV]);
   }
 });
