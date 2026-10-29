@@ -1307,6 +1307,12 @@ async function boot(course, options, lifetime, isCurrent) {
   bridge.on('pause', (m) => setPaused(m.on));
   bridge.on('kept-escape', () => hostEscape.kept());
   bridge.on('focus', () => canvas.focus({ preventScroll: true }));
+  // a CCP lobby row or a friend's race invite while the window is already up: taken on the menu only, never mid-race
+  bridge.on('join-room', (m) => {
+    const id = m && typeof m.roomId === 'string' && /^[a-z0-9]{12}$/.test(m.roomId) ? m.roomId : null;
+    if (!id || !link || state !== 'menu' || (lobbyUi && lobbyUi.phase)) return;
+    hud.setCard('lobby', { roomId: id }); lobbyUi = hud.lobby || lobbyUi;
+  });
   if (!BOT) {
     lifetime.listen(window, 'blur', () => setPaused(true));
     lifetime.listen(document, 'visibilitychange', () => { if (document.hidden) setPaused(true); });
