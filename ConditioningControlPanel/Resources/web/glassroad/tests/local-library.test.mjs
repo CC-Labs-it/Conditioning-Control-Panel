@@ -69,7 +69,7 @@ test('own files never leave the page: no fetch, no bridge, no upload; Scrolller 
   const boot = src('boot.js');
   assert.doesNotMatch(boot, /bridge\.send\([^)]*(library|files)/i);
   assert.match(boot, /else if \(consentOn\(\)\) scrolller\.setConsent\(false\)/);
-  assert.match(boot, /if \(!files\) library\.clear\(\)/);
+  assert.match(boot, /if \(!shared\.filesOn\) \{ library\.clear\(\)/);
   for (const l of [...lib.split('\n'), ...src('hud/cards.js').split('\n')].filter((x) => /My files|Your files|this device|'Choose'|'Change'/.test(x)))
     assert.doesNotMatch(l, /[—–!]/, l);
 });
