@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace ConditioningControlPanel.Tests;
@@ -23,6 +24,10 @@ public class SparklesSlipParityTests
     };
 
     private const string File_ = "sparkles-slip.js";
+
+    /// <summary>The receipt handed to showSlip, directly or through a small arrow (a calm tree).</summary>
+    private static readonly Regex Subscribed =
+        new(@"'sparkles-receipt',\s*(showSlip\b|\(?\w*\)?\s*=>\s*showSlip\()", RegexOptions.CultureInvariant);
 
     private static string WebDir()
     {
@@ -55,7 +60,7 @@ public class SparklesSlipParityTests
                 .Where(f => !f.EndsWith(File_, StringComparison.Ordinal))
                 .Select(Read)
                 .Any(s => s.Contains("from './sparkles-slip.js'", StringComparison.Ordinal)
-                          && s.Contains("'sparkles-receipt', showSlip", StringComparison.Ordinal));
+                          && Subscribed.IsMatch(s));
             Assert.True(wired, $"{tree}: no boot file imports {File_} and subscribes 'sparkles-receipt'");
         }
     }
@@ -67,5 +72,8 @@ public class SparklesSlipParityTests
         Assert.DoesNotContain(src.Split('\n'), l => l.StartsWith("import ", StringComparison.Ordinal));
         Assert.DoesNotContain("fetch(", src);
         Assert.Contains("prefers-reduced-motion", src);
+        // The slip never takes a click: an end card's buttons under it keep working.
+        Assert.DoesNotContain("addEventListener('click'", src);
+        Assert.DoesNotContain("pointer-events:auto", src);
     }
 }
