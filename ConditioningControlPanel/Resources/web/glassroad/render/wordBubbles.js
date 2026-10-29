@@ -25,7 +25,7 @@ import { bubbleLook, fitFontPx, letterLayout, asciiWord, BUBBLE_LOOK as BL, BUBB
 import { FACES } from './fonts.js';
 import { scriptBubbles } from '../sim/words.js';
 import { wordTheme, wordFace, wordAccent } from './wordTheme.js';
-import { wordIdentity } from '../sim/wordIdentity.js';
+import { phraseWordIdentity } from '../sim/wordIdentity.js';
 import { roadWordIdentityUv } from './roadWordIdentity.js';
 
 const GRID = 8, CELL = 256;
@@ -288,7 +288,7 @@ export function createWordBubbles(scene, { feel = null, photosafe = null, cap = 
       if (v.state === 'popped' && !flashed.has(v.id)) flashed.set(v.id, !g && (!photosafe || photosafe.request('pop')));
       if (v.state === 'live') flashed.delete(v.id);   // the song looped: the word may pop again
       bubbleLook(v, { gentle: g, flashOk: !!flashed.get(v.id), seed }, look);
-      const kind = wordIdentity(v.w), popS = g ? BL.gentlePopS : BL.popS;
+      const kind = phraseWordIdentity(v.w), popS = g ? BL.gentlePopS : BL.popS;
       const collected = v.state === 'popped' ? Math.max(0, Math.min(1, v.outT / popS)) : -1;
       if (kind && collected >= 0) look.text = 1 - collected * collected * (3 - 2 * collected);
       const slot = atlas.slotOf(v.w, v.row || 0), size = sizeOf(v);
