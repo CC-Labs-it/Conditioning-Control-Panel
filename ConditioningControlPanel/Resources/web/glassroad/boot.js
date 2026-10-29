@@ -20,14 +20,16 @@
  */
 import { createBridge, songCharts, isLocalSongHost, wantLobbySongs, lobbySongCharts, ROOM_ORIGIN } from './host/bridge.js';
 import { createHostEscape } from './host/hostEscape.js';
-import { createCardMedia } from './host/cardMedia.js';
+import { createCardMedia, PHONE_READY_CLIPS } from './host/cardMedia.js';
 import { createScrolllerFeed } from './host/scrolllerFeed.js';
+import { loadCustomization, saveCustomization, selectedSongCharts } from './host/courseCustomization.js';
 import { nichesFor, isDefault, savePick } from './host/scrolllerNiches.js';
+import { createLocalLibrary, pickFiles, feedSwitch, loadFilesChoice, saveFilesChoice, openFilePicker } from './host/localLibrary.js';
 import { createSubliminalBurst } from './fx/subliminalBurst.js';
 import { loadFeel } from './core/feel.js';
 import { createBus, createQueue } from './core/events.js';
 import { createClock } from './core/clock.js';
-import { createActionMap, createEdgeLatch } from './core/actions.js';
+import { createActionMap, createEdgeLatch, createItemLatch } from './core/actions.js';
 import { clamp, v3, qrotate } from './core/math.js';
 import { createKeyboard } from './input/keyboard.js';
 import { createGamepad } from './input/gamepad.js';
@@ -90,11 +92,11 @@ import { onlineCourseHash as onlineHash } from './net/courseHash.js';
 import { createLobbyApi, fetchTransport, hostTransport } from './net/lobbyApi.js';
 import { createProfileSync } from './meta/profileSync.js';
 import { configureLobby } from './hud/lobby.js';
-import { linkToken, dropLinkParam } from './hud/lobbyMath.js';
+import { linkToken, dropLinkParam, joinParam } from './hud/lobbyMath.js';
 import { poseOf } from './hud/presets.js';
 import { createDevHook, devAllowed } from './dev/hook.js';
 import { chipAlpha, kartPoint } from './hud/countdown.js';
-import { createLoading } from './hud/loading.js';
+import { createLoading, LOAD_STALL_MS } from './hud/loading.js';
 import { describeFailure, rememberFailure, failureLine, isStalled, blockedTick, STALL_MS, WATCH_MS, FRAME_THROWS } from './core/failure.js';
 import { ORDER as TIER_ORDER } from './render/quality.js';
 import { dismantleScene } from './render/sceneResources.js';
@@ -143,7 +145,7 @@ const loading=createLoading();
 /** Read-only status for the boot check (dev/boot-check.mjs) and the console. */
 const shared = { bridge: createBridge(), hostEscape: createHostEscape(), bus: createBus(),
   songCache: createSongCache(), renderer: null, artLibrary: null, garageArt: null, garage: null,
-  kartPool: { current: null }, retiredArt: [], pickedSong: null, audio: null,
+  kartPool: { current: null }, retiredArt: [], pickedSong: null, coursePicks: loadCustomization(), legacyFilesOn: loadFilesChoice(), initialCourse: selectedCourse(location.search).id, courseFiles: {}, courseSongs: {}, songRows: [], audio: null,
   closed: false, counts: { renderer: 0, audio: 0, garage: 0, courses: 0 },
   failures: [], rendererOpts: null, recovering: false };
 shared.feelTask = Promise.all([loadFeel(), loadFonts()]).then(([feel]) => {
@@ -176,6 +178,7 @@ window.addEventListener('pagehide', () => {
   shared.closed = true;
   controller.dispose(); shared.garage?.dispose(); shared.kartPool.current?.dispose();
   shared.artLibrary?.dispose(); shared.renderer?.dispose(); shared.audio?.dispose();
+  shared.library?.dispose(); shared.courseFiles = {}; shared.courseSongs = {};
   shared.songCache.clear(); shared.hostEscape.dispose?.(); shared.bridge.dispose(); loading.dispose();
 }, { once: true });
 
@@ -183,7 +186,7 @@ window.addEventListener('pagehide', () => {
 function record(kind, e) {
   const d = window.__glassroad, ms = d && d.loading && d.loading.milestones;
   const rec = describeFailure(e, { kind, course: controller.active || selectedCourse(location.search).id,
-    backend: shared.renderer?.backend || null, tier: shared.renderer?.tier || null,
+    backend: shared.renderer?.backend || null, tier: shared.renderer?.tier || null, pinned: !!shared.renderer?.pinned,
     stage: ms && ms.length ? ms[ms.length - 1].stage : null, ua: navigator.userAgent });
   rememberFailure(rec);
   if (d) d.lastFailure = rec;
@@ -230,6 +233,17 @@ async function recover(kind, e, { race = false } = {}) {
   } finally { shared.recovering = false; }
 }
 shared.recover = recover;
+/** The loading watchdog (hud/loading.js): a visible cover whose bar has not moved for LOAD_STALL_MS (iOS killed the
+ *  GPU process, a compile that never answers, a rebuild after a lost device that hangs) ends on the reason and Retry. */
+loading.onStall(({ stage, progress }) => {
+  if (shared.closed) return;
+  const rec = record('stall', new Error('stuck at ' + (stage || 'the start') + ' (' + Math.round(progress * 100) + '%) for ' + Math.round(LOAD_STALL_MS / 1000) + ' s'));
+  console.error('[glassroad] ' + failureLine(rec));
+  shared.recovering = false;   // a hung rebuild never finished; the next loss may rebuild again
+  if (window.__glassroad) window.__glassroad.phase = 'failed';
+  loading.fail(failureLine(rec));
+  loading.onRetry(() => void retry(rec.course));
+});
 
 /** ?botFall=1: once, steer the player to the outside of the first open stretch (a rescue to look at). */
 function createFallSteer(track, st, feel) {
@@ -318,6 +332,7 @@ async function boot(course, options, lifetime, isCurrent) {
   loaded('host');
   let CHARTS = courseSongs(TRACK_ID, location.search,
     songCharts({ search: location.search, devHost: DEV_HOST, songs: init.caps.songs }));
+  const soloCharts = () => selectedSongCharts(shared.coursePicks[TRACK_ID]?.songId, shared.songRows, CHARTS);
   const songCache = shared.songCache;
   for (const url of CHARTS) void songCache.preload(url);
   const [feel, trackJson] = await Promise.all([
@@ -356,7 +371,8 @@ async function boot(course, options, lifetime, isCurrent) {
   fx.state.screen = effects.screen;
   fx.state.fog = payoff.fog; fx.state.fogTheme = track.id;
   const audio = shared.audio ||= (() => {
-    shared.counts.audio++; return createAudio(feel, shared.bus, { gentle, musicFetchFn: songCache.fetch });
+    shared.counts.audio++; return createAudio(feel, shared.bus, { gentle, musicFetchFn: songCache.fetch,
+      lowRateDecode: () => !!globalThis.matchMedia?.('(pointer: coarse)').matches });   // phones (pickTier's coarse rule): half-rate song
   })();
   audio.setLaps(laps); audio.setPaused(false); audio.reset();
   audio.music?.stop();
@@ -370,6 +386,11 @@ async function boot(course, options, lifetime, isCurrent) {
   configureLobby({ track: track.id, trackLaps: TRACK_LAPS });
   const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus, { photosafe, racers: () => racers?.list });
   const directionWarning = createDirectionWarning(track);
+  // playtest 2026-10-28 (3 laps ran ~10 min): a solo race runs the Laps option (1 by default, the pre-race card);
+  // online runs the room cfg laps (startOnline). TRACK_LAPS stays the course's own count, the lobby's default.
+  const lapsFor = (o) => (o && o.laps > 0 ? o.laps : TRACK_LAPS);
+  function setSoloLaps(o) { laps = track.laps = lapsFor(o); audio.setLaps(laps); shared.garage?.track?.(trackName, laps); }
+  setSoloLaps(hud.options);
   lifetime.defer(() => hud.dispose());
   // Host state stays live while art and shaders load behind the cover.
   const applyHostGentle = m => {
@@ -382,20 +403,47 @@ async function boot(course, options, lifetime, isCurrent) {
   // Online pictures: a switch in Options only where the host offers the feed (the web), moved only by its echo, and this
   // course's niches (host/scrolllerNiches.js: its default pair, or the player's own pick kept in this browser).
   const scrolller = init.caps.scrolller ? shared.scrolllerFeed : null;
-  if (scrolller) {
-    let niches = nichesFor(track.id);
-    const view = () => ({ on: scrolller.consent ?? init.caps.scrolller.consent === true, track: trackName, niches,
-      custom: !isDefault(track.id), catalog: scrolller.catalog });
-    hud.setScrolller(view());
-    scrolller.setNiches(track.id, niches);
-    lifetime.defer(scrolller.subscribe(() => hud.setScrolller(view())));
-    hud.on('scrolller', (e) => scrolller.setConsent(!!e?.on));
-    hud.on('scrolller-niches', (e) => {
-      niches = savePick(track.id, e?.niches || null);
-      scrolller.setNiches(track.id, niches);
-      hud.setScrolller(view());
-    });
+  // "My files" (host/localLibrary.js): the player's own pictures as blob urls, never uploaded; while it is on the
+  // Scrolller switch is off, so the host fetches nothing. Kept across courses; only the choice survives a reload.
+  const library = shared.library ||= createLocalLibrary();
+  library.setFiles(shared.courseFiles[TRACK_ID] || []);
+  const consentOn = () => scrolller?.consent ?? init.caps.scrolller?.consent === true;
+  const coursePick = shared.coursePicks[TRACK_ID] ||= {};
+  if (!coursePick.source) coursePick.source = TRACK_ID === shared.initialCourse && shared.legacyFilesOn ? 'files' : consentOn() ? 'scrolller' : 'off';
+  shared.filesOn = coursePick.source === 'files';
+  const pictures = feedSwitch(() => shared.filesOn ? library : coursePick.source === 'off' ? null : scrolller);
+  const view = () => ({ on: consentOn(), track: trackName, niches: nichesFor(track.id), custom: !isDefault(track.id),
+    catalog: scrolller?.catalog, source: shared.filesOn ? 'files' : consentOn() ? 'scrolller' : 'off', files: library.count });
+  const refreshMedia = () => { hud.setScrolller(view()); shared.garage?.refreshMedia?.(); };
+  function setSource(to, choose = true) {
+    if (!['scrolller', 'files', 'off'].includes(to) || (to === 'scrolller' && !scrolller)) return;
+    coursePick.source = to; shared.filesOn = to === 'files'; saveCustomization(shared.coursePicks);
+    saveFilesChoice(shared.filesOn);
+    if (!shared.filesOn) { library.clear(); delete shared.courseFiles[TRACK_ID]; }
+    if (shared.filesOn && !library.count && choose) pick();
+    if (scrolller) {
+      scrolller.setConsent(to === 'scrolller');
+      if (to === 'scrolller') scrolller.setNiches(track.id, nichesFor(track.id));
+    }
+    refreshMedia();
   }
+  const pick = () => openFilePicker(files => { shared.courseFiles[TRACK_ID] = pickFiles(files); library.setFiles(shared.courseFiles[TRACK_ID]); if (lifetime.alive) refreshMedia(); });
+  hud.setScrolller(view());
+  if (scrolller) {
+    if (coursePick.source === 'scrolller') {
+      scrolller.setNiches(track.id, nichesFor(track.id));
+      if (!consentOn()) scrolller.setConsent(true);
+    }
+    else if (consentOn()) scrolller.setConsent(false);
+    lifetime.defer(scrolller.subscribe(refreshMedia));
+  }
+  hud.on('scrolller-files', pick);
+  hud.on('scrolller', e => setSource(e?.source || (e?.on ? 'scrolller' : 'off')));
+  hud.on('scrolller-niches', e => {
+    savePick(track.id, e?.niches || null);
+    if (!shared.filesOn && coursePick.source === 'scrolller') scrolller?.setNiches(track.id, nichesFor(track.id));
+    refreshMedia();
+  });
   lifetime.listen(cardEl, 'click', e => {
     const anchor = e.target.closest?.('a.c-link[href]');
     if (!anchor) return;
@@ -429,7 +477,7 @@ async function boot(course, options, lifetime, isCurrent) {
   const lights = { ready: false, busy: false, covered: false, want: null, quiet: false, stage: 'Getting the lights ready', p: 0 };
   const WARM_MENU_FPS = 30; let menuDrawMs = 0;   // the garage's pace while the lights warm
   let online = null, lobbyUi = null;
-  let songToken = 0, pickedSong = shared.pickedSong;
+  let songToken = 0, pickedSong = shared.courseSongs[TRACK_ID] || null;
   lifetime.defer(() => { songToken++; });
   let extraSongs = async () => [];
   audio.setVolumes({ master: hud.options.volMaster, music: hud.options.volMusic, sfx: hud.options.volSfx });
@@ -444,9 +492,11 @@ async function boot(course, options, lifetime, isCurrent) {
   showLoading('Opening the garage', 0.04);
 
   // the saved display options (frame cap, render scale, quality, fps readout) reach the renderer at boot
-  const renderer = shared.renderer ||= await createRenderer(canvas, { forceRenderer: init.caps.forceRenderer, options: hud.options, ...(shared.rendererOpts || {}) });
+  const renderer = shared.renderer ||= await createRenderer(canvas, { forceRenderer: init.caps.forceRenderer, options: hud.options, platform: init.caps.platform, ...(shared.rendererOpts || {}) });
   if (!lifetime.alive) { renderer.dispose(); return; }
   canvas = renderer.canvas;
+  // the options card's Quality hint: a pin above the auto pick on a phone warns about memory (render/deviceClass.js)
+  hud.setDevice?.({ device: renderer.device, autoTier: renderer.autoTier });
   shared.rendererOpts = shared.rendererOpts ? { ...shared.rendererOpts, freshCanvas: false } : null;
   loaded('renderer');
   if (!shared.counts.renderer) shared.counts.renderer++;
@@ -494,8 +544,9 @@ async function boot(course, options, lifetime, isCurrent) {
     dismantleScene(world.scene);
   });
   // A visual review may keep the Loom faces without requesting or displaying private media.
-  const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge });
-  if (scrolller && qs.get('media') !== '0') world.media?.setDisplayFeed(scrolller, renderer.canvas);
+  const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge,
+    readyCount: renderer.device === 'phone' ? PHONE_READY_CLIPS : Infinity });   // the DEVICE, whatever Quality is pinned
+  if (qs.get('media') !== '0') world.media?.setDisplayFeed(pictures, renderer.canvas);
   world.setItemMediaSource(seed => cardMedia?.sourceForFlash(seed) || null);
   const subliminalBurst = createSubliminalBurst({ parent: document.body, primary: () => world.primaryColour() });
   effects.screen.params.mediaFlash = true;
@@ -505,7 +556,7 @@ async function boot(course, options, lifetime, isCurrent) {
   }
   Object.defineProperty(debug, 'cardMedia', { get: () => world.media?.stats() || null });
   Object.defineProperty(debug, 'scrolller', { get: () => (scrolller
-    ? { consent: scrolller.consent, pictures: scrolller.count, ready: scrolller.ready } : null) });
+    ? { consent: scrolller.consent, files: shared.filesOn, pictures: pictures.count, ready: pictures.ready } : null) });
   Object.defineProperty(debug, 'songGates', { get: () => world.phraseGates.stats });
   Object.defineProperty(debug, 'airWords', { get: () => world.airWords?.stats || null });
   Object.defineProperty(debug, 'songCues', { get: () => ({ total: songCues?.cues.length || 0,
@@ -525,6 +576,37 @@ async function boot(course, options, lifetime, isCurrent) {
     garage.setCourse({ trackId: track.id, track: trackName, laps, online: course.online });
     garage.setHandlers({ changeTrack: id => void selectCourse(id, { race: true }),
       action: name => hud.menuAction(name), sound: name => { audio.start(); audio.cue(name); } });
+    const mediaFor = id => {
+      const saved = shared.coursePicks[id] || {}, local = shared.courseSongs[id];
+      return { source: id === TRACK_ID ? view().source : saved.source || (consentOn() ? 'scrolller' : 'off'),
+        files: id === TRACK_ID ? library.count : Math.min(24, shared.courseFiles[id]?.length || 0), catalog: scrolller?.catalog || [], scrolllerAvailable: !!scrolller,
+        niches: nichesFor(id), custom: !isDefault(id), songs: shared.songRows.map(({id,label}) => ({id,label})),
+        songId: local ? 'file' : saved.songId || 'default',
+        songName: local?.name || shared.songRows.find(row => row.id === ((saved.songId && saved.songId !== 'default' ? saved.songId : null) || ({threshold:'pink-road',mainframe:'mainframe',keep:'keep',boudoir:'boudoir',goonworks:'goonworks'})[id]))?.label || 'Track default' };
+    };
+    garage.setMedia(mediaFor);
+    lifetime.listen(document, 'glassroad-course-media', e => {
+      const d = e.detail || {}, id = d.trackId;
+      if (!COURSES.some(c => c.id === id) || !['menu', 'boot'].includes(state)) return;
+      const saved = shared.coursePicks[id] ||= {};
+      if (d.kind === 'niches') {
+        savePick(id, d.niches);
+        if (id === TRACK_ID && coursePick.source === 'scrolller') scrolller?.setNiches(id, nichesFor(id));
+      } else if (d.kind === 'source' && ['scrolller', 'files', 'off'].includes(d.source)) {
+        if (id === TRACK_ID) setSource(d.source, false); else { saved.source = d.source; if (d.source !== 'files') delete shared.courseFiles[id]; }
+      } else if (d.kind === 'files' && d.files?.length) {
+        shared.courseFiles[id] = pickFiles(d.files); saved.source = 'files';
+        if (id === TRACK_ID) library.setFiles(shared.courseFiles[id]);
+        if (id === TRACK_ID) setSource('files', false);
+      } else if (d.kind === 'song' && (d.songId === 'default' || shared.songRows.some(row => row.id === d.songId))) {
+        delete shared.courseSongs[id]; saved.songId = d.songId;
+        if (id === TRACK_ID) { pickedSong = null; stopSong(); void menuSong(); }
+      } else if (d.kind === 'song-file' && /^audio\//.test(d.file?.type || '')) {
+        shared.courseSongs[id] = d.file; saved.songId = 'default';
+        if (id === TRACK_ID) { pickedSong = d.file; stopSong(); void menuSong(); }
+      }
+      saveCustomization(shared.coursePicks); refreshMedia();
+    });
     garage.setVisible(false);
     lifetime.defer(() => { garage.setVisible(false); garage.setHandlers({ action: null, sound: null, changeTrack: null }); });
     // not enumerable: the garage holds its three.js scene, and every status JSON.stringify of the debug
@@ -542,8 +624,8 @@ async function boot(course, options, lifetime, isCurrent) {
     rise(s) { return this.on ? Math.max(.6, gentle.rise(s)) : s; },
     fade(s) { return this.on ? Math.max(1, gentle.fade(s)) : s; } };
   // The flash canvas is a plain page canvas (never a texture), so the web's display-only Scrolller stills may fill it (never its clips).
-  const cueBurst = createFlashBurst({ source: seed => cardMedia?.sourceForFlash(seed) || scrolller?.stillFor(seed) || null,
-    pool: () => cardMedia?.flashCount || scrolller?.stillCount || 0,   // never the same picture twice in one burst
+  const cueBurst = createFlashBurst({ source: seed => cardMedia?.sourceForFlash(seed) || pictures?.stillFor(seed) || null,
+    pool: () => cardMedia?.flashCount || pictures?.stillCount || 0,   // never the same picture twice in one burst
     photosafe, gentle: cueSafety });
   let cueRunSeen = null, cueRevision = -1;
   lifetime.defer(() => cueBurst.dispose());
@@ -607,7 +689,7 @@ async function boot(course, options, lifetime, isCurrent) {
     const log = runLog; runLog = null;
     try {
       const summary = log.finish(res), before = loadRecord();
-      const { record, diff } = applyRun(before, summary);
+      const { record, diff } = applyRun(before, summary, { fullLaps: TRACK_LAPS });   // a short race sets no whole-race best
       saveRecord(record);
       bus.emit('logbook-saved', { record, summary, diff });
       const recap = buildRecap(summary, diff, before);
@@ -644,7 +726,7 @@ async function boot(course, options, lifetime, isCurrent) {
   function prepareRunMode() {
     if (pickedMode !== runMode) { runMode = pickedMode; buildRun(); syncAssist(); }
     const trial = runMode === 'trial';
-    ghost = trial ? loadGhost(track.id) : null;
+    ghost = trial ? loadGhost(track.id, undefined, laps, TRACK_LAPS) : null;
     if (ghost && ghost.laps !== laps) ghost = null;
     ghostRec = trial ? createGhostRecorder({ track: track.id, laps }) : null;
     ghostT = 0; ghostLapN = 0; ghostLapS = 0;
@@ -736,19 +818,20 @@ async function boot(course, options, lifetime, isCurrent) {
   const tapSource = { poll(into) { into.item = tapItem; tapItem = false; }, dispose() {} };
   const actions = createActionMap([createKeyboard({ target: window }), padSource, createTouch({ root: document.body }), tapSource], { items: true, camera: true, feel });
   lifetime.defer(() => actions.dispose());
-  const hopLatch = createEdgeLatch('hopPressed'), itemLatch = createEdgeLatch('item');
+  const hopLatch = createEdgeLatch('hopPressed'), itemLatch = createItemLatch();
 
 
   // ---- options: Gentle preview (never below the host's switch), steering assist and sensitivity,
   //      volumes, and the display set (frame cap, render scale, quality, fps readout, shadows) ----
   // online: { s (net/room.js session), cfg, go (race.start() done) } or null; lobbyUi = the hud/lobby.js handle
-  let opts = hud.options, assistKey = '';
+  let opts = hud.options, assistKey = '', autopilotKind = null;
   const reactiveOptions = { paused: false, gentle: false, muted: false };
-  /** The Steer assist mode: the Options pick; online it is off on a no lane keeper table and on while paused. */
+  /** The Steer assist mode: the Options pick; online it is off on a no lane keeper table and Strong while paused
+   *  (only Strong drives a hands-off kart: the paused coast needs its autopilot and cruise). */
   function syncAssist() {
     let m = opts.steerAssist;
     if (online && online.go) {
-      if (paused) m = !m || m === 'off' ? 'light' : m;
+      if (paused) m = 'strong';
       else if (!(online.cfg && online.cfg.laneKeeper)) m = 'off';
     }
     const key = String(m);
@@ -765,6 +848,7 @@ async function boot(course, options, lifetime, isCurrent) {
     renderer.setOptions(o);
     fx.setMotion?.(o.motion || 'full');                // feel wave: the Motion row (Gentle reads as 'less' inside fx)
     garage?.setMotion?.(o.motion || 'full');
+    if (!online && (state === 'menu' || state === 'boot')) setSoloLaps(o);   // a race under way keeps its laps
     if (world.shadows) world.shadows.setEnabled(qs.get('shadows') !== '0' && o.shadows !== false);
   }
   applyOptions(opts);
@@ -851,7 +935,7 @@ async function boot(course, options, lifetime, isCurrent) {
       }
       if (my !== songToken) return;
     }
-    for (const url of CHARTS) {
+    for (const url of (online ? CHARTS : soloCharts())) {
       if (my !== songToken || !audio.music) return;
       if (await audio.music.playChart(url, { align })) {
         if (my !== songToken) return;
@@ -880,7 +964,7 @@ async function boot(course, options, lifetime, isCurrent) {
     debug.songLoading = true;
     try {
       if (pickedSong) { await audio.music.playFile(pickedSong, { prepareOnly: true }); return; }
-      for (const url of CHARTS) {
+      for (const url of soloCharts()) {
         if (my !== songToken || !lifetime.alive || !['boot', 'menu'].includes(state)) return;
         if (await audio.music.playChart(url, { prepareOnly: true })) return;
       }
@@ -916,7 +1000,7 @@ async function boot(course, options, lifetime, isCurrent) {
     // ?dev=1&songAt=N (dev only): the recording starts N seconds in at GO, for cue checks.
     const songAt = DEV ? Math.max(0, Number(qs.get('songAt')) || 0) : 0;
     const align = () => songAt - race.goInS;
-    if (pickedSong || CHARTS.length) Promise.resolve(raceAudioStart).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
+    if (pickedSong || soloCharts().length) Promise.resolve(raceAudioStart).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
   }
   /** Rebuild the course's programs at the current tier behind the loading cover (renderer.compile, in groups with
    *  painted frames between them), then start the race. Frames pause meanwhile: the warm owns the scene. */
@@ -951,6 +1035,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (warmedTier && renderer.tier !== warmedTier && state === 'menu') { void rewarmThenRace(); return; }
     closeRunLog();
     stopSong();
+    setSoloLaps(opts);
     prepareRunMode();
     const started = audio.start(); unpause(); resetAll();
     if(garage){world.setLook(0,raceLook(garage.state));debug.playerLook=world.looks()[0];}
@@ -1006,10 +1091,18 @@ async function boot(course, options, lifetime, isCurrent) {
     const devLobby = LOCAL_URL.test(qs.get('lobby') || '') && /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
     const roomOrigin = !devLobby ? ROOM_ORIGIN : (LOCAL_URL.test(qs.get('room') || '') ? qs.get('room') : null);
     let fallback;
-    extraSongs = () => fallback ||= lobbyApi.songs().then(r => lobbySongCharts(courseSongRows(TRACK_ID, r?.songs), { roomOrigin })).catch(() => []);
-    if (wantLobbySongs({ search: location.search, charts: CHARTS })) extraSongs().then(list => {
+    extraSongs = () => fallback ||= lobbyApi.songs().then(r => {
+      shared.songRows = (r?.songs || []).flatMap(row => {
+        const url = lobbySongCharts([row], { roomOrigin })[0];
+        return url ? [{ id: row.id, label: row.title || row.name || row.id, url }] : [];
+      });
+      refreshMedia();
+      return lobbySongCharts(courseSongRows(TRACK_ID, r?.songs), { roomOrigin });
+    }).catch(() => []);
+    extraSongs().then(list => {
       if (!lifetime.alive || !list.length) return;
-      if (!CHARTS.length) CHARTS = list;
+      if (!wantLobbySongs({ search: location.search, charts: CHARTS })) return;
+      CHARTS = list;
       for (const url of list) void songCache.preload(url);
       if (audio.state !== 'running' || debug.songLoading || audio.music?.playing) return;
       if (state === 'boot' || state === 'menu') void menuSong();
@@ -1105,7 +1198,7 @@ async function boot(course, options, lifetime, isCurrent) {
     closeRunLog();
     if (!online) return;
     online = null;
-    track.laps = TRACK_LAPS; laps = TRACK_LAPS;
+    setSoloLaps(opts);
     stopSong(); unpause();
     buildRun();
     resetAll();
@@ -1152,7 +1245,7 @@ async function boot(course, options, lifetime, isCurrent) {
   bus.on('finish', ({ timeS } = {}) => {
     if (!ghostRec || online) return;
     const g = ghostRec.finish(timeS); ghostRec = null;
-    if (debug.trial) debug.trial.saved = saveBestGhost(g);
+    if (debug.trial) debug.trial.saved = saveBestGhost(g, undefined, TRACK_LAPS);
   });
   bus.on('go', () => { goAt = performance.now(); });
   bus.on('drop', () => { debug.drops++; });
@@ -1184,12 +1277,13 @@ async function boot(course, options, lifetime, isCurrent) {
     const f = online ? null : audioFile(e);
     if (!f) return;
     e.preventDefault();
-    pickedSong = shared.pickedSong = f;
+    pickedSong = shared.courseSongs[TRACK_ID] = f; refreshMedia();
     if (state === 'race') Promise.resolve(audio.start()).then(() => playSong(() => -race.goInS)).catch((err) => console.warn('[glassroad] song', err));
   });
 
-  // Clip transport overlaps garage setup. The same complete, consent-valid sources still
-  // settle before shader preparation and the cover lifting; no streaming shortcut is used.
+  // Clip transport overlaps garage setup. Complete, consent-valid sources settle before shader preparation and the
+  // cover lifting; no streaming shortcut is used. A phone waits for its first PHONE_READY_CLIPS only, the rest arrive
+  // behind the menu (all of them peaking with the warm ran iOS out of memory, 2026-10-28).
   if (cardMedia) await cardMedia.ready;
   if (!lifetime.alive) return;
   loaded('media');
@@ -1233,8 +1327,9 @@ async function boot(course, options, lifetime, isCurrent) {
           const hall = boudoirLayout.landmarks.find(row => row.id === 'drawer-hall');
           peekCamera(cam.camera, track, { s: hall.s0 + 80, backM: 10, upM: 5, aheadM: 40 }, renderer.aspect);
         }
-        // phone tier, no mirror hall (its captures need the whole scene): stage the warm (render/stagedWarm.js); ?stage=0 (dev) off
-        const staged = renderer.tier === 'phone' && !warmPose && qs.get('stage') !== '0';
+        // a phone DEVICE (whatever Quality is pinned), no mirror hall (its captures need the whole scene): stage the warm
+        // (render/stagedWarm.js); ?stage=0 (dev) off
+        const staged = renderer.device === 'phone' && !warmPose && qs.get('stage') !== '0';
         const stage = staged ? (a) => stagePlan({ ...a, poses: stagePoses(track, intro.shots, { introS: intro.duration, goS }), poolSpan: [1.5, intro.duration] }) : null;
         warm = await renderer.compile(world.scene, cam.camera, undefined,
           { onProgress: (k, n) => showLights('Getting the lights ready', 0.02 + 0.88 * k / n), stage, alive, overdraw });
@@ -1313,7 +1408,10 @@ async function boot(course, options, lifetime, isCurrent) {
   void warmLights();
   // ?r=<token>: a friend's race link goes straight to the lobby card, which claims it (seated, waiting or refused)
   const linkTok = course.online ? linkToken(location.search) : null;
-  const pendingRoom = sessionStorage.getItem('glassroad.pendingRoom');
+  // ?join=<roomId>: a CCP lobby row; taken once (dropped from the address so a reload does not seat us again)
+  const joinId = course.online && link && !linkTok ? joinParam(location.search) : null;
+  if (joinId) { const to = dropLinkParam(location.href, 'join'); if (to) history.replaceState(history.state, '', to); }
+  const pendingRoom = sessionStorage.getItem('glassroad.pendingRoom') || joinId;
   sessionStorage.removeItem('glassroad.pendingRoom');
   if (options.join) { hud.setCard('lobby', { join: options.join }); lobbyUi = hud.lobby || lobbyUi; }
   else if (pendingRoom) { hud.setCard('lobby', { roomId: pendingRoom }); lobbyUi = hud.lobby || lobbyUi; }
@@ -1454,6 +1552,10 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     if (HT) hLap('sim');
     if (online) online.s.update({ paused, assist: assist.mode !== 'off' });   //    online: clock slew, pings, uploads
+    {                                                             //    the autopilot chip (hud): transitions only
+      const k = assist.view.auto > 0 ? 'auto' : assist.view.cruise > 0 ? 'cruise' : null;
+      if (k !== autopilotKind) { autopilotKind = k; bus.emit('autopilot', { on: k !== null, kind: k }); }
+    }
     queue.flush(bus);                                             // 3. events
     if (runLog && simOn && race.phase === 'racing' && !P.finished) runLog.sample(P.st, standings.placeOf(0), steps * clock.dt);
     const frozen = paused && !online;                             //    online the pause card freezes nothing

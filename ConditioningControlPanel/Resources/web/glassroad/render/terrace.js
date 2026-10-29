@@ -4,6 +4,7 @@ import { texture, uv, vec2 } from 'three/tsl';
 import { createSoftMaterial } from './materials/colossus.js';
 import { faceCell, FACE_LOOK } from './faces.js';
 import { planTerrace, TERRACE } from './terraceMath.js';
+import { setStaticSubtree } from './matrixWalk.js';
 
 const writeBasis = (M, axes, p) => M.set(
   axes[0][0], axes[1][0], axes[2][0], p[0],
@@ -90,5 +91,6 @@ export function buildTerrace(art, track, pal, { phone = false, avoid = [], sampl
   result.diagnostics.count = result.count;
   result.diagnostics.chosenStartS = plan.placements[0].s;
   object.userData.terrace = { id, rows: result.count, cabinets: result.count * 6, ...result.diagnostics };
+  setStaticSubtree(object);
   return result;
 }

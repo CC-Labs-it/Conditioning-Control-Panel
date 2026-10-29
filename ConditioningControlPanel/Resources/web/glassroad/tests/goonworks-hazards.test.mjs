@@ -26,7 +26,7 @@ function crossing(row, time, x = 0, h = 0) {
 }
 
 test('authored toy halls contain three real wheels, four shutters and sixteen independent wave blocks with wide bypasses', () => {
-  for (const [kind, count] of [['wheel', 3], ['shutter', 4], ['block', 16], ['flipper', 1]]) assert.equal(rows.filter(r => r.kind === kind).length, count);
+  for (const [kind, count] of [['wheel', 3], ['shutter', 4], ['block', 16], ['flipper', 0]]) assert.equal(rows.filter(r => r.kind === kind).length, count);
   for (const row of rows) assert.ok(row.s > row.fromS && row.s < row.toS);
 });
 
@@ -105,7 +105,7 @@ test('screen shutters sweep their true lateral position and leave both outside l
   assert.equal(crossing(row, t, pose.x).hit, row.id);
   assert.equal(crossing(row, t, -9).hit, null);
   for (const x of [-row.bypass, row.bypass]) assert.equal(crossing(row, t, x).hit, null);
-  const toys = createGoonworksHazards(track, layout), r = racer(row, 0, 5.95), p = cloneState(r.st);
+  const toys = createGoonworksHazards(track, layout), r = racer(row, 0, 4.1), p = cloneState(r.st);
   toys.apply(r, p, 0);
   assert.equal(toys.apply(r, p, .1), row.id, 'a moving screen can contact a stationary racer');
 });
@@ -121,13 +121,14 @@ test('quiz tiles warn before rising, collide only inside their raised footprint,
   assert.notEqual(goonworksPose(row, 4.6).height, goonworksPose(rows.find(r => r.id === 'quiz-block-1-0'), 4.6).height);
 });
 
-test('pinball flipper adds one timed airborne kick and preserves the ordinary launch when at rest', () => {
-  const row = rows.find(r => r.kind === 'flipper');
-  assert.equal(crossing(row, 1).hit, null);
-  const { r, toys, hit } = crossing(row, 4.85);
-  assert.equal(hit, row.id); assert.equal(r.st[S.airborne], 1); assert.ok(r.st[S.velY] >= 8);
-  const velocity = r.st[S.velY]; toys.apply(r, cloneState(r.st), 4.85); assert.equal(r.st[S.velY], velocity);
-  assert.equal(toys.inspect(4.85).launches, 1);
+test('unsupported pinball flipper is gone while the genuine authored flight remains', () => {
+  assert.ok(!rows.some(row => row.kind === 'flipper'));
+  assert.ok(track.aerials.length > 0);
+  const range = layout.byId['pinball-table'];
+  for (let s = range.s0 + 10; s < range.s1 - 10; s += 5) {
+    const f = track.frameAt(s);
+    assert.equal(track.query(...f.p, f.seg).onRoad, true);
+  }
 });
 
 test('clock freeze, reset, rescue, remote and post-finish behavior are deterministic', () => {
@@ -153,7 +154,7 @@ test('a rear bump after resolution is swept before the next movement and cannot 
   r.st.set(racer(row, 0).st);
   const p = cloneState(r.st); r.st.set(racer(row, 2).st);
   assert.equal(toys.apply(r, p, 5 + 1 / 60), row.id);
-  assert.ok(r.st[S.s] < row.s - 1.8);
+  assert.ok(r.st[S.s] < row.s - 1.2);
   assert.equal(toys.inspect(5 + 1 / 60).hits, 1, 'event and stall do not repeat inside the cooldown');
 });
 

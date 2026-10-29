@@ -90,3 +90,19 @@ export function createEdgeLatch(key = 'hopPressed') {
 
 /** The hop edge latch (Phase A name). */
 export function createHopLatch() { return createEdgeLatch('hopPressed'); }
+
+/** Keep a throw and its direction together until a simulation step consumes them. */
+export function createItemLatch() {
+  let pending = false, back = false;
+  return {
+    hold(a) {
+      if (!pending && a.item) { pending = true; back = !!a.back; }
+      a.item = pending;
+      if (pending) a.back = back;
+      return a;
+    },
+    spent(a) { pending = false; back = false; a.item = false; },
+    clear() { pending = false; back = false; },
+    get pending() { return pending; },
+  };
+}

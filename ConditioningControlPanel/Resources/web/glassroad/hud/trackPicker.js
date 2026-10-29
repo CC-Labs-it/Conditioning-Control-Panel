@@ -1,5 +1,8 @@
 import {courseSketch} from './courseSketch.js';
 import {MODE_LABEL,resolveMode,saveMode} from '../meta/mode.js';
+import {loadOptions} from './options.js';
+import {courseTheme} from '../track/themes.js';
+import {mediaRecap} from './courseMedia.js';
 
 const COLORS={threshold:'#ff88b5',mainframe:'#70e6c3',keep:'#ffce62',boudoir:'#e49cfa',goonworks:'#bd006e'};
 // Race / Time trial: two small pills above the grid (Logbook TRIAL lane); the pick is saved and sent as glassroad-mode
@@ -7,13 +10,18 @@ const MODE_CSS='.g-track-mode{display:flex;gap:8px;margin:0 0 14px}#race-garage 
 /** The chooser's in-game shot of a course: art/ui/course-<id>.webp (960 x 540) and a -phone variant (480 x 270). */
 export function courseShot(id){const at=name=>new URL('../art/ui/'+name+'.webp',import.meta.url).href;
   const id2=COLORS[id]?id:'threshold';return {src:at('course-'+id2),srcset:at('course-'+id2+'-phone')+' 480w, '+at('course-'+id2)+' 960w'};}
+/** A tile's details for the solo lap choice (playtest 2026-10-28): "1 lap · 5.4 km", the distance for those laps. */
+export function courseDetails(kmPerLap,laps){const n=laps>0?laps|0:1,km=Number(kmPerLap)*n;
+  return n+(n===1?' lap':' laps')+(Number.isFinite(km)&&km>0?' · '+km.toFixed(1)+' km':'');}
 /** Shows the mode on the garage Race row (the row keeps its own track line). */
 function paintMode(root,mode){const b=root.querySelector('[data-g=race] b');if(b)b.textContent=MODE_LABEL[mode]||'Race';}
 /** Native dialog supplies focus trapping and pointer isolation from the live 3D carousel. */
-export function createTrackPicker({root,courses,trackId,change}) {
+export function createTrackPicker({root,courses,trackId,change,mediaFor=()=>({}),customize=()=>{}}) {
   const dialog=document.createElement('dialog');dialog.className='g-track-picker';dialog.setAttribute('aria-labelledby','g-track-title');
   dialog.innerHTML='<header><div><small>YOUR NEXT RACE</small><h2 id="g-track-title">Choose track</h2></div><button type="button" class="g-track-back">Back</button></header><style>'+MODE_CSS+'</style><div class="g-track-mode" role="group" aria-label="Mode"></div><div class="g-track-grid"></div><p class="g-track-status" role="status"></p>';
-  root.append(dialog);let opener=null,loaded=false,leaving=false,timer=0,disposed=false;
+  root.append(dialog);let opener=null,loaded=false,leaving=false,timer=0,disposed=false;const kms=[];
+  // the solo Laps option, read at each show: the pre-race card may have changed it since
+  const paintDetails=()=>{const laps=loadOptions().laps;tiles.forEach((b,i)=>{if(kms[i])b.querySelector('.g-course-details').textContent=courseDetails(kms[i],laps);});};
   const here=globalThis.location;let mode=resolveMode({search:here?here.search:''});paintMode(root,mode);
   const modes=['race','trial'].map(id=>{const b=document.createElement('button');b.type='button';b.dataset.mode=id;b.textContent=MODE_LABEL[id];
     b.setAttribute('aria-pressed',String(id===mode));
@@ -34,27 +42,43 @@ export function createTrackPicker({root,courses,trackId,change}) {
     b.innerHTML='<img class="g-course-shot" alt="" aria-hidden="true" width="960" height="540" loading="lazy" decoding="async" draggable="false" sizes="(max-width:699px) 46vw, 340px"><span class="g-course-mode"></span><span class="g-course-map" aria-hidden="true"><svg viewBox="0 0 180 88"><path class="g-route-shadow"/><path class="g-route"/><circle r="3"/></svg></span><span class="g-course-text"><strong></strong><small class="g-course-details"></small></span><span class="g-course-selected" aria-hidden="true">Selected</span>';
     const img=b.querySelector('.g-course-shot');img.setAttribute('srcset',shot.srcset);img.setAttribute('src',shot.src);
     b.querySelector('strong').textContent=course.name;b.querySelector('.g-course-mode').textContent=course.online?'Solo / online':'Solo';
+    const theme=courseTheme(course.id);
+    if(theme){
+      const badge=document.createElement('span');badge.className='g-course-theme';badge.textContent='Theme: '+theme.label;
+      const lyrics=document.createElement('small');lyrics.className='g-course-lyrics';lyrics.textContent='Default lyrics: '+theme.lyrics;
+      b.querySelector('.g-course-text').append(badge,lyrics);
+    }
     b.onclick=()=>{if(leaving)return;if(course.id===trackId){close();return;}leaving=true;
       for(const tile of tiles)tile.disabled=true;
       dialog.querySelector('.g-track-status').textContent='Opening '+course.name;
       // The opaque loading cover takes over after navigation. The selected look is already saved on this origin.
       root.classList.add('g-course-leaving');timer=setTimeout(()=>change(course.id),350);
     };
-    dialog.querySelector('.g-track-grid').append(b);return b;
+    const wrap=document.createElement('article');wrap.className='g-course-card';wrap.append(b);
+    const footer=document.createElement('div');footer.className='g-course-media';
+    const pictures=document.createElement('p');pictures.className='g-course-pictures';
+    const song=document.createElement('p');song.className='g-course-song';
+    const custom=document.createElement('button');custom.type='button';custom.className='g-course-customize';custom.textContent='Customize';
+    custom.setAttribute('aria-label','Customize '+course.name);custom.onclick=()=>customize(course,custom);
+    footer.append(pictures,song,custom);wrap.append(footer);dialog.querySelector('.g-track-grid').append(wrap);return b;
   });
+  function refreshMedia(){for(const [i,b]of tiles.entries()){const recap=mediaRecap(mediaFor(courses[i].id)||{},courses[i].id),wrap=b.parentElement;
+    wrap.querySelector('.g-course-pictures').textContent=recap.pictures;wrap.querySelector('.g-course-song').textContent='Music: '+recap.song;}}
   async function loadSketches(){if(loaded)return;loaded=true;
     await Promise.allSettled(courses.map(async(course,i)=>{
       const response=await fetch(new URL('../tracks/'+course.id+'.json',import.meta.url));if(!response.ok)return;
       const sketch=courseSketch(await response.json());if(!sketch||disposed)return;const b=tiles[i];
       for(const path of b.querySelectorAll('path'))path.setAttribute('d',sketch.path);
       const start=b.querySelector('circle');start.setAttribute('cx',sketch.start[0]);start.setAttribute('cy',sketch.start[1]);
-      b.querySelector('.g-course-details').textContent=sketch.km+' km · '+sketch.laps+' laps';
+      kms[i]=sketch.km;
     }));
+    paintDetails();
   }
   return {
     get open(){return dialog.open;},
-    show(trigger=document.activeElement){if(dialog.open)return;opener=trigger;dialog.showModal();tiles.find(b=>b.dataset.course===trackId)?.focus();loadSketches();},
-    nav(dir){if(!dialog.open)return;const buttons=[...modes,...tiles,dialog.querySelector('.g-track-back')],i=buttons.indexOf(document.activeElement);
+    refreshMedia,
+    show(trigger=document.activeElement){if(dialog.open)return;opener=trigger;refreshMedia();dialog.showModal();tiles.find(b=>b.dataset.course===trackId)?.focus();paintDetails();loadSketches();},
+    nav(dir){if(!dialog.open)return;const buttons=[...dialog.querySelectorAll('button')],i=buttons.indexOf(document.activeElement);
       if(dir==='back'){close();return;}if(dir==='ok'){document.activeElement.click?.();return;}
       const step={up:-2,down:2,left:-1,right:1}[dir];if(step)buttons[(i+step+buttons.length)%buttons.length].focus();
     },

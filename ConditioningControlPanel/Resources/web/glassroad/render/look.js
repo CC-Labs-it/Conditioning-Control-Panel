@@ -41,6 +41,10 @@ export const LOOK = {
   // post
   bloomStrength: 0.22, bloomRadius: 0.3, bloomThreshold: 1.0, bloomBoostGain: 1.5,
   vignetteIn: 0.35, vignetteOut: 0.95, vignetteDark: 0.55, edgeTint: '#ff4fa3', flashTint: '#fff0c8',
+  // speed wave 2026-10-28: the view widens at speed (render/cameraMath.js SPEED_FEEL_DEFAULTS; LOOK.speedFeel overrides
+  // any key) and the screen edges blur toward the centre: 0 inside speedBlurIn of the half diagonal (the middle third
+  // stays sharp), the outermost tap steps speedBlurUv of the centre distance at full strength
+  speedFeel: {}, speedBlurIn: 0.33, speedBlurUv: 0.05,
   // particles
   sparkRate: 140, sparkSpeedMps: [2, 6], sparkSizeM: 0.14, sparkSpreadMps: 1.5, burstSpreadMps: 4, burstCount: 60,
   dustCount: 40, dustSpeedMps: 3, dustSizeM: 0.4, dustColour: '#f4eef8', dustLifeS: 0.6,

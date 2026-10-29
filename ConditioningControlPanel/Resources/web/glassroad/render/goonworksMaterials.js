@@ -2,6 +2,7 @@
 import { MeshBasicNodeMaterial, Color, DoubleSide, BackSide, FrontSide, DataTexture, RGBAFormat, UnsignedByteType, LinearFilter, RepeatWrapping } from 'three/webgpu';
 import { vec2, vec3, float, uniform, uv, positionGeometry, positionWorld, normalWorld, cameraPosition, normalize, dot, max, min, abs, pow, mix, smoothstep, fract, fwidth, texture, sin } from 'three/tsl';
 import {getGoonworksLayout} from '../track/goonworks-layout.js';
+import { trackTableWidth } from './spectrum.js';
 import { goonworksMusicFloor } from './materials/goonworksMusicFloor.js';
 import { reliefNormal, reliefFootprint } from './surfaceRelief.js';
 
@@ -68,7 +69,8 @@ export function createGoonworksMaterial(hex, { ink = false, paper = false, unlit
 /** Apply after createRoadMaterial. Return the resource owner for scene disposal. */
 export function applyGoonworksRoad(road, art, track) {
   if (track?.id !== 'goonworks') return null;
-  const size = Math.max(2,Math.ceil(track.lengthM)), bytes = new Uint8Array(size*4*4);
+  // one texel per metre, capped at 8192 (WebGPU's default maxTextureDimension2D; GOONWORKS is 9665 m since the reshape)
+  const size = trackTableWidth(track.lengthM), bytes = new Uint8Array(size*4*4);
   const layout=getGoonworksLayout(track),halls=['mill-hall','quiz-ballroom','pinball-table'].map(id=>layout.byId[id]);
   const districtColourCache=new Map(Object.entries(GOONWORKS_DISTRICT_PALETTES).map(([id,p])=>[id,[p.road,p.pink,p.accent].map(key=>new Color(GOONWORKS_PALETTE[key]).toArray())]));
   for(let i=0;i<size;i++){const s=(i+.5)*track.lengthM/size;bytes[i*4]=Math.round(Math.min(1,track.frameAt(s).w/120)*255);
@@ -173,8 +175,8 @@ export function createGoonworksTubeMaterial(outer=false){
   const tubeGrain=filteredWave(p.y.mul(23).add(p.x.mul(67))).mul(outer?.005:.012).add(1);
   colour=colour.mul(tubeGrain);
   colour=mix(colour,rgb(outer?GOONWORKS_PALETTE.rose:GOONWORKS_PALETTE.warmgray),seam.mul(outer?.16:.1));
-  colour=mix(colour,rgb(GOONWORKS_PALETTE.cream),ribLip.mul(outer?.18:.42));
-  colour=mix(colour,rgb(GOONWORKS_PALETTE.ivory),enamel);
+  if(outer)colour=mix(colour,rgb(GOONWORKS_PALETTE.cream),ribLip.mul(.18));
+  if(outer)colour=mix(colour,rgb(GOONWORKS_PALETTE.ivory),enamel);
   colour=mix(colour,rgb(GOONWORKS_PALETTE.ink),max(rim,ribInk));
   material.colorNode=colour;return material;
 }

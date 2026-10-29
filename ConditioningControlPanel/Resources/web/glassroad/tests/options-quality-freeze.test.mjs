@@ -46,5 +46,5 @@ test('options card: opened from the pause card, the Quality hint says it changes
   const { QUALITY_LATER } = await import('../hud/cards.js');
   assert.equal(QUALITY_LATER, 'Changes after this race');
   assert.doesNotMatch(QUALITY_LATER, /[!–—]/);
-  assert.match(src('hud/cards.js'), /key === 'quality' && data\.from === 'pause' \? QUALITY_LATER : hint/);
+  assert.match(src('hud/cards.js'), /key === 'quality' \? data\.from === 'pause' \? QUALITY_LATER : qualityHint\(opts\.quality, host, hint\) : hint/);
 });

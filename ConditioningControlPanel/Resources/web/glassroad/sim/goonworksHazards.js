@@ -3,20 +3,20 @@ import { S, BOOST, RESPAWN, cloneState } from './state.js';
 import { clamp, wrap } from '../core/math.js';
 import { yawParams, calmOf } from './steer.js';
 import { makeQuery } from '../track/query.js';
-import { GOONWORKS_TOYS as K, goonworksSetpieces, goonworksPose, goonworksLocal, apertureContains } from '../track/goonworks-setpieces.js';
+import { GOONWORKS_TOYS as K, GOONWORKS_CONTACT as C, goonworksSetpieces, goonworksPose, goonworksLocal, apertureContains } from '../track/goonworks-setpieces.js';
 import { machineryBeatAt } from '../track/machineryBeat.js';
 
 const travel = (a, b) => Math.hypot(...[0, 1, 2].map(j => b[S.posX + j] - a[S.posX + j]));
 export function goonworksOverlap(row, pose, p) {
-  if (p.h < -1.2 || Math.abs(p.along) > row.depth / 2 + K.kartRadius) return false;
+  if (p.h < -1.2 || Math.abs(p.along) > row.depth * C.depthScale / 2 + C.radius) return false;
   if (row.kind === 'wheel') {
-    for (const dx of [-K.kartRadius, 0, K.kartRadius]) for (const dh of [0, K.kartHeight / 2, K.kartHeight])
-      if (apertureContains(row, pose, p.x + dx, p.h + dh)) return true;
+    for (const dx of [-C.radius, 0, C.radius]) for (const dh of [C.heightInset, K.kartHeight / 2, K.kartHeight - C.heightInset])
+      if (apertureContains(row, pose, p.x + dx, p.h + dh, C.wheelInset, C.gapPadding)) return true;
     return false;
   }
-  if (Math.abs(p.x - pose.x) > row.w / 2 + K.kartRadius) return false;
+  if (Math.abs(p.x - pose.x) > row.w * C.widthScale / 2 + C.radius) return false;
   if (row.kind === 'flipper') return pose.active && p.h < 1.8;
-  return pose.active && p.h < pose.height && p.h + K.kartHeight > 0;
+  return pose.active && p.h < pose.height - C.heightInset && p.h + K.kartHeight > C.heightInset;
 }
 
 export function createGoonworksHazards(track, layout) {

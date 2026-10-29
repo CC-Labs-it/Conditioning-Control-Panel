@@ -6,13 +6,13 @@ import { driftYaw } from '../sim/drift.js';
 import { DT, makeFeel, fakeTrack, place, recorder, acts, run } from './sim-fake.mjs';
 
 test('manual steering pulses release yaw promptly without a lingering opposite-side bounce', () => {
-  const feel = makeFeel(), track = fakeTrack({ w: 24, flags: () => [] }), st = place(track, { speed: 30 });
+  const feel = makeFeel(), track = fakeTrack({ w: 24, flags: () => [] }), st = place(track, { speed: 33 });   // top speed 30 x F = 1.1
   const events = recorder(); let maxLateral = 0;
   const watch = s => { maxLateral = Math.max(maxLateral, Math.abs(s[S.lateral])); return false; };
   for (const side of [1, -1, 1, -1]) {
     run(st, track, feel, acts({ throttle: 1, steer: side }), .25, events, watch);
     run(st, track, feel, acts({ throttle: 1 }), .2, events, watch);
-    assert.ok(Math.abs(st[S.yawRate]) < .012, 'released turning is under .7 deg/s');
+    assert.ok(Math.abs(st[S.yawRate]) < .0132, 'released turning is under .76 deg/s (.7 x F = 1.1)');
   }
   assert.ok(maxLateral < 4, 'small corrections stay within four metres: ' + maxLateral);
   assert.ok(!events.first('wall') && !events.first('drop'), 'no rail or rescue masks handling');
@@ -28,7 +28,7 @@ test('full-lock countersteering changes yaw side within 50 ms and old feel files
 
 test('countersteered and released hop drift stays on a normal 24 m road without assist', () => {
   for (const dir of [-1, 1]) {
-    const feel = makeFeel(), track = fakeTrack({ w: 24, flags: () => [] }), st = place(track, { speed: 30 });
+    const feel = makeFeel(), track = fakeTrack({ w: 24, flags: () => [] }), st = place(track, { speed: 33 });   // top speed 30 x F = 1.1
     const events = recorder(); let maxLateral = 0;
     const watch = s => { maxLateral = Math.max(maxLateral, Math.abs(s[S.lateral])); return false; };
     run(st, track, feel, acts({ throttle: 1, hop: true, hopPressed: true, steer: dir }), .35, events, watch);
@@ -44,11 +44,11 @@ test('countersteered and released hop drift stays on a normal 24 m road without 
 
 test('speed calm bounds drift at boost speeds while tight Threshold bends remain available', () => {
   const feel = makeFeel(), track = fakeTrack(), st = place(track); st[S.driftDir] = 1;
-  for (const speed of [20, 30, 39]) {
+  for (const speed of [22, 33, 42.9]) {   // 20, 30, 39 x the 2026-10-28 speed factor F = 1.1
     const now = driftYaw(st, 1, feel, gripYaw(speed, feel));
     const before = baseYaw(speed, feel) * 1.45;
     assert.ok(now < before * .6, speed + ' m/s drift avoids the old yaw spike');
     assert.ok(driftYaw(st, -1, feel, gripYaw(speed, feel)) < now * .4, 'countersteer widens the arc');
   }
-  assert.ok(driftYaw(st, 1, feel, gripYaw(30, feel)) >= 30 / 36, 'full inward lock holds the 36 m helix');
+  assert.ok(driftYaw(st, 1, feel, gripYaw(33, feel)) >= 33 / 36, 'full inward lock holds the 36 m helix (speed 30 x F = 1.1)');
 });

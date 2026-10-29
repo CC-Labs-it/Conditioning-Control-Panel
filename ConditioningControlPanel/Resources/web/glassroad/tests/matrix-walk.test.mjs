@@ -6,7 +6,7 @@ const hooks = registerHooks({ resolve(s, c, next) {
   const files = { 'three/tsl': 'three.tsl.min.js', 'three/webgpu': 'three.webgpu.min.js' };
   return files[s] ? { url: new URL('../vendor/three/build/' + files[s], import.meta.url).href, shortCircuit: true } : next(s, c);
 } });
-const { installMatrixWalk, refreshMatrices, matrixWalkStats } = await import('../render/matrixWalk.js');
+const { installMatrixWalk, refreshMatrices, matrixWalkStats, setStaticSubtree } = await import('../render/matrixWalk.js');
 const { Scene, Group, Mesh, LOD, Bone, Matrix4, Vector3, Quaternion, Euler, PerspectiveCamera } = await import('three/webgpu');
 hooks.deregister();
 
@@ -178,4 +178,44 @@ test('the walk keeps one record per node: hidden, re-parented and shown again al
   assert.ok(near(leaf.matrixWorld, expected(leaf)), 'shown again: stale subtree recomputed');
   b.add(leaf); scene.updateMatrixWorld();
   assert.ok(near(leaf.matrixWorld, expected(leaf)), 're-parented: recomputed under the new parent');
+});
+
+test('static scenery skips descendants, preserving moving parents, hides, reparenting and forced warm poses', () => {
+  const scene = new Scene(), a = new Group(), b = new Group(), scenery = new Group();
+  scene.add(a, b); a.add(scenery);
+  for (let i = 0; i < 500; i++) {
+    const holder = new Group(), mesh = new Mesh(); holder.position.set(i, i % 7, -i);
+    mesh.position.set(.5, 2, 1); holder.add(mesh); scenery.add(holder);
+  }
+  installMatrixWalk(scene);
+  assert.equal(setStaticSubtree(scenery), true);
+  scene.updateMatrixWorld(); checkShown(scene, 'initial');
+  const first = matrixWalkStats();
+  scene.updateMatrixWorld();
+  assert.equal(matrixWalkStats().visits - first.visits, 4, '1000 immutable descendants require no repeat visits');
+  a.position.set(4, 5, 6); scene.updateMatrixWorld(); checkShown(scene, 'moving parent');
+  scenery.position.z = 8; scene.updateMatrixWorld(); checkShown(scene, 'moving root');
+  a.visible = false; a.position.y = 9; scene.updateMatrixWorld();
+  a.visible = true; scene.updateMatrixWorld(); checkShown(scene, 'shown');
+  b.position.x = -9; b.add(scenery); scene.updateMatrixWorld(); checkShown(scene, 'reparented');
+  b.position.y = 42; scene.updateMatrixWorld(true); checkShown(scene, 'forced warm pose');
+  b.position.y = 0; scene.updateMatrixWorld(); checkShown(scene, 'restored after warm pose');
+  const leaf = scenery.children[0].children[0];
+  setStaticSubtree(scenery, false); leaf.position.x = 7;
+  scene.updateMatrixWorld(); checkShown(scene, 'mutable again');
+});
+
+test('static scenery refuses custom matrix owners and keeps hidden nodes current when explicitly refreshed', () => {
+  const scene = new Scene(), root = new Group(), leaf = new Mesh();
+  scene.add(root); root.add(leaf); leaf.visible = false; leaf.position.z = 4;
+  installMatrixWalk(scene); setStaticSubtree(root);
+  scene.updateMatrixWorld();
+  leaf.visible = true; scene.updateMatrixWorld();
+  assert.ok(near(leaf.matrixWorld, expected(leaf)), 'hidden fixed props initialize before their first visible frame');
+  leaf.visible = false; refreshMatrices(root, { hidden: true });
+  assert.ok(near(leaf.matrixWorld, expected(leaf)));
+  for (const special of [new Bone(), new LOD(), new PerspectiveCamera()]) {
+    const group = new Group(); group.add(special);
+    assert.equal(setStaticSubtree(group), false, special.type + ' retains the regular walk');
+  }
 });

@@ -29,7 +29,8 @@ export function createMovingHazardView(scene, track, pal, art = null) {
     part(root, 'piston-housing', [2.5, 4, row.len + 1], [anchor, 1.8, 0], 1);
     const head = new Group(); root.add(head);
     const slider = row.kind === 'slider';
-    const sculpture = chessTrap(art, index, [row.w, 3.2, row.len], row.side);
+    const modelScale = track.id === 'goonworks' ? 1.35 : 1;
+    const sculpture = chessTrap(art, index, [row.w, 3.2, row.len].map(v => v * modelScale), row.side);
     if (sculpture) head.add(sculpture);
     if (!sculpture) {
     part(head, slider ? 'sliding-block' : 'crusher-head', [row.w, 3.2, row.len], [0, 1.6, 0], slider ? 5 : 0);

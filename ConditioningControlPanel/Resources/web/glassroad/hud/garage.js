@@ -3,6 +3,7 @@ import {createTrackPicker} from './trackPicker.js';
 import {KARTS,OUTFITS,PRESETS,COLOR_KEYS,lockLine} from './garageState.js';
 import {createRecordPanel} from './record.js';
 import {loadRecord} from '../meta/record.js';
+import {createCourseMedia,mediaRecap} from './courseMedia.js';
 
 /** The title card logo (art/ui/logo.webp, transparent, 720 x 311). */
 export const LOGO=new URL('../art/ui/logo.webp',import.meta.url).href;
@@ -20,7 +21,15 @@ export function garageUi({change,select,customize,action,hover,trackId='threshol
   root.querySelector('[data-g=online]').hidden=!online;
   document.body.append(root);
   const $=s=>root.querySelector(s);
-  let picker=createTrackPicker({root,courses:COURSES,trackId,change:id=>changeTrack?.(id)});
+  let mediaFor=()=>({});
+  const courseMedia=createCourseMedia({root,mediaFor:id=>mediaFor(id)});
+  const makePicker=()=>createTrackPicker({root,courses:COURSES,trackId,change:id=>changeTrack?.(id),mediaFor:id=>mediaFor(id),customize:(course,trigger)=>courseMedia.show(course,trigger)});
+  let picker=makePicker();
+  const mediaRow=document.createElement('button');mediaRow.type='button';mediaRow.className='g-menu-row g-main-media';mediaRow.dataset.g='course-media';
+  mediaRow.innerHTML='<span><b>Customize track</b><small class="g-main-song"></small><small class="g-main-pictures"></small></span><i aria-hidden="true">›</i>';
+  $('[data-g=tracks]').after(mediaRow);
+  function refreshMedia(){const recap=mediaRecap(mediaFor(trackId)||{},trackId);$('.g-main-song').textContent='Music: '+recap.song;$('.g-main-pictures').textContent=recap.pictures;picker.refreshMedia();courseMedia.refresh();}
+  refreshMedia();
   $('.g-course-name').textContent=COURSES.find(c=>c.id===trackId)?.name||'Threshold';
   const record=createRecordPanel({root,courses:COURSES,load:()=>loadRecord()});let noteTimer=0;
   const make=(parent,label,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=fn;$(parent).append(b);return b;};
@@ -30,6 +39,7 @@ export function garageUi({change,select,customize,action,hover,trackId='threshol
   for(const [index,[id,label]]of KARTS.entries()){const b=make('.g-positions','',()=>select(index));b.dataset.kart=id;b.setAttribute('aria-label',label);}
   root.addEventListener('click',e=>{const name=e.target.closest('[data-g]')?.dataset.g;if(!name)return;
     if(name==='tracks'){picker.show($('[data-g=tracks]'));return;}
+    if(name==='course-media'){courseMedia.show(COURSES.find(c=>c.id===trackId)||COURSES[0],mediaRow);return;}
     if(name==='record'){record.show($('[data-g=record]'));return;}
     if(name==='customize'||name==='done')customize(name==='customize');
     else if(name==='previous'||name==='next')select(name==='next'?1:-1,true);
@@ -39,7 +49,8 @@ export function garageUi({change,select,customize,action,hover,trackId='threshol
   root.addEventListener('input',e=>{const key=e.target.dataset.color;if(key)change({[key]:e.target.value,original:false,skin:'Custom'},true);});
   for(const [selector,dir]of [['.previous',-1],['.next',1]])for(const [event,on]of [['pointerenter',true],['pointerleave',false],['focus',true],['blur',false]])$(selector).addEventListener(event,()=>hover(dir,on));
   return {
-    root,get trackPicking(){return picker.open;},trackNav:dir=>picker.nav(dir),get recordOpen(){return record.open;},recordNav:dir=>record.nav(dir),
+    root,get trackPicking(){return picker.open||courseMedia.open;},trackNav:dir=>courseMedia.open?courseMedia.nav(dir):picker.nav(dir),get recordOpen(){return record.open;},recordNav:dir=>record.nav(dir),
+    setMedia(fn){mediaFor=typeof fn==='function'?fn:()=>({});refreshMedia();},refreshMedia,
     lockNote(kart){const line=lockLine(kart);if(!line)return;const el=$('.g-lock-note');el.textContent=KARTS.find(k=>k[0]===kart)[1]+'. '+line;clearTimeout(noteTimer);noteTimer=setTimeout(()=>{el.textContent='';},3200);},
     layout(l){root.style.setProperty("--g-menu",l.menuWidth+"px");root.style.setProperty("--g-stage-center",l.center*100+"%");root.style.setProperty("--g-left-arrow",l.arrowLeft*100+"%");root.style.setProperty("--g-right-arrow",l.arrowRight*100+"%");root.style.setProperty("--g-arrow-y",l.arrowY*100+"%");},
     paint(s,{custom,busy,locked}){
@@ -54,19 +65,19 @@ export function garageUi({change,select,customize,action,hover,trackId='threshol
       for(const el of root.querySelectorAll('[data-g=race],[data-g=online],[data-g=tracks]'))el.disabled=busy;
       $('.g-announce').textContent=custom?'Customize EMI':KARTS.find(k=>k[0]===s.kart)[1]+' selected';
     },
-    track(name,laps){$('.g-track').textContent=name+' · '+laps+' laps';},
+    track(name,laps){$('.g-track').textContent=name+' · '+laps+(laps===1?' lap':' laps');},
     setCourse(course){
       trackId=course.trackId;online=course.online!==false;
       // Replace only the tiny picker. Its previous selection, pending sketches and delayed
       // navigation belong to the old course, while the wardrobe and carousel stay resident.
-      picker.dispose();picker=createTrackPicker({root,courses:COURSES,trackId,change:id=>changeTrack?.(id)});
+      picker.dispose();picker=makePicker();refreshMedia();
       $('[data-g=online]').hidden=!online;
       $('.g-course-name').textContent=COURSES.find(c=>c.id===trackId)?.name||course.track||'Threshold';
-      $('.g-track').textContent=course.track+' · '+course.laps+' laps';
+      $('.g-track').textContent=course.track+' · '+course.laps+(course.laps===1?' lap':' laps');
       root.classList.remove('g-course-leaving');
     },
     setVisible(on){if(root.hidden===!on)return;if(!on)record.close();root.hidden=!on;document.body.classList.toggle('garage-open',on);if(on)$('[data-g=race]').focus({preventScroll:true});},
     customFocus(on){$(on?'[data-g=done]':'[data-g=customize]').focus({preventScroll:true});},
-    dispose(){clearTimeout(noteTimer);record.dispose();picker.dispose();root.remove();document.body.classList.remove('garage-open');},
+    dispose(){clearTimeout(noteTimer);record.dispose();picker.dispose();courseMedia.dispose();root.remove();document.body.classList.remove('garage-open');},
   };
 }

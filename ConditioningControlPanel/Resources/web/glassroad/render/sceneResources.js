@@ -100,10 +100,18 @@ export function releaseSceneResources(three, scene, beforeRetire = () => {}) {
   // then release targets while light listeners still exist, and retire remaining bindings.
   beforeRetire();
   for (const row of retired) if (objects.has(row)) { row.dispose(); severRow(three, row); }
+  const interleaved = new Set();
   for (const attribute of candidates) {
     const buffer = identity(attribute);
     // Each interleaved view has its own r186 attribute/version/memory entry even when
     // views share one GPU buffer. Retire every view; buffer destruction is idempotent.
-    if (!retained.has(buffer)) three._attributes.delete(attribute);
+    if (!retained.has(buffer)) {
+      three._attributes.delete(attribute);
+      if (attribute.isInterleavedBufferAttribute) interleaved.add(buffer);
+    }
   }
+  // r186 destroys the canonical interleaved GPU buffer but deletes only each view's
+  // backend entry. Clear the canonical entry after every view has retired, or the
+  // next course reuses a destroyed buffer instead of uploading its live matrices.
+  for (const buffer of interleaved) three.backend?.delete?.(buffer);
 }
