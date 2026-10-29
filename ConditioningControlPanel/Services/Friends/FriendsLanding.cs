@@ -527,6 +527,14 @@ public static class FriendsLanding
                 return;
         }
         App.StartupLadder?.RemoveRow("friends:" + item.Id);
+        // Racing Thoughts is Prime only: below Prime a race invite shows the Prime refusal instead
+        // of opening, and the sender hears "not now" rather than a join that never seats.
+        if (item.Kind == SendKind.Invite && item.Destination == InviteDestination.Race
+            && !Glassroad.GlassroadHostService.DemandPrime())
+        {
+            FriendsSeen.Shared.Report(App.Friends, ReceiptReport.Item(item.Id, ReceiptState.Declined));
+            return;
+        }
         if (item.Kind == SendKind.Invite)
         {
             FriendsSeen.Shared.Report(App.Friends, ReceiptReport.Item(item.Id, ReceiptState.Joined));
