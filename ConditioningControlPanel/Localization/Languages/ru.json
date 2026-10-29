@@ -15,6 +15,7 @@
   "Sparkles_Slip_CeilingToday": "Дневной лимит достигнут. До завтра только приз за участие",
   "Sparkles_Slip_Short": "Слишком коротко для оплаты",
   "Sparkles_Slip_Offline": "Нет связи, без искр",
+  "Sparkles_Slip_Unreachable": "Банк закрыт, в этот раз без искр",
   "Sparkles_Slip_Pair": "Сегодня снова та же пара. Соло-ставка",
   "Sparkles_Slip_Young": "Новый аккаунт. Пока соло-ставка онлайн",
   "Sparkles_Slip_SoloRoom": "Меньше 2 игроков. Соло-ставка",
