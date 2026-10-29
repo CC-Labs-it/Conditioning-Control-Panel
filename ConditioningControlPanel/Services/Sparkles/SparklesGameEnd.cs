@@ -39,6 +39,15 @@ public static class SparklesGameEnd
         return pct >= topMarksPercent ? "gold" : pct >= 70 ? "silver" : pct >= 50 ? "bronze" : "none";
     }
 
+    /// <summary>Breakout, per cleared wall: no ball lost gold, one silver, two bronze, more finished.</summary>
+    public static string BreakoutMedal(int ballsLost) => ballsLost switch
+    {
+        <= 0 => "gold",
+        1 => "silver",
+        2 => "bronze",
+        _ => "none",
+    };
+
     /// <summary>Claim a finished game. Never throws; null when there is no claim service.
     /// <paramref name="proof"/> rides only on an online claim (the server's own record of it).</summary>
     public static Task<SparklesClaimOutcome?> Claim(string game, string mode, SparklesResult result,

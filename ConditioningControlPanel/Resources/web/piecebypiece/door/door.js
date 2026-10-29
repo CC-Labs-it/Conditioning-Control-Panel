@@ -856,6 +856,12 @@ export function createDoor(opts = {}) {
     settleIq(lastEnd, rec.iq);
     endRating = current.mode === 'online' ? rateEnd(seat, rec) : null;
     if (current.mode === 'online' && m && m.id) stake.end(m.id);
+    // Sparkles by place (B1): the host claims vs Computer and online games; hotseat never.
+    if (current.mode === 'solo' || current.mode === 'online') {
+      postToHost({ type: 'pbp:game-over', mode: current.mode, outcome: outcome(lastEnd), plies: lastEnd.plies || 0,
+        durationMs: lastEnd.durationMs || 0, reason: (lastEnd.result && (lastEnd.result.reason || lastEnd.result.result)) || null,
+        matchId: m && m.id ? String(m.id) : null });
+    }
     const finished = current;
     current = null;
     // the board's own end beat first, then the card
