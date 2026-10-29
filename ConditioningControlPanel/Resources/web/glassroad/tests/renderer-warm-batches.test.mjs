@@ -28,6 +28,40 @@ test('shadowless hit-camera warm retains its real layers and restores renderer s
   geometry.dispose();road.material.dispose();catcher.material.dispose();
 });
 
+test('hit-camera warm prepares every distance variant before its first rival cut',async()=>{
+  const scene=new Scene(),camera=new PerspectiveCamera(),geometry=new BoxGeometry(),lod=new LOD();
+  const near=new Mesh(geometry,new MeshBasicNodeMaterial()),far=new Mesh(geometry,new MeshBasicNodeMaterial());
+  lod.addLevel(near,0);lod.addLevel(far,200);scene.add(lod);lod.update(camera);
+  const seen=new Set(),target={};
+  const three={getRenderTarget:()=>null,setRenderTarget(){},clear(){},async compileAsync(){
+    // Three's projection selects the current LOD during compileAsync, just as it does in render.
+    if(lod.autoUpdate)lod.update(camera);
+    scene.traverseVisible(o=>{if(o.isMesh)seen.add(o);});
+  }};
+  await warmInset(three,{inset:{target}},scene,camera);
+  assert.ok(seen.has(near));
+  assert.ok(seen.has(far),'the first distant hit must not link a new inset program');
+  assert.equal(lod.autoUpdate,true);assert.equal(near.visible,true);assert.equal(far.visible,false);
+  camera.position.z=300;camera.updateMatrixWorld();lod.update(camera);
+  assert.equal(near.visible,false);assert.equal(far.visible,true);
+  near.material.dispose();far.material.dispose();geometry.dispose();
+});
+
+test('a failed hit-camera warm restores automatic and manual LOD policies',async()=>{
+  const scene=new Scene(),camera=new PerspectiveCamera(),auto=new LOD(),manual=new LOD();
+  manual.autoUpdate=false;scene.add(auto,manual);
+  const warn=console.warn;let during;
+  try{
+    console.warn=()=>{};
+    await warmInset({getRenderTarget:()=>null,setRenderTarget(){},async compileAsync(){
+      during=[auto.autoUpdate,manual.autoUpdate];
+      throw Error('test inset compilation failure');
+    }},{inset:{target:{}}},scene,camera);
+  }finally{console.warn=warn;}
+  assert.deepEqual(during,[false,false]);
+  assert.equal(auto.autoUpdate,true);assert.equal(manual.autoUpdate,false);
+});
+
 test('larger WebGPU warm batches keep every render variant and restore hidden pools, materials and layers',async()=>{
   const results={};
   for(const backend of ['webgpu','webgl2','unknown']){

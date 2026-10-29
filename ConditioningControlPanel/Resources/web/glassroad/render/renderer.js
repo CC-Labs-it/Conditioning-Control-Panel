@@ -347,12 +347,14 @@ function renderInset(three, target, spec, pr) {
 /** Compile the inset's own programs (no shadows, its own target) for everything that can appear in a race. */
 export async function warmInset(three, post, scene, camera) {
   if (!post || !post.inset || !scene || !camera) return { ms: 0 };
-  const t0 = performance.now(), saved = [], mats = [];
+  const t0 = performance.now(), saved = [], mats = [], lods = [];
   // the materials made only in a race (render/warmExtras.js) get their inset programs too
   const late = new Group();
   for (const m of lateWarmMaterials(GPU)) late.add(m.isSpriteNodeMaterial ? new Sprite(m) : new Mesh(new PlaneGeometry(0.01, 0.01), m));
   scene.add(late);
   scene.traverse((o) => {
+    // A hit camera can cut to any rival. Projection must not hide its other distance variants during preparation.
+    if (o.isLOD) { lods.push([o, o.autoUpdate]); o.autoUpdate = false; }
     saved.push([o, o.visible, o.frustumCulled, o.count]);
     o.visible = true; o.frustumCulled = false;
     if (o.count === 0 && (o.isInstancedMesh || o.isSprite || o.isBatchedMesh)) o.count = 1;
@@ -369,6 +371,7 @@ export async function warmInset(three, post, scene, camera) {
   } catch (e) {
     console.warn('[glassroad/renderer] hit cam warm: ' + (e && e.message));
   } finally {
+    for (const [o, autoUpdate] of lods) o.autoUpdate = autoUpdate;
     camera.layers.mask = layers;
     for (const [o, v, f, n] of saved) { o.visible = v; o.frustumCulled = f; if (o.count !== n) o.count = n; }
     for (const m of mats) m.visible = false;
