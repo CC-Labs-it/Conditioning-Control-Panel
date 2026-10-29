@@ -125,10 +125,13 @@ internal static class GlassroadRules
         int laps = ReadInt(m, "laps"), fullLaps = ReadInt(m, "fullLaps"), place = ReadInt(m, "place"), of = ReadInt(m, "of");
         double timeS = m["timeS"]?.Type is JTokenType.Float or JTokenType.Integer ? (double)m["timeS"]! : 0;
         if (laps < 1 || !(timeS > 0) || double.IsInfinity(timeS)) return null;
-        bool fullLength = fullLaps > 0 && laps >= fullLaps;
+        // Exactly full length: the medal times are the course's full-length times, so a longer
+        // Time Trial or ghost race cannot be judged and claims nothing.
+        bool fullLength = fullLaps > 0 && laps == fullLaps;
         bool placed = of >= 1 && place >= 1 && place <= of;
 
-        var detail = new JObject { ["laps"] = laps };
+        // A solo race set longer than full length pays full length (the server caps laps/3 too).
+        var detail = new JObject { ["laps"] = fullLaps > 0 ? Math.Min(laps, fullLaps) : laps };
         if (m["track"]?.Type == JTokenType.String) detail["track"] = (string?)m["track"];
         var duration = TimeSpan.FromSeconds(Math.Min(timeS, TimeSpan.FromDays(1).TotalSeconds));
 
