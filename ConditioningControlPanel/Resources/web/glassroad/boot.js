@@ -20,6 +20,7 @@
  */
 import { createBridge, songCharts, isPreviewSongHost, wantLobbySongs, lobbySongCharts, ROOM_ORIGIN } from './host/bridge.js';
 import { createHostEscape } from './host/hostEscape.js';
+import { showSlip, hideSlip } from './sparkles-slip.js';
 import { createCardMedia, PHONE_READY_CLIPS } from './host/cardMedia.js';
 import { createScrolllerFeed } from './host/scrolllerFeed.js';
 import { loadCustomization, saveCustomization, selectedSongCharts } from './host/courseCustomization.js';
@@ -38,6 +39,7 @@ import { createTouch } from './input/touch.js';
 import { glideActive, resetGlide } from './sim/glide.js';
 import { S, RESPAWN, createState } from './sim/state.js';
 import { resolveMode } from './meta/mode.js';
+import { medalFor } from './meta/medals.js';
 import { createGhostRecorder, loadGhost, saveBestGhost, sample as ghostSample, toState as ghostToState, lapGap, formatGap } from './meta/ghost.js';
 import { createImmersion } from './track/immersion.js';
 import { createWaterContact } from './audio/water-travel.js';
@@ -154,6 +156,17 @@ shared.feelTask = Promise.all([loadFeel(), loadFonts()]).then(([feel]) => {
   shared.baseFeel = feel.toJSON(); shared.feel = feel; shared.gentle = createGentle(feel); return feel;
 });
 shared.bridge.on('gentle', m => { shared.hostGentle = m; });
+// SPARKLES BY PLACE (B1 W7): the desktop host's receipt for a finished race, bottom left of the results card
+// (styles.css moves it off the card); a new run takes it away. The website never sends one.
+// A receipt that lands once the next run is under way is dropped rather than covering the race; the
+// Motion row plays it calm when it is not Full (shared.slipGate is set per course).
+function receiptSlip(m) {
+  let gate = null;
+  try { gate = shared.slipGate?.(); } catch (e) { /* no course yet */ }
+  if (gate?.blocked) return;
+  showSlip(m, { calm: !!gate?.calm });
+}
+shared.bridge.on('sparkles-receipt', receiptSlip);
 // The web host's Scrolller pictures (host/scrolllerFeed.js): display only. Built once so a feed
 // that lands before the first course is kept; the desktop host never sends one.
 shared.scrolllerFeed = createScrolllerFeed({ bridge: shared.bridge });
@@ -506,6 +519,8 @@ async function boot(course, options, lifetime, isCurrent) {
   if (!shared.counts.renderer) shared.counts.renderer++;
   renderer.beginCourse(); renderer.setHold(true);
   const racing = () => !online && (state === 'intro' || state === 'race');
+  shared.slipGate = () => ({ blocked: state === 'intro' || (state === 'race' && !!race && race.phase !== 'finished'),
+    calm: (hud.options?.motion || 'full') !== 'full' });
   lifetime.defer(renderer.onLost((lost) => {
     if (isCurrent()) void recover('lost', new Error((lost.api ? lost.api + ' ' : '') + (lost.message || 'device lost') + (lost.reason ? ' (' + lost.reason + ')' : '')), { race: racing() });
   }));
@@ -1088,6 +1103,7 @@ async function boot(course, options, lifetime, isCurrent) {
     garage?.setVisible(false); hud.setCard(null);
     introHud.style.visibility = 'hidden';
     canvas.focus({ preventScroll: true });
+    hideSlip();
     bridge.runStarted({ track: track.id, laps });
   }
   function toMenu() {
@@ -1236,6 +1252,7 @@ async function boot(course, options, lifetime, isCurrent) {
     // The song's zero is startAt for every seat; late joiners follow the shared race clock.
     const align = () => (s.serverNow() - s.startAt) / 1000;
     if (CHARTS.length) Promise.resolve(started).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
+    hideSlip();
     bridge.runStarted({ track: track.id, laps });
   }
   /** Back to the solo run (left, closed or aborted). showLobby: put the lobby card back when no card is up. */
@@ -1305,7 +1322,10 @@ async function boot(course, options, lifetime, isCurrent) {
     const me = (res && res.me) || {}, row = (res.rows || []).find((r) => r.me) || {};
     debug.result = { place: me.place, of: (res.rows || []).length, timeS: me.timeS, bestLapS: me.bestLapS };
     bridge.send({ type: 'race-result', v: 1, track: track.id, laps, place: me.place, of: (res.rows || []).length,
-      timeS: me.timeS, bestLapS: me.bestLapS, finished: row.finished !== false, items: runMode !== 'trial', xp: null });
+      timeS: me.timeS, bestLapS: me.bestLapS, finished: row.finished !== false, items: runMode !== 'trial', xp: null,
+      // Sparkles by place (B1): the host claims from these; online the server reads the room's signed result instead
+      mode: online ? 'online' : runMode, fullLaps: TRACK_LAPS, roomId: online ? online.s.roomId : null,
+      medal: !online && runMode === 'trial' && laps >= TRACK_LAPS ? medalFor(track.id, me.timeS) : null });
   });
 
   bridge.on('pause', (m) => setPaused(m.on));
