@@ -214,6 +214,19 @@ public class SparklesClaimServiceTests
         Assert.Empty(rig.Adopted);
     }
 
+    [Theory]
+    [InlineData(HttpStatusCode.InternalServerError, """{"error":"boom"}""")]
+    [InlineData(HttpStatusCode.NotFound, "Not Found")]
+    public async Task ADownServerIsUnreachableNotOffline(HttpStatusCode status, string body)
+    {
+        var rig = new Rig();
+        rig.Handler.Default = (status, body);
+        var outcome = await rig.Service.ClaimAsync(Claim());
+
+        Assert.Equal("unreachable", outcome.Reason);
+        Assert.Equal(SparklesClaimService.MaxAttempts, rig.Handler.Seen.Count);
+    }
+
     [Fact]
     public async Task PendingThenAReceiptPaysOnce()
     {
