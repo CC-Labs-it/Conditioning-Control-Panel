@@ -23,13 +23,15 @@ public class SparklesSlipParityTests
         "goon",
         "piecebypiece",
         "intake",
+        "glassroad",
     };
 
     private const string File_ = "sparkles-slip.js";
 
-    /// <summary>The receipt handed to showSlip, directly or through a small arrow (a calm tree).</summary>
+    /// <summary>The receipt handed to showSlip, directly, through a small arrow (a calm tree) or through a
+    /// named <c>...Slip</c> handler that gates it (Glassroad drops a receipt that lands mid-race).</summary>
     private static readonly Regex Subscribed =
-        new(@"'sparkles-receipt',\s*(showSlip\b|\(?\w*\)?\s*=>\s*showSlip\()", RegexOptions.CultureInvariant);
+        new(@"'sparkles-receipt',\s*(showSlip\b|\(?\w*\)?\s*=>\s*showSlip\(|\w+Slip\))", RegexOptions.CultureInvariant);
 
     private static string WebDir()
     {

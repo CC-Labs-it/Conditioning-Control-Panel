@@ -33,7 +33,7 @@ function run(extra = '') {
     function syncAssist(){events.push('assist')}
     function playSong(align){events.push(['song',align()])}
     function stopSong(){events.push('song-stop')}
-    function openRunLog(){} function closeRunLog(){}
+    function openRunLog(){} function closeRunLog(){} function hideSlip(){events.push('slip-hide')}
     function prepareRunMode(){}
     const opts={laps:1}; function setSoloLaps(o){events.push(['laps',o.laps])}
     ${fn('begin')}
