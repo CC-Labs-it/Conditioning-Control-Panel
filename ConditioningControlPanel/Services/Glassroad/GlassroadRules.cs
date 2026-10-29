@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
 
@@ -37,6 +39,8 @@ internal static class GlassroadRules
                 ["platform"] = "desktop", ["net"] = true, ["relayBase"] = null, ["texturableRemote"] = false,
                 ["gamepad"] = true, ["touch"] = false, ["forceRenderer"] = null, ["hostSfx"] = false,
                 ["trackPick"] = false, ["canSurface"] = false, ["mediaControls"] = false, ["songs"] = new JArray(),
+                // the pre-race room's "Invite a friend" asks this host (host/friendInvite.js)
+                ["friendInvite"] = true,
             },
             ["identity"] = signedIn
                 ? new JObject { ["unifiedId"] = unifiedId, ["tier"] = Math.Clamp(tier, 0, 2),
@@ -44,6 +48,32 @@ internal static class GlassroadRules
                 : JValue.CreateNull(),
         };
     }
+
+    /// <summary>The page's invite list (<c>friends-list-reply</c>): online friends with a name, as
+    /// <c>{ uid, name }</c>, at most 50. Offline friends are left out: the server refuses them anyway.</summary>
+    public static JArray FriendRows(IEnumerable<Friend>? friends)
+    {
+        var rows = new JArray();
+        if (friends == null) return rows;
+        foreach (var f in friends)
+        {
+            if (rows.Count >= 50) break;
+            if (f == null || !f.Online || string.IsNullOrEmpty(f.Id) || string.IsNullOrWhiteSpace(f.Name)) continue;
+            rows.Add(new JObject { ["uid"] = f.Id, ["name"] = f.Name });
+        }
+        return rows;
+    }
+
+    /// <summary>The loc key that words a race invite's outcome: the room's fixed reason
+    /// (<c>friends_race_&lt;reason&gt;</c>), else the friends drawer's usual send result.</summary>
+    public static string InviteNoteKey(SendOutcome outcome)
+        => outcome.Reason != null && InviteDestination.RaceReasons.Contains(outcome.Reason)
+            ? "friends_race_" + outcome.Reason
+            : Controls.Friends.FriendsDrawerRules.SendResultKey(outcome.Result);
+
+    /// <summary>The page shows the note as a sentence: first letter up (the drawer's lines are lower case).</summary>
+    public static string Sentence(string text)
+        => string.IsNullOrEmpty(text) ? "" : char.ToUpperInvariant(text[0]) + text.Substring(1);
 
     /// <summary>The <c>gentle</c> block: the player's fade (off = the page's own 600 ms), the
     /// 300 ms rise floor, the playback speed.</summary>
