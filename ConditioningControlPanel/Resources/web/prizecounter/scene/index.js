@@ -88,9 +88,9 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
       const holder = new T.Group();
       holder.userData.pick = { bay, slot: p.slot };
       anchor.add(holder);
-      const entry = { holder, lod: null, full: null, id: p.id, meta };
+      const entry = { holder, lod: null, full: null, id: p.id, meta, tagNode: node(group, p.tagNode) };
       slots.set(p.slot, entry);
-      if (p.tag) node(group, p.tagNode)?.add(await cloneOf(`props/${p.tag === 'owned' ? 'owned_stamp' : 'price_tag'}.glb`));
+      if (p.tag) entry.tagNode?.add(await cloneOf(`props/${p.tag === 'owned' ? 'owned_stamp' : 'price_tag'}.glb`));
       if (!meta) { console.warn('prizecounter: no art for', p.id); return; }
       entry.lod = await cloneOf(meta.lod1 || meta.file);
       holder.add(entry.lod);
@@ -111,6 +111,11 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
     const leave = () => outgoing.forEach((s) => { scene.remove(s.group); disposeShelf(s); });
     const wait = hooks.onShelvesSwap?.({ tabId, outgoing: outgoing.map((s) => s.group), incoming: built.map((s) => s.group) });
     if (wait && typeof wait.then === 'function') wait.then(leave, leave); else leave();
+  }
+  // A receipt landed: that item's price tag becomes the OWNED stamp in place (no shelf swap).
+  async function stamp(itemId) {
+    const hits = [...shelves.values()].flatMap((s) => [...s.slots.values()]).filter((e) => e.id === itemId && e.tagNode);
+    for (const e of hits) { e.tagNode.clear(); e.tagNode.add(await cloneOf('props/owned_stamp.glb')); }
   }
   // Clones share geometry and materials with the cache, so a shelf leaving only drops its nodes.
   const disposeShelf = (s) => s.group.removeFromParent();
@@ -265,7 +270,7 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
   }
 
   return {
-    showTab, focus, resize, dispose, hooks,
+    showTab, focus, stamp, resize, dispose, hooks,
     onIntent(cb) { listeners.add(cb); return () => listeners.delete(cb); },
     setMotion(m) { motion = m; },
     parts: { renderer, scene, camera, counter, shelves: () => shelves, dust: (bay) => ['l', 'c', 'r'].map((s) => shelves.get(bay) && node(shelves.get(bay).group, 'dust_' + s)) },
