@@ -1,0 +1,12 @@
+/* page.css - the page frame and the plain fallback list. The HUD lane (B3-W4) owns the real look. */
+html, body { margin: 0; height: 100%; background: #1a1418; color: #f4e9ee; font: 15px/1.4 "Segoe UI", system-ui, sans-serif; }
+.pc { position: relative; height: 100%; overflow: hidden; }
+.pc-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.pc-hud { position: absolute; inset: 0; pointer-events: none; padding: 16px; }
+.pc-hud button { pointer-events: auto; font: inherit; color: inherit; background: #3a2a33; border: 1px solid #6b4c5c; border-radius: 6px; padding: 4px 10px; margin: 2px; }
+.pc-tab[aria-current] { background: #c2577f; }
+.pc-shelf { list-style: none; padding: 0; margin: 8px 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 720px; }
+.pc-focus { outline: 2px solid #f6c1d4; }
+.pc-card { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #2b1f26; border: 1px solid #6b4c5c; border-radius: 10px; padding: 16px 20px; max-width: 360px; }
+.pc-card[hidden], .pc-list[hidden] { display: none; }
+.pc-short { color: #e05252; }
