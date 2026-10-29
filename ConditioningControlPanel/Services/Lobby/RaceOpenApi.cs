@@ -25,8 +25,8 @@ public sealed record RaceOpenReply(IReadOnlyList<RaceOpenRoom> Rooms, bool Ok, s
 
 /// <summary>
 /// The open Glassroad races, read with the chess lobby's desktop auth:
-/// <c>GET /v2/race/open?unified_id=</c> plus the account token. Races run on the web only, so a
-/// Join only opens the browser (<see cref="RaceJoinLink"/>). Never throws; any fault reads as
+/// <c>GET /v2/race/open?unified_id=</c> plus the account token. A Join opens Racing Thoughts in the
+/// app on the room (<see cref="RaceJoinLink"/>). Never throws; any fault reads as
 /// <see cref="RaceOpenReply.Empty"/>.
 /// </summary>
 public sealed class RaceOpenApi
@@ -123,11 +123,11 @@ public sealed class RaceOpenApi
     };
 }
 
-/// <summary>The web door for a race row: <c>https://app.cclabs.app/race3d?join=&lt;roomId&gt;</c>.
-/// Refuses anything that is not a 12-character lowercase room id.</summary>
+/// <summary>The in-app door for a race room: the Glassroad page on <c>?join=&lt;roomId&gt;</c> (the page
+/// takes it once, boot.js joinParam). Refuses anything that is not a 12-character lowercase room id.</summary>
 public static class RaceJoinLink
 {
-    public const string Base = "https://app.cclabs.app/race3d";
+    public const string Base = "https://ccp.game/glassroad/index.html";
     // \z, not $: a .NET $ also matches before a trailing newline.
     private static readonly Regex RoomId = new(@"^[a-z0-9]{12}\z", RegexOptions.CultureInvariant);
 

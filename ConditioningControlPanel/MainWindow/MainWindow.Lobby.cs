@@ -278,13 +278,12 @@ namespace ConditioningControlPanel
             catch (Exception ex) { App.Logger?.Warning(ex, "[Lobby] join {Game} failed", row.Game); }
         }
 
-        /// <summary>A race runs on the web only: open its room in the browser. A malformed room id
-        /// never becomes a URL.</summary>
+        /// <summary>A race row: Racing Thoughts opens in the app on <c>?join=&lt;roomId&gt;</c> and the
+        /// page seats us (a refused seat shows the room's reason). A malformed room id never leaves.</summary>
         internal static void OpenRaceJoin(string? roomId)
         {
-            var uri = RaceJoinLink.For(roomId);
-            if (uri == null) { App.Logger?.Warning("[Lobby] race join refused: bad room id"); return; }
-            Helpers.BrowserLauncher.TryOpenUrl(uri.AbsoluteUri);
+            if (!RaceJoinLink.IsRoomId(roomId)) { App.Logger?.Warning("[Lobby] race join refused: bad room id"); return; }
+            Services.Glassroad.GlassroadHostService.Launch(roomId);
         }
 
         /// <summary>The host bar (and the empty state's buttons): each game's own host door.</summary>

@@ -133,7 +133,7 @@ public class LobbyRaceTests
     [Fact]
     public void Join_link_builds_only_for_a_room_id()
     {
-        Assert.Equal("https://app.cclabs.app/race3d?join=abc123def456", RaceJoinLink.For("abc123def456")!.AbsoluteUri);
+        Assert.Equal("https://ccp.game/glassroad/index.html?join=abc123def456", RaceJoinLink.For("abc123def456")!.AbsoluteUri);
         Assert.Null(RaceJoinLink.For(null));
         Assert.Null(RaceJoinLink.For(""));
         Assert.Null(RaceJoinLink.For("abc123def456&x=1"));

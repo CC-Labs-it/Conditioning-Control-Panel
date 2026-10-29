@@ -62,10 +62,18 @@ internal static class GlassroadHostService
         catch (Exception ex) { App.Logger?.Debug("Glassroad: kept Escape post failed: {E}", ex.Message); }
     }
 
-    /// <summary>Open the race window. Idempotent: a live window is only re-focused.</summary>
-    public static void Launch()
+    /// <summary>Open the race window. Idempotent: a live window is only re-focused. With a room id
+    /// (a Lobby row, a friend's race invite) the page opens on <c>?join=</c> and seats us; a live
+    /// window gets the id as a <c>join-room</c> frame, which the page takes only on its menu.</summary>
+    public static void Launch(string? joinRoomId = null)
     {
-        if (_host != null) { _host.FocusWeb(); return; }
+        var join = Lobby.RaceJoinLink.For(joinRoomId);
+        if (_host != null)
+        {
+            if (join != null) _host.Post(new { type = "join-room", roomId = joinRoomId });
+            _host.FocusWeb();
+            return;
+        }
         try
         {
             _pinged = _earlyInitSent = false;
@@ -73,7 +81,7 @@ internal static class GlassroadHostService
             var webRoot = Path.Combine(AppContext.BaseDirectory, "Resources", "web");
             _host = new ChaosWebViewHost(new ChaosWebViewHost.Options
             {
-                StartUrl = "https://ccp.game/glassroad/index.html",
+                StartUrl = join?.AbsoluteUri ?? Lobby.RaceJoinLink.Base,
                 PrimaryHost = "ccp.game",
                 Mappings = new List<(string, string, CoreWebView2HostResourceAccessKind)>
                 {
