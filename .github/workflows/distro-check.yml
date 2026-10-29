@@ -31,6 +31,8 @@ jobs:
         with:
           path: ~/.cache/ccp-test/vosk
           key: vosk-model-small-en-us-0.15-30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498
+      # Real media, not LFS pointers (build-tarball.sh refuses a pointer); only Assets/ ships.
+      - run: git lfs pull --include "Assets/**"
       - run: bash packaging/linux/build-tarball.sh
       - uses: actions/upload-artifact@v4
         with:

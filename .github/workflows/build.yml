@@ -73,6 +73,11 @@ jobs:
       # The shipped shape: the linux-x64 tarball (publish profile + Vosk model + .desktop + icon) that the
       # Flatpak manifest and the AUR PKGBUILD consume, extracted and smoked with the bundled model required.
       # A workflow artifact only - never a release.
+      # The checkout has LFS off: without this the Back Room word clips and music ship as pointer files.
+      # Only the LFS files the publish copies (all under Assets/), never the ~680 MB of .ccpmod packs.
+      # build-tarball.sh refuses any pointer that is still left.
+      - name: Fetch the LFS media the tarball ships
+        run: git lfs pull --include "Assets/**"
       - name: Build the linux-x64 tarball and smoke it extracted
         run: |
           tar=$(bash packaging/linux/build-tarball.sh)
