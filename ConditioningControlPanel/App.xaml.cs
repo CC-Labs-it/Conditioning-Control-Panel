@@ -526,6 +526,8 @@ namespace ConditioningControlPanel
         public static Services.Prizes.OwnershipService? Ownership { get; private set; }
         /// <summary>Buying a v2 prize from the options panel (see Services/Prizes/V2PurchaseService).</summary>
         public static Services.Prizes.V2PurchaseService? V2Purchase { get; private set; }
+        /// <summary>Sparkles by place: posts a finished game's claim, adopts a paying receipt (see Services/Sparkles).</summary>
+        public static Services.Sparkles.SparklesClaimService? Sparkles { get; private set; }
         /// <summary>Eight-hole intake punch card (see IntakePunchCardService).</summary>
         public static IntakePunchCardService IntakePunchCard { get; private set; } = null!;
         public static TutorialService Tutorial { get; private set; } = null!;
@@ -2219,6 +2221,8 @@ namespace ConditioningControlPanel
                     s.SkillPoints = next;
                     Settings.Save();
                 })));
+            // Sparkles by place (B1). Pure constructor: nothing is sent until a game host claims.
+            Sparkles = Services.Sparkles.SparklesClaimService.CreateForApp();
             Roadmap = new RoadmapService();
             // Needs Settings, Progression and Quests (all above); Patreon is constructed above too.
             Programs = new Services.Program.ProgramService();
