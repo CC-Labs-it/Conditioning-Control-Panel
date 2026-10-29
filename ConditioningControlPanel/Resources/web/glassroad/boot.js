@@ -568,28 +568,32 @@ async function boot(course, options, lifetime, isCurrent) {
   bus.on('phrase-gate', e => {
     if (!e.song || !words) return;
     wordCount.pop(!!feel.get('gentle.on'), { gate: true });
-    if (online) online.s.wordPop(words.pops + world.phraseGates.stats.hits);
-    if (coinC.popBubbles) coinSink();
+    songWordCaught();
   });
   // WORD COINS (playtest 2026-10-28, sim/wordCoins.js): lit road words driven over count up to the cap, each point a
-  // little top speed (P.topBonus, sim/racers.js), a landed hit drops a few. Solo only unless feel wordCoins.online:
-  // online keeps today's rules until the room rollout. render/roadWords.js calls coinSink; hud/wordCount.js draws.
+  // little top speed (P.topBonus, sim/racers.js), a landed hit drops a few. Online carries cumulative catches,
+  // while capped inventory stays local. render/roadWords.js calls coinSink; hud/wordCount.js draws.
   const coinC = coinTuning(feel), coins = createWordCoins(coinC);
   const coinsLive = () => !!coinC.on && (!online || !!coinC.online);
   function coinNote(delta) {
-    if (P) P.topBonus = coins.topMul();
+    if (P) P.topBonus = coinsLive() ? coins.topMul() : 1;
     bus.emit('word-coins', { count: coins.count, cap: coins.cap, delta, show: coinsLive() && !!words });
   }
-  function coinSink(marking) {
+  function coinSink(marking, credit = true) {
     if (!coinsLive() || !race || race.phase !== 'racing') return false;
-    const rose = coins.add();
+    const rose = coins.add(credit);
     coinNote(rose ? 1 : 0);
+    if (online) online.s.wordPop(coins.total);
     // Floor contact gets its own sound even at the cap. Bubbles and gates already have theirs.
     if (marking?.id !== undefined) bus.emit('word-pickup', { count: coins.count, id: marking.id });
     return true;
   }
+  function songWordCaught() {
+    if (coinsLive()) coinSink(null, coinC.popBubbles);
+    else if (online && words) online.s.wordPop(words.pops + world.phraseGates.stats.hits);
+  }
   bus.on('hitter-hit', ({ racer } = {}) => { if (coinsLive() && P && racer === P.i && coins.hit()) coinNote(-1); });
-  Object.defineProperty(debug, 'wordCoins', { get: () => ({ count: coins.count, live: coinsLive(), top: coins.topMul(),
+  Object.defineProperty(debug, 'wordCoins', { get: () => ({ count: coins.count, total: coins.total, live: coinsLive(), top: coinsLive() ? coins.topMul() : 1,
     road: world.roadWords?.stats?.() || null }) });
   const garage = shared.garage ||= await createGarage({ art: shared.garageArt, renderer, canvas,
     track: trackName, laps, trackId: track.id, online: course.online });
@@ -935,8 +939,7 @@ async function boot(course, options, lifetime, isCurrent) {
       words = createWordRun(song, track, { seed, songGates: true }); words.song = song;
       words.onPop((e) => {
         bus.emit('word-pop', e); wordCount.pop(!!feel.get('gentle.on'), e);
-        if (online && words) online.s.wordPop(words.pops + world.phraseGates.stats.hits);
-        if (coinC.popBubbles) coinSink();
+        songWordCaught();
       });
     } else words.reset(seed);
     wordCount.show(!coinsLive());                 // word coins replace the "7 / 20 words" counter while they count
@@ -1722,7 +1725,7 @@ async function boot(course, options, lifetime, isCurrent) {
       ghostToState(ghostSample(ghost, ghostT, ghostPose), ghostView.st);
       ghostKarts[0] = kartViews[0]; shownKarts = ghostKarts;
     }
-    world.roadWords?.setCoins?.(coinsLive() ? coinSink : null);   // word coins: solo unless wordCoins.online
+    world.roadWords?.setCoins?.(coinsLive() ? coinSink : null);
     world.update({ kart: P.view, karts: shownKarts, fx: viewFx, timeS: renderTime, beat: clock.beat, motion: opts?.motion || 'full',
         raceTimeS: racers.clockS, sectionIdx: viewSection, items: iv, mode, camera: cam.camera, paused, gentle: cueSafety.on, song, songS, audioReactive, words: wordLive, beatSong,
       airWords: inRace && !online ? airWords : null,

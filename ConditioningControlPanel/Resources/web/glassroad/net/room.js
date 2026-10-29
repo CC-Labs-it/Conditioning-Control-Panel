@@ -231,7 +231,7 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
     start: () => send({ t: 'start' }),
     setLook(l) { look = normLook(l); return send({ t: 'look', ...look }); },
     emote(code, poseId = 0) { if (poseId) uplink.pose(st.seat, poseId, now()); return send({ t: 'emote', code }); },
-    /** The music road: a word bubble popped (pulse) and the race total (record pops). */
+    /** One collected lyric floor word, bubble or song gate: shared pulse and cumulative race total. */
     wordPop(total) { uplink.event(st.seat, 'word-pop', {}); if (Number.isFinite(total)) uplink.setPops(st.seat, total); },
     leave() { leaving = true; if (retryT) timers.clearTimeout(retryT); send({ t: 'leave' }); if (sock) sock.close(1000, 'leave'); },
     serverNow: () => clock.serverNow(),

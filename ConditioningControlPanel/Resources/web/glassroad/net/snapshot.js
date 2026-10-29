@@ -44,7 +44,11 @@ export function createUplink({ phone = false, track = null } = {}) {
     },
     /** A preset emote pose (16+) for a while. */
     pose(seat, id, ms, holdMs = 1500) { const e = of(seat); e.pose = id; e.poseUntil = ms + holdMs; },
-    setPops(seat, n) { of(seat).pops = n | 0; },
+    setPops(seat, n) {
+      if (!Number.isFinite(n)) return;
+      const e = of(seat);
+      e.pops = Math.max(e.pops, Math.min(65535, Math.max(0, Math.floor(n))));
+    },
     /** Continue a seat's seq after a record (the keeper takes a bot over). */
     seqFrom(seat, seq) { of(seat).seq = (seq + 1) & 0xffff; },
     seqOf: (seat) => of(seat).seq,

@@ -67,7 +67,7 @@ Kart record (40 B; plan 3.2 grew from 32 B: track `s` instead of seg/segT, plus 
 | 35 | aura | u8 | bits 0-3 running screen effect `fxv.effect` (0 none, 1..13 = `EFFECTS` index + 1: the 8 old hit kinds, then pendulum disc tether snap bigSpiral), 4-5 shield (0 none, 1 glass, 2 golden, 3 echo), 6-7 echo copies left 0..3 |
 | 36 | pose | u8 | trick / emote animation id (0 none; 1 trick good, 2 trick great; 16+ = emote presets, B2-d) |
 | 37 | pulses | u8 | one-shot edges since this seat's previous record (table below) |
-| 38 | pops | u16 | word bubbles popped this race (the music road), monotone |
+| 38 | pops | u16 | cumulative lyric floor-word, bubble and song-gate catches this race, monotone |
 
 Every integer field clamps to its range before writing (u8 0..255, i16 -32768..32767, u16 0..65535, u32 0..2^32-1);
 rounding is JS `Math.round`. An all-zero quat decodes to identity.
@@ -218,9 +218,11 @@ Standings: progress = `lap * lengthM + d`, `d = wrap(s - startS)`, minus `length
 
 The room keeps a TRACK CARD per track (numbers only, generated offline from `tracks/<id>.json` through `loadTrack`;
 no client file is copied into the server): `{ id, lengthM, startS, laps, checkpointsS: [], boxes: [items index],
-topMps, maxPct, minLapS, skips: [{ fromS, toS }] }`, plus the item numbers it needs from `feel.json` (`items.*`).
+topMps, maxPct, wordCoins, minLapS, skips: [{ fromS, toS }] }`, plus the item numbers it needs from `feel.json` (`items.*`).
 
-Anti-cheat lite (flags in the signed result; no kick in v1): `speed` (|vel| or progress rate over `topMps * maxPct * 1.1`
+Anti-cheat lite (flags in the signed result; no kick in v1): `speed` (|vel| or progress rate over
+`topMps * maxPct * wordSpeedMultiplier(card.wordCoins) * 1.1`, with the word multiplier bounded to 1.09 and independent
+of cumulative `pops`; `minLapS` uses the same ceiling,
 for over 0.5 s outside a registered skip, `sim/routes.js` `registeredSkip`), `order` (checkpoints out of order), `lap`
 (a lap under `minLapS`), `finish` (finish before full progress), `rate` (over 25 uploads per s for 2 s, or records for
 a seat the socket does not own), `assist` (assist flag in a `laneKeeper: false` room while not paused).

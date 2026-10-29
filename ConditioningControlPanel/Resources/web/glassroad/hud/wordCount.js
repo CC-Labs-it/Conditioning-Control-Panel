@@ -6,7 +6,7 @@
  * with no scale, motion 'off' plays nothing; the chip fades in and out (longer under Gentle). Mounted by hud.js.
  */
 
-export const COIN_HUD = Object.freeze({ gainMs: 320, lossMs: 420, fadeMs: 200, gentleFadeMs: 600 });
+export const COIN_HUD = Object.freeze({ gainMs: 320, lossMs: 420, fadeMs: 200, gentleFadeMs: 600, gentleChangeMs: 900 });
 
 const GAIN_FULL = [{ transform: 'scale(1)', filter: 'brightness(1)' }, { transform: 'scale(1.18)', filter: 'brightness(1.5)', offset: 0.3 },
   { transform: 'scale(1)', filter: 'brightness(1)' }];
@@ -45,7 +45,7 @@ export function createCoinCount(host, bus, { doc = globalThis.document, motion =
   el.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h11M4 17h14"/></svg><b>0</b>';
   host.appendChild(el);
   const num = el.querySelector('b');
-  let last = -1, on = false;
+  let last = -1, on = false, animation = null;
   const off = bus.on('word-coins', ({ count = 0, cap = 10, delta = 0, show = true } = {}) => {
     if (show !== on) {
       on = !!show; el.classList.toggle('on', on);
@@ -53,8 +53,15 @@ export function createCoinCount(host, bus, { doc = globalThis.document, motion =
     }
     if (count !== last) { num.textContent = String(count); last = count; }
     el.classList.toggle('max', count >= cap);
-    const frames = on ? coinFrames(delta, motion(), gentle()) : null;
-    if (frames && typeof el.animate === 'function') el.animate(frames, { duration: delta < 0 ? H.lossMs : H.gainMs, easing: 'cubic-bezier(.2,.8,.3,1)' });
+    const soft = gentle(), frames = on ? coinFrames(delta, motion(), soft) : null;
+    // Linear time keeps both Gentle legs above 300 ms. An accelerated global
+    // easing would reach the .35/.4 keyframe early despite a longer duration.
+    // Dense pickups update the count without restarting a Gentle brightness rise.
+    if (frames && typeof el.animate === 'function' && !(soft && animation?.playState === 'running')) {
+      const duration = delta < 0 ? H.lossMs : H.gainMs;
+      animation = el.animate(frames, { duration: soft ? Math.max(duration, H.gentleChangeMs || 900) : duration,
+        easing: soft ? 'linear' : 'cubic-bezier(.2,.8,.3,1)' });
+    }
   });
-  return () => { if (typeof off === 'function') off(); el.remove?.(); };
+  return () => { if (typeof off === 'function') off(); animation?.cancel?.(); el.remove?.(); };
 }

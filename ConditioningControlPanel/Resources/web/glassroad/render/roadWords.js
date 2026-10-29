@@ -403,7 +403,16 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
   function freeSlot(slot) {
     slotOf.delete(slotId[slot]); slotId[slot] = -1; slotCoin[slot] = 0;
     slotLane[slot] = NaN; slotW[slot] = NaN; slotFoot[slot] = NaN; slotWet[slot] = 0;
-    for (let v = 0; v < V; v++) a.aState.array[(slot * V + v) * 4] = 0;
+    for (let v = 0; v < V; v++) {
+      const at = (slot * V + v) * 4;
+      a.aState.array[at] = 0;
+      // Pickup decoration deliberately outlives the source fade. Retiring a pool
+      // slot must retire its independent pickup clock too, including on restart.
+      a.aIdentity.array[at] = 0;
+      a.aIdentity.array[at + 1] = 0;
+      a.aIdentity.array[at + 2] = -1;
+      a.aIdentity.array[at + 3] = 1;
+    }
   }
 
   function update(s, tS, kart, mf, { gentle = false, paused = false, reactive = null, motion = 'full' } = {}) {
@@ -498,7 +507,7 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
   /** Every marking off the road (a restart; the same song's atlas is kept). */
   function clear() {
     for (let sl = 0; sl < P.slots; sl++) if (slotId[sl] >= 0) freeSlot(sl);
-    a.aState.needsUpdate = true;
+    a.aState.needsUpdate = a.aIdentity.needsUpdate = true;
     if (run) run.reset();
     paint.mesh.visible = false;
     dropIdx = -1; dropOk = false; lastSongS = NaN; coinsGot = 0; previousKart = null;
