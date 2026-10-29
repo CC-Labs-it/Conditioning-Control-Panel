@@ -61,7 +61,7 @@ internal static class GameSurfaces
         new("goon", () => GoonGame.GoonHostService.IsActive, GoonGame.GoonHostService.CloseActive),
         new("piecebypiece", () => PieceByPiece.PieceByPieceHostService.IsActive, PieceByPiece.PieceByPieceHostService.Close),
         new("intake", () => Quiz.IntakeHostService.IsActive, Quiz.IntakeHostService.CloseActive),
-        // Glassroad (the 3D race, preview behind CCP_GLASSROAD): its own window, so panic closes it.
+        // Glassroad (Racing Thoughts 3D, every race door since 7.2): its own window, so panic closes it.
         new("glassroad", () => Glassroad.GlassroadHostService.IsActive, Glassroad.GlassroadHostService.Close),
     };
 

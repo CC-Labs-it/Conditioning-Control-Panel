@@ -8,8 +8,8 @@ using static ConditioningControlPanel.Services.Safety.PanicPolicy;
 
 namespace ConditioningControlPanel.Tests;
 
-/// <summary>The Glassroad desktop host (3D race preview): the hidden door, the init frame, the
-/// relay's signing rule and its path gate, the kept Escape and the panic registry.</summary>
+/// <summary>The Glassroad desktop host (Racing Thoughts 3D): the open race doors, the init frame,
+/// the relay's signing rule and its path gate, the kept Escape and the panic registry.</summary>
 [Collection(GameSurfacesCollection.Name)]
 public class GlassroadHostTests
 {
@@ -45,27 +45,33 @@ public class GlassroadHostTests
 
     // ---- the door ----
 
-    [Theory]
-    [InlineData("1", true)]
-    [InlineData(" 1 ", true)]
-    [InlineData(null, false)]
-    [InlineData("0", false)]
-    [InlineData("true", false)]
-    public void TheDoor_OpensOnlyOnOne(string? env, bool open)
-        => Assert.Equal(open, GlassroadRules.DoorOpen(env));
-
     [Fact]
-    public void BothRaceDoors_GoThroughTheSwitch()
+    public void TheRaceDoor_OpensGlassroadForEveryone_The2dRaceIsRetired()
     {
         var catalogue = Read("Services", "Launcher", "LauncherCatalogue.cs");
         int race = catalogue.IndexOf("G(\"race\"", StringComparison.Ordinal);
         Assert.True(race >= 0);
-        var entry = catalogue.Substring(race, catalogue.IndexOf("revealed:", race, StringComparison.Ordinal) - race);
-        Assert.Contains("GlassroadRules.DoorOpenNow()", entry);
+        var entry = catalogue.Substring(race, catalogue.IndexOf(");", race, StringComparison.Ordinal) - race);
         Assert.Contains("GlassroadHostService.Launch()", entry);
-        Assert.Contains("CaucusHostService.Launch()", entry);
+        Assert.Contains("GlassroadHostService.IsActive", entry);
+        Assert.DoesNotContain("CaucusHostService", entry);   // no 2D door
+        Assert.DoesNotContain("revealed:", entry);           // always revealed, no switch, no purchase
+        Assert.DoesNotContain("CCP_GLASSROAD", catalogue);
         // The Play card reaches the same entry.
         Assert.Contains("LaunchPlayLauncherGame(\"race\")", Read("Views", "Tabs", "PlayTabView.Cards.cs"));
+    }
+
+    [Fact]
+    public void TheBackRoomPortal_OpensGlassroad_AndKeepsTheRoom()
+    {
+        var room = Read("Services", "BackRoom", "BackRoomHostService.cs");
+        int start = room.IndexOf("if ((string?)message[\"game\"] != \"race\"", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var body = room.Substring(start, room.IndexOf("\n    }", start, StringComparison.Ordinal) - start);
+        Assert.Contains("GlassroadHostService.Launch()", body);
+        Assert.Contains("ok = false, reason = \"elsewhere\"", body);   // releases the page's portal
+        Assert.DoesNotContain("RequestClose(\"race\")", body);         // the room stays up
+        Assert.DoesNotContain("_openingRace = true", body);
     }
 
     // ---- the init frame ----

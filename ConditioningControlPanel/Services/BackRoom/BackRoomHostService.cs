@@ -462,11 +462,12 @@ internal static class BackRoomHostService
         }
         if ((string?)message["type"] != "game-open") { _bridge?.Handle(message); return; }
         if ((string?)message["game"] != "race" || _openingRace) return;
-        string? refusal = !RacingAccess.CanLaunch ? "locked" : CaucusHostService.IsActive ? "busy" : null;
-        Post(new { type = "game-open-result", game = "race", ok = refusal == null, reason = refusal });
-        if (refusal != null) return;
-        _openingRace = true;
-        _bridge?.RequestClose("race");
+        // 7.2: the room's race portal opens Racing Thoughts 3D (Glassroad) in its own window; the
+        // 2D race in this window is retired (OnRoomClosed's race branch stays, unreached). The
+        // room stays up: a not-ok answer with reason "elsewhere" releases the page's portal and
+        // its scene (race-portal.js refused), and only "locked" walks to the counter.
+        Post(new { type = "game-open-result", game = "race", ok = false, reason = "elsewhere" });
+        Glassroad.GlassroadHostService.Launch();
     }
 
     private static void OnRoomClosed()
