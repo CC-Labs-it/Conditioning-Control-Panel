@@ -93,6 +93,7 @@ import { onlineCourseHash as onlineHash } from './net/courseHash.js';
 import { createLobbyApi, fetchTransport, hostTransport } from './net/lobbyApi.js';
 import { createProfileSync } from './meta/profileSync.js';
 import { configureLobby } from './hud/lobby.js';
+import { hostInvites, createHostInvite } from './host/friendInvite.js';
 import { linkToken, dropLinkParam, joinParam } from './hud/lobbyMath.js';
 import { poseOf } from './hud/presets.js';
 import { createDevHook, devAllowed } from './dev/hook.js';
@@ -1186,18 +1187,21 @@ async function boot(course, options, lifetime, isCurrent) {
       now: () => s.serverNow(),
     };
   }
+  // "Invite a friend" in the pre-race room: only a host that sends caps.friendInvite (the CCP desktop) owns the list
+  const hostInvite = lobbyApi && hostInvites(bridge, init) ? createHostInvite(bridge) : null;
   configureLobby({ api: lobbyApi ? {
     list: () => lobbyApi.list(),
     open: (body) => lobbyApi.open(body),
     join: (roomId, look) => lobbyApi.join({ roomId, look }),
     quick: (o) => lobbyApi.quick(o),
-    invite: (friendUid, roomId) => lobbyApi.invite({ friendUid, roomId }),
+    invite: hostInvite ? (friendUid, roomId) => hostInvite.invite(friendUid, roomId) : (friendUid, roomId) => lobbyApi.invite({ friendUid, roomId }),
     leave: (roomId) => lobbyApi.leave({ roomId }),
     makeLink: () => lobbyApi.makeLink(),
     revokeLink: () => lobbyApi.revokeLink(),
     claimLink: (token, look, plat) => lobbyApi.claimLink(token, look, plat),
     access: () => lobbyApi.access(),
   } : null, connect: lobbyApi ? connectRoom : null, identity: () => (link && link.identity) || null, track: track.id, trackLaps: TRACK_LAPS, platform,
+  ...(hostInvite ? { friends: hostInvite.friends } : {}),
   garageLook:()=>garage?raceLook(garage.state):null,
   // a race link (?r=<token>, NET.md section 13): the address drops its r after the first claim answer
   linkClaimed: () => { const to = dropLinkParam(location.href); if (to) history.replaceState(history.state, '', to); } });
