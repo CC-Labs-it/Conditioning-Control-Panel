@@ -2,9 +2,10 @@
 
 Branch `avalonia-port/main-20261030` (merge) + `avalonia-port/main-20261030-compat` (build fixes), from
 `review/mich-1025-merge` (`950aedaa1`: Mich's frozen tip `a3d9e984f` + `port/7.2` + the port-review fixes #3099-#3125).
-Pin: `origin/main` = `7e01ec326` (Merge PR #3132 rt-prime-only, 2026-10-29).
+Pin: `origin/main` = `7e01ec326` (Merge PR #3132 rt-prime-only, 2026-10-29), then follow-up pin `a11ada22e`
+(Merge PR #3138 garage-owned-bodies, 2026-10-29; rows 590-591, merge `a9605b2cc`).
 Last sync pin: `f81ea01fb` (main sync #8, [`avalonia-main-sync-20261024.md`](avalonia-main-sync-20261024.md)).
-Delta: 589 non-merge commits, 1562 files. Almost all of it is the Racing Thoughts 3D (Glassroad) web tree, which now
+Delta: 591 non-merge commits (589 + 2 follow-up), 1562 + 22 files. Almost all of it is the Racing Thoughts 3D (Glassroad) web tree, which now
 lives in `Assets/web/glassroad` (moved in the merge, same rule git applied to the other web trees). The rest is the 7.1.15
 release, Sparkles by place (B1), Lobby race rows and the friends race invite (A3), and a few bug fixes.
 
@@ -14,7 +15,7 @@ Every non-merge commit has one row. Status legend as in `avalonia-main-sync-2026
 - **needs-port (`lane`)**: WPF-only behaviour the Avalonia head lacks; the lane owns it.
 - **n/a**: no Avalonia counterpart by design, reason given.
 
-Counts: 558 ported-by-merge, 25 needs-port, 6 n/a (total 589)
+Counts: 559 ported-by-merge, 26 needs-port, 6 n/a (total 591)
 
 Under the 7.2 plan these lanes are A5 work and go as PRs of 600 lines or less against `port/7.2` after A1 lands.
 Sparkles waits for the B1 DECISIONS file; Lobby/invite waits for the A3 server half.
@@ -24,7 +25,7 @@ Sparkles waits for the B1 DECISIONS file; Lobby/invite waits for the A3 server h
 | lane | commits | rows |
 |---|---|---|
 | `sync9-fixes` | 4 | `97eca18de`, `08bb30ba7`, `81bc9fa21`, `cdda883ac` |
-| `sync9-glassroad` | 3 | `5121933ee`, `099607382`, `c7af815a0` |
+| `sync9-glassroad` | 4 | `5121933ee`, `099607382`, `c7af815a0`, `9718fd3f4` |
 | `sync9-lobby-invite` | 3 | `5a353e6b0`, `d6a39c7ac`, `cc6ad7a39` |
 | `sync9-sparkles` | 15 | `3930199ac`, `9d7d5406e`, `28c334234`, `21873bc05`, `48d232dd9`, `a568665e0`, `de0947d9f`, `b96b5931c`, `cc1bdc4b0`, `b2487a365`, `7c086f322`, `70c3d96e6`, `d7348e6a0`, `ba537a09b`, `e0356be6e` |
 
@@ -32,6 +33,10 @@ What each lane is:
 - `sync9-glassroad`: the Avalonia door (`GameWindow.Glassroad.cs`, still behind `CCP_GLASSROAD=1`) opens for everyone,
   Prime only, and the 2D race door is retired (WPF `LauncherCatalogue` "race", `GameSurfaces`, Play tab). Panic/Escape
   rules from `5121933ee` are already in `PanicPolicy.KeptEscapePage.Glassroad`; recheck against `c7af815a0`.
+- `sync9-glassroad` also owns row 590 (`9718fd3f4`): the Avalonia `GlassroadHostRules.InitFrame` must carry
+  `identity.grants` (only `cos.kart.*`, sorted, at most 64, WPF `GlassroadRules.KartGrants`) and `GameWindow.Glassroad.cs`
+  must post `{type:'owned', grants}` on Core `OwnershipService.OwnershipChanged` while the window is up, unsubscribing on close.
+  Without it the Linux garage offers no owned bodies (the page falls back to the free ones). Test to port: `GlassroadHostTests.Init_CarriesOnlyKartGrants_AndTheOwnedPushMatches`.
 - `sync9-sparkles`: claim service, per-game claims (Arcademy, DtRH, Caucus, Intake, chess, Goon, Breakout, Glassroad) and the
   results slip, host side. The web halves (`sparkles-slip.js` in every tree) merged. WPF-only today (`ConditioningControlPanel/Services/Sparkles`).
 - `sync9-lobby-invite`: open race rows in the Lobby (Core `LobbyModel`/`RaceOpenApi`, now in Core), the in-app `?join=` door
@@ -632,6 +637,37 @@ What each lane is:
 | 587 | `639e10a0b` | feat(glassroad): host-owned friends invite in the pre-race room | ConditioningControlPanel/Resources/web | ported-by-merge |
 | 588 | `cc6ad7a39` | feat(friends): invite a friend into your Racing Thoughts room | WPF: FriendsLanding.cs, GlassroadHostService.cs, GlassroadRules.cs | needs-port (`sync9-lobby-invite`) |
 | 589 | `c7af815a0` | fix(glassroad): Racing Thoughts 3D is Prime only, every door | WPF: BackRoomHostService.cs, FriendsLanding.cs, GlassroadHostService.cs, LauncherCatalogue.cs, MainWindow.PlayTab.cs, PlayTabView.xaml | needs-port (`sync9-glassroad`) |
+| 590 | `9718fd3f4` | feat(glassroad): the garage offers only owned kart bodies | WPF: GlassroadHostService.cs, GlassroadRules.cs (web half merged in Assets/web/glassroad) | needs-port (`sync9-glassroad`) |
+| 591 | `9d08ba4d7` | fix(copy): the tier-2 lock label says Prime, not Lab | CCP.Core/Localization/Languages (hm3_rail_lock_t2, all ten files) | ported-by-merge |
+
+## Follow-up merge `a9605b2cc` (pin `a11ada22e`)
+
+On `avalonia-port/main-20261030-compat`, after the compat commit. Conflict resolutions only: the two new files
+`meta/owned.js` and `tests/garage-owned.test.mjs` kept where git's directory-rename detection put them
+(`Assets/web/glassroad/`). The other glassroad edits followed the moved tree on their own. Checks: WPF test project builds
+(0 errors); `node --test` garage-owned, garage and logbook-record-ui: 19/19.
+
+## Watch list: on the way to main, not merged here yet
+
+These are not in this sync. The next sync (or A5) must pick them up, and must add a ledger row for each commit:
+
+| ref | sha | what | trap for the next sync |
+|---|---|---|---|
+| `preview/7.2.0` | `3c05cc1f5` | 42 commits ahead of main (24 non-merge): the Prize Counter shop (B3-W1/W2/ART), the launcher Sparkles wallet chip, `shop_*` loc keys | its web tree is new under `ConditioningControlPanel/Resources/web/prizecounter`. Git will NOT move a new tree, so `git mv` it to `Assets/web/prizecounter` and fix the csproj excludes, CI paths and tests (same as glassroad here). WPF host `Services/PrizeCounter` -> Avalonia port lane |
+| `feat/glassroad-a` | `248c978c1` | 3 commits not on main: `19d633049` owned kart bodies (twin of `9718fd3f4`), `7a83f0356` host-owned friends invite in the pre-race room, `6a5ed13c4` join-room host frame for an open window | lands through A2 catch-up merges; `7a83f0356`/`6a5ed13c4` belong to `sync9-lobby-invite` |
+
+Older open port debt that still applies (not repeated here): sync 7 needs-port rows in
+[`avalonia-main-sync-20261015.md`](avalonia-main-sync-20261015.md) and sync 8 rows in
+[`avalonia-main-sync-20261024.md`](avalonia-main-sync-20261024.md). The sync 8 safety lanes (panic-voice, lockdown,
+remote-end, factory-reset, settings-freeze, chaster-leash) are finished locally but not pushed, so the frozen tip
+`a3d9e984f` does not have them.
+
+## How a row gets closed
+
+A needs-port row is closed when its lane's PR lands on `port/7.2`. Change the status cell to
+`ported (#PR, sha)` in that PR, never in a separate docs PR, so the ledger and the code land together. A row
+that turns out to need nothing is changed to `n/a` with the reason. `~/ccp-port/bin/ledger-check` keeps the row count
+and numbering honest.
 
 ## Merge notes (`avalonia-port/main-20261030`)
 
