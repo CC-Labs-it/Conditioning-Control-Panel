@@ -20,6 +20,15 @@ cp -r "$model" "$pub/Resources/Models/vosk/"
 cp -r "$root/packaging/linux/share" "$pub/"
 cp "$root/LICENSE" "$pub/"
 
+# A checkout with LFS off publishes the media as pointer files, and the app then plays nothing.
+# Refuse them: run `git lfs pull --include "Assets/**"` first (CI does).
+pointers=$(find "$pub" -type f -size -1025c -exec grep -l '^version https://git-lfs' {} + || true)
+if [ -n "$pointers" ]; then
+  echo "build-tarball: LFS pointer files instead of media (git lfs pull --include \"Assets/**\"):" >&2
+  echo "$pointers" >&2
+  exit 1
+fi
+
 mkdir -p "$out"
 tar=$out/ConditioningControlPanel-$ver-linux-x64.tar.gz
 # Reproducible: sorted names, fixed owner and mtime, no gzip timestamp.
