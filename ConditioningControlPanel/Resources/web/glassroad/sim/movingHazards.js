@@ -7,8 +7,9 @@ const local = (st, row) => {
   return { x: dot(d, row.b), z: dot(d, row.t), h: dot(d, row.n) };
 };
 export function movingOverlap(row, pose, p) {
-  return pose.active && Math.abs(p.x - pose.x) <= row.w / 2 + .7
-    && Math.abs(p.z) <= row.len / 2 + .7 && p.h > -1 && p.h < 3.2;
+  const scale = row.hitboxScale ?? 1, radius = scale < 1 ? .4 : .7;
+  return pose.active && Math.abs(p.x - pose.x) <= row.w * scale / 2 + radius
+    && Math.abs(p.z) <= row.len * scale / 2 + radius && p.h > -1 && p.h < 3.2;
 }
 
 export function createMovingHazards(track) {

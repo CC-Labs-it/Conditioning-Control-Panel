@@ -23,6 +23,14 @@ test('failure record: the reason, the stage, the course and backend, remembered 
   assert.equal(failureLine({ ...rec, kind: 'lost', stage: null }), 'graphics device lost (mainframe, webgpu, phone): no WebGL2 context');
   assert.equal(failureLine({ ...rec, kind: 'stalled' }).slice(0, 14), 'frames stopped');
   assert.equal(failureLine({ ...rec, kind: 'frame' }).slice(0, 16), 'frame loop threw');
+  // a pinned Quality says so on the line (owner's iPhone 2026-10-28: High pinned on a phone, "loading stalled after water")
+  assert.equal(rec.pinned, false);
+  const pinned = describeFailure(new Error('stuck at water (58%) for 20 s'), { kind: 'stall', course: 'threshold', backend: 'webgpu', tier: 'high', pinned: true, stage: 'water' });
+  assert.equal(pinned.pinned, true);
+  assert.equal(failureLine(pinned), 'loading stalled after water (threshold, webgpu, high pinned): stuck at water (58%) for 20 s');
+  assert.equal(failureLine({ ...pinned, tier: null }), 'loading stalled after water (threshold, webgpu): stuck at water (58%) for 20 s');
+  assert.equal(describeFailure(new Error('x'), { pinned: 'yes' }).pinned, false, 'only a real true counts');
+  assert.match(src('boot.js'), /tier: shared\.renderer\?\.tier \|\| null, pinned: !!shared\.renderer\?\.pinned/, 'every record carries the pin');
   assert.doesNotMatch(failureLine(rec), /[!–—]/);
   const items = {};
   const storage = { setItem: (k, v) => { items[k] = v; }, getItem: (k) => items[k] ?? null };
@@ -105,7 +113,7 @@ test('boot.js: a failure is recorded with the stage and shown on the cover with 
   for (const k of ['garage', 'kartPool.current', 'artLibrary', 'renderer']) assert.ok(td.includes('shared.' + k + '?.dispose()'), k + ' disposed');
   assert.match(td, /shared\.garage = null; shared\.kartPool\.current = null; shared\.artLibrary = null; shared\.garageArt = null; shared\.renderer = null;/);
   assert.match(td, /freshCanvas: true/);
-  assert.match(b, /createRenderer\(canvas, \{ forceRenderer: init\.caps\.forceRenderer, options: hud\.options, \.\.\.\(shared\.rendererOpts \|\| \{\}\) \}\)/);
+  assert.match(b, /createRenderer\(canvas, \{ forceRenderer: init\.caps\.forceRenderer, options: hud\.options, platform: init\.caps\.platform, \.\.\.\(shared\.rendererOpts \|\| \{\}\) \}\)/);
   assert.match(b, /canvas = renderer\.canvas;/);
   assert.match(b, /^let canvas = document\.getElementById\('view'\);/m);
 });

@@ -26,6 +26,7 @@ import {
   max, abs, fract, pow, fwidth,
 } from 'three/tsl';
 import { Q } from './quality.js';
+import { memoryTier } from './deviceClass.js';   // decoder counts budget on the DEVICE, whatever Quality is pinned
 import {
   mediaLook, tierOf, roadSamples, placeBillboard, haloSlots, haloPoseInto, tunnelLayout, spinSafeCrop, fitCover,
   createUploadBudget, urlAllowed, creditText, colourOf, slotColour,
@@ -378,7 +379,7 @@ export function createMediaSlots(scene, track, opts = {}) {
     owner.src = budget.add({ every: 1 / T.videoFps, kind: 'shared-video', owner, on: false });
     return owner;
   });
-  const videoCapacity = () => Math.min(sharedPool.length, mediaClipLimit(Q.name));
+  const videoCapacity = () => Math.min(sharedPool.length, mediaClipLimit(memoryTier(Q.name)));
   function clearVideoCanvas(owner) {
     // Drop the decoder reference with the GPU allocation; the next clip starts from the dark placeholder.
     owner.tex.image = owner.canvas; owner.width = 2; owner.height = 2;
@@ -708,7 +709,7 @@ export function createMediaSlots(scene, track, opts = {}) {
     /** Browser feed is display-only. Its images and clips must never enter a GPU texture. */
     setDisplayFeed(feed, canvas = globalThis.document?.getElementById('view')) {
       if (!webScreens && feed) webScreens = createWebMediaScreens({ scene, canvas,
-        isVisible: sl => !hidden(sl), maxPlaying: () => maxPlayingFor(Q.name),
+        isVisible: sl => !hidden(sl), maxPlaying: () => maxPlayingFor(memoryTier(Q.name)),
         slots: selected.filter(sl => ['billboard', 'halo', 'tunnel'].includes(sl.frame)) });
       webScreens?.setFeed(feed);
     },

@@ -306,13 +306,16 @@ export const tierShare = (name, J = JUICE_LOOK) => (name === 'phone' ? J.phoneMu
 
 /**
  * Polish 4 particle numbers; LOOK.p4 (render/look.js, integrator) overrides any of them.
- * Drift tiers wear blue, orange, pink everywhere (sparks, skid marks, ribbons, the mini-turbo burst).
+ * Drift tiers wear pink, white, gold everywhere (sparks, skid marks, ribbons, the mini-turbo burst), the
+ * same fills as the HUD pips (hud/kit.js order: art/ui/drift-pip-pink|white|gold.svg, one to three
+ * ticks), so the sparks at the rear wheels read as the tier the pips count
+ * (playtest 2026-10-28: the pips alone did not read).
  * The speed field lives in camera space: each element is born fieldNearM..fieldFarM ahead at a screen
  * position whose |x| is never inside the centre third, then streams toward the camera, so it only ever
  * moves outward on screen and leaves past the edge long before it is near the lens.
  */
 export const P4_LOOK = Object.freeze({
-  tierColours: Object.freeze(['#3da9ff', '#ff8c1a', '#ff2bd6']), slideColour: '#bfe4ff',
+  tierColours: Object.freeze(['#ff5fa8', '#fff8ef', '#ffd36b']), slideColour: '#bfe4ff',
   // speed field (render/speedlines.js)
   // fixer: the owner still read polish 4's streaks as long straight white lines near the eye, so streaks are
   // short dashes (a fifth of the field, about 2 m at most), the field ends further out, and glitter and soft
@@ -328,7 +331,8 @@ export const P4_LOOK = Object.freeze({
   skidWheelX: 0.42, skidWheelZ: 0.38, skidRiseS: 0.05, skidHoldS: 1.6, skidLifeS: 3.8, skidAlpha: 0.9, skidHotS: 0.35, skidGentle: 0.5, skidSlideAlpha: 0.8,
   skidGlow: 1.7,
   // drift sparks per tier: size, rate and a share of stars grow with the tier
-  sparkTierSize: Object.freeze([1, 1.3, 1.7]), sparkTierRate: Object.freeze([1, 1.25, 1.6]), sparkTierStars: Object.freeze([0, 0.08, 0.18]),
+  // (playtest 2026-10-28: each tier a clear step, so the size and rate ladders climb further than polish 4's)
+  sparkTierSize: Object.freeze([1, 1.5, 2.1]), sparkTierRate: Object.freeze([1, 1.4, 1.9]), sparkTierStars: Object.freeze([0, 0.08, 0.18]),
   // mini-turbo burst on drift-boost: a cone thrown back, stars round the saucer, a halo in the tier colour
   turboCount: Object.freeze([24, 40, 64]), turboSpeedMps: Object.freeze([7, 9, 12]), turboRingM: Object.freeze([2.6, 3.6, 5]), turboRingS: 0.42, turboSizeM: 0.42,
   // tricks: confetti thrown up at takeoff, a ring and confetti at the landing

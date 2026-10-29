@@ -63,7 +63,7 @@ test('real approved chess art fits trap envelopes, retains paint, pauses and rel
     return path ? { url: new URL('../vendor/three/' + path, import.meta.url).href, shortCircuit: true } : next(id, ctx);
   } });
   try {
-    const { Group, Box3 } = await import('three/webgpu');
+    const { Group, Box3, Vector3 } = await import('three/webgpu');
     const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
     const { MeshoptDecoder } = await import('three/addons/libs/meshopt_decoder.module.js');
     const { CHESS_TRAP_IDS } = await import('../render/chessTrapIds.js');
@@ -95,7 +95,19 @@ test('real approved chess art fits trap envelopes, retains paint, pauses and rel
     const side = createMovingHazardView(scene, course, {}, art);
     assert.equal(press.entries.flatMap(e => e.pressHeads || []).filter(h => h.sculpture).length, stations.length * 3);
     assert.equal(side.group.getObjectsByProperty('name', 'chess-trap-sculpture').length, 6);
-    const head = press.entries[0].pressHeads[0]; press.update(3 * .625 + .05);
+    const head = press.entries[0].pressHeads[0];
+    for (const entry of press.entries.filter(e => e.pressHeads)) for (const item of entry.pressHeads) {
+      const body = item.sculpture.children[0];
+      assert.ok(Math.cos(body.rotation.z) < -.99, 'Original base attaches above the downward-facing crown');
+      const original = chessTrap(art, item.row.pressLane, [item.row.w,item.row.heightM,item.row.depthM]);
+      const legacy = new Box3().setFromObject(original).getSize(new Vector3());
+      const bounds = new Box3().setFromObject(item.sculpture), size = bounds.getSize(new Vector3());
+      assert.ok(size.y > legacy.y * 1.34 && size.x > legacy.x * 1.14);
+      assert.ok(Math.abs(bounds.min.y) < 1e-6 && Math.abs(bounds.max.y - item.visualHeight) < 1e-6,
+        'Tip touches the contact plane and shaft begins at the actual inverted base');
+      assert.ok(size.x < 5, 'Adjacent lanes retain a visible gap');
+    }
+    press.update(3 * .625 + .05);
     assert.notEqual(head.sculpture.rotation.z, 0);
     const before = head.moving.position.y, wobble = head.sculpture.rotation.z;
     press.update(6, { paused: true }); assert.equal(head.moving.position.y, before); assert.equal(head.sculpture.rotation.z, wobble);

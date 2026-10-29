@@ -442,6 +442,54 @@ export function traumaRot(out, feel, fxState, noise, t, gentle = false) {
   return out;
 }
 
+// ---- speed feel (speed wave 2026-10-28, lane B): the view widens a little at speed and under boost ----
+// A continuous, drawn-only law: render/camera.js adds speedFov() to the COPY written into the three.js camera;
+// the rig's vFov and the pose never see it. fx/reactions.js settles the share into FxState.speedFeel (the post
+// edge blur reads the same number as FxState.speedBlur). LOOK.speedFeel (render/look.js) overrides any default.
+export const SPEED_FEEL_DEFAULTS = Object.freeze({
+  fromPct: 0.7,       // share 0 at this part of top speed (cruise), 1 at top speed
+  topDeg: 7,          // degrees added at top speed
+  boostDeg: 10,       // degrees added at speed.maxPct (boost pads, launches)
+  riseS: 0.35,        // critically damped settle, ~95% there in riseS going up
+  releaseS: 0.6,      // and in releaseS coming down
+  lessMul: 0.5,       // Motion 'less' and Gentle halve it; 'off' removes it
+  blurMax: 1,         // edge blur strength at a share of 1 (post.js u.speedBlur)
+});
+export const speedFeelNumbers = (L) => ({ ...SPEED_FEEL_DEFAULTS, ...((L && L.speedFeel) || {}) });
+export const SPEED_FEEL = speedFeelNumbers(LOOK);
+
+/** Speed share: 0 up to fromPct of top speed, eased to 1 at top, then up to boostDeg/topDeg at maxPct (speedPct past 1 = boost). */
+export function speedShare(pct, maxPct = 1.3, L = SPEED_FEEL) {
+  const p = +pct || 0, over = maxPct > 1 ? clamp((p - 1) / (maxPct - 1), 0, 1) : 0;
+  return smoothstep(L.fromPct, 1, p) + over * (L.boostDeg / L.topDeg - 1);
+}
+
+/** Motion / Gentle multiplier: 'off' 0, 'less' or Gentle lessMul (fx/reactions.js reads Gentle as 'less'), else 1. */
+export function speedFeelMul(motion = 'full', gentle = false, L = SPEED_FEEL) {
+  return motion === 'off' ? 0 : motion === 'less' || gentle ? L.lessMul : 1;
+}
+
+/** Degrees of widen for a share: topDeg per unit, capped at boostDeg, times the motion / Gentle multiplier. */
+export function speedFov(share, motion = 'full', gentle = false, L = SPEED_FEEL) {
+  return clamp(+share || 0, 0, L.boostDeg / L.topDeg) * L.topDeg * speedFeelMul(motion, gentle, L);
+}
+
+/** The settle: one critically damped tracker (no overshoot) that reaches ~95% of a step in riseS up / releaseS down. */
+export function createSpeedSettle(L = SPEED_FEEL) {
+  const s = { x: 0, v: 0 };
+  return {
+    get value() { return s.x; },
+    update(target, dt) {
+      if (!(dt > 0)) return s.x;
+      const w = 4.744 / Math.max(0.02, target > s.x ? L.riseS : L.releaseS), n = Math.ceil(dt * 120), h = dt / n;
+      for (let k = 0; k < n; k++) { s.v += (w * w * (target - s.x) - 2 * w * s.v) * h; s.x += s.v * h; }
+      if (Math.abs(s.x - target) < 1e-4 && Math.abs(s.v) < 1e-3) { s.x = target; s.v = 0; }
+      return s.x;
+    },
+    reset() { s.x = 0; s.v = 0; },
+  };
+}
+
 /** Camera-local offset quaternion [x, y, z, w] for yaw (local Y), then pitch (local X), then roll (local Z). */
 export function offsetQuat(out, pitch, yaw, roll) {
   const cx = Math.cos(pitch / 2), sx = Math.sin(pitch / 2), cy = Math.cos(yaw / 2), sy = Math.sin(yaw / 2);

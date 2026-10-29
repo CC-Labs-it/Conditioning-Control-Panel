@@ -5,6 +5,7 @@ import { getKeepLayout } from '../track/keep-layout.js';
 import { createSoftMaterial } from './materials/colossus.js';
 import { buildKeepFortress, keepStoneMaterial } from './keepFortress.js';
 import { keepMusicFloor } from './materials/keepMusicFloor.js';
+import { setStaticSubtree } from './matrixWalk.js';
 
 /** Musical mortar follows the real 2/4/4/2 m slabs, independent of the artwork's broad grey relief. */
 export function keepMusicSeam(p) {
@@ -116,6 +117,9 @@ export function buildKeepDressing(track, art, pal, samples, { reactive = null, m
       if (holder) fortress.addPlinth(holder.position.toArray(), radius * 0.84);
     }
   }
+  // Architecture is complete. Gates/chains animate in separate scene groups; this
+  // group's musical materials and plinth instance buffers need no matrix walk.
+  setStaticSubtree(group);
   return { group, placed, fortress, casters: [artGroup],
     dispose() { group.removeFromParent(); fortress.dispose(); materials.forEach((m) => m.dispose()); archMaterials.forEach((m) => m.dispose()); } };
 }

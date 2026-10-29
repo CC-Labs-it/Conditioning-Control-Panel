@@ -31,7 +31,7 @@ test('each tile leads with the shot and keeps the route map as a popup',()=>{
   const old=globalThis.document;globalThis.document={createElement:element};
   try{
     const root=element('root'),picker=createTrackPicker({root,courses:COURSES,trackId:'keep',change(){}});
-    const dialog=root.children[0],tiles=dialog.querySelector('.g-track-grid').children;
+    const dialog=root.children[0],tiles=dialog.querySelector('.g-track-grid').children.map(wrap=>wrap.children[0]);
     assert.equal(tiles.length,COURSES.length);
     for(const [i,tile] of tiles.entries()){
       const html=tile.innerHTML;

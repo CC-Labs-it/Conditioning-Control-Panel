@@ -17,6 +17,7 @@ import { clamp, smoothstep } from '../core/math.js';
 import { S } from '../sim/state.js';
 import { FX_CUES, WAVE_CUES } from './cues.js';
 import { createTrauma, noise } from './trauma.js';
+import { speedShare, speedFeelMul, createSpeedSettle, SPEED_FEEL } from '../render/cameraMath.js';
 
 const CHANNELS = ['bloom', 'band', 'lines', 'bandSpeed', 'burst', 'squash', 'stretch',
   'dust', 'edge', 'duck', 'tendril', 'rescue', 'white', 'flash', 'orbit', 'rumble', 'thud', 'pad',
@@ -56,6 +57,9 @@ export function restState() {
     whiteFade: 0, flashLevel: 0, orbit: 0, duck: 0,
     rumble: 0, // added: gamepad rumble 0..1 for boot (zero under Gentle)
     slipWake: 0, // B1: 0..1 while the player charges a slipstream (feeds speedLines at half)
+    // speed wave: the settled speed share (0 at cruise, 1 at top, up to boostDeg/topDeg under boost, times the motion /
+    // Gentle share) for the drawn-only camera widen, and the post edge blur strength 0..1 it feeds
+    speedFeel: 0, speedBlur: 0,
   };
 }
 
@@ -89,7 +93,7 @@ function stepEnv(e, dt) {
 export function createFx(bus, feel, { gentle, photosafe }) {
   const state = restState();
   const ch = Object.fromEntries(CHANNELS.map((n) => [n, newEnv()]));
-  const trauma = createTrauma(feel);
+  const trauma = createTrauma(feel), speedSettle = createSpeedSettle(SPEED_FEEL);
   let padT = -1, padLife = 1, clockS = 0, lastStopS = -1e9, finishT = -1, level = 'full';
   const T = (k, d) => { try { const v = feel.get(k); return Number.isFinite(v) ? v : d; } catch (e) { return d; } };
   // Gentle (host or preview) reads as 'less' at read time; storage keeps the player's pick
@@ -166,6 +170,9 @@ export function createFx(bus, feel, { gentle, photosafe }) {
     const pct = kart ? kart[S.speedPct] : 0, maxPct = feel.get('speed.maxPct');
     state.slipWake = clamp(ch.wake.v, 0, 1);
     state.speedLines = Math.max(ch.lines.v, state.slipWake * 0.5, clamp((pct - 1) / Math.max(maxPct - 1, 1e-3), 0, 1));
+    // speed wave: the settled share behind the camera widen and the edge blur (Motion less / Gentle half, off none)
+    state.speedFeel = speedSettle.update(speedShare(pct, maxPct, SPEED_FEEL) * speedFeelMul(motion(), gentle.on, SPEED_FEEL), dt);
+    state.speedBlur = clamp(state.speedFeel, 0, 1) * SPEED_FEEL.blurMax;
     if (padT >= 0) { padT += dt; state.padRing = padT < padLife ? Math.max(padT / padLife, 1e-3) : 0; if (padT >= padLife) padT = -1; }
     const pm = state.paletteMix;
     if (pm.waitS > 0) pm.waitS = Math.max(0, pm.waitS - dt);   // the old palette lingers one beat
@@ -202,7 +209,7 @@ export function createFx(bus, feel, { gentle, photosafe }) {
   function reset() {
     for (const n of CHANNELS) Object.assign(ch[n], newEnv());
     Object.assign(state, restState());
-    trauma.reset(); photosafe.reset?.();
+    trauma.reset(); speedSettle.reset(); photosafe.reset?.();
     padT = -1; fx.paused = false; finishT = -1; lastStopS = -1e9;
   }
 

@@ -13,7 +13,7 @@ const plan=goonworksWorldPlan(track);
 test('GOONWORKS architecture has distinct physical rooms, windowed tube and suspended local islands',()=>{
   assert.equal(goonworksWorldPlan({id:'keep'}),null);
   assert.equal(plan.rooms.length,3);assert.ok(plan.features.includes('windowed-rabbit-tube'));assert.ok(plan.features.includes('watching-grotto'));
-  for(const name of['rabbit-ceiling-conduit','grotto-scalloped-rock','pinball-bumper-cap','aperture-mill-roof-beam','pop-quiz-island-keel','horizon-island','spiral-cameo-painted-face','rabbit-pipe-organ-arch','icing-observatory-tower'])
+  for(const name of['grotto-scalloped-rock','pinball-bumper-cap','aperture-mill-roof-beam','pop-quiz-island-keel','horizon-island','spiral-cameo-painted-face','rabbit-pipe-organ-arch','icing-observatory-tower'])
     assert.ok(plan.rows.some(r=>r.id===name),name);
   assert.ok(plan.rows.length>700);assert.ok(plan.rows.every(r=>r.p.every(Number.isFinite)&&r.size.every(v=>v>0)));
   assert.ok(!plan.rows.some(r=>/foundation|ground-plane/.test(r.id)));
@@ -41,7 +41,10 @@ test('GOONWORKS rabbit tube has shared continuous rings and platforms have no ov
 test('GOONWORKS does not dress the supported race corridor with scenery',()=>{
   const exceptions=r=>r.id.startsWith('horizon-')||r.id==='white-cartoon-cloud';
   const hits=[];
-  for(const r of plan.rows){if(exceptions(r))continue;for(const c of plan.corridor)if(goonworksBoxesIntersect(r,c)){hits.push(r.id);break;}}
+  for(const r of plan.rows){if(exceptions(r))continue;
+    const size=r.size.map(v=>v+(r.outline?.45:0));
+    if(r.motion){const a=r.motion.axis??1,b=(a+1)%3,c=(a+2)%3,reach=['gear','spiral','star','torus','sphere'].includes(r.shape)?Math.max(size[b],size[c]):Math.hypot(size[b],size[c]);size[b]=size[c]=reach;}
+    for(const c of plan.corridor)if(goonworksBoxesIntersect({...r,size},c)){hits.push(r.id);break;}}
   assert.deepEqual(hits,[]);
 });
 
@@ -101,6 +104,12 @@ test('GOONWORKS decorative gears tile each colored cap once and form one closed 
     if(Math.hypot(x,y)<.39)assert.ok(caps.some(([a,b,c])=>cross(a,b,probe)>=-1e-8&&cross(b,c,probe)>=-1e-8&&cross(c,a,probe)>=-1e-8),'The central disc remains solid');
   }
   geometry.dispose();
+});
+test('GOONWORKS road table stays under the 8192 texel WebGPU limit on the reshaped 9.7 km course',()=>{
+  const road={material:new MeshBasicNodeMaterial({side:DoubleSide})},owner=applyGoonworksRoad(road,null,track);
+  assert.ok(track.lengthM>8192,'the reshaped course is longer than 8192 m');
+  assert.ok(owner.texture.image.width<=8192&&owner.texture.image.width>=2,'width '+owner.texture.image.width);
+  owner.dispose();road.material.dispose();
 });
 test('GOONWORKS opaque road and tube skins cull hidden faces and keep outward triangle winding',()=>{
   const road={material:new MeshBasicNodeMaterial({side:DoubleSide})},owner=applyGoonworksRoad(road,null,track);

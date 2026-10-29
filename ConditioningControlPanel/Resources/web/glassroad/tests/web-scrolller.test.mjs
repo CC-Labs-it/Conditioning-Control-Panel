@@ -78,12 +78,13 @@ test('only loaded pictures are handed out; a closed consent drops them; the swit
 test('Scrolller pictures reach display-only flashes and world windows, never a texture path', () => {
   const boot = src('boot.js');
   assert.doesNotMatch(boot, /scrolller(Feed)?\??\.sourceFor/, 'world clips reach only the display-only screens');
-  const uses = boot.split('\n').filter((l) => /scrolller(Feed)?\??\.stillFor/.test(l));
+  const uses = boot.split('\n').filter((l) => /(scrolller(Feed)?|pictures)\??\.stillFor/.test(l));
   assert.equal(uses.length, 1, 'one consumer of stills');
   assert.match(uses[0], /createFlashBurst\(\{ source:/);
-  assert.doesNotMatch(boot, /setItemMediaSource\([^)]*scrolller/i);
-  assert.doesNotMatch(boot, /createCardMedia\([^)]*scrolller/i);
-  assert.match(boot, /setDisplayFeed\(scrolller, renderer.canvas\)/);
+  assert.doesNotMatch(boot, /pictures\??\.sourceFor/, 'world clips reach only the display-only screens');
+  assert.doesNotMatch(boot, /setItemMediaSource\([^)]*(scrolller|pictures|library)/i);
+  assert.doesNotMatch(boot, /createCardMedia\([^)]*(scrolller|pictures|library)/i);
+  assert.match(boot, /setDisplayFeed\(pictures, renderer.canvas\)/);
   const feed = src('host/scrolllerFeed.js');
   assert.doesNotMatch(feed, /\bfetch\(|Texture|getImageData|toDataURL|crossOrigin/);
   // the flash canvas is a page canvas that is never read back
@@ -93,9 +94,9 @@ test('Scrolller pictures reach display-only flashes and world windows, never a t
 test('the Options switch: drawn only where the host offers the feed, echo-driven, plain copy', () => {
   const cards = src('hud/cards.js');
   assert.match(cards, /host\.scrolller \? '<div class="c-scrolller">' \+ scrolllerHtml\(\)/);
-  assert.match(cards, /<span>Online pictures<small>From Scrolller, on screens and in flashes<\/small>/);
-  assert.match(cards, /emit\('scrolller', \{ on: !host\.scrolller\.on \}\)/);
-  for (const l of cards.split('\n').filter((x) => /Online pictures|Pictures on|Track default|this track/i.test(x)))
+  assert.match(cards, /<span>Pictures<small>On screens and in flashes<\/small>/);
+  assert.match(cards, /emit\('scrolller', \{ on: to === 'scrolller', source: to \}\)/);
+  for (const l of cards.split('\n').filter((x) => /Pictures|Your files|Track default|this track|this device/i.test(x)))
     assert.doesNotMatch(l, /[—–!]/, l);
   assert.match(src('boot.js'), /init\.caps\.scrolller \? shared\.scrolllerFeed : null/);
 });

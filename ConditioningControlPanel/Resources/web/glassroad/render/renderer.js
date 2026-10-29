@@ -30,6 +30,7 @@ import { uploadDataTextureRows } from './dataTextureRows.js';
 import { logPipelineLinks } from './linkLog.js';
 import { isFirefox, concreteFloatConstants, uploadVideoThroughExternalTexture } from './firefoxWebgpu.js';
 import { Q, TIERS, ORDER, GOVERNOR, setTier, pickTier, createGovernor, createDynRes, dynLines, shortGpu, qualityLanding } from './quality.js';
+import { deviceClass, memoryGuard, setDevice } from './deviceClass.js';
 import { createFrameGate } from '../core/clock.js';
 import { reasonOf } from '../core/failure.js';
 import { loadOptions, cleanOptions } from '../hud/options.js';
@@ -49,12 +50,15 @@ function replaceCanvas(canvas) {
  * @param {{ forceRenderer?: string|null, maxDpr?: number, options?: object|null, freshCanvas?: boolean, maxTier?: string|null }} o
  *   freshCanvas: build on a new canvas element in place of the given one (a rebuild after a device loss);
  *   maxTier: a ceiling on the automatic tier (a rebuild after a loss starts one tier lower; a pinned Quality option still wins).
+ *   platform: the host caps platform ('desktop', 'web', 'phone'); with the coarse pointer it names the DEVICE
+ *     (render/deviceClass.js), which the memory protections read whatever Quality is pinned.
  */
-export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2, options = null, freshCanvas = false, maxTier = null } = {}) {
+export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2, options = null, freshCanvas = false, maxTier = null, platform = null } = {}) {
   const qs = new URLSearchParams(globalThis.location ? location.search : '');
   const force = forceRenderer || (/^(webgl2|webgpu)$/.test(qs.get('renderer') || '') ? qs.get('renderer') : null);
   const override = TIERS[qs.get('quality')] ? qs.get('quality') : null;
   const coarse = !!(globalThis.matchMedia && matchMedia('(pointer: coarse)').matches);
+  const device = setDevice(deviceClass({ coarse, platform }));
   let opts = cleanOptions(options || loadOptions());
   // ?quality= wins (dev), then a pinned Quality option, else the auto pick
   const pinOf = () => override ? null : opts.quality !== 'auto' ? opts.quality : null;
@@ -208,6 +212,14 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     /** fn(lost) once when the GPU device or the WebGL context goes away. Returns the unsubscribe. */
     onLost(fn) { lostFns.add(fn); if (lost) { try { fn(lost); } catch (e) { /* told */ } } return () => lostFns.delete(fn); },
     get tier() { return Q.name; },
+    /** The device behind the tier ('phone' or 'desktop'): no Quality pin changes it (render/deviceClass.js). */
+    get device() { return device; },
+    /** The tier a MEMORY budget reads: the phone tier on a phone whatever the look, else the live tier. */
+    get memoryTier() { return memoryGuard(device, Q.name); },
+    /** True while the tier comes from a pinned Quality option (the ?quality= dev flag is not a pin). */
+    get pinned() { return !!pinOf(); },
+    /** The automatic pick for this device and GPU, whatever is pinned. */
+    get autoTier() { return autoTier; },
     get aspect() { return Math.max(1, canvas.clientWidth) / Math.max(1, canvas.clientHeight); },
     get options() { return { ...opts }; },
     /** The adapter in use, short ('nvidia blackwell', 'Intel(R) UHD Graphics 770'), or '' when the browser hides it. */
@@ -304,17 +316,30 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   return api;
 }
 
+const insetLighting = new WeakMap();
+
 /** Shadowless, MRT-less, straight into the inset target; every renderer switch it touches is put back. */
 function withInsetTarget(three, target, fn) {
   const oldTarget = three.getRenderTarget(), mrt = three.getMRT ? three.getMRT() : null;
+  const lighting = three.lighting;
   const shadow = three.shadowMap ? three.shadowMap.enabled : false, autoClear = three.autoClear;
   const restore = () => {
     three.setRenderTarget(oldTarget);
     if (three.setMRT) three.setMRT(mrt);
     if (three.shadowMap) three.shadowMap.enabled = shadow;
+    if (lighting) three.lighting = lighting;
     three.autoClear = autoClear;
   };
   if (three.shadowMap) three.shadowMap.enabled = false;
+  // Cube probes can share this target's render context but see a different set of
+  // lights. Give the inset its own stable lights node so neither pass evicts the
+  // other's prepared render objects and shaders.
+  if (lighting) {
+    let scope = insetLighting.get(three);
+    if (!scope) { scope = new GPU.Lighting(); insetLighting.set(three, scope); }
+    scope.enabled = lighting.enabled;
+    three.lighting = scope;
+  }
   three.autoClear = true;
   if (three.setMRT) three.setMRT(null);
   three.setRenderTarget(target);
@@ -335,28 +360,36 @@ function renderInset(three, target, spec, pr) {
 /** Compile the inset's own programs (no shadows, its own target) for everything that can appear in a race. */
 export async function warmInset(three, post, scene, camera) {
   if (!post || !post.inset || !scene || !camera) return { ms: 0 };
-  const t0 = performance.now(), saved = [], mats = [];
+  const t0 = performance.now(), saved = [], mats = [], lods = [];
   // the materials made only in a race (render/warmExtras.js) get their inset programs too
   const late = new Group();
   for (const m of lateWarmMaterials(GPU)) late.add(m.isSpriteNodeMaterial ? new Sprite(m) : new Mesh(new PlaneGeometry(0.01, 0.01), m));
   scene.add(late);
   scene.traverse((o) => {
+    // A hit camera can cut to any rival. Projection must not hide its other distance variants during preparation.
+    if (o.isLOD) { lods.push([o, o.autoUpdate]); o.autoUpdate = false; }
     saved.push([o, o.visible, o.frustumCulled, o.count]);
     o.visible = true; o.frustumCulled = false;
     if (o.count === 0 && (o.isInstancedMesh || o.isSprite || o.isBatchedMesh)) o.count = 1;
     for (const m of [].concat(o.material || [])) if (m && m.visible === false) { mats.push(m); m.visible = true; }
   });
-  const layers = camera.layers.mask;
+  const layers = camera.layers.mask, shadows = three.shadowMap?.enabled;
   // Use the inset's actual layers. Its shadowless pass cannot compile the
   // layer-2 ShadowNodeMaterial road catchers.
   scene.updateMatrixWorld(true);
   try {
+    // Shader building can yield after taking the render list. Keep the shadowless
+    // policy until it settles; the target itself is still returned before awaiting.
+    if (three.shadowMap) three.shadowMap.enabled = false;
     // the first real hit resizes the target; a 2 px one has the same formats, so the programs carry over
     await withInsetTarget(three, post.inset.target, () => three.compileAsync(scene, camera));
-    withInsetTarget(three, post.inset.target, () => three.clear());
+    // A real covered draw also prepares draw-time material variants and uploads.
+    withInsetTarget(three, post.inset.target, () => three.render(scene, camera));
   } catch (e) {
     console.warn('[glassroad/renderer] hit cam warm: ' + (e && e.message));
   } finally {
+    if (three.shadowMap) three.shadowMap.enabled = shadows;
+    for (const [o, autoUpdate] of lods) o.autoUpdate = autoUpdate;
     camera.layers.mask = layers;
     for (const [o, v, f, n] of saved) { o.visible = v; o.frustumCulled = f; if (o.count !== n) o.count = n; }
     for (const m of mats) m.visible = false;
