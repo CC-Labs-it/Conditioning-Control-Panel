@@ -15,6 +15,7 @@
   "Sparkles_Slip_CeilingToday": "Tetto raggiunto. Solo il gettone fino a domani",
   "Sparkles_Slip_Short": "Troppo breve per pagare",
   "Sparkles_Slip_Offline": "Offline, niente Sparkle",
+  "Sparkles_Slip_Unreachable": "Banca chiusa, niente Sparkle stavolta",
   "Sparkles_Slip_Pair": "Di nuovo la stessa coppia oggi. Paga singola",
   "Sparkles_Slip_Young": "Account nuovo. Per ora paga singola online",
   "Sparkles_Slip_SoloRoom": "Meno di 2 persone in stanza. Paga singola",

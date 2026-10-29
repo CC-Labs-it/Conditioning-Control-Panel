@@ -15,6 +15,7 @@
   "Sparkles_Slip_CeilingToday": "Límite diario alcanzado. Solo premio de llegada hasta mañana",
   "Sparkles_Slip_Short": "Demasiado corta para pagar",
   "Sparkles_Slip_Offline": "Sin conexión, sin Brillos",
+  "Sparkles_Slip_Unreachable": "Banco cerrado, sin Brillos esta vez",
   "Sparkles_Slip_Pair": "La misma pareja otra vez hoy. Tarifa individual",
   "Sparkles_Slip_Young": "Cuenta nueva. Tarifa individual en línea por ahora",
   "Sparkles_Slip_SoloRoom": "Menos de 2 jugadores. Tarifa individual",

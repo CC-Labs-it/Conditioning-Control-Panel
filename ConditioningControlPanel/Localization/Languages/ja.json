@@ -15,6 +15,7 @@
   "Sparkles_Slip_CeilingToday": "上限に達しました。明日まで参加賞のみ",
   "Sparkles_Slip_Short": "短すぎて支払いなし",
   "Sparkles_Slip_Offline": "オフラインのためスパークルなし",
+  "Sparkles_Slip_Unreachable": "銀行が閉まっているため今回はスパークルなし",
   "Sparkles_Slip_Pair": "今日は同じペアが続いたためソロレート",
   "Sparkles_Slip_Young": "新しいアカウントのため、当面オンラインもソロレート",
   "Sparkles_Slip_SoloRoom": "プレイヤーが2人未満のためソロレート",

@@ -15,6 +15,7 @@
   "Sparkles_Slip_CeilingToday": "한도 도달. 내일까지 참가상만",
   "Sparkles_Slip_Short": "너무 짧아 지급 없음",
   "Sparkles_Slip_Offline": "오프라인, 스파클 없음",
+  "Sparkles_Slip_Unreachable": "은행이 닫혀서 이번엔 스파클 없음",
   "Sparkles_Slip_Pair": "오늘 같은 짝과 반복. 솔로 요율",
   "Sparkles_Slip_Young": "새 계정. 당분간 온라인도 솔로 요율",
   "Sparkles_Slip_SoloRoom": "플레이어 2명 미만. 솔로 요율",
