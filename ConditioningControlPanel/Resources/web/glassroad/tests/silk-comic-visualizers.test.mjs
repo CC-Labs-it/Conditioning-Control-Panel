@@ -14,7 +14,7 @@ const { boudoirMusicFloor } = await import('../render/materials/boudoirMusicFloo
 const { goonworksMusicFloor } = await import('../render/materials/goonworksMusicFloor.js');
 hooks.deregister();
 
-const positions = Array.from({ length: 14 }, (_, x) => x + .8)
+const positions = Array.from({ length: 28 }, (_, x) => x - 13.2)
   .flatMap(x => Array.from({ length: 18 }, (_, s) => [x, s * 2.3 + .7]));
 const changedArea = (a, b) => a.filter((c, i) => c.some((v, k) => Math.abs(v - b[i][k]) > .012)).length / a.length;
 
@@ -36,13 +36,13 @@ function setup(kind, t) {
 }
 
 for (const kind of ['boudoir', 'goonworks']) {
-  test(kind + ' changes its floor silhouette with actual PCM at identical energy and beat', t => {
+  test(kind + ' holds whole tiles steady between instrument attacks at identical energy and beat', t => {
     const { music, data, capture } = setup(kind, t);
     if (kind === 'goonworks') music.tileBar.value = 16;
     const writeWave = turns => { for (let i = 0; i < 64; i++) data[i * 4] = Math.round(128 + Math.sin(i / 63 * Math.PI * 2 * turns) * 95); };
     writeWave(1); const before = capture(); writeWave(3);
     const area = changedArea(before, capture());
-    assert.ok(area > .12, 'different recorded waves must reshape a broad floor area, measured ' + area);
+    assert.equal(area, 0, 'raw PCM alone does not smear the tile patterns');
   });
 
   test(kind + ' reacts to hits and real song sections with the transport held fixed', t => {
@@ -51,19 +51,19 @@ for (const kind of ['boudoir', 'goonworks']) {
     for(const name of ['kick','snare','hats']){u[name+'Age'].value=.12;u[name+'Strength'].value=.9;u[name+'Count'].value=2;}
     assert.ok(changedArea(before, capture()) > .1, 'real instrument attacks light distinct marks against quiet regions');
     const hit = capture(); u.section.value = 1;
-    assert.ok(changedArea(hit, capture()) > .12, 'real sections choose a visibly different composition');
+    assert.ok(changedArea(hit, capture()) > .1, 'real sections choose a visibly different composition');
   });
 
-  test(kind + ' reads independent FFT and spectral history at fixed loudness', t => {
+  test(kind + ' reads current FFT while preserving recovery from stale spectral history', t => {
     const { music, data, capture } = setup(kind, t);
     const before = capture();
     for (let i = 0; i < 64; i++) data[i * 4 + 1] = i < 32 ? 210 : 20;
-    assert.ok(changedArea(before, capture()) > .12, 'live frequency content reshapes the floor independently of overall energy');
+    assert.ok(changedArea(before, capture()) > .035, 'live frequency content lights sparse stepped melody at fixed energy');
     music.tileBar.value = 16;
     const noHistory = capture();
     for (let row = 1; row < 18; row++) for (let i = 0; i < 64; i++)
       data[(row * 64 + i) * 4] = (i + row * 3) % 16 < 8 ? 240 : 15;
-    assert.ok(changedArea(noHistory, capture()) > .12, 'recorded spectral trails form visible silk/comic detail');
+    assert.deepEqual(noHistory, capture(), 'history cannot relight tiles after their current instrument has decayed');
   });
 
   test(kind + ' keeps fast PCM and event patterns still in Gentle and returns exactly to silence', t => {

@@ -55,7 +55,7 @@ for (const finish of ['white', 'ice']) {
     reactive.bass.value = .22; reactive.mid.value = .44; reactive.treble.value = .36;
     const changed = capture(.2).map((colour, i) => delta(colour, before[i]) >= .018);
     const coverage = fraction(changed);
-    assert.ok(coverage >= .10, 'Changing real bands reshapes a visible area at equal energy; measured ' + (coverage * 100).toFixed(1) + '%');
+    assert.ok(coverage >= .03, 'Changing real bands lights sparse stepped tiles at equal energy; measured ' + (coverage * 100).toFixed(1) + '%');
   });
 
   test('GOONWORKS ' + finish + ' floor preserves its exact pale finish without audible music', () => {

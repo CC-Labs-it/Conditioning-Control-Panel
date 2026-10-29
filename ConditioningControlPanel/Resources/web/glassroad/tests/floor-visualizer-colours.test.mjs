@@ -31,7 +31,7 @@ for (const kind of ['mainframe','keep','boudoir','goonworks']) test(kind+' actua
     data[i*4+1]=Math.round(80+140*(i%11)/10);
     for(let row=1;row<18;row++)data[(row*64+i)*4]=Math.round(40+160*((i+row)%13)/12);
   }
-  const samples=[];for(const x of [.8,2.4,4.1,5.9,7.5,9.3,11.2,12.4,13.1,14.2])for(const y of [.8,3.5,6.2,8.9,11.6,14.3,17,19.7,22.4])samples.push([x,y]);
+  const samples=[];for(const x of [-14.2,-12.4,-9.3,-7.5,-4.1,-.8,.8,2.4,4.1,5.9,7.5,9.3,11.2,12.4,13.1,14.2])for(const y of [.8,3.5,6.2,8.9,11.6,14.3,17,19.7,22.4])samples.push([x,y]);
   const capture=()=>samples.flatMap(([x,y])=>{p.value.set(x,y);return evaluateColour(root)});
   const authored=samples.flatMap(()=>[.08,.10,.12]);
   const capturePhrases=()=>[0,8,16].flatMap(bar=>{music.tileBar.value=bar;return capture()});

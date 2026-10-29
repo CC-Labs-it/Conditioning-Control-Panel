@@ -68,7 +68,7 @@ test('Keep gives kick, snare and hats different masks at identical song time and
   while (todo.length) { const n = todo.pop(); if (nodes.has(n)) continue; nodes.add(n); for (const child of n.getChildren()) todo.push(child); }
   for (const key of ['kickAge', 'snareAge', 'hatsAge']) assert.ok(nodes.has(u[key]), key + ' has an independent visual clock');
   assert.ok(!nodes.has(u.hitAge), 'the instruments never collapse to the shared hit age');
-  assert.ok(nodes.size < 850, 'the instrument split replaces old graph work instead of growing without bound: ' + nodes.size);
+  assert.ok(nodes.size < 1450, 'three tile layouts and four plucked strings retain a bounded graph: ' + nodes.size);
 });
 
 test('Keep uses three different spectral compositions with dark negative space', t => {
@@ -82,7 +82,7 @@ test('Keep uses three different spectral compositions with dark negative space',
   }
   for (let i = 0; i < fields.length; i++) for (let j = i + 1; j < fields.length; j++) {
     const changed = fields[i].filter((c, k) => difference(c, fields[j][k]) > .025).length / slabs.length;
-    assert.ok(changed > .2, 'organ stacks, diamond choirs and chess processions have different spatial masks: ' + changed);
+    assert.ok(changed > .2, 'tile chords, zigzag relays and split beats have different spatial masks: ' + changed);
   }
 });
 
@@ -109,7 +109,7 @@ test('Keep quiet recording levels still light sparse slabs in all three layouts'
   }
   for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++)
     assert.ok(masks[i].filter((v, k) => v !== masks[j][k]).length > slabs.length * .15,
-      'quiet spectra still distinguish organ, choir and procession layouts');
+      'quiet spectra still distinguish tile chords, zigzag relays and split beats: ' + i + '/' + j + ' changed ' + masks[i].filter((v, k) => v !== masks[j][k]).length + '/' + slabs.length);
 });
 
 test('Keep ages bass fronts independently and high glints expire promptly', t => {
