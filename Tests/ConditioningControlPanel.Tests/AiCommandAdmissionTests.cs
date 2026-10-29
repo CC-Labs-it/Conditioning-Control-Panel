@@ -150,7 +150,11 @@ public class AiCommandAdmissionTests
         var src = Src("Services", "Commands", "AiCommandService.cs");
         Assert.Contains("Judge(commandData)", src);
         Assert.Contains("depth: AiCommandAdmission.FollowUpDepth", src);
-        Assert.Contains("PanicAftermath.TriggersSilenced()", src);
+        // The quiet is the head's PanicAftermath, read through the provider each head seeds (port 7.2:
+        // the Avalonia head arms it in MainShellWindow.SeedPanicAftermath); a quiet that throws refuses.
+        Assert.Contains("quiet = PanicQuietProvider?.Invoke() == true;", src);
+        Assert.Contains("catch { quiet = true; }", src);
+        Assert.Contains("AiCommandService.PanicQuietProvider = () => Services.Safety.PanicAftermath.TriggersSilenced();", Src("App.AiEffects.cs"));
         Assert.DoesNotContain("depth: 0)", src);
     }
 
