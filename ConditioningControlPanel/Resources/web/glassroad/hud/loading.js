@@ -11,6 +11,11 @@ export function createLoading(doc=globalThis.document,{stallMs=LOAD_STALL_MS,tic
   let stage='',watch=0,idle=0,lastTick=0,stall=null;
   const q=s=>root?root.querySelector(s):null;
   const retryBtn=q('.boot-retry');
+  const paint=()=>{
+    const percent=Math.round(progress*100);q('[role=progressbar]').setAttribute('aria-valuenow',String(percent));
+    q('.boot-fill').style.transform=`scaleX(${progress})`;q('.boot-percent').textContent=percent+'%';
+    root.style.setProperty('--boot-left',`calc(${progress*100}% - ${progress*51}px)`);
+  };
   if(retryBtn)retryBtn.addEventListener('click',()=>{if(retry)retry();});
   const disarm=()=>{if(watch)clearInterval(watch);watch=0;};
   const tick=()=>{const t=now(),dt=Math.min(Math.max(0,t-lastTick),2*tickMs);lastTick=t;
@@ -22,6 +27,7 @@ export function createLoading(doc=globalThis.document,{stallMs=LOAD_STALL_MS,tic
   return {
     start(){revision++;clearTimeout(timer);progress=0;finished=false;failed=false;stage='';disarm();
       if(!root)return;root.hidden=false;root.classList.remove('boot-leaving','boot-failed');doc.body.dataset.boot='loading';
+      paint();
       const reason=q('.boot-reason');if(reason){reason.textContent='';reason.hidden=true;}if(retryBtn)retryBtn.hidden=true;
       arm();
     },
@@ -30,9 +36,7 @@ export function createLoading(doc=globalThis.document,{stallMs=LOAD_STALL_MS,tic
       if(next>progress||stageText!==stage)idle=0;   // any movement (bar or stage) restarts the stall clock
       progress=next;stage=stageText;arm();
       root.querySelector('.boot-stage').textContent=stageText;
-      const percent=Math.round(progress*100);root.querySelector('[role=progressbar]').setAttribute('aria-valuenow',String(percent));
-      root.querySelector('.boot-fill').style.transform=`scaleX(${progress})`;root.querySelector('.boot-percent').textContent=percent+'%';
-      root.style.setProperty('--boot-left',`calc(${progress*100}% - ${progress*51}px)`);
+      paint();
     },
     async finish(){if(!root||finished)return;finished=true;disarm();const mine=revision;
       await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));

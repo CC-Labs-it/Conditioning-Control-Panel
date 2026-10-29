@@ -9,7 +9,7 @@ const postModule=moduleUrl('export const createPost=(...args)=>globalThis.__cour
 const gpuModule=moduleUrl(`
 export class WebGPURenderer {
   constructor(){this.backend={isWebGPUBackend:false,gl:{getExtension(){},getParameter(){return 'test-gpu';}}};this.info={render:{}};this.disposals=0;}
-  async init(){} setPixelRatio(){} setSize(){} dispose(){this.disposals++;}
+  async init(){} setDrawingBufferSize(...size){this.bufferSize=size;} dispose(){this.disposals++;}
 }
 export class Group {} export class Mesh {} export class Sprite {} export class PlaneGeometry {}
 export class NodeBuilder { getUniformBufferLimit(){return 65536;} }
@@ -76,6 +76,7 @@ test('course replacement retains one post pipeline, renderer identity and option
   const renderer=await createRenderer({clientWidth:800,clientHeight:600,getContext:()=>null},
     {forceRenderer:'webgl2',options:{quality:'high',frameCap:30,renderScale:.75}});
   const gpu=renderer.three,sceneA={},sceneB={},cameraA={},cameraB={},options=renderer.options;
+  assert.deepEqual(gpu.bufferSize,[800,600,.75],'initial sizing uses the existing quality and resolution settings');
   const first=renderer.post(sceneA,cameraA);
   assert.equal(renderer.releaseScene(sceneB),false);
   assert.equal(renderer.releaseScene(sceneA,cameraB),false);
