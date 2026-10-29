@@ -451,6 +451,12 @@ internal static class BackRoomHostService
     private static void OnRoomMessage(JObject message)
     {
         if (_breakoutPage && (string?)message["type"] == "game-open") return;
+        if (message["type"]?.Type == JTokenType.String && (string?)message["type"] == "breakout-wall")
+        {
+            // SPARKLES BY PLACE (B1): one medal per cleared wall, the Story Demo included.
+            _ = Sparkles.SparklesPageResults.Send(Sparkles.SparklesPageResults.BreakoutWall(message));
+            return;
+        }
         if ((string?)message["type"] != "game-open") { _bridge?.Handle(message); return; }
         if ((string?)message["game"] != "race" || _openingRace) return;
         string? refusal = !RacingAccess.CanLaunch ? "locked" : CaucusHostService.IsActive ? "busy" : null;

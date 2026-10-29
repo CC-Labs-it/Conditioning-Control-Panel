@@ -472,6 +472,8 @@ export async function mount(ctx) {
         if (!d.skipped && cue('wall')) au('wallCleared');   // a skipped board is not a clear: no chime, no wash
         setSp(Number(d.sp) || s.stats.sp || 0);
         onWall(Number(d.walls) || s.stats.walls || 0, d.mantra, d.skipped);
+        // Sparkles by place (B1): the host claims one medal per cleared wall (never a skipped board).
+        if (!d.skipped) { try { ctx.bridge?.send?.({ type: 'breakout-wall', walls: Number(d.walls) || 0, ballsLost: Number(d.ballsLost) || 0, wallMs: Number(d.wallMs) || 0 }); } catch (e) { /* no host */ } }
         break;
       case 'crack': if (cue('crack', 2000)) { au('crack'); host.crack(); } break;
       case 'word': if (d.fired && d.key !== 'BLANK') au('word', d.key, d.fx || d); if (s.state === 'colour' && Math.random() < 0.5) say(d.word); break;
