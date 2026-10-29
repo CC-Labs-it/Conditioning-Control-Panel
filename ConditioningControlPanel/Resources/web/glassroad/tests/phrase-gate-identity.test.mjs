@@ -37,18 +37,19 @@ function fixture(text) {
 const near = (a, b, slack = .0001) => assert.ok(Math.abs(a - b) <= slack, `${a} != ${b}`);
 
 test('song signs retain the complete recorded phrase and share RESET/EMPTY identities before crossing', () => {
-  for (const [text, kind] of [['Reset the signal', 7], ['Empty the buffer', 8], ['stay with me', 0]]) {
+  for (const [text, kind] of [['Reset the signal', 7], ['Empty the buffer', 8], ['stay with me', 11], ['the a and', 0]]) {
     const { view, tick, drawn } = fixture(text);
     for (let i = 0; i <= 100; i++) tick(i / 60);
     const [row] = view._dev.live();
     assert.equal(row.text, text); assert.equal(row.identity[0], kind); assert.equal(row.identity[3], text.length);
     near(row.identity[1], 100 / 60 - 2); assert.equal(row.identity[2], -1);
+    assert.deepEqual(row.pickup, { halo: 0, width: 1, height: 1, lift: 0 });
     assert.ok(drawn.includes(text)); assert.equal(view.stats.hits, 0);
     view.dispose();
   }
 });
 
-test('real gate crossing drives source collection once without moving signs or recreating their resources', () => {
+test('real gate crossing pops the source once without moving its gate or recreating resources', () => {
   const { view, scene, tick, events, drawn, canvases } = fixture('Reset the signal');
   const root = scene.getObjectByName('phrase-gates'), signs = [];
   root.traverse(object => { if (object.name === 'phrase-gate-word') signs.push(object); });
@@ -57,8 +58,12 @@ test('real gate crossing drives source collection once without moving signs or r
   assert.equal(events.length, 1); assert.equal(events[0].text, 'Reset the signal'); assert.equal(events[0].song, true);
   const crossed = view._dev.live()[0], fixedS = crossed.s, draws = drawn.length;
   assert.equal(crossed.state, 'hit'); near(crossed.hitS, 2, .04);
+  assert.ok(crossed.pickup.width > 1 && crossed.pickup.height < 1); assert.ok(crossed.pickup.halo > 0);
   for (let i = 123; i <= 140; i++) tick(i / 60);
   const midway = view._dev.live()[0]; near(midway.identity[2], (140 / 60 - crossed.hitS) / .6); assert.equal(midway.s, fixedS);
+  assert.ok(midway.pickup.lift > .1 && midway.pickup.lift <= .45); assert.ok(midway.pickup.height > 1);
+  assert.equal(midway.text, 'Reset the signal');
+  tick(2.6, { paused: true }); assert.deepEqual(view._dev.live()[0], midway, 'pause freezes the active pickup as well as its clock');
   for (let i = 141; i <= 160; i++) tick(i / 60);
   assert.equal(view._dev.live()[0].identity[2], 1, 'source finishes while the physical gate retains its own exit');
   assert.equal(events.length, 1); assert.equal(drawn.length, draws, 'only a changed caption redraws its texture');
@@ -73,8 +78,11 @@ test('pause freezes the song-sign clock and Gentle/off keep real lifetime with a
   const paused = view._dev.live(); tick(2.4, { paused: true }); assert.deepEqual(view._dev.live(), paused);
   tick(121 / 60, { motion: 'less' }); assert.equal(view._dev.live()[0].motion, .5);
   tick(122 / 60, { motion: 'off' }); assert.equal(view._dev.live()[0].motion, 0);
+  assert.deepEqual(view._dev.live()[0].pickup, { halo: 0, width: 1, height: 1, lift: 0 });
   for (let i = 123; i <= 145; i++) tick(i / 60, { gentle: true });
   const gentle = view._dev.live()[0]; assert.equal(gentle.motion, 0); near(gentle.identity[2], (145 / 60 - 2) / .85, .03);
+  assert.equal(gentle.pickup.width, 1); assert.equal(gentle.pickup.height, 1); assert.equal(gentle.pickup.lift, 0);
+  assert.ok(gentle.pickup.halo > 0 && gentle.pickup.halo <= .3);
   for (let i = 146; i <= 174; i++) tick(i / 60, { gentle: true });
   assert.equal(view._dev.live()[0].identity[2], 1);
   view.clear(); assert.deepEqual(view._dev.live(), []); view.dispose();

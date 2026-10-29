@@ -578,10 +578,13 @@ async function boot(course, options, lifetime, isCurrent) {
     if (P) P.topBonus = coins.topMul();
     bus.emit('word-coins', { count: coins.count, cap: coins.cap, delta, show: coinsLive() && !!words });
   }
-  function coinSink() {
+  function coinSink(marking) {
     if (!coinsLive() || !race || race.phase !== 'racing') return false;
     const rose = coins.add();
-    coinNote(rose ? 1 : 0); return true;
+    coinNote(rose ? 1 : 0);
+    // Floor contact gets its own sound even at the cap. Bubbles and gates already have theirs.
+    if (marking?.id !== undefined) bus.emit('word-pickup', { count: coins.count, id: marking.id });
+    return true;
   }
   bus.on('hitter-hit', ({ racer } = {}) => { if (coinsLive() && P && racer === P.i && coins.hit()) coinNote(-1); });
   Object.defineProperty(debug, 'wordCoins', { get: () => ({ count: coins.count, live: coinsLive(), top: coins.topMul(),
