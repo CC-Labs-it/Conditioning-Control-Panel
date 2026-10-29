@@ -18,7 +18,8 @@
       {"id":"rain.dress.scarlet-bell","tier":"L","priceSp":730,"grants":["cos.rain.dress.scarlet-bell"],"owned":null,"sale":"on"},
       {"id":"rain.dress.teal-tulip","tier":"L","priceSp":730,"grants":["cos.rain.dress.teal-tulip"],"owned":null,"sale":"on"},
       {"id":"rain.dress.black-highlow","tier":"L","priceSp":730,"grants":["cos.rain.dress.black-highlow"],"owned":null,"sale":"on"},
-      {"id":"rain.suit.hazmat-yellow","tier":"XL","priceSp":2540,"grants":["cos.rain.suit.hazmat-yellow"],"owned":null,"sale":"on"}
+      {"id":"rain.suit.hazmat-yellow","tier":"XL","priceSp":2540,"grants":["cos.rain.suit.hazmat-yellow"],"owned":null,"sale":"on"},
+      {"id":"rain.suit.action-yellow","tier":"XL","priceSp":2540,"grants":["cos.rain.suit.action-yellow"],"owned":null,"sale":"on"}
      ]
     }
    ]
@@ -35,7 +36,13 @@
       {"id":"rain.hair.platinum-long","tier":"M","priceSp":360,"grants":["cos.rain.hair.platinum-long"],"owned":null,"sale":"on"},
       {"id":"rain.hair.auburn-volume","tier":"M","priceSp":360,"grants":["cos.rain.hair.auburn-volume"],"owned":null,"sale":"on"},
       {"id":"rain.acc.silver-drops","tier":"S","priceSp":120,"grants":["cos.rain.acc.silver-drops"],"owned":null,"sale":"on"},
-      {"id":"rain.acc.cat-eye-frames","tier":"S","priceSp":120,"grants":["cos.rain.acc.cat-eye-frames"],"owned":null,"sale":"on"}
+      {"id":"rain.acc.cat-eye-frames","tier":"S","priceSp":120,"grants":["cos.rain.acc.cat-eye-frames"],"owned":null,"sale":"on"},
+      {"id":"rain.acc.hazmat-mask","tier":"S","priceSp":120,"grants":["cos.rain.acc.hazmat-mask"],"owned":null,"sale":"on"}
+     ]
+    },
+    {
+     "rows": [
+      {"id":"rain.acc.back-katana","tier":"S","priceSp":120,"grants":["cos.rain.acc.back-katana"],"owned":null,"sale":"on"}
      ]
     }
    ]
@@ -45,15 +52,26 @@
    "shelves": [
     {
      "rows": [
-      {"id":"kart.body.glass-slipper","tier":"XL","priceSp":2540,"grants":["cos.kart.body.glass-slipper"],"owned":null,"sale":"on"},
-      {"id":"kart.body.candy-tin","tier":"L","priceSp":730,"grants":["cos.kart.body.candy-tin"],"owned":null,"sale":"on"},
+      {"id":"kart.body.petal","tier":"L","priceSp":730,"grants":["cos.kart.body.petal"],"owned":null,"sale":"on"},
+      {"id":"kart.body.trinket","tier":"L","priceSp":730,"grants":["cos.kart.body.trinket"],"owned":null,"sale":"on"},
+      {"id":"kart.body.pendulum","tier":"L","priceSp":730,"grants":["cos.kart.body.pendulum"],"owned":null,"sale":"on"},
+      {"id":"kart.body.checkmate","tier":"L","priceSp":730,"grants":["cos.kart.body.checkmate"],"owned":null,"sale":"on"},
+      {"id":"kart.body.lovebomb","tier":"L","priceSp":730,"grants":["cos.kart.body.lovebomb"],"owned":null,"sale":"on"},
+      {"id":"kart.body.undertow","tier":"L","priceSp":730,"grants":["cos.kart.body.undertow"],"owned":null,"sale":"on"},
+      {"id":"kart.body.feedback","tier":"L","priceSp":730,"grants":["cos.kart.body.feedback"],"owned":null,"sale":"on"},
+      {"id":"kart.body.velvet-lock","tier":"L","priceSp":730,"grants":["cos.kart.body.velvet-lock"],"owned":null,"sale":"on"},
+      {"id":"kart.body.reverie","tier":"L","priceSp":730,"grants":["cos.kart.body.reverie"],"owned":null,"sale":"on"}
+     ]
+    },
+    {
+     "rows": [
+      {"id":"kart.body.house-edge","tier":"L","priceSp":730,"grants":["cos.kart.body.house-edge"],"owned":null,"sale":"on"},
       {"id":"kart.outfit.pit-crew","tier":"L","priceSp":730,"grants":["cos.kart.outfit.pit-crew"],"owned":null,"sale":"on"},
       {"id":"kart.outfit.ringmaster","tier":"L","priceSp":730,"grants":["cos.kart.outfit.ringmaster"],"owned":null,"sale":"on"},
       {"id":"kart.outfit.ballerina","tier":"L","priceSp":730,"grants":["cos.kart.outfit.ballerina"],"owned":null,"sale":"on"},
-      {"id":"kart.paint.hearts","tier":"S","priceSp":120,"grants":["cos.kart.paint.hearts"],"owned":{"at":"2026-10-27T20:14:00Z","paidSp":120},"sale":"on"},
-      {"id":"kart.paint.pink-checker","tier":"S","priceSp":120,"grants":["cos.kart.paint.pink-checker"],"owned":null,"sale":"on"},
-      {"id":"kart.paint.spiral","tier":"S","priceSp":120,"grants":["cos.kart.paint.spiral"],"owned":null,"sale":"on"},
-      {"id":"kart.umbrella.lace","tier":"M","priceSp":360,"grants":["cos.kart.umbrella.lace"],"owned":null,"sale":"on"}
+      {"id":"kart.paint.pattern-bundle","tier":"M","priceSp":360,"grants":["cos.kart.paint.pattern-bundle"],"owned":null,"sale":"on"},
+      {"id":"kart.umbrella.lace","tier":"M","priceSp":360,"grants":["cos.kart.umbrella.lace"],"owned":null,"sale":"on"},
+      {"id":"kart.paint.hearts","tier":"S","priceSp":120,"grants":["cos.kart.paint.hearts"],"owned":{"at":"2026-10-27T20:14:00Z","paidSp":120},"sale":"soon"}
      ]
     }
    ]

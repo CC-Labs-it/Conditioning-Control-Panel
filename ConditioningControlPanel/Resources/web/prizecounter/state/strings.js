@@ -44,9 +44,8 @@ const ITEM_NAMES = {
   'rain.dress.black-highlow': 'Black high-low', 'rain.suit.hazmat-yellow': 'Yellow hazmat suit', 'rain.hair.chestnut-bob': 'Chestnut bob',
   'rain.hair.copper-lob': 'Copper lob', 'rain.hair.ink-sleek': 'Sleek ink', 'rain.hair.rose-waves': 'Rose waves',
   'rain.hair.platinum-long': 'Long platinum', 'rain.hair.auburn-volume': 'Auburn volume', 'rain.acc.silver-drops': 'Silver drops',
-  'rain.acc.cat-eye-frames': 'Cat-eye frames', 'kart.body.glass-slipper': 'Glass slipper kart', 'kart.body.candy-tin': 'Candy tin kart',
+  'rain.acc.cat-eye-frames': 'Cat-eye frames',
   'kart.outfit.pit-crew': 'Pit crew outfit', 'kart.outfit.ringmaster': 'Ringmaster outfit', 'kart.outfit.ballerina': 'Ballerina outfit',
-  'kart.paint.hearts': 'Heart paint', 'kart.paint.pink-checker': 'Pink checker paint', 'kart.paint.spiral': 'Spiral paint',
   'kart.umbrella.lace': 'Lace umbrella', 'chess.set.royal-capes': 'Royal capes set', 'chess.set.velvet-court': 'Velvet court set',
   'chess.banner.house-pink': 'House pink banner', 'chess.banner.crest': 'Crest banner', 'chess.insignia.heart': 'Heart insignia',
   'chess.insignia.star': 'Star insignia', 'profile.frame.lace': 'Lace frame', 'profile.frame.ink-stamp': 'Ink stamp frame',
@@ -57,6 +56,14 @@ const ITEM_NAMES = {
   jackpot_remix: 'Jackpot Remix', rt_demo: 'Racing Thoughts Demo', high_roller: 'High Roller', flashes_v2: 'Flashes v2',
   bubbles_v2: 'Bubbles v2', rt_bundle_1: 'Racing Thoughts Bundle 1', rt_bundle_2: 'Racing Thoughts Bundle 2',
   rt_bundle_3: 'Racing Thoughts Bundle 3',
+  // Catalog revision 2 (Astra's art pass 2, names as on her tags).
+  'kart.body.petal': 'The Blushing Petal', 'kart.body.trinket': 'The Precious Trinket',
+  'kart.body.pendulum': 'The Dizzy Pendulum', 'kart.body.checkmate': 'The Cheeky Checkmate',
+  'kart.body.lovebomb': 'The Smitten Lovebomb', 'kart.body.undertow': 'The Dreamy Undertow',
+  'kart.body.feedback': 'The Rowdy Feedback', 'kart.body.velvet-lock': 'The Velvet Lock',
+  'kart.body.reverie': 'The Drowsy Reverie', 'kart.body.house-edge': 'The Lucky House Edge',
+  'kart.paint.pattern-bundle': 'The Pattern Parade', 'rain.suit.action-yellow': 'The Vengeful Bride',
+  'rain.acc.hazmat-mask': 'The Lab Partner', 'rain.acc.back-katana': 'The Last Word',
 };
 for (const [id, name] of Object.entries(ITEM_NAMES)) LEX[itemKey(id)] = name;
 
