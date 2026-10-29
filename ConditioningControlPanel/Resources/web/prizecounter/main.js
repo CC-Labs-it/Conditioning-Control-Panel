@@ -71,6 +71,7 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
     if (!ch) return;
     if (ch.tab && scene) scene.showTab(ch.tab.id, ch.tab.shelves);
     if (ch.focus && scene) scene.focus(ch.focus.bay, ch.focus.slot);
+    if (ch.owned && scene && !ch.tab) scene.stamp?.(ch.owned);
     for (const e of ch.effects || []) if (e.type === 'wallet') host.wallet(e.sp);
     if (ch.close) host.close(ch.close.reason);
     if (ch.buy) ch.buy.then(apply);
