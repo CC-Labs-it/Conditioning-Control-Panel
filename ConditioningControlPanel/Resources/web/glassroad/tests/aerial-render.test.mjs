@@ -217,3 +217,47 @@ test('sparks burst when a word appears and on contact, and the flight trail is a
   assert.equal(trail.instanceMatrix.array, matrices, 'no reallocation');
   view.dispose(); assert.equal(scene.children.length, 0);
 });
+
+test('flight trail finishes after the route clock stops and clears on a run reset', () => {
+  const { view } = fixture(), kart = { x: 1, y: 8, z: 3 };
+  const run = { timeS: 4, flying: true, platforms: [] };
+  for (let i = 0; i < 12; i++) { run.timeS += 1 / 60; view.update(run, 1 / 60, { kart }); }
+  assert.ok(view.trail.count > 0);
+  run.flying = false;
+  for (let i = 0; i < 60; i++) view.update(run, 1 / 60, { kart });
+  assert.equal(view.trail.count, 0, 'no frozen motes remain after the flight clock stops');
+  run.flying = true; view.update(run, 1 / 60, { kart }); assert.ok(view.trail.count > 0);
+  run.timeS = 0; run.flying = false; view.update(run, 1 / 60, { kart });
+  assert.equal(view.trail.count, 0, 'a restarted run cannot inherit the previous flight trail');
+  view.dispose();
+});
+
+test('motion off keeps the word readable and planted while clearing all optional particles', () => {
+  const { view } = fixture(), kart = { x: 1, y: 8, z: 3 };
+  const p = platform({ bornS: 3.2, catchS: 4, landedS: 4 });
+  const run = { timeS: 3.6, flying: true, platforms: [p] };
+  view.update(run, .1, { kart }); assert.ok(view.trail.count > 0);
+  const root = view.object.children[0], letters = root.children[0];
+  let fixed;
+  for (const timeS of [3.6, 4.18, 4.4]) {
+    run.timeS = timeS; view.update(run, .1, { kart, motion: 'off' });
+    assert.equal(root.visible, true); assert.equal(letters.material[0].opacity, 1);
+    assert.equal(view.stats.particles, 0); assert.equal(view.trail.count, 0);
+    assert.equal(letters.position.y, 0); assert.equal(letters.rotation.z, 0);
+    fixed ||= letters.scale.toArray(); assert.deepEqual(letters.scale.toArray(), fixed);
+  }
+  view.dispose();
+});
+
+test('Gentle flight motes rise from zero for at least 300 ms and retain their drawn lifetime', () => {
+  const { view } = fixture(), kart = { x: 1, y: 8, z: 3 }, run = { timeS: 4, flying: true, platforms: [] };
+  const size = () => { const a = view.trail.instanceMatrix.array; return Math.hypot(a[0], a[1], a[2]); };
+  view.update(run, .01, { kart, gentle: true }); assert.equal(size(), 0);
+  run.flying = false;
+  const sizes = [];
+  for (let i = 0; i < 6; i++) { view.update(run, .05, { kart, gentle: true }); sizes.push(size()); }
+  for (let i = 1; i < sizes.length; i++) assert.ok(sizes[i] > sizes[i - 1], 'the calm rise has no instant peak');
+  for (let i = 0; i < 10; i++) view.update(run, .05, { kart, gentle: true });
+  assert.equal(view.trail.count, 0);
+  view.dispose();
+});

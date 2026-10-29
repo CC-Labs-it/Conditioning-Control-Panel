@@ -117,7 +117,7 @@ export function createAirWords(scene, track, { feel, photosafe, doc = globalThis
     trail.setColorAt(k, sparkColours[k % sparkColours.length]); return { x: 0, y: 0, z: 0, born: -Infinity, spin: k * .7 };
   });
   scene.add(object); scene.add(trail);
-  let clock = 0, visible = 0, solidCount = 0, particles = 0, disposed = false, nextMote = 0, emitS = -Infinity;
+  let clock = 0, trailClock = 0, visible = 0, solidCount = 0, particles = 0, disposed = false, nextMote = 0, emitS = -Infinity;
   function trim() {
     const used = new Set(rows.map(row => row.letters.geometry));
     for (const [key, value] of cache) {
@@ -125,24 +125,29 @@ export function createAirWords(scene, track, { feel, photosafe, doc = globalThis
       if (!used.has(value.geometry)) { cache.delete(key); value.geometry.dispose(); }
     }
   }
+  function clearTrail() {
+    for (const m of motes) m.born = -Infinity;
+    trail.count = 0; trailClock = 0; emitS = -Infinity;
+  }
   function clear() {
     for (const row of rows) { row.root.visible = false; row.bits.count = 0; row.id = null; row.solid = false; row.safety = false; }
-    for (const m of motes) m.born = -Infinity;
-    trail.count = 0; visible = solidCount = particles = clock = 0; emitS = -Infinity;
+    clearTrail(); visible = solidCount = particles = clock = 0;
   }
   function updateTrail(run, kart, soft, motion) {
-    if (clock < emitS) emitS = -Infinity;
-    const flying = !!run.flying && motion !== 'off' && Number.isFinite(kart?.x);
-    if (flying && clock - emitS >= (soft || motion === 'less' ? 1 / 14 : 1 / 40)) {
-      emitS = clock; const m = motes[nextMote], a = clock * 9.1 + nextMote;
+    if (motion === 'off') { clearTrail(); return; }
+    const flying = !!run.flying && Number.isFinite(kart?.x);
+    if (flying && trailClock - emitS >= (soft || motion === 'less' ? 1 / 14 : 1 / 40)) {
+      emitS = trailClock; const m = motes[nextMote], a = trailClock * 9.1 + nextMote;
       nextMote = (nextMote + 1) % AIR_WORD_TRAIL;
-      m.x = kart.x + Math.cos(a) * .45; m.y = kart.y + .3 + Math.sin(a * 1.3) * .2; m.z = kart.z + Math.sin(a) * .45; m.born = clock;
+      m.x = kart.x + Math.cos(a) * .45; m.y = kart.y + .3 + Math.sin(a * 1.3) * .2; m.z = kart.z + Math.sin(a) * .45; m.born = trailClock;
     }
     let n = 0;
     for (const m of motes) {
-      const age = clock - m.born;
+      const age = trailClock - m.born;
       if (!(age >= 0 && age < TRAIL_LIFE_S)) continue;
-      const size = (soft ? .1 : .16) * (1 - age / TRAIL_LIFE_S) * Math.min(1, age * 20 + .2);
+      // Gentle rises from zero to its peak in 375 ms, then falls without a blink.
+      const size = soft ? .1 * Math.sin(Math.PI * age / TRAIL_LIFE_S) :
+        .16 * (1 - age / TRAIL_LIFE_S) * Math.min(1, age * 20 + .2);
       dummy.position.set(m.x, m.y - age * .8, m.z); dummy.rotation.set(m.spin, m.spin + (soft ? 0 : age * 3), 0);
       dummy.scale.set(size, size * 1.8, size); dummy.updateMatrix(); trail.setMatrixAt(n++, dummy.matrix);
     }
@@ -152,7 +157,11 @@ export function createAirWords(scene, track, { feel, photosafe, doc = globalThis
     if (disposed) return;
     if (!run || mode !== 'race') { clear(); return; }
     if (paused) return;
-    clock = Number.isFinite(run.timeS) ? run.timeS : clock + Math.max(0, Math.min(.1, dt || 0));
+    const step = Math.max(0, Math.min(.1, dt || 0)), nextClock = Number.isFinite(run.timeS) ? run.timeS : clock + step;
+    if (nextClock < clock) clearTrail();
+    clock = nextClock;
+    // The route's clock stops after landing. The drawn trail must finish even with that clock held.
+    trailClock += step;
     visible = solidCount = particles = 0;
     for (const row of rows) row.root.visible = false;
     for (const p of (run.platforms || []).slice(-2)) {
@@ -172,6 +181,7 @@ export function createAirWords(scene, track, { feel, photosafe, doc = globalThis
       matrix.makeBasis(bx.fromArray(p.b), ny.fromArray(p.n), tz.fromArray(p.t).negate());
       row.root.quaternion.setFromRotationMatrix(matrix);
       airWordPose(p, clock, soft, wordPose);
+      if (motion === 'off') Object.assign(wordPose, { y: 0, tilt: 0, depth: 1, spread: 1 });
       row.letters.position.y = wordPose.y;
       row.letters.rotation.z = wordPose.tilt;
       row.letters.scale.set(w * wordPose.spread, wordPose.depth * AIR_WORD_THICK, l * wordPose.spread);
@@ -182,7 +192,8 @@ export function createAirWords(scene, track, { feel, photosafe, doc = globalThis
       // The simulation's arrival envelope supplies the only reveal, with no positional pop.
       row.top.opacity = row.side.opacity = row.outlineMaterial.opacity = alpha;
       row.rimMaterial.opacity = alpha * .9;
-      const floating = soft ? 12 : AIR_WORD_MOTES, sparks = motion === 'off' ? 0 : soft || motion === 'less' ? 8 : AIR_WORD_SPARKS;
+      const floating = motion === 'off' ? 0 : soft ? 12 : AIR_WORD_MOTES;
+      const sparks = motion === 'off' ? 0 : soft || motion === 'less' ? 8 : AIR_WORD_SPARKS;
       row.bits.count = floating + sparks; particles += row.bits.count;
       for (let i = 0; i < row.bits.count; i++) {
         if (i < floating) airWordBit(i, clock, w, l, alpha, soft, pose);
@@ -192,7 +203,7 @@ export function createAirWords(scene, track, { feel, photosafe, doc = globalThis
       }
       row.bits.instanceMatrix.needsUpdate = true;
     }
-    updateTrail(run, kart, gentle, motion);
+    updateTrail(run, kart, gentle || rows.some(row => row.root.visible && row.safety), motion);
     trim();
   }
   return { object, trail, update, clear,
