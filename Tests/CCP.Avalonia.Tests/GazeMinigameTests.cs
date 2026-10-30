@@ -56,7 +56,8 @@ public sealed class GazeMinigameTests
     [InlineData("mixed", false)]
     [InlineData("mp4", true)]
     [InlineData("gif", true)]
-    public void Start_RunsOnTheTracker_GazeScoresTheRound_PanicClosesTheGame(string kind, bool panicInRound)
+    [InlineData("png", false, 62.5)]   // late ticks: counting 50 ms per tick reaches only 2400 ms (main a4a5aa43b)
+    public void Start_RunsOnTheTracker_GazeScoresTheRound_PanicClosesTheGame(string kind, bool panicInRound, double periodMs = 50)
     {
         // Seed the shared LibVLC so video panes really start players (InlineLoopVideoTests.WithClip).
         if (kind is "mp4" or "mixed")
@@ -64,10 +65,10 @@ public sealed class GazeMinigameTests
             try { _ = new LibVlcAudio("--aout=dummy"); }
             catch (Exception e) { Assert.Skip("libvlc not available: " + e.Message); }
         }
-        AvaloniaTestDispatcher.Run(() => Body(kind, panicInRound));
+        AvaloniaTestDispatcher.Run(() => Body(kind, panicInRound, periodMs));
     }
 
-    private static void Body(string kind, bool panicInRound)
+    private static void Body(string kind, bool panicInRound, double periodMs)
     {
         EnsureApp();
         var s = CoreSettings.Current;
@@ -161,7 +162,7 @@ public sealed class GazeMinigameTests
                 clock.Now += TimeSpan.FromMilliseconds(1100); // past the round-start grace
                 win.RoundTicker_Tick(null, EventArgs.Empty);
                 tracker.RaiseGazeSideForTest(correct);
-                for (int i = 0; i < 60; i++) { clock.Now += TimeSpan.FromMilliseconds(50); win.RoundTicker_Tick(null, EventArgs.Empty); }
+                for (int i = 0; i < (int)Math.Ceiling(3000 / periodMs); i++) { clock.Now += TimeSpan.FromMilliseconds(periodMs); win.RoundTicker_Tick(null, EventArgs.Empty); }
                 Assert.Equal("GOOD GIRL", win.FindControl<TextBlock>("TxtFeedback")!.Text);
                 Assert.Equal(new[] { "bell.wav", "chime.wav" }, clips.Select(c => Path.GetFileName(c.Path)));
                 Assert.All(clips, c =>
