@@ -9,6 +9,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -137,20 +138,23 @@ public sealed partial class AccountSeedTests
         }
     }
 
-    [Fact]
-    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard()
+    [Theory]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Full)]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Reduced)]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Off)]
+    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard(ConditioningControlPanel.Models.MotionLevel motion)
     {
         var s = CoreSettings.Current;
-        var old = (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId);
+        var old = (s.OfflineMode, s.MotionLevel, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId);
         var wire = new CardWire();
         try
         {
             LeaderboardTabView.NewClient = () => new LeaderboardClient(wire);
-            (s.OfflineMode, CoreAccount.UnifiedUserId) = (false, "u9");
+            (s.OfflineMode, s.MotionLevel, CoreAccount.UnifiedUserId) = (false, motion, "u9");
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
-                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
@@ -161,14 +165,42 @@ public sealed partial class AccountSeedTests
                 Dispatcher.UIThread.RunJobs();
                 int BoardGets() => wire.Seen.Count(r => r.Contains("/v3/leaderboard"));
                 var boardTabGets = BoardGets();
+                // Pointer coordinates must describe the landed entrance, not a moving tab.
+                w.CompleteTabTransition();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
+                // Headless MouseDown/Up render between events and use stopwatch timestamps.
+                // Give the simulated gesture its own time, regardless of CI rendering speed.
+                ulong gestureTime = 0;
+                var clicks = new List<int>();
+                list.AddHandler(global::Avalonia.Input.InputElement.PointerPressedEvent,
+                    (_, e) => clicks.Add(e.ClickCount), global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+                // Avalonia 12 marks the raw input callback/timestamp as private API.
+                var platform = w.PlatformImpl!;
+                var rawInput = platform.GetType().GetProperty("Input")!;
+                var timestamp = typeof(global::Avalonia.Input.Raw.RawInputEventArgs).GetProperty("Timestamp")!;
+                var input = (Action<global::Avalonia.Input.Raw.RawInputEventArgs>)rawInput.GetValue(platform)!;
+                rawInput.SetValue(platform, (Action<global::Avalonia.Input.Raw.RawInputEventArgs>)(e =>
                 {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                    if (e is global::Avalonia.Input.Raw.RawPointerEventArgs)
+                        timestamp.SetValue(e, gestureTime += 10);
+                    input(e);
+                }));
+                try
+                {
+                    for (var i = 0; i < 2; i++)
+                    {
+                        // Prove a renderer stall beyond the OS interval cannot change this gesture.
+                        if (i == 1) await Task.Delay(w.GetPlatformSettings()!.GetDoubleTapTime(global::Avalonia.Input.PointerType.Mouse)
+                            + TimeSpan.FromMilliseconds(50));
+                        w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
+                        w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                    }
                 }
+                finally { rawInput.SetValue(platform, input); }
+                Assert.Equal(new[] { 1, 2 }, clicks);
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
@@ -196,7 +228,7 @@ public sealed partial class AccountSeedTests
         }
         finally
         {
-            (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId) = old;
+            (s.OfflineMode, s.MotionLevel, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId) = old;
         }
     }
 
