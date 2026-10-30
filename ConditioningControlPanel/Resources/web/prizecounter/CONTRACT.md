@@ -53,7 +53,7 @@ carry a fresh state. One idem per confirm card; a retry reuses it.
 
 The page talks to whoever hosts it through `host.js`, never `fetch` to the server directly:
 
-- in: `init { identity?, sp, locale, lexicon, motion:'full'|'less'|'off', gentle, reducedMotion, tab, from, platform }`.
+- in: `init { identity?, sp, locale, lexicon, motion:'full'|'less'|'off', gentle, reducedMotion, tab, from, platform, companion? }`. `companion` = the active mod's name for the V2 avatar (Bambi, Bimbo, Emi; "Rain" is only the 3D model), filling `{companion}` in copy; absent = Emi.
 - out: `request('shop-state')`, `request('shop-buy', {itemId, catalogVersion, week}, idem)` -> the server body as above,
   or `{ ok:false, reason:'offline'|'signed_out' }` from the host itself.
 - out: `wallet { sp }` after a receipt (the WPF host adopts it with `V2WalletAdoption`, `fromBuy = true`).

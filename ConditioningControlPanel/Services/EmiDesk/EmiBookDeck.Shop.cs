@@ -27,7 +27,7 @@ internal static class EmiBookDeckShop
             "THE PRIZE COUNTER",
             "a 3D *counter* that trades *Sparkles* for looks.",
             new[] { "games pay *Sparkles* by your finishing place",
-                   "looks for *Rain*, the *kart*, *chess*, your *profile* and my desk",
+                   "looks for *{companion}*, the *kart*, *chess*, your *profile* and my desk",
                    "the *stock* changes every week. what you own stays *stamped*",
                    "open it from the *wallet* chip on the launcher or the panel" },
             "no refunds, no gifts. Prime items need Prime to buy, and stay yours after.",
@@ -36,7 +36,7 @@ internal static class EmiBookDeckShop
 
         new EmiBookCard(
             "rain", 2, "emi_book_rain",
-            "RAIN",
+            "V2 AVATAR",
             "a second *avatar* for the tube, in 3D, and you dress her.",
             new[] { "the *V1 | V2* pill under the tube switches to her",
                    "her files install once, about *250 MB*",

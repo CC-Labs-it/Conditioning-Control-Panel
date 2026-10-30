@@ -16,7 +16,7 @@ const KEYS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown:
 export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
   const host = typeof hostIn.ready === 'function' && hostIn.hosted !== undefined ? hostIn : asHost(hostIn);
   const init = (await host.ready()) || {};
-  const t = makeT(init.lexicon), motion = init.motion || 'full';
+  const t = makeT(init.lexicon, init.companion), motion = init.motion || 'full';
   root.classList.add('pc');
   root.dataset.motion = motion;
   root.replaceChildren();

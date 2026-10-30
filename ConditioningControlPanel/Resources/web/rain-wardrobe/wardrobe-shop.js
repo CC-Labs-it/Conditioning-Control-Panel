@@ -1,6 +1,6 @@
 // The dressing room's shop layer (RAIN-V2-PLAN 2.4 / 2.5): badges, try-on, draft then Apply.
 // Pure on purpose: no location, no document at import, so node tests load it as is. viewer.js wires it.
-// Host -> page: init {look, grants[], level, achievements[], locale, motion, gentle, prices?, applyMode?},
+// Host -> page: init {look, grants[], level, achievements[], locale, motion, gentle, prices?, applyMode?, companion?},
 //   rain-owned {grants}, rain-applied {lookHash}, rain-tryon {key} (init.tryOn too),
 //   rain-baking {lookHash, done, total, shown, fraction} (the host's count of the bake; init.strings localises STR). Page -> host: rain-draft {look, unowned},
 //   rain-apply {look}, open-counter {tab}. Without init the page reads today's ?locked= list instead
@@ -30,6 +30,29 @@ export const STR = {
 };
 
 export const fill = (text, values) => text.replace(/\{(\w+)\}/g, (_, k) => String(values[k] ?? ''));
+
+/** What the page calls her (owner 2026-10-30): the host's `init.companion`, the active mod's name (Bambi, Bimbo,
+ *  Emi). "Rain" is only the 3D model's name and never shows. A missing or odd value answers Emi. */
+export function companionName(value) {
+  const v = typeof value === 'string' ? value.trim() : '';
+  return v && v.length <= 24 ? v : 'Emi';
+}
+
+/** Put the name on the page chrome (ids from index.html): title, brand, preview label, foot line. */
+export function paintCompanion(doc, name) {
+  const n = companionName(name);
+  const $ = id => doc.getElementById(id);
+  doc.title = `${n} | Dressing room`;
+  const brand = $('brand');
+  if (brand) {
+    brand.setAttribute('aria-label', `${n} dressing room`);
+    const first = brand.firstChild;
+    if (first && first.nodeType === 3) first.nodeValue = n.toUpperCase();
+  }
+  if ($('preview')) $('preview').setAttribute('aria-label', `${n}. Drag to rotate, scroll to zoom.`);
+  if ($('sameName')) $('sameName').textContent = `Your look. Same ${n}.`;
+  return n;
+}
 
 const SINGLE = ['dress', 'hair', 'skin', 'shoes', 'legwear', 'arms', 'ankles'];
 
@@ -77,6 +100,7 @@ export function createShop({ items, isLocked = () => false, post = () => {}, nam
     applyMode: false, calm: false, applied: null, draft: null, pending: null, applying: false, lookHash: '', tryOn: null,
     // bake = {shown, total, fraction} while a bake reports; outcome = how the last Apply ended (the meter's OUT).
     bake: null, outcome: null, str: { ...STR },
+    companion: companionName(null),
   };
 
   function owned(key) {
@@ -183,6 +207,7 @@ export function createShop({ items, isLocked = () => false, post = () => {}, nam
       if (typeof data.tryOn === 'string') s.tryOn = data.tryOn;
       // The host's localised lines: known keys only, plain strings only.
       if (data.strings && typeof data.strings === 'object') for (const [k, v] of Object.entries(data.strings)) if (k in STR && typeof v === 'string' && v.trim()) s.str[k] = v;
+      s.companion = companionName(data.companion);
       return 'init';
     }
     // The Prize Counter's Wear door on a window that is already up.
@@ -214,7 +239,7 @@ export function createShop({ items, isLocked = () => false, post = () => {}, nam
 
   return {
     get applyMode() { return s.applyMode; }, get calm() { return s.calm; }, get source() { return s.source; },
-    get applied() { return s.applied; }, get lookHash() { return s.lookHash; }, get str() { return s.str; },
+    get applied() { return s.applied; }, get lookHash() { return s.lookHash; }, get str() { return s.str; }, get companion() { return s.companion; },
     owned, badge, status, setDraft, apply, discard, openCounter, handle,
     /** The piece the counter asked to try on, once: {slot, id} when items.json knows it (never a bundled
      *  look), else null. Kept until items.json has loaded, so an early init is not lost. */
@@ -259,6 +284,7 @@ export function paintShop(doc, shop) {
   if ($('discardLook')) { $('discardLook').textContent = STR.discard; $('discardLook').disabled = !st.canDiscard; }
   if ($('applyLook')) { $('applyLook').textContent = st.bake ? bakeLine(T, st.bake) : (st.applying ? T.applying : STR.apply); $('applyLook').disabled = !st.canApply; }
   paintMeter($('bakeMeter'), st, shop.calm);
+  paintCompanion(doc, shop.companion);
   return st;
 }
 

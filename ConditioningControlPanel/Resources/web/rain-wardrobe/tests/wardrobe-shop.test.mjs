@@ -166,6 +166,30 @@ test('paintShop fills the ribbon and the bar by the ids index.html carries', asy
   assert.deepEqual([nodes.openCounter.hidden, nodes.applyLook.disabled, nodes.discardLook.disabled], [false, true, false]);
 });
 
+test('the page calls her by the mod name from init.companion, Emi without one, and never "Rain"', async () => {
+  const { paintCompanion, companionName } = await import('../wardrobe-shop.js');
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  for (const id of ['brand', 'preview', 'sameName']) assert.match(html, new RegExp(`id="${id}"`));
+  assert.doesNotMatch(html.replace(/<!--[\s\S]*?-->/g, ''), /\bRain\b|\bRAIN\b/);
+  assert.equal(shopWith({}).shop.companion, 'Emi');
+  assert.equal(shopWith({ companion: 'Bambi' }).shop.companion, 'Bambi');
+  assert.equal(createShop({ items }).companion, 'Emi');
+  assert.deepEqual(['', '  ', 42, null, 'x'.repeat(25)].map(companionName), ['Emi', 'Emi', 'Emi', 'Emi', 'Emi']);
+  const attrs = {}, brandText = { nodeType: 3, nodeValue: 'EMI' };
+  const nodes = {
+    brand: { firstChild: brandText, setAttribute: (k, v) => { attrs.brand = v; } },
+    preview: { setAttribute: (k, v) => { attrs.preview = v; } },
+    sameName: { textContent: '' },
+  };
+  const doc = { title: '', getElementById: id => nodes[id] || null };
+  assert.equal(paintCompanion(doc, 'Bimbo'), 'Bimbo');
+  assert.equal(doc.title, 'Bimbo | Dressing room');
+  assert.equal(brandText.nodeValue, 'BIMBO');
+  assert.equal(attrs.brand, 'Bimbo dressing room');
+  assert.equal(attrs.preview, 'Bimbo. Drag to rotate, scroll to zoom.');
+  assert.equal(nodes.sameName.textContent, 'Your look. Same Bimbo.');
+});
+
 test('counter Wear door: init.tryOn and rain-tryon hand one known piece over once; unknown keys and bundled looks never', () => {
   const { shop } = shopWith({ tryOn: 'dress:midnight-cocktail' });
   assert.deepEqual(shop.takeTryOn(), { slot: 'dress', id: 'midnight-cocktail' });
