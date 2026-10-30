@@ -79,7 +79,6 @@ public sealed class EmiDeskSettingsSpeechTests
         Assert.Equal("^_~", desk.Window.Face);
         return Task.CompletedTask;
     });
-
     [Fact]
     public Task SayTypesThenLandsAndCompletesAfterRest() => InDesk(desk =>
     {
@@ -108,7 +107,6 @@ public sealed class EmiDeskSettingsSpeechTests
         Assert.True(done);
         return Task.CompletedTask;
     });
-
     [Fact]
     public Task GreetingIsReachableOnSummonAndPanicCutsIt() => InDesk(desk =>
     {
@@ -121,7 +119,6 @@ public sealed class EmiDeskSettingsSpeechTests
         desk.Window.AdvanceSpeech();
         desk.Window.AdvanceSpeech();
         Assert.Equal("desktop hello", desk.Window.BubbleText);
-
         PanicSurfaces.All.Single(x => x.Id == "emi-desk-feedback").Stop(null);
         Assert.True(desk.Window.HoldPending);
         Assert.Null(desk.Window.BubbleText);
@@ -130,7 +127,6 @@ public sealed class EmiDeskSettingsSpeechTests
         Assert.Null(desk.Window.BubbleText);
         return Task.CompletedTask;
     });
-
     [Fact]
     public Task HoldShowsQuietFaceThenRevertsToRest() => InDesk(desk =>
     {
@@ -142,7 +138,6 @@ public sealed class EmiDeskSettingsSpeechTests
         Assert.Equal("0_0", window.Face);
         return Task.CompletedTask;
     });
-
     [Fact]
     public Task CancelNeverCallsSpeechContinuation() => InDesk(desk =>
     {
@@ -154,7 +149,6 @@ public sealed class EmiDeskSettingsSpeechTests
         Assert.Null(desk.Window.BubbleText);
         return Task.CompletedTask;
     });
-
     [Fact]
     public Task WordlessRowDrawsItsFaceWithoutAHold() => InDesk(desk =>
     {
@@ -165,7 +159,6 @@ public sealed class EmiDeskSettingsSpeechTests
         Assert.False(desk.Window.HoldPending);
         return Task.CompletedTask;
     });
-
     [Fact]
     public Task HoldPlaysOnDismissedAndDismissCancelsIt() => InDesk(desk =>
     {
@@ -189,7 +182,6 @@ public sealed class EmiDeskSettingsSpeechTests
         desk.Fire("resized");
         Assert.Null(desk.Window!.BubbleText);
     });
-
     [Fact]
     public void ShippedCatalogueLoadsOutsideTheSourceTree()
     {
