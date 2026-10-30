@@ -1149,6 +1149,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private PixelRect[] _inputPx = Array.Empty<PixelRect>();
         private DispatcherTimer? _regionPoll;
         internal Action<PixelRect[]>? ApplyInputRects;
+        internal Action<bool>? ApplyButtonClickThrough;
 
         private void UpdateHotRects()
         {
@@ -1169,7 +1170,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             PointerReleased += OnClickAway;
             if (_dismissListener != null || _awayPoll != null) return;
             // The Windows shim switches WS_EX_TRANSPARENT from the current cursor position;
-            // unlike an XFixes region it needs refreshing as the cursor crosses a card boundary.
+            // this poll is for hover only. Button routing is updated synchronously below.
             if (TryGetPlatformHandle()?.HandleDescriptor == "HWND")
             {
                 _regionPoll = new DispatcherTimer(TimeSpan.FromMilliseconds(30), DispatcherPriority.Input,
@@ -1177,11 +1178,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 _regionPoll.Start();
             }
             int generation = ++_dismissGeneration;
-            _dismissListener = StartDismissListener((at, escape) => Dispatcher.UIThread.Post(() =>
+            _dismissListener = StartDismissListener((at, escape) =>
             {
-                if (!_open || generation != _dismissGeneration) return;
-                if (escape || (at is { } p && Array.TrueForAll(_hotPx, r => !r.Contains(p)))) CloseRing();
-            }));
+                // Win32OptionsDismiss calls on the UI hook thread before CallNextHookEx delivers
+                // the button. WPF ring:1200 never costs the underlying click. Use the event's
+                // physical position, not a later cursor sample or a queued dispatcher update.
+                if (_open && generation == _dismissGeneration && at is { } px &&
+                    (ApplyButtonClickThrough != null || TryGetPlatformHandle()?.HandleDescriptor == "HWND"))
+                {
+                    var local = px - Position;
+                    bool through = !Platform.Win32Overlay.Hits(_inputPx, _inputPx.Length, local.X, local.Y);
+                    if (ApplyButtonClickThrough != null) ApplyButtonClickThrough(through);
+                    else Platform.X11Overlay.SetClickThrough(this, through);
+                }
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!_open || generation != _dismissGeneration) return;
+                    if (escape || (at is { } p && Array.TrueForAll(_hotPx, r => !r.Contains(p)))) CloseRing();
+                });
+            });
             if (_dismissListener != null) return;
             _wasDown = _wasEsc = true; // ignore the press that opened the fan
             _awayPoll = new DispatcherTimer(TimeSpan.FromMilliseconds(30), DispatcherPriority.Background, (_, _) => PollClickAway());

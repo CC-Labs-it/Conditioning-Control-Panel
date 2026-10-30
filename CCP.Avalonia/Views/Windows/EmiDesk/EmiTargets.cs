@@ -70,7 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             "dtrh" => (Always, Views.Games.GameWindow.DtrhLocked,
                 () => Views.Games.GameWindow.Launch(Views.Games.GameWindow.DtrhId)),
             "intake" => (Always, () => !App.IntakePass.CanStartIntake,
-                () => Shell?.Named<Views.Tabs.GradedIntakeTabView>("GradedIntakeTab")?.BtnStartIntake_Click(null, new global::Avalonia.Interactivity.RoutedEventArgs())),
+                () => Views.Tabs.GradedIntakeTabView.OpenIntake(Shell, duckMain: true)),
             "justdrop" => (() => Services.JustDrop.JustDropService.DoorAvailable, Never, () => Nav("justdrop")),
             "loom" => Free(() => Rack("spiral")),
             "sessions" => Free(() => Nav("presets")),
@@ -96,8 +96,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             _ => null,
         };
 
-        private static MainShellWindow? Shell =>
+        internal static Func<MainShellWindow?> ShellProvider = () =>
             (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainShellWindow;
+        private static MainShellWindow? Shell => ShellProvider();
 
         private static void Nav(string tab)
         {

@@ -215,4 +215,103 @@ public sealed class EmiRingDismissTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task ButtonRoutingCrossesCardBoundaryBeforeDelivery(bool cardFirst) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        Action<PixelPoint?, bool>? press = null;
+        bool? through = null;
+        var win = new EmiRingWindow(new PixelRect(590, 290, 220, 420), new PixelPoint(700, 500))
+        {
+            StartDismissListener = callback => { press = callback; return new Listener(); },
+            ApplyButtonClickThrough = value => through = value,
+        };
+        try
+        {
+            win.OpenRing();
+            var card = win.FindControl<Canvas>("Field")!.Children.OfType<Border>().First();
+            var hot = win.Position + PixelPoint.FromPoint(new Point(Canvas.GetLeft(card) + 20, Canvas.GetTop(card) + 20), win.RenderScaling);
+            var gap = new PixelPoint(-5000, -5000);
+            foreach (bool onCard in new[] { cardFirst, !cardFirst })
+            {
+                through = onCard; // stale style from the opposite side of the boundary
+                press!(onCard ? hot : gap, false);
+                Assert.Equal(!onCard, through); // before any dispatcher job, timer tick or delivery
+                Assert.True(win.IsOpen);
+            }
+        }
+        finally { win.Kill(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task RingIntakeLaunchesWithoutAiDucksFirstRunAndRefocuses() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var state = global::ConditioningControlPanel.Services.EmiDesk.EmiState.Current;
+        var usage = state.Usage.ToArray();
+        var scores = state.OpenScore.ToArray();
+        var usageAt = state.UsageAt.ToArray();
+        var shellProvider = EmiTargets.ShellProvider;
+        var ai = global::ConditioningControlPanel.CoreAi.IsAvailableProvider;
+        var login = global::ConditioningControlPanel.CoreAccount.IsLoggedInProvider;
+        var paid = global::ConditioningControlPanel.CoreAccount.HasPremiumAccessProvider;
+        var shell = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+        try
+        {
+            EmiTargets.ShellProvider = () => shell;
+            global::ConditioningControlPanel.CoreAi.IsAvailableProvider = () => false;
+            global::ConditioningControlPanel.CoreAccount.IsLoggedInProvider = () => true;
+            global::ConditioningControlPanel.CoreAccount.HasPremiumAccessProvider = () => true;
+            Assert.False(global::ConditioningControlPanel.Models.IntakePunchCardState.ReadEverCompletedIntake(global::ConditioningControlPanel.CorePaths.UserData));
+            shell.Show();
+            shell.WindowState = WindowState.Maximized;
+            EmiTargets.Find("intake")!.Open();
+            var run = Assert.Single(global::ConditioningControlPanel.Avalonia.Views.Windows.IntakeHostWindow.Snapshot());
+            Assert.Same(shell, run.DuckTarget);
+            Assert.Equal(WindowState.Minimized, shell.WindowState);
+            // Count the real platform Activate call: headless emits no native focus event.
+            var field = typeof(TopLevel).GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                .Single(f => f.FieldType == typeof(global::Avalonia.Platform.ITopLevelImpl));
+            var real = field.GetValue(run)!;
+            var proxy = System.Reflection.DispatchProxy.Create<global::Avalonia.Platform.IWindowImpl, ActivationSpy>();
+            var spy = (ActivationSpy)(object)proxy;
+            spy.Inner = real;
+            field.SetValue(run, proxy);
+            try
+            {
+                EmiTargets.Find("intake")!.Open();
+                Assert.Same(run, Assert.Single(global::ConditioningControlPanel.Avalonia.Views.Windows.IntakeHostWindow.Snapshot()));
+                Assert.Equal(1, spy.Activations);
+            }
+            finally { field.SetValue(run, real); }
+        }
+        finally
+        {
+            global::ConditioningControlPanel.Avalonia.Views.Windows.IntakeHostWindow.CloseAllForPanic();
+            shell.Close();
+            EmiTargets.ShellProvider = shellProvider;
+            state.Usage.Clear(); foreach (var pair in usage) state.Usage[pair.Key] = pair.Value;
+            state.OpenScore.Clear(); foreach (var pair in scores) state.OpenScore[pair.Key] = pair.Value;
+            state.UsageAt.Clear(); foreach (var pair in usageAt) state.UsageAt[pair.Key] = pair.Value;
+            global::ConditioningControlPanel.CoreAi.IsAvailableProvider = ai;
+            global::ConditioningControlPanel.CoreAccount.IsLoggedInProvider = login;
+            global::ConditioningControlPanel.CoreAccount.HasPremiumAccessProvider = paid;
+        }
+        return Task.CompletedTask;
+    });
+
+    public class ActivationSpy : System.Reflection.DispatchProxy
+    {
+        internal object Inner = null!;
+        internal int Activations;
+        protected override object? Invoke(System.Reflection.MethodInfo? method, object?[]? args)
+        {
+            if (method!.Name == "Activate") Activations++;
+            return method.Invoke(Inner, args);
+        }
+    }
+
 }
