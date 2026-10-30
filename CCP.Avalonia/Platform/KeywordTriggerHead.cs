@@ -14,7 +14,7 @@ using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-/// <summary>Keyboard/audio slice of WPF KeywordTriggerService. OCR and the other actions remain a follow-up.</summary>
+/// <summary>Keyboard/audio/comment slice of WPF KeywordTriggerService. OCR and the other actions remain a follow-up.</summary>
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
@@ -37,7 +37,7 @@ internal static class KeywordTriggerHead
     }
 
     // The hook itself stays: on this head the panic key (Win32Input.Start at boot) owns it, the case WPF :426 keeps it for.
-    internal static void Stop() { DetachKeyboard(); Engine.Stop(); }
+    internal static void Stop() { DetachKeyboard(); Engine.Stop(); KeywordAvatarComment.CancelPending(); }
 
     /// <summary>WPF MainWindow.Awareness.cs:493: Keyboard off drops only the key source; the engine and a playing clip stay.</summary>
     internal static void DetachKeyboard()
@@ -171,11 +171,23 @@ internal sealed class KeywordAudioRuntime
                 PlayCount = t.AudioPlayCount, DelayBetweenMs = t.AudioDelayBetweenMs, DuckSystemAudio = t.DuckAudio };
         }
         if (audio != null) Play(audio);
+        // WPF KeywordTriggerService.cs:1272,1345,1363: all enabled actions for one trigger;
+        // :1283-1293: only the first enabled comment when multiple triggers merge.
+        var comments = fired.SelectMany(t => t.Actions ?? new()).OfType<AvatarCommentAction>().Where(a => a.Enabled);
+        if (fired.Count > 1) comments = comments.Take(1);
+        foreach (var comment in comments) _ = KeywordAvatarComment.DispatchAsync(comment, fired[0]);
     }
 
-    // ponytail: WPF FireDemoTrigger (KeywordTriggerService :394-424) checks HasAccess (#887) and fires a synthetic
-    // Highlight+AvatarComment trigger with no audio and no settings; both actions land with wire-shell-keyword-triggers-b.
-    internal void FireDemo(string keyword, string source) { }
+    // WPF KeywordTriggerService.cs:393-432. Null OCR words draw no highlight.
+    // Feed, quest and achievement recording remain part B.
+    internal void FireDemo(string keyword, string source)
+    {
+        if (string.IsNullOrWhiteSpace(keyword) ||
+            !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return;
+        var demo = new KeywordTrigger { Id = "tutorial:demo", Keyword = keyword };
+        _ = KeywordAvatarComment.DispatchAsync(new AvatarCommentAction
+        { FallbackPhraseCategory = "PuppyPraise", RequireAiAvailable = false }, demo);
+    }
 
     internal void StopAudio()
     {
