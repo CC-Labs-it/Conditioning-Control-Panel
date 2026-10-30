@@ -64,6 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             FinishImportReveal();
+            _searchDebounce?.Stop();
             Platform.WebcamTracker.Instance.StateChanged -= RefreshWebcamStatus;
             CoreMods.ModChanged -= OnModChanged;
             CoreSettings.Current.PropertyChanged -= OnWebcamSettingsChanged;
@@ -295,10 +296,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             e.Handled = true;
             _ = shell.SubmitDeeperLibraryEntryAsync(row.Entry);
         }
+        // WPF MainWindow.DeeperHub.cs:147-148, MainWindow.DeeperHub.cs:417-433.
+        private global::Avalonia.Threading.DispatcherTimer? _searchDebounce;
         private void DeeperSearch_TextChanged(object? sender, TextChangedEventArgs e)
         {
             var text = sender is TextBox box ? box.Text : TxtDeeperSearch?.Text;
-            ViewModel?.SetSearch(text);
+            _searchDebounce ??= new global::Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+            _searchDebounce.Stop();
+            ViewModel?.StageSearch(text);
+            _searchDebounce.Tick -= ApplySearch;
+            _searchDebounce.Tick += ApplySearch;
+            _searchDebounce.Start();
+        }
+
+        /// <summary>Test seam: the pending 150 ms debounce fires now (WPF search debounce).</summary>
+        internal bool FlushSearchDebounce()
+        {
+            if (_searchDebounce is not { IsEnabled: true } t || t.Interval != TimeSpan.FromMilliseconds(150)) return false;
+            ApplySearch(null, EventArgs.Empty);
+            return true;
+        }
+
+        private void ApplySearch(object? sender, EventArgs e)
+        {
+            _searchDebounce?.Stop();
+            ViewModel?.Refresh();
         }
 
         private void DeeperSort_SelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -376,6 +398,65 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _allEntries.AddRange(result.Entries.Where(e => !PendingDeletes.ContainsKey(FullPath(e.FilePath))));
             _libraryError = result.HasError;
             ApplyFilter();
+            if (!_probingDurations) DurationBackfill = ProbeDurationsAsync();
+        }
+
+        /// <summary>The running duration backfill, so tests await it instead of sleeping.</summary>
+        internal System.Threading.Tasks.Task DurationBackfill { get; private set; } = System.Threading.Tasks.Task.CompletedTask;
+
+        // WPF MainWindow.DeeperHub.cs:814-859: local, sequential, once per source, batches of five.
+        private bool _probingDurations;
+        private readonly HashSet<string> _durationTried = new(StringComparer.OrdinalIgnoreCase);
+        internal static Func<string, System.Threading.Tasks.Task<double?>> DurationProbe = ProbeLocalDurationAsync;
+
+        private static async System.Threading.Tasks.Task<double?> ProbeLocalDurationAsync(string path)
+        {
+            // ponytail: LibVLC parse-only handles both media types on every OS; no playback/device is opened.
+            return await System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    var vlc = Platform.LibVlcAudio.Shared;
+                    if (vlc == null) return (double?)null;
+                    using var media = new LibVLCSharp.Shared.Media(vlc, path, LibVLCSharp.Shared.FromType.FromPath);
+                    var status = await media.Parse(LibVLCSharp.Shared.MediaParseOptions.ParseLocal, 5000);
+                    return status == LibVLCSharp.Shared.MediaParsedStatus.Done && media.Duration > 0
+                        ? media.Duration / 1000.0 : (double?)null;
+                }
+                catch (Exception ex) { Serilog.Log.Debug(ex, "Deeper duration probe failed"); return null; }
+            });
+        }
+
+        internal async System.Threading.Tasks.Task ProbeDurationsAsync()
+        {
+            if (_probingDurations) return;
+            _probingDurations = true;
+            try
+            {
+                while (true)
+                {
+                    var pending = _allEntries.Where(e => e.DurationSeconds <= 0
+                        && !_durationTried.Contains(e.MediaSource) && MediaDurationCache.IsProbeable(e.MediaSource))
+                        .Select(e => e.MediaSource).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    if (pending.Count == 0) break;
+                    var found = 0;
+                    foreach (var source in pending)
+                    {
+                        _durationTried.Add(source);
+                        double? seconds = MediaDurationCache.TryGetCached(source, out var cached)
+                            ? cached : await DurationProbe(source);
+                        if (seconds is not > 0 || !double.IsFinite(seconds.Value)) continue;
+                        MediaDurationCache.Remember(source, seconds.Value);
+                        foreach (var entry in _allEntries.Where(e => e.DurationSeconds <= 0
+                            && string.Equals(e.MediaSource, source, StringComparison.OrdinalIgnoreCase)))
+                            entry.DurationSeconds = seconds.Value;
+                        if (++found % 5 == 0) ApplyFilter();
+                    }
+                    if (found % 5 != 0) ApplyFilter();
+                }
+            }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "Deeper duration backfill failed"); }
+            finally { _probingDurations = false; }
         }
 
         /// <summary>Full path -> start timestamp of a delete waiting out its undo grace (the shell
@@ -435,9 +516,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             !string.IsNullOrEmpty(a) && !string.IsNullOrEmpty(b)
             && string.Equals(FullPath(a), FullPath(b), StringComparison.OrdinalIgnoreCase);
 
+        internal void StageSearch(string? search) => _search = search ?? "";
+
         public void SetSearch(string? search)
         {
-            _search = search ?? "";
+            StageSearch(search);
             ApplyFilter();
         }
 
@@ -536,6 +619,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ShowCreator = !string.IsNullOrEmpty(entry.Creator),
                 MediaSourceGlyph = source.Glyph,
                 MediaSourceLabel = source.Label,
+                MediaSourceTooltip = source.Glyph == IconKind.Warning ? Loc.Get("deeper_hub_tip_media_missing") : source.Label,
+                DurationDisplay = entry.DurationSeconds > 0 ? MediaDurationCache.Format(entry.DurationSeconds) : "",
+                ShowDuration = entry.DurationSeconds > 0,
                 MediaSourceBrush = source.Exists ? new SolidColorBrush(Color.FromRgb(0x4A, 0xDE, 0x80)) : Brushes.Gray,
                 ShowMediaSource = !string.IsNullOrEmpty(source.Label),
                 TimestampDisplay = FormatRelativeTime(entry.LastModified),
@@ -668,6 +754,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public bool ShowCreator { get; init; }
 
         public string MediaSourceLabel { get; init; } = "";
+        public string MediaSourceTooltip { get; init; } = "";
+        public string DurationDisplay { get; init; } = "";
+        public bool ShowDuration { get; init; }
         public IconKind MediaSourceGlyph { get; init; } = IconKind.Info;
         public IBrush MediaSourceBrush { get; init; } = Brushes.Gray;
         public bool ShowMediaSource { get; init; }

@@ -5,8 +5,7 @@
 // DeeperLocalLibrary; this partial owns the windows, dialogs, timers and files.
 //
 // Import picker/drop and the shared batch live in MainShellWindow.DeeperImport.cs.
-// Still out (shell-deeper-hub): startup demo seeding, the persistent library watcher,
-// and duration probing. The tab's tour uses the existing head tour lifecycle.
+// Library lifecycle follows WPF App.xaml.cs:3418,6541 and MainWindow.DeeperTab.cs:677-689.
 
 using System;
 using System.Collections.Generic;
@@ -45,7 +44,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private DeeperTabViewModel? DeeperModel => Named<DeeperTabView>("DeeperTab")?.DataContext as DeeperTabViewModel;
 
         /// <summary>Reloads the local index when the Deeper view is attached or the tab opens.</summary>
-        internal void InitializeDeeperHub() => ReloadDeeperLibraryFromDisk();
+        private EnhancementLibrary? _deeperLibrary;
+        private bool _deeperHubClosed;
+        internal void InitializeDeeperHub()
+        {
+            if (_deeperHubClosed) return;
+            EnsureDeeperLibrary();
+            ReloadDeeperLibraryFromDisk();
+        }
+
+        /// <summary>Creates the watched library once, without a rescan (import reloads once itself).</summary>
+        private void EnsureDeeperLibrary()
+        {
+            if (_deeperHubClosed) return;
+            if (_deeperLibrary == null)
+            {
+                _deeperLibrary = new EnhancementLibrary();
+                _deeperLibrary.LibraryChanged += OnDeeperLibraryChanged;
+                Closed += (_, _) =>
+                {
+                    _deeperHubClosed = true;
+                    _deeperLibrary.LibraryChanged -= OnDeeperLibraryChanged;
+                    _deeperLibrary.Dispose();
+                };
+            }
+        }
+
+        private void OnDeeperLibraryChanged(object? sender, EventArgs e)
+            => Dispatcher.UIThread.Post(() => { if (!_deeperHubClosed && Named<DeeperTabView>("DeeperTab") is { IsVisible: true }) ReloadDeeperLibraryFromDisk(); });
 
         private void ReloadDeeperLibraryFromDisk() => DeeperModel?.ReloadLibrary();
 
