@@ -50,7 +50,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                     if (_isLoading) return;
                     var paused = ChkPauseBrowserCompanion.IsChecked == true;
                     if (TopLevel.GetTopLevel(this) is Windows.MainShellWindow shell)
+                    {
                         await shell.SetBrowserPausedFromWorkshopAsync(paused);
+                        shell.Tube?.SetBrowserPaused(paused);
+                    }
                 };
 
             SyncFromSettings();
@@ -108,9 +111,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 // Paint the midnight-glass row from the two facts that govern it: does the player own
                 // tube_midnight, and did they ask for it. Ownership failing to read answers "no",
                 // which greys the row - the honest state for a prize we cannot prove was sold.
-                // ponytail: needs ArcademyHostService.WalletOwnsSku (ConditioningControlPanel/Services/
-                // Arcademy/ArcademyHostService.cs), still in the WPF head; the SKU itself is in Core.
-                bool owned = false;
+                // WPF ArcademyHostService.cs:905: persisted ownership when Arcademy is closed.
+                bool owned = global::ConditioningControlPanel.Services.Arcademy.ArcademyMetaStore.WalletOwnsOnDisk(
+                    global::ConditioningControlPanel.Services.Arcademy.ArcademyEconomy.SkuTubeMidnight);
                 ChkTubeMidnightGlass.IsEnabled = owned;
                 ChkTubeMidnightGlass.IsChecked = owned && s.TubeMidnightGlass;
             }
@@ -120,6 +123,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 Log.Debug(ex, "WorkshopBehaviorCell.SyncFromSettings failed");
             }
             finally { _isLoading = false; }
+        }
+
+        // WPF MainWindow.Patreon.cs:2179: mirror without dispatching a second pause.
+        internal void SetPauseBrowserChecked(bool paused)
+        {
+            var loading = _isLoading;
+            _isLoading = true;
+            try { ChkPauseBrowserCompanion.IsChecked = paused; }
+            finally { _isLoading = loading; }
         }
 
         /// <summary>
@@ -162,11 +174,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             // part of the prescribed dose and is locked while one runs.
             CoreSettings.Current.SubAudioMuted = ChkMuteWhispersCompanion.IsChecked == true;
             CoreSettings.Save();
-            // ponytail: WPF also refreshes the tube's quick menu. AvatarTubeWindow.UpdateQuickMenuState
-            // exists on this head and is private AND deliberately inert - it needs App.Engine and
-            // App.Companion for the item titles, which have no seam, so retitling from settings
-            // alone would print a menu that disagrees with the engine. Calling it would change
-            // nothing; it is not called for that reason, not because the tube is missing.
+            // WPF MainWindow.Patreon.cs:2119: refresh the open tube's whisper mute item.
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.Tube?.UpdateQuickMenuState();
         }
 
         // #846: mute only the spoken voicelines - the bubble, its text and the giggle cues stay.

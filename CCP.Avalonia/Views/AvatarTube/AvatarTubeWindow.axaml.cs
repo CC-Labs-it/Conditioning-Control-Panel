@@ -938,6 +938,20 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private static bool ModOverridesAttachedTubeOnly()
             => CoreModArt.HasOverride("tube.png") && !CoreModArt.HasOverride("tube2.png");
 
+        /// <summary>WPF MidnightGlassWanted (Windowing.cs:2040): a mod tube wins, then the player's
+        /// switch, then the Prize Counter's sale. Never throws.</summary>
+        internal static bool MidnightGlassWanted()
+        {
+            try
+            {
+                if (CoreModArt.HasOverride("tube.png") || CoreModArt.HasOverride("tube2.png")) return false;
+                if (CoreSettings.Current.TubeMidnightGlass != true) return false;
+                return global::ConditioningControlPanel.Services.Arcademy.ArcademyMetaStore.WalletOwnsOnDisk(
+                    global::ConditioningControlPanel.Services.Arcademy.ArcademyEconomy.SkuTubeMidnight);
+            }
+            catch { return false; }
+        }
+
         // =========================================================================================
         //  Tube glass and avatar art. PORTED from AvatarTubeWindow.Windowing.cs (SetTubeStyle) and
         //  Avatar.cs (LoadAvatarPoses / ApplyAvatarTransform / UpdateTitleDisplay).
@@ -946,13 +960,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>
         /// Points ImgTubeFrame at tube.png or tube2.png - the mod's replacement if it ships one,
         /// else this head's own shipped copy. A mod that overrides only the attached pane owns both
-        /// states (see <see cref="ModOverridesAttachedTubeOnly"/>).
-        ///
-        /// <para>ponytail: the MIDNIGHT glass pair is deliberately not here. WPF gates it on
-        /// <c>ArcademyHostService.WalletOwnsSku(SkuTubeMidnight)</c> - a purchased cosmetic - and
-        /// this head has no wallet seam, so the only answers available are "always show it" or
-        /// "never". Showing a player glass they have not bought is the worse of the two lies, so
-        /// the standard pair it is until an entitlement seam exists.</para>
+        /// states (see <see cref="ModOverridesAttachedTubeOnly"/>). When the midnight glass is bought
+        /// and switched on, their <c>*_midnight.png</c> siblings instead; a miss falls back to standard.
         /// </summary>
         public void SetTubeStyle(bool useAlternative) => RunOnAvatar(() =>
         {
@@ -960,11 +969,17 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             {
                 if (useAlternative && ModOverridesAttachedTubeOnly()) useAlternative = false;
                 var name = useAlternative ? "tube2.png" : "tube.png";
-                var art = ModArt.TryLoad(name);
+                global::Avalonia.Media.Imaging.Bitmap? art = null;
+                if (MidnightGlassWanted())
+                {
+                    var midnightName = useAlternative ? "tube2_midnight.png" : "tube_midnight.png";
+                    art = ModArt.TryLoad(midnightName);
+                    if (art != null) name = midnightName;
+                }
+                art ??= ModArt.TryLoad(name);
                 if (art != null) _imgTubeFrame.Source = art;
                 Log.Information("Tube style changed to: {Style}", name);
-                // No midnight glass on this head (see above), so the motes are always the pink tint.
-                ApplyTubeMotes(useAlternative, midnight: false);
+                ApplyTubeMotes(useAlternative, name.Contains("_midnight"));
             }
             catch (Exception ex) { Log.Warning(ex, "Failed to change tube style"); }
         });
