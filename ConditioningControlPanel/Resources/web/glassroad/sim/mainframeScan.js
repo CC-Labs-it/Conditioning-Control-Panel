@@ -46,7 +46,7 @@ export function createMainframeScan(track, events) {
   let lastT = null, safeUntil = -Infinity;
   const api = { ready: true, hits: 0, update, reset };
   function reset() { previous.clear(); latched.clear(); lastT = null; safeUntil = -Infinity; api.ready = true; api.hits = 0; }
-  function update(racers, timeS, bpm = 120) {
+  function update(racers, timeS, bpm = 120, { immune } = {}) {
     if (!zones.length || !Number.isFinite(timeS)) return;
     // A seek or loop must show a full bar of warning before contact becomes live again.
     if (lastT !== null && (timeS < lastT - 0.02 || timeS - lastT > 0.5)) {
@@ -58,7 +58,7 @@ export function createMainframeScan(track, events) {
       const now = { s: st[S.s], x: st[S.lateral], h: st[S.height], t: timeS };
       const prev = previous.get(id) || now;
       previous.set(id, now);
-      if (racer.kind === 'remote' || racer.finished || st[S.respawnPhase] !== RESPAWN.NONE || !api.ready) continue;
+      if (racer.kind === 'remote' || racer.finished || st[S.respawnPhase] !== RESPAWN.NONE || !api.ready || immune?.(racer)) continue;
       // Teleports and lap wraps never draw a collision line through the rest of the course.
       const ds = now.s - prev.s;
       for (const zone of zones) {

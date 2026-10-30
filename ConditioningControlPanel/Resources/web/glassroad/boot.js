@@ -1622,8 +1622,8 @@ async function boot(course, options, lifetime, isCurrent) {
       debug.cleanTopMps = P.feel.get('speed.topMps');
       if (race.phase === 'racing' || race.phase === 'finished') {
         const sc = scanClock(online ? null : audio.music, racers.clockS, online ? 1 : MACHINERY_PACE);
-        scan.update(racers.list, sc.timeS, sc.bpm);
-        perfume.update(racers.list, racers.clockS, clock.dt);
+        scan.update(racers.list, sc.timeS, sc.bpm, { immune: (r) => !!items?.tunnel?.riding?.(r.i) });
+        perfume.update(racers.list, racers.clockS, clock.dt, { immune: (r) => !!items?.tunnel?.riding?.(r.i) });
       }
       contact.update(clock.dt, racers.list, race);                //    bumps, ghosts, slipstream
       standings.update(racers.list, race, clock.dt);              //    places, race-result
