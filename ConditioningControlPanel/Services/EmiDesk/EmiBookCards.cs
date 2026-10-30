@@ -178,6 +178,7 @@ public static class EmiBookCards
         all.AddRange(EmiBookDeckMachines.Cards);
         all.AddRange(EmiBookDeckControl.Cards);
         all.AddRange(EmiBookDeckPlaces.Cards);
+        all.AddRange(EmiBookDeckShop.Cards);
         return all.OrderBy(c => c.Tab).ToList();
     }
 
