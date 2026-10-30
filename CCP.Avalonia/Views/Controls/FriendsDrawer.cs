@@ -10,6 +10,7 @@
 // (the corner notices are not on this head). A word WPF throws outside the drawer
 // (FriendsLanding.Tell) is a FloatingWord over the rail chip's window (OwnerWindow).
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using Avalonia.Input.Platform;
 using System.Threading.Tasks;
@@ -373,6 +374,7 @@ public sealed partial class FriendsDrawer : Border
             Tag = "friends-row:" + f.Id, Child = outer, ContextMenu = Menu(f),
         };
         if (table != null && !open) DressHostingRow(row);
+        AttachHover(row, open);
         // A click on the row (not inside the open card) opens or folds its card.
         top.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) { Toggle(f.Id); e.Handled = true; } };
         return row;
@@ -485,12 +487,12 @@ public sealed partial class FriendsDrawer : Border
         else ShowTimed(f.Id, Loc.Get(FriendsDrawerRules.ActResultKey(r)), false);
         await SafeRefreshAsync();
     }
-    internal async Task<ActResult> ReportAsync(string friendId, string reason)
+    internal async Task<ActResult> ReportAsync(string friendId, string reason, string? rowId = null)
     {
         if (_svc == null) return ActResult.TryLater;
         ActResult r;
         try { r = await _svc.ReportAsync(friendId, reason); } catch { r = ActResult.TryLater; }
-        ShowTimed(friendId, Loc.Get(r == ActResult.Done ? "friends_report_done" : FriendsDrawerRules.ActResultKey(r)), r == ActResult.Done);
+        ShowTimed(rowId ?? friendId, Loc.Get(r == ActResult.Done ? "friends_report_done" : FriendsDrawerRules.ActResultKey(r)), r == ActResult.Done);
         return r;
     }
 
@@ -535,8 +537,33 @@ public sealed partial class FriendsDrawer : Border
             var decline = Pill(Loc.Get("friends_request_decline"), Raised, Text, "friends-decline");
             decline.Margin = new Thickness(6, 0, 0, 0);
             decline.Click += async (_, _) => await AnswerRequestAsync(r, "decline");
+            var more = Pill(new IconGlyph { Kind = IconKind.MoreHorizontal, Size = 11 }, Brushes.Transparent, Muted, "friends-request-more");
+            more.Padding = new Thickness(5, 4, 5, 4);
+            more.Margin = new Thickness(2, 0, 0, 0);
+            ToolTip.SetTip(more, Loc.Get("friends_action_more"));
+            AutomationProperties.SetName(more, Loc.Get("friends_action_more"));
+            more.ContextMenu = RequestMenu(r);
+            more.Click += (_, _) => more.ContextMenu.Open(more);
             buttons.Children.Add(accept);
             buttons.Children.Add(decline);
+            buttons.Children.Add(more);
+            // WPF keeps the age readable when translated action labels grow too wide.
+            if (agoKey != null)
+            {
+                var need = Label(Loc.GetF("friends_notice_minutes", 59) + "…", 11.5, Muted);
+                need.Measure(Size.Infinity);
+                double buttonsWidth = 0;
+                foreach (var button in new[] { accept, decline, more })
+                {
+                    var content = (Control)button.Content!;
+                    content.Measure(Size.Infinity);
+                    buttonsWidth += content.DesiredSize.Width + button.Padding.Left + button.Padding.Right
+                        + button.BorderThickness.Left + button.BorderThickness.Right + button.Margin.Left + button.Margin.Right;
+                }
+                double room = DrawerWidth - 2 - 12 - 16 - 16 - 38 - 16;
+                if (buttonsWidth + need.DesiredSize.Width > room)
+                    accept.Padding = decline.Padding = new Thickness(5, 3, 5, 3);
+            }
         }
         else
         {
@@ -546,20 +573,38 @@ public sealed partial class FriendsDrawer : Border
         }
         Grid.SetColumn(mid, 1);
         Grid.SetColumn(buttons, 2);
-        ContextMenu? menu = null;
-        if (incoming)   // WPF FriendsDrawer.cs:785-818 builds the menu for incoming requests only
+        var row = new Border
         {
-            var block = MenuItem("block");
-            block.Click += async (_, _) => await BlockRequesterAsync(r);
-            menu = new ContextMenu { ItemsSource = new[] { block } };
-        }
-        return new Border
-        {
-            ContextMenu = menu,
+            ContextMenu = incoming ? RequestMenu(r) : null,
             CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 1),
             Tag = (incoming ? "friends-request-in:" : "friends-request-out:") + r.Id,
             Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto"), Children = { Avatar(r.Name, 38, null), mid, buttons } },
         };
+        AttachHover(row, false);
+        return row;
+    }
+
+    // WPF FriendsDrawer.Honesty.cs:80-115 and .Blocked.cs:126-131: both request doors expose Block and Report.
+    private ContextMenu RequestMenu(FriendRequest request)
+    {
+        var block = MenuItem("block");
+        block.Click += async (_, _) => await BlockRequesterAsync(request);
+        var report = MenuItem("report");
+        report.ItemsSource = ReportReason.All.Select(reason =>
+        {
+            var item = MenuItem("report_" + reason);
+            item.Click += async (_, _) => await ReportAsync(request.Id, reason, "in:" + request.Id);
+            return item;
+        }).ToArray();
+        return new ContextMenu { ItemsSource = new[] { block, report } };
+    }
+
+    // WPF FriendsDrawer.Juice.cs:93-102. The animated sweep is deferred.
+    private static void AttachHover(Border row, bool open)
+    {
+        var rest = row.Background;
+        row.PointerEntered += (_, _) => { if (!open) row.Background = Hover; };
+        row.PointerExited += (_, _) => { if (!open) row.Background = rest; };
     }
 
     private void RememberBlock(string id, string name)
@@ -664,7 +709,7 @@ public sealed partial class FriendsDrawer : Border
         {
             // Your code on a row of its own: it is what a friend types to add you.
             var code = snap.MyCode;
-            var copied = Label(Loc.Get("friends_my_code"), 9, Dim, Mono);
+            var copied = Tagged(Label(Loc.Get("friends_my_code"), 9, Dim, Mono), "friends-copy-label");
             copied.VerticalAlignment = VerticalAlignment.Center;
             var copy = Pill(new IconGlyph { Kind = IconKind.Copy, Size = 11 }, Brushes.Transparent, Muted, "friends-copy");   // WPF E8C8
             ToolTip.SetTip(copy, Loc.Get("friends_copy"));
@@ -674,6 +719,9 @@ public sealed partial class FriendsDrawer : Border
                 try { await (TopLevel.GetTopLevel(this)?.Clipboard?.SetTextAsync(code) ?? Task.CompletedTask); } catch { return; }
                 copied.Text = Loc.Get("friends_copied");
                 copied.Foreground = Mint;
+                _copyReset?.Dispose();
+                // WPF FriendsDrawer.cs:985-995: restore the label after two seconds.
+                _copyReset = After(() => { copied.Text = Loc.Get("friends_my_code"); copied.Foreground = Dim; }, TimeSpan.FromSeconds(2));
             };
             var mine = new StackPanel { Orientation = Orientation.Horizontal, Children = { Tagged(Label(code, 12, Lilac, Mono, FontWeight.SemiBold), "friends-my-code"), copy } };
             mine.VerticalAlignment = VerticalAlignment.Center;
@@ -701,11 +749,17 @@ public sealed partial class FriendsDrawer : Border
     }
 
 
+    private IDisposable? _copyReset;
+
+    /// <summary>One-shot UI timer for the copy reset and result holds; tests swap it to step time (P08).</summary>
+    internal Func<Action, TimeSpan, IDisposable> After { get; set; } = (a, t) => DispatcherTimer.RunOnce(a, t);
+    private readonly Dictionary<string, IDisposable> _resultTimers = new();
     private void ShowTimed(string rowId, string text, bool good)
     {
+        if (_resultTimers.Remove(rowId, out var previous)) previous.Dispose();
         _results[rowId] = (text, good);
         Render();
-        DispatcherTimer.RunOnce(() => { if (_results.TryGetValue(rowId, out var cur) && cur.Text == text) { _results.Remove(rowId); Render(); } },
+        _resultTimers[rowId] = After(() => { _resultTimers.Remove(rowId); if (_results.Remove(rowId)) Render(); },
             TimeSpan.FromSeconds(FriendsDrawerRules.ResultHoldSeconds));
     }
     /// <summary>The window a word outside the drawer flies over. The drawer lives in a popup (not a Window) and is
