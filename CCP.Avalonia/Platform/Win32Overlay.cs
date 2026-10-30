@@ -46,6 +46,15 @@ internal static class Win32Overlay
 
     [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
     [DllImport("user32.dll")] private static extern bool ShowWindowAsync(IntPtr hwnd, int command);
+    // WPF Compositor/OverlayCaptureAffinity.cs:48-59: best effort, including older Windows.
+    internal static uint CaptureAffinity(bool allowCapture) => allowCapture ? 0u : ExcludeFromCapture;
+    internal static void SetCaptureAffinity(TopLevel window, uint affinity)
+    {
+        if (!OperatingSystem.IsWindows() || window.TryGetPlatformHandle() is not { HandleDescriptor: "HWND" } h || h.Handle == IntPtr.Zero) return;
+        try { SetWindowDisplayAffinity(h.Handle, affinity); }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "Brain Drain capture affinity failed"); }
+    }
+
 
     // DWM can cloak our window without waiting for its owner to process a window message.
     // The async requests finish the normal hide and unpin if the dispatcher recovers.
