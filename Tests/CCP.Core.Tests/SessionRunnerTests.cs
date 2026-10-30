@@ -70,6 +70,33 @@ public sealed class SessionRunnerTests : IDisposable
         JObject.Parse(JsonConvert.SerializeObject(CoreSettings.Current, Formatting.Indented));   // = settings.json
 
     [Fact]
+    public void Local_resume_releases_a_remote_overlay_stop_after_panic()
+    {
+        var oldRefresh = RemoteCommands.RefreshOverlays;
+        RemoteCommands.RefreshOverlays = () => { };
+        try
+        {
+            _runner.Start(OneMinute());
+            Assert.Null(RemoteCommands.Execute("show_spiral", null));
+            _runner.Pause();
+            CoreEngine.Stop();
+            Assert.True(RemoteCommands.OverlaysStopped);
+            _runner.Resume();
+            Assert.False(RemoteCommands.OverlaysStopped);
+            Assert.Null(RemoteCommands.Execute("show_spiral", null));
+            RemoteCommands.StopOverlays();
+            Assert.True(RemoteCommands.OverlaysStopped);
+            CoreEngine.Start();
+            Assert.False(RemoteCommands.OverlaysStopped);
+        }
+        finally
+        {
+            RemoteCommands.StopOverlays(); RemoteCommands.ReleaseOverlayStop();
+            RemoteCommands.RefreshOverlays = oldRefresh;
+        }
+    }
+
+    [Fact]
     public void OneMinuteSession_CompletesByTick_SavesLog_RestoresSettings_ReleasesPools()
     {
         var s = CoreSettings.Current;

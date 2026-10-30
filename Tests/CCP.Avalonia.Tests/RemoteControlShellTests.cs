@@ -27,6 +27,24 @@ namespace CCP.Avalonia.Tests;
 /// MainWindow.RemoteControl.cs overlay, toast, Start lock, big emotes and End Session.</summary>
 public sealed class RemoteControlShellTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task Remote_overlay_lifetime_reaches_existing_hosts(bool pink) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        CoreSession.IsEngineRunningProvider = () => false;
+        RemoteCommands.RefreshOverlays = () => { };
+        var type = pink ? typeof(ConditioningControlPanel.Avalonia.Views.Overlays.PinkFilterOverlay)
+            : typeof(ConditioningControlPanel.Avalonia.Views.Overlays.SpiralOverlay);
+        var gate = type.GetMethod("ShouldShow", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        Assert.False((bool)gate.Invoke(null, null)!);
+        Assert.Null(RemoteCommands.Execute(pink ? "show_pink_filter" : "show_spiral", null));
+        Assert.True((bool)gate.Invoke(null, null)!);
+        CoreEngine.Stop();
+        Assert.False((bool)gate.Invoke(null, null)!);
+        return Task.CompletedTask;
+    });
+
     private sealed class FakeRelay : HttpMessageHandler
     {
         public readonly List<string> Paths = new();
@@ -51,13 +69,13 @@ public sealed class RemoteControlShellTests
     [Fact]
     public Task Controller_gets_the_overlay_toast_start_lock_emotes_and_end_session() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        AmbientBeatLoopsTests.Setup();
         var (oldRelay, oldTime, oldProvider) = (RemoteControlTabView.Relay, MainShellWindow.RemoteOverlayTime, CoreSettings.ServiceProvider);
         var oldSink = global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink;
         var notified = new List<string>();
+        var oldAttention = MainShellWindow.RemoteJoinAttention;
+        var attention = 0;
+        MainShellWindow.RemoteJoinAttention = _ => attention++;
         global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = (t, b) => { lock (notified) notified.Add($"{t}|{b}"); };
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
@@ -72,6 +90,7 @@ public sealed class RemoteControlShellTests
         try
         {
             shell = new MainShellWindow();
+            Assert.NotNull(RemoteCommands.RefreshOverlays);
             shell.Show();
             Dispatcher.UIThread.RunJobs();
             var overlay = shell.Named<Border>("RemoteControlOverlay")!;
@@ -87,8 +106,16 @@ public sealed class RemoteControlShellTests
             lock (notified)
                 Assert.Equal(new[] { $"{Loc.Get("title_remote_controller_joined")}|{Loc.Get("msg_remote_controller_joined")}" }, notified);
 
+            Assert.Equal(0, attention); // visible joins notify without flashing or restoring
+            shell.WindowState = WindowState.Minimized; // Hide()+Show() threw "Cannot re-show a closed window" headless
+            shell.OnRemoteControllerChanged();
+            Assert.Equal(1, attention);
+            Assert.Equal(WindowState.Minimized, shell.WindowState); // a join never restores the subject's window
+            shell.WindowState = WindowState.Normal;
+
             // Overlay up with code + PIN; Start disabled, green, "REMOTE CONNECTED" (WPF StartStop.cs:992).
             Assert.True(overlay.IsVisible);
+            Assert.False(shell.LeashBrowser!.IsVisible); // native browser must not paint over the remote card
             Assert.Equal(1, Target(overlay));
             Assert.Equal($"Session: A B C 1 2 3  PIN: {relay.ConnectPin}", shell.Named<TextBlock>("TxtOverlaySessionCode")!.Text);
             Assert.False(start.IsEnabled);
@@ -145,6 +172,18 @@ public sealed class RemoteControlShellTests
             Assert.Equal("", box.Text);
             Assert.Equal("on my way", box.Watermark);
 
+            // A reconnect during the exit fade cancels the pending browser restoration.
+            f.Poll = "{\"controller_connected\":false}";
+            await relay.PollOnceAsync(); Dispatcher.UIThread.RunJobs();
+            Assert.False(shell.LeashBrowser!.IsVisible);
+            clock.Step(TimeSpan.FromMilliseconds(100));
+            f.Poll = "{\"controller_connected\":true}";
+            await relay.PollOnceAsync(); Dispatcher.UIThread.RunJobs();
+            clock.Step(MainShellWindow.RemoteOverlayFadeOut);
+            shell.RemoteOverlayTick();
+            Assert.True(overlay.IsVisible);
+            Assert.False(shell.LeashBrowser.IsVisible);
+
             // End Session: the relay stops, the overlay fades 200 ms then goes, Start comes back.
             var end = overlay.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == Loc.Get("btn_end_session"));
             end.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -156,12 +195,25 @@ public sealed class RemoteControlShellTests
             clock.Step(MainShellWindow.RemoteOverlayFadeOut);
             shell.RemoteOverlayTick();
             Assert.False(overlay.IsVisible);
+            Assert.True(shell.LeashBrowser!.IsVisible); // restore only after the 200 ms fade
             Assert.True(start.IsEnabled);
             Assert.Equal(Loc.Get("label_start"), shell.Named<TextBlock>("TxtStartLabel")!.Text);
+            // Remote exit hands its blindfold to an open leash gate; dismissing that gate restores it.
+            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            typeof(MainShellWindow).GetMethod("ShowRemoteControlOverlay", flags)!.Invoke(shell, null);
+            shell.LeashGate!.IsVisible = true;
+            typeof(MainShellWindow).GetMethod("HideRemoteControlOverlay", flags)!.Invoke(shell, null);
+            clock.Step(MainShellWindow.RemoteOverlayFadeOut);
+            shell.RemoteOverlayTick();
+            Assert.False(shell.LeashBrowser.IsVisible);
+            typeof(MainShellWindow).GetMethod("HideLeashGate", flags)!.Invoke(shell, null);
+            Assert.True(shell.LeashBrowser.IsVisible);
+
         }
         finally
         {
             shell?.Close();
+            MainShellWindow.RemoteJoinAttention = oldAttention;
             relay.Dispose();
             (RemoteControlTabView.Relay, MainShellWindow.RemoteOverlayTime, CoreSettings.ServiceProvider) = (oldRelay, oldTime, oldProvider);
             global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = oldSink;

@@ -45,6 +45,8 @@ public class TestIsolationTests
     [InlineData(typeof(AvApp), nameof(AvApp.Brain))]
     [InlineData(typeof(ConditioningControlPanel.Services.LockdownService), nameof(ConditioningControlPanel.Services.LockdownService.Current))]
     [InlineData(typeof(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay), "PanicListenerLive")]
+    [InlineData(typeof(ConditioningControlPanel.Services.RemoteCommands), "OverlayRunning")]
+    [InlineData(typeof(ConditioningControlPanel.Services.RemoteCommands), "OverlaysStopped")]
     public void TheHookCoversEverySeamThatLeakedBefore(System.Type type, string member) =>
         Assert.Contains(ProcessStateSnapshot.Members.Value, m => m.DeclaringType == type && m.Name == member);
 

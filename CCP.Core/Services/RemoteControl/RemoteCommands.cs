@@ -8,7 +8,7 @@ namespace ConditioningControlPanel.Services
     /// WPF RemoteControlService.ExecuteCommand's dispatch table for the features Core drives. Runs on the
     /// UI thread (RemoteRelay marshals). Returns null when the verb ran, else the refusal the controller
     /// sees: a verb with no surface on this head says so rather than reporting "ok" and doing nothing.
-    /// ponytail: pink filter, spiral, opacity, HypnoTube, autonomy, mind wipe, Melt (start/stop_brain_drain),
+    /// ponytail: HypnoTube, autonomy, Melt (start/stop_brain_drain),
     /// wallpaper and the session verbs have no Core entry point yet; they refuse until their services move.
     /// </summary>
     public static class RemoteCommands
@@ -42,6 +42,51 @@ namespace ConditioningControlPanel.Services
         /// (no HUD), so the scale stays 1.</summary>
         internal static Remote.CoreRemoteHapticDriver RemoteHaptics = new(() => 1.0);   // tests swap in a stepped clock
 
+        /// <summary>WPF EnsureOverlayRunning: a controller can show overlays with the engine stopped.
+        /// The head refreshes its existing hosts; Core never owns a window.</summary>
+        public static Action? RefreshOverlays;
+        public static bool OverlayRunning { get; private set; }
+        public static bool OverlaysStopped { get; private set; }
+        public static void ReleaseOverlayStop() => OverlaysStopped = false;
+
+        public static void StopOverlays()
+        {
+            if (!OverlayRunning && !OverlaysStopped) return;
+            OverlayRunning = false;
+            OverlaysStopped = true;
+            try { RefreshOverlays?.Invoke(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] overlay stop failed"); }
+        }
+
+        private static string? OverlayCommand(string action, JObject? p)
+        {
+            // Do not promise a surface on heads that did not seed one.
+            if (RefreshOverlays == null) return NotOnThisBuild;
+            var s = CoreSettings.Current;
+            switch (action)
+            {
+                case "show_pink_filter": Remote.RemoteWearer.NoteWrite(Remote.RemoteHeld.Pink, 1); s.PinkFilterEnabled = true; break;
+                case "stop_pink_filter": Remote.RemoteWearer.NoteWrite(Remote.RemoteHeld.Pink, 0); s.PinkFilterEnabled = false; break;
+                case "show_spiral": Remote.RemoteWearer.NoteWrite(Remote.RemoteHeld.Spiral, 1); s.SpiralEnabled = true; break;
+                case "stop_spiral": Remote.RemoteWearer.NoteWrite(Remote.RemoteHeld.Spiral, 0); s.SpiralEnabled = false; break;
+                case "set_pink_opacity":
+                    if (p == null) return null; // WPF null params is a no-op
+                    var pink = Math.Clamp(p["value"]?.Value<int>() ?? 25, 0, 50);
+                    Remote.RemoteWearer.NoteWrite(Remote.RemoteHeld.PinkOpacity, pink);
+                    s.PinkFilterOpacity = pink; break;
+                case "set_spiral_opacity":
+                    if (p == null) return null;
+                    var spiral = Math.Clamp(p["value"]?.Value<int>() ?? 25, 0, 100);
+                    Remote.RemoteWearer.NoteWrite(Remote.RemoteHeld.SpiralOpacity, spiral);
+                    s.SpiralOpacity = spiral; break;
+            }
+            OverlayRunning = true;
+            OverlaysStopped = false;
+            RefreshOverlays();
+            CoreSettings.Save();
+            return null;
+        }
+
         private static int _panicGeneration;
         /// <summary>Moves on every panic: a command fetched before it never runs after it (RemoteRelay).</summary>
         public static int PanicGeneration => Volatile.Read(ref _panicGeneration);
@@ -60,6 +105,10 @@ namespace ConditioningControlPanel.Services
             var s = CoreSettings.Current;
             switch (action)
             {
+                case "show_pink_filter": case "stop_pink_filter":
+                case "show_spiral": case "stop_spiral":
+                case "set_pink_opacity": case "set_spiral_opacity":
+                    return OverlayCommand(action, p);
                 case "trigger_flash":
                     if (CoreFlash.ShowProvider is not { } flash) return NotOnThisBuild;
                     flash();
@@ -83,6 +132,15 @@ namespace ConditioningControlPanel.Services
                 case "start_video": if (CoreEngine.Video == null) return NotOnThisBuild; CoreEngine.Video.Start(); return null;
                 case "stop_video": CoreEngine.Video?.Stop(); return null;
                 case "trigger_bubble_count": if (CoreEngine.BubbleCount == null) return NotOnThisBuild; CoreEngine.BubbleCount.Trigger(forceTest: true); return null;
+                case "trigger_mind_wipe":
+                    if (CoreMindWipe.TriggerOnceProvider == null) return NotOnThisBuild;
+                    if (CoreMindWipe.ClipCount > 0) CoreMindWipe.TriggerOnce();
+                    return null;
+                case "start_mind_wipe":
+                    if (CoreMindWipe.StartProvider == null) return NotOnThisBuild;
+                    CoreMindWipe.Start(s.MindWipeFrequency, s.MindWipeVolume / 100.0);
+                    return null;
+                case "stop_mind_wipe": CoreMindWipe.Stop(); return null;
                 case "start_lock_card": s.LockCardEnabled = true; LockCardScheduler.Instance.Start(); return null;
                 case "stop_lock_card": LockCardScheduler.Instance.Stop(); return null;
                 case "trigger_haptic":
@@ -121,16 +179,18 @@ namespace ConditioningControlPanel.Services
             if (force) StopHaptics(); else RemoteHaptics.Stop();
             try { CoreHaptics.Service?.PanicStop(); } catch { }
             CoreAudio.Unduck();
+            // Keep the base's wearer restoration; never clear the subject's saved switches.
+            if (force || !CoreEngine.IsRunning) StopOverlays();
             if (force) CoreEngine.Stop();
             else
             {
                 CoreFlash.Stop(); CoreSubliminal.Stop(); CoreBubbles.Stop(); CoreBouncingText.Stop();
-                CoreEngine.Video?.Stop(); CoreEngine.BubbleCount?.Stop(); LockCardScheduler.Instance.Stop();
+                CoreEngine.Video?.Stop(); CoreEngine.BubbleCount?.Stop(); LockCardScheduler.Instance.Stop(); CoreMindWipe.Stop();
             }
             // WPF (main 4adc4c476, 2a712d9da): never a blanket strict-off. The strict lock goes back to the
             // wearer's own (a running Lockdown keeps the one it forced, its record corrected), the panic key
             // comes back on except while a running Lockdown holds it off; its own end restores it.
-            Remote.RemoteWearer.HandBackAllButStrict();
+            if (Remote.RemoteWearer.HandBackAllButStrict() > 0) RefreshOverlays?.Invoke();
             Remote.RemoteWearer.ReleaseSafetyState();
         }
 
