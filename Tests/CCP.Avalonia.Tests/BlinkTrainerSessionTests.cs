@@ -221,6 +221,94 @@ public sealed class BlinkTrainerSessionTests
         return done();
     }
 
+    // 1x1, two frames (red, then blue), 100 ms each; the MiniPlayerPreviewTests fixture.
+    private static readonly byte[] TwoFrameGif =
+    {
+        0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00,
+        0xFF, 0x00, 0x00, 0x00, 0x00, 0xFF,
+        0x21, 0xFF, 0x0B, 0x4E, 0x45, 0x54, 0x53, 0x43, 0x41, 0x50, 0x45, 0x32, 0x2E, 0x30, 0x03, 0x01, 0x00, 0x00, 0x00,
+        0x21, 0xF9, 0x04, 0x00, 0x0A, 0x00, 0x00, 0x00,
+        0x2C, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x44, 0x01, 0x00,
+        0x21, 0xF9, 0x04, 0x00, 0x0A, 0x00, 0x00, 0x00,
+        0x2C, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x4C, 0x01, 0x00,
+        0x3B,
+    };
+
+    /// <summary>WPF BuildTile -> AnimatedWebp.AttachAnimation: a GIF tile loops on the overlay; Stop drops the loop.</summary>
+    [Theory]
+    [InlineData(".gif")]
+    [InlineData(".webp")]
+    public async System.Threading.Tasks.Task AnimatedAsset_LoopsOnTheOverlay_AndStopDropsTheLoop(string extension)
+    {
+        await WithSessionAsync(async (dir, made) =>
+        {
+            File.Delete(Path.Combine(dir, "a.png"));
+            // Two lossless WebP frames, red then blue, 100 ms each.
+            var webp = Convert.FromBase64String("UklGRoQAAABXRUJQVlA4WAoAAAACAAAAAAAAAAAAQU5JTQYAAAAAAAAAAABBTk1GKAAAAAAAAAAAAAAAAAAAAGQAAAJWUDhMDwAAAC8AAAAABxD9j/4HIqL/AQBBTk1GKAAAAAAAAAAAAAAAAAAAAGQAAABWUDhMDwAAAC8AAAAABxDR//4HIqL/AQA=");
+            File.WriteAllBytes(Path.Combine(dir, "loop" + extension), extension == ".gif" ? TwoFrameGif : webp);
+            Assert.True(WebcamTracker.Instance.Start());
+            Assert.True(BlinkTrainerSession.Start(new Window()));
+            await BlinkTrainerSession.AnimationDecode;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(BlinkTrainerSession.AnimatedTiles > 0);
+            var child = Assert.Single(Assert.Single(made).Host.Children);
+            var tile = child as Image ?? ((UniformGrid)child).Children.OfType<Image>().First();
+            var shown = tile.Source;
+            BlinkTrainerSession.StepAnimations();
+            Assert.NotNull(tile.Source);
+            Assert.NotSame(shown, tile.Source);
+            BlinkTrainerSession.Stop();
+            Assert.Equal(0, BlinkTrainerSession.AnimatedTiles);
+        });
+    }
+
+    /// <summary>WPF BlinkTrainerService.Start -> SeasonRecapService.TrackFeature(BlinkTrainer): the e_bl day-log event.</summary>
+    [Fact]
+    public void SessionStart_CreditsTheBlinkDayLogEvent()
+    {
+        WithSession((dir, _) =>
+        {
+            var prop = typeof(AvApp).GetProperty("FeatureDayLog", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+            var oldLog = prop.GetValue(null);
+            using var log = new FeatureDayLogService(() => null, Path.Combine(dir, "feature_day_log.json"));
+            prop.SetValue(null, log);
+            try
+            {
+                Assert.True(WebcamTracker.Instance.Start());
+                Assert.True(BlinkTrainerSession.Start(new Window()));
+                var today = DateTime.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                Assert.Equal(1, log.Log.GetOrAddDay(today).Get("e_bl"));
+            }
+            finally
+            {
+                BlinkTrainerSession.Stop();
+                prop.SetValue(null, oldLog);
+            }
+        });
+    }
+
+    [Fact]
+    public void SessionScreens_ExplicitPickWinsOverDual_AndUnpluggedPickUsesPrimary() => AvaloniaTestDispatcher.Run(() =>
+    {
+        LabWebcamStatusTests.Setup();
+        var template = new Window().Screens.All.First();
+        Screen Display(int x, bool primary)
+        {
+            var screen = (Screen)typeof(object).GetMethod("MemberwiseClone", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(template, null)!;
+            typeof(Screen).GetProperty(nameof(Screen.IsPrimary))!.SetValue(screen, primary);
+            typeof(Screen).GetProperty(nameof(Screen.DisplayName))!.SetValue(screen, $"display-{x}");
+            return screen;
+        }
+        var primary = Display(0, true);
+        var second = Display(1920, false);
+        var screens = new[] { second, primary };
+        Assert.Equal(new[] { second }, BlinkTrainerSession.ResolveScreens(screens, WebcamScreens.Name(second), true));
+        Assert.Equal(new[] { primary }, BlinkTrainerSession.ResolveScreens(screens, "unplugged", true));
+        Assert.Equal(screens, BlinkTrainerSession.ResolveScreens(screens, "Primary", true));
+        Assert.Equal(new[] { primary }, BlinkTrainerSession.ResolveScreens(screens, "Primary", false));
+        Assert.Empty(BlinkTrainerSession.ResolveScreens(Array.Empty<Screen>(), "unplugged", true));
+    });
+
     [Fact]
     public void Revoke_DeletesTheCalibrationFile()
     {

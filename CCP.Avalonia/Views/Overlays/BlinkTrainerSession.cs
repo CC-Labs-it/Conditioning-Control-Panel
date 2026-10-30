@@ -13,7 +13,6 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
-using ConditioningControlPanel.Services.UI;               // MonitorTarget
 using ConditioningControlPanel.Services.Webcam;
 using LibVLCSharp.Shared;
 using Serilog;
@@ -25,10 +24,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// transparent, topmost, click-through overlay per screen shows a random pool asset and swaps it on
     /// every <see cref="WebcamTracker.OnBlink"/>; auto-stops after the configured duration.
     /// Same refusals as <see cref="PinkFilterOverlay"/>: no click-through or no transparency = no overlay.
-    /// ponytail: GIF/animated webp show their first frame (no animated decoder on this head); mix mode
-    /// prefers same-aspect images only among those already shown (WPF warms the aspect cache in the
-    /// background); the explicit "Tracking monitor" pick is not offered on this head, so placement is
-    /// always the app-wide convention; SeasonRecapService.TrackFeature is head-side on WPF.
+    /// GIF/WebP session tiles loop using the shared SpiralOverlay decoder (WPF BuildTile :543).
+    /// Mix mode prefers same-aspect images among those already shown; WPF warms its cache.
     /// </summary>
     internal static class BlinkTrainerSession
     {
@@ -132,6 +129,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _duration.Tick += (_, _) => { Log.Information("BlinkTrainer: duration elapsed — auto-stopping"); Stop(); };
                 _duration.Start();
                 IsRunning = true;
+                // WPF BlinkTrainerService.cs:177 -> SeasonRecapService.cs:187: BlinkTrainer is
+                // a day-log event, not a Catalog feature, so it never increments the recap bucket.
+                try { App.FeatureDayLog?.Note(ConditioningControlPanel.Models.SeasonFeatureKeys.ToDayLogEvent(
+                    ConditioningControlPanel.Models.SeasonFeatureKeys.BlinkTrainer)!); }
+                catch (Exception ex) { Log.Debug("blink season credit: {E}", ex.Message); }
                 LastError = "";
                 Log.Information("BlinkTrainer: started — pool={Count} assets, duration={Mins}m, opacity={Opacity}%, screens={Screens}",
                     pool.Paths.Count, s.BlinkTrainerDurationMinutes, s.BlinkTrainerOpacity, Overlays.Count);
@@ -238,19 +240,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var aspect = lead.Size.Height > 0 ? lead.Size.Width / lead.Size.Height : 1.0;
             var (cols, rows) = BlinkTrainerState.TileGrid(aspect, ov.Aspect);
-            if (cols == 1 && rows == 1) { ov.Host.Children.Add(new Image { Source = lead, Stretch = Stretch.Uniform }); return; }
+            var tileDim = TileDecodeDim(ov, cols, rows);
+            if (cols == 1 && rows == 1) { ov.Host.Children.Add(Tile(leadPath, lead, Stretch.Uniform, tileDim)); return; }
 
             var grid = new UniformGrid { Columns = cols, Rows = rows };
             var extras = mix ? MixCandidates(leadPath, aspect) : new List<string>();
             for (int i = 0; i < cols * rows; i++)
             {
-                Bitmap? bmp = lead;
-                if (i > 0 && extras.Count > 0)
+                var bmp = lead;
+                var path = leadPath;
+                if (i > 0 && extras.Count > 0 && Load(extras[(i - 1) % extras.Count]) is { } extra)
                 {
-                    bmp = Load(extras[(i - 1) % extras.Count]) ?? lead;
-                    if (bmp != lead) Shown.Add(bmp);
+                    path = extras[(i - 1) % extras.Count];
+                    bmp = extra;
+                    Shown.Add(extra);
                 }
-                grid.Children.Add(new Image { Source = bmp, Stretch = Stretch.UniformToFill });
+                grid.Children.Add(Tile(path, bmp, Stretch.UniformToFill, tileDim));
             }
             ov.Host.Children.Add(grid);
         }
@@ -278,8 +283,95 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static void DisposeShown()
         {
+            StopAnimations();
             foreach (var b in Shown.Distinct()) b.Dispose();
             Shown.Clear();
+        }
+
+        // ---- GIF / animated webp (WPF BuildTile -> AnimatedWebp.AttachAnimation) ----------------
+
+        private sealed class Animation
+        {
+            public readonly List<Image> Tiles = new();
+            public List<Bitmap>? Frames;
+            public DispatcherTimer? Timer;
+            public int Index;
+        }
+
+        private static readonly Dictionary<string, Animation> Animations = new(StringComparer.OrdinalIgnoreCase);
+        private static int _swap;   // bumped by every swap and stop, so a late decode lands nowhere
+
+        /// <summary>The last decode started; tests await it instead of sleeping.</summary>
+        internal static System.Threading.Tasks.Task AnimationDecode { get; private set; } = System.Threading.Tasks.Task.CompletedTask;
+
+        /// <summary>Tests: how many tiles are looping.</summary>
+        internal static int AnimatedTiles => Animations.Values.Where(a => a.Timer != null).Sum(a => a.Tiles.Count);
+
+        private static bool MayAnimate(string path)
+        {
+            var ext = System.IO.Path.GetExtension(path);
+            return ext.Equals(".gif", StringComparison.OrdinalIgnoreCase) || ext.Equals(".webp", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>One tile; a .gif / .webp tile starts on its still and joins its path's loop.</summary>
+        private static Image Tile(string path, Bitmap still, Stretch stretch, int tileDim)
+        {
+            var img = new Image { Source = still, Stretch = stretch };
+            if (!MayAnimate(path)) return img;
+            if (!Animations.TryGetValue(path, out var anim))
+            {
+                Animations[path] = anim = new Animation();
+                // WPF GifDecodeDim: a GIF decodes at no more than 400 px; a webp at its cell size.
+                var dim = path.EndsWith(".gif", StringComparison.OrdinalIgnoreCase) ? Math.Min(tileDim, 400) : tileDim;
+                AnimationDecode = DecodeThenLoop(path, anim, dim, _swap);
+            }
+            anim.Tiles.Add(img);
+            return img;
+        }
+
+        private static async System.Threading.Tasks.Task DecodeThenLoop(string path, Animation anim, int dim, int swap)
+        {
+            var (frames, delay) = await System.Threading.Tasks.Task.Run(() => SpiralOverlay.Decode(path, dim, 96));
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                // A still webp decodes to one frame and keeps its still; a swap since the start drops it.
+                if (swap != _swap || frames.Count < 2) { foreach (var f in frames) f.Dispose(); return; }
+                anim.Frames = frames;
+                foreach (var t in anim.Tiles) t.Source = frames[0];
+                anim.Timer = new DispatcherTimer { Interval = delay };
+                anim.Timer.Tick += (_, _) => Step(anim);
+                anim.Timer.Start();
+            });
+        }
+
+        private static void Step(Animation anim)
+        {
+            if (anim.Frames is not { Count: > 1 } frames) return;
+            anim.Index = (anim.Index + 1) % frames.Count;
+            foreach (var t in anim.Tiles) t.Source = frames[anim.Index];
+        }
+
+        /// <summary>Tests: one frame of every loop, as the timer would.</summary>
+        internal static void StepAnimations() { foreach (var a in Animations.Values) Step(a); }
+
+        private static void StopAnimations()
+        {
+            _swap++;
+            foreach (var a in Animations.Values)
+            {
+                a.Timer?.Stop();
+                foreach (var t in a.Tiles) t.Source = null;
+                foreach (var f in a.Frames ?? new List<Bitmap>()) f.Dispose();
+            }
+            Animations.Clear();
+        }
+
+        /// <summary>WPF TileDecodeDim: the overlay's cell size, clamped to [64, 1280].</summary>
+        private static int TileDecodeDim(OverlayWindow ov, int cols, int rows)
+        {
+            var w = ov.Width > 0 ? ov.Width : 1920;
+            var h = ov.Height > 0 ? ov.Height : 1080;
+            return (int)Math.Clamp(Math.Max(w / Math.Max(1, cols), h / Math.Max(1, rows)), 64, 1280);
         }
 
         /// <summary>WPF ApplyVideoToAllOverlays: one muted decoder, looped, every screen shows its frames.</summary>
@@ -313,19 +405,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _sink = null;
         }
 
-        /// <summary>WPF GazeContentScreenPolicy minus the explicit pick: DualMonitorEnabled ? every
-        /// screen : the primary. Each window must accept click-through and transparency or none show.</summary>
+        // WPF GazeContentScreenPolicy.cs:39: explicit tracking pick wins over dual-monitor mode.
+        internal static IReadOnlyList<Screen> ResolveScreens(IReadOnlyList<Screen> screens, string? saved, bool dual)
+        {
+            if (!string.IsNullOrEmpty(saved) && !string.Equals(saved, "Primary", StringComparison.OrdinalIgnoreCase))
+                return WebcamScreens.Resolve(screens, saved) is { } picked ? new[] { picked } : Array.Empty<Screen>();
+            if (dual) return screens;
+            return WebcamScreens.Resolve(screens, null) is { } primary ? new[] { primary } : Array.Empty<Screen>();
+        }
+
+        /// <summary>Each window must accept click-through and transparency or none show.</summary>
         private static List<OverlayWindow> DefaultCreateOverlays(Visual host)
         {
             var made = new List<OverlayWindow>();
             if (!X11Overlay.IsAvailable) { Log.Warning("BlinkTrainer: no X11 display, so no click-through overlay on this platform"); return made; }
             var screens = ScreenList.Enumerate(host);
-            var primary = -1;
-            for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
-            foreach (var i in PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, MonitorTarget.FollowGlobal, CoreSettings.Current.DualMonitorEnabled, screens.Count, primary))
+            foreach (var screen in ResolveScreens(screens, CoreSettings.Current.WebcamCalibrationScreen, CoreSettings.Current.DualMonitorEnabled))
             {
                 var w = new OverlayWindow();
-                w.PlaceOn(screens[i]);
+                w.PlaceOn(screen);
                 w.Show();
                 made.Add(w);
                 if (!X11Overlay.SetClickThrough(w, true) || w.ActualTransparencyLevel == WindowTransparencyLevel.None)
