@@ -37,6 +37,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\CCP.Core\CCP.Core.csproj" />
+    <Compile Include="..\ConditioningControlPanel.Tests\BankAccumulatorTests.cs" Link="BankAccumulatorTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\BankFlightPlanTests.cs" Link="BankFlightPlanTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\BankFxDisplayHoldTests.cs" Link="BankFxDisplayHoldTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\HostNetPathRuleTests.cs" Link="HostNetPathRuleTests.cs" />
     <Compile Include="..\Shared\BackRoomBridgeRig.cs" Link="BackRoomBridgeRig.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\AchievementSharePromptRuleTests.cs" Link="AchievementSharePromptRuleTests.cs" />
