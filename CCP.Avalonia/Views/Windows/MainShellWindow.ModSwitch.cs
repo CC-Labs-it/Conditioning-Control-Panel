@@ -237,10 +237,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>
-        /// The palette half of WPF RefreshThemeAwareElements: the same keys, the same math, written to
-        /// the application resources so every DynamicResource repaints. ponytail: the Descent-fuse
-        /// dimming (DescentFuseChrome, WPF-only, step 0 on every install without a countdown) and the
-        /// per-control writes (title bar, level label, XP bar, banner) are not ported.
+        /// WPF MainWindow/MainWindow.xaml.cs:2489-2536, RefreshThemeAwareElements: the same keys, the same math, written to
+        /// the application resources so every DynamicResource repaints. Only neutrals see the fuse's
+        /// dim step; accent washes always blend from the active mod's original ground, as WPF.
+        /// ponytail: per-control writes (title bar, level label, XP bar, banner) are not ported.
         /// </summary>
         private void RefreshThemeAwareElements()
         {
@@ -271,14 +271,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var surface = C(mods.GetSurfaceColorHex(), "#1E1E3A");
                 var pressed = Color.FromRgb((byte)Math.Max(0, accent.R - 30), (byte)Math.Max(0, accent.G - 30), (byte)Math.Max(0, accent.B - 30));
 
+                var step = AvApp.DescentCountdown?.DimStep ?? 0;
+                var neutralBg = Helpers.DescentFuseChrome.Dim(bg, step);
+                var neutralPanel = Helpers.DescentFuseChrome.Dim(panel, step);
+                var neutralSurface = Helpers.DescentFuseChrome.Dim(surface, step);
+
                 void Put(string key, Color c) { res[key] = c; res[key + "Brush"] = new SolidColorBrush(c); }
-                Put("DarkerBg", bg);
-                Put("PanelBg", panel);
-                Put("SurfaceBg", surface);
-                Put("PanelAccent", Lighten(panel, 0.15));
-                Put("PanelAccentHover", Lighten(panel, 0.25));
-                Put("PreviewBg", Darken(bg, 0.15));
-                Put("PanelBgTransparent", A(0xB0, panel));
+                Put("DarkerBg", neutralBg);
+                Put("PanelBg", neutralPanel);
+                Put("SurfaceBg", neutralSurface);
+                Put("PanelAccent", Lighten(neutralPanel, 0.15));
+                Put("PanelAccentHover", Lighten(neutralPanel, 0.25));
+                Put("PreviewBg", Darken(neutralBg, 0.15));
+                Put("PanelBgTransparent", A(0xB0, neutralPanel));
                 Put("DarkPink", dark);
                 Put("PinkButtonHovered", light);
                 Put("TransparentPink", A(0x30, accent));
