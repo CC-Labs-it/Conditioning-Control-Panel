@@ -433,6 +433,14 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `items.tetherWeights` [0, 2, 3]: Tether draw weights (never in front).
 - `items.snapWeights` [3, 1, 0]: Snap draw weights (front and middle).
 - `items.bigSpiralWeights` [0, 0, 2]: Big Spiral draw weights (back only).
+- `items.tunnelWeights` [0, 0, 3]: Tunnel Vision draw weights (back only).
+- `items.tunnelS` 4: Tunnel Vision: the ride lasts this long (sim/tunnel.js), longer only while it waits for solid railed road.
+- `items.tunnelSpeedMul` 1.6: Tunnel Vision ride pace, share of top speed (at least the leader's speed plus tunnelLeadMps).
+- `items.tunnelLeadMps` 6: Tunnel Vision: the ride runs at least this much faster than the leader.
+- `items.tunnelHoverM` 0.6: Tunnel Vision: the riding kart hovers this high over the road.
+- `items.tunnelStopPlace` 2: Tunnel Vision ends early at this place or better: it never takes the lead.
+- `items.tunnelGuardS` 1.0: Tunnel Vision: guard after the ride (throws, lobs and traps pop, as Snap's guard).
+- `items.tunnelRamRadiusM` 2.0: Tunnel Vision: a kart this close to the ride is launched (tunnel-ram).
 - `items.pendulumS` 1.5: Pendulum hit: the kart swings left and right this long. No screen cover.
 - `items.pendulumSteerAmp` 0.5: Pendulum swing, stick share added at the peak.
 - `items.pendulumSteerHz` 1.1: Pendulum swing rate.

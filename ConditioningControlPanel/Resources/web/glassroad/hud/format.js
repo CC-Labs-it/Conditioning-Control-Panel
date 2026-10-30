@@ -49,12 +49,14 @@ export const ITEM_NAMES = {
   flash: 'Flash', spiral: 'Spiral', brainDrain: 'Brain Drain', freeze: 'Freeze', blackout: 'Blackout',
   pink: 'Fog', melt: 'Melt', shatter: 'Shatter', surge: 'Surge', glass: 'Bubble Shield', echo: 'Echo', golden: 'Golden',
   pendulum: 'Pendulum', disc: 'Disc', tether: 'Tether', snap: 'Snap', bigSpiral: 'Big Spiral',
+  tunnel: 'Tunnel Vision',
 };
 const ICON_FILES = {
   flash: 'flash', spiral: 'spiral', brainDrain: 'braindrain', freeze: 'bambifreeze', blackout: 'blackout',
   pink: 'pinkfilter', melt: 'melt', shatter: 'prism', surge: 'gold_droplet', glass: 'bubble', echo: 'glitch', golden: 'golden',
   // Directional enamel frames match the world atlas and sim/itemTable.js.
   pendulum: 'pendulum', disc: 'disc', tether: 'tether', snap: 'snap', bigSpiral: 'bigspiral',
+  tunnel: 'tunnel',   // placeholder until Astra's art
 };
 export const ICON_IDS = Object.keys(ICON_FILES);
 /** 'spiral' -> 'art/fx/spiral.png' (relative to the page); unknown -> the empty bubble. */

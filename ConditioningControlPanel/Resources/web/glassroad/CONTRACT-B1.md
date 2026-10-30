@@ -260,6 +260,9 @@ Queue = emitted in sim steps, flushed once per frame. Bus = emitted synchronousl
 | `item-box` | `{ racer, box, p }` | items | hud (slot spins, racer 0), audio, render |
 | `item-roll` | `{ racer, id }` | items | hud, audio |
 | `item-fire` | `{ racer, id, mode: 'throw'\|'lob'\|'wide'\|'drop'\|'self', target, p }` | items | audio, hud, fx |
+| `tunnel-start` | `{ racer }` (Tunnel Vision: the ride took the kart, sim/tunnel.js; online also when a remote record shows effect `tunnel`) | sim/items.js, net/items.js | fx (speed field held, tunnel tint, low-pass via submerged), payoff words, audio (rising whoosh); the player only |
+| `tunnel-ram` | `{ attacker, victim, p }` (a kart the ride passed through was launched with the BUBBLE_RAM fling, no spin, no stall) | sim/tunnel.js (online: the victim's client) | fx (trauma pulse), audio (thump) when the player is in it; lane C treats it as a hard-bump |
+| `tunnel-end` | `{ racer, reason: 'time'\|'place'\|'cancel' }` (handed back on solid railed road at full speed; a guard of items.tunnelGuardS follows) | sim/tunnel.js | fx (field and tint OUT), audio (falling whoosh) |
 | `item-refused` | `{ racer, id, reason: 'edge' }` | items | hud (racer 0), audio |
 | `item-hit` | `{ victim, by, kind, verdict: 'hit'\|'glass'\|'golden'\|'mercy'\|'decoy', durationS, p }` | items | effects (victim 0), fx, audio, hud (name tag) |
 | `bubble-pop` | `{ racer, i, p }` | items | audio, fx |
