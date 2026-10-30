@@ -64,7 +64,7 @@ namespace ConditioningControlPanel.Services
         private readonly Random _random = new();
         private Queue<string> _queue = new();
         private ITimer? _scheduler, _preroll;
-        private volatile bool _running, _playing;
+        private volatile bool _running, _playing, _sequenceActive;
         private int _retryGeneration, _noVideosShown;
 
         /// <summary>The library came back empty for the first time this launch (WPF's "no videos"
@@ -74,7 +74,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>A clip is on screen (WPF VideoService.VideoStarted, VideoService.cs:3370).</summary>
         public event Action? VideoStarted;
 
-        /// <summary>The displayed clip closed, including force cleanup and verdict replay.</summary>
+        /// <summary>The video sequence ended, after verdict/replay or forced cleanup (WPF Cleanup:7950).</summary>
         public event Action? VideoEnded;
 
         /// <summary>The clip <see cref="VideoStarted"/> announced (WPF VideoService.LastVideoPath).</summary>
@@ -332,6 +332,7 @@ namespace ConditioningControlPanel.Services
             }
             IsStrict = strictOverride ?? CoreSettings.Current.StrictLockEnabled;
             _playing = true;
+            _sequenceActive = true; // stays live through attention messages and replay pre-roll
             _retryGeneration++;   // WPF PlayVideo CancelPendingRetry: a new clip retires any pending verdict replay
             AttentionSpawned = AttentionHits = 0;
             CoreFlash.Stop();   // WPF PlayVideo: App.Flash?.Stop()
@@ -365,14 +366,17 @@ namespace ConditioningControlPanel.Services
         /// engine runs, the next video is scheduled.</summary>
         public void End()
         {
-            if (!Finish()) return;
+            if (!_sequenceActive) return;
+            Finish();
             AfterEnd();
         }
 
         private void AfterEnd()
         {
+            _retryGeneration++; // WPF Cleanup cancels a pending verdict replay too
             Penalties = 0;
             CoreBubbles.Resume();   // WPF Cleanup: App.Bubbles?.Resume() - not before a verdict replay
+            NotifyVideoEnded();
             if (_running && CoreSettings.Current.FlashEnabled) CoreFlash.Start();
             else CoreDiscord.Service?.SetIdleActivity(); // WPF Cleanup:7962
             if (_running) ScheduleNext();
@@ -418,10 +422,21 @@ namespace ConditioningControlPanel.Services
             _retryGeneration++;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.
-            if (!Finish()) return;
+            Finish();
+            if (!_sequenceActive) return;
+            NotifyVideoEnded();
             // Deviation: WPF ForceCleanup leaves the presence on "Watching"; a closed clip is not watched.
             CoreDiscord.Service?.SetIdleActivity();
             if (_running) CoreBubbles.Resume();   // Stop() clears _running first: no resume after an engine stop
+        }
+
+        // WPF ShowMessage:6052 closes the clip without ending the sequence; Cleanup:7950 notifies.
+        private void NotifyVideoEnded()
+        {
+            if (!_sequenceActive) return;
+            _sequenceActive = false;
+            try { VideoEnded?.Invoke(); }
+            catch (Exception ex) { Log.Debug("VideoEnded handler failed: {Error}", ex.Message); }
         }
 
         private bool Finish()
@@ -433,8 +448,6 @@ namespace ConditioningControlPanel.Services
             double watched = 0;
             try { watched = _host.CloseAll(); }
             catch (Exception ex) { Log.Warning(ex, "VideoService: close failed"); }
-            try { VideoEnded?.Invoke(); }
-            catch (Exception ex) { Log.Debug("VideoEnded handler failed: {Error}", ex.Message); }
             if (watched >= 1.0) CoreProgression.TrackVideoWatched(watched);
             // WPF CloseAll (VideoService.cs:7916): every teardown path stops the vibe and the funscript.
             _ = CoreHaptics.Service?.StopVideoBackgroundVibeAsync();

@@ -7,7 +7,7 @@ All WPF paths below are under `ConditioningControlPanel/Services/`.
 ## Ported safety slice
 
 - Stop audio at run end and page exit: `CCP.Avalonia/Views/Games/GameWindow.Race.cs:95,155`; old lane same file:120,186; WPF `Chaos/CaucusHostService.cs:383,435`.
-- Mandatory video pause/resume and focus return: same Avalonia file:198; old:264; WPF `Chaos/CaucusHostService.cs:558-592`. Core cleanup notification: `CCP.Core/Services/Video/MandatoryVideoScheduler.cs:436`, old:431; WPF `Video/VideoService.cs:7950`.
+- Mandatory video pause/resume and focus return: same Avalonia file:198; old:264; WPF `Chaos/CaucusHostService.cs:558-592`. Core cleanup notification: `CCP.Core/Services/Video/MandatoryVideoScheduler.cs:434`, old:431; WPF `Video/VideoService.cs:7950`.
 - Accepted counter-snapshot additions refresh tracks; losses request exit with 1200 ms fallback, loading pages close immediately: Avalonia race file:210; old:298; WPF `Chaos/CaucusHostService.cs:1108-1115,235-248,631-638`. `CCP.Avalonia/Platform/PrizeOwnership.cs:61` publishes accepted snapshots outside the lock.
 - Listeners detach on close/panic: Avalonia race file:231; old:343; WPF `Chaos/CaucusHostService.cs:692-723`.
 
@@ -47,7 +47,7 @@ Mutation commands used `dotnet test Tests/CCP.Core.Tests --filter FullyQualified
 
 The .NET 10 channel installer fell back to a denied CI endpoint. Retrying `dotnet-install --version 10.0.403 --azure-feed https://builds.dotnet.microsoft.com/dotnet` found the installed SDK. Commands below use `/tmp/ccp-dotnet/dotnet`.
 
-## Final commands and result tails
+## Initial port commands and result tails
 
 | Command | Result tail |
 | --- | --- |
@@ -61,3 +61,28 @@ The .NET 10 channel installer fell back to a denied CI endpoint. Retrying `dotne
 | `git diff --check` | exit 0, no output |
 
 Compiled but skipped by existing dependency checks: `RaceTrackPlayerTests.PauseRightAfterPlayIsHonoured`, `DecodeTurnsAStereoFileIntoMono16k`, `EndedOnlyForARealEndingAndOnce` (native LibVLC unavailable). System package installation was unavailable without administrator permissions. Core's six existing skips are the board frame budget and five Vosk speech tests. No live parity check or WPF runtime test was performed.
+
+## P2 review fix
+
+Accepted the finding against c391093ab. WPF `ConditioningControlPanel/Services/Video/VideoService.cs:6052` closes the clip for the attention message without raising `VideoEnded`; only final `Cleanup` at :7950 announces completion. `CaucusHostService.cs:579-592` uses that event to resume the race and return focus.
+
+`CCP.Core/Services/Video/MandatoryVideoScheduler.cs:374,434` now emits once on final sequence completion. Per-clip `Finish` still credits watch time and stops haptics, but keeps the sequence active through the 2000 ms fail/troll message, replay pre-roll and the 2500 ms mercy message. Ending or forcing cleanup during a message cancels its pending replay and emits once, preserving the base's safe force-cleanup resume.
+
+New tests: `Tests/CCP.Core.Tests/MandatoryVideoSchedulerTests.cs:65,104` cover both real verdict branches through mercy and End/ForceCleanup/Stop during the gap; `Tests/CCP.Avalonia.Tests/GameWindowRaceSafetyTests.cs:153` checks actual race pause frames through fail/troll replay and mercy. The existing random field is seeded after library shuffling so the troll path is deterministic without a new production seam.
+
+Fail-proof before the production fix: the five Core cases failed with expected 0 notifications, actual 1; both headless race cases failed because the first verdict already posted a second frame (`pause:false`). All seven cases compiled and ran. Existing tests remain intact. No localization key, WPF source or progress HTML changed.
+
+Review validation uses `/tmp/ccp-dotnet/dotnet` (SDK 10.0.403):
+
+| Command | Result tail |
+| --- | --- |
+| `dotnet build CCP.Core` | 50 warnings, 0 errors |
+| `dotnet build CCP.Avalonia` | 201 warnings, 0 errors |
+| `dotnet build Tests/CCP.Avalonia.Tests` | 145 warnings, 0 errors |
+| `dotnet test Tests/CCP.Core.Tests` | Passed!  - Failed:     0, Passed:  4641, Skipped:     6, Total:  4647, Duration: 43 s - CCP.Core.Tests.dll (net10.0) |
+| `dotnet test Tests/CCP.Avalonia.Tests --no-build --filter "FullyQualifiedName~GameWindowTests.Race_\|FullyQualifiedName~RaceTrackPlayerTests\|FullyQualifiedName~TestIsolationTests\|FullyQualifiedName~EveryHostedGame_KnowsItsKeptEscapePage"` | Passed!  - Failed:     0, Passed:    32, Skipped:     3, Total:    35, Duration: 1 m 53 s - CCP.Avalonia.Tests.dll (net10.0) |
+| `bash .github/scripts/core-guards.sh` | All Core guards passed |
+| `python3 .github/scripts/avalonia_docs.py` | avalonia_docs self-check OK |
+| `git diff --check` | exit 0, no output |
+
+The skips retain the dependency and opt-in reasons listed above. Both new headless race cases and all five new Core cases ran and passed. No live desktop parity check was performed.

@@ -58,6 +58,75 @@ public sealed class MandatoryVideoSchedulerTests
         Assert.Equal(1, starts); // stopped during pre-roll
     });
 
+    // WPF VideoService.cs:6052 closes only the clip; Cleanup:7950 ends the sequence.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Verdict_replay_and_mercy_notify_only_after_final_completion(bool troll) => With(60, true, () =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.AttentionChecksEnabled, s.MercySystemEnabled, s.MercyAfterFails);
+        (s.AttentionChecksEnabled, s.MercySystemEnabled, s.MercyAfterFails) = (true, true, 2);
+        var clock = new FakeClock(); var host = new Host();
+        var video = new MandatoryVideoScheduler(host, clock, () => Clips);
+        int ends = 0;
+        video.VideoEnded += () => ends++;
+        try
+        {
+            video.Trigger(); clock.Advance(MandatoryVideoScheduler.PreRoll);
+            video.NoteSpawn(); if (troll) video.NoteHit();
+            // Seed after the library shuffle so the actual verdict is deterministically Troll.
+            if (troll) typeof(MandatoryVideoScheduler).GetField("_random", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .SetValue(video, new Random(Enumerable.Range(0, 100).First(seed => new Random(seed).NextDouble() < 0.1)));
+            video.Ended();
+            Assert.Equal(troll ? AttentionVerdict.Troll : AttentionVerdict.Fail, host.Messages[^1]);
+            Assert.Equal(0, ends); // still in the 2 s verdict message
+            host.Then!();
+            Assert.Equal(0, ends); // replay pre-roll
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(0, ends); // replay on screen
+            video.NoteSpawn(); video.Ended();
+            Assert.Equal(AttentionVerdict.Mercy, host.Messages[^1]);
+            Assert.Equal(0, ends); // still in the 2.5 s mercy message
+            host.Then!();
+            Assert.Equal(1, ends);
+            video.End(); video.ForceCleanup();
+            Assert.Equal(1, ends);
+        }
+        finally { video.Stop(); (s.AttentionChecksEnabled, s.MercySystemEnabled, s.MercyAfterFails) = old; }
+    });
+
+    // WPF Cleanup/ForceCleanup cancel pending retries, including the message gap.
+    [Theory]
+    [InlineData("end")]
+    [InlineData("force")]
+    [InlineData("stop")]
+    public void Ending_during_a_verdict_notifies_once_and_cancels_replay(string action) => With(60, true, () =>
+    {
+        var s = CoreSettings.Current;
+        var old = s.AttentionChecksEnabled;
+        s.AttentionChecksEnabled = true;
+        var clock = new FakeClock(); var host = new Host();
+        var video = new MandatoryVideoScheduler(host, clock, () => Clips);
+        int ends = 0;
+        video.VideoEnded += () => ends++;
+        try
+        {
+            video.Trigger(); clock.Advance(MandatoryVideoScheduler.PreRoll);
+            video.NoteSpawn(); video.Ended();
+            Assert.Equal(0, ends);
+            if (action == "end") video.End();
+            else if (action == "force") video.ForceCleanup();
+            else video.Stop();
+            Assert.Equal(1, ends);
+            host.Then!(); clock.Advance(TimeSpan.FromHours(1));
+            Assert.Single(host.Shown);
+            video.ForceCleanup();
+            Assert.Equal(1, ends);
+        }
+        finally { video.Stop(); s.AttentionChecksEnabled = old; }
+    });
+
     [Fact]
     public void Rate_follows_videos_per_hour_with_the_pre_roll_and_End_rearms() => With(6, false, () =>
     {

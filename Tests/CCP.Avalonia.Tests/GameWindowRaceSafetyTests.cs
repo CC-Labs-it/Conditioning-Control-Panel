@@ -92,7 +92,10 @@ public sealed partial class GameWindowTests
     {
         public void Show(string path, bool strict) { }
         public double CloseAll() => 0;
-        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) => then();
+        public Action? Then;
+        public AttentionVerdict Verdict;
+        public int Delay;
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) => (Verdict, Delay, Then) = (verdict, ms, then);
     }
 
     private sealed class RaceVideoClock : TimeProvider
@@ -141,6 +144,47 @@ public sealed partial class GameWindowTests
             Assert.Empty(sent);
         }
         finally { video.Stop(); CoreEngine.Video = old; }
+    });
+
+    // WPF VideoService.cs:6052,7950; CaucusHostService.cs:579-592 resumes only on final cleanup.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Race_StaysPausedThroughVerdictReplayAndMercy(bool troll) => RunRace("rt.original.03", (_, _, _) =>
+    {
+        var s = CoreSettings.Current;
+        var old = (CoreEngine.Video, s.AttentionChecksEnabled, s.MercySystemEnabled, s.MercyAfterFails);
+        var clock = new RaceVideoClock(); var host = new RaceVideoHost();
+        var video = new MandatoryVideoScheduler(host, clock, () => new[] { "test.mp4" });
+
+        try
+        {
+            (CoreEngine.Video, s.AttentionChecksEnabled, s.MercySystemEnabled, s.MercyAfterFails) = (video, true, true, 2);
+            var w = GameWindow.Launch("race")!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            video.Trigger(); clock.Due!(); Dispatcher.UIThread.RunJobs();
+            Assert.True((bool)Assert.Single(sent)["on"]!);
+            video.NoteSpawn(); if (troll) video.NoteHit();
+            if (troll) typeof(MandatoryVideoScheduler).GetField("_random", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .SetValue(video, new Random(Enumerable.Range(0, 100).First(seed => new Random(seed).NextDouble() < 0.1)));
+            video.Ended(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(troll ? AttentionVerdict.Troll : AttentionVerdict.Fail, host.Verdict);
+            Assert.Equal(2000, host.Delay);
+            Assert.Single(sent); // no resume or focus return during the verdict
+            host.Then!(); Dispatcher.UIThread.RunJobs();
+            Assert.Single(sent); // replay pre-roll
+            clock.Due!(); Dispatcher.UIThread.RunJobs();
+            Assert.All(sent, frame => Assert.True((bool)frame["on"]!));
+            video.NoteSpawn(); video.Ended(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(AttentionVerdict.Mercy, host.Verdict);
+            Assert.Equal(2500, host.Delay);
+            Assert.All(sent, frame => Assert.True((bool)frame["on"]!));
+            host.Then!(); Dispatcher.UIThread.RunJobs();
+            Assert.False((bool)sent[^1]["on"]!);
+            Assert.Single(sent.Where(frame => (bool?)frame["on"] == false));
+        }
+        finally { video.Stop(); (CoreEngine.Video, s.AttentionChecksEnabled, s.MercySystemEnabled, s.MercyAfterFails) = old; }
     });
 
 }
