@@ -319,6 +319,14 @@
 #card button:active:not(:disabled) { transform: translateY(1px); }
 #card button:disabled { opacity: 0.45; cursor: default; }
 #card button[hidden] { display: none; }
+/* the Options card's top close (same act as Back): a zero-height sticky row, so the x stays in reach while the
+   list scrolls; it rides the card's own IN and OUT */
+#card .c-top-close { position: sticky; top: 14px; height: 0; z-index: 2; }
+#card .c-top-close[hidden] { display: none; }
+#card .c-top-close .c-close { position: absolute; top: -14px; right: -14px; min-height: 0; width: 40px; height: 40px; padding: 0;
+  border-color: transparent; color: var(--paper-dim); background: var(--paper); font-size: 22px; line-height: 1;
+  transition: color 0.15s ease-out, border-color 0.15s ease-out; }
+#card .c-top-close .c-close:hover { color: var(--paper-ink); }
 
 .c-list { display: flex; flex-direction: column; gap: 8px; }
 .c-list.row { flex-direction: row; justify-content: center; margin-top: 14px; }
