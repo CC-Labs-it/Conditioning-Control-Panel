@@ -67,6 +67,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (pill != null) pill.Click += SectionPill_Click;
             }
             SectionScroll.ScrollChanged += SectionScroll_ScrollChanged;
+            SectionAccount.PlansView.PlansActive = false;
+            // WPF MainWindow.Exclusives.cs:296: park Plans when Settings is hidden.
+            PropertyChanged += (_, e) =>
+            {
+                if (e.Property == IsVisibleProperty)
+                    SectionAccount.PlansView.PlansActive = IsVisible && CheckedSectionKey == "account";
+            };
         }
 
         // =====================================================================================
@@ -186,6 +193,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             finally { _syncingPills = false; }
             if (key == _raisedKey) return; // the spy calls this every scroll step (P07)
             _raisedKey = key;
+            // WPF Views/Tabs/AppSettingsTabView.xaml.cs:177: the Account & Plans vault motion follows the lit pill, parked elsewhere.
+            SectionAccount.PlansView.PlansActive = IsVisible && key == "account";
             SectionChecked?.Invoke();
         }
 

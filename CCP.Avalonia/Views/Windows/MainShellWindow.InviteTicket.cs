@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The ticket's server read (tests swap the wire).</summary>
         internal Func<IInviteApi> InviteTicketApi { get; set; } = () => new InviteApi();
 
-        private InvitePanel? InvitesCard => Named<Tabs.ExclusivesTabView>("ExclusivesTab")?.FindControl<InvitePanel>("InvitesHost");
+        private InvitePanel? InvitesCard => AppSettingsPage?.SectionAccount.PlansView.FindControl<InvitePanel>("InvitesCard");
 
         /// <summary>WPF InitializeInviteTicket: one delayed read, then every 30 min and on account change;
         /// every read the invites card makes repaints the ticket too.</summary>
@@ -118,12 +118,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void BtnInviteTicket_Click(object? sender, RoutedEventArgs e) => OpenInvitesCard();
 
-        /// <summary>WPF OpenInvitesCard: the Premium tab, a forced read, and the card scrolled into view.
+        /// <summary>WPF MainWindow/MainWindow.InviteTicket.cs:200: Settings > Account, a forced read, and the card scrolled into view.
         /// Refused under Lockdown (no veil on this head yet).</summary>
         internal void OpenInvitesCard()
         {
             if (LockdownActive) return;
-            ShowTab("premium");
+            OpenAppSettingsSection("account");
+            var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            InvitesCardOpened = done.Task;
             DispatcherTimer.RunOnce(async () =>
             {
                 try
@@ -133,7 +135,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     card.BringIntoView();
                 }
                 catch (Exception ex) { Log.Debug("[Invites] open invites card failed: {E}", ex.GetType().Name); }
-            }, TimeSpan.FromMilliseconds(300));
+                finally { done.TrySetResult(); }
+            }, InvitesCardSettle);
         }
+
+        /// <summary>WPF's 300 ms settle before the forced read (tests shorten it).</summary>
+        internal TimeSpan InvitesCardSettle { get; set; } = TimeSpan.FromMilliseconds(300);
+
+        /// <summary>Completes when the last OpenInvitesCard has read and scrolled (tests await it).</summary>
+        internal Task InvitesCardOpened { get; private set; } = Task.CompletedTask;
     }
 }
