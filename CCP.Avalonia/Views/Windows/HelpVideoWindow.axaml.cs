@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Input;
@@ -45,6 +46,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly bool _hasLoop;
 
         private readonly TextBlock _txtCaption;
+
+        private bool _panicCleanup;
+        internal Action? BeforeNativeStop { get; set; } // deterministic stalled-decoder test seam
+        internal Task? NativeTeardown { get; private set; }
 
         private Image? _video;
         private MediaPlayer? _mediaPlayer;
@@ -157,12 +162,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        internal static void CloseCurrent()
+        internal static void CloseCurrent(bool forPanic = false)
         {
             var existing = _current;
             _current = null;
             if (existing != null)
             {
+                existing._panicCleanup = forPanic;
                 try { existing.Close(); } catch { /* ignore */ }
             }
         }
@@ -247,7 +253,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 container.IsVisible = true;
 
                 _mediaPlayer = new MediaPlayer(libVLC) { EnableHardwareDecoding = true };
-                _sink = new VlcFrameSink(_mediaPlayer, () => _media,
+                var media = new Media(libVLC, _clipPath, FromType.FromPath);
+                _media = media;
+                _sink = new VlcFrameSink(_mediaPlayer, () => media,
                     bmp => { if (_video != null) _video.Source = bmp; },
                     () => { _video?.InvalidateVisual(); FrameShown?.Invoke(); });
                 _mediaPlayer.EndReached += (_, _) =>
@@ -262,7 +270,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         }
                     });
                 };
-                _media = new Media(libVLC, _clipPath, FromType.FromPath);
                 // Muted tutorial loop, silent through :no-audio (WPF Services.LibVlcSilence).
                 _media.AddOption(ConditioningControlPanel.Services.LibVlcSilence.NoAudioOption);
                 _mediaPlayer.Play(_media);
@@ -310,19 +317,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // user or superseded by a newer help video).
             if (ReferenceEquals(_current, this)) _current = null;
 
-            // Teardown as WPF's (MiniPlayerWindow.OnClosed): stop joins the decoder thread, then the
-            // player, media and frame buffer go.
-            if (_mediaPlayer != null)
-            {
-                try { _mediaPlayer.Stop(); } catch { /* Ignore stop errors */ }
-                try { _mediaPlayer.Dispose(); } catch { /* Ignore dispose errors */ }
-                _mediaPlayer = null;
-            }
-            try { _media?.Dispose(); } catch { /* Ignore dispose errors */ }
+            var player = _mediaPlayer;
+            var media = _media;
+            var sink = _sink;
+            _mediaPlayer = null; // queued EndReached callbacks must not restart playback
             _media = null;
-            _sink?.Free();
             _sink = null;
+            if (_video != null) _video.Source = null;
             _video = null;
+            if (!_hasLoop) this.FindControl<Border>("VideoContainer")!.Child = null;
+
+            void StopNative()
+            {
+                BeforeNativeStop?.Invoke();
+                try { player?.Stop(); } catch { /* Ignore stop errors */ }
+                try { player?.Dispose(); } catch { /* Ignore dispose errors */ }
+                try { media?.Dispose(); } catch { /* Ignore dispose errors */ }
+                // Stop/Dispose may stall. Keep callback delegates and their native buffer rooted
+                // until both return, even though the window has already detached them.
+                GC.KeepAlive(sink);
+            }
+
+            async Task StopOffThread()
+            {
+                await Task.Run(StopNative).ConfigureAwait(false);
+                // Bitmap disposal and any queued blits remain serialized on the UI thread.
+                await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => sink?.Free());
+            }
+
+            // WPF MainWindow.xaml.cs:2033 uses ForceCleanup(synchronous: false) during panic.
+            // Normal close retains its existing synchronous disposal contract.
+            if (_panicCleanup) NativeTeardown = StopOffThread();
+            else { StopNative(); sink?.Free(); }
             base.OnClosed(e);
         }
     }
