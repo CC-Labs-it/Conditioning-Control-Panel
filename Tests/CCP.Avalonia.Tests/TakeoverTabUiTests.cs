@@ -23,11 +23,95 @@ namespace CCP.Avalonia.Tests;
 /// shell the way a user reaches them - open the tab, read the copy, click the buttons.</summary>
 public sealed class TakeoverTabUiTests
 {
+    private sealed class ChantVoice : MindWipePlayer.IVoice
+    {
+        internal double Level;
+        internal bool Disposed;
+        public double Volume { set => Level = value; }
+        public void Dispose() => Disposed = true;
+    }
+
+    [Fact]
+    public Task ChantControlsAndPanicFollowSettings() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .With(new global::Avalonia.Media.FontManagerOptions {
+                    DefaultFamilyName = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
+                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily> {
+                        ["Segoe UI"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                        ["Segoe UI Black"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter) } })
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var saved = (s.MantraChantEnabled, s.MantraChantVolume, s.MantraChantGapSeconds, s.MasterVolume);
+        var old = (CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider, LibVlcAudio.Instance);
+        var id = "chant-" + Guid.NewGuid().ToString("N");
+        var root = Path.Combine(Path.GetTempPath(), id);
+        var dir = Path.Combine(root, "resources", "sounds", "companion_audio");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "p.mp3"), "audio");
+        File.WriteAllText(Path.Combine(dir, "mantras.json"),
+            "{\"mantras\":[{\"id\":\"a\",\"phrase\":\"Obey\",\"promptAudio\":\"p.mp3\"}]}");
+        var shell = new MainShellWindow();
+        try
+        {
+            s.MantraChantEnabled = false;
+            shell.Show();
+            shell.ShowTab("bambitakeover");
+            Dispatcher.UIThread.RunJobs();
+            LibVlcAudio.Instance = null; // exercise the real loop without an audio device
+            CoreMods.ActiveModIdProvider = () => id;
+            CoreMods.ActiveModPackageProvider = () => new ConditioningControlPanel.Models.ModPackage(
+                new ConditioningControlPanel.Models.ModManifest { Id = id }, root, false);
+            var tab = shell.GetLogicalDescendants().OfType<global::ConditioningControlPanel.Avalonia.Views.Tabs.BambiTakeoverTabView>().Single();
+            tab.FindControl<CheckBox>("ChkMantraChant")!.IsChecked = true;
+            Assert.True(s.MantraChantEnabled);
+            Assert.True(global::ConditioningControlPanel.Avalonia.App.MantraChant.IsRunning);
+            tab.FindControl<CheckBox>("ChkMantraChant")!.IsChecked = false;
+            Assert.False(global::ConditioningControlPanel.Avalonia.App.MantraChant.IsRunning);
+            tab.FindControl<CheckBox>("ChkMantraChant")!.IsChecked = true;
+            var voice = new ChantVoice();
+            typeof(MantraChantHost).GetField("_voice", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                .SetValue(global::ConditioningControlPanel.Avalonia.App.MantraChant, voice);
+            s.MasterVolume = 80;
+            tab.FindControl<Slider>("SldMantraChantVolume")!.Value = 37;
+            tab.FindControl<Slider>("SldMantraChantGap")!.Value = 7;
+            Assert.Equal(.296, voice.Level, 8);
+            Assert.Equal(37, s.MantraChantVolume);
+            Assert.Equal(7, s.MantraChantGapSeconds);
+            Assert.Equal("37%", tab.FindControl<TextBlock>("TxtMantraChantVolume")!.Text);
+            Assert.Equal("7s", tab.FindControl<TextBlock>("TxtMantraChantGap")!.Text);
+            PanicSurfaces.All.Single(x => x.Id == "mantra-chant").Stop(shell);
+            Assert.False(s.MantraChantEnabled);
+            Assert.False(global::ConditioningControlPanel.Avalonia.App.MantraChant.IsRunning);
+            Assert.True(voice.Disposed);
+            tab.IsVisible = false;
+            tab.IsVisible = true;
+            Assert.False(tab.FindControl<CheckBox>("ChkMantraChant")!.IsChecked);
+            global::ConditioningControlPanel.Avalonia.App.MantraChant.StopAndDisarm(); // idempotent
+        }
+        finally
+        {
+            global::ConditioningControlPanel.Avalonia.App.MantraChant.Stop();
+            (s.MantraChantEnabled, s.MantraChantVolume, s.MantraChantGapSeconds, s.MasterVolume) = saved;
+            (CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider, LibVlcAudio.Instance) = old;
+            shell.Close();
+            Directory.Delete(root, true);
+        }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task TabShowsWpfCopyAndItsButtonsGoWhereWpfsDo() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .With(new global::Avalonia.Media.FontManagerOptions {
+                    DefaultFamilyName = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
+                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily> {
+                        ["Segoe UI"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                        ["Segoe UI Black"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter) } })
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
