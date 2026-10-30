@@ -96,6 +96,7 @@ namespace ConditioningControlPanel.Services
         private string[]? _serverAchievements;   // null: the profile carried none, so achievements are not known
         private Timer? _heartbeat;
         private int _nudgePending;
+        private int _sessionVersion;
         private readonly Func<ProfileCosmetics?, ProfileCosmetics>? _sanitizeCosmetics;
         private volatile bool _pendingCosmeticsClear;
         private SyncBody.Field _knownProgress;
@@ -161,6 +162,7 @@ namespace ConditioningControlPanel.Services
         {
             StopHeartbeat();
             DescentReader?.Reset();
+            Interlocked.Increment(ref _sessionVersion);
             Loaded = false;
             _adopted = false;
             _knownProgress = SyncBody.Field.None;
@@ -427,16 +429,23 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF SyncProfileAsync:1970-1985: a new web XP claim is persisted (and saved) BEFORE its XP is added, so a
         /// crash under-pays once instead of paying twice; skipped on level_reset, whose level/XP overwrite would eat it. The
         /// id then goes back as <c>web_xp_claim_ack</c> on every push.</summary>
-        internal static void ClaimWebXp(AppSettings s, JObject reply)
+        internal void ClaimWebXp(AppSettings s, JObject reply)
         {
             if (reply["web_xp"]?["claim"] is not JObject claim || reply["level_reset"]?.Type == JTokenType.Boolean && reply.Value<bool>("level_reset")) return;
             var id = claim["id"]?.Type == JTokenType.String ? (string?)claim["id"] : null;
             var amount = claim["amount"]?.Type == JTokenType.Integer ? (int)claim["amount"]! : 0;
             if (string.IsNullOrEmpty(id) || amount <= 0 || id == s.LastWebXpClaimId) return;
-            Log.Information("V2 Sync: Web XP claim {ClaimId} - applying +{Amount} XP", id, amount);
-            s.LastWebXpClaimId = id;
-            CoreSettings.Save();
-            CoreDispatch.Post(() => ProgressionBank.AddClaimed(amount));   // level-up listeners draw
+            var account = s.UnifiedId;
+            var session = Volatile.Read(ref _sessionVersion);
+            CoreDispatch.Post(() =>
+            {
+                // WPF ProfileSyncService:1970-1985 pays immediately. Keep its id/save/payment together on UI dispatch.
+                if (!Loaded || session != Volatile.Read(ref _sessionVersion) || !ReferenceEquals(s, CoreSettings.Current)
+                    || !SignedIn(s) || s.UnifiedId != account || s.LastWebXpClaimId == id) return;
+                s.LastWebXpClaimId = id;
+                CoreSettings.Save();
+                ProgressionBank.AddClaimed(amount);
+            });
         }
 
         /// <summary>WPF SkillTreeService.PointsPerLevel (the force-reset refund when the server sends no balance).</summary>

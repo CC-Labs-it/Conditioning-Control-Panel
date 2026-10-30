@@ -25,6 +25,38 @@ public sealed partial class AccountSeedTests
     }
 
     [Fact]
+    public void SubLevelClaimNudgesFollowUpPushWithAckWithoutQuestCredit() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        var s = CoreSettings.Current;
+        s.LastWebXpClaimId = null;
+        var xp = ProfileAdopt.TotalXp(s);
+        var level = s.PlayerLevel;
+        var quests = 0;
+        var source = "";
+        System.Action<double, string> nudge = (_, origin) => { source = origin; sync.Nudge("xp:" + origin); };
+        System.Action<double, string> quest = (_, _) => quests++;
+        ProgressionBank.Awarded += nudge;
+        ProgressionBank.QuestAwarded += quest;
+        try
+        {
+            sync.UtcNow = () => T0.AddSeconds(31);
+            sync.ClaimWebXp(s, JObject.Parse("""{"web_xp":{"claim":{"id":"nudge","amount":1}}}"""));
+            for (var i = 0; i < 100 && wire.Syncs.Count() < 2; i++) await System.Threading.Tasks.Task.Delay(50);
+            Assert.Equal(2, wire.Syncs.Count());
+            Assert.Equal("nudge", (string?)wire.Syncs.Last()["web_xp_claim_ack"]);
+            Assert.Equal((int)(xp + 1), (int)wire.Syncs.Last()["xp"]!);
+            Assert.Equal(level, s.PlayerLevel);
+            Assert.Equal("Other", source);
+            Assert.Equal(0, quests);
+            ProgressionBank.Add(1, "Other"); // ordinary Other awards still credit quests
+            Assert.Equal(1, quests);
+        }
+        finally { ProgressionBank.Awarded -= nudge; ProgressionBank.QuestAwarded -= quest; }
+    });
+
+    [Fact]
     public void FreshInstall_SendsNoSkills_UntilAResponseWasAdopted_ThenTheMergedValues() => WithFreshInstall(async () =>
     {
         var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
@@ -141,13 +173,13 @@ public sealed partial class AccountSeedTests
     [Fact]
     public void AWebXpClaim_AddsItsAmountWithoutMultipliers() => WithFreshInstall(async () =>
     {
-        var (wire, _, _) = SignIn("u1", L40Profile("u1"));
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
         var s = CoreSettings.Current;
         s.LastWebXpClaimId = null;
         wire.SyncReply = """{"success":true}""";
         Assert.True(await AccountSeed.LoadProfileAsync());
         var before = ProfileAdopt.TotalXp(s);
-        SyncPush.ClaimWebXp(s, JObject.Parse("""{"web_xp":{"claim":{"id":"c9","amount":100}}}"""));
+        sync.ClaimWebXp(s, JObject.Parse("""{"web_xp":{"claim":{"id":"c9","amount":100}}}"""));
         Assert.Equal(before + 100, ProfileAdopt.TotalXp(s));
     });
 

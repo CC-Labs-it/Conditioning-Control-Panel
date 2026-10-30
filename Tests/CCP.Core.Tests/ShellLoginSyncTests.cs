@@ -13,6 +13,55 @@ namespace CCP.Core.Tests;
 public class ShellLoginSyncTests
 {
     [Fact]
+    public void NoticePreservesAccountWideDescentMeaning()
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var language = loc.CurrentLanguage;
+        try { loc.SetLanguage("en"); Assert.Equal("+1 XP from your web account. Descending is account-wide now.", loc.GetF("web_xp_claim_notice", "1")); }
+        finally { loc.SetLanguage(language); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void QueuedClaimChecksAccountAndSessionBeforeRecordingOrPaying(bool sameAccount)
+    {
+        var old = (CoreSettings.ServiceProvider, CoreDispatch.PostProvider, CoreAccount.IsLoggedInProvider);
+        var service = new SettingsService { SaveDebounceDueTimeMilliseconds = System.Threading.Timeout.Infinite };
+        var queue = new Queue<Action>();
+        try
+        {
+            CoreSettings.ServiceProvider = () => service;
+            CoreAccount.IsLoggedInProvider = () => true;
+            CoreDispatch.PostProvider = queue.Enqueue;
+            var s = service.Current;
+            s.UnifiedId = "first";
+            s.LastWebXpClaimId = null;
+            var sync = new SyncPush(() => null, () => false);
+            sync.MarkLoaded(null);
+            var claim = JObject.Parse("""{"web_xp":{"claim":{"id":"queued","amount":1}}}""");
+            var xp = ProfileAdopt.TotalXp(s);
+            sync.ClaimWebXp(s, claim);
+            Assert.Null(s.LastWebXpClaimId);
+            if (sameAccount) { sync.Reset(); sync.MarkLoaded(null); }
+            else s.UnifiedId = "second";
+            while (queue.TryDequeue(out var pay)) pay();
+            Assert.Null(s.LastWebXpClaimId);
+            Assert.Equal(xp, ProfileAdopt.TotalXp(s));
+            sync.ClaimWebXp(s, claim);
+            sync.ClaimWebXp(s, claim);
+            while (queue.TryDequeue(out var pay)) pay();
+            Assert.Equal("queued", s.LastWebXpClaimId);
+            Assert.Equal(xp + 1, ProfileAdopt.TotalXp(s));
+        }
+        finally
+        {
+            service.SealForReset();
+            (CoreSettings.ServiceProvider, CoreDispatch.PostProvider, CoreAccount.IsLoggedInProvider) = old;
+        }
+    }
+
+    [Fact]
     public void CompanionMergeUsesLevelThenLifetimeXpAndPreservesOtherCompanions()
     {
         var s = new AppSettings { TotalConditioningMinutes = 10,
