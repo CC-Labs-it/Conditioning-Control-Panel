@@ -4776,6 +4776,26 @@ namespace ConditioningControlPanel.Models
             set { _rainPackHash = value ?? ""; OnPropertyChanged(); }
         }
 
+        private bool _rainLookPushOwed;
+        /// <summary>Rain look sync (/v2/equip family rain, Services/Companion/RainLookSync): this PC changed
+        /// the look and the server has not taken it yet. While true the next sync PUTs instead of adopting.
+        /// Machine-local (left out of the cloud backup, kept across a restore).</summary>
+        public bool RainLookPushOwed
+        {
+            get => _rainLookPushOwed;
+            set { _rainLookPushOwed = value; OnPropertyChanged(); }
+        }
+
+        private DateTime? _rainLookAgreedUtc;
+        /// <summary>The server's equip <c>updatedAt</c> the last time this PC and the server agreed on
+        /// Rain's look (a push landed, an adopt, or both already equal). Null = never synced. A newer server
+        /// copy is adopted. Machine-local like <see cref="RainPackHash"/>.</summary>
+        public DateTime? RainLookAgreedUtc
+        {
+            get => _rainLookAgreedUtc;
+            set { _rainLookAgreedUtc = value; OnPropertyChanged(); }
+        }
+
         /// <summary>True when the user has agreed to see remote content anywhere. Read THIS,
         /// not the raw flag: users who already accepted the FYP feed's consent card agreed to
         /// exactly this, and asking them a second time in different words would read as the
