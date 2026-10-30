@@ -1,8 +1,10 @@
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -57,6 +59,32 @@ public sealed class Sync7HistoryGentleTests
             Assert.Equal(2, brain.Session.Turns.Count);
         }
         finally { tube.Close(); AvApp.Brain = null; }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task IncompleteGentlePromiseStaysOutOfTheSettingsUi(bool enabled) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        s.GentleVisuals = enabled;
+        var section = new PerformanceSettingsSection();
+        section.OnSectionShown();
+        // Every control, including the tooltip's grid, must have an invisible ancestor.
+        // A saved preference or a settings refresh must never reveal the pending promise.
+        var toggle = section.FindControl<CheckBox>("ChkGentleVisuals")!;
+        var choices = section.FindControl<StackPanel>("PnlGentleChoices")!;
+        Assert.Equal(enabled, toggle.IsChecked);
+        Assert.Equal(enabled, choices.IsVisible);
+        var controls = section.GetLogicalDescendants().OfType<Control>()
+            .Where(c => c.Name is "ChkGentleVisuals" or "CmbGentleFade" or "CmbGentleSpeed"
+                || ToolTip.GetTip(c) is not null && c.GetLogicalDescendants().Contains(toggle)).ToArray();
+        Assert.Equal(4, controls.Length);
+        foreach (var control in controls)
+            Assert.Contains(control.GetLogicalAncestors().OfType<Control>(), ancestor => !ancestor.IsVisible);
+        Assert.Equal(enabled, s.GentleVisuals);
         return Task.CompletedTask;
     });
 
