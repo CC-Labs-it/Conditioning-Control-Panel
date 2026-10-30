@@ -132,6 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             s.SlutModeEnabled = enabled;
             CoreSettings.Save();
+            _avatarTubeWindow?.Giggle(Loc.Get(enabled ? "companion_spice_on_line" : "companion_spice_off_line"));
             return enabled;
         }
 
