@@ -14,7 +14,7 @@ ConditioningControlPanel/MainWindow/MainWindow.Awareness.cs.
 | Preset cards/editor/advanced/tutorial, old AwarenessTabView.Presets.cs:27 | Already: CCP.Avalonia/Views/Tabs/AwarenessTabView.Presets.cs:27 and CCP.Avalonia/Tours/TutorialService.cs:78 | WPF shell:102, onboarding FireDemoTrigger WPF service:393 |
 | Privacy-filtered consent/title reactions and legacy AI routing | Already: CCP.Avalonia/Views/AvatarTube/AvatarTubeWindow.Reactions.cs:32; native Wayland remains unknown | ConditioningControlPanel/AvatarTube/AvatarTubeWindow.Reactions.cs:46; unchanged legacy path |
 | First enabled merged comment, old Platform/KeywordTriggerHead.cs:226 | Ported: CCP.Avalonia/Platform/KeywordTriggerHead.cs:174 | WPF service:1283,1439 |
-| Tutorial comment bypasses master/cooldowns but needs entitlement, old KeywordTriggerHead.cs:236 | Ported comment only: same new file:181; real caller CCP.Avalonia/Tours/TutorialService.cs:78 | WPF service:393-432; null OCR words draw nothing |
+| Tutorial comment bypasses master/cooldowns but needs entitlement, old KeywordTriggerHead.cs:236 | Ported comment only: same new file:183; real caller CCP.Avalonia/Tours/TutorialService.cs:78 | WPF service:393-432; null OCR words draw nothing |
 | AI-first, edited pool then raw fallback, old Platform/KeywordAvatarComment.cs:23 | Ported: CCP.Avalonia/Platform/KeywordAvatarComment.cs:24 | WPF service:1548-1615 |
 | Busy bubble/audio, 750ms x16 retries, old KeywordAvatarComment.cs:55 | Ported: new file:57, using existing AvatarTubeWindow.axaml.cs:1424 SpokenAudioDone instead of old duplicate voice state | WPF service:1621-1655 |
 | Panic and shutdown cancellation, old Views/Windows/PanicSurfaces.cs:45 and KeywordTriggerHead.cs:73 | Ported: CCP.Avalonia/Views/Windows/PanicSurfaces.cs:69 and Platform/KeywordTriggerHead.cs:40; shutdown caller App.axaml.cs:1268 | Stronger cancellation than WPF; current WPF service:1263 quiet also retained in new comment path |
@@ -50,3 +50,16 @@ No live desktop, remote AI or audio-device verification is claimed; tests use in
 - bash .github/scripts/core-guards.sh and python3 .github/scripts/avalonia_docs.py passed.
 - The full Avalonia suite was compiled; only the affected 44 tests were run.
   No live desktop, AI provider, microphone or audio device was used.
+
+## Review fix
+
+P2 accepted: WPF service:1272 bypasses merge deduplication for one trigger;
+:1345 filters enabled actions and :1363 dispatches each in order. The Avalonia
+comment path now does the same at CCP.Avalonia/Platform/KeywordTriggerHead.cs:174;
+merged triggers still select only the first enabled comment (:1283-1293 on WPF).
+SingleTriggerDispatchesEveryEnabledCommentInOrder fails on the reviewed commit
+(expected two comments, received one) and passes with the fix. It also checks that
+a disabled comment between the two enabled comments is skipped. No new UI copy.
+Review validation: all three required builds passed (0 errors); 25 selected Avalonia
+tests passed, including TestIsolationTests. Full Core suite: 4635 passed, 6 existing
+skips. Core guards and avalonia_docs.py passed. No full Avalonia suite or live devices.

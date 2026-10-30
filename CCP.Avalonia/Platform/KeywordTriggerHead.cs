@@ -171,9 +171,11 @@ internal sealed class KeywordAudioRuntime
                 PlayCount = t.AudioPlayCount, DelayBetweenMs = t.AudioDelayBetweenMs, DuckSystemAudio = t.DuckAudio };
         }
         if (audio != null) Play(audio);
-        // WPF KeywordTriggerService.cs:1283-1293,1439: first enabled merged comment.
-        var comment = fired.SelectMany(t => t.Actions ?? new()).OfType<AvatarCommentAction>().FirstOrDefault(a => a.Enabled);
-        if (comment != null) _ = KeywordAvatarComment.DispatchAsync(comment, fired[0]);
+        // WPF KeywordTriggerService.cs:1272,1345,1363: all enabled actions for one trigger;
+        // :1283-1293: only the first enabled comment when multiple triggers merge.
+        var comments = fired.SelectMany(t => t.Actions ?? new()).OfType<AvatarCommentAction>().Where(a => a.Enabled);
+        if (fired.Count > 1) comments = comments.Take(1);
+        foreach (var comment in comments) _ = KeywordAvatarComment.DispatchAsync(comment, fired[0]);
     }
 
     // WPF KeywordTriggerService.cs:393-432. Null OCR words draw no highlight.

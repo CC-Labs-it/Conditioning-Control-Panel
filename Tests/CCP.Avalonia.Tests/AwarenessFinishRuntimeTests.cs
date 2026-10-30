@@ -76,6 +76,21 @@ public sealed class AwarenessFinishRuntimeTests
     });
 
     [Fact]
+    public Task SingleTriggerDispatchesEveryEnabledCommentInOrder() => Run((engine, s, lines) =>
+    {
+        s.DisabledPhraseIds.Add("second:0"); // keep the second pool deterministic
+        s.CustomCompanionPhrases.Add(new() { Id = "custom:second", Category = "second",
+            Text = "second comment", Enabled = true });
+        s.KeywordTriggers = new() { new() { Keyword = "sit", CooldownSeconds = 0, Actions = new() {
+            new AvatarCommentAction { FallbackPhraseCategory = "PuppyPraise" },
+            new AvatarCommentAction { Enabled = false, FallbackPhraseCategory = "PuppyPraise" },
+            new AvatarCommentAction { FallbackPhraseCategory = "second" } } } };
+        foreach (var c in "sit") engine.Character(c);
+        Assert.Equal(new[] { ("custom praise", false), ("second comment", false) }, lines);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task TypedMergedCommentsUseFirstEnabledActionOnce() => Run((engine, s, lines) =>
     {
         s.KeywordTriggers = new() {
