@@ -25,7 +25,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages
         /// <summary>WPF PersonalityPage.OnShown, through ShowTab("personality") -> OnTabShown.</summary>
         internal void OnShown(CompanionRoomView? room)
         {
-            _picker ??= new CompanionPickerCard();
+            _picker ??= new CompanionPickerCard { MorePersonalityOptions = async owner => {
+                await Dialogs.PersonalityStudio.Show(owner);
+                _presets?.ViewModel.Sync();
+            } };
             PickerHost.Content = _picker;
             _picker.Refresh();
             if (room is null) return;
