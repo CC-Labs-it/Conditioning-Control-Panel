@@ -9,21 +9,16 @@ using Avalonia.Input;
 using Avalonia.Media;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Leash;
-
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Leash;
-
 /// <summary>A borderless, see-through window holding one ask card over its owner. Escape is the
 /// card's own "later": the offer stays.</summary>
 public sealed class LeashAskWindow : Window
 {
     /// <summary>The ask on screen, if any. One at a time: a second Look replaces it (WPF Open closes the overlay first).</summary>
     internal static LeashAskWindow? Current { get; private set; }
-
     internal LeashAskCard Card { get; }
-
     // RenderProof: a sample ask.
     internal LeashAskWindow() : this(new LeashAskCard()) { }
-
     private LeashAskWindow(LeashAskCard card)
     {
         Card = card;
@@ -43,7 +38,6 @@ public sealed class LeashAskWindow : Window
             card.Dismiss();
         };
     }
-
     /// <summary>WPF LeashSurfaces.ShowAsk: open the card, close it on an answer or a dismiss, and report
     /// the offer seen once it is up.</summary>
     internal static LeashAskWindow? Open(LeashOffer offer, Func<ILeashService?> service, Window? owner)
@@ -69,7 +63,6 @@ public sealed class LeashAskWindow : Window
         catch (Exception ex) { Serilog.Log.Debug("[Leash] ask seen note failed: {E}", ex.Message); }
         return w;
     }
-
     internal static void CloseCurrent()
     {
         var w = Current;
