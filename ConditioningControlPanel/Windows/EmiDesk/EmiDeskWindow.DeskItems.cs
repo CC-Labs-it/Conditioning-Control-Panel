@@ -31,11 +31,13 @@ public partial class EmiDeskWindow
     private void HookDeskItems()
     {
         PrizeGrants.GrantsChanged += OnDeskGrantsChanged;
+        DeskEquipSync.Adopted += OnDeskGrantsChanged;
     }
 
     private void UnhookDeskItems()
     {
         PrizeGrants.GrantsChanged -= OnDeskGrantsChanged;
+        DeskEquipSync.Adopted -= OnDeskGrantsChanged;
     }
 
     private void OnDeskGrantsChanged()
@@ -50,13 +52,14 @@ public partial class EmiDeskWindow
 
     /// <summary>
     /// Read the stored pick (clamped to owned grants) and paint it. Called with every outfit refresh (each
-    /// summon) and when grants change.
+    /// summon), when grants change and when a server copy is adopted. Also starts the once-a-launch pull.
     /// </summary>
     public void RefreshDeskItems()
     {
         try
         {
             SetDeskItems(EmiDeskItems.Current());
+            _ = DeskEquipSync.PullOnceAsync(a => Dispatcher.BeginInvoke(a));
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] desk items refresh failed"); }
     }
