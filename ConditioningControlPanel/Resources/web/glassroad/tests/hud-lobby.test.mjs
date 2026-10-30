@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   hostGate, isPrime, signedIn, tableRows, rowStartsIn, startsLabel, pollDue, quickDelay, cleanHost, stepHost, hostBody, HOST_DEFAULTS,
-  applySeats, applySeat, seatName, seatBadges, raceTags, seatRows, readyCount, canStart, lookChoices, cycleLook, lookLabel,
+  applySeats, applySeat, seatName, seatBadges, raceTags, seatRows, readyCount, canStart, hostSeat, lobbyNote, hostMoved, lookChoices, cycleLook, lookLabel,
   loadLook, saveLook, LOOK_KEY, countdown, serverNow, resultLines, popsLabel, errorCopy, abortCopy, closeCopy, trackName,
 } from '../hud/lobbyMath.js';
 import { PRESETS, POSE_BASE, presetOf, poseOf, presetByPose, poseHoldS, emoteAllowed, isPreset, CLIP_S } from '../hud/presets.js';
@@ -90,6 +90,27 @@ const SEATS = [
   { seat: 1, kind: 'human', name: 'Bo', platform: 'phone', look: { outfit: 'emi-outfit-swim', vehicle: 'emi-vehicle-petal' }, host: false, ready: false, idle: false, left: false },
   { seat: 3, kind: 'bot', name: 'EMI bot', platform: null, look: { outfit: 'emi-outfit-pool', vehicle: 'emi-vehicle-trinket' }, host: false, ready: false, idle: false, left: false },
 ];
+
+test('host start (owner 2026-10-30): joiners wait for the host, a hand-off says who hosts now', () => {
+  const s = applySeats(SEATS);
+  assert.equal(hostSeat(s), 0);
+  assert.equal(lobbyNote(s, 0, 'open'), 'Open table, 1 of 2 ready');
+  assert.equal(lobbyNote(s, 1, 'open'), 'Waiting for the host, 1 of 2 ready');
+  assert.equal(lobbyNote(s, 1, 'friends'), 'Waiting for the host, 1 of 2 ready');
+  const quick = applySeats(SEATS.map((x) => ({ ...x, host: false })));
+  assert.equal(hostSeat(quick), -1);
+  assert.equal(lobbyNote(quick, 1, 'open'), 'Open table, 1 of 2 ready', 'a quick room has nobody to wait for');
+  // the host leaves the lobby: the room blanks seat 0 and hands the role to seat 1 in one seats list
+  const after = applySeats([{ ...SEATS[1], host: true }, SEATS[2]]);
+  assert.equal(hostMoved(s, after, 1), 'You are the host now');
+  assert.equal(hostMoved(s, after, 3), 'Bo is the host now');
+  assert.equal(hostMoved(s, s, 1), '');
+  assert.equal(hostMoved(quick, after, 1), '', 'no host before: nothing moved');
+  assert.equal(canStart(after, 1, 'lobby'), true);
+  const src = readFileSync(fileURLToPath(new URL('../hud/lobby.js', import.meta.url)), 'utf8');
+  assert.ok(!src.includes('Starts by itself'), 'an open table no longer starts by itself');
+  assert.ok(src.includes("'Anyone can join. You start it'"));
+});
 
 test('seats: the room list fills eight seats, one seat message updates one seat', () => {
   assert.ok(TYPES.seatList(SEATS), 'fixture is a valid wire seat list');

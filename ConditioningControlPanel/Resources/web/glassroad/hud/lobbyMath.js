@@ -136,6 +136,21 @@ export function applySeat(seats, msg) {
   return out;
 }
 
+/** Racers who were seated and are now gone (left, or the seat emptied), never `me`: [{ seat, name }] for the
+ *  '<name> left' line in the room and in the race. */
+export function seatsGone(was, now, me = -1) {
+  const out = [];
+  if (!Array.isArray(was) || !Array.isArray(now)) return out;
+  for (const a of was) {
+    if (!a || a.kind !== 'human' || a.left || a.seat === me) continue;
+    const b = now[a.seat];
+    if (!b || b.kind === 'empty' || b.left) out.push({ seat: a.seat, name: seatName(a) });
+  }
+  return out;
+}
+/** The line for one racer gone. */
+export const goneLine = (name) => (name || 'Racer') + ' left';
+
 /** The name a seat shows: its ticket name, our short names for bots, 'Open seat' when empty. */
 export function seatName(s) {
   if (!s || s.kind === 'empty') return 'Open seat';
@@ -171,6 +186,20 @@ export const humans = (seats) => (seats || []).filter((s) => s.kind === 'human' 
 export const readyCount = (seats) => humans(seats).filter((s) => s.ready).length;
 /** The host may press Start in the lobby phase with at least one human seated. */
 export const canStart = (seats, mySeat, phase) => phase === 'lobby' && !!(seats && seats[mySeat] && seats[mySeat].host) && humans(seats).length > 0;
+/** The host's seat, or -1 (a quick room has none). A room with a host starts only when the host says (owner 2026-10-30). */
+export const hostSeat = (seats) => { const h = (seats || []).find((s) => s && s.kind === 'human' && s.host); return h ? h.seat : -1; };
+/** The lobby line under the room title: the host sees the ready count, everyone else waits for the host. */
+export function lobbyNote(seats, mySeat, mode) {
+  const me = (seats || [])[mySeat], count = readyCount(seats) + ' of ' + humans(seats).length + ' ready';
+  if (hostSeat(seats) >= 0 && !(me && me.host)) return 'Waiting for the host, ' + count;
+  return (mode === 'friends' ? 'Friends room' : 'Open table') + ', ' + count;
+}
+/** The host moved to another seat (the old host left the lobby): the line everyone sees, or '' when nothing moved. */
+export function hostMoved(was, now, mySeat) {
+  const a = hostSeat(was), b = hostSeat(now);
+  if (a < 0 || b < 0 || a === b) return '';
+  return b === mySeat ? 'You are the host now' : seatName(now[b]) + ' is the host now';
+}
 
 // ---- looks -------------------------------------------------------------------------------------
 

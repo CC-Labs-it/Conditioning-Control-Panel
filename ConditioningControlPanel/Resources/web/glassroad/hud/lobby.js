@@ -25,10 +25,10 @@
  */
 import {
   hostGate, signedIn, tableRows, quickDelay, cleanHost, stepHost, hostBody, HOST_DEFAULTS, applySeats, applySeat,
-  seatRows, raceTags, readyCount, humans, canStart, lookChoices, cycleLook, lookLabel, loadLook, saveLook, countdown,
+  seatRows, raceTags, canStart, hostSeat, lobbyNote, hostMoved, lookChoices, cycleLook, lookLabel, loadLook, saveLook, countdown,
   lookKeys, fitLook, LOOK_ROW_LABEL,
   serverNow, resultLines, popsLabel, errorCopy, abortCopy, closeCopy, connectFailCopy, trackName, startsLabel, rowStartsIn, BADGE_COPY,
-  linkButton, linkNote, claimStep, pollNow, pollStep, pollReset, listKey,
+  linkButton, linkNote, claimStep, pollNow, pollStep, pollReset, listKey, seatsGone, goneLine,
 } from './lobbyMath.js';
 import { PRESETS, presetOf, poseOf, poseHoldS, emoteAllowed, EMOTE_GAP_MS, EMOTE_SHOW_MS } from './presets.js';
 import { normLook, roomLook } from '../net/protocol.js';
@@ -96,7 +96,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     join: null, room: null, offs: [], welcome: null, seenAt: 0, seat: -1, phase: 'lobby', cfg: null, seed: 0, keep: [],
     seats: applySeats([]), start: null, raced: false, results: null, leaving: false,
     lastEmote: -Infinity, myPose: null, bubbles: {}, friends: null, sent: new Set(),
-    quickT: 0, quickOn: false, autoAt: 0, gen: 0,
+    quickT: 0, quickOn: false, autoAt: 0, gen: 0, hostMsg: '', hostMsgT: 0,
     // the race link (NET.md section 13): preview refusal, access().host, our live link, a claim in flight
     preview: false, access: null, accessAsked: false, link: null, linkCopied: false, linkMsg: '', linkBusy: false, claim: null,
   };
@@ -163,7 +163,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     host() {
       const f = st.host, open = f.mode === 'open';
       title.textContent = open ? 'Host a table' : 'Friends room';
-      setNote(st.msg || (open ? 'Anyone can join. Starts by itself' : 'Friends you invite. You start it'));
+      setNote(st.msg || (open ? 'Anyone can join. You start it' : 'Friends you invite. You start it'));
       const row = (key, label, value, hint, dis) => '<div class="c-opt"><span>' + label + (hint ? '<small>' + hint + '</small>' : '') + '</span>' +
         btn('lb-hstep', value, 'c-tog', ' data-key="' + key + '" aria-label="' + label + '"' + (dis ? ' disabled' : '')) + '</div>';
       extra.innerHTML = '<div class="c-opts">' + row('laps', 'Laps', String(f.laps)) + row('seats', 'Seats', String(f.seats)) +
@@ -190,8 +190,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     room() {
       const cfg = st.cfg || {}, me = st.seats[st.seat] || {};
       title.textContent = trackName(cfg.track) + ', ' + (cfg.laps || 3) + ' laps';
-      const hs = humans(st.seats).length;
-      setNote(st.msg || st.linkMsg || (st.phase === 'lobby' ? (cfg.mode === 'friends' ? 'Friends room' : 'Open table') + ', ' + readyCount(st.seats) + ' of ' + hs + ' ready'
+      setNote(st.msg || st.linkMsg || (st.phase === 'lobby' ? st.hostMsg || lobbyNote(st.seats, st.seat, cfg.mode)
         : st.phase === 'done' ? 'Race over' : 'Racing'));
       if (cfg.mode === 'friends' && me.host && !st.accessAsked) askAccess();
       const linkOn = linkButton(cfg, me, st.access, st.phase);
@@ -204,7 +203,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
       }).join('');
       const lobby = st.phase === 'lobby', counting = !!st.start && st.phase !== 'done';
       const chatOff = !emoteAllowed(st.lastEmote, now);
-      extra.innerHTML = (counting ? '<div class="lb-count" aria-live="polite"></div>' : lobby && st.autoAt ? '<p class="lb-head lb-auto"></p>' : '') +
+      extra.innerHTML = (counting ? '<div class="lb-count" aria-live="polite"></div>' : lobby && st.autoAt && hostSeat(st.seats) < 0 ? '<p class="lb-head lb-auto"></p>' : '') +
         '<ol class="lb-seats">' + seats + '</ol>' +
         (lobby ? '<div class="c-opts">' + lookRows() + '</div><div class="c-list row">' +
           btn('lb-ready', me.ready ? 'Ready' : 'Not ready', 'c-tog' + (me.ready ? ' on' : ''), ' aria-pressed="' + !!me.ready + '"') +
@@ -404,8 +403,8 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     if (!room || st.join !== join) { if (room && st.join !== join) room.close?.(); if (st.join === join) { st.msg = connectFailCopy(why); st.view = 'msg'; st.join = null; paint(); } return; }
     st.room = room;
     const on = (t, fn) => { const off = room.on(t, m => { if(alive() && st.room===room)fn(m); }); if (typeof off === 'function') st.offs.push(off); };
-    on('welcome', onWelcome); on('seats', (m) => { const was = st.seats; st.seats = applySeats(m.seats, st.seats); seatSay(was); seatsChanged(); });
-    on('seat', (m) => { const was = st.seats; st.seats = applySeat(st.seats, m); seatSay(was); seatsChanged(m.seat); });
+    on('welcome', onWelcome); on('seats', (m) => { const was = st.seats; st.seats = applySeats(m.seats, st.seats); hostSay(was); seatSay(was); seatGone(was); seatsChanged(); });
+    on('seat', (m) => { const was = st.seats; st.seats = applySeat(st.seats, m); seatSay(was); seatGone(was); seatsChanged(m.seat); });
     on('start', onStart); on('emote', onEmote); on('finish', onFinish); on('abort', onAbort); on('error', onError); on('close', onClose);
   }
 
@@ -422,6 +421,25 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     if (m.phase === 'countdown' || m.phase === 'racing') {
       emit('online-start', { ...ctx(), resume: m.resume || null });
       if (srv() >= st.start.countAt) { st.raced = true; emit('online-race', ctx()); }
+    }
+  }
+  /** The host left the lobby and the room handed the role on: one line for a few seconds. */
+  function hostSay(was) {
+    const line = st.phase === 'lobby' ? hostMoved(was, st.seats, st.seat) : '';
+    if (!line) return;
+    st.hostMsg = line;
+    if (st.hostMsgT) win.clearTimeout(st.hostMsgT);
+    st.hostMsgT = win.setTimeout(() => { st.hostMsgT = 0; st.hostMsg = ''; if (alive() && st.view === 'room') paint(); }, 5000);
+  }
+  /** Someone left (or dropped past the reconnect grace): '<name> left' under the room's seats while it waits, and
+   *  online-gone for the race (boot.js toasts it). */
+  function seatGone(was) {
+    for (const g of seatsGone(was, st.seats, st.seat)) {
+      emit('online-gone', g);
+      if (st.phase !== 'lobby' || st.view !== 'room') continue;
+      const line = goneLine(g.name);
+      st.msg = line; setNote(line);
+      win.setTimeout(() => { if (st.msg !== line) return; st.msg = ''; if (st.view === 'room') paint(); }, 2400);
     }
   }
   /** Someone sat down, left or got ready while the room waits: one sound (never in a race). */
@@ -481,6 +499,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     st.offs = [];
     const r = st.room; st.room = null;
     if (r) { st.leaving = true; try { r.close?.(); } catch (e) { /* already closed */ } }
+    if (st.hostMsgT) { win.clearTimeout(st.hostMsgT); st.hostMsgT = 0; } st.hostMsg = '';
     st.join = null; st.welcome = null; st.start = null; st.autoAt = 0; st.bubbles = {}; st.myPose = null;
     st.link = null; st.linkCopied = false; st.linkMsg = '';             // the link lives on server side; Invite link fetches it again
     if (bellT) { win.clearTimeout(bellT); bellT = 0; }

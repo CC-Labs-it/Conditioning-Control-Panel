@@ -43,7 +43,7 @@ import { gripYaw, slewSteer } from './steer.js';
 import { beneath, onLanding, firstBeneath, landRoute, catchCap, resetRoute, edgeAt, hopTrack, airCatch, turnsAway, guideLanding } from './routes.js';
 import { fallBeneath, fallLand, resetFall } from './falls.js';
 import { waterAt, waterOut, blendPush, gradeDeg, surfaceKind } from './flow.js';
-import { lipLeave, broadPlatformEdgeKick, platformHopUp, fieldAtS } from './stones.js';
+import { lipLeave, broadPlatformEdgeKick, platformHopUp, fieldAtS, fromLipVoid } from './stones.js';
 import { armGlide, glideGravity, resetGlide } from './glide.js';
 import { aerialGapAt } from '../track/aerial.js';
 import { airWordQuery, resetAirWords, stepAirWords } from './airWords.js';
@@ -252,16 +252,22 @@ export function step(st, a, track, feel, dt, ev) {
   }
   const road = !has(qb.flags, 'jump'), n = qb.normal, vn = v3dot(V, n);
   const travel = Math.hypot(P[0] - PRE[0], P[1] - PRE[1], P[2] - PRE[2]);
-  const heldRail = !air && qa.onRoad && qb.railed && !qb.hole && road && qb.edgeDist >= -travel &&
+  // A flight coming down along a rail where the road narrows (the funnel after the Threshold stones) touches down on
+  // the rail's road side too: the rail below pushes it back in. Before, every tick ended just past the narrowing edge,
+  // never counted as road, and the kart sank under the deck it was riding beside.
+  const heldRail = (!air || qa.edgeDist >= 0) && qa.onRoad && qb.railed && !qb.hole && road && qb.edgeDist >= -travel &&
     edgeAt(track, qb, qb.lateral, gap(feel, 'kart.radiusM')) !== 'kicker';
   const following = !air && qa.onRoad && qa.forkId === qb.forkId;
   const crossed = air && crossedSupportedRoad(track, qa, qb);
+  // wave 2 STONES: a flight over a field's void inside the snap band is still on its own road (overLip); reaching the
+  // next stone or the deck past the field there lands, never passes under its front edge (sim/stones.js fromLipVoid)
+  const lipCatch = air && fromLipVoid(qa, qb, snap);
   const band = snap + (following || crossed ? travel : Math.abs(vn) * dt);
   const previousHeight = (PRE[0] - qb.p[0]) * n[0] + (PRE[1] - qb.p[1]) * n[1] + (PRE[2] - qb.p[2]) * n[2];
   // a ramp wedge is solid: a kart inside its volume (stepped on from the side, or a flight that clips it) stands on it
   const inWedge = !!qb.ramp && qb.height < 0 && qb.height >= -qb.rampH - snap;
   const ground = !ramp && (qb.onRoad || heldRail) && (inWedge || qb.height >= -band &&
-    (air ? qb.height <= 0 && (crossed || previousHeight >= -.03 && vn <= 0) : qb.height <= band));
+    (air ? qb.height <= 0 && (crossed || (lipCatch || previousHeight >= -.03) && vn <= 0) : qb.height <= band));
   if (ground) {
     // The probe's surface point is exact on a curved bank; a normal-plane step is not.
     v3copy(P, qb.p); v3reject(V, V, n);
