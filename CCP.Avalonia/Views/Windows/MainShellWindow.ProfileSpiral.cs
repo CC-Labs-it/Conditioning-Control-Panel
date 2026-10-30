@@ -66,8 +66,8 @@ public partial class MainShellWindow
         RefreshProfileMenuSpiral();
     });
 
-    // Same persisted withhold reader as SpiralTabView. WPF ProfileSpiral.cs:61,128,156.
-    private static bool ProfileSpiralWithheld => SpiralRoom.SpiralWithheldFor(CoreSettings.Current, false, false);
+    // Same live and persisted withhold reader as SpiralTabView. WPF ProfileSpiral.cs:61,128,156.
+    private static bool ProfileSpiralWithheld => SpiralRoom.SpiralWithheldFor(CoreSettings.Current, App.Descent?.HasMigrationOffer == true, false);
 
     // WPF MainWindow.ProfileSpiral.cs:122-137. Never put our block on a searched card.
     internal void RefreshProfileSpiralPlate()

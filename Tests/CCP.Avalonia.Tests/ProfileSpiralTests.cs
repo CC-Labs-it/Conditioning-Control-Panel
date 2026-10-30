@@ -17,6 +17,8 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Descent;
 using Xunit;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
+using Newtonsoft.Json.Linq;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
@@ -105,6 +107,65 @@ public sealed class ProfileSpiralTests
         Plate(s).RaiseEvent(new PointerReleasedEventArgs(Plate(s),
             new global::Avalonia.Input.Pointer(1, PointerType.Mouse, true), Plate(s), default, 0, default, KeyModifiers.None, MouseButton.Left));
         Dispatcher.UIThread.RunJobs(); Assert.Equal("spiral", s.CurrentTab);
+    });
+
+    [Theory]
+    [InlineData(MouseButton.Right)]
+    [InlineData(MouseButton.Middle)]
+    public void OtherMouseButtonsDoNotOpenTheRoom(MouseButton button) => Run((s, service, _) =>
+    {
+        Block(service, 12);
+        Plate(s).RaiseEvent(new PointerReleasedEventArgs(Plate(s),
+            new global::Avalonia.Input.Pointer(1, PointerType.Mouse, true), Plate(s), default, 0, default, KeyModifiers.None, button));
+        Dispatcher.UIThread.RunJobs(); Assert.Equal("discord", s.CurrentTab);
+    });
+
+    [Fact]
+    public void LiveOfferWithoutPersistedFlagWithholdsDoorsAndRoomUntilAnswered() => Run((s, service, settings) =>
+    {
+        Block(service, 12);
+        service.ObserveMigrationOffer(JObject.Parse("{\"descent_migration\":{\"required\":true}}"));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(settings.Current.DescentMigrationOffered);
+        Assert.False(Row(s).IsVisible); Assert.False(Plate(s).IsVisible);
+        s.OpenSpiralMapFromProfile(); Dispatcher.UIThread.RunJobs();
+        var room = s.Named<SpiralTabView>("SpiralTab")!;
+        Assert.Equal(SpiralRoomState.Fog, room.RoomState);
+        settings.Current.PendingDescentMigrationChoice = DescentMigrationChoices.Restore;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(Row(s).IsVisible); Assert.True(Plate(s).IsVisible);
+        Assert.Equal(SpiralRoomState.Spiral, room.RoomState);
+        service.ObserveMigrationOffer(JObject.Parse("{\"descent_migration\":{\"completed\":true}}"));
+        settings.Current.PendingDescentMigrationChoice = null; Dispatcher.UIThread.RunJobs();
+        Assert.Equal(SpiralRoomState.Spiral, room.RoomState);
+    });
+
+    [Fact]
+    public void BothDoorsReadServerBlockAndRoomTracksUpdatesAndUnsubscribes() => Run((s, service, _) =>
+    {
+        var oldEngine = SpiralTabView.EngineAvailable; var oldStart = SpiralTabView.StartEmbed;
+        SpiralTabView.EngineAvailable = () => true; SpiralTabView.StartEmbed = _ => { };
+        try
+        {
+            Block(service, 12); Row(s).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            var room = s.Named<SpiralTabView>("SpiralTab")!;
+            Assert.Equal(SpiralRoomState.Spiral, room.RoomState);
+            var embed = Assert.IsType<SpiralEmbedView>(Assert.Single(room.FindControl<Grid>("EmbedHost")!.Children));
+            string? sent = null; embed.SendJson = json => { sent = json; return Task.CompletedTask; };
+            embed.Receive("{\"type\":\"spiral:ready\"}");
+            Assert.Equal(12, JObject.Parse(sent!).Value<int>("devotion_days"));
+            Block(service, 13); Assert.Equal(13, JObject.Parse(sent!).Value<int>("devotion_days"));
+            Block(service, null); Assert.Equal(SpiralRoomState.Waiting, room.RoomState);
+            Block(service, 14); Assert.Equal(SpiralRoomState.Spiral, room.RoomState);
+            s.ShowTab("discord"); Block(service, null);
+            var handlers = (EventHandler?)typeof(DescentService).GetField("BlockChanged", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(service);
+            Assert.DoesNotContain(handlers?.GetInvocationList() ?? Array.Empty<Delegate>(), h => ReferenceEquals(h.Target, room));
+            Block(service, 15);
+            Plate(s).RaiseEvent(new PointerReleasedEventArgs(Plate(s),
+                new global::Avalonia.Input.Pointer(1, PointerType.Mouse, true), Plate(s), default, 0, default, KeyModifiers.None, MouseButton.Left));
+            Dispatcher.UIThread.RunJobs(); Assert.Equal(SpiralRoomState.Spiral, room.RoomState);
+        }
+        finally { SpiralTabView.EngineAvailable = oldEngine; SpiralTabView.StartEmbed = oldStart; }
     });
 
     [Fact]

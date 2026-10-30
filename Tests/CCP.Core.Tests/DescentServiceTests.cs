@@ -144,15 +144,39 @@ public sealed class DescentServiceTests
         finally { sync.Reset(); CoreAccount.IsLoggedInProvider = savedAccount; }
     });
 
+    [Fact]
+    public Task AcceptedSyncRetainsLiveOfferUntilAckOrLogoutAndNotifiesSurfaces() => Run(async () =>
+    {
+        var account = CoreAccount.IsLoggedInProvider;
+        var reader = new DescentService();
+        int changes = 0; reader.BlockChanged += (_, _) => changes++;
+        var sync = new SyncPush(() => Array.Empty<string>(), () => false,
+            new AcceptedSync("{\"descent_migration\":{\"required\":true}}")) { DescentReader = reader };
+        try
+        {
+            CoreAccount.IsLoggedInProvider = () => true; sync.MarkLoaded(Array.Empty<string>());
+            Assert.True(await sync.PushAsync("live migration offer"));
+            Assert.True(reader.HasMigrationOffer); Assert.Equal(1, changes);
+            reader.ObserveMigrationOffer(new JObject());
+            Assert.True(reader.HasMigrationOffer); Assert.Equal(1, changes);
+            reader.ObserveMigrationOffer(JObject.Parse("{\"descent_migration\":{\"completed\":true}}"));
+            Assert.False(reader.HasMigrationOffer); Assert.Equal(2, changes);
+            reader.ObserveMigrationOffer(JObject.Parse("{\"descent_migration\":{\"required\":true}}"));
+            Assert.True(reader.HasMigrationOffer);
+            sync.Reset(); Assert.False(reader.HasMigrationOffer);
+        }
+        finally { sync.Reset(); CoreAccount.IsLoggedInProvider = account; }
+    });
+
     private sealed class SteppedClock : TimeProvider
     {
         public DateTimeOffset Now = DateTimeOffset.UnixEpoch;
         public override DateTimeOffset GetUtcNow() => Now;
     }
 
-    private sealed class AcceptedSync : HttpMessageHandler
+    private sealed class AcceptedSync(string body = "{}") : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") });
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
     }
 }
