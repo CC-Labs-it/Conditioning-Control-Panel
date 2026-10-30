@@ -4765,6 +4765,17 @@ namespace ConditioningControlPanel.Models
             set { _scrolllerOfficialNoteSeen = value; OnPropertyChanged(); }
         }
 
+        private string _rainPackHash = "";
+        /// <summary>The look hash of the baked Rain clip pack the tube plays (a folder under
+        /// &lt;userdata&gt;/rain-packs, Services/Companion/RainPackStore). "" = the embedded default
+        /// clips. Machine-local: the pack lives on this PC only, so it is left out of the cloud
+        /// backup and kept across a restore (ProfileSyncService).</summary>
+        public string RainPackHash
+        {
+            get => _rainPackHash;
+            set { _rainPackHash = value ?? ""; OnPropertyChanged(); }
+        }
+
         /// <summary>True when the user has agreed to see remote content anywhere. Read THIS,
         /// not the raw flag: users who already accepted the FYP feed's consent card agreed to
         /// exactly this, and asking them a second time in different words would read as the
