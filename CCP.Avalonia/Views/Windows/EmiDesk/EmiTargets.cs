@@ -15,8 +15,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// openers this head has. WPF twin: ConditioningControlPanel/Services/EmiDesk/EmiTargets.cs, whose
     /// availability, lock probe and opener this mirrors door for door.
     ///
-    /// <para>ponytail: HIDDEN, not faked, until this head has their surface: arcademy, dtrh,
-    /// intake, spiral (overlay), goon, backroom and justdrop. Each is a host window or overlay no
+    /// <para>ponytail: HIDDEN until this head has their surface: arcademy, spiral (overlay),
+    /// goon and backroom. Each is a host window or overlay no
     /// Avalonia code launches yet; a null from <see cref="Door"/> keeps the card out of the ring the
     /// same way an unavailable door does. Also missing: the moments WPF's Pick fires
     /// (<c>ringPick</c>, <c>lockedCardTapped</c>) - there is no <c>App.EmiDesk.Fire</c> on this head.</para>
@@ -64,8 +64,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 open);
         }
 
+        // WPF Services/EmiDesk/EmiTargets.cs:179,182,204 and ShowGate:295-296.
         private static (Func<bool> Available, Func<bool> Locked, Action Open)? Door(string id) => id switch
         {
+            "dtrh" => (Always, Views.Games.GameWindow.DtrhLocked,
+                () => Views.Games.GameWindow.Launch(Views.Games.GameWindow.DtrhId)),
+            "intake" => (Always, () => !App.IntakePass.CanStartIntake,
+                () => Shell?.Named<Views.Tabs.GradedIntakeTabView>("GradedIntakeTab")?.BtnStartIntake_Click(null, new global::Avalonia.Interactivity.RoutedEventArgs())),
+            "justdrop" => (() => Services.JustDrop.JustDropService.DoorAvailable, Never, () => Nav("justdrop")),
             "loom" => Free(() => Rack("spiral")),
             "sessions" => Free(() => Nav("presets")),
             "flashes" => Free(() => Rack("flash")),
@@ -121,6 +127,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 if (locked)
                 {
                     var name = Loc.Get("emi_desk_target_" + id);
+                    // WPF ShowGate: these two refusals are Lab prompts, never Premium.
+                    if (id is "dtrh" or "intake")
+                    {
+                        TierGate.DemandLab(name, id == "dtrh" ? id : null);
+                        return;
+                    }
                     string? daily = id is "awareness" or "remote" or "takeover" ? id : null;
                     if (daily == null) TierGate.DemandPremium(name); else TierGate.DemandPremium(name, daily);
                     return;
