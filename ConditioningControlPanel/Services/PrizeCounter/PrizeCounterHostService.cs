@@ -534,6 +534,8 @@ internal static class PrizeCounterHostService
             from = _from,
             wears = WearsFor(_from),
             platform = "desktop",
+            // The V2 avatar's name for the active mod; the lexicon is already filled, this covers page-side copy.
+            companion = Companion.CompanionName.ForActiveMod(),
         };
     }
 

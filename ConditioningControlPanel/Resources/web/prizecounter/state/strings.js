@@ -30,8 +30,8 @@ export const LEX = {
   shop_week: 'wk {0}',
   shop_back: 'Back',
   shop_tabs: 'Shelves',
-  shop_tab_rain_clothes: 'Rain: clothes',
-  shop_tab_rain_hair: 'Rain: hair',
+  shop_tab_rain_clothes: '{companion}: clothes',
+  shop_tab_rain_hair: '{companion}: hair',
   shop_tab_kart: 'Kart',
   shop_tab_chess: 'Chess',
   shop_tab_profile: 'Profile',
@@ -53,7 +53,7 @@ const ITEM_NAMES = {
   'chess.banner.house-pink': 'House Banner', 'chess.banner.crest': 'Crest Banner', 'chess.insignia.heart': 'Heart Insignia',
   'chess.insignia.star': 'Star Insignia', 'profile.frame.lace': 'Lace Frame', 'profile.frame.ink-stamp': 'Ink Stamp Frame',
   'profile.frame.gilt': 'Gilt Frame', 'profile.frame.polaroid': 'Polaroid Frame', 'profile.avatar.emi-pixel': 'Pixel EMI',
-  'profile.avatar.rain-portrait': 'Rain Portrait', 'desk.hat.top-hat': 'The Pompous Topper', 'desk.hat.party': 'The Giddy Cone',
+  'profile.avatar.rain-portrait': '{companion} Portrait', 'desk.hat.top-hat': 'The Pompous Topper', 'desk.hat.party': 'The Giddy Cone',
   'desk.toy.rubber-duck': 'The Suggestible Duck', 'desk.toy.snow-globe': 'The Foggy Forecast', 'prime.paint.host-gold': 'Host Gold Paint',
   'prime.trail.podium': 'Podium Ribbons', 'prime.frame.room-host': 'Room Host Frame', 'prime.banner.arena': 'Arena Banner',
   jackpot_remix: 'Jackpot Remix', rt_demo: 'Racing Thoughts Demo', high_roller: 'High Roller', flashes_v2: 'Flashes V2',
@@ -80,25 +80,25 @@ const ITEM_DESCS = {
   "shop_item_kart_outfit_ballerina_desc": "Ballet outfit with a tutu for EMI in Racing Thoughts. The kart is separate.",
   "shop_item_kart_paint_pattern_bundle_desc": "Five paint patterns for EMI in one item: stripes, polka dots, checks, hearts and spirals.",
   "shop_item_kart_umbrella_lace_desc": "Lace parasol for the kart in Racing Thoughts.",
-  "shop_item_rain_dress_midnight_cocktail_desc": "Blue cocktail dress for Rain.",
-  "shop_item_rain_dress_rose_flare_desc": "Pink flared dress for Rain.",
-  "shop_item_rain_dress_ivory_midi_desc": "Ivory midi dress for Rain.",
-  "shop_item_rain_dress_plum_asymmetric_desc": "Plum asymmetric dress for Rain.",
-  "shop_item_rain_dress_scarlet_bell_desc": "Scarlet bell dress for Rain.",
-  "shop_item_rain_dress_teal_tulip_desc": "Teal tulip dress for Rain.",
-  "shop_item_rain_dress_black_highlow_desc": "Black dress with a high-low hem for Rain.",
-  "shop_item_rain_suit_hazmat_yellow_desc": "Yellow hazmat suit for Rain. The respirator is a separate item.",
-  "shop_item_rain_suit_action_yellow_desc": "Yellow suit with black side stripes for Rain. The katana is a separate item.",
-  "shop_item_rain_acc_back_katana_desc": "Katana and scabbard worn on Rain's back. Equips separately from clothing.",
-  "shop_item_rain_acc_hazmat_mask_desc": "Respirator mask for Rain. Equips separately from the hazmat suit.",
-  "shop_item_rain_acc_cat_eye_frames_desc": "Cat-eye glasses for Rain.",
-  "shop_item_rain_acc_silver_drops_desc": "Silver drop earrings for Rain.",
-  "shop_item_rain_hair_chestnut_bob_desc": "Chestnut bob for Rain. Shown on a display head.",
-  "shop_item_rain_hair_copper_lob_desc": "Copper long bob for Rain. Shown on a display head.",
-  "shop_item_rain_hair_ink_sleek_desc": "Sleek black hairstyle for Rain. Shown on a display head.",
-  "shop_item_rain_hair_rose_waves_desc": "Pink wavy hairstyle for Rain. Shown on a display head.",
-  "shop_item_rain_hair_platinum_long_desc": "Long platinum hairstyle for Rain. Shown on a display head.",
-  "shop_item_rain_hair_auburn_volume_desc": "Full auburn hairstyle for Rain. Shown on a display head.",
+  "shop_item_rain_dress_midnight_cocktail_desc": "Blue cocktail dress for {companion}.",
+  "shop_item_rain_dress_rose_flare_desc": "Pink flared dress for {companion}.",
+  "shop_item_rain_dress_ivory_midi_desc": "Ivory midi dress for {companion}.",
+  "shop_item_rain_dress_plum_asymmetric_desc": "Plum asymmetric dress for {companion}.",
+  "shop_item_rain_dress_scarlet_bell_desc": "Scarlet bell dress for {companion}.",
+  "shop_item_rain_dress_teal_tulip_desc": "Teal tulip dress for {companion}.",
+  "shop_item_rain_dress_black_highlow_desc": "Black dress with a high-low hem for {companion}.",
+  "shop_item_rain_suit_hazmat_yellow_desc": "Yellow hazmat suit for {companion}. The respirator is a separate item.",
+  "shop_item_rain_suit_action_yellow_desc": "Yellow suit with black side stripes for {companion}. The katana is a separate item.",
+  "shop_item_rain_acc_back_katana_desc": "Katana and scabbard worn on {companion}'s back. Equips separately from clothing.",
+  "shop_item_rain_acc_hazmat_mask_desc": "Respirator mask for {companion}. Equips separately from the hazmat suit.",
+  "shop_item_rain_acc_cat_eye_frames_desc": "Cat-eye glasses for {companion}.",
+  "shop_item_rain_acc_silver_drops_desc": "Silver drop earrings for {companion}.",
+  "shop_item_rain_hair_chestnut_bob_desc": "Chestnut bob for {companion}. Shown on a display head.",
+  "shop_item_rain_hair_copper_lob_desc": "Copper long bob for {companion}. Shown on a display head.",
+  "shop_item_rain_hair_ink_sleek_desc": "Sleek black hairstyle for {companion}. Shown on a display head.",
+  "shop_item_rain_hair_rose_waves_desc": "Pink wavy hairstyle for {companion}. Shown on a display head.",
+  "shop_item_rain_hair_platinum_long_desc": "Long platinum hairstyle for {companion}. Shown on a display head.",
+  "shop_item_rain_hair_auburn_volume_desc": "Full auburn hairstyle for {companion}. Shown on a display head.",
   "shop_item_chess_set_royal_capes_desc": "Cobalt and gold capes for all six chess pieces. Shown on the knight.",
   "shop_item_chess_set_velvet_court_desc": "Emerald and copper clothing for all six chess pieces. Shown on the knight.",
   "shop_item_chess_banner_house_pink_desc": "Jade and copper banner with a heart crest for your chess pieces.",
@@ -110,7 +110,7 @@ const ITEM_DESCS = {
   "shop_item_profile_frame_gilt_desc": "Gold frame for your profile picture. The portrait is an example.",
   "shop_item_profile_frame_polaroid_desc": "Instant photo frame for your profile picture. The portrait is an example.",
   "shop_item_profile_avatar_emi_pixel_desc": "Pixel-art EMI for your profile picture.",
-  "shop_item_profile_avatar_rain_portrait_desc": "Rain portrait for your profile picture.",
+  "shop_item_profile_avatar_rain_portrait_desc": "{companion} portrait for your profile picture.",
   "shop_item_desk_hat_top_hat_desc": "Top hat for EMI on your desktop.",
   "shop_item_desk_hat_party_desc": "Party hat for EMI on your desktop.",
   "shop_item_desk_toy_rubber_duck_desc": "Rubber duck for EMI on your desktop.",
@@ -130,10 +130,23 @@ const ITEM_DESCS = {
 };
 Object.assign(LEX, ITEM_DESCS);
 
-/** A translator over the host lexicon: t(key, ...args) fills {0}, {1}. Unknown keys answer the key itself. */
-export function makeT(lexicon) {
+/** The V2 avatar's name when the host sends none (web, phone): "Rain" is only the 3D model's name. */
+export const COMPANION_FALLBACK = 'Emi';
+
+/** `init.companion` as a display name: a short plain string, else Emi. */
+export function companionName(value) {
+  const v = typeof value === 'string' ? value.trim() : '';
+  return v && v.length <= 24 ? v : COMPANION_FALLBACK;
+}
+
+/** A translator over the host lexicon: t(key, ...args) fills {0}, {1} and {companion} (the active mod's name for the
+ *  V2 avatar; the WPF host already fills it in its lexicon). Unknown keys answer the key itself. */
+export function makeT(lexicon, companion) {
   const lex = lexicon && typeof lexicon === 'object' ? lexicon : {};
-  return (key, ...args) => String(lex[key] ?? LEX[key] ?? key).replace(/\{(\d)\}/g, (m, i) => (args[i] ?? m));
+  const name = companionName(companion);
+  return (key, ...args) => String(lex[key] ?? LEX[key] ?? key)
+    .replace(/\{(\d)\}/g, (m, i) => (args[i] ?? m))
+    .replace(/\{companion\}/g, name);
 }
 
 export const tabKey = (id) => `shop_tab_${String(id).replace(/-/g, '_')}`;

@@ -2044,6 +2044,8 @@ namespace ConditioningControlPanel
                     Services.FxTheme.ApplyForActiveMod();
                     foreach (Window w in Current.Windows)
                         Services.WindowChromeHelper.ApplyDarkTitleBar(w);
+                    // {companion} and the other vocab tokens name the new mod's words.
+                    Localization.LocalizationManager.Instance.NotifyVocabChanged();
                 }
                 if (Current?.Dispatcher?.CheckAccess() == true) Recolor();
                 else Current?.Dispatcher?.Invoke(Recolor);

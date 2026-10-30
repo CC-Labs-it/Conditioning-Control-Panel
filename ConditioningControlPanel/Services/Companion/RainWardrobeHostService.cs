@@ -256,6 +256,8 @@ internal static class RainWardrobeHostService
             LocalizationManager.Instance.CurrentLanguage,
             MotionFx.Level.ToString().ToLowerInvariant(),
             Safety.GentleVisuals.On, prices);
+        // What the page calls her: the active mod's name (Bambi, Bimbo, Emi), never the model's "Rain".
+        init["companion"] = CompanionName.ForActiveMod();
         // The counter's Wear door: one piece on as a draft, once (a later ready never re-applies it).
         if (_tryOn != null) { init["tryOn"] = _tryOn; _tryOn = null; }
         return init;
