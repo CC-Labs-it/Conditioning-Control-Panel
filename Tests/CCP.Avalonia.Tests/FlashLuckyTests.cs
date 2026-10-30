@@ -9,6 +9,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Helpers;
@@ -147,4 +148,55 @@ public sealed class FlashLuckyTests
         var glow = ShowOne();
         Assert.Equal(FlashCorners.GlowBaseDip, glow.CornerRadiusDip);
     });
+
+    // WPF FlashLayer.cs:441-470: clip all picture effects after drawing the outer glow.
+    [Theory]
+    [InlineData(FlashExitStyle.Glitch, false)]
+    [InlineData(FlashExitStyle.TvOff, false)]
+    [InlineData(FlashExitStyle.Glitch, true)]
+    [InlineData(FlashExitStyle.TvOff, true)]
+    public Task Rounded_exit_layers_render_inside_the_picture_clip(FlashExitStyle style, bool glow) => OnUi((s, clock) =>
+    {
+        s.FlashRoundedCorners = true;
+        s.FlashGlowEnabled = glow;
+        PrizeOwnership.IsGranted = _ => true;
+        if (glow) s.UnlockedSkills.Add("sparkle_boost_1");
+        var w = ShowOne();
+        try
+        {
+            w.Width = w.Height = 300;
+            using var before = w.CaptureRenderedFrame();
+            w.BeginExit(FlashExit.Begin(style, MotionLevel.Full, seed: 41));
+            clock.Now += TimeSpan.TicksPerSecond / 10;
+            w.ExitFrame();
+            using var arranged = w.CaptureRenderedFrame();
+            var image = w.GetVisualDescendants().OfType<Image>().First();
+            var fit = Stretch.Uniform.CalculateSize(image.Bounds.Size, image.Source!.Size);
+            var origin = new Point((image.Bounds.Width - fit.Width) / 2, (image.Bounds.Height - fit.Height) / 2);
+            var corner = image.TranslatePoint(origin + new Vector(1, 1), w)!.Value;
+            var centre = image.TranslatePoint(origin + new Vector(fit.Width / 2, fit.Height / 2), w)!.Value;
+            byte Alpha(Bitmap frame, Point point)
+            {
+                using var copy = new WriteableBitmap(frame.PixelSize, frame.Dpi, PixelFormat.Bgra8888, AlphaFormat.Premul);
+                using var fb = copy.Lock();
+                frame.CopyPixels(new PixelRect(frame.PixelSize), fb.Address, fb.RowBytes * fb.Size.Height, fb.RowBytes);
+                int x = (int)(point.X * frame.PixelSize.Width / w.Bounds.Width);
+                int y = (int)(point.Y * frame.PixelSize.Height / w.Bounds.Height);
+                return System.Runtime.InteropServices.Marshal.ReadByte(fb.Address + y * fb.RowBytes + x * 4 + 3);
+            }
+            if (glow)
+            {
+                // The halo remains outside the shared clip. Hide it only to inspect the picture pixels.
+                var halo = w.GetVisualDescendants().OfType<Border>().Single(b => b.BoxShadow.Count > 0);
+                Assert.True(Alpha(arranged!, corner) > 0);
+                Assert.Null(halo.Clip);
+                halo.IsVisible = false;
+            }
+            using var rendered = w.CaptureRenderedFrame();
+            Assert.Equal(0, Alpha(rendered!, corner));
+            Assert.True(Alpha(rendered!, centre) > 0);
+        }
+        finally { w.Close(); }
+    });
+
 }

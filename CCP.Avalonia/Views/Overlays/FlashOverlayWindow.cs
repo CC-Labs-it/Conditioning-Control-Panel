@@ -30,7 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     {
         private readonly Image _image;
         // The picture, its glow card and the TvOff whiten move together on an exit; the sparks do not.
-        private readonly Panel _card, _root;
+        private readonly Panel _card, _picture, _root;
         private readonly Border _glow, _whiten;
         private Canvas? _sparks;
         private Panel? _slices;
@@ -233,9 +233,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var pixels = CopyPixels(src as Bitmap);
                 _redGhost = BuildGhost("FlashGlitchRed", src, pixels, Color.FromRgb(255, 40, 90));
                 _cyanGhost = BuildGhost("FlashGlitchCyan", src, pixels, Color.FromRgb(40, 230, 255));
-                var index = _card.Children.IndexOf(_image) + 1;
-                _card.Children.Insert(index, _redGhost);
-                _card.Children.Insert(index + 1, _cyanGhost);
+                var index = _picture.Children.IndexOf(_image) + 1;
+                _picture.Children.Insert(index, _redGhost);
+                _picture.Children.Insert(index + 1, _cyanGhost);
                 for (var k = 0; k < n; k++)
                     _slices.Children.Add(new Image
                     {
@@ -243,7 +243,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         Clip = new RectangleGeometry(new Rect(0, h * k / n, w, h / n)),
                     });
                 _image.IsVisible = false;
-                _card.Children.Insert(_card.Children.IndexOf(_cyanGhost) + 1, _slices);
+                _picture.Children.Insert(_picture.Children.IndexOf(_cyanGhost) + 1, _slices);
             }
             if (FlashExit.SparkCount(exit) > 0)
             {
@@ -396,25 +396,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ClipCorners();
         }
 
-        /// <summary>The clip follows the letterboxed picture, not the Image's box.</summary>
+        /// <summary>WPF FlashLayer.cs:441-470 clips the picture, Glitch and TV whiten together,
+        /// after drawing the glow. The clip follows the letterboxed picture, not the outer card.</summary>
         private void ClipCorners()
         {
             if (CornerRadiusDip <= 0 || _image.Source is not { } src || _image.Bounds.Width <= 0 || _image.Bounds.Height <= 0)
             {
-                _image.Clip = null;
+                _picture.Clip = null;
                 return;
             }
             var box = _image.Bounds.Size;
             var fit = Stretch.Uniform.CalculateSize(box, src.Size);
             var r = Math.Min(CornerRadiusDip, Math.Min(fit.Width, fit.Height) / 2);
-            _image.Clip = new RectangleGeometry(new Rect((box.Width - fit.Width) / 2, (box.Height - fit.Height) / 2, fit.Width, fit.Height), r, r);
+            _picture.Clip = new RectangleGeometry(new Rect((box.Width - fit.Width) / 2, (box.Height - fit.Height) / 2, fit.Width, fit.Height), r, r);
         }
 
         /// <summary>Test seams: the picture's current transform (null before an exit), the glow, the
         /// whiten, the glitch slices and the sparks.</summary>
         internal Transform? PictureTransform => _card.RenderTransform as Transform;
         internal BoxShadows GlowShadow => _glow.BoxShadow;
-        internal Geometry? PictureClip => _image.Clip;
+        internal Geometry? PictureClip => _picture.Clip;
         internal double WhitenOpacity => _whiten.Opacity;
         internal Panel? Slices => _slices;
         internal Canvas? Sparks => _sparks;
@@ -452,10 +453,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _image.SizeChanged += (_, _) => ClipCorners();
             _glow = new Border { Background = Brushes.Black, IsHitTestVisible = false };
             _whiten = new Border { Background = Brushes.White, Opacity = 0, IsHitTestVisible = false };
+            _picture = new Panel { Children = { _image, _whiten } };
             // Centred, so the card is the letterboxed picture, not the window (as the bare Image was).
             _card = new Panel
             {
-                Children = { _glow, _image, _whiten },
+                Children = { _glow, _picture },
                 HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center,
                 VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
             };

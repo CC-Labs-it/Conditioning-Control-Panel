@@ -22,7 +22,8 @@ public sealed class FlashDriftTests
     private static void EnsureApp()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
+                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
