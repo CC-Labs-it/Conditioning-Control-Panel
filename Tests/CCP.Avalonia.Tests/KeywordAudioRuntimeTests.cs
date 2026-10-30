@@ -19,6 +19,7 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class KeywordAudioRuntimeTests
 {
+    private static DateTime _singletonNow = new(2026, 10, 14, 12, 0, 0);
     private static void Run(Action<KeywordAudioRuntime, AppSettings, List<(string Path, float Volume)>> body) =>
         RunAsync((engine, settings, played) => { body(engine, settings, played); return Task.CompletedTask; }).GetAwaiter().GetResult();
 
@@ -30,7 +31,10 @@ public sealed class KeywordAudioRuntimeTests
         var s = CoreSettings.Current;
         var saved = (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
             s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
-            CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled);
+            CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled, CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider);
+        var singletonClock = KeywordTriggerHead.Engine.Now;
+        _singletonNow = _singletonNow.AddHours(3);
+        KeywordTriggerHead.Engine.Now = () => _singletonNow;
         var engine = new KeywordAudioRuntime();
         var played = new List<(string, float)>();
         var file = Path.GetTempFileName();
@@ -45,15 +49,18 @@ public sealed class KeywordAudioRuntimeTests
             CoreEntitlement.IsFreeTodayProvider = _ => false;
             CoreAudio.PlayStoppableProvider = (path, volume, _, _, _) => { played.Add((path, volume)); return () => played.Add(("stopped", 0)); };
             engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 0);
+            CoreSession.IsEngineRunningProvider = () => true;
+            CoreSession.IsSessionRunningProvider = () => false;
             engine.Start();
             await body(engine, s, played);
         }
         finally
         {
             engine.Stop(); KeywordTriggerHead.Stop(); File.Delete(file);
+            KeywordTriggerHead.Engine.Now = singletonClock;
             (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
                 s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
-                CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled) = saved;
+                CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled, CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider) = saved;
         }
     });
 
@@ -145,7 +152,7 @@ public sealed class KeywordAudioRuntimeTests
     {
         // Linux headless test deliberately never installs a native keyboard hook.
         s.KeywordTriggersEnabled = false;
-        var clock = new DateTime(2026, 10, 14, 12, 0, 0);
+        var clock = _singletonNow;
         var realNow = KeywordTriggerHead.Engine.Now;
         KeywordTriggerHead.Engine.Now = () => clock;   // the re-type below must not depend on wall-clock cooldowns
         try
@@ -177,4 +184,93 @@ public sealed class KeywordAudioRuntimeTests
         _ = new MainShellWindow();   // WPF MainWindow.xaml.cs:341 starts the service at boot
         Assert.True(KeywordTriggerHead.Engine.IsActive);
     });
+    [Fact] // WPF KeywordTriggerService.cs:176-188
+    public void StartRequiresAccessAndAcceptsTheAwarenessFreeDay() => Run((engine, _, _) =>
+    {
+        engine.Stop();
+        CoreEntitlement.HasPremiumProvider = () => false;
+        engine.Start();
+        Assert.False(engine.IsActive);
+        CoreEntitlement.IsFreeTodayProvider = key => key == "awareness";
+        engine.Start();
+        Assert.True(engine.IsActive);
+    });
+
+    [Fact] // WPF KeywordTriggerService.cs:178
+    public void RepeatedStartPreservesPartialInput() => Run((engine, _, played) =>
+    {
+        Type(engine, "si");
+        engine.Start();
+        Type(engine, "t");
+        Assert.Single(played);
+    });
+
+    [Theory] // WPF KeywordTriggerService.cs:1841-1855
+    [InlineData(false, false, 0)]
+    [InlineData(true, false, 1)]
+    [InlineData(false, true, 1)]
+    [InlineData(true, true, 1)]
+    public void AudioRequiresAnEngineOrSession(bool engineOn, bool sessionOn, int count) => Run((engine, _, played) =>
+    {
+        CoreSession.IsEngineRunningProvider = () => engineOn;
+        CoreSession.IsSessionRunningProvider = () => sessionOn;
+        Type(engine, "sit");
+        Assert.Equal(count, played.Count);
+    });
+
+    [Fact] // Recheck WPF's engine-off audio hold before each pending repeat.
+    public void EngineStoppingDuringRepeatGapCutsTheClipAndHoldsTheRepeat() => Run((engine, s, played) =>
+    {
+        var audio = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
+        audio.PlayCount = 2; audio.DelayBetweenMs = 50;
+        var gap = new TaskCompletionSource();
+        engine.Delay = (_, _) => gap.Task;
+        Type(engine, "sit");
+        Assert.Single(played);
+        CoreSession.IsEngineRunningProvider = () => false;
+        gap.SetResult();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Single(played.Where(x => x.Path != "stopped"));
+        Assert.Equal("stopped", played.Last().Path);
+    });
+
+    [Fact] // WPF MainWindow.Patreon.cs:187-189,452-454
+    public void EntitlementRefreshStopsAudioAndRearmsSavedMasterWhenAccessResolves() => Run((_, s, played) =>
+    {
+        s.KeywordTriggers[0].Keyword = "access-resolution-word";
+        var shell = new MainShellWindow();
+        try
+        {
+            Type(KeywordTriggerHead.Engine, "access-resolution-word");
+            Assert.Single(played);
+            CoreEntitlement.HasPremiumProvider = () => false;
+            shell.RefreshEntitlementVeils(persist: true);
+            Assert.False(s.KeywordTriggersEnabled);
+            Assert.False(KeywordTriggerHead.Engine.IsActive);
+            Assert.Equal("stopped", played.Last().Path);
+            s.KeywordTriggersEnabled = true;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            shell.RefreshEntitlementVeils();
+            Assert.True(KeywordTriggerHead.Engine.IsActive);
+        }
+        finally { shell.Close(); }
+    });
+
+    [Fact] // WPF MainWindow.Patreon.cs:452-454
+    public void AccessResolutionRearmsASavedMaster() => Run((_, s, _) =>
+    {
+        KeywordTriggerHead.Stop();
+        CoreEntitlement.HasPremiumProvider = () => false;
+        var shell = new MainShellWindow();
+        try
+        {
+            KeywordTriggerHead.Stop(); // isolate late resolution from the startup path
+            s.KeywordTriggersEnabled = true;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            shell.RefreshEntitlementVeils();
+            Assert.True(KeywordTriggerHead.Engine.IsActive);
+        }
+        finally { shell.Close(); }
+    });
+
 }
