@@ -12,7 +12,11 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// silent frame with the head's existing VLC instead. Missing codecs leave the placeholder.</summary>
 internal static class VideoThumbnail
 {
-    internal static async Task<Bitmap?> LoadAsync(string path)
+    internal static Task<Bitmap?> LoadAsync(string path) => LoadAsync(path, TimeSpan.FromSeconds(5));
+
+    // Per-call observation only: tests inspect the real player and sink without replacing decoding.
+    internal static async Task<Bitmap?> LoadAsync(string path, TimeSpan timeout,
+        Action<MediaPlayer, VlcFrameSink>? opened = null)
     {
         var vlc = LibVlcAudio.Shared;
         if (vlc == null) return null;
@@ -32,11 +36,12 @@ internal static class VideoThumbnail
                 ready.TrySetResult(Bitmap.DecodeToWidth(png, 100));
             }
             catch { ready.TrySetResult(null); }
-        });
+        }, decodeWidth: 100);
         Bitmap? result = null;
         try
         {
-            if (player.Play(media)) result = await ready.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            opened?.Invoke(player, sink);
+            if (player.Play(media)) result = await ready.Task.WaitAsync(timeout).ConfigureAwait(false);
         }
         catch { } // Corrupt/unsupported media: WPF leaves its placeholder too.
         finally

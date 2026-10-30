@@ -23,6 +23,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private readonly Func<Media?> _media;
         private readonly Action<WriteableBitmap> _bitmapChanged;
         private readonly Action _frame;
+        private readonly int _decodeWidth;
         private IntPtr _buffer;
         private int _width, _height, _blitQueued, _frames;
         private bool _freed;
@@ -30,11 +31,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         /// <param name="bitmapChanged">UI thread: a new bitmap (first frame or a size change) to show.</param>
         /// <param name="frame">UI thread: the bitmap holds a new frame (invalidate what shows it).</param>
-        public VlcFrameSink(MediaPlayer player, Func<Media?> media, Action<WriteableBitmap> bitmapChanged, Action frame)
+        public VlcFrameSink(MediaPlayer player, Func<Media?> media, Action<WriteableBitmap> bitmapChanged, Action frame, int decodeWidth = 0)
         {
             _media = media;
             _bitmapChanged = bitmapChanged;
             _frame = frame;
+            _decodeWidth = decodeWidth;
             _blit = Blit;   // cached: Display runs per decoded frame
             player.SetVideoFormatCallbacks(Format, (ref IntPtr _) => { });
             player.SetVideoCallbacks(LockPicture, null, Display);
@@ -57,6 +59,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 width = v.SarNum > 0 && v.SarDen > 0 ? v.Width * v.SarNum / v.SarDen : v.Width;
                 height = v.Height;
                 break;
+            }
+            // WPF MainWindow.Assets.cs:921 requests 100 px thumbnails off-thread. Ask VLC's
+            // scaler for that size before allocating/copying a frame; normal playback is unchanged.
+            if (_decodeWidth > 0)
+            {
+                height = Math.Max(1, (uint)((ulong)height * (uint)_decodeWidth / Math.Max(1u, width)));
+                width = (uint)_decodeWidth;
             }
             pitches = width * 4;
             lines = height;
