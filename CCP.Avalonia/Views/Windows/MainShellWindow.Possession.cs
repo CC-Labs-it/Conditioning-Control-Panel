@@ -1,6 +1,5 @@
 // WPF MainWindow.Possession.cs:53,96,149,257,323,355,432,454 (lifecycle, stage, cache, walk, roles).
-// WPF :529,563,623,658 (placement, names, coordinates, usability).
-// Stage/registry only. The director requires attribution and effect adapters before controls move.
+// WPF :529,563,623,658 (placement, names, coordinates, usability). Stage only; director requires attribution and effect adapters.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -106,8 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                             || (_possessionCacheDirty && age > PossessionRebuildFloor);
                 if (!stale) return _possessionTargetCache!;
                 var sw = System.Diagnostics.Stopwatch.StartNew();
-                var found = new List<PossessionTarget>();
-                var labels = new List<PossessionTarget>();
+                List<PossessionTarget> found = new(), labels = new();
                 var root = Content as Visual;
                 if (root != null) WalkPossession(root, found, labels, 0, 17);
                 if (labels.Count > MaxAutoLabels) TrimLabels(labels);
@@ -174,8 +172,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!leaf)
             {
                 var children = node.GetVisualChildren().ToArray();
-                var count = children.Length;
-                for (int i = 0; i < count; i++)
+                for (int i = 0; i < children.Length; i++)
                 {
                     var child = children[i];
                     var h = unchecked(pathHash * 31 + i * 7 + (child?.GetType().Name.Length ?? 0));
@@ -206,8 +203,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (_possessionTargets.TryGetValue(fe, out var existing)) return existing;
                 var target = new PossessionTarget
                 {
-                    Visual = fe,
-                    Role = role,
+                    Visual = fe, Role = role,
                     Key = !string.IsNullOrEmpty(fe.Name) ? fe.Name : role + "#" + pathHash.ToString("x8"),
                     DisplayName = DisplayNameFor(fe, role),
                 };
@@ -220,10 +216,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (fe is ToggleButton) return PossessionRole.Toggle;
             if (fe is Button)
-            {
-                if (fe is RepeatButton && IsInsideScrollBar(fe)) return PossessionRole.None;
-                return PossessionRole.Button;
-            }
+                return fe is RepeatButton && IsInsideScrollBar(fe) ? PossessionRole.None : PossessionRole.Button;
             if (fe is Slider) return PossessionRole.Slider;
             if (fe is ComboBox) return PossessionRole.Combo;
             if (fe is TextBox) return PossessionRole.TextBox;
@@ -243,8 +236,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (size >= 18) return PossessionRole.Title;
                 var text = tb.Text;
                 if (string.IsNullOrWhiteSpace(text)) return PossessionRole.None;
-                var trimmed = text.Trim();
-                return trimmed.Length is >= 3 and <= 40 ? PossessionRole.Label : PossessionRole.None;
+                return text.Trim().Length is >= 3 and <= 40 ? PossessionRole.Label : PossessionRole.None;
             }
             return PossessionRole.None;
         }
@@ -267,8 +259,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                if (fe is not Border b) return false;
-                if (b.Background == null) return false;
+                if (fe is not Border b || b.Background == null) return false;
                 var cr = b.CornerRadius;
                 if (cr.TopLeft <= 0 && cr.TopRight <= 0 && cr.BottomLeft <= 0 && cr.BottomRight <= 0) return false;
                 return b.Bounds.Height >= 60 && b.Bounds.Width >= 60;
@@ -280,6 +271,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 if (!fe.IsEffectivelyEnabled || !fe.IsHitTestVisible) return false;
+                for (Visual? ancestor = fe.GetVisualParent(); ancestor != null; ancestor = ancestor.GetVisualParent())
+                    if (ancestor is global::Avalonia.Input.InputElement { IsHitTestVisible: false }) return false;
                 if (fe.Bounds.Width <= 0 || fe.Bounds.Height <= 0) return false;
                 if (!TryWindowBounds(fe, out var r)) return false;
                 if (r.Width < MinTargetPx || r.Height < MinTargetPx) return false;

@@ -23,9 +23,7 @@ public sealed class PossessionHostTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
-        settings.Current.Welcomed = true;
-        settings.Current.HasAcceptedAgeVerification = true;
-        settings.Current.WhatMovedCardShown = 1;
+        settings.Current.Welcomed = true; settings.Current.HasAcceptedAgeVerification = true; settings.Current.WhatMovedCardShown = 1;
         var panel = new StackPanel();
         var shell = new MainShellWindow { Width = 600, Height = 700, Content = new Grid { Children = { panel } } };
         try
@@ -101,7 +99,7 @@ public sealed class PossessionHostTests
         PossessionTree.SetRole(excluded, PossessionRole.Button);
         PossessionTree.SetExclude(excluded, true);
         panel.Children.Add(reserved);
-        panel.Children.Add(timer);
+        panel.Children.Add(new StackPanel { IsHitTestVisible = false, Children = { timer } });
         panel.Children.Add(new StackPanel { IsVisible = false, Children = { Button("Hidden") } });
         panel.Children.Add(new StackPanel { Children = { excluded } });
         panel.Children.Add(new Button { Name = "Tiny", Width = 2, Height = 2 });
@@ -110,6 +108,15 @@ public sealed class PossessionHostTests
         Assert.Same(timer, target.Visual);
         Assert.Equal(PossessionRole.Timer, target.Role);
         Assert.Equal("the timer", target.DisplayName);
+    });
+    [Fact]
+    public void NonHitTestableAncestorsKeepAutomaticTargetsOut() => Run((shell, panel) =>
+    {
+        var button = Button("PassiveChild");
+        panel.Children.Add(new StackPanel { IsHitTestVisible = false, Children = { button } });
+        Layout(shell);
+        Assert.True(button.IsHitTestVisible);
+        Assert.DoesNotContain(shell.GetPossessionTargets(), t => t.Visual == button);
     });
     [Theory, InlineData(false), InlineData(true)]
     public void EffectivelyDisabledControlsAreNotTargets(bool command) => Run((shell, panel) =>
