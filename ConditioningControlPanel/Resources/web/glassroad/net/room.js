@@ -16,7 +16,7 @@
  * sim/ai.js (kind 'local'); losing them makes them remote again. Pure apart from the injected WebSocket and timers.
  */
 import { S, RESPAWN } from '../sim/state.js';
-import { NET_V, COUNT_MS, RATES, PLATFORMS, normLook } from './protocol.js';
+import { NET_V, COUNT_MS, RATES, PLATFORMS, normLook, roomLook } from './protocol.js';
 import { openSocket, FINAL_CLOSE } from './socket.js';
 import { createServerClock } from './clock.js';
 import { createInterp } from './interp.js';
@@ -229,7 +229,7 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
     },
     ready: (on2 = true) => send({ t: 'ready', on: !!on2 }),
     start: () => send({ t: 'start' }),
-    setLook(l) { look = normLook(l); return send({ t: 'look', ...look }); },
+    setLook(l) { look = normLook(l); return send({ t: 'look', ...roomLook(look) }); },
     emote(code, poseId = 0) { if (poseId) uplink.pose(st.seat, poseId, now()); return send({ t: 'emote', code }); },
     /** One collected lyric floor word, bubble or song gate: shared pulse and cumulative race total. */
     wordPop(total) { uplink.event(st.seat, 'word-pop', {}); if (Number.isFinite(total)) uplink.setPops(st.seat, total); },

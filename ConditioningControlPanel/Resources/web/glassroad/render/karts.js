@@ -415,7 +415,10 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     k.life?.beforePose();
     root.visible = true;
     k.propeller.update(st[S.respawnPhase] === RESPAWN.NONE ? underwater : 0, dt, {gentle,paused});
-    if (k.glideCap) k.glideCap.update(glide && st[S.airborne] > 0 && st[S.respawnPhase] === RESPAWN.NONE, dt, gentle);
+    const gliding = glide && st[S.airborne] > 0 && st[S.respawnPhase] === RESPAWN.NONE;
+    // a Prize Counter umbrella (render/wardrobe.js) opens in the glide cap's place
+    if (k.dress && k.dress.umbrella) { k.dress.showUmbrella(gliding); if (k.glideCap) k.glideCap.update(false, dt, gentle); }
+    else if (k.glideCap) k.glideCap.update(gliding, dt, gentle);
     if (k.accessory) k.accessory.visible = !(k.dress && k.dress.outfit) && !(k.glideCap && k.glideCap.cap.visible);
     root.position.set(st[S.posX], st[S.posY], st[S.posZ]);
     root.quaternion.set(st[S.quatX], st[S.quatY], st[S.quatZ], st[S.quatW]);
@@ -562,6 +565,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
       k.phrasePieces?.beforePose();
       k.react = Object.assign(createReact(k.i), { rig: !!k.rig }); k.pend.length = 0; k.dir = createDirector();
       if (k.glideCap) k.glideCap.reset();
+      k.dress?.showUmbrella?.(false);
       k.propeller.reset();
       k.surge.alpha = k.surge.time = k.surge.material.opacity = 0; k.surge.mesh.visible = false;
       k.underwater=0;k.caustics.amount.value=k.caustics.time.value=0;
@@ -601,19 +605,21 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     const k = list[i];
     if (!k || !k.dress) return null;
     k.phrasePieces?.beforePose();
-    const picked=lookForSeat(i,seed,want);
-    if ((k.dress.outfit || null) === (picked.outfit || null) && (k.dress.vehicle || null) === (picked.vehicle || null)) {
-      if(k.skin)k.skin.set(skinFromWire(want?.skin));
+    const picked=lookForSeat(i,seed,want),same=(a,b)=>(a||null)===(b||null);
+    const paint={...skinFromWire(want?.skin),paint:picked.paint||null};
+    if (same(k.dress.outfit,picked.outfit) && same(k.dress.vehicle,picked.vehicle) && same(k.dress.umbrella,picked.umbrella) && same(k.dress.trail,picked.trail)) {
+      if(k.skin)k.skin.set(paint);
       return lookOf(k);
     }
     k.dress.dispose();
     k.dress = dressKart(art, k.model, i===0&&want?picked:lookForTier(picked,Q.name), { tint: k.look ? k.look.cup : null, tintMix: LOOK.vehicleTintMix });
     k.propeller.fit(art?.model?.(k.dress?.vehicle || 'emi-teacup-kart')?.scene);
-    if(k.skin)k.skin.set(skinFromWire(want?.skin));
+    if(k.skin)k.skin.set(paint);
     if (k.accessory) k.accessory.visible = !k.dress.outfit;
     return lookOf(k);
   }
-  const lookOf = (k) => ({ outfit: k.dress ? k.dress.outfit : null, vehicle: k.dress ? k.dress.vehicle : null });
+  const lookOf = (k) => ({ outfit: k.dress ? k.dress.outfit : null, vehicle: k.dress ? k.dress.vehicle : null,
+    ...(k.dress && k.dress.umbrella ? { umbrella: k.dress.umbrella } : {}), ...(k.dress && k.dress.trail ? { trail: k.dress.trail } : {}) });
 
   return { list, propellers, pose, hide, attach, rebind, resetReactions, setLook, looks: () => list.map(lookOf), dispose };
 }
