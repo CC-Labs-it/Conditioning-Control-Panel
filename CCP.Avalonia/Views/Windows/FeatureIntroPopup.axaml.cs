@@ -54,7 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///    seam; <c>App.IsUpdateDialogActive</c> is <see cref="Platform.AppUpdater.IsUpdateDialogActive"/>
     ///    and <c>MainWindow.IsStartupDialogShowing</c> is the shell's twin, set by the first-run
     ///    wizard and the welcome-back offer. A manually opened What's New / season recap does not
-    ///    hold it, as in WPF (only RunModal sets it); their startup callers are not on this head.
+    ///    hold it, as in WPF (only RunModal sets it); upgrade startup owns the flag around What's New.
     ///  - Shown through <c>ShowDialogSafe</c>, so a tray-hidden shell does not throw and
     ///    <c>_opening</c> clears when the card closes.
     ///  - The One Account card's CTA is live: <c>Launcher.LaunchUriAsync</c> stands in for
