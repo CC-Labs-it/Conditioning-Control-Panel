@@ -138,6 +138,45 @@ public sealed partial class GameWindowTests
     public void Glassroad_Signing_Refusals(string method, string path, string body)
         => Assert.False(GlassroadHostRules.TrySign(method, path, body, "u_1", out _, out _));
 
+    [Fact]
+    public void Glassroad_InitAndLiveOwnershipUseOnlyCurrentAccountKartGrants() => RunGlassroad("1", (_, _, _) =>
+    {
+        var settings = CoreSettings.Current;
+        var oldIdentity = (settings.UnifiedId, settings.AuthToken, settings.OfflineMode);
+        try
+        {
+            (settings.UnifiedId, settings.AuthToken, settings.OfflineMode) = ("discord:12", "tok", false);
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplySnapshot("discord:12", 1,
+                new[] { "cos.kart.body.petal", "cos.rain.hair.ink" });
+            var w = GameWindow.Launch(GameWindow.GlassroadId)!;
+            Dispatcher.UIThread.RunJobs();
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.PostGlassroadInit();
+            Assert.Equal(new[] { "cos.kart.body.petal" }, sent.Single()["identity"]!["grants"]!.Values<string>());
+            sent.Clear();
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplySnapshot("other", 2, new[] { "cos.kart.body.bad" });
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplySnapshot("discord:12", 0, Array.Empty<string>());
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(sent);
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplySnapshot("discord:12", 2, new[] { "cos.kart.body.new" });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("owned", (string?)sent.Single()["type"]);
+            Assert.Equal(new[] { "cos.kart.body.new" }, sent.Single()["grants"]!.Values<string>());
+            w.Close();
+            Dispatcher.UIThread.RunJobs();
+            sent.Clear();
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplySnapshot("discord:12", 3, Array.Empty<string>());
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(sent);
+        }
+        finally
+        {
+            (settings.UnifiedId, settings.AuthToken, settings.OfflineMode) = oldIdentity;
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ResetHeld();
+        }
+    });
+
     // ---- the window ----
 
     /// <summary>Door shut: the page cannot be opened and the race tile stays hidden without a track. Door open: the
