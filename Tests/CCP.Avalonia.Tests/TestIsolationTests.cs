@@ -31,6 +31,20 @@ public class TestIsolationTests
         Assert.Empty(bad);
     }
 
+    [Fact]
+    public void SharedPlatformLoadsBundledFontsBeforeAnyTestSetup()
+    {
+        Assert.NotNull(global::Avalonia.Application.Current);
+        Assert.Equal(new global::Avalonia.Media.FontFamily(
+                ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter).Name,
+            global::Avalonia.Media.FontManager.Current.DefaultFontFamily.Name);
+        foreach (var family in new[] { ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
+                     ConditioningControlPanel.Avalonia.Platform.AppFonts.Fredoka,
+                     ConditioningControlPanel.Avalonia.Platform.AppFonts.Mono })
+            Assert.NotNull(new global::Avalonia.Media.Typeface(family,
+                weight: global::Avalonia.Media.FontWeight.Bold).GlyphTypeface);
+    }
+
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
 
     [Fact]
