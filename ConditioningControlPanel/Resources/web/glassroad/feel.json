@@ -334,8 +334,8 @@
     "cornerMargin": 0.9
   },
   "contact": {
-    "radiusM": 0.54,
-    "maxHeightM": 1.05,
+    "radiusM": 0.62,
+    "maxHeightM": 1.21,
     "pushMps": 3.5,
     "pushPerDv": 0.5,
     "maxPushMps": 7,

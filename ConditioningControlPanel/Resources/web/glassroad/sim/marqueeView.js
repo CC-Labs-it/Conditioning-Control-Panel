@@ -13,7 +13,7 @@ import { CHASE_NEUTRAL_PITCH_DEG } from '../core/chaseView.js';
 export const CLEAR_M = 7.2, HANG_M = 7.8, DROP_S = 1.05;   // road clearance, hang height, the drop's fall time
 export const MARQUEE_VIEW = Object.freeze({
   // feel.json camera / fov and render/framing.js numbers; boot passes the live ones (aspect included).
-  eyeUpM: 2.2, eyeBackM: 3.9, eyeLiftM: .25, centreUpM: .429, screenY: .62, vFovDeg: 60, aspect: 16 / 9,
+  eyeUpM: 2.2, eyeBackM: 3.9, eyeLiftM: .25, centreUpM: .493, screenY: .6, vFovDeg: 60, aspect: 16 / 9,
   neutralPitchDeg: CHASE_NEUTRAL_PITCH_DEG,
   topNdc: .95,    // the face top, bounce included, stays under this share of the upper half
   sideNdc: .86,   // and every face inside this share of each side
