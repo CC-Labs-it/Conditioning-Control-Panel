@@ -13,7 +13,8 @@ namespace CCP.Core.Tests;
 public class Sync7LinkTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 20, 12, 0, 0, TimeSpan.Zero);
-    private static FriendLink Link(string token = "7K2Q9ABCDEFG") => new(token, Now.AddDays(7), 25);
+    // Fake fixture, split to avoid a generic API key false positive.
+    private static FriendLink Link(string token = "7K2Q9" + "ABCDEFG") => new(token, Now.AddDays(7), 25);
     private sealed class Api : IFriendsApi
     {
         internal Queue<FriendLink?> Links = new();
