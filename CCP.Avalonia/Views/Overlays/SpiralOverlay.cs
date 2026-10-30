@@ -87,6 +87,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             VoiceOpacity = on ? Math.Clamp(CoreSettings.Current.SpiralOpacity / 100.0, 0, 1) : null;
             Refresh(host);
         }
+        // WPF Session/SessionEngine.cs:799,814: a later session tick overwrites the
+        // sustained opacity, while its visibility hold remains owned by the voice action.
+        internal static bool ApplySessionOpacity(double? percent)
+        {
+            if (VoiceOpacity == null || percent == null) return false;
+            var next = Math.Clamp(percent.Value / 100.0, 0, 1);
+            var changed = VoiceOpacity != next;
+            VoiceOpacity = next;
+            return changed;
+        }
         internal static void StopForPanic() { VoiceOpacity = null; CloseAll(); }
 
         /// <summary>The painted alpha: the slider through WPF's #722 curve. A ramping session's value

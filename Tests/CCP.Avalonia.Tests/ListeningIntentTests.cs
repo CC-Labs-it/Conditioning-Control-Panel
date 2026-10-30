@@ -161,6 +161,52 @@ public sealed class ListeningIntentTests
         }
     });
 
+    // WPF Session/SessionEngine.cs:799,814: subsequent ramp ticks overwrite a voice hold's
+    // opacity through SetSustainedOverlayOpacity, without releasing its visibility ownership.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SessionRampTakesOpacityBackAfterAVoiceCommand(bool pink) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var shell = new MainShellWindow();
+        var oldRunner = global::ConditioningControlPanel.Avalonia.App.Sessions;
+        var runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
+        runner.Ticked += shell.OnSessionTick;
+        try
+        {
+            var session = new ConditioningControlPanel.Models.Session { Id = "voice-ramp", Name = "Voice ramp", DurationMinutes = 10 };
+            var settings = session.Settings;
+            settings.RampCurve = ConditioningControlPanel.Models.RampCurve.Linear;
+            settings.SpiralEnabled = settings.PinkFilterEnabled = true;
+            settings.SpiralStartMinute = settings.PinkFilterStartMinute = 0;
+            settings.SpiralOpacity = 20; settings.SpiralOpacityEnd = 80;
+            settings.PinkFilterStartOpacity = 10; settings.PinkFilterEndOpacity = 90;
+            runner.Start(session);
+            runner.Tick(TimeSpan.FromMinutes(2));
+            shell.VoiceCmds.Host.ActionFor(pink ? "pink_on" : "spiral_on")!();
+            double Painted() => pink ? PinkFilterOverlay.PaintedOpacity : SpiralOverlay.PaintedOpacity;
+            Assert.Equal(pink ? 0.4 : 0.02, Painted(), 6); // the command takes effect immediately
+            runner.Tick(TimeSpan.FromMinutes(5));
+            Assert.Equal(pink ? 0.5 : 0.05, Painted(), 6);
+            runner.Tick(TimeSpan.FromMinutes(6));
+            Assert.Equal(pink ? 0.58 : 0.116, Painted(), 6);
+            Assert.NotNull(pink ? PinkFilterOverlay.VoiceOpacity : SpiralOverlay.VoiceOpacity);
+            Assert.Equal(20, CoreSettings.Current.SpiralOpacity);
+            Assert.Equal(10, CoreSettings.Current.PinkFilterOpacity);
+        }
+        finally
+        {
+            runner.Ticked -= shell.OnSessionTick;
+            runner.Stop(); CoreEngine.Stop();
+            SpiralOverlay.StopForPanic(); PinkFilterOverlay.StopForPanic();
+            global::ConditioningControlPanel.Avalonia.App.Sessions = oldRunner;
+            shell.Close();
+        }
+    });
+
     private sealed class QuizHost : IPopQuizHost
     {
         public int Opened; public bool Test;
