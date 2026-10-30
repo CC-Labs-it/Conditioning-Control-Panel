@@ -316,6 +316,8 @@
 #card button.quiet { border-color: transparent; color: var(--paper-dim); }
 #card button:hover:not(:disabled) { border-color: var(--paper-pink); }
 #card button:focus-visible, #card input:focus-visible { outline: 2.5px solid var(--paper-pink); outline-offset: 3px; }
+/* a pad step focuses from script: paint :focus too (hud/hud.js sets html.pad-nav until the pointer moves) */
+html.pad-nav #card button:focus, html.pad-nav #card input:focus, html.pad-nav #card a:focus { outline: 2.5px solid var(--paper-pink); outline-offset: 3px; }
 #card button:active:not(:disabled) { transform: translateY(1px); }
 #card button:disabled { opacity: 0.45; cursor: default; }
 #card button[hidden] { display: none; }

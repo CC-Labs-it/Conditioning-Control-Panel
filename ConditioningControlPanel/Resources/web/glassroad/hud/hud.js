@@ -95,6 +95,12 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
   }
   const cards = createCards(card, { doc, emit: fire, devices, kit });
   let garageNav=null;
+  // A pad step moves focus from script, which the browser never paints as :focus-visible after a mouse
+  // click: html.pad-nav paints :focus (styles.css, garage.css) until the pointer is used again.
+  const padRoot = doc && doc.documentElement;
+  const padFocus = (on) => { try { padRoot?.classList.toggle('pad-nav', on); } catch (e) { /* no DOM */ } };
+  const padOff = (e) => { if (e.type !== 'mousemove' || e.movementX || e.movementY) padFocus(false); };
+  for (const t of ['pointerdown', 'mousemove']) doc?.addEventListener?.(t, padOff, true);
   let noteTimer = 0;
   function note(text) {
     if (disposed) return;
@@ -348,7 +354,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
   }
 
   return {
-    setCard, update, nav: (dir)=>cards.kind==='menu'&&garageNav?garageNav(dir):cards.nav(dir),
+    setCard, update, nav: (dir)=>{if(dir!=='throttle')padFocus(true);return cards.kind==='menu'&&garageNav?garageNav(dir):cards.nav(dir);},
     menuAction:cards.menuAction,
     setGarageNav(fn){garageNav=fn;},
     setReady: (r, n) => cards.setReady(r, n),
@@ -376,6 +382,6 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     credit: root.querySelector('.hud-credit'),
     /** A short note at the bottom, on any screen (the controller notes use it). */
     note,
-    dispose() { if(disposed)return;disposed=true;for(const list of [...Object.values(listeners),...Object.values(fns)])list.length=0;garageNav=null;cards.dispose(); itemFeel.dispose(); offs.forEach((off) => off()); offDev(); clearTimeout(noteTimer); kit.dispose(); warm.length = 0; },
+    dispose() { if(disposed)return;disposed=true;for(const list of [...Object.values(listeners),...Object.values(fns)])list.length=0;garageNav=null;cards.dispose(); itemFeel.dispose(); offs.forEach((off) => off()); offDev(); for (const t of ['pointerdown', 'mousemove']) doc?.removeEventListener?.(t, padOff, true); padFocus(false); clearTimeout(noteTimer); kit.dispose(); warm.length = 0; },
   };
 }
