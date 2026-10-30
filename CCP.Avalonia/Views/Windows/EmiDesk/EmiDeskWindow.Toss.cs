@@ -10,11 +10,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 // thrown. The numbers, the throw detection and the landing curve are Core EmiTossRules /
 // EmiFlingDetector, shared with WPF.
 //
-// The "land" chain's faces play here (PlayLandFace); its "celebration" body frame does not.
-// ponytail: WPF also plays the "dizzy" chain, the land body frame, and fires the moment bus ("dragged",
-// "dropped", "flung" with zoneRow / flings20 / flings50). Both need the chain player and
-// EmiDeskService.Fire, neither on this head (folded into row win-emi-desk); PlayChain is the
-// head's no-op stub until then.
+// Land faces and the landing curve are retained; throws now play Core's dizzy chain.
+// ponytail: the land body frame and dragged/dropped/flung moment bus still need hosts.
 public partial class EmiDeskWindow
 {
     /// <summary>The throw clock; tests step it.</summary>
