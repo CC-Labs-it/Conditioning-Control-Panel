@@ -21,9 +21,12 @@ public sealed class NavRailRemainingTests
 {
     private static void Run(Action<MainShellWindow> body) => AvaloniaTestDispatcher.Run(() =>
     {
+        // Use the desktop font setup so isolated Linux runs can construct the shell without Segoe UI.
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var previous = CoreMods.MakeModAwareProvider;
         var language = LocalizationManager.Instance.CurrentLanguage;
         var motion = CoreSettings.Current.MotionLevel;
