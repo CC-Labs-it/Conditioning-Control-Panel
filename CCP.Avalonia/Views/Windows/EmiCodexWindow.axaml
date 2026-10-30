@@ -15,9 +15,8 @@
        Style="{StaticResource X}"      -> Theme="{StaticResource X}"
        Content="{loc:Str …}" on Button -> a <TextBlock> child (Avalonia parses "_" in Content as an
                                           access key and every key here is snake_case)
-       ListBox.ItemContainerStyle      -> <Window.Styles><Style Selector="ListBoxItem">, NOT a
-                                          ControlTheme: property-only would null the container's
-                                          template and the list would draw empty rows
+       ListBox.ItemContainerStyle      -> local ItemContainerTheme based on the stock ListBoxItem
+                                          theme, replacing Inputs.xaml while retaining a template
        ResizeMode="CanResizeWithGrip"  -> CanResize="True"  (Avalonia has no resize grip)
        AllowsTransparency="False"      -> dropped; opaque is the Avalonia default, and the reason
                                           the original states it out loud is a WPF-only hazard
@@ -68,15 +67,13 @@
                 <Setter Property="BorderBrush" Value="#FF69B4"/>
             </Style>
         </ControlTheme>
-    </Window.Resources>
-
-    <Window.Styles>
-        <!-- The WPF ItemContainerStyle, setters verbatim. -->
-        <Style Selector="ListBox#ChapterList > ListBoxItem">
+        <!-- WPF Windows/EmiCodexWindow.xaml:91-96 replaces the implicit Inputs.xaml row style. -->
+        <ControlTheme x:Key="CodexChapterRow" TargetType="ListBoxItem"
+                      BasedOn="{StaticResource {x:Type ListBoxItem}}">
             <Setter Property="Padding" Value="12,7"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-        </Style>
-    </Window.Styles>
+        </ControlTheme>
+    </Window.Resources>
 
     <Grid Margin="0">
         <Grid.RowDefinitions>
@@ -107,6 +104,7 @@
             </Grid.ColumnDefinitions>
 
             <ListBox x:Name="ChapterList"
+                     ItemContainerTheme="{StaticResource CodexChapterRow}"
                      Grid.Column="0"
                      Background="#15152A" BorderThickness="0"
                      Foreground="#E0E0E0"
