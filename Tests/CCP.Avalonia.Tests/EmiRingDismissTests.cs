@@ -172,6 +172,10 @@ public sealed class EmiRingDismissTests
     [InlineData("intake")]
     public void LockedDoorAsksForLabWithoutScoring(string id)
     {
+        var state = global::ConditioningControlPanel.Services.EmiDesk.EmiState.Current;
+        var usage = state.Usage.ToArray();
+        var scores = state.OpenScore.ToArray();
+        var usageAt = state.UsageAt.ToArray();
         var premium = global::ConditioningControlPanel.CoreEntitlement.HasPremiumProvider;
         var lab = global::ConditioningControlPanel.CoreEntitlement.HasLabProvider;
         var daily = global::ConditioningControlPanel.CoreEntitlement.IsFreeTodayProvider;
@@ -183,14 +187,22 @@ public sealed class EmiRingDismissTests
             global::ConditioningControlPanel.CoreEntitlement.HasLabProvider = () => false;
             global::ConditioningControlPanel.CoreEntitlement.IsFreeTodayProvider = _ => false;
             global::ConditioningControlPanel.CoreEntitlement.ShowDeniedHandler = v => refusal = v;
-            double before = global::ConditioningControlPanel.Services.EmiDesk.EmiSuggester.ScoreOf(id);
+            // A previously used door must not gain usage when its locked card is tapped.
+            state.Usage[id] = 7;
+            state.OpenScore[id] = 4;
+            state.UsageAt[id] = DateTime.UtcNow.AddDays(-1).Ticks;
+            // ScoreOf decays with wall time; refusal must preserve the stored usage exactly.
+            var before = (state.OpenScore[id], state.UsageAt[id], state.Usage[id]);
             EmiTargets.Find(id)!.Open();
             Assert.NotNull(refusal);
             Assert.Equal(global::ConditioningControlPanel.Models.PatreonTier.Level2, refusal!.Value.Required);
-            Assert.Equal(before, global::ConditioningControlPanel.Services.EmiDesk.EmiSuggester.ScoreOf(id));
+            Assert.Equal(before, (state.OpenScore[id], state.UsageAt[id], state.Usage[id]));
         }
         finally
         {
+            state.Usage.Clear(); foreach (var pair in usage) state.Usage[pair.Key] = pair.Value;
+            state.OpenScore.Clear(); foreach (var pair in scores) state.OpenScore[pair.Key] = pair.Value;
+            state.UsageAt.Clear(); foreach (var pair in usageAt) state.UsageAt[pair.Key] = pair.Value;
             global::ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = premium;
             global::ConditioningControlPanel.CoreEntitlement.HasLabProvider = lab;
             global::ConditioningControlPanel.CoreEntitlement.IsFreeTodayProvider = daily;
