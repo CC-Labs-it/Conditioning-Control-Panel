@@ -21,7 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     ///
     /// <para>Coordinates: OnGazeMove is GAZE space (DIPs local to the calibrated monitor); bubbles are
     /// global DIPs (screen px / scaling). The conversion is the calibrated monitor's origin, a pure
-    /// translation (WPF CalOriginDips), here read from the saved MonitorBounds.</para>
+    /// translation (WPF CalOriginDips), resolved from the live display set.</para>
     /// </summary>
     internal sealed class GazeFocus
     {
@@ -174,13 +174,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
             _subscribed = false;
         }
 
-        /// <summary>WPF CalOriginDips/GazeToDesktop: the calibrated monitor's origin in global DIPs, or
-        /// none for a primary-monitor (or pre-hotfix, DeviceName-less) calibration.</summary>
+        /// <summary>Resolve on every gaze event so a sleeping display can return at a new origin.
+        /// The primary fallback never replaces the calibration's saved identity or geometry.</summary>
         internal static Point GazeToDesktop(Point p)
         {
-            if (WebcamTracker.Instance.Calibration?.MonitorBounds is not { DeviceName: not null } mb || (mb.X == 0 && mb.Y == 0)) return p;
-            double dpi = mb.DpiScale is > 0.25 and < 8.0 ? mb.DpiScale : 1.0;
-            return new Point(p.X + mb.X / dpi, p.Y + mb.Y / dpi);
+            var name = WebcamTracker.Instance.Calibration?.MonitorBounds?.DeviceName;
+            var screen = WebcamScreens.Resolve(WebcamScreens.Enumerate(), name);
+            if (screen == null) return p;
+            var dpi = screen.Scaling > 0 ? screen.Scaling : 1;
+            return new Point(p.X + screen.Bounds.X / dpi, p.Y + screen.Bounds.Y / dpi);
         }
 
         internal void HandleGazeMove(Point p) => _lastGazePoint = GazeToDesktop(p);

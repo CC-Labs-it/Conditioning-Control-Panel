@@ -64,6 +64,8 @@ public sealed class JustDropServiceTests
     [Theory]
     [InlineData("https://app.cclabs.app/api/auth/desktop-session?unified_id=u1&next=%2Fdashboard%2Fexpress", true)]
     [InlineData("https://APP.cclabs.app/api/auth/desktop-session", true)]
+    [InlineData("https://app.cclabs.app/api/auth/desktop-session/?next=x", true)]
+    [InlineData("https://app.cclabs.app/api/auth/desktop-session-evil", false)]
     [InlineData("http://app.cclabs.app/api/auth/desktop-session", false)]
     [InlineData("https://app.cclabs.app:8443/api/auth/desktop-session", false)]
     [InlineData("https://app.cclabs.app/api/auth/desktop-session/extra", false)]
