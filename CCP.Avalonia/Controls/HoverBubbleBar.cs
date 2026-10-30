@@ -54,6 +54,12 @@ namespace ConditioningControlPanel.Avalonia.Controls
         public static IconKind? GetIcon(Control o) => o.GetValue(IconProperty);
         public static void SetIcon(Control o, IconKind? v) => o.SetValue(IconProperty, v);
 
+        /// <summary>A vector brand mark, drawn in place of the Fluent icon.</summary>
+        public static readonly AttachedProperty<Geometry?> MarkProperty =
+            AvaloniaProperty.RegisterAttached<HoverBubbleBar, Control, Geometry?>("Mark");
+        public static Geometry? GetMark(Control o) => o.GetValue(MarkProperty);
+        public static void SetMark(Control o, Geometry? v) => o.SetValue(MarkProperty, v);
+
         /// <summary>Loc keys for the label, joined by '+' ("section_scheduler+section_intensity_ramp").</summary>
         public static readonly AttachedProperty<string> LabelKeysProperty =
             AvaloniaProperty.RegisterAttached<HoverBubbleBar, Control, string>("LabelKeys", "");
@@ -84,7 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             public Border Plate = null!;
             public Border LabelHost = null!;
             public TextBlock Label = null!;
-            public IconGlyph Glyph = null!;
+            public Control Glyph = null!;
             public ScaleTransform Scale = null!;
             public Color RestColor, HoverColor;
             public bool Expanded;
@@ -121,7 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         protected override void OnInitialized()
         {
             base.OnInitialized();
-            foreach (var b in Children.OfType<Button>().Where(b => GetIcon(b) != null || !string.IsNullOrEmpty(GetGlyph(b))).ToList())
+            foreach (var b in Children.OfType<Button>().Where(b => GetMark(b) != null || GetIcon(b) != null || !string.IsNullOrEmpty(GetGlyph(b))).ToList())
                 Dress(b);
         }
 
@@ -159,15 +165,28 @@ namespace ConditioningControlPanel.Avalonia.Controls
             }
 
             var labelHost = new Border { Width = 0, ClipToBounds = true, Child = label, VerticalAlignment = VerticalAlignment.Stretch };
-            var glyph = new IconGlyph
+            var fluent = new IconGlyph
             {
                 Size = 16,
                 Foreground = Brushes.White,
                 Width = BubbleSize - 3,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            if (GetIcon(b) is { } icon) glyph.Kind = icon;
-            else glyph.Emoji = GetGlyph(b);
+            if (GetIcon(b) is { } icon) fluent.Kind = icon;
+            else fluent.Emoji = GetGlyph(b);
+            Control glyph = GetMark(b) is { } mark
+                ? new Border
+                {
+                    Width = BubbleSize - 3,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Child = new global::Avalonia.Controls.Shapes.Path
+                    {
+                        Data = mark, Fill = Brushes.White, Stretch = Stretch.Uniform,
+                        Height = 15, HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center,
+                    },
+                }
+                : fluent;
             var scale = new ScaleTransform(1, 1);
             var plate = new Border
             {
@@ -240,12 +259,12 @@ namespace ConditioningControlPanel.Avalonia.Controls
             var hue = Hue;
             p.Plate.BorderBrush = new SolidColorBrush(on ? hue : WithAlpha(hue, 0.45));
             p.Glyph.Opacity = on ? 1.0 : 0.55;
-            p.Glyph.Variant = on ? IconVariant.Filled : IconVariant.Regular;
+            if (p.Glyph is IconGlyph fluent) fluent.Variant = on ? IconVariant.Filled : IconVariant.Regular;
             p.Plate.Effect = on ? new DropShadowEffect { Color = hue, BlurRadius = 12, OffsetX = 0, OffsetY = 0, Opacity = 0.75 } : null;
         }
 
         /// <summary>The bubble's icon. Test seam.</summary>
-        internal IconGlyph? GlyphOf(Button b) => _parts.TryGetValue(b, out var p) ? p.Glyph : null;
+        internal IconGlyph? GlyphOf(Button b) => _parts.TryGetValue(b, out var p) ? p.Glyph as IconGlyph : null;
 
         /// <summary>Is a switch bubble painted lit?</summary>
         public bool IsLit(Button b) => _parts.TryGetValue(b, out var p) && p.Plate.Effect != null;

@@ -73,8 +73,27 @@ public sealed class LockCardVoiceTests
             CoreSpeech.IsAvailableProvider = () => false;
             CoreSpeech.ModelStatusProvider = () => CoreSpeechModelStatus.NoModelFound;
             var hint = ConditioningControlPanel.Avalonia.Views.Features.LockCardFeatureControl.VoiceHint(true);
-            Assert.Contains("not installed yet", hint);
+            Assert.Contains("not installed yet.", hint);
+            Assert.DoesNotContain("\u2014", hint);
             Assert.Contains(Path.Combine(CorePaths.UserData, "Models", "vosk"), hint);
+        }
+        finally { ResetSpeech(); }
+    }
+
+    [Theory]
+    [InlineData(true, true, CoreSpeechModelStatus.NoModelFound, "On. Speak")]
+    [InlineData(false, false, CoreSpeechModelStatus.NoModelFound, "No microphone detected.")]
+    [InlineData(false, true, CoreSpeechModelStatus.LoadFailed, "would not load. Remove")]
+    public void VoiceHintsUseSentenceStops(bool available, bool mic, CoreSpeechModelStatus status, string expected)
+    {
+        try
+        {
+            CoreSpeech.IsAvailableProvider = () => available;
+            CoreSpeech.HasCaptureDeviceProvider = () => mic;
+            CoreSpeech.ModelStatusProvider = () => status;
+            var hint = ConditioningControlPanel.Avalonia.Views.Features.LockCardFeatureControl.VoiceHint(true);
+            Assert.Contains(expected, hint);
+            Assert.DoesNotContain("\u2014", hint);
         }
         finally { ResetSpeech(); }
     }

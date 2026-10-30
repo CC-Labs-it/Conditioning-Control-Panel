@@ -123,7 +123,7 @@
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                         Cursor="Hand">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Sign in via Web" VerticalAlignment="Center"/>
+                        <TextBlock Text="{loc:Str login_device_title}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
 
@@ -232,15 +232,15 @@
             <!-- SP3: Device-Code Panel -->
             <StackPanel x:Name="DeviceCodePanel" Grid.Row="2" IsVisible="False"
                         VerticalAlignment="Center">
-                <TextBlock Text="Sign in via Web"
+                <TextBlock Text="{loc:Str login_device_title}"
                            FontSize="18" FontWeight="Bold" Foreground="White"
                            HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                <TextBlock Text="We've opened your browser to finish sign-in. Complete it there, then come back to this window. It's okay to leave this open."
+                <TextBlock Text="{loc:Str login_device_body}"
                            FontSize="12" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap"
                            HorizontalAlignment="Center" Margin="0,0,0,15"
                            TextAlignment="Center"/>
 
-                <TextBlock Text="Your code:"
+                <TextBlock Text="{loc:Str login_device_your_code}"
                            FontSize="11" Foreground="{DynamicResource TextMutedBrush}"
                            HorizontalAlignment="Center" Margin="0,0,0,4"/>
                 <Border BorderBrush="#9333EA" BorderThickness="2" CornerRadius="6"
@@ -255,7 +255,7 @@
 
                 <!-- Manual fallback: if the browser launch failed, the user can read this URL and
                      open it themselves. Selectable so they can copy. -->
-                <TextBlock Text="Or open this URL manually:"
+                <TextBlock Text="{loc:Str login_device_open_manually}"
                            FontSize="11" Foreground="{DynamicResource TextMutedBrush}"
                            HorizontalAlignment="Center" Margin="0,0,0,4"/>
                 <TextBox x:Name="TxtVerificationUrl"
@@ -270,17 +270,17 @@
                             Padding="14,6" Margin="0,0,8,0"
                             Background="{DynamicResource AccentTintedBgBrush}" Foreground="White"
                             BorderThickness="0" FontSize="12" Cursor="Hand">
-                        <TextBlock Text="Copy code"/>
+                        <TextBlock Text="{loc:Str login_device_copy_code}"/>
                     </Button>
                     <Button x:Name="BtnDeviceCodeOpenBrowser"
                             Padding="14,6"
                             Background="{DynamicResource AccentTintedBgBrush}" Foreground="White"
                             BorderThickness="0" FontSize="12" Cursor="Hand">
-                        <TextBlock Text="Open browser again"/>
+                        <TextBlock Text="{loc:Str login_device_open_again}"/>
                     </Button>
                 </StackPanel>
 
-                <TextBlock x:Name="TxtDeviceStatus" Text="Waiting for browser confirmation..."
+                <TextBlock x:Name="TxtDeviceStatus" Text="{loc:Str login_device_waiting}"
                            FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
                            HorizontalAlignment="Center" Margin="0,0,0,8"
                            TextAlignment="Center" TextWrapping="Wrap"/>
@@ -288,7 +288,7 @@
                              Width="200" Height="3" Margin="0,0,0,15"
                              Foreground="#9333EA" Background="{DynamicResource AccentTintedBgBrush}"/>
 
-                <TextBlock x:Name="BtnDeviceCodeCancel" Text="Cancel" Margin="0,0,0,0"
+                <TextBlock x:Name="BtnDeviceCodeCancel" Text="{loc:Str btn_cancel}" Margin="0,0,0,0"
                            FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
                            HorizontalAlignment="Center" Cursor="Hand"/>
             </StackPanel>
