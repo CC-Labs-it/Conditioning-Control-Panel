@@ -372,9 +372,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (e.Key == Key.Enter) _ = SearchAsync(TxtProfileSearch.Text);
         }
 
-        /// <summary>The Trainer Card's spiral plate. Opens the expanded map window — the same door
+        /// <summary>The Trainer Card's spiral plate. Opens the Spiral Room, the same door
         /// the nav rail's miniature uses (MainWindow.ProfileSpiral.cs).</summary>
-        private void ProfileSpiralPlate_Click(object? sender, PointerReleasedEventArgs e) { }
+        private void ProfileSpiralPlate_Click(object? sender, PointerReleasedEventArgs e) =>
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.OpenSpiralMapFromProfile();
 
         /// <summary>Left-click on a badge pins or unpins it (own card only). The tile is reached
         /// through the sender's DataContext exactly as the WPF handler reads it.</summary>
