@@ -27,6 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     internal sealed partial class GameWindow
     {
         internal const string JustDropId = "justdrop";
+        private WindowState _justDropWindowedState = WindowState.Normal;
 
         /// <summary>WPF ShowTab("justdrop"): a door the account cannot see is a no-op, never a redirect.</summary>
         private static bool JustDropDoorOpen()
@@ -80,8 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 ? "btn_exit_fullscreen" : "btn_fullscreen");
             Stamp();
             ToolTip.SetTip(toggle, Loc.Get("tooltip_fill_the_screen_esc_brings_the_window_back"));
-            toggle.Click += (_, _) => WindowState = WindowState == WindowState.FullScreen
-                ? WindowState.Normal : WindowState.FullScreen;
+            toggle.Click += (_, _) => SetJustDropFullscreen(WindowState != WindowState.FullScreen);
             PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty) Stamp(); };
             var bar = new DockPanel { LastChildFill = true };
             DockPanel.SetDock(toggle, Dock.Right);
@@ -106,7 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             AddHandler(KeyDownEvent, (_, e) =>
             {
                 if (e.Key != Key.Escape || WindowState != WindowState.FullScreen) return;
-                WindowState = WindowState.Normal;
+                SetJustDropFullscreen(false);
                 e.Handled = true;
             }, RoutingStrategies.Tunnel);
         }
@@ -123,7 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             window.LoadJustDrop();
             var state = shell.WindowState;
             bool duck = shell.IsVisible && state != global::Avalonia.Controls.WindowState.Minimized;
-            window.WindowState = global::Avalonia.Controls.WindowState.FullScreen;
+            window.SetJustDropFullscreen(true);
             window.Closed += (_, _) =>
             {
                 if (duck && shell.IsVisible && shell.WindowState == global::Avalonia.Controls.WindowState.Minimized)
@@ -134,12 +134,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             return window;
         }
 
+        // WPF ChaosWebViewHost.cs:746-756,768-776: capture on each entry, restore on every exit.
+        // Native bounds restoration remains the window platform's job; replay starts from Normal.
+        private void SetJustDropFullscreen(bool fullscreen)
+        {
+            if (fullscreen)
+            {
+                if (WindowState == WindowState.FullScreen) return;
+                _justDropWindowedState = WindowState == WindowState.Maximized
+                    ? WindowState.Maximized : WindowState.Normal;
+                WindowState = WindowState.FullScreen;
+            }
+            else if (WindowState == WindowState.FullScreen) WindowState = _justDropWindowedState;
+        }
+
         /// <summary>WPF OnPageMessage (:227): the raw envelope to Core, so the source/version checks stay in one place.</summary>
         private void HandleJustDrop(JObject o)
         {
             if ((string?)o["type"] == "ccp-host-escape")
             {
-                if (WindowState == WindowState.FullScreen) WindowState = WindowState.Normal;
+                SetJustDropFullscreen(false);
                 return;
             }
             try { JustDropService.HandleWebMessage(o.ToString(Formatting.None)); }
