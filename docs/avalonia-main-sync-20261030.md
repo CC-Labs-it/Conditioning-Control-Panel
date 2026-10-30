@@ -3,9 +3,10 @@
 Branch `avalonia-port/main-20261030` (merge) + `avalonia-port/main-20261030-compat` (build fixes), from
 `review/mich-1025-merge` (`950aedaa1`: Mich's frozen tip `a3d9e984f` + `port/7.2` + the port-review fixes #3099-#3125).
 Pin: `origin/main` = `7e01ec326` (Merge PR #3132 rt-prime-only, 2026-10-29), then follow-up pin `a11ada22e`
-(Merge PR #3138 garage-owned-bodies, 2026-10-29; rows 590-591, merge `a9605b2cc`).
+(Merge PR #3138 garage-owned-bodies, 2026-10-29; rows 590-591, merge `a9605b2cc`), then `ddc43afeb`
+(Merge PR #3146 rain-wardrobe page 4, 2026-10-30; rows 592-594, merge `047449d1f`).
 Last sync pin: `f81ea01fb` (main sync #8, [`avalonia-main-sync-20261024.md`](avalonia-main-sync-20261024.md)).
-Delta: 591 non-merge commits (589 + 2 follow-up), 1562 + 22 files. Almost all of it is the Racing Thoughts 3D (Glassroad) web tree, which now
+Delta: 594 non-merge commits (589 + 2 + 3 follow-up), 1562 + 22 + 12 files. Almost all of it is the Racing Thoughts 3D (Glassroad) web tree, which now
 lives in `Assets/web/glassroad` (moved in the merge, same rule git applied to the other web trees). The rest is the 7.1.15
 release, Sparkles by place (B1), Lobby race rows and the friends race invite (A3), and a few bug fixes.
 
@@ -15,7 +16,7 @@ Every non-merge commit has one row. Status legend as in `avalonia-main-sync-2026
 - **needs-port (`lane`)**: WPF-only behaviour the Avalonia head lacks; the lane owns it.
 - **n/a**: no Avalonia counterpart by design, reason given.
 
-Counts: 559 ported-by-merge, 26 needs-port, 6 n/a (total 591)
+Counts: 562 ported-by-merge, 26 needs-port, 6 n/a (total 594)
 
 Under the 7.2 plan these lanes are A5 work and go as PRs of 600 lines or less against `port/7.2` after A1 lands.
 Sparkles waits for the B1 DECISIONS file; Lobby/invite waits for the A3 server half.
@@ -639,6 +640,9 @@ What each lane is:
 | 589 | `c7af815a0` | fix(glassroad): Racing Thoughts 3D is Prime only, every door | WPF: BackRoomHostService.cs, FriendsLanding.cs, GlassroadHostService.cs, LauncherCatalogue.cs, MainWindow.PlayTab.cs, PlayTabView.xaml | needs-port (`sync9-glassroad`) |
 | 590 | `9718fd3f4` | feat(glassroad): the garage offers only owned kart bodies | WPF: GlassroadHostService.cs, GlassroadRules.cs (web half merged in Assets/web/glassroad) | needs-port (`sync9-glassroad`) |
 | 591 | `9d08ba4d7` | fix(copy): the tier-2 lock label says Prime, not Lab | CCP.Core/Localization/Languages (hm3_rail_lock_t2, all ten files) | ported-by-merge |
+| 592 | `fe3c3790c` | feat(rain-wardrobe): fitting room page shell and viewer (1/4) | Assets/web/rain-wardrobe (web only, no host references it yet on either head) | ported-by-merge |
+| 593 | `503817d4c` | feat(rain-wardrobe): garment, hair and jewellery modules (3/4) | Assets/web/rain-wardrobe (web only, no host references it yet on either head) | ported-by-merge |
+| 594 | `9ef595efc` | feat(rain-wardrobe): colour studio, review studio and runtime info (4/4) | Assets/web/rain-wardrobe (web only, no host references it yet on either head) | ported-by-merge |
 
 ## Follow-up merge `a9605b2cc` (pin `a11ada22e`)
 
@@ -646,6 +650,12 @@ On `avalonia-port/main-20261030-compat`, after the compat commit. Conflict resol
 `meta/owned.js` and `tests/garage-owned.test.mjs` kept where git's directory-rename detection put them
 (`Assets/web/glassroad/`). The other glassroad edits followed the moved tree on their own. Checks: WPF test project builds
 (0 errors); `node --test` garage-owned, garage and logbook-record-ui: 19/19.
+
+## Follow-up merge `047449d1f` (pin `ddc43afeb`)
+
+No conflicts. Main added a new web tree `ConditioningControlPanel/Resources/web/rain-wardrobe` (12 files, the
+fitting room pages 1, 3 and 4; page 2 is not on main yet). Git does not move a new tree, so the merge `git mv`s it to
+`Assets/web/rain-wardrobe`; the existing `Assets/web/**` content glob ships it for both heads. No C# references it yet.
 
 ## Watch list: on the way to main, not merged here yet
 
