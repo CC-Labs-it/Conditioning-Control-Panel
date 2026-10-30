@@ -1,11 +1,13 @@
 /* Staggered chess thumpers, sweeping mascara brushes and clocked satin conveyor lanes. */
 import { Group, Mesh, InstancedMesh, BoxGeometry, SphereGeometry, CylinderGeometry, TorusGeometry, BufferGeometry, Float32BufferAttribute,
-  PlaneGeometry, IcosahedronGeometry, MeshBasicNodeMaterial, Matrix4, Box3, Vector3, Quaternion, Color, DoubleSide } from 'three/webgpu';
-import { vec3, uniform, normalize, normalWorld, dot, clamp } from 'three/tsl';
+  PlaneGeometry, IcosahedronGeometry, CircleGeometry, MeshBasicNodeMaterial, Matrix4, Box3, Vector3, Quaternion, Color, DoubleSide } from 'three/webgpu';
+import { vec3, uniform, normalize, normalWorld, dot, clamp, texture, uv, float } from 'three/tsl';
+import { acquireLoomAtlas, loomAtlasUv } from './loomAtlas.js';
 import { BOUDOIR_HAZARD as K, getBoudoirSetpieces, powderPressHeads, powderPressPhase as pressPose, mascaraHeads, mascaraPhase as brushPose, ribbonPhase as ribbonPose } from '../track/boudoir-setpieces.js';
 import { machineryBeatAt } from '../track/machineryBeat.js';
 import { chessTrap, chessWobble } from './chessTrap.js';
 import { LOOK } from './look.js';
+export const SPIRAL_FACE_R = 2.06, SPIRAL_FACE_Z = 2.93, SPIRAL_SPIN_HZ = .45, SPIRAL_SPIN_GENTLE_HZ = .12;
 export function createBoudoirHazardView(scene, track, art = null) {
   const timed = pose => (row, timeS) => pose(row, timeS, machineryBeatAt(track,timeS));
   const powderPressPhase = timed(pressPose), mascaraPhase = timed(brushPose), ribbonPhase = timed(ribbonPose);
@@ -16,6 +18,12 @@ export function createBoudoirHazardView(scene, track, art = null) {
   const shade = clamp(dot(normalize(normalWorld), normalize(vec3(...LOOK.lightDir))).mul(.36).add(.64), .24, 1);
   function paint(hex) { const m = new MeshBasicNodeMaterial(), c = new Color(hex); m.colorNode = vec3(c.r, c.g, c.b).mul(shade); materials.push(m); return m; }
   const gold = paint('#dcb778'), ink = paint('#41263f'), pink = paint('#d994bc'), cushion = paint('#f4d0df'), satin = paint('#786096');
+  // Each brush face carries a real Loom spiral inside its gold brim (owner, 2026-10-30). One shared material and disc;
+  // the disc turns on the course clock in update(), render only. No canvas (Node tests): a flat pink face instead.
+  const spiralFace = own(new CircleGeometry(SPIRAL_FACE_R, 48)), spiralAtlas = (typeof document !== 'undefined' || typeof OffscreenCanvas !== 'undefined') ? acquireLoomAtlas() : null;
+  const spiral = new MeshBasicNodeMaterial(); materials.push(spiral);
+  spiral.colorNode = spiralAtlas ? texture(spiralAtlas.texture, loomAtlasUv(uv(), float(0))).rgb.mul(shade.mul(.35).add(.65)) : vec3(.85, .58, .74).mul(shade);
+  const spinners = [];
   const M = new Matrix4(), B = new Matrix4(), Q = new Quaternion(), P = new Vector3(), Scale = new Vector3(), X = new Vector3(), Y = new Vector3(), Z = new Vector3();
   function basis(f) { return B.makeBasis(X.fromArray(f.b), Y.fromArray(f.n), Z.fromArray(f.t).negate()); }
   function mesh(parent, geometry, material, position, scale = [1, 1, 1]) {
@@ -69,25 +77,15 @@ export function createBoudoirHazardView(scene, track, art = null) {
     const bristles = new InstancedMesh(ring, satin, 9);
     for (let i = 0; i < 9; i++) bristles.setMatrixAt(i, M.compose(P.set(0, 0, -2.7 + i * .675), Q.identity(), Scale.setScalar(1)));
     bristles.instanceMatrix.needsUpdate = true; bristles.computeBoundingSphere(); brush.add(bristles);
-    // Both approach faces have individual bristles, raised spiral ridges and a gilt ferrule.
+    // Both approach faces carry a spinning Loom spiral inside the gilt brim, round a gilt ferrule.
     // The template scales to the compact collision radius and depth of each pendulum.
-    const ends = new InstancedMesh(box, pink, 144); ends.name = 'mascara-radial-end-bristles'; let endIndex = 0;
     for (const sign of [-1, 1]) {
       mesh(brush, ring, gold, [0, 0, sign * 2.85]);
       const hub = mesh(brush, cylinder, gold, [0, 0, sign * 2.87], [.34, .23, .34]); hub.rotation.x = Math.PI / 2;
-      for (let i = 0; i < 24; i++) {
-        const a = i * Math.PI / 12, length = i % 2 ? .9 : 1.3, radius = 2.06 - length / 2;
-        Q.setFromAxisAngle(Z.set(0, 0, 1), a);
-        ends.setMatrixAt(endIndex++, M.compose(P.set(Math.cos(a) * radius, Math.sin(a) * radius, sign * 2.93), Q, Scale.set(length, .075, .12)));
-      }
-      for (let i = 0; i < 48; i++) {
-        const a = i / 48 * Math.PI * 4, b = (i + 1) / 48 * Math.PI * 4, ra = .4 + i / 48 * 1.55, rb = .4 + (i + 1) / 48 * 1.55;
-        const ax = Math.cos(a) * ra, ay = Math.sin(a) * ra, bx = Math.cos(b) * rb, by = Math.sin(b) * rb;
-        Q.setFromAxisAngle(Z.set(0, 0, 1), Math.atan2(by - ay, bx - ax));
-        ends.setMatrixAt(endIndex++, M.compose(P.set((ax + bx) / 2, (ay + by) / 2, sign * 2.93), Q, Scale.set(Math.hypot(bx - ax, by - ay), .055, .12)));
-      }
+      const face = mesh(brush, spiralFace, spiral, [0, 0, sign * SPIRAL_FACE_Z]); face.name = 'mascara-spiral-face';
+      if (sign < 0) face.rotation.y = Math.PI;   // both faces read outward and turn the same way seen from outside
+      spinners.push({ face, phase: spinners.length * .618 });
     }
-    ends.instanceMatrix.needsUpdate = true; ends.computeBoundingSphere(); brush.add(ends);
     return brush;
   }
   for (const row of plan.sweepers) {
@@ -165,6 +163,9 @@ export function createBoudoirHazardView(scene, track, art = null) {
         entry.opacity.value = (.1 + .12 * Math.min(1, motion)) * (gentle ? .65 : 1);
       }
     }
+    // The face spirals turn on the same course clock as the swing: frozen with it, slower under Gentle.
+    const spin = clock * Math.PI * 2 * (gentle ? SPIRAL_SPIN_GENTLE_HZ : SPIRAL_SPIN_HZ);
+    for (const s of spinners) s.face.rotation.z = -(spin + s.phase);
     for (const belt of belts) {
       const p = ribbonPhase(belt.row, clock), length = belt.row.s1 - belt.row.s0;
       beltTarget.set(p.direction > 0 ? '#94e2c8' : p.direction < 0 ? '#f29ab4' : '#e8c675');
@@ -190,6 +191,6 @@ export function createBoudoirHazardView(scene, track, art = null) {
   reset();
   return { group, plan, entries, belts, update, reset,
     hit(event) { const e = byId.get(event?.id); if (e) puff(e, 18, event); },
-    dispose() { if (disposed) return; disposed = true; group.removeFromParent(); group.traverse(o => { if (o.isInstancedMesh) o.dispose(); }); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); },
+    dispose() { if (disposed) return; disposed = true; spiralAtlas?.dispose(); group.removeFromParent(); group.traverse(o => { if (o.isInstancedMesh) o.dispose(); }); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); },
   };
 }

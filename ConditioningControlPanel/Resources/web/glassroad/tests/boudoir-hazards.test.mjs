@@ -236,13 +236,22 @@ test('Sculpted trap meshes match their collision poses, pause freezes all motion
       assert.ok(bottom.distanceTo(centre) < 1e-5, 'arm stays attached to brush head');
     }
   }
-  const firstHead = brush.heads[0], ends = firstHead.brush.getObjectByName('mascara-radial-end-bristles'), vertex = new Vector3(), matrix = new Matrix4(), positions = ends.geometry.attributes.position;
-  assert.equal(ends.count, 144);
-  for (let i = 0; i < ends.count; i++) {
-    ends.getMatrixAt(i, matrix);
+  const firstHead = brush.heads[0], vertex = new Vector3(), matrix = new Matrix4();
+  const faces = firstHead.brush.children.filter(o => o.name === 'mascara-spiral-face');
+  assert.equal(faces.length, 2, 'both approach faces carry a spiral');
+  assert.equal(faces[0].material, brush.heads.at(-1).brush.children.find(o => o.name === 'mascara-spiral-face').material, 'one shared spiral material');
+  for (const face of faces) {
+    face.updateMatrix(); matrix.copy(face.matrix); const positions = face.geometry.attributes.position;
     for (let j = 0; j < positions.count; j++) { vertex.fromBufferAttribute(positions, j).applyMatrix4(matrix).multiply(firstHead.brush.scale);
-      assert.ok(Math.hypot(vertex.x, vertex.y) < firstHead.row.radiusM && Math.abs(vertex.z) < firstHead.row.depthM / 2, 'visible end bristles fit the collision envelope'); }
+      assert.ok(Math.hypot(vertex.x, vertex.y) < firstHead.row.radiusM && Math.abs(vertex.z) < firstHead.row.depthM / 2, 'spiral faces fit the collision envelope'); }
   }
+  // The spirals turn on the course clock (render only), freeze while paused and turn slower under Gentle.
+  view.update(6); const spinAt6 = faces[0].rotation.z; view.update(6.5); const spun = faces[0].rotation.z - spinAt6;
+  assert.ok(Math.abs(spun) > .5, 'spiral turns with the clock');
+  view.update(7, { paused: true }); assert.equal(faces[0].rotation.z - spinAt6, spun, 'paused freezes the spiral');
+  view.update(6, { gentle: true }); const g6 = faces[0].rotation.z; view.update(6.5, { gentle: true });
+  assert.ok(Math.abs(faces[0].rotation.z - g6) < Math.abs(spun) / 2, 'Gentle turns the spiral slower');
+  view.update(6);
   const poses = () => view.entries.map(e => e.heads ? e.heads.map(h => h.pivot.rotation.z) : e.moving.position.toArray());
   const before = poses(), arrows = [...view.belts[0].arrows.instanceMatrix.array], colours = view.belts.map(b => b.colour.value.toArray());
   view.update(9, { paused: true }); assert.deepEqual(poses(), before); assert.deepEqual([...view.belts[0].arrows.instanceMatrix.array], arrows);
