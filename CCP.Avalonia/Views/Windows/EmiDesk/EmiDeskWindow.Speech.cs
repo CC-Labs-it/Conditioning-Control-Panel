@@ -1,9 +1,7 @@
 using System;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.EmiDesk;
-
 namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
-
 public partial class EmiDeskWindow
 {
     private DispatcherTimer? _speechTimer;
@@ -12,9 +10,9 @@ public partial class EmiDeskWindow
     private string? _speechLine;
     private string _speechFace = "^_^";
     private Action? _speechDone;
-
     private void BeginSpeech(string? line, string face, Action? done)
     {
+        if (PresentationActive) return; // WPF EmiDeskWindow.xaml.cs:1048,1077
         CancelChain();
         _speechChain = EmiChains.MakeSay(line, face, EmiChains.SayHoldMs(line));
         _speechLine = line;
@@ -27,7 +25,6 @@ public partial class EmiDeskWindow
         _speechTimer.Tick += (_, _) => AdvanceSpeech();
         _speechTimer.Start();
     }
-
     // The timer and the headless tests drive the same frames; no wall-clock waits in the tests.
     internal void AdvanceSpeech()
     {
@@ -59,7 +56,6 @@ public partial class EmiDeskWindow
                 break;
         }
     }
-
     private void CancelSpeech()
     {
         _speechTimer?.Stop();
@@ -68,7 +64,6 @@ public partial class EmiDeskWindow
         _speechDone = null;
         OnBubbleTextCore(null);
     }
-
     internal void SpeakLine(LineDraw line, EmiLineEngine engine)
     {
         if (PresentationActive || !IsVisible) return;
@@ -89,12 +84,10 @@ public partial class EmiDeskWindow
         }
         Say(line.Text, line.Face);
     }
-
     // WPF EmiDeskWindow.Bubble.cs:545-565 HoldFace: a face, held, no bubble, then back to rest.
     private const int IgnoreFaceMs = 1400;
     private DispatcherTimer? _holdTimer;
     internal bool HoldPending => _holdTimer != null;
-
     private void HoldFace(LineDraw line)
     {
         CancelHold();
@@ -107,7 +100,6 @@ public partial class EmiDeskWindow
         _holdTimer.Tick += (_, _) => ExpireHold();
         _holdTimer.Start();
     }
-
     // The timer and the headless tests drive the same step.
     internal void ExpireHold()
     {
@@ -116,7 +108,6 @@ public partial class EmiDeskWindow
         DrawFace(EmiChains.RestFace);
         RestartIdleBeats();
     }
-
     private void CancelHold()
     {
         _holdTimer?.Stop();

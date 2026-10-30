@@ -2,7 +2,6 @@ using System;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.EmiDesk;
 using Serilog;
-
 namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 
 internal sealed partial class EmiDeskService

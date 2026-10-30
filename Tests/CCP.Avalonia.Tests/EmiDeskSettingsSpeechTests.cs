@@ -190,4 +190,39 @@ public sealed class EmiDeskSettingsSpeechTests
         Assert.Null(desk.Window!.BubbleText);
     });
 
+    [Fact]
+    public void ShippedCatalogueLoadsOutsideTheSourceTree()
+    {
+        var output = AppContext.BaseDirectory;
+        var temp = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString());
+        var target = System.IO.Path.Combine(temp, "Resources", "emi", "desk-lines.json");
+        try
+        {
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(target)!);
+            System.IO.File.Copy(System.IO.Path.Combine(output, "Resources", "emi", "desk-lines.json"), target);
+            AppContext.SetData("APP_CONTEXT_BASE_DIRECTORY", temp);
+            Assert.Equal(temp, AppContext.BaseDirectory);
+            var engine = (EmiLineEngine)Activator.CreateInstance(typeof(EmiLineEngine), nonPublic: true)!;
+            Assert.True(engine.Ready);
+            Assert.Contains("firstContact", engine.MomentIds);
+            Assert.True(engine.IsHoldMoment("panicPressed"));
+        }
+        finally { AppContext.SetData("APP_CONTEXT_BASE_DIRECTORY", output); System.IO.Directory.Delete(temp, true); }
+    }
+    [Fact]
+    public Task DirectSayCannotInterruptPresentation() => InDesk(desk =>
+    {
+        var window = desk.Window!;
+        window.BeginPresentation(() => { });
+        var face = window.Face;
+        bool done = false;
+        window.Say("friends notification", "^_~", () => done = true);
+        Assert.Null(window.BubbleText);
+        Assert.False(window.ChainLive);
+        for (int i = 0; i < 6; i++) window.AdvanceSpeech();
+        Assert.Equal(face, window.Face);
+        Assert.False(done);
+        return Task.CompletedTask;
+    });
+
 }

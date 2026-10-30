@@ -205,6 +205,8 @@
       Folders where the views use everything are globbed, so a new file is picked up without a
       csproj edit. Folders where they use a fraction are explicit, so growth stays a decision.
     -->
+    <!-- WPF ConditioningControlPanel.csproj:665: line engine reads this from disk. -->
+    <Content Include="..\Assets\emi\desk-lines.json" Link="Resources\emi\desk-lines.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <AvaloniaResource Include="..\Assets\quests\**\*"
                       Link="Resources\quests\%(RecursiveDir)%(Filename)%(Extension)" />
     <AvaloniaResource Include="..\Assets\nav\**\*"
