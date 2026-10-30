@@ -2,7 +2,7 @@
  * Left stick steer (dead zone rescaled, never inverted), RT throttle, LT brake, A hop and drift,
  * Start pause (and only pause). rumble() is skipped by the caller under Gentle.
  * Items: X / RB use forward, Y drops behind (one edge per press). Stick down / d-pad down also modifies X / RB.
- * Polish 1: RB is a second item button; LB is unused. R3 changes view, L3 holds rear view. Pads without the
+ * Polish 1: RB is a second item button; LB reacts (the next of four preset reactions, interaction wave 2026-10-30). R3 changes view, L3 holds rear view. Pads without the
  * standard mapping read through a fallback layout (input/padmap.js). A pad that was being played
  * with and then leaves sets `padLost` once (the action map turns it into a pause edge). The shared
  * `devices` hears which pad is in use and every connect and leave, for the HUD.
@@ -63,7 +63,7 @@ export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigat
   }
 
   function poll(into) {
-    into.cameraPressed = false; into.rearView = false; into.item = false; into.back = false;
+    into.cameraPressed = false; into.rearView = false; into.item = false; into.back = false; into.react = false;
     const hit = scan(true);
     into.padLost = lostEdge; lostEdge = false;
     if (!hit) { sampled = null; was = {}; navWas = null; navEdge = null; look.x = look.y = 0; return; }
@@ -86,6 +86,7 @@ export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigat
     into.item = dropPressed || (r.west && !was.west) || (r.rb && !was.rb);
     into.back = dropPressed || ay > 0.5 || r.down;
     into.cameraPressed = r.rs && !was.rs;
+    into.react = r.lb && !was.lb;
     into.rearView = r.ls;
     // one nav edge per press for the cards (never fed to the sim)
     const dir = r.up || ay < -0.6 ? 'up' : r.down || ay > 0.6 ? 'down'
@@ -95,7 +96,7 @@ export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigat
     navWas = dir;
     const used = usedInput(r);
     if (used) { active = k; devices.use('pad', infoOf(g)); }
-    was = { south: r.south, north: r.north, start: r.start, west: r.west, rb: r.rb, rs: r.rs };
+    was = { south: r.south, north: r.north, start: r.start, west: r.west, rb: r.rb, rs: r.rs, lb: r.lb };
   }
   /** The last card nav edge since the previous call, or null. */
   function takeNav() { const d = navEdge; navEdge = null; return d; }

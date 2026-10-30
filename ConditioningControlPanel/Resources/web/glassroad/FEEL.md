@@ -538,6 +538,12 @@ pose). Gentle and OS reduced motion drop the edge flash and keep fades only; the
 - `ai.audibleKarts` 3: the nearest this many bot engines are heard.
 - `ai.cornerMargin` 0.9: share of the kart's calmed full-lock grip yaw a bot plans a bend with (was a feel gap in sim/ai.js).
 
+## react (interaction wave 2026-10-30: preset race reactions, `sim/social.js`; Q / pad LB / touch heart)
+
+- `react.gapS` 2: one reaction per racer per this long (the room keeps the same gap online).
+- `react.botChance` 0.35: a bot reacts to a hard bump, a landed hit, a knock, being passed or the finish this often.
+- `react.botDelayS` 0.5: a bot's reaction waits about this long (0.6x to 1.4x).
+
 ## contact (B1 kart contact and slipstream, sim/contact.js)
 - `contact.radiusM` 0.54 (retained from polish 6 when visual scale rose to 0.78): kart contact radius (two karts touch under 2x this).
 - `contact.maxHeightM` 1.05 (polish 6, was 1.5): karts further apart than this along the road normal never touch.

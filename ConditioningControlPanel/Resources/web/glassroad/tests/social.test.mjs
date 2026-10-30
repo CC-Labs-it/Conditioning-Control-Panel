@@ -153,3 +153,48 @@ test('payback: a mark behind you or out of range keeps normal targeting and stay
   assert.equal(rec.first('item-fire').payload.target, 1);
   assert.equal(social.markOf(0), 2);
 });
+
+test('reactions: four presets in turn, one per react.gapS per racer, unknown ids refused', async () => {
+  const { social, rec, tick } = setup();
+  social.attach(rec, () => false);
+  assert.equal(social.press(0), 'laugh');
+  assert.equal(social.press(0), null, 'too soon');
+  tick(2.01);
+  assert.equal(social.press(0), 'kiss');
+  assert.equal(social.press(1), 'laugh', 'every racer has its own gap');
+  assert.equal(social.react(0, 'hello'), false);
+  assert.deepEqual(rec.all('kart-react').map((e) => [e.payload.racer, e.payload.id]), [[0, 'laugh'], [0, 'kiss'], [1, 'laugh']]);
+  const { REACTIONS } = await import('../sim/social.js');
+  const proto = await import('../net/protocol.js');
+  assert.deepEqual([...proto.REACTIONS], [...REACTIONS]);
+  assert.ok(proto.checkMsg(proto.C2R, { t: 'react', id: 'wink' }));
+  assert.ok(proto.checkMsg(proto.C2R, { t: 'react', id: 'pout', seat: 3 }));
+  assert.ok(!proto.checkMsg(proto.C2R, { t: 'react', id: 'free text' }));
+  assert.ok(proto.checkMsg(proto.R2C, { t: 'react', seat: 2, id: 'kiss' }));
+});
+
+test('reactions: bots react sometimes after a hard bump, never for the player', () => {
+  const { social, rec, q, tick } = setup({ feel: { 'react.botChance': 1 }, karts: [{ s: 100 }, { s: 103 }, { s: 106 }] });
+  social.attach(rec, (i) => i > 0);
+  tick();
+  q.emit('hard-bump', { winner: 1, loser: 0, dv: 5 });
+  q.emit('hard-bump', { winner: 2, loser: 1, dv: 5 });
+  tick(1);
+  const got = rec.all('kart-react').map((e) => [e.payload.racer, e.payload.id]);
+  assert.ok(got.some(([i, id]) => i === 1 && id === 'laugh'));
+  assert.ok(got.some(([i, id]) => i === 2 && id === 'laugh'));
+  assert.ok(!got.some(([i]) => i === 0), 'the player is never made to react');
+});
+
+test('reactions: kartPose maps each preset to an atlas face, a head mark and a bound clip', async () => {
+  const { REACT_LOOK, reactionsFor } = await import('../render/kartPose.js');
+  const fs = await import('node:fs');
+  const b = JSON.parse(fs.readFileSync(new URL('../art/models/emi-kart-event-bindings.json', import.meta.url), 'utf8'));
+  const clips = b.actions.map((a) => a.clip);
+  for (const [id, k] of Object.entries(REACT_LOOK)) {
+    assert.ok(b.faceAtlas.ids.includes(k.face), id);
+    assert.ok(b.markIds.includes(k.mark), id);
+    assert.ok(clips.includes(k.clip), id);
+  }
+  assert.deepEqual(reactionsFor('kart-react', { racer: 2, id: 'kiss' }), [[2, 'react', { id: 'kiss' }]]);
+});

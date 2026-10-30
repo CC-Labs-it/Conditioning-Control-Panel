@@ -820,6 +820,7 @@ async function boot(course, options, lifetime, isCurrent) {
     standings = createStandings(track, feel, q);
     items = s ? s.mount(racers, race, q) : solo ? noItems() : createItems(track, feel, q, { seed: sd });
     social.bind(items);
+    social.attach(q, (i) => { const r = racers.list[i]; return !!(r && r.meta && r.meta.isBot && r.kind !== 'remote'); });
     P = racers.player;
     assist = createAssist(track, P.feel);
     if (!s) {
@@ -1300,6 +1301,11 @@ async function boot(course, options, lifetime, isCurrent) {
   hud.on('back', ({ from } = {}) => { if (from === 'menu') bridge.send({ type: 'menu-back' }); });
 
   // dev status for the boot check's reaction and item shots (times are performance.now())
+  // reactions online: a local racer's (you or a kept bot) goes up; the room relays it, net/room.js shows the others'
+  bus.on('kart-react', ({ racer, id, remote } = {}) => {
+    const r = online && !remote ? racers.list[racer] : null;
+    if (r && r.kind !== 'remote') online.s.react(id, r.meta.seat);
+  });
   bus.on('bump', ({ a, b, dv = 0 }) => { if (a === 0 || b === 0) { debug.bumpMeAt = performance.now(); debug.bumpDv = Math.round(dv * 10) / 10; } });
   bus.on('item-fire', ({ racer, id, mode }) => { if (mode === 'throw' || mode === 'lob') { debug.fireAt = performance.now(); debug.fire = { racer, id, mode }; } });
   bus.on('lap', () => { debug.laps++; });
@@ -1574,6 +1580,7 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     if (paused) { hopLatch.clear(); itemLatch.clear(); } else { hopLatch.hold(a); itemLatch.hold(a); }
     const inRace = state === 'race' || state === 'results';
+    if (a.react && !card && !paused && inRace && race.phase !== 'ready') social.press(0);   // reactions: the next of four, 1 per react.gapS
     // online: go lands on the room's startAt (race.start() runs the local count of goS); the sim never pauses
     if (online && state === 'race' && !online.go && online.s.serverNow() >= online.s.raceStartAt(goS)) { online.go = true; race.start(); syncAssist(); }
     // online the count keeps server time (bells and go on the room's clock, even through a slow frame)

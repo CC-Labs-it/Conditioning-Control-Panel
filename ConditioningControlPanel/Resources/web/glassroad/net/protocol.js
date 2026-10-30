@@ -29,6 +29,8 @@ export const RATES = Object.freeze({
 export const WIRE_ITEMS = Object.freeze(['flash', 'spiral', 'brainDrain', 'freeze', 'blackout', 'pink', 'melt', 'shatter',
   'surge', 'glass', 'echo', 'golden', 'pendulum', 'disc', 'tether', 'snap', 'bigSpiral']);
 export const EFFECT_COUNT = 8;
+/** Preset reactions in a race (sim/social.js REACTIONS; no free text). Append only. */
+export const REACTIONS = Object.freeze(['laugh', 'kiss', 'wink', 'pout']);
 /** Effect kinds a record carries (byte 35, 4 bits): the 8 old hit kinds, then the toys kit's. */
 export const EFFECTS = Object.freeze([...WIRE_ITEMS.slice(0, EFFECT_COUNT), 'pendulum', 'disc', 'tether', 'snap', 'bigSpiral']);
 export const SHIELDS = Object.freeze([null, 'glass', 'golden', 'echo']);
@@ -238,6 +240,7 @@ export const TYPES = Object.freeze({
   str: (v) => typeof v === 'string' && v.length >= 1 && v.length <= 1024,
   item: (v) => WIRE_ITEMS.includes(v),
   mode: (v) => MODES.includes(v),
+  react: (v) => REACTIONS.includes(v),
   code: (v) => typeof v === 'string' && /^[a-z0-9-]{1,24}$/.test(v),
   lookId: (v) => v === null || (typeof v === 'string' && LOOK_ID.test(v)),
   skin: (v) => typeof v === 'string' && /^[0-9a-f]{36}[0-3]$/.test(v),
@@ -277,6 +280,7 @@ export const C2R = Object.freeze({
   finish: { tick: 'u32', frac: 'unit', seat: 'seat?' },
   drop: { tick: 'u32', s: 'num', seat: 'seat?' },
   emote: { code: 'code' },
+  react: { id: 'react', seat: 'seat?' },
   leave: {},
 });
 
@@ -296,6 +300,7 @@ export const R2C = Object.freeze({
   standings: { tick: 'u32', rows: 'standRows' },
   finish: { rows: 'finishRows' },
   emote: { seat: 'seat', code: 'code' },
+  react: { seat: 'seat', id: 'react' },
   error: { code: 'err', re: 'code?' },
   abort: { reason: 'abort' },
 });

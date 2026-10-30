@@ -123,6 +123,7 @@ Client -> room:
 | `finish` | `tick: u32, frac: unit, seat?` | crossed the line on the final lap, `frac` within the tick |
 | `drop` | `tick: u32, s: num, seat?` | fell off (rescue starts); progress may go back |
 | `emote` | `code` | preset id (`hud/presets.js`), at most 1 per 2 s, never free text |
+| `react` | `id, seat?` | race reaction (`laugh kiss wink pout`, `net/protocol.js` REACTIONS), countdown or racing phase, at most 1 per 2 s per seat, never free text; `seat` = a kept bot's |
 | `leave` | | leaving on purpose |
 
 Room -> client:
@@ -142,6 +143,7 @@ Room -> client:
 | `standings` | `tick, rows: [{ seat, place, lap, progM, pops, finished, timeMs }]` (every 500 ms racing + on a place change) |
 | `finish` | `rows: [{ seat, place, name, bot, finished, timeMs, bestLapMs, pops }]` (final, by place) |
 | `emote` | `seat, code` |
+| `react` | `seat, id` (to every seat; the sender's own clients ignore their own seats) |
 | `error` | `code, re?` (`code`: bad phase seat item host rate; `re` = the refused `t`) |
 | `abort` | `reason`, then the socket closes |
 

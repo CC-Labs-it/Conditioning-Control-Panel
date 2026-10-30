@@ -65,7 +65,7 @@ import { createFaceCanvas, faceCell, FACE_LOOK, MARK_LOOK, markCell, createMarkA
 
 const QX = new Quaternion(), QH = new Quaternion(), QI = new Quaternion(), EU = new Euler(), V = new Vector3(), AX = new Vector3();
 const UPY = new Vector3(0, 1, 0), FZ = new Vector3(0, 0, 1), RX = new Vector3(1, 0, 0), GC = new Color();
-const BUS_EVENTS = ['bump', 'wall', 'countdown', 'go', 'finish', 'item-hit', 'item-fire', 'item-roll', 'race-result', 'racer-event'];
+const BUS_EVENTS = ['bump', 'wall', 'countdown', 'go', 'finish', 'item-hit', 'item-fire', 'item-roll', 'kart-react', 'race-result', 'racer-event'];
 const RIM = [0, 0, 0], STAR = [0, 0, 0, 0];
 // polish 6 VIEW: every kart root carries the look scale (render/viewMath.js); sprites read at range keep their size
 const KS = KART_VIEW.scale, SPRITE_KEEP = KART_VIEW.keepSprites ? 1 / KS : 1;
