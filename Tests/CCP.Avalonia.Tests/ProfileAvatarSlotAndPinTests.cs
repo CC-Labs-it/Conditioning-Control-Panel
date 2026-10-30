@@ -190,13 +190,19 @@ public sealed class ProfileAvatarSlotAndPinTests
     public Task ModSwitchRepaintsViewedPins_AndUnsubscribesOnClose() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
-        CoreSettings.Current.OfflineMode = true;
-        CoreSettings.Current.ProfileCosmetics = new ProfileCosmetics();
-        var shell = new MainShellWindow();
-        shell.Show();
-        shell.ShowTab("discord");
+        var old = (CoreSettings.ServiceProvider, CoreMods.MakeModAwareProvider);
+        var settingsBefore = CoreSettings.Current;
+        var valuesBefore = (settingsBefore.OfflineMode, settingsBefore.ProfileCosmetics);
+        var settings = new SettingsService();
+        MainShellWindow? shell = null;
         try
         {
+            CoreSettings.ServiceProvider = () => settings;
+            settings.Current.OfflineMode = true;
+            settings.Current.ProfileCosmetics = new ProfileCosmetics();
+            shell = new MainShellWindow();
+            shell.Show();
+            shell.ShowTab("discord");
             shell.SetProfileViewingSelf(false);
             shell.ApplyViewedProfileWardrobe(new ProfileCosmetics { PinnedAchievements = new() { "plastic_initiation" } });
             var pins = shell.ProfilePage!.FindControl<ItemsControl>("ProfilePinnedShowcase")!;
@@ -214,20 +220,34 @@ public sealed class ProfileAvatarSlotAndPinTests
             Dispatcher.UIThread.RunJobs();
             Assert.Same(before, pins.ItemsSource);
         }
-        finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
+        finally
+        {
+            try { shell?.Close(); Dispatcher.UIThread.RunJobs(); }
+            finally { (CoreSettings.ServiceProvider, CoreMods.MakeModAwareProvider) = old; }
+        }
+        // Check before the assembly hook runs, so it cannot hide missing local cleanup.
+        Assert.Same(old.ServiceProvider, CoreSettings.ServiceProvider);
+        Assert.Same(old.MakeModAwareProvider, CoreMods.MakeModAwareProvider);
+        Assert.Equal(valuesBefore, (settingsBefore.OfflineMode, settingsBefore.ProfileCosmetics));
     });
 
     [Fact]
     public Task FailedLookupFreesOwnPresetSlot() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
-        CoreSettings.Current.OfflineMode = true;
-        CoreSettings.Current.UserDisplayName = "Nyx";
-        CoreSettings.Current.ProfileCosmetics = new ProfileCosmetics { AvatarId = "avatar_bambi_1" };
-        LeaderboardTabView.NewClient = () => new LeaderboardClient(new LookupWire { FailLookup = true });
-        var shell = new MainShellWindow();
+        var old = (CoreSettings.ServiceProvider, LeaderboardTabView.NewClient);
+        var settingsBefore = CoreSettings.Current;
+        var valuesBefore = (settingsBefore.OfflineMode, settingsBefore.UserDisplayName, settingsBefore.ProfileCosmetics);
+        var settings = new SettingsService();
+        MainShellWindow? shell = null;
         try
         {
+            CoreSettings.ServiceProvider = () => settings;
+            settings.Current.OfflineMode = true;
+            settings.Current.UserDisplayName = "Nyx";
+            settings.Current.ProfileCosmetics = new ProfileCosmetics { AvatarId = "avatar_bambi_1" };
+            LeaderboardTabView.NewClient = () => new LeaderboardClient(new LookupWire { FailLookup = true });
+            shell = new MainShellWindow();
             shell.Show();
             shell.ShowTab("discord");
             CoreSettings.Current.OfflineMode = false;
@@ -236,7 +256,14 @@ public sealed class ProfileAvatarSlotAndPinTests
             await Until(() => shell.ProfilePage.ProfileHeroAvatar.AvatarImage != null);
             Assert.Same(ModArt.AvatarPreset("avatar_bambi_1"), shell.ProfilePage.ProfileHeroAvatar.AvatarImage);
         }
-        finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
+        finally
+        {
+            try { shell?.Close(); Dispatcher.UIThread.RunJobs(); }
+            finally { (CoreSettings.ServiceProvider, LeaderboardTabView.NewClient) = old; }
+        }
+        Assert.Same(old.ServiceProvider, CoreSettings.ServiceProvider);
+        Assert.Same(old.NewClient, LeaderboardTabView.NewClient);
+        Assert.Equal(valuesBefore, (settingsBefore.OfflineMode, settingsBefore.UserDisplayName, settingsBefore.ProfileCosmetics));
     });
 
     private static async Task Until(Func<bool> done)
