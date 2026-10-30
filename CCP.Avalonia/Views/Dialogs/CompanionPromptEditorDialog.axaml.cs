@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data;
@@ -39,11 +38,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         /// <summary>WPF's <c>DialogResult.HasValue</c>: set by Save/Cancel (and by an answered X
         /// prompt) so their Close(x) skips the unsaved-changes prompt in OnClosing.</summary>
         private bool _closeDecided;
-        private readonly ObservableCollection<KnowledgeBaseLink> _knowledgeLinks = new();
+        private readonly Views.Controls.Companion.KnowledgeLinksEditor _knowledgeLinks;
 
         private readonly CheckBox _chkUseCustom;
         private readonly StackPanel _contentPanel;
-        private readonly ListBox _lstKnowledgeLinks;
         private readonly TextBox _txtPersonality, _txtExplicitReaction, _txtSlutMode,
                                  _txtKnowledgeBase, _txtContextReactions, _txtOutputRules;
 
@@ -53,7 +51,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
             _chkUseCustom = this.FindControl<CheckBox>("ChkUseCustom")!;
             _contentPanel = this.FindControl<StackPanel>("ContentPanel")!;
-            _lstKnowledgeLinks = this.FindControl<ListBox>("LstKnowledgeLinks")!;
+            _knowledgeLinks = this.FindControl<Views.Controls.Companion.KnowledgeLinksEditor>("KnowledgeLinks")!;
             _txtPersonality = this.FindControl<TextBox>("TxtPersonality")!;
             _txtExplicitReaction = this.FindControl<TextBox>("TxtExplicitReaction")!;
             _txtSlutMode = this.FindControl<TextBox>("TxtSlutMode")!;
@@ -63,7 +61,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
             _defaults = ActivePersonaPromptText.Resolve(ActivePersonaPrompt(), CompanionPromptSettings.GetDefaults());
             LoadCurrentSettings();
-            LoadKnowledgeLinks();
+            _knowledgeLinks.Load();
+            _knowledgeLinks.Changed += (_, _) => _hasUnsavedChanges = true;
             UpdateActivePromptDisplay();
             ApplyPolicyBannerState();
 
@@ -83,8 +82,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             this.FindControl<Button>("ResetKnowledgeBase")!.Click += (_, _) => _txtKnowledgeBase.Text = _defaults.KnowledgeBase;
             this.FindControl<Button>("ResetContextReactions")!.Click += (_, _) => _txtContextReactions.Text = _defaults.ContextReactions;
             this.FindControl<Button>("ResetOutputRules")!.Click += (_, _) => _txtOutputRules.Text = _defaults.OutputRules;
-            this.FindControl<Button>("AddKnowledgeLink")!.Click += (_, _) => AddKnowledgeLink_Click();
-            this.FindControl<Button>("RemoveKnowledgeLink")!.Click += (_, _) => RemoveKnowledgeLink_Click();
             this.FindControl<Button>("BtnResetAll")!.Click += (_, _) => ResetAll_Click();
             this.FindControl<Button>("BtnCancel")!.Click += (_, _) => BtnCancel_Click();
             this.FindControl<Button>("BtnSave")!.Click += (_, _) => BtnSave_Click();
@@ -127,32 +124,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             catch (Exception ex)
             {
                 Log.Warning(ex, "CompanionPromptEditorDialog: failed to open policy URL");
-            }
-        }
-
-        /// <summary>
-        /// Loads global knowledge base links into the list.
-        /// </summary>
-        private void LoadKnowledgeLinks()
-        {
-            _knowledgeLinks.Clear();
-            foreach (var link in CoreSettings.Current.GlobalKnowledgeBaseLinks)
-            {
-                _knowledgeLinks.Add(link);
-            }
-            _lstKnowledgeLinks.ItemsSource = _knowledgeLinks;
-        }
-
-        /// <summary>
-        /// Saves global knowledge base links from the list.
-        /// </summary>
-        private void SaveKnowledgeLinks()
-        {
-            var links = CoreSettings.Current.GlobalKnowledgeBaseLinks;
-            links.Clear();
-            foreach (var link in _knowledgeLinks)
-            {
-                links.Add(link);
             }
         }
 
@@ -257,13 +228,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 PersonalityService.ClearCustomPromptOverride(CoreSettings.Current);
 
             // Save global knowledge base links
-            SaveKnowledgeLinks();
+            _knowledgeLinks.SaveToSettings();
 
             CoreSettings.Save();
             _hasUnsavedChanges = false;
 
             Log.Information("Companion prompt settings saved. UseCustomPrompt={UseCustom}, GlobalLinks={LinkCount}",
-                settings.UseCustomPrompt, _knowledgeLinks.Count);
+                settings.UseCustomPrompt, _knowledgeLinks.Links.Count);
         }
 
         private void UpdateEnabledState()
@@ -278,30 +249,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         {
             UpdateEnabledState();
             _hasUnsavedChanges = true;
-        }
-
-        private async void AddKnowledgeLink_Click()
-        {
-            var dialog = new KnowledgeLinkEditorDialog();
-            await dialog.ShowDialogSafe(this);
-            if (dialog.Result != null)
-            {
-                _knowledgeLinks.Add(dialog.Result);
-                _hasUnsavedChanges = true;
-            }
-        }
-
-        private async void RemoveKnowledgeLink_Click()
-        {
-            if (_lstKnowledgeLinks.SelectedItem is KnowledgeBaseLink link)
-            {
-                _knowledgeLinks.Remove(link);
-                _hasUnsavedChanges = true;
-            }
-            else
-            {
-                await MessageDialog.ShowAsync(this, "No Selection", Loc.Get("msg_please_select_a_link_to_remove"));
-            }
         }
 
         private async void ResetAll_Click()
