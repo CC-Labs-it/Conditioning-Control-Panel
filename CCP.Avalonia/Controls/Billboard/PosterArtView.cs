@@ -6,7 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
-using ConditioningControlPanel.Services.Billboard;
+using ConditioningControlPanel.Services.Billboard.Motion;
 using Serilog;
 using Env = ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env;
 

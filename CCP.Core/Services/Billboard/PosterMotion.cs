@@ -1,6 +1,6 @@
 // Motion budgets from WPF 80a8cdfc9. No UI types: both heads can use these poses.
 using System;
-namespace ConditioningControlPanel.Services.Billboard;
+namespace ConditioningControlPanel.Services.Billboard.Motion;
 public static class PosterMotion
 {
     public const double BaseScale = 1.034;

@@ -1,5 +1,5 @@
 using System;
-using ConditioningControlPanel.Services.Billboard;
+using ConditioningControlPanel.Services.Billboard.Motion;
 using Xunit;
 namespace CCP.Core.Tests;
 public sealed class PosterMotionTests
