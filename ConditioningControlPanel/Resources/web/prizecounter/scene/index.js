@@ -13,6 +13,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { layoutTab, slotIndex, usedBays } from './layout.js';
 import { motionAmp, damp, emptyToCameraQuat, forwardOf, lookPoint, bayView, bandFit, dipFor, bob } from './camera-math.js';
 import { keyIntent, padIntent, stickIntent, swipeIntent } from './intents.js';
+import { createPressGuard, keyName } from '../state/press-guard.js';
 import { createTags } from './tags.js';
 
 const PINK = 0xff3d9a;
@@ -21,7 +22,7 @@ const STAMP_DROP = -0.14;    // owned_stamp's card centre (+0.058) lands on the 
 const FRAME = { wide: [15.4, 6.2], bay: [3.3, 3.55] };
 const WIDE_HOLD = 0.7;       // seconds on cam_wide before the first ease in
 
-export async function createScene(canvas, { base = './assets/', motion = 'full' } = {}) {
+export async function createScene(canvas, { base = './assets/', motion = 'full', guard = createPressGuard({ now: () => performance.now(), focused: true }) } = {}) {
   const renderer = new T.WebGLRenderer({ canvas, antialias: true, powerPreference: 'default' });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   renderer.outputColorSpace = T.SRGBColorSpace;
@@ -205,13 +206,24 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
   const emit = (i) => { if (i) listeners.forEach((cb) => { try { cb(i); } catch (err) { console.error(err); } }); };
   // A focused HUD control keeps its own Enter and Space; the shelves get everything else.
   const typing = (el) => el && (/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(el.tagName) || el.isContentEditable);
+  // Select is the one intent that can spend: it fires on the RELEASE of a deliberate press (state/press-guard.js).
   const onKey = (ev) => {
     if (ev.ctrlKey || ev.metaKey || ev.altKey || typing(ev.target)) return;
-    if (!keyIntent({ code: ev.code, key: ev.key })) return;
+    const k = keyIntent({ code: ev.code, key: ev.key });
+    if (!k) return;
     ev.preventDefault();
-    emit(keyIntent(ev));
+    if (k.type === 'select') guard.down(keyName(ev), ev.repeat); else emit(keyIntent(ev));
+  };
+  const onKeyUp = (ev) => {
+    const k = keyIntent({ code: ev.code, key: ev.key });
+    if (!k || k.type !== 'select') return;
+    const meant = guard.up(keyName(ev));
+    if (ev.ctrlKey || ev.metaKey || ev.altKey || typing(ev.target)) return;
+    ev.preventDefault();
+    if (meant) emit({ type: 'select', key: true });   // key: main.js never lets it reach an open card
   };
   window.addEventListener('keydown', onKey);
+  window.addEventListener('keyup', onKeyUp);
 
   const ray = new T.Raycaster(), ndc = new T.Vector2();
   let down = null;
@@ -247,7 +259,9 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
       if (s && (s.type !== stickHeld || t - stickAt > 0.32)) { emit(s); stickAt = t; }
       stickHeld = s ? s.type : null;
     }
-    now.forEach((i) => { if (!padHeld.has(i)) emit(padIntent(i)); });
+    // Pad A selects on release, through the same guard as the keys; the other buttons act on press.
+    now.forEach((i) => { if (padHeld.has(i)) return; if (padIntent(i).type === 'select') guard.down(`pad:${i}`); else emit(padIntent(i)); });
+    padHeld.forEach((i) => { if (!now.has(i) && padIntent(i).type === 'select' && guard.up(`pad:${i}`)) emit(padIntent(i)); });
     padHeld.clear(); now.forEach((i) => padHeld.add(i));
   }
 
@@ -307,6 +321,7 @@ export async function createScene(canvas, { base = './assets/', motion = 'full' 
   function dispose() {
     alive = false; cancelAnimationFrame(raf);
     window.removeEventListener('keydown', onKey);
+    window.removeEventListener('keyup', onKeyUp);
     canvas.removeEventListener('pointerdown', onDown);
     canvas.removeEventListener('pointerup', onUp);
     listeners.clear();

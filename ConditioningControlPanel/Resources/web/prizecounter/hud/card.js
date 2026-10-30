@@ -38,7 +38,8 @@ export function cardModel(card, sp, t) {
   };
 }
 
-export function renderCard(doc, m, send) {
+/** press(event, button) -> false drops a click (hud/index.js: a key's synthetic click, a step too fresh to confirm). */
+export function renderCard(doc, m, send, press = () => true) {
   const el = (tag, cls, text) => { const n = doc.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
   const card = el('div', `pc-card pc-face-${m.face}`);
   card.setAttribute('role', 'dialog');
@@ -72,7 +73,7 @@ export function renderCard(doc, m, send) {
       btn.type = 'button';
       btn.disabled = b.disabled;
       btn.dataset.intent = b.intent;
-      btn.onclick = () => send({ type: b.intent });
+      btn.onclick = (e) => { if (press(e, b)) send({ type: b.intent }); };
       row.append(btn);
     }
     card.append(row);

@@ -30,6 +30,15 @@ public class RainWardrobeTests
         "\"accessories\":[\"hoops-original\",\"silver-drops\"]},\"colors\":{\"fabric\":\"#AA3366\"}}";
 
     [Fact]
+    public void ProcessFailed_BusyRendererKeepsTheWindow_ARealFailureCloses()
+    {
+        // Desk 2026-10-30: input during the ~30 s asset boot raised RenderProcessUnresponsive and the room closed.
+        Assert.False(RainWardrobeHostService.ClosesOn(Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedKind.RenderProcessUnresponsive));
+        Assert.True(RainWardrobeHostService.ClosesOn(Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedKind.RenderProcessExited));
+        Assert.True(RainWardrobeHostService.ClosesOn(Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedKind.BrowserProcessExited));
+    }
+
+    [Fact]
     public void Codec_IsCanonical_AndDropsJunk()
     {
         var n = RainLookCodec.Normalize(Look);

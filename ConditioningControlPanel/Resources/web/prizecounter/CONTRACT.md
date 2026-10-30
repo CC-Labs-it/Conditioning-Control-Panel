@@ -81,3 +81,8 @@ Standalone frames (`host.js`): out `{type:'ready', protocol:1}`, `{type:'request
 - Every effect has an IN and an OUT. Gentle visuals: fades only, no dust, no shake. Motion off: cuts.
 - Copy: no em dashes, no exclamation marks; strings are loc keys `shop_*` in all ten language files.
 - Nothing here writes Sparkles. Only a receipt's `sp` moves the wallet.
+- Stray keys never spend (desk bug 2026-10-30, `state/press-guard.js`): the counter opens with nothing focused and
+  no card; a new card face (Buy, then Wear) focuses the card itself, never its action. Space, Enter and pad A select
+  on RELEASE of a press that began after the window had focus 600 ms and the card had been up 400 ms; a repeat or a
+  key held from before focus never counts, and a key's synthetic click on the action is dropped. A key's select never
+  reaches an open card from the shelves. Pointer clicks act as before, after the same 400 ms on a fresh card.
