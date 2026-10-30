@@ -18,6 +18,7 @@ namespace ConditioningControlPanel.Views.Controls.Companion
         {
             ChatCommand = CompanionRelayCommand.NoOp("hero.chat");
             DetachCommand = CompanionRelayCommand.NoOp("hero.detach");
+            OpenRainWardrobeCommand = CompanionRelayCommand.NoOp("hero.wardrobe");
             ToggleMuteCommand = new CompanionRelayCommand(() => IsMuted = !IsMuted);
             ToggleShownCommand = new CompanionRelayCommand(() => IsCompanionShown = !IsCompanionShown);
             // The three cross-zone links. They still record their tag like every other mock
@@ -92,6 +93,8 @@ namespace ConditioningControlPanel.Views.Controls.Companion
         public ICommand ChatCommand { get; }
         public ICommand SwitchCommand { get; }
         public ICommand DetachCommand { get; }
+        public ICommand OpenRainWardrobeCommand { get; }
+        public bool IsRainWardrobeAvailable { get; init; } = true;
         public ICommand ToggleMuteCommand { get; }
         public ICommand ToggleShownCommand { get; }
         public ICommand OpenEngineRoomCommand { get; }

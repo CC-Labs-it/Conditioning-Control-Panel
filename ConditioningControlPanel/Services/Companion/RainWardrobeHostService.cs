@@ -15,8 +15,9 @@ namespace ConditioningControlPanel.Services.Companion;
 /// fitting room (<c>Resources/web/rain-wardrobe</c>) in one windowed <see cref="ChaosWebViewHost"/>, which
 /// attaches ScrolllerWebGate. Kept minimal on purpose: the dressing room (lanes R4/R5) replaces it.
 ///
-/// <para>The host owns the look: the saved <c>AppSettings.RainLook</c> goes in as <c>?host=ccp&amp;look=</c>,
-/// every change comes back as a <c>rain-look</c> frame and is stored through <see cref="RainLookCodec"/>.
+/// <para>The host owns the look: the saved <c>AppSettings.RainLook</c> goes in as <c>?host=ccp&amp;look=</c>
+/// and again in the <c>init</c> frame (applyMode:true, lane R5). Changes are a draft on the page; only
+/// <c>rain-apply</c> reaches the tube, through <see cref="RainApplyController"/> (clamp, bake, commit).
 /// Prize Counter: items the account does not own (<see cref="RainWardrobeCatalog"/> against
 /// <c>App.Ownership</c> grants) go in as <c>?locked=</c>, show "In the Prize Counter" and cannot be
 /// worn; a buy while the window is up posts <c>rain-locked</c>. Single items only (the page hides its
@@ -36,6 +37,16 @@ internal static class RainWardrobeHostService
 
     private static ChaosWebViewHost? _host;
     private static bool _disposing;
+    private static RainApplyController? _apply;
+    private static readonly RainSerialQueue BakeQueue = new();
+    private static IReadOnlyList<string>? _clips;
+
+    /// <summary>The Prize Counter door (lane R5): the counter host sets it when it lands on this
+    /// branch (<c>PrizeCounterHostService.Launch(from, tab)</c>). Null = no counter in this build.</summary>
+    internal static Action<string, string?>? CounterLauncher { get; set; }
+
+    /// <summary>The counter's cached prices (grant or slot:id -> Sparkles); null or empty = no prices.</summary>
+    internal static Func<IReadOnlyDictionary<string, int>?>? CounterPrices { get; set; }
 
     public static bool IsActive => _host != null;
 
@@ -106,6 +117,7 @@ internal static class RainWardrobeHostService
                     RunOnUi(Close);
                 },
             });
+            _apply = new RainApplyController(ApplyHooks(_host));
             _host.Show();
             if (_host.Window != null) _host.Window.Closed += (_, _) => Close();
             if (App.Ownership != null) { App.Ownership.OwnershipChanged -= OnOwnershipChanged; App.Ownership.OwnershipChanged += OnOwnershipChanged; }
@@ -127,6 +139,9 @@ internal static class RainWardrobeHostService
         try
         {
             try { if (App.Ownership != null) App.Ownership.OwnershipChanged -= OnOwnershipChanged; } catch (Exception ex) { Diag.Swallowed(ex); }
+            // Panic or close mid-bake: the temp pack goes, the applied look and pack stay.
+            try { _apply?.Abort(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            _apply = null;
             bool had = _host != null;
             try { _host?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _host = null;
@@ -137,29 +152,119 @@ internal static class RainWardrobeHostService
 
     private static void OnOwnershipChanged(object? sender, Prizes.OwnershipChangedEventArgs e)
     {
-        try { _host?.Post(new { type = "rain-locked", locked = RainWardrobeCatalog.LockedKeys(App.Ownership?.Grants) }); }
-        catch (Exception ex) { App.Logger?.Debug("RainWardrobe: locked post failed: {E}", ex.Message); }
+        RunOnUi(() =>
+        {
+            try
+            {
+                // rain-owned re-badges the shop layer in place; rain-locked keeps the ?locked= fallback in step.
+                _host?.Post(new { type = "rain-owned", grants = AccountGrants() });
+                _host?.Post(new { type = "rain-locked", locked = RainWardrobeCatalog.LockedKeys(App.Ownership?.Grants) });
+            }
+            catch (Exception ex) { App.Logger?.Debug("RainWardrobe: ownership post failed: {E}", ex.Message); }
+        });
     }
 
     private static void OnPageMessage(JObject o)
     {
         try
         {
-            switch ((string?)o["type"])
-            {
-                case "rain-look":
-                    if (o["look"] is JObject look) StoreLook(look.ToString(Newtonsoft.Json.Formatting.None), App.Ownership?.Grants);
-                    break;
-                case "rain-ready":
-                    App.Logger?.Information("RainWardrobe: page ready");
-                    break;
-                case "boot-error":
-                    // The page shows its own error card; the window stays so the user can read it.
-                    App.Logger?.Warning("RainWardrobe: page boot-error: {Msg}", (string?)o["msg"]);
-                    break;
-            }
+            var host = _host;
+            if (host == null) return;
+            Route(o, _apply, host.Post, BuildLiveInit, ShowCounterSoon);
         }
         catch (Exception ex) { App.Logger?.Warning("RainWardrobe: message handler threw: {E}", ex.Message); }
+    }
+
+    /// <summary>One page frame (testable): init on ready, Apply and bake frames to the controller, the
+    /// counter door, and no per-change autosave (Apply is the only way a look reaches the tube).</summary>
+    internal static void Route(JObject o, RainApplyController? apply, Action<object> post, Func<JObject> init, Action counterMissing)
+    {
+        var type = (string?)o["type"];
+        if (apply != null && apply.Handle(o)) return;
+        switch (type)
+        {
+            case "rain-ready":
+                App.Logger?.Information("RainWardrobe: page ready");
+                post(init());
+                break;
+            case "open-counter":
+                var tab = (string?)o["tab"];
+                var launch = CounterLauncher;
+                if (launch != null) launch("wardrobe", string.IsNullOrWhiteSpace(tab) ? null : tab);
+                else counterMissing();
+                break;
+            case "rain-look":
+                // The pre-Apply autosave. Init always says applyMode:true, so a stray frame never saves.
+                App.Logger?.Debug("RainWardrobe: rain-look ignored (Apply mode)");
+                break;
+            case "boot-error":
+                // The page shows its own error card; the window stays so the user can read it.
+                App.Logger?.Warning("RainWardrobe: page boot-error: {Msg}", (string?)o["msg"]);
+                break;
+        }
+    }
+
+    private static JObject BuildLiveInit()
+    {
+        var progress = new AppRainProgressSource();
+        var settings = App.Settings?.Current;
+        IReadOnlyDictionary<string, int>? prices = null;
+        try { prices = CounterPrices?.Invoke(); } catch (Exception ex) { Diag.Swallowed(ex); }
+        return RainApplyController.BuildInit(
+            RainWardrobeCatalog.Clamp(settings?.RainLook, App.Ownership?.Grants),
+            AccountGrants(), progress.Level, progress.UnlockedAchievements,
+            LocalizationManager.Instance.CurrentLanguage,
+            MotionFx.Level.ToString().ToLowerInvariant(),
+            Safety.GentleVisuals.On, prices);
+    }
+
+    /// <summary>The grants the host's Apply clamp honours (PrizeGrants, so a dev override agrees with the page).</summary>
+    private static IReadOnlyList<string> AccountGrants()
+    {
+        var set = new HashSet<string>(App.Ownership?.Grants ?? Array.Empty<string>(), StringComparer.Ordinal);
+        foreach (var item in RainItemManifest.Shipped.Items)
+            if (item.Grant != null && Prizes.PrizeGrants.IsGranted(item.Grant)) set.Add(item.Grant);
+        return set.OrderBy(g => g, StringComparer.Ordinal).ToList();
+    }
+
+    private static void ShowCounterSoon()
+        => App.Notifications?.Show(Loc.Get("rain_wardrobe_counter_soon"), NotificationType.Info, TimeSpan.FromSeconds(6));
+
+    private static RainApplyController.Hooks ApplyHooks(ChaosWebViewHost host) => new()
+    {
+        Post = msg => host.Post(msg),
+        Store = RainPackStore.CreateDefault,
+        Access = RainItemAccess.ForApp,
+        Clips = () => _clips ??= RainApplyController.ClipsFromEmotes(ReadEmbeddedEmotes()),
+        Commit = CommitLook,
+        Background = BakeQueue.Enqueue,
+        Ui = RunOnUi,
+        Log = line => App.Logger?.Information("RainWardrobe: {Line}", line),
+        OnFailed = () => App.Notifications?.Show(Loc.Get("rain_wardrobe_apply_failed"), NotificationType.Info, TimeSpan.FromSeconds(6)),
+    };
+
+    /// <summary>Apply landed: the look and its pack become the tube's, saved, and the tube re-enters emote mode.</summary>
+    private static void CommitLook(string look, string packHash)
+    {
+        var settings = App.Settings?.Current;
+        if (settings == null) return;
+        settings.RainLook = look;
+        settings.RainPackHash = packHash;
+        App.Settings!.Save();
+        App.AvatarWindow?.RefreshRainLook();
+        App.Logger?.Information("RainWardrobe: applied look {Hash}", packHash.Length > 0 ? packHash[..12] : "default");
+    }
+
+    private static string? ReadEmbeddedEmotes()
+    {
+        try
+        {
+            var sri = Application.GetResourceStream(new Uri("pack://application:,,,/Resources/rain_emotes/emotes.json", UriKind.Absolute));
+            if (sri == null) return null;
+            using var reader = new StreamReader(sri.Stream);
+            return reader.ReadToEnd();
+        }
+        catch (Exception ex) { App.Logger?.Debug("RainWardrobe: emotes.json read failed: {E}", ex.Message); return null; }
     }
 
     /// <summary>Clamps (owned items only) and saves the look; false when nothing changed.</summary>
