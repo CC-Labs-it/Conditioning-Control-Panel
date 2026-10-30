@@ -38,3 +38,5 @@ October 12, 2026 repertoire revision 2: derived native-rig arm and finger animat
 Shy repertoire, October 13, 2026: three six-second native performances (shy_hold, shy_glance, shy_sway) on the revision 2 appearance.
 
 Tube clips, October 24, 2026: the accepted performances pre-rendered unchanged (same source file, materials and camera direction) as transparent 192x309 animated WebP at 15 fps for the companion tube. talk_a, talk_b and talk_c layer the V13 library's silent speech-like mouth controls over the accepted idle and listening bodies; this is not phoneme lip-sync. Original Rain attribution and licenses remain in force. This adaptation is not endorsed by the Blender Foundation.
+
+Reactions, October 30, 2026: five polished six-second native performances (joy, surprise, affection, confidence, disappointment) on the accepted appearance, pre-rendered with the shipped clips' camera and crop as transparent 192x309 animated WebP at 15 fps with the same 48-colour palette. Original Rain attribution and licenses remain in force. This adaptation is not endorsed by the Blender Foundation.
