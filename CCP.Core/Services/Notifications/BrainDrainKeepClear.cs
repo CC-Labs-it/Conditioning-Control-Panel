@@ -22,6 +22,25 @@ namespace ConditioningControlPanel.Services
         internal readonly record struct BandEntry(IntPtr Hwnd, bool Ours, bool Drain);
 
         /// <summary>
+        /// WPF Services/Notifications/OverlayService.cs:3213-3248: sink all drains in their
+        /// current top-to-bottom order, chaining each insertion after the preceding drain.
+        /// The head supplies the visible topmost band and its native insert-below operation.
+        /// No call is made when disabled or when the band is already correctly ordered.
+        /// </summary>
+        internal static void Sink(bool enabled, IReadOnlyList<BandEntry> band, Action<IntPtr, IntPtr> insertBelow)
+        {
+            if (!enabled) return;
+            var anchor = AnchorIfNeeded(band);
+            if (anchor == IntPtr.Zero) return;
+            foreach (var entry in band)
+            {
+                if (!entry.Drain) continue;
+                insertBelow(entry.Hwnd, anchor);
+                anchor = entry.Hwnd;
+            }
+        }
+
+        /// <summary>
         /// The window every blur window must be inserted under, or <see cref="IntPtr.Zero"/> when
         /// nothing needs to move: no blur in the band, nothing of ours to keep clear, or every blur
         /// window already sits below the lowest of our windows.

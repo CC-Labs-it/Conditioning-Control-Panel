@@ -41,6 +41,11 @@ internal static class Win32Overlay
     [DllImport("user32.dll")] private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint colorKey, byte alpha, uint flags);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
+    // WPF OverlayService.cs:3247. hWndInsertAfter means immediately below this window.
+    internal static bool RestackBelow(IntPtr hwnd, IntPtr after)
+        => OperatingSystem.IsWindows() && hwnd != IntPtr.Zero && after != IntPtr.Zero
+            && SetWindowPos(hwnd, after, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+
     // Per window: whether it should currently be click-through, read by the style callback.
     private static readonly ConditionalWeakTable<TopLevel, StrongBox<bool>> Wanted = new();
 
