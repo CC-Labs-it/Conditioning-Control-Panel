@@ -60,13 +60,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
 
-        /// <summary>The Chaos folders: the user's library (assets/Chaos), then the shipped art beside the exe.</summary>
+        /// <summary>WPF UserAssetsPath/assets/Chaos first, then shipped assets/Chaos.</summary>
         private static IEnumerable<string> Roots()
         {
             if (RootsOverride != null) { foreach (var r in RootsOverride()) yield return r; yield break; }
-            string? user = null;
-            try { user = CorePaths.EffectiveAssets; } catch { /* no assets folder yet */ }
-            if (!string.IsNullOrEmpty(user)) yield return Path.Combine(user, "Chaos");
+            // WPF App.xaml.cs:192; Services/Chaos/ChaosArt.cs:64,142-147.
+            yield return Path.Combine(CorePaths.UserData, "assets", "assets", "Chaos");
             yield return Path.Combine(AppContext.BaseDirectory, "assets", "Chaos");
         }
     }

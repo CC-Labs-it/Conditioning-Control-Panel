@@ -96,6 +96,50 @@ public sealed class ChaosUnlockCardOverlayTests
         finally { ChaosArt.ResetForTest(); System.IO.Directory.Delete(root, true); }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Production_art_roots_preserve_Wpf_library_path_and_precedence(bool customLibrary) => await Run(_ =>
+    {
+        // WPF App.xaml.cs:192 and Services/Chaos/ChaosArt.cs:64,142-147.
+        // Use production roots and the suite's isolated UserData, not RootsOverride.
+        string kind = "art-review-" + Guid.NewGuid().ToString("N");
+        string library = System.IO.Path.Combine(ConditioningControlPanel.CorePaths.UserData, "assets", "assets", "Chaos", kind);
+        string shipped = System.IO.Path.Combine(AppContext.BaseDirectory, "assets", "Chaos", kind);
+        string effective = customLibrary
+            ? System.IO.Path.Combine(ConditioningControlPanel.CorePaths.UserData, kind)
+            : System.IO.Path.Combine(ConditioningControlPanel.CorePaths.UserData, "assets");
+        string wrong = System.IO.Path.Combine(effective, "Chaos", kind);
+        var provider = ConditioningControlPanel.CorePaths.EffectiveAssetsProvider;
+        try
+        {
+            ChaosArt.ResetForTest();
+            ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = () => effective;
+            foreach (string folder in new[] { library, shipped, wrong })
+            {
+                System.IO.Directory.CreateDirectory(folder);
+                using var bitmap = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(6, 3), new Vector(96, 96));
+                bitmap.Save(System.IO.Path.Combine(folder, "probe.png"));
+            }
+            string expected = System.IO.Path.Combine(library, "probe.png");
+            Assert.Same(ChaosArt.TryLoad(expected), ChaosArt.Resolve(kind, "probe"));
+            Assert.Equal(expected, ChaosArt.PathFor(kind, "probe"));
+            Assert.Equal(expected, ChaosArt.FilePath(System.IO.Path.Combine(kind, "probe.png")));
+            // An unreadable override must fall through to shipped art, like WPF :65-66.
+            System.IO.File.WriteAllText(expected, "invalid image");
+            ChaosArt.ResetForTest();
+            Assert.Same(ChaosArt.TryLoad(System.IO.Path.Combine(shipped, "probe.png")), ChaosArt.Resolve(kind, "probe"));
+        }
+        finally
+        {
+            ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = provider;
+            ChaosArt.ResetForTest();
+            foreach (string folder in new[] { library, shipped, wrong })
+                if (System.IO.Directory.Exists(folder)) System.IO.Directory.Delete(folder, true);
+            if (customLibrary && System.IO.Directory.Exists(effective)) System.IO.Directory.Delete(effective, true);
+        }
+    });
+
     [Fact]
     public async Task Passive_card_style_keeps_clicks_without_activation_or_changing_topmost() => await Run(_ =>
     {
