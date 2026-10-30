@@ -47,7 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void StartEngineFromUser()
         {
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
-            StartEngine();
+            StartEngine(warnEmptyLibrary: true);
         }
 
         private void MenuJumpRightIn_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => RandomizeAndStart();
@@ -77,12 +77,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF StartEngine, through the portal wrapper so the panic key is bound first.</summary>
-        internal void StartEngine()
+        internal void StartEngine(bool warnEmptyLibrary = false)
         {
             var gen = ++_engineGen;
             StartEffect(() =>
             {
                 if (gen != _engineGen || CoreEngine.IsRunning) return;
+                // WPF StartStop.cs:345-350: no notice for audio-only or system starts.
+                if (warnEmptyLibrary && !CoreSettings.Current.AudioOnlySession) WarnIfFlashLibraryEmpty();
                 CoreEngine.Start();
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
