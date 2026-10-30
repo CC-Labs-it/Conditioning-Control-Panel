@@ -1,9 +1,9 @@
-# Flatpak for the own-repo channel (docs/avalonia-linux-install.md). Consumes the tarball from
+# Flatpak for the own-repo channel (docs/avalonia-linux-install.html). Consumes the tarball from
 # packaging/linux/build-tarball.sh: copy it next to this file as ConditioningControlPanel-linux-x64.tar.gz.
 # A release swaps `path:` for `url:` + `sha256:` of the uploaded asset. Not submitted to Flathub.
 # GNOME 50 already ships webkit2gtk-4.1, libsecret, libXi and libpulse; libVLC is bundled below.
 # WPE WebKit is NOT bundled although the user brief asks for it: WebHost only needs the GTK3 NativeControlHost
-# engine. Blocked on the first flatpak-builder run proving that (docs/avalonia-decisions.md, Linux package shape).
+# engine. Blocked on the first flatpak-builder run proving that (docs/avalonia-decisions.html, Linux package shape).
 app-id: io.github.CodeBambi.ConditioningControlPanel
 runtime: org.gnome.Platform
 runtime-version: '50'

@@ -22,7 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     /// model <c>CompanionPrompt.AiModel</c> already names, and finishing flips the provider to Local
     /// and saves. Every step drives OllamaSetupService (moved to Core unchanged) exactly as WPF does;
     /// off Windows there is no installer download - the user installs Ollama and Continue re-detects
-    /// (see docs/avalonia-decisions.md). WPF's DialogResult becomes Close(bool).
+    /// (see docs/avalonia-decisions.html). WPF's DialogResult becomes Close(bool).
     /// </summary>
     public partial class LocalAiSetupWizard : Window
     {
@@ -228,7 +228,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             (model, p, ct) => OllamaSetupService.PullModelAsync(model, progress: p, ct: ct);
         internal static Func<string, CancellationToken, Task<(bool ok, TimeSpan elapsed, string reply)>> SmokeTest =
             (model, ct) => OllamaSetupService.SmokeTestAsync(model, ct: ct);
-        /// <summary>Decision (docs/avalonia-decisions.md): off Windows the wizard never downloads or runs an
+        /// <summary>Decision (docs/avalonia-decisions.html): off Windows the wizard never downloads or runs an
         /// installer; the user installs Ollama, Continue re-runs detection.</summary>
         internal static bool CanAutoInstall = OperatingSystem.IsWindows();
 

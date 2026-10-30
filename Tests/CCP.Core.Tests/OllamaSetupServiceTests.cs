@@ -15,7 +15,7 @@ namespace CCP.Core.Tests;
 public sealed class ProcessPathCollection { }
 
 /// <summary>OllamaSetupService off Windows: `ollama` comes from PATH (no installer, decision in
-/// docs/avalonia-decisions.md), and exit stops only the `ollama serve` this app spawned. The binary
+/// docs/avalonia-decisions.html), and exit stops only the `ollama serve` this app spawned. The binary
 /// is a shell-script fake and the API a loopback fake; no real ollama, pull or network.</summary>
 [Collection("ProcessPath")]
 public sealed class OllamaSetupServiceTests

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Clean-distro check of the shipped linux-x64 tarball, one distro per call, entirely inside Docker.
 #   bash packaging/linux/distro-check/run.sh <image> <tarball> <outdir>   e.g. ubuntu:24.04
-# Phase 1 (network on): install docs/avalonia-linux-install.md runtime deps + Xvfb/openbox/ImageMagick/xdotool/xwininfo, docker commit.
+# Phase 1 (network on): install docs/avalonia-linux-install.html runtime deps + Xvfb/openbox/ImageMagick/xdotool/xwininfo, docker commit.
 # Phase 2 (--network none, no devices, host uid): run the app under Xvfb at 1920x1080, 1366x768 and 1920x1080 @2x
 # with a throwaway HOME/XDG_CONFIG_HOME/CCP_USERDATA_DIR. Writes <outdir>/<distro>/{*.png,log.txt,ldd.txt,fonts.txt,result.json}.
 set -euo pipefail

@@ -47,7 +47,7 @@ namespace ConditioningControlPanel.Services
     /// <para><b>Deliberate deviation:</b> a scheduled tick that finds an empty library re-arms the
     /// schedule. WPF returns from ContinueTriggerVideo (:2424) without ScheduleNext, so its schedule
     /// silently dies until the engine restarts; here a video added mid-session still plays
-    /// (docs/avalonia-decisions.md).</para>
+    /// (docs/avalonia-decisions.html).</para>
     /// </summary>
     public sealed class MandatoryVideoScheduler
     {

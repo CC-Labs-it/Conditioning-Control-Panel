@@ -265,7 +265,7 @@ namespace ConditioningControlPanel.Avalonia
             // Pinned, not detected: every desktop overlay is an X11 override-redirect window
             // (Platform/X11Overlay.cs), and under a future native Wayland backend those calls would
             // silently no-op. On a Wayland session this runs through XWayland.
-            // See docs/avalonia-decisions.md (desktop overlays).
+            // See docs/avalonia-decisions.html (desktop overlays).
             // WM_CLASS = the app id, so desktops match windows to the .desktop file (StartupWMClass).
             return OperatingSystem.IsLinux()
                 ? builder.UseX11().With(new X11PlatformOptions { WmClass = AppId })

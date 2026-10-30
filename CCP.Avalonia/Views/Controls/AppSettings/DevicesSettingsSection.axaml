@@ -488,7 +488,7 @@
                             <fx:IconLabel Key="btn_escape"/>
                         </Button>
                     </Grid>
-                    <!-- Avalonia-only: policy C, docs/avalonia-decisions.md (panic key row). -->
+                    <!-- Avalonia-only: policy C, docs/avalonia-decisions.html (panic key row). -->
                     <TextBlock Text="{loc:Str panic_key_wayland_hint}" FontSize="11" Opacity="0.7"
                                TextWrapping="Wrap" Margin="0,0,0,6"/>
 

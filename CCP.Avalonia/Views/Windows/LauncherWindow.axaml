@@ -1,5 +1,5 @@
 <!-- PORTED (slice 1, shell only) from ConditioningControlPanel/Windows/Launcher/LauncherWindow.xaml; sizes,
-     order and loc keys are the original's. What is not here yet: docs/avalonia-parity.md win-launcher. -->
+     order and loc keys are the original's. What is not here yet: docs/avalonia-parity.html win-launcher. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"

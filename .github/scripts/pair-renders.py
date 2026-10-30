@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Pair WPF reference renders with Avalonia renders per parity row.
 
-usage: pair-renders.py <parity.md> <wpf-dir> <avalonia-dir> <out-dir>
+usage: pair-renders.py <parity.html> <wpf-dir> <avalonia-dir> <out-dir>
 
-Reads docs/avalonia-parity.md rows (id | WPF file(s) | Avalonia file(s) | status | notes), maps
+Reads docs/avalonia-parity.html rows (id | WPF file(s) | Avalonia file(s) | status | notes), maps
 each backticked file to a type name (basename up to the first '.', so MainWindow.Foo.cs ->
 MainWindow and MainShellWindow.Foo.cs -> MainShellWindow), prefers a type rendered on both heads, else the first one per side that has a
 <TypeName>.png render, and writes <out>/<row-id>.png = WPF left | Avalonia right. Also writes
@@ -15,6 +15,7 @@ import os
 import re
 import sys
 
+import avalonia_docs
 from PIL import Image, ImageDraw, ImageFont
 
 LABEL_H = 28
@@ -35,11 +36,9 @@ def stems(cell):
 
 def rows(parity):
     seen = {}
-    for line in open(parity, encoding="utf-8"):
-        if not line.startswith("| "):
-            continue
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if len(cells) < 4 or cells[0] in ("id", "---") or set(cells[0]) <= set("-"):
+    for r in avalonia_docs.rows(open(parity, encoding="utf-8").read(), "id"):
+        cells = list(r.values())
+        if len(cells) < 4:
             continue
         rid = re.sub(r"[^A-Za-z0-9._-]", "_", cells[0].strip("`"))
         seen[rid] = seen.get(rid, 0) + 1

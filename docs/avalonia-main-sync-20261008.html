@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Main sync #5 delta ledger (2026-10-08)</title>
+<style>
+:root{color-scheme:light dark;--fg:#1f2328;--bg:#fff;--muted:#59636e;--line:#d1d9e0;--code:#f6f8fa;--link:#0969da}
+@media (prefers-color-scheme:dark){:root{--fg:#e6edf3;--bg:#0d1117;--muted:#9198a1;--line:#3d444d;--code:#151b23;--link:#4493f8}}
+body{font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);background:var(--bg);max-width:1200px;margin:2rem auto;padding:0 1.25rem}
+h1,h2,h3,h4{line-height:1.25;margin:1.5em 0 .5em}h1,h2{border-bottom:1px solid var(--line);padding-bottom:.3em}
+a{color:var(--link)}code,pre{font:13px/1.5 ui-monospace,Consolas,monospace;background:var(--code);border-radius:5px}
+code{padding:.1em .3em;overflow-wrap:anywhere}pre{padding:1em;overflow:auto}pre code{padding:0;background:none}
+table{border-collapse:collapse;margin:1em 0;width:100%}th,td{border:1px solid var(--line);padding:.35em .6em;vertical-align:top}
+th{background:var(--code);position:sticky;top:0}td{overflow-wrap:anywhere}blockquote{margin:0;padding:0 1em;color:var(--muted);border-left:.25em solid var(--line)}
+.counts{font-weight:600}.src{color:var(--muted);font-size:.85em}
+</style>
+<script type="application/json" id="ledger-meta">{"total": 5}</script>
+</head>
+<body>
+<h1 id="main-sync-5-delta-ledger-2026-10-08">Main sync #5 delta ledger (2026-10-08)</h1>
+<p>Branch <code>avalonia-port/main-20261008</code>, from the pushed stack tip.
+Pin: <code>origin/main</code> = <code>0d9e83383</code>.
+Last sync pin: <code>4629b1f4a</code> (main sync #4). Delta: 5 non-merge commits.</p>
+<p>Every non-merge commit has one row. Status legend as in <code>avalonia-main-sync-20261005.html</code>:</p>
+<ul>
+<li><strong>ported-by-merge</strong>: the change landed in a file both heads use (a <code>CCP.Core</code> file the stack moved, the language files, or <code>Assets/web</code>, which the Avalonia <code>WebAssetServer</code> ships through the <code>..\Assets\web\**</code> wildcard).</li>
+<li><strong>needs-port (<code>lane</code>)</strong>: WPF-only behaviour the Avalonia head lacks; the lane name is the port lane that owns it. Tick the row when that lane lands.</li>
+<li><strong>n/a</strong>: no Avalonia counterpart by design, reason given.</li>
+</ul>
+
+<p class="counts">Counts: 3 ported-by-merge, 2 needs-port, 0 n/a (total 5).</p>
+<h2 id="needs-port-lanes">needs-port lanes</h2>
+
+<table>
+<tr><th>lane</th><th>rows</th></tr>
+<tr><td><code>descent-migration</code></td><td><code>fc9640ff7</code></td></tr>
+<tr><td><code>descent-migration-offer</code></td><td><code>abac4fa02</code></td></tr>
+</table>
+<h2 id="rows">Rows</h2>
+
+<table>
+<tr><th>#</th><th>sha</th><th>subject</th><th>WPF files</th><th>Avalonia / Core counterpart</th><th>status</th><th>notes</th></tr>
+<tr><td>1</td><td><code>75c078465</code></td><td>fix(breakout): level 8 keeps an early launch press; pendulum hint clears the prompt</td><td>assets: 2; tests: 1</td><td>Assets/web/backroom/stations/breakout (WebAssetServer wildcard)</td><td>ported-by-merge</td><td>web-only; finale.test.js lands beside the other breakout JS tests</td></tr>
+<tr><td>2</td><td><code>4d668a96d</code></td><td>fix(breakout): Endless board name shows on arrival, then fades</td><td>assets: 2</td><td>Assets/web/backroom/stations/breakout</td><td>ported-by-merge</td><td>web-only</td></tr>
+<tr><td>3</td><td><code>fc9640ff7</code></td><td>fix(descent): the bonus is for migrated accounts, not every curve_epoch 1 record</td><td><code>DescentMigration.cs</code>, <code>DescentFuseWindow.xaml</code> (comment); tests: 1</td><td>Core <code>DescentCycleXp.XpBonusFor</code> (WPF <code>DescentMigration.XpBonusFor</code> delegates); Core <code>ProgressionBank.Add</code> applies it; Avalonia own Trainer Card receipt + &quot;(+N%)&quot; readout (<code>MainShellWindow.ProfileCard.cs</code>, <code>DiscordTabView.SetXpMeter</code>, Core <code>DescentReceipt</code> git-mv)</td><td>ported (avalonia-port/rows-descent-migration)</td><td>Rule: ack or valid pending choice, never a bare epoch-1 stamp. <code>Tests/CCP.Avalonia.Tests/DescentMigrationAckTests.cs</code> (both tests fail-proven: epoch rule, no multiply, no receipt call, no suffix).</td></tr>
+<tr><td>4</td><td><code>3aa4801fb</code></td><td>chore(descent): delete the dead migration ceremony</td><td><code>DescentCeremonyWindow.xaml(.cs)</code>, <code>DescentCeremonyCopy.cs</code>, <code>DescentStageCopy.cs</code>, <code>DescentShowDirector.cs</code>, <code>MainWindow.StartStop.cs</code>; tests: 2</td><td>Core <code>DescentCeremonyCopy.cs</code> / <code>DescentStageCopy.cs</code> (merge); <code>CCP.Avalonia/Views/Windows/DescentCeremonyWindow.axaml(.cs)</code></td><td>ported-by-merge</td><td>Core side by merge (copy deleted, RomanNumeral in DescentStageCopy). The Avalonia ceremony window (ported from the deleted WPF window, no production opener) and its CoreStandInTests check are deleted in the -compat layer of this sync; parity row win-descent-ceremony removed.</td></tr>
+<tr><td>5</td><td><code>abac4fa02</code></td><td>fix(descent): retire the migration ceremony - auto-restore on offer, bonus for every migrated account</td><td><code>DescentMigration.cs</code>, <code>DescentMigrationService.cs</code>, <code>DescentReceipt.cs</code>, <code>DescentShowDirector.cs</code>, <code>ProfileSyncService.cs</code>; tests: 1</td><td>Core <code>DescentMigrationAck</code> (ack settle + <code>EnsureCycleBonus</code> heal; WPF <code>HandleDescentMigrationAck</code>/<code>EnsureCycleBonus</code> delegate), called by Core <code>SyncPush</code>; receipt shows for Restore too (avalonia-port/rows-descent-migration). Missing: the offer auto-restore</td><td>needs-port (<code>descent-migration-offer</code>)</td><td>Ported: bonus for every migrated account + ack settle/heal (<code>Tests/CCP.Core.Tests/DescentMigrationAckTests.cs</code>, <code>Tests/CCP.Avalonia.Tests/DescentMigrationAckTests.cs</code>). MISSING: Avalonia does not take the offer, so a lapsed user who returns on Linux only stays unmigrated (old curve, no bonus, no receipt). Port gate for lane <code>descent-migration-offer</code>: a full <code>ApplyChoice</code> plus the choice submit (<code>descent_auto</code>, <code>descent_migration.choice</code>); fixture-only tests for idempotence, crash ordering and no XP loss; a golden sync body; each fail-proven. See <code>docs/avalonia-decisions.html</code> 2026-10-08.</td></tr>
+</table>
+<h2 id="merge-notes-75b682228-and--compat">Merge notes (75b682228) and -compat</h2>
+<ul>
+<li>Conflicts: <code>DescentCeremonyCopy.cs</code> (stack moved it to Core, main deleted it) -&gt; deleted from Core; <code>DescentMigration.cs</code>
+(stack aliased <code>CycleXpBonus</code> to Core <code>DescentCycleXp</code>) -&gt; kept the alias, main's new doc comment moved to Core;
+<code>ProfileSyncService.cs</code> (stack builds a Core <code>SyncBody</code>, main added <code>descent_auto</code>) -&gt; new <code>SyncBody.DescentAuto</code>
+field (<code>Field.DescentAuto</code>, inside <code>All</code>), set by WPF only. Avalonia <code>SyncPush.Sent</code> leaves it out on purpose.</li>
+<li>-compat: deletes the Avalonia ceremony window + its test, updates the Core sync-body goldens for <code>descent_auto</code>.</li>
+</ul>
+
+<script>
+(()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
+const m=document.getElementById('ledger-meta');const s=document.querySelector('.counts');if(m&&s){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
+</script>
+</body>
+</html>

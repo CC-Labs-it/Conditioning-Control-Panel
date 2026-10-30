@@ -2,7 +2,7 @@
 // Stop refused + Stop tripwire), RequestExit (Launcher.cs:184, Exit refused), OnClosing
 // (WindowChrome.cs:131, close refused + Close tripwire) and OnGlobalKeyPressed (MainWindow.xaml.cs:888,
 // every GLOBAL key ignored). Window and TextBox input are never touched: the secret phrase is typed
-// through them (docs/avalonia-decisions.md, Lockdown / Emergency Exit).
+// through them (docs/avalonia-decisions.html, Lockdown / Emergency Exit).
 
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;

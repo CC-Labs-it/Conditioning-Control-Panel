@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Main sync #9 delta ledger (2026-10-30)</title>
+<style>
+:root{color-scheme:light dark;--fg:#1f2328;--bg:#fff;--muted:#59636e;--line:#d1d9e0;--code:#f6f8fa;--link:#0969da}
+@media (prefers-color-scheme:dark){:root{--fg:#e6edf3;--bg:#0d1117;--muted:#9198a1;--line:#3d444d;--code:#151b23;--link:#4493f8}}
+body{font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);background:var(--bg);max-width:1200px;margin:2rem auto;padding:0 1.25rem}
+h1,h2,h3,h4{line-height:1.25;margin:1.5em 0 .5em}h1,h2{border-bottom:1px solid var(--line);padding-bottom:.3em}
+a{color:var(--link)}code,pre{font:13px/1.5 ui-monospace,Consolas,monospace;background:var(--code);border-radius:5px}
+code{padding:.1em .3em;overflow-wrap:anywhere}pre{padding:1em;overflow:auto}pre code{padding:0;background:none}
+table{border-collapse:collapse;margin:1em 0;width:100%}th,td{border:1px solid var(--line);padding:.35em .6em;vertical-align:top}
+th{background:var(--code);position:sticky;top:0}td{overflow-wrap:anywhere}blockquote{margin:0;padding:0 1em;color:var(--muted);border-left:.25em solid var(--line)}
+.counts{font-weight:600}.src{color:var(--muted);font-size:.85em}
+</style>
+<script type="application/json" id="ledger-meta">{"total": 594}</script>
+</head>
+<body>
+<h1 id="main-sync-9-delta-ledger-2026-10-30">Main sync #9 delta ledger (2026-10-30)</h1>
+<p>Branch <code>avalonia-port/main-20261030</code> (merge) + <code>avalonia-port/main-20261030-compat</code> (build fixes), from
+<code>review/mich-1025-merge</code> (<code>950aedaa1</code>: Mich's frozen tip <code>a3d9e984f</code> + <code>port/7.2</code> + the port-review fixes #3099-#3125).
+Pin: <code>origin/main</code> = <code>7e01ec326</code> (Merge PR #3132 rt-prime-only, 2026-10-29), then follow-up pin <code>a11ada22e</code>
+(Merge PR #3138 garage-owned-bodies, 2026-10-29; rows 590-591, merge <code>a9605b2cc</code>), then <code>ddc43afeb</code>
+(Merge PR #3146 rain-wardrobe page 4, 2026-10-30; rows 592-594, merge <code>047449d1f</code>).
+Last sync pin: <code>f81ea01fb</code> (main sync #8, <a href="avalonia-main-sync-20261024.html"><code>avalonia-main-sync-20261024.html</code></a>).
+Delta: 594 non-merge commits (589 + 2 + 3 follow-up), 1562 + 22 + 12 files. Almost all of it is the Racing Thoughts 3D (Glassroad) web tree, which now
+lives in <code>Assets/web/glassroad</code> (moved in the merge, same rule git applied to the other web trees). The rest is the 7.1.15
+release, Sparkles by place (B1), Lobby race rows and the friends race invite (A3), and a few bug fixes.</p>
+<p>Every non-merge commit has one row. Status legend as in <code>avalonia-main-sync-20261005.html</code>:</p>
+<ul>
+<li><strong>ported-by-merge</strong>: the change landed in a file both heads use (<code>Assets/web</code>, <code>CCP.Core</code>, the language files).</li>
+<li><strong>needs-port (<code>lane</code>)</strong>: WPF-only behaviour the Avalonia head lacks; the lane owns it.</li>
+<li><strong>n/a</strong>: no Avalonia counterpart by design, reason given.</li>
+</ul>
+
+<p class="counts">Counts: 562 ported-by-merge, 26 needs-port, 6 n/a (total 594)</p>
+<p>Under the 7.2 plan these lanes are A5 work and go as PRs of 600 lines or less against <code>port/7.2</code> after A1 lands.
+Sparkles waits for the B1 DECISIONS file; Lobby/invite waits for the A3 server half.</p>
+<h2 id="needs-port-lanes">needs-port lanes</h2>
+
+<table>
+<tr><th>lane</th><th>commits</th><th>rows</th></tr>
+<tr><td><code>sync9-fixes</code></td><td>4</td><td><code>97eca18de</code>, <code>08bb30ba7</code>, <code>81bc9fa21</code>, <code>cdda883ac</code></td></tr>
+<tr><td><code>sync9-glassroad</code></td><td>4</td><td><code>5121933ee</code>, <code>099607382</code>, <code>c7af815a0</code>, <code>9718fd3f4</code></td></tr>
+<tr><td><code>sync9-lobby-invite</code></td><td>3</td><td><code>5a353e6b0</code>, <code>d6a39c7ac</code>, <code>cc6ad7a39</code></td></tr>
+<tr><td><code>sync9-sparkles</code></td><td>15</td><td><code>3930199ac</code>, <code>9d7d5406e</code>, <code>28c334234</code>, <code>21873bc05</code>, <code>48d232dd9</code>, <code>a568665e0</code>, <code>de0947d9f</code>, <code>b96b5931c</code>, <code>cc1bdc4b0</code>, <code>b2487a365</code>, <code>7c086f322</code>, <code>70c3d96e6</code>, <code>d7348e6a0</code>, <code>ba537a09b</code>, <code>e0356be6e</code></td></tr>
+</table>
+<p>What each lane is:</p>
+<ul>
+<li><code>sync9-glassroad</code>: the Avalonia door (<code>GameWindow.Glassroad.cs</code>, still behind <code>CCP_GLASSROAD=1</code>) opens for everyone,
+Prime only, and the 2D race door is retired (WPF <code>LauncherCatalogue</code> &quot;race&quot;, <code>GameSurfaces</code>, Play tab). Panic/Escape
+rules from <code>5121933ee</code> are already in <code>PanicPolicy.KeptEscapePage.Glassroad</code>; recheck against <code>c7af815a0</code>.</li>
+<li><code>sync9-glassroad</code> also owns row 590 (<code>9718fd3f4</code>): the Avalonia <code>GlassroadHostRules.InitFrame</code> must carry
+<code>identity.grants</code> (only <code>cos.kart.*</code>, sorted, at most 64, WPF <code>GlassroadRules.KartGrants</code>) and <code>GameWindow.Glassroad.cs</code>
+must post <code>{type:'owned', grants}</code> on Core <code>OwnershipService.OwnershipChanged</code> while the window is up, unsubscribing on close.
+Without it the Linux garage offers no owned bodies (the page falls back to the free ones). Test to port: <code>GlassroadHostTests.Init_CarriesOnlyKartGrants_AndTheOwnedPushMatches</code>.</li>
+<li><code>sync9-sparkles</code>: claim service, per-game claims (Arcademy, DtRH, Caucus, Intake, chess, Goon, Breakout, Glassroad) and the
+results slip, host side. The web halves (<code>sparkles-slip.js</code> in every tree) merged. WPF-only today (<code>ConditioningControlPanel/Services/Sparkles</code>).</li>
+<li><code>sync9-lobby-invite</code>: open race rows in the Lobby (Core <code>LobbyModel</code>/<code>RaceOpenApi</code>, now in Core), the in-app <code>?join=</code> door
+and the friends race invite.</li>
+<li><code>sync9-fixes</code>: JustDrop refused handoff (#1499), subliminal font pick on the Avalonia card (#1493; the Core layer now takes
+the face through <code>SubliminalLayer.BundledFaceStream</code>), browser fullscreen diag/software target (#1492, WebView2-only parts are n/a).</li>
+</ul>
+<h2 id="rows">Rows</h2>
+
+<table>
+<tr><th>#</th><th>sha</th><th>subject</th><th>where</th><th>status</th></tr>
+<tr><td>1</td><td><code>409a708f3</code></td><td>feat(glassroad): vendor three.js r186 (webgpu, tsl, bloom addon)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>2</td><td><code>4b2330d01</code></td><td>feat(glassroad): contracts, feel sheet data, Threshold greybox track, schema</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>3</td><td><code>f62eac1eb</code></td><td>feat(glassroad): track spline, frames, ground query, meshes</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>4</td><td><code>7ebda455e</code></td><td>feat(glassroad): clock, input and kart sim (drift, boost, air, rescue)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>5</td><td><code>3883954a4</code></td><td>feat(glassroad): renderer, TSL materials, camera, bloom, particles</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>6</td><td><code>0bcb5d2a4</code></td><td>feat(glassroad): juice registry, photosafe, gentle, synthesised audio</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>7</td><td><code>e21023441</code></td><td>feat(glassroad): hud, feel sheet, host bridge v2, escape pauses</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>8</td><td><code>0bb681d4a</code></td><td>feat(glassroad): boot loop, local server, headless boot check</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>9</td><td><code>18edf08b2</code></td><td>feat(glassroad): vendor three r186.1 glTF, KTX2, meshopt and basis loaders</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>10</td><td><code>e5d9161e0</code></td><td>feat(glassroad): Astra's wave 1 art (road, sky, EMI kart, props, rings, portal)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>11</td><td><code>e0424465c</code></td><td>feat(glassroad): wire wave 1 art (road, rails, pads, sky, EMI kart, rings, arch, scatter)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>12</td><td><code>2547c42a2</code></td><td>feat(glassroad): props read as landmarks (about 3x size, 90 on high, fewer per tier)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>13</td><td><code>04f645371</code></td><td>Add Glassroad particle atlas and cell map</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>14</td><td><code>ed876c985</code></td><td>Add Glassroad screen effect masks</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>15</td><td><code>054d42398</code></td><td>Add Glassroad Wave 2 item carriers</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>16</td><td><code>a08933f9e</code></td><td>Add Glassroad Wave 2 rival colourways and accessories</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>17</td><td><code>c3649f10c</code></td><td>Add Glassroad Wave 2 paper and ink HUD kit</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>18</td><td><code>54d9d1995</code></td><td>Refine Glassroad galaxies and finish portal for Wave 2</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>19</td><td><code>75eead6c0</code></td><td>Clarify finish mask transparency binding</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>20</td><td><code>5ec394b1a</code></td><td>feat(glassroad): B1 contracts, item/ai/contact feel, item boxes on Threshold, effect icons</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>21</td><td><code>01b3d1213</code></td><td>feat(glassroad): 8 racers, contact, slipstream, standings</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>22</td><td><code>57af5ad81</code></td><td>feat(glassroad): AI racers (lines, braking, drift boosts, items, rubber band)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>23</td><td><code>b0c974912</code></td><td>feat(glassroad): effect-bubble items, mercy, screen effect state</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>24</td><td><code>8d003375b</code></td><td>feat(glassroad): screen effects and living item bubbles</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>25</td><td><code>4cd2d4ecf</code></td><td>feat(glassroad): juice pass (8 karts, lean, particles, motes, wakes, road sheen)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>26</td><td><code>853ec1d51</code></td><td>feat(glassroad): menu, pause, options, results, race HUD, minimap</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>27</td><td><code>5687dc9ee</code></td><td>feat(glassroad): item and rival audio, mix, music player for chart tracks and local files</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>28</td><td><code>76575e208</code></td><td>feat(glassroad): B1 boot flow (menu to results), item input, pad card navigation, smoke checks</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>29</td><td><code>ce8ecba4b</code></td><td>chore(glassroad): one manifest for waves 1 and 2 (78 rows)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>30</td><td><code>38458f821</code></td><td>fix(glassroad): bot item view once per tick, leader fires Blackout, finished karts never targeted, Gentle Flas</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>31</td><td><code>508a1bbd5</code></td><td>feat(glassroad): particle atlas and screen-effect masks (frost, melt flow, crack, iris, noise dither)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>32</td><td><code>66d2f4dd6</code></td><td>feat(glassroad): item cards, glass bubble shells, melt puddle, rival colourways and head accessories, finish m</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>33</td><td><code>ec9df63b4</code></td><td>feat(glassroad): SVG HUD kit, pad layouts for non-standard pads, RB item, pause on pad loss, device-aware labe</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>34</td><td><code>b34245e31</code></td><td>feat(glassroad): polish 1 integration (look numbers, near-camera bubble cap, hit sprays, boot-check shots)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>35</td><td><code>a1eddd8c1</code></td><td>Add Glassroad Wave 3 EMI screen expressions</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>36</td><td><code>7b8b8abe9</code></td><td>Add Glassroad Wave 3 glyphs art</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>37</td><td><code>099938c58</code></td><td>Add Glassroad Wave 3 cards art</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>38</td><td><code>93cfcd4bb</code></td><td>Add Glassroad Wave 3 threshold art</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>39</td><td><code>3f92d1f16</code></td><td>Add Glassroad Wave 3 horizon art</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>40</td><td><code>2edff0b3b</code></td><td>Add Glassroad Wave 3 stage art</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>41</td><td><code>e6740ee1f</code></td><td>Update Racing Thoughts 3D launcher artwork</td><td>Assets/features/race.png</td><td>ported-by-merge</td></tr>
+<tr><td>42</td><td><code>7b0393537</code></td><td>Add Glassroad Wave 3 road art</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>43</td><td><code>a4852ac78</code></td><td>feat(glassroad): calmer speed-sensitive steering, key ramp and stick curve, steering sensitivity, snappier hop</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>44</td><td><code>0bcf4c9b7</code></td><td>feat(glassroad): recorded hover engine loops and sound effects (no more synth whine), synth as fallback</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>45</td><td><code>601528646</code></td><td>feat(glassroad): frame cap, auto render scale, quality and fps options, high-performance GPU, material warm-up</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>46</td><td><code>d887c2255</code></td><td>feat(glassroad): colossi leaning over the track, soft lamp shadows, bigger scatter, glassier road, rails and s</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>47</td><td><code>47c160b4a</code></td><td>feat(glassroad): kart reactions (squash, head lag, bumps, effect hits, finish) and 16 EMI screen faces</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>48</td><td><code>7a02abfcb</code></td><td>feat(glassroad): power-up and screen effect polish (trails, impacts, confetti boxes, slot orbit, richer effect</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>49</td><td><code>a0a12ed1f</code></td><td>feat(glassroad): polish 2 integration (options wiring, render-time pacing, shadows, reactions, boot-check shot</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>50</td><td><code>860c00645</code></td><td>Add Glassroad Wave 4 flipbooks art</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>51</td><td><code>0475f0b55</code></td><td>Add Glassroad Wave 4 trails art</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>52</td><td><code>f1744f1f4</code></td><td>Add Glassroad Wave 4 details art</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>53</td><td><code>9b38bfcf0</code></td><td>Add Glassroad Wave 4 colossi art</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>54</td><td><code>f3f56b427</code></td><td>Add Glassroad Wave 4 sky art</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>55</td><td><code>814a420bb</code></td><td>Add Glassroad Wave 4 reactions art</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>56</td><td><code>7eee74aff</code></td><td>Clarify selected-tier texture residency</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>57</td><td><code>ab69ac7e2</code></td><td>Clarify selected-tier texture residency</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>58</td><td><code>5d91e05f4</code></td><td>feat(glassroad): full-spectrum colour system, road lanes that stream along the track, per-section patterns, sp</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>59</td><td><code>199ff6f63</code></td><td>feat(glassroad): visible floating world (70/45/25 props in the camera corridor, saturated colours, less haze),</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>60</td><td><code>a1b1e6310</code></td><td>feat(glassroad): Loom spiral gates materialised as glitter particles that part as karts pass through</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>61</td><td><code>da5d54202</code></td><td>feat(glassroad): media slots with animated placeholders (billboards, sky-halo ring, screen tunnel), no remote</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>62</td><td><code>c1a8ebf9f</code></td><td>feat(glassroad): bigger, clearer juice (speed lines, boost, drift, bumps, landings, reactions, camera kick)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>63</td><td><code>cced3792c</code></td><td>feat(glassroad): polish 3 integration (gates, media, spectrum wiring, art status in the fps readout, muted hea</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>64</td><td><code>019c4d9ae</code></td><td>feat(glassroad): progressive steering, brake power slide with a boost after every drift, timed trick boost</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>65</td><td><code>6aa00cca7</code></td><td>feat(glassroad): drop shortcut from the helix top onto the lower straight (kerb gap, catch zone, safe lap cred</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>66</td><td><code>3026e1f14</code></td><td>feat(glassroad): dense glowing Loom gates with an aura, the gate's Loom plays on screen, Loom band maths impor</td><td>Assets/web/arcademy, ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>67</td><td><code>2092f97df</code></td><td>feat(glassroad): real hit reactions (spins, stomps, flips, dizzy faces, stars), louder power-ups with auras an</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>68</td><td><code>6f2fa18f2</code></td><td>feat(glassroad): depth speed field, glowing skid marks, tier sparks, mini-turbo and trick bursts, a lens rule</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>69</td><td><code>f378b892a</code></td><td>feat(glassroad): polish 4 integration (pause freezes the floor and effects, Firefox on WebGL2, governor follow</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>70</td><td><code>6c8d4aeb3</code></td><td>feat(glassroad): colossal hero props (chess, slots, cards, watches, discs 30 to 55 m tall beside the road, nea</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>71</td><td><code>9d63f5963</code></td><td>feat(glassroad): music road + word bubbles (the road plays the song, each player pops their own words)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>72</td><td><code>9c1b49d82</code></td><td>art(glassroad): refine EMI teacup and add race reactions</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>73</td><td><code>830257dc3</code></td><td>art(glassroad): seat EMI and stagger cup assembly reactions</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>74</td><td><code>d81e4e6db</code></td><td>art(glassroad): label takeoff endpoints as airborne joins</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>75</td><td><code>28e2df5d7</code></td><td>art(glassroad): align reaction handoff with engine polish four</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>76</td><td><code>dfdc834e1</code></td><td>art(glassroad): add opposing cup and saucer wobble</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>77</td><td><code>809c0ed7b</code></td><td>art(glassroad): strengthen teacup layer motion</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>78</td><td><code>f65bebe58</code></td><td>feat(glassroad): music road pass 2 - every word in a bubble, pop juice, visible power-up status, no boot stall</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>79</td><td><code>6083dc982</code></td><td>fix(glassroad): no freeze at the first spiral gate, a spread-out field, song state in the dev beacon</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>80</td><td><code>4cdf77c63</code></td><td>art(glassroad): restore classic Back Room EMI expressions</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>81</td><td><code>ec9ee366b</code></td><td>art(glassroad): replace melty EMI states with classic idle face</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>82</td><td><code>76da33662</code></td><td>fix(glassroad): pass 3 - no mid-race tier relinks, an honest loading card, bubbles on the voice, no white cres</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>83</td><td><code>6bde90922</code></td><td>feat(glassroad): music road pass 4 - words painted on the road, fewer shiny bubbles, the word rush, steer assi</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>84</td><td><code>848442ca2</code></td><td>art(glassroad): add eight modular EMI bot outfits</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>85</td><td><code>b2150937e</code></td><td>art(glassroad): give every EMI outfit a distinct headpiece</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>86</td><td><code>d64a65a85</code></td><td>art(glassroad): add fitted Petal and Trinket vehicle variants</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>87</td><td><code>a2e113cae</code></td><td>feat(glassroad): Astra R4 seated EMI rig, classic faces, eight bot outfits and two vehicles wired in</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>88</td><td><code>99dc9cb2e</code></td><td>feat(glassroad): readable road edges and a drop shortcut people make</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>89</td><td><code>525d1d9bd</code></td><td>feat(glassroad): B2 net contracts - wire format, messages, ticket spec, shared vectors</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>90</td><td><code>5b7118219</code></td><td>feat(glassroad): B2 client net - room session, server clock, interpolation, remote karts, bot keeper</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>91</td><td><code>ba8b5e49f</code></td><td>feat(glassroad): B2 lobby card - Race online door, open tables, quick match, seats, looks, preset chat</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>92</td><td><code>cdade1a3f</code></td><td>feat(glassroad): B2 integration - online flow in boot, seat looks in the scene, local 4-seat e2e</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>93</td><td><code>1747e84a3</code></td><td>feat(glassroad): boost camera ladder - fov kick, speed lines and shake by boost tier (polish 5 J1)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>94</td><td><code>5faffd46f</code></td><td>feat(glassroad): screen effects keep a clear lane, gate glitter fades at the lens, particles fade in (polish 5</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>95</td><td><code>464c4ba74</code></td><td>fix(glassroad): road stair bands gone - shadow depth range, line antialiasing, anisotropy, pad and sky seams (</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>96</td><td><code>6e1eb6e3f</code></td><td>feat(glassroad): countdown that punches, Go on the song downbeat, menu and lobby sounds, dev hook (polish 5 J2</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>97</td><td><code>d4b518c0e</code></td><td>feat(glassroad): Go bursts at the player's kart (polish 5 J2 follow-up)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>98</td><td><code>7b74c3382</code></td><td>feat(glassroad): item slot that reads, and moments that answer (polish 6 JUICE)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>99</td><td><code>008f99c60</code></td><td>feat(glassroad): beat shake that phases in with the song's rise (polish 6 BEAT)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>100</td><td><code>1398672bc</code></td><td>feat(glassroad): add validated cavity shading and material detail</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>101</td><td><code>c3608ff9a</code></td><td>feat(glassroad): frame the road with layered construction and contrast</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>102</td><td><code>0d891f5b5</code></td><td>feat(glassroad): sharpen deliberate keyboard counter-steering</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>103</td><td><code>71645462c</code></td><td>fix(glassroad): keep material wear fixed to instanced geometry</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>104</td><td><code>0537edaeb</code></td><td>chore(glassroad): freeze P6 course snapshot for isolated art work</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>105</td><td><code>3e577e444</code></td><td>feat(glassroad): Threshold rebuilt as a stacked course with loops and a dare (polish 6 GEO + SIM)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>106</td><td><code>b4f3f63cf</code></td><td>feat(glassroad): closer, lower chase camera, smaller karts, roadside scale cues (polish 6 VIEW)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>107</td><td><code>b47375541</code></td><td>perf(glassroad): Firefox hitches - Echo ghosts linked at load, word rush without CSS filters, less garbage (po</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>108</td><td><code>9e6c9523d</code></td><td>feat(glassroad): add raised arcade terraces beside the P6 starting straight</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>109</td><td><code>eb5a05243</code></td><td>feat(glassroad): add fixed glazed tiles driven by the song clock</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>110</td><td><code>c5a1de703</code></td><td>fix(glassroad): owed polish 6 leftovers - bump shake ducks the beat, engine layers reuse a record, item visual</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>111</td><td><code>1af472815</code></td><td>fix(glassroad): bring the chase closer and enlarge every racer</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>112</td><td><code>7df00e32c</code></td><td>feat(glassroad): race a friend through a link - Invite link for friends-room hosts, ?r=&lt;token&gt; claim, closed p</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>113</td><td><code>7395f46a5</code></td><td>fix(glassroad): hold the racer in the reference chase framing</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>114</td><td><code>eb943dac2</code></td><td>feat(glassroad): widen P6 racing lanes while preserving technical gaps</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>115</td><td><code>5121933ee</code></td><td>feat(glassroad): desktop host behind CCP_GLASSROAD=1 - WebView2 window, /v2/race/ relay, panic + Escape rules</td><td>WPF: App.xaml.cs, GameSurfaces.cs, GlassroadHostService.cs, GlassroadRules.cs, LauncherCatalogue.cs, MainWindow.xaml.cs</td><td>needs-port (<code>sync9-glassroad</code>)</td></tr>
+<tr><td>116</td><td><code>b245fda29</code></td><td>feat(glassroad): songs from the host (caps.songs), bigger racers and a closer camera (owner call), invite-link</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>117</td><td><code>6cdb7a37f</code></td><td>revert(glassroad): back out the duplicate size/camera change - Codex owns the owner's framing call (codex/glas</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>118</td><td><code>7d0100677</code></td><td>feat(glassroad): add clear song-beat waves across glass and tiles</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>119</td><td><code>4e5add5ff</code></td><td>release: 7.1.15 &quot;Settle Down&quot; (night-shift fixes + quiet sensing lines)</td><td>CCP.Core/Localization/Languages</td><td>ported-by-merge</td></tr>
+<tr><td>120</td><td><code>6b0e282e4</code></td><td>feat(glassroad): songs from the lobby when the host names none - signed room-origin chart urls (lobbyApi.songs</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>121</td><td><code>31b275ca6</code></td><td>perf(glassroad): the open-table list stops polling in a hidden tab and backs off 15 -&gt; 60 s while nothing chan</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>122</td><td><code>38269e22d</code></td><td>feat(glassroad): add Aperture Court geometry and physical openings</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>123</td><td><code>73fbf1600</code></td><td>feat(glassroad): guide racers safely through court routes</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>124</td><td><code>f8b6df42f</code></td><td>feat(glassroad): dress Aperture Court with musical tiles and open shafts</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>125</td><td><code>c38a9ee70</code></td><td>Add Racing Thoughts wave 3 water art</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>126</td><td><code>5f0893e9a</code></td><td>Add Racing Thoughts wave 3 stones art</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>127</td><td><code>c31e25a58</code></td><td>Add Racing Thoughts wave 3 glide art concepts</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>128</td><td><code>3e82f8284</code></td><td>Add Racing Thoughts wave 3 spouts art</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>129</td><td><code>332a9430e</code></td><td>feat(glassroad): water wave 1, track: stream and pool surfaces, flow per node, chute and pool in the lap</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>130</td><td><code>80c2efc3a</code></td><td>feat(glassroad): water wave 1, sim: the kart drives relative to the current, chutes and pool landings</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>131</td><td><code>33031598a</code></td><td>feat(glassroad): water wave 1, render: TSL water on stream and pool nodes, the waterfall sheet, wakes on water</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>132</td><td><code>a1e847393</code></td><td>feat(glassroad): water wave 1, bots: read the current, take the inside line on a stream, no drift on water</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>133</td><td><code>9cb768f8f</code></td><td>Glassroad art W4: six fitted propeller beanies</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>134</td><td><code>7d7de51a3</code></td><td>Glassroad art W4: six unlockable umbrella alternates</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>135</td><td><code>d7a8f2230</code></td><td>Glassroad art W4: pawn stamp and portcullis hazards</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>136</td><td><code>2ea7e8221</code></td><td>Glassroad art W4: Threshold stream bank trims</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>137</td><td><code>2e6d5d75d</code></td><td>Glassroad art W4: The Keep road, sky and dressing</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>138</td><td><code>96bba73e2</code></td><td>feat(glassroad): stones wave 2, track: a stepping-stone field on the bridge, in the lap</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>139</td><td><code>cf12caed6</code></td><td>feat(glassroad): stones wave 2, sim: the lip kick, the void fall, rescue clear of the field, damped shoves</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>140</td><td><code>890f20f62</code></td><td>feat(glassroad): stones wave 2, bots: a field plan, one safe lane picked late and held, a damped approach</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>141</td><td><code>261974a68</code></td><td>feat(glassroad): stones wave 2, render: Astra's platforms per 5 m tile, a slab fallback, stone and void cues</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>142</td><td><code>b746a78b3</code></td><td>feat(glassroad): ship polished garage wardrobe and vehicle catalog</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>143</td><td><code>a8a313197</code></td><td>feat(glassroad): integrate the animated racer garage</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>144</td><td><code>ac14dfb67</code></td><td>build(glassroad): keep the Racing Thoughts 3D tree out of the WPF build and installer (no desktop door yet; it</td><td>WPF build/release only (version is Version.props here; the web tree ships from Assets/web): ConditioningControlPanel.csproj</td><td>n/a</td></tr>
+<tr><td>145</td><td><code>4174e8cd4</code></td><td>docs(glassroad): record the garage appearance wire</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>146</td><td><code>a18eeadb9</code></td><td>feat(glassroad): author Mainframe course and timed scan rules</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>147</td><td><code>00db018e6</code></td><td>feat(glassroad): make Mainframe playable with its circuit world</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>148</td><td><code>90f15d141</code></td><td>fix(glassroad): keep blank Mainframe song choices silent</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>149</td><td><code>d7bb9cbdf</code></td><td>fix(glassroad): fit garage skin masks within WebGPU buffer limits</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>150</td><td><code>91481d2f4</code></td><td>feat(glassroad): author the Keep course and deterministic gate simulation</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>151</td><td><code>747864f5d</code></td><td>feat(glassroad): dress the Keep with delivered fortress art and moving gates</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>152</td><td><code>f817398b5</code></td><td>feat(glassroad): make the Keep selectable for complete solo races</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>153</td><td><code>f4006bfc0</code></td><td>fix(glassroad): keep garage skin within WebGPU buffer limit</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>154</td><td><code>7612d98e6</code></td><td>Rebuild Keep as a two-turn tower circuit with chain traps</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>155</td><td><code>b0125806c</code></td><td>Build solid Keep halls, battlements and spiral tower scenery</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>156</td><td><code>c5170e04e</code></td><td>Restore shared moving media and Loom panels for Keep</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>157</td><td><code>f33ee3254</code></td><td>Connect Keep panels to the saved media feed on Race</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>158</td><td><code>abf28e07f</code></td><td>Keep fortress foundations below the curved driving surface</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>159</td><td><code>16c2db999</code></td><td>feat(glassroad): support driving on curved canal banks</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>160</td><td><code>3a0cd2e22</code></td><td>feat(glassroad): extend Mainframe through a reactor and coolant circuit</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>161</td><td><code>017432ad0</code></td><td>feat(glassroad): enclose Mainframe and flood the coolant reservoir</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>162</td><td><code>0a1d8ce03</code></td><td>fix(glassroad): share and prewarm animated world media</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>163</td><td><code>cd14a34d1</code></td><td>feat(glassroad): bind Mainframe panels to the selected cached feed</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>164</td><td><code>77c785ee8</code></td><td>fix(glassroad): expose Mainframe media through framed display bays</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>165</td><td><code>d562c36dd</code></td><td>Extend The Keep around a ruined prison with broken crossings</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>166</td><td><code>9d2872bb8</code></td><td>Build the ruined prison castle around The Keep</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>167</td><td><code>283ac0b40</code></td><td>Give The Keep an overcast ruined skyline and mounted media</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>168</td><td><code>d60d473da</code></td><td>Keep mounted screens clear of prison bars and roof ribs</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>169</td><td><code>4761311fc</code></td><td>Make the ruined Keep playable with a raised drawbridge and stone crossing</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>170</td><td><code>0f28309f8</code></td><td>Record castle race and Firefox verification</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>171</td><td><code>8132dfe09</code></td><td>chore(glassroad): pair authored Mainframe node rows for course review</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>172</td><td><code>44b135a45</code></td><td>feat(glassroad): support broad hex platforms and overlapping decks</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>173</td><td><code>d9d86de56</code></td><td>feat(glassroad): give coolant depth, overflow and contact spray</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>174</td><td><code>dcf742302</code></td><td>feat(glassroad): fit Mainframe machinery and smooth the reservoir exit</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>175</td><td><code>250896b29</code></td><td>feat(glassroad): expand Mainframe with five hex paths and switchbacks</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>176</td><td><code>77da25d1d</code></td><td>fix(glassroad): keep the chase camera above rising roads</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>177</td><td><code>ca3610f57</code></td><td>feat(glassroad): widen Keep platforms and add propeller flight</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>178</td><td><code>e72c6d64a</code></td><td>feat(glassroad): add worn Keep interiors and stronger masonry contrast</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>179</td><td><code>56f973600</code></td><td>fix(glassroad): display shared video frames on WebGL2</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>180</td><td><code>7f6ae0085</code></td><td>Expand Keep into stacked tower routes with drop shortcuts</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>181</td><td><code>090cb0ab0</code></td><td>Dress Keep with forged pendulums and colossal lock passages</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>182</td><td><code>2e7ed8a8b</code></td><td>Give shared water depth, rolling crests and stronger contact spray</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>183</td><td><code>a41cfabd1</code></td><td>Complete Mainframe layered routes, hovering islands and shared bubble ram</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>184</td><td><code>5dae348fe</code></td><td>Add Boudoir course with layered routes, perfume courts and shared water</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>185</td><td><code>7c786185b</code></td><td>feat(glassroad): articulate the eight kart designs with mechanism metadata</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>186</td><td><code>8ea23b01b</code></td><td>feat(glassroad): animate rigid kart mechanisms on the shared rig</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>187</td><td><code>f38ccd12b</code></td><td>feat(glassroad): bring EMI and the garage to life</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>188</td><td><code>733a9d813</code></td><td>Add Mainframe industrial rooms and traps with shared spiral clouds</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>189</td><td><code>0fe757bb7</code></td><td>docs(glassroad): record liveness contracts and review evidence</td><td>docs/tests/release only: GLASSROAD-KART-LIFE.md</td><td>n/a</td></tr>
+<tr><td>190</td><td><code>9f46349c0</code></td><td>Polish Mainframe materials and spirals with musical hex landings</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>191</td><td><code>251098d3c</code></td><td>Keep hex landing highlights smooth when racers arrive together</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>192</td><td><code>623bd4d72</code></td><td>Stabilize distant screens and enrich Boudoir scenery</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>193</td><td><code>f1f80a430</code></td><td>Add timed Boudoir traps and reversible ribbon lanes</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>194</td><td><code>8b3acb19a</code></td><td>feat(glassroad): unify the garage menu and conceal shader warmup</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>195</td><td><code>384f1462f</code></td><td>fix(glassroad): keep accent cores visible and calm menu motion</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>196</td><td><code>e7989596b</code></td><td>Add live Boudoir mirror hall and integrate course traps</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>197</td><td><code>67df2c8d2</code></td><td>Vary Boudoir galleries with crests and tapered S-bends</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>198</td><td><code>d5a753279</code></td><td>Split Boudoir sweepers into independent pendulum groups</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>199</td><td><code>583a27efa</code></td><td>Give Boudoir distinct textured room architecture</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>200</td><td><code>14ba8b151</code></td><td>Give Boudoir distinct road finishes and a teal bath palette</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>201</td><td><code>eeeda8b95</code></td><td>feat(glassroad): add cartoon garage and smooth centered customization</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>202</td><td><code>7df9b0cc3</code></td><td>feat(glassroad): simulate persistent contact-driven water waves</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>203</td><td><code>2e28f3bcf</code></td><td>feat(glassroad): animate physical water spray and bank impacts</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>204</td><td><code>73f0c6ceb</code></td><td>feat(glassroad): render shared reactive water across courses</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>205</td><td><code>733ba8505</code></td><td>Support physical branch roads with continuous race progress</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>206</td><td><code>0dfcff077</code></td><td>Add three distinct Boudoir split routes and shortcuts</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>207</td><td><code>2d7286a12</code></td><td>Keep assistance and item interactions on the selected path</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>208</td><td><code>0fe02da0e</code></td><td>Render signed branch junctions with clean shared aprons</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>209</td><td><code>0e2ce99c5</code></td><td>Add shared underwater audio and folding kart propellers</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>210</td><td><code>9410bbdbd</code></td><td>Add clear reflective water and dimensional wake and spill foam</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>211</td><td><code>4c70922e9</code></td><td>Connect water optics and underwater effects to track depth</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>212</td><td><code>d6bae277b</code></td><td>feat(glassroad): choose individual courses from the garage menu</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>213</td><td><code>8bce49eea</code></td><td>Build GOONWORKS folded funhouse course and polish its playable attractions</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>214</td><td><code>86c40dfdf</code></td><td>Make shield shells smaller and smooth their colour transitions</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>215</td><td><code>e5446a19a</code></td><td>Stabilize masonry projection on diagonal Keep walls</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>216</td><td><code>1f71d7e82</code></td><td>Make item flight steer visibly and enlarge circular trap contacts</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>217</td><td><code>3a5d8a814</code></td><td>Give projectiles larger shells and trails and readable trap footprints</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>218</td><td><code>eae2fed47</code></td><td>fix(glassroad): give water visible body and clear its submerged bed</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>219</td><td><code>9bd3b594e</code></td><td>feat(glassroad): trail propeller bubbles through moving underwater light</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>220</td><td><code>019584e15</code></td><td>Polish GOONWORKS sightlines, landmarks and linked boost runs</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>221</td><td><code>4dc974835</code></td><td>Obscure the race with live media cards drifting fog and blackout tunnels</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>222</td><td><code>6d9cdaf73</code></td><td>Add deliberate triple boost runs across Boudoir</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>223</td><td><code>eff514367</code></td><td>feat(race): share measured music energy across floor and water materials</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>224</td><td><code>e8b1a1873</code></td><td>feat(race): fill every course with fitted shared-media screen clusters</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>225</td><td><code>a3a3935f6</code></td><td>Keep distant GOONWORKS surfaces stable with verified face culling</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>226</td><td><code>83cd3006a</code></td><td>Cover item effects across the combined Boudoir fork routes</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>227</td><td><code>20f49ea1e</code></td><td>Polish shared water with crossing swells and stronger wakes</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>228</td><td><code>c6fd106c1</code></td><td>feat(race): author dense boost trains with verified safe rollouts</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>229</td><td><code>388310ce7</code></td><td>Fit curved boost pads to rendered canal triangles</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>230</td><td><code>2a1728cf2</code></td><td>Keep projectile trails finite and lob warnings at their committed landing</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>231</td><td><code>e6f3342de</code></td><td>Burst tilted subliminal cards across the Brain Drain victim view</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>232</td><td><code>c98015f21</code></td><td>Keep boost arrows visible over transparent roads</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>233</td><td><code>f239f1d6b</code></td><td>Add themed pass-through phrase gates across the five courses</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>234</td><td><code>eeece2d13</code></td><td>Refine GOONWORKS colour, stable painted faces and 60 percent media</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>235</td><td><code>067ac5b6f</code></td><td>Keep wrapped canal boost decals complete at Float32 road boundaries</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>236</td><td><code>4f4640439</code></td><td>Polish phrase gates with particles, crossing pulses and animated text</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>237</td><td><code>3e90617dd</code></td><td>Give each GOONWORKS section a stronger colour identity</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>238</td><td><code>933c1accc</code></td><td>Make subliminals larger unboxed level-colored words with drifting smoke</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>239</td><td><code>674e1aedf</code></td><td>Sound phrase gate crossings with track-themed pentatonic cues</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>240</td><td><code>cce423c07</code></td><td>Add water travel wake, spray and underwater bubbles</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>241</td><td><code>9f488690b</code></td><td>Register phrase gate notifications without duplicating their visual pulse</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>242</td><td><code>753fcea1f</code></td><td>Stagger subliminal words with independent fades and clearer spacing</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>243</td><td><code>b76b7fe52</code></td><td>fix(glassroad): identify loaded course data when joining online rooms</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>244</td><td><code>232d55b78</code></td><td>feat(glassroad): race every course online with shared hazards and branch paths</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>245</td><td><code>8315b1d9a</code></td><td>test(glassroad): cover course filtering and wait for long races</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>246</td><td><code>fcc6b4a4c</code></td><td>fix(glassroad): keep shared online stone motion gentle</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>247</td><td><code>8455f4ece</code></td><td>Improve Threshold song continuity, course pacing and driving spray</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>248</td><td><code>d6db721c0</code></td><td>Regenerate the extended six-section Threshold course</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>249</td><td><code>0ff80db73</code></td><td>Polish course textures and add shared boost media and malus Loom underlays</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>250</td><td><code>c76d5d128</code></td><td>Improve driving control, course launch, audio and floor finish</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>251</td><td><code>b332d6e0f</code></td><td>Regenerate Threshold with wider ordinary road sections</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>252</td><td><code>4e0b37f85</code></td><td>Reduce course loading and avoid duplicate graphics preparation</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>253</td><td><code>49b8b8abf</code></td><td>Retain shared race art through renderer-owned leases</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>254</td><td><code>18d145233</code></td><td>Reuse garage racers and graphics across course worlds</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>255</td><td><code>8c32651b7</code></td><td>Release course shadow targets through their light owner</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>256</td><td><code>703622676</code></td><td>Retire old course callbacks while preserving audio and room tickets</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>257</td><td><code>95a10d644</code></td><td>Switch race courses inside one retained application shell</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>258</td><td><code>fe2abf055</code></td><td>Remove glancing camera hops and warm first-water cull variants</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>259</td><td><code>716608c45</code></td><td>Keep the paused camera still and start race music at GO</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>260</td><td><code>fb591e6f1</code></td><td>Adapt private Mainframe verse timing for local race previews</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>261</td><td><code>3e2bc8d9e</code></td><td>Add cinematic course intros before solo race countdowns</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>262</td><td><code>424f2f591</code></td><td>Polish Racing Thoughts reactive surfaces, media cards and course lettering</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>263</td><td><code>cec828a57</code></td><td>Lengthen each course intro shot by one second</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>264</td><td><code>dd0291b38</code></td><td>fix(race): make shortcuts forgiving and show wrong-way guidance</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>265</td><td><code>56a55c03f</code></td><td>feat(race): align phrase and drop gates with recorded songs</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>266</td><td><code>697287d83</code></td><td>Enlarge platform challenges with real jump gaps and landing feel</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>267</td><td><code>0af119b4f</code></td><td>Polish boost pads, song-lit Keep tiles and driver view</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>268</td><td><code>6ba07bdee</code></td><td>feat(race): add the selected GOONWORKS recording</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>269</td><td><code>2341f178e</code></td><td>feat(race): vary Loom spirals across world and HUD</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>270</td><td><code>6dc3b969c</code></td><td>feat(race): synchronize solo machinery with musical beats</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>271</td><td><code>fd2ccb4a7</code></td><td>feat(race): connect heard beats and nearby press impacts</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>272</td><td><code>40729cbd2</code></td><td>feat(glassroad): add physical sung-word flight mechanics</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>273</td><td><code>75cb7ac7a</code></td><td>feat(glassroad): add two long aerial crossings to every course</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>274</td><td><code>549d74297</code></td><td>fix(race): keep first-beat machinery transitions continuous</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>275</td><td><code>e64b21f16</code></td><td>feat(glassroad): materialize sung words as aerial platforms</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>276</td><td><code>194c9d465</code></td><td>fix(race): resolve root-relative song audio paths</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>277</td><td><code>f538747a9</code></td><td>test(glassroad): reuse vectors in the castle geometry audit</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>278</td><td><code>f7ad82fff</code></td><td>feat(glassroad): sync Boudoir to Think Pink v5</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>279</td><td><code>ba4dce20b</code></td><td>feat(race): add music-reactive screen edges across courses</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>280</td><td><code>910aa4c11</code></td><td>feat(race): shape word-flight ramps and add musical jump cues</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>281</td><td><code>b2eb2cc6a</code></td><td>feat(race): build solid themed letters for aerial catches</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>282</td><td><code>748ea7df9</code></td><td>feat(race): carry players automatically across word platforms</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>283</td><td><code>996391a29</code></td><td>fix(race): preserve scenery and authored audits around raised ramps</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>284</td><td><code>66500685e</code></td><td>fix(race): keep reactor rings behind screen approach sightlines</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>285</td><td><code>0e15fa419</code></td><td>feat(glassroad): add anchored cosmetic song cue transport</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>286</td><td><code>b455ebe94</code></td><td>feat(glassroad): add pooled song veils and cosmetic flash bursts</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>287</td><td><code>da790da6a</code></td><td>Add pooled song marquees and hanging-screen motion</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>288</td><td><code>2d416d5fb</code></td><td>feat(glassroad): select Locked v5 for The Keep preview</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>289</td><td><code>b13bc24e0</code></td><td>feat(glassroad): toys item kit - Pendulum, Disc, Tether, Snap, Big Spiral, bigger Melt</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>290</td><td><code>449352721</code></td><td>feat(glassroad): payoff words and flashes, Tether chain</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>291</td><td><code>897477d4a</code></td><td>fix(glassroad): preserve beneficial scans and physical tether boundaries</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>292</td><td><code>f92466a7c</code></td><td>fix(glassroad): preserve beneficial scans and physical tether boundaries</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>293</td><td><code>8474d53f5</code></td><td>art(glassroad): distinct toy icons and measured physical props</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>294</td><td><code>d534f2fa0</code></td><td>feat(glassroad): physical Tether chain and pass break</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>295</td><td><code>d918a5b64</code></td><td>feat(glassroad): tactile toy flights and host-controlled hit looks</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>296</td><td><code>a1df7d753</code></td><td>fix(glassroad): restore screen effects module parsing</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>297</td><td><code>fe48a7309</code></td><td>fix(glassroad): song cues sit on fixed road spots and lock to the beat</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>298</td><td><code>edb53f8bd</code></td><td>test(glassroad): the intro harness mirrors boot's DEV flag</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>299</td><td><code>738d898e2</code></td><td>feat(glassroad): song cue SHIFT, count arches, install bar and world bursts</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>300</td><td><code>40f5ecb96</code></td><td>feat(glassroad): song cue swarm, giants and course props</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>301</td><td><code>d49461eb8</code></td><td>Polish Glassroad materials and make toy flights readable</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>302</td><td><code>11f6d0ef7</code></td><td>Polish race arches, rhythmic Keep tiles and water spray</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>303</td><td><code>9c344a195</code></td><td>Refine aerial word scale, fall reveals and soft catches</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>304</td><td><code>a4a757977</code></td><td>Build solo speed from clean driving and the heard song</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>305</td><td><code>b9338a0d6</code></td><td>Align feel reference and spray expectations with the polish defaults</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>306</td><td><code>0f4c9cfcf</code></td><td>Fit Keep arch grain to UV-less models and retain floor contrast</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>307</td><td><code>aa411ac2a</code></td><td>Give road slabs clearance-aware structural depth</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>308</td><td><code>e98e09db8</code></td><td>Build substantial themed bodies beneath jump platforms</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>309</td><td><code>1c366afe3</code></td><td>Ease water boundaries through shallows puddles drains and spills</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>310</td><td><code>25497092e</code></td><td>Keep liquid graph checks scoped around static drainage groups</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>311</td><td><code>b3c4ffdb5</code></td><td>Verify tapered water heights and nested drain geometry</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>312</td><td><code>cc5e0a13c</code></td><td>Give every course distinct outlined road lettering and semantic motion</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>313</td><td><code>a1f0c5ef1</code></td><td>Enlarge road lettering and keep complete glyphs inside moving lanes</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>314</td><td><code>0dc95bd2c</code></td><td>Carry gaps with two long phrase jumps and a steady helicopter glide</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>315</td><td><code>01a66e6cc</code></td><td>Give Goonworks four beat-driven openings and solid press contacts</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>316</td><td><code>968336a21</code></td><td>Animate Goonworks enamel with three song-driven floor patterns</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>317</td><td><code>9a402584c</code></td><td>Add phrase landing spring, steering and delayed helicopter flight</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>318</td><td><code>edb4d9726</code></td><td>Place dropping screens farther ahead and remove card face depth fighting</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>319</td><td><code>703b59f2d</code></td><td>Give Boudoir mirrors live reflections and beat-driven escape openings</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>320</td><td><code>500f14789</code></td><td>Keep ground impacts level and spring continuously from outlined phrases</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>321</td><td><code>646b2e291</code></td><td>Skip unseen Mainframe display redraws while preserving music phase</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>322</td><td><code>0bc7a6680</code></td><td>Fix Firefox black scenes caused by forced Loom context loss</td><td>Assets/web/arcademy, ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>323</td><td><code>d46c6c6a7</code></td><td>Make late phrase catches spring into a three-piece kart rebound</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>324</td><td><code>74b87c353</code></td><td>Keep banked road contact solid through rail bumps and side hops</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>325</td><td><code>f328b563a</code></td><td>Give image screens solid frames and speed up their placement</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>326</td><td><code>5faa367ee</code></td><td>Add directional material relief across all five courses</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>327</td><td><code>47d1a1fa6</code></td><td>Reduce race loading work while warming every visible variant</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>328</td><td><code>b8d16737b</code></td><td>Keep the late falling rescue within the steady chase view</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>329</td><td><code>4e82a8d15</code></td><td>Enlarge all course media screens with visible cleared placements</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>330</td><td><code>957bd9c67</code></td><td>Keep the rebound assembly visible and skip inactive pose work</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>331</td><td><code>c03d128de</code></td><td>Keep Loom cleanup compatible with older shared web helpers</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>332</td><td><code>a5fc31c6b</code></td><td>Fit enlarged media using complete cabinet bounds</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>333</td><td><code>6b7283f2d</code></td><td>fix(glassroad): preserve shortcut flow and catch curved-road jumps</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>334</td><td><code>ed6f8d400</code></td><td>fix(glassroad): carry fast shortcuts through their landing runout</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>335</td><td><code>838e51f3e</code></td><td>feat(glassroad): enlarge thrown toys and strengthen launch feedback</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>336</td><td><code>60d9c122a</code></td><td>feat(glassroad): give phrase rebounds more height and pace</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>337</td><td><code>441993556</code></td><td>feat(glassroad): add beat-driven traps to Keep spiral drives</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>338</td><td><code>f372f5c59</code></td><td>Make four Glassroad floors respond with distinct musical shapes</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>339</td><td><code>c332874a6</code></td><td>Raise the chase view slightly for readable floor lettering</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>340</td><td><code>599268228</code></td><td>Make racing media flashes scatter in shared view-blocking bursts</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>341</td><td><code>0c19018d0</code></td><td>Retire pending flash cards after multiple effect replacements</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>342</td><td><code>7edea2f90</code></td><td>fix(glassroad): release stuck controls and bound pickup height</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>343</td><td><code>5537b7407</code></td><td>Add racing camera views and authored mirror close-up</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>344</td><td><code>81fecccf1</code></td><td>Explain camera controls in How to Play</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>345</td><td><code>4c5f6e845</code></td><td>fix(glassroad): keep the full phrase rebound rig in view</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>346</td><td><code>dabdfc698</code></td><td>fix(glassroad): correct controller, reconnect and launch handling</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>347</td><td><code>0d6a44a69</code></td><td>Keep the actual GO frame eligible for a launch boost</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>348</td><td><code>3351b2b23</code></td><td>Restore visible GOONWORKS screens and fit complete cabinets to tube walls</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>349</td><td><code>b09fc4407</code></td><td>Make course floors readable and keep screens with their frames</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>350</td><td><code>1c21a6f37</code></td><td>Speed solo machinery and add shared breakable mirrors</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>351</td><td><code>30a8a679c</code></td><td>feat(glassroad): restore bubble shield and course fog</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>352</td><td><code>168a04c25</code></td><td>Give Threshold wider lanes and a living pink sky</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>353</td><td><code>06d883280</code></td><td>Open Threshold galleries and keep stacked road clearance</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>354</td><td><code>63d893518</code></td><td>Shorten platform fields and add worn Keep openings</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>355</td><td><code>bd989d03e</code></td><td>Align integration checks with shorter fields and faster machinery</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>356</td><td><code>3996f0878</code></td><td>Keep pink clouds bright and soap bubbles readable</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>357</td><td><code>725c55765</code></td><td>Keep pink clouds bright and soap bubbles readable</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>358</td><td><code>4cda1e6e5</code></td><td>polish(glassroad): name restored items and match Keep fog</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>359</td><td><code>74e6ae06b</code></td><td>Preserve floor support and gate clearance on widened Threshold</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>360</td><td><code>1f2a86595</code></td><td>Make Racing Thoughts hazards strike on short beat cycles</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>361</td><td><code>73ab35562</code></td><td>Author moving trap stations and bridge shortcuts on all five courses</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>362</td><td><code>b2d01c617</code></td><td>Drive beat-locked horizontal pistons and timed forming bridges</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>363</td><td><code>bb52f6994</code></td><td>Keep thuds and contact checks aligned with faster machinery</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>364</td><td><code>63b0200d5</code></td><td>Give Boudoir its own timed powder bridge and a broad trap approach</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>365</td><td><code>e515240b2</code></td><td>Keep piston bypasses clear of holes and plan boosted approaches early</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>366</td><td><code>9900008c4</code></td><td>Place Keep ironwork clear of the complete missing-slab intervals</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>367</td><td><code>bf67b395a</code></td><td>fix(glassroad): retain support on moving bridge slabs</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>368</td><td><code>0d50cdcdd</code></td><td>Animate liquid DNA on the heard music grid and course colors</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>369</td><td><code>dfe33759c</code></td><td>Lengthen horizontal trap heads and refine themed materials</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>370</td><td><code>a409723fc</code></td><td>Replace menu engine noise with a soft instrumental melody</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>371</td><td><code>c303a465d</code></td><td>feat(glassroad): logbook contract, record v1 store and medal table</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>372</td><td><code>c70d2f64d</code></td><td>Keep the Goonworks horizontal trap above its driving surface</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>373</td><td><code>91c0c308c</code></td><td>Build a layered bubblegum garage and upbeat menu instrumental</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>374</td><td><code>6ed74e784</code></td><td>feat(glassroad): logbook Record panel, achievement wall and unlock-aware garage locks</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>375</td><td><code>fa6428825</code></td><td>feat(glassroad): account record sync for the Logbook (meta/profileSync.js)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>376</td><td><code>d162e71d5</code></td><td>Keep racing effects out of the camera and fix controller menu navigation</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>377</td><td><code>f4a6694d7</code></td><td>feat(glassroad): Time Trial with a best-run ghost and medal times</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>378</td><td><code>48bcb6790</code></td><td>feat(glassroad): logbook META lane - run recorder, applyRun, achievements, unlocks, recap</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>379</td><td><code>6e2f0b094</code></td><td>Pin the steady camera contract in the legacy boost regression</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>380</td><td><code>18daa506a</code></td><td>docs(glassroad): medal times cross-checked against 8-kart races</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>381</td><td><code>1292797d6</code></td><td>feat(glassroad): logbook recap pages on the results card</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>382</td><td><code>50029209e</code></td><td>docs(glassroad): boot-check --finish timing for the long courses, trial flag</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>383</td><td><code>f67e9ee11</code></td><td>feat(glassroad): toys kit online - Disc, Tether, Snap, Pendulum, Big Spiral on the room wire</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>384</td><td><code>eb947f53c</code></td><td>fix(glassroad): one onlineCourseHash for the page, netbots and the room card generator</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>385</td><td><code>415caf0fd</code></td><td>fix(glassroad): garage menu fits phones held sideways, 720p and portrait</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>386</td><td><code>aed182501</code></td><td>fix(glassroad): chase follow runs on the drawn karts' clock, no pitch bounce at phone frame rates</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>387</td><td><code>97eca18de</code></td><td>fix(justdrop): a refused sign-in handoff opens the signed-out page, not raw JSON (ccp-bugs #1499)</td><td>WPF: JustDropHostService.cs</td><td>needs-port (<code>sync9-fixes</code>)</td></tr>
+<tr><td>388</td><td><code>08bb30ba7</code></td><td>fix(subliminal): the compositor card honours the Studio font pick (ccp-bugs #1493)</td><td>WPF: SubliminalService.cs</td><td>needs-port (<code>sync9-fixes</code>)</td></tr>
+<tr><td>389</td><td><code>81bc9fa21</code></td><td>diag(browser): log why a web takeover's fullscreen request is refused (ccp-bugs #1492)</td><td>WPF: MainWindow.Browser.cs</td><td>needs-port (<code>sync9-fixes</code>)</td></tr>
+<tr><td>390</td><td><code>77d1e929e</code></td><td>fix(chaster): a lock that ended or ran out no longer hides the credit behind a raffle day slip-up (ccp-bugs #1</td><td>CCP.Core/Services/Chaster</td><td>ported-by-merge</td></tr>
+<tr><td>391</td><td><code>cdda883ac</code></td><td>fix(browser): fullscreen browser hosts use a software target, blink preview decodes off the UI thread (ccp-bug</td><td>WPF: App.xaml.cs, BenignTaskFault.cs, BrowserHostSurface.cs, EnhancementPlayerWindow.xaml.cs, MainWindow.BlinkTrainer.cs, MainWindow.Browser.cs</td><td>needs-port (<code>sync9-fixes</code>)</td></tr>
+<tr><td>392</td><td><code>50339c51d</code></td><td>feat(glassroad): web Scrolller pictures in the flash bursts, Online pictures switch</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>393</td><td><code>b315a742a</code></td><td>fix(goon): a refused game card comes back with a reason (ccp-bugs #1507)</td><td>Assets/web/goon</td><td>ported-by-merge</td></tr>
+<tr><td>394</td><td><code>9f6a6b04d</code></td><td>docs(leash): unseen assignments move to the day the leashed side comes back (ccp-bugs #1496)</td><td>CCP.Core/Services/Leash</td><td>ported-by-merge</td></tr>
+<tr><td>395</td><td><code>09fd6a825</code></td><td>fix(glassroad): phones race in real time, the sim catches up a whole capped frame</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>396</td><td><code>26ba26f1b</code></td><td>chore(glassroad): __glassroad.scrolller readout (consent, pictures, ready)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>397</td><td><code>c129d4c37</code></td><td>perf(glassroad): water field steps live runs only, from static neighbour taps</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>398</td><td><code>50eabbbec</code></td><td>perf(glassroad): minimap reads its box only after a resize</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>399</td><td><code>a4f00f4a6</code></td><td>perf(glassroad): no reflection probe warm-up on a course without raised water</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>400</td><td><code>0c8de4ced</code></td><td>feat(glassroad): Scrolller niches per track, pictures on by default</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>401</td><td><code>0cbf8107e</code></td><td>fix(glassroad): a Quality change never relinks every program in view</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>402</td><td><code>182b6d59c</code></td><td>perf(glassroad): phone tier water drops the live scene probe for a palette sheen</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>403</td><td><code>4e0cf4e18</code></td><td>fix(glassroad): honest boot failures, WebGPU to WebGL2 fallback, dead-world recovery</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>404</td><td><code>4b8fb892c</code></td><td>fix(glassroad): the stall watchdog forgives a late tick (one long task is not a dead loop)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>405</td><td><code>75ed7b60f</code></td><td>fix(glassroad): a course switch no longer keeps the departed course in memory</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>406</td><td><code>ace80d971</code></td><td>feat(glassroad): hit cam inset and item fire/hit feel</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>407</td><td><code>2a2aa3c7c</code></td><td>feat(glassroad): staged shader preparation on the phone tier</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>408</td><td><code>a74caa54b</code></td><td>feat(glassroad): staged warm pins far less to the cover</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>409</td><td><code>bdf559899</code></td><td>fix(glassroad): dropping screens land whole in the chase view, on the kart's line</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>410</td><td><code>739ac6b08</code></td><td>fix(glassroad): every dropped screen shows its own picture and never falls through a deck</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>411</td><td><code>3c81c80d0</code></td><td>Polish Threshold cotton candy clouds and glass bubbles</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>412</td><td><code>60ccb2021</code></td><td>Add Mainframe green code hexagons and Matrix rain</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>413</td><td><code>abe1bf87d</code></td><td>Add Keep dream clouds and bright floating padlocks</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>414</td><td><code>2e585dcf3</code></td><td>Dress Boudoir with satin bows lace pearls and cosmetics</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>415</td><td><code>14fa377e8</code></td><td>Fill GOONWORKS sky with a morphing spiral and course keepsakes</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>416</td><td><code>d008769bb</code></td><td>Connect five course atmospheres to race lifetime and motion settings</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>417</td><td><code>129fd85be</code></td><td>feat(glassroad): Mainframe plays song v5 (drain pop burst removed)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>418</td><td><code>9f7687bbd</code></td><td>Fix Glassroad web media, course music and intro hitches</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>419</td><td><code>aff5d48a0</code></td><td>Update fallback assertion for transparent world screens</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>420</td><td><code>9ae707613</code></td><td>perf(glassroad): one material per look, one vertex program per instanced material</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>421</td><td><code>8f7783383</code></td><td>perf(glassroad): the water probe sees only the reflection layer</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>422</td><td><code>ec2f4bf8f</code></td><td>fix(glassroad): items never move the chase camera; edge flash asks photosafe; fire tick keeps the confirm rumb</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>423</td><td><code>0a6b3173e</code></td><td>perf(glassroad): shareInstancePrograms in its own module</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>424</td><td><code>e772ff609</code></td><td>feat(glassroad): logo on the title card, course shots in the chooser</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>425</td><td><code>dc941f1dc</code></td><td>fix(glassroad): new logo on the loading screen; course mode label readable on every shot</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>426</td><td><code>80228c5b1</code></td><td>fix(glassroad): web Scrolller screens play the GIF-style clips</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>427</td><td><code>15933968a</code></td><td>Fix unsafe boost approaches, tall rail contact and chase camera angle</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>428</td><td><code>0addaa449</code></td><td>Keep song screens and framing checks aligned with the new chase angle</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>429</td><td><code>078ef7f38</code></td><td>feat(pbp): host intent mode 'quick' starts Quick match at once</td><td>Assets/web/piecebypiece</td><td>ported-by-merge</td></tr>
+<tr><td>430</td><td><code>621dfdbe4</code></td><td>Slow solo race traps and arrange closures around the song</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>431</td><td><code>1739578d0</code></td><td>feat(glassroad): garage first, the course's lights warm behind the menu</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>432</td><td><code>7dcd1e79b</code></td><td>feat(glassroad): camera - look-point hints and rotational trauma on the drawn copy</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>433</td><td><code>68283421d</code></td><td>feat(glassroad): world - permanence, final-lap wake, speed sense, cascades, rival glances</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>434</td><td><code>cdaf8cdc6</code></td><td>feat(glassroad): moments - rocket start ladder, hitter-hit, lap final flag, HUD pulses, Motion option</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>435</td><td><code>aa69e156f</code></td><td>feat(glassroad): audio - sub thump, drift squeal, final lap, rocket start, hitter chime, wind</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>436</td><td><code>2ca016798</code></td><td>feat(glassroad): trauma - one trauma value, render-only hit-stop and finish slow frame</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>437</td><td><code>7f1a3798c</code></td><td>feat(glassroad): scene wiring for the world feel lane (scorch, debris, final-lap wake, rival glances, motion l</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>438</td><td><code>d96bdced7</code></td><td>feat(glassroad): feel wave integration hooks (hud racers, drift charge, motion to world and garage, kart wobbl</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>439</td><td><code>0d237403d</code></td><td>perf(glassroad): draw every kart's marine drive as one fleet, let pickup cards cull</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>440</td><td><code>8d29e905b</code></td><td>perf(glassroad): one cheap matrix walk per frame instead of stock updateMatrixWorld per render</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>441</td><td><code>28ae87f2c</code></td><td>perf(glassroad): cut per-frame instance and upload work (Firefox frame cost, lane 2)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>442</td><td><code>397e42b3a</code></td><td>perf(glassroad): upload world video frames straight from the &lt;video&gt;</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>443</td><td><code>5f4b2a16d</code></td><td>Keep shadow catchers out of shadowless inset warmup</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>444</td><td><code>4f13be621</code></td><td>Clear GOONWORKS carousel horses and tube particle clutter</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>445</td><td><code>c490ba4ce</code></td><td>Keep song helix geometry outside the GOONWORKS tube</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>446</td><td><code>947888adb</code></td><td>feat(glassroad): chess piston heads and staggered Boudoir thumpers</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>447</td><td><code>77e1d2eab</code></td><td>feat(glassroad): trap telegraph with headroom, no repeated flash-burst pictures</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>448</td><td><code>7dde57a1a</code></td><td>feat(glassroad): vivid beat-driven floor colour across three courses</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>449</td><td><code>2dd415b60</code></td><td>fix(glassroad): keep vivid floor within shader graph budget</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>450</td><td><code>c41247cb0</code></td><td>perf(glassroad): living icons re-upload only their redrawn cells; dry road words skip per-frame rewrites</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>451</td><td><code>5848b249f</code></td><td>test(glassroad): verify distinct Boudoir boost sequences</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>452</td><td><code>3892e82c2</code></td><td>test(glassroad): require boost use on each completed lap</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>453</td><td><code>b8f35668e</code></td><td>perf(glassroad): merge static GOONWORKS toy parts and share ink hulls (fewer draws)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>454</td><td><code>a2e18f9be</code></td><td>ci(glassroad): verify game suite on feature pull requests</td><td>docs/tests/release only: build.yml</td><td>n/a</td></tr>
+<tr><td>455</td><td><code>bc0b02d7a</code></td><td>fix(ci): keep Windows test arguments below path limit</td><td>docs/tests/release only: build.yml</td><td>n/a</td></tr>
+<tr><td>456</td><td><code>783ea01f8</code></td><td>fix(glassroad): Firefox WebGPU draws soft props, shadow catchers and clips</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>457</td><td><code>55b430d71</code></td><td>perf(glassroad): cheaper per-draw uniform, node and attribute bookkeeping on WebGL2</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>458</td><td><code>066d1bdfa</code></td><td>perf(glassroad): cut the shadow pass on high (FF60 shadows lane)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>459</td><td><code>eddf0fb9b</code></td><td>perf(glassroad): frustum cull rigid kart parts (mechanisms, accents) per camera</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>460</td><td><code>ec6fea9d7</code></td><td>perf(glassroad): cube warm shows every LOD level; music edge wash on a one-row canvas; dev link log</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>461</td><td><code>2063cbc6c</code></td><td>perf(glassroad): cull racer skinned meshes on a fixed kart sphere</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>462</td><td><code>480312063</code></td><td>perf(glassroad): one walk record per node, shared group versions kept on the binding</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>463</td><td><code>125c454ba</code></td><td>fix(glassroad): no shadow map render while shadows are switched off (Threshold 3 s stall)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>464</td><td><code>d27ea326e</code></td><td>perf(glassroad): warm the rival name-tag sprite program behind the cover</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>465</td><td><code>5c865719d</code></td><td>perf(glassroad): WebGL2 uploads send only changed bytes (Firefox command channel)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>466</td><td><code>2e1b50efb</code></td><td>feat(glassroad): share live waveform, spectrum and musical attack data</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>467</td><td><code>e82437e10</code></td><td>feat(glassroad): phosphor instruments and musical slate mosaics</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>468</td><td><code>7a9e947b1</code></td><td>feat(glassroad): silk spectra and comic soundstage visualizers</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>469</td><td><code>816ea04e3</code></td><td>feat(glassroad): draw live sound and struck caustics through water</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>470</td><td><code>90c3e5745</code></td><td>fix(glassroad): cull distant gate mist and update shared video bindings</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>471</td><td><code>c83a04629</code></td><td>fix(glassroad): keep musical slate clear of broad artwork masks</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>472</td><td><code>c2be0101c</code></td><td>fix(glassroad): retain per-copy effect materials to avoid per-draw state churn</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>473</td><td><code>24553801b</code></td><td>fix(glassroad): distinguish musical slate frequency banks</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>474</td><td><code>7564e765a</code></td><td>Revert &quot;fix(glassroad): retain per-copy effect materials to avoid per-draw state churn&quot;</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>475</td><td><code>3dfe6f6dc</code></td><td>fix(glassroad): scope attribute program sharing to instanced mesh builders</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>476</td><td><code>2e526ea73</code></td><td>fix(glassroad): keep one fixed sampled image per warmed video owner</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>477</td><td><code>6d3c511f6</code></td><td>test(glassroad): include scoped instance builder in course lifecycle fixture</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>478</td><td><code>8adb76d9f</code></td><td>fix(glassroad): prepare shared five-course shape infrastructure</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>479</td><td><code>5e1862138</code></td><td>fix(glassroad): align scenery and source authoring with reshaped courses</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>480</td><td><code>a94ce8ff8</code></td><td>fix(glassroad): activate broad bends and actual-speed boost corridors</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>481</td><td><code>735aac49a</code></td><td>fix(glassroad): verify every course and live boost run</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>482</td><td><code>a9e68ed28</code></td><td>perf(glassroad): reuse identical road samples in boost safety checks</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>483</td><td><code>00a162a83</code></td><td>feat(glassroad): give musical attacks independent visual clocks</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>484</td><td><code>81a65bb20</code></td><td>feat(glassroad): play slate and phosphor as separate musical instruments</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>485</td><td><code>64133650e</code></td><td>feat(glassroad): separate silk and comic light by musical role</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>486</td><td><code>4d269db83</code></td><td>feat(glassroad): separate bass, snare and high water light</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>487</td><td><code>500e0ee82</code></td><td>fix(glassroad): keep quiet melodic slabs visibly distinct</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>488</td><td><code>95557dd98</code></td><td>fix(glassroad): cap the comic road lookup across long courses</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>489</td><td><code>a02de8e9e</code></td><td>fix(glassroad): expose quiet music shapes in water</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>490</td><td><code>466cc1da5</code></td><td>fix(glassroad): clear GOONWORKS scenery and stabilize Boudoir mirrors</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>491</td><td><code>fe7452363</code></td><td>fix(glassroad): omit GOONWORKS pictures hidden behind the road</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>492</td><td><code>76337fa18</code></td><td>fix(glassroad): preserve reflection camera across nested draws</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>493</td><td><code>f8487fcff</code></td><td>fix(glassroad): phones lift the cover after the first pictures; a stalled load fails with Retry</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>494</td><td><code>6c20a7675</code></td><td>fix(glassroad): phones decode the race song at half rate; touch throw button sits bottom right</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>495</td><td><code>a069c5edd</code></td><td>fix(glassroad): STOMP heel reads as a stiletto pump</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>496</td><td><code>171e827d2</code></td><td>fix(glassroad): shortcuts catch at speed - route commit assist, earlier lead chevrons</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>497</td><td><code>7e7270cdb</code></td><td>fix(glassroad): online seats survive engine rounding; a refused seat says why</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>498</td><td><code>a8b8a5ab7</code></td><td>feat(glassroad): ?join=&lt;roomId&gt; seats you in that room (CCP lobby open-race rows)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>499</td><td><code>5a353e6b0</code></td><td>feat(lobby): list open Racing Thoughts 3D races</td><td>WPF: LauncherWindow.Lobby.cs, LiveProvider.cs, LobbyRowView.cs, LobbyService.cs, MainWindow.Lobby.cs, RaceOpenApi.cs</td><td>needs-port (<code>sync9-lobby-invite</code>)</td></tr>
+<tr><td>500</td><td><code>79c468b2b</code></td><td>fix(glassroad): cap the GOONWORKS road table at 8192 texels</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>501</td><td><code>83fa738a6</code></td><td>feat(glassroad): real speed x1.25, readout unchanged</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>502</td><td><code>21787579c</code></td><td>feat(glassroad): speed feel, the view widens and the edges blur at speed</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>503</td><td><code>ab9a04261</code></td><td>fix(glassroad): steer assist Help never takes the wheel, autopilot bus event</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>504</td><td><code>4ac22d31c</code></td><td>fix(glassroad): HUD playtest fixes - fire key on the item slot, opt-in speedo, Autopilot chip</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>505</td><td><code>46099cdc7</code></td><td>feat(glassroad): dev/decision-gaps.mjs measures time between decisions per course</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>506</td><td><code>5df22c940</code></td><td>feat(glassroad): drift sparks wear the pip colours, wind lines at speed</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>507</td><td><code>4d365164c</code></td><td>feat(glassroad): solo races default to 1 lap, pre-race card, speedo option</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>508</td><td><code>3195ba8a6</code></td><td>feat(glassroad): track picker shows the solo lap choice and its distance</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>509</td><td><code>aff0cc2b9</code></td><td>fix(glassroad): a rail never turns a moving kart round; the wheel mirrors only in reverse</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>510</td><td><code>84010dd73</code></td><td>fix(glassroad): item boxes read as item boxes - &quot;?&quot; cards inside chartreuse bubbles</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>511</td><td><code>3b2f7328c</code></td><td>fix(glassroad): wind line constants as float nodes, a touch brighter</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>512</td><td><code>e2cbd45de</code></td><td>test(glassroad): mesh build budget scales with course length, best of two loads</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>513</td><td><code>c67a76ed9</code></td><td>feat(glassroad): speed factor F = 1.1 with the whole boost envelope time-scaled</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>514</td><td><code>5649cda8a</code></td><td>docs(glassroad): shownTopMps comment names the real top (33 m/s)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>515</td><td><code>c80901989</code></td><td>test(glassroad): mesh build budget scales with course length, best of two loads</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>516</td><td><code>79f98829c</code></td><td>fix(glassroad): race notices sit clear of the item slot</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>517</td><td><code>61b55bdbc</code></td><td>test(glassroad): course length budget guard</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>518</td><td><code>1bfc330ed</code></td><td>feat(glassroad): My files - own pictures on the course screens instead of Scrolller</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>519</td><td><code>b191bab61</code></td><td>fix(glassroad): phone memory protections key on the device, not the pinned tier</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>520</td><td><code>1efaa7ae1</code></td><td>fix(glassroad): drift pip ring wears the wheel sparks' tier colours</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>521</td><td><code>83d9a11ec</code></td><td>feat(glassroad): expose course media customization and skip static matrix walks</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>522</td><td><code>0e1a9dd6e</code></td><td>fix(glassroad): restore saved picture sources without duplicate song downloads</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>523</td><td><code>9049aee20</code></td><td>fix(glassroad): add rear throw and right-hand keyboard controls</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>524</td><td><code>3abe6b2d9</code></td><td>feat(glassroad): show course themes and default lyric content</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>525</td><td><code>5497f7cc2</code></td><td>fix(glassroad): prepare every hit-camera LOD before racing</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>526</td><td><code>f006c1f2e</code></td><td>fix(glassroad): keep hit-camera warm and live layers identical</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>527</td><td><code>78b8a5d05</code></td><td>fix(glassroad): clear retired interleaved GPU buffer entries</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>528</td><td><code>2f0464612</code></td><td>fix(glassroad): isolate and draw hit-camera warm pipelines</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>529</td><td><code>bc48879ae</code></td><td>Separate musical drops and expressive string plucks</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>530</td><td><code>1baf8cf79</code></td><td>Add ten Afterimage backgrounds selected per course load</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>531</td><td><code>f1e910bf5</code></td><td>Mix musical tile phrases with brighter drops and bending strings</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>532</td><td><code>b2a8efea1</code></td><td>Open distant scenery to vivid musical backgrounds</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>533</td><td><code>fb35e9fe6</code></td><td>Restore full Scrolller and DropDuel cards inside pickup bubbles</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>534</td><td><code>4ea69ebdc</code></td><td>Preserve momentum through drop shortcut landings</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>535</td><td><code>e9a785f6b</code></td><td>Add rear item drops and favor speed and shields near the front</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>536</td><td><code>8594c97aa</code></td><td>perf(glassroad): use lighter phone scenery and distant kart meshes</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>537</td><td><code>0b043a907</code></td><td>fix(glassroad): preserve custom skin masks in distant kart geometry</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>538</td><td><code>06c4ff220</code></td><td>fix(glassroad): smooth phone startup and viewport changes</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>539</td><td><code>f340cfccc</code></td><td>fix(glassroad): report progress within race shader batches</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>540</td><td><code>bb40cf9ea</code></td><td>Add course intro soundscapes tied to cinematic timing</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>541</td><td><code>6c9079949</code></td><td>Recess side pistons into sliding road pockets</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>542</td><td><code>74809495c</code></td><td>Support piston jumps and preserve safe race corridors</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>543</td><td><code>845286166</code></td><td>test(glassroad): cover atomic initial viewport sizing</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>544</td><td><code>7c95ed669</code></td><td>feat(glassroad): make floor lettering answer the music</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>545</td><td><code>300a20cb8</code></td><td>fix(glassroad): keep sung word accents clear under bright effects</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>546</td><td><code>78d252a42</code></td><td>feat(glassroad): road words as coins (playtest fix, lane words)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>547</td><td><code>675b4510b</code></td><td>feat(glassroad): air words spawn under the kart, bigger and higher, vivid with rim and sparks, springier hops</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>548</td><td><code>cf0a83db1</code></td><td>Select semantic word pickups and validate grounded crossings</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>549</td><td><code>2b6568f6a</code></td><td>Add ten GPU letter identities with readable arrival and collection</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>550</td><td><code>5d1d6b15c</code></td><td>Animate actual road keywords and preserve trigger bubble ownership</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>551</td><td><code>087b10339</code></td><td>Finish airborne word trails and honor motion off</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>552</td><td><code>628ad9d69</code></td><td>Resolve keyword identities inside preserved trigger phrases</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>553</td><td><code>ea05a6ea8</code></td><td>Apply semantic identities to the actual song gate signs</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>554</td><td><code>74ea9b678</code></td><td>Animate the full matched song vocabulary with 36 word mechanisms</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>555</td><td><code>cdefb05a9</code></td><td>Make word pickups pop with bounded lift sparkles and sound</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>556</td><td><code>a667ed2c5</code></td><td>Enable matching online word pickups and finish reset and Gentle polish</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>557</td><td><code>007a2c1aa</code></td><td>fix(glassroad): speed edge blur reaches the shader; intro sound fade no longer clicks</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>558</td><td><code>eaee8fc3d</code></td><td>fix(glassroad): Gentle music floors fade section and bar steps</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>559</td><td><code>b1d4c57bc</code></td><td>fix(glassroad): the phone's loopback server no longer hides the lobby songs</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>560</td><td><code>3930199ac</code></td><td>feat(sparkles): claim service + wallet adoption (B1 W1)</td><td>WPF: App.xaml.cs, SparklesClaim.cs, SparklesClaimService.cs, SparklesReceipt.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
+<tr><td>561</td><td><code>9d7d5406e</code></td><td>test(sparkles): fold the claim tests to keep the PR under the line cap</td><td>WPF: SparklesClaimService.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
+<tr><td>562</td><td><code>28c334234</code></td><td>fix(sparkles): a place receipt only raises the wallet</td><td>WPF: SparklesClaimService.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
+<tr><td>563</td><td><code>21873bc05</code></td><td>feat(sparkles): Arcademy, DtRH, Caucus and Intake claim Sparkles (B1 W2)</td><td>WPF: ArcademyHostService.cs, CaucusHostService.cs, DtrhHostService.cs, IntakeHostService.cs, SparklesGameEnd.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
+<tr><td>564</td><td><code>48d232dd9</code></td><td>feat(sparkles): Racing Thoughts 3D claims Sparkles by place (B1 W4)</td><td>WPF: GlassroadHostService.cs, GlassroadRules.cs, SparklesGameEnd.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
+<tr><td>565</td><td><code>a568665e0</code></td><td>feat(sparkles): chess, Goon and Breakout claim Sparkles (B1 W3)</td><td>WPF: BackRoomHostService.cs, GoonHostService.cs, PieceByPieceHostService.cs, SparklesGameEnd.cs, SparklesPageResults.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
+<tr><td>566</td><td><code>de0947d9f</code></td><td>fix(sparkles): the Breakout Story Demo pays like the full game</td><td>WPF: BackRoomHostService.cs, SparklesPageResults.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
+<tr><td>567</td><td><code>b96b5931c</code></td><td>feat(sparkles): the results slip, host side (B1 W5)</td><td>WPF: ArcademyHostService.cs, CaucusHostService.cs, DtrhHostService.cs, IntakeHostService.cs, SparklesSlip.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
+<tr><td>568</td><td><code>c3a4cdd43</code></td><td>feat(sparkles): the results slip, page side (B1 W5)</td><td>Assets/web/arcademy, Assets/web/dtrh, Assets/web/intake, ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>569</td><td><code>cc1bdc4b0</code></td><td>feat(sparkles): Claim carries the online proof (shared by W3 and W4)</td><td>WPF: SparklesGameEnd.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
+<tr><td>570</td><td><code>b9b541bcb</code></td><td>test(sparkles): one slip tree per line so later trees add without conflicts</td><td>docs/tests/release only: SparklesSlipParityTests.cs</td><td>n/a</td></tr>
+<tr><td>571</td><td><code>b2487a365</code></td><td>feat(sparkles): results slip in chess and Goon</td><td>WPF: GoonHostService.cs, PieceByPieceHostService.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
+<tr><td>572</td><td><code>7c086f322</code></td><td>feat(sparkles): results slip in Racing Thoughts 3D</td><td>WPF: GlassroadHostService.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
+<tr><td>573</td><td><code>70c3d96e6</code></td><td>feat(sparkles): results slip in Breakout</td><td>WPF: BackRoomHostService.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
+<tr><td>574</td><td><code>f763e6a40</code></td><td>fix(goon): the Sparkles slip sits bottom left, clear of the recap buttons</td><td>Assets/web/goon</td><td>ported-by-merge</td></tr>
+<tr><td>575</td><td><code>fcff83904</code></td><td>fix(sparkles): the slip never takes a click, and trance pages play it calm</td><td>Assets/web/dtrh, ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>576</td><td><code>d7348e6a0</code></td><td>fix(sparkles): the slip's wallet chip counts to the app's own wallet</td><td>WPF: SparklesSlip.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
+<tr><td>577</td><td><code>d81611c81</code></td><td>fix(sparkles): chess and Goon take the reviewed slip module (no clicks, calm option)</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>578</td><td><code>5ee971ae3</code></td><td>fix(sparkles): Breakout takes the reviewed slip; Back Room Calm plays it calm</td><td>Assets/web/backroom, ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>579</td><td><code>ba537a09b</code></td><td>fix(sparkles): Racing Thoughts claims full length only for trial and ghost, caps solo laps</td><td>WPF: GlassroadRules.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
+<tr><td>580</td><td><code>a76daed30</code></td><td>fix(sparkles): Racing Thoughts drops a receipt that lands mid-race and follows the Motion row</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>581</td><td><code>e0356be6e</code></td><td>feat(sparkles): a down server reads &quot;Bank closed&quot;, not &quot;Offline&quot;</td><td>WPF: SparklesClaimService.cs, SparklesSlip.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
+<tr><td>582</td><td><code>463045dfa</code></td><td>build(glassroad): ship Racing Thoughts 3D in the WPF build (7.2 A2)</td><td>WPF build/release only (version is Version.props here; the web tree ships from Assets/web): ConditioningControlPanel.csproj</td><td>n/a</td></tr>
+<tr><td>583</td><td><code>099607382</code></td><td>feat(glassroad): Racing Thoughts 3D for everyone, 2D race door retired (7.2 A2)</td><td>WPF: BackRoomHostService.cs, GameSurfaces.cs, GlassroadHostService.cs, GlassroadRules.cs, LauncherCatalogue.cs</td><td>needs-port (<code>sync9-glassroad</code>)</td></tr>
+<tr><td>584</td><td><code>c3c64ba4c</code></td><td>fix(launcher): Racing Thoughts blurb fits the 3D race</td><td>CCP.Core/Localization/Languages</td><td>ported-by-merge</td></tr>
+<tr><td>585</td><td><code>701f9cdd6</code></td><td>feat(glassroad): join-room host frame for a window that is already up</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>586</td><td><code>d6a39c7ac</code></td><td>feat(lobby): race rows open Racing Thoughts in the app on ?join=</td><td>WPF: GlassroadHostService.cs, MainWindow.Lobby.cs, RaceOpenApi.cs</td><td>needs-port (<code>sync9-lobby-invite</code>)</td></tr>
+<tr><td>587</td><td><code>639e10a0b</code></td><td>feat(glassroad): host-owned friends invite in the pre-race room</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
+<tr><td>588</td><td><code>cc6ad7a39</code></td><td>feat(friends): invite a friend into your Racing Thoughts room</td><td>WPF: FriendsLanding.cs, GlassroadHostService.cs, GlassroadRules.cs</td><td>needs-port (<code>sync9-lobby-invite</code>)</td></tr>
+<tr><td>589</td><td><code>c7af815a0</code></td><td>fix(glassroad): Racing Thoughts 3D is Prime only, every door</td><td>WPF: BackRoomHostService.cs, FriendsLanding.cs, GlassroadHostService.cs, LauncherCatalogue.cs, MainWindow.PlayTab.cs, PlayTabView.xaml</td><td>needs-port (<code>sync9-glassroad</code>)</td></tr>
+<tr><td>590</td><td><code>9718fd3f4</code></td><td>feat(glassroad): the garage offers only owned kart bodies</td><td>WPF: GlassroadHostService.cs, GlassroadRules.cs (web half merged in Assets/web/glassroad)</td><td>needs-port (<code>sync9-glassroad</code>)</td></tr>
+<tr><td>591</td><td><code>9d08ba4d7</code></td><td>fix(copy): the tier-2 lock label says Prime, not Lab</td><td>CCP.Core/Localization/Languages (hm3_rail_lock_t2, all ten files)</td><td>ported-by-merge</td></tr>
+<tr><td>592</td><td><code>fe3c3790c</code></td><td>feat(rain-wardrobe): fitting room page shell and viewer (1/4)</td><td>Assets/web/rain-wardrobe (web only, no host references it yet on either head)</td><td>ported-by-merge</td></tr>
+<tr><td>593</td><td><code>503817d4c</code></td><td>feat(rain-wardrobe): garment, hair and jewellery modules (3/4)</td><td>Assets/web/rain-wardrobe (web only, no host references it yet on either head)</td><td>ported-by-merge</td></tr>
+<tr><td>594</td><td><code>9ef595efc</code></td><td>feat(rain-wardrobe): colour studio, review studio and runtime info (4/4)</td><td>Assets/web/rain-wardrobe (web only, no host references it yet on either head)</td><td>ported-by-merge</td></tr>
+</table>
+<h2 id="follow-up-merge-a9605b2cc-pin-a11ada22e">Follow-up merge <code>a9605b2cc</code> (pin <code>a11ada22e</code>)</h2>
+<p>On <code>avalonia-port/main-20261030-compat</code>, after the compat commit. Conflict resolutions only: the two new files
+<code>meta/owned.js</code> and <code>tests/garage-owned.test.mjs</code> kept where git's directory-rename detection put them
+(<code>Assets/web/glassroad/</code>). The other glassroad edits followed the moved tree on their own. Checks: WPF test project builds
+(0 errors); <code>node --test</code> garage-owned, garage and logbook-record-ui: 19/19.</p>
+<h2 id="follow-up-merge-047449d1f-pin-ddc43afeb">Follow-up merge <code>047449d1f</code> (pin <code>ddc43afeb</code>)</h2>
+<p>No conflicts. Main added a new web tree <code>ConditioningControlPanel/Resources/web/rain-wardrobe</code> (12 files, the
+fitting room pages 1, 3 and 4; page 2 is not on main yet). Git does not move a new tree, so the merge <code>git mv</code>s it to
+<code>Assets/web/rain-wardrobe</code>; the existing <code>Assets/web/**</code> content glob ships it for both heads. No C# references it yet.</p>
+<h2 id="watch-list-on-the-way-to-main-not-merged-here-yet">Watch list: on the way to main, not merged here yet</h2>
+<p>These are not in this sync. The next sync (or A5) must pick them up, and must add a ledger row for each commit:</p>
+
+<table>
+<tr><th>ref</th><th>sha</th><th>what</th><th>trap for the next sync</th></tr>
+<tr><td><code>preview/7.2.0</code></td><td><code>3c05cc1f5</code></td><td>42 commits ahead of main (24 non-merge): the Prize Counter shop (B3-W1/W2/ART), the launcher Sparkles wallet chip, <code>shop_*</code> loc keys</td><td>its web tree is new under <code>ConditioningControlPanel/Resources/web/prizecounter</code>. Git will NOT move a new tree, so <code>git mv</code> it to <code>Assets/web/prizecounter</code> and fix the csproj excludes, CI paths and tests (same as glassroad here). WPF host <code>Services/PrizeCounter</code> -&gt; Avalonia port lane</td></tr>
+<tr><td><code>feat/glassroad-a</code></td><td><code>248c978c1</code></td><td>3 commits not on main: <code>19d633049</code> owned kart bodies (twin of <code>9718fd3f4</code>), <code>7a83f0356</code> host-owned friends invite in the pre-race room, <code>6a5ed13c4</code> join-room host frame for an open window</td><td>lands through A2 catch-up merges; <code>7a83f0356</code>/<code>6a5ed13c4</code> belong to <code>sync9-lobby-invite</code></td></tr>
+</table>
+<p>Older open port debt that still applies (not repeated here): sync 7 needs-port rows in
+<a href="avalonia-main-sync-20261015.html"><code>avalonia-main-sync-20261015.html</code></a> and sync 8 rows in
+<a href="avalonia-main-sync-20261024.html"><code>avalonia-main-sync-20261024.html</code></a>. The sync 8 safety lanes (panic-voice, lockdown,
+remote-end, factory-reset, settings-freeze, chaster-leash) are finished locally but not pushed, so the frozen tip
+<code>a3d9e984f</code> does not have them.</p>
+<h2 id="how-a-row-gets-closed">How a row gets closed</h2>
+<p>A needs-port row is closed when its lane's PR lands on <code>port/7.2</code>. Change the status cell to
+<code>ported (#PR, sha)</code> in that PR, never in a separate docs PR, so the ledger and the code land together. A row
+that turns out to need nothing is changed to <code>n/a</code> with the reason. <code>~/ccp-port/bin/ledger-check</code> keeps the row count
+and numbering honest.</p>
+<h2 id="merge-notes-avalonia-portmain-20261030">Merge notes (<code>avalonia-port/main-20261030</code>)</h2>
+<p>Conflict resolutions only (23 files):</p>
+<ul>
+<li><code>sparkles-slip.js</code> x7: kept where git's directory-rename detection put them (<code>Assets/web/&lt;tree&gt;/</code>).</li>
+<li><code>ConditioningControlPanel/Resources/web/glassroad</code> (new on main, 1444 files) moved to <code>Assets/web/glassroad</code>, the layout
+the stack uses and the path <code>GameWindow.Glassroad.cs</code> already expects. csproj harness excludes and the <code>glassroad</code> CI job follow.</li>
+<li>Languages x8: union of the stack keys and <code>Sparkles_Slip_*</code>; no duplicate keys.</li>
+<li><code>ChasterService</code> (Core): main's <code>Waits(...)</code> logic with the stack's Serilog logging.</li>
+<li><code>LobbyModel</code> (Core): the stack's <code>LobbyPollPlan</code> plus main's <code>LobbyGame.Race</code>; the Race label key added to <code>LobbyPageRules</code>.</li>
+<li><code>LauncherCatalogue</code>: the stack's host dictionary; the race entry is now Glassroad, Prime only (main <code>c7af815a0</code>).</li>
+<li><code>IntakeHostService</code>: the stack's Core <code>IntakeRun</code> plus main's Sparkles claim (<code>firstResult</code> read from <code>IntakeRun.ResultReceived</code>).</li>
+<li><code>LobbyRowView</code>: the stack's <code>LobbyPageRules</code> delegate.</li>
+<li>WPF csproj <code>&lt;Version&gt;</code>: stays in <code>Version.props</code>; <code>build-installer.bat</code> keeps the stack layout with <code>VERSION=7.1.15</code>.</li>
+<li><code>build.yml</code>: the stack jobs plus main's <code>glassroad</code> job (working directory <code>Assets/web/glassroad</code>).</li>
+</ul>
+<h2 id="-compat-avalonia-portmain-20261030-compat">-compat (<code>avalonia-port/main-20261030-compat</code>)</h2>
+<ul>
+<li><code>RaceOpenApi.cs</code> moved to <code>CCP.Core/Services/Lobby/</code> (Core <code>LobbyModel</code> uses it); logger is Serilog.</li>
+<li><code>ChasterService</code> line 628 and <code>SubliminalLayer</code>: <code>App.Logger</code> replaced with Serilog in Core.</li>
+<li><code>SubliminalLayer.ResolveFace</code> (main <code>08bb30ba7</code>) no longer reads the WPF pack:// resource in Core; the WPF head sets
+<code>SubliminalLayer.BundledFaceStream = FontPickerHelper.BundledFaceStream</code> (static ctor of <code>SubliminalService</code>).</li>
+<li><code>DtrhHostService</code> Sparkles claim reads the Core <code>DtrhRunBooking</code> (main used locals the stack moved into <code>DtrhRunWire.Book</code>).</li>
+<li>Tests that read the web tree (<code>GlassroadHostTests</code>, <code>SparklesSlipParityTests</code>) read <code>Assets/web</code>.</li>
+<li><code>Version.props</code> 7.1.15 (matches <code>installer.iss</code>, <code>build-installer.bat</code>, <code>UpdateService.AppVersion</code>).</li>
+</ul>
+<p>Local builds: CCP.Core, CCP.Avalonia and the WPF test project (EnableWindowsTargeting) all build with 0 errors.</p>
+<p>Open for the reviewers (not changed here):</p>
+<ul>
+<li><code>build-installer.bat</code> on this line packages the Avalonia head for Windows. The 7.2 plan ships Windows as WPF from <code>main</code>,
+so this branch must not be the Windows installer source.</li>
+</ul>
+
+<script>
+(()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
+const m=document.getElementById('ledger-meta');const s=document.querySelector('.counts');if(m&&s){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
+</script>
+</body>
+</html>

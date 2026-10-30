@@ -584,7 +584,7 @@
                                                 </Grid>
                                             </Button>
 
-                                            <!-- No exit games on this head (docs/avalonia-decisions.md,
+                                            <!-- No exit games on this head (docs/avalonia-decisions.html,
                                                  Lockdown / Emergency Exit): the slab says how the phrase works. -->
                                             <TextBlock x:Name="TxtEmergencyExitNotice" IsVisible="False" TextWrapping="Wrap"
                                                        Foreground="#FFB0A0" FontSize="12.5" Margin="0,8,0,0"/>

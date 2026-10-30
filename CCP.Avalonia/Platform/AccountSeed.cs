@@ -18,7 +18,7 @@ internal static class AccountSeed
     /// <see cref="SandboxWhitelistRequested"/>). Always false in a Release build.</summary>
     internal static bool SandboxWhitelisted { get; private set; }
 
-    /// <summary>Decision 2026-10-12 (docs/avalonia-decisions.md): a sandboxed DEBUG run (CCP_USERDATA_DIR honoured,
+    /// <summary>Decision 2026-10-12 (docs/avalonia-decisions.html): a sandboxed DEBUG run (CCP_USERDATA_DIR honoured,
     /// so SandboxNet is active and there is no network or real account) with CCP_SANDBOX_WHITELIST=1 is treated as a
     /// whitelisted account: premium + Lab, as the server whitelist would grant. Only `kc start` sets the variable;
     /// headless tests do not, so they keep testing the gates. Release builds compile this out: shipped builds keep the paywall.</summary>

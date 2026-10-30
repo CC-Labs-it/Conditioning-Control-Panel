@@ -5,7 +5,7 @@ using ConditioningControlPanel.Models.Program;
 namespace ConditioningControlPanel.Avalonia.Platform
 {
     /// <summary>
-    /// Which program task signals this head can raise (programs-3a decision, docs/avalonia-decisions.md).
+    /// Which program task signals this head can raise (programs-3a decision, docs/avalonia-decisions.html).
     /// A static table, not runtime registration: a signal that simply has not fired yet must not look
     /// unavailable. Each category here has a reachable QuestService.Track* call in the head or Core
     /// (ProgramCapabilitiesTests scans for it). Seeded into CoreProgram.TaskAvailableProvider at startup.

@@ -101,7 +101,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private WindowEdge? ResizeEdgeFor(PointerEventArgs e)
             => WindowState == WindowState.Normal && CanResize ? EdgeAt(e.GetPosition(this), Bounds.Size) : null;
 
-        // The shell's stretch policy (docs/avalonia-decisions.md, oracle-deep): WPF's Fill while
+        // The shell's stretch policy (docs/avalonia-decisions.html, oracle-deep): WPF's Fill while
         // the window is within 15% of the design canvas aspect, Uniform outside it.
         private const double CanvasAspect = 1585.0 / 901.0;
         internal const double FillTolerance = 0.15;

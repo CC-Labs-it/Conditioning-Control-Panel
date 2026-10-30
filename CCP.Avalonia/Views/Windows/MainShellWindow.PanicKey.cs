@@ -1,7 +1,7 @@
 // PORTED from ConditioningControlPanel/MainWindow/MainWindow.xaml.cs: OnGlobalKeyPressed's panic
 // branch (:955), HandlePanicKeyPress (:1458) and RunPanicStopTail (:1694), engine-not-running path.
 // The decision is the same Core PanicPolicy; the listener is Platform/X11PanicKey (XInput2 raw keys,
-// non-consuming like the WH_KEYBOARD_LL hook - docs/avalonia-decisions.md, panic key row).
+// non-consuming like the WH_KEYBOARD_LL hook - docs/avalonia-decisions.html, panic key row).
 // The stop pass is PanicSurfaces.StopAll (one registry shared with the tray and the safe word); a new
 // surface registers there, never here. ponytail: no bark on this head yet. The #919b watchdog is Platform/PanicWatchdog:
 // a queued stop the UI thread never runs is torn down off-thread after 2 s.
@@ -202,7 +202,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        /// <summary>Decision C (docs/avalonia-decisions.md, panic and the camera; deliberate WPF deviation):
+        /// <summary>Decision C (docs/avalonia-decisions.html, panic and the camera; deliberate WPF deviation):
         /// every panic press that is not a palette-claimed Escape closes the camera, after the audio and
         /// overlay teardown. Fire-and-forget: Stop can block up to 5 s on a wedged driver. Consent,
         /// calibration, device choice and settings are kept. The Blink Trainer session is stopped with
@@ -218,7 +218,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         // ---- Native Wayland windows: the GlobalShortcuts portal, bound only while effects run ----
-        // Policy C (docs/avalonia-decisions.md, panic key row): the portal grab CONSUMES the key
+        // Policy C (docs/avalonia-decisions.html, panic key row): the portal grab CONSUMES the key
         // desktop-wide, so it exists only while a desktop effect is on screen. The first effect
         // waits (<= 30 s, a KDE dialog) for the bind; refused/missing/timeout = XI2 only for this
         // run, one notice, and the effect starts anyway.

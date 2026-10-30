@@ -7,7 +7,7 @@ namespace ConditioningControlPanel.Services
     /// and RestoreSettings (SessionEngine.cs:1053-1114, 1659-1777), same fields, same order. The three
     /// phrase pools are <see cref="PhrasePoolCustody"/>'s. Plus SubliminalDuration: WPF writes it from the
     /// session's frames and never restores it, leaking it into the user's settings - a WPF bug not carried
-    /// over (docs/avalonia-decisions.md).
+    /// over (docs/avalonia-decisions.html).
     /// </summary>
     public sealed class SessionSettingsSnapshot
     {

@@ -147,7 +147,7 @@ jobs:
           path: ${{ runner.temp }}/render/
 
   # --perf-bench on a real X server (xvfb), not headless: startup, per-tab switch median/p95, working set.
-  # The numbers are report-only (docs/avalonia-perf.md; Linux is never compared against WPF). The missing-tab
+  # The numbers are report-only (docs/avalonia-perf.html; Linux is never compared against WPF). The missing-tab
   # step is NOT report-only: it proves the bench can fail (exit 3), so a broken tab lookup cannot pass silently.
   perf-bench-linux:
     if: github.event_name != 'workflow_dispatch' || inputs.scope != 'windows'

@@ -1099,7 +1099,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             // Opened here, owned by this window: WPF deferred it (FirstRunWizard.xaml.cs:1175) only
             // to dodge a modal-on-modal Win32 folder browser, and the user saw nothing happen
-            // (docs/avalonia-decisions.md). Same guard, write and follow-ups as the shell's picker.
+            // (docs/avalonia-decisions.html). Same guard, write and follow-ups as the shell's picker.
             _btnPickFolder.IsEnabled = false;
             if (await MainShellWindow.PickAssetsFolder(this) is { } chosen)
             {

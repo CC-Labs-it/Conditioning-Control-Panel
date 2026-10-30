@@ -73,7 +73,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF RunPanicStopTail StopEngine/StopAdHocEffects: pauses a running session; OnEngineStopped
             // then ends Takeover pulses, desktop overlays (subliminal/whisper, mind wipe, spiral, video,
             // bubbles, pink filter), pop quizzes and open lock cards.
-            // programs 3a (P06, docs/avalonia-decisions.md): today's program session ENDS, not pauses, so
+            // programs 3a (P06, docs/avalonia-decisions.html): today's program session ENDS, not pauses, so
             // a panic never leaves a program run holding the screen; foreign sessions stay paused below.
             new("program-session", sh => { if (sh != null) sh.EndProgramSessionQuietly("panic"); else App.Programs?.StopProgramSessionIfRunning("panic"); }),
             // WPF :1554 CancelPendingAi (right after FirstShowService.Stop :1553) runs long before StopEngine (:1838); :1721-1732 game

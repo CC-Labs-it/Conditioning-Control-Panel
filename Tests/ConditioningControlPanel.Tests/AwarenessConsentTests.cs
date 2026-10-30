@@ -193,7 +193,7 @@ public class AwarenessConsentTests
     public void WpfBuildsTheLegacyObserverWithoutAPrivacyFilter()
     {
         // The Core service takes an optional title filter that only the Avalonia head passes
-        // (docs/avalonia-decisions.md). WPF's legacy observer is the frozen reference: one argument.
+        // (docs/avalonia-decisions.html). WPF's legacy observer is the frozen reference: one argument.
         var app = SourceRoots.ReadProductFile("App.xaml.cs");
         Assert.Contains("WindowAwareness = new WindowAwarenessService(ReadForegroundWindowTitle);", app, StringComparison.Ordinal);
 

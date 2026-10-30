@@ -3,7 +3,7 @@
 // gated by CCP.Core Services/Safety/BlinkStopGate (never more permissive than the panic key).
 //
 // The stop pass is exactly WPF StopAllForRecalibration's set (decision 2026-10-12 in
-// docs/avalonia-decisions.md): a recalibration stop, not a panic. It pauses the session (never ends
+// docs/avalonia-decisions.html): a recalibration stop, not a panic. It pauses the session (never ends
 // it) and leaves the camera, mic, haptics and program run alone. No leash service, Focus Gaze, help
 // popover or interaction queue exists on this head, so those WPF steps have no target here.
 

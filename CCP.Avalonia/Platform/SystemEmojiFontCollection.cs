@@ -10,7 +10,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 {
     /// <summary>
     /// The system colour-emoji font as its own font collection that never builds a synthetic bold/italic
-    /// (decision 2026-10-12, render-all-segv in docs/avalonia-decisions.md).
+    /// (decision 2026-10-12, render-all-segv in docs/avalonia-decisions.html).
     ///
     /// Avalonia 12.1.x (and master) builds a synthetic typeface by calling SkiaTypeface.TryGetStream, which copies
     /// the font out of an SKStreamAsset it neither disposes nor keeps alive. In optimised code that asset is dead

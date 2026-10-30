@@ -24,9 +24,9 @@ using Xunit;
 namespace CCP.Avalonia.Snapshot.Tests;
 
 /// <summary>
-/// Locks the look of every parity row that is `verified`/`improved` in docs/avalonia-parity.md:
+/// Locks the look of every parity row that is `verified`/`improved` in docs/avalonia-parity.html:
 /// one baseline per row id under Snapshots/. A new baseline is accepted only with the WPF
-/// side-by-side image path in the commit message (docs/avalonia-parity.md, "Locking a row").
+/// side-by-side image path in the commit message (docs/avalonia-parity.html, "Locking a row").
 /// ~/ccp-port/bin/ledger-snapshot-check.sh fails a verified/improved row without a file here.
 /// </summary>
 public sealed class VerifiedRowSnapshotTests
