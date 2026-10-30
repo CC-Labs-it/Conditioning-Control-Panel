@@ -33,6 +33,12 @@ public class TestIsolationTests
 
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
 
+    [Theory]
+    [InlineData("fonts:Inter#Inter")][InlineData("Consolas")][InlineData("Fredoka")]
+    public void SharedPlatformResolvesProductionFontsBeforeAnyTestSetup(string family) =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() => Assert.NotNull(
+            new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily(family)).GlyphTypeface));
+
     [Fact]
     public void EveryTestRunsInsideTheHook() => Assert.NotNull(IsolateProcessStateAttribute.Current);
 

@@ -154,10 +154,6 @@ public sealed class Sync6CompanionLinksTests
     private static void Run(Action body) => RunAsync(() => { body(); return Task.CompletedTask; }).GetAwaiter().GetResult();
     private static Task RunAsync(Func<Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
-                .With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var settings = new SettingsService(); CoreSettings.ServiceProvider = () => settings;
         CoreSettings.Current.GlobalKnowledgeBaseLinks.Clear(); await body(); Dispatcher.UIThread.RunJobs();
     });
