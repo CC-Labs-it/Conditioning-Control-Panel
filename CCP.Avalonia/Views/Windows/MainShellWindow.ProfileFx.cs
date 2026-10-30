@@ -142,7 +142,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Debug("StaggerProfileCards: {E}", ex.Message); }
         }
 
-        private static void Entrance(Control target, TimeSpan delay, int ms, AvaloniaProperty property, double from, double to) =>
+        internal static void Entrance(Control target, TimeSpan delay, int ms, AvaloniaProperty property, double from, double to,
+            System.Threading.CancellationToken cancel = default) =>
             _ = new Animation
             {
                 Delay = delay,
@@ -154,7 +155,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     new KeyFrame { Cue = new Cue(0), Setters = { new Setter(property, from) } },
                     new KeyFrame { Cue = new Cue(1), Setters = { new Setter(property, to) } },
                 },
-            }.RunAsync(target);
+            }.RunAsync(target, cancel);
 
         private static Color GlowAt(byte alpha)
         {

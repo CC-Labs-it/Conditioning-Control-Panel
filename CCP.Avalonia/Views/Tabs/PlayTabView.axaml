@@ -216,13 +216,7 @@
       <StackPanel Margin="20">
 
         <!-- ============================== HEADER ============================== -->
-        <TextBlock Text="{loc:Str nav_door_play}" Foreground="White" FontSize="24" FontWeight="Bold"
-                   Margin="0,0,0,4">
-          <TextBlock.Effect>
-            <!-- Mod-chain colour, never a hard-coded accent. -->
-            <DropShadowEffect Color="{DynamicResource FxGlowColor}" BlurRadius="20" OffsetX="0" OffsetY="0" Opacity="0.5"/>
-          </TextBlock.Effect>
-        </TextBlock>
+        <!-- No "Play" H1: the section breadcrumb above the page says it (WPF :336, nav rework 2026-10-06). -->
         <TextBlock Text="{loc:Str pl6_play_subtitle}" Foreground="{DynamicResource TextDimBrush}"
                    FontSize="12" Margin="0,0,0,16"/>
 
@@ -235,7 +229,7 @@
           <TextBlock Grid.Column="0" Text="{loc:Str rf_play_zone_games}" Theme="{StaticResource PlayZoneTag}"/>
           <Border Grid.Column="1" Theme="{StaticResource PlayZoneRule}"/>
         </Grid>
-        <UniformGrid Columns="2">
+        <UniformGrid x:Name="GamesGrid" Columns="3">
           <Grid x:Name="SlotBreakoutDemo">
             <Border Theme="{StaticResource PlayCard}">
               <Grid>
@@ -317,6 +311,112 @@
                 <Border Theme="{StaticResource PlayBadgePill}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-12,-12,0,0" ZIndex="10">
                   <TextBlock Text="{loc:Str exclusives_badge_new}" Theme="{StaticResource PlayBadgePillText}"/>
                 </Border>
+              </Grid>
+            </Border>
+          </Grid>
+          <!-- WPF :462-605, nav rework 2026-10-06: the Premium page retired and these five came here.
+               Racing Thoughts runs the launcher's own entry and the Web App opens like the rail door.
+               The Back Room and the Arcademy have no host on this head, so their
+               buttons refuse honestly; the T2 bands are decoration painted by RefreshPlayCards. -->
+          <Grid x:Name="SlotBackRoom">
+            <Border Theme="{StaticResource PlayCard}">
+              <Grid RowDefinitions="Auto,Auto,*,Auto">
+                <Border Grid.Row="0" Theme="{StaticResource PlayCardArtPlate}">
+                  <Border x:Name="PlayBackRoomHeroPlate" CornerRadius="16,16,0,0"/>
+                </Border>
+                <TextBlock Grid.Row="1" Text="{loc:Str launcher_game_backroom_title}" Theme="{StaticResource PlayCardTitle}" Margin="0,0,0,6"/>
+                <TextBlock Grid.Row="2" Text="{loc:Str launcher_game_backroom_blurb}" Theme="{StaticResource PlayCardBlurb}" Margin="0,0,0,14"/>
+                <Button Grid.Row="3" x:Name="BtnPlayBackRoom" IsEnabled="False" HorizontalAlignment="Left" Padding="16,8" CornerRadius="10" Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13"
+                        ToolTip.Tip="{loc:Str exclusives_not_on_this_build}" ToolTip.ShowOnDisabled="True">
+                  <TextBlock Text="{loc:Str launcher_play}"/>
+                </Button>
+              </Grid>
+            </Border>
+          </Grid>
+          <Grid x:Name="SlotDtrh">
+            <Border Theme="{StaticResource PlayCardT2}"
+                    fx:TierFxBorder.Tier="2" fx:TierFxBorder.RimThickness="3">
+              <Grid>
+                <Grid RowDefinitions="Auto,Auto,*,Auto">
+                  <Border Grid.Row="0" Theme="{StaticResource PlayCardArtPlate}">
+                    <Border x:Name="PlayDtrhHeroPlate" CornerRadius="16,16,0,0"/>
+                  </Border>
+                  <TextBlock Grid.Row="1" Text="{loc:Str launcher_game_dtrh_title}" Theme="{StaticResource PlayCardTitle}" Margin="0,0,0,6"/>
+                  <TextBlock Grid.Row="2" Text="{loc:Str launcher_game_dtrh_blurb}" Theme="{StaticResource PlayCardBlurb}" Margin="0,0,0,14"/>
+                  <Button Grid.Row="3" x:Name="BtnPlayDtrh" Cursor="Hand" Click="BtnPlayDtrh_Click" HorizontalAlignment="Left" Padding="16,8" CornerRadius="10" Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13">
+                    <TextBlock Text="{loc:Str launcher_play}"/>
+                  </Button>
+                </Grid>
+                <Border x:Name="PlayLockDtrh" Theme="{StaticResource PlayLockBandT2}" Margin="-22">
+                  <StackPanel VerticalAlignment="Center">
+                    <fx:IconGlyph Kind="LockClosed" Foreground="{DynamicResource IconTier1Brush}" Theme="{StaticResource PlayLockGlyph}"/>
+                    <TextBlock Text="{loc:Str hm3_rail_lock_t2}" Theme="{StaticResource PlayLockTeaserT2}"/>
+                  </StackPanel>
+                </Border>
+                <fx:TierBadge x:Name="PlayBadgeDtrh" Theme="{StaticResource PlayTierBadge}" Tier="2"/>
+              </Grid>
+            </Border>
+          </Grid>
+          <Grid x:Name="SlotArcademy">
+            <Border Theme="{StaticResource PlayCardT2}"
+                    fx:TierFxBorder.Tier="2" fx:TierFxBorder.RimThickness="3">
+              <Grid>
+                <Grid RowDefinitions="Auto,Auto,*,Auto">
+                  <Border Grid.Row="0" Theme="{StaticResource PlayCardArtPlate}">
+                    <Border x:Name="PlayArcademyHeroPlate" CornerRadius="16,16,0,0"/>
+                  </Border>
+                  <TextBlock Grid.Row="1" Text="{loc:Str launcher_game_arcademy_title}" Theme="{StaticResource PlayCardTitle}" Margin="0,0,0,6"/>
+                  <TextBlock Grid.Row="2" Text="{loc:Str launcher_game_arcademy_blurb}" Theme="{StaticResource PlayCardBlurb}" Margin="0,0,0,14"/>
+                  <Button Grid.Row="3" x:Name="BtnPlayArcademy" IsEnabled="False" HorizontalAlignment="Left" Padding="16,8" CornerRadius="10" Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13"
+                          ToolTip.Tip="{loc:Str exclusives_not_on_this_build}" ToolTip.ShowOnDisabled="True">
+                    <TextBlock Text="{loc:Str launcher_play}"/>
+                  </Button>
+                </Grid>
+                <Border x:Name="PlayLockArcademy" Theme="{StaticResource PlayLockBandT2}" Margin="-22">
+                  <StackPanel VerticalAlignment="Center">
+                    <fx:IconGlyph Kind="LockClosed" Foreground="{DynamicResource IconTier1Brush}" Theme="{StaticResource PlayLockGlyph}"/>
+                    <TextBlock Text="{loc:Str hm3_rail_lock_t2}" Theme="{StaticResource PlayLockTeaserT2}"/>
+                  </StackPanel>
+                </Border>
+                <fx:TierBadge x:Name="PlayBadgeArcademy" Theme="{StaticResource PlayTierBadge}" Tier="2"/>
+              </Grid>
+            </Border>
+          </Grid>
+          <Grid x:Name="SlotRacingThoughts">
+            <Border Theme="{StaticResource PlayCard}">
+              <Grid>
+              <Grid RowDefinitions="Auto,Auto,*,Auto">
+                <Border Grid.Row="0" Theme="{StaticResource PlayCardArtPlate}">
+                  <Border x:Name="PlayRaceHeroPlate" CornerRadius="16,16,0,0"/>
+                </Border>
+                <TextBlock Grid.Row="1" Text="{loc:Str launcher_game_race_title}" Theme="{StaticResource PlayCardTitle}" Margin="0,0,0,6"/>
+                <TextBlock Grid.Row="2" Text="{loc:Str launcher_game_race_blurb}" Theme="{StaticResource PlayCardBlurb}" Margin="0,0,0,14"/>
+                <Button Grid.Row="3" x:Name="BtnPlayRacingThoughts" Cursor="Hand" Click="BtnPlayRacingThoughts_Click" HorizontalAlignment="Left" Padding="16,8" CornerRadius="10" Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13">
+                  <TextBlock Text="{loc:Str launcher_play}"/>
+                </Button>
+              </Grid>
+              <!-- WPF PlayTabView.xaml:574, presentation only; the launcher owns access. -->
+              <Border x:Name="PlayLockRacingThoughts" Theme="{StaticResource PlayLockBandT2}" Margin="-22">
+                <StackPanel VerticalAlignment="Center">
+                  <fx:IconGlyph Kind="LockClosed" Foreground="{DynamicResource IconTier1Brush}" Theme="{StaticResource PlayLockGlyph}"/>
+                  <TextBlock Text="{loc:Str hm3_rail_lock_t2}" Theme="{StaticResource PlayLockTeaserT2}"/>
+                </StackPanel>
+              </Border>
+              <fx:TierBadge x:Name="PlayBadgeRacingThoughts" Theme="{StaticResource PlayTierBadge}" Tier="2"/>
+              </Grid>
+            </Border>
+          </Grid>
+          <Grid x:Name="SlotWebApp">
+            <Border Theme="{StaticResource PlayCard}">
+              <Grid RowDefinitions="Auto,Auto,*,Auto">
+                <Border Grid.Row="0" Theme="{StaticResource PlayCardArtPlate}">
+                  <Border x:Name="PlayWebAppHeroPlate" CornerRadius="16,16,0,0"/>
+                </Border>
+                <TextBlock Grid.Row="1" Text="{loc:Str nav_door_webapp}" Theme="{StaticResource PlayCardTitle}" Margin="0,0,0,6"/>
+                <TextBlock Grid.Row="2" Text="{loc:Str play_card_webapp_blurb}" Theme="{StaticResource PlayCardBlurb}" Margin="0,0,0,14"/>
+                <Button Grid.Row="3" x:Name="BtnPlayWebApp" Cursor="Hand" Click="BtnPlayWebApp_Click" HorizontalAlignment="Left" Padding="16,8" CornerRadius="10" Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13">
+                  <TextBlock Text="{loc:Str btn_open}"/>
+                </Button>
               </Grid>
             </Border>
           </Grid>

@@ -11,9 +11,11 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
-using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Services.Race;
 using ConditioningControlPanel.Services;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
@@ -191,6 +193,257 @@ public sealed class PlayWallTests
                 CoreSettings.ServiceProvider = previousSettings;
                 root.Delete(true);
             }
+        });
+    }
+
+    [Fact]
+    public void NineGameWall_DoorsRunTheLauncherEntryAndTheWebApp()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var service = new SettingsService();
+            var prevSettings = CoreSettings.ServiceProvider;
+            CoreSettings.ServiceProvider = () => service;
+            var (loggedIn, lab, owns, prevServer, prevShell) = (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider,
+                RacingAccess.IsGrantedProvider, GameWindow.Server, ExternalOpener.Shell);
+            var prevFree = CoreEntitlement.IsFreeTodayProvider;
+            bool isLoggedIn = false, isLab = false;
+            string? freeKey = null;
+            CoreAccount.IsLoggedInProvider = () => isLoggedIn;
+            CoreEntitlement.HasLabProvider = () => isLab;
+            CoreEntitlement.IsFreeTodayProvider = k => k == freeKey;
+            RacingAccess.IsGrantedProvider = id => id == "rt.original.03";
+            string? opened = null;
+            ExternalOpener.Shell = t => { opened = t; return true; };
+            var root = Directory.CreateTempSubdirectory("play-nine-games-");
+            var prevAssets = CorePaths.EffectiveAssetsProvider;
+            CorePaths.EffectiveAssetsProvider = () => root.FullName;
+            using var server = new WebAssetServer(root.FullName);
+            GameWindow.Server = () => server;
+            var shell = new MainShellWindow();
+            shell.Show();
+            try
+            {
+                shell.ShowTab("play");
+                Dispatcher.UIThread.RunJobs();
+                var play = shell.Named<Control>("PlayTab")!;
+                T C<T>(string n) where T : Control => play.FindControl<T>(n)!;
+
+                // Layout: WPF order, three columns, no "Play" H1 above the subtitle.
+                var grid = C<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid");
+                Assert.Equal(3, grid.Columns);
+                Assert.Equal(new[] { "SlotBreakoutDemo", "SlotBreakout", "SlotGoon", "SlotPieceByPiece", "SlotBackRoom",
+                    "SlotDtrh", "SlotArcademy", "SlotRacingThoughts", "SlotWebApp" }, grid.Children.Select(c => c.Name));
+                var wall = (StackPanel)C<ScrollViewer>("WallScroll").Content!;
+                Assert.Equal(Loc.Get("pl6_play_subtitle"), Assert.IsType<TextBlock>(wall.Children[0]).Text);
+
+                // Hostless doors refuse honestly; the T2 bands follow the tier.
+                foreach (var n in new[] { "BtnPlayBackRoom", "BtnPlayArcademy" })
+                {
+                    Assert.False(C<Button>(n).IsEnabled, n);
+                    Assert.Equal(Loc.Get("exclusives_not_on_this_build"), ToolTip.GetTip(C<Button>(n)));
+                }
+                Assert.True(C<Border>("PlayLockDtrh").IsVisible);
+                Assert.True(C<Border>("PlayLockArcademy").IsVisible);
+                Assert.True(C<Border>("PlayLockRacingThoughts").IsVisible);
+                Assert.False(C<TierBadge>("PlayBadgeDtrh").FreeToday);
+                // A DtRH drop day (WPF RequiresLab(.., "dtrh") + SetFreeStamp): band off, FREE TODAY on.
+                freeKey = "dtrh";
+                ((global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView)play).RefreshPlayCards();
+                Assert.False(C<Border>("PlayLockDtrh").IsVisible);
+                Assert.True(C<TierBadge>("PlayBadgeDtrh").FreeToday);
+                Assert.True(C<Border>("PlayLockArcademy").IsVisible);
+                isLab = true;
+                ((global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView)play).RefreshPlayCards();
+                Assert.False(C<Border>("PlayLockDtrh").IsVisible);
+                Assert.False(C<Border>("PlayLockArcademy").IsVisible);
+                Assert.False(C<Border>("PlayLockRacingThoughts").IsVisible);
+                Assert.False(C<TierBadge>("PlayBadgeDtrh").FreeToday); // an owner gets no gift
+
+                // DtRH uses the existing launcher door, including its account check.
+                Assert.True(C<Button>("BtnPlayDtrh").IsEnabled);
+                C<Button>("BtnPlayDtrh").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Single(shell.OwnedWindows.OfType<LoginDialog>()).Close();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(GameWindow.OpenForTests("dtrh"));
+
+                // Racing Thoughts signed out: the login door, no race.
+                var race = C<Button>("BtnPlayRacingThoughts");
+                race.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Single(shell.OwnedWindows.OfType<LoginDialog>()).Close();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(GameWindow.OpenForTests("race"));
+
+                // Signed in with Lab access: the base's DtRH host, then the owned race track.
+                isLoggedIn = true;
+                C<Button>("BtnPlayDtrh").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal("/dtrh/index.html", GameWindow.OpenForTests("dtrh")!.PageUrl!.AbsolutePath);
+                GameWindow.CloseAllForPanic();
+                Dispatcher.UIThread.RunJobs();
+                race.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal("/dtrh/race.html", GameWindow.OpenForTests("race")!.PageUrl!.AbsolutePath);
+                GameWindow.CloseAllForPanic();
+                Dispatcher.UIThread.RunJobs();
+
+                // Web App: the rail door's URL (or its no-browser notice under the sandbox), then the beat retires.
+                service.Current.SeenFeatureIntros.Remove(MainShellWindow.WebBannerSeenKey);
+                C<Button>("BtnPlayWebApp").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                if (shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault() is { } notice)
+                {
+                    Assert.Contains("https://app.cclabs.app", notice.FindControl<TextBlock>("TxtMessage")!.Text);
+                    notice.Close();
+                    Dispatcher.UIThread.RunJobs();
+                }
+                else Assert.Equal("https://app.cclabs.app", opened);
+                Assert.Contains(MainShellWindow.WebBannerSeenKey, service.Current.SeenFeatureIntros);
+            }
+            finally
+            {
+                GameWindow.CloseAllForPanic();
+                shell.Close();
+                (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider, RacingAccess.IsGrantedProvider, CoreEntitlement.IsFreeTodayProvider) = (loggedIn, lab, owns, prevFree);
+                (GameWindow.Server, ExternalOpener.Shell, CorePaths.EffectiveAssetsProvider) = (prevServer, prevShell, prevAssets);
+                service.SealForReset();
+                CoreSettings.ServiceProvider = prevSettings;
+                root.Delete(true);
+            }
+        });
+    }
+
+    [Fact]
+    public void PlayEntranceFollowsMotion_AndCancelsWhenHiddenOrDetached()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var settings = CoreSettings.Current;
+            var previous = settings.MotionLevel;
+            var play = new global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView();
+            var field = play.GetType().GetField("_entrance", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            System.Threading.CancellationTokenSource? Active() => (System.Threading.CancellationTokenSource?)field.GetValue(play);
+            var host = new Window { Content = play };
+            try
+            {
+                settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full;
+                // Before Show: once animating, a section drops out of EntranceTargets (opacity filter).
+                var last = play.EntranceTargets()[^1];
+                host.Show();
+                Dispatcher.UIThread.RunJobs();
+                var first = Assert.IsType<System.Threading.CancellationTokenSource>(Active()).Token;
+                Assert.False(first.IsCancellationRequested);
+                // The animations really run: one frame in, the last section (240 ms delay) holds its "from" values.
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(0, last.Opacity);
+                Assert.Equal(10, Assert.IsType<global::Avalonia.Media.TranslateTransform>(last.RenderTransform).Y);
+                play.IsVisible = false;
+                Assert.True(first.IsCancellationRequested);
+                Assert.Null(Active());
+                play.IsVisible = true;
+                var second = Assert.IsType<System.Threading.CancellationTokenSource>(Active()).Token;
+                Assert.NotEqual(first, second);
+                host.Content = null;
+                Assert.True(second.IsCancellationRequested);
+                settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Off;
+                host.Content = play;
+                Assert.Null(Active());
+                Assert.Equal(1, play.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Opacity);
+                // WPF AnimateTabIn returns at Reduced before StaggerTabCards.
+                host.Content = null;
+                settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Reduced;
+                host.Content = play;
+                play.IsVisible = false; play.IsVisible = true;
+                Assert.Null(Active());
+                // P07: attaching while hidden (startup) starts nothing.
+                host.Content = null;
+                settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full;
+                play.IsVisible = false;
+                host.Content = play;
+                Assert.Null(Active());
+            }
+            finally { host.Close(); settings.MotionLevel = previous; }
+        });
+    }
+
+
+    [Fact]
+    public void LanguageChangeRepaintsTrackerText_OnlyWhileAttached()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var play = new PlayTabView();
+            var host = new Window { Content = play };
+            var language = LocalizationManager.Instance.CurrentLanguage;
+            try
+            {
+                host.Show();
+                LocalizationManager.Instance.SetLanguage("en");
+                Dispatcher.UIThread.RunJobs();
+                var text = play.FindControl<TextBlock>("TxtWebcamStatusChipPlay")!;
+                text.Text = "repaint probe";
+                LocalizationManager.Instance.SetLanguage("de");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(Loc.Get("rf_webcam_stopped"), text.Text);
+                host.Content = null;
+                text.Text = "detached probe";
+                LocalizationManager.Instance.SetLanguage("en");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal("detached probe", text.Text);
+                host.Content = play;
+                Assert.Equal(Loc.Get("rf_webcam_stopped"), text.Text);
+            }
+            finally { host.Close(); LocalizationManager.Instance.SetLanguage(language); }
+        });
+    }
+
+    [Theory]
+    [InlineData("PlayBackRoomHeroPlate", "features/backroom.png")]
+    [InlineData("PlayDtrhHeroPlate", "features/dtrh.png")]
+    [InlineData("PlayArcademyHeroPlate", "features/arcademy.png")]
+    [InlineData("PlayRaceHeroPlate", "features/race.png")]
+    [InlineData("PlayWebAppHeroPlate", "billboard/webapp.png")]
+    public void AddedGameArtUsesModOverrides_OnAttachAndModChange(string plate, string art)
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            LabWebcamStatusTests.Setup();
+            var dir = Directory.CreateTempSubdirectory("play-art-");
+            var png = Path.Combine(dir.FullName, "override.png");
+            using (var bitmap = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(6, 3), new Vector(96, 96)))
+                bitmap.Save(png);
+            var previous = CoreModArt.OverridePathProvider;
+            CoreModArt.OverridePathProvider = key => key == art ? png : null;
+            var play = new PlayTabView();
+            var host = new Window { Content = play };
+            try
+            {
+                host.Show();
+                var border = play.FindControl<Border>(plate)!;
+                var brush = Assert.IsType<global::Avalonia.Media.ImageBrush>(border.Background);
+                Assert.Equal(global::Avalonia.Media.Stretch.UniformToFill, brush.Stretch);
+                Assert.Equal(6, Assert.IsType<global::Avalonia.Media.Imaging.Bitmap>(brush.Source).PixelSize.Width);
+                border.Background = null;
+                CoreMods.RaiseModChanged(null, new ConditioningControlPanel.Models.ModPackage(new ConditioningControlPanel.Models.ModManifest(), null, false));
+                Dispatcher.UIThread.RunJobs();
+                Assert.IsType<global::Avalonia.Media.ImageBrush>(border.Background);
+            }
+            finally { host.Close(); CoreModArt.OverridePathProvider = previous; dir.Delete(true); }
         });
     }
 
