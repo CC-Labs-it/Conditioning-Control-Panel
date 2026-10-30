@@ -184,13 +184,13 @@ public sealed class WebcamGestureTests
         // Parked in Read: blank frames would race the assertion into "Face lost".
         var source = new ParkedSource();
         WebcamTracker.SourceFactory = () => source;
-        Assert.True(tracker.Start(), tracker.LastError);
         var section = new DevicesSettingsSection();
         var owner = new global::Avalonia.Controls.Window { Content = section };
         owner.Show();
         var status = section.FindControl<TextBlock>("TxtWebcamDebugStatus")!;
         try
         {
+            Assert.True(tracker.Start(), tracker.LastError);
             Dispatcher.UIThread.RunJobs();
             Assert.True(tracker.IsRunning);
             Assert.Equal(Loc.Get("rf_webcam_tracking"), status.Text);
@@ -198,7 +198,7 @@ public sealed class WebcamGestureTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("追跡中", status.Text);
         }
-        finally { LocalizationManager.Instance.SetLanguage("en"); owner.Close(); source.Release.Set(); }
+        finally { LocalizationManager.Instance.SetLanguage("en"); owner.Close(); source.Release.Set(); tracker.Stop(); }
     });
 
     [Fact]
@@ -206,13 +206,14 @@ public sealed class WebcamGestureTests
     {
         var source = new ParkedSource();
         WebcamTracker.SourceFactory = () => source;
-        Assert.True(tracker.Start(), tracker.LastError);
         int delivered = 0;
         Action handler = () => delivered++;
         tracker.OnTongueOut += handler;
         using var bgr = new Mat(40, 40, MatType.CV_8UC3, new Scalar(0, 0, 200));
         try
         {
+            Assert.True(tracker.Start(), tracker.LastError);
+            Assert.True(source.Entered.Wait(TimeSpan.FromSeconds(5)));
             CoreSettings.Current.WebcamSensitivity = 0.5;
             var now = new DateTime(2026, 1, 1);
             for (int i = 0; i < 150; i++)
@@ -227,18 +228,22 @@ public sealed class WebcamGestureTests
             tracker.ProcessMouthLandmarks(Lips(0.6f), now.AddSeconds(10));
             tracker.ProcessTongue(bgr, Lips(0.6f), now.AddSeconds(10));
             tracker.ProcessTongue(bgr, Lips(0.6f), now.AddSeconds(11));
+            // Release the fake driver before joining it (WPF WebcamTrackingService.cs:939,970).
+            // Stop still runs before the dispatcher delivers the queued tongue event.
+            source.Release.Set();
             tracker.Stop();
+            Assert.False(tracker.IsClosing, "The fake capture worker must exit before another test can start tracking.");
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, delivered);
         }
-        finally { tracker.OnTongueOut -= handler; source.Release.Set(); }
+        finally { tracker.OnTongueOut -= handler; source.Release.Set(); tracker.Stop(); }
     });
 
     private sealed class ParkedSource : IFrameSource
     {
-        public readonly ManualResetEventSlim Release = new();
+        public readonly ManualResetEventSlim Entered = new(), Release = new();
         public bool Open() => true;
-        public bool Read(Mat bgr) { Release.Wait(); return false; }
+        public bool Read(Mat bgr) { Entered.Set(); Release.Wait(); return false; }
         public void Dispose() { }
     }
 
@@ -249,7 +254,7 @@ public sealed class WebcamGestureTests
     {
         WebcamTracker.SourceFactory = () => new PanicOnOpen(tracker);
         Assert.False(tracker.Start());
-        Assert.True(tracker.StartWasStopped);
+        Assert.True(tracker.StartWasStopped, tracker.LastError);
         Assert.Equal("Webcam tracking was stopped before the camera finished opening.", tracker.LastError);
     });
 
