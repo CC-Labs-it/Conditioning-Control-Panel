@@ -12,8 +12,7 @@
 // The section edge (PaintSectionEdge, WPF MainWindow.SectionEdge.cs, 8f4bb7814) is here too: the
 // frame line, the 28 px glow band and the lift in the hue.
 //
-// ponytail: not yet here (lane sync6-nav-polish-c): the edge lift's lap round the frame at Full
-// motion (it sits at the top centre, WPF's Reduced), the fog and ember strips the band thins for
+// ponytail: not yet here (lane sync6-nav-polish-c): the fog and ember strips the band thins for
 // (EdgeParticles, AmbientFxCanvas.EdgeFog), the depth painters the wash feeds
 // (PaintDepthRail/Hud/Home/Quests), the "Moved" redirects and their note, and the "Cloud sync
 // issue" title suffix (SetSyncIssueTitle: no cloud profile sync on this head).
@@ -146,11 +145,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Named<Panel>("SectionEdgeGlow") is { } glow)
                 foreach (var band in glow.Children.OfType<Border>())
                     PaintFill(band, NavStripRules.WithAlpha(hue, NavStripRules.EdgeGlowAlpha(hue) / 255.0), ms);
-            if (Named<Border>("SectionEdgeLiftTop") is { } lift)
-            {
-                lift.IsVisible = level != Models.MotionLevel.Off;
-                PaintFill(lift, NavStripRules.Mix(hue, global::Avalonia.Media.Colors.White, SectionEdgeLiftWhite), ms);
-            }
+            EnsureEdgeLifts();
+            _edgeLevel = level;
+            if (_edgeLifts != null)
+                foreach (var lift in _edgeLifts)
+                    PaintFill(lift, NavStripRules.Mix(hue, global::Avalonia.Media.Colors.White, SectionEdgeLiftWhite), ms);
+            UpdateEdgeLap();
         }
 
         /// <summary>A solid background, crossfaded over <paramref name="ms"/> (0 = at once, WPF's
