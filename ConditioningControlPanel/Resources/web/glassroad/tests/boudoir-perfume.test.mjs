@@ -28,12 +28,12 @@ test('perfume shares a repeatable warning, spray, active and fade clock', () => 
 });
 
 test('active mist slows the short line while dry bypass, warning, flight and remote states remain untouched', () => {
-  for (const mode of ['wet', 'dry', 'warn', 'flight', 'below', 'respawn', 'finished', 'remote']) {
+  for (const mode of ['wet', 'dry', 'warn', 'flight', 'below', 'respawn', 'finished', 'remote', 'riding']) {
     const { sim, events } = make(), r = racer(mode === 'dry' ? 12 : -5, 120, mode === 'flight' ? 4 : mode === 'below' ? -3 : 0);
     if (mode === 'respawn') r.st[S.respawnPhase] = RESPAWN.GRACE;
     if (mode === 'finished') r.finished = true;
     if (mode === 'remote') r.kind = 'remote';
-    const before = speed(r); sim.update([r], mode === 'warn' ? 4 : 6, DT);
+    const before = speed(r); sim.update([r], mode === 'warn' ? 4 : 6, DT, { immune: mode === 'riding' ? () => true : undefined });
     if (mode === 'wet') { assert.ok(speed(r) < before); assert.equal(events.all('perfume-contact').length, 1); }
     else { assert.equal(speed(r), before, mode); assert.equal(events.all('perfume-contact').length, 0, mode); }
     assert.equal(r.st[S.stalled], 0); assert.ok([...r.st].every(Number.isFinite));
