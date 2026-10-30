@@ -33,7 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length),
     /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
-    /// the Pendulum motion style (Drift and Bounce is below), GIF animation (first frame only), content-pack and remote pools, avatar pre-announce.</para>
+    /// GIF animation (first frame only), remote pools, gaze pop/linger, solid hosting and avatar pre-announce.</para>
     /// </summary>
     internal static class FlashOverlay
     {
@@ -85,6 +85,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var targets = PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
                 var occupied = Active.Select(a => a.Rect).ToList();
                 var flashes = await Task.Run(() => LoadPictures(BurstCount(amount, s, Rng), screens, targets, s, occupied, size));
+                if (generation != _generation || _closed)
+                {
+                    foreach (var f in flashes) f.Bitmap.Dispose();
+                    return;
+                }
                 if (flashes.Count == 0)
                 {
                     if (!_warnedEmpty) Log.Warning("Flash: no images found in {Path}", ImagesPath());
@@ -105,13 +110,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 scheduled = true;
             }
             catch (Exception ex) { Log.Error(ex, "Flash: burst failed"); }
-            finally { if (!scheduled) _busy = false; }
+            finally { if (!scheduled && generation == _generation) _busy = false; }
         }
 
         /// <summary>Spawn each placed picture on its own dispatcher timer: Task.Delay continuations
         /// were measured landing 1.7 s late here (thread-pool timer), dispatcher timers stayed on time.
         /// A spawn the platform refuses stops the rest; CloseAll (a newer generation) drops them.</summary>
-        private static void Schedule(List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> flashes, int firstMs, int staggerMs,
+        internal static void Schedule(List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> flashes, int firstMs, int staggerMs,
             int generation, int cap, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, Action? done,
             FlashMotionStyle? inheritMotion = null)
         {
@@ -128,7 +133,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         refused = !Show(bmp, rect, path, screen, alpha, fade, lifetime, clickable, ambient, hydraGeneration, inheritMotion);
                     }
                     catch (Exception ex) { refused = true; Log.Error(ex, "Flash: spawn failed"); }
-                    finally { if (last) done?.Invoke(); }
+                    finally { if (last && generation == _generation) done?.Invoke(); }
                 }, TimeSpan.FromMilliseconds(firstMs + i * staggerMs));
             }
         }
@@ -240,6 +245,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var entry = (w, rect);
             w.Closed += (_, _) => Active.RemoveAll(e => e.Window == w);
             Active.Add(entry);
+            w.ApplyCorners(CoreSettings.Current.FlashRoundedCorners, OwnsMotion, glow.HasGlow,
+                rect.Width / scaling, rect.Height / scaling);
             w.Show();
             w.Run(alpha, fade, lifetime);
             var motion = BuildMotion(rect, screen, CoreSettings.Current, Rng, w.InheritMotion);
@@ -258,9 +265,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>
         /// The motion one flash plays, or null for Still. WPF ResolveMotionStyle + FlashMotion.Create
-        /// + the #1265 speed (FlashDriftSpeed x the rolled velocity), in screen pixels over the spawn
-        /// monitor, like WPF's world px. Ownership is <see cref="PrizeOwnership"/>; this head has no
-        /// pendulum yet, so a Pendulum pick (synced profile) plays Still and Mix rolls Still or Drift.
+        /// + #1265 speed, in screen pixels. Pendulums separate their pivots and phases from live
+        /// neighbours on the same monitor (WPF FlashPendulumRig).
         /// </summary>
         internal static FlashMotionState? BuildMotion(PixelRect rect, PixelRect screen, AppSettings s, Random rng, FlashMotionStyle? inherit = null)
         {
@@ -268,13 +274,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var picked = inherit ?? s.FlashMotionStyle;
             if (picked == FlashMotionStyle.Still) return null;
             var style = FlashMotion.Resolve(picked, PrizeOwnership.IsGranted(PrizeOwnership.FlashDriftBounce),
-                ownsPendulum: false, s.MotionLevel, rng);
-            if (style != FlashMotionStyle.DriftBounce) return null;
+                PrizeOwnership.IsGranted(Services.Prizes.PrizeGrants.FlashPendulum), s.MotionLevel, rng);
+            if (style == FlashMotionStyle.Still) return null;
             var m = FlashMotion.Create(style, rect.X, rect.Y, rect.Width, rect.Height,
-                screen.X, screen.Y, screen.Width, screen.Height, s.MotionLevel, rng);
-            if (m.Style != FlashMotionStyle.DriftBounce) return null;
-            m.Vx *= s.FlashDriftSpeed;
-            m.Vy *= s.FlashDriftSpeed;
+                screen.X, screen.Y, screen.Width, screen.Height, s.MotionLevel, rng,
+                Drifting.Where(e => e.Motion.Style == FlashMotionStyle.Pendulum
+                    && FlashPendulumRig.SameMonitor(e.Motion.BoundsX, e.Motion.BoundsY, e.Motion.BoundsW, e.Motion.BoundsH,
+                        screen.X, screen.Y, screen.Width, screen.Height))
+                    .Select(e => new PendulumNeighbour(e.Motion.PivotX, FlashPendulumRig.EffectivePhase(e.Motion))).ToList());
+            if (m.Style == FlashMotionStyle.Still) return null;
+            if (m.Style == FlashMotionStyle.DriftBounce) { m.Vx *= s.FlashDriftSpeed; m.Vy *= s.FlashDriftSpeed; }
             return m;
         }
 
@@ -288,8 +297,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.Closed += (_, _) =>
             {
                 Drifting.Remove(entry);
-                if (Drifting.Count == 0) { _driftTimer?.Stop(); _driftTimer = null; }
+                StopClockIfIdle();
             };
+            if (w is FlashOverlayWindow flash && m.Style == FlashMotionStyle.Pendulum) flash.ApplyMotion(m);
+            EnsureClock();
+        }
+
+        /// <summary>WPF EnsureDragMotion: a still flash gets a rect state when first grabbed.</summary>
+        internal static FlashMotionState MotionForDrag(FlashOverlayWindow w)
+        {
+            var existing = Drifting.Find(e => e.Window == w).Motion;
+            if (existing != null) return existing;
+            var r = Active.First(e => e.Window == w).Rect;
+            var b = w.SpawnScreen?.Bounds ?? r;
+            var m = FlashMotion.Create(FlashMotionStyle.Still, r.X, r.Y, r.Width, r.Height,
+                b.X, b.Y, b.Width, b.Height, CoreSettings.Current.MotionLevel, Rng);
+            StartDrift(w, m);
+            return m;
+        }
+
+        internal static bool OwnsMotion => PrizeOwnership.IsGranted(PrizeOwnership.FlashDriftBounce)
+            || PrizeOwnership.IsGranted(Services.Prizes.PrizeGrants.FlashPendulum);
+
+        private static void StopClockIfIdle()
+        {
+            if (Drifting.Count != 0) return;
+            _driftTimer?.Stop();
+            _driftTimer = null;
+        }
+
+        private static void EnsureClock()
+        {
             if (_driftTimer != null) return;
             _lastDriftTick = Clock.GetTimestamp();
             _driftTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => DriftTick());
@@ -312,10 +350,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     var p = new PixelPoint((int)Math.Round(m.X), (int)Math.Round(m.Y));
                     var pad = (w as FlashOverlayWindow)?.GlowPadPx ?? 0;   // the glow card sits round the picture
-                    w.Position = new PixelPoint(p.X - pad, p.Y - pad);
+                    if (w is FlashOverlayWindow flash && m.Style == FlashMotionStyle.Pendulum) flash.ApplyMotion(m);
+                    else w.Position = new PixelPoint(p.X - pad, p.Y - pad);
                     // The overlap check of later bursts reads the LIVE rect, as WPF reads MotionState X/Y.
                     for (var i = 0; i < Active.Count; i++)   // a loop, not FindIndex: no closure per frame
-                        if (Active[i].Window == w) Active[i] = (Active[i].Window, new PixelRect(p, Active[i].Rect.Size));
+                        if (Active[i].Window == w) Active[i] = (Active[i].Window, new PixelRect(p, new PixelSize((int)Math.Ceiling(m.W), (int)Math.Ceiling(m.H))));
                 }
         }
 
@@ -325,6 +364,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void CloseAll(bool final = true)
         {
             _generation++;
+            _busy = false;
             _closed |= final;
             foreach (var (w, _) in Active.ToList()) w.Close();
             foreach (var w in Exiting.ToList()) w.Close();
@@ -344,6 +384,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Fire(h, ambient);
                 noteUsed();
             }
+            CoreFlash.StopProvider = () =>
+            {
+                if (Dispatcher.UIThread.CheckAccess()) CloseAll(final: false);
+                else Dispatcher.UIThread.Post(() => CloseAll(final: false));
+            };
             CoreFlash.IsBusyProvider = () => IsBusy || StayScreenFull(CoreSettings.Current);
             CoreFlash.ShowProvider = () => Show(ambient: false);
             CoreFlash.AmbientShowProvider = () => Show(ambient: true);

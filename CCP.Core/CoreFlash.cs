@@ -24,6 +24,9 @@ namespace ConditioningControlPanel
         /// <summary>True while the head's previous burst is still going (WPF <c>_isBusy</c>).</summary>
         public static volatile Func<bool>? IsBusyProvider;
 
+        /// <summary>Head cleanup on every Stop, including point-fired bursts while idle.</summary>
+        public static volatile Action? StopProvider;
+
         private static readonly object Gate = new();
         private static readonly Random Rng = new();
         private static Timer? _timer;
@@ -65,7 +68,7 @@ namespace ConditioningControlPanel
             Log.Information("Flash schedule started");
         }
 
-        /// <summary>Disarm the schedule. Idempotent; bursts already on screen finish on their own.</summary>
+        /// <summary>Disarm the schedule and close on-screen and queued bursts, as WPF Stop does.</summary>
         public static void Stop()
         {
             bool wasRunning;
@@ -75,6 +78,8 @@ namespace ConditioningControlPanel
                 _isRunning = false;
                 try { _timer?.Change(Timeout.Infinite, Timeout.Infinite); } catch { }
             }
+            try { StopProvider?.Invoke(); }
+            catch (Exception ex) { Log.Warning(ex, "Flash stop provider failed"); }
             CoreDiscord.Service?.SetIdleActivity(); // WPF FlashService.Stop:580 (even when already stopped)
             if (wasRunning) Log.Information("Flash schedule stopped");
         }
