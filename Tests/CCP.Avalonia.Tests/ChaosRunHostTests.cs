@@ -749,60 +749,76 @@ public sealed class ChaosRunHostTests
         });
     }
     [Theory]
-    [InlineData(1, 1, 0.7, 0.8)]
-    [InlineData(2, 1, 0.85, 0.9)]
-    [InlineData(4, 2, 1.0, 1.0)]
-    public async Task DvdToyKeyLaunchesRankedLogosAndGlowFollowsTheirLifetime(int level, int count, double speed, double scale)
+    [InlineData(1, 1, 0.7, 0.8, "en", "Porn DVD", "📀 now loading")]
+    [InlineData(2, 1, 0.85, 0.9, "fr", "DVD porno", "📀 chargement")]
+    [InlineData(4, 2, 1.0, 1.0, "ja", "ポルノDVD", "📀 読み込み中")]
+    public async Task DvdToyKeyLaunchesRankedLogosAndGlowFollowsTheirLifetime(int level, int count, double speed, double scale, string language, string banner, string loading)
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
-            Setup();
-            FreshMeta();
-            var meta = ChaosMeta.State;
-            meta.ToyPockets = 1;
-            meta.ActiveLifetimeBoons.Add("porn_dvd");
-            meta.LifetimeBoonLevels["porn_dvd"] = level;
-            CoreSettings.Current.ChaosAccessoryKey1 = "Q";
-            CoreSettings.Current.PanicKey = "F8";
-            ChaosDvdOverlay.CanOverlay = () => true;
-            ChaosDvdOverlay.PrepareWindow = (_, _) => true;
-            ChaosDvdOverlay.PlaySfx = (_, _) => { };
-            ChaosEffectBannerOverlay.SkipPlatformChecksForTests = true;
+            var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx, ChaosEffectBannerOverlay.SkipPlatformChecksForTests, CoreSettings.Current.ChaosAccessoryKey1, CoreSettings.Current.PanicKey);
+            var previousLanguage = ConditioningControlPanel.Localization.LocalizationManager.Instance.CurrentLanguage;
+            var snapshot = ProcessStateSnapshot.Take();
             try
             {
-                ChaosRunHost.StartRun(Cfg());
-                ChaosRunHost.Overlay!.FinishCountdown();
-                ChaosRunHost.StopTimerForTests();
-                var toy = Assert.Single(ChaosRunHost.ToyButtons).Toy;
-                ChaosRunHost.ToggleManualPause();
-                ChaosRunHost.OnToyKey("Q");
-                Assert.False(ChaosDvdOverlay.AnyActive);
-                ChaosRunHost.ToggleManualPause();
-                ChaosRunHost.OnToyKey("Q");
-                Assert.Equal(count, ChaosDvdOverlay.Flock.Active.Count);
-                foreach (var logo in ChaosDvdOverlay.Flock.Active)
+                Setup();
+                ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage(language);
+                FreshMeta();
+                var meta = ChaosMeta.State;
+                meta.ToyPockets = 1;
+                meta.ActiveLifetimeBoons.Add("porn_dvd");
+                meta.LifetimeBoonLevels["porn_dvd"] = level;
+                CoreSettings.Current.ChaosAccessoryKey1 = "Q";
+                CoreSettings.Current.PanicKey = "F8";
+                ChaosDvdOverlay.CanOverlay = () => true;
+                ChaosDvdOverlay.PrepareWindow = (_, _) => true;
+                ChaosDvdOverlay.PlaySfx = (_, _) => { };
+                ChaosEffectBannerOverlay.SkipPlatformChecksForTests = true;
+                try
                 {
-                    Assert.Equal(scale, logo.FontScale);
-                    Assert.Equal(230 * speed, Math.Sqrt(logo.Vx * logo.Vx + logo.Vy * logo.Vy), 6);
-                    Assert.Equal(ChaosRunHost.State!.ToyPower["porn_dvd"], logo.RemainingSec);
+                    ChaosRunHost.StartRun(Cfg());
+                    ChaosRunHost.Overlay!.FinishCountdown();
+                    ChaosRunHost.StopTimerForTests();
+                    var toy = Assert.Single(ChaosRunHost.ToyButtons).Toy;
+                    ChaosRunHost.ToggleManualPause();
+                    ChaosRunHost.OnToyKey("Q");
+                    Assert.False(ChaosDvdOverlay.AnyActive);
+                    ChaosRunHost.ToggleManualPause();
+                    ChaosRunHost.OnToyKey("Q");
+                    Assert.Equal(count, ChaosDvdOverlay.Flock.Active.Count);
+                    foreach (var logo in ChaosDvdOverlay.Flock.Active)
+                    {
+                        Assert.Equal(scale, logo.FontScale);
+                        Assert.Equal(230 * speed, Math.Sqrt(logo.Vx * logo.Vx + logo.Vy * logo.Vy), 6);
+                        Assert.Equal(ChaosRunHost.State!.ToyPower["porn_dvd"], logo.RemainingSec);
+                    }
+                    Assert.True(ChaosEffectBannerOverlay.Active!.Strip.IsLive("dvd"));
+                    Assert.Equal(banner, ChaosEffectBannerOverlay.Active.Strip.Row.Single(e => e.Id == "dvd").Text);
+                    Assert.Contains(loading, ChaosRunHost.State!.RecentEvents);
+                    Assert.Equal(60, toy.CooldownRemainingSec);
+                    ChaosRunHost.OnToyKey("Q"); // cooldown must not spawn more
+                    Assert.Equal(count, ChaosDvdOverlay.Flock.Active.Count);
+                    ChaosRunHost.Tick();
+                    Assert.True(toy.IsEffectActive);
+                    ChaosDvdOverlay.Advance(30);
+                    ChaosDvdOverlay.Advance(0.3);
+                    ChaosRunHost.Tick();
+                    Assert.False(toy.IsEffectActive);
+                    Assert.False(ChaosEffectBannerOverlay.Active!.Strip.IsLive("dvd"));
+                    Assert.NotNull(ChaosDvdOverlay.Window);
+                    ChaosRunHost.ForceShutdown();
+                    Assert.Null(ChaosDvdOverlay.Window);
                 }
-                Assert.True(ChaosEffectBannerOverlay.Active!.Strip.IsLive("dvd"));
-                Assert.Equal("Porn DVD", ChaosEffectBannerOverlay.Active.Strip.Row.Single(e => e.Id == "dvd").Text);
-                Assert.Equal(60, toy.CooldownRemainingSec);
-                ChaosRunHost.OnToyKey("Q"); // cooldown must not spawn more
-                Assert.Equal(count, ChaosDvdOverlay.Flock.Active.Count);
-                ChaosRunHost.Tick();
-                Assert.True(toy.IsEffectActive);
-                ChaosDvdOverlay.Advance(30);
-                ChaosDvdOverlay.Advance(0.3);
-                ChaosRunHost.Tick();
-                Assert.False(toy.IsEffectActive);
-                Assert.False(ChaosEffectBannerOverlay.Active!.Strip.IsLive("dvd"));
-                Assert.NotNull(ChaosDvdOverlay.Window);
-                ChaosRunHost.ForceShutdown();
-                Assert.Null(ChaosDvdOverlay.Window);
+                finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
             }
-            finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            finally
+            {
+                snapshot.Restore();
+                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx, ChaosEffectBannerOverlay.SkipPlatformChecksForTests, CoreSettings.Current.ChaosAccessoryKey1, CoreSettings.Current.PanicKey) = saved;
+                ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage(previousLanguage);
+            }
+            Assert.Equal(saved, (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx, ChaosEffectBannerOverlay.SkipPlatformChecksForTests, CoreSettings.Current.ChaosAccessoryKey1, CoreSettings.Current.PanicKey));
+            Assert.Equal(previousLanguage, ConditioningControlPanel.Localization.LocalizationManager.Instance.CurrentLanguage);
             return Task.CompletedTask;
         });
     }
