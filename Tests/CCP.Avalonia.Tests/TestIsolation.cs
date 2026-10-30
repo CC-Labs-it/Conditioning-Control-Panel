@@ -1,4 +1,7 @@
 using System;
+using Avalonia;
+using Avalonia.Headless;
+using Avalonia.Media;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -54,6 +57,18 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
     public override void Before(MethodInfo methodUnderTest, IXunitTest test) =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
+            // The platform and font manager are process-wide. Initialize before any test can
+            // claim them with a bare builder; match AmbientBeatLoopsTests.Setup's portable faces.
+            if (Application.Current is null)
+            {
+                var options = ConditioningControlPanel.Avalonia.Platform.AppFonts.Options();
+                var mappings = new Dictionary<string, FontFamily>(options.FontFamilyMappings!);
+                mappings["Segoe UI"] = mappings["Segoe UI Black"] = new FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter);
+                options.FontFamilyMappings = mappings;
+                ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(options)
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            }
             Current = ProcessStateSnapshot.Take();
             OpenWindows.Mark();
             // P76: a held startup card opens only when a test steps the ladder clock, never by wall time.

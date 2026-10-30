@@ -1,4 +1,6 @@
 {
+  "devices_always_on_title": "常時オンのマイク",
+  "devices_always_on_body": "ウェイクワードを使うと、Takeover の実行中はマイクが常に開いたままになり、彼女を呼ぶ声を聞き取れます。\n\nすべてオフラインで動作します。音声はデバイス上で処理され、録音も送信もされません。\n\n常時リスニングを有効にしますか？",
   "deeper_submission_badge_published": "公開済み",
   "deeper_submission_badge_published_tip": "このエンハンスメントはコミュニティカタログで公開中です。",
   "deeper_submission_badge_pending": "審査中",

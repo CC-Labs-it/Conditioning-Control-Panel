@@ -1,4 +1,8 @@
 {
+  "btn_yes": "Sì",
+  "btn_no": "No",
+  "devices_always_on_title": "Microfono sempre attivo",
+  "devices_always_on_body": "La parola di attivazione mantiene il microfono aperto mentre Takeover è in esecuzione, così lei può sentirti chiamarla.\n\nTutto resta offline. L’audio viene elaborato sul dispositivo e non viene mai registrato o inviato.\n\nAttivare l’ascolto continuo?",
   "Sparkles_Slip_Paid": "Pagato",
   "Sparkles_Slip_Place": "Posto {0} su {1}",
   "Sparkles_Slip_Gold": "Oro",

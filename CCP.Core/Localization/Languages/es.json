@@ -1,4 +1,6 @@
 {
+  "devices_always_on_title": "Micrófono siempre activo",
+  "devices_always_on_body": "La palabra de activación mantiene el micrófono abierto mientras Takeover está en marcha para que ella pueda oírte llamarla.\n\nTodo permanece sin conexión. El audio se procesa en tu dispositivo y nunca se graba ni se envía.\n\n¿Activar la escucha continua?",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Esta mejora está publicada en el catálogo de la comunidad.",
   "deeper_submission_badge_pending": "Pendiente",

@@ -1,4 +1,6 @@
 {
+  "devices_always_on_title": "Always-on microphone",
+  "devices_always_on_body": "Wake word keeps the microphone open continuously while Takeover is running so she can hear you call her.\n\nEverything stays offline. Audio is processed on your device and never recorded or sent anywhere.\n\nTurn on always-on listening?",
   "Sparkles_Slip_Paid": "Paid",
   "Sparkles_Slip_Place": "Place {0} of {1}",
   "Sparkles_Slip_Gold": "Gold",
