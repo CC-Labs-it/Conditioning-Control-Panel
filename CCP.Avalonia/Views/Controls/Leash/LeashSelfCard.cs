@@ -101,7 +101,15 @@ public sealed class LeashSelfCard : Border
         ToolTip.SetTip(cap, Loc.Get("leash_video_max_hint"));
         cap.Committed += m => _ = SetVideoMaxAsync(m);
         _body.Children.Add(cap);
-        // ponytail: do not advertise WPF's panic-key hold-to-cut until this head owns that route.
+        // WPF Controls/Leash/LeashSelfCard.cs:220-224; the head already owns the hold route.
+        _body.Children.Add(Caption(Loc.GetF("leash_self_hold_hint", LeashHoldToCut.KeyLabel(CoreSettings.Current.PanicKey)), "leash-self-hold"));
+        if (_me.Stickers.Count > 0)
+        {
+            _body.Children.Add(Caption(Loc.GetF("leash_self_shelf", _me.Stickers.Count), "leash-shelf"));
+            // WPF Controls/Leash/LeashSelfCard.cs:248-260. Artwork remains unported.
+            foreach (var s in _me.Stickers.Reverse().Take(14))
+                _body.Children.Add(Label(s.Id + " · " + Loc.GetF("leash_sticker_from", s.From.Name), 12, F.Text, "leash-sticker"));
+        }
     }
 
     internal async Task CutAsync()

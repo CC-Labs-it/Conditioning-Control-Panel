@@ -50,6 +50,44 @@ public sealed class LeashPageTests
             Assert.True(page.ShowingEmpty);
         });
 
+    [Fact]
+    public void VisiblePageRebindsWhenServiceArrivesAndIsDropped() =>
+        Run(true, (shell, _, svc) =>
+        {
+            LeashHead.Service = null;
+            shell.Show(); shell.ShowTab("leash");
+            var page = shell.Named<LeashTabView>("LeashTab")!;
+            Assert.True(page.ShowingEmpty);
+            LeashHead.Service = svc;
+            Assert.False(page.ShowingEmpty);
+            LeashHead.Service = null;
+            Assert.True(page.ShowingEmpty);
+        });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void OwnCardShowsHoldHintAndLatestFourteenStickerRecords(bool hint) =>
+        Run(true, (shell, _, svc) =>
+        {
+            shell.ShowTab("leash");
+            var page = shell.Named<LeashTabView>("LeashTab")!;
+            var me = svc.Snapshot.Me!;
+            page.SelfCard!.Update(me with { Stickers = Enumerable.Range(0, 16)
+                .Select(i => new Sticker("sticker-" + i, me.Holder, DateTimeOffset.UtcNow)).ToArray() });
+            var words = page.GetLogicalDescendants().OfType<TextBlock>().ToArray();
+            if (hint)
+                Assert.Contains(words, t => t.Text == ConditioningControlPanel.Localization.Loc.GetF("leash_self_hold_hint",
+                    LeashHoldToCut.KeyLabel(ConditioningControlPanel.CoreSettings.Current.PanicKey)));
+            else
+            {
+                var shelf = words.Where(t => t.Tag as string == "leash-sticker").ToArray();
+                Assert.Equal(14, shelf.Length);
+                Assert.StartsWith("sticker-15", shelf[0].Text);
+                Assert.StartsWith("sticker-2", shelf[13].Text);
+            }
+        });
+
     private sealed class Wire : ILeashApi
     {
         public readonly List<(string Op, JObject Body)> Calls = new();
