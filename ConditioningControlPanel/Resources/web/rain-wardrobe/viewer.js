@@ -31,7 +31,7 @@ const state = { ready:false, slot:'dress', look:{}, animation:'idle', paused:mot
 const singleSlots=['dress','hair','skin','shoes','legwear','arms','ankles'];
 const meshSlots=['dress','hair','accessories','shoes','legwear','arms','ankles'];
 let expansionUpdates=[],coveredNodes=new Set(),transitionStart=0,transitionTimer,transitionOrbit=0;
-const garmentUniforms={mode:{value:1},color:{value:new THREE.Color(.075,.012,.038)},opacity:{value:.78},density:{value:5},lower:{value:.129},upper:{value:.713},hideBelow:{value:-1},bodyMaskRange:{value:new THREE.Vector2(0,-1)},bodyMaskHem:{value:new THREE.Vector4(0,0,0,-1)}};
+const garmentUniforms={mode:{value:1},color:{value:new THREE.Color(.075,.012,.038)},opacity:{value:.78},density:{value:5},lower:{value:.129},upper:{value:.713},hideBelow:{value:-1},bodyMaskRange:{value:new THREE.Vector2(0,-1)},bodyMaskHem:{value:new THREE.Vector4(0,0,0,-1)},strand:{value:.092}};
 let demoTimers=[],demoPrevious=null;
 const titles = {dress:['The dress.','Pick a silhouette.'],hair:['A new mood.','Keep it loose. Change it up.'],skin:['Your palette.','A little warmth. A different glow.'],accessories:['Little details.','Wear one. Wear a few.'],shoes:['From the ground up.','A different finishing touch.'],legwear:['The next layer.','Sheer, patterned or tailored.'],looks:['The whole look.','One touch. Everything together.']};
 titles.arms=['On your arms.','Bracelets, cuffs and bands.'];titles.ankles=['A little glint.','Anklets, ribbons and cuffs.'];
@@ -344,7 +344,7 @@ function preserveStockingsMaterial(){
       for(const [name,value] of Object.entries(garmentUniforms))shader.uniforms[`wardrobe_${name}`]=value;
       shader.vertexShader='attribute vec3 wardrobeBodyReference;\nattribute float wardrobeLowerBody;\nvarying vec3 wardrobeRest;\nvarying vec3 wardrobeBodyRest;\nvarying float wardrobeBodyRegion;\n'+shader.vertexShader;
       shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nwardrobeRest = position;\nwardrobeBodyRest = wardrobeBodyReference;\nwardrobeBodyRegion = wardrobeLowerBody;');
-      shader.fragmentShader='varying vec3 wardrobeRest;\nvarying vec3 wardrobeBodyRest;\nvarying float wardrobeBodyRegion;\nuniform float wardrobe_mode;\nuniform vec3 wardrobe_color;\nuniform float wardrobe_opacity;\nuniform float wardrobe_density;\nuniform float wardrobe_lower;\nuniform float wardrobe_upper;\nuniform float wardrobe_hideBelow;\nuniform vec2 wardrobe_bodyMaskRange;\nuniform vec4 wardrobe_bodyMaskHem;\n'+shader.fragmentShader;
+      shader.fragmentShader='varying vec3 wardrobeRest;\nvarying vec3 wardrobeBodyRest;\nvarying float wardrobeBodyRegion;\nuniform float wardrobe_mode;\nuniform vec3 wardrobe_color;\nuniform float wardrobe_opacity;\nuniform float wardrobe_density;\nuniform float wardrobe_lower;\nuniform float wardrobe_upper;\nuniform float wardrobe_hideBelow;\nuniform vec2 wardrobe_bodyMaskRange;\nuniform vec4 wardrobe_bodyMaskHem;\nuniform float wardrobe_strand;\n'+shader.fragmentShader;
       shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
         float wardrobeZ = wardrobeRest.y / 1.03;
         if (wardrobeBodyRegion > .5) {
@@ -358,13 +358,13 @@ function preserveStockingsMaterial(){
         float wardrobeTheta = atan(wardrobeRest.x - sign(wardrobeRest.x) * .075, -wardrobeRest.z + .006);
         float wardrobeA = abs(sin(wardrobeTheta * wardrobe_density + wardrobeZ * wardrobe_density * 10.0));
         float wardrobeB = abs(sin(wardrobeTheta * wardrobe_density - wardrobeZ * wardrobe_density * 10.0));
-        float wardrobeGrid = max(1.0 - smoothstep(.092 - fwidth(wardrobeA), .092 + fwidth(wardrobeA), wardrobeA), 1.0 - smoothstep(.092 - fwidth(wardrobeB), .092 + fwidth(wardrobeB), wardrobeB));
+        float wardrobeGrid = max(1.0 - smoothstep(wardrobe_strand - fwidth(wardrobeA), wardrobe_strand + fwidth(wardrobeA), wardrobeA), 1.0 - smoothstep(wardrobe_strand - fwidth(wardrobeB), wardrobe_strand + fwidth(wardrobeB), wardrobeB));
         float wardrobeMask = wardrobe_mode < .5 ? 0.0 : (wardrobe_mode < 1.5 ? max(wardrobeGrid * wardrobe_opacity, step(wardrobe_upper-.029, wardrobeZ) * wardrobe_opacity) : wardrobe_opacity);
         wardrobeMask *= step(wardrobe_lower, wardrobeZ) * (1.0 - step(wardrobe_upper, wardrobeZ)) * step(.5, wardrobeBodyRegion);
         diffuseColor.rgb = mix(diffuseColor.rgb, wardrobe_color, wardrobeMask);`:''}
       `);
     };
-    material.customProgramCacheKey=()=> `rain-legwear-v3-${stockings}`;
+    material.customProgramCacheKey=()=> `rain-legwear-v4-${stockings}`;
     material.needsUpdate=true;
   }
 }
@@ -424,7 +424,7 @@ async function init(){
   applyLook(saved||info.defaultLook||{},{persist:!hosted&&!reviewMode});if(hosted){shop.markApplied();paintShop(document,shop);}setAnimation('idle');if(!action&&clips.length){const first=(info.animations||[])[0];setAnimation(typeof first==='string'?first:first?.id);}
   // Bake on Apply (bake.js): its own renderer, camera and mixer; every frame hands the visible pose back.
   const settle=()=>{for(const update of expansionUpdates)update(0,state.look);avatar.updateMatrixWorld(true);};
-  window.wardrobeDebug.bake=installBaker({THREE,scene,avatar,clips,getClip,hide:[ground],prepare:finishTransition,sync:settle,restore:()=>{mixer.update(0);settle();},post:postHost});
+  window.wardrobeDebug.bake=installBaker({THREE,scene,avatar,clips,getClip,hide:[ground],garment:garmentUniforms,prepare:finishTransition,sync:settle,restore:()=>{mixer.update(0);settle();},post:postHost});
   state.ready=true;postHost({type:'rain-ready'});$('demo').disabled=false;$('loading').hidden=true;updateCamera(1/60);
   if(!clips.length){errors.push('No animation clips in avatar.glb');$('liveLabel').textContent='NO ANIMATIONS EXPORTED';}
   if(reviewMode)installReviewStudio({info,errors,renderCase:renderReviewCase});

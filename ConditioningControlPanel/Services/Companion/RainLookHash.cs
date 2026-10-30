@@ -18,8 +18,10 @@ internal static class RainLookHash
     /// <summary>Bump when the clip set the baker renders changes (new actions in the wardrobe GLB):
     /// every old pack then misses and the look is baked again. 2 = the 17-action GLB
     /// (release asset rain-assets-v1, clip set rain-v2-17-20261030). 3 = the same clips baked at
-    /// 384x618 without the 2x2 pixel grain (the 192x309 pixel packs looked blocky in the tube).</summary>
-    public const int ClipSetVersion = 3;
+    /// 384x618 without the 2x2 pixel grain (the 192x309 pixel packs looked blocky in the tube).
+    /// 4 = the ink look (2026-10-30): inverted-hull outlines, readable fishnets, a mild sharpen and a
+    /// colour pop (bake.js INK / TOON), so looks baked plain bake again with ink.</summary>
+    public const int ClipSetVersion = 4;
 
     /// <summary>The pack layout revision (manifest.json "rev"); RainPackStore writes and checks it.</summary>
     public const int PackRev = 1;
