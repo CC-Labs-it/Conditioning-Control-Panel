@@ -43,7 +43,7 @@ public partial class MainShellWindow
     internal void RollBannerDrum(TextBlock outgoing, TextBlock incoming)
     {
         ResetBannerDrum();
-        if (CoreSettings.Current.MotionLevel != MotionLevel.Full) return;
+        if (AmbientFxCanvas.Env.Level != MotionLevel.Full) return;
         _drumOutgoing = outgoing;
         _drumIncoming = incoming;
         var outScale = new ScaleTransform();
@@ -55,7 +55,7 @@ public partial class MainShellWindow
         incoming.RenderTransform = new TransformGroup { Children = { inScale, inSlide } };
         void Step(double t)
         {
-            if (t >= CoreBannerDrum.Seconds || CoreSettings.Current.MotionLevel != MotionLevel.Full)
+            if (t >= CoreBannerDrum.Seconds || AmbientFxCanvas.Env.Level != MotionLevel.Full)
             { ResetBannerDrum(); return; }
             var a = CoreBannerDrum.Face(MotionLevel.Full, t, false);
             var b = CoreBannerDrum.Face(MotionLevel.Full, t, true);

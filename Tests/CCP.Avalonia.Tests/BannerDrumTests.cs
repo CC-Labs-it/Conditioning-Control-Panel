@@ -1,4 +1,7 @@
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -13,6 +16,79 @@ namespace CCP.Avalonia.Tests;
 
 public class BannerDrumTests
 {
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public void EffectiveMotionCapsKeepCrossfadesWithoutRolling(bool gentle, bool duringRoll)
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var oldProbe = UiMotionPreference.OsProbe;
+            var oldClock = BeatLoop.Time;
+            BeatLoop.Time = new FrozenClock();
+            var settings = CoreSettings.Current;
+            var old = (settings.MotionLevel, settings.GentleVisuals);
+            MainShellWindow? w = null;
+            TextBlock? a = null, b = null;
+            try
+            {
+                settings.MotionLevel = MotionLevel.Full;
+                settings.GentleVisuals = false;
+                UiMotionPreference.OsProbe = () => true;
+                UiMotionPreference.CacheStamp = long.MinValue;
+                w = new MainShellWindow();
+                a = w.Named<TextBlock>("TxtBannerPrimary")!;
+                b = w.Named<TextBlock>("TxtBannerSecondary")!;
+                if (duringRoll)
+                {
+                    w.Crossfade(a, b);
+                    Assert.IsType<TransformGroup>(b.RenderTransform);
+                }
+                settings.GentleVisuals = gentle;
+                UiMotionPreference.OsProbe = () => gentle; // otherwise the OS cap alone
+                UiMotionPreference.CacheStamp = long.MinValue;
+                Assert.Equal(MotionLevel.Reduced, AmbientFxCanvas.Env.Level);
+                if (duringRoll) BeatLoop.StepAll(); // no settings event: exercises the frame gate
+                else w.Crossfade(a, b);
+                Assert.Null(a.RenderTransform);
+                Assert.Null(b.RenderTransform);
+                Assert.DoesNotContain(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, w));
+                foreach (var beat in new[] { a, b })
+                {
+                    var fade = Assert.IsType<global::Avalonia.Animation.DoubleTransition>(Assert.Single(beat.Transitions!));
+                    Assert.Equal(Visual.OpacityProperty, fade.Property);
+                    Assert.Equal(System.TimeSpan.FromMilliseconds(500), fade.Duration);
+                }
+                Assert.Equal(0, a.Opacity);
+                Assert.Equal(1, b.Opacity);
+                Assert.False(a.IsHitTestVisible);
+                Assert.True(b.IsHitTestVisible);
+                Assert.Equal(MotionLevel.Full, settings.MotionLevel);
+            }
+            finally
+            {
+                settings.MotionLevel = MotionLevel.Off;
+                if (a is not null && b is not null) w!.RollBannerDrum(a, b);
+                w?.Close();
+                (settings.MotionLevel, settings.GentleVisuals) = old;
+                BeatLoop.Time = oldClock;
+                UiMotionPreference.OsProbe = oldProbe;
+                UiMotionPreference.CacheStamp = long.MinValue;
+            }
+        });
+    }
+
+    private sealed class FrozenClock : System.TimeProvider
+    {
+        public override long GetTimestamp() => 0;
+    }
+
     [Fact]
     public void ShellPaintAndRollUseTheLiveBannerControls()
     {
