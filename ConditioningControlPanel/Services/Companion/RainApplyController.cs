@@ -20,6 +20,10 @@ namespace ConditioningControlPanel.Services.Companion;
 /// <see cref="Hooks.Background"/> (one serial queue, so Begin, frames, strips and Commit stay in
 /// order). The page renders its CURRENT look, so a look the clamp changed is never baked: it goes
 /// back as <c>rain-applied {failed:true, reason:"clamped", look}</c> for the user to see and Apply.</para>
+///
+/// <para>Progress (fix wave F1c): every clip finished or skipped, plus the page's per-frame
+/// <c>rain-bake-progress</c>, goes back as <c>rain-baking {done, total, shown, fraction}</c> (only when the
+/// percent or the clip moves) and to <see cref="Hooks.Progress"/>; a commit or a drop sends it null.</para>
 /// </summary>
 internal sealed class RainApplyController
 {
@@ -44,6 +48,8 @@ internal sealed class RainApplyController
         public Action<string>? Log { get; init; }
         /// <summary>A bake that failed (not a cancel): the toast.</summary>
         public Action? OnFailed { get; init; }
+        /// <summary>Bake progress on the UI thread (window title, taskbar); null once it commits or drops.</summary>
+        public Action<RainBakeProgress?>? Progress { get; init; }
     }
 
     private sealed class Bake
@@ -56,6 +62,13 @@ internal sealed class RainApplyController
         public RainPackWriter? Writer;
         public RainPackSink? Sink;
         public readonly Dictionary<string, int> FrameCount = new(StringComparer.Ordinal);
+        // Progress: touched only on the UI thread (Handle).
+        public int Total;
+        public HashSet<string> Clips = new(StringComparer.Ordinal);
+        public double ClipFraction;
+        public readonly HashSet<string> ClipsDone = new(StringComparer.Ordinal);
+        public int LastPercent = -1, LastShown = -1;
+        public RainBakeProgress Progress => new(ClipsDone.Count, Total, ClipFraction);
     }
 
     private readonly Hooks _h;
@@ -73,6 +86,7 @@ internal sealed class RainApplyController
             case "rain-apply": OnApply(o["look"]); return true;
             case "rain-bake-frame": OnFrame(o); return true;
             case "rain-bake-done": OnDone(o); return true;
+            case "rain-bake-progress": OnProgress(o); return true;
             default: return false;
         }
     }
@@ -111,7 +125,45 @@ internal sealed class RainApplyController
             bake.Writer = store.Begin(hash);
             bake.Sink = new RainPackSink(bake.Writer, Fps, Width, Height);
         }));
-        _h.Post(new { type = "rain-bake", lookHash = hash, clips = _h.Clips(), fps = Fps, w = Width, h = Height });
+        var clips = _h.Clips();
+        bake.Clips = new HashSet<string>(clips, StringComparer.Ordinal);
+        bake.Total = bake.Clips.Count;
+        _h.Post(new { type = "rain-bake", lookHash = hash, clips, fps = Fps, w = Width, h = Height });
+        Report(bake);
+    }
+
+    /// <summary>The page's per-frame <c>rain-bake-progress {clip, frame, of}</c>: how far into the clip in hand.</summary>
+    private void OnProgress(JObject o)
+    {
+        var bake = Current(o);
+        if (bake == null) return;
+        var clip = (string?)o["clip"];
+        if (!RainPackStore.IsValidClipName(clip) || !bake.Clips.Contains(clip!) || bake.ClipsDone.Contains(clip!)) return;
+        if (o["frame"]?.Type != JTokenType.Integer || o["of"]?.Type != JTokenType.Integer) return;
+        int frame = (int)o["frame"]!, of = (int)o["of"]!;
+        if (of <= 0 || frame < 0) return;
+        bake.ClipFraction = Math.Clamp((double)frame / of, 0, 1);
+        Report(bake);
+    }
+
+    /// <summary>One clip is in (baked or skipped): counts once, so a repeated frame never overshoots.</summary>
+    private void ClipDone(Bake bake, string clip)
+    {
+        if (!bake.Clips.Contains(clip) || !bake.ClipsDone.Add(clip)) return;
+        bake.ClipFraction = 0;
+        Report(bake);
+    }
+
+    /// <summary>Posts <c>rain-baking {done, total, shown, fraction}</c> to the page and raises the hook,
+    /// only when the whole percent or the clip in hand moved (a bake posts every frame).</summary>
+    private void Report(Bake bake)
+    {
+        var p = bake.Progress;
+        if (p.Percent == bake.LastPercent && p.ClipShown == bake.LastShown) return;
+        bake.LastPercent = p.Percent;
+        bake.LastShown = p.ClipShown;
+        _h.Post(new { type = "rain-baking", lookHash = bake.Hash, done = p.ClipsDone, total = p.ClipsTotal, shown = p.ClipShown, fraction = Math.Round(p.Fraction, 3) });
+        _h.Progress?.Invoke(p);
     }
 
     private void OnFrame(JObject o)
@@ -140,7 +192,9 @@ internal sealed class RainApplyController
         if (o["all"]?.Value<bool>() != true)
         {
             var clip = (string?)o["clip"];
-            if (o["skipped"]?.Value<bool>() == true || !RainPackStore.IsValidClipName(clip)) return;
+            if (!RainPackStore.IsValidClipName(clip)) return;
+            ClipDone(bake, clip!);
+            if (o["skipped"]?.Value<bool>() == true) return;
             _h.Background(() => Guard(bake, () =>
             {
                 if (bake.Sink!.PendingClips.Contains(clip!)) bake.Sink.FinishClip(clip!);
@@ -163,6 +217,7 @@ internal sealed class RainApplyController
                 _bake = null;
                 _h.Commit(bake.Look, bake.Hash);
                 _h.Post(new { type = "rain-applied", lookHash = bake.Hash });
+                _h.Progress?.Invoke(null);
             });
         }));
     }
@@ -184,6 +239,7 @@ internal sealed class RainApplyController
         bake.Dead = true;
         _bake = null;
         _h.Log?.Invoke("bake dropped: " + why);
+        _h.Progress?.Invoke(null);
         _h.Background(() => { try { bake.Writer?.Dispose(); } catch (Exception) { } });
         if (post)
         {
@@ -210,10 +266,11 @@ internal sealed class RainApplyController
 
     /// <summary>The page's <c>init</c> frame (RAIN-V2-PLAN 2.5 + lane R4): the applied look, the account's
     /// grants, level and achievements (the same sources as <see cref="RainItemAccess"/>), Apply mode on.
-    /// Prices only when the Prize Counter has a cached list.</summary>
+    /// Prices only when the Prize Counter has a cached list. <paramref name="strings"/> = the host's
+    /// localised lines for the page's string table (<c>wardrobe-shop.js STR</c>); blanks are left out.</summary>
     internal static JObject BuildInit(string? storedLook, IEnumerable<string>? grants, int level,
         IEnumerable<string>? achievements, string? locale, string motion, bool gentle,
-        IReadOnlyDictionary<string, int>? prices)
+        IReadOnlyDictionary<string, int>? prices, IReadOnlyDictionary<string, string>? strings = null)
     {
         var look = RainLookCodec.Normalize(storedLook);
         var init = new JObject
@@ -229,6 +286,10 @@ internal sealed class RainApplyController
             ["applyMode"] = true,
         };
         if (prices != null && prices.Count > 0) init["prices"] = JObject.FromObject(prices);
+        var lines = new JObject();
+        foreach (var kv in strings ?? new Dictionary<string, string>())
+            if (!string.IsNullOrWhiteSpace(kv.Key) && !string.IsNullOrWhiteSpace(kv.Value)) lines[kv.Key] = kv.Value;
+        if (lines.Count > 0) init["strings"] = lines;
         return init;
     }
 

@@ -281,7 +281,8 @@ public sealed class RainLookSyncTests
             var apply = Controller();
             RainWardrobeHostService.Route(JObject.FromObject(new { type = "rain-ready" }), apply, m => posted.Add(JObject.FromObject(m)),
                 () => init, () => { }, () => N(Dress));
-            Assert.Equal(new[] { "init", "rain-bake" }, posted.Select(p => (string?)p["type"]));
+            // rain-baking = the dressing room's "1 of n" meter (fix wave F1c): a host-side re-bake counts too.
+            Assert.Equal(new[] { "init", "rain-bake", "rain-baking" }, posted.Select(p => (string?)p["type"]));
             Assert.Equal(RainLookHash.Compute(N(Dress)), (string?)posted[1]["lookHash"]);
             Assert.True(apply.IsBaking);
             apply.Abort();
