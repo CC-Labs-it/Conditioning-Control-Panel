@@ -1,4 +1,4 @@
-using ConditioningControlPanel.Services.Companion;
+using ConditioningControlPanel.Services.Companion.Rain;
 using Xunit;
 
 namespace CCP.Core.Tests;

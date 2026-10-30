@@ -3,7 +3,7 @@ using System.IO;
 using System.Linq;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
-using ConditioningControlPanel.Services.Companion;
+using ConditioningControlPanel.Services.Companion.Rain;
 using SkiaSharp;
 using Xunit;
 

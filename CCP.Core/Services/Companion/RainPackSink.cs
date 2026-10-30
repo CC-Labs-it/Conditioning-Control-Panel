@@ -5,7 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using SkiaSharp;
 
-namespace ConditioningControlPanel.Services.Companion;
+namespace ConditioningControlPanel.Services.Companion.Rain;
 
 /// <summary>Frames read back from a strip: one tightly packed W x H x 4 buffer per frame.</summary>
 internal sealed record RainStripFrames(int Width, int Height, SKColorType ColorType, SKAlphaType AlphaType, IReadOnlyList<byte[]> Frames);
