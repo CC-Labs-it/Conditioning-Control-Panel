@@ -16,6 +16,7 @@ import { cancelDrift } from '../sim/drift.js';
 import { endBoost } from '../sim/boost.js';
 import { ITEMS, bucketOf, BUCKETS, SPIN_KINDS } from '../sim/itemTable.js';
 import { itemUseMode } from '../sim/itemUse.js';
+import { liftedNear } from '../sim/ramps.js';
 
 const GROW_S = 0.4, WAVE_S = 1.2, THROW_LEAD_M = 2.5, ARC_S = 0.5, PENDING_S = 2, ORPHAN_S = 3;   // as sim/items.js
 
@@ -37,11 +38,13 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
     for (let k = 0; k < 3; k++) out[k] = f.p[k] + f.b[k] * x + f.n[k] * h;
     return out;
   }
+  // ramps: a lifted item (liftM > 0) floats liftM above the road and is only taken in 3D, as in sim/items.js
   const pick = (track.items || []).map((it, i) => {
-    const f = track.frameAt(it.s);
-    return { kind: it.kind, s: it.s, x: it.x, downT: 0, upT: 1e9,
-      v: { i, p: point(it.s, it.x, 0), n: f.n.slice(), t: f.t.slice(), b: f.b.slice(), alive: true, k: 1 } };
+    const f = track.frameAt(it.s), liftM = it.liftM > 0 ? it.liftM : 0;
+    return { kind: it.kind, s: it.s, x: it.x, liftM, downT: 0, upT: 1e9,
+      v: { i, p: point(it.s, it.x, liftM), n: f.n.slice(), t: f.t.slice(), b: f.b.slice(), alive: true, k: 1, ...(liftM ? { lift: liftM } : {}) } };
   });
+  const anyLift = pick.some((b) => b.liftM > 0);
   const sinks = [];
   const sink = (i) => (i === 0 ? events : (sinks[i] ||= { emit: (name, p) => events.emit('racer-event', { racer: i, name, p }) }));
   const rs = (i) => (R[i] ||= { eff: null, glass: 0, golden: 0, echo: 0, echoT: 0, pendT: 0, snapGuard: 0 });
@@ -58,7 +61,7 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
   function onRoll(m) {
     ver++;
     const b = pick[m.box], r = bySeat(m.seat);
-    if (b) { b.downT = g('boxRespawnS'); b.upT = 0; pop('box', 'box', b.s, b.x); }
+    if (b) { b.downT = g('boxRespawnS'); b.upT = 0; pop('box', 'box', b.s, b.x, b.liftM || 0); }
     if (!r) return;
     if (local(r)) { Object.assign(r.item, { id: m.item, rolling: true, rollT: 0, heldT: 0 }); rs(r.i).pendT = 0; }
     events.emit('item-box', { racer: r.i, box: m.box, p: b ? b.v.p.slice() : kartP(r) });
@@ -180,19 +183,20 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
     return -1;
   }
   function pickups(r) {
-    if (!low(r)) return;
+    const grounded = low(r);
+    if (!grounded && !anyLift) return;
     const x = rs(r.i);
     for (let i = 0; i < pick.length; i++) {
       const b = pick[i];
-      if (b.downT > 0) continue;
+      if (b.downT > 0 || (!b.liftM && !grounded)) continue;
       if (b.kind === 'box') {
-        if (r.item.id || r.item.rolling || x.pendT > 0 || !near(r, b.s, b.x, g('boxRadiusM'))) continue;
+        if (r.item.id || r.item.rolling || x.pendT > 0 || !(b.liftM ? liftedNear(r.st, b.v, g('boxRadiusM')) : near(r, b.s, b.x, g('boxRadiusM')))) continue;
         if (send(seatArg(r, { t: 'pickup', box: i, tick: tick() })) === false) continue;
         b.downT = g('boxRespawnS'); b.upT = 0; x.pendT = PENDING_S;          // hidden once sent, filled on roll
-      } else if (near(r, b.s, b.x, g('bubbleRadiusM'))) {
+      } else if (b.liftM ? liftedNear(r.st, b.v, g('bubbleRadiusM')) : near(r, b.s, b.x, g('bubbleRadiusM'))) {
         b.downT = g('bubbleRespawnS'); b.upT = 0;
         grantBoost(r.st, g('bubbleAmount'), g('bubbleHoldS'), 'bubble', feel, sink(r.i));
-        pop('bubble', 'bubble', b.s, b.x);
+        pop('bubble', 'bubble', b.s, b.x, b.liftM || 0);
         events.emit('bubble-pop', { racer: r.i, i, p: b.v.p.slice() });
       }
     }
