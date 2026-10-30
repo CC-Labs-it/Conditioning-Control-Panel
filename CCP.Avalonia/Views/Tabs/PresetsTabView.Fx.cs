@@ -92,6 +92,7 @@ public partial class PresetsTabView
         {
             SyncCustomSessionsFromDisk();
             RepaintSessionRack();
+            Shell?.RefreshTakeawayShelf(); // WPF TabFxPresetsQuestsAchievements.cs:286, before StaggerPresetCards.
         }
         if (IsVisible && _fxWindow != null) StaggerZones();
         else { CancelEntrances(); DetachRowSweep(); }

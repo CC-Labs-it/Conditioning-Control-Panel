@@ -9,8 +9,9 @@
 // The data-before-FX arrival funnel (SyncCustomSessionsFromDisk, RepaintSessionRack) runs
 // in PresetsTabView.Fx.cs OnPropertyChanged before the stagger. IsIncomingTab has nothing to
 // filter: ShowTab snaps tabs, there is no FadeOutgoingTab re-show on this head yet.
-// Real Takeaway refresh runs from TabNavigation.cs:256. The view keeps the prior receipts for
-// the arrival stagger during the async fetch, matching WPF MainWindow.Takeaway.cs:72-84.
+// Real Takeaway refresh runs from PresetsTabView.Fx.cs:95 before the stagger
+// (WPF TabFxPresetsQuestsAchievements.cs:286-289). Pending reads retain the prior receipts,
+// matching WPF MainWindow.Takeaway.cs:72-84. The shell refreshes only a visible-tab revisit.
 // MainShellWindow.Takeaway.cs applies the existing chip lift to receipts and the shop door.
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {

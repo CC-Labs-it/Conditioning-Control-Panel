@@ -6,6 +6,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Data;
+using Avalonia.Diagnostics;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
@@ -93,6 +95,37 @@ public sealed class TakeawayShelfTests
         surface.Stop(shell);
         Assert.False(GameWindow.IsAnyOpen());
         Assert.Equal(prior, shell.WindowState);
+    });
+
+    [Fact]
+    public Task CachedArrivalStaggersTheRefreshedReceipts() => InShell(async shell =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreSettings.Current.PerformanceMode = false;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        shell.ShowTab("presets"); await shell.TakeawayLoad;
+        var shelf = shell.Named<PresetsTabView>("PresetsTab")!.FindControl<StackPanel>("TakeawayShelf")!;
+        var previous = shelf.Children[0];
+        shell.ShowTab("quests");
+        // The live drawer is cached. A synchronous repaint must precede the entrance,
+        // as in WPF MainWindow.TabFxPresetsQuestsAchievements.cs:286-289.
+        shell.ShowTab("presets");
+        Assert.True(shell.TakeawayLoad.IsCompletedSuccessfully);
+        var refreshed = shelf.Children.OfType<Border>()
+            .Where(c => c.Tag is JustDropOrdersService.Order).ToArray();
+        Assert.Equal(3, refreshed.Length);
+        Assert.NotSame(previous, refreshed[0]);
+        // Inspect the actual animation bindings before advancing the render clock. This
+        // checks the refreshed controls, without depending on shell layout/render timing.
+        Assert.All(refreshed, receipt =>
+        {
+            var diagnostic = receipt.GetValueStoreDiagnostic();
+            // AppliedFrames is diagnostic-only and omitted from Avalonia's reference assembly.
+            var frames = (System.Collections.IEnumerable)diagnostic.GetType()
+                .GetProperty("AppliedFrames")!.GetValue(diagnostic)!;
+            Assert.Contains(frames.Cast<object>(), frame =>
+                (BindingPriority)frame.GetType().GetProperty("Priority")!.GetValue(frame)! == BindingPriority.Animation);
+        });
     });
 
     [Fact]
