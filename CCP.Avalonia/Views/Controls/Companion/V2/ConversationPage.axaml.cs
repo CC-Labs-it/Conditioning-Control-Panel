@@ -13,9 +13,8 @@ using ConditioningControlPanel.Localization;
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.V2;
 
 /// <summary>
-/// PORTED from WPF V2/ConversationPage.xaml.cs. The room (<see cref="CompanionRoomView"/>) mounts it
-/// as its first section and calls <see cref="Resume"/>/<see cref="Park"/> from its effective-visibility
-/// watch (WPF IsVisibleChanged). The fallback sheet is not ported: WPF OpenSheet navigates to the
+/// PORTED from WPF V2/ConversationPage.xaml.cs. The Companion tab mounts it beside the collapsed room and calls
+/// <see cref="Resume"/>/<see cref="Park"/> from its effective-visibility watch (WPF IsVisibleChanged). The fallback sheet is not ported: WPF OpenSheet navigates to the
 /// Companion pages whenever they are registered, which is always in the real app.
 /// </summary>
 public partial class ConversationPage : UserControl
@@ -23,11 +22,16 @@ public partial class ConversationPage : UserControl
     private bool _followBottom = true;
     internal ConversationPageVm Vm { get; }
     private CompanionRoomView? _room;
-    /// <summary>Set by the room's constructor; the bindings start then, so Hero is never a null path.</summary>
+    /// <summary>Set by the tab constructor; the bindings start then, so Hero is never a null path.</summary>
     internal CompanionRoomView? Room { get => _room; set { _room = value; DataContext = Vm; } }
     public ConversationPage()
     {
         InitializeComponent();
+        StageDust.StartLayers(new global::ConditioningControlPanel.Avalonia.Controls.AmbientFxConfig
+        {
+            Layers = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxLayers.DustField, Intensity = 0.8, DustDensity = 0.65,
+            Tint = global::Avalonia.Media.Color.FromRgb(244, 134, 211)
+        });
         Vm = new ConversationPageVm(() => Room?.HeroZone.ViewModel, () => Room?.EngineZone.DataContext as EngineRoomVm);
         Vm.Turns.CollectionChanged += TurnsChanged;
         Composer.AddHandler(KeyDownEvent, Composer_KeyDown, RoutingStrategies.Tunnel);
@@ -36,8 +40,8 @@ public partial class ConversationPage : UserControl
             if (Math.Abs(e.ExtentDelta.Y) < .1) _followBottom = Transcript.Offset.Y >= Transcript.ScrollBarMaximum.Y - 24;
         };
     }
-    internal void Resume() => Vm.Resume();
-    internal void Park() => Vm.Detach();
+    internal void Resume() { StageDust.Resume(); Vm.Resume(); }
+    internal void Park() { StageDust.Pause(); Vm.Detach(); }
     // A closed shell does not detach its tree (MainShellWindow unsubscribes statics on Closed), so
     // both edges release the static subscriptions (CoreAccount, the ask service, the brain's session).
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e) { Release(); base.OnDetachedFromVisualTree(e); }
@@ -51,8 +55,11 @@ public partial class ConversationPage : UserControl
     }
     private Window? _window;
     private void WindowClosed(object? sender, EventArgs e) => Release();
+    internal void StopForPanic() { Vm.Stop(); StageDust.Pause(); }
+
     private void Release()
     {
+        StageDust.Pause();
         if (_window != null) { _window.Closed -= WindowClosed; _window = null; }
         Vm.Stop();
         Vm.Detach();
