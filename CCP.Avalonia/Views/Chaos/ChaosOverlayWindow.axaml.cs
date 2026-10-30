@@ -1560,7 +1560,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// files. Collapse them into one <c>Views/Chaos/ChaosTips.cs</c> the moment a third caller
         /// appears - not before, because the head's own class is the source both are copying and a
         /// third copy is where drift starts. ChaosToyButtonWindow reuses this one (internal) rather
-        /// than copying it; its tooltip has the default chrome, not this window's style.</para></summary>
+        /// than copying it; it supplies the same chrome on its own tooltip.</para></summary>
         internal static class ChaosTips
         {
             public static void Attach(Control target, string title, string? desc,
