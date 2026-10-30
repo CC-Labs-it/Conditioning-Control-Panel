@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using ConditioningControlPanel.Services;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -183,6 +184,20 @@ internal static class Win32Overlay
             if (window.TryGetPlatformHandle()?.Handle == hwnd && (!current.Ok || current.Value == ExcludeFromCapture))
                 set(hwnd, before);
         }
+    }
+
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+    internal static IReadOnlyList<BrainDrainKeepClear.BandEntry> VisibleOwnBand(IReadOnlyList<Window> windows)
+    {
+        var own = windows.Select(w => w.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero).ToHashSet();
+        var band = new List<BrainDrainKeepClear.BandEntry>();
+        int steps = 0;
+        for (var h = GetTopWindow(IntPtr.Zero); h != IntPtr.Zero && steps++ < 1024; h = GetWindow(h, 2))
+        {
+            if ((GetWindowLong(h, GwlExStyle) & WsExTopmost) == 0) break;
+            if (IsWindowVisible(h)) band.Add(new(h, own.Contains(h), false));
+        }
+        return band;
     }
 
     // Per window: whether it should currently be click-through, read by the style callback.
