@@ -38,6 +38,14 @@ public sealed class ChaosWaveTimerWindowTests
     private static void Ticks(int n) { for (int i = 0; i < n; i++) ChaosRunHost.Tick(); }
 
     [Fact]
+    public async Task Video_probe_restores_its_native_raise_delegate()
+    {
+        var originalRaise = ChaosWaveTimerWindow.RaiseWindow;
+        await Video_birth_and_click_raise_the_watch_only_in_a_pinned_run();
+        Assert.Same(originalRaise, ChaosWaveTimerWindow.RaiseWindow);
+    }
+
+    [Fact]
     public async Task Video_birth_and_click_raise_the_watch_only_in_a_pinned_run()
     {
         await AvaloniaTestDispatcher.RunAsync(async () =>
@@ -45,6 +53,7 @@ public sealed class ChaosWaveTimerWindowTests
             Setup();
             ChaosWaveTimerWindow.SkipPlatformChecksForTests = true;
             CoreSettings.Current.ChaosPinOnTop = true;
+            var originalRaise = ChaosWaveTimerWindow.RaiseWindow;
             int raises = 0;
             ChaosWaveTimerWindow.RaiseWindow = w =>
             {
@@ -99,6 +108,7 @@ public sealed class ChaosWaveTimerWindowTests
             }
             finally
             {
+                ChaosWaveTimerWindow.RaiseWindow = originalRaise;
                 video?.Close();
                 ChaosRunHost.ForceShutdown();
                 ChaosWaveTimerWindow.SkipPlatformChecksForTests = false;

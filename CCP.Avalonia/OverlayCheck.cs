@@ -1,5 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Threading;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Services.Chaos;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
@@ -119,6 +125,101 @@ namespace ConditioningControlPanel.Avalonia
             XCloseDisplay(display);
             Console.WriteLine(fails == 0 ? "PASS" : $"FAIL ({fails} mismatch(es))");
             return fails == 0 ? 0 : 1;
+        }
+
+        [DllImport(LibX11)] private static extern int XGetInputFocus(IntPtr display, out IntPtr focus, out int revert);
+        [DllImport(LibX11)] private static extern int XQueryTree(IntPtr display, IntPtr window,
+            out IntPtr root, out IntPtr parent, out IntPtr children, out uint count);
+
+        /// <summary>Focused native regression for WPF ChaosWindowZ.cs:37-56. Run in a private
+        /// composited X11/KWin session: dotnet run --project CCP.Avalonia -- --wave-timer-check.
+        /// Reads native attributes, fullscreen stacking and focus, with no mocked raise delegate.</summary>
+        internal static int RunWaveTimer()
+        {
+            if (!OperatingSystem.IsLinux() || IntPtr.Size != 8)
+            {
+                Console.Error.WriteLine("Wave timer check requires 64-bit X11.");
+                return 2;
+            }
+            // Like headless tests, load resources without normal desktop startup services.
+            Program.BuildAvaloniaApp().SetupWithoutStarting();
+            using var stopped = new CancellationTokenSource();
+            var display = XOpenDisplay(IntPtr.Zero);
+            if (display == IntPtr.Zero) return 1;
+            int result = 0;
+            Window? video = null;
+            bool savedPin = CoreSettings.Current.ChaosPinOnTop;
+            void Check(bool ok, string message)
+            {
+                Console.WriteLine($"[{(ok ? "ok" : "FAIL")}] {message}");
+                if (!ok) throw new InvalidOperationException(message);
+            }
+            Dispatcher.UIThread.Post(async () =>
+            {
+                try
+                {
+                    foreach (bool pinned in new[] { true, false })
+                    {
+                        CoreSettings.Current.ChaosPinOnTop = pinned;
+                        ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                        Check(ChaosRunHost.State != null, "run started");
+                        ChaosRunHost.State!.ShowWaveTimer = true;
+                        ChaosRunHost.Overlay!.FinishCountdown();
+                        ChaosRunHost.StopTimerForTests();
+                        ChaosRunHost.Tick();
+                        var watch = ChaosWaveTimerWindow.Active;
+                        Check(watch != null, "watch created on a composited display");
+                        var watchId = watch!.TryGetPlatformHandle()!.Handle;
+                        Check(Read(display, watchId)?.OverrideRedirect == pinned,
+                            $"override_redirect matches pin setting ({pinned})");
+                        video = MandatoryVideoOverlay.Instance.Build(null, false).Window;
+                        var videoId = video.TryGetPlatformHandle()!.Handle;
+                        await Task.Delay(1000); // KWin fullscreen activation and the 60 ms raise
+                        XGetInputFocus(display, out var focus, out _);
+                        Check(focus == videoId, "fullscreen video has keyboard focus");
+                        if (pinned)
+                        {
+                            var frame = videoId;
+                            IntPtr root;
+                            while (true)
+                            {
+                                XQueryTree(display, frame, out root, out var parent, out var children, out _);
+                                if (children != IntPtr.Zero) XFree(children);
+                                if (parent == root) break;
+                                frame = parent;
+                            }
+                            XQueryTree(display, root, out _, out _, out var siblings, out var count);
+                            try
+                            {
+                                var order = Enumerable.Range(0, checked((int)count))
+                                    .Select(i => Marshal.ReadIntPtr(siblings, i * IntPtr.Size)).ToArray();
+                                Check(Array.IndexOf(order, watchId) > Array.IndexOf(order, frame),
+                                    "watch is above focused fullscreen video in native stacking order");
+                            }
+                            finally { if (siblings != IntPtr.Zero) XFree(siblings); }
+                            ChaosWaveTimerWindow.RaiseActive();
+                            await Task.Delay(100);
+                            XGetInputFocus(display, out var afterRaise, out _);
+                            Check(afterRaise == focus, "raising watch preserves video keyboard focus");
+                        }
+                        video.Close();
+                        video = null;
+                        ChaosRunHost.ForceShutdown();
+                    }
+                }
+                catch (Exception e) { Console.Error.WriteLine(e); result = 1; }
+                finally
+                {
+                    video?.Close();
+                    ChaosRunHost.ForceShutdown();
+                    CoreSettings.Current.ChaosPinOnTop = savedPin;
+                    stopped.Cancel();
+                }
+            });
+            Dispatcher.UIThread.MainLoop(stopped.Token);
+            XCloseDisplay(display);
+            Console.WriteLine(result == 0 ? "PASS wave timer native stacking" : "FAIL wave timer native stacking");
+            return result;
         }
 
         [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);

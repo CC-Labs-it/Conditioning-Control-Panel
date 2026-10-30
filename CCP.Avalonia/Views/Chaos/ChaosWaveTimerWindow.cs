@@ -41,7 +41,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static void EnsureCreated()
         {
             if (Active != null || _refused) return;
-            try { Active = new ChaosWaveTimerWindow(live: true); Active.Show(); }
+            try
+            {
+                var w = new ChaosWaveTimerWindow(live: true);
+                // WPF ChaosWindowZ.cs:37-56: above fullscreen video without activation.
+                // Bypass the WM before mapping, otherwise KWin can keep fullscreen above us.
+                if (w.Topmost && !X11Overlay.SetOverrideRedirect(w, passive: true) && !SkipPlatformChecksForTests)
+                {
+                    _refused = true;
+                    w.Close();
+                    return;
+                }
+                Active = w;
+                w.Show();
+            }
             catch (Exception ex) { Log.Debug("ChaosWaveTimer.EnsureCreated: {E}", ex.Message); }
         }
 
