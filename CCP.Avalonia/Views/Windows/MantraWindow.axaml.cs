@@ -497,7 +497,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void ApplyDroneVolume()
         {
             if (_drone == null) return;
-            var masterVol = _droneRamped ? CoreSettings.Current.MantraDroneVolume / 100.0 : 1.0;
+            var masterVol = (_droneRamped ? CoreSettings.Current.MantraDroneVolume / 100.0 : 1.0) * MasterGain();
             _drone.Volume = Platform.ToneWav.VlcVolume(_droneCurrentGain * masterVol * Platform.ToneWav.DronePeak);
         }
 
@@ -518,9 +518,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _drone = null;
         }
 
+        private static float MasterGain() => Math.Clamp(CoreSettings.Current.MasterVolume / 100f, 0f, 1f);
+
         private static void PlayTone(double frequency, int durationMs)
         {
-            try { CoreAudio.PlayOneShot(Platform.ToneWav.Tone(frequency, durationMs), 0.15f, "mantra"); }
+            try { CoreAudio.PlayOneShot(Platform.ToneWav.Tone(frequency, durationMs), 0.15f * MasterGain(), "mantra"); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Failed to play mantra tone"); }
         }
 
