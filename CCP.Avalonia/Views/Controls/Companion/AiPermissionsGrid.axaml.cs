@@ -21,11 +21,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// <c>_isLoading</c> (WPF's <c>SyncLabEffectPermsUI</c>) and compared before writing, because
     /// Avalonia raises <c>IsCheckedChanged</c> on a programmatic set too.</para>
     ///
-    /// <para><b>One write is deliberately NOT restored.</b> WPF's <c>UpdateUnlockablesVisibility</c>
-    /// force-clear (which unticks <c>ChkCapEffects</c> once an account has lapsed) is not ported:
-    /// it is a WRITE decided by an entitlement this head cannot see, so here it would silently
-    /// destroy a paid-up user's setting on every launch. Seeding shows the stored truth; only a
-    /// head that can read Patreon may repair it.</para>
+    /// <para>WPF MainWindow.UiUpdates.cs:909: tier changes repaint the effective checkbox
+    /// and permissions lock band while preserving the saved preference.</para>
     ///
     /// <para><see cref="ApplyTierGate"/> and the master toggle's refusal now call the real
     /// <c>TierGate</c> (CCP.Core/Services/TierGate.cs), not a local stand-in, over the providers
@@ -97,7 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         }
 
         // Providers raise this off the UI thread (a poll or a sign-in callback).
-        private void OnTierChanged(object? sender, global::ConditioningControlPanel.Models.PatreonTier tier) => Dispatcher.UIThread.Post(ApplyTierGate);
+        private void OnTierChanged(object? sender, global::ConditioningControlPanel.Models.PatreonTier tier) => Dispatcher.UIThread.Post(() => { SyncFromSettings(); ApplyTierGate(); });
 
         protected override void OnDetachedFromVisualTree(global::Avalonia.VisualTreeAttachmentEventArgs e)
         {

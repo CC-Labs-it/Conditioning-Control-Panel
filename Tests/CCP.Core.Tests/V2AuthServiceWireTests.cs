@@ -73,6 +73,27 @@ public sealed class V2AuthServiceWireTests : IDisposable
     }
 
     [Fact]
+    public async Task SuccessfulProfileAndHeartbeatOfferTierButErrorsDoNot()
+    {
+        var old = V2AuthService.TierReadingProvider;
+        var readings = new List<(string, int?)>();
+        try
+        {
+            V2AuthService.TierReadingProvider = (id, tier) => readings.Add((id, tier));
+            _fake.Body = "{\"user\":{\"effective_tier\":2}}";
+            Assert.NotNull(await Client().GetUserProfileAsync("u_abc123"));
+            _fake.Body = "{\"effective_tier\":1}";
+            Assert.True(await Client().SendHeartbeatAsync("u_abc123"));
+            Assert.Equal(new[] { ("u_abc123", (int?)2), ("u_abc123", (int?)1) }, readings);
+            _fake.Status = HttpStatusCode.InternalServerError;
+            Assert.Null(await Client().GetUserProfileAsync("u_abc123"));
+            Assert.False(await Client().SendHeartbeatAsync("u_abc123"));
+            Assert.Equal(2, readings.Count);
+        }
+        finally { V2AuthService.TierReadingProvider = old; }
+    }
+
+    [Fact]
     public async Task EveryRequestMatchesTheWpfFixture()
     {
         var c = Client();
