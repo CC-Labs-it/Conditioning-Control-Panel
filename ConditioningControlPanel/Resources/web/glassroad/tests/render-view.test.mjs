@@ -5,8 +5,9 @@ import { createFeel } from '../core/feel.js';
 import { loadTrack } from '../track/load.js';
 import { KART_VIEW, scaledRadius, chaseFraming, nearCuePlan, basisMatrix, NEAR_LOOK } from '../render/viewMath.js';
 import { onLoop } from '../render/colossiMath.js';
-import { RACER_FRAMING } from '../render/framing.js';
+import { RACER_FRAMING, RACER_GROWTH } from '../render/framing.js';
 import { CHASE_NEUTRAL_PITCH_DEG } from '../core/chaseView.js';
+import { gap } from '../sim/gaps.js';
 import { createCamRig } from '../render/cameraMath.js';
 import { S, createState } from '../sim/state.js';
 
@@ -28,7 +29,9 @@ test('view: the reference framing opens road-word space while retaining a close 
 
 test('view: EMI remains readable and the requested upward neutral records its lower-frame tradeoff', () => {
   const now = chaseFraming(cam, feel.get('fov.baseVDeg'), ASPECTS.desk);
-  assert.ok(KART_VIEW.scale / BEFORE_SCALE >= 1.1 && KART_VIEW.scale / BEFORE_SCALE <= 1.2, 'modest whole-racer enlargement');
+  // owner 2026-10-23 took 0.68 -> 0.78; the interaction wave (2026-10-30) grew that by 8% more
+  assert.ok(Math.abs(KART_VIEW.scale - 0.78 * RACER_GROWTH) < 1e-9, 'accepted scale x RACER_GROWTH');
+  assert.ok(KART_VIEW.scale / BEFORE_SCALE >= 1.2 && KART_VIEW.scale / BEFORE_SCALE <= 1.3, 'modest whole-racer enlargement');
   assert.ok(now.kartW >= 0.13 && now.kartW <= 0.18, 'readable screen width ' + now.kartW);
   assert.ok(now.kartY > .8 && now.kartY < .83, 'requested neutral puts the player lower in the desktop view');
   assert.ok(now.horizonY < now.kartY - 0.17, 'road ahead between horizon and kart');
@@ -83,6 +86,10 @@ test('view: collision sizes follow the kart scale', () => {
   const r = KART_VIEW.modelRadiusM * KART_VIEW.scale;
   assert.ok(Math.abs(feel.get('contact.radiusM') - r) < 0.1, 'contact radius ' + feel.get('contact.radiusM') + ' vs visual ' + r);
   assert.equal(scaledRadius(0.8, 0.68), 0.54);
+  // interaction wave: the sim sizes grow with the look (0.54 -> 0.58 contact, 0.5 -> 0.54 rail distance)
+  assert.equal(feel.get('contact.radiusM'), scaledRadius(0.54, RACER_GROWTH));
+  assert.equal(gap(feel, 'kart.radiusM'), scaledRadius(0.5, RACER_GROWTH));
+  assert.equal(feel.get('contact.maxHeightM'), scaledRadius(1.05, RACER_GROWTH));
   assert.ok(feel.get('contact.maxHeightM') <= 1.5 * KART_VIEW.scale + 0.05, 'contact height follows the kart height');
 });
 

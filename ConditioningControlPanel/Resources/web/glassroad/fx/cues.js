@@ -118,7 +118,7 @@ export const FX_CUES = {
   // (pickup bubble, slipstream) keep their band speed in proportion to their size against a pad
   'boost-start'(fx, p) {
     const { kind, amount = 0 } = p, L = boostLadder(fx.feel, p);
-    const small = kind === 'bubble' || kind === 'slip';
+    const small = kind === 'bubble' || kind === 'slip' || kind === 'bump';
     const size = small ? Math.min(1, Math.max(0.3, amount / fx.feel.get('pad.amount'))) : 1;
     fx.hold('lines', L.lines, fx.feel.get('boost.riseS'));
     fx.hold('bandSpeed', fx.gentle.scroll((j(fx, 'boostBandMul') - 1) * size), fx.feel.get('boost.riseS'));

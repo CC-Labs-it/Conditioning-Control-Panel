@@ -334,11 +334,11 @@
     "cornerMargin": 0.9
   },
   "contact": {
-    "radiusM": 0.54,
-    "maxHeightM": 1.05,
-    "pushMps": 3.5,
+    "radiusM": 0.58,
+    "maxHeightM": 1.13,
+    "pushMps": 4.2,
     "pushPerDv": 0.5,
-    "maxPushMps": 7,
+    "maxPushMps": 8.4,
     "speedRefMps": 12,
     "boostShoveMul": 1.6,
     "stalledShoveMul": 1.6,
@@ -353,7 +353,11 @@
     "slipChargeS": 0.8,
     "slipAmount": 0.1,
     "slipHoldS": 0.6,
-    "slipCooldownS": 2.5
+    "slipCooldownS": 2.5,
+    "hardBumpDvMps": 6,
+    "bumpBoostAmount": 0.06,
+    "bumpBoostHoldS": 0.4,
+    "bumpBoostCooldownS": 3
   },
   "permanence": { "skidCapMul": 3, "skidLifeS": 600, "scorchLenM": 1.4, "scorchWidthM": 0.9, "scorchColour": "#3a1430",
     "debrisCount": 10, "debrisSettleS": 20, "debrisFadeS": 1.5, "debrisSizeM": 0.16 },

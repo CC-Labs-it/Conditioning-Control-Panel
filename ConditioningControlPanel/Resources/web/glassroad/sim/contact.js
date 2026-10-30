@@ -10,6 +10,11 @@
  * Slipstream: sit slipMinM..slipMaxM behind a kart, inside slipWidthM, both fast and grounded, for
  * slipChargeS and a small boost fires (sim/grant.js), then slipCooldownS; on an open stretch the charge holds
  * full and fires once the road is railed again (polish 6). No three.js.
+ * Interaction wave (2026-10-30): a kart-vs-kart contact closing at contact.hardBumpDvMps or more also emits
+ * hard-bump { winner, loser, dv, p } (winner = the heavier kart by weight(); pair cooldown applies), and the
+ * winner gets a small bump boost (contact.bumpBoostAmount, per racer contact.bumpBoostCooldownS apart), never
+ * on an open stretch or a court / stones hold, never cutting a bigger boost (grant.js). fxv.slipFrom names
+ * the kart a drafter sits behind (-1 none) for the slipstream ribbon (render/slipRibbon.js).
  */
 import { S, RESPAWN, BOOST } from './state.js';
 import { wrap, clamp } from '../core/math.js';
@@ -31,8 +36,9 @@ export function createContact(track, feel, events) {
   const L = track.lengthM;
   const cool = new Map();          // pair key -> seconds left before the next push and bump cue
   const slip = [];                 // per racer { charge, cool, inWake }
+  const bumpCool = [];             // per racer seconds left before another bump boost
 
-  function reset() { cool.clear(); slip.length = 0; }
+  function reset() { cool.clear(); slip.length = 0; bumpCool.length = 0; }
   /** A kart on a stretch with an open side (no rail there). */
   function openAt(st) {
     const f = track.nodeFlags ? track.nodeFlags(st[S.seg] | 0) : null;
@@ -120,12 +126,25 @@ export function createContact(track, feel, events) {
     seat(r, q);
   }
 
+  /** A hard kart-vs-kart contact: the event, then the winner's small bump boost when the road allows it. */
+  function hardBump(win, lose, dv, a, b) {
+    const p = [(a[S.posX] + b[S.posX]) / 2, (a[S.posY] + b[S.posY]) / 2, (a[S.posZ] + b[S.posZ]) / 2];
+    events.emit('hard-bump', { winner: win.i, loser: lose.i, dv, p });
+    const st = win.st;
+    if ((bumpCool[win.i] || 0) > 0 || openAt(st) || courtAt(st) || st[S.respawnPhase] !== RESPAWN.NONE) return;
+    const wf = win.feel || feel;
+    if (grantBoost(st, feel.get('contact.bumpBoostAmount'), feel.get('contact.bumpBoostHoldS'), 'bump', wf, win.events || events)) {
+      bumpCool[win.i] = feel.get('contact.bumpBoostCooldownS');
+    }
+  }
+
   function update(dt, racers, race) {
     const live = race.phase === 'racing' || race.phase === 'finished';
     const startGhost = race.phase === 'racing' && race.timeS < feel.get('contact.ghostS');
     for (const r of racers) r.fxv.ghost = live && (startGhost || r.st[S.respawnPhase] !== RESPAWN.NONE);
-    if (!live) { for (const r of racers) r.fxv.slip = 0; return; }
+    if (!live) { for (const r of racers) { r.fxv.slip = 0; r.fxv.slipFrom = -1; } return; }
     for (const [k, v] of cool) { if (v - dt <= 0) cool.delete(k); else cool.set(k, v - dt); }
+    for (let i = 0; i < bumpCool.length; i++) if (bumpCool[i] > 0) bumpCool[i] = Math.max(0, bumpCool[i] - dt);
 
     const radius = feel.get('contact.radiusM'), maxH = feel.get('contact.maxHeightM');
     const n = racers.length;
@@ -198,6 +217,7 @@ export function createContact(track, feel, events) {
             events.emit('bump', { a: i, b: j, dv: c,
               p: [(a[S.posX] + b[S.posX]) / 2, (a[S.posY] + b[S.posY]) / 2, (a[S.posZ] + b[S.posZ]) / 2] });
           }
+          if (c >= feel.get('contact.hardBumpDvMps')) hardBump(wa >= wb ? ra : rb, wa >= wb ? rb : ra, c, a, b);
         }
         holdInside(ra, beforeA); holdInside(rb, beforeB);
       }
@@ -210,14 +230,14 @@ export function createContact(track, feel, events) {
     for (const r of racers) {
       const w = (slip[r.i] ||= { charge: 0, cool: 0, inWake: false });
       w.cool = Math.max(0, w.cool - dt);
-      let wake = false;
+      let wake = false, from = -1;
       if (w.cool <= 0 && fast(r)) {
         for (const o of racers) {
           if (o === r || !fast(o)) continue;
           const ownFork = track.forkAtSeg?.(r.st[S.seg]), otherFork = track.forkAtSeg?.(o.st[S.seg]);
           if (ownFork !== otherFork) continue;
           const ds = ownFork ? ownFork.localS(o.st[S.s]) - ownFork.localS(r.st[S.s]) : wrap(o.st[S.s] - r.st[S.s], L);
-          if (ds >= minM && ds <= maxM && Math.abs(o.st[S.lateral] - r.st[S.lateral]) < wid) { wake = true; break; }
+          if (ds >= minM && ds <= maxM && Math.abs(o.st[S.lateral] - r.st[S.lateral]) < wid) { wake = true; from = o.i; break; }
         }
       }
       if (wake) {
@@ -235,6 +255,7 @@ export function createContact(track, feel, events) {
         w.charge = Math.max(0, w.charge - dt);
       }
       r.fxv.slip = clamp(w.charge / chargeS, 0, 1);
+      r.fxv.slipFrom = wake ? from : -1;
     }
   }
 

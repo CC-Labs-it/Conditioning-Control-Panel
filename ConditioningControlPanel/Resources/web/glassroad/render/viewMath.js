@@ -5,7 +5,7 @@
  * reads clearly during play, held below the middle to match the supplied reference. The camera distances
  * live in feel.json "camera"; shared size and composition live in framing.js (KART_VIEW.scale, applied on every kart root by
  * render/karts.js, so the pose, sparks, wakes, skids, ring and aura all follow it). The sim's collision sizes
- * retain the accepted P6 values (feel.json contact.radiusM, sim/gaps.js kart.radiusM).
+ * follow it: the interaction wave (2026-10-30) grew both by RACER_GROWTH (feel.json contact.radiusM, sim/gaps.js kart.radiusM).
  *
  * The near cues (render/nearDressing.js): lamp posts just outside a railed edge, a banner on every other
  * post, streaming past the kart at a steady rhythm. They give the eye speed and a human scale next to the
