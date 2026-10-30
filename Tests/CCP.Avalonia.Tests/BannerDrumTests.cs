@@ -89,8 +89,10 @@ public class BannerDrumTests
         public override long GetTimestamp() => 0;
     }
 
-    [Fact]
-    public void ShellPaintAndRollUseTheLiveBannerControls()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ShellPaintAndRollUseTheLiveBannerControls(bool runnerAnimationsEnabled)
     {
         AvaloniaTestDispatcher.Run(() =>
         {
@@ -98,9 +100,15 @@ public class BannerDrumTests
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            var w = new MainShellWindow();
+            var oldProbe = UiMotionPreference.OsProbe;
+            var settings = CoreSettings.Current;
+            var oldMotion = (settings.MotionLevel, settings.GentleVisuals);
+            MainShellWindow? w = null;
             try
             {
+                UiMotionPreference.OsProbe = () => runnerAnimationsEnabled;
+                UiMotionPreference.CacheStamp = long.MinValue;
+                w = new MainShellWindow();
                 var host = w.Named<Border>("HeaderBannerHost")!;
                 Assert.Equal(31, host.Height);
                 Assert.True(w.Named<Grid>("BannerDrum")!.ClipToBounds);
@@ -123,7 +131,13 @@ public class BannerDrumTests
                 Assert.Equal(10, lip.EndPoint.Point.X);
                 var a = w.Named<TextBlock>("TxtBannerPrimary")!;
                 var b = w.Named<TextBlock>("TxtBannerSecondary")!;
-                CoreSettings.Current.MotionLevel = MotionLevel.Full;
+                Assert.Equal(runnerAnimationsEnabled, UiMotionPreference.AnimationsEnabled);
+                // Full motion needs an uncapped environment even on a reduced-motion runner.
+                settings.GentleVisuals = false;
+                UiMotionPreference.OsProbe = () => true;
+                UiMotionPreference.CacheStamp = long.MinValue;
+                settings.MotionLevel = MotionLevel.Full;
+                Assert.Equal(MotionLevel.Full, AmbientFxCanvas.Env.Level);
                 w.Crossfade(a, b);
                 var group = Assert.IsType<TransformGroup>(b.RenderTransform);
                 Assert.Equal(13, Assert.IsType<TranslateTransform>(group.Children[1]).Y);
@@ -141,7 +155,18 @@ public class BannerDrumTests
                 Assert.Equal(1, a.Opacity);
                 Assert.Equal(0, b.Opacity);
             }
-            finally { w.Close(); }
+            finally
+            {
+                settings.MotionLevel = MotionLevel.Off;
+                if (w is not null)
+                {
+                    w.RollBannerDrum(w.Named<TextBlock>("TxtBannerPrimary")!, w.Named<TextBlock>("TxtBannerSecondary")!);
+                    w.Close();
+                }
+                (settings.MotionLevel, settings.GentleVisuals) = oldMotion;
+                UiMotionPreference.OsProbe = oldProbe;
+                UiMotionPreference.CacheStamp = long.MinValue;
+            }
         });
     }
 }
