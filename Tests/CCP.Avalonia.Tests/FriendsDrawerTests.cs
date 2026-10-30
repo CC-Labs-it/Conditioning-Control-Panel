@@ -671,6 +671,10 @@ public sealed class FriendsDrawerTests
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        ConditioningControlPanel.CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        ConditioningControlPanel.CoreSettings.Current.GentleVisuals = false;
+        UiMotionPreference.OsProbe = () => true;
+        UiMotionPreference.CacheStamp = long.MinValue;
         var (svc, _) = Service();
         var feed = new FriendsFeed(() => "u_me");
         var chip = new FriendsRailChip(svc);
@@ -687,12 +691,14 @@ public sealed class FriendsDrawerTests
             Assert.True(feed.Add(Ev("b", "u_x", "Kit", 2)));
             Assert.True(feed.Add(Ev("c", "u_x", "Kit", 3)));
             Assert.Equal(3, chip.UnreadBadge);
+            Assert.IsType<global::Avalonia.Media.ScaleTransform>(Tagged<Border>(chip, "friends-chip-unread")!.RenderTransform);
 
             chip.Toggle();
             Assert.True(chip.IsOpen);
             var d = chip.Drawer;
             Assert.True(d.FeedSection.IsVisible);
             Assert.Equal(new[] { "c", "b", "a" }, d.FeedLineKeys);
+            Assert.Null(Tagged<Border>(d, "friends-feed-line:c")!.RenderTransform);
             Assert.Equal(0, feed.Unread);
             Assert.Equal(0, chip.UnreadBadge);
             Assert.Equal(3, d.GetLogicalDescendants().OfType<Control>().Count(c => c.Tag as string == "friends-feed-new"));
@@ -705,6 +711,10 @@ public sealed class FriendsDrawerTests
             Assert.True(feed.Add(Ev("d", "u_x", "Kit", 4)));
             Assert.Equal("d", d.FeedLineKeys[0]);
             Assert.Equal(0, feed.Unread);
+            Assert.IsType<global::Avalonia.Media.TranslateTransform>(Tagged<Border>(d, "friends-feed-line:d")!.RenderTransform);
+            var glow = Assert.IsType<global::Avalonia.Media.DropShadowEffect>(Tagged<Control>(d, "friends-feed-new")!.Effect);
+            Assert.Equal(6, glow.BlurRadius);
+            Assert.Equal(0.9, glow.Opacity);
 
             // Folded and reopened: nothing new, so FoldMin lines and "more" for the rest.
             chip.Toggle();
@@ -723,8 +733,76 @@ public sealed class FriendsDrawerTests
             Click(d, "friends-feed-more");
             d.OpenFromFeed("u_on");
             Assert.NotNull(Tagged<Button>(d, "friends-action:poke"));
+            ConditioningControlPanel.CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            Assert.True(feed.Add(Ev("e", "u_x", "Kit", 5)));
+            Assert.Null(Tagged<Border>(d, "friends-feed-line:e")!.RenderTransform);
         }
         finally { chip.Toggle(); w.Close(); }
+    });
+
+    // Uses the normal feed subscriptions without Window.Show, which needs system fonts on Linux.
+    [Fact]
+    public Task LiveFeedVisualsFollowArrivalReadAndMotion() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        ConditioningControlPanel.CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        ConditioningControlPanel.CoreSettings.Current.GentleVisuals = false;
+        UiMotionPreference.OsProbe = () => true;
+        UiMotionPreference.CacheStamp = long.MinValue;
+        var feed = new FriendsFeed(() => "visual-test");
+        FriendsHead.Feed = feed;
+        var (svc, _) = Service();
+        var chip = new FriendsRailChip(svc);
+        var d = chip.Drawer;
+        FriendEvent Ev(string key) => new(FriendEventKind.PokeReceived, "u_on", "Mia", DateTime.UtcNow, key, Detail: PokeSet.Shipped[0]);
+        try
+        {
+            Assert.Null(Tagged<Border>(chip, "friends-chip-unread")!.RenderTransform);
+            feed.Add(Ev("first"));
+            Assert.IsType<global::Avalonia.Media.ScaleTransform>(Tagged<Border>(chip, "friends-chip-unread")!.RenderTransform);
+            d.OnOpened();
+            Assert.Null(Tagged<Border>(d, "friends-feed-line:first")!.RenderTransform);
+            Assert.True(feed.Add(Ev("second")));
+            Assert.IsType<global::Avalonia.Media.TranslateTransform>(Tagged<Border>(d, "friends-feed-line:second")!.RenderTransform);
+            var glow = Assert.IsType<global::Avalonia.Media.DropShadowEffect>(Tagged<Control>(d, "friends-feed-new")!.Effect);
+            Assert.Equal(6, glow.BlurRadius);
+            Assert.Equal(0.9, glow.Opacity);
+            Assert.Equal(0, feed.Unread);
+            ConditioningControlPanel.CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            feed.Add(Ev("still"));
+            Assert.Null(Tagged<Border>(d, "friends-feed-line:still")!.RenderTransform);
+        }
+        finally { d.OnClosed(); }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(MotionLevel.Off, 0)]
+    [InlineData(MotionLevel.Reduced, 0.5)]
+    [InlineData(MotionLevel.Full, 1)]
+    public Task FeedMotionMatchesWpfTimingAndAmount(MotionLevel level, double amount) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        ConditioningControlPanel.CoreSettings.Current.MotionLevel = level;
+        ConditioningControlPanel.CoreSettings.Current.GentleVisuals = false;
+        UiMotionPreference.OsProbe = () => true;
+        UiMotionPreference.CacheStamp = long.MinValue;
+        var landing = FriendsDrawer.LandingAnimation();
+        var bump = FriendsRailChip.BadgeAnimation();
+        if (amount == 0) { Assert.Null(landing); Assert.Null(bump); return Task.CompletedTask; }
+        Assert.NotNull(landing);
+        Assert.NotNull(bump);
+        Assert.Equal(TimeSpan.FromMilliseconds(280), landing.Duration);
+        Assert.Equal(-12 * amount, Assert.IsType<global::Avalonia.Styling.Setter>(landing.Children[0].Setters[0]).Value);
+        Assert.Equal(0.4 * amount, Assert.IsType<global::ConditioningControlPanel.Avalonia.Theme.BackEaseOutAmplitude>(landing.Easing).Amplitude);
+        Assert.Equal(TimeSpan.FromMilliseconds(420), bump.Duration);
+        Assert.Equal(1 + 0.45 * amount, Assert.IsType<global::Avalonia.Styling.Setter>(bump.Children[1].Setters[0]).Value);
+        Assert.Equal(0, bump.Easing.Ease(0), 8);
+        Assert.Equal(1, bump.Easing.Ease(120d / 420), 8);
+        Assert.Equal(0, bump.Easing.Ease(1), 8);
+        Assert.True(bump.Easing.Ease(240d / 420) < 0); // elastic return overshoots below rest
+        return Task.CompletedTask;
     });
 
     /// <summary>WPF FriendsDrawer.Trail.cs: under a friend's name, the latest send's trail (kind, pips, state),
