@@ -36,6 +36,8 @@ public sealed class LockdownVeilTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<AvApp>()
+                    .WithInterFont().With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                    .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -491,6 +493,8 @@ public sealed class LockdownVeilTests
     [Fact]
     public void Activation_TurnsTheShellBloodRed_FlashesOnce_AndExitRestoresIt() => Run((shell, ld) =>
     {
+        // A real 600 ms timer could remove the flash while Frame renders on a busy runner.
+        shell.LockdownFlashTime = new SteppedTime();
         var res = Application.Current!.Resources;
         Assert.True(res.TryGetResource("PinkBrush", null, out var pb));
         var pinkBefore = Hex(pb);
