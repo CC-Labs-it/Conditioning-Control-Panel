@@ -260,7 +260,9 @@ export function createPieces({ group, assetsBase = './assets/pieces/', hooks = {
     }
     // Worn things (clothes, banner, insignia) are the same kind of child as a
     // jewel: authored in the piece's own space, own material, bent by the flex.
-    if (attachments && looks[side]) for (const part of attachments.partsFor(type, looks[side])) {
+    // Only on the sculpted art: a lathe placeholder is scaled to its type height,
+    // so a worn mesh authored for the sculpted man would sit at the wrong size.
+    if (art && attachments && looks[side]) for (const part of attachments.partsFor(type, looks[side])) {
       const worn = wornMesh(part, RECEIVES_SHADOW);
       root.add(worn);
       mats.push(worn.material);
