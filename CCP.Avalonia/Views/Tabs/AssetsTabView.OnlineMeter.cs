@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Services.Fyp.Online;
 using Serilog;
@@ -45,11 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 BtnOnlineOfficialNice.Click += (_, _) => OnlineOfficialNice();
                 // The credit is the shared ScrolllerCreditLine: its own link opens scrolller.com and refuses under
                 // Strict Lock, Lockdown or a Chaos run (a second click handler here would open it twice).
-                OnlineHelp = LeashHelpButton.Create(() => new Border
-                {
-                    Padding = new global::Avalonia.Thickness(18), MaxWidth = 400, Background = new SolidColorBrush(Color.Parse("#241838")),
-                    Child = new TextBlock { Text = HelpText(), TextWrapping = TextWrapping.Wrap, Foreground = Brushes.White },
-                }, "online-media-help");
+                OnlineHelp = LeashHelpButton.Create(() => new OnlineMediaHelpSlip(), "online-media-help");
                 OnlineMeterHelp.Child = OnlineHelp;
             }
             catch (Exception ex) { Log.Warning(ex, "Online meter wiring failed"); }
