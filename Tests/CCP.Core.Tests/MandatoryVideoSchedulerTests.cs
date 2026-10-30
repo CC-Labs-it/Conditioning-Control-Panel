@@ -16,6 +16,7 @@ public sealed class MandatoryVideoSchedulerTests
     private sealed class Host : IMandatoryVideoHost
     {
         public readonly List<(string Path, bool Strict)> Shown = new();
+        public bool BubbleCountActive { get; set; }
         public int Closes;
         public double Watched;
         public void Show(string path, bool strict) => Shown.Add((path, strict));
@@ -35,6 +36,65 @@ public sealed class MandatoryVideoSchedulerTests
     }
 
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
+
+    [Fact]
+    public void Video_waits_for_the_whole_bubble_round_and_keeps_the_first_request() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { BubbleCountActive = true };
+        var picks = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () => { picks++; return Clips; });
+        try
+        {
+            Assert.True(v.Trigger(true, "/earned.mp4"));
+            Assert.True(v.Trigger(false, "/duplicate.mp4"));
+            clock.Advance(TimeSpan.FromMinutes(6)); // a long clip/strict retry still owns the screen
+            Assert.False(v.IsPlaying);
+            Assert.Empty(host.Shown);
+            Assert.Equal(0, picks);
+            host.BubbleCountActive = false;
+            clock.Advance(BubbleCountScheduler.QueuePoll);
+            Assert.True(v.IsPlaying);
+            Assert.Empty(host.Shown);
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            var shown = Assert.Single(host.Shown);
+            Assert.Equal("/earned.mp4", shown.Path);
+            Assert.True(shown.Strict);
+        }
+        finally { v.Stop(); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Waiting_video_is_cancelled_by_panic_or_stop(bool stop) => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { BubbleCountActive = true };
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        Assert.True(v.Trigger());
+        if (stop) v.Stop(); else v.ForceCleanup();
+        host.BubbleCountActive = false;
+        clock.Advance(TimeSpan.FromHours(1));
+        Assert.False(v.IsPlaying);
+        Assert.Empty(host.Shown);
+    });
+
+    [Fact]
+    public void Scheduled_video_waiting_for_bubbles_drops_if_the_card_is_switched_off() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { BubbleCountActive = true };
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        try
+        {
+            v.Start();
+            clock.Advance(TimeSpan.FromSeconds(722));
+            CoreSettings.Current.MandatoryVideosEnabled = false;
+            host.BubbleCountActive = false;
+            clock.Advance(TimeSpan.FromSeconds(3));
+            Assert.False(v.IsPlaying);
+            Assert.Empty(host.Shown);
+        }
+        finally { v.Stop(); }
+    });
 
     [Fact]
     public void Rate_follows_videos_per_hour_with_the_pre_roll_and_End_rearms() => With(6, false, () =>
