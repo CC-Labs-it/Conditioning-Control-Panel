@@ -164,9 +164,13 @@ namespace ConditioningControlPanel
 
             // The V1/V2 pill (Rain): with V2 on and a v2 row for this mod the whole avatar is Rain,
             // whatever the set; otherwise today's (mod, set) answer. The setting is never changed here.
-            return Services.Companion.AvatarGenerationRule.ResolveFolder(
+            // A baked look (RainPackHash) plays its pack folder; a missing or corrupt pack plays the
+            // embedded clips (lane R8).
+            return Services.Companion.RainPackPlayback.ResolveTubeFolder(
                 App.Settings?.Current?.AvatarGeneration,
                 EmoteGenerationFolder(modId, Services.Companion.AvatarGenerationRule.V2),
+                App.Settings?.Current?.RainPackHash,
+                hash => Services.Companion.RainPackStore.CreateDefault().TryGetFolder(hash),
                 () => ResolveV1EmoteFolder(modId!));
         }
 
@@ -300,6 +304,7 @@ namespace ConditioningControlPanel
         /// an absolute baked pack), V1 never does.</summary>
         internal bool IsRainLookActive => _circeEmoteMode
             && (IsRainFolder(_emoteFolder)
+                || Services.Companion.RainPackPlayback.IsPackFolder(_emoteFolder)
                 || (Services.Companion.AvatarGenerationRule.IsV2(App.Settings?.Current?.AvatarGeneration)
                     && !string.IsNullOrEmpty(_emoteFolder)
                     && string.Equals(_emoteFolder,
