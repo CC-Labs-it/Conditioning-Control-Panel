@@ -144,6 +144,22 @@ public sealed class HelpVideoWindowTests
         finally { File.Delete(clip); }
     }
 
+    [Fact]
+    public Task PanicClosesCurrentHelpWindowAndIsSafeWhenIdle() => Run(() =>
+    {
+        HelpVideoWindow.Show(new HelpContent { SectionId = "PanicHelpTest", Title = "Help", WhatItDoes = "Help" }, null);
+        var win = Current()!;
+        try
+        {
+            var stop = PanicSurfaces.All.Single(x => x.Id == "help-video");
+            stop.Stop(null);
+            Assert.False(win.IsVisible);
+            Assert.Null(Current());
+            stop.Stop(null);
+        }
+        finally { win.Close(); }
+    });
+
     private static HelpVideoWindow? Current() =>
         (HelpVideoWindow?)typeof(HelpVideoWindow).GetField("_current", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null);
 
