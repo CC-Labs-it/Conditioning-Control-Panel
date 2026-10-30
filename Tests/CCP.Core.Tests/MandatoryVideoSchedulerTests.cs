@@ -16,7 +16,10 @@ public sealed class MandatoryVideoSchedulerTests
     private sealed class Host : IMandatoryVideoHost
     {
         public readonly List<(string Path, bool Strict)> Shown = new();
-        public int Closes;
+        public int Closes, Freezes;
+        public readonly List<bool> FreezeEnds = new();
+        public void Freeze() => Freezes++;
+        public void FinishFreeze(bool cancelled) => FreezeEnds.Add(cancelled);
         public double Watched;
         public void Show(string path, bool strict) => Shown.Add((path, strict));
         public double CloseAll() { Closes++; return Watched; }
@@ -41,6 +44,7 @@ public sealed class MandatoryVideoSchedulerTests
     {
         var s = CoreSettings.Current;
         var oldPath = s.StartupVideoPath;
+        var oldAttention = s.AttentionChecksEnabled; s.AttentionChecksEnabled = true;
         var file = System.IO.Path.GetTempFileName();
         var clock = new FakeClock(); var host = new Host();
         var v = new MandatoryVideoScheduler(host, clock, () => Clips);
@@ -64,7 +68,34 @@ public sealed class MandatoryVideoSchedulerTests
             Assert.False(empty.Trigger()); // a later user action still gets its explanation
             Assert.Equal(1, warnings);
         }
-        finally { v.ForceCleanup(); s.StartupVideoPath = oldPath; System.IO.File.Delete(file); }
+        finally { v.ForceCleanup(); s.StartupVideoPath = oldPath; s.AttentionChecksEnabled = oldAttention; System.IO.File.Delete(file); }
+    });
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void StartupFreezeTimingAndCancellation(bool attention, bool cancel) => With(6, false, () =>
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.AttentionChecksEnabled, s.StartupVideoPath);
+        s.AttentionChecksEnabled = attention; s.StartupVideoPath = null;
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        try
+        {
+            Assert.True(v.TriggerStartup());
+            Assert.Equal(attention ? 0 : 1, host.Freezes);
+            clock.Advance(TimeSpan.FromMilliseconds(cancel ? 400 : (attention ? 0 : 800) + 1299));
+            Assert.Empty(host.Shown);
+            if (cancel) v.ForceCleanup();
+            else { clock.Advance(TimeSpan.FromMilliseconds(1)); Assert.Single(host.Shown); v.End(); }
+            clock.Advance(TimeSpan.FromMinutes(1));
+            Assert.Equal(cancel ? 0 : 1, host.Shown.Count);
+            Assert.Equal(attention ? Array.Empty<bool>() : new[] { cancel }, host.FreezeEnds);
+        }
+        finally { v.ForceCleanup(); (s.AttentionChecksEnabled, s.StartupVideoPath) = saved; }
     });
 
     [Fact]

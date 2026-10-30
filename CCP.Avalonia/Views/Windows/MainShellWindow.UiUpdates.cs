@@ -1,3 +1,15 @@
+// NOT BLOCKED, MOVED - the settings toggles. SliderMaster_Changed, SliderVideoVolume_Changed,
+// SliderDuck_Changed, ChkAudioDuck_Changed, ChkExcludeBambiCloudDucking_Changed,
+// CmbAudioOutputDevice_SelectionChanged, BtnAudioOutputRefresh_Click, BtnTestAudio_Click,
+// PopulateAudioOutputDevices, ChkPerformanceMode_Changed, ChkAutoPerformance_Changed,
+// CmbMotionLevel_SelectionChanged, ChkVideoHwDecode_Changed, ChkUnifiedOverlay_Changed,
+// ChkPanicOverridesAll_Changed, ChkNoPanic_Changed, ChkWinStart_Click, ChkStartHidden_Click,
+// BtnPauseKey_Click, BtnPanicKey_Click, BtnSelectStartupVideo_Click, BtnClearStartupVideo_Click and
+// ChkOfflineMode_Changed were all "MainWindow owns the handler, the section relays to it" on WPF.
+// On this head each section owns its own handler and its own _isLoading guard:
+// Views/Controls/AppSettings/{Audio,Performance,General,Devices,Data}SettingsSection.axaml.cs.
+// Adding any of them back here would be a SECOND writer for one setting, not a restoration.
+
 using System;
 using System.Linq;
 using System.Threading.Tasks;
