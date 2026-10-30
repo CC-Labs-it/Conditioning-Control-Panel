@@ -1,0 +1,227 @@
+{
+  "slots": {
+    "dress": [
+      {
+        "id": "satin-original",
+        "name": "Pink satin",
+        "nodes": [
+          "Companion.Wardrobe.Dress",
+          "Companion.DetailV3.Waist seam",
+          "Companion.DetailV3.Waist clasp"
+        ],
+        "swatch": "#db4c9e"
+      },
+      {
+        "id": "midnight-cocktail",
+        "name": "Midnight cocktail",
+        "nodes": [
+          "WardrobePrototype.Dress.Midnight"
+        ],
+        "swatch": "#23324c"
+      },
+      {
+        "id": "rose-flare",
+        "name": "Rose flare",
+        "nodes": [
+          "WardrobePrototype.Dress.RoseFlare"
+        ],
+        "swatch": "#ac3e68"
+      }
+    ],
+    "hair": [
+      {
+        "id": "original-blonde",
+        "name": "Long blonde",
+        "nodes": [
+          "Companion.HairV4.Secondary Left front",
+          "Companion.HairV4.Secondary Left outer",
+          "Companion.HairV4.Secondary Right front",
+          "Companion.HairV4.Secondary Right outer",
+          "Companion.HairV9.Foundation",
+          "Companion.HairV9.Swept lock 00",
+          "Companion.HairV9.Swept lock 01",
+          "Companion.HairV9.Swept lock 02",
+          "Companion.HairV9.Swept lock 03",
+          "Companion.HairV9.Swept lock 04",
+          "Companion.HairV9.Swept lock 05",
+          "Companion.HairV9.Swept lock 06",
+          "Companion.HairV9.Swept lock 07",
+          "Companion.HairV9.Swept lock 08",
+          "Companion.HairV9.Swept lock 09",
+          "Companion.HairV9.Swept lock 10",
+          "Companion.HairV9.Swept lock 11"
+        ],
+        "swatch": "#e8d8ad"
+      },
+      {
+        "id": "chestnut-bob",
+        "name": "Chestnut bob",
+        "nodes": [
+          "WardrobePrototype.Hair.Bob.HairV4.Secondary Left front",
+          "WardrobePrototype.Hair.Bob.HairV4.Secondary Left outer",
+          "WardrobePrototype.Hair.Bob.HairV4.Secondary Right front",
+          "WardrobePrototype.Hair.Bob.HairV4.Secondary Right outer",
+          "WardrobePrototype.Hair.Bob.HairV9.Foundation",
+          "WardrobePrototype.Hair.Bob.HairV9.Swept lock 00",
+          "WardrobePrototype.Hair.Bob.HairV9.Swept lock 01",
+          "WardrobePrototype.Hair.Bob.HairV9.Swept lock 02",
+          "WardrobePrototype.Hair.Bob.HairV9.Swept lock 03",
+          "WardrobePrototype.Hair.Bob.HairV9.Swept lock 04",
+          "WardrobePrototype.Hair.Bob.HairV9.Swept lock 05",
+          "WardrobePrototype.Hair.Bob.HairV9.Swept lock 06",
+          "WardrobePrototype.Hair.Bob.HairV9.Swept lock 07",
+          "WardrobePrototype.Hair.Bob.HairV9.Swept lock 08",
+          "WardrobePrototype.Hair.Bob.HairV9.Swept lock 09",
+          "WardrobePrototype.Hair.Bob.HairV9.Swept lock 10",
+          "WardrobePrototype.Hair.Bob.HairV9.Swept lock 11"
+        ],
+        "swatch": "#653c2d"
+      }
+    ],
+    "accessories": [
+      {
+        "id": "hoops-original",
+        "name": "Gold hoops",
+        "nodes": [
+          "Companion.Wardrobe.Hoop.L",
+          "Companion.Wardrobe.Hoop.R"
+        ],
+        "swatch": "#d2a953"
+      },
+      {
+        "id": "glasses",
+        "name": "Fine frames",
+        "nodes": [
+          "WardrobePrototype.Accessory.Glasses"
+        ],
+        "swatch": "#322331"
+      },
+      {
+        "id": "velvet-choker",
+        "name": "Velvet choker",
+        "nodes": [
+          "WardrobePrototype.Accessory.Choker"
+        ],
+        "swatch": "#30202b"
+      },
+      {
+        "id": "hair-bow",
+        "name": "Rose ribbon",
+        "nodes": [
+          "WardrobePrototype.Accessory.HairBow"
+        ],
+        "swatch": "#b44978"
+      }
+    ],
+    "skin": [
+      {
+        "id": "original",
+        "name": "Original",
+        "swatch": "#e4b49b",
+        "materials": {
+          "Companion.MakeupV10.Skin": {
+            "color": "#ffffff"
+          },
+          "Companion.Complexion.Stockings": {
+            "color": "#ffffff"
+          }
+        }
+      },
+      {
+        "id": "warm",
+        "name": "Warm bronze",
+        "swatch": "#c58a65",
+        "materials": {
+          "Companion.MakeupV10.Skin": {
+            "color": "#e8bf9e"
+          },
+          "Companion.Complexion.Stockings": {
+            "color": "#e8bf9e"
+          }
+        }
+      },
+      {
+        "id": "deep",
+        "name": "Deep bronze",
+        "swatch": "#885637",
+        "materials": {
+          "Companion.MakeupV10.Skin": {
+            "color": "#a97856"
+          },
+          "Companion.Complexion.Stockings": {
+            "color": "#a97856"
+          }
+        }
+      }
+    ]
+  },
+  "defaultLook": {
+    "dress": "satin-original",
+    "hair": "original-blonde",
+    "skin": "original",
+    "accessories": [
+      "hoops-original"
+    ]
+  },
+  "animations": [
+    {
+      "id": "idle",
+      "name": "Idle",
+      "clip": "idle"
+    },
+    {
+      "id": "greeting",
+      "name": "Greeting",
+      "clip": "greeting"
+    },
+    {
+      "id": "jump",
+      "name": "Jump",
+      "clip": "jump"
+    }
+  ],
+  "camera": {
+    "target": [
+      0,
+      1.08,
+      0
+    ],
+    "position": [
+      -1.37,
+      1.1,
+      3.76
+    ]
+  },
+  "exportMethod": "Evaluated source geometry with measured low-rank morph animation. Prototype bridge, not production rig.",
+  "hairSources": {
+    "WardrobePrototype.Hair.Bob.HairV4.Secondary Left front": "Companion.HairV4.Secondary Left front",
+    "WardrobePrototype.Hair.Bob.HairV4.Secondary Left outer": "Companion.HairV4.Secondary Left outer",
+    "WardrobePrototype.Hair.Bob.HairV4.Secondary Right front": "Companion.HairV4.Secondary Right front",
+    "WardrobePrototype.Hair.Bob.HairV4.Secondary Right outer": "Companion.HairV4.Secondary Right outer",
+    "WardrobePrototype.Hair.Bob.HairV9.Foundation": "Companion.HairV9.Foundation",
+    "WardrobePrototype.Hair.Bob.HairV9.Swept lock 00": "Companion.HairV9.Swept lock 00",
+    "WardrobePrototype.Hair.Bob.HairV9.Swept lock 01": "Companion.HairV9.Swept lock 01",
+    "WardrobePrototype.Hair.Bob.HairV9.Swept lock 02": "Companion.HairV9.Swept lock 02",
+    "WardrobePrototype.Hair.Bob.HairV9.Swept lock 03": "Companion.HairV9.Swept lock 03",
+    "WardrobePrototype.Hair.Bob.HairV9.Swept lock 04": "Companion.HairV9.Swept lock 04",
+    "WardrobePrototype.Hair.Bob.HairV9.Swept lock 05": "Companion.HairV9.Swept lock 05",
+    "WardrobePrototype.Hair.Bob.HairV9.Swept lock 06": "Companion.HairV9.Swept lock 06",
+    "WardrobePrototype.Hair.Bob.HairV9.Swept lock 07": "Companion.HairV9.Swept lock 07",
+    "WardrobePrototype.Hair.Bob.HairV9.Swept lock 08": "Companion.HairV9.Swept lock 08",
+    "WardrobePrototype.Hair.Bob.HairV9.Swept lock 09": "Companion.HairV9.Swept lock 09",
+    "WardrobePrototype.Hair.Bob.HairV9.Swept lock 10": "Companion.HairV9.Swept lock 10",
+    "WardrobePrototype.Hair.Bob.HairV9.Swept lock 11": "Companion.HairV9.Swept lock 11"
+  },
+  "fitNotes": [
+    "Default geometry and materials are unchanged by wardrobe.build.",
+    "Alternate skirts retain native bodice, skin weights, corrective keys and clearance modifiers.",
+    "Bob uses original fitted crown and shortened lower locks; its named hair keys follow source clip actions.",
+    "Accessories are fitted in evaluated rest world space, then inverse-bound to existing deform bones.",
+    "Garment and accessory fit requires front/quarter motion review in the viewer."
+  ],
+  "limitations": [
+    "Prototype evaluated-mesh animation bridge; production deform rig optimization remains.",
+    "Native 25 fps animation samples interpolate live; three accepted clips included.",
+    "Material reconstruction is a runtime approximation of the Blender illustration shader."
+  ]
+}

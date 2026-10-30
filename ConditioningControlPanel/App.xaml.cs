@@ -182,9 +182,17 @@ namespace ConditioningControlPanel
 
         private static string ResolveUserDataPath()
         {
+            string? overrideDir = null;
+            try { overrideDir = Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"); }
+            catch (Exception ex) { Diag.Swallowed(ex); }
+            return ResolveUserDataPath(overrideDir);
+        }
+
+        /// <summary>The user data root for a given CCP_USERDATA_DIR value (null = not set).</summary>
+        internal static string ResolveUserDataPath(string? overrideDir)
+        {
             try
             {
-                var overrideDir = Environment.GetEnvironmentVariable("CCP_USERDATA_DIR");
                 if (!string.IsNullOrWhiteSpace(overrideDir) && Path.IsPathRooted(overrideDir))
                     return overrideDir;
             }
@@ -526,6 +534,8 @@ namespace ConditioningControlPanel
         public static Services.Prizes.OwnershipService? Ownership { get; private set; }
         /// <summary>Buying a v2 prize from the options panel (see Services/Prizes/V2PurchaseService).</summary>
         public static Services.Prizes.V2PurchaseService? V2Purchase { get; private set; }
+        /// <summary>Sparkles by place: posts a finished game's claim, adopts a paying receipt (see Services/Sparkles).</summary>
+        public static Services.Sparkles.SparklesClaimService? Sparkles { get; private set; }
         /// <summary>Eight-hole intake punch card (see IntakePunchCardService).</summary>
         public static IntakePunchCardService IntakePunchCard { get; private set; } = null!;
         public static TutorialService Tutorial { get; private set; } = null!;
@@ -2219,6 +2229,8 @@ namespace ConditioningControlPanel
                     s.SkillPoints = next;
                     Settings.Save();
                 })));
+            // Sparkles by place (B1). Pure constructor: nothing is sent until a game host claims.
+            Sparkles = Services.Sparkles.SparklesClaimService.CreateForApp();
             Roadmap = new RoadmapService();
             // Needs Settings, Progression and Quests (all above); Patreon is constructed above too.
             Programs = new Services.Program.ProgramService();
@@ -2715,6 +2727,12 @@ namespace ConditioningControlPanel
                     Settings?.Save();
             }
             catch (Exception ex) { Logger?.Warning(ex, "Remote holdings heal failed (non-fatal)"); }
+            // Baked Rain looks: drop half-written bakes and packs whose manifest no longer reads.
+            _ = System.Threading.Tasks.Task.Run(() =>
+            {
+                try { Services.Companion.RainPackStore.CreateDefault().Sweep(); }
+                catch (Exception ex) { Logger?.Warning(ex, "Rain pack sweep failed (non-fatal)"); }
+            });
             Lockdown = new LockdownService();
             // Possession: the haunt that rides the lockdown timer. It only arms when a lockdown starts
             // and LockdownPossessionEnabled is on, so constructing it here costs nothing.
@@ -5781,6 +5799,8 @@ Application State:
             // protect, so there is no graceful wind-down whose 1200ms timer would never tick.
             try { Services.PieceByPiece.PieceByPieceHostService.Close(); } catch (Exception ex) { Diag.Swallowed(ex); }
             try { Services.PrizeCounter.PrizeCounterHostService.Close(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // Glassroad (3D race preview): the same straight dispose.
+            try { Services.Glassroad.GlassroadHostService.Close(); } catch (Exception ex) { Diag.Swallowed(ex); }
 
             // If the companion is on its own UI thread (AvatarOwnThread), shut its Dispatcher down so the
             // STA thread's Dispatcher.Run() returns and the thread exits cleanly. Background thread, so it

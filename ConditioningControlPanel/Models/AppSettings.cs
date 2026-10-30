@@ -383,6 +383,33 @@ namespace ConditioningControlPanel.Models
             }
         }
 
+        private string _rainLook = "";
+        /// <summary>
+        /// Rain's wardrobe look (7.2 V2 avatar), JSON per Services/Companion/RainLookCodec:
+        /// <c>{"rev":1,"items":{slot:id, accessories:[ids]},"colors":{channel:"#rrggbb"}}</c>. Empty = Rain's
+        /// authored default look. Written by the wardrobe window, always clamped to the items the account
+        /// owns (RainWardrobeCatalog). Cosmetic: rides the settings backup like SelectedAvatarSet, and every
+        /// machine clamps it to that account's grants again on open.
+        /// </summary>
+        public string RainLook
+        {
+            get => _rainLook;
+            set { _rainLook = value ?? ""; OnPropertyChanged(); }
+        }
+
+        private string _avatarGeneration = "v1";
+        /// <summary>
+        /// The tube's avatar generation, one GLOBAL choice: "v1" (the classic avatar, default) or
+        /// "v2" (Rain, on mods with a v2 emote row: Bambi, Sissy, CCP Default). Flipped by the tube's
+        /// V1 | V2 pill; a mod with no v2 row plays V1 and leaves this alone. Rides the settings backup.
+        /// </summary>
+        [JsonProperty]
+        public string AvatarGeneration
+        {
+            get => _avatarGeneration;
+            set { _avatarGeneration = Services.Companion.AvatarGenerationRule.Normalize(value); OnPropertyChanged(); }
+        }
+
         // Retired with tube EMI (companion pivot, 2026-09-25). Kept only so settings files that
         // carry these keys still load; nothing reads or writes them.
         [Obsolete("Tube EMI was retired as the companion (2026-09-25).")]
@@ -4736,6 +4763,17 @@ namespace ConditioningControlPanel.Models
         {
             get => _scrolllerOfficialNoteSeen;
             set { _scrolllerOfficialNoteSeen = value; OnPropertyChanged(); }
+        }
+
+        private string _rainPackHash = "";
+        /// <summary>The look hash of the baked Rain clip pack the tube plays (a folder under
+        /// &lt;userdata&gt;/rain-packs, Services/Companion/RainPackStore). "" = the embedded default
+        /// clips. Machine-local: the pack lives on this PC only, so it is left out of the cloud
+        /// backup and kept across a restore (ProfileSyncService).</summary>
+        public string RainPackHash
+        {
+            get => _rainPackHash;
+            set { _rainPackHash = value ?? ""; OnPropertyChanged(); }
         }
 
         /// <summary>True when the user has agreed to see remote content anywhere. Read THIS,

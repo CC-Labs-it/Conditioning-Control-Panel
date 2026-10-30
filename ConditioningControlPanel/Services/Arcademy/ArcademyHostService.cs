@@ -82,6 +82,7 @@ internal static class ArcademyHostService
     private static bool _minimizedMainWindow;
     private static bool _suppressSettingEcho; // we are mid set-setting: the reply is the echo
     private static bool _classActive;         // between class-started and class-left/class-ended
+    private static DateTime _classStartedUtc; // the Sparkles claim's duration (B1)
     // The class opened by the last `class-started` that has not ended graded yet (#1455): what
     // a leave without `class-ended` settles through ArcademyOneTryRule.
     private static string? _openClassKey;
@@ -602,6 +603,7 @@ internal static class ArcademyHostService
                 break;
             case "class-started":
                 _classActive = true;
+                _classStartedUtc = DateTime.UtcNow;
                 _openClassKey = (string?)o["gameKey"];
                 _openClassEndless = o["endless"]?.Type == JTokenType.Boolean && (bool)o["endless"]!;
                 _openClassDayUtc = ArcademyOneTryRule.DayFor((string?)o["dayUtc"], DateTime.UtcNow);
@@ -3804,6 +3806,16 @@ internal static class ArcademyHostService
                     gameKey);
                 grade = "S";
             }
+
+            // SPARKLES BY PLACE (B1): every graded class claims; the server tapers repeats and
+            // checks the length. No class-started seen = no duration = the server's floor refuses it.
+            var classLength = _classStartedUtc == default ? TimeSpan.Zero : DateTime.UtcNow - _classStartedUtc;
+            _classStartedUtc = default;
+            // The results slip (W5) lands on the report card that is up when the receipt comes in.
+            var slipHost = _host;
+            _ = Sparkles.SparklesSlip.Deliver(Sparkles.SparklesGameEnd.Claim("arcademy", "solo",
+                Sparkles.SparklesResult.ForMedal(Sparkles.SparklesGameEnd.ArcademyMedal(grade)), classLength,
+                new JObject { ["grade"] = grade }), json => slipHost?.Post(new JRaw(json)));
             double flavor = Math.Clamp(ReadDouble(o, "flavorXp", 0), 0, FlavorXpCap);
 
             // THE FARM GUARD: one payout per class per UTC day. Replaying a class is a supported,

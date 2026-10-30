@@ -267,6 +267,9 @@ public partial class LauncherWindow
                 case LobbyGame.Remote:
                     _ = App.MainWindowRef?.ClaimRemoteSubjectAsync(row.Key);
                     break;
+                case LobbyGame.Race:
+                    MainWindow.OpenRaceJoin(row.Key);
+                    break;
             }
         }
         catch (Exception ex) { Log.Warning(ex, "[Launcher] lobby join {Game} failed", row.Game); }
