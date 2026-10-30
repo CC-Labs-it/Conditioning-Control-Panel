@@ -91,7 +91,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// Host seam: the Settings door repaints the tier card every time it opens, so a login that
         /// happened behind another door is never shown stale.
         /// </summary>
-        public void OnSectionShown() => Refresh();
+        public void OnSectionShown()
+        {
+            Refresh();
+            // WPF MainWindow/MainWindow.Exclusives.cs:296 -> ShowVaultPage -> RefreshVaultCore: gates can move between visits.
+            if (PlansView.PlansActive) PlansView.RefreshVault();
+        }
 
         private void Post() => global::Avalonia.Threading.Dispatcher.UIThread.Post(Refresh);
 
