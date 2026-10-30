@@ -2,6 +2,8 @@
 // half of the Glassroad host. Kept in the head under its own name so the WPF copy (which sees Core internals) never
 // meets a twin when feat/glassroad-a lands on port/7.2. The window glue is GameWindow.Glassroad.cs.
 using System;
+using System.Collections.Generic;
+using ConditioningControlPanel.Services.Race;
 using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
 
@@ -28,7 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// desktop: a signed-out player gets <c>identity: null</c> and the lobby asks them to sign in. <c>songs</c>
         /// stays empty: the private race song never ships in the app.</summary>
         public static JObject InitFrame(string? unifiedId, string? displayName, int tier,
-            bool gentleOn, double gentleFadeSeconds, double gentleSpeed)
+            bool gentleOn, double gentleFadeSeconds, double gentleSpeed, IEnumerable<string>? grants = null)
         {
             bool signedIn = !string.IsNullOrWhiteSpace(unifiedId);
             return new JObject
@@ -47,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     {
                         ["unifiedId"] = unifiedId, ["tier"] = Math.Clamp(tier, 0, 2),
                         ["displayName"] = string.IsNullOrWhiteSpace(displayName) ? "Player" : displayName,
+                        ["grants"] = GlassroadOwnership.KartGrants(grants),
                     }
                     : JValue.CreateNull(),
             };
