@@ -275,11 +275,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>Clicking the revealed face is clicking the box - one navigation, two faces.</summary>
         private void MysteryRevealFace_Click(object? sender, PointerReleasedEventArgs e) => CardMystery_Click(sender, e);
 
-        /// <summary>The rotation's keys. The DailyFreeService instance is private to App, so today's key is
-        /// read back through the provider TierGate asks (CoreEntitlement.IsFreeToday).</summary>
-        private static readonly string[] MysteryKeys = { "takeover", "awareness", "haptics", "voice", "fyp", "remote", "dtrh" };
-
-        internal static string? TodayFreeKey() => MysteryKeys.FirstOrDefault(CoreEntitlement.IsFreeToday);
+        // WPF Presets.cs:1171 reads TodayKey, not IsFreeToday: that predicate also includes
+        // member gifts and post-code grants (Core DailyFreeService.cs:153), not just the box.
+        internal static Func<string?> ReadDailyGiftKey = () => null;
+        internal static Func<System.Threading.Tasks.Task> RefreshDailyGift = () => System.Threading.Tasks.Task.CompletedTask;
+        internal static string? TodayFreeKey() => ReadDailyGiftKey();
 
         /// <summary>WPF's key -> tab table, verbatim; Drop days go to the Play door, where the game's card lives.</summary>
         internal static string? MysteryTabFor(string? key) => key switch

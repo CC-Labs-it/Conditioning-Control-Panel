@@ -392,7 +392,8 @@ public sealed class HomeMarqueeTests
     [Fact]
     public Task MysteryBoxOpensTodaysFreeFeature() => WithShell((w, dash) =>
     {
-        CoreEntitlement.IsFreeTodayProvider = k => k == "voice";
+        SettingsTabView.ReadDailyGiftKey = () => "voice";
+        CoreEntitlement.IsFreeTodayProvider = _ => true; // other grants do not change the advertised gift
         var box = dash.FindControl<ConditioningControlPanel.Avalonia.Views.Features.FeatureCard>("CardMystery")!;
         box.RaiseEvent(new RoutedEventArgs(ConditioningControlPanel.Avalonia.Views.Features.FeatureCard.ClickEvent, box));
         Dispatcher.UIThread.RunJobs();
