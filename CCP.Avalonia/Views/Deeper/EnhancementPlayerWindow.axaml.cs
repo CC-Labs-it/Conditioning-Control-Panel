@@ -225,7 +225,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // RestoreOwnerOnClose. The title-bar tint has no Linux equivalent short of
             // SystemDecorations="None" plus a hand-drawn bar, which would cost this resizable
             // window its native move/resize/maximize for a colour. Left native and untinted.
-            Closed += (_, _) => { try { (Owner as Window)?.Activate(); } catch { } };
+            Opened += (_, _) => LivePlayers.Add(this);
+            Closed += (_, _) => { LivePlayers.Remove(this); try { (Owner as Window)?.Activate(); } catch { } };
 
             _statusPill = this.FindControl<Border>("StatusPill")!;
             _statusPillText = this.FindControl<TextBlock>("StatusPillText")!;
@@ -808,6 +809,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _txtPlayPauseGlyph.Kind = _isPlaying ? IconKind.Pause : IconKind.Play;
             _txtStatus.Text = Loc.Get(_isPlaying ? "deeper_player_status_playing" : "deeper_player_status_stopped");
             UpdateStatusPill();
+        }
+
+        private static readonly HashSet<EnhancementPlayerWindow> LivePlayers = new();
+
+        /// <summary>Panic surface "deeper-player" (WPF EnhancementPlayerWindow.PanicPauseAll, b9368d963): PAUSE, not
+        /// unload; the playhead stays so Play picks up where it was, and page fullscreen drops.</summary>
+        internal static void PanicPauseAll()
+        {
+            foreach (var player in LivePlayers.ToArray())
+            {
+                if (player._isVideoMode && player._videoNavigated)
+                    _ = player._videoBrowser.InvokeScriptAsync(Controls.WebHostMedia.PanicPauseScript);
+                player._isPlaying = false;
+                player._txtPlayPauseGlyph.Kind = IconKind.Play;
+                player._txtStatus.Text = Loc.Get("deeper_player_status_stopped");
+                player.UpdateStatusPill();
+            }
         }
 
         private void BtnStop_Click()
