@@ -23,14 +23,10 @@ public class RainItemAccessTests
 
     private static string RepoRoot()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
-            dir = dir.Parent;
-        Assert.True(dir != null, "could not locate the repo root from " + AppContext.BaseDirectory);
-        return dir!.FullName;
+        return SourceRoots.RepoRoot;
     }
 
-    private static string WardrobeDir() => Path.Combine(RepoRoot(), "ConditioningControlPanel", "Resources", "web", "rain-wardrobe");
+    private static string WardrobeDir() => Path.Combine(RepoRoot(), "Assets", "web", "rain-wardrobe");
 
     private static RainItemManifest Shipped() => RainItemManifest.Load(Path.Combine(WardrobeDir(), RainItemManifest.FileName));
 

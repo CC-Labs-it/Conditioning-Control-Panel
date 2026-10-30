@@ -16,11 +16,7 @@ public class AvatarGenerationRuleTests
 {
     private static string RepoRoot()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
-            dir = dir.Parent;
-        Assert.True(dir != null, "could not locate the repo root from " + AppContext.BaseDirectory);
-        return dir!.FullName;
+        return SourceRoots.RepoRoot;
     }
 
     private static string App(string rel) => Path.Combine(RepoRoot(), "ConditioningControlPanel", rel);
@@ -80,7 +76,7 @@ public class AvatarGenerationRuleTests
     [Fact]
     public void Registry_KeepsTheOldSetRows_AndReadsTheV2RowsApart()
     {
-        var (sets, generations) = AvatarGenerationRule.ParseRegistry(File.ReadAllText(App("Resources/avatar_emotes_registry.json")));
+        var (sets, generations) = AvatarGenerationRule.ParseRegistry(File.ReadAllText(Path.Combine(SourceRoots.RepoRoot, "Assets", "avatar_emotes_registry.json")));
 
         Assert.Equal(new[] { 1, 2, 3, 4 }, sets.Where(s => s.modId == BuiltInMods.LockedId).Select(s => s.set).OrderBy(x => x));
         foreach (var mod in new[] { BuiltInMods.BambiSleepId, BuiltInMods.SissyHypnoId, BuiltInMods.CCPDefaultId })

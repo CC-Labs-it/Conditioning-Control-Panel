@@ -23,11 +23,7 @@ public sealed class RainPackStoreTests : IDisposable
 
     private static string RainEmotesDir()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
-            dir = dir.Parent;
-        Assert.True(dir != null, "could not locate the repo root from " + AppContext.BaseDirectory);
-        return Path.Combine(dir!.FullName, "ConditioningControlPanel", "Resources", "rain_emotes");
+        return Path.Combine(SourceRoots.RepoRoot, "Assets", "rain_emotes");
     }
 
     private static string? Template(string name) => File.ReadAllText(Path.Combine(RainEmotesDir(), name));

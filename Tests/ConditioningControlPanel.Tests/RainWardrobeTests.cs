@@ -18,11 +18,7 @@ public class RainWardrobeTests
 {
     private static string RepoRoot()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
-            dir = dir.Parent;
-        Assert.True(dir != null, "could not locate the repo root from " + AppContext.BaseDirectory);
-        return dir!.FullName;
+        return SourceRoots.RepoRoot;
     }
 
     private const string Look =
@@ -123,7 +119,7 @@ public class RainWardrobeTests
     [Fact]
     public void PageAndHost_AgreeOnTheBigAssetHost()
     {
-        var bridge = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Resources", "web", "rain-wardrobe", "host-bridge.js"));
+        var bridge = File.ReadAllText(Path.Combine(RepoRoot(), "Assets", "web", "rain-wardrobe", "host-bridge.js"));
         Assert.Contains($"'https://{RainWardrobeHostService.AssetsHost}/'", bridge);
         foreach (var f in RainWardrobeAssets.Files) Assert.True(f == "avatar.glb" || f == "pelvis-data.js");
     }

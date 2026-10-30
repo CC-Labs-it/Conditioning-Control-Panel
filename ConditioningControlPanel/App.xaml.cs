@@ -183,6 +183,9 @@ namespace ConditioningControlPanel
         // head gets the sandbox hook rather than only this one.
         public static string UserDataPath => CorePaths.UserData;
 
+        /// <summary>The user data root for a given CCP_USERDATA_DIR value (null = not set).</summary>
+        internal static string ResolveUserDataPath(string? overrideDir) => CorePaths.UserDataFor(overrideDir);
+
         /// <summary>
         /// User assets folder path - for user-added content that persists across updates
         /// </summary>

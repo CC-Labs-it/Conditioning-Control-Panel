@@ -23,14 +23,10 @@ public class RainTubeClipsTests
 
     private static string RepoRoot()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
-            dir = dir.Parent;
-        Assert.True(dir != null, "could not locate the repo root from " + AppContext.BaseDirectory);
-        return dir!.FullName;
+        return SourceRoots.RepoRoot;
     }
 
-    private static string RainDir => Path.Combine(RepoRoot(), "ConditioningControlPanel", "Resources", "rain_emotes");
+    private static string RainDir => Path.Combine(RepoRoot(), "Assets", "rain_emotes");
 
     private static Uri Pack(string clip) => new($"pack://application:,,,/Resources/rain_emotes/{clip}.webp", UriKind.Absolute);
 
@@ -120,7 +116,7 @@ public class RainTubeClipsTests
     public void EveryMappedClip_IsAFileAndInTheCsproj()
     {
         var csproj = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "ConditioningControlPanel.csproj"));
-        var includes = System.Text.RegularExpressions.Regex.Matches(csproj, "<Resource Include=\"Resources\\\\rain_emotes\\\\([^\"]+)\"")
+        var includes = System.Text.RegularExpressions.Regex.Matches(csproj, "<Resource Include=\"\\.\\.\\\\Assets\\\\rain_emotes\\\\([^\"]+)\"")
             .Select(m => m.Groups[1].Value).ToList();
         Assert.NotEmpty(includes);
         foreach (var clip in MappedClips().Concat(Reactions))
