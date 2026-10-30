@@ -22,7 +22,6 @@ namespace ConditioningControlPanel.Tests;
 /// fresh invite, shorten its knock countdown, or hide the sender's trail.
 /// </summary>
 [Collection("ServerClockStatics")]
-[Collection(CompanionWpfRenderCollection.Name)]
 public class FriendsServerClockTests
 {
     private const string Id1 = "0123456789abcdef";

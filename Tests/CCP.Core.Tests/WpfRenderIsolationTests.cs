@@ -23,9 +23,13 @@ public sealed class WpfRenderIsolationTests
                 Attributes: match.Groups["attributes"].Value,
                 Body: source.Substring(match.Index, (i + 1 < matches.Length ? matches[i + 1].Index : source.Length) - match.Index)));
         }).ToArray();
-        var collections = classes.Where(c => c.Attributes.Contains(
-                "[CollectionDefinition(Name, DisableParallelization = true)]"))
-            .Select(c => c.Name + ".Name").ToArray();
+        var collections = classes.SelectMany(c => Regex.Matches(c.Attributes,
+                @"\[CollectionDefinition\((?<name>[^,\r\n]+),\s*DisableParallelization\s*=\s*true\)\]")
+            .Cast<Match>().Select(match => match.Groups["name"].Value == "Name"
+                ? c.Name + ".Name" : match.Groups["name"].Value)).ToArray();
+        Assert.All(classes.GroupBy(c => c.Name), group => Assert.True(
+            group.Sum(c => Regex.Matches(c.Attributes, @"\[Collection\(").Count) <= 1,
+            group.Key + " has more than one collection"));
         Assert.NotEmpty(collections);
         var isolated = classes.Where(c => collections.Any(name => c.Attributes.Contains("[Collection(" + name + ")]")))
             .Select(c => c.Name).ToHashSet();
