@@ -10,18 +10,25 @@ internal static class CompanionApiKey
     internal const string Name = "companion_openai";
     internal const string Reference = "secret:companion_openai";
 
-    internal static void Store(string? key)
+    internal static string? SessionKey; // null: no override; empty: session-only clear
+
+    internal static bool Store(string? key)
     {
         // WPF MainWindow.CompanionRoom.cs:315 returns early without settings.
-        if (CoreSettings.Current is null) return;
-        // Store first: a store failure must not replace the last usable settings value.
-        CoreSecrets.StoreOrThrow(Name, string.IsNullOrEmpty(key) ? null : key);
-        CoreSettings.Current.CompanionPrompt.OpenAiCompatibleApiKey =
-            string.IsNullOrEmpty(key) ? "" : Reference;
+        if (CoreSettings.Current is null) return false;
+        // WPF MainWindow/MainWindow.CompanionRoom.cs:318 persists the protected value.
+        // A failed OS write must leave that persisted value intact, including legacy blobs.
+        var persisted = SecretStore.StoreWithStatus(Name, string.IsNullOrEmpty(key) ? null : key);
+        SessionKey = persisted ? null : key ?? "";
+        if (persisted)
+            CoreSettings.Current.CompanionPrompt.OpenAiCompatibleApiKey =
+                string.IsNullOrEmpty(key) ? "" : Reference;
+        return persisted;
     }
 
     internal static string? Read(string stored)
     {
+        if (SessionKey is { } session) return string.IsNullOrEmpty(session) ? null : session;
         if (stored == Reference) return CoreSecrets.Retrieve(Name);
         if (string.IsNullOrEmpty(stored)) return null;
         // WPF SecureStringHelper uses base64 DPAPI with null entropy. Preserve its legacy

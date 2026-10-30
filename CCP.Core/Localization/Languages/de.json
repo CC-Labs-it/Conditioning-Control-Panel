@@ -5280,6 +5280,7 @@
   "companion_constellation_flavor_new": "sie hat dich gerade erst kennengelernt. ",
   "companion_constellation_flavor_new_accent": "gib ihr etwas zum Erinnern.",
   "companion_engine_api_key_note": "der Schlüssel bleibt auf diesem Rechner.",
+  "companion_engine_api_key_session_only": "Die Schlüsseländerung wurde nicht gespeichert. Sie gilt bis zum Neustart.",
   "companion_engine_btn_sampler": "Sampler-Einstellungen",
   "companion_engine_btn_setup_local": "Lokale KI einrichten",
   "companion_engine_btn_test": "Verbindung testen",

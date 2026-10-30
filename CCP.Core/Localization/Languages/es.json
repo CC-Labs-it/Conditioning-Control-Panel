@@ -5280,6 +5280,7 @@
   "companion_constellation_flavor_new": "acaba de conocerte. ",
   "companion_constellation_flavor_new_accent": "dale algo que recordar.",
   "companion_engine_api_key_note": "la clave se queda en esta máquina.",
+  "companion_engine_api_key_session_only": "El cambio de clave no se guardó. Se aplica hasta reiniciar.",
   "companion_engine_btn_sampler": "Ajustes del sampler",
   "companion_engine_btn_setup_local": "Configurar IA local",
   "companion_engine_btn_test": "Probar conexión",

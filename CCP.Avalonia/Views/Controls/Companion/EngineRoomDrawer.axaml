@@ -244,6 +244,9 @@
                         <TextBox x:Name="CustomKeyBox" Theme="{StaticResource CmpFieldPasswordStyle}"/>
                         <TextBlock Text="{ReflectionBinding #Root.Strings.LocApiKeyNote}"
                                    Theme="{StaticResource CmpFaintTextStyle}" Margin="2,4,0,0"/>
+                        <TextBlock x:Name="CustomKeyNotice" IsVisible="{ReflectionBinding CustomKeySessionOnly}"
+                                   Text="{ReflectionBinding #Root.Strings.LocApiKeySessionOnly}"
+                                   Theme="{StaticResource CmpFaintTextStyle}" TextWrapping="Wrap" Margin="2,4,0,0"/>
                     </StackPanel>
                 </Grid>
                 <WrapPanel Orientation="Horizontal" Margin="0,0,0,4">

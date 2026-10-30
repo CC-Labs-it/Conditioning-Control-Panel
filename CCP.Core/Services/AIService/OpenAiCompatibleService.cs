@@ -198,13 +198,14 @@ namespace ConditioningControlPanel.Services.AIService
         private static string? GetApiKey()
         {
             var raw = Settings?.OpenAiCompatibleApiKey;
-            if (string.IsNullOrWhiteSpace(raw)) return null;
+            // The head may hold a session-only key while the persisted value is still empty.
+            // WPF SecureStringHelper.Unprotect also accepts an empty value.
 
             try
             {
                 // Value is stored encrypted at rest; decrypt on use.
                 // Unseeded (no DPAPI on this head): no key, never the stored blob sent in the clear.
-                return ApiKeyUnprotect?.Invoke(raw);
+                return ApiKeyUnprotect?.Invoke(string.IsNullOrWhiteSpace(raw) ? "" : raw);
             }
             catch (Exception ex)
             {

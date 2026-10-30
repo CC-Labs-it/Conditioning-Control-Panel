@@ -5789,6 +5789,7 @@
   "companion_constellation_flavor_new": "她才刚认识你。 ",
   "companion_constellation_flavor_new_accent": "给她点值得记住的东西。",
   "companion_engine_api_key_note": "密钥只留在这台电脑上。",
+  "companion_engine_api_key_session_only": "密钥更改未保存，仅在重启前有效。",
   "companion_engine_btn_sampler": "采样器设置",
   "companion_engine_btn_setup_local": "设置本地 AI",
   "companion_engine_btn_test": "测试连接",

@@ -135,9 +135,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             {
                 if (_suppressWrite) return;
                 Platform.CompanionApiKey.Store(value);
+                Raise(nameof(CustomKeySessionOnly));
                 CoreSettings.Save();
             }
         }
+
+        public bool CustomKeySessionOnly => Platform.CompanionApiKey.SessionKey is not null;
 
         public string CustomModel
         {
@@ -179,6 +182,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                     : Loc.Get("companion_engine_daily_limit_none");
                 IsLoggedIn = !string.IsNullOrEmpty(CoreAccount.UnifiedUserId);
                 Raise(nameof(ShowLiveActions));
+                Raise(nameof(CustomKeySessionOnly));
                 RefreshStatus();
             }
             catch (Exception ex) { Serilog.Log.Warning(ex, "EngineRoomVm: sync failed"); }
