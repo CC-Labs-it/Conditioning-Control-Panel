@@ -42,24 +42,16 @@ public sealed class EnhancementScreenMirrorTests {
                     .With(AppFonts.Options(systemEmoji: false))
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            var s = CoreSettings.Current;
-            s.OfflineMode = false;
-            s.DualMonitorEnabled = dualMonitor;
-            var screens = new[] { MakeScreen(0, true), MakeScreen(1920, false) };
-            ScreenList.QueryOverride = _ => screens;
-            var topo = new FakeTopology();
-            var mirror = new DisplayMirror(topo);
-            ScreenMirrorHead.Override = mirror;
-            var shell = new EnhancementPlayerWindow(null, null);
+            var s = CoreSettings.Current; s.OfflineMode = false; s.DualMonitorEnabled = dualMonitor;
+            var screens = new[] { MakeScreen(0, true), MakeScreen(1920, false) }; ScreenList.QueryOverride = _ => screens;
+            var topo = new FakeTopology(); var mirror = new DisplayMirror(topo);
+            ScreenMirrorHead.Override = mirror; var shell = new EnhancementPlayerWindow(null, null);
             try {
-                shell.Show();
-                Dispatcher.UIThread.RunJobs();
+                shell.Show(); Dispatcher.UIThread.RunJobs();
                 check(shell, shell.FindControl<WebHost>("VideoBrowser")!, topo, mirror);
             }
             finally {
-                shell.Close();
-                ScreenMirrorHead.Override = null;
-                Dispatcher.UIThread.RunJobs();
+                shell.Close(); ScreenMirrorHead.Override = null; Dispatcher.UIThread.RunJobs();
             }
             return Task.CompletedTask;
         });
@@ -214,5 +206,12 @@ public sealed class EnhancementScreenMirrorTests {
             host.OnWebMessage(EnhancementPlayerWindow.BrowserExitFullscreenMessage); Assert.Equal(new Window[] { tint, spiral }, raised); Assert.Contains(scripts, x => x.Contains("cursor=''"));
             scripts.Clear(); now += TimeSpan.FromSeconds(3); player.TickPlayerInput(); Assert.Empty(scripts);
         } finally { tint.Close(); spiral.Close(); other.Close(); }
+    });
+    [Fact]
+    public Task EscapeDownAndUpCloseOnlyTheChangePopup() => Run(false, (player, host, topo, mirror) => {
+        CoreSettings.Current.StrictLockEnabled = false; var popup = player.FindControl<global::Avalonia.Controls.Primitives.Popup>("ChangePopup")!; popup.IsOpen = true; Assert.True(popup.IsOpen); Assert.True(player.IsVisible);
+        player.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+        player.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = Key.Escape });
+        Assert.False(popup.IsOpen); Assert.True(player.IsVisible);
     });
 }

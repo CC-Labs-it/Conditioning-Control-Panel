@@ -125,6 +125,7 @@ public partial class EnhancementPlayerWindow {
         switch (key) {
             case Key.Escape:
                 _lastEscape = InputNow();
+                if (!repeat && _changePopup.IsOpen) { _changePopup.IsOpen = false; _escapeConsumed = true; return true; }
                 if (!repeat) { _escapeConsumed = _videoFullscreenWindow != null; ExitVideoFullscreen();
                     if (!StrictInput && (_videoNavigated || _isPlaying)) _escapeStart = InputNow(); }
                 return true;
