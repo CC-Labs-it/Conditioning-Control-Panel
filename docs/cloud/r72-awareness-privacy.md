@@ -105,3 +105,32 @@ existing test was changed, skipped or removed.
 Final restored run: dotnet test Tests/CCP.Avalonia.Tests --filter
 'FullyQualifiedName~AwarenessPrivacyCandidatesTests|FullyQualifiedName~TestIsolationTests':
 15 passed, 0 failed, 0 skipped. Build completed with 0 errors.
+
+## CI follow-up: deterministic headless font setup
+
+The GitHub API reports PR run 41086306721 as cancelled, with no failed job;
+logs for its two started Avalonia shards end with "The operation was canceled."
+There is no assertion failure in those logs to attribute to this patch.
+
+A concrete failure was reproduced locally in a fresh testhost:
+`dotnet test Tests/CCP.Avalonia.Tests --no-build --filter FullyQualifiedName~AwarenessLedgerPrivacyTests`
+failed at AwarenessLedgerPrivacyTests.cs:75 with "Could not create glyphTypeface",
+bold Consolas (compositefont:Consolas, Courier New). The mixed privacy/isolation
+run passed 19 tests before the fix. This discrepancy is initialization order:
+the platform and FontManager live for the testhost, and the first test's bare
+AppBuilder omits Program.BuildAvaloniaApp's production font mappings.
+
+The assembly's existing IsolateProcessStateAttribute.Before hook now initializes
+the production app with Skia/headless drawing on the shared UI dispatcher before
+snapshotting state. Every test therefore gets the shipped font registrations,
+regardless of which test runs first. Product behavior is unchanged.
+
+New regression TestIsolationTests.EveryTestStartsWithProductionFonts asserts the
+app and Inter default exist before test work and measures bold monospace text.
+It failed alone before the fix (1 failed, 0 passed); no existing test changed.
+After the fix the privacy/candidate/ledger/font/isolation group passed all 22
+tests, with no skips. The previously crashing ledger test passed alone (1/1).
+Core guards passed; avalonia_docs self-check passed; git diff --check passed.
+Shuffled-order validation (`CCP_TEST_ORDER_SEED=17`) expanded that filter with
+ChasterRaffleCardLayout, BlinkTrainerSession and EmiBookDemo: 39 passed,
+0 failed, 0 skipped. The test-project rebuild completed with 0 errors.

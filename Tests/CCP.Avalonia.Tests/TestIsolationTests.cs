@@ -31,6 +31,22 @@ public class TestIsolationTests
         Assert.Empty(bad);
     }
 
+    [Fact]
+    public void EveryTestStartsWithProductionFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.IsType<AvApp>(global::Avalonia.Application.Current);
+        Assert.Contains("Inter", global::Avalonia.Media.FontManager.Current.DefaultFontFamily.Name);
+        var text = new global::Avalonia.Controls.TextBlock
+        {
+            Text = "[ eyes closed ]",
+            FontFamily = new global::Avalonia.Media.FontFamily("Consolas, Courier New"),
+            FontWeight = global::Avalonia.Media.FontWeight.Bold
+        };
+        text.Measure(new global::Avalonia.Size(400, 100));
+        Assert.True(text.DesiredSize.Width > 0);
+        Assert.True(text.DesiredSize.Height > 0);
+    });
+
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
 
     [Fact]
