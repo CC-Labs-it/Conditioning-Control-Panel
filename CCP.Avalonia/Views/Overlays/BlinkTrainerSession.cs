@@ -16,6 +16,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Webcam;
 using LibVLCSharp.Shared;
 using Serilog;
+using SkiaSharp;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
 {
@@ -24,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// transparent, topmost, click-through overlay per screen shows a random pool asset and swaps it on
     /// every <see cref="WebcamTracker.OnBlink"/>; auto-stops after the configured duration.
     /// Same refusals as <see cref="PinkFilterOverlay"/>: no click-through or no transparency = no overlay.
-    /// GIF/WebP session tiles loop using the shared SpiralOverlay decoder (WPF BuildTile :543).
+    /// GIF/WebP session tiles loop using WPF AnimatedWebp timing and limits (WPF BuildTile :543).
     /// Mix mode prefers same-aspect images among those already shown; WPF warms its cache.
     /// </summary>
     internal static class BlinkTrainerSession
@@ -329,9 +330,79 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return img;
         }
 
+        // WPF AnimatedWebp.cs:167-249,439: Blink Trainer uses 96 frames / 24 MiB.
+        // Keep this separate from Spiral, whose playback policy is intentionally different.
+        internal static (List<Bitmap> Frames, TimeSpan Delay) DecodeAnimation(string path, int dim)
+        {
+            var frames = new List<Bitmap>();
+            try
+            {
+                using var codec = SKCodec.Create(path);
+                if (codec == null || codec.FrameCount <= 1) return (frames, TimeSpan.Zero);
+                int count = codec.FrameCount, w = codec.Info.Width, h = codec.Info.Height;
+                if (w <= 0 || h <= 0 || (long)w * h > 4096L * 4096L) return (frames, TimeSpan.Zero);
+                var scale = Math.Min(1, dim / (double)Math.Max(w, h));
+                int tw = Math.Max(1, (int)Math.Round(w * scale)), th = Math.Max(1, (int)Math.Round(h * scale));
+                double estimatedMb = (long)tw * th * 4 * count / (1024.0 * 1024.0);
+                int keep = estimatedMb > 24 ? Math.Max(10, (int)(count * (24 / estimatedMb))) : count;
+                keep = Math.Min(keep, 96); // WPF's minimum ten is applied before the caller's frame cap.
+                int step = Math.Max(1, (int)Math.Ceiling(count / (double)keep));
+                int decodeCount = Math.Min(count, 600);
+                var info = codec.FrameInfo;
+                var full = new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
+                using var canvas = new SKBitmap(full);
+                using var scaled = new SKBitmap(new SKImageInfo(tw, th, SKColorType.Bgra8888, SKAlphaType.Premul));
+                byte[]? restore = null;
+                int restoreIndex = -1;
+                long totalMs = 0;
+                int samples = 0;
+                for (int i = 0; i < decodeCount && frames.Count < keep; i++)
+                {
+                    // WPF :201-232: compose delta frames in order, including GIF restore-previous.
+                    int prior = -1;
+                    if (i > 0 && info[i].RequiredFrame >= 0)
+                    {
+                        if (info[i - 1].DisposalMethod != SKCodecAnimationDisposalMethod.RestorePrevious)
+                            prior = i - 1;
+                        else if (restore != null && restoreIndex >= info[i].RequiredFrame)
+                        {
+                            System.Runtime.InteropServices.Marshal.Copy(restore, 0, canvas.GetPixels(), restore.Length);
+                            prior = restoreIndex;
+                        }
+                    }
+                    var options = prior >= 0 ? new SKCodecOptions(i, prior) : new SKCodecOptions(i);
+                    var result = codec.GetPixels(full, canvas.GetPixels(), options);
+                    if (result != SKCodecResult.Success && result != SKCodecResult.IncompleteInput) break;
+                    if (i + 1 < decodeCount
+                        && info[i].DisposalMethod != SKCodecAnimationDisposalMethod.RestorePrevious
+                        && info[i + 1].DisposalMethod == SKCodecAnimationDisposalMethod.RestorePrevious)
+                    {
+                        restore ??= new byte[canvas.ByteCount];
+                        canvas.GetPixelSpan().CopyTo(restore);
+                        restoreIndex = i;
+                    }
+                    if (i % step != 0) continue;
+                    canvas.ScalePixels(scaled, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
+                    frames.Add(new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, scaled.GetPixels(),
+                        new PixelSize(tw, th), new Vector(96, 96), scaled.RowBytes));
+                    if (info[i].Duration > 0) { totalMs += info[i].Duration; samples++; }
+                }
+                double average = samples > 0 ? totalMs / (double)samples : 100;
+                if (average < 20) average = 100;
+                return (frames, TimeSpan.FromMilliseconds(Math.Clamp(average * step, 20, 2000)));
+            }
+            catch (Exception ex)
+            {
+                foreach (var frame in frames) frame.Dispose();
+                frames.Clear();
+                Log.Warning(ex, "BlinkTrainer: animation decode failed");
+                return (frames, TimeSpan.Zero);
+            }
+        }
+
         private static async System.Threading.Tasks.Task DecodeThenLoop(string path, Animation anim, int dim, int swap)
         {
-            var (frames, delay) = await System.Threading.Tasks.Task.Run(() => SpiralOverlay.Decode(path, dim, 96));
+            var (frames, delay) = await System.Threading.Tasks.Task.Run(() => DecodeAnimation(path, dim));
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 // A still webp decodes to one frame and keeps its still; a swap since the start drops it.
