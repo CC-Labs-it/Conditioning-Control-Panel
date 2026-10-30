@@ -19,6 +19,10 @@ namespace ConditioningControlPanel.Services.EmiDesk;
 /// </summary>
 internal static class EmiBookDeckShop
 {
+    /// <summary>The cards the book shows: the Rain page only while the Rain V2 gate is on (RainV2Gate).</summary>
+    public static EmiBookCard[] Shipping(bool rainOn)
+        => rainOn ? Cards : System.Array.FindAll(Cards, c => c.Id != "rain");
+
     /// <summary>This batch's cards, in reading order within their tab.</summary>
     public static readonly EmiBookCard[] Cards =
     {
@@ -27,7 +31,7 @@ internal static class EmiBookDeckShop
             "THE PRIZE COUNTER",
             "a 3D *counter* that trades *Sparkles* for looks.",
             new[] { "games pay *Sparkles* by your finishing place",
-                   "looks for *{companion}*, the *kart*, *chess*, your *profile* and my desk",
+                   "looks for the *kart*, *chess*, your *profile* and my desk",
                    "the *stock* changes every week. what you own stays *stamped*",
                    "open it from the *wallet* chip on the launcher or the panel" },
             "no refunds, no gifts. Prime items need Prime to buy, and stay yours after.",

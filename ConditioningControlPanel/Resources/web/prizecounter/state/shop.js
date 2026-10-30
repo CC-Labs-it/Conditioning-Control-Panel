@@ -75,11 +75,13 @@ export function walk(shelves, f, dir) {
 }
 
 /* The window display a signed-out player sees behind the sign-in button: the art itself, greyed, no prices.
- * One family set per bay; Back Room rows stay off it (they are the account's counter). items = manifest items. */
+ * One family set per bay; Back Room rows stay off it (they are the account's counter). items = manifest items.
+ * Rain V2 waits for its release: only a host that sends init.rainV2 true shows the Rain bay and the portrait. */
 export const WINDOW_BAYS = [['rain'], ['kart'], ['chess', 'desk'], ['profile', 'prime']];
-export function windowShelves(items) {
-  const list = Array.isArray(items) ? items.filter((i) => obj(i) && typeof i.id === 'string' && i.id) : [];
-  return WINDOW_BAYS.map((fams) => ({
+export const WINDOW_BAYS_NO_RAIN = [['kart'], ['chess'], ['desk'], ['profile', 'prime']];
+export function windowShelves(items, { rain = false } = {}) {
+  const list = Array.isArray(items) ? items.filter((i) => obj(i) && typeof i.id === 'string' && i.id && (rain || i.id !== 'profile.avatar.rain-portrait')) : [];
+  return (rain ? WINDOW_BAYS : WINDOW_BAYS_NO_RAIN).map((fams) => ({
     rows: list.filter((i) => fams.includes(i.family)).sort((a, b) => fams.indexOf(a.family) - fams.indexOf(b.family))
       .slice(0, SLOTS).map((i) => readRow({ id: i.id, sale: 'soon' })),
   }));

@@ -42,7 +42,10 @@ public class CounterWearRouteTests
         Assert.Contains("kart", PrizeCounterHostService.WearsFor("glassroad"));
         Assert.DoesNotContain("kart", PrizeCounterHostService.WearsFor("wallet"));
         Assert.DoesNotContain("kart", PrizeCounterHostService.WearsFor("piecebypiece"));
+        // Rain V2 runs under the gate on (RainV2Gate; off in 7.2.0, RainV2GateTests pins that side).
         foreach (var fam in new[] { "rain", "desk", "chess", "profile" })
+            Assert.Contains(fam, PrizeCounterHostService.WearsFor("wallet", rainOn: true));
+        foreach (var fam in new[] { "desk", "chess", "profile" })
             Assert.Contains(fam, PrizeCounterHostService.WearsFor("wallet"));
     }
 

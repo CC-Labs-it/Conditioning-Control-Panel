@@ -165,9 +165,53 @@ internal static class PrizeCounterHostService
     /// <summary><c>init.wears</c>: the families this host can put on from the counter. A kart is worn
     /// only in the garage, so only a counter opened from Glassroad lists it; elsewhere the page reads
     /// "Wear it in the garage" and the button only steps back.</summary>
-    internal static string[] WearsFor(string? from) => from == "glassroad"
-        ? new[] { FamilyRain, FamilyDesk, FamilyChess, FamilyProfile, FamilyKart }
-        : new[] { FamilyRain, FamilyDesk, FamilyChess, FamilyProfile };
+    internal static string[] WearsFor(string? from) => WearsFor(from, Companion.RainV2Gate.On);
+
+    /// <summary><see cref="WearsFor(string?)"/> with the Rain V2 gate given: off, Rain is never listed.</summary>
+    internal static string[] WearsFor(string? from, bool rainOn)
+    {
+        var all = from == "glassroad"
+            ? new[] { FamilyRain, FamilyDesk, FamilyChess, FamilyProfile, FamilyKart }
+            : new[] { FamilyRain, FamilyDesk, FamilyChess, FamilyProfile };
+        return rainOn ? all : all.Where(f => f != FamilyRain).ToArray();
+    }
+
+    // ============================ Rain V2 gate (owner 2026-10-30, postponed out of 7.2.0) ============================
+
+    /// <summary>True for a Rain row id (<c>rain.*</c>) or a Rain tab id (<c>rain-*</c>).</summary>
+    internal static bool IsRainId(string? id)
+        => id != null && (id.StartsWith("rain.", StringComparison.Ordinal) || id.StartsWith("rain-", StringComparison.Ordinal));
+
+    /// <summary>
+    /// A server body as the page may see it. With the Rain V2 gate off the Rain tabs go, and any other
+    /// <c>rain.*</c> row becomes a hole (null keeps the server's slot layout); the same for a refusal's
+    /// fresh <c>state</c>. Gate on, or a body with no tabs: untouched. Never throws.
+    /// </summary>
+    internal static JObject? HideRain(JObject? body, bool rainOn)
+    {
+        if (rainOn || body == null) return body;
+        var copy = (JObject)body.DeepClone();
+        HideRainTabs(copy);
+        if (copy["state"] is JObject state) HideRainTabs(state);
+        return copy;
+    }
+
+    private static void HideRainTabs(JObject body)
+    {
+        if (body["tabs"] is not JArray tabs) return;
+        foreach (var tab in tabs.OfType<JObject>().Where(t => IsRainId(t["id"]?.Type == JTokenType.String ? (string?)t["id"] : null)).ToList())
+            tab.Remove();
+        foreach (var rows in tabs.SelectTokens("[*].shelves[*].rows").OfType<JArray>())
+            for (int i = 0; i < rows.Count; i++)
+                if (rows[i] is JObject row && row["id"]?.Type == JTokenType.String && ((string?)row["id"])!.StartsWith("rain.", StringComparison.Ordinal))
+                    rows[i] = JValue.CreateNull();
+    }
+
+    /// <summary>A <c>shop-buy</c> for a Rain row while the gate is off: the host answers <c>unavailable</c>
+    /// itself and never relays it.</summary>
+    internal static bool RefusesBuy(string? op, JObject? body, bool rainOn)
+        => !rainOn && op == PrizeCounterRelay.OpBuy
+           && body?["itemId"]?.Type == JTokenType.String && ((string?)body["itemId"])!.StartsWith("rain.", StringComparison.Ordinal);
 
     /// <summary>The kart a Wear closed the counter for (reason <see cref="CloseWear"/>): the garage under
     /// it reads this in its close hook and selects it. Cleared at every launch.</summary>
@@ -189,6 +233,7 @@ internal static class PrizeCounterHostService
         switch (WearFamily(id))
         {
             case FamilyRain:
+                if (!Companion.RainV2Gate.On) { App.Logger?.Information("PrizeCounter: wear {Id} refused (Rain V2 is off)", id); return "refused"; }
                 return HandleWear(new JObject { ["id"] = id }, Companion.RainItemManifest.Shipped, key =>
                 {
                     CloseFor(CloseWear);
@@ -441,9 +486,16 @@ internal static class PrizeCounterHostService
                 var idem = m["idem"]?.Type == JTokenType.String ? (string?)m["idem"] : null;
                 _ = System.Threading.Tasks.Task.Run(async () =>
                 {
-                    var reply = await relay.RelayAsync(op, body, idem).ConfigureAwait(false);
-                    var prices = RainPricesFrom(reply);
-                    if (prices.Count > 0) _rainPrices = prices;
+                    var rainOn = Companion.RainV2Gate.On;
+                    JObject? reply;
+                    if (RefusesBuy(op, body, rainOn)) reply = new JObject { ["ok"] = false, ["reason"] = "unavailable" };
+                    else
+                    {
+                        reply = await relay.RelayAsync(op, body, idem).ConfigureAwait(false);
+                        var prices = RainPricesFrom(reply);
+                        if (prices.Count > 0) _rainPrices = prices;
+                        reply = HideRain(reply, rainOn);
+                    }
                     OnUi(() => { if (generation == _generation) _host?.Post(new { type = "reply", reqId, body = reply }); });
                 });
                 break;
@@ -530,12 +582,13 @@ internal static class PrizeCounterHostService
             motion = MotionWire(s?.MotionLevel ?? Models.MotionLevel.Full, gentle),
             gentle,
             reducedMotion = !osAnim,
-            tab = _tab,
+            tab = !Companion.RainV2Gate.On && IsRainId(_tab) ? null : _tab,
             from = _from,
             wears = WearsFor(_from),
             platform = "desktop",
             // The V2 avatar's name for the active mod; the lexicon is already filled, this covers page-side copy.
             companion = Companion.CompanionName.ForActiveMod(),
+            rainV2 = Companion.RainV2Gate.On,
         };
     }
 

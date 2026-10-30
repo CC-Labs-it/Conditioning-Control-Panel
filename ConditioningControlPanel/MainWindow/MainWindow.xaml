@@ -2943,8 +2943,8 @@
                                     </Grid>
                                 </Border>
 
-                                <!-- Rain (7.2 Help page: hover or click Read for the page) -->
-                                <Border Background="{DynamicResource SurfaceBgBrush}" CornerRadius="8" Padding="12" Margin="0,0,0,8">
+                                <!-- Rain (7.2 Help page: hover or click Read for the page). Collapsed in code while RainV2Gate is off. -->
+                                <Border x:Name="HelpRainRow" Background="{DynamicResource SurfaceBgBrush}" CornerRadius="8" Padding="12" Margin="0,0,0,8">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/>

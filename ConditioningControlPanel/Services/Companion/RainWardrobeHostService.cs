@@ -106,6 +106,8 @@ internal static class RainWardrobeHostService
     /// <summary>The door (tube menu while Rain plays). One live window, focused rather than reopened.</summary>
     public static void Open()
     {
+        // RainV2Gate off (7.2.0): the backstop for every door. No dressing room, no install card.
+        if (!RainV2Gate.On) { App.Logger?.Information("RainWardrobe: V2 is off in this release, door refused"); return; }
         if (_host != null) { _host.FocusWeb(); return; }
         var dir = AssetsDir;
         var missing = RainWardrobeAssets.Missing(dir);
