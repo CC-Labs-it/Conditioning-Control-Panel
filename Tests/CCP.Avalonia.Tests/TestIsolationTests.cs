@@ -33,6 +33,22 @@ public class TestIsolationTests
 
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
 
+    // Run this alone in a fresh testhost: no fixture may decide the process-wide font setup.
+    [Fact]
+    public System.Threading.Tasks.Task TheHookInitializesTheShippedFontsBeforeAnyFixture() =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Assert.IsType<AvApp>(global::Avalonia.Application.Current);
+            foreach (var name in new[] { "fonts:Inter#Inter", "Fredoka, Segoe UI" })
+            {
+                var face = new global::Avalonia.Media.Typeface(name);
+                Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(face, out var glyphs), name);
+                Assert.True(glyphs!.CharacterToGlyphMap.TryGetGlyph('A', out var glyph));
+                Assert.NotEqual((ushort)0, glyph);
+            }
+            return System.Threading.Tasks.Task.CompletedTask;
+        });
+
     [Fact]
     public void EveryTestRunsInsideTheHook() => Assert.NotNull(IsolateProcessStateAttribute.Current);
 
