@@ -41,6 +41,82 @@ public sealed class ChaosToyEffectsTests
         { VariantId = "pink", IsLive = live, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
 
     [Theory]
+    [InlineData("snap_field")]
+    [InlineData("vibe_popping")]
+    public async Task Toys_preserve_touch_only_and_linked_escort_immunity(string id)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var oldPointer = ChaosRunHost.ReadToyPointer;
+            try
+            {
+                var tease = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsTease = true, SizePx = 200 });
+                var brittle = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsBrittle = true, SizePx = 200 });
+                var live = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsLive = true, IsChaperoneLive = true, SizePx = 200, FuseMs = 5000 });
+                var escort = Spawn(false);
+                live.Escort = escort;
+                foreach (var b in BubbleOverlay.Field.Bubbles) { b.X = live.X; b.Y = live.Y; }
+                double scale = ChaosRunHost.Overlay!.Screens.All.ElementAtOrDefault(live.Screen)?.Scaling ?? 1;
+                ChaosRunHost.ReadToyPointer = () => (new PixelPoint((int)(live.CenterX * scale), (int)(live.CenterY * scale)), true, false);
+                var toy = Equip(id, 30, maxed: true);
+                ChaosRunHost.UseToyById(id);
+                if (id == "vibe_popping") ChaosRunHost.SweepToyPointer();
+                Assert.False(tease.Popping);
+                Assert.False(brittle.Popping);
+                Assert.False(live.Popping);
+                Assert.True(escort.Popping);
+                Assert.Equal(0, ChaosRunHost.State!.Defused);
+                toy.CooldownRemainingSec = 0;
+                if (id == "vibe_popping") ChaosRunHost.SweepToyPointer();
+                else ChaosRunHost.UseToyById(id);
+                Assert.True(live.Popping);
+                Assert.Equal(1, ChaosRunHost.State.Defused);
+            }
+            finally { ChaosRunHost.ReadToyPointer = oldPointer; ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Theory]
+    [InlineData("en")][InlineData("de")][InlineData("es")][InlineData("fr")][InlineData("it")]
+    [InlineData("ja")][InlineData("ko")][InlineData("pt-BR")][InlineData("ru")][InlineData("zh-CN")]
+    public async Task Toy_events_use_translations_in_every_language(string language)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+            string prior = loc.CurrentLanguage;
+            string[] keys = { "chaos_toy_buzz", "chaos_toy_snap_all", "chaos_toy_snap_live", "chaos_toy_afterglow" };
+            try
+            {
+                loc.SetLanguage("en");
+                var english = keys.Select(loc.Get).ToArray();
+                loc.SetLanguage(language);
+                var expected = keys.Select(loc.Get).ToArray();
+                for (int i = 0; i < keys.Length; i++)
+                {
+                    Assert.NotEqual(keys[i], expected[i]);
+                    if (language != "en") Assert.NotEqual(english[i], expected[i]);
+                }
+                var state = ChaosRunHost.State!;
+                state.AfterglowSec = 1;
+                Equip("snap_field", 30);
+                ChaosRunHost.UseToyById("snap_field");
+                Equip("snap_field", 30, maxed: true);
+                ChaosRunHost.UseToyById("snap_field");
+                Equip("vibe_popping", 1);
+                ChaosRunHost.UseToyById("vibe_popping");
+                for (int i = 0; i < 4; i++) ChaosRunHost.Tick();
+                foreach (var message in expected) Assert.Contains(message, state.RecentEvents);
+            }
+            finally { ChaosRunHost.ForceShutdown(); loc.SetLanguage(prior); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Snap_pays_for_live_bubbles_and_capstone_also_pays_for_treats(bool maxed)

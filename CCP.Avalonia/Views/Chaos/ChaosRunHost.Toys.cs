@@ -6,6 +6,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Chaos;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos;
@@ -33,7 +34,7 @@ internal static partial class ChaosRunHost
                 ChaosVibeTrailOverlay.Start();
                 ChaosEffectBannerOverlay.Show("vibe", "VibePopping", Color.FromRgb(0xFF, 0xB0, 0x3A));
                 ChaosOverlayWindow.ChaosSfx.Play("vibe_buzz", 0.5f);
-                s.PushEvent("it buzzes. hold and sweep");
+                s.PushEvent(Loc.Get("chaos_toy_buzz"));
                 if (_sweepTimer == null)
                 {
                     _sweepTimer = new FrameClock(_overlay!) { Interval = TimeSpan.FromMilliseconds(16) };
@@ -45,16 +46,12 @@ internal static partial class ChaosRunHost
                 foreach (var b in BubbleOverlay.Field.Bubbles.ToArray())
                 {
                     if (b.Spec == null || b.Spec.IsDarter || b.Spec.IsFreeze || b.Popping) continue;
-                    if (b.IsLiveThreat)
-                    {
-                        if (b.Snap()) BubbleOverlay.Field.ChaosDefused?.Invoke(b);
-                    }
-                    else if (maxed) BubbleOverlay.PopChaos(b);
+                    if (maxed || b.IsLiveThreat) BubbleOverlay.PopChaos(b);
                 }
                 _snapRemaining = 1;
                 ChaosOverlayWindow.ChaosSfx.Play("freeze_trigger", 0.5f);
                 if (s.Config.ColorFlashesEnabled) _fx?.Pulse(Color.FromRgb(150, 220, 255), 0.35);
-                s.PushEvent(maxed ? "snapped. all of it." : "snapped. every live one let go");
+                s.PushEvent(Loc.Get(maxed ? "chaos_toy_snap_all" : "chaos_toy_snap_live"));
                 return true;
             default:
                 // ponytail: freeze, DVD contact, rabbit motion/aim and charged arcs need their
@@ -82,11 +79,7 @@ internal static partial class ChaosRunHost
             double radius = plain ? Math.Max(b.Size, Math.Round(b.Size * hitMult)) / 2 : b.Size / 2;
             double dx = pointer.At.X / scale - b.CenterX, dy = pointer.At.Y / scale - b.CenterY;
             if (dx * dx + dy * dy > radius * radius) continue;
-            if (b.IsLiveThreat)
-            {
-                if (b.Snap()) BubbleOverlay.Field.ChaosDefused?.Invoke(b);
-            }
-            else BubbleOverlay.PopChaos(b);
+            BubbleOverlay.PopChaos(b);
         }
     }
 
@@ -104,7 +97,7 @@ internal static partial class ChaosRunHost
                     _afterglow = true;
                     _vibeHover = true;
                     _vibeRemaining = _state.AfterglowSec;
-                    _state.PushEvent("afterglow. it lingers");
+                    _state.PushEvent(Loc.Get("chaos_toy_afterglow"));
                 }
                 else
                 {

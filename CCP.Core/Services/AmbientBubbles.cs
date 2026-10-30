@@ -78,6 +78,8 @@ namespace ConditioningControlPanel.Services
 
         public enum Result { Alive, Missed, Done, Detonated, Defused }
 
+        /// <summary>The linked shield-bearer (WPF BubbleService.cs:2708-2709,2730).</summary>
+        public AmbientBubble? Escort { get; set; }
         /// <summary>A live threat the player defuses by holding (WPF NeedsHoldDefuse for the plain lives).</summary>
         public bool IsLiveThreat => Spec is { IsLive: true, IsDarter: false, IsFreeze: false };
         public double FuseSecLeft => Math.Max(0, FuseRemainingMs) / 1000.0;
