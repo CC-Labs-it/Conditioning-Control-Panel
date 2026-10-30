@@ -21,8 +21,17 @@ public class LanguageFlagTests
     private static void Ensure()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia()
+        {
+            // The shell draws text during construction. Use the shipped embedded fonts,
+            // including aliases for the Windows faces, even on runners without those fonts.
+            var fonts = ConditioningControlPanel.Avalonia.Platform.AppFonts.Options();
+            var mappings = new Dictionary<string, FontFamily>(fonts.FontFamilyMappings!);
+            mappings["Segoe UI"] = mappings["Segoe UI Black"] =
+                new FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter);
+            fonts.FontFamilyMappings = mappings;
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(fonts).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        }
     }
 
     [Fact]
