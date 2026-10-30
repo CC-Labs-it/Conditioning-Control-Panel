@@ -1233,6 +1233,9 @@ namespace ConditioningControlPanel.Avalonia
         internal static void SaveSettingsOnExit(Views.Windows.MainShellWindow? shell, Action save)
         {
             try { shell?.CancelAutonomyPulses(); } catch (Exception ex) { Serilog.Log.Debug("Exit pulse cancel failed: {E}", ex.Message); }
+            // WPF SettleTemporarySettingsForExit (WindowChrome.cs:406): a connected controller's strict lock goes back too.
+            try { if (Views.Tabs.RemoteControlTabView.Relay is { IsValueCreated: true } relay) relay.Value.ReleaseHoldingsForExit(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Exit: remote holdings release failed"); }
             try { save(); }
             catch { /* SettingsService logs save failures; exit must continue */ }
         }
