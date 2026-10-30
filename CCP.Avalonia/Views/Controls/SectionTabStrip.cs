@@ -11,8 +11,8 @@
 // lift / glyph wiggle / choose sparks / idle sheen (wave 7, same partial). The "?" help badges:
 // SectionTabStrip.Help.cs.
 // Choose rings reuse NavGlow; the press squish shares WPF MotionFx's Core values.
-// ponytail: wire-ctrl-section-tab-strip-b owns the Moved redirects/note, Just Drop ask-first
-// with its missing window, absent Companion/Premium paths and section edge lap/fog/embers.
+// The "Moved" note (ShowMovedNote, WPF :503) landed in wire-ctrl-section-tab-strip-b.
+// Remaining section edge effects are tracked in the parity ledger.
 
 using System;
 using System.Collections.Generic;
@@ -65,6 +65,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private readonly StackPanel _pillRow = new() { Orientation = Orientation.Horizontal, Spacing = 6 };
         private readonly Border _track;
         private readonly Border _accentLine = new() { Height = 2, CornerRadius = new CornerRadius(1), Opacity = 0.85 };
+        // WPF SectionTabStrip.xaml:78 MovedNote: non-modal, never hit-testable, column 2 of the header row.
+        private readonly TextBlock _movedNoteText = new() { FontSize = 12.5, FontWeight = FontWeight.SemiBold };
+        private readonly Border _movedNote;
+        private global::Avalonia.Threading.DispatcherTimer? _noteTimer, _noteFadeTimer;
+
+        /// <summary>WPF :516: the note stays 3.2 s, then fades out over 300 ms.</summary>
+        internal static readonly TimeSpan MovedNoteHold = TimeSpan.FromSeconds(3.2), MovedNoteFade = TimeSpan.FromMilliseconds(300);
+
+        internal bool MovedNoteShown => _movedNote.IsVisible;
+        internal string? MovedNoteTextForTests => _movedNoteText.Text;
+        internal IBrush? MovedNoteBrush => _movedNoteText.Foreground;
+        internal double MovedNoteOpacity => _movedNote.Opacity;
         // The lit tab's solid hue, sliding under the pills (WPF ActiveFill + PlaceFill :1018).
         private readonly Border _activeFill = new()
         {
@@ -109,6 +121,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         public SectionTabStrip()
         {
             IsVisible = false;
+            _movedNote = new Border
+            {
+                VerticalAlignment = VerticalAlignment.Center, CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(12, 4), Background = new SolidColorBrush(Color.FromArgb(0xE6, 0x1B, 0x10, 0x26)),
+                BorderThickness = new Thickness(1), IsVisible = false, Opacity = 0, IsHitTestVisible = false,
+                Child = _movedNoteText,
+            };
             _crumbSection = new Button
             {
                 Content = _crumbSectionText, Padding = new Thickness(4, 1), Background = Brushes.Transparent,
@@ -132,10 +151,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             var trayHost = BuildDepthTray(_track);
             _pillRow.LayoutUpdated += (_, _) => { if (IsVisible) PositionFill(animate: false, onlyIfMoved: true); };
             _pillRow.AddHandler(KeyDownEvent, PillRow_KeyDown, RoutingStrategies.Tunnel);
-            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(0, 0, 0, 6) };
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(0, 0, 0, 6) };
             Grid.SetColumn(trayHost, 1);
+            Grid.SetColumn(_movedNote, 2);
             row.Children.Add(crumb);
             row.Children.Add(trayHost);
+            row.Children.Add(_movedNote);
             Content = new StackPanel { Children = { row, _accentLine } };
         }
 
@@ -150,12 +171,74 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
             _sheenClock?.Stop();   // P65: a detached strip never ticks
+            _noteTimer?.Stop();
+            HideNote();
+            CloseConfirm();
             base.OnDetachedFromVisualTree(e);
         }
 
         // WPF Rebind (P09): code-set labels are rebuilt on a language switch.
         private void OnLanguageChanged(object? sender, EventArgs e) =>
             global::Avalonia.Threading.Dispatcher.UIThread.Post(() => Rebuild());
+
+        /// <summary>The one-line "Moved: Social › Lobby" note, about three seconds, non-modal. WPF :503.</summary>
+        public void ShowMovedNote(string text)
+        {
+            _movedNoteText.Text = text;
+            var hue = NavStripRules.Accent(_section);
+            _movedNote.BorderBrush = new SolidColorBrush(hue);
+            _movedNoteText.Foreground = new SolidColorBrush(NavStripRules.WithAlpha(hue, NavStripRules.NoteTextAlpha));
+            _noteFadeTimer?.Stop();
+            var level = Level;
+            // Fade in 150 ms (75 at Reduced), instant at Off.
+            _movedNote.Transitions = level == MotionLevel.Off ? null : new global::Avalonia.Animation.Transitions
+            {
+                new global::Avalonia.Animation.DoubleTransition
+                {
+                    Property = OpacityProperty,
+                    Duration = TimeSpan.FromMilliseconds(level == MotionLevel.Reduced ? 75 : 150),
+                },
+            };
+            _movedNote.IsVisible = true;
+            _movedNote.Opacity = 1;
+
+            _noteTimer?.Stop();
+            _noteTimer = new global::Avalonia.Threading.DispatcherTimer { Interval = MovedNoteHold };
+            _noteTimer.Tick += (_, _) => ExpireMovedNote();
+            _noteTimer.Start();
+        }
+
+        /// <summary>The hold timer's tick (test seam): Off hides at once, else a 300 ms fade, then hidden.</summary>
+        internal void ExpireMovedNote()
+        {
+            _noteTimer?.Stop();
+            if (Level == MotionLevel.Off) { HideNote(); return; }
+            _movedNote.Transitions = new global::Avalonia.Animation.Transitions
+            {
+                new global::Avalonia.Animation.DoubleTransition { Property = OpacityProperty, Duration = MovedNoteFade },
+            };
+            _movedNote.Opacity = 0;
+            _noteFadeTimer?.Stop();
+            _noteFadeTimer = new global::Avalonia.Threading.DispatcherTimer { Interval = MovedNoteFade };
+            _noteFadeTimer.Tick += (_, _) => HideNote();
+            _noteFadeTimer.Start();
+        }
+
+        /// <summary>Test seam (P08): fires the pending 300 ms fade timer's tick without waiting.</summary>
+        internal bool FireMovedNoteFade()
+        {
+            if (_noteFadeTimer?.IsEnabled != true) return false;
+            HideNote();
+            return true;
+        }
+
+        internal void HideNote()
+        {
+            _noteFadeTimer?.Stop();
+            _movedNote.Transitions = null;
+            _movedNote.Opacity = 0;
+            _movedNote.IsVisible = false;
+        }
 
         /// <summary>Rebuilds the pills (language switch, a tier change).</summary>
         public void Rebuild()
@@ -169,6 +252,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// breadcrumb's page word (Settings passes its current section's label). WPF Show.</summary>
         public void Show(string? section, string? tab, string? pageLabel = null)
         {
+            if (!string.Equals(section, _section, StringComparison.OrdinalIgnoreCase)) CloseConfirm();
             _tab = tab;
             bool sectionChanged = !string.Equals(section, _section, StringComparison.OrdinalIgnoreCase);
             if (!NavStripTable.ShowsHeader(section))
@@ -242,6 +326,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         private void BuildPills(string section)
         {
+            CloseConfirm();
             _pillRow.Children.Clear();
             _pills.Clear();
             _helpBadges.Clear();
@@ -387,6 +472,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (tab.Kind is NavTabKind.Tab or NavTabKind.Zone) SetActive(tab.Key, animate: true);
             if (focus) PillFor(tab.Key)?.Focus();
             FxOnChosen(tab);
+            if (tab.Kind == NavTabKind.Window) { AskBeforeOpening(tab); return; }
             TabRequested?.Invoke(tab);
         }
 

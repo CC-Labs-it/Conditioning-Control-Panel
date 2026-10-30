@@ -27,6 +27,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         public const double RestOutlineAlpha = 0.95, BevelLight = 0.70, BevelShade = 0.75, OutlineFootOffset = 0.85;
         public const double RestFaceThickness = 1.5, ActiveFaceThickness = 2.0, HoverFillAlpha = 0.38;
         public const double TrackBorderAlpha = 0.40, TrackInsetAlpha = 0.70;
+        /// <summary>The "Moved" note's text: the hue at 90% (WPF NavStripRules.NoteTextAlpha).</summary>
+        public const double NoteTextAlpha = 0.90;
         public const double ActiveGlowBlur = 16, ActiveGlowOpacity = 0.75;
         public const double ActiveRingTopAlpha = 0.80, ActiveRingFootAlpha = 0.30;
         public const double PillHeight = 38, PillFontSize = 14.5, PillPadding = 16;

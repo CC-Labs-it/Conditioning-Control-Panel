@@ -142,6 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF :228 TryRedirectSilentTab, at the door before anything counts the old key.
             if (Array.IndexOf(SilentRedirectKeys, tab) >= 0
                 && Services.UI.NavSections.Redirects.TryGetValue(tab, out var moved)) { ShowTab(moved.Tab); return; }
+            if (TryRedirectMovedTab(tab)) return;   // WPF :229, "together" -> Social > Lobby with the note
             // The dashboard's RECENT rail, at the door before the intercepts (WPF :121), so a
             // window key counts as an open like any tab (MainShellWindow.FavoritesRail.cs).
             NoteDestinationOpened(tab);
