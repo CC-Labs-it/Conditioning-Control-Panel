@@ -83,4 +83,31 @@ public sealed class RainBakeProgressTests
             Assert.Contains("{total}", baking);
         }
     }
+
+    [Fact]
+    public void Every_boot_cover_line_is_in_all_ten_languages_with_its_tokens()
+    {
+        Assert.Equal(new[] { "loadTitle", "loadSize", "loadAlmost" }, RainWardrobeHostService.BootStringKeys.Keys.ToArray());
+        var files = Directory.GetFiles(LanguagesDir(), "*.json");
+        Assert.Equal(10, files.Length);
+        foreach (var file in files)
+        {
+            var json = JObject.Parse(Encoding.UTF8.GetString(File.ReadAllBytes(file)));
+            foreach (var key in RainWardrobeHostService.BootStringKeys.Values)
+            {
+                var text = (string?)json[key];
+                Assert.False(string.IsNullOrWhiteSpace(text), $"{Path.GetFileName(file)} lacks {key}");
+                Assert.DoesNotContain('\u2014', text!);
+                Assert.DoesNotContain('\u2013', text!);
+                Assert.DoesNotContain('!', text!);
+                Assert.DoesNotContain('\uFFFD', text!);
+            }
+            Assert.Contains("{companion}", (string)json["rain_wardrobe_load_title"]!);
+            var size = (string)json["rain_wardrobe_load_size"]!;
+            Assert.Contains("{loaded}", size);
+            Assert.Contains("{total}", size);
+        }
+        var lines = RainWardrobeHostService.BootStrings(key => key == "rain_wardrobe_load_almost" ? "Quasi fatto" : key);
+        Assert.Equal(new[] { "loadAlmost" }, lines.Keys.ToArray());
+    }
 }

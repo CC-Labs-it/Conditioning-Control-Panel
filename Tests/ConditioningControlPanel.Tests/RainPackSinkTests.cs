@@ -113,7 +113,7 @@ public sealed class RainPackSinkTests : IDisposable
         int w = RainApplyController.Width, h = RainApplyController.Height, clipSet = RainLookHash.ClipSetVersion;
         Assert.True(w >= 2 * 190 && h >= 2 * 306, $"{w}x{h}");
         Assert.Equal(192.0 / 309, (double)w / h, 3);
-        Assert.True(clipSet >= 3, $"clip set {clipSet}");   // the 192x309 pixel packs miss and bake again
+        Assert.True(clipSet >= 4, $"clip set {clipSet}");   // the 192x309 pixel packs and the un-inked 384x618 packs miss and bake again
     }
 
     [Fact]
