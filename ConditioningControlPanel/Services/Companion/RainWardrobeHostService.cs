@@ -142,6 +142,11 @@ internal static class RainWardrobeHostService
                 OnMessage = OnPageMessage,
                 OnProcessFailed = kind =>
                 {
+                    if (!ClosesOn(kind))
+                    {
+                        App.Logger?.Information("RainWardrobe: page busy ({Kind}), kept open", kind);
+                        return;
+                    }
                     App.Logger?.Warning("RainWardrobe: browser process failed ({Kind}) - closing", kind);
                     RunOnUi(Close);
                 },
@@ -159,6 +164,12 @@ internal static class RainWardrobeHostService
             Close();
         }
     }
+
+    /// <summary>Which process failures close the window. RenderProcessUnresponsive does not: the renderer is alive
+    /// and busy. The page parses ~300 MB of Rain (avatar.glb + pelvis-data.js) for about 30 s on boot, and any key
+    /// or click sent to the window meanwhile trips Chromium's hang monitor (desk 2026-10-30: stray Spaces after a
+    /// counter Wear closed the dressing room 26 s in). The title-bar X and panic still close it.</summary>
+    internal static bool ClosesOn(CoreWebView2ProcessFailedKind kind) => kind != CoreWebView2ProcessFailedKind.RenderProcessUnresponsive;
 
     /// <summary>The one funnel for every exit (title-bar X, panic, dead browser, shutdown). Idempotent.</summary>
     public static void Close()

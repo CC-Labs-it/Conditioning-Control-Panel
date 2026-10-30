@@ -9,11 +9,13 @@ import { tabKey, itemName, itemDesc } from '../state/strings.js';
 import { TAB_ICONS, STAR, LOCK, BACK } from './icons.js';
 import { cardModel, renderCard } from './card.js';
 import { countDown, weekNo } from './wallet.js';
+import { createPressGuard, keyName } from '../state/press-guard.js';
 
 const STATUS = { loading: 'shop_loading', offline: 'shop_offline' };
 const OUT_MS = 160;
 
-export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'full', gentle = false, list = false }) {
+export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'full', gentle = false, list = false,
+  guard = createPressGuard({ now: () => performance.now(), focused: true }) }) {
   const doc = root.ownerDocument;
   const el = (tag, cls, text) => { const n = doc.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
   const hud = el('div', 'pc-hud');
@@ -137,12 +139,18 @@ export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'f
   }
 
   const buttons = () => (card ? [...card.querySelectorAll('button')].filter((b) => !b.disabled) : []);
+  let cardAct = '';   // the face and its buttons: a change is a new confirm step
+  // A pointer press on the action counts once the step has been up a moment; a key's synthetic click never does
+  // (keys go through the modal's guarded keyup below).
+  const press = (e, b) => !(b.main && ((e && e.detail === 0) || !guard.ready()));
   function paintCard(v) {
     const m = cardModel(v.card, v.sp, t);
     const key = m && JSON.stringify(m);
     if (key === cardKey) return;
-    const wasOpen = !!cardKey, had = doc.activeElement && doc.activeElement.dataset ? doc.activeElement.dataset.intent : null;
-    cardKey = key;
+    const had = doc.activeElement && doc.activeElement.dataset ? doc.activeElement.dataset.intent : null;
+    const wasOpen = !!cardKey, act = m ? `${m.face}|${m.buttons.map((b) => b.label).join('|')}` : '';
+    const fresh = !wasOpen || act !== cardAct;
+    cardKey = key; cardAct = act;
     clearTimeout(outTimer);
     if (!m) {
       modal.classList.remove('pc-in');
@@ -151,19 +159,31 @@ export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'f
       if (motion === 'off') hide(); else { modal.classList.add('pc-out'); outTimer = setTimeout(hide, OUT_MS); }
       return;
     }
-    const next = renderCard(doc, m, send);
+    const next = renderCard(doc, m, send, press);
     if (card) card.replaceWith(next); else modal.append(next);
     card = next;
     modal.hidden = false;
     modal.classList.remove('pc-out');
     if (!wasOpen) pulse(modal, 'pc-in'); else modal.classList.remove('pc-in');
+    if (fresh) guard.card();
     const bs = buttons();
-    // While pending the card itself holds focus (a stray Enter must not keep looking); after, back to where it was or the action.
-    (m.pending ? card : bs.find((b) => b.dataset.intent === had) || bs.find((b) => b.classList.contains('pc-main')) || bs[0] || card).focus();
+    // No default action (desk bug 2026-10-30): a new step, or a pending one, focuses the card itself, so Space or
+    // Enter does nothing until Tab or an arrow lands on a button. A same-step repaint keeps the button it had.
+    (m.pending || fresh ? card : bs.find((b) => b.dataset.intent === had) || card).focus();
   }
-  // Keys inside the card stay in the card: Esc keeps looking, Tab and arrows walk its buttons, Enter and Space press.
+  // Keys inside the card stay in the card: Esc keeps looking, Tab and arrows walk its buttons, and Enter or Space
+  // press the focused button on a deliberate release (state/press-guard.js). Their native click never fires.
+  const pressKey = (e) => e.key === 'Enter' || e.key === ' ' || e.code === 'Space' || e.code === 'NumpadEnter';
+  modal.addEventListener('keyup', (e) => {
+    e.stopPropagation();
+    if (!pressKey(e)) return;
+    e.preventDefault();
+    const b = doc.activeElement;
+    if (guard.up(keyName(e)) && card && b && b !== card && card.contains(b) && b.dataset.intent && !b.disabled) send({ type: b.dataset.intent });
+  });
   modal.addEventListener('keydown', (e) => {
     e.stopPropagation();
+    if (pressKey(e)) { e.preventDefault(); guard.down(keyName(e), e.repeat); return; }
     if (e.key === 'Escape' || e.key === 'Backspace') { e.preventDefault(); send({ type: 'back' }); return; }
     const step = { Tab: e.shiftKey ? -1 : 1, ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
     if (!step) return;

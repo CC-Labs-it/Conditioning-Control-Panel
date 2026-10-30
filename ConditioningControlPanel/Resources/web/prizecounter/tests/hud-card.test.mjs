@@ -65,7 +65,7 @@ test('pending: aria-busy, the buy button disabled, the note says so; a note key 
   assert.match(draw({ ...CARDS.buy, noteKey: 'shop_note_retry' }).el.text(), /Confirm again to retry/);
 });
 
-test('the HUD opens the card with focus on Buy, traps Tab, Esc keeps looking, and closes it', () => {
+test('the HUD opens the card with focus on the card (no default action), traps Tab, Esc keeps looking, and closes it', () => {
   const doc = fakeDocument(), root = doc.createElement('main'), sent = [];
   const hud = createHud(root, { t, send: (i) => sent.push(i), goTab: () => {}, motion: 'off' });
   const view = (card) => ({ status: 'ready', sp: 1850, week: '2026-W44', tier: 1, tabs: ['rain-clothes', 'kart'], tabId: 'kart',
@@ -73,6 +73,8 @@ test('the HUD opens the card with focus on Buy, traps Tab, Esc keeps looking, an
   hud.paint(view(CARDS.buy));
   const modal = root.querySelectorAll('.pc-modal')[0];
   assert.equal(modal.hidden, false);
+  assert.ok(doc.activeElement.classList.contains('pc-card'), 'the card itself, never Buy');
+  modal.dispatch('keydown', { key: 'Tab' });
   assert.equal(doc.activeElement.textContent, 'Buy');
   modal.dispatch('keydown', { key: 'Tab' });
   assert.equal(doc.activeElement.textContent, 'Keep looking');

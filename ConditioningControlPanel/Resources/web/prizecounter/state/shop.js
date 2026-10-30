@@ -138,14 +138,15 @@ export function createShop({ request, newIdem, tab: startTab = null, wears = und
     card = { itemId, idem: newIdem(), catalogVersion: st.catalogVersion, week: st.week, pending: false, retry: false, noteKey, forced: null };
     return cardView();
   };
-  /** Adopt a fresh state; focus stays on the same item id when it still exists, else the tab's first item. */
+  /** Adopt a fresh state; focus stays on the same item id when it still exists, else the tab's first item. The
+   * first load focuses nothing (desk bug 2026-10-30): no item waits for a stray select; a move or a tap picks one. */
   function replace(next) {
     const keep = foc && at(shelves(), foc.bay, foc.slot);
     const tabId = st ? (st.tabs[tab] || {}).id : startTab;
     st = next;
     tab = Math.max(0, st.tabs.findIndex((t) => t.id === tabId));
     const hit = keep && find(keep.id);
-    if (hit) { tab = hit.tab; foc = { bay: hit.bay, slot: hit.slot }; } else foc = firstItem(shelves());
+    if (hit) { tab = hit.tab; foc = { bay: hit.bay, slot: hit.slot }; } else foc = keep ? firstItem(shelves()) : null;
     if (card && !rowsOf(card.itemId).length) card = null;
   }
   const act = () => {
@@ -199,7 +200,8 @@ export function createShop({ request, newIdem, tab: startTab = null, wears = und
         foc = f;
         return { focus: focusView() };
       }
-      const f = foc && walk(shelves(), foc, type);
+      // Nothing focused yet (just opened): any move lands on the tab's first item.
+      const f = foc ? walk(shelves(), foc, type) : ['left', 'right', 'up', 'down'].includes(type) && firstItem(shelves());
       if (!f) return {};
       foc = f;
       return { focus: focusView() };

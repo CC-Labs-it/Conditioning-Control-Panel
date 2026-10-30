@@ -25,6 +25,8 @@ function rig(sample = SAMPLE, opts = {}) {
 }
 const goTab = (shop, id) => { while (shop.tabId() !== id) shop.intent({ type: 'tabNext' }); };
 const at = (shop) => { const f = shop.focus(); return f && [f.bay, f.slot, f.row.id]; };
+/** Open the counter and make the first move: the load itself focuses nothing (stray-keys fix). */
+const loadFocused = async (shop) => { const out = await shop.load(); shop.intent({ type: 'right' }); return out; };
 
 test('readState: house tab order, unknown tabs dropped, bad rows kept as holes, 4 bays x 9 slots', () => {
   const st = readState({ ...SAMPLE, tabs: [...SAMPLE.tabs].reverse().concat([{ id: 'mystery', shelves: [] }]) });
@@ -41,7 +43,7 @@ test('readState: house tab order, unknown tabs dropped, bad rows kept as holes, 
 
 test('focus walk: columns, rows, the empty last slot, edges stay put', async () => {
   const { shop } = rig(SAMPLE8);
-  await shop.load();
+  await loadFocused(shop);
   assert.equal(shop.tabId(), 'rain-clothes');
   assert.deepEqual(at(shop), [0, 0, 'rain.dress.midnight-cocktail']);
   assert.deepEqual(shop.intent({ type: 'left' }), {}, 'no bay to the left');
@@ -64,7 +66,7 @@ test('focus walk: crosses bays, skips holes and an empty bay, single-item tab ne
     { id: 'kart', shelves: [{ rows: [row('a'), null, row('c'), row('d')] }, { rows: [] }, { rows: [row('e'), row('f')] }] },
     { id: 'desk', shelves: [{ rows: [] }, { rows: [row('solo')] }] },
   ]));
-  await shop.load();
+  await loadFocused(shop);
   shop.intent({ type: 'right' });
   assert.deepEqual(at(shop), [0, 2, 'c'], 'hole at slot 1 skipped');
   shop.intent({ type: 'right' });
@@ -93,7 +95,7 @@ test('pick: a tap focuses, a tap on the focused item opens its card, an empty sl
 
 test('every card face: buy, owned (wear), short, prime, soon', async () => {
   const { shop, server } = rig();
-  await shop.load();
+  await loadFocused(shop);
   const open = (tab, slot) => { goTab(shop, tab); shop.intent({ type: 'pick', bay: 0, slot }); const c = shop.card() || shop.intent({ type: 'select' }).card; shop.intent({ type: 'back' }); return c; };
   assert.deepEqual([open('rain-clothes', 0).face, open('rain-clothes', 0).action], ['buy', 'buy']);
   assert.deepEqual([open('rain-clothes', 1).face, open('rain-clothes', 1).action], ['owned', 'wear']);
@@ -110,7 +112,7 @@ test('every card face: buy, owned (wear), short, prime, soon', async () => {
 
 test('confirm: one idem per card, a press while pending sends nothing, the receipt moves the wallet', async () => {
   const r = rig();
-  await r.shop.load();
+  await loadFocused(r.shop);
   r.shop.intent({ type: 'select' });
   r.hold(true);
   const first = r.shop.confirm();
@@ -134,7 +136,7 @@ test('confirm: one idem per card, a press while pending sends nothing, the recei
 
 test('a lost reply retries with the same idem and the server replays the receipt', async () => {
   const r = rig();
-  await r.shop.load();
+  await loadFocused(r.shop);
   r.shop.intent({ type: 'select' });
   r.server.fail('offline', { apply: true });
   const lost = await r.shop.confirm();
@@ -163,7 +165,7 @@ test('every refusal maps to a card state', async () => {
   };
   for (const [reason, want] of Object.entries(cases)) {
     const r = rig();
-    await r.shop.load();
+    await loadFocused(r.shop);
     r.shop.intent({ type: 'select' });
     r.server.fail(reason);
     const { card } = await r.shop.confirm();
@@ -177,7 +179,7 @@ test('every refusal maps to a card state', async () => {
 
 test('insufficient adopts the server balance; a reprice reopens the card at the new price', async () => {
   const r = rig();
-  await r.shop.load();
+  await loadFocused(r.shop);
   r.shop.intent({ type: 'select' });
   r.server.setSp(100);
   const { card } = await r.shop.confirm();
@@ -195,7 +197,7 @@ test('insufficient adopts the server balance; a reprice reopens the card at the 
 
 test('stock_changed: the fresh state replaces the shelf, focus keeps the same item id', async () => {
   const r = rig();
-  await r.shop.load();
+  await loadFocused(r.shop);
   r.shop.intent({ type: 'pick', bay: 0, slot: 3 });
   r.shop.intent({ type: 'select' });
   r.server.setWeek('2026-W45', ['rain.dress.midnight-cocktail']);
@@ -213,7 +215,7 @@ test('stock_changed: the fresh state replaces the shelf, focus keeps the same it
 
 test('Esc ladder: card, then preview, then close', async () => {
   const { shop } = rig();
-  await shop.load();
+  await loadFocused(shop);
   assert.ok(shop.intent({ type: 'select' }).card);
   assert.deepEqual(shop.intent({ type: 'back' }), { card: null });
   assert.ok(shop.focus(), 'the preview (focused item) stays');
@@ -229,7 +231,9 @@ test('load: the host refusal shows as a status, the init tab is honoured', async
   assert.equal((await thrown.load()).status, 'offline');
   const { shop } = rig(SAMPLE, { tab: 'chess' });
   const first = await shop.load();
-  assert.deepEqual([first.tab.id, first.focus.row.id], ['chess', 'chess.set.royal-capes']);
+  assert.deepEqual([first.tab.id, first.focus, first.card], ['chess', null, null], 'nothing focused, no card on open');
+  assert.deepEqual(shop.intent({ type: 'select' }), {}, 'a stray select on open picks nothing');
+  assert.equal(shop.intent({ type: 'down' }).focus.row.id, 'chess.set.royal-capes', 'the first move lands on the first item');
   const wrapped = createShop({ request: async () => ({ ok: true, status: 200, body: structuredClone(SAMPLE) }), newIdem: () => 'x' });
   assert.equal((await wrapped.load()).status, 'ready', 'a relay {ok,status,body} is unwrapped');
 });
