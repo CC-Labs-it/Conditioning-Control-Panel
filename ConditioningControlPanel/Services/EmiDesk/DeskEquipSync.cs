@@ -77,6 +77,24 @@ public static class DeskEquipSync
         catch (Exception ex) { App.Logger?.Debug("DeskEquipSync save failed: {E}", ex.Message); }
     }
 
+    /// <summary>
+    /// The Prize Counter's Wear on an owned desk hat or toy: the "Her things" pick (local first, PUT
+    /// behind) with one slot changed, then the desk repaints through <see cref="Adopted"/>. UI thread.
+    /// False when the id is not a desk item or the account does not own it.
+    /// </summary>
+    public static bool WearFromCounter(string itemId)
+    {
+        var item = EmiDeskItems.Find(itemId);
+        if (item == null) return false;
+        var now = EmiDeskItems.Current();
+        var next = item.Slot == EmiDeskItems.HatSlot ? now with { Hat = item.Id } : now with { Toy = item.Id };
+        var clean = EmiDeskItems.Clamp(next, EmiDeskItems.KnownGrants());
+        if ((item.Slot == EmiDeskItems.HatSlot ? clean.Hat : clean.Toy) != item.Id) return false;
+        Save(next);
+        try { Adopted?.Invoke(); } catch (Exception ex) { App.Logger?.Debug("DeskEquipSync wear repaint failed: {E}", ex.Message); }
+        return true;
+    }
+
     private static void UiPost(Action a)
     {
         try { System.Windows.Application.Current?.Dispatcher?.BeginInvoke(a); }

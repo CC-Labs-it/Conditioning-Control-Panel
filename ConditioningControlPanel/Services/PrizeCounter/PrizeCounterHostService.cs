@@ -144,6 +144,127 @@ internal static class PrizeCounterHostService
         return true;
     }
 
+    // ============================ Wear, per family (fix wave F1) ============================
+
+    internal const string FamilyRain = "rain", FamilyDesk = "desk", FamilyChess = "chess", FamilyProfile = "profile", FamilyKart = "kart";
+
+    /// <summary>The family a counter row's Wear belongs to, by its id, or null (Back Room prizes and
+    /// anything unknown: nothing to wear, the page shows no Wear button for it).</summary>
+    internal static string? WearFamily(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return null;
+        bool P(string prefix) => id.StartsWith(prefix, StringComparison.Ordinal);
+        if (P("rain.")) return FamilyRain;
+        if (P("desk.hat.") || P("desk.toy.")) return FamilyDesk;
+        if (P("chess.set.") || P("chess.banner.") || P("chess.insignia.") || P("prime.banner.")) return FamilyChess;
+        if (P("profile.frame.") || P("profile.avatar.") || P("prime.frame.")) return FamilyProfile;
+        if (P("kart.") || P("prime.paint.") || P("prime.trail.")) return FamilyKart;
+        return null;
+    }
+
+    /// <summary><c>init.wears</c>: the families this host can put on from the counter. A kart is worn
+    /// only in the garage, so only a counter opened from Glassroad lists it; elsewhere the page reads
+    /// "Wear it in the garage" and the button only steps back.</summary>
+    internal static string[] WearsFor(string? from) => from == "glassroad"
+        ? new[] { FamilyRain, FamilyDesk, FamilyChess, FamilyProfile, FamilyKart }
+        : new[] { FamilyRain, FamilyDesk, FamilyChess, FamilyProfile };
+
+    /// <summary>The kart a Wear closed the counter for (reason <see cref="CloseWear"/>): the garage under
+    /// it reads this in its close hook and selects it. Cleared at every launch.</summary>
+    internal static string? WornItem { get; private set; }
+
+    /// <summary>Each family's own picker write (local first, PUT behind). Settable for tests.</summary>
+    internal static Func<string, bool> WearDesk { get; set; } = id => EmiDesk.DeskEquipSync.WearFromCounter(id);
+    internal static Func<string, bool> WearChess { get; set; } = id => PieceByPiece.PieceByPieceHostService.WearFromCounter(id);
+    internal static Func<string, bool> WearProfile { get; set; } = id => App.MainWindowRef?.WearProfileItemFromCounter(id) == true;
+
+    /// <summary>
+    /// The page's <c>wear {id}</c>, routed by family. Rain closes the counter for the dressing room; a
+    /// kart from the garage closes back to it (<see cref="WornItem"/>); desk, chess and profile are
+    /// worn in place and the page hears <c>worn {id, ok}</c>. UI thread. Answers what it did.
+    /// </summary>
+    internal static string RouteWear(string? id, string? from)
+    {
+        WornItem = null;
+        switch (WearFamily(id))
+        {
+            case FamilyRain:
+                return HandleWear(new JObject { ["id"] = id }, Companion.RainItemManifest.Shipped, key =>
+                {
+                    CloseFor(CloseWear);
+                    try { OpenWardrobe(key); } catch (Exception ex) { App.Logger?.Warning(ex, "PrizeCounter: wardrobe open failed"); }
+                }) ? FamilyRain : "refused";
+            case FamilyKart:
+                if (from != "glassroad") { App.Logger?.Information("PrizeCounter: wear {Id} waits for the garage", id); return "garage"; }
+                WornItem = id;
+                CloseFor(CloseWear);
+                return FamilyKart;
+            case FamilyDesk: return WornInPlace(id!, WearDesk, FamilyDesk);
+            case FamilyChess: return WornInPlace(id!, WearChess, FamilyChess);
+            case FamilyProfile: return WornInPlace(id!, WearProfile, FamilyProfile);
+            default:
+                App.Logger?.Information("PrizeCounter: wear {Id} refused (nothing to wear)", id ?? "(none)");
+                return "refused";
+        }
+    }
+
+    private static string WornInPlace(string id, Func<string, bool> wear, string family)
+    {
+        bool ok;
+        try { ok = wear(id); }
+        catch (Exception ex) { App.Logger?.Warning(ex, "PrizeCounter: wear {Id} failed", id); ok = false; }
+        App.Logger?.Information("PrizeCounter: wear {Id} ({Family}) {Result}", id, family, ok ? "on" : "refused");
+        try { _host?.Post(new { type = "worn", id, ok }); } catch (Exception ex) { Diag.Swallowed(ex); }
+        return ok ? family : "refused";
+    }
+
+    // ============================ the header wallet at boot (fix wave F1) ============================
+
+    private static string? _walletReadFor;
+    private static DateTime _walletReadAt;
+
+    /// <summary>A shop-state read is due for this account: once per account, again after 10 minutes.</summary>
+    internal static bool WalletReadDue(string? account, string? lastAccount, DateTime lastAt, DateTime now)
+        => !string.IsNullOrEmpty(account)
+           && (!string.Equals(account, lastAccount, StringComparison.Ordinal) || now - lastAt >= TimeSpan.FromMinutes(10));
+
+    /// <summary>
+    /// The header Sparkle wallet read 0 after boot until the counter opened: the profile read carries
+    /// no <c>skill_points</c> and a fresh profile's first sync waits. So when the profile lands, one
+    /// <c>shop-state</c> read through the counter's own relay: its <c>sp</c> is a snapshot and may only
+    /// RAISE the wallet (<see cref="Prizes.V2WalletAdoption"/>), its <c>prizes</c> block fills the grants.
+    /// Fire and forget, never throws, nothing while offline or signed out.
+    /// </summary>
+    public static void RefreshWalletInBackground()
+    {
+        try
+        {
+            var id = BackRoomApi.AppIdentity();
+            if (id == null || App.Settings?.Current?.OfflineMode == true) return;
+            var account = id.Value.UnifiedId;
+            var now = DateTime.UtcNow;
+            if (!WalletReadDue(account, _walletReadFor, _walletReadAt, now)) return;
+            _walletReadFor = account;
+            _walletReadAt = now;
+            var relay = new PrizeCounterRelay(null,
+                () => BackRoomApi.AppIdentity() is { } i && i.UnifiedId == account ? i : null,
+                () => App.Settings?.Current?.OfflineMode == true,
+                AdoptOnUi,
+                (acc, revision, grants) => App.Ownership?.ApplySnapshot(acc, revision, grants));
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    var reply = await relay.RelayAsync(PrizeCounterRelay.OpState, null, null).ConfigureAwait(false);
+                    var prices = RainPricesFrom(reply);
+                    if (prices.Count > 0) _rainPrices = prices;
+                }
+                catch (Exception ex) { App.Logger?.Debug("PrizeCounter: wallet read failed: {E}", ex.Message); }
+            });
+        }
+        catch (Exception ex) { App.Logger?.Debug("PrizeCounter: wallet read skipped: {E}", ex.Message); }
+    }
+
     /// <summary>Every <c>cos.rain.*</c> grant's price in one shop-state body (or a refusal carrying <c>state</c>).</summary>
     internal static Dictionary<string, int> RainPricesFrom(JObject? body)
     {
@@ -171,6 +292,7 @@ internal static class PrizeCounterHostService
     public static void Launch(string from = "wallet", string? tab = null, Action<string>? onClosed = null)
     {
         tab = CounterTab(tab);
+        if (_host == null) WornItem = null;
         if (onClosed != null) _onClosed.Add(onClosed);
         if (_host != null)
         {
@@ -333,14 +455,19 @@ internal static class PrizeCounterHostService
                 OnUi(() => CloseFor(why));
                 break;
             case "wear":
-                // An owned card's Wear on a Rain row: the counter steps aside (queued, never inside the
-                // WebView2 callback) and the dressing room opens with that piece on. One window at a time.
+                // An owned card's Wear, routed by family (RouteWear). Queued, never inside the WebView2
+                // callback: a Rain row closes the counter for the dressing room, one window at a time.
                 if (generation == _generation)
-                    HandleWear(m, Companion.RainItemManifest.Shipped, key => Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    var wearId = m["id"]?.Type == JTokenType.String ? (string?)m["id"] : null;
+                    var from = _from;
+                    Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
                     {
-                        CloseFor(CloseWear);
-                        try { OpenWardrobe(key); } catch (Exception ex) { App.Logger?.Warning(ex, "PrizeCounter: wardrobe open failed"); }
-                    })));
+                        if (generation != _generation) return;
+                        try { RouteWear(wearId, from); }
+                        catch (Exception ex) { App.Logger?.Warning(ex, "PrizeCounter: wear failed"); }
+                    }));
+                }
                 break;
             case "signin":
                 // Queued, never inside the WebView2 message callback: the dialog runs its own loop.
@@ -403,6 +530,7 @@ internal static class PrizeCounterHostService
             reducedMotion = !osAnim,
             tab = _tab,
             from = _from,
+            wears = WearsFor(_from),
             platform = "desktop",
         };
     }

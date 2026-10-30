@@ -181,8 +181,8 @@ public class GlassroadHostTests
         Assert.True(pause >= 0 && launch > pause, "pause first, then the counter window");
         Assert.Contains("OnCounterClosed(reason)", body);
         var closed = host.Substring(host.IndexOf("private static void OnCounterClosed(string reason)", StringComparison.Ordinal));
-        Assert.Contains("GlassroadRules.OwnedFrame(App.Ownership?.Grants)", closed);
-        Assert.Contains("GlassroadRules.CounterReturn(reason)", closed);
+        Assert.Contains("GlassroadRules.OwnedFrame(App.Ownership?.Grants, worn)", closed);
+        Assert.Contains("GlassroadRules.CounterReturn(reason, kartWorn: worn != null)", closed);
     }
 
     [Fact]

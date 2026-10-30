@@ -279,10 +279,11 @@ internal static class GlassroadHostService
     {
         if (!_counterOpen) return;
         _counterOpen = false;
-        var (resend, focus) = GlassroadRules.CounterReturn(reason);
+        var worn = reason == PrizeCounter.PrizeCounterHostService.CloseWear ? PrizeCounter.PrizeCounterHostService.WornItem : null;
+        var (resend, focus) = GlassroadRules.CounterReturn(reason, kartWorn: worn != null);
         try
         {
-            if (resend) _host?.Post(GlassroadRules.OwnedFrame(App.Ownership?.Grants));
+            if (resend) _host?.Post(GlassroadRules.OwnedFrame(App.Ownership?.Grants, worn));
             if (focus) _host?.FocusWeb();
         }
         catch (Exception ex) { App.Logger?.Debug("Glassroad: owned re-send after the counter failed: {E}", ex.Message); }

@@ -98,12 +98,46 @@ internal static class PbpLookRules
         catch (JsonException) { return (ChessLook.Empty, 0); }
     }
 
-    public static string Write(ChessLook look, long at)
+    public static string Write(ChessLook look, long at, bool owed = false)
     {
         var o = look.ToJObject();
         o["at"] = at;
+        if (owed) o["owed"] = true;
         return o.ToString(Formatting.None);
     }
+
+    /// <summary>True while the saved pick has not reached <c>/v2/equip</c> yet (the PUT failed or never
+    /// answered). <c>updatedAt</c> is shared by every family, so a newer Rain or desk write would
+    /// otherwise make the server's older chess look win at the next launch.</summary>
+    public static bool IsOwed(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return false;
+        try { return JObject.Parse(json)["owed"] is JValue { Type: JTokenType.Boolean } v && (bool)v; }
+        catch (JsonException) { return false; }
+    }
+
+    /// <summary>Launch with a push owed: the local pick wins and is PUT again, whatever the server holds.</summary>
+    public static (ChessLook Look, bool Adopt, bool Push) Reconcile(ChessLook local, long localAt, ChessLook? server, long serverAt, bool owed)
+        => owed ? (local, false, true) : Reconcile(local, localAt, server, serverAt);
+
+    /// <summary>The counter's Wear on a chess row: the slot that item goes in, or null when the board
+    /// does not draw it.</summary>
+    public static string? SlotOf(string? itemId)
+    {
+        if (string.IsNullOrEmpty(itemId)) return null;
+        foreach (var (slot, ids) in Catalog)
+            if (ids.Contains(itemId, StringComparer.Ordinal)) return slot;
+        return null;
+    }
+
+    /// <summary>The look with one item put on its slot (an id the board does not draw leaves it as it was).</summary>
+    public static ChessLook With(ChessLook look, string itemId) => SlotOf(itemId) switch
+    {
+        "set" => look with { Set = itemId },
+        "banner" => look with { Banner = itemId },
+        "insignia" => look with { Insignia = itemId },
+        _ => look,
+    };
 
     /// <summary>
     /// Which copy wins at launch (contract 3): the server's when its <c>updatedAt</c> is newer than

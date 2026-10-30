@@ -80,16 +80,22 @@ internal static class GlassroadRules
     /// <summary>What the garage does when the counter over it closes (<c>PrizeCounterHostService.Close*</c>
     /// reasons): panic and app exit close this window too, so nothing is re-sent or focused; Rain's Wear hands
     /// the keyboard to the dressing room; anything else re-sends <c>owned</c> and takes the keyboard back.</summary>
-    public static (bool Resend, bool Focus) CounterReturn(string? reason)
+    public static (bool Resend, bool Focus) CounterReturn(string? reason, bool kartWorn = false)
     {
         bool calm = reason != PrizeCounter.PrizeCounterHostService.ClosePanic
             && reason != PrizeCounter.PrizeCounterHostService.CloseAppExit;
-        return (calm, calm && reason != PrizeCounter.PrizeCounterHostService.CloseWear);
+        // A kart's Wear closes back to the garage (fix wave F1): the garage takes the keyboard again.
+        return (calm, calm && (reason != PrizeCounter.PrizeCounterHostService.CloseWear || kartWorn));
     }
 
-    /// <summary>The host -> page push when the account's grants change while the window is up.</summary>
-    public static JObject OwnedFrame(IEnumerable<string>? grants)
-        => new JObject { ["type"] = "owned", ["grants"] = KartGrants(grants) };
+    /// <summary>The host -> page push when the account's grants change while the window is up. After a
+    /// kart's Wear in the counter it also names that item (<c>wear</c>), and the garage selects it.</summary>
+    public static JObject OwnedFrame(IEnumerable<string>? grants, string? wear = null)
+    {
+        var o = new JObject { ["type"] = "owned", ["grants"] = KartGrants(grants) };
+        if (!string.IsNullOrEmpty(wear)) o["wear"] = wear;
+        return o;
+    }
 
     /// <summary>The page's invite list (<c>friends-list-reply</c>): online friends with a name, as
     /// <c>{ uid, name }</c>, at most 50. Offline friends are left out: the server refuses them anyway.</summary>

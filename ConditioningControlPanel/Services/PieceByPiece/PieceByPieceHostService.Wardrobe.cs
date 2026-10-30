@@ -3,7 +3,6 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Threading;
 using ConditioningControlPanel.Services.PrizeCounter;
 using Newtonsoft.Json.Linq;
 
@@ -25,7 +24,7 @@ namespace ConditioningControlPanel.Services.PieceByPiece;
 internal static partial class PieceByPieceHostService
 {
     private const string EquipPath = "/v2/equip";
-    private static DispatcherTimer? _counterWatch;
+    private static bool _counterHooked;
     private static bool _ownershipHooked;
 
     private static void HookOwnership(bool on)
@@ -67,10 +66,42 @@ internal static partial class PieceByPieceHostService
         var look = PbpLookRules.Clamp(PbpLookRules.Normal(o["look"]), App.Ownership?.Grants);
         var (was, _) = PbpLookRules.Read(settings.ChessLook);
         if (was.Equals(look) && !string.IsNullOrEmpty(settings.ChessLook)) return;
-        settings.ChessLook = PbpLookRules.Write(look, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        SaveAndPush(settings, look);
+    }
+
+    /// <summary>Local first with the push owed, then the PUT in the background clears the flag.</summary>
+    private static void SaveAndPush(Models.AppSettings settings, ChessLook look)
+    {
+        settings.ChessLook = PbpLookRules.Write(look, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), owed: true);
         try { App.Settings!.Save(); } catch (Exception ex) { Diag.Swallowed(ex); }
         _ = PutEquipAsync(look);
     }
+
+    /// <summary>
+    /// The Prize Counter's Wear on an owned chess row (set, banner, insignia): the same write a pick on
+    /// the board's wardrobe makes (clamped, saved, PUT), and an open board redraws. UI thread. False
+    /// when the board does not draw that id or the account does not own it.
+    /// </summary>
+    internal static bool WearFromCounter(string itemId)
+    {
+        var settings = App.Settings?.Current;
+        if (settings == null || PbpLookRules.SlotOf(itemId) == null) return false;
+        var grants = App.Ownership?.Grants;
+        var (was, _) = PbpLookRules.Read(settings.ChessLook);
+        var look = PbpLookRules.Clamp(PbpLookRules.With(was, itemId), grants);
+        if (PbpLookRules.SlotOf(itemId) is { } slot && !Wears(look, slot, itemId)) return false;
+        if (!was.Equals(look) || string.IsNullOrEmpty(settings.ChessLook)) SaveAndPush(settings, look);
+        if (_host != null) PostWardrobe();
+        App.Logger?.Information("PieceByPiece: wearing {Id} from the counter", itemId);
+        return true;
+    }
+
+    private static bool Wears(ChessLook look, string slot, string id) => slot switch
+    {
+        "set" => look.Set == id,
+        "banner" => look.Banner == id,
+        _ => look.Insignia == id,
+    };
 
     /// <summary>Contract 1: the counter window over the board, on the chess tab.</summary>
     private static void OnOpenCounter(JObject o)
@@ -80,35 +111,31 @@ internal static partial class PieceByPieceHostService
         {
             try
             {
-                PrizeCounterHostService.Launch(PbpLookRules.CounterFrom, tab);
-                WatchCounter();
+                // One close hook per counter: a second press while it is up only brings it forward.
+                Action<string>? hook = _counterHooked ? null : OnCounterClosed;
+                _counterHooked = true;
+                PrizeCounterHostService.Launch(PbpLookRules.CounterFrom, tab, hook);
             }
-            catch (Exception ex) { App.Logger?.Warning("PieceByPiece: counter open failed: {E}", ex.Message); }
+            catch (Exception ex) { _counterHooked = false; App.Logger?.Warning("PieceByPiece: counter open failed: {E}", ex.Message); }
         });
     }
 
-    /// <summary>When the counter closes, the page re-reads what it owns (contract 1). The counter has
-    /// no close event of its own, so a slow look at <see cref="PrizeCounterHostService.IsActive"/>.</summary>
-    private static void WatchCounter()
+    /// <summary>The counter went (contract 1): the page re-reads what it owns and wears. Panic and app
+    /// exit never hand focus back; a board closed under the counter has nothing to hear it.</summary>
+    private static void OnCounterClosed(string reason)
     {
-        _counterWatch?.Stop();
-        _counterWatch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
-        _counterWatch.Tick += (_, _) =>
-        {
-            if (PrizeCounterHostService.IsActive && _host != null) return;
-            StopCounterWatch();
-            if (_host == null) return;
-            PostWardrobe();
-            _host.FocusWeb();
-        };
-        _counterWatch.Start();
+        _counterHooked = false;
+        if (_host == null) return;
+        PostWardrobe();
+        if (CounterHandsFocusBack(reason)) _host.FocusWeb();
     }
 
-    private static void StopCounterWatch()
-    {
-        try { _counterWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
-        _counterWatch = null;
-    }
+    /// <summary>Only a plain back (or a Wear that stays on the board) gives the board the keyboard again.</summary>
+    internal static bool CounterHandsFocusBack(string reason)
+        => reason != PrizeCounterHostService.ClosePanic && reason != PrizeCounterHostService.CloseAppExit
+           && reason != PrizeCounterHostService.CloseFailed;
+
+    private static void StopCounterWatch() => _counterHooked = false;
 
     // ============================ /v2/equip (contract 3) ============================
 
@@ -137,7 +164,8 @@ internal static partial class PieceByPieceHostService
             var body = JObject.Parse(await res.Content.ReadAsStringAsync().ConfigureAwait(false));
             var (server, serverAt) = PbpLookRules.FromEquip(body);
             var (local, localAt) = PbpLookRules.Read(App.Settings?.Current?.ChessLook);
-            var (look, adopt, push) = PbpLookRules.Reconcile(local, localAt, server, serverAt);
+            var owed = PbpLookRules.IsOwed(App.Settings?.Current?.ChessLook);
+            var (look, adopt, push) = PbpLookRules.Reconcile(local, localAt, server, serverAt, owed);
             if (adopt)
             {
                 RunOnUi(() =>
@@ -163,7 +191,17 @@ internal static partial class PieceByPieceHostService
         {
             using var req = EquipRequest(HttpMethod.Put, token, uid, PbpLookRules.EquipBody(uid, look));
             using var res = await Http.SendAsync(req, CancellationToken.None).ConfigureAwait(false);
-            if (!res.IsSuccessStatusCode) App.Logger?.Debug("PieceByPiece: equip PUT {Status}, local look kept", (int)res.StatusCode);
+            if (!res.IsSuccessStatusCode) { App.Logger?.Debug("PieceByPiece: equip PUT {Status}, local look kept, push owed", (int)res.StatusCode); return; }
+            // Landed: clear the owed flag, unless the player picked again while it was in flight.
+            RunOnUi(() =>
+            {
+                var s = App.Settings?.Current;
+                if (s == null || !PbpLookRules.IsOwed(s.ChessLook)) return;
+                var (now, at) = PbpLookRules.Read(s.ChessLook);
+                if (!now.Equals(look)) return;
+                s.ChessLook = PbpLookRules.Write(now, at);
+                try { App.Settings!.Save(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            });
         }
         catch (Exception ex) { App.Logger?.Debug("PieceByPiece: equip PUT failed, local look kept: {E}", ex.Message); }
     }

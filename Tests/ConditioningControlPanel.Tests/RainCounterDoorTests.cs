@@ -114,7 +114,10 @@ public class RainCounterDoorTests
     public void TheCounterHost_RoutesWearFrames_AndClosesBeforeTheWardrobeOpens()
     {
         var src = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "PrizeCounter", "PrizeCounterHostService.cs"));
-        int wear = src.IndexOf("case \"wear\":", StringComparison.Ordinal);
+        Assert.True(src.IndexOf("case \"wear\":", StringComparison.Ordinal) > 0);
+        Assert.Contains("RouteWear(wearId, from)", src);
+        // Fix wave F1: the frame routes by family; the Rain branch still closes before the wardrobe opens.
+        int wear = src.IndexOf("case FamilyRain:", StringComparison.Ordinal);
         Assert.True(wear > 0);
         int close = src.IndexOf("CloseFor(CloseWear);", wear, StringComparison.Ordinal);
         int open = src.IndexOf("OpenWardrobe(key)", wear, StringComparison.Ordinal);

@@ -23,7 +23,7 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
   canvas.className = 'pc-canvas';
   root.append(canvas);
 
-  const shop = createShop({ request: host.request, newIdem: mintIdem, tab: init.tab || null });
+  const shop = createShop({ request: host.request, newIdem: mintIdem, tab: init.tab || null, wears: init.wears });
   let scene = null;
   try {
     const m = await import('./scene/index.js');
