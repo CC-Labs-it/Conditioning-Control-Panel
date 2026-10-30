@@ -167,13 +167,21 @@ internal static class AccountSeed
             Log.Warning("Profile load: server profile could not be read for {Id}", id);
             return false;
         }
+        // The request may finish after logout or an account/settings switch.
+        if (!ReferenceEquals(s, CoreSettings.Current) || s.UnifiedId != id) return false;
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
-        // EntitlementTierSync.SignedInWithV2: a rise only for a V2 account with a token.
-        if (!string.IsNullOrEmpty(s.AuthToken))
+        var before = EffectiveTierNow();
+        // WPF EntitlementTierSync.SignedInWithV2 gates both Offer and OfferPatreon.
+        if (!string.IsNullOrEmpty(s.UnifiedId) && !string.IsNullOrEmpty(s.AuthToken))
+        {
             EntitlementTierRule.ApplyRise(s, EntitlementTierRule.ParseTier(user.EffectiveTierRaw), DateTime.UtcNow);
-        PatreonActiveRule.RestampProfile(s, user, DateTime.UtcNow);
+            PatreonActiveRule.RestampProfile(s, user, DateTime.UtcNow);
+        }
         ProfileAdopt.AdoptReadBeforeWrite(s, user);
         CoreSettings.Save();
+        var after = EffectiveTierNow();
+        if (after > before)
+            Patreon?.NotifyEntitlementRaised(after >= 2 ? Models.PatreonTier.Level2 : Models.PatreonTier.Level1);
         Log.Information("Profile load: Level {Level} ({Xp} XP into level) after adopt", s.PlayerLevel, (int)s.PlayerXP);
         if (Sync is { } sync)
         {
@@ -183,6 +191,10 @@ internal static class AccountSeed
         }
         return true;
     }
+
+    // WPF EntitlementTierSync.EffectiveTierNow: an invite week is not a paid tier.
+    private static int EffectiveTierNow() => CoreAccount.HasLabAccess ? 2
+        : CoreAccount.HasPremiumAccess && !ProviderSubscription.IsInviteWeekOnly(Patreon, SubscribeStar, CoreSettings.Current) ? 1 : 0;
 
     /// <summary>Signs a provider out (WPF AccountService.LogoutProvider).</summary>
     internal static void LogoutProvider(string? provider)
