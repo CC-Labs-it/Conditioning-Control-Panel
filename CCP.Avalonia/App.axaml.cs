@@ -162,7 +162,7 @@ namespace ConditioningControlPanel.Avalonia
             global::ConditioningControlPanel.Services.Companion.ConversationDelivery.QuestsOpenProvider = () => Quests?.HasUnfinishedQuest();
             definitions.QuestDefinitionsUpdated += () => Quests?.CheckAndGenerateQuests();
             // WPF ProgressionService.AddXP:120 feeds every award to the "earn X XP" quests.
-            ProgressionBank.Awarded += (amount, _) => Quests?.TrackXPEarned((int)amount);
+            ProgressionBank.QuestAwarded += (amount, _) => Quests?.TrackXPEarned((int)amount);
         }
 
         /// <summary>WPF App.xaml.cs:414. WPF plays SystemSounds.Exclamation; Linux has no stock
@@ -669,7 +669,7 @@ namespace ConditioningControlPanel.Avalonia
                     var sync = Platform.AccountSeed.Sync = new SyncPush(
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true,
                         sanitizeCosmetics: Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
-                        { Countdown = DescentCountdown, DescentReader = Descent };
+                        { Countdown = DescentCountdown, DescentReader = Descent, LifetimeLifted = () => FeatureDayLog?.Rebaseline("v2 cloud merge") };
                     CoreProgression.AddXPProvider = ProgressionBank.Add;
                     ProgressionBank.LevelUp += level => sync.PushAsync($"level-up {level}");
                     ProgressionBank.Awarded += (amount, source) =>
