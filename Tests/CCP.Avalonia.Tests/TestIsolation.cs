@@ -1,4 +1,6 @@
 using System;
+using Avalonia;
+using Avalonia.Headless;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -54,6 +56,12 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
     public override void Before(MethodInfo methodUnderTest, IXunitTest test) =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
+            // FontManager is process-wide. Match desktop startup before any test can install a
+            // bare AppBuilder whose missing font options would leak into every later test.
+            if (Application.Current is null)
+                ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
             Current = ProcessStateSnapshot.Take();
             OpenWindows.Mark();
             // P76: a held startup card opens only when a test steps the ladder clock, never by wall time.

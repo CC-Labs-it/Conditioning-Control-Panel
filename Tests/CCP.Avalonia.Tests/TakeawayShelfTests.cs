@@ -9,6 +9,8 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
+using Avalonia.Interactivity;
+using ConditioningControlPanel.Localization;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
@@ -90,6 +92,75 @@ public sealed class TakeawayShelfTests
         surface.Stop(shell);
         Assert.False(GameWindow.IsAnyOpen());
         Assert.Equal(prior, shell.WindowState);
+    });
+
+    // WPF JustDropHostService.cs:72-95 and ChaosWebViewHost.cs:620-693.
+    [Fact]
+    public Task ShopAndReceiptKeepAVisibleFullscreenExitOutsideThePage() => InShell(async shell =>
+    {
+        shell.ShowTab("presets"); await shell.TakeawayLoad;
+        var shelf = shell.Named<PresetsTabView>("PresetsTab")!.FindControl<StackPanel>("TakeawayShelf")!;
+        ((Border)shelf.Children[^1]).RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
+        var shop = GameWindow.Launch(GameWindow.JustDropId)!;
+        var toggle = Assert.Single(shop.GetVisualDescendants().OfType<Button>(), b => b.Name == "JustDropFullscreen");
+        Assert.Equal(WindowState.Normal, shop.WindowState);
+        Assert.Contains(shop.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Just Drop");
+        Assert.Equal(Loc.Get("tooltip_fill_the_screen_esc_brings_the_window_back"), ToolTip.GetTip(toggle));
+        Assert.Equal(Loc.Get("btn_fullscreen"), toggle.Content);
+        toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(WindowState.FullScreen, shop.WindowState);
+        Assert.Equal(Loc.Get("btn_exit_fullscreen"), toggle.Content);
+        toggle.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+        Assert.Equal(WindowState.Normal, shop.WindowState);
+        Assert.Equal(Loc.Get("btn_fullscreen"), toggle.Content);
+        shop.Close(); await shell.TakeawayLoad;
+        ((Border)shelf.Children[0]).RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
+        var replay = GameWindow.LaunchJustDropReplay("code1", shell)!;
+        toggle = Assert.Single(replay.GetVisualDescendants().OfType<Button>(), b => b.Name == "JustDropFullscreen");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(toggle.IsVisible);
+        Assert.True(toggle.Bounds.Height > 0);
+        Assert.Equal(Loc.Get("btn_exit_fullscreen"), toggle.Content);
+        string? injected = null;
+        replay.Web.ScriptInvoker = script => { injected = script; return Task.FromResult<string?>(null); };
+        replay.Web.OnNavigationCompleted(replay.PageUrl!);
+        Assert.Contains("ccp-host-escape", injected);
+        Assert.Contains("},true)", injected); // capture-phase, leaves page handling alone
+        replay.Web.OnWebMessage("{\"type\":\"ccp-host-escape\"}");
+        Assert.Equal(WindowState.Normal, replay.WindowState);
+        toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(WindowState.FullScreen, replay.WindowState);
+        toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(WindowState.Normal, replay.WindowState);
+        Assert.Equal(Loc.Get("btn_fullscreen"), toggle.Content);
+        Assert.Equal(WindowState.Minimized, shell.WindowState); // restored on close, not fullscreen exit
+        replay.Close(); await shell.TakeawayLoad;
+        Assert.Equal(WindowState.Normal, shell.WindowState);
+    });
+
+    // WPF ChaosWebViewHost.cs:746-756,768-776 restores the state captured at each entry.
+    [Theory]
+    [InlineData("toggle")]
+    [InlineData("host-escape")]
+    [InlineData("page-escape")]
+    public Task FullscreenExitRestoresTheShopStateAtEachEntry(string exit) => InShell(async shell =>
+    {
+        shell.ShowTab("presets"); await shell.TakeawayLoad;
+        shell.ShowTab("justdrop");
+        var shop = GameWindow.Launch(GameWindow.JustDropId)!;
+        var toggle = Assert.Single(shop.GetVisualDescendants().OfType<Button>(), b => b.Name == "JustDropFullscreen");
+        shop.Web.OnNavigationCompleted(shop.PageUrl!);
+        foreach (var prior in new[] { WindowState.Maximized, WindowState.Normal, WindowState.Maximized })
+        {
+            shop.WindowState = prior;
+            toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(WindowState.FullScreen, shop.WindowState);
+            if (exit == "toggle") toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            else if (exit == "host-escape") toggle.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            else shop.Web.OnWebMessage("{\"type\":\"ccp-host-escape\"}");
+            Assert.Equal(prior, shop.WindowState);
+            Assert.Equal(Loc.Get("btn_fullscreen"), toggle.Content);
+        }
     });
 
     private sealed class Drawer : HttpMessageHandler
