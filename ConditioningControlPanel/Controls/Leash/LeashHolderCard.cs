@@ -238,7 +238,7 @@ public sealed class LeashHolderCard : Border
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var av = new Grid { Width = 48, Height = 56, Margin = new Thickness(0, 0, 10, 0) };
-        var face = FriendsLook.Avatar(_h.Who.Name, _h.Who.AvatarUrl, 46, _h.Online);
+        var face = FriendsLook.Avatar(_h.Who.Name, _h.Who.AvatarUrl, 46, _h.Online, _h.Who.Look);
         face.VerticalAlignment = VerticalAlignment.Top;
         av.Children.Add(face);
         _tag = LeashLook.HeartTag(22);

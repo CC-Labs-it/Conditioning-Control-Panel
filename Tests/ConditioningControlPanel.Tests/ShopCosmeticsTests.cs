@@ -140,3 +140,46 @@ public class ShopCosmeticsTests
         Assert.Equal("profile.frame.lace", back.Clone().FrameId);
     }
 }
+
+/// <summary>Contract 4: another player's avatar and frame ride the friends and leash wires as optional cosmetics.</summary>
+public class PlayerLookTests
+{
+    private static readonly HashSet<string> Avatars = new() { "avatar_bambi_1", "profile.avatar.emi-pixel" };
+    private static readonly HashSet<string> Frames = new() { "profile.frame.lace" };
+
+    [Fact]
+    public void Reads_known_avatar_and_frame()
+    {
+        var look = PlayerLook.From(JObject.Parse("{\"avatar_id\":\"profile.avatar.emi-pixel\",\"frame_id\":\"profile.frame.lace\"}"), Avatars, Frames);
+        Assert.Equal("profile.avatar.emi-pixel", look.AvatarId);
+        Assert.Equal("profile.frame.lace", look.FrameId);
+        Assert.False(look.IsEmpty);
+    }
+
+    [Fact]
+    public void Unknown_ids_and_junk_read_as_none()
+    {
+        Assert.Same(PlayerLook.None, PlayerLook.From(null, Avatars, Frames));
+        Assert.Same(PlayerLook.None, PlayerLook.From(new JArray(), Avatars, Frames));
+        Assert.Same(PlayerLook.None, PlayerLook.From(JObject.Parse("{\"avatar_id\":\"x\",\"frame_id\":7}"), Avatars, Frames));
+        var frameless = PlayerLook.From(JObject.Parse("{\"avatar_id\":\"avatar_bambi_1\",\"frame_id\":\"profile.frame.lace\"}"), Avatars, null);
+        Assert.Null(frameless.FrameId);
+        Assert.Equal("avatar_bambi_1", frameless.AvatarId);
+    }
+
+    [Fact]
+    public void Friends_and_leash_wires_carry_the_look()
+    {
+        var snap = ConditioningControlPanel.Services.Friends.FriendsApi.ParseState(JObject.Parse(
+            "{\"friends\":[{\"id\":\"u1\",\"name\":\"A\",\"cosmetics\":{\"avatar_id\":\"avatar_bambi_1\"}},{\"id\":\"u2\",\"name\":\"B\"}],"
+            + "\"incoming\":[{\"id\":\"r1\",\"name\":\"C\",\"cosmetics\":{\"avatar_id\":\"avatar_sissy_2\"}}]}"));
+        Assert.Equal("avatar_bambi_1", snap.Friends.Single(f => f.Id == "u1").Look.AvatarId);
+        Assert.True(snap.Friends.Single(f => f.Id == "u2").Look.IsEmpty);
+
+        var holder = ConditioningControlPanel.Services.Leash.LeashParse.Person(JObject.Parse(
+            "{\"id\":\"h\",\"name\":\"H\",\"cosmetics\":{\"avatar_id\":\"avatar_circe_1\"}}"));
+        Assert.Equal("avatar_circe_1", holder!.Look.AvatarId);
+        Assert.Equal(new ConditioningControlPanel.Services.Leash.LeashPerson("h", "H", null),
+            ConditioningControlPanel.Services.Leash.LeashParse.Person(JObject.Parse("{\"id\":\"h\",\"name\":\"H\"}")));
+    }
+}

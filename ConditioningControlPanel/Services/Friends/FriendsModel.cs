@@ -47,6 +47,9 @@ public sealed record Friend(
     /// <summary>Where they are online (Friends Everywhere S3): a subset of <see cref="FriendPlatform.Order"/>,
     /// in that order. Empty when offline or from a server that predates platforms (no marks drawn).</summary>
     public IReadOnlyList<string> Platforms { get; init; } = Array.Empty<string>();
+
+    /// <summary>Their avatar and Prize Counter frame (optional <c>cosmetics</c> on the wire; none from an older server).</summary>
+    public Services.PlayerLook Look { get; init; } = Services.PlayerLook.None;
 }
 
 /// <summary>The devices a friend can be online from (Friends Everywhere S3). This client always
@@ -96,7 +99,11 @@ public static class FriendPlatform
 
 /// <summary>A pending request, incoming or outgoing. <see cref="Via"/> is the mutual friend's
 /// name when the server knows one, else null.</summary>
-public sealed record FriendRequest(string Id, string Name, string? AvatarUrl, string? Via, DateTimeOffset At);
+public sealed record FriendRequest(string Id, string Name, string? AvatarUrl, string? Via, DateTimeOffset At)
+{
+    /// <summary>Their avatar and Prize Counter frame, when the server sends <c>cosmetics</c>.</summary>
+    public Services.PlayerLook Look { get; init; } = Services.PlayerLook.None;
+}
 
 /// <summary>Everything the drawer draws, in one object. Replaced whole on every refresh.</summary>
 public sealed record FriendsSnapshot(

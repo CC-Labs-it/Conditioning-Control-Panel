@@ -36,6 +36,12 @@ namespace ConditioningControlPanel.Services
         public const string AvatarType = "avatar";
         public const string GrantPrefix = "cos.";
 
+        /// <summary>
+        /// Width of a frame PNG's transparent window as a share of its 512 canvas (Astra's frames measure
+        /// 0.74 to 0.85). Every surface draws a frame at avatar diameter / this, centred on the avatar.
+        /// </summary>
+        public const double FrameWindowRatio = 0.78;
+
         private const int DecodePixels = 256;
         private static readonly object Gate = new();
         private static IReadOnlyList<ShopCosmeticItem>? _items;

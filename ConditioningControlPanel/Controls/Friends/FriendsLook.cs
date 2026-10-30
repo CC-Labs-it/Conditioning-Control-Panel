@@ -181,7 +181,7 @@ internal static class FriendsLook
     /// so a friend looks the same here as on the leaderboard. <paramref name="dot"/> adds the
     /// presence dot at the bottom right (null = no dot).
     /// </summary>
-    public static Grid Avatar(string name, string? url, double size, bool? dot = null)
+    public static Grid Avatar(string name, string? url, double size, bool? dot = null, PlayerLook? look = null)
     {
         var host = new Grid { Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center };
         var disc = new Ellipse { Fill = SafeAvatarBrush(name) };
@@ -197,6 +197,33 @@ internal static class FriendsLook
         };
         host.Children.Add(disc);
         host.Children.Add(initials);
+
+        // Their look (contract 4): a preset or Prize Counter avatar stands in for the initials when there is
+        // no picture, and their frame rides over the disc at the one frame geometry every surface uses.
+        if (look is { IsEmpty: false })
+        {
+            if (string.IsNullOrEmpty(url) && CosmeticsCatalog.GetAvatarImage(look.AvatarId) is { } preset)
+            {
+                disc.Fill = new ImageBrush(preset) { Stretch = Stretch.UniformToFill };
+                initials.Visibility = Visibility.Collapsed;
+            }
+            if (CosmeticsCatalog.GetFrameImage(look.FrameId) is { } frameArt)
+            {
+                var frame = size / ShopCosmetics.FrameWindowRatio;
+                host.Children.Add(new Image
+                {
+                    Source = frameArt,
+                    Width = frame,
+                    Height = frame,
+                    Stretch = Stretch.Fill,
+                    IsHitTestVisible = false,
+                    // Larger than the slot without a layout clip, same as AdornedAvatar.
+                    Margin = new Thickness(-(frame - size) / 2d),
+                    Tag = "friends-frame",
+                });
+            }
+        }
+
         if (dot is bool on)
         {
             var d = new Ellipse
