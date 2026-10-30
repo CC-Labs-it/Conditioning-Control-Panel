@@ -201,3 +201,4 @@ marketing/
 
 # Release-notes drafts (the text lives in the GitHub release body; keep the file local)
 notes-v*.txt
+__pycache__/
