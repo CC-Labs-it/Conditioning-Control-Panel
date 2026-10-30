@@ -17,6 +17,12 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private const double Box = 560;
         private AmbientFxCanvas? _layer;
 
+        internal void Stop()
+        {
+            _layer?.Stop();
+            (_layer?.Parent as Panel)?.Children.Remove(_layer!);
+        }
+
         /// <summary>Bursts fired (test hook).</summary>
         internal int Count { get; private set; }
 
