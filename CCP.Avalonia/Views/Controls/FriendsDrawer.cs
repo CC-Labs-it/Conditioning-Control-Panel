@@ -394,6 +394,13 @@ public sealed partial class FriendsDrawer : Border
         }
         return t;
     }
+    // WPF Controls/Friends/FriendsDrawer.cs:1189: keep the selected friend open.
+    internal string? OpenId => _openId;
+    internal void OpenOn(string friendId)
+    {
+        if (_openId != friendId) Toggle(friendId);
+    }
+
     internal void Toggle(string friendId)
     {
         _openId = _openId == friendId ? null : friendId;

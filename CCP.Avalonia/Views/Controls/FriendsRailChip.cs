@@ -102,6 +102,13 @@ public sealed class FriendsRailChip : Grid
     }
 
     internal int PillCount => _pill.IsVisible && int.TryParse(_pillText.Text, out var n) ? n : 0;
+    // WPF Controls/Friends/FriendsRailChip.cs:395-402: request row opens the drawer.
+    internal void OpenDrawer(string? friendId)
+    {
+        if (!_popup.IsOpen) { Rebind(); _popup.IsOpen = true; }
+        if (!string.IsNullOrEmpty(friendId)) Drawer.OpenOn(friendId);
+    }
+
     internal void Toggle()
     {
         if (_popup.IsOpen) { _popup.IsOpen = false; return; }

@@ -22,12 +22,9 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// leaves through <see cref="FloatingWord"/> (poke received with Emi's line, the sent beat, Say/Tell from outside
 /// the drawer). Nothing here plays or joins by itself. A light timer re-attaches to <see cref="FriendsHead.Service"/>
 /// and releases the held queue (WPF :28-82).
-/// ponytail: the corner notices (FriendNotices: poke toast, watch toast, request toast) are not on this head
-/// (row feat-friends-open-tables), so a watch, and a poke that cannot throw its word (over a game, or nothing of
-/// ours on screen), go to the Inbox as WPF does with the bell off (WPF :212); WPF's "Poke back" toast is dropped
-/// with them. Request rows/cues wait for row feat-friends-open-tables.
+/// Request corner notices are in FriendsLanding.Notices.cs; poke and watch notices remain unported.
 /// </summary>
-internal static class FriendsLanding
+internal static partial class FriendsLanding
 {
     private static DispatcherTimer? _timer;
     private static FriendsLandingRouter? _router;
@@ -58,12 +55,14 @@ internal static class FriendsLanding
     }
 
     /// <summary>Exit path (WPF Stop :38): no landing window may outlive the app.</summary>
+    // WPF Services/Friends/FriendsLanding.cs:38-46,66: exit and hold close notices.
     public static void Stop()
     {
         try { _timer?.Stop(); } catch { /* shutting down */ }
         _timer = null;
         _router?.Dispose();
         _router = null;
+        try { FriendNotices.CloseAll(); } catch { /* shutting down */ }
         try { KnockCard.CloseAll(); } catch { /* shutting down */ }
     }
 
@@ -81,7 +80,7 @@ internal static class FriendsLanding
                 _router = current == null ? null : new FriendsLandingRouter(current, () => World(), () => KnockCard.Clock(), TheSink);
             }
             _router?.Release();
-            if (KnockCard.AnyUp && World().Holding) KnockCard.FoldAll();
+            if (World().Holding) { KnockCard.FoldAll(); FriendNotices.CloseAll(fold: true); }
             // The server lists blocks now: carry this PC's old list over once (WPF FriendsLanding.cs:71).
             if (current != null) global::ConditioningControlPanel.Controls.Friends.FriendsBlockList.MigrateIfDue(current);
         }
@@ -212,11 +211,11 @@ internal static class FriendsLanding
             var (key, english) = LandingRules.SentWord(kind);
             FloatingWord.Throw(anchor, Str(key, english), pink: false, small: true);
         }
-        public void RequestRow(FriendRequest request) { }
-        public void RequestAnnounce(FriendRequest request, bool inGame) { }
-        public void RequestCue() { }
-        public void RequestGone(string requestId) { }
-        public void RequestsWaiting(IReadOnlyList<FriendRequest> waiting, bool announce, bool inGame) { }
+        public void RequestRow(FriendRequest request) => FileRequest(request);
+        public void RequestAnnounce(FriendRequest request, bool inGame) => AnnounceRequest(request, inGame);
+        public void RequestCue() { if (NoticesOn) Sfx("chaos/dling.mp3", 0.16f, "friends-request", true); }
+        public void RequestGone(string requestId) => StartupLadder.Inbox.Remove("friends-request:" + requestId);
+        public void RequestsWaiting(IReadOnlyList<FriendRequest> waiting, bool announce, bool inGame) => Waiting(waiting, announce, inGame);
     }
 
     /// <summary>The drawer's bell (WPF NoticesOn :348). Off: Inbox rows only.</summary>
