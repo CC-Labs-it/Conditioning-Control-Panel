@@ -39,6 +39,8 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
   let sock = null, joinInfo = null, look = normLook(null), leaving = false, downAt = 0, tries = 0, retryT = 0;
   let racers = null, race = null, items = null, connectWait = null, isLoaded = false;
   const keepWait = new Map();   // kept bot seat -> ms after which it is driven without a record
+  const STAMP_SLACK_TICKS = 2, VIEW_LEAN = 0.02, VIEW_SNAP_MS = 100;
+  let stampLag = null, viewAt = null, viewFrame = null;
 
   const emit = (name, m) => { const set = handlers.get(name); if (set) for (const fn of [...set]) { try { fn(m); } catch (e) { log('warn', `net ${name}: ${e}`); } } };
   function on(name, fn) { let set = handlers.get(name); if (!set) handlers.set(name, (set = new Set())); set.add(fn); return () => set.delete(fn); }
@@ -228,7 +230,7 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
   /** Wire the racers in: remote driver, kept bots, online items. @returns the items object for boot.js */
   function mount(rs, rc, q) {
     racers = rs; race = rc;
-    racers.remote = createRemoteDriver(interp, () => clock.serverNow(), q).drive;
+    racers.remote = createRemoteDriver(interp, viewNow, q).drive;
     items = createNetItems(track, feel, q, { send, tick: raceTick });
     const keep = st.keep; st.keep = []; applyKeep(keep);
     syncRacers();
@@ -246,18 +248,42 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
     if (clock.serverNow(t) < st.countAt || !uplink.due(t)) return;
     const rows = [{ seat: st.seat, r: racers.player, bot: false, paused, assist: !!assist || paused }];
     for (const s of st.keep) { const r = racerOf(s); if (r && r.kind !== 'remote' && !r.meta.left) rows.push({ seat: s, r, bot: true, paused: false, assist: false }); }
-    sock.upload(Math.max(0, Math.round(clock.roomMs(t))), uplink.build(rows, clock.tick(t), t));
+    sock.upload(Math.max(0, Math.round(clock.roomMs(t))), uplink.build(rows, recordTick(t), t));
+  }
+
+  /** The tick a record is stamped with. While racing it counts the sim's own steps, so equal travel carries equal
+   * time: the wall clock is a frame's phase off at each upload, and one tick is 67 cm at 40 m/s on every rival's
+   * screen. The wall clock only re-anchors it when they part (dropped sim time, a pause). */
+  function recordTick(t) {
+    const wall = clock.tick(t);
+    if (!race || race.phase !== 'racing') { stampLag = null; return wall; }
+    const sim = st.goTick + Math.round(race.timeS * 60);
+    if (stampLag === null || Math.abs(wall - sim - stampLag) > STAMP_SLACK_TICKS) stampLag = wall - sim;
+    return Math.max(0, sim + stampLag);
+  }
+
+  /** The server time remote karts are drawn at: it runs on the frame clock and leans toward serverNow, which reads
+   * Date.now wherever the frame's work has got to (2 ms of that is 8 cm at 40 m/s). */
+  function viewNow() {
+    const server = clock.serverNow();
+    return viewAt === null || Math.abs(server - viewAt) > VIEW_SNAP_MS ? server : viewAt;
+  }
+  function stepView(frameMs) {
+    const server = clock.serverNow();
+    const next = viewAt === null || frameMs === undefined || viewFrame === null ? server : viewAt + Math.max(0, frameMs - viewFrame);
+    viewAt = Math.abs(server - next) > VIEW_SNAP_MS ? server : next + (server - next) * VIEW_LEAN;
+    viewFrame = frameMs === undefined ? null : frameMs;
   }
 
   /** After racers.interpolate(alpha): remote karts drawn at this frame's server time (smooth at any frame rate,
-   * whatever number of sim steps the frame ran). */
-  function drawRemotes() {
+   * whatever number of sim steps the frame ran). `frameMs` = the frame's requestAnimationFrame stamp. */
+  function drawRemotes(frameMs) {
     if (!racers) return;
-    const t = clock.serverNow();
+    stepView(frameMs);
     for (const r of racers.list) {
       if (r.kind !== 'remote' || !interp.has(r.meta.seat)) continue;
       r.view.set(r.st);
-      interp.sample(r.meta.seat, t, r.view, true);
+      interp.sample(r.meta.seat, viewAt, r.view);
     }
   }
 
