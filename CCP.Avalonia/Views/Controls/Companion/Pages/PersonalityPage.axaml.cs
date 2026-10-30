@@ -30,7 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages
             {
                 MorePersonalityOptions = async owner =>
                 {
-                    if (owner is MainShellWindow shell) await shell.OpenCompanionPromptEditorAsync();
+                    await Dialogs.PersonalityStudio.ShowAsync(owner);
                     _presets?.ViewModel.Sync();
                 }
             };
