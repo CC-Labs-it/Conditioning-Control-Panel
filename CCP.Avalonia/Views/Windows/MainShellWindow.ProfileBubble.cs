@@ -9,9 +9,9 @@
 // (UpdateQuickLoginUI) and tier changes (App RepaintVeils). XP / level-up / achievement events
 // pulse and glow the bubble (WPF OnBubble*).
 //
-// ponytail: still missing vs WPF - the flash wobble and subliminal shimmer
-// (no FlashDisplayed / SubliminalDisplayed event on this head), the spiral row (shell-profile-spiral,
-// no DescentService here).
+// Flash / subliminal reactions ride App.FeatureUsed, which fires where WPF raised FlashDisplayed /
+// SubliminalDisplayed (App.axaml.cs flash + subliminal seeds).
+// ponytail: still missing vs WPF - the spiral row (shell-profile-spiral, no DescentService here).
 // PlaceProfileBubblePopup is dropped: Placement="BottomEdgeAlignedRight" is the same result.
 //
 // Controls are reached with Named<T>(name): the window loads with AvaloniaXamlLoader.Load.
@@ -318,6 +318,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private string? _profileBubbleAvatarUrl;
         private IBrush? _profileBubblePhotoBrush;
         private DateTime _profileBubbleLastXpPulse;
+        private DateTime _profileBubbleLastWobble;
+        private DateTime _profileBubbleLastShimmer;
 
         /// <summary>WPF InitializeProfileBubble's service half: the reaction events (static or app-lived,
         /// so they come off when the window closes, P41) and the first paint.</summary>
@@ -326,14 +328,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Action<double, string> awarded = (_, _) => Dispatcher.UIThread.Post(OnBubbleXPChanged);
             Action<int> levelUp = _ => Dispatcher.UIThread.Post(OnBubbleLevelUp);
             EventHandler<Achievement> unlocked = (_, _) => Dispatcher.UIThread.Post(OnBubbleAchievementUnlocked);
+            Action<string> featureUsed = f => Dispatcher.UIThread.Post(() => OnBubbleFeatureUsed(f));
             var engine = App.Achievements;
             ProgressionBank.Awarded += awarded;
             ProgressionBank.LevelUp += levelUp;
+            App.FeatureUsed += featureUsed;
             if (engine != null) engine.Unlocked += unlocked;
             Closed += (_, _) =>
             {
                 ProgressionBank.Awarded -= awarded;
                 ProgressionBank.LevelUp -= levelUp;
+                App.FeatureUsed -= featureUsed;
                 if (engine != null) engine.Unlocked -= unlocked;
             };
             RefreshProfileBubble();
@@ -432,6 +437,58 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (ProfileBubblePopupHost?.IsOpen == true) RefreshProfileMenu();
         }
 
+        /// <summary>WPF MainWindow.ProfileBubble.cs:623-649: flash wobble (2.5 s) / subliminal shimmer (4 s).</summary>
+        private void OnBubbleFeatureUsed(string feature)
+        {
+            try
+            {
+                if (feature == ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureFlash)
+                {
+                    if ((DateTime.UtcNow - _profileBubbleLastWobble).TotalMilliseconds < 2500) return;
+                    _profileBubbleLastWobble = DateTime.UtcNow;
+                    WobbleProfileBubble();
+                }
+                else if (feature == ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureSubliminal)
+                {
+                    if ((DateTime.UtcNow - _profileBubbleLastShimmer).TotalMilliseconds < 4000) return;
+                    _profileBubbleLastShimmer = DateTime.UtcNow;
+                    ShimmerProfileBubble();
+                }
+            }
+            catch (Exception ex) { Log.Debug("Bubble flash/subliminal reaction: {E}", ex.Message); }
+        }
+
+        /// <summary>WPF MainWindow.ProfileBubble.cs:674-687: a decaying tilt -12, 9, -5, 0 deg at 90/220/340/480ms.</summary>
+        private void WobbleProfileBubble()
+        {
+            if (!AmbientFxCanvas.Env.AllowTransitions || Named<Grid>("ProfileBubbleVisual") is not { } visual) return;
+            KeyFrame At(double ms, double angle) =>
+                new() { Cue = new Cue(ms / 480.0), Setters = { new Setter(RotateTransform.AngleProperty, angle) } };
+            _ = new Animation
+            {
+                Duration = TimeSpan.FromMilliseconds(480),
+                Children = { At(0, 0), At(90, -12), At(220, 9), At(340, -5), At(480, 0) },
+            }.RunAsync(visual);
+        }
+
+        /// <summary>WPF MainWindow.ProfileBubble.cs:690-702: opacity 1 -> 0.55 -> 1, 300ms each way, SineEaseInOut.</summary>
+        private void ShimmerProfileBubble()
+        {
+            if (!AmbientFxCanvas.Env.AllowTransitions || Named<Grid>("ProfileBubbleVisual") is not { } visual) return;
+            _ = new Animation
+            {
+                Duration = TimeSpan.FromMilliseconds(300),
+                IterationCount = new IterationCount(2),
+                PlaybackDirection = PlaybackDirection.Alternate,
+                Easing = new SineEaseInOut(),
+                Children =
+                {
+                    new KeyFrame { Cue = new Cue(0), Setters = { new Setter(OpacityProperty, 1.0) } },
+                    new KeyFrame { Cue = new Cue(1), Setters = { new Setter(OpacityProperty, 0.55) } },
+                },
+            }.RunAsync(visual);
+        }
+
         /// <summary>1 -> peak -> 1 over <paramref name="durationMs"/>, QuadraticEaseOut, auto-reversed.</summary>
         private void PulseProfileBubble(double peak, int durationMs)
         {
@@ -455,17 +512,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (!AmbientFxCanvas.Env.AllowTransitions || Named<Ellipse>("ProfileBubbleGlowRing") is not { } ring) return;
             ring.Stroke = new ImmutableSolidColorBrush(ProfileBubbleGold);
-            _ = new Animation
-            {
-                Duration = TimeSpan.FromMilliseconds(1200),
-                Children =
-                {
-                    new KeyFrame { Cue = new Cue(0), Setters = { new Setter(OpacityProperty, 0.0) } },
-                    new KeyFrame { Cue = new Cue(0.1), Setters = { new Setter(OpacityProperty, 1.0) } },
-                    new KeyFrame { Cue = new Cue(0.375), Setters = { new Setter(OpacityProperty, 1.0) } },
-                    new KeyFrame { Cue = new Cue(1), Setters = { new Setter(OpacityProperty, 0.0) } },
-                },
-            }.RunAsync(ring);
+            _ = CreateProfileBubbleGlowAnimation().RunAsync(ring);
         }
+
+        // WPF MainWindow.ProfileBubble.cs:705-717: quadratic fade only after the hold.
+        internal static Animation CreateProfileBubbleGlowAnimation() => new()
+        {
+            Duration = TimeSpan.FromMilliseconds(1200),
+            Children =
+            {
+                new KeyFrame { Cue = new Cue(0), Setters = { new Setter(OpacityProperty, 0.0) } },
+                new KeyFrame { Cue = new Cue(0.1), Setters = { new Setter(OpacityProperty, 1.0) } },
+                new KeyFrame { Cue = new Cue(0.375), Setters = { new Setter(OpacityProperty, 1.0) } },
+                // WPF eases only the 450-1200ms fade. This cubic is exactly 1 - (1 - t)^2.
+                new KeyFrame { Cue = new Cue(1), KeySpline = new KeySpline(1.0 / 3, 2.0 / 3, 2.0 / 3, 1),
+                    Setters = { new Setter(OpacityProperty, 0.0) } },
+            },
+        };
     }
 }

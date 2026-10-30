@@ -24,7 +24,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private Image? ProfileTierBadgeBigImage => Named<Image>("ProfileTierBadgeBig");
         private static readonly (double At, double V)[] ProfileTierWobbleKeys =
         {
-            (0, -12), (0.105, -3), (0.245, -18.75), (0.385, -7.95), (0.525, -13.8), (0.7, -12),
+            // Linear keys only; the 0.525 -> 0.7 s settle to -12 is ProfileTierWobbleAngle's sine ease.
+            (0, -12), (0.105, -3), (0.245, -18.75), (0.385, -7.95), (0.525, -13.8),
         };
 
         private void EnsureProfileTierFx()
@@ -41,7 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     tilt.Angle = -12;
                     _profileTierBeat?.Stop();
                 }
-                else tilt.Angle = BeatLoop.Keys(seconds, ProfileTierWobbleKeys);
+                else tilt.Angle = ProfileTierWobbleAngle(seconds);
             });
             _profileTierTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(8) };
             _profileTierTimer.Tick += (_, _) => ProfileTierWobble();
@@ -67,6 +68,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _profileTierGrow = null;
                 HideProfileTierBig();
             };
+        }
+
+        // WPF MainWindow.ProfileBubbleTierFx.cs:66-72: sine ease on the final key only.
+        internal static double ProfileTierWobbleAngle(double seconds)
+        {
+            if (seconds <= 0.525) return BeatLoop.Keys(seconds, ProfileTierWobbleKeys);
+            // WPF's final key alone uses SineEase EaseOut; earlier segments stay linear.
+            var progress = Math.Clamp((seconds - 0.525) / 0.175, 0, 1);
+            return -13.8 + 1.8 * Math.Sin(progress * Math.PI / 2);
         }
 
         private void SyncProfileTierMotion()
@@ -110,16 +120,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             _profileTierGrow = new CancellationTokenSource();
             // Run on the image: Avalonia's transform animator requires a Visual.
-            // ponytail: BackEaseOut has no WPF Amplitude=0.45 knob; exact curve is in lane-b.
             _ = new Animation
             {
-                Duration = TimeSpan.FromMilliseconds(260), Easing = new BackEaseOut(),
+                Duration = TimeSpan.FromMilliseconds(260), Easing = new ProfileTierGrowEase(),
                 Children =
                 {
                     new KeyFrame { Cue = new Cue(0), Setters = { new Setter(ScaleTransform.ScaleXProperty, 0.35), new Setter(ScaleTransform.ScaleYProperty, 0.35) } },
                     new KeyFrame { Cue = new Cue(1), Setters = { new Setter(ScaleTransform.ScaleXProperty, 1.0), new Setter(ScaleTransform.ScaleYProperty, 1.0) } },
                 },
             }.RunAsync(big, _profileTierGrow.Token);
+        }
+
+        /// <summary>WPF MainWindow.ProfileBubbleTierFx.cs:96-103: BackEase { EaseOut, Amplitude = 0.45 }: 1 - f(1 - t), f(x) = x^3 - x * A * sin(pi x).
+        /// Avalonia's BackEaseOut has no Amplitude (fixed at 1).</summary>
+        internal sealed class ProfileTierGrowEase : Easing
+        {
+            internal const double Amplitude = 0.45;
+            public override double Ease(double progress)
+            {
+                var x = 1 - progress;
+                return 1 - (x * x * x - x * Amplitude * Math.Sin(Math.PI * x));
+            }
         }
 
         private void ProfileTierBadge_MouseLeave(object? sender, PointerEventArgs e) => HideProfileTierBig();

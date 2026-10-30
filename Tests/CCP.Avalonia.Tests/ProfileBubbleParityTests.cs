@@ -29,6 +29,9 @@ namespace CCP.Avalonia.Tests;
 [Collection(RunsAloneCollection.Name)]
 public sealed class ProfileBubbleParityTests : IDisposable
 {
+    // Capture head statics only after the suite owns Dispatcher.UIThread.
+    static ProfileBubbleParityTests() => AvaloniaTestDispatcher.Run(() => { });
+
     private readonly SettingsService _settings = new();
     private readonly Func<SettingsService?>? _settingsBefore = CoreSettings.ServiceProvider;
     private readonly Func<bool>? _labBefore = CoreAccount.HasLabAccessProvider;
@@ -211,7 +214,11 @@ public sealed class ProfileBubbleParityTests : IDisposable
             time.Advance(TimeSpan.FromSeconds(0.105));
             BeatLoop.StepAll();
             Assert.Equal(-3, tilt.Angle, 3);
-            time.Advance(TimeSpan.FromSeconds(0.595));
+            time.Advance(TimeSpan.FromTicks(5_075_000)); // FromSeconds truncates 0.5075 to one tick short
+            BeatLoop.StepAll();
+            // WPF's final SineEase EaseOut (linear would be -12.9).
+            Assert.Equal(-12.527207793864215, tilt.Angle, 6);
+            time.Advance(TimeSpan.FromTicks(875_000)); // lands on exactly 700 ms
             BeatLoop.StepAll();
             Assert.Equal(-12, tilt.Angle, 3);
             // The 700 ms one-shot stops its own frame clock.
@@ -229,6 +236,115 @@ public sealed class ProfileBubbleParityTests : IDisposable
             Dispatcher.UIThread.RunJobs();
             BeatLoop.Time = previousTime;
         }
+        return Task.CompletedTask;
+    });
+
+    /// <summary>WPF OnBubbleFlashDisplayed / OnBubbleSubliminalDisplayed: a flash tilts the bubble, a subliminal dips it.
+    /// Motion Off: WPF MotionFx.AllowTransitions gate, nothing tilts or dims.</summary>
+    [Theory]
+    [InlineData(MotionLevel.Full, true)]
+    [InlineData(MotionLevel.Off, false)]
+    public Task FlashWobblesAndSubliminalShimmersTheBubble(MotionLevel motion, bool animates) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var shell = Shell(motion);
+        var savedFlash = (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider,
+            global::ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.Fire);
+        try
+        {
+            // The startup seam App.axaml.cs uses; the burst itself is stubbed (no overlay windows in a test).
+            global::ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.Fire = (_, _) => { };
+            global::ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.SeedCore(() => shell,
+                () => global::ConditioningControlPanel.Avalonia.App.NoteFeatureUsed(
+                    ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureFlash));
+            var visual = shell.FindControl<Grid>("ProfileBubbleVisual")!;
+            double Angle() => visual.RenderTransform is TransformGroup g
+                ? g.Children.OfType<RotateTransform>().Single().Angle
+                : (visual.RenderTransform as RotateTransform)?.Angle ?? 0;
+            double maxTilt = 0, minOpacity = 1;
+            void Run()
+            {
+                for (int i = 0; i < 60; i++)
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    maxTilt = Math.Max(maxTilt, Math.Abs(Angle()));
+                    minOpacity = Math.Min(minOpacity, visual.Opacity);
+                }
+            }
+
+            CoreFlash.ShowProvider!();
+            Run();
+            if (animates) Assert.True(maxTilt > 1, $"a flash never tilted the bubble (max {maxTilt})");
+            else Assert.Equal(0, maxTilt);
+            Assert.Equal(1, minOpacity);
+
+            maxTilt = 0;
+            global::ConditioningControlPanel.Avalonia.App.NoteFeatureUsed(
+                ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureSubliminal);
+            Run();
+            if (animates) Assert.True(minOpacity < 0.95, $"a subliminal never dipped the bubble (min {minOpacity})");
+            else Assert.Equal(1, minOpacity);
+            Assert.Equal(0, maxTilt);
+        }
+        finally
+        {
+            (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider,
+                global::ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.Fire) = savedFlash;
+            shell.Close(); Dispatcher.UIThread.RunJobs();
+        }
+        return Task.CompletedTask;
+    });
+
+    // WPF MainWindow.ProfileBubble.cs:623-649: independent 2.5 s / 4 s throttles.
+    [Theory]
+    [InlineData("flash", "_profileBubbleLastWobble", 2500)]
+    [InlineData("subliminal", "_profileBubbleLastShimmer", 4000)]
+    public Task FeatureReactionsThrottleIndependentlyAndUnsubscribeOnClose(string feature, string fieldName, int interval) =>
+        AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var shell = Shell();
+        var field = typeof(MainShellWindow).GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance)!;
+        void Fire()
+        {
+            global::ConditioningControlPanel.Avalonia.App.NoteFeatureUsed(feature);
+            Dispatcher.UIThread.RunJobs();
+        }
+        try
+        {
+            Fire();
+            var first = (DateTime)field.GetValue(shell)!;
+            Assert.True(first > DateTime.UtcNow.AddSeconds(-1));
+            Fire();
+            Assert.Equal(first, field.GetValue(shell));
+            // Just inside the throttle stays suppressed; just outside is accepted.
+            var recent = DateTime.UtcNow.AddMilliseconds(-interval + 100);
+            field.SetValue(shell, recent);
+            Fire();
+            Assert.Equal(recent, field.GetValue(shell));
+            field.SetValue(shell, DateTime.UtcNow.AddMilliseconds(-interval - 100));
+            Fire();
+            var accepted = (DateTime)field.GetValue(shell)!;
+            Assert.True(accepted > DateTime.UtcNow.AddSeconds(-1));
+            shell.Close();
+            field.SetValue(shell, DateTime.MinValue);
+            Fire();
+            Assert.Equal(DateTime.MinValue, field.GetValue(shell));
+        }
+        finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
+        return Task.CompletedTask;
+    });
+
+    /// <summary>WPF tier grow: BackEase EaseOut Amplitude 0.45 (overshoot ~1.11), not Avalonia's amplitude-1 BackEaseOut (~1.37).</summary>
+    [Fact]
+    public Task TierGrowUsesWpfBackEaseAmplitude() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var ease = new MainShellWindow.ProfileTierGrowEase();
+        Assert.Equal(0, ease.Ease(0), 6);
+        Assert.Equal(1, ease.Ease(1), 6);
+        double peak = Enumerable.Range(0, 1001).Max(i => ease.Ease(i / 1000.0));
+        double wpf = Enumerable.Range(0, 1001).Max(i => { double x = 1 - i / 1000.0; return 1 - (x * x * x - x * 0.45 * Math.Sin(Math.PI * x)); });
+        Assert.Equal(wpf, peak, 6);
+        Assert.True(peak > 1.05 && peak < 1.2, $"overshoot {peak}");
         return Task.CompletedTask;
     });
 
