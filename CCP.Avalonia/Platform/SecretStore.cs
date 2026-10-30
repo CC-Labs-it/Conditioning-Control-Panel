@@ -68,9 +68,12 @@ internal static class SecretStore
         NotRemembered = true;
     }
 
+    // Test-owned Linux store; never connects to a session bus.
+    internal static Func<string, (bool Ok, string? Value)>? OsReadOverride;
+
     // A faked OS write means a test owns the store: it never reads the real keyring either (empty store).
     private static (bool Ok, string? Value) OsRead(string name) =>
-        Sandboxed || OsWriteOverride is not null ? (true, null) : OperatingSystem.IsWindows() ? (true, Dpapi.Read(CorePaths.UserData, name))
+        OsReadOverride is { } read ? read(name) : Sandboxed || OsWriteOverride is not null ? (true, null) : OperatingSystem.IsWindows() ? (true, Dpapi.Read(CorePaths.UserData, name))
         : OperatingSystem.IsLinux() ? Libsecret.Read(name) : (true, null);
 
     private static bool OsWrite(string name, string? value) =>
