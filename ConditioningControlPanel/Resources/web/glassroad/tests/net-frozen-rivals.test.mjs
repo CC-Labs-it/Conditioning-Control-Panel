@@ -5,6 +5,7 @@
  *    Kept as a guard so nobody "fixes" interp.js for it.
  *  - A fresh session rejoining mid-race restarted the uplink seq at 0 and the room dropped all its records until the
  *    seq passed the old one: welcome.resume now continues it (net/room.js).
+ *  - A fresh keeper with no record of a bot leaves it remote until a batch carries one (it drove it from the grid).
  *  - A phone says 'phone' to the lobby, so the room never makes it the bot keeper over a desktop (net/lobbyApi.js). */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,8 +14,9 @@ import { loadTrack } from '../track/load.js';
 import { createInterp } from '../net/interp.js';
 import { createRoomSession } from '../net/room.js';
 import { createLobbyApi } from '../net/lobbyApi.js';
-import { BIN, NET_V, HEADER_BYTES, KART_BYTES, createKart, encodeFrame, toHex } from '../net/protocol.js';
+import { BIN, NET_V, HEADER_BYTES, KART_BYTES, createKart, encodeFrame, decodeFrame, toHex } from '../net/protocol.js';
 import { S, createState } from '../sim/state.js';
+import { createRacers } from '../sim/racers.js';
 import { threshold } from './sim-racers-harness.mjs';
 import { makeFeel } from './sim-fake.mjs';
 
@@ -87,6 +89,62 @@ test('a reconnect in the same session never moves its seq back', async () => {
   r.ws.recv({ t: 'welcome', v: NET_V, roomId: 'abcdefabcdef', seat: 0, t0: r.t - 60_000, serverMs: r.t, phase: 'racing', cfg: CFG, seed: 7,
     seats: [seatRow(0), seatRow(1)], keep: [], countAt: r.t - 40_000, startAt: r.t - 37_000, goTick: 1380, resume: toHex(frame.slice(HEADER_BYTES, HEADER_BYTES + KART_BYTES)) });
   assert.equal(r.s.uplink.seqOf(0), 41);
+});
+
+test('a fresh session resumes past seq 0x8000 (a race longer than ~27 min at 20 Hz)', async () => {
+  const frame = encodeFrame(BIN.UPLOAD, 0, [{ ...createKart(), seat: 0, seq: 40000, tick: 3000, s: 120, grounded: true }]);
+  const r = await session({ resume: toHex(frame.slice(HEADER_BYTES, HEADER_BYTES + KART_BYTES)) });
+  assert.equal(r.s.uplink.seqOf(0), 40001, 'seqNewer(0, 40000) is true past half the ring: the old check never resumed');
+});
+
+// ---- the bot keeper after a rejoin -------------------------------------------------------------------------------
+const botRow = (seat) => ({ seat, kind: 'bot', name: 'EMI bot', platform: null, look, host: false, ready: true, idle: false, left: false });
+
+/** A mid-race session with one human seat and bot seat 2, racers mounted. */
+async function botSession(keep) {
+  const r = await session({ seats: [seatRow(0), botRow(2)], keep });
+  const q = r.s.tap({ emit() {} });
+  const racers = createRacers(threshold(), makeFeel(), q, { net: r.s.layout(), seed: 7 });
+  r.s.mount(racers, { phase: 'racing', timeS: 40, lapStartS: 0, finish() {} }, q);
+  return Object.assign(r, { racers, bot: racers.list.find((x) => x.meta.seat === 2) });   // keeps the t accessor
+}
+const botRecord = (s, seq) => encodeFrame(BIN.BATCH, 0, [Object.assign(createKart(), { seat: 2, seq, tick: s.clock.tick() - 3, s: 640, x: 1.2,
+  lap: 1, checkpoint: 2, bot: true, q: [0, 0, 0, 1], grounded: true, speedPct: 0.8 })]);
+const upSeats = (ws) => decodeFrame(ws.sent.filter((d) => typeof d !== 'string').at(-1)).karts.map((k) => [k.seat, k.seq]);
+
+test('the room sends the bot record before keep: the new keeper seeds position, lap and seq + 1', async () => {
+  const r = await botSession([]);
+  assert.equal(r.bot.kind, 'remote');
+  r.ws.bin(botRecord(r.s, 300));
+  r.ws.recv({ t: 'keep', seats: [2] });
+  assert.equal(r.bot.kind, 'local');
+  assert.ok(Math.abs(r.bot.st[S.s] - 640) < 1e-3, 'seeded where the room last saw it, not on the grid');
+  assert.equal(r.bot.st[S.lap], 1);
+  assert.equal(r.s.uplink.seqOf(2), 301);
+  r.t += 100; r.s.update();
+  assert.deepEqual(upSeats(r.ws).find((x) => x[0] === 2), [2, 301]);
+});
+
+test('keep with no record leaves the bot remote until a batch carries it, then seeds it', async () => {
+  const r = await botSession([2]);
+  assert.equal(r.bot.kind, 'remote', 'driving it from the grid froze it at the start line on every screen');
+  r.t += 100; r.s.update();
+  assert.deepEqual(upSeats(r.ws).map((x) => x[0]), [0], 'nothing uploaded for a bot it cannot place');
+  r.ws.bin(botRecord(r.s, 1200));
+  assert.equal(r.bot.kind, 'local');
+  assert.ok(Math.abs(r.bot.st[S.s] - 640) < 1e-3);
+  assert.equal(r.bot.st[S.lap], 1);
+  assert.equal(r.s.uplink.seqOf(2), 1201);
+  r.t += 100; r.s.update();
+  assert.deepEqual(upSeats(r.ws).find((x) => x[0] === 2), [2, 1201]);
+});
+
+test('a kept bot whose record never comes is driven from where it stands after a second (an older room)', async () => {
+  const r = await botSession([2]);
+  r.t += 500; r.s.update();
+  assert.equal(r.bot.kind, 'remote');
+  r.t += 600; r.s.update();
+  assert.equal(r.bot.kind, 'local');
 });
 
 // ---- the lobby ---------------------------------------------------------------------------------------------------
