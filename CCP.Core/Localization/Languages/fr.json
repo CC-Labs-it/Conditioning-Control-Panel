@@ -1,4 +1,8 @@
 {
+  "media_drop_player_error_title": "Échec de l’ouverture du lecteur",
+  "media_drop_editor_error_title": "Échec de l’ouverture de l’éditeur",
+  "media_drop_player_error_fmt": "Impossible d’ouvrir Deeper Player : {0} : {1}",
+  "media_drop_editor_error_fmt": "Impossible d’ouvrir Deeper Editor : {0} : {1}",
   "deeper_submission_badge_published": "Publié",
   "deeper_submission_badge_published_tip": "Cette amélioration est en ligne dans le catalogue communautaire.",
   "deeper_submission_badge_pending": "En attente",

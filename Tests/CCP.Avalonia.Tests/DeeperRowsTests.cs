@@ -25,7 +25,7 @@ public sealed class DeeperRowsTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
@@ -60,6 +60,7 @@ public sealed class DeeperRowsTests
     private sealed class FakeAudio : IDeeperLocalAudio
     {
         public bool Playing, Disposed;
+        public double Volume { get; set; }
         public double DurationSeconds { get; set; } = 95;
         public double PositionSeconds { get; set; }
         public void Play() => Playing = true;
@@ -126,6 +127,7 @@ public sealed class DeeperRowsTests
         public LibVLCSharp.Shared.VLCState State { get; set; } = LibVLCSharp.Shared.VLCState.NothingSpecial;
         public long Time { get; set; }
         public long Length => 6000;
+        public int Volume { get; set; }
         public int Stops;
         public void Play() => State = LibVLCSharp.Shared.VLCState.Opening;
         public void SetPause(bool pause) => State = pause ? LibVLCSharp.Shared.VLCState.Paused : LibVLCSharp.Shared.VLCState.Playing;
@@ -141,9 +143,13 @@ public sealed class DeeperRowsTests
 
         // Seek before playback: taken by the first Playing, never again.
         t.PositionSeconds = 3;
+        t.Volume = .125; // WPF linear gain, LibVLC cubic volume
+        Assert.Equal(50, e.Volume);
         t.Play();
         e.State = LibVLCSharp.Shared.VLCState.Playing;
+        e.Volume = 100;
         t.OnPlaying();
+        Assert.Equal(50, e.Volume);
         Assert.Equal(3000, e.Time);
         Assert.Equal(6, t.DurationSeconds);               // exact length once playing
         e.Time = 4000;

@@ -16,7 +16,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        internal void CloseDroppedMediaPlayer() => _deeperPlayer?.Close();
+        internal void CloseDroppedMediaPlayer()
+        {
+            _deeperPlayer?.Close();
+            Deeper.EnhancementPlayerWindow.CloseAudioForPanic();
+        }
+
+        internal static (string Title, string Message) DroppedMediaError(bool play, Exception ex) =>
+            (Loc.Get(play ? "media_drop_player_error_title" : "media_drop_editor_error_title"),
+             Loc.GetF(play ? "media_drop_player_error_fmt" : "media_drop_editor_error_fmt", ex.GetType().Name, ex.Message));
 
         private AssetImportService? _assetImportService;
 
@@ -88,9 +96,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 catch (Exception ex)
                 {
                     Log.Error(ex, "Failed to open dropped media");
-                    var target = choice == Dialogs.MediaDropChoice.Play ? "Player" : "Editor";
-                    await Dialogs.MessageDialog.ShowAsync(this, $"Open {target} failed",
-                        $"Couldn't open Deeper {target}:\n\n{ex.GetType().Name}: {ex.Message}");
+                    var error = DroppedMediaError(choice == Dialogs.MediaDropChoice.Play, ex);
+                    await Dialogs.MessageDialog.ShowAsync(this, error.Title, error.Message);
                 }
                 return;
             }

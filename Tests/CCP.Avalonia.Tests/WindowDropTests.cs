@@ -20,6 +20,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Services.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
+using ConditioningControlPanel;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -256,6 +257,111 @@ public sealed class WindowDropTests
         Assert.Empty(shell.OwnedWindows.OfType<MediaDropDialog>());
         Assert.False(Directory.Exists(assets));
     });
+
+    private sealed class PlayerAudio : IDeeperLocalAudio
+    {
+        public bool Playing, Disposed;
+        public double Volume { get; set; }
+        public double DurationSeconds => 12;
+        public double PositionSeconds { get; set; }
+        public event Action? Ended;
+        public void Play() => Playing = true;
+        public void Pause() => Playing = false;
+        public void Dispose() { Disposed = true; Playing = false; }
+        public void End() { Playing = false; Ended?.Invoke(); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task AudioDropPlaysReplacesAndPanicStopsIt(bool viaVideo) => Run(async (shell, root, _) =>
+    {
+        var old = DeeperLocalAudio.Open;
+        CoreSettings.Current.DeeperPlayerVolume = 25;
+        var first = new PlayerAudio(); var second = new PlayerAudio();
+        var opens = 0;
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(++opens == 1 ? first : second);
+        try
+        {
+            var path = Path.Combine(root, "clip.wav"); File.WriteAllBytes(path, Array.Empty<byte>());
+            Drop(shell, path);
+            Click(await WaitFor(() => shell.OwnedWindows.OfType<MediaDropDialog>().SingleOrDefault()), "BtnPlay");
+            var player = await WaitFor(() => shell.OwnedWindows.OfType<EnhancementPlayerWindow>().SingleOrDefault());
+            Assert.True(first.Playing);
+            Assert.Equal(.25, first.Volume);
+            player.FindControl<Slider>("SliderVolume")!.Value = 0;
+            Assert.Equal(0, first.Volume);
+            Assert.Equal(0, CoreSettings.Current.DeeperPlayerVolume);
+            Click(player, "BtnPlayPause"); Assert.False(first.Playing);
+            Click(player, "BtnPlayPause"); Assert.True(first.Playing);
+            Click(player, "BtnStop"); Assert.False(first.Playing);
+            if (viaVideo)
+            {
+                player.OpenLocalMediaFile(Path.Combine(root, "clip.mp4"));
+                Assert.True(first.Disposed); Assert.False(first.Playing);
+            }
+            player.OpenLocalMediaFile(path);
+            Assert.True(first.Disposed); Assert.True(second.Playing);
+            second.End(); Dispatcher.UIThread.RunJobs();
+            Click(player, "BtnPlayPause"); Assert.True(second.Playing);
+            var other = new PlayerAudio();
+            DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(other);
+            var tutorialPlayer = new EnhancementPlayerWindow(null, null);
+            tutorialPlayer.Show(shell); tutorialPlayer.OpenLocalMediaFile(path);
+            Assert.True(other.Playing);
+            PanicSurfaces.All.Single(s => s.Id == "deeper-drop-player").Stop(shell);
+            Assert.True(second.Disposed); Assert.False(second.Playing);
+            Assert.True(other.Disposed); Assert.False(other.Playing);
+        }
+        finally { DeeperLocalAudio.Open = old; }
+    });
+
+    [Fact]
+    public Task LateAudioParsesCannotPlayAfterReplacementOrPanic() => Run(async (shell, root, _) =>
+    {
+        var old = DeeperLocalAudio.Open;
+        var pending = new TaskCompletionSource<IDeeperLocalAudio?>();
+        DeeperLocalAudio.Open = _ => pending.Task;
+        try
+        {
+            var path = Path.Combine(root, "clip.wav"); File.WriteAllBytes(path, Array.Empty<byte>());
+            Drop(shell, path);
+            Click(await WaitFor(() => shell.OwnedWindows.OfType<MediaDropDialog>().SingleOrDefault()), "BtnPlay");
+            var player = await WaitFor(() => shell.OwnedWindows.OfType<EnhancementPlayerWindow>().SingleOrDefault());
+            var stale = new PlayerAudio(); var closing = new PlayerAudio();
+            var later = new TaskCompletionSource<IDeeperLocalAudio?>();
+            DeeperLocalAudio.Open = _ => later.Task;
+            player.OpenLocalMediaFile(path);
+            pending.SetResult(stale); Dispatcher.UIThread.RunJobs();
+            Assert.True(stale.Disposed); Assert.False(stale.Playing);
+            Click(player, "BtnStop");
+            var stopped = new PlayerAudio(); later.SetResult(stopped); Dispatcher.UIThread.RunJobs();
+            Assert.True(stopped.Disposed); Assert.False(stopped.Playing);
+            var afterClose = new TaskCompletionSource<IDeeperLocalAudio?>();
+            DeeperLocalAudio.Open = _ => afterClose.Task; player.OpenLocalMediaFile(path);
+            PanicSurfaces.All.Single(s => s.Id == "deeper-drop-player").Stop(shell);
+            afterClose.SetResult(closing); Dispatcher.UIThread.RunJobs();
+            Assert.True(closing.Disposed); Assert.False(closing.Playing);
+        }
+        finally { DeeperLocalAudio.Open = old; }
+    });
+
+    [Fact]
+    public void DroppedMediaErrorsHaveTranslatedFormatsInEveryLanguage()
+    {
+        foreach (var language in new[] { "en", "de", "es", "fr", "it", "pt-BR", "ru", "ja", "ko", "zh-CN" })
+        {
+            LocalizationManager.Instance.SetLanguage(language);
+            foreach (var play in new[] { true, false })
+            {
+                var error = MainShellWindow.DroppedMediaError(play, new IOException("probe"));
+                Assert.Contains("IOException", error.Message); Assert.Contains("probe", error.Message);
+                Assert.DoesNotContain("media_drop_", error.Title);
+                if (language != "en")
+                { Assert.DoesNotContain("Could not open", error.Message); Assert.DoesNotContain("Open ", error.Title); }
+            }
+        }
+    }
 
     // ---- harness ----------------------------------------------------------------------
 

@@ -1,4 +1,8 @@
 {
+  "media_drop_player_error_title": "Não foi possível abrir o reprodutor",
+  "media_drop_editor_error_title": "Não foi possível abrir o editor",
+  "media_drop_player_error_fmt": "Não foi possível abrir Deeper Player: {0}: {1}",
+  "media_drop_editor_error_fmt": "Não foi possível abrir Deeper Editor: {0}: {1}",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Este aprimoramento está publicado no catálogo da comunidade.",
   "deeper_submission_badge_pending": "Pendente",

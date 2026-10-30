@@ -11,6 +11,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// drive the editor's play/seek/end path without a sound card.</summary>
     internal interface IDeeperLocalAudio : IDisposable
     {
+        double Volume { get; set; }
         double DurationSeconds { get; }
         double PositionSeconds { get; set; }
         void Play();
@@ -56,6 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             VLCState State { get; }
             long Time { get; set; }
             long Length { get; }
+            int Volume { set; }
             void Play();
             void SetPause(bool pause);
             void Stop();
@@ -66,6 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             public VLCState State => p.State;
             public long Time { get => p.Time; set => p.Time = value; }
             public long Length => p.Length;
+            public int Volume { set => p.Volume = value; }
             public void Play() => p.Play();
             public void SetPause(bool pause) => p.SetPause(pause);
             public void Stop() => p.Stop();
@@ -78,6 +81,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             internal readonly object Gate = new();
             private long _pendingMs;   // a seek made before playback could take it; consumed once
             private int _disposed;
+            private float _volume = 1;
+            public double Volume
+            {
+                get => _volume;
+                set { lock (Gate) { _volume = (float)Math.Clamp(value, 0, 1); player.Volume = LibVlcAudio.VlcVolume(_volume); } }
+            }
             internal bool IsDisposed => _disposed != 0;
 
             public event Action? Ended;
@@ -141,7 +150,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 lock (Gate)
                 {
-                    if (IsDisposed || _pendingMs <= 0) return;
+                    if (IsDisposed) return;
+                    player.Volume = LibVlcAudio.VlcVolume(_volume); // device/start can reset gain
+                    if (_pendingMs <= 0) return;
                     player.Time = _pendingMs;
                     _pendingMs = 0;
                 }

@@ -1,4 +1,8 @@
 {
+  "media_drop_player_error_title": "Impossibile aprire il lettore",
+  "media_drop_editor_error_title": "Impossibile aprire l’editor",
+  "media_drop_player_error_fmt": "Impossibile aprire Deeper Player: {0}: {1}",
+  "media_drop_editor_error_fmt": "Impossibile aprire Deeper Editor: {0}: {1}",
   "Sparkles_Slip_Paid": "Pagato",
   "Sparkles_Slip_Place": "Posto {0} su {1}",
   "Sparkles_Slip_Gold": "Oro",
