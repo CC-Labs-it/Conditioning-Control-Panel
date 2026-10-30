@@ -89,6 +89,7 @@ public sealed class PanicSurfacesTests
         "games",
         "first-show",
         "voice-capture",
+        "companion-conversation",
         "ai-followups",
         "blink-trainer",
         "camera",

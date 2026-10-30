@@ -5,6 +5,7 @@
 // window restore and the double-press exit ladder stay in the routes. Guarded by PanicSurfacesTests.
 
 using System;
+using Avalonia.Controls;
 using System.Collections.Generic;
 using ConditioningControlPanel.Services;
 
@@ -45,6 +46,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("first-show", _ => WelcomeShow.FirstShowService.Stop()),   // WPF MainWindow.xaml.cs:1553, before CancelPendingAi
             new("voice-capture", sh => sh?.CancelVoicePrompt(), After: ["intake"]),   // intake loops end before the mic abort
             // decisions "Panic <-> mic": capture and the command chain end first; WPF :1553 FirstShowService.Stop() before CancelPendingAi.
+            // WPF ConversationPage.xaml.cs:42 cancels on unload; keep the old lane's stricter explicit panic stop.
+            new("companion-conversation", sh => sh?.Named<Tabs.CompanionTabView>("CompanionTab")
+                ?.FindControl<Controls.Companion.V2.ConversationPage>("Conversation")?.StopForPanic()),
             new("ai-followups", _ => MainShellWindow.CancelPendingAi(), After: ["voice-capture", "first-show"]),
             // WPF MainWindow.xaml.cs:1732: standalone Lab minigames first; the engine stop never reaches them.
             new("blink-trainer", _ => Overlays.BlinkTrainerSession.Stop()),
