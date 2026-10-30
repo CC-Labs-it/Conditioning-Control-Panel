@@ -81,7 +81,9 @@
             <Setter Property="FontSize" Value="12" />
         </Style>
 
+        <!-- WPF GoonTestWindow.xaml:72,102 local styles replace Inputs.xaml. -->
         <Style Selector="CheckBox">
+            <Setter Property="Theme" Value="{StaticResource {x:Type CheckBox}}" />
             <Setter Property="Foreground" Value="{DynamicResource GgText}" />
             <Setter Property="Margin" Value="4,2" />
             <Setter Property="FontSize" Value="12" />
@@ -110,6 +112,7 @@
         </Style>
 
         <Style Selector="ListBox">
+            <Setter Property="ItemContainerTheme" Value="{StaticResource {x:Type ListBoxItem}}" />
             <Setter Property="Foreground" Value="{DynamicResource GgText}" />
             <Setter Property="Background" Value="{DynamicResource GgPanelDeep}" />
             <Setter Property="BorderBrush" Value="#FF3A3A68" />

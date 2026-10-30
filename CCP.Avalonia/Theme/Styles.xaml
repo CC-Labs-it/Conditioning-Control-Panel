@@ -630,6 +630,106 @@
       <Setter Property="BorderBrush" Value="{Binding BorderBrush, RelativeSource={RelativeSource TemplatedParent}}"/>
     </Style>
   </ControlTheme>
+  <!-- Inputs.xaml:218-309 CheckBox: the house 18px dot, white core when checked, 40% accent fill for
+       the three-state middle value, 140ms check-pop. A Grid, not a StackPanel, so wrapping content wraps.
+       Keyed switches (ToggleStyle etc.) set Theme locally and never reach this. -->
+  <ControlTheme x:Key="InputCheckBoxTheme" TargetType="CheckBox">
+    <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource PanelAccentBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource GlassBorderBrush}"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="CheckBox">
+        <Grid ColumnDefinitions="Auto,*" Background="Transparent">
+          <Panel x:Name="DotHost" Width="18" Height="18" VerticalAlignment="Center" RenderTransformOrigin="50%,50%">
+            <Border x:Name="Dot" CornerRadius="9" BorderThickness="1"
+                    Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                    fx:InputFx.GlowColor="{DynamicResource PinkColor}" fx:InputFx.GlowBlur="8"/>
+            <Ellipse x:Name="Core" Width="7" Height="7" Fill="White" IsVisible="False"/>
+          </Panel>
+          <!-- Hidden without content: a content-less box carries no 8px gap (WPF Content=null trigger). -->
+          <ContentPresenter x:Name="PART_ContentPresenter" Grid.Column="1" Margin="8,0,0,0"
+                            RecognizesAccessKey="True"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            IsVisible="{TemplateBinding Content, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#Dot">
+      <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+    </Style>
+    <Style Selector="^:indeterminate /template/ Border#Dot">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink40Brush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+    </Style>
+    <Style Selector="^:checked /template/ Border#Dot">
+      <Setter Property="Background" Value="{DynamicResource PinkBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+      <Setter Property="fx:InputFx.GlowOpacity" Value="0.5"/>
+    </Style>
+    <Style Selector="^:checked /template/ Ellipse#Core">
+      <Setter Property="IsVisible" Value="True"/>
+    </Style>
+    <!-- check-pop: 1 -> 1.18 -> 1 over 140ms (WPF linear keyframes). -->
+    <Style Selector="^:checked /template/ Panel#DotHost">
+      <Style.Animations>
+        <Animation Duration="0:0:0.14">
+          <KeyFrame Cue="0%">
+            <Setter Property="ScaleTransform.ScaleX" Value="1"/>
+            <Setter Property="ScaleTransform.ScaleY" Value="1"/>
+          </KeyFrame>
+          <KeyFrame Cue="50%">
+            <Setter Property="ScaleTransform.ScaleX" Value="1.18"/>
+            <Setter Property="ScaleTransform.ScaleY" Value="1.18"/>
+          </KeyFrame>
+          <KeyFrame Cue="100%">
+            <Setter Property="ScaleTransform.ScaleX" Value="1"/>
+            <Setter Property="ScaleTransform.ScaleY" Value="1"/>
+          </KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.45"/>
+      <Setter Property="Cursor" Value="Arrow"/>
+    </Style>
+  </ControlTheme>
+
+  <!-- Inputs.xaml:394-431 ListBoxItem: kills the stock accent selection. Handed over by the implicit
+       ListBox style (App.axaml) as ItemContainerTheme, so a list's own ItemContainerTheme wins. -->
+  <ControlTheme x:Key="InputListBoxItemTheme" TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Padding" Value="4,3"/>
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
+    <!-- StyleTrigger priority overrides Fluent inline template foregrounds. -->
+    <Style Selector="^[IsVisible=True] /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource TemplatedParent}}"/>
+    </Style>
+    <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
+    </Style>
+    <Style Selector="^:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
+    </Style>
+    <Style Selector="^:selected">
+      <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    </Style>
+    <Style Selector="^:selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink40Brush}"/>
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.45"/>
+    </Style>
+  </ControlTheme>
+
   <ControlTheme x:Key="FocusGlowTextBox" TargetType="TextBox" BasedOn="{StaticResource InputTextBoxTheme}"/>
 
   <!-- MainWindow.xaml:280. The WPF template replaced wholesale, and so does this one: a

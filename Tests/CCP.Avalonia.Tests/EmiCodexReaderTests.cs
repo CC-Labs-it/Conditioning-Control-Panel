@@ -19,7 +19,7 @@ public sealed class EmiCodexReaderTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().WithInterFont().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var old = EmiState.Current.CodexChapter;
         try
