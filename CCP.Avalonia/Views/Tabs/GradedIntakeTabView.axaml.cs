@@ -166,6 +166,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF MainWindow.Lab.cs:148: the pass gate and the AI gate in front of the launch.</summary>
         internal async void BtnStartIntake_Click(object? sender, RoutedEventArgs e)
         {
+            // WPF Lab.cs:154: a live run wins even after the pass was spent or login changed.
+            if (Windows.IntakeHostWindow.Snapshot().FirstOrDefault() is { } live)
+            {
+                live.Activate();
+                return;
+            }
             var owner = TopLevel.GetTopLevel(this) as Window;
             var pass = App.IntakePass;
             if (!pass.CanStartIntake)
@@ -180,7 +186,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 {
                     App.Notifications.Show(SpentBody(), Helpers.NotificationType.Warning,
                         TimeSpan.FromSeconds(8), Loc.Get("intake_gate_spent_cta"),
-                        () => (owner as Windows.MainShellWindow)?.OpenAppSettingsSection("account"));
+                        () => (owner as Windows.MainShellWindow)?.OpenPricedCard("gradedintake", 1));
                 }
                 return;
             }
@@ -193,8 +199,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 return;
             }
 
-            // WPF Lab.cs:195: a first-ever run does not duck the control panel (it reads as a crash).
-            OpenIntake(owner, duckMain: IntakePunchCardState.ReadEverCompletedIntake(CorePaths.UserData));
+            // WPF Lab.cs:195/198: a first-ever run does not duck the control panel (it reads as a crash). The live
+            // service first: a finished intake reaches the file only on its next (up to 30 s) save.
+            OpenIntake(owner, duckMain: App.IntakePunchCard?.HasEverCompletedIntake
+                ?? IntakePunchCardState.ReadEverCompletedIntake(CorePaths.UserData));
         }
 
         /// <summary>WPF IntakeHostService.Launch: one live run at a time, focused if already open;
