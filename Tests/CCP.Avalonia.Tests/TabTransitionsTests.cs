@@ -380,6 +380,39 @@ public sealed class TabTransitionsTests
         }
     });
 
+    [Theory]
+    [InlineData("takeover", "tab_takeover", 1)]
+    [InlineData("awareness", "tab_awareness", 1)]
+    [InlineData("haptics", "tab_haptics", 1)]
+    [InlineData("voice", "tab_shelistening", 1)]
+    [InlineData("fyp", "tab_fyp", 1)]
+    [InlineData("remote", "tab_remote_control", 1)]
+    [InlineData("dtrh", null, 2)]
+    [InlineData(null, "mosaic_daily_gift", 0)]
+    public Task HomeEntryRepaintsMysteryOfferAndReveal(string? key, string? nameKey, int tier) => Run(shell =>
+    {
+        ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.ReadDailyGiftKey = () => key;
+        CoreEntitlement.IsFreeTodayProvider = _ => true; // extra member/post grants must not choose the box
+        CoreEntitlement.HasPremiumProvider = () => false;
+        shell.ShowTab("quests");
+        shell.ShowTab("settings"); // WPF FavoritesRail.cs:107, TabNavigation.cs:389
+        var dash = shell.SettingsPage!;
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("mosaic_free_today"), dash.CardMystery.Title);
+        Assert.Null(dash.CardMystery.TierBadge);
+        Assert.Equal(nameKey == null ? "Down the Rabbit Hole" : ConditioningControlPanel.Localization.Loc.Get(nameKey),
+            dash.FindControl<TextBlock>("MysteryRevealName")!.Text);
+        var badge = dash.FindControl<ConditioningControlPanel.Avalonia.Controls.TierBadge>("MysteryRevealBadge")!;
+        Assert.Equal(tier, badge.Tier);
+        Assert.Equal(tier > 0, badge.FreeToday);
+        var face = dash.FindControl<Border>("MysteryRevealFace")!;
+        var art = Assert.IsType<ImageBrush>(((Grid)face.Child!).Children.OfType<Border>().First().Background);
+        Assert.NotNull(art.Source);
+        CoreEntitlement.HasPremiumProvider = () => true;
+        shell.RefreshNavPremiumTags(); // existing daily-free / entitlement callback
+        Assert.Equal(0, badge.Tier);
+        Assert.False(badge.FreeToday);
+    });
+
     private sealed class SteppedTime : TimeProvider
     {
         public long Now;

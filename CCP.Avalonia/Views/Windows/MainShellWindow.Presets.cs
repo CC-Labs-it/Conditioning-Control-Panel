@@ -66,7 +66,7 @@
 //   internal void CardVault_Click(…)
 //   internal void CardJustDrop_Click(…)
 //   internal void RefreshMosaicTierBadges(…)
-//   internal void RefreshMysteryTile(…)
+//   internal void RefreshMysteryTile(…)             RESTORED in MainShellWindow.MysteryTile.cs
 //   private static string? MysteryFeatureName(…)
 //   private static int MysteryFeatureTier(…)
 //   private static string MysteryFeatureArtPath(…)
@@ -188,8 +188,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // Callers: SettingsTabView's Card*_Toggle / Combo*_Toggle (right-click on a wall tile) and
         // the Studio rack's right-click QuickToggle. The rings repaint from HookWallRings.
         //
-        // ponytail: RefreshMosaicTierBadges, RefreshMysteryTile and SetTierBadge still need
-        // App.Patreon's tier state. The caption counter uses Core DashboardToggleHintRule below.
+        // Mystery tile repaint uses CoreEntitlement in MainShellWindow.MysteryTile.cs.
+        // Prize v2 livery and mystery hover choreography remain unported.
 
         /// <summary>The persisted flag behind a wall key. Unknown key = false.</summary>
         internal static bool IsWallFeatureOn(string key)

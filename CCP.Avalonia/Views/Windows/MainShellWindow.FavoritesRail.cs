@@ -64,6 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void RefreshFavoritesRail()
         {
             RefreshDashboardToggleHint();
+            RefreshMysteryTile();
             var dash = SettingsPage;
             var s = CoreSettings.Current;
             if (dash?.FavoritesList == null || dash.RecentList == null || s == null) return;
