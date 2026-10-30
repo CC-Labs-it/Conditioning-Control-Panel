@@ -272,11 +272,11 @@ internal sealed class RainPackWriter : IDisposable
 }
 
 /// <summary>
-/// Rewrites Rain's emotes.json / clip_timing.json for a pack that has only some of the 12 clips
+/// Rewrites Rain's emotes.json / clip_timing.json for a pack that has only some of the 17 clips
 /// (until the wardrobe GLB carries every action, a custom look bakes idle, greeting and jump).
 /// Every clip the map names that the pack lacks folds onto one it has: talk, listening, shy and
-/// smirk onto idle, giggle onto greeting, anything else onto idle, and failing idle onto the
-/// pack's first clip. A full pack comes out unchanged.
+/// smirk onto idle, giggle and surprise onto greeting, joy onto jump, anything else onto idle,
+/// and failing idle onto the pack's first clip. A full pack comes out unchanged.
 /// </summary>
 internal static class RainPackEmotesFold
 {
@@ -285,7 +285,8 @@ internal static class RainPackEmotesFold
         if (have.Contains(clip)) return clip;
         string? near = clip.StartsWith("talk", StringComparison.Ordinal) || clip.StartsWith("shy", StringComparison.Ordinal)
                        || clip is "listening" or "smirk" ? "idle"
-                     : clip == "giggle" ? "greeting"
+                     : clip is "giggle" or "surprise" ? "greeting"
+                     : clip == "joy" ? "jump"
                      : null;
         if (near != null && have.Contains(near)) return near;
         if (have.Contains("idle")) return "idle";
