@@ -80,12 +80,21 @@ public sealed class LeashAskTests
             Assert.False(page.ShowingEmpty);
             Tagged<Border>(page, "leash-offer-row:u_juno");
             Assert.Equal(new[] { OfferId }, seen); // The row on screen is the offer seen.
+            LeashLevelHelp.Open = false;
+            CoreSettings.Current.PanicKey = "F10";
 
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
             var ask = LeashAskWindow.Current!;
             Assert.True(ask.IsVisible);
             var card = ask.Card;
             Assert.Equal(new[] { OfferId }, seen); // Seen once, however many surfaces show it.
+            Assert.Equal(Loc.GetF("leash_explain_leashed_cut", "F10"), Tagged<Grid>(card, "leash-explain-line:cut").Children.OfType<TextBlock>().Single().Text);
+            Assert.Equal(Loc.Get(LeashLevelGuide.TaglineKey(LeashIntensity.Standard)), Tagged<TextBlock>(card, "leash-guide-tagline").Text);
+            Assert.False(Tagged<ScrollViewer>(card, "leash-guide-table").IsVisible);
+            LeashGateCardTests.Click(Tagged<Button>(card, "leash-guide-toggle"));
+            Assert.True(Tagged<ScrollViewer>(card, "leash-guide-table").IsVisible);
+            Assert.Equal(220, Tagged<ScrollViewer>(card, "leash-guide-table").MaxHeight);
+            Assert.Equal(Loc.GetF(LeashLevelGuide.LimitsKey, LeashLevelGuide.PunishmentsPerDay, LeashLevelGuide.ExpiresAfterHours), Tagged<TextBlock>(card, "leash-guide-limits").Text);
             Assert.False(card.PutItOnButton.IsEnabled); // First ask: read the explainer first.
             Assert.Equal(4, card.GetLogicalDescendants().OfType<Border>().Count(b => (b.Tag as string)?.StartsWith("leash-explain-panel:") == true));
             card.IsVisible = false;
@@ -100,6 +109,8 @@ public sealed class LeashAskTests
 
             LeashGateCardTests.Click(Tagged<Button>(card, "leash-ask-level:2"));
             Assert.Equal(LeashIntensity.Strict, card.Level);
+            Assert.Equal(Loc.Get(LeashLevelGuide.TaglineKey(LeashIntensity.Strict)), Tagged<TextBlock>(card, "leash-guide-tagline").Text);
+            Assert.True(Tagged<ScrollViewer>(card, "leash-guide-table").IsVisible);
             Assert.Contains(card.GetLogicalDescendants().OfType<Border>(), b => b.Tag as string == "leash-allow:chaster:on");
             LeashGateCardTests.Click(card.PutItOnButton);
             var (op, sent) = wire.Calls.Last();

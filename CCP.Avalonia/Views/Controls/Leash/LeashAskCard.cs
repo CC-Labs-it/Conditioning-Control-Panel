@@ -1,8 +1,7 @@
 // WPF Controls/Leash/LeashAskCard.cs:70-138 (layout), :141-240 (levels), :244-278 (answer).
 // WPF Controls/Leash/Explain/LeashExplainCard.cs:70-225 (grid), :232-246 (visible read clock).
 // WPF Controls/Leash/Explain/LeashExplainer.cs:278-282 (remember the answered intro).
-// ponytail: the explainer's drawn art and entrance (LeashExplainArt), LeashFx sounds/pops, the "?" button and
-// WPF's hold-the-panic-key cut line are wire-views-tab-leash-b-next; the cut line says the one-click Cut this head has.
+// Missing: drawn art, entrance, LeashFx and help. WPF cut copy: Explain/LeashExplainCard.cs:91.
 using System;
 using System.Threading.Tasks;
 using Avalonia;
@@ -30,6 +29,7 @@ public sealed class LeashAskCard : Border
     private readonly Func<ILeashService?> _svc;
     private readonly StackPanel _body = new();
     private readonly Border _switchHost = new();
+    private readonly Border _guideHost = new();
     private readonly WrapPanel _allowed = new() { Margin = new Thickness(0, 8, 0, 0), Tag = "leash-ask-allowed" };
     private readonly TextBlock _error;
     private LeashIntensity _level = LeashIntensity.Standard;
@@ -71,6 +71,7 @@ public sealed class LeashAskCard : Border
         _body.Children.Add(Explainer(offer.From.Name));
         _body.Children.Add(Caption(Loc.Get("leash_ask_level")));
         _body.Children.Add(_switchHost);
+        _body.Children.Add(_guideHost); // WPF LeashAskCard.cs:103, :210.
         _body.Children.Add(_allowed);
         PaintLevel();
         var acts = new Grid { Margin = new Thickness(0, 16, 0, 0), ColumnDefinitions = new ColumnDefinitions("*,1.3*") };
@@ -151,6 +152,7 @@ public sealed class LeashAskCard : Border
             g.Children.Add(b);
         }
         _switchHost.Child = new Border { Background = Chip, CornerRadius = new CornerRadius(10), Padding = new Thickness(3), Tag = "leash-ask-level", Child = g };
+        _guideHost.Child = new LeashLevelHelp(_level, lines: false, maxTable: 220);
         _allowed.Children.Clear();
         foreach (var k in LeashUiRules.PunishOrder)
         {
@@ -208,7 +210,7 @@ public sealed class LeashAskCard : Border
         var see = string.IsNullOrWhiteSpace(name) ? Loc.Get("leash_explain_leashed_see_anon") : Loc.GetF("leash_explain_leashed_see", name.Trim());
         var lines = new StackPanel { Margin = new Thickness(6, 8, 6, 0) };
         lines.Children.Add(Bullet(IconKind.Eye, F.Lilac, see, "leash-explain-line:see"));
-        lines.Children.Add(Bullet(IconKind.Cut, F.Mint, Loc.Get("leash_ask_p_cut"), "leash-explain-line:cut"));
+        lines.Children.Add(Bullet(IconKind.Cut, F.Mint, Loc.GetF("leash_explain_leashed_cut", LeashHoldToCut.KeyLabel(CoreSettings.Current.PanicKey)), "leash-explain-line:cut"));
         root.Children.Add(lines);
         return root;
     }
