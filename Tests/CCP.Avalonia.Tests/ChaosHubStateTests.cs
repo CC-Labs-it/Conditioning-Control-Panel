@@ -22,10 +22,7 @@ public sealed class ChaosHubStateTests
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
-            if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+            AmbientBeatLoopsTests.Setup();
             var old = CoreSettings.Current.ChaosActiveSlot;
             ChaosSlotPickerWindow? picker = null;
             ChaosHubWindow? hub = null;
@@ -87,10 +84,7 @@ public sealed class ChaosHubStateTests
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
-            if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+            AmbientBeatLoopsTests.Setup();
             var old = CoreSettings.Current.ChaosActiveSlot;
             ChaosHubWindow? hub = null;
             try
