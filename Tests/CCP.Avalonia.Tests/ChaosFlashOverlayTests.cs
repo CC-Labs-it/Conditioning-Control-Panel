@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using ConditioningControlPanel.Avalonia.Platform;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -92,13 +93,21 @@ public sealed class ChaosFlashOverlayTests
         {
             Setup();
             var schedule = ChaosFlashOverlay.Schedule;
+            var oldRaise = X11Overlay.RaiseRequestedForTests;
+            var raised = new List<global::Avalonia.Controls.TopLevel>();
             var steps = new List<(Action Run, TimeSpan At)>();
             try
             {
+                X11Overlay.RaiseRequestedForTests = w =>
+                {
+                    Assert.True(Assert.IsAssignableFrom<global::Avalonia.Controls.Window>(w).IsVisible);
+                    raised.Add(w);
+                };
                 ChaosFlashOverlay.SkipPlatformChecksForTests = true;
                 ChaosFlashOverlay.Schedule = (a, t) => steps.Add((a, t));
                 await ChaosFlashOverlay.ShowPath(TwoScreens, path, 600, .1);
                 var window = Assert.Single(ChaosFlashOverlay.Shown);
+                Assert.Same(window, Assert.Single(raised));
                 Assert.Equal(2560, ((global::Avalonia.Media.Imaging.Bitmap)window.Spiral.Source!).PixelSize.Width);
                 Assert.False(ChaosFlashOverlay.IsAnimating);
                 foreach (var step in steps.ToArray()) step.Run();
@@ -113,6 +122,10 @@ public sealed class ChaosFlashOverlayTests
                 steps.Clear();
                 await ChaosFlashOverlay.ShowPath(TwoScreens, path, 600, .1);
                 Assert.Same(window, Assert.Single(ChaosFlashOverlay.Shown));
+                Assert.Equal(2, raised.Count); // retained window raised again after Show
+                ChaosFlashOverlay.RaiseActive(); // WPF ChaosFlashOverlay.cs:82
+                Assert.Equal(3, raised.Count);
+                Assert.All(raised, w => Assert.Same(window, w));
                 hide(); // a grace callback from the old wash cannot hide its replacement
                 Assert.True(window.IsVisible);
                 PanicSurfaces.StopAll("chaos-flash still test");
@@ -123,6 +136,7 @@ public sealed class ChaosFlashOverlayTests
                 ChaosFlashOverlay.CloseActive();
                 ChaosFlashOverlay.SkipPlatformChecksForTests = false;
                 ChaosFlashOverlay.Schedule = schedule;
+                X11Overlay.RaiseRequestedForTests = oldRaise;
                 Directory.Delete(dir, true);
             }
         });

@@ -105,7 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
         public static void RaiseActive()
         {
-            foreach (var window in Wash.Windows) X11Overlay.SetOverrideRedirect(window, Wash.Bounds);
+            foreach (var window in Wash.Windows) X11Overlay.Raise(window);
         }
         internal static void NextFrame() => Wash.NextFrame();
 
@@ -197,7 +197,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     X11Overlay.SetOpacity(w, 0);
                     w.Show();
-                    X11Overlay.SetOverrideRedirect(w, bounds); // re-stack above video after unhiding
+                    X11Overlay.SetOverrideRedirect(w, bounds);
+                    X11Overlay.Raise(w); // WPF ChaosFlashOverlay.cs:72, :104: re-stack after Show
                 }
                 Alpha = 0;
                 var plan = ChaosFlashWash.For(durationMs, opacity);
