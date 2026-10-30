@@ -272,6 +272,36 @@ public sealed class CompanionBarkHeadTests
     });
 
     [Fact]
+    public void ListeningOpenedBeforeAnIdleTickCancelsThatTick() => WithSeamsRestored(s =>
+    {
+        // WPF AvatarTubeWindow.Speech.cs:789 resets the cadence after showing the mic prompt.
+        var oldEngine = BarkHead.Engine;
+        var tube = new ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow(null);
+        var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+        var timerField = tube.GetType().GetField("_idleTimer", flags)!;
+        try
+        {
+            s.AvatarMuted = false;
+            s.IdleGiggleIntervalSeconds = 120;
+            BarkHead.Engine = Seeded(Rule("Idle", "idle"), out var spoken);
+            tube.RestartIdleTimer();
+            var pending = (global::Avalonia.Threading.DispatcherTimer)timerField.GetValue(tube)!;
+            // Make the existing tick runnable, as if its interval just elapsed, without waiting.
+            typeof(global::Avalonia.Threading.DispatcherTimer).GetMethod("Promote", flags)!.Invoke(pending, null);
+            tube.ShowListeningBubble("listening");
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Null(spoken());
+            Assert.StartsWith("listening", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
+            Assert.False(pending.IsEnabled);
+            var restarted = (global::Avalonia.Threading.DispatcherTimer)timerField.GetValue(tube)!;
+            Assert.NotSame(pending, restarted);
+            Assert.True(restarted.IsEnabled);
+            Assert.Equal(System.TimeSpan.FromSeconds(120), restarted.Interval);
+        }
+        finally { tube.Close(); BarkHead.Engine = oldEngine; }
+    });
+
+    [Fact]
     public void IdleTimerFollowsTheSliderAndSpeechAndStopsOnClose() => WithSeamsRestored(s =>
     {
         // WPF Speech.cs:1571-1623 and MainWindow.Patreon.cs:1459: slider restart.

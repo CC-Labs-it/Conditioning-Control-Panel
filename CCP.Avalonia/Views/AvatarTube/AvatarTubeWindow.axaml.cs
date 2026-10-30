@@ -1385,6 +1385,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 };
                 _listeningDotsTimer = timer;
                 timer.Start();
+                RestartIdleTimer();   // WPF AvatarTubeWindow.Speech.cs:789: keep idle off the mic prompt.
             });
         }
 
