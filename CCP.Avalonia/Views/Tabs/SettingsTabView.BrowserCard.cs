@@ -6,11 +6,13 @@
 // Mute rides the WebHost script channel (Views/Controls/WebHostMedia.cs) and is re-applied after every navigation,
 // since a new document has no flag. The load prompt: WPF builds the WebView2 on that click; here the engine exists
 // from the start but loads nothing until asked, so the prompt stands in the slot until the first page.
-// ponytail: Pop out (WPF re-parents the WebView2 into a 1024x768 window; NativeWebView cannot be re-parented live)
-// and "Enhance if possible" (no BrowserEnhanceBridge on this head) are greyed with the "not on this build" line.
+// Pop out preserves the native adapter with BeginReparenting.
+// "Enhance if possible" remains disabled without BrowserEnhanceBridge.
 
 using System;
 using Avalonia.Controls;
+using Avalonia.Data;
+using ConditioningControlPanel.Avalonia.Localization;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -45,7 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Platform.WebcamTracker.Instance.StateChanged -= OnBrowserCardTrackerChanged;
                 CoreMods.ModChanged -= OnBrowserCardModChanged;
             };
-            foreach (Control c in new Control[] { ToggleEnhanceIfPossible, BtnPopOutBrowser })
+            foreach (Control c in new Control[] { ToggleEnhanceIfPossible })
             {
                 c.IsEnabled = false;
                 c.Bind(ToolTip.TipProperty, LocBinding("exclusives_not_on_this_build"));
@@ -174,17 +176,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         internal void SyncBrowserPrompt()
         {
-            bool prompt = BrowserPromptShown(BrowserWebHost.HasEngine, BrowserWebHost.Source != null);
+            bool popped = Shell?.IsBrowserPoppedOut == true;
+            bool offline = CoreSettings.Current.OfflineMode;
+            bool prompt = popped || offline || BrowserPromptShown(BrowserWebHost.HasEngine, BrowserWebHost.Source != null);
             BrowserLoadingText.IsVisible = prompt;
-            // A native web view draws over anything laid on it, so the prompt only shows with the host hidden.
-            BrowserWebHost.IsVisible = !prompt;
+            BrowserLoadingText.Bind(TextBlock.TextProperty, LocBinding(offline
+                ? "label_browser_disabled_in_offline_mode" : popped   // WPF MainWindow.Browser.cs:2737
+                ? "label_browser_popped_out_nclick_to_focus_window" : "label_click_to_load_browser"));
+            // The placeholder belongs to the card; the popped-out host stays visible in its window.
+            BrowserWebHost.IsVisible = popped || !prompt;
         }
 
-        /// <summary>WPF BrowserLoadingText_Click: load the selected site. The shell's reload is exactly that, behind the
-        /// offline gate (WPF #867).</summary>
-        internal void OnBrowserPromptClick() => Shell?.BtnReloadBrowser_Click(this, new RoutedEventArgs());
+        /// <summary>WPF BrowserLoadingText_Click: initially load the mod's default. Subsequent Reload uses the selected
+        /// site's home, behind the offline gate (WPF #867).</summary>
+        internal void OnBrowserPromptClick()
+        {
+            if (Shell?.IsBrowserPoppedOut == true) Shell.BtnPopOutBrowser_Click(this, new RoutedEventArgs());
+            else if (BrowserWebHost.Source == null) Shell?.LoadInitialBrowserHome();
+            else Shell?.BtnReloadBrowser_Click(this, new RoutedEventArgs());
+        }
 
-        private void BtnPopOutBrowser_Click(object? sender, RoutedEventArgs e) { }          // greyed: see the header
+        internal void SyncBrowserPopout()
+        {
+            // WPF MainWindow.Browser.cs:2790-2800: label and tooltip follow the hosting window.
+            bool popped = Shell?.IsBrowserPoppedOut == true;
+            if (BtnPopOutBrowser.Content is TextBlock label)
+                label.Bind(TextBlock.TextProperty, (Binding)new StrBareExtension(
+                    popped ? "btn_focus" : "btn_pop_out").ProvideValue(null!));
+            BtnPopOutBrowser.Bind(ToolTip.TipProperty, LocBinding(popped
+                ? "tooltip_browser_is_popped_out_click_to_focus" : "tooltip_pop_out_browser_to_resizable_window"));
+            SyncBrowserPrompt();
+        }
+
+        private void BtnPopOutBrowser_Click(object? sender, RoutedEventArgs e) => Shell?.BtnPopOutBrowser_Click(sender, e);
         private void ToggleEnhanceIfPossible_Changed(object? sender, RoutedEventArgs e) { } // greyed: see the header
     }
 }
