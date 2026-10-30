@@ -21,6 +21,99 @@ namespace CCP.Avalonia.Tests;
 public sealed class WorkshopPhrasePresetTests
 {
     [Fact]
+    public Task StandaloneRosterSwitchesAndCloudRestoreRefreshesTriggerSettings() => Run((drawer, parts, owner, s) =>
+    {
+        s.ActiveCompanionId = 0;
+        var card = parts.Roster.FindControl<Border>("CompanionCard2")!;
+        var pointer = new global::Avalonia.Input.Pointer(global::Avalonia.Input.Pointer.GetNextFreeId(), global::Avalonia.Input.PointerType.Mouse, true);
+        card.RaiseEvent(new global::Avalonia.Input.PointerPressedEventArgs(card, pointer, owner, default, 0,
+            new global::Avalonia.Input.PointerPointProperties(global::Avalonia.Input.RawInputModifiers.LeftMouseButton,
+                global::Avalonia.Input.PointerUpdateKind.LeftButtonPressed), global::Avalonia.Input.KeyModifiers.None, 1));
+        Assert.Equal(2, s.ActiveCompanionId);
+        var restored = new AppSettings { TriggerModeEnabled = true, TriggerIntervalSeconds = 144 };
+        CoreSettings.Service!.RestoreFrom(restored);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(parts.Triggers.FindControl<CheckBox>("ChkTriggerModeCompanion")!.IsChecked);
+        Assert.Equal(144, parts.Triggers.FindControl<Slider>("SliderTriggerIntervalCompanion")!.Value);
+        Assert.False(CoreSettings.Service.HasPendingSave);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PanicDiscardsTriggerEditsWithoutOpeningAnUnsavedPrompt() => Run(async (drawer, parts, owner, s) =>
+    {
+        s.CustomTriggers = new() { "KEEP" };
+        Click(parts.Triggers.FindControl<Button>("BtnEditTriggersCompanion")!);
+        Dispatcher.UIThread.RunJobs();
+        var dialog = Assert.Single(owner.OwnedWindows);
+        dialog.FindControl<TextBox>("TxtNewItem")!.Text = "UNSAVED";
+        Click(dialog.FindControl<Button>("BtnAdd")!);
+        global::ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All
+            .Single(surface => surface.Id == "workshop-trigger-editor").Stop(null);
+        await Task.Yield(); Dispatcher.UIThread.RunJobs();
+        Assert.Empty(owner.OwnedWindows);
+        Assert.Equal(new[] { "KEEP" }, s.CustomTriggers);
+    });
+
+    [Fact]
+    public Task TriggerSettingsRestoreWithoutWritingAndUserChangesReachSettings() => Run((drawer, parts, owner, s) =>
+    {
+        var service = CoreSettings.Service!;
+        Assert.False(service.HasPendingSave);
+        s.TriggerModeEnabled = true; s.TriggerIntervalSeconds = 123;
+        owner.Content = null; owner.Content = drawer;
+        Assert.False(service.HasPendingSave); // restoring flips the toggle but must not ask to persist
+        var cell = parts.Triggers;
+        var toggle = cell.FindControl<CheckBox>("ChkTriggerModeCompanion")!;
+        var slider = cell.FindControl<Slider>("SliderTriggerIntervalCompanion")!;
+        Assert.True(toggle.IsChecked);
+        Assert.Equal(123, slider.Value);
+        Assert.Equal("123s", cell.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!.Text);
+        toggle.IsChecked = false;
+        Assert.False(s.TriggerModeEnabled);
+        Assert.True(service.HasPendingSave);
+        Assert.False(cell.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!.IsVisible);
+        slider.Value = 137.8;
+        Assert.Equal(137, s.TriggerIntervalSeconds);
+        Assert.Equal("137s", cell.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!.Text);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task TriggerEditorDeduplicatesAndSavesOnlyEnabledWithUserProvenance() => Run(async (drawer, parts, owner, s) =>
+    {
+        s.CustomTriggers = new() { "KEEP", "keep", "REMOVE", "  " };
+        s.UserAddedCustomTriggers.Add("REMOVE");
+        Click(parts.Triggers.FindControl<Button>("BtnEditTriggersCompanion")!);
+        Dispatcher.UIThread.RunJobs();
+        var dialog = Assert.IsType<global::ConditioningControlPanel.Avalonia.Views.Dialogs.TextEditorDialog>(Assert.Single(owner.OwnedWindows));
+        var items = dialog.FindControl<ItemsControl>("ItemList")!.Items
+            .Cast<global::ConditioningControlPanel.Avalonia.Views.Dialogs.TextItem>().ToArray();
+        Assert.Equal(2, items.Length);
+        items.Single(i => i.Text == "REMOVE").IsEnabled = false;
+        dialog.FindControl<TextBox>("TxtNewItem")!.Text = "unique user phrase";
+        Click(dialog.FindControl<Button>("BtnAdd")!);
+        Click(dialog.FindControl<Button>("BtnSave")!);
+        await Task.Yield(); Dispatcher.UIThread.RunJobs();
+        Assert.Equal(new[] { "KEEP", "UNIQUE USER PHRASE" }, s.CustomTriggers);
+        Assert.Contains("UNIQUE USER PHRASE", s.UserAddedCustomTriggers);
+        Assert.DoesNotContain("REMOVE", s.UserAddedCustomTriggers);
+    });
+
+    [Fact]
+    public Task CancellingEmptyTriggerEditorKeepsEmptyPool() => Run(async (drawer, parts, owner, s) =>
+    {
+        s.CustomTriggers.Clear();
+        Click(parts.Triggers.FindControl<Button>("BtnEditTriggersCompanion")!);
+        Dispatcher.UIThread.RunJobs();
+        var dialog = Assert.Single(owner.OwnedWindows);
+        Assert.Empty(dialog.FindControl<ItemsControl>("ItemList")!.Items);
+        Click(dialog.FindControl<Button>("BtnCancel")!);
+        await Task.Yield(); Dispatcher.UIThread.RunJobs();
+        Assert.Empty(s.CustomTriggers);
+    });
+
+    [Fact]
     public Task SaveButtonOpensTheWpfNamePromptAndStoresAnIndependentSnapshot() => Run(async (drawer, parts, owner, s) =>
     {
         s.DisabledPhraseIds.Add("original");

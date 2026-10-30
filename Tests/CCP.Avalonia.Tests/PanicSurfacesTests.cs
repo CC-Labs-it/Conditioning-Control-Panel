@@ -85,6 +85,7 @@ public sealed class PanicSurfacesTests
     {
         "intake",
         "leash-task",
+        "workshop-trigger-editor",
         "tour",
         "games",
         "first-show",
@@ -110,6 +111,7 @@ public sealed class PanicSurfacesTests
         "intake",
         "knock-cards",
         "leash-task",
+        "workshop-trigger-editor",
         "lock-cards",
         "mantra",
         "panic-quiet",
