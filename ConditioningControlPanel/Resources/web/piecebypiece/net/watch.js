@@ -93,6 +93,7 @@ export function createWatchSession({
   let ticker = null;
   let watchers = 0;
   let players = { w: null, b: null };
+  let lastLooks = '';            // the last looks frame sent, so a steady head stays quiet
   let seat = 'w';               // which side the camera watches from
   let sided = false;            // the camera is set once; after that the swap is the watcher's own
   let adopted = false;          // watch-info waits for the tape's first head, so behindMs is right from the first one
@@ -164,6 +165,11 @@ export function createWatchSession({
     adopted = true;
     const n = Math.max(0, Math.trunc(Number(data && data.watchers) || 0));
     if (n !== watchers) { watchers = n; changed = true; bus.emit('watchers', { count: n }); }
+    // Both seats' looks ride the head too (contract 4): the stands see what the players wear.
+    if (data && data.looks && typeof data.looks === 'object') {
+      const l = { white: data.looks.white || null, black: data.looks.black || null };
+      if (JSON.stringify(l) !== lastLooks) { lastLooks = JSON.stringify(l); bus.emit('looks', l); }
+    }
     const p = (data && data.players && typeof data.players === 'object') ? data.players : {};
     const next = { w: playerOf(p.w), b: playerOf(p.b) };
     if (JSON.stringify(next) !== JSON.stringify(players)) {

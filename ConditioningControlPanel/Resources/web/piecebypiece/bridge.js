@@ -66,7 +66,8 @@ let heartbeat = 0;        // setInterval handle, 0 when not beating
 // (Options > Pictures) and the ramp's media pool have landed from their async imports. The
 // pre-buffer only holds frames while NO listener exists, so the latest of each is kept here and
 // handed to a listener that joins late (bug hunt 2026-09-29, CHESS-9).
-const REPLAYED = new Set(['pbp:settings', 'pbp:media-state']);
+// The wardrobe's grants and saved look (skins/wear.js) are the same kind of frame: latest wins.
+const REPLAYED = new Set(['pbp:settings', 'pbp:media-state', 'owned', 'pbp:look']);
 const lastFrames = new Map();   // type -> the latest delivered frame of a REPLAYED type
 
 if (webview) {
