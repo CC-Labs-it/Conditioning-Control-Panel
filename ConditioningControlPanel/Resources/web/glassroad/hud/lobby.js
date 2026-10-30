@@ -17,6 +17,7 @@
  *        ({ code }), room.send(msg), room.close(), room.now() (server ms).
  *   identity: { displayName, tier } or a function returning it. friends?: () -> [{ uid, name }].
  *   track: 'threshold'. storage: localStorage-like. looks?: () -> { wardrobe, vehicles } (default: fetch the files).
+ *   lookOwned?: () -> lobbyMath ownedChoices(grants, unlocked): the picker offers only those (absent: every wire id).
  *   link (section 13): api.makeLink(), revokeLink(), claimLink(token, look, platform), access(); platform: 'web' | ...;
  *        linkClaimed(): after the first claim answer (boot drops ?r= from the address bar).
  * Events (through the hud's emit): online-start, online-race (at countAt), online-seat, online-emote,
@@ -25,11 +26,12 @@
 import {
   hostGate, signedIn, tableRows, quickDelay, cleanHost, stepHost, hostBody, HOST_DEFAULTS, applySeats, applySeat,
   seatRows, raceTags, readyCount, humans, canStart, lookChoices, cycleLook, lookLabel, loadLook, saveLook, countdown,
+  lookKeys, fitLook, LOOK_ROW_LABEL,
   serverNow, resultLines, popsLabel, errorCopy, abortCopy, closeCopy, connectFailCopy, trackName, startsLabel, rowStartsIn, BADGE_COPY,
   linkButton, linkNote, claimStep, pollNow, pollStep, pollReset, listKey,
 } from './lobbyMath.js';
 import { PRESETS, presetOf, poseOf, poseHoldS, emoteAllowed, EMOTE_GAP_MS, EMOTE_SHOW_MS } from './presets.js';
-import { normLook } from '../net/protocol.js';
+import { normLook, roomLook } from '../net/protocol.js';
 import { actSound, seatSound, nextGridBell } from './sounds.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -85,11 +87,12 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
   const ident = () => { const i = deps().identity; return typeof i === 'function' ? i() : i || null; };
   const storage = () => { const d = deps(); if (d.storage) return d.storage; try { return win.localStorage; } catch (e) { return null; } };
   const track = () => deps().track || 'threshold';
+  const owned = () => { try { return deps().lookOwned?.() || null; } catch (e) { return null; } };
 
   const st = {
     view: 'home', msg: '', busy: false,
     rows: [], listAt: -1e9, listMs: 0, listSeen: 0, poll: { key: null, same: 0 },
-    host: cleanHost({ ...HOST_DEFAULTS, laps: deps().trackLaps || HOST_DEFAULTS.laps }), look: loadLook(storage()), choices: lookChoices(), looksAsked: false,
+    host: cleanHost({ ...HOST_DEFAULTS, laps: deps().trackLaps || HOST_DEFAULTS.laps }), look: loadLook(storage()), choices: lookChoices(null, null, owned()), looksAsked: false,
     join: null, room: null, offs: [], welcome: null, seenAt: 0, seat: -1, phase: 'lobby', cfg: null, seed: 0, keep: [],
     seats: applySeats([]), start: null, raced: false, results: null, leaving: false,
     lastEmote: -Infinity, myPose: null, bubbles: {}, friends: null, sent: new Set(),
@@ -134,8 +137,8 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
   }
   const setNote = (t) => { note.hidden = !t; note.textContent = t || ''; };
 
-  const lookRows = () => ['outfit', 'vehicle'].map((k) => '<div class="c-opt"><span>' + (k === 'outfit' ? 'Outfit' : 'Ride') +
-    '</span>' + btn('lb-lstep', esc(lookLabel(st.look, k, st.choices)), 'c-tog', ' data-key="' + k + '" aria-label="' + (k === 'outfit' ? 'Outfit' : 'Ride') + '"') + '</div>').join('');
+  const lookRows = () => lookKeys(st.look, st.choices).map((k) => '<div class="c-opt"><span>' + LOOK_ROW_LABEL[k] +
+    '</span>' + btn('lb-lstep', esc(lookLabel(st.look, k, st.choices)), 'c-tog', ' data-key="' + k + '" aria-label="' + LOOK_ROW_LABEL[k] + '"') + '</div>').join('');
 
   const VIEWS = {
     home() {
@@ -367,8 +370,10 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
         const get = async (f) => { const res = await win.fetch(new URL('../art/models/' + f, import.meta.url)); return res.ok ? res.json() : null; };
         [w, v] = await Promise.all([get('emi-bot-wardrobe.json'), get('emi-vehicle-variants.json')]);
       }
-      st.choices = lookChoices(w, v);
-    } catch (e) { st.choices = lookChoices(); }
+      st.lookFiles = [w, v];
+      st.choices = lookChoices(w, v, owned());
+    } catch (e) { st.choices = lookChoices(null, null, owned()); }
+    st.look = fitLook(st.look, st.choices);
     if (st.view === 'look' || st.view === 'room') paint();
   }
 
@@ -581,9 +586,10 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
   function step(el, dir) {
     const key = el.dataset.key;
     if (el.dataset.act === 'lb-hstep') { st.host = stepHost(st.host, key, dir); paint(); return; }
-    st.look = cycleLook(st.look, key, dir, st.choices);
+    st.look = fitLook(cycleLook(st.look, key, dir, st.choices), st.choices);
     saveLook(storage(), st.look);
-    if (st.room && st.phase === 'lobby') send({ t: 'look', outfit: st.look.outfit, vehicle: st.look.vehicle });
+    // the whole look, extras and skin too: the room keeps them bound to the ticket, a bare change would drop them
+    if (st.room && st.phase === 'lobby') send({ t: 'look', ...roomLook(st.look) });
     paint();
   }
 
@@ -624,7 +630,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     /** hud/cards.js calls this from show('lobby', data). data.view: 'results' or 'home' to jump there; data.claim: a link token (boot's ?r=). */
     show(data = {}) {
       if (!alive()) return;
-      if(!st.room){const selected=deps().garageLook?.();if(selected)st.look=normLook(selected);}
+      if(!st.room){const selected=deps().garageLook?.();if(selected)st.look=normLook(selected);const [lw,lv]=st.lookFiles||[];st.choices=lookChoices(lw||null,lv||null,owned());st.look=fitLook(st.look,st.choices);}
       injectCss();
       if (data.join && !st.room) {
         if(data.join.look)st.look=normLook(data.join.look);
