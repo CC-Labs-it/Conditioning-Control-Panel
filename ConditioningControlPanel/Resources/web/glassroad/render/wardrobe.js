@@ -7,7 +7,7 @@
  *   to cup_body / saucer_body (shared by every kart on a vehicle); the source geometry stays untouched.
  * No clips here: the shared kart mixer moves every piece.
  */
-import { SkinnedMesh, Skeleton, Matrix4, BufferGeometry, BufferAttribute, SRGBColorSpace, Color } from 'three/webgpu';
+import { SkinnedMesh, Skeleton, Matrix4, BufferGeometry, BufferAttribute, SRGBColorSpace, Color, FloatType } from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createVehicleLife } from './vehicleLife.js';
 import { racerFinish } from './racerFinish.js';
@@ -28,6 +28,23 @@ const cutCache = new WeakMap(), mergeCache = new WeakMap();
 
 function skinnedIn(root) { const out = []; root.traverse((o) => { if (o.isSkinnedMesh) out.push(o); }); return out; }
 
+/** A plain (never interleaved) copy of an attribute: the raw stored values, so a normalized one stays exact. */
+function plainCopy(a) {
+  if (!a.isInterleavedBufferAttribute) return a.clone();
+  const src = a.data.array, stride = a.data.stride, n = a.count, k = a.itemSize, out = new src.constructor(n * k);
+  for (let i = 0; i < n; i++) for (let j = 0; j < k; j++) out[i * k + j] = src[i * stride + a.offset + j];
+  return new BufferAttribute(out, k, a.normalized);
+}
+
+/** A loose copy for merging: the loader tags some float positions with gpuType and not others, which the merge
+ * refuses; every float attribute says FloatType (what it is). The source geometry stays untouched. */
+function mergeable(src) {
+  const g = new BufferGeometry();
+  for (const [k, a] of Object.entries(src.attributes)) { const c = plainCopy(a); if (c.array instanceof Float32Array) c.gpuType = FloatType; g.setAttribute(k, c); }
+  if (src.index) g.setIndex(src.index.clone());
+  return g;
+}
+
 /* Astra's Prize Counter pieces arrive as many small skinned meshes on one skin (a tutu is 31 ribbons). They share
  * the inverse binds, so one merged geometry per material keeps a racer at two or three draws; cached per source
  * scene, shared by every kart. Anything that will not merge keeps its own meshes. */
@@ -39,7 +56,7 @@ function mergedSkinned(scene) {
   if (list.length > byMat.size) {
     out = [];
     for (const [material, group] of byMat) {
-      const g = group.length > 1 ? mergeGeometries(group.map((m) => m.geometry)) : group[0].geometry;
+      const g = group.length > 1 ? mergeGeometries(group.map((m) => mergeable(m.geometry))) : group[0].geometry;
       if (!g) { out = list; break; }
       out.push({ geometry: g, material, skeleton: group[0].skeleton, isSkinnedMesh: true });
     }
