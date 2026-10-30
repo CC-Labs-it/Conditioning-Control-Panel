@@ -37,6 +37,15 @@ public sealed partial class FriendsService
         return SendAsync(friendId, SendKind.Invite, null, destination, code, null, null);
     }
 
+    /// <summary>The race-room invite (Racing Thoughts pre-race room, host only). Checked against the
+    /// grammar first; the server checks the room itself and answers a fixed reason.</summary>
+    public Task<SendOutcome> InviteToRaceAsync(string friendId, string roomId)
+    {
+        if (!InviteDestination.IsRoomId(roomId)) return Task.FromResult(new SendOutcome(SendResult.Refused, null));
+        return SendOutcomeAsync(friendId, SendKind.Invite, InviteDestination.Race,
+            () => _api.SendRaceInviteAsync(friendId, roomId), null);
+    }
+
     public Task<SendResult> SendWatchAsync(string friendId, WatchRef watch)
     {
         if (watch == null || !watch.IsValid()) return Task.FromResult(SendResult.Refused);
@@ -55,10 +64,15 @@ public sealed partial class FriendsService
 
     private async Task<SendResult> SendAsync(string friendId, SendKind kind, string? poke, string? destination, string? code,
         WatchRef? watch, Action<bool>? after)
+        => (await SendOutcomeAsync(friendId, kind, kind switch { SendKind.Poke => poke, SendKind.Invite => destination, _ => watch?.Title },
+            () => _api.SendForItemAsync(friendId, kind, poke, destination, code, watch), after)).Result;
+
+    private async Task<SendOutcome> SendOutcomeAsync(string friendId, SendKind kind, string? detail,
+        Func<Task<SendOutcome>> send, Action<bool>? after)
     {
-        if (!Available || string.IsNullOrEmpty(friendId)) return SendResult.TryLater;
+        if (!Available || string.IsNullOrEmpty(friendId)) return new SendOutcome(SendResult.TryLater, null);
         var sentFor = _account();
-        var outcome = await _api.SendForItemAsync(friendId, kind, poke, destination, code, watch);
+        var outcome = await send();
         var result = outcome.Result;
         after?.Invoke(result == SendResult.Sent);
         if (result == SendResult.Sent)
@@ -66,14 +80,13 @@ public sealed partial class FriendsService
             // The trail starts at "sent"; receipts walk it on (FriendsSentBook). Not for an account
             // that changed while the call was out: that one's book was just cleared.
             if (_account() == sentFor)
-                NoteSentTrail(friendId, kind, outcome.ItemId,
-                    kind switch { SendKind.Poke => poke, SendKind.Invite => destination, _ => watch?.Title });
+                NoteSentTrail(friendId, kind, outcome.ItemId, detail);
             var friend = Snapshot.Friends.FirstOrDefault(f => f.Id == friendId)
                 ?? new Friend(friendId, "", null, 0, false, FriendPresence.None, false);
             try { Sent?.Invoke(kind, friend); }
             catch (Exception ex) { Log.Debug("Friends sent handler failed: {E}", ex.Message); }
         }
-        return result;
+        return outcome;
     }
 
     public async Task<AddResult> AddByCodeAsync(string code)

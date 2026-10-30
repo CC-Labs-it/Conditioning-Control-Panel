@@ -376,6 +376,12 @@
     <Resource Include="..\Assets\avatar0_emotes\*.gif" Link="Resources\avatar0_emotes\%(RecursiveDir)%(Filename)%(Extension)" />
     <Resource Include="..\Assets\avatar0_emotes\emotes.json" Link="Resources\avatar0_emotes\emotes.json" Condition="Exists('..\Assets\avatar0_emotes\emotes.json')" />
     <Resource Include="..\Assets\avatar0_emotes\clip_timing.json" Link="Resources\avatar0_emotes\clip_timing.json" Condition="Exists('..\Assets\avatar0_emotes\clip_timing.json')" />
+    <!-- Rain (7.2, the V2 avatar generation on BambiSleep, Sissy and CCP Default): animated WebP with real
+         alpha, played by the tube's SkiaSharp lane (AvatarTube\EmoteClipPlayer.cs). CC BY 4.0: ATTRIBUTION.txt. -->
+    <Resource Include="..\Assets\rain_emotes\*.webp" Link="Resources\rain_emotes\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Resource Include="..\Assets\rain_emotes\emotes.json" Link="Resources\rain_emotes\emotes.json" />
+    <Resource Include="..\Assets\rain_emotes\clip_timing.json" Link="Resources\rain_emotes\clip_timing.json" />
+    <Content Include="..\Assets\rain_emotes\ATTRIBUTION.txt" Link="Resources\rain_emotes\ATTRIBUTION.txt" CopyToOutputDirectory="PreserveNewest" />
 
     <!-- Achievement images -->
     <Resource Include="..\Assets\achievements\*.png" Link="Resources\achievements\%(RecursiveDir)%(Filename)%(Extension)" />
@@ -550,6 +556,9 @@
          the direct play page, engine and ending assets must reach both output and publish. -->
     <!-- Piece by Piece: its node smokes, the dev pages (only ever opened with ?media=fixture
          from a checkout), its design notes and the node-only package.json. -->
+    <!-- Racing Thoughts 3D (Glassroad, 7.2) ships. Only its node tests, the node dev tools
+         (dev\*.mjs; dev\hook.js and dev\uploadCensus.js are page modules and stay) and its notes
+         are left out. -->
     <ArcademyHarnessExclude>
       ..\Assets\web\arcademy\annex\demo.html;
       ..\Assets\web\arcademy\vn\demo.html;
@@ -557,6 +566,9 @@
       ..\Assets\web\arcademy\shell\recordsroom.demo.html;
       ..\Assets\web\arcademy\games\**\smoke\**\*;
       ..\Assets\web\backroom\smoke\**\*;
+      ..\Assets\web\glassroad\tests\**\*;
+      ..\Assets\web\glassroad\dev\**\*.mjs;
+      ..\Assets\web\glassroad\**\*.md;
       ..\Assets\web\backroom\**\tests\**\*;
       ..\Assets\web\backroom\shared\hypno\tests\**\*;
       ..\Assets\web\backroom\stations\breakout\**\*.test.js;
@@ -569,6 +581,7 @@
       ..\Assets\web\piecebypiece\**\*.md;
       ..\Assets\web\piecebypiece\package.json;
       ..\Assets\web\dtrh\tests\**\*;
+      ..\Assets\web\rain-wardrobe\tests\**\*;
       ..\Assets\web\intake\tests\**\*
     </ArcademyHarnessExclude>
     <!-- Remix engine (Resources\web\remix, vendored from cclabs-site/remix for the Jackpot Remix
@@ -587,6 +600,9 @@
       $(MSBuildProjectDirectory)\..\Assets\web\arcademy\shell\recordsroom.demo.html;
       $(MSBuildProjectDirectory)\..\Assets\web\arcademy\games\**\smoke\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\smoke\**\*;
+      $(MSBuildProjectDirectory)\..\Assets\web\glassroad\tests\**\*;
+      $(MSBuildProjectDirectory)\..\Assets\web\glassroad\dev\**\*.mjs;
+      $(MSBuildProjectDirectory)\..\Assets\web\glassroad\**\*.md;
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\**\tests\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\shared\hypno\tests\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\stations\breakout\**\*.test.js;
@@ -599,6 +615,7 @@
       $(MSBuildProjectDirectory)\..\Assets\web\piecebypiece\**\*.md;
       $(MSBuildProjectDirectory)\..\Assets\web\piecebypiece\package.json;
       $(MSBuildProjectDirectory)\..\Assets\web\dtrh\tests\**\*;
+      $(MSBuildProjectDirectory)\..\Assets\web\rain-wardrobe\tests\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\intake\tests\**\*
     </ArcademyHarnessExcludeAbs>
   </PropertyGroup>

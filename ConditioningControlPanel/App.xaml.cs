@@ -183,6 +183,9 @@ namespace ConditioningControlPanel
         // head gets the sandbox hook rather than only this one.
         public static string UserDataPath => CorePaths.UserData;
 
+        /// <summary>The user data root for a given CCP_USERDATA_DIR value (null = not set).</summary>
+        internal static string ResolveUserDataPath(string? overrideDir) => CorePaths.UserDataFor(overrideDir);
+
         /// <summary>
         /// User assets folder path - for user-added content that persists across updates
         /// </summary>
@@ -1114,6 +1117,8 @@ namespace ConditioningControlPanel
         public static Services.Prizes.OwnershipService? Ownership { get; private set; }
         /// <summary>Buying a v2 prize from the options panel (see Services/Prizes/V2PurchaseService).</summary>
         public static Services.Prizes.V2PurchaseService? V2Purchase { get; private set; }
+        /// <summary>Sparkles by place: posts a finished game's claim, adopts a paying receipt (see Services/Sparkles).</summary>
+        public static Services.Sparkles.SparklesClaimService? Sparkles { get; private set; }
         /// <summary>Eight-hole intake punch card (see IntakePunchCardService).</summary>
         public static IntakePunchCardService IntakePunchCard { get; private set; } = null!;
         public static TutorialService Tutorial { get; private set; } = null!;
@@ -2471,8 +2476,14 @@ namespace ConditioningControlPanel
             };
             TaskScheduler.UnobservedTaskException += (s, args) =>
             {
-                LogCrashDetails("TASK", args.Exception);
                 args.SetObserved();
+                // A late close on a dead Intiface socket is not a crash (ccp-bugs #1510/#1513).
+                if (Services.Diagnostics.BenignTaskFault.IsLateWebSocketClose(args.Exception))
+                {
+                    try { Logger?.Debug("Ignored a WebSocket close on an already-aborted socket: {Msg}", args.Exception?.InnerException?.Message); } catch { }
+                    return;
+                }
+                LogCrashDetails("TASK", args.Exception);
             };
 
             // Clean up old update packages in background (don't block startup)
@@ -2838,6 +2849,8 @@ namespace ConditioningControlPanel
                     s.SkillPoints = next;
                     Settings.Save();
                 })));
+            // Sparkles by place (B1). Pure constructor: nothing is sent until a game host claims.
+            Sparkles = Services.Sparkles.SparklesClaimService.CreateForApp();
             Roadmap = new RoadmapService();
             // Needs Settings, Progression and Quests (all above); Patreon is constructed above too.
             Programs = new Services.Program.ProgramService();
@@ -3442,6 +3455,12 @@ namespace ConditioningControlPanel
                     Settings?.Save();
             }
             catch (Exception ex) { Logger?.Warning(ex, "Remote holdings heal failed (non-fatal)"); }
+            // Baked Rain looks: drop half-written bakes and packs whose manifest no longer reads.
+            _ = System.Threading.Tasks.Task.Run(() =>
+            {
+                try { Services.Companion.RainPackStore.CreateDefault().Sweep(); }
+                catch (Exception ex) { Logger?.Warning(ex, "Rain pack sweep failed (non-fatal)"); }
+            });
             Lockdown = new LockdownService();
             LockdownService.Current = Lockdown;
             // Possession: the haunt that rides the lockdown timer. It only arms when a lockdown starts
@@ -6371,6 +6390,8 @@ Application State:
             // and here is a straight dispose - the board has nothing to flush and no verdict to
             // protect, so there is no graceful wind-down whose 1200ms timer would never tick.
             try { Services.PieceByPiece.PieceByPieceHostService.Close(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // Glassroad (3D race preview): the same straight dispose.
+            try { Services.Glassroad.GlassroadHostService.Close(); } catch (Exception ex) { Diag.Swallowed(ex); }
 
             // If the companion is on its own UI thread (AvatarOwnThread), shut its Dispatcher down so the
             // STA thread's Dispatcher.Run() returns and the thread exits cleanly. Background thread, so it

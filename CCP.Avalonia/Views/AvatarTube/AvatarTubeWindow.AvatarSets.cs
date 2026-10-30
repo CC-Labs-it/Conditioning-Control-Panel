@@ -11,7 +11,6 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Companion;
-using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Avalonia.Views.AvatarTube;
 
@@ -55,8 +54,9 @@ public partial class AvatarTubeWindow
         {
             using var stream = AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/avatar_emotes_registry.json"));
             using var reader = new StreamReader(stream);
-            var registry = JObject.Parse(reader.ReadToEnd());
-            return _registeredEmoteSets = registry["sets"]!.Select(e => ((string)e["modId"]!, (int)e["avatarSet"]!)).ToArray();
+            // Core rule: a "generation" row (Rain v2) is a whole avatar, never an avatar set.
+            var (sets, _) = ConditioningControlPanel.Services.Companion.AvatarGenerationRule.ParseRegistry(reader.ReadToEnd());
+            return _registeredEmoteSets = sets.Select(e => (e.modId, e.set)).ToArray();
         }
         catch (Exception ex)
         {

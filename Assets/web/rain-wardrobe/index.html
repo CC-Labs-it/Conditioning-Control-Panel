@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ede9e2">
+  <title>Rain | Dressing room</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./style.css">
+  <script type="importmap">{"imports":{"three":"../vendor/three/three.module.min.js","three/addons/":"../vendor/three/addons/"}}</script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="Rain dressing room">RAIN<span>01 / DRESSING ROOM</span></a>
+    <div class="top-actions"><span class="live-dot" id="liveLabel">LIVE PREVIEW</span><button class="quiet" id="demo" disabled>Show swaps <span aria-hidden="true">▷</span></button><button class="quiet" id="reset">Original look <span aria-hidden="true">↺</span></button></div>
+  </header>
+  <main>
+    <section class="stage" aria-label="Animated avatar preview">
+      <div class="stage-title"><p class="eyebrow">MAKE IT YOURS</p><h1>A little<br><em>change.</em></h1></div>
+      <canvas id="preview" aria-label="Rain. Drag to rotate, scroll to zoom." tabindex="0"></canvas>
+      <div class="swap-fx" id="swapFx" aria-hidden="true"><i></i><b>✦</b><b>✧</b><b>✦</b><b>✧</b><b>✦</b><b>✧</b></div>
+      <div class="load-card" id="loading" role="status"><span class="spinner"></span><p id="loadMessage">Getting dressed</p><progress id="loadProgress"></progress></div>
+      <div class="stage-caption"><span id="lookCaption">The original</span><span class="drag-hint">Drag to turn · Scroll to zoom</span></div>
+      <div class="camera-controls" aria-label="Camera angle"><button data-view="front">Front</button><button data-view="quarter" class="active">¾</button><button data-view="side">Side</button><button data-view="back">Back</button><button id="headView">Head</button><button id="handsView">Hands</button><button id="feetView">Feet</button><button id="outfitView">Outfit</button><button id="fullView">Full</button><button id="tube" aria-pressed="false" title="Show at companion size">Tube size</button></div>
+      <div class="tube-label" id="tubeLabel" hidden>190 px</div>
+      <div class="tryon-ribbon" id="tryonRibbon" role="status" aria-hidden="true"></div>
+      <div class="animation-strip"><button id="pause" class="round" aria-label="Pause animation" title="Pause animation">Ⅱ</button><div class="animation-options" id="animations" aria-label="Animation"></div></div>
+    </section>
+    <aside class="wardrobe">
+      <div class="wardrobe-heading"><span class="eyebrow">THE WARDROBE</span><span class="saved" id="saveStatus">Saved on this device</span></div>
+      <nav class="tabs" aria-label="Customization category" role="tablist">
+        <button role="tab" aria-selected="true" aria-controls="choices" data-slot="dress">Dresses</button>
+        <button role="tab" aria-selected="false" aria-controls="choices" data-slot="hair">Hair</button>
+        <button role="tab" aria-selected="false" aria-controls="choices" data-slot="skin">Skin</button>
+        <button role="tab" aria-selected="false" aria-controls="choices" data-slot="accessories">Extras</button>
+        <button role="tab" aria-selected="false" aria-controls="choices" data-slot="shoes">Shoes</button>
+        <button role="tab" aria-selected="false" aria-controls="choices" data-slot="legwear">Legwear</button>
+        <button role="tab" aria-selected="false" aria-controls="choices" data-slot="arms">Arms</button>
+        <button role="tab" aria-selected="false" aria-controls="choices" data-slot="ankles">Ankles</button>
+        <button role="tab" aria-selected="false" aria-controls="choices" data-slot="looks">Looks</button>
+      </nav>
+      <details class="color-studio" id="colorStudio">
+        <summary>Color studio <span>Make it personal</span></summary>
+        <div class="color-controls">
+          <label for="colorChannel">Color</label><select id="colorChannel" aria-label="Color channel"></select>
+          <div id="colorPresets" class="color-presets" aria-label="Color presets"></div>
+          <div class="custom-color"><input type="color" id="colorPicker" aria-label="Custom color"><input id="colorHex" aria-label="Color hex" maxlength="7" pattern="#[0-9a-fA-F]{6}" spellcheck="false" value="#b47c8c"><button id="resetChannel">Reset</button></div>
+          <div class="color-foot"><span id="colorStatus">Original palette</span><button id="resetColors">Reset all colors</button></div>
+        </div>
+      </details>
+      <div class="section-intro"><h2 id="categoryTitle">The dress.</h2><p id="categoryHint">Pick a silhouette.</p></div>
+      <div class="choices" id="choices" role="tabpanel" aria-label="Dresses"></div>
+      <div class="outfit-summary"><span class="eyebrow">WEARING NOW</span><div id="equipped"></div></div>
+      <div class="wardrobe-foot"><span class="small-star">✳</span><p>Your look. Same Rain.</p><span class="prototype">FITTING PROTOTYPE</span></div>
+    </aside>
+  </main>
+  <footer class="look-bar" id="lookBar" hidden>
+    <div class="look-text"><p class="look-now"><span id="lookNowLabel">Wearing now:</span> <span id="lookNow"></span></p>
+    <p class="look-blocker" id="lookBlocker" role="status"><span id="lookBlockerText"></span><button class="link" id="openCounter" hidden>Open counter</button></p></div>
+    <div class="look-actions"><button class="quiet" id="discardLook" disabled>Discard</button><button class="ink" id="applyLook" disabled>Apply look</button></div>
+  </footer>
+  <script type="module" src="./viewer.js"></script>
+</body>
+</html>

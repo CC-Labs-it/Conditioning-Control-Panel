@@ -434,9 +434,9 @@ public sealed partial class ChasterService : IDisposable
                 seconds = Math.Min(seconds, room);
             }
             booking = CircesTab.Book(_tab, eventId, seconds, now, _localNow(), _runStartUtc, safetyExit: now < _safetyUntilUtc, options.Caps,
-                // Only with a lock picked: with none, nothing can push, and the set-aside credit would
-                // hide until the next lock and then land a slip-up the credit used to cover.
-                raffleDay: seconds > 0 && ChasterClient.IsLockId(options.LockId) && RaffleRunning(now))
+                // Only with a live lock picked: with none (or one that ended or ran out), nothing can
+                // push, and the set-aside credit would hide every later slip-up (ccp-bugs #1511).
+                raffleDay: seconds > 0 && PickedLockTakesTime(options, now) && RaffleRunning(now))
                 with { Unprompted = unprompted };
             if (booking.AppliedSeconds > 0) { CircesTab.NoteUse(_tab, eventId, _localNow()); if (heats) NoteHeat(eventId); }
             else if (booking.AppliedSeconds < 0) NoteCool();
@@ -508,18 +508,18 @@ public sealed partial class ChasterService : IDisposable
             // An id the client would refuse is no lock at all. Checked here, before the pending
             // mark: AddTimeAsync throws on it before sending, and a mark left behind by a throw
             // was counted as landed at the next settle, so the tab booked time Chaster never got.
-            if (!ChasterClient.IsLockId(lockId)) return SettleOutcome.NoLockChosen;
+            if (!ChasterClient.IsLockId(lockId)) return Waits(SettleOutcome.NoLockChosen);
 
             // A push onto a lock whose timer has run out locks it again from now (LockRelock).
             if (await LockRanOutAsync(lockId!, options.RelockPastEnd, ct).ConfigureAwait(false))
             {
                 Serilog.Log.Information("[Chaster] the chosen lock's timer has run out; the tab waits");
-                return SettleOutcome.LockRanOut;
+                return Waits(SettleOutcome.LockRanOut);
             }
 
             // The keyholder turned adding off (the fresh read above says so, or the last add was
             // refused with 403 and no read has said otherwise since). Asking again changes nothing.
-            if (AddsBlockedFor(lockId!)) return SettleOutcome.AddsBlocked;
+            if (AddsBlockedFor(lockId!)) return Waits(SettleOutcome.AddsBlocked);
 
             lock (_gate)
             {
@@ -562,9 +562,9 @@ public sealed partial class ChasterService : IDisposable
             {
                 // update-time answers 403 only for a missing lock.time.add: the wearer may not add.
                 NoteAddPermission(lockId!, false);
-                return SettleOutcome.AddsBlocked;
+                return Waits(SettleOutcome.AddsBlocked);
             }
-            if (!added.Ok) return Failed(added.Status);
+            if (!added.Ok) return Failed(added.Status) is var failed && failed == SettleOutcome.NoLockChosen ? Waits(failed) : failed;
             Serilog.Log.Information("[Chaster] settled {Seconds}s to the lock", plan.Seconds);
             LadderPushLanded();
             try { PushLanded?.Invoke(plan.Seconds); } catch (Exception ex) { Diag.Swallowed(ex, "chaster push landed listener"); }
@@ -611,6 +611,24 @@ public sealed partial class ChasterService : IDisposable
         if (status != ChasterStatus.LinkExpired) return SettleOutcome.TryLater;
         DropLink();
         return SettleOutcome.LinkExpired;
+    }
+
+    /// <summary>The tab waits on the lock, not on Chaster being away: a raffle day's set-aside
+    /// credit comes back on the tab (<see cref="CircesTab.ReleaseParked"/>) so it cancels in sight.</summary>
+    private SettleOutcome Waits(SettleOutcome outcome)
+    {
+        int released;
+        lock (_gate)
+        {
+            released = CircesTab.ReleaseParked(_tab);
+            if (released > 0) SaveTab();
+        }
+        if (released > 0)
+        {
+            Serilog.Log.Information("[Chaster] the push cannot land ({Outcome}); {Seconds}s of set-aside credit is back on the tab", outcome, released);
+            try { LockChanged?.Invoke(); } catch (Exception ex) { Diag.Swallowed(ex, "chaster parked credit repaint"); }
+        }
+        return outcome;
     }
 
     /// <summary>Forget the link on this machine and tell Chaster to forget it too. The tab

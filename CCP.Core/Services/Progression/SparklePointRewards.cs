@@ -3,7 +3,7 @@ using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Services;
 
-public enum SparklePointSource { LevelUp, BubbleMilestone }
+public enum SparklePointSource { LevelUp, BubbleMilestone, Place }
 
 /// <summary>A settled local credit, distinct from a balance restored or received from another device.</summary>
 public readonly record struct SparklePointAward(int Amount, int Balance, SparklePointSource Source);
