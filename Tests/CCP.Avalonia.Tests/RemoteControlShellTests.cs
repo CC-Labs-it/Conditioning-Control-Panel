@@ -38,10 +38,26 @@ public sealed class RemoteControlShellTests
             : typeof(ConditioningControlPanel.Avalonia.Views.Overlays.SpiralOverlay);
         var gate = type.GetMethod("ShouldShow", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
         Assert.False((bool)gate.Invoke(null, null)!);
-        Assert.Null(RemoteCommands.Execute(pink ? "show_pink_filter" : "show_spiral", null));
-        Assert.True((bool)gate.Invoke(null, null)!);
-        CoreEngine.Stop();
-        Assert.False((bool)gate.Invoke(null, null)!);
+        var runner = new SessionRunner(new SessionLogService());
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.App.Sessions = runner;
+            Assert.Null(RemoteCommands.Execute(pink ? "show_pink_filter" : "show_spiral", null));
+            Assert.True((bool)gate.Invoke(null, null)!);
+            runner.Start(new Session { DurationMinutes = 1 });
+            Assert.Null(RemoteCommands.Execute(pink ? "show_pink_filter" : "show_spiral", null));
+            runner.Pause();
+            Assert.False((bool)gate.Invoke(null, null)!); // WPF SessionEngine.cs:530
+            runner.Resume();
+            Assert.True((bool)gate.Invoke(null, null)!); // WPF SessionEngine.cs:582
+            runner.Pause();
+            Assert.Null(RemoteCommands.Execute(pink ? "show_pink_filter" : "show_spiral", null));
+            Assert.True(runner.IsPaused);
+            Assert.True((bool)gate.Invoke(null, null)!); // WPF RemoteControlService.cs:1316-1390
+            CoreEngine.Stop();
+            Assert.False((bool)gate.Invoke(null, null)!);
+        }
+        finally { runner.Stop(); CoreEngine.Stop(); }
         return Task.CompletedTask;
     });
 

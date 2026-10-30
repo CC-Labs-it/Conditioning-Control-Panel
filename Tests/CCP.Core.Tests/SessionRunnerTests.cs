@@ -69,6 +69,41 @@ public sealed class SessionRunnerTests : IDisposable
     private static JObject SettingsJson() =>
         JObject.Parse(JsonConvert.SerializeObject(CoreSettings.Current, Formatting.Indented));   // = settings.json
 
+    [Theory]
+    [InlineData("show_pink_filter")]
+    [InlineData("show_spiral")]
+    public void Local_pause_stops_remote_overlays_and_later_remote_show_can_restart_them(string verb)
+    {
+        var oldRefresh = RemoteCommands.RefreshOverlays;
+        var refreshes = 0;
+        RemoteCommands.RefreshOverlays = () => refreshes++;
+        try
+        {
+            _runner.Start(OneMinute());
+            Assert.Null(RemoteCommands.Execute(verb, null));
+            Assert.True(RemoteCommands.OverlayRunning);
+            var beforePause = refreshes;
+            _runner.Pause();
+            Assert.False(RemoteCommands.OverlayRunning);
+            Assert.True(RemoteCommands.OverlaysStopped);
+            Assert.Equal(beforePause + 1, refreshes);
+            Assert.True(verb == "show_pink_filter" ? CoreSettings.Current.PinkFilterEnabled : CoreSettings.Current.SpiralEnabled);
+            _runner.Resume();
+            Assert.False(RemoteCommands.OverlaysStopped);
+            _runner.Pause();
+            Assert.Null(RemoteCommands.Execute(verb, null));
+            Assert.True(_runner.IsPaused);
+            Assert.True(RemoteCommands.OverlayRunning);
+            Assert.False(RemoteCommands.OverlaysStopped);
+        }
+        finally
+        {
+            _runner.Stop();
+            RemoteCommands.StopOverlays(); RemoteCommands.ReleaseOverlayStop();
+            RemoteCommands.RefreshOverlays = oldRefresh;
+        }
+    }
+
     [Fact]
     public void Local_resume_releases_a_remote_overlay_stop_after_panic()
     {
