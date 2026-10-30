@@ -40,9 +40,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///    original's.
     ///  - Categories, history, trend and fallback content are Core's <see cref="QuizStore"/>; only
     ///    the AI round trip of <c>QuizService</c> stays head-side (see StartQuizAsync).
-    ///  - NAudio's drone loop, <c>App.Flash</c>/<c>Bubbles</c>/<c>Subliminal</c>/<c>MindWipe</c> and
-    ///    <c>App.AvatarWindow</c> stay head-only; the <c>LoopStream</c> wrapper and the WaveOutEvent
-    ///    pool went with them. There is no XP call to port: WPF awards quiz XP through
+    ///  - The drone loop uses LibVLC's existing overlap player. The desktop effects and avatar
+    ///    remain head-side. There is no XP call to port: WPF awards quiz XP through
     ///    <c>QuizService.RaiseQuizCompleted</c> -> <c>GamificationBridge</c>, both head-side, so a
     ///    <c>CoreProgression.AddXP</c> here would be a second, divergent copy of bridge logic.
     ///  - <c>Microsoft.Win32.SaveFileDialog</c> -> Avalonia's <c>IStorageProvider</c> is available,
@@ -159,6 +158,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             foreach (var w in _shown.ToArray()) try { w.Close(); } catch { }
         }
 
+        private readonly bool _playDrone;
+        private Platform.MindWipePlayer.IVoice? _drone;
+        internal static Func<string, double, bool, Action, Platform.MindWipePlayer.IVoice?> PlayDrone =
+            (path, volume, loop, ended) => Platform.LibVlcAudio.Instance?.PlayVoice(path, volume, loop, ended);
+        internal static Func<string, string?> ResolveDrone = name =>
+            CoreModArt.AudioOverridePath(name) ?? ContentLocator.Resolve(IOPath.Combine("Resources", "sounds", name));
+
         public QuizWindow(bool fullscreen, bool playDrone)
         {
             IsOpen = true;
@@ -176,12 +182,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // state on close.
 
             AvaloniaXamlLoader.Load(this);
-            // ponytail: the playDrone track (Resources/sounds/"00 Bimbo Drone.mp3") is a LOOP over a
-            // NAudio WaveOutEvent plus App.Audio.ApplyPreferredDevice. CoreAudio offers PlayOneShot
-            // only, which expresses neither, so this waits on a looping-playback seam. Deliberately
-            // NOT faked with a one-shot: the drone would play once and go silent while the quiz ran
-            // on, which is a worse lie than no drone at all.
-            _ = playDrone;
+            _playDrone = playDrone;
 
             _rootGrid = this.FindControl<Grid>("RootGrid")!;
             _titleBar = this.FindControl<Border>("TitleBar")!;
@@ -287,6 +288,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             brush.GradientStops.Add(_bgStop2);
             _backgroundBorder.Background = brush;
             _gradientTimer.Start();
+            if (_playDrone) StartDrone();
         }
 
         private void BuildProgressDots()
@@ -1137,6 +1139,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return (float)Math.Pow(master * multiplier, 1.5);
         }
 
+        // WPF Windows/QuizWindow.xaml.cs:1191-1227: neutral mod cue first, bundled legacy name second, missing = silence.
+        // ponytail: reuse the existing overlap player rather than another looping audio backend.
+        private void StartDrone()
+        {
+            if (_drone != null) return;
+            try
+            {
+                var path = ResolveDrone("quiz_drone.mp3");
+                if (!System.IO.File.Exists(path)) path = ResolveDrone("00 Bimbo Drone.mp3");
+                if (System.IO.File.Exists(path))
+                    _drone = PlayDrone(path!, GetVolume(0.35f), true, () => { });
+            }
+            catch (Exception ex) { Log.Debug(ex, "Quiz drone playback failed"); StopDrone(); }
+        }
+
+        private void StopDrone()
+        {
+            var voice = _drone;
+            _drone = null;
+            try { voice?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Quiz drone stop failed"); }
+        }
+
         private static void PlayRandomGiggle() => PlaySound(GiggleFiles[_random.Next(GiggleFiles.Length)], 0.5f);
 
         private static void PlayRandomChime() => PlaySound(ChimeFiles[_random.Next(ChimeFiles.Length)], 0.5f);
@@ -1205,8 +1229,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void EnterSurrenderMode()
         {
-            // Duck audio heavily. WPF also muted the drone here; there is no drone on this head
-            // (see the ctor note), so there is nothing to mute.
+            if (_drone != null) _drone.Volume = 0;
             _surrenderDuckGen = CoreAudio.DuckGeneration;
             CoreAudio.Duck(95);
 
@@ -1315,7 +1338,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void ExitSurrenderMode()
         {
-            // Unduck audio (the drone volume restore has nothing to restore here).
+            if (_drone != null) _drone.Volume = GetVolume(0.35f);
             CoreAudio.Unduck(_surrenderDuckGen);
 
             // Restart gradient timer (resumes normal palette cycling)
@@ -1383,8 +1406,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                var lifetime = global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
-                foreach (var window in lifetime?.Windows.OfType<QuizWindow>().ToList() ?? new List<QuizWindow>())
+                foreach (var window in _shown.ToList())
                 {
                     try { window.Close(); } catch { }
                 }
@@ -1404,10 +1426,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             _loadingDotsTimer.Stop();
             _gradientTimer.Stop();
-            // ponytail: needs the drone's WaveOutEvent/AudioFileReader pair to stop and dispose -
-            // nothing starts one here yet (see the ctor note) - and AvatarWindow.SetMuteAvatar from
-            // ConditioningControlPanel/Windows/AvatarWindow.xaml.cs to restore the avatar's
-            // pre-quiz mute state. Both head-side.
+            StopDrone();
 
             // Deliberate divergence from WPF: it ducks to 95 in EnterSurrenderMode and only unducks
             // in ExitSurrenderMode, so closing the window (Escape) while the surrender screen is up

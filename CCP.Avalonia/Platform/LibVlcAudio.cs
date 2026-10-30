@@ -219,6 +219,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return new Voice(new MediaPlayer(media), media, onEnded);
         }
 
+        internal static Action<MediaPlayer> RouteVoice = ApplyPreferredDevice;
+
         private sealed class Voice(MediaPlayer player, Media media, Action onEnded) : MindWipePlayer.IVoice
         {
             private int _vol, _done;
@@ -230,7 +232,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 // Cubic like PlayOneShot; applied off libvlc's thread once the output exists.
                 set { _vol = (int)Math.Round(Math.Cbrt(Math.Clamp(value, 0, 1)) * 100); Apply(); }
             }
-            private void Apply() => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (_done == 0 && player.IsPlaying) player.Volume = _vol; });
+            private void Apply() => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (_done == 0 && player.IsPlaying) { RouteVoice(player); player.Volume = _vol; } });
             public bool Play()
             {
                 var started = 0;
@@ -433,6 +435,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 foreach (var si in DuckRecovery.ParseSinkInputs(_pactl("-f json list sink-inputs")))
                 {
                     if (si.Pid == Environment.ProcessId) continue;
+                    // WPF AudioService.cs:1021-1041. WebKit audio runs in a child process.
+                    if ((CoreSettings.Current?.ExcludeBambiCloudFromDucking ?? true)
+                        && (si.Name.StartsWith("WebKit", StringComparison.Ordinal)
+                            || si.Name.Contains("webview2", StringComparison.OrdinalIgnoreCase))) continue;
                     var index = si.Index;
                     // PulseAudio volume units: 65536 is unity. WPF skips <=0.001 on rescans so an
                     // already-silent/recycled session is not captured as its original volume.
@@ -547,6 +553,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static List<OutputDevice> EnumerateOutputDevices(Func<string, string>? pactl = null)
         {
             var list = new List<OutputDevice> { new("", Loc.Get("set2_mic_system_default")) };
+            if (pactl is null && OperatingSystem.IsWindows())
+                return WindowsAudioDevices.Enumerate(list);
             if (pactl is null && !OperatingSystem.IsLinux()) return list;
             try
             {
@@ -566,7 +574,21 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>WPF's ApplyPreferredDevice rule: the saved device, only when the live player
         /// lists it (a stale id routes audio to nowhere), and not again when already there.</summary>
         internal static string? PreferredDevice(string? saved, string? current, IEnumerable<string> available)
-            => string.IsNullOrEmpty(saved) || saved == current || !available.Contains(saved) ? null : saved;
+        {
+            if (string.IsNullOrEmpty(saved) || saved == current) return null;
+            var live = available.ToArray();
+            if (live.Contains(saved)) return saved;
+            // WPF AudioService.cs:216-269 validates the live output. This head uses DirectSound
+            // for per-player gain: its device GUID is the suffix of the saved WASAPI endpoint ID.
+            if (saved.StartsWith("{0.0.0.", StringComparison.Ordinal)
+                && saved.LastIndexOf('{') is var start && start > 0
+                && Guid.TryParse(saved.AsSpan(start), out var endpoint))
+            {
+                var id = live.FirstOrDefault(d => Guid.TryParse(d, out var guid) && guid == endpoint);
+                return id == current ? null : id;
+            }
+            return null;
+        }
 
         /// <summary>Call once the player is live (its Playing event), never before: like WPF's
         /// mmdevice, the output's device list is only meaningful once it exists.</summary>

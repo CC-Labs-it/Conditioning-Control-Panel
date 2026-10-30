@@ -60,6 +60,7 @@
     <!-- Audio (and later video) on both OSes; see docs/avalonia-decisions.html. Linux loads the
          system libvlc (libvlc.so.5); only Windows needs the bundled natives. -->
     <PackageReference Include="LibVLCSharp" Version="3.10.1" />
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
     <!-- Vosk speech (Core SpeechEngine): the head references it itself so libvosk ships with it.
          Vosk.targets picks the native lib by the BUILD machine's OS; build Linux releases on Linux. -->
     <PackageReference Include="Vosk" Version="0.3.38" />
