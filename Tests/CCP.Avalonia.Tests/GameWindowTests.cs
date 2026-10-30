@@ -325,6 +325,42 @@ public sealed partial class GameWindowTests
         }
     });
 
+    /// <summary>WPF PieceByPieceHostService.cs:165,230-232,284: opening, ready and a repeat
+    /// launch all return keyboard focus. The headless WebHost fallback is focusable for this probe;
+    /// the same FocusPage call targets NativeWebView when an engine is attached.</summary>
+    [Theory]
+    [InlineData("open")]
+    [InlineData("ready")]
+    [InlineData("reopen")]
+    public void PieceByPiece_ReturnsKeyboardToPage(string path) => RunBoard(() =>
+    {
+        var board = new GameWindow(GameWindow.Games[GameWindow.PbpId]);
+        board.Web.Focusable = true;
+        board.Load(GameWindow.Server());
+        board.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            if (path != "open")
+            {
+                var other = new global::Avalonia.Controls.Button { Content = "Focus probe" };
+                // A sibling can take focus without replacing the page or its native host.
+                var panel = new global::Avalonia.Controls.StackPanel();
+                board.Content = null;
+                panel.Children.Add(board.Web);
+                panel.Children.Add(other);
+                board.Content = panel;
+                Assert.True(other.Focus());
+                Assert.False(board.Web.IsFocused);
+                if (path == "ready") board.HandleMessage("{\"type\":\"ready\"}");
+                else Assert.Same(board, GameWindow.Launch(GameWindow.PbpId));
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.True(board.Web.IsFocused);
+        }
+        finally { board.Close(); }
+    });
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
