@@ -1,0 +1,178 @@
+/* Solid fortress construction around the authored course. One instanced draw per finish. */
+import { Group, Mesh, InstancedMesh, BoxGeometry, CylinderGeometry, MeshBasicNodeMaterial, Matrix4, Quaternion, Euler, Vector3, Color } from 'three/webgpu';
+import { materialColor, positionWorld, positionGeometry, normalWorld, normalLocal, modelNormalMatrix, cameraPosition, normalize, dot, clamp, vec2, vec3, texture, mix, float, fract, smoothstep, fwidth, uv, min, max, floor, hash, select, sin, abs, pow } from 'three/tsl';
+import { LOOK } from './look.js';
+import { prisonPlan } from './keepPrison.js';
+import { waterSpills } from './waterMath.js';
+import { supportIntervals } from '../track/courts.js';
+import { reliefNormal, reliefFootprint } from './surfaceRelief.js';
+
+export function keepStoneMaterial(hex, art, mortar = true, outline = true, finish = 'stone') {
+  const material = new MeshBasicNodeMaterial({ color: new Color(hex) });
+  let N = normalize(normalWorld), masonry = null;
+  if (mortar) {
+    const worldNormal = modelNormalMatrix.mul(normalLocal);
+    const brickAxis = select(worldNormal.x.abs().greaterThan(worldNormal.z.abs()), float(1), float(0))
+      .toVarying('keepBrickAxis').setInterpolation('flat');
+    const y = positionWorld.y.div(2.4), edge = fract(y);
+    const across = mix(positionWorld.x, positionWorld.z, brickAxis).div(4.8);
+    const staggered = across.add(fract(floor(y).mul(.5))), brick = fract(staggered);
+    const cell = vec2(brick, edge), border = min(cell, vec2(1).sub(cell)).mul(vec2(4.8, 2.4));
+    const height = smoothstep(.035, .23, min(border.x, border.y)).mul(.17)
+      .add(sin(across.mul(15).add(sin(y.mul(11)))).mul(.009));
+    N = reliefNormal(N, height, reliefFootprint(vec2(staggered, y)), { from: .12, to: .4, slope: .55 });
+    masonry = { y, edge, staggered, brick };
+  } else if (finish === 'iron' || finish === 'cap') {
+    const hammered = sin(positionGeometry.x.mul(19).add(positionGeometry.y.mul(11)))
+      .mul(sin(positionGeometry.z.mul(17).sub(positionGeometry.y.mul(7)))).mul(.008);
+    N = reliefNormal(N, hammered, reliefFootprint(positionGeometry.xy.mul(4)), { slope: .2 });
+  }
+  const light = clamp(dot(N, normalize(vec3(...LOOK.lightDir))).mul(0.58).add(0.64), 0.19, 1.14);
+  const map = art?.tex('road-glass-roughness');
+  const grain = map ? texture(map, positionGeometry.xz.mul(vec2(3, 6))).r.add(texture(map, positionGeometry.xy.mul(vec2(3, 6))).r).mul(0.5) : float(0.5);
+  let colour = materialColor.rgb.mul(light).mul(smoothstep(.2, .8, grain).mul(.33).add(.83));
+  if (mortar) {
+    const { y, edge, staggered, brick } = masonry, aa = fwidth(y).max(0.008);
+    const horizontal = smoothstep(.015, aa.add(.025), edge).mul(smoothstep(.015, aa.add(.025), float(1).sub(edge)));
+    // Decide the projection in world space at the vertex, once for the whole face. A fragment
+    // normal's camera-space round trip can flip this comparison on 45-degree walls, producing
+    // crawling black mortar speckles even with a perfectly filtered texture.
+    const bx = fwidth(staggered).max(.006);
+    const vertical = smoothstep(.008, bx.add(.018), brick).mul(smoothstep(.008, bx.add(.018), float(1).sub(brick)));
+    const joint = horizontal.mul(vertical);
+    const variation = hash(floor(staggered).add(floor(y).mul(37))).mul(.24).add(.86);
+    const footprint = max(aa, bx), detail = float(1).sub(smoothstep(.14, .42, footprint));
+    const bed = min(edge, float(1).sub(edge)), side = min(brick, float(1).sub(brick));
+    const bevel = smoothstep(.02, aa.add(.045), bed).mul(float(1).sub(smoothstep(.07, aa.add(.12), bed)))
+      .add(smoothstep(.015, bx.add(.03), side).mul(float(1).sub(smoothstep(.05, bx.add(.09), side))));
+    // Recessed joints and wide dressed lips give stone mass without extra geometry or dark shimmer.
+    colour = colour.mul(variation).mul(mix(float(1), mix(float(.23), float(1), joint), detail))
+      .add(materialColor.rgb.mul(bevel).mul(.27).mul(detail));
+    const beddingPhase = y.mul(8).add(sin(staggered.mul(2.1)).mul(.65));
+    const bedding = sin(beddingPhase).mul(.08).mul(float(1).sub(smoothstep(.4, 1.3, fwidth(beddingPhase))));
+    colour = colour.mul(bedding.add(1));
+    // Rain-darkened lower beds and worn crowns give each block a readable face at driving distance.
+    const damp = float(1).sub(smoothstep(.09, .34, edge)).mul(joint).mul(detail);
+    colour = colour.mul(float(1).sub(damp.mul(.16)));
+  }
+  if (finish === 'iron' || finish === 'cap') {
+    const V = normalize(cameraPosition.sub(positionWorld)), H = normalize(V.add(normalize(vec3(...LOOK.lightDir))));
+    const specular = pow(max(dot(N, H), 0), finish === 'iron' ? grain.mul(18).add(20) : float(18));
+    // Plum forged iron and pale dressed crowns keep their accepted colours under a soft polish.
+    colour = colour.add(mix(materialColor.rgb, vec3(.65, .52, .57), .3).mul(specular).mul(finish === 'iron' ? .32 : .16));
+    if (finish === 'iron') {
+      const forgePhase = positionGeometry.y.mul(95).add(positionGeometry.x.mul(5));
+      const forge = sin(forgePhase).mul(.065).mul(float(1).sub(smoothstep(.3, 1.2, fwidth(forgePhase))));
+      colour = colour.mul(forge.add(1));
+    }
+  }
+  if (outline) {
+    // A subpixel ink edge follows each primitive face. Derivatives keep it thin at every distance.
+    const u = uv(), pixels = min(min(u.x, float(1).sub(u.x)).div(fwidth(u.x).max(.00001)),
+      min(u.y, float(1).sub(u.y)).div(fwidth(u.y).max(.00001)));
+    colour = mix(vec3(.0015, .001, .003), colour, smoothstep(.35, 1.05, pixels));
+  }
+  material.colorNode = colour;
+  return material;
+}
+
+/** Physical construction is separate from accepted prop meshes; all driving clearances stay empty. */
+export function buildKeepFortress(track, layout, art) {
+  const group = new Group(); group.name = 'keep-solid-fortress';
+  const owned = [], batches = { deck: [], stone: [], dark: [], cap: [], iron: [], roof: [], glow: [] };
+  const box = new BoxGeometry(1, 1, 1), cylinder = new CylinderGeometry(1, 1, 1, 8);
+  // The prison drums have eight masonry faces. Give each face one normal and projection,
+  // including its two triangles, instead of interpolating round-tower normals across corners.
+  const facetedCylinder = cylinder.toNonIndexed();
+  cylinder.copy(facetedCylinder); cylinder.computeVertexNormals(); facetedCylinder.dispose();
+  owned.push(box, cylinder);
+  const M = new Matrix4(), B = new Matrix4(), Q = new Quaternion(), P = new Vector3(), S = new Vector3();
+  const X = new Vector3(), Y = new Vector3(), Z = new Vector3();
+  const groundY = Math.min(-20, ...(layout.towers || []).map((t) => t.baseY));
+  const landmarkAt = (s) => layout.landmarks.find((r) => s >= r.s0 && s <= r.s1);
+  function block(batch, f, x, y, size) {
+    B.makeBasis(X.fromArray(f.b), Y.fromArray(f.n), Z.fromArray(f.t).negate());
+    Q.setFromRotationMatrix(B); P.fromArray(f.p).addScaledVector(X, x).addScaledVector(Y, y);
+    batches[batch].push(M.compose(P, Q, S.fromArray(size)).clone());
+  }
+  function worldBlock(batch, p, size, angle = 0, tilt = 0) {
+    Q.setFromEuler(new Euler(0, angle, tilt, 'YXZ'));
+    batches[batch].push(M.compose(P.fromArray(p), Q, S.fromArray(size)).clone());
+  }
+  const spills = waterSpills(track);
+  const count = Math.ceil(track.lengthM / 6), step = track.lengthM / count, frames = [];
+  for (let i = 0; i < count; i++) {
+    const f = track.frameAt((i + 0.5) * step);
+    frames.push({ s: (i + 0.5) * step, p: [...f.p], b: [...f.b], n: [...f.n], t: [...f.t], w: f.w, flags: f.flags });
+  }
+  const excluded = [...(track.jumps || []).map((j) => [j.s, j.landS]), ...(track.fields || []).map((f) => [f.fromS, f.toS]),
+    ...(track.aerials || []).map(a => [a.gapS0, a.gapS1])];
+  if (layout.drawbridge) excluded.push([layout.drawbridge.rampS0, layout.drawbridge.gapS1]);
+  const holes = (track.courts || []).flatMap(c => c.holes);
+  const holeNear = (s, margin) => holes.some(h => s + margin >= h.s && s - margin <= h.s + h.len);
+  const clearSpan = (s, half = step / 2 + 1.3) => !excluded.some(([a, b]) => s + half >= a && s - half <= b);
+  for (let i = 0; i < frames.length; i++) {
+    if (!clearSpan(frames[i].s)) continue;
+    const f = frames[i], name = landmarkAt(f.s)?.id || '';
+    const spiral = /spiral/.test(name) || name === 'north-tower', hall = layout.architecture.halls.some((a) => f.s >= a.s0 && f.s <= a.s1);
+    // Stone supports the actual spline only. The bridge and stepping field retain open water below.
+    const broken = (layout.brokenEdges || []).some((a) => f.s >= a.s0 - 5 && f.s <= a.s1 + 5);
+    for (let j = 0; j < 4; j++) {
+      const s = f.s + (j - 1.5) * step / 4, at = track.frameAt(s), halfWidth = at.w / 2 + (broken ? 0 : 1);
+      // Remove structural decking too; a road cut must remain open all the way through the stone.
+      const spans = holeNear(s, 1.2) ? supportIntervals(track.courts, s, halfWidth, 1.2) : [[-halfWidth, halfWidth]];
+      for (const [lo, hi] of spans) block('deck', at, (lo + hi) / 2, -2.8, [hi - lo, 4, step / 4 + .2]);
+    }
+    for (const side of [-1, 1]) {
+      const hasRail = [f.s - step / 2, f.s, f.s + step / 2].every((s) => {
+        const flags = track.frameAt(s).flags; return flags.includes('rail') || flags.includes(side < 0 ? 'railL' : 'railR');
+      });
+      if (!hasRail || hall || spills.some(v => v.side === side && f.s + step / 2 >= v.fromS && f.s - step / 2 <= v.toS)) continue;
+      const h = spiral ? 2.3 : /rampart|battlement|crown/.test(name) ? 2.8 : 1.2;
+      // Sample taper and banking per short wall segment, as for the supporting deck.
+      for (let j = 0; j < 3; j++) {
+        const at = track.frameAt(f.s + (j - 1) * step / 3), x = side * (at.w / 2 + 1.65);
+        block('stone', at, x, h / 2 - .25, [1.8, h, step / 3 + .15]);
+        block('cap', at, x, h - .1, [2.2, .45, step / 3 + .15]);
+      }
+      if (h > 2 && i % 3 === 0) block('stone', f, side * (f.w / 2 + 1.65), h + .65, [2.1, 1.1, 2.8]);
+    }
+    // Foundations stop under stacked roads. The spiral is carried by the central tower instead.
+    if (!spiral && i % 5 === 0 && f.p[1] > groundY + 8) {
+      const otherBelow = frames.some((o) => Math.abs(o.s - f.s) > 36 && o.p[1] < f.p[1] - 5 &&
+        Math.hypot(o.p[0] - f.p[0], o.p[2] - f.p[2]) < (o.w + f.w) / 2 + 3);
+      if (!otherBelow && clearSpan(f.s, 12) && !holeNear(f.s, 16)) worldBlock('stone', [f.p[0], (groundY + f.p[1] - 4) / 2, f.p[2]], [f.w - 1, f.p[1] - 4 - groundY, 8], Math.atan2(-f.t[0], -f.t[2]));
+    }
+  }
+  const plan = prisonPlan(track, layout, { phone: art?.tier === 'phone' });
+  for (const p of plan.boxes) worldBlock(p.material, p.p, p.size, p.yaw, p.tilt);
+  const materials = { stone: keepStoneMaterial('#96789e', art), deck: keepStoneMaterial('#39213f', art),
+    cap: keepStoneMaterial('#d1a8bc', art, true, true, 'cap'), iron: keepStoneMaterial('#673955', art, false, true, 'iron'),
+    dark: keepStoneMaterial('#090610', art, false), roof: keepStoneMaterial('#3c1939', art), glow: new MeshBasicNodeMaterial({ color: '#ffd198' }) };
+  const { stone, cap } = materials;
+  owned.push(...Object.values(materials));
+  const plinths = new InstancedMesh(cylinder, stone, 24), crowns = new InstancedMesh(cylinder, cap, 24);
+  plinths.name = 'keep-colossus-foundations'; crowns.name = 'keep-colossus-crowns';
+  plinths.count = crowns.count = 0; group.add(plinths, crowns);
+  function addPlinth(p, radius) {
+    const i = plinths.count, height = p[1] - groundY;
+    if (i >= 24 || height <= 0) return;
+    Q.identity(); M.compose(P.set(p[0], groundY + height / 2, p[2]), Q, S.set(radius, height, radius));
+    plinths.setMatrixAt(i, M); plinths.count++;
+    M.compose(P.set(p[0], p[1] - 0.45, p[2]), Q, S.set(radius + 1.5, 0.9, radius + 1.5));
+    crowns.setMatrixAt(i, M); crowns.count++;
+    for (const mesh of [plinths, crowns]) { mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere(); }
+  }
+  for (const t of plan.drums) {
+    const body = new Mesh(cylinder, stone); body.name = 'keep-tower-volume';
+    body.position.set(t.x, (t.baseY + t.topY) / 2, t.z); body.scale.set(t.radiusM, t.topY - t.baseY, t.radiusM); group.add(body);
+  }
+  for (const [key, material] of Object.entries(materials)) {
+    if (!batches[key].length) continue;
+    const mesh = new InstancedMesh(box, material, batches[key].length); mesh.name = 'keep-' + key;
+    batches[key].forEach((matrix, i) => mesh.setMatrixAt(i, matrix)); mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere(); group.add(mesh);
+  }
+  return { group, addPlinth, plan, counts: Object.fromEntries(Object.entries(batches).map(([k, a]) => [k, a.length])),
+    dispose() { group.removeFromParent(); group.traverse((o) => { if (o.isInstancedMesh) o.dispose(); }); owned.forEach((o) => o.dispose()); } };
+}

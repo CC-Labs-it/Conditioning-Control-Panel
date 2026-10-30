@@ -57,6 +57,9 @@ The page talks to whoever hosts it through `host.js`, never `fetch` to the serve
   or `{ ok:false, reason:'offline'|'signed_out' }` from the host itself.
 - out: `wallet { sp }` after a receipt (the WPF host adopts it with `V2WalletAdoption`, `fromBuy = true`).
 - out: `close { reason:'back'|'panic' }`. Esc ladder: confirm card -> preview -> close.
+- out: `wear { id }` from an owned card's Wear (frame `{type:'wear', id}`). WPF: a Rain row (`cos.<id>` in
+  `rain-wardrobe/items.json`) closes the counter and opens Rain's dressing room with that piece tried on; any other id is
+  refused (logged). The host caches the `cos.rain.*` prices of each shop-state for the dressing room's badges.
 - out: `signIn()` when `shop-state` answered `signed_out` (owner 2026-10-29): the page greys a window display of the
   art (no prices, no tabs, no wallet) behind one "Sign in to shop" button; the button, or select/Enter/A, asks the host.
   The host opens its own sign-in and, once someone is signed in, loads the page again with a fresh `init`

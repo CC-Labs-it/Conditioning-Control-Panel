@@ -64,6 +64,10 @@ internal static class GameSurfaces
         // The 7.2 shop. Not a launcher tile (its door is the Sparkle wallet), but a window the
         // player sits in all the same: panic closes it at once.
         new(PrizeCounter.PrizeCounterHostService.GameId, () => PrizeCounter.PrizeCounterHostService.IsActive, PrizeCounter.PrizeCounterHostService.Close),
+        // Glassroad (Racing Thoughts 3D, every race door since 7.2): its own window, so panic closes it.
+        new("glassroad", () => Glassroad.GlassroadHostService.IsActive, Glassroad.GlassroadHostService.Close),
+        // Rain's wardrobe (7.2): a normal window, not a game, but a WebView2 surface panic must close.
+        new("rain-wardrobe", () => Companion.RainWardrobeHostService.IsActive, Companion.RainWardrobeHostService.Close),
     };
 
     /// <summary>True while any of them is on screen. Read BEFORE the stop pass closes them. Never

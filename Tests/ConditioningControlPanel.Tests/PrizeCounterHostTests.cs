@@ -42,7 +42,7 @@ public class PrizeCounterHostTests
     public void TheEscapeClaim_CountsTheCounterAsAGameInFront()
     {
         var body = Read("ConditioningControlPanel", "MainWindow", "MainWindow.xaml.cs");
-        Assert.Contains("|| intakeInFront || counterInFront,", body);
+        Assert.Contains("|| glassroadInFront || counterInFront,", body);
         Assert.Contains("PrizeCounterHostService.PostKeptEscape(); break;", body);
     }
 

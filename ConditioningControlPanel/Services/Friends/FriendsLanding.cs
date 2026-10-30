@@ -527,6 +527,14 @@ public static class FriendsLanding
                 return;
         }
         App.StartupLadder?.RemoveRow("friends:" + item.Id);
+        // Racing Thoughts is Prime only: below Prime a race invite shows the Prime refusal instead
+        // of opening, and the sender hears "not now" rather than a join that never seats.
+        if (item.Kind == SendKind.Invite && item.Destination == InviteDestination.Race
+            && !Glassroad.GlassroadHostService.DemandPrime())
+        {
+            FriendsSeen.Shared.Report(App.Friends, ReceiptReport.Item(item.Id, ReceiptState.Declined));
+            return;
+        }
         if (item.Kind == SendKind.Invite)
         {
             FriendsSeen.Shared.Report(App.Friends, ReceiptReport.Item(item.Id, ReceiptState.Joined));
@@ -560,8 +568,10 @@ public static class FriendsLanding
                 return;
 
             case InviteDestination.Race:
-                // A web race (no code): the friend is on app.cclabs.app/race, so is the join.
-                Helpers.BrowserLauncher.OpenUrlOrPrompt(InviteDestination.RaceWebUrl, Str("friends_land_dest_race", "Racing Thoughts"));
+                // Racing Thoughts in the app, seated in the host's room when the invite carries one
+                // (?join=; a refused seat shows the room's reason). A bare one opens the menu.
+                try { Glassroad.GlassroadHostService.Launch(item.Room); }
+                catch (Exception ex) { App.Logger?.Warning(ex, "[Friends] race launch failed"); }
                 return;
 
             case InviteDestination.Breakout:

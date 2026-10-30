@@ -386,6 +386,12 @@
     <Resource Include="Resources\avatar0_emotes\*.gif" />
     <Resource Include="Resources\avatar0_emotes\emotes.json" Condition="Exists('Resources\avatar0_emotes\emotes.json')" />
     <Resource Include="Resources\avatar0_emotes\clip_timing.json" Condition="Exists('Resources\avatar0_emotes\clip_timing.json')" />
+    <!-- Rain (7.2, the V2 avatar generation on BambiSleep, Sissy and CCP Default): animated WebP with real
+         alpha, played by the tube's SkiaSharp lane (AvatarTube\EmoteClipPlayer.cs). CC BY 4.0: ATTRIBUTION.txt. -->
+    <Resource Include="Resources\rain_emotes\*.webp" />
+    <Resource Include="Resources\rain_emotes\emotes.json" />
+    <Resource Include="Resources\rain_emotes\clip_timing.json" />
+    <Content Include="Resources\rain_emotes\ATTRIBUTION.txt" CopyToOutputDirectory="PreserveNewest" />
 
     <!-- Achievement images -->
     <Resource Include="Resources\achievements\*.png" />
@@ -566,6 +572,9 @@
          the direct play page, engine and ending assets must reach both output and publish. -->
     <!-- Piece by Piece: its node smokes, the dev pages (only ever opened with ?media=fixture
          from a checkout), its design notes and the node-only package.json. -->
+    <!-- Racing Thoughts 3D (Glassroad, 7.2) ships. Only its node tests, the node dev tools
+         (dev\*.mjs; dev\hook.js and dev\uploadCensus.js are page modules and stay) and its notes
+         are left out. -->
     <ArcademyHarnessExclude>
       Resources\web\arcademy\annex\demo.html;
       Resources\web\arcademy\vn\demo.html;
@@ -573,6 +582,9 @@
       Resources\web\arcademy\shell\recordsroom.demo.html;
       Resources\web\arcademy\games\**\smoke\**\*;
       Resources\web\backroom\smoke\**\*;
+      Resources\web\glassroad\tests\**\*;
+      Resources\web\glassroad\dev\**\*.mjs;
+      Resources\web\glassroad\**\*.md;
       Resources\web\backroom\**\tests\**\*;
       Resources\web\backroom\shared\hypno\tests\**\*;
       Resources\web\backroom\stations\breakout\**\*.test.js;
@@ -584,6 +596,7 @@
       Resources\web\piecebypiece\**\*.md;
       Resources\web\piecebypiece\package.json;
       Resources\web\dtrh\tests\**\*;
+      Resources\web\rain-wardrobe\tests\**\*;
       Resources\web\intake\tests\**\*;
       Resources\web\prizecounter\tests\**\*;
       Resources\web\prizecounter\mock\**\*;
@@ -606,6 +619,9 @@
       $(MSBuildProjectDirectory)\Resources\web\arcademy\shell\recordsroom.demo.html;
       $(MSBuildProjectDirectory)\Resources\web\arcademy\games\**\smoke\**\*;
       $(MSBuildProjectDirectory)\Resources\web\backroom\smoke\**\*;
+      $(MSBuildProjectDirectory)\Resources\web\glassroad\tests\**\*;
+      $(MSBuildProjectDirectory)\Resources\web\glassroad\dev\**\*.mjs;
+      $(MSBuildProjectDirectory)\Resources\web\glassroad\**\*.md;
       $(MSBuildProjectDirectory)\Resources\web\backroom\**\tests\**\*;
       $(MSBuildProjectDirectory)\Resources\web\backroom\shared\hypno\tests\**\*;
       $(MSBuildProjectDirectory)\Resources\web\backroom\stations\breakout\**\*.test.js;
@@ -617,6 +633,7 @@
       $(MSBuildProjectDirectory)\Resources\web\piecebypiece\**\*.md;
       $(MSBuildProjectDirectory)\Resources\web\piecebypiece\package.json;
       $(MSBuildProjectDirectory)\Resources\web\dtrh\tests\**\*;
+      $(MSBuildProjectDirectory)\Resources\web\rain-wardrobe\tests\**\*;
       $(MSBuildProjectDirectory)\Resources\web\intake\tests\**\*;
       $(MSBuildProjectDirectory)\Resources\web\prizecounter\tests\**\*;
       $(MSBuildProjectDirectory)\Resources\web\prizecounter\mock\**\*;
