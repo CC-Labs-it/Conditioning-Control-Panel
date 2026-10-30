@@ -1,0 +1,31 @@
+Temporary mutations, all restored:
+open-count: use done instead of shown minus remaining.
+payload: return 99 completed.
+stamp: remove the pre-loop gate.
+height: return zero height.
+The first stamp mutation survived; the test was strengthened to cover t=0, 0.4 and 1.39 for every completed count. The repeated stamp mutation fails below.
+
+open-count exit=1
+  Failed CCP.Core.Tests.QuestClipboardTests.VisibleSlipsPreserveTheOpenCount(done: 5, total: 7, shown: 5, checkedCount: 3) [2 ms]
+  Failed CCP.Core.Tests.QuestClipboardTests.VisibleSlipsPreserveTheOpenCount(done: 2, total: 9, shown: 5, checkedCount: 0) [< 1 ms]
+  Failed CCP.Core.Tests.QuestClipboardTests.VisibleSlipsPreserveTheOpenCount(done: 9, total: 9, shown: 5, checkedCount: 5) [< 1 ms]
+Failed!  - Failed:     3, Passed:     6, Skipped:     0, Total:     9, Duration: 33 ms - CCP.Core.Tests.dll (net10.0)
+
+payload exit=1
+  Failed CCP.Core.Tests.QuestClipboardTests.PayloadDefaultsAndClampsInvalidCounts [4 ms]
+Failed!  - Failed:     1, Passed:     8, Skipped:     0, Total:     9, Duration: 42 ms - CCP.Core.Tests.dll (net10.0)
+
+stamp exit=0
+Passed!  - Failed:     0, Passed:     9, Skipped:     0, Total:     9, Duration: 25 ms - CCP.Core.Tests.dll (net10.0)
+stamp exit=1
+  Failed CCP.Core.Tests.QuestClipboardTests.StampCyclesOnlyThroughCompletedSlips [4 ms]
+Failed!  - Failed:     1, Passed:     8, Skipped:     0, Total:     9, Duration: 43 ms - CCP.Core.Tests.dll (net10.0)
+
+height exit=1
+  Failed CCP.Core.Tests.QuestClipboardTests.BoardGrowsAndAllSlipRowsFit [2 ms]
+Failed!  - Failed:     1, Passed:     8, Skipped:     0, Total:     9, Duration: 36 ms - CCP.Core.Tests.dll (net10.0)
+
+art: freeze the sampled frame at zero, exit=1
+  Failed CCP.Avalonia.Tests.QuestClipboardArtTests.ClipboardPaintsTheLoopAndReleasesItsClock [1 s]
+   The clipboard story must change across the loop.
+Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 1 s - CCP.Avalonia.Tests.dll (net10.0)

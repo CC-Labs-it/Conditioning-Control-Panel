@@ -110,6 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF ShowcaseArtRegistration.Register, once per process.</summary>
         private static readonly Lazy<bool> ShowcaseArt = new(() =>
         {
+            BillboardArt.Register(BuiltInArtKeys.Quests, data => new QuestsArtView(data));
             BillboardArt.Register(ShowcaseRules.ArtKey, data => new ClipArtView(data as ShowcaseClipArt));
             return true;
         });
