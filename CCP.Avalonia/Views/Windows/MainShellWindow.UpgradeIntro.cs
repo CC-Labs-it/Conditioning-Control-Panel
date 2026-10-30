@@ -95,6 +95,8 @@ public partial class MainShellWindow
     internal void StopUpgradeIntroForPanic()
     {
         _upgradeCancelled = true;
+        Platform.StartupLadder.CancelDeferred();
+        FeatureIntroPopup.CancelPending();
         Platform.StartupLadder.ModalPending = false;
         _upgradeDialog?.Close();
     }

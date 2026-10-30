@@ -82,11 +82,18 @@ public sealed class FeatureIntroUpgradeTests
         PanicSurfaces.All.Single(s => s.Id == "upgrade-intro").Stop(shell);
         Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
         await showing;
+        ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(5));
+        StartupLadder.PumpHeld(); // cancellation also discarded the held offer
         Dispatcher.UIThread.RunJobs();
+        Assert.Empty(((StartupLadder.TestClock)StartupLadder.Time).Timers);
         Assert.False(MainShellWindow.IsStartupDialogShowing);
         Assert.Empty(shell.OwnedWindows.OfType<FeatureIntroPopup>());
         Assert.False(StartupLadder.Inbox.Contains("intro:lockdown"));
         Assert.DoesNotContain("lockdown", CoreSettings.Current.SeenFeatureIntros);
+        // A new explicit offer is still owed after panic cancelled the earlier one.
+        FeatureIntroPopup.ShowWhenStartupSettles("lockdown", shell, "play");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Single(shell.OwnedWindows.OfType<FeatureIntroPopup>());
     });
 
     [Fact]
@@ -111,6 +118,7 @@ public sealed class FeatureIntroUpgradeTests
         Assert.False(StartupLadder.Inbox.Contains("intro:lockdown"));
         Assert.DoesNotContain("lockdown", CoreSettings.Current.SeenFeatureIntros);
         Assert.Empty(shell.OwnedWindows.OfType<FeatureIntroPopup>());
+        Assert.Empty(((StartupLadder.TestClock)StartupLadder.Time).Timers); // WPF modal defer never arms a watch
         settle.SetResult();
         await Task.Yield();
         Dispatcher.UIThread.RunJobs();
@@ -188,6 +196,83 @@ public sealed class FeatureIntroUpgradeTests
         Assert.Equal(tour, news.FindControl<TextBlock>("TourLabel")!.Text);
         news.Close();
         await showing;
+    });
+
+    [Fact]
+    public Task PanicDisposesWatchAndInvalidatesQueuedTimerTick() => Run("old-version", async shell =>
+    {
+        StartupLadder.ModalPending = false; // a passive watch predating the upgrade modal
+        StartupLadder.PresentOrInbox(new() { Key = "prime", Open = () => { } });
+        FeatureIntroPopup.ShowWhenStartupSettles("lockdown", shell, "play");
+        var clock = (StartupLadder.TestClock)StartupLadder.Time;
+        var timer = Assert.Single(clock.Timers);
+        var dismissed = false;
+        StartupLadder.PresentOrInbox(new() { Key = "held", Dismiss = () => dismissed = true });
+        var showing = shell.ShowWhatsNewIfNeeded();
+        Task.Run(timer.Fire).GetAwaiter().GetResult(); // tick queued, UI thread still occupied
+        PanicSurfaces.All.Single(s => s.Id == "upgrade-intro").Stop(shell);
+        Assert.Empty(clock.Timers);
+        Assert.False(dismissed); // panic is not the user's dismiss action
+        await showing;
+        // A new offer after cancellation must not be opened by the stale queued tick.
+        var opened = false;
+        StartupLadder.PresentOrInbox(new() { Key = "new-offer", Open = () => opened = true });
+        clock.Now += TimeSpan.FromSeconds(5); // advance without firing the NEW timer
+        Task.Run(timer.Fire).GetAwaiter().GetResult(); // disposed timer callback races with cancellation
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(opened);
+        clock.Advance(TimeSpan.FromSeconds(5));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(opened);
+        Assert.Empty(shell.OwnedWindows.OfType<FeatureIntroPopup>());
+        Assert.DoesNotContain("lockdown", CoreSettings.Current.SeenFeatureIntros);
+    });
+
+    [Fact]
+    public Task PanicCancelsAlreadyQueuedCardOpen() => Run(null, shell =>
+    {
+        FeatureIntroPopup.ShowWhenStartupSettles("lockdown", shell, "play");
+        PanicSurfaces.All.Single(s => s.Id == "upgrade-intro").Stop(shell);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(shell.OwnedWindows.OfType<FeatureIntroPopup>());
+        Assert.DoesNotContain("lockdown", CoreSettings.Current.SeenFeatureIntros);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PanicCancelsOfferAlreadyPostedFromWorker() => Run(null, shell =>
+    {
+        var opened = false;
+        Task.Run(() => StartupLadder.PresentOrInbox(new() { Key = "worker", Open = () => opened = true }))
+            .GetAwaiter().GetResult();
+        PanicSurfaces.All.Single(s => s.Id == "upgrade-intro").Stop(shell);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(StartupLadder.ModalPending);
+        Assert.Empty(((StartupLadder.TestClock)StartupLadder.Time).Timers);
+        ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(5));
+        StartupLadder.PumpHeld();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(opened);
+        Assert.False(StartupLadder.Inbox.Contains("worker"));
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PanicKeepsExistingInboxIntroAvailableWithoutDuplicatingIt() => Run(null, shell =>
+    {
+        MainShellWindow.IsStartupDialogShowing = true;
+        FeatureIntroPopup.ShowWhenStartupSettles("lockdown", shell, "play");
+        MainShellWindow.IsStartupDialogShowing = false;
+        PanicSurfaces.All.Single(s => s.Id == "upgrade-intro").Stop(shell);
+        FeatureIntroPopup.ShowWhenStartupSettles("lockdown", shell, "play");
+        ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(5));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(shell.OwnedWindows.OfType<FeatureIntroPopup>());
+        var row = Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "intro:lockdown");
+        StartupLadder.Inbox.Open(row);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Single(shell.OwnedWindows.OfType<FeatureIntroPopup>());
+        return Task.CompletedTask;
     });
 
     private static Task Run(string? previous, Func<MainShellWindow, Task> body, bool detachStartup = true) => AvaloniaTestDispatcher.RunAsync(async () =>

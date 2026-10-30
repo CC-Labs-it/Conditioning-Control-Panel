@@ -127,6 +127,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// startup arms one clock and not two.</summary>
         private static readonly HashSet<string> _settling = new(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>Panic releases cancelled offers; Inbox rows keep their existing latches.</summary>
+        internal static void CancelPending() =>
+            _settling.RemoveWhere(key => !Platform.StartupLadder.Inbox.Contains("intro:" + key));
+
         /// <summary>Test seam: forget the pacing clock, the door budget and the latches.</summary>
         internal static void ResetForTests()
         {
@@ -215,10 +219,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (doorKey != null && _doorSlotsSpentThisLaunch.Contains(doorKey)) return;
 
                 _opening = true;
+                var generation = Platform.StartupLadder.PresentationGeneration;
                 Dispatcher.UIThread.Post(async () =>
                 {
                     try
                     {
+                        if (generation != Platform.StartupLadder.PresentationGeneration) return;
                         var live = CoreSettings.Current;
                         if (live.SeenFeatureIntros.Contains(key)) return;
 
