@@ -3170,6 +3170,7 @@
   "rain_wardrobe_locked": "경품 카운터에 있어요",
   "rain_wardrobe_counter_soon": "경품 카운터는 7.2에서 열려요.",
   "rain_wardrobe_apply_failed": "Rain이 옷을 갈아입지 못했어요. 이전 룩이 그대로예요.",
+  "rain_look_synced_rebake": "Rain의 룩이 다른 기기에서 왔어요. 옷장을 한 번 열면 맞춰져요.",
   "rain_assets_title": "Rain의 드레스룸",
   "rain_assets_line": "Rain의 3D 파일이 아직 이 PC에 없어요(약 300 MB).",
   "rain_assets_install": "설치",

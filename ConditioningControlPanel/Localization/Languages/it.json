@@ -4189,6 +4189,7 @@
   "rain_wardrobe_locked": "Alla Sala dei Premi",
   "rain_wardrobe_counter_soon": "La Sala dei Premi apre con la 7.2.",
   "rain_wardrobe_apply_failed": "Rain non è riuscita a cambiarsi. Resta il look di prima.",
+  "rain_look_synced_rebake": "Il look di Rain è arrivato da un altro dispositivo. Apri il guardaroba una volta per sistemarlo.",
   "rain_assets_title": "Il camerino di Rain",
   "rain_assets_line": "I file 3D di Rain non sono ancora su questo PC (circa 300 MB).",
   "rain_assets_install": "Installa",

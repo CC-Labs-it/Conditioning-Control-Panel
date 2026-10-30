@@ -3170,6 +3170,7 @@
   "rain_wardrobe_locked": "No balcão de prêmios",
   "rain_wardrobe_counter_soon": "O balcão de prêmios abre na 7.2.",
   "rain_wardrobe_apply_failed": "A Rain não conseguiu se trocar. O último visual continua.",
+  "rain_look_synced_rebake": "O visual da Rain veio de outro dispositivo. Abra o guarda-roupa uma vez para ajustar.",
   "rain_assets_title": "O provador da Rain",
   "rain_assets_line": "Os arquivos 3D da Rain ainda não estão neste PC (cerca de 300 MB).",
   "rain_assets_install": "Instalar",

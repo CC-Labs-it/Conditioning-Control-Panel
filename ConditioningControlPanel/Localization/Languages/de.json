@@ -3170,6 +3170,7 @@
   "rain_wardrobe_locked": "Am Preistresen",
   "rain_wardrobe_counter_soon": "Der Preistresen öffnet mit 7.2.",
   "rain_wardrobe_apply_failed": "Rain konnte sich nicht umziehen. Der letzte Look bleibt.",
+  "rain_look_synced_rebake": "Rains Look kam von einem anderen Gerät. Öffne einmal die Garderobe, damit er sitzt.",
   "rain_assets_title": "Rains Umkleide",
   "rain_assets_line": "Rains 3D-Dateien sind noch nicht auf diesem PC (etwa 300 MB).",
   "rain_assets_install": "Installieren",

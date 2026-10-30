@@ -3170,6 +3170,7 @@
   "rain_wardrobe_locked": "景品カウンターにあります",
   "rain_wardrobe_counter_soon": "景品カウンターは7.2で開きます。",
   "rain_wardrobe_apply_failed": "Rainは着替えられませんでした。前のルックのままです。",
+  "rain_look_synced_rebake": "Rainのルックが別のデバイスから届きました。ワードローブを一度開くと反映されます。",
   "rain_assets_title": "Rainのドレッシングルーム",
   "rain_assets_line": "Rainの3DファイルはまだこのPCにありません（約300 MB）。",
   "rain_assets_install": "インストール",

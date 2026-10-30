@@ -225,6 +225,41 @@ public sealed class RainLookSyncTests
     }
 
     [Fact]
+    public void The_ready_frame_bakes_a_look_that_owes_one_and_nothing_else()
+    {
+        var posted = new List<JObject>();
+        int commits = 0;
+        var dir = Path.Combine(Path.GetTempPath(), "ccp-rainsync-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            RainApplyController Controller() => new(new RainApplyController.Hooks
+            {
+                Post = m => posted.Add(JObject.FromObject(m)),
+                Store = () => new RainPackStore(RainPackStore.RootFor(dir), () => null,
+                    name => File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Resources", "rain_emotes", name))),
+                Access = () => new RainItemAccess(LoadManifest(), new RainGrantSet(new[] { "cos.rain.dress.rose-flare" }), new Lvl()),
+                Clips = () => new[] { "idle" },
+                Commit = (_, _) => commits++,
+            });
+            var init = new JObject { ["type"] = "init" };
+            var apply = Controller();
+            RainWardrobeHostService.Route(JObject.FromObject(new { type = "rain-ready" }), apply, m => posted.Add(JObject.FromObject(m)),
+                () => init, () => { }, () => N(Dress));
+            Assert.Equal(new[] { "init", "rain-bake" }, posted.Select(p => (string?)p["type"]));
+            Assert.Equal(RainLookHash.Compute(N(Dress)), (string?)posted[1]["lookHash"]);
+            Assert.True(apply.IsBaking);
+            apply.Abort();
+
+            posted.Clear();
+            RainWardrobeHostService.Route(JObject.FromObject(new { type = "rain-ready" }), Controller(), m => posted.Add(JObject.FromObject(m)),
+                () => init, () => { }, () => null);
+            Assert.Equal(new[] { "init" }, posted.Select(p => (string?)p["type"]));
+            Assert.Equal(0, commits);
+        }
+        finally { try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch (IOException) { } }
+    }
+
+    [Fact]
     public void Sync_state_is_machine_local()
     {
         Assert.True(ProfileSyncService.IsExcludedFromBackup(nameof(AppSettings.RainLookPushOwed)));

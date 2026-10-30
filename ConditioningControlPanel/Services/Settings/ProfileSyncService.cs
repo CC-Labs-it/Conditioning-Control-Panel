@@ -667,7 +667,12 @@ namespace ConditioningControlPanel.Services
         /// resolved; a block for any other record is ignored.
         /// </summary>
         public static void ApplyValidatePrizes(string? requestedFor, string? answeredFor, PrizesBlock? prizes, string source)
-            => PrizeFeed.Apply(requestedFor, answeredFor, prizes, source);
+        {
+            PrizeFeed.Apply(requestedFor, answeredFor, prizes, source);
+            // Rain look sync (/v2/equip family rain): queued behind the snapshot, so the clamp sees the grants.
+            if (!string.IsNullOrEmpty(requestedFor) && string.Equals(requestedFor, answeredFor, StringComparison.Ordinal))
+                PostPrizeWork(() => Companion.RainLookSync.OnAccountReady(requestedFor));
+        }
 
         /// <summary>
         /// Queue one ownership change on the UI thread, always behind what is already queued.

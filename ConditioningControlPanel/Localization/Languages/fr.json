@@ -3170,6 +3170,7 @@
   "rain_wardrobe_locked": "Au comptoir des prix",
   "rain_wardrobe_counter_soon": "Le comptoir des prix ouvre avec la 7.2.",
   "rain_wardrobe_apply_failed": "Rain n'a pas pu se changer. Le dernier look reste.",
+  "rain_look_synced_rebake": "Le look de Rain vient d'un autre appareil. Ouvre la garde-robe une fois pour l'ajuster.",
   "rain_assets_title": "La loge de Rain",
   "rain_assets_line": "Les fichiers 3D de Rain ne sont pas encore sur ce PC (environ 300 Mo).",
   "rain_assets_install": "Installer",
