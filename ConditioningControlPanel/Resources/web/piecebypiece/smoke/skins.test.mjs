@@ -134,6 +134,11 @@ test('wardrobe: owned pills pick, the rest stay visible and locked', () => {
   assert.match(html, /data-act="counter"/);
   const bare = wardrobeHtml(w, { esc, bar: () => '', bigBtn: (a) => `<b data-act="${a}">`, hosted: false });
   assert.doesNotMatch(bare, /data-act="counter"/, 'no counter without a host');
+  // the web shim's pbp:settings.prizeCounter: false (site door shut) hides it; absent (the desktop) keeps it
+  const shut = wardrobeHtml(w, { esc, bar: () => '', bigBtn: (a) => `<b data-act="${a}">`, hosted: true, counter: false });
+  assert.doesNotMatch(shut, /data-act="counter"/, 'no counter while the host says the door is shut');
+  const open = wardrobeHtml(w, { esc, bar: () => '', bigBtn: (a) => `<b data-act="${a}">`, hosted: true, counter: true });
+  assert.match(open, /data-act="counter"/);
   assert.deepEqual(readPick('banner:chess.banner.crest'), ['banner', 'chess.banner.crest']);
   assert.deepEqual(readPick('banner:'), ['banner', null]);
   assert.equal(readPick('banner:chess.set.royal-capes'), null);

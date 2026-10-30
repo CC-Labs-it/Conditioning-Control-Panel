@@ -5,7 +5,9 @@
  * pick; the rest stay visible, locked, with where to get them ("In the Prize
  * Counter"). A hosted page has the counter button, which asks the host to open
  * the Prize Counter on the chess tab; the host re-sends the grants when it
- * closes and the screen repaints with whatever was bought.
+ * closes and the screen repaints with whatever was bought. A host that says
+ * `pbp:settings.prizeCounter: false` (the web shim while the site's counter
+ * door is shut) gets no button; the desktop never sends it and keeps it.
  *
  * The door owns the card; this file only draws the screen's body and reads the
  * one press it adds (`wear`, data-id "slot:itemId", an empty id = none).
@@ -17,10 +19,10 @@ export const LOCKED_NOTE = 'In the Prize Counter';
 
 /**
  * @param wear   skins/wear.js
- * @param kit    the door's helpers: { esc, bar, bigBtn, hosted }
+ * @param kit    the door's helpers: { esc, bar, bigBtn, hosted, counter } (counter: false hides the button)
  */
 export function wardrobeHtml(wear, kit) {
-  const { esc, bar, bigBtn, hosted } = kit;
+  const { esc, bar, bigBtn, hosted, counter: counterOpen } = kit;
   const owned = wear ? wear.owned() : new Set();
   const picked = wear ? wear.picked() : {};
   const rows = SLOTS.map((slot) => {
@@ -36,7 +38,7 @@ export function wardrobeHtml(wear, kit) {
     }).join('');
     return `<div class="setup-row ward-row"><span class="setup-k">${SLOT_WORDS[slot]}</span><div class="level-row" role="group" aria-label="${SLOT_WORDS[slot]}">${none}${pills}</div></div>`;
   }).join('');
-  const counter = hosted ? bigBtn('counter', 'go', 'Prize Counter', 'more for your men', 'slim') : '';
+  const counter = hosted && counterOpen !== false ? bigBtn('counter', 'go', 'Prize Counter', 'more for your men', 'slim') : '';
   const empty = owned.size ? '' : '<p class="door-sub">Nothing owned yet. Your men play as they are.</p>';
   return `
     ${bar('Wardrobe', 'Back', '<span class="door-count-k">your side</span>')}

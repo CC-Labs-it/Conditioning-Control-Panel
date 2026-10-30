@@ -339,7 +339,7 @@ export function createDoor(opts = {}) {
     for (const n of Array.from(card.children)) if (!n.classList.contains('fx-ghost')) n.remove();
     const body = document.createElement('div'); body.className = 'door-body screen-' + screen;
     body.innerHTML = ({ menu, lobby: lobbyScreen, found, games, profile, replay: replayScreen, end, ladder: () => ladder.screenHtml(me()),
-      wardrobe: () => wardrobeHtml(wear, { esc, bar, bigBtn, hosted: !!host.isHosted }) }[screen] || menu)();
+      wardrobe: () => wardrobeHtml(wear, { esc, bar, bigBtn, hosted: !!host.isHosted, counter: settings().prizeCounter !== false }) }[screen] || menu)();
     card.prepend(body);   // first, so every card.querySelector finds the live screen before a ghost
     if (fresh) land(body);
     if (screen === 'end' && endRating) ladder.mountEnd(body.querySelector('.rating-slot'), endRating, { still: still(), sfx });
