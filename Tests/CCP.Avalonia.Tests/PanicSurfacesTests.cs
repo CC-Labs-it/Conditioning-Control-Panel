@@ -91,6 +91,7 @@ public sealed class PanicSurfacesTests
         "voice-capture",
         "ai-followups",
         "blink-trainer",
+        "shell-hero",
         "camera",
         "chaster-hold",
         "chaos",

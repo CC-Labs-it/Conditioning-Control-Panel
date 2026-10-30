@@ -15,6 +15,7 @@ public partial class MainShellWindow
     private async Task SaveSettingsAndOfferPreset()
     {
         CoreSettings.Save();
+        FlashSaveAbsorb(); // WPF MainWindow.Settings.cs:381, before the preset offer.
         var s = CoreSettings.Current;
         var current = Preset.GetDefaultPresets().Concat(s.UserPresets)
             .FirstOrDefault(p => p.Name == s.CurrentPresetName);
