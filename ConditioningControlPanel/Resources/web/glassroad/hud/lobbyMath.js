@@ -171,6 +171,20 @@ export const humans = (seats) => (seats || []).filter((s) => s.kind === 'human' 
 export const readyCount = (seats) => humans(seats).filter((s) => s.ready).length;
 /** The host may press Start in the lobby phase with at least one human seated. */
 export const canStart = (seats, mySeat, phase) => phase === 'lobby' && !!(seats && seats[mySeat] && seats[mySeat].host) && humans(seats).length > 0;
+/** The host's seat, or -1 (a quick room has none). A room with a host starts only when the host says (owner 2026-10-30). */
+export const hostSeat = (seats) => { const h = (seats || []).find((s) => s && s.kind === 'human' && s.host); return h ? h.seat : -1; };
+/** The lobby line under the room title: the host sees the ready count, everyone else waits for the host. */
+export function lobbyNote(seats, mySeat, mode) {
+  const me = (seats || [])[mySeat], count = readyCount(seats) + ' of ' + humans(seats).length + ' ready';
+  if (hostSeat(seats) >= 0 && !(me && me.host)) return 'Waiting for the host, ' + count;
+  return (mode === 'friends' ? 'Friends room' : 'Open table') + ', ' + count;
+}
+/** The host moved to another seat (the old host left the lobby): the line everyone sees, or '' when nothing moved. */
+export function hostMoved(was, now, mySeat) {
+  const a = hostSeat(was), b = hostSeat(now);
+  if (a < 0 || b < 0 || a === b) return '';
+  return b === mySeat ? 'You are the host now' : seatName(now[b]) + ' is the host now';
+}
 
 // ---- looks -------------------------------------------------------------------------------------
 
