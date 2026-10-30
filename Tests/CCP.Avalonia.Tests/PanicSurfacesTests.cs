@@ -127,6 +127,7 @@ public sealed class PanicSurfacesTests
         "tube-speech",
         "lock-cards",
         "speak-cue",
+        "companion-community",
         "companion-transcript",
         "possession",
         "attention-test",

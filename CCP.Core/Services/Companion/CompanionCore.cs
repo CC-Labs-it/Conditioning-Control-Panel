@@ -8,8 +8,7 @@ namespace ConditioningControlPanel.Services.Companion
     /// The settings half of WPF 7.1.5 <c>Services/Companion/CompanionService.cs</c>, same numbers: switching
     /// (:185), the perk XP modifier (:226), companion XP and its level loop (:276), the Brain Parasite drain
     /// (:393) and active time (:429). The head owns the timers and the reactions. Named apart from WPF's type.
-    /// ponytail: ApplyCompanionPrompt (:476) and the autonomy bonus's IsActionInProgress wait for a community-prompt
-    /// service and an autonomy service on this head; XPDrained for the drain flash's ported view.
+    /// ponytail: the autonomy bonus's IsActionInProgress waits for an autonomy service.
     /// </summary>
     public static class CompanionCore
     {
@@ -42,7 +41,7 @@ namespace ConditioningControlPanel.Services.Companion
         }
 
         /// <summary>WPF SwitchCompanion (:185): free switching, active time banked to the old one.</summary>
-        public static bool SwitchCompanion(CompanionId newCompanion)
+        public static bool SwitchCompanion(CompanionId newCompanion, CommunityPromptService? prompts = null)
         {
             var old = ActiveCompanion;
             if (old == newCompanion) return true;
@@ -51,10 +50,24 @@ namespace ConditioningControlPanel.Services.Companion
             CoreSettings.Save();
             var progress = CoreSettings.Current.ActiveCompanionProgress;
             if (progress.FirstActivated == DateTime.MinValue) progress.FirstActivated = DateTime.Now;
+            ApplyCompanionPrompt(newCompanion, prompts);
             try { Switched?.Invoke(newCompanion); } catch (Exception ex) { Log.Debug("CompanionSwitched handler: {E}", ex.Message); }
             Log.Information("Switched companion: {Old} -> {New}",
                 CompanionDefinition.GetById(old).Name, CompanionDefinition.GetById(newCompanion).Name);
             return true;
+        }
+
+        /// <summary>WPF CompanionService.cs:424-450: no assignment leaves the current prompt alone.</summary>
+        public static void ApplyCompanionPrompt(CompanionId companion, CommunityPromptService? prompts = null)
+        {
+            try
+            {
+                var id = CoreSettings.Current.GetCompanionPromptId((int)companion);
+                if (string.IsNullOrEmpty(id)) return;
+                using var owned = prompts == null ? new CommunityPromptService() : null;
+                (prompts ?? owned!).ActivatePrompt(id); // Shared consent and validation rules still apply.
+            }
+            catch (Exception ex) { Log.Warning(ex, "Failed to apply companion prompt"); }
         }
 
         /// <summary>WPF CalculateXPModifier (:226).</summary>

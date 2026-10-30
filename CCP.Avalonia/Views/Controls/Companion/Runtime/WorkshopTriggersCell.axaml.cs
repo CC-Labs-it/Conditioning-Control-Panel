@@ -16,6 +16,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
     /// </summary>
     public partial class WorkshopTriggersCell : UserControl
     {
+        // WPF MainWindow.CompanionTab.cs:44-51 SyncCompanionTabUI.
+        internal void SyncFromSettings()
+        {
+            var settings = CoreSettings.Current;
+            this.FindControl<CheckBox>("ChkTriggerModeCompanion")!.IsChecked = settings.TriggerModeEnabled;
+            this.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!.IsVisible = settings.TriggerModeEnabled;
+            this.FindControl<Slider>("SliderTriggerIntervalCompanion")!.Value = settings.TriggerIntervalSeconds;
+            this.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!.Text = $"{settings.TriggerIntervalSeconds}s";
+        }
+
         public event EventHandler? PhrasePresetSelectionChanged;
         public event EventHandler? SavePhrasePresetRequested;
         public event EventHandler? DeletePhrasePresetRequested;

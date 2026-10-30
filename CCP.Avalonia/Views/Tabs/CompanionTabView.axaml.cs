@@ -27,8 +27,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             // WPF WorkshopRosterCell forwards its card action through the tab to MainWindow.
             if (Room.WorkshopParts is { } shelf)
+            {
                 shelf.Roster.CompanionCardClicked += (_, index) =>
                     (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.SwitchCompanionFromRoster(index, Room);
+
+                shelf.Roster.PersonalityAssignRequested += async (_, index) =>
+                {
+                    if (TopLevel.GetTopLevel(this) is Windows.MainShellWindow shell)
+                        await shell.AssignCompanionPersonalityAsync(index, Room);
+                };
+            }
 
             // WPF CompanionTabView.xaml.cs:36-40: the room is collapsed (XAML) and the page reads its zones.
             Conversation.Room = Room;
@@ -64,6 +72,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (shown)
             {
                 Room.HeroZone.ApplyAvatarArt();   // the hero re-read + portrait the page header shows (WPF Room.Sync)
+                Room.WorkshopParts?.Behavior.SyncFromSettings(); // WPF MainWindow.CompanionTab.cs:52-60
+                Room.WorkshopParts?.Triggers.SyncFromSettings();
                 Room.RefreshCommunity();   // WPF SyncCompanionTabUI -> UpdateCommunityPromptsUI (MainWindow.CompanionTab.cs:147)
                 // WPF MainWindow.TabNavigation.cs:505 ShowTab("companion") -> InitializePhrasePresets, v2 or not:
                 // the Triggers cell's combo (on Companion > AI under v2) re-reads presets saved elsewhere.
