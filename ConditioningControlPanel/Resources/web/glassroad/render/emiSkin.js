@@ -1,6 +1,22 @@
-/* Per-instance uniforms keep the accepted face pixels and skin patterns attached to the source mesh. */
-import {InterleavedBuffer,InterleavedBufferAttribute,Color} from 'three/webgpu';
-import {uniform,texture,attribute,positionGeometry,mix,float,step,fract} from 'three/tsl';
+/* Per-instance uniforms keep the accepted face pixels and skin patterns attached to the source mesh.
+ * Patterns 0-3 are the free native ones; the Prize Counter paints (lane B3-G1: hearts, spiral, host gold) are
+ * Astra's 4x4 masks (art/paints/*-mask.png, art/kart/paints registry) projected on the shell with her EMI_root
+ * mapping, loaded on first wear and shared by every kart. Shell only: vehicle, face, hands and antenna keep theirs. */
+import {InterleavedBuffer,InterleavedBufferAttribute,Color,DataTexture,TextureLoader,RepeatWrapping,NoColorSpace} from 'three/webgpu';
+import {uniform,texture,attribute,positionGeometry,mix,float,step,fract,vec2} from 'three/tsl';
+
+export const PAINT_PATTERN = Object.freeze({hearts:4,spiral:5,'host-gold':6});
+const MASK_FILES = {hearts:'hearts-mask.png',spiral:'spiral-mask.png','host-gold':'host-gold-mask.png'};
+const masks = new Map();
+let blank = null;
+const blankMask = () => blank || (blank = new DataTexture(new Uint8Array(4), 1, 1));
+function maskFor(paint) {
+  if (!masks.has(paint)) {
+    const t = new TextureLoader().load(new URL('../art/paints/' + MASK_FILES[paint], import.meta.url).href);
+    t.wrapS = t.wrapT = RepeatWrapping; t.colorSpace = NoColorSpace; masks.set(paint, t);
+  }
+  return masks.get(paint);
+}
 
 export function createEmiSkin(model,{cloneMaterials=true}={}) {
   const u=Object.fromEntries(['primary','secondary','antenna','hands','shoes','face'].map(k=>[k,uniform(new Color('#ffffff'))]));
@@ -9,8 +25,9 @@ export function createEmiSkin(model,{cloneMaterials=true}={}) {
   const stripes=step(.5,fract(p.x.add(p.y.mul(1.2)).mul(14)));
   const dots=float(1).sub(step(.23,fract(p.xy.mul(17)).sub(.5).length()));
   const checks=fract(p.x.mul(14).floor().add(p.y.mul(14).floor()).mul(.5)).mul(2);
-  const pattern=stripes.mul(step(.5,u.pattern)).mul(float(1).sub(step(1.5,u.pattern)))
-    .add(dots.mul(step(1.5,u.pattern)).mul(float(1).sub(step(2.5,u.pattern)))).add(checks.mul(step(2.5,u.pattern)));
+  const band=(lo,hi)=>step(lo,u.pattern).mul(float(1).sub(step(hi,u.pattern)));
+  const mask=texture(blankMask(),vec2(p.x.add(.255).div(.511),p.y.sub(.427).div(.52)));
+  const pattern=stripes.mul(band(.5,1.5)).add(dots.mul(band(1.5,2.5))).add(checks.mul(band(2.5,3.5))).add(mask.r.mul(step(3.5,u.pattern)));
   const owned=[];
   model.traverse(m=>{
     if(!m.isSkinnedMesh)return;
@@ -47,7 +64,10 @@ export function createEmiSkin(model,{cloneMaterials=true}={}) {
     material.clearcoatRoughnessNode=mix(material.clearcoatRoughnessNode||float(material.clearcoatRoughness||.1),float(.24),shell);
   });
   return {
-    set(s){for(const k of ['primary','secondary','antenna','hands','shoes','face'])u[k].value.set(s[k]);u.amount.value=s.original?0:1;u.pattern.value=s.pattern;},
+    set(s){for(const k of ['primary','secondary','antenna','hands','shoes','face'])u[k].value.set(s[k]);u.amount.value=s.original?0:1;
+      const paint=Object.hasOwn(PAINT_PATTERN,String(s.paint))?s.paint:null;
+      if(paint)mask.value=maskFor(paint);
+      u.pattern.value=paint?PAINT_PATTERN[paint]:s.pattern;},
     dispose(){for(const x of owned)x.dispose();},
   };
 }
