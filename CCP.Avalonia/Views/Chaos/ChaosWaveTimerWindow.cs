@@ -20,9 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// false, WS_EX_NOACTIVATE -> ShowActivated false, WS_EX_TRANSPARENT ->
     /// <see cref="X11Overlay.SetClickThrough"/>. UI thread only: <see cref="ChaosRunHost"/> calls it
     /// from its run tick and closes it on every teardown, including panic (PanicSurfaces "chaos").</para>
-    /// <para>ponytail: WPF's Clear() (the watch blanks while a boon draft is out) and RaiseActive()
-    /// (re-stack above a mandatory video) have no caller here yet: this head has no drafts and no
-    /// chaos video toys.</para>
+    /// <para>Draft clearing remains pending the run host draft lifecycle.</para>
     /// </summary>
     internal sealed class ChaosWaveTimerWindow : Window
     {
@@ -61,6 +59,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Active = null;
             _refused = false;   // the next run may try again
             try { w?.Close(); } catch (Exception ex) { Log.Debug("ChaosWaveTimer close: {E}", ex.Message); }
+        }
+
+        // Native stacking is kept behind the existing platform seam; headless tests observe calls.
+        internal static Action<Window> RaiseWindow = w => X11Overlay.Raise(w);
+
+        /// <summary>WPF ChaosModeService.cs:745-750,766 and ChaosWaveTimerOverlay.cs:74.
+        /// Re-stack without activation, only during a descending, pinned run.</summary>
+        internal static void RaiseActive()
+        {
+            if (!ChaosRunHost.IsDescending || !CoreSettings.Current.ChaosPinOnTop) return;
+            if (Active is { IsVisible: true } w) RaiseWindow(w);
         }
 
         internal readonly Border Pill;

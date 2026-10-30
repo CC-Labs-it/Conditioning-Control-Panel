@@ -2,6 +2,10 @@ using System;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Input.Raw;
+using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Avalonia.Media;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -20,7 +24,7 @@ public sealed class ChaosWaveTimerWindowTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -32,6 +36,75 @@ public sealed class ChaosWaveTimerWindowTests
     }
 
     private static void Ticks(int n) { for (int i = 0; i < n; i++) ChaosRunHost.Tick(); }
+
+    [Fact]
+    public async Task Video_birth_and_click_raise_the_watch_only_in_a_pinned_run()
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            Setup();
+            ChaosWaveTimerWindow.SkipPlatformChecksForTests = true;
+            CoreSettings.Current.ChaosPinOnTop = true;
+            int raises = 0;
+            ChaosWaveTimerWindow.RaiseWindow = w =>
+            {
+                Assert.Same(ChaosWaveTimerWindow.Active, w);
+                raises++;
+            };
+            global::Avalonia.Controls.Window? video = null;
+            try
+            {
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.State!.ShowWaveTimer = true;
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                ChaosRunHost.Tick();   // give the initially hidden pill a measured readout
+                // The real video surface factory must wire this, even for a video started
+                // outside Chaos. No VLC playback is needed to exercise stacking.
+                video = MandatoryVideoOverlay.Instance.Build(null, false).Window;
+                // Headless has no fullscreen screen geometry.
+                video.WindowState = global::Avalonia.Controls.WindowState.Normal;
+                video.Width = 800;
+                video.Height = 600;
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(raises > 0);
+                raises = 0;
+                await Task.Delay(120);   // WPF's second kick after fullscreen activation settles
+                Assert.True(raises > 0);
+
+                void Click()
+                {
+                    var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+                    video.RaiseEvent(new PointerPressedEventArgs(video, pointer, video, new Point(10, 10), 0,
+                        new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed),
+                        KeyModifiers.None));
+                    Dispatcher.UIThread.RunJobs();
+                }
+                raises = 0;
+                Click();
+                Assert.True(raises > 0);
+                CoreSettings.Current.ChaosPinOnTop = false;
+                raises = 0;
+                Click();
+                await Task.Delay(120);
+                Assert.Equal(0, raises);
+
+                CoreSettings.Current.ChaosPinOnTop = true;
+                Click();   // queue a delayed kick, then end the run before it executes
+                ChaosRunHost.ForceShutdown();
+                raises = 0;
+                await Task.Delay(120);
+                Assert.Equal(0, raises);
+                Assert.Null(ChaosWaveTimerWindow.Active);
+            }
+            finally
+            {
+                video?.Close();
+                ChaosRunHost.ForceShutdown();
+                ChaosWaveTimerWindow.SkipPlatformChecksForTests = false;
+            }
+        });
+    }
 
     [Fact]
     public async Task Pocket_watch_counts_the_wave_down_goes_red_blinks_and_panic_closes_it()
