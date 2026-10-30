@@ -87,6 +87,36 @@ public sealed class RainPackSinkTests : IDisposable
     }
 
     [Fact]
+    public void A_tube_size_strip_reads_frame_by_frame_exactly_like_a_whole_decode()
+    {
+        Directory.CreateDirectory(_dir);
+        int w = RainApplyController.Width, h = RainApplyController.Height;
+        var rnd = new Random(5);
+        var frames = Enumerable.Range(0, 3).Select(_ => { var f = new byte[w * h * 4]; rnd.NextBytes(f); return f; }).ToList();
+        var path = Path.Combine(_dir, "t.strip.png");
+        RainPackSink.WriteRgbaStrip(path, w, h, frames);
+
+        // The player's format (Pbgra32), against one whole-strip decode of the same file.
+        var back = RainPackSink.ReadStrip(path, 3, SKColorType.Bgra8888, SKAlphaType.Premul);
+        Assert.Equal((w, h, 3), (back.Width, back.Height, back.Frames.Count));
+        using var codec = SKCodec.Create(path);
+        using var whole = new SKBitmap(new SKImageInfo(w, h * 3, SKColorType.Bgra8888, SKAlphaType.Premul));
+        Assert.Equal(SKCodecResult.Success, codec.GetPixels(whole.Info, whole.GetPixels()));
+        var all = whole.GetPixelSpan().ToArray();
+        for (int i = 0; i < 3; i++) Assert.Equal(all.AsSpan(i * w * h * 4, w * h * 4).ToArray(), back.Frames[i]);
+    }
+
+    [Fact]
+    public void The_bake_fills_the_tube_at_2x_and_old_packs_rebake()
+    {
+        // The tube shows Rain at about 190x306 DIP (MaxWidth 198, MaxHeight 306): frames 2x that stay crisp at 200%.
+        int w = RainApplyController.Width, h = RainApplyController.Height, clipSet = RainLookHash.ClipSetVersion;
+        Assert.True(w >= 2 * 190 && h >= 2 * 306, $"{w}x{h}");
+        Assert.Equal(192.0 / 309, (double)w / h, 3);
+        Assert.True(clipSet >= 3, $"clip set {clipSet}");   // the 192x309 pixel packs miss and bake again
+    }
+
+    [Fact]
     public void The_pack_hash_is_machine_local()
     {
         Assert.True(ProfileSyncService.IsExcludedFromBackup(nameof(AppSettings.RainPackHash)));
