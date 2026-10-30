@@ -43,7 +43,7 @@ public sealed class ServerAnnouncementInboxTests
     private static Task Run(Func<FakeProxy, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;   // the profile TestUserDataProfile seeded (feature intros spent)
@@ -130,9 +130,22 @@ public sealed class ServerAnnouncementInboxTests
 
             var popup = Assert.Single(opened);
             Assert.Equal("The Spiral is open", popup.FindControl<TextBlock>("TxtTitle")!.Text);
+            await shell.CheckServerAnnouncementAsync(); // a delayed launch check cannot repost an opened row
             Assert.Empty(StartupLadder.Inbox.Items);
         }
         finally { shell.Close(); foreach (var p in opened) p.Close(); }
+    });
+
+    [Fact]
+    public Task AClosedShellCannotPostIntoTheNextShellsInbox() => Run(async fake =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var shell = new MainShellWindow();
+        shell.Show();
+        shell.Close();
+        await shell.CheckServerAnnouncementAsync();
+        Assert.Empty(fake.Calls);
+        Assert.Empty(StartupLadder.Inbox.Items);
     });
 
     [Fact]

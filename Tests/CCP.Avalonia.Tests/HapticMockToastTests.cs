@@ -17,7 +17,7 @@ public sealed class HapticMockToastTests
     public Task ProviderFeedbackReusesOneWindowRefreshesExpiryAndExitDropsQueuedPosts() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current == null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var old = MockProviderV2.Toast;
