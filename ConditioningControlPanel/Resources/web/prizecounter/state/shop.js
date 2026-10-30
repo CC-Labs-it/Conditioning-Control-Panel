@@ -85,10 +85,33 @@ export function windowShelves(items) {
   }));
 }
 
+/** The family an owned row's Wear belongs to (PrizeCounterHostService.WearFamily): null = nothing to wear (Back Room prizes). */
+export function wearFamily(id) {
+  const s = String(id || ''), p = (x) => s.startsWith(x);
+  if (p('rain.')) return 'rain';
+  if (p('desk.hat.') || p('desk.toy.')) return 'desk';
+  if (p('chess.set.') || p('chess.banner.') || p('chess.insignia.') || p('prime.banner.')) return 'chess';
+  if (p('profile.frame.') || p('profile.avatar.') || p('prime.frame.')) return 'profile';
+  if (p('kart.') || p('prime.paint.') || p('prime.trail.')) return 'kart';
+  return null;
+}
+/** What an owned card's main button does with the host's init.wears: 'wear' (the host puts it on), 'garage' (a kart
+ * outside the garage: the button reads "Wear it in the garage" and only steps back), null (no button). A host that
+ * sends no wears list keeps the plain Wear. */
+export function wearMode(id, wears) {
+  if (!Array.isArray(wears)) return 'wear';
+  const fam = wearFamily(id);
+  if (!fam) return null;
+  if (wears.includes(fam)) return 'wear';
+  return fam === 'kart' ? 'garage' : null;
+}
+/** Families the host wears in place (the counter stays open and the card says so); Rain and kart close the counter. */
+const IN_PLACE = ['desk', 'chess', 'profile'];
+
 const RETRY = { busy: 'shop_note_retry', offline: 'shop_note_retry', timeout: 'shop_note_retry', signed_out: 'shop_note_signed_out' };
 
-/** deps: { request(op, body, idem) -> body, newIdem(), tab? (init.tab), now? }. request may answer {ok,status,body} too. */
-export function createShop({ request, newIdem, tab: startTab = null, now = () => new Date().toISOString() }) {
+/** deps: { request(op, body, idem) -> body, newIdem(), tab? (init.tab), wears? (init.wears), now? }. request may answer {ok,status,body} too. */
+export function createShop({ request, newIdem, tab: startTab = null, wears = undefined, now = () => new Date().toISOString() }) {
   let st = null, tab = 0, foc = null, card = null, status = 'idle';
   const send = (op, body, idem) => Promise.resolve().then(() => request(op, body, idem)).catch(() => null)
     .then((res) => (obj(res) && obj(res.body) && 'status' in res ? res.body : res) || { ok: false, reason: 'offline' });
@@ -108,7 +131,8 @@ export function createShop({ request, newIdem, tab: startTab = null, now = () =>
     const row = card && rowsOf(card.itemId)[0];
     if (!row) return null;
     const f = card.forced || faceOf(row, st.sp, st.tier);
-    return { itemId: row.id, priceSp: row.priceSp, ...f, noteKey: card.noteKey, pending: card.pending, retry: card.retry };
+    const wear = f.face === 'owned' ? wearMode(row.id, wears) : undefined;
+    return { itemId: row.id, priceSp: row.priceSp, ...f, ...(wear !== undefined ? { wear } : {}), noteKey: card.noteKey, pending: card.pending, retry: card.retry };
   }
   const openCard = (itemId, noteKey = null) => {
     card = { itemId, idem: newIdem(), catalogVersion: st.catalogVersion, week: st.week, pending: false, retry: false, noteKey, forced: null };
@@ -128,7 +152,13 @@ export function createShop({ request, newIdem, tab: startTab = null, now = () =>
     const v = cardView();
     if (!v || v.pending) return {};
     if (v.action === 'buy') return { buy: shop.confirm() };
-    if (v.action === 'wear') return { wear: { itemId: v.itemId } };
+    if (v.action === 'wear') {
+      if (v.wear === 'garage') { card = null; return { card: null }; }
+      if (v.wear === null) return {};
+      if (v.wear === undefined || !Array.isArray(wears) || !IN_PLACE.includes(wearFamily(v.itemId))) return { wear: { itemId: v.itemId } };
+      card.noteKey = 'shop_worn';
+      return { wear: { itemId: v.itemId }, card: cardView() };
+    }
     if (v.action === 'prime') return { prime: { itemId: v.itemId } };
     return {};
   };
@@ -173,6 +203,13 @@ export function createShop({ request, newIdem, tab: startTab = null, now = () =>
       if (!f) return {};
       foc = f;
       return { focus: focusView() };
+    },
+
+    /** The host's worn {id, ok} after an in-place Wear: a refusal on the open card says so instead of "Wearing it now". */
+    worn(id, ok) {
+      if (ok || !card || card.itemId !== id || card.noteKey !== 'shop_worn') return {};
+      card.noteKey = 'shop_note_try_again';
+      return { card: cardView() };
     },
 
     /** One buy with the card's idem. A press while pending sends nothing; a retry reuses the idem. */

@@ -59,8 +59,11 @@ The page talks to whoever hosts it through `host.js`, never `fetch` to the serve
 - out: `wallet { sp }` after a receipt (the WPF host adopts it with `V2WalletAdoption`, `fromBuy = true`).
 - out: `close { reason:'back'|'panic' }`. Esc ladder: confirm card -> preview -> close.
 - out: `wear { id }` from an owned card's Wear (frame `{type:'wear', id}`). WPF: a Rain row (`cos.<id>` in
-  `rain-wardrobe/items.json`) closes the counter and opens Rain's dressing room with that piece tried on; any other id is
-  refused (logged). The host caches the `cos.rain.*` prices of each shop-state for the dressing room's badges.
+  `rain-wardrobe/items.json`) closes the counter and opens Rain's dressing room with that piece tried on. Fix wave F1:
+  `init.wears` lists the families the host puts on (rain, desk, chess, profile; kart only from the garage). Desk, chess
+  and profile are worn in place (the card notes "Wearing it now.") and the host answers `worn { id, ok }`; `ok:false`
+  turns the note into "That did not go through". A kart away from the garage reads "Wear it in the garage" and only
+  steps back; Back Room prizes have no Wear. A host that sends no `wears` keeps the plain Wear. The host caches the `cos.rain.*` prices of each shop-state for the dressing room's badges.
 - out: `signIn()` when `shop-state` answered `signed_out` (owner 2026-10-29): the page greys a window display of the
   art (no prices, no tabs, no wallet) behind one "Sign in to shop" button; the button, or select/Enter/A, asks the host.
   The host opens its own sign-in and, once someone is signed in, loads the page again with a fresh `init`

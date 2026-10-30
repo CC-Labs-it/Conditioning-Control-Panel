@@ -14,6 +14,8 @@ export const LEX = {
   shop_buy: 'Buy',
   shop_keep_looking: 'Keep looking',
   shop_wear: 'Wear',
+  shop_wear_in_garage: 'Wear it in the garage',
+  shop_worn: 'Wearing it now.',
   shop_owned: 'Owned',
   shop_prime: 'Prime',
   shop_prime_reason: 'Prime members can buy this one.',

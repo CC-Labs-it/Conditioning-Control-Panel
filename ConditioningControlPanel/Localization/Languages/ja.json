@@ -7919,6 +7919,8 @@
   "shop_buy": "購入",
   "shop_keep_looking": "ほかを見る",
   "shop_wear": "身につける",
+  "shop_wear_in_garage": "ガレージで身につける",
+  "shop_worn": "身につけました。",
   "shop_owned": "所持済み",
   "shop_prime": "Prime",
   "shop_prime_reason": "Primeメンバーだけが購入できます。",

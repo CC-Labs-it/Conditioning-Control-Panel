@@ -20,7 +20,18 @@ public partial class MainWindow
         HeaderSparkleWallet.CounterRequested += OpenCounterFromSparkleWallet;
         Closed += (_, _) => ShutdownSparkleWallet();
         Deactivated += (_, _) => HeaderSparkleWallet.ClosePopup();
+        if (App.ProfileSync != null) App.ProfileSync.ProfileLoaded += OnSparkleWalletProfileLoaded;
         ReplaceSparkleWalletSettings();
+        // A launcher-first boot can load the profile before this window exists: read once now too
+        // (no-op signed out or offline; the 10-minute guard keeps ProfileLoaded from doubling it).
+        Services.PrizeCounter.PrizeCounterHostService.RefreshWalletInBackground();
+    }
+
+    /// <summary>The profile landed: read the counter's wallet once (raise-only), so the header is not
+    /// 0 until the counter opens (fix wave F1).</summary>
+    private void OnSparkleWalletProfileLoaded(object? sender, EventArgs e)
+    {
+        if (_sparkleWalletActive) Services.PrizeCounter.PrizeCounterHostService.RefreshWalletInBackground();
     }
 
     private void ReplaceSparkleWalletSettings()
@@ -93,6 +104,7 @@ public partial class MainWindow
         _sparkleWalletActive = false;
         App.Settings.CurrentReplaced -= ReplaceSparkleWalletSettings;
         SparklePointRewards.Awarded -= OnSparklePointAwarded;
+        if (App.ProfileSync != null) App.ProfileSync.ProfileLoaded -= OnSparkleWalletProfileLoaded;
         if (_sparkleWalletSettings != null) _sparkleWalletSettings.PropertyChanged -= OnSparkleWalletSettingChanged;
         _sparkleWalletSettings = null;
         HeaderSparkleWallet.VisitRequested -= VisitFromSparkleWallet;

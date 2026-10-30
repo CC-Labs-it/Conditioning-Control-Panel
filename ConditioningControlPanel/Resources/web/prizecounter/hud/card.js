@@ -6,6 +6,10 @@ import { itemName, itemDesc } from '../state/strings.js';
 import { STAR, LOCK } from './icons.js';
 
 const KEEP = { key: 'shop_keep_looking', intent: 'back', main: false };
+const WEAR = { key: 'shop_wear', intent: 'select', main: true };
+const GARAGE = { key: 'shop_wear_in_garage', intent: 'back', main: true };
+/** An owned card's buttons by its wear mode (state/shop.js wearMode): no mode = the plain Wear. */
+const ownedButtons = (wear) => (wear === null ? [KEEP] : wear === 'garage' ? [GARAGE] : [WEAR, KEEP]);
 const FACES = {
   buy: { price: true, buttons: [{ key: 'shop_buy', intent: 'select', main: true }, KEEP] },
   owned: { stamp: 'owned', buttons: [{ key: 'shop_wear', intent: 'select', main: true }, KEEP] },
@@ -30,7 +34,7 @@ export function cardModel(card, sp, t) {
     price: f.price ? { text: String(card.priceSp), red: card.face === 'short', label: t('shop_price', card.priceSp) } : null,
     stamp: f.stamp ? t(f.stamp === 'owned' ? 'shop_owned' : 'shop_prime') : null, stampKind: f.stamp || null,
     lines, note,
-    buttons: f.buttons.map((b) => ({ label: t(b.key), intent: b.intent, main: b.main, disabled: !!card.pending && b.main })),
+    buttons: (card.face === 'owned' ? ownedButtons(card.wear) : f.buttons).map((b) => ({ label: t(b.key), intent: b.intent, main: b.main, disabled: !!card.pending && b.main })),
   };
 }
 
