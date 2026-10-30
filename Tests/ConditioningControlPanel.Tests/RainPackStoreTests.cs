@@ -183,7 +183,7 @@ public sealed class RainPackStoreTests : IDisposable
     {
         var template = JObject.Parse(Template("emotes.json")!);
         var all = Directory.GetFiles(RainEmotesDir(), "*.webp").Select(p => Path.GetFileNameWithoutExtension(p)!).ToHashSet();
-        Assert.Equal(12, all.Count);
+        Assert.Equal(17, all.Count);
         Assert.True(JToken.DeepEquals(template, RainPackEmotesFold.FoldEmotes(template, all)));
     }
 
