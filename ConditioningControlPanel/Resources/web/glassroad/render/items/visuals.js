@@ -348,6 +348,21 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
       bubble3d(W.x, W.y, W.z, id || 'box', L.heldR * (TOYS.has(id) ? 1.5 : 1) * (me ? L.playerHeldScale : 1), 1, h.racer * 7, me ? 4 : -1);
     }
 
+    // payback mark (social lane): a small ring of sparks over whoever last hit you, on your screen only; IN 0.3 s, OUT 0.5 s
+    const pm = view.payback, mk = pm && pm.racer > 0 ? karts[pm.racer] : null;
+    if (mk && pm.k > 0.01) {
+      kartPos(mk); kartQuat(mk);
+      const a = pm.k, spin = soft || reduced ? 0 : timeS * 1.4, n = 6, up = L.heldUpM + 0.85;
+      W.set(0, up, 0).applyQuaternion(QT).add(V);
+      motes.push(W.x, W.y, W.z, 0.32, 1, 0.92, 0.95, a * 0.9);
+      motes.push(W.x, W.y, W.z, 0.9, 1, 0.3, 0.45, a * 0.22);
+      for (let j = 0; j < n; j++) {   // the ring stands in the kart's own right/up plane, so a chase camera sees it face on
+        const t = spin + j * 6.283 / n;
+        W.set(Math.cos(t) * 0.42, up + Math.sin(t) * 0.42, 0).applyQuaternion(QT).add(V);
+        motes.push(W.x, W.y, W.z, 0.16, 1, 0.3, 0.45, a * 0.85);
+      }
+    }
+
     // throws and lobs: the sim's p already carries the arc. A throw draws a sparkling ribbon of motes
     // behind it; a lob a dotted arc, and a soft shadow with a pulsing ring waits where it will land
     seen.clear();

@@ -461,6 +461,7 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `items.knockBehindM` 3: it lands this far behind the loser, in the loser's lane.
 - `items.knockOwnerS` 1: the loser cannot take it back for this long; anyone else with an empty slot takes it at once.
 - `items.knockMax` 6: the oldest loose item pops when one more is knocked out.
+- `items.paybackS` 20: whoever last hit you (item hit, hard bump lost, tunnel ram) stays your mark this long; your next throw prefers the mark when it is ahead in throw range. The mark shows on your screen only.
 
 ## payoff (toys kit 2026-10-25: subliminal words and flashes for the local player, `fx/payoff.js`; Gentle and photosafe still rule)
 

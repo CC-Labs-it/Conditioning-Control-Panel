@@ -110,3 +110,46 @@ test('knock-loose: a racer holding an item drives through a loose one', () => {
   tick();
   assert.equal(list[1].item.id, 'disc');
 });
+
+test('payback: an item hit, a lost hard bump or a tunnel ram makes the hitter your mark for paybackS', () => {
+  const { q, social, tick } = setup({ karts: [{ s: 100 }, { s: 110 }, { s: 120 }] });
+  tick();
+  q.emit('item-hit', { victim: 0, by: 2, kind: 'disc', verdict: 'glass' });
+  assert.equal(social.markOf(0), -1, 'a blocked hit is no score');
+  q.emit('item-hit', { victim: 0, by: 2, kind: 'disc', verdict: 'hit' });
+  assert.equal(social.markOf(0), 2);
+  q.emit('hard-bump', { winner: 1, loser: 0, dv: 6 });
+  assert.equal(social.markOf(0), 1, 'the last hitter wins');
+  q.emit('racer-event', { racer: 2, name: 'tunnel-ram', p: { attacker: 2, victim: 1 } });
+  assert.equal(social.markOf(1), 2);
+  assert.equal(social.markView(0).racer, 1);
+  tick(19.9);
+  assert.equal(social.markOf(0), 1);
+  tick(0.2);
+  assert.equal(social.markOf(0), -1);
+  assert.equal(social.markView(0), null);
+});
+
+test('payback: the next throw homes on the mark when it is ahead in range, then the mark clears', () => {
+  const { q, social, list, tick, rec } = setup({ karts: [{ s: 100 }, { s: 110 }, { s: 130 }] });
+  tick();
+  q.emit('item-hit', { victim: 0, by: 2, kind: 'disc', verdict: 'hit' });
+  Object.assign(list[0].item, { id: 'pendulum' }); list[0].input.item = true;
+  tick(); list[0].input.item = false;
+  assert.equal(rec.first('item-fire').payload.target, 2, 'past the nearer kart to the mark');
+  assert.equal(social.markOf(0), -1);
+  // without a mark the nearest kart ahead is the target
+  Object.assign(list[0].item, { id: 'pendulum' }); list[0].input.item = true;
+  tick(); list[0].input.item = false;
+  assert.equal(rec.all('item-fire')[1].payload.target, 1);
+});
+
+test('payback: a mark behind you or out of range keeps normal targeting and stays', () => {
+  const { q, social, list, tick, rec } = setup({ karts: [{ s: 100 }, { s: 110 }, { s: 90 }] });
+  tick();
+  q.emit('hard-bump', { winner: 2, loser: 0, dv: 7 });
+  Object.assign(list[0].item, { id: 'pendulum' }); list[0].input.item = true;
+  tick(); list[0].input.item = false;
+  assert.equal(rec.first('item-fire').payload.target, 1);
+  assert.equal(social.markOf(0), 2);
+});

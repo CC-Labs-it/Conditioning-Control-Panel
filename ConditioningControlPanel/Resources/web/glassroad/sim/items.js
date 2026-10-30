@@ -165,6 +165,17 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
   }
 
   // ---- use ------------------------------------------------------------------------------------
+  let payback = null;   // sim/social.js { markOf, spend }: whoever last hit a racer
+  /** r's payback mark when it is ahead within rangeM (then the mark is spent), else -1. */
+  function markAhead(r, st, rangeM) {
+    const m = payback ? payback.markOf(r.i) : -1, o = m >= 0 ? racer(m) : null;
+    if (!o || o.finished || !free(o) || st.progressOf(m) <= st.progressOf(r.i)) return -1;
+    const d = pathGap(r.st[S.s], r.st[S.seg], o.st[S.s], o.st[S.seg]);
+    if (!(d > 0 && d <= rangeM)) return -1;
+    payback.spend(r.i);
+    return m;
+  }
+
   function aheadOf(r, st, rangeM) {
     let best = -1, bestD = Infinity;
     const me = st.progressOf(r.i);
@@ -202,7 +213,8 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       if (traps.length >= g('maxTraps')) { const o = traps.shift(); pop(o.kind, 'fizzle', o.s, o.x, 0, o.seg); }
       traps.push({ id: nextId++, kind: id, s: dropS, x, seg: dropped.seg, t: 0, layer: r.i });
     } else if (mode === 'throw') {
-      target = aheadOf(r, standings, g('throwRangeM'));
+      target = markAhead(r, standings, g('throwRangeM'));
+      if (target < 0) target = aheadOf(r, standings, g('throwRangeM'));
       fired = { id: nextId++, kind: id, mode, by: r.i, target, t: 0, ...advance(s, seg, THROW_LEAD_M), x, h: g('throwHeightM'),
         v: Math.max(0, st[S.speedPct]) * feel.get('speed.topMps') + g('throwExtraMps'), homing: target >= 0 };
       projectiles.push(fired);
@@ -624,5 +636,5 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
     for (const b of pick) { b.downT = 0; b.upT = 1e9; }
   }
 
-  return { update, view, reset, nearOpenEdge, trapRows, lobTarget, knock };
+  return { update, view, reset, nearOpenEdge, trapRows, lobTarget, knock, setPayback(p) { payback = p || null; } };
 }

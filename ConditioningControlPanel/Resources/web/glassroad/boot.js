@@ -1621,6 +1621,7 @@ async function boot(course, options, lifetime, isCurrent) {
       contact.update(clock.dt, racers.list, race);                //    bumps, ghosts, slipstream
       standings.update(racers.list, race, clock.dt);              //    places, race-result
       items.update(clock.dt, racers.list, standings, race);       //    pickups, use, flights, hits, mods
+      social.update(clock.dt);                                    //    payback marks
       moving.decorate(racers.list, racers.clockS);
       hopLatch.spent(a); itemLatch.spent(a);
     }
@@ -1713,6 +1714,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (HT) hLap('cam');
     if (BOT && debug.peek) peekCamera(cam.camera, track, debug.peek, renderer.aspect);
     const iv = items.view();
+    iv.payback = social ? social.markView(0) : null;              // your payback mark, drawn on your screen only
     // Share one near-pass crossing with sound and the world-space toy accent.
     cam.camera.updateMatrixWorld();
     const cameraBasis = cam.camera.matrixWorld.elements;
