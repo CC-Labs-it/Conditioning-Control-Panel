@@ -124,4 +124,11 @@
     <EmbeddedResource Include="..\Assets\sounds\companion_audio\awareness_angles.json" Link="Resources\sounds\companion_audio\awareness_angles.json" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\ConditioningControlPanel\Services\Sparkles\SparklesClaim.cs" Link="Services\GameRewards\SparklesClaim.cs" />
+    <Compile Include="..\ConditioningControlPanel\Services\Sparkles\SparklesReceipt.cs" Link="Services\GameRewards\SparklesReceipt.cs" />
+    <Compile Include="..\ConditioningControlPanel\Services\Sparkles\SparklesClaimService.cs" Link="Services\GameRewards\SparklesClaimService.cs" />
+  </ItemGroup>
+  <ItemGroup><Compile Include="..\ConditioningControlPanel\Services\Sparkles\SparklesGameEnd.cs" Link="Services\GameRewards\SparklesGameEnd.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="..\ConditioningControlPanel\Services\Sparkles\SparklesPageResults.cs" Link="Services\GameRewards\SparklesPageResults.cs" /></ItemGroup>
 </Project>

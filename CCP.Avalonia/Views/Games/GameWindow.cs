@@ -151,8 +151,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             switch ((string?)o["type"])
             {
                 case "breakout-wall" when Spec.Id.StartsWith("breakout", StringComparison.OrdinalIgnoreCase):
-                    _ = ConditioningControlPanel.Services.GameRewards.SparklesPageResults.Send(
-                        ConditioningControlPanel.Services.GameRewards.SparklesPageResults.BreakoutWall(o), Platform.SparklesHead.Service);
+                    _ = ConditioningControlPanel.Services.Sparkles.SparklesPageResults.Send(
+                        ConditioningControlPanel.Services.Sparkles.SparklesPageResults.BreakoutWall(o), Platform.SparklesHead.Service);
                     break;
                 case "ready":
                     IsReady = true;

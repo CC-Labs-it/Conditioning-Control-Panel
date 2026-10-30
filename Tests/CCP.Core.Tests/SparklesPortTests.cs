@@ -1,3 +1,4 @@
+using ConditioningControlPanel.Services.Sparkles;
 using System;
 using System.Net;
 using System.Net.Http;
@@ -61,6 +62,19 @@ public class SparklesPortTests
         var receipt = new SparklesReceipt { Credited = 5, Sp = server, Shadow = shadow };
         Assert.Equal(adopt, SparklesClaimService.DecideWallet(same, receipt, local, out var next));
         Assert.Equal(expected, next);
+    }
+    [Theory]
+    [InlineData("{result:{kind:'medal',medal:'gold'},taper:0.5}", "Sparkles_Slip_Gold", "Sparkles_Slip_HalfRate")]
+    [InlineData("{place:2,of:8,reason:'short'}", "Sparkles_Slip_Place", "Sparkles_Slip_Short")]
+    [InlineData("{result:{kind:'duel',outcome:'draw'},reason:'ceiling'}", "Sparkles_Slip_Draw", "Sparkles_Slip_CeilingToday")]
+    public void SlipsNameResultsAndExplainRates(string json, string result, string reason)
+    {
+        var outcome = new SparklesClaimOutcome(SparklesReceipt.Parse(JObject.Parse(json)), null);
+        var msg = SparklesSlip.Build(outcome, false, key => key)!;
+        Assert.Equal(result, (string?)msg["lines"]![0]);
+        Assert.Equal(reason, (string?)msg["lines"]![1]);
+        Assert.Null(SparklesSlip.Build(null, false, key => key));
+        Assert.Null(SparklesSlip.Build(SparklesClaimOutcome.Refused("pending"), false, key => key));
     }
     private sealed class Wire : HttpMessageHandler
     {

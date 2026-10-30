@@ -138,8 +138,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         PbpBootFailedThisSession = true;
                         return false;
                     case "pbp:game-over":
-                        _ = ConditioningControlPanel.Services.GameRewards.SparklesPageResults.Send(
-                            ConditioningControlPanel.Services.GameRewards.SparklesPageResults.Chess(o), Platform.SparklesHead.Service);
+                        SparklesPending = DeliverSparkles(ConditioningControlPanel.Services.Sparkles.SparklesPageResults.Send(
+                            ConditioningControlPanel.Services.Sparkles.SparklesPageResults.Chess(o), Platform.SparklesHead.Service));
                         return true;
                     case "pbp:exit":
                         Close();
