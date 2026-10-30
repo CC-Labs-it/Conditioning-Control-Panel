@@ -35,6 +35,8 @@ import { Q } from './quality.js';
 import { juiceHues, p4Look, fieldBirth, fieldDensity, boostTarget, tierColour } from './atlas.js';
 import { finalLapMods, topSpeedShare, feelVal, WORLD_FEEL, motionMul } from './worldFeel.js';
 
+const TUNNEL_HUE_HZ = 0.25, TUNNEL_HUE_GENTLE = 0.08;   // Tunnel Vision tint drift, turns per second (no flicker)
+
 // wind is negative so every `kind < 0.5` streak rule (tail, taper, head-bright shape) covers it too
 const KIND = { wind: -1, streak: 0, glitter: 1, orb: 2 };
 
@@ -143,6 +145,7 @@ export function createSpeedLines(feel = null) {
 
   let boost = 0, curve = 0, wake = 0, motion = 'full';
   const top = () => (feel && feel.get ? feel.get('speed.topMps') : 0) || 39;
+  let tunHue = 0;
   /** Per frame (signature kept from polish 3; obj unused, the field follows the rendering camera). */
   function update(dt, kart, fx, obj, visibility = 1) {
     const gentle = !!(feel && feel.get && feel.get('gentle.on')), pct = Math.max(0, kart[S.speedPct] || 0), mps = pct * top();
@@ -150,6 +153,13 @@ export function createSpeedLines(feel = null) {
     const want = rescue ? 0 : fx ? Math.min(1, Math.max(0, fx.speedLines || 0)) : boostTarget(bk, BOOST);
     if (dt > 0) boost += (want - boost) * (1 - Math.exp(-dt / (want > boost ? P.boostRiseS : P.boostFallS)));
     if (bk) u.boostCol.value.set(bk >= BOOST.DRIFT1 && bk <= BOOST.DRIFT3 ? tierColour(bk - BOOST.DRIFT1 + 1, P) : bk === BOOST.LAUNCH ? '#ffffff' : LOOK.padTrail);
+    // Tunnel Vision: the field becomes the colour tunnel, its hue drifting (slow under Gentle, still under motion off)
+    const tun = fx ? Math.min(1, Math.max(0, fx.tunnel || 0)) : 0;
+    if (tun > 0) {
+      tunHue = (tunHue + dt * (motion === 'off' ? 0 : gentle ? TUNNEL_HUE_GENTLE : TUNNEL_HUE_HZ)) % 1;
+      u.boostCol.value.setHSL(0.7 + 0.2 * Math.sin(2 * Math.PI * tunHue), 0.85, 0.7);   // cyan to pink and back
+      boost = Math.max(boost, tun);
+    }
     const flow = gentle ? ((feel && feel.get('gentle.scrollMul')) || 0.5) : 1;
     u.dist.value = (u.dist.value + mps * dt * flow) % 20000;
     u.time.value = (u.time.value + dt) % 1000;

@@ -97,7 +97,9 @@ export function createPayoff(bus, feel, { gentle = null, photosafe = null, rand 
     clock = 0; lastCascade = lastFlash = lastPad = -1e9;
   }
 
-  const offs = [bus.on('item-hit', onHit), bus.on('pad', onPad), ...MALUS_EVENTS.map((name) => bus.on(name, onMalus))];
+  // Tunnel Vision: the words stream past the player for the ride (cascade only: no fog, no flash, the road stays clear)
+  function onTunnel(e) { if (e && e.racer === 0 && g('on')) sayWords(feel.get('items.tunnelS')); }
+  const offs = [bus.on('item-hit', onHit), bus.on('pad', onPad), bus.on('tunnel-start', onTunnel), ...MALUS_EVENTS.map((name) => bus.on(name, onMalus))];
   return { words, flash, fog, stats, update, reset, dispose() { for (const off of offs) off(); } };
 }
 
