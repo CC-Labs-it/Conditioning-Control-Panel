@@ -11,12 +11,68 @@ namespace ConditioningControlPanel.Services.Companion;
 internal sealed record RainStripFrames(int Width, int Height, SKColorType ColorType, SKAlphaType AlphaType, IReadOnlyList<byte[]> Frames);
 
 /// <summary>
-/// A baked pack's clip strips (RAIN-V2-PLAN 2.3): one vertical PNG per clip, frame 0 on top,
-/// alpha kept (straight, unpremultiplied RGBA). <see cref="ReadStrip"/> is the way back for the
-/// tube's pack player (lane R8).
+/// Turns baked frames into a pack's clip strips (RAIN-V2-PLAN 2.3). The wardrobe streams
+/// <c>rain-bake-frame {clip, index, png}</c>; frames are held per clip (as PNG or RGBA bytes,
+/// never as bitmaps) and <see cref="FinishClip"/> writes one vertical PNG strip, frame 0 on top,
+/// alpha kept (straight, unpremultiplied RGBA), then records it on the writer.
+/// <see cref="ReadStrip"/> is the way back for the tube's pack player (lane R8).
 /// </summary>
-internal static class RainPackSink
+internal sealed class RainPackSink
 {
+    private readonly RainPackWriter _writer;
+    private readonly Dictionary<string, SortedDictionary<int, (byte[] bytes, bool rgba)>> _pending = new(StringComparer.Ordinal);
+
+    public RainPackSink(RainPackWriter writer, int fps, int width, int height)
+    {
+        if (fps <= 0 || width <= 0 || height <= 0) throw new ArgumentOutOfRangeException(nameof(fps));
+        _writer = writer ?? throw new ArgumentNullException(nameof(writer));
+        Fps = fps;
+        Width = width;
+        Height = height;
+    }
+
+    public int Fps { get; }
+    public int Width { get; }
+    public int Height { get; }
+
+    /// <summary>One encoded PNG frame (any colour type; it must be W x H).</summary>
+    public void AddFrame(string clip, int index, byte[] png) => Add(clip, index, png, rgba: false);
+
+    /// <summary>One raw frame: W x H x 4 bytes of straight-alpha RGBA.</summary>
+    public void AddRgbaFrame(string clip, int index, byte[] rgba)
+    {
+        if (rgba == null || rgba.Length != Width * Height * 4) throw new ArgumentException("RGBA frame has the wrong size.", nameof(rgba));
+        Add(clip, index, rgba, rgba: true);
+    }
+
+    private void Add(string clip, int index, byte[] bytes, bool rgba)
+    {
+        if (!RainPackStore.IsValidClipName(clip)) throw new ArgumentException("Bad clip name.", nameof(clip));
+        if (index < 0) throw new ArgumentOutOfRangeException(nameof(index));
+        if (!_pending.TryGetValue(clip, out var frames)) _pending[clip] = frames = new SortedDictionary<int, (byte[], bool)>();
+        frames[index] = (bytes ?? throw new ArgumentNullException(nameof(bytes)), rgba);
+    }
+
+    /// <summary>Clips with frames still waiting for <see cref="FinishClip"/>.</summary>
+    public IReadOnlyCollection<string> PendingClips => _pending.Keys;
+
+    /// <summary>Writes the clip's strip into the bake folder and records it. Frames must run 0..n-1.</summary>
+    public void FinishClip(string clip)
+    {
+        if (!_pending.TryGetValue(clip, out var frames) || frames.Count == 0)
+            throw new InvalidOperationException($"No frames for {clip}.");
+        if (frames.Keys.Last() != frames.Count - 1)
+            throw new InvalidOperationException($"Clip {clip} is missing frames.");
+        WriteStrip(_writer.StripPath(clip), Width, Height, frames.Values.ToList());
+        _writer.AddClip(clip, frames.Count, Fps, Width, Height);
+        _pending.Remove(clip);
+    }
+
+    public void FinishAll()
+    {
+        foreach (var clip in _pending.Keys.ToList()) FinishClip(clip);
+    }
+
     /// <summary>Writes PNG frames (each W x H) as one vertical strip.</summary>
     public static void WriteStrip(string path, int width, int height, IReadOnlyList<byte[]> pngFrames) =>
         WriteStrip(path, width, height, pngFrames.Select(b => (b, false)).ToList());
