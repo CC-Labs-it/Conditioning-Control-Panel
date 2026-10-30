@@ -106,7 +106,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         // All three arrive on whatever thread found out.
-        private void OnRaffleChanged() => Dispatcher.UIThread.Post(RefreshCalendarRaffle);
+        private void OnRaffleChanged() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_raffleCard != null && PageRaffleCard == null)
+            {
+                _raffleCard = null;
+                PaintLadder();
+            }
+            RefreshCalendarRaffle();
+        });
         private void OnLinkChanged() => Dispatcher.UIThread.Post(OnTabShown);
         private void OnLockChanged() => Dispatcher.UIThread.Post(RepaintForLock);
 

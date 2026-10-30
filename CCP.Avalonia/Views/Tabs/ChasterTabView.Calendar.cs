@@ -72,7 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // Re-dot in place: a new card must not redraw crosses or replace the sheet's cells.
         internal void RefreshCalendarRaffle()
         {
-            var days = ChasterRaffle.CountedDates(ChasterHead.Service?.LastRaffleCard ?? _raffleCard);
+            var days = ChasterRaffle.CountedDates(ChasterHead.Service?.LastRaffleCard ?? PageRaffleCard);
             var utcNow = DateTime.UtcNow;
             var any = false;
             foreach (var (day, square, number) in _calendarCells)

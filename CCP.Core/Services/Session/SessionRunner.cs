@@ -312,6 +312,12 @@ namespace ConditioningControlPanel.Services
                         case "lock cards": LockCardScheduler.Instance.Stop(); break;
                     }
                 });
+            if (CurrentSession?.Settings.LockCardEnabled == true && !_deferred.IsPending("lock cards"))
+                Step("resume:lock-cards", () =>
+                {
+                    LockCardScheduler.Instance.Stop();
+                    LockCardScheduler.Instance.Start(Remaining.TotalMinutes);
+                });
             Step("resume:mind-wipe", CoreMindWipe.Stop);
         }
 

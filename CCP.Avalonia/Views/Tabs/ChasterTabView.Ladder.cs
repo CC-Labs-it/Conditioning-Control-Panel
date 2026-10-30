@@ -34,6 +34,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private DispatcherTimer? _addedRoll;
         private bool _ladderPinned, _overLadder, _ladderLoading, _ladderBoardLoading;
         private RaffleCard? _raffleCard;
+        private int _raffleCardEpoch;
+        private RaffleCard? PageRaffleCard => ChasterHead.Service is { } chaster
+            && chaster.RaffleEpoch != _raffleCardEpoch ? null : _raffleCard;
         private LadderBoard? _ladderBoard;
         private string? _scrapSignature;
         private DateTime _ladderFetchedUtc = DateTime.MinValue;
@@ -266,8 +269,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _ladderLoading = true;
             try
             {
+                var epoch = chaster.RaffleEpoch;
                 var card = await Task.Run(() => chaster.RaffleAsync());
                 _raffleCard = card;
+                _raffleCardEpoch = epoch;
                 _ladderFetchedUtc = DateTime.UtcNow;
                 PaintLadder();
                 RefreshCalendarRaffle();
@@ -287,13 +292,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void ShowRaffleCard(RaffleCard? card)
         {
             _raffleCard = card;
+            _raffleCardEpoch = ChasterHead.Service?.RaffleEpoch ?? 0;
             PaintLadder();
             RefreshCalendarRaffle();
         }
 
         private void PaintLadder()
         {
-            var card = _raffleCard;
+            var card = PageRaffleCard;
             RafflePips.Children.Clear();
             string? state = null;
             LadderRows.IsVisible = card != null;

@@ -88,9 +88,14 @@ public sealed class ChasterLadderTests
 
     private static Point Centre(Window w, Control c) => c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), w)!.Value;
 
-    [Fact]
-    public Task ServiceCardUpdatesDotsWithoutRedrawingTheSheet() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, _) =>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task ServiceCardUpdatesDotsWithoutRedrawingTheSheet(bool subscribed) => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, _) =>
     {
+        var oldId = CoreAccount.UnifiedUserId;
+        CoreAccount.UnifiedUserId = "raffle-owner";
+        chaster.WatchIdentity();
         var tab = new ChasterTabView();
         tab.Subscribe(true);
         try
@@ -107,8 +112,15 @@ public sealed class ChasterLadderTests
             Assert.Same(square, grid.Children[0]);
             Assert.Contains(cross, plate.Children);
             Assert.Single(plate.Children.OfType<global::Avalonia.Controls.Shapes.Ellipse>(), e => Equals(e.Tag, ChasterTabView.RaffleDotTag));
+            tab.ShowRaffleCard(chaster.LastRaffleCard); // the page also cached this account's card
+            if (!subscribed) tab.Subscribe(false);
+            CoreAccount.UnifiedUserId = subscribed ? null : "raffle-other";
+            Dispatcher.UIThread.RunJobs();
+            if (!subscribed) tab.RefreshCalendarRaffle(); // next visit, without a live subscription
+            Assert.DoesNotContain(plate.Children.OfType<global::Avalonia.Controls.Shapes.Ellipse>(), e => Equals(e.Tag, ChasterTabView.RaffleDotTag));
+            Assert.False(tab.FindControl<DockPanel>("CalendarRaffleKey")!.IsVisible);
         }
-        finally { tab.Subscribe(false); }
+        finally { tab.Subscribe(false); CoreAccount.UnifiedUserId = oldId; }
     }));
 
     [Fact]

@@ -124,6 +124,21 @@ public sealed class SessionRunnerTests : IDisposable
     }
 
     [Fact]
+    public void PanicStartRestoresTheRemainingLockCardWindow()
+    {
+        var session = OneMinute();
+        session.DurationMinutes = 2;
+        _runner.Start(session);
+        _runner.Pause();
+        _runner._pausedElapsed = TimeSpan.FromSeconds(30);
+        CoreEngine.Stop();
+        CoreEngine.Start(resumingSession: true);
+        Assert.Null(LockCardScheduler.Instance.LastWindowMinutes);
+        _runner.ResumeAfterEngineStart();
+        Assert.InRange(LockCardScheduler.Instance.LastWindowMinutes ?? -1, 1.49, 1.5);
+    }
+
+    [Fact]
     public void PauseAndResumeRepaintEvenWhileTheTimerIsHeld()
     {
         _runner.Start(OneMinute());
