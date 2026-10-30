@@ -59,8 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// finished game asks for the count and resolves on the answer instead of being written off.</para>
     ///
     /// <para><b>Stubbed:</b> the VideoService lease/wedge watchdog/native poison cooldown (HwndHost
-    /// teardown safety with no counterpart here), the metadata-cache duration (LengthChanged corrects
-    /// the 30 s fallback within a second) and VideoDiag.</para>
+    /// teardown safety with no counterpart here), and VideoDiag. The game shares the mandatory-video metadata cache.</para>
     ///
     /// <para><c>Loaded</c> became <c>Opened</c>: WPF's Loaded fires synchronously inside Show(),
     /// which ShowOnAllMonitors' completion de-duplication leans on, and Avalonia's Opened is the
@@ -384,23 +383,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void AdoptRealDuration(double seconds)
         {
             if (!_isPrimary || _videoEnded || _isCleaningUp) return;
-            if (seconds <= 0 || Math.Abs(seconds - _videoDurationSeconds) < 0.5) return;
+            if (seconds <= 0 || Math.Abs(seconds - _videoDurationSeconds) < 1.0) return;
 
             _videoDurationSeconds = seconds;
             LastVideoDurationSeconds = seconds;
             CalculateTargetBubbles();
             _sharedTargetCount = _targetBubbleCount;
+            // WPF BubbleCountWindow.xaml.cs:736-748: keep every window's target and the
+            // active spawn cadence in step with the corrected clock.
+            foreach (var window in _allWindows) window._targetBubbleCount = _targetBubbleCount;
+            if (_bubbleSpawnTimer != null)
+                _bubbleSpawnTimer.Interval = TimeSpan.FromMilliseconds(
+                    _videoDurationSeconds * 1000 / Math.Max(1, _targetBubbleCount) * 0.7);
             StartSafetyTimer(_videoDurationSeconds);
         }
 
-        /// <summary>WPF's primary LibVLC start: the 30 s fallback clock (the metadata cache is not
-        /// ported; LengthChanged corrects it), bubbles, then Play at master volume. False when no
+        // WPF BubbleCountWindow.xaml.cs:705-718: shared cache, asynchronous warm on miss,
+        // and a 30 s fallback. No metadata parse blocks the UI thread.
+        internal static double ResolveVideoDurationSeconds(string path)
+        {
+            try
+            {
+                if (Overlays.MandatoryVideoOverlay.LengthOf(path) is double seconds && seconds > 0) return seconds;
+            }
+            catch { }
+            return FallbackDurationSeconds;
+        }
+
+        /// <summary>WPF's primary LibVLC start: the cached duration or 30 s fallback clock, bubbles, then Play at master volume. False when no
         /// LibVLC is available, which ends the game as a start failure does in WPF.</summary>
         private bool StartPlayback()
         {
             var vlc = LibVlcAudio.Shared;
             if (vlc == null) return false;
-            _videoDurationSeconds = FallbackDurationSeconds;
+            _videoDurationSeconds = ResolveVideoDurationSeconds(_videoPath);
             LastVideoDurationSeconds = _videoDurationSeconds;
             CalculateTargetBubbles();
             _sharedTargetCount = _targetBubbleCount;
