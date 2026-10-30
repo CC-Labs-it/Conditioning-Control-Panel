@@ -50,6 +50,24 @@ export function wearable(kind,id,owns=NONE_OWNED) {
   if (!table || !(id in table)) return kind === 'outfit';
   return !!owns[kind+'s']?.has(id);
 }
+/** A Prize Counter Wear (desktop host `owned { grants, wear }` after the counter closes from the garage, CONTRACT.md
+ * section 7): the counter row id -> { kind, id, label, values } the garage puts on, values shaped like its own picker's.
+ * A row opens what its grant `cos.<row>` opens; a bundle that opens two paints keeps the one worn already, else its
+ * first. Null for an unknown, unowned or dark id: nothing changes. */
+export function wearPick(item,s=DEFAULT,{locked=LOCKED,owns=NONE_OWNED}={}) {
+  if(typeof item!=='string'||item.length>64||!/^[a-z0-9.-]+$/.test(item))return null;
+  const body=/^kart\.body\.([a-z0-9-]+)$/.exec(item);
+  if(body){const k=KARTS.find(([id])=>id===body[1]);return k&&!locked.has(k[0])?{kind:'kart',id:k[0],label:k[1],values:{kart:k[0]}}:null;}
+  const grant='cos.'+item;
+  for(const [kind,table,list]of [['outfit',SHOP_OUTFITS,OUTFITS],['paint',SHOP_PAINTS,PAINTS],['umbrella',SHOP_UMBRELLAS,UMBRELLAS],['trail',SHOP_TRAILS,TRAILS]]){
+    const ids=list.map(([id])=>id).filter(id=>table[id]?.includes(grant)&&wearable(kind,id,owns));
+    if(!ids.length)continue;
+    const id=kind==='paint'&&s&&!s.original&&ids.includes(s.paint)?s.paint:ids[0],label=list.find(r=>r[0]===id)[1];
+    const values=kind==='paint'?{paint:id,original:false,...(PAINT_COLORS[id]?{...PAINT_COLORS[id],skin:label}:{})}:{[kind]:id};
+    return {kind,id,label,values};
+  }
+  return null;
+}
 export function cleanGarage(saved,locked=LOCKED,owns=NONE_OWNED) {
   const s = {...DEFAULT};
   if (!saved || typeof saved !== 'object') return s;
