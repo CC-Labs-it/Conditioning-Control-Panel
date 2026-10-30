@@ -56,6 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 (_heldAccount, _revision) = (accountId, revision);
                 _grants = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
             }
+            PrizeGrants.RaiseGrantsChanged();   // WPF OwnershipService -> PrizeGrants.GrantsChanged
         }
 
         /// <summary>Test cleanup (P02): forget every held snapshot.</summary>

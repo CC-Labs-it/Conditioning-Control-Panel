@@ -73,6 +73,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         // ---- settings instance tracking (WPF: SettingsHook + ISettingsRebindable) --------------
 
         private AppSettings? _hooked;
+        private bool _ownershipAttached;
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
@@ -80,7 +81,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
             CoreMods.ModChanged += OnModChanged;
             Overlays.BubbleOverlay.XpBudgetChanged += UpdateAmbientXpBudgetLine;   // WPF AmbientXpBudgetChanged
+            _ownershipAttached = true;
+            Services.Prizes.PrizeGrants.GrantsChanged += OnGrantsChanged;
+            CoreAccount.UnifiedIdentityChanged += OnIdentityChanged;
             RebindToCurrentSettings();
+            RebuildMotionPicker();   // grants may have changed while detached (WPF OnLoaded:30)
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -88,6 +93,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
             CoreMods.ModChanged -= OnModChanged;
             Overlays.BubbleOverlay.XpBudgetChanged -= UpdateAmbientXpBudgetLine;
+            _ownershipAttached = false;
+            Services.Prizes.PrizeGrants.GrantsChanged -= OnGrantsChanged;
+            CoreAccount.UnifiedIdentityChanged -= OnIdentityChanged;
             Unhook();
             base.OnDetachedFromVisualTree(e);
         }
@@ -159,11 +167,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         // ---- Bubbles v2 motion picker (WPF BubblePopFeatureControl.xaml.cs:310-396) -----------
-        // WPF rebuilds on PrizeGrants.GrantsChanged. This picker currently reads the head
-        // snapshot on construction; live grant refresh remains with svc-prize-ownership.
+        // WPF BubblePopFeatureControl.xaml.cs:24-46,299-307: listen only while attached,
+        // marshal grants to the UI thread, and ignore a queued repaint after detach.
+        private void OnIdentityChanged(object? sender, EventArgs e) => OnGrantsChanged();
+
+        private void OnGrantsChanged() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_ownershipAttached) RebuildMotionPicker();
+        });
 
         /// <summary>Float up always; Rain / Spiral In only when owned (each with its v2 pill); Mix once
-        /// any v2 style is owned. With nothing owned the box stays hidden. Caller holds _isLoading.</summary>
+        /// any v2 style is owned. With nothing owned the box stays hidden.</summary>
         private void RebuildMotionPicker()
         {
             bool rain = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.BubbleRain);
@@ -171,11 +185,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             // ponytail: WPF also keeps the box up for the V2GetItRow (RowGetBubblesV2) and shows
             // ChkBrainDrainBubble with the same grants; neither is ported (feat-bubble-pop).
             V2Box.IsVisible = MotionRow.IsVisible = rain || spiral;
-            CmbMotion.Items.Clear();
-            AddMotionChoice(BubbleMotionStyle.FloatUp, "bubble_motion_float_up", v2: false);
-            if (rain) AddMotionChoice(BubbleMotionStyle.Rain, "bubble_motion_rain", v2: true);
-            if (spiral) AddMotionChoice(BubbleMotionStyle.SpiralIn, "bubble_motion_spiral_in", v2: true);
-            if (rain || spiral) AddMotionChoice(BubbleMotionStyle.Mix, "bubble_motion_mix", v2: false);
+            var wasLoading = _isLoading;
+            _isLoading = true;
+            try
+            {
+                CmbMotion.Items.Clear();
+                AddMotionChoice(BubbleMotionStyle.FloatUp, "bubble_motion_float_up", v2: false);
+                if (rain) AddMotionChoice(BubbleMotionStyle.Rain, "bubble_motion_rain", v2: true);
+                if (spiral) AddMotionChoice(BubbleMotionStyle.SpiralIn, "bubble_motion_spiral_in", v2: true);
+                if (rain || spiral) AddMotionChoice(BubbleMotionStyle.Mix, "bubble_motion_mix", v2: false);
+                SelectMotion(CoreSettings.Current.BubbleMotionStyle);
+            }
+            finally { _isLoading = wasLoading; }
         }
 
         private void SelectMotion(BubbleMotionStyle current)

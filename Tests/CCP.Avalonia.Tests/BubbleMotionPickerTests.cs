@@ -25,16 +25,7 @@ public sealed class BubbleMotionPickerTests
     [Fact]
     public Task PickerListsOwnedStylesWritesTheSettingAndLocksDuringASession() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        if (Application.Current is null)
-        {
-            // Same portable font mapping as QuestsDepthTests: this must also run alone on Linux.
-            var fonts = AppFonts.Options();
-            var mappings = new Dictionary<string, FontFamily>(fonts.FontFamilyMappings!);
-            mappings["Segoe UI"] = mappings["Segoe UI Black"] = new FontFamily(AppFonts.Inter);
-            fonts.FontFamilyMappings = mappings;
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(fonts).UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        }
+        Setup();
         LocalizationManager.Instance.SetLanguage("en");
         var seam = PrizeOwnership.IsGranted;
         var saved = CoreSettings.Current.BubbleMotionStyle;
@@ -91,4 +82,72 @@ public sealed class BubbleMotionPickerTests
         }
         return Task.CompletedTask;
     });
+    [Fact]
+    public Task GrantsAfterConstructionRefreshOnUiThreadAndDetachStopsListening() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var settings = CoreSettings.Current;
+        settings.OfflineMode = false;
+        settings.UnifiedId = "bubble-owner";
+        CoreSecrets.RetrieveProvider = n => n == CoreSecrets.AuthToken ? "test-token" : null;
+        PrizeOwnership.IsGranted = PrizeOwnership.Held;
+        PrizeOwnership.ResetHeld();
+        settings.BubbleMotionStyle = BubbleMotionStyle.SpiralIn;
+        var panel = new BubblePopFeatureControl();
+        var picker = panel.FindControl<ComboBox>("CmbMotion")!;
+        var box = panel.FindControl<Border>("V2Box")!;
+        var host = new Window { Content = panel };
+        host.Show();
+        try
+        {
+            Assert.False(box.IsVisible);
+            // The same accepted snapshot a purchase reply supplies, arriving off the UI thread.
+            Task.Run(() => PrizeOwnership.ApplySnapshot("bubble-owner", 1, new[] { PrizeOwnership.BubbleRain })).GetAwaiter().GetResult();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(box.IsVisible);
+            Assert.Equal(new[] { BubbleMotionStyle.FloatUp, BubbleMotionStyle.Rain, BubbleMotionStyle.Mix },
+                picker.Items.OfType<ComboBoxItem>().Select(i => (BubbleMotionStyle)i.Tag!).ToArray());
+            Assert.Equal(BubbleMotionStyle.SpiralIn, settings.BubbleMotionStyle); // repaint must not save fallback
+            PrizeOwnership.ApplySnapshot("bubble-owner", 2, new[] { PrizeOwnership.BubbleRain, PrizeOwnership.BubbleSpiralIn });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(BubbleMotionStyle.SpiralIn, ((ComboBoxItem)picker.SelectedItem!).Tag);
+            Assert.Equal(4, picker.Items.Count);
+            settings.UnifiedId = "other-owner";
+            CoreAccount.UnifiedUserId = "other-owner";
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(box.IsVisible);
+            settings.UnifiedId = "bubble-owner";
+            CoreAccount.UnifiedUserId = "bubble-owner";
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(box.IsVisible);
+            var first = picker.Items[0];
+            PrizeOwnership.ApplySnapshot("bubble-owner", 3, System.Array.Empty<string>());
+            host.Content = null; // also invalidate the repaint already queued above
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(first, picker.Items[0]);
+            var changed = (System.Delegate?)typeof(ConditioningControlPanel.Services.Prizes.PrizeGrants).GetField("GrantsChanged",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null);
+            Assert.DoesNotContain(changed?.GetInvocationList() ?? System.Array.Empty<System.Delegate>(), d => ReferenceEquals(d.Target, panel));
+            host.Content = panel;
+            Assert.False(box.IsVisible); // reload catches the snapshot missed while detached
+            Assert.Single(picker.Items);
+        }
+        finally { host.Close(); Dispatcher.UIThread.RunJobs(); }
+        return Task.CompletedTask;
+    });
+
+    private static void Setup()
+    {
+        if (Application.Current is null)
+        {
+            // Same portable font mapping as QuestsDepthTests: this must also run alone on Linux.
+            var fonts = AppFonts.Options();
+            var mappings = new Dictionary<string, FontFamily>(fonts.FontFamilyMappings!);
+            mappings["Segoe UI"] = mappings["Segoe UI Black"] = new FontFamily(AppFonts.Inter);
+            fonts.FontFamilyMappings = mappings;
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(fonts).UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        }
+    }
+
 }
