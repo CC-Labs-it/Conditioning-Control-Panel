@@ -738,6 +738,9 @@ namespace ConditioningControlPanel.Avalonia
                     Platform.V2PurchaseHead.Service = v2Purchase;
                     CoreAccount.UnifiedIdentityChanged += (_, _) => v2Purchase.Invalidate();
                 }
+                Platform.SparklesHead.Service = Platform.SparklesHead.Create(
+                    Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"),
+                    Environment.GetEnvironmentVariable(Platform.V2PurchaseHead.EnvVar));
                 // WPF App.xaml.cs:3010-3013: the task runner the gate's action starts.
                 try { Platform.LeashTaskHost.Start(Platform.LeashHead.Service as ConditioningControlPanel.Services.Leash.LeashService); }
                 catch (Exception exRunner) { Serilog.Log.Warning(exRunner, "[Leash] task runner could not be built"); }
