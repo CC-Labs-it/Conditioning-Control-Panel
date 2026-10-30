@@ -8,8 +8,7 @@ namespace ConditioningControlPanel.Services.Companion
     /// The settings half of WPF 7.1.5 <c>Services/Companion/CompanionService.cs</c>, same numbers: switching
     /// (:185), the perk XP modifier (:226), companion XP and its level loop (:276), the Brain Parasite drain
     /// (:393) and active time (:429). The head owns the timers and the reactions. Named apart from WPF's type.
-    /// ponytail: ApplyCompanionPrompt (:476) and the autonomy bonus's IsActionInProgress wait for a community-prompt
-    /// service and an autonomy service on this head; XPDrained for the drain flash's ported view.
+    /// ponytail: the autonomy bonus's IsActionInProgress waits for an autonomy service.
     /// </summary>
     public static class CompanionCore
     {
@@ -51,6 +50,7 @@ namespace ConditioningControlPanel.Services.Companion
             CoreSettings.Save();
             var progress = CoreSettings.Current.ActiveCompanionProgress;
             if (progress.FirstActivated == DateTime.MinValue) progress.FirstActivated = DateTime.Now;
+            InstalledCommunityPrompts.ApplyAssigned(newCompanion);
             try { Switched?.Invoke(newCompanion); } catch (Exception ex) { Log.Debug("CompanionSwitched handler: {E}", ex.Message); }
             Log.Information("Switched companion: {Old} -> {New}",
                 CompanionDefinition.GetById(old).Name, CompanionDefinition.GetById(newCompanion).Name);

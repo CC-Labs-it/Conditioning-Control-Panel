@@ -1,4 +1,6 @@
 {
+  "title_select_companion_personality": "Selecionar personalidade de IA para {0}",
+  "filter_personality_json_files": "Arquivos JSON de personalidade",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Este aprimoramento está publicado no catálogo da comunidade.",
   "deeper_submission_badge_pending": "Pendente",

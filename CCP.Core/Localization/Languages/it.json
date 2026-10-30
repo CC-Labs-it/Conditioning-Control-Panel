@@ -1,4 +1,6 @@
 {
+  "title_select_companion_personality": "Scegli la personalità IA per {0}",
+  "filter_personality_json_files": "File JSON di personalità",
   "Sparkles_Slip_Paid": "Pagato",
   "Sparkles_Slip_Place": "Posto {0} su {1}",
   "Sparkles_Slip_Gold": "Oro",
