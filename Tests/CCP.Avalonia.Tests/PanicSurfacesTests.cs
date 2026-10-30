@@ -87,7 +87,7 @@ public sealed class PanicSurfacesTests
         "leash-task",
         "tour",
         "games",
-        "first-show",
+        "first-show", "quest-stamps", "quest-voice",
         "voice-capture",
         "ai-followups",
         "blink-trainer",
