@@ -270,6 +270,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _raffleCard = card;
                 _ladderFetchedUtc = DateTime.UtcNow;
                 PaintLadder();
+                RefreshCalendarRaffle();
                 if (LadderPopup.IsOpen) UnrollLadder();
             }
             catch (Exception ex) { Serilog.Log.Debug(ex, "[Chaster] raffle fetch"); }
@@ -287,6 +288,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             _raffleCard = card;
             PaintLadder();
+            RefreshCalendarRaffle();
         }
 
         private void PaintLadder()

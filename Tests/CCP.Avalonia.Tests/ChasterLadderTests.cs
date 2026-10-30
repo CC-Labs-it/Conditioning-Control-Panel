@@ -89,6 +89,29 @@ public sealed class ChasterLadderTests
     private static Point Centre(Window w, Control c) => c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), w)!.Value;
 
     [Fact]
+    public Task ServiceCardUpdatesDotsWithoutRedrawingTheSheet() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, _) =>
+    {
+        var tab = new ChasterTabView();
+        tab.Subscribe(true);
+        try
+        {
+            var first = new DateTime(2026, 10, 1);
+            tab.BuildCalendar((first, first.AddDays(4)), first.AddDays(4));
+            var grid = tab.FindControl<UniformGrid>("Calendar")!;
+            var square = (Border)grid.Children[0];
+            var plate = (Panel)square.Child!;
+            var cross = plate.Children.Last();
+            Assert.DoesNotContain(plate.Children.OfType<global::Avalonia.Controls.Shapes.Ellipse>(), e => Equals(e.Tag, ChasterTabView.RaffleDotTag));
+            Assert.NotNull(await chaster.RaffleAsync());
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(square, grid.Children[0]);
+            Assert.Contains(cross, plate.Children);
+            Assert.Single(plate.Children.OfType<global::Avalonia.Controls.Shapes.Ellipse>(), e => Equals(e.Tag, ChasterTabView.RaffleDotTag));
+        }
+        finally { tab.Subscribe(false); }
+    }));
+
+    [Fact]
     public Task RaffleReachesOnlyTheLoopbackProxy() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         await Run(async (chaster, fake) =>

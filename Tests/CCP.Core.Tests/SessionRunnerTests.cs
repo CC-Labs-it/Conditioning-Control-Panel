@@ -66,6 +66,101 @@ public sealed class SessionRunnerTests : IDisposable
         },
     };
 
+    [Fact]
+    public void ThrowingProgressDoesNotEscapeOrPreventTheNextTick()
+    {
+        _runner.Start(OneMinute());
+        var calls = 0;
+        _runner.Ticked += () => { calls++; throw new InvalidOperationException("progress probe"); };
+        _runner.Tick(TimeSpan.FromSeconds(1));
+        _runner.Tick(TimeSpan.FromSeconds(2));
+        Assert.Equal(2, calls);
+        Assert.True(_runner.IsRunning);
+        _runner.Tick(TimeSpan.FromMinutes(1));
+        Assert.False(_runner.IsRunning);
+        Assert.NotNull(_ready);
+    }
+
+    [Fact]
+    public void ThrowingSettingsRestoreStillReleasesPoolsAndRaisesStopped()
+    {
+        var stopped = false;
+        var threw = false;
+        var snapshot = SessionSettingsSnapshot.Capture(CoreSettings.Current);
+        _runner.Start(OneMinute());
+        System.ComponentModel.PropertyChangedEventHandler handler = (_, e) =>
+        {
+            if (e.PropertyName == "FlashEnabled") { threw = true; throw new InvalidOperationException("restore probe"); }
+        };
+        var settings = CoreSettings.Current;
+        settings.PropertyChanged += handler;
+        _runner.Stopped += (_, _) => stopped = true;
+        try
+        {
+            _runner.Stop();
+            Assert.True(threw);
+            Assert.True(stopped);
+            Assert.Null(_runner.CurrentSession);
+            Assert.False(CoreEngine.IsRunning);
+        }
+        finally { settings.PropertyChanged -= handler; snapshot.RestoreTo(settings); }
+    }
+
+    [Fact]
+    public void UserResumeRestoresDeferredStartsWithoutCountingANewRun()
+    {
+        var session = OneMinute();
+        session.Settings.FlashStartMinute = 1;
+        session.Settings.MindWipeEnabled = false;
+        _runner.Start(session);
+        _runner.Pause();
+        CoreEngine.Stop();
+        var count = CoreSettings.Current.TotalSessions;
+        CoreEngine.Start(resumingSession: true);
+        _runner.ResumeAfterEngineStart();
+        Assert.False(_runner.IsPaused);
+        Assert.False(CoreFlash.IsRunning);
+        Assert.Equal(count, CoreSettings.Current.TotalSessions);
+    }
+
+    [Fact]
+    public void PauseAndResumeRepaintEvenWhileTheTimerIsHeld()
+    {
+        _runner.Start(OneMinute());
+        var paused = new System.Collections.Generic.List<bool>();
+        _runner.Ticked += () => paused.Add(_runner.IsPaused);
+        _runner.Pause();
+        _runner.Resume();
+        Assert.Equal(new[] { true, false }, paused);
+        Assert.Equal(" [PAUSED]", SessionClockRules.PauseMark(true, "PAUSED"));
+        Assert.False(SessionClockRules.ResumeStartsEngine(false, true));
+    }
+
+    [Fact]
+    public void StepFailuresReportOncePerStepAndResetForTheNextSession()
+    {
+        var failures = new SessionClockRules.StepFailures();
+        Assert.True(failures.Note("tick:ramp"));
+        Assert.False(failures.Note("tick:ramp"));
+        Assert.True(failures.Note("stop"));
+        Assert.Equal("stop x1, tick:ramp x2", failures.Summary());
+        failures.Clear();
+        Assert.False(failures.Any);
+        Assert.True(failures.Note("tick:ramp"));
+    }
+
+    [Fact]
+    public void RaffleDatesUseUtcEvenWhenTheLocalSheetIsAhead()
+    {
+        var utc = new DateTime(2026, 10, 8, 23, 30, 0, DateTimeKind.Utc);
+        var dates = new System.Collections.Generic.HashSet<DateTime> { utc.Date, utc.Date.AddDays(1) };
+        var cells = ConditioningControlPanel.Services.Chaster.LockCalendar.CellsFor(utc.Date, utc.Date.AddDays(1),
+            utc.Date.AddDays(1), dates, utc);
+        Assert.True(cells[0].RaffleCounted);
+        Assert.False(cells[1].RaffleCounted);
+        Assert.False(cells[2].RaffleCounted); // key never gets a dot
+    }
+
     private static JObject SettingsJson() =>
         JObject.Parse(JsonConvert.SerializeObject(CoreSettings.Current, Formatting.Indented));   // = settings.json
 

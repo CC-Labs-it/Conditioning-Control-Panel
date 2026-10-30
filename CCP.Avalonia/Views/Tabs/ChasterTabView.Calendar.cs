@@ -4,6 +4,9 @@
 // in), the padlock stamp is a glyph not the padlock art mask, the key is the key glyph on gold not
 // the foil sticker, tonight's ring a plain ellipse; the draw-in, sheet nudge, tonight's tag and its bob (Fx.cs) are not ported.
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
@@ -25,6 +28,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private static readonly FontFamily CalMono = new("Consolas, Courier New, monospace");
         private (DateTime Start, DateTime End, DateTime Today)? _calendarKey;
 
+        private readonly List<(LockDay Day, Border Square, int Number)> _calendarCells = new();
+        internal const string RaffleDotTag = "raffle-day";
+
         /// <summary>WPF CalendarSpan: the lock's days in local time; nothing without an end or with a hidden timer.</summary>
         internal static (DateTime Start, DateTime End)? CalendarSpan(LockSnapshot? snapshot, DateTime localToday)
         {
@@ -40,18 +46,54 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (span is not { } lockSpan)
             {
                 _calendarKey = null;
+                _calendarCells.Clear();
+                CalendarRaffleKey.IsVisible = false;
                 Calendar.Children.Clear();
                 CalendarRow.IsVisible = false;
                 return;
             }
             var key = (lockSpan.Start.Date, lockSpan.End.Date, today.Date);
-            if (_calendarKey == key && CalendarRow.IsVisible) return;   // a tick that changes nothing redraws nothing
+            if (_calendarKey == key && CalendarRow.IsVisible) { RefreshCalendarRaffle(); return; }   // a tick that changes nothing redraws nothing
             _calendarKey = key;
             Calendar.Children.Clear();
+            _calendarCells.Clear();
             var elided = LockCalendar.ElidedDays(lockSpan.Start, lockSpan.End);
             foreach (var day in LockCalendar.CellsFor(lockSpan.Start, lockSpan.End, today))
-                Calendar.Children.Add(Cell(day, (day.Date - lockSpan.Start.Date).Days + 1, elided));
+            {
+                var number = (day.Date - lockSpan.Start.Date).Days + 1;
+                var square = Cell(day, number, elided);
+                Calendar.Children.Add(square);
+                _calendarCells.Add((day, square, number));
+            }
+            RefreshCalendarRaffle();
             CalendarRow.IsVisible = true;
+        }
+
+        // Re-dot in place: a new card must not redraw crosses or replace the sheet's cells.
+        internal void RefreshCalendarRaffle()
+        {
+            var days = ChasterRaffle.CountedDates(ChasterHead.Service?.LastRaffleCard ?? _raffleCard);
+            var utcNow = DateTime.UtcNow;
+            var any = false;
+            foreach (var (day, square, number) in _calendarCells)
+            {
+                if (day.IsKey || square.Child is not Panel plate) continue;
+                var counted = LockCalendar.CountsForRaffle(day.Date, days, utcNow);
+                any |= counted;
+                var dot = plate.Children.OfType<Ellipse>().FirstOrDefault(e => Equals(e.Tag, RaffleDotTag));
+                if (counted && dot == null) plate.Children.Add(new Ellipse
+                {
+                    Width = 6, Height = 6, Fill = PipCounted, Tag = RaffleDotTag, IsHitTestVisible = false,
+                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom,
+                    Margin = new Thickness(0, 0, 0, 3),
+                });
+                else if (!counted && dot != null) plate.Children.Remove(dot);
+                if (day.Elided) continue;
+                if (day.Served) ToolTip.SetTip(square, Loc.GetF(counted ? "chaster_cal_served_raffle" : "chaster_cal_served", number));
+                else if (day.Today) ToolTip.SetTip(square, Loc.Get("chaster_chain_tonight")
+                    + (counted ? Environment.NewLine + Loc.Get("chaster_cal_raffle_key") : ""));
+            }
+            CalendarRaffleKey.IsVisible = any;
         }
 
         /// <summary>A ruled square with its number; a cross (served), padlock (to serve), red ring (tonight) or the key.</summary>
