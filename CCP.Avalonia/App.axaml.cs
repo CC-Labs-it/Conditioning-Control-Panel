@@ -69,6 +69,24 @@ namespace ConditioningControlPanel.Avalonia
         internal static SessionRunner? Sessions { get; set; }
         /// <summary>The app-lifetime media recap (WPF App.MediaHistory), or null on the headless render path.</summary>
         internal static MediaHistoryService? MediaHistory { get; set; }
+        /// <summary>The tube the countdown speaks through. Test seam: a headless app cannot swap its lifetime after init.</summary>
+        internal static Func<Views.AvatarTube.AvatarTubeWindow?> DescentTube = () => Views.AvatarTube.AvatarTubeWindow.Live;
+
+        /// <summary>WPF App.xaml.cs:3196-3206: arm before the shell; a missing tube leaves the line retryable.</summary>
+        internal static void StartDescentCountdown()
+        {
+            DescentCountdown = new Services.Descent.DescentCountdownService
+            {
+                Speaker = line =>
+                {
+                    if (DescentTube() is not { } avatar) return false;
+                    avatar.GigglePriority(line, playSound: false, aiGenerated: false);
+                    return true;
+                },
+            };
+            DescentCountdown.Start();
+        }
+
         /// <summary>THE FUSE (WPF App.DescentCountdown). Built before the shell so its spark can subscribe.</summary>
         internal static Services.Descent.DescentCountdownService? DescentCountdown { get; set; }
         internal static Services.Descent.DescentService? Descent { get; set; }
@@ -646,9 +664,7 @@ namespace ConditioningControlPanel.Avalonia
                 // After the version seed (the proxy client's headers carry it). Fail closed; the
                 // startup validate runs on the UI thread as WPF's does (App.xaml.cs OnStartup).
                 // WPF App.xaml.cs:2856. Start() arms nothing without a cached ceremony timestamp.
-                // ponytail: no Speaker - the tube's speech coupling is not ported, so phase lines stay unsaid.
-                DescentCountdown = new Services.Descent.DescentCountdownService();
-                DescentCountdown.Start();
+                StartDescentCountdown();
                 Descent = new Services.Descent.DescentService
                 {
                     // ponytail: full clean-ledger level/XP poll adoption needs the remaining profile lane.
