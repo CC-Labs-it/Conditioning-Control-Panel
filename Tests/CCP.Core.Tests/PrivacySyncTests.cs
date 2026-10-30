@@ -148,4 +148,30 @@ public sealed class PrivacySyncTests
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
         }
     }
+    [Fact]
+    public async Task PurchaseRetryWaitsOutCooldownOnceBeforeCreditingTheServer()
+    {
+        var previous = CoreSettings.ServiceProvider;
+        var login = CoreAccount.IsLoggedInProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        CoreAccount.IsLoggedInProvider = () => true;
+        var handler = new FakeSync();
+        var sync = new SyncPush(() => Array.Empty<string>(), () => false, handler);
+        try
+        {
+            var s = settings.Current;
+            s.UnifiedId = "purchase-test"; s.AuthToken = "fake"; s.OfflineMode = false;
+            s.LastConfirmedServerXp = 0;
+            var now = DateTime.UtcNow;
+            sync.UtcNow = () => now;
+            int waits = 0;
+            sync.PurchaseRetryDelay = delay => { waits++; now += delay; return Task.CompletedTask; };
+            sync.MarkLoaded(null);
+            Assert.True(await sync.PushAsync("initial"));
+            Assert.True(await sync.SyncBeforePurchaseRetryAsync());
+            Assert.Equal(1, waits); Assert.Equal(2, handler.Bodies.Count);
+        }
+        finally { sync.Reset(); CoreSettings.ServiceProvider = previous; CoreAccount.IsLoggedInProvider = login; }
+    }
 }
