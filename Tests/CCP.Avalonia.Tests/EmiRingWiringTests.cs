@@ -44,7 +44,7 @@ public sealed class EmiRingWiringTests
     {
         var ids = EmiTargets.All.Select(t => t.Id).ToList();
         // Table order, minus exactly the doors this head cannot open.
-        var hidden = new[] { "arcademy", "dtrh", "intake", "spiral", "goon", "backroom", "justdrop" };
+        var hidden = new[] { "arcademy", "spiral", "goon", "backroom" };
         Assert.Equal(EmiDoors.All.Select(d => d.Id).Except(hidden), ids);
 
         // A brand new user: no pins, no usage, so the first six available doors in order.
@@ -65,8 +65,8 @@ public sealed class EmiRingWiringTests
     public Task DeskOpensTheRingAndCountsADismissal() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .WithInterFont().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         return WithFreshState(() =>
         {
@@ -90,8 +90,8 @@ public sealed class EmiRingWiringTests
     public Task BookTakeMeThereOpensTheDoorThroughThePick() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .WithInterFont().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         return WithFreshState(() =>
         {
@@ -121,8 +121,8 @@ public sealed class EmiRingWiringTests
     public Task OptionsStopPollingOnCloseAndSurviveANullRead() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .WithInterFont().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         int reads = 0;
         var win = new EmiOptionsWindow { ReadPointer = () => { reads++; return null; } };
@@ -145,8 +145,8 @@ public sealed class EmiRingWiringTests
     public Task OptionsFoldOnAClickAwayOrEscapeButNotOnItself() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .WithInterFont().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         (PixelPoint, bool, bool)? now = null;
         var win = new EmiOptionsWindow { ReadPointer = () => now };
