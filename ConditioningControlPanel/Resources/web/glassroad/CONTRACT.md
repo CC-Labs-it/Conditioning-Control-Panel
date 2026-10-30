@@ -261,6 +261,22 @@ GET /v2/race/profile (every platform, through the same lobby transport). The las
 `glassroad.owned.v1`; signed out owns nothing. A saved pick that is locked now falls back to the free kart.
 CLIENT LOCK ONLY: a room seat's `look.vehicle` is checked against `LOOK_VEHICLES`, never against ownership. Looks
 never reach the sim, `onlineCourseHash` or room validation, so no room redeploy follows a lock change.
+Owned kart looks (7.2, lane B3-G1, `hud/garageState.js` SHOP_*): the Prize Counter also sells three EMI outfits
+(`kart.outfit.pit-crew|ringmaster|ballerina`), the pattern bundle (`kart.paint.pattern-bundle` = hearts + spiral; the
+retired v1 rows `kart.paint.hearts` / `kart.paint.spiral` keep theirs, `pink-checker` is the free Checks), the lace
+glide umbrella (`kart.umbrella.lace`) and two Prime looks (`prime.paint.host-gold`, `prime.trail.podium`, grants
+`cos.prime.*`, so the owned snapshot and the desktop `KartGrants` keep `cos.prime.paint.*` and `cos.prime.trail.*` too).
+The nine free outfits and the four native patterns stay free. Unowned ones are dark with "In the Prize Counter" (Prime
+looks: "Prime, in the Prize Counter") and change nothing. The race look carries them next to the vehicle (NET.md
+looks): `outfit` (the shop ids join the list), `paint: hearts|spiral|host-gold` (only with a custom `skin`; the skin's
+pattern digit stays 0-3), `umbrella: lace` (opens in the glide cap's place) and `trail: podium` (ribbons behind the
+cup). They ride the lobby create / join / quick / claim bodies into the seat ticket; the room `look` message keeps
+its old keys (`roomLook`). Bots never wear them. Looks never touch feel.json or tracks: `onlineCourseHash` is pinned
+against the room cards in tests/garage-shop.test.mjs.
+Prize Counter row (7.2 contract 1, `host/prizeCounter.js`): a host that sets `caps.prizeCounter: true` gets a "Prize
+Counter" row on the garage menu. Page -> host `open-prize-counter { tab: 'kart', from: 'glassroad' }`; the host pauses
+the page, opens the counter over it (desktop: the counter window, `PrizeCounterHostService.Launch`; web:
+`/prize-counter?tab=kart&from=glassroad`; phone: the counter screen) and re-sends `owned { grants }` when it closes.
 Web Scrolller pictures (2026-10-26, `host/scrolllerFeed.js`): a host that can feed them sets `caps.scrolller:
 { consent: boolean }` (the web shim; the desktop never does). Host -> page `scrolller-feed { v: 1, rows: [{ url, kind:
 'image' }] }` (https on a scrolller.com host, at most 12 used; an empty list when consent is off) and the `setting

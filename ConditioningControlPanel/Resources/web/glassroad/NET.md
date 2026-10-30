@@ -262,6 +262,12 @@ and #2624). Only ids travel; render maps them (ART5 lane); an unknown id falls b
   (`art/models/emi-vehicle-variants.json`).
 - Bots: `botLook(seat, seed)` = outfit `LOOK_OUTFITS[(seed + seat * 3) mod 8]`, vehicle `LOOK_VEHICLES[(seed + seat) mod 3]`
   (seed as an unsigned 32-bit int). The room writes it into `seats`.
+- Prize Counter looks (7.2, CONTRACT.md section 7 "Owned kart looks"): `outfit` may also be `emi-outfit-pit-crew`,
+  `emi-outfit-ringmaster` or `emi-outfit-ballerina`; optional `paint` (`hearts|spiral|host-gold`), `umbrella` (`lace`)
+  and `trail` (`podium`) sit next to it. They ride the lobby bodies and the seat ticket (the proxy clamps each to the
+  seat's owned `cos.*` grants) and come back in `seats` / `seat`; the C2R `look` message keeps `{ outfit, vehicle, skin? }`
+  so a room that predates them never refuses it. A client drops any extra id it does not know (`normLook`); bots never
+  wear them.
 
 ## 11. Signed result (room -> lobby)
 

@@ -105,6 +105,7 @@ import { ORDER as TIER_ORDER } from './render/quality.js';
 import { dismantleScene } from './render/sceneResources.js';
 import { createGarage } from './render/garage.js';
 import { raceLook } from './hud/garageState.js';
+import { hostCounter, counterMessage } from './host/prizeCounter.js';
 import { COURSES, selectedCourse, courseUrl, courseRaceIntent } from './track/catalog.js';
 import { getKeepLayout } from './track/keep-layout.js';
 import { getBoudoirLayout } from './track/boudoir-layout.js';
@@ -614,7 +615,7 @@ async function boot(course, options, lifetime, isCurrent) {
   await paintGap();
   if (!lifetime.alive) return;
   const garage = shared.garage ||= await createGarage({ art: shared.garageArt, renderer, canvas,
-    track: trackName, laps, trackId: track.id, online: course.online, owned: () => shared.owned.grants,
+    track: trackName, laps, trackId: track.id, online: course.online, owned: () => shared.owned.grants, counter: hostCounter(shared.bridge, init),
     onProgress: (d, n) => showLoading('Getting the garage ready', 0.56 + 0.36 * d / Math.max(1, n)) });
   if (!lifetime.alive) { garage?.dispose(); return; }
   loaded('garage');
@@ -623,7 +624,8 @@ async function boot(course, options, lifetime, isCurrent) {
     if (!shared.counts.garage) shared.counts.garage++;
     garage.setCourse({ trackId: track.id, track: trackName, laps, online: course.online });
     garage.setHandlers({ changeTrack: id => void selectCourse(id, { race: true }),
-      action: name => hud.menuAction(name), sound: name => { audio.start(); audio.cue(name); } });
+      action: name => { if (name === 'counter') shared.bridge.send(counterMessage()); else hud.menuAction(name); },
+      sound: name => { audio.start(); audio.cue(name); } });
     const mediaFor = id => {
       const saved = shared.coursePicks[id] || {}, local = shared.courseSongs[id];
       return { source: id === TRACK_ID ? view().source : saved.source || (consentOn() ? 'scrolller' : 'off'),
