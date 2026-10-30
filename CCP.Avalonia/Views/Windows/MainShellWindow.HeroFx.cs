@@ -12,7 +12,7 @@
 // XP readout, meniscus and chip pop now follow WPF on the existing shared beat (see below).
 //
 // STILL MISSING vs WPF, so the row stays a stub:
-//   the level-up burst (FireBurstAt) and THE BANK hold
+//   THE BANK hold (level-up particles live in MainShellWindow.EventFx.cs)
 //   (MainWindow.BankFx.cs); the rank title (TxtPlayerTitle, a {loc:Str} a code write would lose);
 //   the Start button's charge/exhale/ignition/heartbeat set and FlashSaveAbsorb - no caller here
 //   (BtnStart_Click and the settings-save half are stubs); level-up sound and toast.
@@ -45,7 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void HookLevelDisplay()
         {
             Action<double, string> awarded = (_, _) => Dispatcher.UIThread.Post(UpdateLevelDisplay);
-            Action<int> levelUp = _ => Dispatcher.UIThread.Post(() => { FlashLevelUp(); PopLevelChip(); UpdateLevelDisplay(); });
+            Action<int> levelUp = _ => Dispatcher.UIThread.Post(() => { FlashLevelUp(); PopLevelChip(); CelebrateLevelUp(); UpdateLevelDisplay(); });
             HookHeroXpFx();
             ProgressionBank.Awarded += awarded;
             ProgressionBank.LevelUp += levelUp;
