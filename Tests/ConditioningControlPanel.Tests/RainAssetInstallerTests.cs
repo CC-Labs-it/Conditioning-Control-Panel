@@ -124,6 +124,21 @@ public class RainAssetInstallerTests : IDisposable
     }
 
     [Fact]
+    public async Task AnOlderPack_IsNotInstalled_AndTheNewOneReplacesIt()
+    {
+        var zip = GoodZip();
+        var pin = PinFor(zip);
+        Assert.Equal(RainInstallResult.Installed, await Make(pin, zip).InstallAsync(null, CancellationToken.None));
+        var newer = Make(pin with { Version = "rain-assets-test-2" }, zip);
+        Assert.False(newer.IsInstalled());
+        Assert.Equal(RainAssetState.Missing, newer.State);
+        Assert.Equal(RainInstallResult.Installed, await newer.InstallAsync(null, CancellationToken.None));
+        Assert.True(newer.IsInstalled());
+        File.Delete(Path.Combine(Dir, RainAssetInstaller.Marker));   // hand-copied files, no marker
+        Assert.False(newer.IsInstalled());
+    }
+
+    [Fact]
     public async Task Cancel_LeavesNothing()
     {
         var zip = GoodZip();

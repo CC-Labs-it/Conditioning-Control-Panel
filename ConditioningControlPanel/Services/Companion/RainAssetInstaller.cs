@@ -72,7 +72,16 @@ namespace ConditioningControlPanel.Services.Companion
         private string DownloadFile => _dir + ".download";
         private string OldDir => _dir + ".old";
 
-        public bool IsInstalled() => _devOverride || RainWardrobeAssets.Missing(_dir).Count == 0;
+        /// <summary>The files are there AND (with a real pin) <c>installed.json</c> names the pinned version,
+        /// so an older pack (the 3-action GLB) installs the new one over itself.</summary>
+        public bool IsInstalled() => _devOverride
+            || (RainWardrobeAssets.Missing(_dir).Count == 0 && (!_pin.IsReady || MarkerVersion() == _pin.Version));
+
+        private string? MarkerVersion()
+        {
+            try { return (string?)Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(Path.Combine(_dir, Marker)))["version"]; }
+            catch (Exception) { return null; }
+        }
 
         public RainAssetState State => IsInstalled() ? RainAssetState.Installed
             : _pin.IsReady ? RainAssetState.Missing : RainAssetState.NotAvailable;

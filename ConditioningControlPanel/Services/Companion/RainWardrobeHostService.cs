@@ -73,12 +73,13 @@ internal static class RainWardrobeHostService
         if (_host != null) { _host.FocusWeb(); return; }
         var dir = AssetsDir;
         var missing = RainWardrobeAssets.Missing(dir);
-        if (missing.Count > 0)
+        var installer = RainAssetInstaller.ForApp();
+        if (!installer.IsInstalled())
         {
             // Lane R12: the native install card, never a broken page; success reopens this door.
-            App.Logger?.Information("RainWardrobe: not installed: {Missing} missing from {Dir} (or set {Env})",
+            App.Logger?.Information("RainWardrobe: not installed: [{Missing}] missing or an older pack in {Dir} (or set {Env})",
                 string.Join(", ", missing), dir, RainWardrobeAssets.EnvVar);
-            RainAssetInstallWindow.ShowFor(RainAssetInstaller.ForApp(), () => RunOnUi(Open));
+            RainAssetInstallWindow.ShowFor(installer, () => RunOnUi(Open));
             return;
         }
         try
