@@ -1,4 +1,8 @@
 {
+  "deeper_open_player_failed_title": "プレーヤーを開けませんでした",
+  "deeper_open_player_failed_fmt": "Deeper プレーヤーを開けませんでした:\n\n{0}: {1}",
+  "deeper_open_editor_failed_title": "エディターを開けませんでした",
+  "deeper_open_editor_failed_fmt": "Deeper エディターを開けませんでした:\n\n{0}: {1}",
   "deeper_submission_badge_published": "公開済み",
   "deeper_submission_badge_published_tip": "このエンハンスメントはコミュニティカタログで公開中です。",
   "deeper_submission_badge_pending": "審査中",

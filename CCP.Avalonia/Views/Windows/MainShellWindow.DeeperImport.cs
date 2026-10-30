@@ -101,8 +101,10 @@ public partial class MainShellWindow
     private async void ReportDeeperOpenError(Exception ex, string surface)
     {
         Serilog.Log.Error(ex, "Failed to open Deeper {Surface}", surface);
-        if (IsVisible) await Dialogs.MessageDialog.ShowAsync(this, $"Open {surface} failed",
-            $"Couldn't open Deeper {surface}:\n\n{ex.GetType().Name}: {ex.Message}");
+        // WPF MainWindow.DeeperTab.cs:611-616,662-665: preserve exception details.
+        var prefix = surface == "Player" ? "deeper_open_player_failed" : "deeper_open_editor_failed";
+        if (IsVisible) await Dialogs.MessageDialog.ShowAsync(this, Loc.Get(prefix + "_title"),
+            Loc.GetF(prefix + "_fmt", ex.GetType().Name, ex.Message));
     }
 
 }

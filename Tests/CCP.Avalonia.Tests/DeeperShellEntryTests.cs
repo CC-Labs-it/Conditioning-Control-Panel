@@ -8,6 +8,9 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -107,7 +110,20 @@ public sealed partial class DeeperFollowupTests
         try
         {
             shell.Show();
+            CoreSettings.Current.Welcomed = true;
+            CoreSettings.Current.HasAcceptedAgeVerification = true;
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            Assert.True(LauncherWindow.BackToLauncher(shell));
+            var launcher = LauncherWindow.Instance!;
+            CoreSettings.Current.PerformanceMode = false;
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            Assert.False(shell.IsVisible);
             LauncherWindow.RouteHandoff(shell, DeeperFileOpen.Encode(new[] { "--" + action, media }));
+            Assert.False(shell.IsVisible);
+            Assert.Empty(shell.OwnedWindows);
+            Assert.DoesNotContain(DeeperEditorWindow.OpenEditors, e => e.LoadedFilePath == null);
+            launcher.StepFx(0.3);
+            Assert.True(shell.IsVisible);
             if (action == "edit")
             {
                 var editor = Assert.Single(shell.OwnedWindows.OfType<DeeperEditorWindow>());
@@ -120,9 +136,83 @@ public sealed partial class DeeperFollowupTests
         finally
         {
             foreach (var window in shell.OwnedWindows.ToArray()) window.Close();
+            LauncherWindow.Instance?.Close();
             shell.Close();
             File.Delete(media);
         }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PlayerReusesAnEditorOutsideTheShellRegistry() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        CoreSettings.Current.PerformanceMode = true;
+        var shell = new MainShellWindow();
+        var path = Path.Combine(TestUserDataProfile.Root, "external.ccpenh.json");
+        var enhancement = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*" };
+        File.WriteAllText(path, EnhancementSerializer.Save(enhancement));
+        var external = new DeeperEditorWindow(enhancement, path);
+        try
+        {
+            shell.Show();
+            external.Show();
+            external.WindowState = WindowState.Minimized;
+            shell.BtnDeeperOpenPlayer_Click();
+            var player = Assert.Single(shell.OwnedWindows.OfType<EnhancementPlayerWindow>());
+            player.LoadEnhancementFile(path);
+            Click(player, "BtnOpenInEditor");
+            Assert.Same(external, Assert.Single(DeeperEditorWindow.OpenEditors));
+            Assert.Equal(WindowState.Normal, external.WindowState);
+        }
+        finally
+        {
+            external.Close();
+            foreach (var window in shell.OwnedWindows.ToArray()) window.Close();
+            shell.Close();
+            File.Delete(path);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData("en")]
+    [InlineData("de")]
+    [InlineData("es")]
+    [InlineData("fr")]
+    [InlineData("it")]
+    [InlineData("ja")]
+    [InlineData("ko")]
+    [InlineData("pt-BR")]
+    [InlineData("ru")]
+    [InlineData("zh-CN")]
+    public Task OpenErrorsUseTranslatedTitlesAndKeepExceptionDetails(string language) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var localization = LocalizationManager.Instance;
+        var previous = localization.CurrentLanguage;
+        CoreSettings.Current.PerformanceMode = true;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            localization.SetLanguage(language);
+            foreach (var surface in new[] { "Player", "Editor" })
+            {
+                var prefix = "deeper_open_" + surface.ToLowerInvariant() + "_failed";
+                var title = Loc.Get(prefix + "_title");
+                Assert.NotEqual(prefix + "_title", title);
+                if (language != "en") Assert.NotEqual("Open " + surface + " failed", title);
+                typeof(MainShellWindow).GetMethod("ReportDeeperOpenError", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .Invoke(shell, new object[] { new IOException("test detail"), surface });
+                var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+                Assert.Equal(title, dialog.Title);
+                Assert.Equal(Loc.GetF(prefix + "_fmt", "IOException", "test detail"), dialog.FindControl<TextBlock>("TxtMessage")!.Text);
+                Assert.Contains("IOException: test detail", dialog.FindControl<TextBlock>("TxtMessage")!.Text);
+                dialog.Close();
+            }
+        }
+        finally { shell.Close(); localization.SetLanguage(previous); }
         return Task.CompletedTask;
     });
 

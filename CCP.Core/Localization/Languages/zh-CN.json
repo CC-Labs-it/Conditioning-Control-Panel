@@ -1,4 +1,8 @@
 {
+  "deeper_open_player_failed_title": "无法打开播放器",
+  "deeper_open_player_failed_fmt": "无法打开 Deeper 播放器:\n\n{0}: {1}",
+  "deeper_open_editor_failed_title": "无法打开编辑器",
+  "deeper_open_editor_failed_fmt": "无法打开 Deeper 编辑器:\n\n{0}: {1}",
   "deeper_submission_badge_published": "已发布",
   "deeper_submission_badge_published_tip": "此增强已在社区目录中上线。",
   "deeper_submission_badge_pending": "待审核",
