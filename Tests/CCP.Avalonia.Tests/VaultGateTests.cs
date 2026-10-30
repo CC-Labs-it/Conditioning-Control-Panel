@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using System.Collections.Concurrent;
+using ConditioningControlPanel.Services.Funnel;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -289,6 +291,40 @@ public sealed class VaultGateTests
             .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Dispatcher.UIThread.RunJobs();
     }
+
+    [Fact]
+    public Task FunnelCountsFeatureShowsAndBothCheckoutRails() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureAvalonia();
+        var lines = new ConcurrentQueue<string>();
+        var oldRoot = FunnelBeacon.BaseUrlOverride;
+        var oldSend = FunnelBeacon.SendOverride;
+        var oldLaunch = VaultGateDialog.Launch;
+        FunnelBeacon.BaseUrlOverride = "https://proxy.test";
+        FunnelBeacon.SendOverride = (_, body) => { lines.Enqueue(body); return Task.CompletedTask; };
+        VaultGateDialog.Launch = _ => true;
+        try
+        {
+            var card = VaultGateDialog.ShowOffer(null, "remote-control", 1, () => { });
+            Click(card, Loc.Get("vaultgate_open_vault"));
+            card = VaultGateDialog.ShowOffer(null, null, 2, () => { });
+            Click(card, Loc.Get("vaultgate_or_card"));
+            card = VaultGateDialog.ShowEnding(null, DateTime.UtcNow.AddHours(4), () => { });
+            for (var i = 0; i < 100 && lines.Count < 5; i++) await Task.Delay(10);
+            Assert.Contains("gate_shown|panel|remote_control|basic", lines);
+            Assert.Contains("cta_clicked|panel|remote_control|patreon", lines);
+            Assert.Contains("gate_shown|panel|vault|prime", lines);
+            Assert.Contains("cta_clicked|panel|vault|web", lines);
+            Assert.Contains("gate_shown|panel|invite_ending|basic", lines);
+        }
+        finally
+        {
+            VaultGateDialog.Open?.Close();
+            FunnelBeacon.BaseUrlOverride = oldRoot;
+            FunnelBeacon.SendOverride = oldSend;
+            VaultGateDialog.Launch = oldLaunch;
+        }
+    });
 
     private static void EnsureAvalonia()
     {
