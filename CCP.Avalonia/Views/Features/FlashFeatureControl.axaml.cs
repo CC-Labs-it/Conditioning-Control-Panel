@@ -150,6 +150,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         // WPF FlashFeatureControl.xaml.cs:81-85 rebuilds on every grant change, including revokes.
         private void OnGetRowChanged()
         {
+            // WPF FlashFeatureControl.xaml.cs:75,81-85 also refreshes the exit state on grants.
+            RefreshExitRow();
             if (RowMotion.IsVisible == Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.FlashDriftBounce)
                 && RowShatter.IsVisible == Platform.PrizeOwnership.OwnsFlashV2())
             {

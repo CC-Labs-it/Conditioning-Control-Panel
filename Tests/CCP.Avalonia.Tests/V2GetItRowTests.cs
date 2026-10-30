@@ -53,6 +53,7 @@ public sealed class V2GetItRowTests
             EnsureApp();
             var s = CoreSettings.Current;
             var (id, token, offline, seam) = (s.UnifiedId, s.AuthToken, s.OfflineMode, PrizeOwnership.IsGranted);
+            var shatter = s.FlashShatterEnabled;
             var unified = CoreAccount.UnifiedUserId;
             var (get, put) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
             var secrets = new System.Collections.Generic.Dictionary<string, string?>();
@@ -64,12 +65,17 @@ public sealed class V2GetItRowTests
                 (s.UnifiedId, s.AuthToken, s.OfflineMode) = (null, null, false);
                 PrizeOwnership.IsGranted = PrizeOwnership.Held;
                 PrizeOwnership.ResetHeld();
+                s.FlashShatterEnabled = true;
                 var card = new FlashFeatureControl();
                 host = new Window { Content = card };
                 host.Show();
                 var row = card.FindControl<V2GetItRow>("RowGetFlashesV2")!;
                 var btn = row.FindControl<Button>("BtnGet")!;
                 var status = row.FindControl<TextBlock>("TxtStatus")!;
+                var exit = card.FindControl<ComboBox>("CmbExit")!;
+                var note = card.FindControl<TextBlock>("TxtExitShatterNote")!;
+                Assert.True(exit.IsEnabled);
+                Assert.False(note.IsVisible);
                 Assert.True(card.FindControl<Border>("BoxFlashV2")!.IsVisible);
                 Assert.True(row.IsVisible);
                 Assert.Equal(Loc.Get("v2_get_flash_blurb"), row.FindControl<TextBlock>("TxtBlurb")!.Text);
@@ -98,18 +104,28 @@ public sealed class V2GetItRowTests
                 Assert.False(row.IsVisible);
                 Assert.True(row.IsRowHidden);
                 Assert.True(card.FindControl<Control>("RowMotion")!.IsVisible);
+                // WPF FlashFeatureControl.xaml.cs:75,191-196 refreshes exit state on grants.
+                Assert.False(exit.IsEnabled);
+                Assert.True(note.IsVisible);
                 PrizeOwnership.ApplySnapshot("u-test", 2, Array.Empty<string>());
                 Dispatcher.UIThread.RunJobs();
                 Assert.True(row.IsVisible);
                 Assert.False(card.FindControl<Control>("RowMotion")!.IsVisible);
+                Assert.True(exit.IsEnabled);
+                Assert.False(note.IsVisible);
                 // The 7.2 base also gates Shatter on either motion grant, including Pendulum.
                 PrizeOwnership.ApplySnapshot("u-test", 3, new[] { PrizeOwnership.FlashPendulum });
                 Dispatcher.UIThread.RunJobs();
                 Assert.True(card.FindControl<Control>("RowShatter")!.IsVisible);
+                Assert.False(exit.IsEnabled);
+                Assert.True(note.IsVisible);
                 Assert.False(row.IsVisible);
                 PrizeOwnership.ApplySnapshot("u-test", 4, Array.Empty<string>());
                 Dispatcher.UIThread.RunJobs();
                 Assert.False(card.FindControl<Control>("RowShatter")!.IsVisible);
+                Assert.True(exit.IsEnabled);
+                Assert.False(note.IsVisible);
+                Assert.True(s.FlashShatterEnabled);
                 Assert.True(row.IsVisible);
             }
             finally
@@ -117,6 +133,7 @@ public sealed class V2GetItRowTests
                 host?.Close();
                 PrizeOwnership.ResetHeld();
                 CoreAccount.UnifiedUserId = unified;
+                s.FlashShatterEnabled = shatter;
                 (s.UnifiedId, s.AuthToken, s.OfflineMode, PrizeOwnership.IsGranted) = (id, token, offline, seam);
                 (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (get, put);
             }
