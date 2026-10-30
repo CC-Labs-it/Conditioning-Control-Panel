@@ -419,8 +419,8 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     root.visible = true;
     k.propeller.update(st[S.respawnPhase] === RESPAWN.NONE ? underwater : 0, dt, {gentle,paused});
     const gliding = glide && st[S.airborne] > 0 && st[S.respawnPhase] === RESPAWN.NONE;
-    // a Prize Counter umbrella (render/wardrobe.js) opens in the glide cap's place
-    if (k.dress && k.dress.umbrella) { k.dress.showUmbrella(gliding); if (k.glideCap) k.glideCap.update(false, dt, gentle); }
+    // a Prize Counter umbrella (render/wardrobe.js) opens in the glide cap's place: it glides open and folds away
+    if (k.dress && k.dress.umbrella) { k.dress.glideUmbrella(gliding, paused ? 0 : dt, gentle); if (k.glideCap) k.glideCap.update(false, dt, gentle); }
     else if (k.glideCap) k.glideCap.update(gliding, dt, gentle);
     if (k.accessory) k.accessory.visible = !(k.dress && k.dress.outfit) && !(k.glideCap && k.glideCap.cap.visible);
     root.position.set(st[S.posX], st[S.posY], st[S.posZ]);

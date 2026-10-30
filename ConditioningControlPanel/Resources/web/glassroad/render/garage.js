@@ -78,7 +78,8 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   function change(values,colors=false){if(viewBusy)return;const previous=state.outfit+'|'+state.umbrella+'|'+state.trail;Object.assign(state,values);if(colors){state.antenna=state.secondary;state.shoes=state.secondary;state.hands='#'+new T.Color(state.primary).lerp(new T.Color('#ffffff'),.24).getHexString();state.face='#'+new T.Color(state.primary).lerp(new T.Color('#ffffff'),.65).getHexString();}
     if(previous!==state.outfit+'|'+state.umbrella+'|'+state.trail)redress();paint();sound('menu-toggle');}
   // the garage shows an owned umbrella open; the trail ribbons never count toward the framing bounds
-  function redress(){dress?.dispose();const look=raceLook(state,owns);dress=dressKart(art,model,{outfit:look.outfit,vehicle:null,umbrella:look.umbrella,trail:look.trail});dress.showUmbrella(true);style.apply(model);customBounds=null;if(custom)resize();}
+  // the lace umbrella glides open when it is picked (update), and stays open through any other re-dress
+  function redress(){const hadUmbrella=dress?.umbrella;dress?.dispose();const look=raceLook(state,owns);dress=dressKart(art,model,{outfit:look.outfit,vehicle:null,umbrella:look.umbrella,trail:look.trail});if(dress.umbrella&&dress.umbrella===hadUmbrella)dress.showUmbrella(true);style.apply(model);customBounds=null;if(custom)resize();}
   function riderBounds(){
     if(wardrobeBounds)return wardrobeBounds;if(customBounds)return customBounds;
     scene.updateMatrixWorld(true);const inverse=rider.matrixWorld.clone().invert(),box=new T.Box3(),point=new T.Vector3(),local=new T.Matrix4();
@@ -113,7 +114,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   const ease=x=>x*x*(3-2*x);
   // feel wave (lane C): list rows tween in (render/worldFeel.js cascadeIn); OS reduced motion or Gentle reads as 'less'
   let motion='full';const entrance=()=>motion==='off'?'off':reduced&&motion==='full'?'less':motion;
-  function update(dt,motionReduced,gentle=false){dt=Math.max(0,Math.min(.05,Number.isFinite(dt)?dt:0));reduced=motionReduced||gentle;ui.root.classList.toggle('g-calm',reduced);time+=dt;emiLife.beforePose();
+  function update(dt,motionReduced,gentle=false){dt=Math.max(0,Math.min(.05,Number.isFinite(dt)?dt:0));reduced=motionReduced||gentle;ui.root.classList.toggle('g-calm',reduced);time+=dt;emiLife.beforePose();dress?.glideUmbrella?.(true,dt,gentle);
     backdrop.update(dt,{reducedMotion:motionReduced,gentle});
     const screen=advanceGarageView(view,custom,dt,reduced),sceneProgress=screen.framing,wasBusy=viewBusy;view=screen.value;viewBusy=screen.busy;
     ui.root.style.setProperty('--g-custom-progress',String(screen.progress));ui.root.classList.toggle('g-scene-transition',viewBusy);

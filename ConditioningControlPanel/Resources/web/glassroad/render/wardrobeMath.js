@@ -107,3 +107,23 @@ export function cutIndex(index, joints, weights, remove, eps = 1e-3) {
 export function lookForTier(look, tierName) {
   return tierName === 'phone' ? { ...look, vehicle: null } : look;
 }
+
+/** The lace umbrella's IN and OUT (desk run 2026-10-30, it popped in and out): seconds to open and to fold, longer
+ *  under Gentle. */
+export const UMBRELLA_TWEEN = Object.freeze({ openS: 0.3, foldS: 0.2, gentleOpenS: 0.5, gentleFoldS: 0.38 });
+
+/** One step of the umbrella's openness u (0 folded away, 1 open) toward `on`. */
+export function umbrellaStep(u, on, dt, gentle = false) {
+  const T = UMBRELLA_TWEEN, s = on ? (gentle ? T.gentleOpenS : T.openS) : (gentle ? T.gentleFoldS : T.foldS);
+  const d = Math.max(0, dt || 0) / s;
+  return on ? Math.min(1, u + d) : Math.max(0, u - d);
+}
+
+/** The canopy at openness u: { radial, height } scales about the handle's foot. Opening glides out with a small
+ *  overshoot (ease-out-back; Gentle a plain ease-out, no overshoot); folding starts slow and snaps shut. u = 1 is
+ *  exactly { 1, 1 } either way. */
+export function umbrellaShape(u, opening, gentle = false) {
+  const t = Math.min(1, Math.max(0, u)), r = t - 1;
+  const e = !opening ? 1 - r * r : gentle ? 1 - Math.abs(r * r * r) : 1 + 2.6 * r * r * r + 1.6 * r * r;
+  return { radial: 0.08 + 0.92 * e, height: 0.5 + 0.5 * Math.min(1, e) };
+}

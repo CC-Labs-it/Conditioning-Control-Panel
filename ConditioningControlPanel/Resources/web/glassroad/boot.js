@@ -20,7 +20,7 @@
  */
 import { createBridge, songCharts, isPreviewSongHost, wantLobbySongs, lobbySongCharts, ROOM_ORIGIN } from './host/bridge.js';
 import { createHostEscape } from './host/hostEscape.js';
-import { showSlip, hideSlip } from './sparkles-slip.js';
+import { showSlip, hideSlip, releaseSlip } from './sparkles-slip.js';
 import { createCardMedia, PHONE_READY_CLIPS } from './host/cardMedia.js';
 import { createScrolllerFeed } from './host/scrolllerFeed.js';
 import { loadCustomization, saveCustomization, selectedSongCharts } from './host/courseCustomization.js';
@@ -169,11 +169,21 @@ shared.bridge.on('owned', m => adoptOwned(m?.grants));
 // (styles.css moves it off the card); a new run takes it away. The website never sends one.
 // A receipt that lands once the next run is under way is dropped rather than covering the race; the
 // Motion row plays it calm when it is not Full (shared.slipGate is set per course).
+// Desk run 2026-10-30 (owner: 6 s went before anyone read it): it stays while the results are up (the finished
+// race and its results card, solo or online) and at least SLIP_MIN_MS from when it lands.
+const SLIP_MIN_MS = 10000;
+let slipWatch = 0;
+const slipGate = () => { try { return shared.slipGate?.() || null; } catch (e) { return null; } };   // null: no course yet
 function receiptSlip(m) {
-  let gate = null;
-  try { gate = shared.slipGate?.(); } catch (e) { /* no course yet */ }
+  const gate = slipGate();
   if (gate?.blocked) return;
-  showSlip(m, { calm: !!gate?.calm });
+  clearInterval(slipWatch); slipWatch = 0;
+  const held = !!gate?.results;
+  showSlip(m, { calm: !!gate?.calm, holdMs: held ? Infinity : SLIP_MIN_MS });
+  if (held) slipWatch = setInterval(() => {
+    if (slipGate()?.results) return;
+    clearInterval(slipWatch); slipWatch = 0; releaseSlip(SLIP_MIN_MS);
+  }, 250);
 }
 shared.bridge.on('sparkles-receipt', receiptSlip);
 // The web host's Scrolller pictures (host/scrolllerFeed.js): display only. Built once so a feed
@@ -531,7 +541,8 @@ async function boot(course, options, lifetime, isCurrent) {
   renderer.beginCourse(); renderer.setHold(true);
   const racing = () => !online && (state === 'intro' || state === 'race');
   shared.slipGate = () => ({ blocked: state === 'intro' || (state === 'race' && !!race && race.phase !== 'finished'),
-    calm: (hud.options?.motion || 'full') !== 'full' });
+    calm: (hud.options?.motion || 'full') !== 'full',
+    results: state === 'results' || (state === 'race' && !!race && race.phase === 'finished') });
   lifetime.defer(renderer.onLost((lost) => {
     if (isCurrent()) void recover('lost', new Error((lost.api ? lost.api + ' ' : '') + (lost.message || 'device lost') + (lost.reason ? ' (' + lost.reason + ')' : '')), { race: racing() });
   }));
