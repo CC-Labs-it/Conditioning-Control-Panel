@@ -145,3 +145,12 @@ body.garage-open .gr-touch{display:none}
 @media(max-width:699px){.g-course-media{padding:8px}.g-course-media p{font-size:11px}#race-garage .g-main-media{min-height:58px;padding:7px 10px}.g-main-media small{font-size:10px}}
 .g-main-media small{max-width:none;line-height:1.3}#race-garage .g-media-picker section button:disabled{opacity:.45;cursor:default}
 @media(max-width:699px) and (orientation:portrait){.g-selector{bottom:calc(354px + env(safe-area-inset-bottom))}.g-main-media small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.g-main-media>span{min-width:0}}
+/* Prize Counter looks (lane B3-G1): dark until owned, the counter line under the panel */
+#race-garage .g-controls button.locked{opacity:.45;filter:grayscale(1)}
+.g-patterns{flex-wrap:wrap}
+#race-garage .g-patterns button[data-paint=hearts]{background-image:url(../art/paints/hearts-mask.png);background-size:24px 24px;background-color:#3a1f33}
+#race-garage .g-patterns button[data-paint=spiral]{background-image:url(../art/paints/spiral-mask.png);background-size:24px 24px;background-color:#3a1f33}
+#race-garage .g-patterns button[data-paint=host-gold]{background-image:url(../art/paints/host-gold-mask.png),linear-gradient(135deg,#d79b14,#fff09a);background-size:24px 24px,cover;background-blend-mode:multiply}
+.g-extras{display:flex;gap:8px;flex-wrap:wrap}
+#race-garage .g-extras button{font-size:11px;padding:7px 10px;background:var(--g-paper);border-width:2px;border-radius:7px}
+.g-shop-note{min-height:15px;margin:10px 0 0;font-size:11px;color:#ffce62}

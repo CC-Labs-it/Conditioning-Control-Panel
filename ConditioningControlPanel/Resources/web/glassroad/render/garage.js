@@ -13,7 +13,7 @@ import {createEmiSkin} from './emiSkin.js';
 import {garageArrows} from './garageArrows.js';
 import {garageUi} from '../hud/garage.js';
 import {createGarageNav} from '../hud/garageNav.js';
-import {KARTS,OUTFITS,STORAGE,loadGarage,stepKart,routeTo,raceLook,lockedKarts,ownedKarts} from '../hud/garageState.js';
+import {KARTS,OUTFITS,STORAGE,loadGarage,cleanGarage,stepKart,routeTo,raceLook,lockedKarts,ownedKarts,ownedLooks} from '../hud/garageState.js';
 import {loadRecord} from '../meta/record.js';
 import {unlockedSet} from '../meta/unlocks.js';
 import {warmGarageWardrobe} from './garageWarm.js';
@@ -23,14 +23,15 @@ import {cascadeIn} from './worldFeel.js';
 /** One menu scene on the game's existing renderer, driven by the existing frame loop. */
 // The ring: one STEP per kart; the radius grows with the count so neighbours keep the eight-kart spacing.
 const STEP=2*Math.PI/KARTS.length,RING=2.35*KARTS.length/8;
-/** `owned()` = the account's Prize Counter grants (meta/owned.js); only owned, earned or free karts are selectable. */
-export async function createGarage({art,renderer,canvas,action,sound,track,laps,trackId='threshold',online=true,changeTrack,onProgress,owned:ownedGrants=()=>[]}) {
+/** `owned()` = the account's Prize Counter grants (meta/owned.js); only owned, earned or free karts are selectable,
+ * and the shop outfits, paints, umbrella and trail are worn only when owned. `counter`: the host opens the Prize Counter. */
+export async function createGarage({art,renderer,canvas,action,sound,track,laps,trackId='threshold',online=true,changeTrack,onProgress,owned:ownedGrants=()=>[],counter=false}) {
   const base=art?.model('emi-teacup-kart');
   if(!base||KARTS.some(([id])=>!art.model('emi-vehicle-'+id)))return null;
   let storage;try{storage=localStorage;}catch{}
   let layout=garageLayout(canvas.clientWidth,canvas.clientHeight);
-  const darkNow=()=>lockedKarts(unlockedSet(loadRecord(storage)),ownedKarts(ownedGrants()));let locked=darkNow();
-  const state=loadGarage(storage,locked),scene=new T.Scene(),camera=new T.PerspectiveCamera(33,1,.03,40);
+  const darkNow=()=>lockedKarts(unlockedSet(loadRecord(storage)),ownedKarts(ownedGrants()));let locked=darkNow(),owns=ownedLooks(ownedGrants());
+  const state=loadGarage(storage,locked,owns),scene=new T.Scene(),camera=new T.PerspectiveCamera(33,1,.03,40);
   scene.background=new T.Color('#ffe3ec');scene.fog=new T.Fog('#f8d2e1',18,35);
   const backdrop=createGarageBackdrop(scene);
   const style=createGarageStyle();
@@ -65,21 +66,23 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   const arrows=garageArrows(scene),ray=new T.Raycaster(),pointer=new T.Vector2(),particles=[];
   const particleGeo=new T.OctahedronGeometry(.014),particleMaterial=new T.MeshBasicNodeMaterial({color:0xffd4ae});
   for(const arrow of arrows.arrows)style.apply(arrow.root);
-  const ui=garageUi({change,select,customize,trackId,online,changeTrack:id=>changeTrack?.(id),action:name=>{if(!moving&&!viewBusy){sound('menu-ok');action(name);}},hover:(dir,on)=>arrows.hover(dir,on)});ui.track(track,laps);
+  const ui=garageUi({change,select,customize,trackId,online,counter,deny:()=>sound('menu-deny'),changeTrack:id=>changeTrack?.(id),action:name=>{if(!moving&&!viewBusy){sound('menu-ok');action(name);}},hover:(dir,on)=>arrows.hover(dir,on)});ui.track(track,laps);
   function save(){try{storage?.setItem(STORAGE,JSON.stringify(state));}catch{}}
-  function paint(){skin.set(state);ui.paint(state,{custom:custom||view>0,busy:!!moving||viewBusy,locked});save();}
+  function paint(){skin.set(state);ui.paint(state,{custom:custom||view>0,busy:!!moving||viewBusy,locked,owned:owns});save();}
   // A kart earned in the logbook or bought in the Prize Counter since the last look gets its own paint back; nothing re-darkens until the next page.
-  function refreshLocks(){const next=darkNow();let lifted=false;
+  function refreshLocks(){const next=darkNow();let lifted=false;owns=ownedLooks(ownedGrants());
     for(const [index,[id]]of KARTS.entries())if(locked.has(id)&&!next.has(id)){lifted=true;const asset=collection[index].userData.asset;
       asset.traverse(m=>{if(m.isMesh&&m.userData.garageLit){m.material=m.userData.garageLit;delete m.userData.garageLit;}});style.apply(asset);}
-    if(lifted){locked=new Set([...locked].filter(id=>next.has(id)));paint();renderer.three.compileAsync?.(scene,camera)?.catch?.(()=>{});}}
-  function change(values,colors=false){if(viewBusy)return;const previous=state.outfit;Object.assign(state,values);if(colors){state.antenna=state.secondary;state.shoes=state.secondary;state.hands='#'+new T.Color(state.primary).lerp(new T.Color('#ffffff'),.24).getHexString();state.face='#'+new T.Color(state.primary).lerp(new T.Color('#ffffff'),.65).getHexString();}
-    if(previous!==state.outfit)redress();paint();sound('menu-toggle');}
-  function redress(){dress?.dispose();dress=dressKart(art,model,{outfit:raceLook(state).outfit,vehicle:null});style.apply(model);customBounds=null;if(custom)resize();}
+    if(lifted){locked=new Set([...locked].filter(id=>next.has(id)));renderer.three.compileAsync?.(scene,camera)?.catch?.(()=>{});}
+    paint();}
+  function change(values,colors=false){if(viewBusy)return;const previous=state.outfit+'|'+state.umbrella+'|'+state.trail;Object.assign(state,values);if(colors){state.antenna=state.secondary;state.shoes=state.secondary;state.hands='#'+new T.Color(state.primary).lerp(new T.Color('#ffffff'),.24).getHexString();state.face='#'+new T.Color(state.primary).lerp(new T.Color('#ffffff'),.65).getHexString();}
+    if(previous!==state.outfit+'|'+state.umbrella+'|'+state.trail)redress();paint();sound('menu-toggle');}
+  // the garage shows an owned umbrella open; the trail ribbons never count toward the framing bounds
+  function redress(){dress?.dispose();const look=raceLook(state,owns);dress=dressKart(art,model,{outfit:look.outfit,vehicle:null,umbrella:look.umbrella,trail:look.trail});dress.showUmbrella(true);style.apply(model);customBounds=null;if(custom)resize();}
   function riderBounds(){
     if(wardrobeBounds)return wardrobeBounds;if(customBounds)return customBounds;
     scene.updateMatrixWorld(true);const inverse=rider.matrixWorld.clone().invert(),box=new T.Box3(),point=new T.Vector3(),local=new T.Matrix4();
-    model.traverse(m=>{if(!m.isMesh||m.userData.garageInk||!m.visible)return;const positions=m.geometry?.getAttribute('position');if(!positions)return;
+    model.traverse(m=>{if(!m.isMesh||m.userData.garageInk||m.userData.kartTrail||!m.visible)return;const positions=m.geometry?.getAttribute('position');if(!positions)return;
       local.multiplyMatrices(inverse,m.matrixWorld);const index=m.geometry.index,vertices=index?new Set(index.array):Array.from({length:positions.count},(_,i)=>i);
       for(const i of vertices){m.getVertexPosition(i,point);box.expandByPoint(point.applyMatrix4(local));}});
     customBounds={min:box.min.toArray(),max:box.max.toArray()};return customBounds;
@@ -161,7 +164,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
     restore(){redress();paint();},
   });
   return {
-    scene,camera,nav,backdrop,life:{emi:emiLife.metrics,vehicles:vehicleLives.map(l=>l.metrics)},get state(){return {...state};},get yaw(){return yaw;},get custom(){return custom;},get busy(){return !!moving||viewBusy;},get transition(){return {progress:view,busy:viewBusy,framing:customFrame};},get selected(){return KARTS[selected][0];},select,customize,change,
+    scene,camera,nav,backdrop,life:{emi:emiLife.metrics,vehicles:vehicleLives.map(l=>l.metrics)},get state(){return cleanGarage(state,new Set(),owns);},get yaw(){return yaw;},get custom(){return custom;},get busy(){return !!moving||viewBusy;},get transition(){return {progress:view,busy:viewBusy,framing:customFrame};},get selected(){return KARTS[selected][0];},select,customize,change,
     setMedia(getter){ui.setMedia(getter);},
     refreshMedia(){ui.refreshMedia();},
     setCourse(course){ui.setCourse(course);},
