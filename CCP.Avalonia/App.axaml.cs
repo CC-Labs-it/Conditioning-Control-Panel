@@ -186,6 +186,33 @@ namespace ConditioningControlPanel.Avalonia
             catch (Exception ex) { Serilog.Log.Debug("Chime failed: {E}", ex.Message); }
         }
 
+        // WPF App.xaml.cs:3218: subscribe at construction time and return the exact detach.
+        internal static void SeedHapticPlaybackTime()
+        {
+            Services.Haptics.FunScriptService.SubscribePlaybackTime = handler =>
+            {
+                var video = Views.Overlays.MandatoryVideoOverlay.Instance;
+                video.PrimaryPlaybackTimeMsChanged += handler;
+                return () => video.PrimaryPlaybackTimeMsChanged -= handler;
+            };
+        }
+
+        // WPF App.xaml.cs:3199: false before the avatar exists leaves the phase retryable.
+        // findAvatar is a test seam only: Application.ApplicationLifetime cannot be set after init,
+        // so a headless test cannot make AvatarTubeWindow.Live non-null.
+        internal static Services.Descent.DescentCountdownService CreateDescentCountdown(
+            Func<Views.AvatarTube.AvatarTubeWindow?>? findAvatar = null) => new()
+        {
+            Speaker = line => SpeakCountdownLine(line, (findAvatar ?? (() => Views.AvatarTube.AvatarTubeWindow.Live))()),
+        };
+
+        internal static bool SpeakCountdownLine(string line, Views.AvatarTube.AvatarTubeWindow? avatar)
+        {
+            if (avatar is null) return false;
+            avatar.GigglePriority(line, playSound: false, aiGenerated: false);
+            return true;
+        }
+
         /// <summary>The mod service (WPF App.Mods), or null on the headless render path.</summary>
         internal static ModService? Mods { get; private set; }
 
@@ -635,8 +662,8 @@ namespace ConditioningControlPanel.Avalonia
                 CoreEntitlement.IntakePassAvailableProvider = () => IntakePass.IsPassAvailable;
                 // WPF App.xaml.cs:2875/2941: the one HapticService, gated (premium / daily free) in its
                 // mixer. Connects only to what the user runs (Intiface at ButtplugUrl, Lovense Remote).
-                // ponytail: no funscript playhead (FunScriptService.
-                // SubscribePlaybackTime unseeded: no video time source here), no EMI Desk.
+                // WPF App.xaml.cs:3218: seed the clock before constructing the haptic service.
+                SeedHapticPlaybackTime();
                 Views.Overlays.HapticMockToast.Seed();
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
                 _ = CoreHaptics.Service.AutoConnectOnStartupAsync();
@@ -646,8 +673,8 @@ namespace ConditioningControlPanel.Avalonia
                 // After the version seed (the proxy client's headers carry it). Fail closed; the
                 // startup validate runs on the UI thread as WPF's does (App.xaml.cs OnStartup).
                 // WPF App.xaml.cs:2856. Start() arms nothing without a cached ceremony timestamp.
-                // ponytail: no Speaker - the tube's speech coupling is not ported, so phase lines stay unsaid.
-                DescentCountdown = new Services.Descent.DescentCountdownService();
+                // WPF App.xaml.cs:3197: retry phase speech until the avatar exists.
+                DescentCountdown = CreateDescentCountdown();
                 DescentCountdown.Start();
                 Descent = new Services.Descent.DescentService
                 {
