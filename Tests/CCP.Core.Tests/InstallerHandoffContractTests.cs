@@ -7,6 +7,7 @@ using System.Xml.Linq;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
 using Xunit;
+using CCP.Tests.Shared;
 
 namespace CCP.Core.Tests;
 
@@ -18,7 +19,9 @@ public class InstallerHandoffContractTests
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !File.Exists(Path.Combine(dir.FullName, "installer.iss"))) dir = dir.Parent;
         Assert.NotNull(dir);
-        return File.ReadAllText(Path.Combine(dir!.FullName, path));
+        return path.EndsWith(".iss")
+            ? InstallerSource.Read(dir!.FullName, path)
+            : File.ReadAllText(Path.Combine(dir!.FullName, path));
     }
     private static string Define(string source, string name) =>
         Regex.Match(source, "#define " + name + " \"([^\"]+)\"").Groups[1].Value;
@@ -100,6 +103,38 @@ public class InstallerHandoffContractTests
         Assert.Contains("public static string UserDataPath => CorePaths.UserData;", Read("ConditioningControlPanel/App.xaml.cs"));
         Assert.Contains("Settings = new SettingsService();", Read("CCP.Avalonia/App.axaml.cs"));
         Assert.Contains("Path.Combine(CorePaths.UserData, \"settings.json\")", Read("CCP.Core/Services/Settings/SettingsService.cs"));
+    }
+
+    [Fact]
+    public void WpfPublishPathsMatchTheProjectAndIconExists()
+    {
+        var project = XDocument.Parse(Read("ConditioningControlPanel/ConditioningControlPanel.csproj"));
+        var framework = project.Descendants("TargetFramework").Single().Value;
+        var expected = @"ConditioningControlPanel\bin\Release\" + framework + @"\win-x64\publish";
+        var iss = Read("installer.iss");
+        Assert.Equal(expected, Define(iss, "PublishDir"));
+        var batch = Read("build-installer.bat");
+        Assert.Contains("set PROJECT_DIR=ConditioningControlPanel", batch);
+        Assert.Contains("set PUBLISH_DIR=" + expected.Replace("ConditioningControlPanel", "%PROJECT_DIR%"), batch);
+        Assert.Equal(@"Assets\app.ico", Directive(iss, "SetupIconFile"));
+        // Read verifies the icon exists at the repository-relative path on every OS.
+        Assert.NotEmpty(Read(Directive(iss, "SetupIconFile").Replace('\\', '/')));
+    }
+
+    [Fact]
+    public void WrapperSelectsOnlyAvaloniaAndPreservesWpfAssociations()
+    {
+        var wpf = Read("installer.iss");
+        var ava = Read("installer-avalonia.iss");
+        Assert.Equal(@"CCP.Avalonia\bin\publish\win-x64", Define(ava, "PublishDir"));
+        Assert.Contains("Name: \"fileassoc\"", wpf);
+        Assert.Contains("Tasks: fileassoc", wpf);
+        Assert.Contains("if not WizardIsTaskSelected('fileassoc') then", wpf);
+        Assert.DoesNotContain("Name: \"fileassoc\"", ava);
+        Assert.DoesNotContain("Tasks: fileassoc", ava);
+        Assert.DoesNotContain("WizardIsTaskSelected('fileassoc')", ava);
+        Assert.DoesNotContain("Type: files; Name: \"{app}\\WebView2Loader.dll\"", wpf);
+        Assert.Contains("Type: files; Name: \"{app}\\WebView2Loader.dll\"", ava);
     }
 
     [Fact]

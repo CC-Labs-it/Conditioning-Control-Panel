@@ -304,7 +304,7 @@ jobs:
           if ($neg -eq 0) { throw '--win-panic-check F23 passed: the check cannot fail' }
 
       # Separate Avalonia installer; workflow artifact only, never a release.
-      - name: Compile Avalonia installer (ISCC)
+      - name: Compile WPF and Avalonia installers (ISCC)
         timeout-minutes: 20
         run: |
           $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
@@ -313,6 +313,11 @@ jobs:
           curl.exe -L -f -o redist\VC_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           if ($LASTEXITCODE -ne 0) { throw 'VC redist download failed' }
           $version = ([xml](Get-Content Version.props)).Project.PropertyGroup.Version
+          # Also compile the default WPF entry point; never upload this check output.
+          dotnet publish ConditioningControlPanel/ConditioningControlPanel.csproj -c Release -r win-x64 --self-contained true -o C:\ccpb\wpf
+          if ($LASTEXITCODE -ne 0) { throw 'WPF publish failed' }
+          & $iscc '/DPublishDir=C:\\ccpb\\wpf' '/OC:\ccpb\wpf-installer' installer.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Default WPF ISCC failed' }
           $stage = 'C:\ccpb\avalonia'
           robocopy CCP.Avalonia\bin\publish\win-x64 $stage /MIR /NJH /NJS /NDL /NFL /NP
           if ($LASTEXITCODE -ge 8) { throw 'staging failed' }

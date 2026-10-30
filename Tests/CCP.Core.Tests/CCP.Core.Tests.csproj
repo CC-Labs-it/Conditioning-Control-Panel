@@ -51,4 +51,7 @@
     <Content Include="..\..\Assets\spiral.gif" Link="Spirals\spiral.gif" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\Shared\InstallerSource.cs" Link="InstallerSource.cs" />
+  </ItemGroup>
 </Project>

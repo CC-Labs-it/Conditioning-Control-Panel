@@ -17,6 +17,9 @@
 #define MyAppPublisher "CodeBambi"
 #define MyAppURL "https://github.com/CC-Labs-it/Conditioning-Control-Panel"
 #define MyAppExeName "ConditioningControlPanel.exe"
+#ifdef AvaloniaInstaller
+  #define SourceExeName "CCP.Avalonia.exe"
+#endif
 #define MyAppDescription "A professional visual conditioning application with gamification features"
 
 ; Path to the published output (adjust if needed)
@@ -25,7 +28,11 @@
 ; ~131 chars deep, and a handful of builtin-sissyhypno audio files push past MAX_PATH (260)
 ; from there, aborting the ISCC compile. Staging to e.g. C:\ccpb\pub keeps every path short.
 #ifndef PublishDir
-  #define PublishDir "ConditioningControlPanel\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish"
+#ifdef AvaloniaInstaller
+  #define PublishDir "CCP.Avalonia\bin\publish\win-x64"
+#else
+  #define PublishDir "ConditioningControlPanel\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish"
+#endif
 #endif
 
 [Setup]
@@ -66,7 +73,7 @@ UsePreviousPrivileges=yes
 ; Output settings
 OutputDir=.\installer-output
 OutputBaseFilename=ConditioningControlPanel-{#MyAppVersion}-Setup
-SetupIconFile=ConditioningControlPanel\Resources\app.ico
+SetupIconFile=Assets\app.ico
 
 ; Compression
 Compression=lzma2/ultra64
@@ -110,7 +117,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 Name: "startmenuicon"; Description: "Create a Start Menu shortcut"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
+#ifndef AvaloniaInstaller
 Name: "fileassoc"; Description: "Add 'Open with CCP' to right-click menu for media files (.mp4, .mp3, etc.)"; GroupDescription: "File associations:"; Flags: unchecked
+#endif
 
 [Files]
 ; Microsoft Visual C++ 2015-2022 x64 runtime bootstrapper. OpenCvSharpExtern.dll
@@ -131,11 +140,21 @@ Source: "redist\VC_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall;
 ;   https://go.microsoft.com/fwlink/p/?LinkId=2124703
 Source: "redist\MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: WebView2RuntimeNeeded
 
+#ifdef AvaloniaInstaller
+; Avalonia executable, renamed on install. CI builds are unsigned and are not release assets.
+Source: "{#PublishDir}\{#SourceExeName}"; DestDir: "{app}"; DestName: "{#MyAppExeName}"; Flags: ignoreversion
+
+; All other files from publish directory (the original exe name is excluded: it is installed above)
+Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "\{#SourceExeName},*.pdb,cs\*,de\*,es\*,fr\*,it\*,ja\*,ko\*,pl\*,pt-BR\*,ru\*,tr\*,zh-Hans\*,zh-Hant\*"
+
+#else
 ; Main executable
 Source: "{#PublishDir}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 
 ; All other files from publish directory
 Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.pdb,cs\*,de\*,es\*,fr\*,it\*,ja\*,ko\*,pl\*,pt-BR\*,ru\*,tr\*,zh-Hans\*,zh-Hant\*"
+
+#endif
 
 ; NOTE: Don't include user data files - those go to %APPDATA%
 
@@ -199,6 +218,11 @@ Type: files;      Name: "{app}\Resources\sounds\PRIMPED AND PAMPERED.MP3"
 Type: files;      Name: "{app}\Resources\sounds\SNAP AND FORGET.MP3"
 Type: files;      Name: "{app}\Resources\sounds\ZAP COCK DRAIN OBEY.mp3"
 
+#ifdef AvaloniaInstaller
+; Retire the WPF loose loader only when installing Avalonia.
+Type: files; Name: "{app}\WebView2Loader.dll"
+#endif
+
 [Icons]
 ; Start Menu shortcut
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: startmenuicon
@@ -213,6 +237,7 @@ Root: HKCU; Subkey: "Software\{#MyAppPublisher}\{#MyAppName}"; ValueType: string
 Root: HKCU; Subkey: "Software\{#MyAppPublisher}\{#MyAppName}"; ValueType: string; ValueName: "Version"; ValueData: "{#MyAppVersion}"; Flags: uninsdeletekey
 ; Assets path will be written by [Code] section during install
 
+#ifndef AvaloniaInstaller
 ; --- "Open with CCP" file association (per-user, no admin required) ---
 ; Two ProgIDs so the Open With list shows two entries with the app icon:
 ;   "CCP Player" (--play)  →  EnhancementPlayerWindow
@@ -264,6 +289,8 @@ Root: HKCU; Subkey: "Software\Classes\.flac\OpenWithProgids"; ValueType: string;
 Root: HKCU; Subkey: "Software\Classes\.ogg\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
 Root: HKCU; Subkey: "Software\Classes\.ogg\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
 
+#endif
+
 [Run]
 ; Install the VC++ runtime first (only if missing) so the webcam native library
 ; can load on first launch. Self-elevates via UAC; /norestart keeps setup flowing.
@@ -287,6 +314,10 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 Filename: "taskkill"; Parameters: "/F /IM {#MyAppExeName}"; Flags: runhidden; RunOnceId: "KillApp"
 
 [UninstallDelete]
+#ifdef AvaloniaInstaller
+Type: filesandordirs; Name: "{app}\{#MyAppExeName}.WebView2"
+Type: filesandordirs; Name: "{app}\{#SourceExeName}.WebView2"
+#endif
 ; Clean up any generated files (optional)
 Type: filesandordirs; Name: "{app}\logs"
 
@@ -635,7 +666,11 @@ begin
       Sleep(2000);
 
       // Force kill if still running
+#ifdef AvaloniaInstaller
+      if CheckForMutexes('ConditioningControlPanel_SingleInstance_Mutex') then
+#else
       if CheckForMutexes('{#MyAppName}_Mutex') then
+#endif
       begin
         ShellExec('', 'taskkill', '/F /IM {#MyAppExeName}', '', SW_HIDE, ewWaitUntilTerminated, ErrorCode);
         Sleep(1000);
@@ -681,7 +716,9 @@ begin
     end;
 
     // Remove any pre-existing file associations if the user opted out (or silent install)
+#ifndef AvaloniaInstaller
     if not WizardIsTaskSelected('fileassoc') then
+#endif
       CleanupFileAssociations();
 
     // Offer to clean up old Velopack installation
