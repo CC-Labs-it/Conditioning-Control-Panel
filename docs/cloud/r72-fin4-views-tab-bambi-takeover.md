@@ -51,3 +51,11 @@ filter is TakeoverTabUiTests|PanicSurfacesTests|PremiumGatesTests|TestIsolationT
 Final restored headless run: 23 passed, 0 failed, 0 skipped. All three builds,
 core-guards.sh, avalonia_docs.py and git diff --check pass. The full Avalonia
 test assembly was compiled; only the affected and isolation filter was run.
+
+Review P2: live tube mute now governs loop parking and volume, with settings
+fallback (CCP.Avalonia/Platform/MantraChantHost.cs:23,34; WPF
+ConditioningControlPanel/Services/MantraChantService.cs:185-193,231-253).
+The focused tab test minimizes/restores the shell with an attached avatar,
+checks zero volume and disposed audio, and verifies fresh-pair resume.
+Review validation: both mute-gate reversions failed independently, then restored.
+Core: 4648 passed, 6 inherited skips; affected/windowing/isolation: 28 passed.

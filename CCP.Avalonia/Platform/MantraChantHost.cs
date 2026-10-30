@@ -20,7 +20,7 @@ internal sealed class MantraChantHost : IDisposable
             var entry = App.MantraVoice.NextMantra();
             return MantraChantLoop.ResolveClips(App.MantraVoice.ResolveAudio(entry?.PromptAudio),
                 App.MantraVoice.ResolveAudio(entry?.ResponseAudio));
-        }, () => CoreSettings.Current.AvatarMuted, () => CoreSettings.Current.MantraChantGapSeconds,
+        }, () => (Views.AvatarTube.AvatarTubeWindow.Live?.IsMuted ?? CoreSettings.Current.AvatarMuted), () => CoreSettings.Current.MantraChantGapSeconds,
         (path, generation) =>
         {
             StopAudio();
@@ -31,7 +31,7 @@ internal sealed class MantraChantHost : IDisposable
         _watch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(.5) };
         _watch.Tick += (_, _) => { _loop.Tick(_clock.Elapsed); ApplyVolume(); ScheduleWatch(); };
     }
-    private double Volume => MantraChantLoop.ResolveVolume(CoreSettings.Current.AvatarMuted,
+    private double Volume => MantraChantLoop.ResolveVolume((Views.AvatarTube.AvatarTubeWindow.Live?.IsMuted ?? CoreSettings.Current.AvatarMuted),
         CoreSettings.Current.MantraChantVolume, CoreSettings.Current.MasterVolume);
     internal bool IsRunning => _loop.IsRunning;
     internal void Start() { _loop.Start(_clock.Elapsed); ScheduleWatch(); }

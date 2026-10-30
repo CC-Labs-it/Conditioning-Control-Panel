@@ -32,7 +32,7 @@ public sealed class TakeoverTabUiTests
     }
 
     [Fact]
-    public Task ChantControlsAndPanicFollowSettings() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task ChantControlsMinimizeRestoreAndPanicFollowSettings() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -51,8 +51,15 @@ public sealed class TakeoverTabUiTests
         var dir = Path.Combine(root, "resources", "sounds", "companion_audio");
         Directory.CreateDirectory(dir);
         File.WriteAllText(Path.Combine(dir, "p.mp3"), "audio");
+        File.WriteAllText(Path.Combine(dir, "r.mp3"), "audio");
         File.WriteAllText(Path.Combine(dir, "mantras.json"),
-            "{\"mantras\":[{\"id\":\"a\",\"phrase\":\"Obey\",\"promptAudio\":\"p.mp3\"}]}");
+            "{\"mantras\":[{\"id\":\"a\",\"phrase\":\"Obey\",\"promptAudio\":\"p.mp3\",\"responseAudio\":\"r.mp3\"}]}");
+        var oldLifetime = Application.Current!.ApplicationLifetime;
+        using var lifetime = new global::Avalonia.Controls.ApplicationLifetimes.ClassicDesktopStyleApplicationLifetime {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        lifetime.GetType().GetMethod("SubscribeGlobalEvents", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(lifetime, null);
+        var lifetimeField = typeof(Application).GetField("_applicationLifetime", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        lifetimeField.SetValue(Application.Current, lifetime);
         var shell = new MainShellWindow();
         try
         {
@@ -82,6 +89,35 @@ public sealed class TakeoverTabUiTests
             Assert.Equal(7, s.MantraChantGapSeconds);
             Assert.Equal("37%", tab.FindControl<TextBlock>("TxtMantraChantVolume")!.Text);
             Assert.Equal("7s", tab.FindControl<TextBlock>("TxtMantraChantGap")!.Text);
+            // WPF MantraChantService.cs:185-193,231-253: live minimize mute, then a fresh pair.
+            s.AvatarMuted = false;
+            s.AvatarEnabled = true;
+            s.AvatarTubeDetached = false;
+            shell.ShowAvatarTube();
+            var tube = global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow.Live!;
+            Assert.NotNull(tube);
+            tube.Attach();
+            var chant = global::ConditioningControlPanel.Avalonia.App.MantraChant;
+            var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+            var loop = (ConditioningControlPanel.Services.MantraChantLoop)typeof(MantraChantHost).GetField("_loop", flags)!.GetValue(chant)!;
+            var pending = (Queue<string>)loop.GetType().GetField("_pending", flags)!.GetValue(loop)!;
+            Assert.EndsWith("r.mp3", Assert.Single(pending));
+            shell.WindowState = WindowState.Minimized;
+            Assert.True(tube.IsMuted);
+            Assert.False(s.AvatarMuted);
+            chant.ApplyVolume();
+            Assert.Equal(0, voice.Level);
+            loop.Tick(TimeSpan.Zero);
+            Assert.True(voice.Disposed);
+            Assert.Empty(pending);
+            loop.Tick(TimeSpan.FromSeconds(100));
+            Assert.Empty(pending); // stays silent while minimized
+            shell.WindowState = WindowState.Normal;
+            Assert.False(tube.IsMuted);
+            loop.Tick(TimeSpan.FromSeconds(101));
+            Assert.EndsWith("r.mp3", Assert.Single(pending)); // prompt consumed, affirmation still owed
+            voice = new ChantVoice(); // keep the original panic teardown assertion independent of minimize
+            typeof(MantraChantHost).GetField("_voice", flags)!.SetValue(chant, voice);
             PanicSurfaces.All.Single(x => x.Id == "mantra-chant").Stop(shell);
             Assert.False(s.MantraChantEnabled);
             Assert.False(global::ConditioningControlPanel.Avalonia.App.MantraChant.IsRunning);
@@ -97,6 +133,7 @@ public sealed class TakeoverTabUiTests
             (s.MantraChantEnabled, s.MantraChantVolume, s.MantraChantGapSeconds, s.MasterVolume) = saved;
             (CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider, LibVlcAudio.Instance) = old;
             shell.Close();
+            lifetimeField.SetValue(Application.Current, oldLifetime);
             Directory.Delete(root, true);
         }
         return Task.CompletedTask;
