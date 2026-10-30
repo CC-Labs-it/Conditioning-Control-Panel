@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -135,8 +136,11 @@ public sealed class ChaosGifCascadeOverlayTests
                         Payload = new GifCascadePayload { DurationMult = 9 }
                     });
                     // A real failed hold: no focus detonates on press, through the run callback.
+                    var cues = new List<string>();
+                    CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => cues.Add(Path.GetFileNameWithoutExtension(path));
                     ChaosRunHost.State!.Focus = 0;
                     BubbleOverlay.Press(bubble, bubble.CenterX, bubble.CenterY);
+                    Assert.Contains("fx_rain_start", cues); // detonation must preserve the htlink variant
                     Assert.NotNull(ChaosGifCascadeOverlay.LastPick);
                     await ChaosGifCascadeOverlay.LastPick!;
                     Dispatcher.UIThread.RunJobs();
@@ -193,29 +197,31 @@ public sealed class ChaosGifCascadeOverlayTests
             BubbleOverlay.Field.Clock = () => now;
             int fired = 0;
             EffectPayload.Firer = _ => fired++;
+            void Detonate(EffectPayload payload) =>
+                ChaosRunHost.FirePayloadForDetonation(new EffectBubbleSpec { Payload = payload });
             try
             {
                 ChaosRunHost.ForceShutdown();
-                ChaosRunHost.FirePayloadForDetonation(new GifCascadePayload());
-                ChaosRunHost.FirePayloadForDetonation(new GifCascadePayload());
-                ChaosRunHost.FirePayloadForDetonation(new VideoPayload());
+                Detonate(new GifCascadePayload());
+                Detonate(new GifCascadePayload());
+                Detonate(new VideoPayload());
                 Assert.Equal(1, fired);
-                ChaosRunHost.FirePayloadForDetonation(new FlashPayload());
+                Detonate(new FlashPayload());
                 Assert.Equal(2, fired); // light effects still fire
                 now = now.AddSeconds(10.9);
-                ChaosRunHost.FirePayloadForDetonation(new GifCascadePayload());
+                Detonate(new GifCascadePayload());
                 Assert.Equal(2, fired);
                 now = now.AddSeconds(0.2);
                 ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
                 ChaosGifCascadeOverlay.ManualFramesForTests = true;
                 Show("missing.gif"); // decoding may fail, but the faller is still real rain
-                ChaosRunHost.FirePayloadForDetonation(new GifCascadePayload());
+                Detonate(new GifCascadePayload());
                 Assert.Equal(2, fired);
                 ChaosGifCascadeOverlay.CloseActive();
-                ChaosRunHost.FirePayloadForDetonation(new GifCascadePayload());
+                Detonate(new GifCascadePayload());
                 Assert.Equal(3, fired);
                 ChaosRunHost.ForceShutdown();
-                ChaosRunHost.FirePayloadForDetonation(new GifCascadePayload());
+                Detonate(new GifCascadePayload());
                 Assert.Equal(4, fired);
             }
             finally
@@ -224,6 +230,45 @@ public sealed class ChaosGifCascadeOverlayTests
                 ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
                 ChaosGifCascadeOverlay.ManualFramesForTests = false;
             }
+            return Task.CompletedTask;
+        });
+    }
+
+    // WPF ChaosModeService.cs:2321-2337: sound is chosen by variant and never plays for a dropped rain.
+    [Theory]
+    [InlineData("htlink", true)]
+    [InlineData("other", false)]
+    public async Task Rain_stinger_uses_variant_and_only_plays_after_heavy_gate_accepts(string variant, bool sounds)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var now = DateTime.UtcNow;
+            BubbleOverlay.Field.Clock = () => now;
+            CoreSettings.Current.MasterVolume = 100;
+            var events = new List<(string Key, float Volume)>();
+            CoreAudio.PlayOneShotProvider = (path, volume, _, _, _) =>
+                events.Add((Path.GetFileNameWithoutExtension(path), volume));
+            EffectPayload.Firer = _ => events.Add(("fire", 0f));
+            var spec = new EffectBubbleSpec { VariantId = variant, Payload = new GifCascadePayload() };
+            var expected = sounds
+                ? new[] { ("fx_rain_start", 0.45f), ("fire", 0f) }
+                : new[] { ("fire", 0f) };
+            try
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosRunHost.FirePayloadForDetonation(spec);
+                Assert.Equal(expected, events); // accepted: variant sound at 0.45, then payload
+                ChaosRunHost.FirePayloadForDetonation(spec);
+                Assert.Equal(expected, events); // dropped: neither sound nor payload
+                now = now.AddSeconds(11.1);
+                ChaosRunHost.FirePayloadForDetonation(spec);
+                Assert.Equal(expected.Concat(expected), events);
+            }
+            finally { ChaosRunHost.ForceShutdown(); }
             return Task.CompletedTask;
         });
     }

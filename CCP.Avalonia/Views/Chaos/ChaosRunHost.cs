@@ -283,7 +283,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
             // Other payload runners and the ambient remap remain unported.
             EffectLabel(b);   // WPF Detonate :4862
-            FirePayloadForDetonation(spec.Payload);
+            FirePayloadForDetonation(spec);
             ChaosRunLessons.OnDetonation();   // silk_touch: the loop is no longer clean
             string name = spec.Payload.DisplayName;
             double s = spec.Strength / 100.0;
@@ -363,14 +363,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         // WPF ChaosModeService.cs:2155-2156,2295-2322: drop overlapping heavy
         // detonations, including during the off-thread pool pick, without queuing.
-        internal static void FirePayloadForDetonation(EffectPayload payload)
+        internal static void FirePayloadForDetonation(EffectBubbleSpec spec)
         {
+            var payload = spec.Payload;
             bool heavy = payload.Kind is EffectBubblePayloadKind.GifCascade or EffectBubblePayloadKind.Video;
             var now = BubbleOverlay.Field.Clock();
             if (heavy && (CoreEngine.Video?.IsPlaying == true || ChaosGifCascadeOverlay.IsRaining || now < _heavyUntilUtc))
                 return;
             if (payload.Kind == EffectBubblePayloadKind.GifCascade)
                 _heavyUntilUtc = now.AddSeconds(GifCascadePayload.DURATION_SEC + 5);
+            // WPF ChaosModeService.cs:2321-2337: the variant's stinger follows gate acceptance.
+            if (spec.VariantId == "htlink") ChaosOverlayWindow.ChaosSfx.Play("fx_rain_start", 0.45f);
             FireScaledPayload(payload);
         }
 
