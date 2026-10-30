@@ -16,12 +16,14 @@ internal sealed class FloatingVideoFrame
     private readonly FloatingVideoMotion _motion;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(16) };
+    private readonly Func<double> _nowMs;
     private double _last;
     internal double MotionSpeed { get => _motion.Speed; set => _motion.Speed = value; }
 
-    internal FloatingVideoFrame(Window window)
+    internal FloatingVideoFrame(Window window, Func<double>? nowMs = null)
     {
         _window = window;
+        _nowMs = nowMs ?? (() => _clock.Elapsed.TotalMilliseconds);
         var b = window.Screens.ScreenFromWindow(window)?.WorkingArea ?? new PixelRect(0, 0, 1920, 1080);
         _motion = new(window.Position.X, window.Position.Y, window.Width * window.RenderScaling,
             window.Height * window.RenderScaling, b.X, b.Y, b.Width, b.Height);
@@ -72,7 +74,7 @@ internal sealed class FloatingVideoFrame
         _motion.Resync(_window.Position.X, _window.Position.Y,
             _window.Bounds.Width * _window.RenderScaling, _window.Bounds.Height * _window.RenderScaling, rehome: true);
         var p = Pointer(e);
-        _motion.Press(p.X, p.Y, _clock.Elapsed.TotalMilliseconds);
+        _motion.Press(p.X, p.Y, _nowMs());
         e.Pointer.Capture(_window);
     }
 
@@ -80,7 +82,7 @@ internal sealed class FloatingVideoFrame
     {
         if (!_motion.Held) return;
         var p = Pointer(e);
-        _motion.Move(p.X, p.Y, _clock.Elapsed.TotalMilliseconds);
+        _motion.Move(p.X, p.Y, _nowMs());
         _motion.Step(0.001);
         Place();
     }
@@ -88,14 +90,17 @@ internal sealed class FloatingVideoFrame
     private void Release(object? sender, PointerReleasedEventArgs e)
     {
         if (!_motion.Held || e.InitialPressMouseButton != MouseButton.Left) return;
-        _motion.Release(_clock.Elapsed.TotalMilliseconds, CoreSettings.Current.MotionLevel);
+        var p = Pointer(e);
+        var now = _nowMs();
+        _motion.Move(p.X, p.Y, now);
+        _motion.Release(now, CoreSettings.Current.MotionLevel);
         e.Pointer.Capture(null);
         Place();
     }
 
     internal void Tick()
     {
-        var now = _clock.Elapsed.TotalSeconds;
+        var now = _nowMs() / 1000.0;
         MotionSpeed = CoreSettings.Current.MandatoryVideoFloatingSpeedPercent / 100.0;
         _motion.Resize(_window.Bounds.Width * _window.RenderScaling, _window.Bounds.Height * _window.RenderScaling);
         if (!_motion.Active)

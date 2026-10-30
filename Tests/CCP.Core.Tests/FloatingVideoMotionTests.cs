@@ -82,4 +82,28 @@ public sealed class FloatingVideoMotionTests
         Assert.True(Math.Abs(m.Vx) <= 1800);
         if (level == MotionLevel.Off) Assert.False(m.Flying);
     }
+    [Fact]
+    public void A_fast_drag_is_thrown_the_way_the_hand_went_not_the_way_its_last_twitch_did()
+    {
+        // WPF regression: a 1 kHz rightward drag ends with a 2 px leftward twitch.
+        var m = New();
+        m.Press(650, 350, 0);
+        double x = 650;
+        for (int ms = 1; ms <= 60; ms++) { x += 3; m.Move(x, 350, ms); }
+        m.Move(x - 2, 350, 60.05);
+        Assert.Equal(FlashDragOutcome.Fling, m.Release(60.1, MotionLevel.Full));
+        Assert.True(m.Vx > 0, $"thrown backwards: {m.Vx}");
+        Assert.Equal(0, m.Vy, 6);
+    }
+
+    [Fact]
+    public void A_hand_that_stopped_before_letting_go_places_the_window()
+    {
+        var m = New();
+        m.Press(650, 350, 0);
+        for (int ms = 1; ms <= 40; ms++) m.Move(650 + ms * 3, 350, ms);
+        Assert.Equal(FlashDragOutcome.Place, m.Release(400, MotionLevel.Full));
+        Assert.False(m.Active);
+    }
+
 }
