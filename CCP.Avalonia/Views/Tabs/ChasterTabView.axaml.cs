@@ -49,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public ChasterTabView()
         {
             InitializeComponent();
+            HookLinkComet();
             _tick.Tick += (_, _) => { PaintHeroClock(); PaintChasterChip(ChasterHead.Service); };
             SlowTick.Tick += (_, _) => RefreshHero();
             // WPF (:99) only listens and ticks while the page is on screen; the shell hides tabs with IsVisible.
@@ -408,8 +409,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void ShowLinking(bool linking)
         {
+            _linking = linking;
             BtnLink.IsVisible = !linking;
             LinkingRow.IsVisible = linking;
+            RefreshLinkComet();
         }
 
         private async void BtnLink_Click(object? sender, RoutedEventArgs e)
