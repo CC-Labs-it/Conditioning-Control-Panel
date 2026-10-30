@@ -71,6 +71,18 @@ export function buildMainframe() {
     const node = nearest(s); nodes[node].flags.push('boost'); track.boosts.push({ node, x: 0, w: 6, len: 7.5 });
   }
   for (const d of [80, 90, 100, 110, 120]) track.items.push({ node: nearest(at('canal', d)), x: -3, kind: 'bubble' });
+  // Ramps (handoff-1030/GLASSROAD-RAMPS.md): lip nodes on straights, proven by tests/ramps-mainframe.test.mjs.
+  const canalLip = spans.canal.from + 27, memoryLip = spans.memory.from + 60, underpassLip = spans['bus-underpass'].from + 26;
+  track.ramps = [
+    { id: 'mf-ramp-canal', node: canalLip, x: 0, widthM: 6, lenM: 7, heightM: 1.2, upMps: 13, purpose: 'air',
+      note: 'kicks out of the coolant tube mouth, crown 40 m up, and lands on the core approach before the press bank' },
+    { id: 'mf-ramp-memory', node: memoryLip, x: 0, widthM: 8, lenM: 8, heightM: 1.2, upMps: 13, purpose: 'item',
+      note: 'off the far memory deck past the tiles: three floating boxes on the arc before the exit funnel' },
+    { id: 'mf-ramp-underpass', node: underpassLip, x: 0, widthM: 6, lenM: 7, heightM: 1, upMps: 12, purpose: 'air',
+      note: 'a hop down the lower bus straight under the descent, clear of the tar and the rams' },
+  ];
+  // Lifted boxes ride the memory ramp arc at about 50-60 m/s (lip + ds, height above the deck).
+  for (const [ds, liftM] of [[12, 3.6], [24, 4.2], [36, 3.8]]) track.items.push({ node: memoryLip, ds, x: 0, kind: 'box', liftM });
   const from = spans.memory.from + 4, to = from + Math.round((spans.memory.to - 4 - from) * 2 / 3), lanes = [-80, -40, 0, 40, 80], stones = [];
   const s0 = loaded.nodeS[from], s1 = loaded.nodeS[to];
   for (let i = from; i < to; i++) nodes[i].flags = ['open'];

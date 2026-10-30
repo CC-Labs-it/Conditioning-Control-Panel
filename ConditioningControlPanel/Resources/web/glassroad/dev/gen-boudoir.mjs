@@ -6,6 +6,7 @@ import { validate } from '../track/schema.js';
 import { BOUDOIR_PIECES, boudoirPieceLength, boudoirSegmentCount, walkBoudoir, getBoudoirLayout } from '../track/boudoir-layout.js';
 import { makeBoudoirForks } from '../track/boudoir-forks.js';
 import { makeBoudoirBoosts } from '../track/boudoir-boosts.js';
+import { makeBoudoirRamps, makeBoudoirRampBoxes } from '../track/boudoir-ramps.js';
 const RAD = Math.PI / 180, smooth = u => u * u * (3 - 2 * u), round = x => +x.toFixed(3) || 0;
 export function buildBoudoir() {
   const plan = walkBoudoir(BOUDOIR_PIECES), nodes = [], starts = [];
@@ -70,6 +71,9 @@ export function buildBoudoir() {
   track.waterSpills = [{ fromS: at('bath-stream', 100), toS: at('bath-stream', 150), side: -1, dropM: 36 },
     { fromS: at('bath-turn', 70), toS: at('bath-turn', 105), side: 1, dropM: 40 },
     { fromS: at('bath-chute', 20), toS: at('bath-chute', 55), side: 1, dropM: 34 }];
+  // Ramps come last: boosts and spills above are placed without the floating boxes.
+  track.ramps = makeBoudoirRamps(id => node(id));
+  track.items.push(...makeBoudoirRampBoxes(track.ramps));
   const result = validate(track); if (!result.ok || result.warnings.length) throw Error(JSON.stringify(result));
   return track;
 }
