@@ -136,7 +136,7 @@ public sealed class SharedDeeperThemeTests
     /// <summary>Hand-stepped animation clock, so transitions advance only when the test says so. Avalonia 12 made
     /// IClock internal, and the headless render clock is real time, so this reaches Avalonia's own ClockBase by
     /// reflection; a rename there fails loudly here instead of silently passing.</summary>
-    private sealed class StepClock
+    internal sealed class StepClock
     {
         private const System.Reflection.BindingFlags Any = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
         private static readonly Type Base = typeof(Animatable).Assembly.GetType("Avalonia.Animation.ClockBase", throwOnError: true)!;

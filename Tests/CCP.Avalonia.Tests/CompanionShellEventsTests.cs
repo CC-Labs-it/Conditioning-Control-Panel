@@ -69,16 +69,21 @@ public sealed class CompanionShellEventsTests
         s.ActiveCompanionProgress.CurrentXP = 11;
         var overlay = shell.GetLogicalDescendants().OfType<CompanionHeroCard>().Single()
             .FindControl<Border>("PrgCompanion0FlashOverlay")!;
-        Assert.Equal(0, overlay.Opacity);
-        CompanionCore.DrainTick(DateTime.UtcNow);
-        double peak = 0;
-        for (int i = 0; i < 30; i++)
+        var header = shell.FindControl<Border>("XPBarFlashOverlay")!;
+        var clock = new SharedDeeperThemeTests.StepClock();
+        foreach (var bar in new[] { header, overlay })
         {
-            Dispatcher.UIThread.RunJobs();
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-            peak = Math.Max(peak, overlay.Opacity);
+            Assert.Equal(0, bar.Opacity);
+            bar.SetValue(SharedDeeperThemeTests.StepClock.Property, clock.Instance);
         }
-        Assert.True(peak > 0, "the drain never flashed the hero card's XP bar");
+        CompanionCore.DrainTick(DateTime.UtcNow);
+        // WPF MainWindow.Companion.cs:116-130: 250 ms EaseOut forward, then auto-reverse.
+        clock.Step(0);
+        foreach (var (ms, opacity) in new[] { (125, 0.75), (250, 1.0), (375, 0.75), (500, 0.0) })
+        {
+            clock.Step(ms);
+            foreach (var bar in new[] { header, overlay }) Assert.Equal(opacity, bar.Opacity, 5);
+        }
     });
 
     [Fact]

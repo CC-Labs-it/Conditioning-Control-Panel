@@ -143,24 +143,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>
-        /// One 0 -> 1 -> 0 opacity pulse. WPF ran a 250ms DoubleAnimation with AutoReverse; the
-        /// Avalonia twin is one 500ms keyframe animation with the peak at the halfway cue, which
-        /// is the same curve and leaves the overlay back at its XAML opacity afterwards (FillMode
-        /// None) rather than pinned by a local value.
+        /// WPF MainWindow.Companion.cs:116-130: 250 ms EaseOut forward, then auto-reverse.
+        /// Ease each leg independently so the peak is at 250 ms; leave the overlay at its XAML
+        /// opacity afterwards (FillMode.None).
         /// </summary>
         private static void FlashOverlay(Border? overlay)
         {
             if (overlay == null) return;
             var anim = new Animation
             {
-                Duration = TimeSpan.FromMilliseconds(500),
+                Duration = TimeSpan.FromMilliseconds(250),
+                IterationCount = new IterationCount(2),
+                PlaybackDirection = PlaybackDirection.Alternate,
                 Easing = new QuadraticEaseOut(),
                 FillMode = FillMode.None,
                 Children =
                 {
                     new KeyFrame { Cue = new Cue(0d),   Setters = { new Setter(Visual.OpacityProperty, 0d) } },
-                    new KeyFrame { Cue = new Cue(0.5d), Setters = { new Setter(Visual.OpacityProperty, 1d) } },
-                    new KeyFrame { Cue = new Cue(1d),   Setters = { new Setter(Visual.OpacityProperty, 0d) } },
+                    new KeyFrame { Cue = new Cue(1d),   Setters = { new Setter(Visual.OpacityProperty, 1d) } },
                 },
             };
             _ = anim.RunAsync(overlay);

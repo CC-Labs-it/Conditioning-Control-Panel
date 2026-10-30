@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Companion;
 using Xunit;
 
@@ -11,12 +12,14 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public sealed class CompanionCoreTests : IDisposable
 {
+    private readonly string _oldLanguage = LocalizationManager.Instance.CurrentLanguage;
     private readonly AppSettings _s = CoreSettings.Current;
     private readonly (int, CompanionBonusType?, double, int, int, bool, bool, string) _old;
     private readonly Dictionary<int, CompanionProgress> _oldProgress;
 
     public CompanionCoreTests()
     {
+        LocalizationManager.Instance.Initialize("en");
         _old = (_s.ActiveCompanionId, _s.CompanionPerk, _s.PlayerXP, _s.PlayerLevel, _s.HighestLevelEver, _s.StrictLockEnabled, _s.OfflineMode, _s.OfflineUsername);
         (_oldProgress, _s.CompanionProgressData) = (_s.CompanionProgressData, new());
     }
@@ -25,6 +28,7 @@ public sealed class CompanionCoreTests : IDisposable
     {
         (_s.ActiveCompanionId, _s.CompanionPerk, _s.PlayerXP, _s.PlayerLevel, _s.HighestLevelEver, _s.StrictLockEnabled, _s.OfflineMode, _s.OfflineUsername) = _old;
         _s.CompanionProgressData = _oldProgress;
+        LocalizationManager.Instance.Initialize(_oldLanguage);
     }
 
     [Fact]
