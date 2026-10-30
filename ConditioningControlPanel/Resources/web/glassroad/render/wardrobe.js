@@ -7,11 +7,11 @@
  *   to cup_body / saucer_body (shared by every kart on a vehicle); the source geometry stays untouched.
  * No clips here: the shared kart mixer moves every piece.
  */
-import { SkinnedMesh, Skeleton, Matrix4, BufferGeometry, BufferAttribute, SRGBColorSpace, Color, FloatType } from 'three/webgpu';
+import { SkinnedMesh, Skeleton, Matrix4, Box3, BufferGeometry, BufferAttribute, SRGBColorSpace, Color, FloatType } from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createVehicleLife } from './vehicleLife.js';
 import { racerFinish } from './racerFinish.js';
-import { catalogFrom, lookForSeat as pick, sameJoints, cutIndex, SHOP_PIECES } from './wardrobeMath.js';
+import { catalogFrom, lookForSeat as pick, sameJoints, cutIndex, SHOP_PIECES, umbrellaStep, umbrellaShape } from './wardrobeMath.js';
 
 const json = (f) => fetch(new URL('../art/models/' + f, import.meta.url)).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 const [WARDROBE, VARIANTS] = await Promise.all([json('emi-bot-wardrobe.json'), json('emi-vehicle-variants.json')]);
@@ -23,7 +23,7 @@ const SHOP_IDS = new Set([...SHOP_PIECES.outfits, ...Object.values(SHOP_PIECES.u
 /** The look for a seat (render/wardrobeMath.js lookForSeat over the loaded catalog); want = a remote player's ids. */
 export const lookForSeat = (seat, seed, want) => pick(seat, seed, CATALOG, want);
 
-const I4 = new Matrix4(), WHITE = new Color(1, 1, 1), TC = new Color();
+const I4 = new Matrix4(), UM = new Matrix4(), WHITE = new Color(1, 1, 1), TC = new Color();
 const cutCache = new WeakMap(), mergeCache = new WeakMap();
 
 function skinnedIn(root) { const out = []; root.traverse((o) => { if (o.isSkinnedMesh) out.push(o); }); return out; }
@@ -147,7 +147,7 @@ function flat(a) {
  * back (a re-dress).
  */
 export function dressKart(art, model, look, { tint = null, tintMix = 0.6 } = {}) {
-  const kart = kartSurface(model), res = { outfit: null, vehicle: null, umbrella: null, trail: null, tris: 0, draws: 0, dispose() {}, showUmbrella() {} };
+  const kart = kartSurface(model), res = { outfit: null, vehicle: null, umbrella: null, trail: null, tris: 0, draws: 0, dispose() {}, showUmbrella() {}, glideUmbrella() {} };
   if (!kart || !art || !look) return res;
   const parent = kart.parent, owned = [], added = [], srcGeo = kart.geometry;
   let vehicleLife = null;
@@ -183,7 +183,26 @@ export function dressKart(art, model, look, { tint = null, tintMix = 0.6 } = {})
     if (meshes) {
       for (const m of meshes) { m.userData.noCast = true; m.visible = false; parent.add(m); added.push(m); res.tris += triCount(m.geometry); }
       res.umbrella = look.umbrella; res.draws += meshes.length;
-      res.showUmbrella = (on) => { for (const m of meshes) m.visible = !!on; };
+      // IN and OUT (desk run 2026-10-30): an attached-bind skinned mesh ignores its own scale (three re-derives
+      // bindMatrixInverse from matrixWorld), so the canopy scales through its bind matrix, in bind space about the
+      // handle's foot, before the shared kart bones move it. Open (u = 1) is the identity bind again.
+      const box = meshes.reduce((b, m) => { if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); return b.union(m.geometry.boundingBox); }, new Box3());
+      const px = (box.min.x + box.max.x) / 2, py = box.min.y, pz = (box.min.z + box.max.z) / 2;
+      let open = 0, opening = false;
+      const pose = (gentle) => {
+        const vis = open > 1e-3;
+        if (vis) {
+          const { radial: r, height: h } = umbrellaShape(open, opening, gentle);
+          UM.set(r, 0, 0, px * (1 - r), 0, h, 0, py * (1 - h), 0, 0, r, pz * (1 - r), 0, 0, 0, 1);
+        }
+        for (const m of meshes) { m.visible = vis; if (vis) m.bindMatrix.copy(UM); }
+      };
+      res.showUmbrella = (on) => { open = on ? 1 : 0; opening = !!on; pose(false); };   // at once: the garage, a reset
+      res.glideUmbrella = (on, dt, gentle = false) => {                               // the race: glides open, folds away
+        const next = umbrellaStep(open, !!on, dt, gentle);
+        if (next === open && !!on === opening) return;
+        open = next; opening = !!on; pose(gentle);
+      };
     }
   }
   const trailId = look.trail && Object.hasOwn(SHOP_PIECES.trails, look.trail) ? SHOP_PIECES.trails[look.trail] : null;
