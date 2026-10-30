@@ -79,6 +79,8 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
   };
   const onResize = () => { if (scene) { scene.resize(); scene.setInsets(hud.insets()); } };
   if (scene) scene.onIntent(intent); else window.addEventListener('keydown', onKey);
+  // The host's answer to an in-place Wear: a refusal replaces the card's "Wearing it now." (fix wave F1).
+  if (typeof host.onWorn === 'function') host.onWorn((m) => apply(shop.worn(m && m.id, !!(m && m.ok === true))));
   window.addEventListener('resize', onResize);
   paint();
   apply(await shop.load());

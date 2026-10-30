@@ -22,6 +22,9 @@ public partial class MainWindow
         Deactivated += (_, _) => HeaderSparkleWallet.ClosePopup();
         if (App.ProfileSync != null) App.ProfileSync.ProfileLoaded += OnSparkleWalletProfileLoaded;
         ReplaceSparkleWalletSettings();
+        // A launcher-first boot can load the profile before this window exists: read once now too
+        // (no-op signed out or offline; the 10-minute guard keeps ProfileLoaded from doubling it).
+        Services.PrizeCounter.PrizeCounterHostService.RefreshWalletInBackground();
     }
 
     /// <summary>The profile landed: read the counter's wallet once (raise-only), so the header is not

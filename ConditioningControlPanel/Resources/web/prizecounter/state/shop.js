@@ -205,6 +205,13 @@ export function createShop({ request, newIdem, tab: startTab = null, wears = und
       return { focus: focusView() };
     },
 
+    /** The host's worn {id, ok} after an in-place Wear: a refusal on the open card says so instead of "Wearing it now". */
+    worn(id, ok) {
+      if (ok || !card || card.itemId !== id || card.noteKey !== 'shop_worn') return {};
+      card.noteKey = 'shop_note_try_again';
+      return { card: cardView() };
+    },
+
     /** One buy with the card's idem. A press while pending sends nothing; a retry reuses the idem. */
     async confirm() {
       const c = card, v = cardView();

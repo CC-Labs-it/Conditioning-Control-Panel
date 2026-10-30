@@ -256,10 +256,12 @@ internal static class PrizeCounterHostService
                 try
                 {
                     var reply = await relay.RelayAsync(PrizeCounterRelay.OpState, null, null).ConfigureAwait(false);
+                    // A read that did not land (boot before the network, busy) leaves the next ProfileLoaded free to try.
+                    if (reply?["ok"]?.Type != JTokenType.Boolean || !(bool)reply["ok"]!) { _walletReadFor = null; return; }
                     var prices = RainPricesFrom(reply);
                     if (prices.Count > 0) _rainPrices = prices;
                 }
-                catch (Exception ex) { App.Logger?.Debug("PrizeCounter: wallet read failed: {E}", ex.Message); }
+                catch (Exception ex) { _walletReadFor = null; App.Logger?.Debug("PrizeCounter: wallet read failed: {E}", ex.Message); }
             });
         }
         catch (Exception ex) { App.Logger?.Debug("PrizeCounter: wallet read skipped: {E}", ex.Message); }

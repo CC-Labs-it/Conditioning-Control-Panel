@@ -3,7 +3,7 @@
  *   createHost(win)  standalone: frames over window.chrome.webview (WPF) or postMessage to the parent (web, phone).
  *                    out { type:'ready' } { type:'request', reqId, op, body, idem } { type:'wallet', sp } { type:'close', reason } { type:'signin' }
  *                        { type:'wear', id } (an owned card's Wear; the WPF host opens Rain's dressing room for a Rain row)
- *                    in  { type:'init', ... } { type:'reply', reqId, body }
+ *                    in  { type:'init', ... } { type:'reply', reqId, body } { type:'worn', id, ok } (WPF, after an in-place Wear)
  *   asHost(obj)      mounted inside a game: a plain object with the same methods (missing ones are no-ops).
  * request() never rejects: a missing reply answers { ok:false, reason:'offline' }. */
 
@@ -16,9 +16,11 @@ export function createHost(win = window, { timeoutMs = 15000 } = {}) {
   const post = (m) => { try { if (webview) webview.postMessage(m); else if (parent) parent.postMessage(m, '*'); } catch (e) { /* host gone */ } };
   const waiting = new Map();
   let init = null, initWaiters = [];
+  const wornHears = [];
   const onFrame = (m) => {
     if (!m || typeof m.type !== 'string') return;
     if (m.type === 'init') { init = m; initWaiters.forEach((f) => f(m)); initWaiters = []; }
+    else if (m.type === 'worn') wornHears.forEach((f) => { try { f(m); } catch (e) { /* page error stays local */ } });
     else if (m.type === 'reply' && waiting.has(m.reqId)) { waiting.get(m.reqId)(m.body || OFFLINE); waiting.delete(m.reqId); }
   };
   if (webview) webview.addEventListener('message', (e) => onFrame(e.data));
@@ -45,6 +47,7 @@ export function createHost(win = window, { timeoutMs = 15000 } = {}) {
     close(reason = 'back') { post({ type: 'close', reason }); },
     signIn() { post({ type: 'signin' }); },
     wear(id) { if (typeof id === 'string' && id) post({ type: 'wear', id }); },
+    onWorn(f) { if (typeof f === 'function') wornHears.push(f); },
     log(msg) { post({ type: 'log', level: 'debug', msg: String(msg).slice(0, 400) }); },
   };
 }
@@ -59,6 +62,7 @@ export function asHost(o = {}) {
     close: (reason = 'back') => call(o.close, reason),
     signIn: () => call(o.signIn),
     wear: (id) => call(o.wear, id),
+    onWorn: (f) => call(o.onWorn, f),
     log: (msg) => call(o.log, msg),
   };
 }

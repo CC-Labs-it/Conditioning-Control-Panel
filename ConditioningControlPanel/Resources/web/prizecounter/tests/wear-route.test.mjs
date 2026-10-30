@@ -2,7 +2,7 @@
 // "Wear it in the garage" and only steps back; Back Room prizes have nothing to wear; a host with no list keeps Wear.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { wearFamily, wearMode } from '../state/shop.js';
+import { wearFamily, wearMode, createShop } from '../state/shop.js';
 import { cardModel, renderCard } from '../hud/card.js';
 import { makeT } from '../state/strings.js';
 import { fakeDocument } from './fake-dom.mjs';
@@ -44,4 +44,21 @@ test('owned card buttons follow the mode: Wear + Keep looking, the garage button
   assert.deepEqual(labels('wear'), [['Wear', 'Keep looking'], ['select', 'back']]);
   assert.deepEqual(labels('garage'), [['Wear it in the garage'], ['back']]);
   assert.deepEqual(labels(null), [['Keep looking'], ['back']]);
+});
+
+test('an in-place Wear notes "Wearing it now."; the host refusing it (worn ok:false) turns the note into a retry', async () => {
+  const owned = { at: 'T', paidSp: 10 };
+  const state = { ok: true, sp: 50, tier: 1, week: '2026-W44', catalogVersion: 'cv', prizes: { revision: 1, grants: [] },
+    tabs: [{ id: 'desk', shelves: [{ rows: [{ id: 'desk.hat.party', tier: 'S', priceSp: 10, grants: ['cos.desk.hat.party'], owned, sale: 'on' }] }] }] };
+  const shop = createShop({ request: async () => state, newIdem: () => 'idem-000000000001', wears: DESKTOP });
+  await shop.load();
+  shop.intent({ type: 'pick', bay: 0, slot: 0 });
+  if (!shop.card()) shop.intent({ type: 'select' });
+  const ch = shop.intent({ type: 'select' });
+  assert.deepEqual(ch.wear, { itemId: 'desk.hat.party' });
+  assert.equal(ch.card.noteKey, 'shop_worn');
+  assert.deepEqual(shop.worn('desk.hat.party', true), {});
+  assert.deepEqual(shop.worn('desk.toy.other', false), {});
+  assert.equal(shop.worn('desk.hat.party', false).card.noteKey, 'shop_note_try_again');
+  assert.deepEqual(shop.worn('desk.hat.party', false), {}, 'once');
 });
