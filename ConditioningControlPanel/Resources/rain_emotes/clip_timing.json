@@ -1,5 +1,5 @@
 {
-  "_comment": "Per-talk-clip speaking window, in ms (same schema as avatar0_emotes/clip_timing.json). Rain's talk clips layer silent mouth movement on the accepted body under an envelope: full movement from 280 ms, fading out from 5280 ms, back at rest by 5880 ms. The window is taken from that authored envelope (not measured by ear). Keyed by clip stem.",
+  "_comment": "Per-talk-clip speaking window, in ms (same schema as avatar0_emotes/clip_timing.json). Rain's talk clips layer silent mouth movement on the accepted body under an envelope: full movement from 280 ms, fading out from 5280 ms, back at rest by 5880 ms. The window is taken from that authored envelope (not measured by ear). Keyed by clip stem. The five reactions (joy, surprise, affection, confidence, disappointment) carry only their 6000 ms length: no mouth, so no speaking window.",
   "talk_a": {
     "durationMs": 6000,
     "speakStartMs": 120,
@@ -17,5 +17,20 @@
     "speakStartMs": 120,
     "speakEndMs": 5600,
     "confirmed": false
+  },
+  "joy": {
+    "durationMs": 6000
+  },
+  "surprise": {
+    "durationMs": 6000
+  },
+  "affection": {
+    "durationMs": 6000
+  },
+  "confidence": {
+    "durationMs": 6000
+  },
+  "disappointment": {
+    "durationMs": 6000
   }
 }

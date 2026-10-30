@@ -64,7 +64,7 @@ public class RainTubeClipsTests
     [Fact]
     public void EveryMappedClip_ShipsAsEmbeddedWebp()
     {
-        Assert.Equal(12, Directory.GetFiles(RainDir, "*.webp").Length);
+        Assert.Equal(17, Directory.GetFiles(RainDir, "*.webp").Length);
         Assert.Empty(Directory.GetFiles(RainDir, "*.gif"));
         foreach (var clip in MappedClips())
         {
@@ -113,6 +113,78 @@ public class RainTubeClipsTests
             Assert.True(player.IsComplete);
             Assert.True(AvatarTubeWindow.IsWebpClip(player.Source));
         });
+
+    private static readonly string[] Reactions = { "joy", "surprise", "affection", "confidence", "disappointment" };
+
+    [Fact]
+    public void EveryMappedClip_IsAFileAndInTheCsproj()
+    {
+        var csproj = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "ConditioningControlPanel.csproj"));
+        var includes = System.Text.RegularExpressions.Regex.Matches(csproj, "<Resource Include=\"Resources\\\\rain_emotes\\\\([^\"]+)\"")
+            .Select(m => m.Groups[1].Value).ToList();
+        Assert.NotEmpty(includes);
+        foreach (var clip in MappedClips().Concat(Reactions))
+        {
+            var name = clip + ".webp";
+            Assert.True(File.Exists(Path.Combine(RainDir, name)), name + " missing on disk");
+            Assert.True(includes.Any(inc => inc == name || inc == "*.webp"), name + " not a Resource in the csproj");
+        }
+    }
+
+    [Fact]
+    public void TheFiveReactions_AreMappedByThePlanTable()
+    {
+        var map = JObject.Parse(File.ReadAllText(Path.Combine(RainDir, "emotes.json")));
+        var stem = (JObject)map["stemPrefix"]!;
+        var mood = (JObject)map["mood"]!;
+        foreach (var s in new[] { "level_up", "achievement" }) Assert.Equal("joy", (string)stem[s]!);
+        Assert.Equal("joy", (string)mood["triumphant"]!);
+        foreach (var s in new[] { "video_check_pass", "quest_done", "lockdown_on", "kw" }) Assert.Equal("confidence", (string)stem[s]!);
+        foreach (var m in new[] { "proud", "intense" }) Assert.Equal("confidence", (string)mood[m]!);
+        foreach (var s in new[] { "face_lost", "attention_lost", "video_check_fail" }) Assert.Equal("disappointment", (string)stem[s]!);
+        foreach (var s in new[] { "session_complete", "video_end", "gaze_reward", "hold_success" }) Assert.Equal("affection", (string)stem[s]!);
+        foreach (var m in new[] { "soft", "warm", "tender", "adoring" }) Assert.Equal("affection", (string)mood[m]!);
+        Assert.Equal("surprise", (string)stem["remote"]!);
+        Assert.Equal("surprise", (string)mood["responsive"]!);
+        // No drift clip yet: trance moments stay on idle. The rest keeps its 2026-10-24 pick.
+        foreach (var s in new[] { "video_start", "pinkrush", "braindrain", "mindwipe" }) Assert.Equal("idle", (string)stem[s]!);
+        Assert.Equal("idle", (string)mood["hypnotic"]!);
+        Assert.Equal("giggle", (string)stem["bubble_pop"]!);
+        Assert.Equal("smirk", (string)stem["session_stopped"]!);
+        Assert.Equal("shy_hold", (string)stem["cam_denied"]!);
+        Assert.Equal("greeting", (string)stem["session_start"]!);
+
+        var timing = JObject.Parse(File.ReadAllText(Path.Combine(RainDir, "clip_timing.json")));
+        foreach (var r in Reactions) Assert.Equal(6000, (int)timing[r]!["durationMs"]!);
+    }
+
+    [Fact]
+    public void EachReaction_DecodesWithSkCodec_ManyFramesAndAlphaKept()
+    {
+        foreach (var r in Reactions)
+        {
+            using var data = SkiaSharp.SKData.CreateCopy(File.ReadAllBytes(Path.Combine(RainDir, r + ".webp")));
+            using var codec = SkiaSharp.SKCodec.Create(data);
+            Assert.NotNull(codec);
+            Assert.Equal(SkiaSharp.SKEncodedImageFormat.Webp, codec.EncodedFormat);
+            Assert.True(codec.FrameCount > 1, r + " is a still");
+            Assert.NotEqual(SkiaSharp.SKAlphaType.Opaque, codec.Info.AlphaType);
+            var info = new SkiaSharp.SKImageInfo(codec.Info.Width, codec.Info.Height, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Premul);
+            using var bmp = new SkiaSharp.SKBitmap(info);
+            // A middle frame (the codec rebuilds whatever it builds on): transparency must survive past frame 0.
+            bmp.Erase(SkiaSharp.SKColors.Transparent);
+            var res = codec.GetPixels(info, bmp.GetPixels(), new SkiaSharp.SKCodecOptions(codec.FrameCount / 2, -1));
+            Assert.True(res == SkiaSharp.SKCodecResult.Success || res == SkiaSharp.SKCodecResult.IncompleteInput, r + ": " + res);
+            bool clear = false, solid = false;
+            for (int y = 0; y < info.Height && !(clear && solid); y += 3)
+                for (int x = 0; x < info.Width; x += 3)
+                {
+                    var a = bmp.GetPixel(x, y).Alpha;
+                    clear |= a == 0; solid |= a == 255;
+                }
+            Assert.True(clear && solid, r + " lost its alpha mid clip");
+        }
+    }
 
     [Fact]
     public void Attribution_ShipsBesideTheClips()
