@@ -69,8 +69,8 @@ export function buildKeep() {
     limits: { fallY: -30, edgeGraceM: 1.2, edgeGraceS: .8 },
   };
   track.boosts = densifyBoosts(track).boosts;
-  track.courts = keepHoleCourts(loadTrack(track, { boostSafety: false, courseShape: false }));
-  track.boosts = filterKeepHoleBoosts(loadTrack(track, { boostSafety: false, courseShape: false }), track.boosts);
+  track.courts = keepHoleCourts(loadTrack(track, { boostSafety: false, courseShape: false, ramps: false }));
+  track.boosts = filterKeepHoleBoosts(loadTrack(track, { boostSafety: false, courseShape: false, ramps: false }), track.boosts);
   const result = validate(track);
   if (!result.ok || result.warnings.length) throw Error(JSON.stringify(result));
   return track;

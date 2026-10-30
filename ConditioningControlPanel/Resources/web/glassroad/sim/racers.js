@@ -73,6 +73,7 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1, net = nu
           r.bestLapS = r.bestLapS > 0 ? Math.min(r.bestLapS, p.lapTimeS) : p.lapTimeS;
         } else if (name === 'finish') { r.finished = true; r.finishS = p.timeS; }
         else if (name === 'drop') r.falls++;
+        else if (name === 'ramp') p.racer = i;     // ramps contract: { racer, id }
         if (i > 0) queue.emit('racer-event', { racer: i, name, p });   // online, a remote person is not the player either
         else queue.emit(name, p);
       },

@@ -63,9 +63,9 @@ export function buildBoudoir() {
     for (const x of [-7, -2.5, 2.5, 7]) track.items.push({ node: node(id, u), x, kind: 'box' });
   for (const [id, x] of [['powder-return', 3], ['shelf-climb', -3], ['wardrobe-descent', 4], ['bath-stream', -4]])
     for (let i = 0; i < 5; i++) track.items.push({ node: node(id, .35), x, ds: i * 4, kind: 'bubble' });
-  const loaded = loadTrack(track, { aerials: false, boostSafety: false, courseShape: false }), at = (id, d = 0) => loaded.nodeS[node(id)] + d;
+  const loaded = loadTrack(track, { aerials: false, boostSafety: false, courseShape: false, ramps: false }), at = (id, d = 0) => loaded.nodeS[node(id)] + d;
   track.forks = makeBoudoirForks(loaded, node);
-  track.boosts = makeBoudoirBoosts(loadTrack(track, { aerials: false, boostSafety: false, courseShape: false }));
+  track.boosts = makeBoudoirBoosts(loadTrack(track, { aerials: false, boostSafety: false, courseShape: false, ramps: false }));
   for (const pad of track.boosts) if (!nodes[pad.node].flags.includes('boost')) nodes[pad.node].flags.push('boost');
   track.waterSpills = [{ fromS: at('bath-stream', 100), toS: at('bath-stream', 150), side: -1, dropM: 36 },
     { fromS: at('bath-turn', 70), toS: at('bath-turn', 105), side: 1, dropM: 40 },

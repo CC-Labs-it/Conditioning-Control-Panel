@@ -48,6 +48,7 @@ import { armGlide, glideGravity, resetGlide } from './glide.js';
 import { aerialGapAt } from '../track/aerial.js';
 import { airWordQuery, resetAirWords, stepAirWords } from './airWords.js';
 import { pistonHopUp } from '../track/movingHazards.js';
+import { rampCrossed, RAMP_HOP_GRACE_S } from './ramps.js';
 
 export { applyBoost };
 
@@ -216,6 +217,14 @@ export function step(st, a, track, feel, dt, ev) {
   v3addScaled(P, P, V, dt);
   let qb = airWordQuery(st, P, track.query(P[0], P[1], P[2], qa.seg, QB), PRE);
   const snap = gap(feel, 'kart.snapM');
+  // ramps (sim/ramps.js): a grounded kart (or one that just hopped off the wedge) crossing a lip fast enough leaves
+  // with velY = max(velY, upMps) and keeps its speed; the take-off itself happens below with the ground decision
+  const rampHop = air && !!qa.ramp && st[S.hopT] <= RAMP_HOP_GRACE_S && st[S.airTime] <= st[S.hopT] + 1e-6;
+  const ramp = (!air || rampHop) && !qa.airWord && track.ramps?.length ? rampCrossed(track, qa, qb, dt) : null;
+  if (ramp) {
+    V[1] = Math.max(V[1], ramp.upMps);
+    ev.emit('ramp', { id: ramp.id, purpose: ramp.purpose, upMps: ramp.upMps, s: qb.s, x: qb.lateral, speed: Math.hypot(V[0], V[2]) });
+  }
   // A low hop reaching the edge of a broad Keep platform receives its normal lip kick once.
   if (air) v3addScaled(V, V, qb.normal, broadPlatformEdgeKick(track, qa, qb, v3dot(V, qb.normal), feel.get('stones.kickUpMps')));
   // wave 2 STONES: over a field's void the kart is still on its own road while within the snap band of the deck
@@ -249,8 +258,10 @@ export function step(st, a, track, feel, dt, ev) {
   const crossed = air && crossedSupportedRoad(track, qa, qb);
   const band = snap + (following || crossed ? travel : Math.abs(vn) * dt);
   const previousHeight = (PRE[0] - qb.p[0]) * n[0] + (PRE[1] - qb.p[1]) * n[1] + (PRE[2] - qb.p[2]) * n[2];
-  const ground = (qb.onRoad || heldRail) && qb.height >= -band &&
-    (air ? qb.height <= 0 && (crossed || previousHeight >= -.03 && vn <= 0) : qb.height <= band);
+  // a ramp wedge is solid: a kart inside its volume (stepped on from the side, or a flight that clips it) stands on it
+  const inWedge = !!qb.ramp && qb.height < 0 && qb.height >= -qb.rampH - snap;
+  const ground = !ramp && (qb.onRoad || heldRail) && (inWedge || qb.height >= -band &&
+    (air ? qb.height <= 0 && (crossed || previousHeight >= -.03 && vn <= 0) : qb.height <= band));
   if (ground) {
     // The probe's surface point is exact on a curved bank; a normal-plane step is not.
     v3copy(P, qb.p); v3reject(V, V, n);
@@ -274,6 +285,8 @@ export function step(st, a, track, feel, dt, ev) {
     if (air && under && onLanding(track, st, qb) === under) landRoute(track, st, under, qb, F, feel, ev, prevS);
     else if (air && fall && qb === QD) fallLand(track, st, qb, ev);
     else if (air) resetFall(st);
+  } else if (!air && ramp) {
+    takeoff(st, ev, 'lip');                        // a ramp lip: the trick late window and the online LIP pulse
   } else if (!air) {
     // a drop shortcut's kicker lip (sim/routes.js edgeAt): driving off the opening throws the kart up a little,
     // a 'lip' take-off, so a hop right after it pays the trick
