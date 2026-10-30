@@ -1,0 +1,97 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
+using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
+using Xunit;
+
+namespace CCP.Avalonia.Tests;
+
+public sealed class WorkshopTriggersCellTests
+{
+    [Fact]
+    public Task SettingsLoadWithoutWritesAndUserControlsUpdateTheModel() => Run((cell, owner, service) =>
+    {
+        var s = service.Current;
+        Assert.True(cell.FindControl<CheckBox>("ChkTriggerModeCompanion")!.IsChecked);
+        Assert.True(cell.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!.IsVisible);
+        Assert.Equal("123s", cell.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!.Text);
+        Assert.False(service.HasPendingSave);
+        cell.FindControl<Slider>("SliderTriggerIntervalCompanion")!.Value = 87.9;
+        Assert.Equal(87, s.TriggerIntervalSeconds);
+        Assert.Equal("87s", cell.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!.Text);
+        cell.FindControl<CheckBox>("ChkTriggerModeCompanion")!.IsChecked = false;
+        Assert.False(s.TriggerModeEnabled);
+        Assert.False(cell.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!.IsVisible);
+        Assert.True(service.HasPendingSave);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task EditorFiltersSeedAndSaveKeepsOnlyEnabledLinesWithUserBookkeeping() => Run(async (cell, owner, service) =>
+    {
+        var s = service.Current;
+        s.CustomTriggers = new() { "Keep", "keep", " ", "Remove" };
+        s.UserAddedCustomTriggers.Add("Remove");
+        Click(cell.FindControl<Button>("BtnEditTriggersCompanion")!);
+        Dispatcher.UIThread.RunJobs();
+        var dialog = Assert.IsType<TextEditorDialog>(Assert.Single(owner.OwnedWindows));
+        var items = dialog.FindControl<ItemsControl>("ItemList")!.ItemsSource!.Cast<TextItem>().ToList();
+        Assert.Equal(new[] { "Keep", "Remove" }, items.Select(i => i.Text));
+        items.Single(i => i.Text == "Remove").IsEnabled = false;
+        dialog.FindControl<TextBox>("TxtNewItem")!.Text = "new line";
+        Click(dialog.FindControl<Button>("BtnAdd")!);
+        Click(dialog.FindControl<Button>("BtnSave")!);
+        await Task.Yield(); Dispatcher.UIThread.RunJobs();
+        Assert.Equal(new[] { "Keep", "NEW LINE" }, s.CustomTriggers);
+        Assert.Contains("NEW LINE", s.UserAddedCustomTriggers);
+        Assert.DoesNotContain("Remove", s.UserAddedCustomTriggers);
+        Assert.True(service.HasPendingSave);
+    });
+
+    [Fact]
+    public Task CancelDoesNotChangeTriggersAndEmptyPoolsDoNotRepopulate() => Run(async (cell, owner, service) =>
+    {
+        service.Current.CustomTriggers.Clear();
+        Click(cell.FindControl<Button>("BtnEditTriggersCompanion")!);
+        Dispatcher.UIThread.RunJobs();
+        var dialog = Assert.IsType<TextEditorDialog>(Assert.Single(owner.OwnedWindows));
+        Assert.Empty(dialog.FindControl<ItemsControl>("ItemList")!.ItemsSource!);
+        Click(dialog.FindControl<Button>("BtnCancel")!);
+        await Task.Yield(); Dispatcher.UIThread.RunJobs();
+        Assert.Empty(service.Current.CustomTriggers);
+        Assert.False(service.HasPendingSave);
+    });
+
+    private static Task Run(Func<WorkshopTriggersCell, Window, SettingsService, Task> body) =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        service.Current.TriggerModeEnabled = true;
+        service.Current.TriggerIntervalSeconds = 123;
+        var cell = new WorkshopTriggersCell();
+        var owner = new Window { Content = cell };
+        owner.Show(); owner.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+        try { await body(cell, owner, service); }
+        finally
+        {
+            foreach (var child in owner.OwnedWindows.ToArray()) child.Close();
+            owner.Close(); service.SealForReset();
+        }
+    });
+
+    private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+}

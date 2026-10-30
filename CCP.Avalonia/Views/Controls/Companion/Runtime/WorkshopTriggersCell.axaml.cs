@@ -1,4 +1,9 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Avalonia;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.VisualTree;
@@ -9,13 +14,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
 {
     /// <summary>Z8 · TRIGGERS &amp; PHRASES. See the XAML header.
     ///
-    /// WPF forwards the controls to MainWindow. This head keeps the toggle's local visibility
-    /// and interval label here, and hoists phrase-preset selection/save/delete to the Workshop host.
-    /// Manage Phrases forwards to the owning shell. Edit Phrases and the live avatar trigger timer
-    /// still await their runtime.
+    /// Settings and text editing follow MainWindow.Patreon.cs:1335-1339,1489-1584.
+    /// The live avatar trigger timer and phrase count still await their runtime.
     /// </summary>
     public partial class WorkshopTriggersCell : UserControl
     {
+        private bool _isLoading;
+
         public event EventHandler? PhrasePresetSelectionChanged;
         public event EventHandler? SavePhrasePresetRequested;
         public event EventHandler? DeletePhrasePresetRequested;
@@ -37,8 +42,60 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             var intervalText = this.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!;
 
             // WPF wired Checked/Unchecked separately; Avalonia has one event for both.
-            toggle.IsCheckedChanged += (_, _) => panel.IsVisible = toggle.IsChecked == true;
-            slider.ValueChanged += (_, _) => intervalText.Text = $"{(int)slider.Value}s";
+            toggle.IsCheckedChanged += (_, _) =>
+            {
+                panel.IsVisible = toggle.IsChecked == true;
+                if (_isLoading) return;
+                CoreSettings.Current.TriggerModeEnabled = toggle.IsChecked == true;
+                CoreSettings.Save();
+            };
+            slider.ValueChanged += (_, _) =>
+            {
+                intervalText.Text = $"{(int)slider.Value}s";
+                if (_isLoading) return;
+                // WPF :1521 updates the model; only the toggle explicitly calls Save (:1498).
+                CoreSettings.Current.TriggerIntervalSeconds = (int)slider.Value;
+            };
+            this.FindControl<Button>("BtnEditTriggersCompanion")!.Click += async (_, _) => await EditTriggersAsync();
+            AttachedToVisualTree += (_, _) => SyncFromSettings();
+            SyncFromSettings();
+        }
+        internal void SyncFromSettings()
+        {
+            _isLoading = true;
+            try
+            {
+                var s = CoreSettings.Current;
+                this.FindControl<CheckBox>("ChkTriggerModeCompanion")!.IsChecked = s.TriggerModeEnabled;
+                this.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!.IsVisible = s.TriggerModeEnabled;
+                this.FindControl<Slider>("SliderTriggerIntervalCompanion")!.Value = s.TriggerIntervalSeconds;
+                this.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!.Text = $"{s.TriggerIntervalSeconds}s";
+            }
+            finally { _isLoading = false; }
+        }
+
+        private async Task EditTriggersAsync()
+        {
+            if (TopLevel.GetTopLevel(this) is not Window owner) return;
+            // WPF MainWindow.Patreon.cs:1534-1543: no defaults, ignore blanks and case duplicates.
+            var data = (CoreSettings.Current.CustomTriggers ?? new List<string>())
+                .Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(t => t, _ => true);
+            var dialog = new TextEditorDialog("Trigger Phrases", data);
+            // MarkSilentLines needs the unported recorded-voice lookup; keep editing independent.
+            if (await dialog.ShowDialogSafe<bool?>(owner) != true || dialog.ResultData is not { } result) return;
+            var enabled = result.Where(kv => kv.Value).Select(kv => kv.Key).ToList();
+            var defaults = new HashSet<string>(CoreMods.Service?.GetDefaultCustomTriggers() ?? new List<string>(),
+                StringComparer.OrdinalIgnoreCase);
+            var old = new HashSet<string>(data.Keys, StringComparer.OrdinalIgnoreCase);
+            var current = new HashSet<string>(enabled, StringComparer.OrdinalIgnoreCase);
+            // WPF :1561-1584: preserve user additions across mod switches and remove deleted ones.
+            foreach (var t in enabled)
+                if (!old.Contains(t) && !defaults.Contains(t)) CoreSettings.Current.UserAddedCustomTriggers.Add(t);
+            foreach (var t in old)
+                if (!current.Contains(t)) CoreSettings.Current.UserAddedCustomTriggers.Remove(t);
+            CoreSettings.Current.CustomTriggers = enabled;
+            CoreSettings.Save();
         }
     }
 
