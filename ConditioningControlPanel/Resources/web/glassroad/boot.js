@@ -35,6 +35,7 @@ import { createKeyboard } from './input/keyboard.js';
 import { createGamepad } from './input/gamepad.js';
 import { createPointerLook } from './input/pointerLook.js';
 import { createTouch } from './input/touch.js';
+import { holdCueAt } from './input/holdCue.js';
 import { glideActive, resetGlide } from './sim/glide.js';
 import { S, RESPAWN, createState } from './sim/state.js';
 import { resolveMode } from './meta/mode.js';
@@ -872,7 +873,8 @@ async function boot(course, options, lifetime, isCurrent) {
   let tapItem = false;                            // touch: a tap on the HUD item slot
   hud.on('item', () => { tapItem = true; });
   const tapSource = { poll(into) { into.item = tapItem; tapItem = false; }, dispose() {} };
-  const actions = createActionMap([createKeyboard({ target: window }), padSource, createTouch({ root: document.body }), tapSource], { items: true, camera: true, feel });
+  const touch = createTouch({ root: document.body });
+  const actions = createActionMap([createKeyboard({ target: window }), padSource, touch, tapSource], { items: true, camera: true, feel });
   lifetime.defer(() => actions.dispose());
   const hopLatch = createEdgeLatch('hopPressed'), itemLatch = createItemLatch();
 
@@ -1760,19 +1762,21 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     // renderTime (sim time + alpha x dt), not simTime: whole sim steps would judder the world on a
     // display that is not 60 Hz
-    for (let i = 0; i < kartViews.length; i++) kartViews[i].glide = !online && glideActive(racers.list[i].st);
-    if ((keepLayout || boudoirLayout || goonworksLayout) && inRace && !paused && !online && pst[S.lap] !== glideHintLap) {
-      const bridge = goonworksLayout?.launch || boudoirLayout?.mirrorJump || keepLayout.drawbridge;
-      if (pst[S.s] >= bridge.rampS0 - 65 && pst[S.s] < bridge.rampS1) {
+    // online the local kart still flies its own sim (racer 0); a rival's flight state does not exist on this page
+    for (let i = 0; i < kartViews.length; i++) kartViews[i].glide = (!online || i === 0) && glideActive(racers.list[i].st);
+    const launchLip = goonworksLayout?.launch || boudoirLayout?.mirrorJump || keepLayout?.drawbridge || null;
+    touch?.setHoldCue(state === 'race' && race.phase === 'racing' && !paused && holdCueAt(track, launchLip, pst[S.s], !!online));
+    if (launchLip && inRace && !paused && !online && pst[S.lap] !== glideHintLap) {
+      if (pst[S.s] >= launchLip.rampS0 - 65 && pst[S.s] < launchLip.rampS1) {
         glideHintLap = pst[S.lap]; hud.toast('Hold jump to fly with the propeller cap');
       }
     }
     if (BOT) debug.gliding = !!kartViews[0]?.glide;
-    if (inRace && !paused && !online) for (const zone of track.aerials || []) {
+    if (inRace && !paused) for (const zone of track.aerials || []) {
       const key = `${pst[S.lap]}:${zone.id}`;
       if (pst[S.s] < zone.rampS0 - 55 || pst[S.s] >= zone.gapS0 || aerialHints.has(key)) continue;
       aerialHints.add(key);
-      hud.toast('The words will catch you. Steer if you like');
+      hud.toast(online ? 'Hold jump across the gap' : 'The words will catch you. Steer if you like');   // no word rides online
     }
     const introShot = state === 'intro' ? intro.shotAt(introElapsed) : -1;
     const viewSection = introShot >= 0 && introShot < 3 ? track.sectionAt(intro.shots[introShot].s) : pst[S.sectionIdx];
