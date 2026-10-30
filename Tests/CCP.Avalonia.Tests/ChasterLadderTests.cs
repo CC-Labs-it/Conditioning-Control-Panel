@@ -50,8 +50,11 @@ public sealed class ChasterLadderTests
 
     private static async Task Run(Func<ChasterService, FakeProxy, Task> body, string? overrideUrl = "http://127.0.0.1:47999/")
     {
+        // Match the desktop builder: a fresh testhost must resolve Fredoka without system fonts
+        // or another fixture registering the app's bundled font mappings first.
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var settings = new SettingsService();
