@@ -4,6 +4,9 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.GoonGame;
+using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -12,13 +15,16 @@ using ConditioningControlPanel.Services.Lobby;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 
-/// <summary>WPF's Lobby frame and narrow-column switcher. The old sample subject roster is gone.</summary>
+/// <summary>WPF Lobby frame, watched discovery and narrow-column switcher.</summary>
 public partial class AvailableSubjectsTabView : UserControl
 {
     internal bool IsNarrow { get; private set; }
     internal int SelectedColumn { get; private set; }
     internal Func<LobbyGates> ReadGates = () => LobbyGates.From(Platform.FriendsHead.Identity() != null,
         TierGate.HasPremium, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed);
+    internal Func<LobbyService>? CreateLobby;
+    private LobbyService? _lobby;
+    private IDisposable? _lease;
     private LobbySnapshot _snapshot = LobbySnapshot.Empty;
 
     public AvailableSubjectsTabView()
@@ -29,20 +35,55 @@ public partial class AvailableSubjectsTabView : UserControl
         SizeChanged += (_, e) => SetNarrow(LobbyPageRules.IsNarrowWidth(e.NewSize.Width));
         // The shell hides tabs with IsVisible, so Loaded fires once; WPF redraws on every open
         // (MainWindow.Lobby.cs:84), which picks up sign-in, Remote gate and language changes.
-        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && IsVisible) Repaint(); };
+        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) { Repaint(); SyncWatch(); } };
         Loaded += (_, _) =>
         {
+            if (_lobby == null)
+            {
+                _lobby = CreateLobby?.Invoke() ?? BuildLobby();
+                _lobby.Changed += OnLobbyChanged;
+            }
             Repaint();
+            SyncWatch();
             SubjectsAmbientFx.StartLayers(new AmbientFxConfig
                 { Layers = AmbientFxLayers.FogDrift, FogPuffs = 2, Intensity = 0.40 });
         };
-        Unloaded += (_, _) => SubjectsAmbientFx.Stop();
+        Unloaded += (_, _) =>
+        {
+            _lease?.Dispose(); _lease = null;
+            if (_lobby != null) { _lobby.Changed -= OnLobbyChanged; _lobby.Dispose(); _lobby = null; }
+            SubjectsAmbientFx.Stop();
+        };
     }
 
-    private void Repaint()
+    private static LobbyService BuildLobby()
+    {
+        var remote = new RemoteLobbyApi();
+        return new LobbyService(new Platform.FriendsHead.Timer(),
+            () => Platform.FriendsHead.Identity() != null,
+            () => Platform.FriendsHead.Service?.Snapshot.Friends ?? Array.Empty<Friend>(),
+            () => new PbpLobbyApi().FetchAsync(), () => GoonOpenTables.RefreshAsync(), () => remote.FetchAsync());
+    }
+
+    private void SyncWatch()
+    {
+        if (IsVisible && _lobby != null) _lease ??= _lobby.Watch();
+        else { _lease?.Dispose(); _lease = null; }
+    }
+
+    private void OnLobbyChanged(LobbySnapshot snapshot)
     {
         var gates = ReadGates();
-        PaintSnapshot(_snapshot with { SignedIn = gates.SignedIn }, gates);
+        PaintSnapshot(gates.SignedIn ? snapshot : LobbySnapshot.Empty, gates,
+            gates.SignedIn && snapshot.SignedIn && _lobby?.LastRoundOk == false);
+    }
+
+    internal void Repaint()
+    {
+        var gates = ReadGates();
+        // WPF recomputes the error panel from LastRoundOk on every paint (MainWindow.Lobby.cs:116).
+        PaintSnapshot(gates.SignedIn ? _snapshot with { SignedIn = true } : LobbySnapshot.Empty, gates,
+            gates.SignedIn && _lobby?.LastRoundOk == false);
     }
 
     internal void SetNarrow(bool narrow)
@@ -91,11 +132,30 @@ public partial class AvailableSubjectsTabView : UserControl
         TabOpen.Content = Loc.Get("lobby_list_open") + "  " + snapshot.Open.Count;
         TabPlaying.Content = Loc.Get("lobby_list_playing") + "  " + snapshot.Playing.Count;
         TabFriends.Content = Loc.Get("lobby_list_friends") + "  " + snapshot.Friends.Count;
+        ChessHostLock.IsVisible = !gates.CanHost(LobbyGame.Chess);
+        GoonHostLock.IsVisible = !gates.CanHost(LobbyGame.Goon);
+        BtnHostChess.Opacity = gates.CanHost(LobbyGame.Chess) ? 1 : 0.7;
+        BtnHostGoon.Opacity = gates.CanHost(LobbyGame.Goon) ? 1 : 0.7;
         RemoteHostLock.IsVisible = !gates.CanHost(LobbyGame.Remote);
         BtnBecomeASubject.Opacity = gates.CanHost(LobbyGame.Remote) ? 1 : 0.7;
         TxtBecomeASubjectSubtitle.IsVisible = gates.SignedIn && !gates.CanHost(LobbyGame.Remote);
-        // ponytail: Chess/Goon host and all row Join flows wait for the Lobby service/hosts in the b-lane.
+        // Goon doors and Remote claims remain part B.
         // Keep those destinations disabled instead of constructing a made-up game or remote claim flow.
+    }
+
+    private void BtnHostChess_Click(object? sender, RoutedEventArgs e)
+    {
+        if (TopLevel.GetTopLevel(this) is not MainShellWindow shell) return;
+        if (!ReadGates().SignedIn) { _ = shell.OpenUnifiedLoginDialog(); return; }
+        GameWindow.OpenChessLobby("host");
+    }
+
+    private void BtnLobbyRow_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control { DataContext: LobbyCardView card } || card.Row.Game != LobbyGame.Chess) return;
+        if (TopLevel.GetTopLevel(this) is not MainShellWindow shell) return;
+        if (!ReadGates().CanJoin(LobbyGame.Chess)) { _ = shell.OpenUnifiedLoginDialog(); return; }
+        GameWindow.OpenChessLobby(card.Row.CanWatch ? "spectate" : "join", card.Row.Key);
     }
 
     private void BtnBecomeASubject_Click(object? sender, RoutedEventArgs e)
@@ -112,6 +172,7 @@ public sealed class LobbyCardView
 {
     public LobbyCardView(LobbyRow row, LobbyGates gates)
     {
+        Row = row;
         Title = LobbyPageRules.Title(row, Loc.Get);
         Line = LobbyPageRules.Line(Loc.Get(LobbyPageRules.LabelKey(row.Game)), LobbySummary.For(row, Loc.Get));
         Friend = row.Friend;
@@ -120,6 +181,8 @@ public sealed class LobbyCardView
         ButtonText = Loc.Get(row.CanJoin ? "lobby_btn_join" : "lobby_btn_watch");
         ButtonOpacity = LobbyPageRules.ButtonOpacity(Locked);
     }
+    public LobbyRow Row { get; }
+    public bool DoorAvailable => Row.Game == LobbyGame.Chess;
     public string Title { get; }
     public string Line { get; }
     public bool Friend { get; }

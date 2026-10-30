@@ -98,6 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void RefreshEntitlementVeils(bool persist)
         {
             EnforceEntitlementLapse(persist);
+            Named<Tabs.AvailableSubjectsTabView>("AvailableSubjectsTab")?.Repaint();
             var haptics = StudioRack?.HapticsPanel;
             var hapticsOpen = CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("haptics");
             if (haptics?.FindControl<Control>("HapticsContentGrid") is { } grid)
