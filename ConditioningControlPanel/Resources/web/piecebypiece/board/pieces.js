@@ -23,6 +23,7 @@ import * as THREE from 'three';
 import { squareToWorld } from './scene.js';
 import { wornMesh } from './attachments.js';
 import { sameLook } from '../skins/look.js';
+import { backMountShift, unionBox } from '../skins/mount.js';
 
 export const TYPES = ['p', 'n', 'b', 'r', 'q', 'k'];
 export const GLB_NAMES = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
@@ -231,6 +232,26 @@ export function createPieces({ group, assetsBase = './assets/pieces/', hooks = {
   const artKey = (type, side) => type + ':' + side;
   const artFor = (type, side) => glb.get(artKey(type, side)) || null;
 
+  // An insignia comes from attachments.js turned to the man's back; here it is
+  // slid along Z to rest just off this body (skins/mount.js). One slide per
+  // badge and body, cached: the body is only read, never moved.
+  const seats = new WeakMap();    // body geometry -> Map(badge geometry -> seated geometry)
+  function seated(art, parts) {
+    const badge = parts.filter((p) => p.slot === 'insignia' && p.geometry);
+    if (!badge.length) return parts;
+    let mine = seats.get(art.geometry);
+    if (!mine) { mine = new Map(); seats.set(art.geometry, mine); }
+    if (!badge.every((p) => mine.has(p.geometry))) {
+      let dz = 0;
+      try {
+        for (const p of badge) if (!p.geometry.boundingBox) p.geometry.computeBoundingBox();
+        dz = backMountShift(art.geometry.attributes.position, unionBox(badge.map((p) => p.geometry.boundingBox)));
+      } catch { dz = 0; }
+      for (const p of badge) mine.set(p.geometry, dz ? p.geometry.clone().translate(0, 0, dz) : p.geometry);
+    }
+    return parts.map((p) => (p.slot === 'insignia' && mine.has(p.geometry) ? { ...p, geometry: mine.get(p.geometry) } : p));
+  }
+
   function geometryFor(type, side) {
     const art = artFor(type, side);
     if (art) return art.geometry;
@@ -262,7 +283,7 @@ export function createPieces({ group, assetsBase = './assets/pieces/', hooks = {
     // jewel: authored in the piece's own space, own material, bent by the flex.
     // Only on the sculpted art: a lathe placeholder is scaled to its type height,
     // so a worn mesh authored for the sculpted man would sit at the wrong size.
-    if (art && attachments && looks[side]) for (const part of attachments.partsFor(type, looks[side])) {
+    if (art && attachments && looks[side]) for (const part of seated(art, attachments.partsFor(type, looks[side]))) {
       const worn = wornMesh(part, RECEIVES_SHADOW);
       root.add(worn);
       mats.push(worn.material);
