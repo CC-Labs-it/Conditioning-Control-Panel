@@ -118,10 +118,9 @@
          marks PointerPressed/Released handled before an instance handler sees them, so a ported
          handler pair would be silently dead. A :pressed descendant selector is the idiom, needs
          no code, and drives the TransformOperationsTransition already on EERoot. EERoot must NOT
-         carry a local RenderTransform or it outranks these setters. -->
+         carry a local RenderTransform or it outranks these setters. Set transitions before scale to avoid cancelling the tween. -->
     <UserControl.Styles>
         <Style Selector="Grid#EERoot">
-            <Setter Property="RenderTransform" Value="scale(1)"/>
             <Setter Property="Transitions">
                 <Transitions>
                     <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.14">
@@ -129,9 +128,9 @@
                     </TransformOperationsTransition>
                 </Transitions>
             </Setter>
+            <Setter Property="RenderTransform" Value="scale(1)"/>
         </Style>
         <Style Selector="Button#BtnEmergencyExit:pressed Grid#EERoot">
-            <Setter Property="RenderTransform" Value="scale(0.965)"/>
             <Setter Property="Transitions">
                 <Transitions>
                     <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.06">
@@ -139,6 +138,7 @@
                     </TransformOperationsTransition>
                 </Transitions>
             </Setter>
+            <Setter Property="RenderTransform" Value="scale(0.965)"/>
         </Style>
     </UserControl.Styles>
 

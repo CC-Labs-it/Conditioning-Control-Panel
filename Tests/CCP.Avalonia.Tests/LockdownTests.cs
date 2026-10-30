@@ -120,17 +120,42 @@ public sealed class LockdownTests
                 Dispatcher.UIThread.RunJobs();
                 AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                 var root = tab.FindControl<Grid>("EERoot")!;
+                // Same stepped ClockBase pattern as SharedDeeperThemeTests. Avalonia 12 keeps
+                // the clock contract internal; no wall-clock sleeps or timing races here.
+                const System.Reflection.BindingFlags any = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+                var clockType = typeof(global::Avalonia.Animation.Animatable).Assembly
+                    .GetType("Avalonia.Animation.ClockBase", throwOnError: true)!;
+                var clock = Activator.CreateInstance(clockType, nonPublic: true)!;
+                var pulse = clockType.GetMethod("Pulse", any | System.Reflection.BindingFlags.Instance)!;
+                var clockProperty = (AvaloniaProperty)typeof(global::Avalonia.Animation.Animatable)
+                    .GetField("ClockProperty", any | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+                root.SetValue(clockProperty, clock);
+                void Step(double ms) => pulse.Invoke(clock, new object[] { TimeSpan.FromMilliseconds(ms) });
+                void ScaleIs(double expected)
+                {
+                    Assert.Equal(expected, root.RenderTransform!.Value.M11, 5);
+                    Assert.Equal(expected, root.RenderTransform.Value.M22, 5);
+                }
                 var p = tab.BtnEmergencyExit.TranslatePoint(new Point(40, 40), win)!.Value;
                 win.MouseDown(p, MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();
                 var down = Assert.IsType<global::Avalonia.Animation.TransformOperationsTransition>(Assert.Single(root.Transitions!));
                 Assert.Equal(TimeSpan.FromMilliseconds(60), down.Duration);
                 Assert.IsType<global::Avalonia.Animation.Easings.QuadraticEaseOut>(down.Easing);
+                // WPF LockdownTabView.xaml.cs:330-342: EaseOut halfway down, then settled.
+                Step(0); Step(30);
+                ScaleIs(0.97375);
+                Step(60);
+                ScaleIs(0.965);
                 win.MouseUp(p, MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();
                 var up = Assert.IsType<global::Avalonia.Animation.TransformOperationsTransition>(Assert.Single(root.Transitions!));
                 Assert.Equal(TimeSpan.FromMilliseconds(140), up.Duration);
                 Assert.IsType<global::Avalonia.Animation.Easings.QuadraticEaseInOut>(up.Easing);
+                Step(1000); Step(1070);
+                ScaleIs(0.9825);
+                Step(1140);
+                ScaleIs(1.0);
             }
             finally
             {
