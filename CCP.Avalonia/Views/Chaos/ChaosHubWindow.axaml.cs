@@ -16,6 +16,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Localization;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
@@ -36,12 +37,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///    <c>RenderProof.Rendering</c>, where it draws the in-memory state and writes nothing.
     ///    Still sample data: mantras and the codex (ChaosBoonPool / ChaosBubbleVariants are
     ///    run-engine, head-side). ponytail: <c>ChaosArt</c> returns
-    ///    <c>System.Windows.Media.ImageSource</c>, so only its path half can ever move; the hub's
-    ///    ChaosSfx cues and lesson/script-locked row dressing are not ported. Unlock cards are
+    ///    <c>System.Windows.Media.ImageSource</c>, so only its path half can ever move; the bench's
+    ///    remaining ChaosSfx cues are not ported. Lesson/script locks and unlock cards are
     ///    (<see cref="ChaosUnlockCardLayer"/>).
     ///  - The four partials the WPF class spans (Bench / Reveals / Lessons / Debug) are NOT in
     ///    this layer. <c>BuildBench</c> is inlined here over Core <c>ChaosBench</c>; reveal
-    ///    flashes, the lesson panel and the CCP_CHAOS_DEBUG strip are dropped, so pills and
+    ///    flashes and the CCP_CHAOS_DEBUG strip are dropped, so pills and
     ///    headers render in their revealed state.
     ///  - The whole Skia menu scene (fog, per-frame glint masks, blooms, the crossfading
     ///    flipbook) and the NAudio menu music are gone: no SkiaSharp and no NAudio on this head,
@@ -566,14 +567,122 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 toggle.Click += HabitToggle_Click;
                 right.Children.Add(toggle);
             }
+            else if (ChaosLessons.IsLessonBlocked(u.Id))
+                right.Children.Add(BuildLessonLockPanel(u.Id, accent));
             else
             {
-                right.Children.Add(BuyButton(Glyphed(13, "Train", IconKind.Sparkle, $"{u.Cost}"), u.Id, afford, Buy_Click));
+                // WPF ChaosHubWindow.xaml.cs:463-482: lesson first, then rank.
+                bool rankLocked = ChaosMeta.IsPurchaseRankLocked(u.Id);
+                var train = BuyButton(Glyphed(13, "Train", IconKind.Sparkle, $"{u.Cost}"), u.Id, afford && !rankLocked, Buy_Click);
+                if (rankLocked)
+                {
+                    ToolTip.SetTip(train, RankLockedTip + "\n" + ChaosRanks.RankSpecifics(ChaosRank.Devoted, ChaosMeta.State.RunsCompleted));
+                    ToolTip.SetShowOnDisabled(train, true);
+                }
+                right.Children.Add(train);
             }
             Grid.SetColumn(right, 2);
             grid.Children.Add(right);
 
             return ShelfCard(grid, on, owned, accent);
+        }
+
+        /// <summary>WPF ChaosHubWindow.Lessons.cs:25-81: exact progress and mechanics,
+        /// with no purchase button until the lesson is complete.</summary>
+        private static Control BuildLessonLockPanel(string id, Color accent)
+        {
+            var def = ChaosLessons.ById(id);
+            if (def == null) return new StackPanel();
+            long target = Math.Max(1, def.Target);
+            long progress = Math.Clamp(ChaosLessons.Progress(id), 0, target);
+            var panel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Right };
+            var line = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+            line.Children.Add(new IconGlyph { Kind = IconKind.LockClosed, Size = 13, Margin = new Thickness(0, 0, 5, 0) });
+            var text = new TextBlock
+            {
+                Text = Loc.Get($"chaos_lesson_{id}_text"), FontSize = 10.5, FontStyle = FontStyle.Italic,
+                Foreground = new SolidColorBrush(Color.FromArgb(0xB0, accent.R, accent.G, accent.B)),
+                TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Right,
+            };
+            Grid.SetColumn(text, 1);
+            line.Children.Add(text);
+            panel.Children.Add(line);
+            panel.Children.Add(new Border
+            {
+                Width = 120, Height = 7, CornerRadius = new CornerRadius(3.5),
+                Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x26, 0x4C)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x50, accent.R, accent.G, accent.B)),
+                BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 7, 0, 4),
+                Child = new Border
+                {
+                    Width = progress <= 0 ? 0 : Math.Max(7, 120.0 * progress / target),
+                    CornerRadius = new CornerRadius(3.5), HorizontalAlignment = HorizontalAlignment.Left,
+                    Background = new LinearGradientBrush
+                    {
+                        StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                        EndPoint = new RelativePoint(1, 0, RelativeUnit.Relative),
+                        GradientStops = new GradientStops
+                        {
+                            new GradientStop(BoonAccent, 0),
+                            new GradientStop(Color.FromRgb(0x8B, 0x5C, 0xF6), 1),
+                        },
+                    },
+                },
+            });
+            panel.Children.Add(new TextBlock
+            {
+                Text = Loc.GetF("chaos_lesson_count", progress, target), FontSize = 10.5,
+                Foreground = new SolidColorBrush(Color.FromArgb(0xA0, 0xB8, 0xB8, 0xD0)),
+                HorizontalAlignment = HorizontalAlignment.Right,
+            });
+            // WPF ChaosTips.cs:20-66, called by ChaosHubWindow.Lessons.cs:75-79.
+            AttachLessonTip(panel, new StackPanel
+            {
+                MaxWidth = 260,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = Loc.Get(progress <= 0 ? "chaos_lesson_title" : "chaos_lesson_started"),
+                        FontWeight = FontWeight.Bold, FontSize = 13, Foreground = new SolidColorBrush(accent),
+                    },
+                    new TextBlock
+                    {
+                        Text = Loc.Get($"chaos_lesson_{id}_detail"), FontSize = 12, TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 3, 0, 0), Foreground = new SolidColorBrush(Color.FromArgb(0xDD, 0xE0, 0xE0, 0xF0)),
+                    },
+                    new TextBlock
+                    {
+                        Text = Loc.GetF("chaos_lesson_progress", progress, target), FontSize = 12, TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 3, 0, 0), Foreground = GoldBrush,
+                    },
+                },
+            });
+            return panel;
+        }
+
+        // WPF ChaosTips.cs:54-66. Avalonia has no ShowDuration, so stop a one-shot
+        // UI timer on close/detach and restart it for each opening.
+        internal static DispatcherTimer AttachLessonTip(Control target, StackPanel content)
+        {
+            ToolTip.SetTip(target, new ToolTip
+            {
+                Content = content,
+                Background = new SolidColorBrush(Color.FromArgb(0xF2, 0x15, 0x12, 0x26)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x55, 0xFF, 0x69, 0xB4)),
+                Foreground = Brushes.White, Padding = new Thickness(10, 8, 10, 8),
+            });
+            ToolTip.SetShowDelay(target, 250);
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+            timer.Tick += (_, _) => { timer.Stop(); ToolTip.SetIsOpen(target, false); };
+            target.GetObservable(ToolTip.IsOpenProperty).Subscribe(new AnonymousObserver<bool>(open =>
+            {
+                timer.Stop();
+                if (open) timer.Start();
+            }));
+            target.DetachedFromVisualTree += (_, _) => { timer.Stop(); ToolTip.SetIsOpen(target, false); };
+            return timer;
         }
 
         /// <summary>The card every shelf row sits in: gold edge while switched on, pink otherwise,
@@ -804,15 +913,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     ToolTip.SetTip(held, RankLockedTip + "\n" + RankSpecifics(b.RankFloor));
                     right.Children.Add(held);
                 }
+                else if (ChaosMeta.IsAccessoryScriptLocked(b.Id))
+                {
+                    // WPF ChaosHubWindow.xaml.cs:731-747: rank, her script, then lesson.
+                    var held = BuyButton(Glyphed(13, "Unlock", IconKind.Sparkle, $"{b.UnlockCost}"), b.Id, false, BoonUnlock_Click);
+                    ToolTip.SetTip(held, Loc.Get("chaos_accessory_script_lock"));
+                    ToolTip.SetShowOnDisabled(held, true);
+                    right.Children.Add(held);
+                }
                 else
                 {
-                    right.Children.Add(BuyButton(Glyphed(13, "Unlock", IconKind.Sparkle, $"{b.UnlockCost}"), b.Id, Live.Sparks >= b.UnlockCost, BoonUnlock_Click));
+                    right.Children.Add(ChaosLessons.IsLessonBlocked(b.Id)
+                        ? BuildLessonLockPanel(b.Id, BoonAccent)
+                        : BuyButton(Glyphed(13, "Unlock", IconKind.Sparkle, $"{b.UnlockCost}"), b.Id, Live.Sparks >= b.UnlockCost, BoonUnlock_Click));
                 }
             }
             else if (maxed)
                 right.Children.Add(new ContentControl { Content = Glyphed(13, "MAX", IconKind.Checkmark), Foreground = new SolidColorBrush(Color.FromRgb(0x5A, 0xE0, 0x96)), FontSize = 13, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Right });
             else
-                right.Children.Add(BuyButton(Glyphed(13, "deepen", IconKind.Sparkle, $"{b.UpgradeCost}"), b.Id, Live.Sparks >= b.UpgradeCost, BoonUpgrade_Click));
+            {
+                // WPF ChaosHubWindow.xaml.cs:753-767: the final deepen waits for Devoted.
+                bool capLocked = ChaosMeta.IsCapstonePurchaseRankLocked(b.Id);
+                var deepen = BuyButton(Glyphed(13, "deepen", IconKind.Sparkle, $"{b.UpgradeCost}"), b.Id, Live.Sparks >= b.UpgradeCost && !capLocked, BoonUpgrade_Click);
+                if (capLocked)
+                {
+                    ToolTip.SetTip(deepen, ChaosRanks.CapstoneLockedTip + "\n" + ChaosRanks.RankSpecifics(ChaosRank.Devoted, ChaosMeta.State.RunsCompleted));
+                    ToolTip.SetShowOnDisabled(deepen, true);
+                }
+                right.Children.Add(deepen);
+            }
 
             Grid.SetColumn(right, 2);
             grid.Children.Add(right);
