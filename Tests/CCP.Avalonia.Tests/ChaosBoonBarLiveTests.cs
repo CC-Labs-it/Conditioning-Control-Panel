@@ -90,4 +90,31 @@ public sealed class ChaosBoonBarLiveTests
             return Task.CompletedTask;
         });
     }
+    // WPF ConditioningControlPanel.csproj:206-214 ships promoted art, not staging candidates.
+    [Fact]
+    public async Task Bundled_boon_art_is_copied_to_real_output_and_resolves()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var source = Path.Combine(RepoRoot(), "ConditioningControlPanel", "assets", "Chaos", "boons");
+            var output = Path.Combine(AppContext.BaseDirectory, "assets", "Chaos", "boons");
+            var expected = Directory.GetFiles(source, "*.png", SearchOption.AllDirectories)
+                .Select(p => Path.GetRelativePath(source, p))
+                .Where(p => !p.Split(Path.DirectorySeparatorChar).Any(part => part.StartsWith("_staging", StringComparison.Ordinal)))
+                .OrderBy(p => p, StringComparer.Ordinal).ToArray();
+            Assert.NotEmpty(expected);
+            Assert.True(Directory.Exists(output), "Bundled boon art was not copied to output");
+            var copied = Directory.GetFiles(output, "*.png", SearchOption.AllDirectories)
+                .Select(p => Path.GetRelativePath(output, p)).OrderBy(p => p, StringComparer.Ordinal);
+            Assert.Equal(expected, copied);
+            var image = Assert.IsType<Bitmap>(ChaosBoonArt.ResolveFrom("boons", "welcome_shower", AppContext.BaseDirectory));
+            Assert.Equal(new PixelSize(512, 512), image.PixelSize);
+            return Task.CompletedTask;
+        });
+    }
+
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string here = "") =>
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", ".."));
+
 }
