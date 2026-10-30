@@ -301,6 +301,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF AwardAmbientPop, head half: sound, XP, quest credit.</summary>
         internal static void Pop(AmbientBubble b)
         {
+            if (b.Popping) return;   // WPF BubbleService.cs:4647 rejects an already popping bubble.
             if (b.Spec != null) { PopChaos(b); return; }
             var s = CoreSettings.Current;
             var paid = Field.Pop(b, s);
@@ -309,15 +310,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             App.NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureBubbles);   // WPF OnBubblePopped
             var master = s.MasterVolume / 100f;
             var vol = (float)Math.Pow(master * (s.BubblesVolume / 100f), 1.5);
-            var dir = Path.Combine(AppContext.BaseDirectory, "Resources", "sounds");
-            var path = b.Lucky
-                ? Path.Combine(dir, $"chime{Field.Random.Next(1, 4)}.mp3")   // lucky: a chime replaces the pop, at 0.35x
-                : Path.Combine(dir, "bubbles", new[] { "Pop.mp3", "Pop2.mp3", "Pop3.mp3" }[Field.Random.Next(3)]);
-            if (b.Lucky) vol *= 0.35f;
-            CoreAudio.PlayOneShot(path, Math.Min(vol, 1f), "bubble-pop");
+            var (path, chime) = ResolvePopSound(b.Lucky, s.SuppressPerkNotifications, Field.Random);
+            if (chime) vol *= 0.35f;
+            if (File.Exists(path)) CoreAudio.PlayOneShot(path, Math.Min(vol, 1f), "bubble-pop");
+            App.Achievements?.TrackBubblePopped();   // WPF BubbleService.cs:1117
             try { App.Quests?.TrackBubblePopped(); } catch (Exception ex) { Log.Debug("bubble quest credit: {E}", ex.Message); }
             _ = CoreHaptics.Service?.BubblePopAsync();   // WPF BubbleService.cs:1089
             try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("bubble popped handler: {E}", ex.Message); }   // WPF OnBubblePopped
+        }
+
+        // WPF BubbleService.cs:2191-2236: mod audio, perk opt-out and missing-chime fallback.
+        internal static (string Path, bool Chime) ResolvePopSound(bool lucky, bool suppressed, Random random)
+        {
+            string Resolve(string cue) => CoreModArt.AudioOverridePath(cue)
+                ?? Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", cue);
+            if (lucky && !suppressed)
+            {
+                var chime = Resolve($"chime{random.Next(1, 4)}.mp3");
+                if (File.Exists(chime)) return (chime, true);
+            }
+            return (Resolve("bubbles/" + new[] { "Pop.mp3", "Pop2.mp3", "Pop3.mp3" }[random.Next(3)]), false);
         }
 
         internal static void OnFrame(TimeSpan now)
@@ -381,7 +393,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal readonly int Index;
         internal readonly PixelRect Bounds;
         internal readonly double Scaling;
-        internal readonly PixelRect[] Rects = new PixelRect[64];
+        internal PixelRect[] Rects = new PixelRect[64];
+        internal int InputRectCount { get; private set; }
         private int _lastCount = -1;
         /// <summary>Cached (no per-frame closure); a closed window's late frame is ignored.</summary>
         internal readonly Action<TimeSpan> FrameCallback;
@@ -451,16 +464,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var n = 0;
             var bubbles = BubbleOverlay.Field.Bubbles;
-            for (var i = 0; i < bubbles.Count && n < Rects.Length; i++)
+            for (var i = 0; i < bubbles.Count; i++)
             {
                 var b = bubbles[i];
-                if (b.Screen != Index || !b.Clickable || b.Popping) continue;
-                Rects[n++] = new PixelRect((int)(b.X * Scaling) - Bounds.X, (int)(b.Y * Scaling) - Bounds.Y,
-                    (int)(b.Size * Scaling), (int)(b.Size * Scaling));
+                if (b.Screen != Index || !b.Clickable || b.Popping || b.Size <= 0) continue;
+                // WPF BubbleService.cs:661/:3027: the shared-host hook tests a disc.
+                // Both native backends already accept unions of rectangles: rasterise each
+                // physical pixel row, clipped to this screen. Keep the buffer across frames.
+                var cx = b.CenterX * Scaling - Bounds.X;
+                var cy = b.CenterY * Scaling - Bounds.Y;
+                var r = b.Size * Scaling / 2;
+                var first = Math.Max(0, (int)Math.Ceiling(cy - r));
+                var last = Math.Min(Bounds.Height - 1, (int)Math.Floor(cy + r));
+                for (var y = first; y <= last; y++)
+                {
+                    var dy = y - cy;
+                    var half = Math.Sqrt(Math.Max(0, r * r - dy * dy));
+                    var left = Math.Max(0, (int)Math.Ceiling(cx - half));
+                    var right = Math.Min(Bounds.Width - 1, (int)Math.Floor(cx + half));
+                    // Round trips through mixed-DPI global DIPs can differ by an ULP at the
+                    // radius. Use the same predicate as the press handler at the endpoints.
+                    bool Hit(int x) => b.Contains((Bounds.X + x) / Scaling, (Bounds.Y + y) / Scaling);
+                    if (left > 0 && Hit(left - 1)) left--;
+                    if (right < Bounds.Width - 1 && Hit(right + 1)) right++;
+                    while (left <= right && !Hit(left)) left++;
+                    while (right >= left && !Hit(right)) right--;
+                    if (left > right) continue;
+                    var rect = new PixelRect(left, y, right - left + 1, 1);
+                    // Coalesce identical adjacent rows (especially useful for small bubbles).
+                    if (n > 0 && Rects[n - 1] is var prev && prev.X == rect.X && prev.Width == rect.Width && prev.Bottom == y)
+                        Rects[n - 1] = new PixelRect(prev.X, prev.Y, prev.Width, prev.Height + 1);
+                    else
+                    {
+                        if (n == Rects.Length) Array.Resize(ref Rects, Rects.Length * 2);
+                        Rects[n++] = rect;
+                    }
+                }
             }
+            InputRectCount = n;
             var drawn = HasBubbles();
             if (!drawn && _lastCount == 0) return;   // stayed empty: region already empty, nothing to repaint
-            X11Overlay.SetInputRects(this, Rects, n);
+            X11Overlay.SetInputRects(this, Rects, InputRectCount);
             (Content as Control)?.InvalidateVisual();
             _lastCount = drawn ? 1 : 0;
         }
