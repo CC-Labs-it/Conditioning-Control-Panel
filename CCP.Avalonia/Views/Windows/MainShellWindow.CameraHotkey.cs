@@ -24,7 +24,12 @@ public partial class MainShellWindow
 
     // Native seam: headless tests never grab a key on the real desktop.
     internal Func<Window, ChordMods, string, Action, IDisposable?> RegisterCameraHotkey = RegisterCameraHotkeyNative;
-    internal Func<Window, Task> ShowCameraConsent = owner => new WebcamConsentDialog().ShowDialogSafe(owner);
+    // WPF MainWindow.BlinkTrainer.cs:337-338: persisted consent alone does not finish the dialog.
+    internal Func<Window, Task<bool>> ShowCameraConsent = async owner =>
+    {
+        var dialog = new WebcamConsentDialog();
+        return await dialog.ShowDialogSafe<bool?>(owner) == true && dialog.ConsentGiven;
+    };
     internal bool CameraHotkeyArmed => _cameraHotkeyRegistration != null;
 
     private static IDisposable? RegisterCameraHotkeyNative(Window owner, ChordMods mods, string key, Action pressed)
@@ -100,7 +105,7 @@ public partial class MainShellWindow
                 if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
                 Show();
                 Activate();
-                await ShowCameraConsent(this);
+                if (!await ShowCameraConsent(this)) return;
                 if (!WebcamConsent.IsCurrent(CoreSettings.Current)) return;
             }
             if (await tracker.StartAsync())

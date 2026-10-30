@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -6,6 +8,7 @@ using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.EmiDesk;
@@ -383,7 +386,7 @@ public sealed class QuickRecalHotkeyTests
         {
             asks++;
             if (grant) (s.WebcamConsentGiven, s.WebcamConsentVersion) = (true, WebcamConsent.ConsentVersion);
-            return Task.CompletedTask;
+            return Task.FromResult(grant);
         };
         try
         {
@@ -470,7 +473,7 @@ public sealed class QuickRecalHotkeyTests
         var shell = new MainShellWindow();
         shell.QuickRecalPlatformSupported = true;
         shell.RegisterQuickRecal = (_, _) => null;
-        var held = new TaskCompletionSource();
+        var held = new TaskCompletionSource<bool>();
         int asks = 0;
         shell.ShowCameraConsent = owner =>
         {
@@ -497,10 +500,59 @@ public sealed class QuickRecalHotkeyTests
             Assert.Equal(1, asks);
             await shell.ToggleWebcamFromHotkeyAsync();
             Assert.Equal(1, asks);
-            held.SetResult();
+            held.SetResult(false);
             Assert.False(WebcamTracker.Instance.IsRunning);
         }
-        finally { held.TrySetResult(); shell.StopQuickRecalHotkey(); shell.Close(); }
+        finally { held.TrySetResult(false); shell.StopQuickRecalHotkey(); shell.Close(); }
     });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task CameraHotkey_ClosingAfterEnable_DoesNotStartUntilDialogFinished(bool finish) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Init();
+        CoreSettings.Current.WebcamConsentGiven = false;
+        WebcamTracker.SourceFactory = () => new BlinkTrainerSessionTests.BlackFrames();
+        var tracker = WebcamTracker.Instance;
+        var shell = new MainShellWindow();
+        try
+        {
+            var pending = shell.ToggleWebcamFromHotkeyAsync();
+            var dialog = Assert.Single(shell.OwnedWindows.OfType<WebcamConsentDialog>());
+            void Click(string name) => dialog.FindControl<Button>(name)!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Click("BtnNext"); Click("BtnNext");
+            foreach (var name in new[] { "ChkConsent1", "ChkConsent2", "ChkConsent3" }) dialog.FindControl<CheckBox>(name)!.IsChecked = true;
+            dialog.FindControl<TextBox>("TxtConfirm")!.Text = "ENABLE";
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.True(dialog.FindControl<Button>("BtnEnable")!.IsEnabled);
+            Click("BtnEnable");
+            Assert.True(dialog.ConsentGiven);
+            Assert.True(WebcamConsent.IsCurrent(CoreSettings.Current));
+            Assert.False(tracker.IsRunning);
+            if (finish) Click("BtnSkipCal"); else dialog.Close();
+            await pending;
+            Assert.Equal(finish, tracker.IsRunning);
+        }
+        finally { await tracker.StopAsync(); shell.Close(); }
+    });
+
+    [Fact]
+    public void X11HeldChord_FiresOnceUntilGenuineRelease()
+    {
+        int toggles = 0;
+        var grabs = new[] { (45, 12u, (Action)(() => toggles++)) };
+        var held = new HashSet<int>();
+        void Send(int type, long time, (int, int, long) next = default) =>
+            X11SummonChord.MatchKeyEvent(grabs, held, type, 45, 12, time, next)?.Invoke();
+        Send(2, 100); Send(2, 200); Send(2, 300); // detectable repeat: repeated presses only
+        Assert.Equal(1, toggles);
+        Send(3, 400, (2, 45, 400)); Send(2, 400); // legacy synthetic release/press pair
+        Assert.Equal(1, toggles);
+        Send(3, 500, (2, 45, 501)); Send(2, 501); // genuine release followed by a new press
+        Assert.Equal(2, toggles);
+        Send(3, 600); Send(2, 700);
+        Assert.Equal(3, toggles);
+    }
 
 }

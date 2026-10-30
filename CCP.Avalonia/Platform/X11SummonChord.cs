@@ -17,9 +17,9 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal static class X11SummonChord
 {
     private const string LibX11 = "libX11.so.6";
-    private const int KeyPress = 2, MappingNotify = 34, BadAccess = 10, GrabModeAsync = 1;
+    private const int KeyPress = 2, KeyRelease = 3, MappingNotify = 34, BadAccess = 10, GrabModeAsync = 1;
     private const uint ShiftMask = 1, LockMask = 2, ControlMask = 4, Mod1Mask = 8, Mod2Mask = 16, Mod4Mask = 64;
-    private const int XEventSize = 192, KeyEventState = 80, KeyEventKeycode = 84, ErrorEventCode = 32;
+    private const int XEventSize = 192, KeyEventTime = 56, KeyEventState = 80, KeyEventKeycode = 84, ErrorEventCode = 32;
     private const uint ChordBits = ShiftMask | ControlMask | Mod1Mask | Mod4Mask;
     private static readonly uint[] LockExtras = { 0u, LockMask, Mod2Mask, LockMask | Mod2Mask };
 
@@ -34,6 +34,8 @@ internal static class X11SummonChord
     [DllImport(LibX11)] private static extern int XConnectionNumber(IntPtr display);
     [DllImport(LibX11)] private static extern int XPending(IntPtr display);
     [DllImport(LibX11)] private static extern int XNextEvent(IntPtr display, IntPtr ev);
+    [DllImport(LibX11)] private static extern int XPeekEvent(IntPtr display, IntPtr ev);
+    [DllImport(LibX11)] private static extern int XkbSetDetectableAutoRepeat(IntPtr display, bool detectable, out int supported);
     [DllImport(LibX11)] private static extern int XGrabKey(IntPtr display, int keycode, uint modifiers, IntPtr window, bool ownerEvents, int pointerMode, int keyboardMode);
     [DllImport(LibX11)] private static extern int XUngrabKey(IntPtr display, int keycode, uint modifiers, IntPtr window);
     [DllImport(LibX11)] private static extern int XSync(IntPtr display, bool discard);
@@ -146,11 +148,26 @@ internal static class X11SummonChord
         return null;
     }
 
+    // WPF Services/Input/GlobalHotkeyService.cs:108 uses MOD_NOREPEAT. Legacy X11 repeats
+    // synthesize a release immediately followed by a press with the same keycode and timestamp.
+    internal static Action? MatchKeyEvent(IEnumerable<(int Code, uint Mask, Action OnPress)> grabs,
+        HashSet<int> held, int type, int code, uint state, long time, (int Type, int Code, long Time) next = default)
+    {
+        if (type == KeyRelease)
+        {
+            if (next != (KeyPress, code, time)) held.Remove(code);
+            return null;
+        }
+        return type == KeyPress && held.Add(code) ? Match(grabs, code, state) : null;
+    }
+
     private static bool EnsureDisplay()
     {
         if (_display != IntPtr.Zero) return true;
         _display = XOpenDisplay(IntPtr.Zero);
         if (_display == IntPtr.Zero) { Log.Warning("[EmiDesk] no X display: the summon chord cannot be armed"); return false; }
+        // Detectable repeats are press-only. MatchKeyEvent also handles servers without this support.
+        XkbSetDetectableAutoRepeat(_display, true, out _);
         _root = XDefaultRootWindow(_display);
         var fd = XConnectionNumber(_display);
         pipe(_wake);
@@ -172,6 +189,8 @@ internal static class X11SummonChord
     private static void Listen(int fd)
     {
         var ev = Marshal.AllocHGlobal(XEventSize);
+        var next = Marshal.AllocHGlobal(XEventSize);
+        var held = new HashSet<int>();
         var pfd = new[] { new PollFd { Fd = fd, Events = 1 /* POLLIN */ }, new PollFd { Fd = _wake[0], Events = 1 } };
         var buf = new byte[16];
         while (true)
@@ -189,9 +208,17 @@ internal static class X11SummonChord
                         XNextEvent(_display, ev);
                         int type = Marshal.ReadInt32(ev);
                         if (type == MappingNotify) XRefreshKeyboardMapping(ev);
-                        else if (type == KeyPress
-                                 && Match(_grabs.Values, Marshal.ReadInt32(ev, KeyEventKeycode), (uint)Marshal.ReadInt32(ev, KeyEventState)) is { } hit)
-                            fire += hit;
+                        else if (type is KeyPress or KeyRelease)
+                        {
+                            var following = (Type: 0, Code: 0, Time: 0L);
+                            if (type == KeyRelease && XPending(_display) > 0)
+                            {
+                                XPeekEvent(_display, next);
+                                following = (Marshal.ReadInt32(next), Marshal.ReadInt32(next, KeyEventKeycode), Marshal.ReadInt64(next, KeyEventTime));
+                            }
+                            fire += MatchKeyEvent(_grabs.Values, held, type, Marshal.ReadInt32(ev, KeyEventKeycode),
+                                (uint)Marshal.ReadInt32(ev, KeyEventState), Marshal.ReadInt64(ev, KeyEventTime), following);
+                        }
                     }
                 }
                 fire?.Invoke();
