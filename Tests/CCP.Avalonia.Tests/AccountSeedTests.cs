@@ -219,10 +219,8 @@ public sealed partial class AccountSeedTests : IDisposable
         var client = new V2AuthService(() => s, new Answer(HttpStatusCode.OK, body));
         await AccountSeed.TierSync.OnAppFocusedAsync(s, DateTime.UtcNow, async id => { await client.GetUserProfileAsync(id); });
         global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-        Assert.Equal(tier, s.PatreonTier);
-        Assert.Equal(confirmed.AddDays(14), s.PatreonPremiumValidUntil);
-        Assert.True(CoreAccount.HasPremiumAccess);
-        Assert.Equal(tier == 2, CoreAccount.HasLabAccess);
+        Assert.Equal(tier, s.PatreonTier); Assert.Equal(confirmed.AddDays(14), s.PatreonPremiumValidUntil);
+        Assert.True(CoreAccount.HasPremiumAccess); Assert.Equal(tier == 2, CoreAccount.HasLabAccess);
         Assert.Equal(1, notifications);
     });
 

@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -162,8 +163,10 @@ public sealed partial class AccountSeedTests
                 int BoardGets() => wire.Seen.Count(r => r.Contains("/v3/leaderboard"));
                 var boardTabGets = BoardGets();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
+                w.CaptureRenderedFrame()?.Dispose(); // Settle layout before measuring the real click target.
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
+                Assert.Same(row.DataContext, (w.InputHitTest(at) as Control)?.DataContext);
                 for (var i = 0; i < 2; i++)
                 {
                     w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
