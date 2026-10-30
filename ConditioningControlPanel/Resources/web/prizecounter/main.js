@@ -1,7 +1,7 @@
 /* main.js - the page entry. mountPrizeCounter(host, { root }) boots the host seam, loads the state and wires the
  * model to the 3D scene (scene/index.js, lane B3-W2) and the HUD (hud/index.js, lane B3-W4). If the scene cannot load,
  * the HUD draws a plain list of the shelves and the page still buys. index.html mounts it on the real host, dev.html
- * on the mock. */
+ * on the mock. preview/index.js (lane B3-W5) fills the HUD's preview box for the focused item. */
 
 import { createShop, windowShelves } from './state/shop.js';
 import { makeT } from './state/strings.js';
@@ -34,8 +34,14 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
 
   const hud = createHud(root, { t, send: (i) => intent(i), goTab, signIn: () => host.signIn(), list: !scene, gentle: !!init.gentle,
     motion: motion === 'full' && init.reducedMotion ? 'less' : motion });
+  // The preview box (lane B3-W5): the focused item's model or picture, loaded when the focus rests, freed when it leaves.
+  const preview = await import('./preview/index.js')
+    .then((m) => m.createPreview(hud.previewSlot, { base: './assets/', motion, reducedMotion: !!init.reducedMotion, gentle: !!init.gentle, log: host.log }))
+    .catch((e) => { host.log(`prizecounter: no previews (${(e && e.message) || e})`); return null; });
   const tier = () => (shop.state() ? shop.state().tier : 0);
   const paint = () => {
+    const f = shop.focus();
+    if (preview) preview.focus(shop.status() === 'ready' && f && f.row ? f.row.id : null);
     hud.paint({ status: shop.status(), sp: shop.sp(), week: shop.state() && shop.state().week, tier: tier(),
       tabs: shop.tabs(), tabId: shop.tabId(), shelves: shop.shelves(), focus: shop.focus(), card: shop.card() });
     if (scene) scene.setInsets(hud.insets());   // a phone frames the shelf between the tabs and the preview strip
@@ -79,6 +85,6 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
 
   return {
     shop, scene, hud, intent,
-    dispose() { window.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); hud.dispose(); if (scene) scene.dispose(); root.replaceChildren(); },
+    dispose() { window.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); hud.dispose(); if (preview) preview.dispose(); if (scene) scene.dispose(); root.replaceChildren(); },
   };
 }

@@ -52,6 +52,16 @@ html, body { margin: 0; height: 100%; background: #140d19; color: var(--ink); fo
   transform: rotate(-1deg); transform-origin: 100% 100%; }
 .pc-peek-view:empty { display: none; }
 .pc-peek-view { height: 150px; border-bottom: 2px dashed var(--ink-soft); margin-bottom: 8px; }
+/* the preview itself (preview/): a 3D turntable or a picture, faded IN and OUT (lengths set by preview/frame.js) */
+.pc-pv-box { position: relative; width: 100%; height: 100%; overflow: hidden; }
+.pc-pv { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity var(--pc-pv-out, 120ms) ease-in; }
+.pc-pv.pc-pv-on { opacity: 1; transition: opacity var(--pc-pv-in, 180ms) ease-out; }
+.pc-pv-img { position: absolute; inset: 4px; width: calc(100% - 8px); height: calc(100% - 8px); object-fit: contain; }
+.pc-pv-avatar .pc-pv-img { inset: 8px; margin: auto; width: auto; height: calc(100% - 16px); aspect-ratio: 1; border-radius: 50%; border: 2.5px solid var(--ink);
+  object-fit: cover; background: var(--chalk); }
+.pc-pv-swatch .pc-pv-img { object-fit: cover; border: 2px solid var(--ink); border-radius: 4px; opacity: 0;
+  transition: opacity var(--pc-pv-in, 180ms) ease-out; }
+.pc-pv-swatch .pc-pv-lit { opacity: 1; }
 .pc-peek-name { margin: 0; font: 700 24px/1.1 var(--hand); }
 .pc-peek-price { margin: 6px 0 0; display: flex; align-items: center; gap: 6px; font-size: 20px; }
 .pc-peek-desc { margin: 6px 0 0; font-size: 14px; line-height: 1.3; color: var(--ink-soft); }

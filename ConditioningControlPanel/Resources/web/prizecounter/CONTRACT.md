@@ -15,7 +15,8 @@ Scope and owner calls: `handoff-1029/B3-SHOP-DECISIONS.md` (sections 5 and 6 are
 | `scene/` | B3-W2 | three.js: load, place, cameras, input. |
 | `fx/` | B3-W3 | springs, dust, settle, sfx bus, Gentle / reduced / motion off. |
 | `hud/` | B3-W4 | tabs, wallet, preview box, confirm card, stamps. |
-| `preview/` | B3-W5 | per-family preview in the HUD box. |
+| `preview/` | B3-W5 | the HUD preview box: `catalog.js` (item id -> spec over `assets/preview/index.json`), `loader.js` (rests 140 ms, drops stale loads, disposes on leave, frees a kind's shared art when the focus leaves it), `stage.js` (3D turntable: Rain, kart bodies, outfits, trail, chess), `pictures.js` (frames, avatars, EMI desk sheets, paints). |
+| `assets/preview/` | B3-W5 (art is Astra's) | byte copies from `out/preview` and `out/art` (only what the box draws: the knight variants, idle desk overlays, one Rain attribution) plus the approved `piecebypiece` knight and the arcademy EMI idle body; `index.json` = one spec per item id. Budget: no file over 8 MB, the tree under 10 MB (`tests/preview.test.mjs`). Rigged kart outfits stay out: they bind to the KTX2 kart base, which r169 here cannot read, so outfits and the umbrella preview their shelf GLB. |
 | `index.html`, `main.js`, `dev.html` | B3-W1 creates, others add one line each | page entry; `dev.html` runs on the mock with no host. |
 | `tests/*.test.mjs` | every lane | `node --test tests/*.test.mjs` from this folder (the bare folder form fails on Node 24). Every lane runs the whole folder. |
 
