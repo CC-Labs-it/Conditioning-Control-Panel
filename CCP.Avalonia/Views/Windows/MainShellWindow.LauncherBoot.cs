@@ -18,7 +18,13 @@ public partial class MainShellWindow
         void Route(object? sender, EventArgs e)
         {
             Opened -= Route;
-            try { LauncherWindow.RouteBoot(this); }
+            try
+            {
+                // WPF MainWindow.Launcher.cs:74 hides before App.xaml.cs:4290 routes,
+                // even if Lockdown began during Opened. The launcher veil owns that surface.
+                Hide();
+                LauncherWindow.RouteBoot(this);
+            }
             finally
             {
                 BuildingHiddenForBoot = false;

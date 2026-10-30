@@ -101,17 +101,30 @@ public sealed class LauncherWindowTests
     }, pumpUntilIdle: false);
 
     [Fact]
-    public void LockdownStartingBeforeBootRouting_KeepsThePanelUp() => Run(shell =>
+    public void LockdownStartingDuringHiddenBoot_KeepsPanelHiddenAndLauncherVeiled() => Run(shell =>
     {
         var ld = LockdownService.Current = new LockdownService();
         try
         {
-            ld.Activate(TimeSpan.FromMinutes(30));
-            ConditioningControlPanel.Avalonia.Platform.StartupLadder.Hold();
-            LauncherWindow.RouteBoot(shell);
-            Assert.True(shell.IsVisible);
-            Assert.Null(LauncherWindow.Instance);
-            Assert.False(ConditioningControlPanel.Avalonia.Platform.StartupLadder.LauncherHolding);
+            // WPF MainWindow.Launcher.cs:74 hides before App.xaml.cs:4290 routes the surface.
+            shell.Hide();
+            LauncherWindow.Boot = new BootDecision(BootSurface.Launcher, null);
+            shell.Opened += (_, _) => ld.Activate(TimeSpan.FromMinutes(30));
+            shell.PrepareLauncherBoot();
+            shell.Show();
+            Assert.False(shell.IsVisible);
+            Assert.Equal(1, shell.Opacity);
+            Assert.False(shell.BuildingHiddenForBoot);
+            Assert.True(LauncherWindow.Instance!.IsVisible);
+            Assert.True(LauncherWindow.Instance.FindControl<Border>("LockdownVeil")!.IsVisible);
+            Assert.True(ConditioningControlPanel.Avalonia.Platform.StartupLadder.LauncherHolding);
+            bool offered = false;
+            ConditioningControlPanel.Avalonia.Platform.StartupLadder.PresentOrInbox(new()
+            {
+                Key = "lockdown-boot-hold-test", Open = () => offered = true,
+            });
+            Assert.False(offered);
+            Assert.Single(ConditioningControlPanel.Avalonia.Platform.StartupLadder.Inbox.Items);
         }
         finally { ld.Deactivate(); }
     }, pumpUntilIdle: false);

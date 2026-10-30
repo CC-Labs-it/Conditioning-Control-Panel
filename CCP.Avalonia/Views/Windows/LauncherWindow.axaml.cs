@@ -166,14 +166,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                // Lockdown may have started during the panel's Opened work. Deliberate deviation:
-                // WPF hides the panel and shows the veiled launcher here; this head keeps the panel up.
-                if (MainShellWindow.LockdownActive)
-                {
-                    Platform.StartupLadder.Release();
-                    panel.ShowFromTray();
-                    return;
-                }
                 Platform.StartupLadder.Hold();
                 panel.HideForLauncher(quiet: true);
                 if (!(Boot.Surface == BootSurface.Game && Boot.GameId is { } id && LaunchGame(panel, id)))
