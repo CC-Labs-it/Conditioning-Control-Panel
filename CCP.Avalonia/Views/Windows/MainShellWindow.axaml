@@ -652,6 +652,17 @@
             </Grid>
         </Border>
 
+        <!-- WPF MainWindow.xaml:817-822: shade onto the page, below the rail, never intercept input. -->
+        <Rectangle x:Name="NavRailShadow" Grid.Row="1" Grid.RowSpan="5" Grid.Column="1"
+                   Width="6" HorizontalAlignment="Left" ZIndex="59" IsHitTestVisible="False">
+            <Rectangle.Fill>
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                    <GradientStop Color="#BF000000" Offset="0"/>
+                    <GradientStop Color="#00000000" Offset="1"/>
+                </LinearGradientBrush>
+            </Rectangle.Fill>
+        </Rectangle>
+
         <!-- THE HUD BAND (WPF MainWindow.xaml:805, nav polish wave 2): the header row and the XP row
              read as one zone - 20% black over the window ground and a 1px TextMuted divider at 30%
              under the XP row. Drawn before the header so its controls sit on it; never hit-testable.
