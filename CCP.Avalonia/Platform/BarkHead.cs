@@ -93,10 +93,11 @@ internal static class BarkHead
         if (tube == null) return;
         if (s.Unprompted && HoldIdleVoice())
         {
-            tube.GigglePriority(s.Text, playSound: false, aiGenerated: false, mood: s.Mood);
+            if (s.Priority) tube.GigglePriority(s.Text, playSound: false, aiGenerated: false, mood: s.Mood);
+            else tube.Giggle(s.Text, unprompted: true); // WPF BarkService.cs:1975: retain preset routing
             return;
         }
-        if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) { tube.Giggle(s.Text); return; }
+        if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) { tube.Giggle(s.Text, unprompted: s.Unprompted); return; }
         tube.GigglePriority(s.Text, playSound: s.AudioPath == null, aiGenerated: false,
             phraseAudioPath: s.AudioPath, barkVoice: s.AudioPath != null, mood: s.Mood);
     }

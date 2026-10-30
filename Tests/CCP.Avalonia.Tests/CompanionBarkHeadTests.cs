@@ -51,7 +51,7 @@ public sealed class CompanionBarkHeadTests
     }
 
     [Fact]
-    public void OpenTubeIdleTickReachesBarksAndPanicAndCloseStopItsTimer() => WithSeamsRestored(s =>
+    public void IdleMouthKeepsPresetRoutingAndRecoversAfterPanicQuiet() => WithSeamsRestored(s =>
     {
         var old = (BarkHead.Engine, s.MasterVolume, s.IdleGiggleIntervalSeconds, s.BarkIdleRotation);
         var lifetime = Application.Current!.ApplicationLifetime;
@@ -69,18 +69,51 @@ public sealed class CompanionBarkHeadTests
             s.IdleGiggleIntervalSeconds = 120;
             s.BarkIdleRotation = new();
             var e = Seeded(Rule("Idle", "idle hello"), out var spoken);
-            // Keep the headless test's mouth observational, avoiding audio or notifications.
-            e.Speak = _ => { };
+            var clock = new BarkClock();
+            e.Clock = clock;
+            CoreSession.IsEngineRunningProvider = () => false;
+            CoreSession.IsSessionRunningProvider = () => false;
+            s.CompanionSpeaksIdleWhenEngineOff = false;
+            s.AvatarMuted = false;
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            int audio = 0;
+            CoreModArt.OverridePathProvider = path => path.StartsWith("sounds/") ? typeof(BarkHead).Assembly.Location : null;
+            CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { audio++; return () => { }; };
             BarkHead.Engine = e;
             shell.Show();
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             var tube = shell.Tube!;
             Assert.True(tube.IdleTimerRunning);
+            tube.SpeechClock = clock;
+            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            var counter = tube.GetType().GetField("_presetGiggleCounter", flags)!;
+            counter.SetValue(tube, 4); // the next preset would make its every-fifth sound
             var latch = tube.GetType().GetField("_isGiggling", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
             latch.SetValue(tube, true); // a collapsed bubble left the WPF speech latch stranded
             tube.OnIdleTick();
-            Assert.False(tube.IsSpeaking);
+            Assert.True(tube.IsSpeaking);
             Assert.Equal("idle hello", spoken());
+            Assert.Empty(tube.ChatHistory);
+            Assert.Equal(false, tube.GetType().GetField("_isShowingAiBubble", flags)!.GetValue(tube));
+            Assert.Equal(0, audio);
+            System.Action? delayed = null;
+            tube.SpeechDelayScheduler = (_, fire) => { delayed = fire; return () => { }; };
+            tube.Giggle("queued idle", unprompted: true);
+            Assert.Equal(1, tube.QueuedSpeechCount);
+            tube.EndSpeechBubble();
+            clock.Advance(2);
+            counter.SetValue(tube, 4);
+            delayed!();
+            Assert.Equal(0, audio); // queued preset retains the idle voice hold
+            Assert.Empty(tube.ChatHistory);
+            tube.EndSpeechBubble();
+            clock.Advance(2);
+            Assert.True(tube.IsSpeechReady()); // preset gap, no AI bonus
+            BarkHead.Speak(new BarkSpeech("held clip", "unused.mp3", false, null, false, true));
+            Assert.Empty(tube.ChatHistory);
+            Assert.Equal(0, audio);
+            tube.EndSpeechBubble();
+            clock.Advance(2);
             s.IdleGiggleIntervalSeconds = 60;
             BarkHead.OnSettingChanged(e, nameof(s.IdleGiggleIntervalSeconds));
             Assert.Equal(System.TimeSpan.FromSeconds(60), tube.IdleInterval);
@@ -88,20 +121,46 @@ public sealed class CompanionBarkHeadTests
             s.IdleGiggleIntervalSeconds = 30;
             tube.GigglePriority("idle reset", playSound: false);
             Assert.Equal(System.TimeSpan.FromSeconds(30), tube.IdleInterval);
+            tube.ChatHistory.Clear(); // the explicit priority speech above is a chat-log line
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
             tube.PanicSilence();
-            Assert.False(tube.IdleTimerRunning);
-            tube.RestartIdleTimer();
             Assert.True(tube.IdleTimerRunning);
+            s.CompanionSpeaksIdleWhenEngineOff = true;
+            Assert.True(BarkHead.HoldIdleVoice());
+            clock.Advance(60);
+            tube.OnIdleTick(); // still ticking, with no audible voice during quiet
+            Assert.Equal(0, audio);
+            tube.EndSpeechBubble();
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet(
+                System.Environment.TickCount64 - (long)ConditioningControlPanel.Services.Safety.PanicAftermath.QuietWindow.TotalMilliseconds);
+            clock.Advance(60);
+            counter.SetValue(tube, 4);
+            Assert.False(BarkHead.HoldIdleVoice());
+            tube.OnIdleTick(); // no speech, slider change or explicit timer restart needed
+            Assert.Equal(1, audio);
+            Assert.Empty(tube.ChatHistory);
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            BarkHead.Speak(new BarkSpeech("priority idle", "unused.mp3", true, null, false, true));
+            Assert.Single(tube.ChatHistory); // priority remains priority while held
+            Assert.Equal(1, audio);
             shell.Close();
             Assert.False(tube.IdleTimerRunning);
         }
         finally
         {
             shell.Close();
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             lifetimeField.SetValue(Application.Current, lifetime);
             (BarkHead.Engine, s.MasterVolume, s.IdleGiggleIntervalSeconds, s.BarkIdleRotation) = old;
         }
     });
+
+    private sealed class BarkClock : System.TimeProvider
+    {
+        private global::System.DateTimeOffset _now = global::System.DateTimeOffset.UtcNow;
+        public override global::System.DateTimeOffset GetUtcNow() => _now;
+        public void Advance(int seconds) => _now = _now.AddSeconds(seconds);
+    }
 
     [Fact]
     public void AppStartupStartsBothHeadsOnceQuestsExist()
