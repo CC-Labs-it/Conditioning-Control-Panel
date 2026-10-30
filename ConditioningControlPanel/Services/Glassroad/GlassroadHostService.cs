@@ -150,6 +150,7 @@ internal static class GlassroadHostService
             try { if (_core != null) _core.DOMContentLoaded -= OnDomContentLoaded; } catch (Exception ex) { Diag.Swallowed(ex); }
             _core = null;
             try { if (App.Ownership != null) App.Ownership.OwnershipChanged -= OnOwnershipChanged; } catch (Exception ex) { Diag.Swallowed(ex); }
+            PrizeCounter.PrizeCounterHostService.Closed -= OnCounterClosed;
             try { _host?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _host = null;
             if (had)
@@ -233,6 +234,9 @@ internal static class GlassroadHostService
                 case "race-result":
                     OnRaceResult(o);
                     break;
+                case "open-prize-counter":
+                    RunOnUi(OpenPrizeCounter);
+                    break;
                 case "exit":
                 case "menu-back":
                     // The page's own Leave / the menu's Back link. Escape never sends these.
@@ -248,6 +252,26 @@ internal static class GlassroadHostService
         {
             App.Logger?.Warning("Glassroad: message handler threw ({Type}): {E}", (string?)o["type"], ex.Message);
         }
+    }
+
+    /// <summary>The garage's Prize Counter row (7.2 contract 1, owner call: no per-game relay): pause the page and
+    /// open the counter WINDOW over it on the kart tab. When the counter closes the page gets the owned frame
+    /// again, so a look bought there lights up even if no ownership event reached us.</summary>
+    private static void OpenPrizeCounter()
+    {
+        if (_host == null) return;
+        try { _host.Post(new { type = "pause", on = true }); } catch (Exception ex) { Diag.Swallowed(ex); }
+        PrizeCounter.PrizeCounterHostService.Closed -= OnCounterClosed;
+        PrizeCounter.PrizeCounterHostService.Closed += OnCounterClosed;
+        PrizeCounter.PrizeCounterHostService.Launch(GlassroadRules.CounterFrom, GlassroadRules.CounterTab);
+        if (!PrizeCounter.PrizeCounterHostService.IsActive) PrizeCounter.PrizeCounterHostService.Closed -= OnCounterClosed;
+    }
+
+    private static void OnCounterClosed()
+    {
+        PrizeCounter.PrizeCounterHostService.Closed -= OnCounterClosed;
+        try { _host?.Post(GlassroadRules.OwnedFrame(App.Ownership?.Grants)); _host?.FocusWeb(); }
+        catch (Exception ex) { App.Logger?.Debug("Glassroad: owned re-send after the counter failed: {E}", ex.Message); }
     }
 
     /// <summary>SPARKLES BY PLACE (B1): a finished race claims; the server prices it, tapers repeats

@@ -114,6 +114,10 @@ internal static class PrizeCounterHostService
 
     public static bool IsActive => _host != null;
     public static bool IsInFront => _host?.IsForeground == true;
+
+    /// <summary>Raised once each time an open counter closes (any exit): a game that opened it over itself re-sends
+    /// its grants frame (7.2 contract 1).</summary>
+    public static event Action? Closed;
     public static bool IsReady => _host?.IsReady == true;
 
     /// <summary>Open the counter, or bring it forward. <paramref name="from"/> is the door
@@ -194,6 +198,7 @@ internal static class PrizeCounterHostService
             _relay = null;
             _opener = null;
             if (had) App.Logger?.Information("PrizeCounterHostService: closed");
+            if (had) try { Closed?.Invoke(); } catch (Exception ex) { Diag.Swallowed(ex); }
         }
         catch (Exception ex) { App.Logger?.Debug("PrizeCounterHostService.Close: {E}", ex.Message); }
         finally { _disposing = false; }

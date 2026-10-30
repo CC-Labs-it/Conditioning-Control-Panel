@@ -157,6 +157,34 @@ public class GlassroadHostTests
     }
 
     [Fact]
+    public void Init_CarriesTheKartPrimeLooks_ButNoOtherPrimeItem()
+    {
+        var owned = new[] { "cos.prime.paint.host-gold", "cos.prime.trail.podium", "cos.prime.frame.room-host", "cos.prime.banner.arena", "cos.kart.outfit.ballerina" };
+        var grants = (JArray)GlassroadRules.InitFrame("u_1", "Kit", 2, false, 1, 1, owned)["identity"]!["grants"]!;
+        Assert.Equal(new[] { "cos.kart.outfit.ballerina", "cos.prime.paint.host-gold", "cos.prime.trail.podium" }, grants.Select(g => (string)g!).ToArray());
+    }
+
+    [Fact]
+    public void TheGarageCounterRow_PausesAndOpensTheCounterOnTheKartTab_ThenResendsOwned()
+    {
+        Assert.True((bool)GlassroadRules.InitFrame(null, "Kit", 0, false, 1, 1)["caps"]!["prizeCounter"]!);
+        Assert.Equal("kart", GlassroadRules.CounterTab);
+        Assert.Equal("glassroad", GlassroadRules.CounterFrom);
+        var host = Read("Services", "Glassroad", "GlassroadHostService.cs");
+        Assert.Contains("case \"open-prize-counter\":", host);
+        int start = host.IndexOf("private static void OpenPrizeCounter()", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var body = host.Substring(start, host.IndexOf("private static void OnCounterClosed()", start, StringComparison.Ordinal) - start);
+        int pause = body.IndexOf("type = \"pause\", on = true", StringComparison.Ordinal);
+        int launch = body.IndexOf("PrizeCounterHostService.Launch(GlassroadRules.CounterFrom, GlassroadRules.CounterTab)", StringComparison.Ordinal);
+        Assert.True(pause >= 0 && launch > pause, "pause first, then the counter window");
+        Assert.Contains("PrizeCounterHostService.Closed += OnCounterClosed", body);
+        Assert.Contains("GlassroadRules.OwnedFrame(App.Ownership?.Grants)", host.Substring(host.IndexOf("private static void OnCounterClosed()", StringComparison.Ordinal)));
+        var counter = Read("Services", "PrizeCounter", "PrizeCounterHostService.cs");
+        Assert.Contains("if (had) try { Closed?.Invoke(); }", counter);
+    }
+
+    [Fact]
     public void Init_SignedOut_HasNullIdentityAndStillNet_GentleCarried()
     {
         var f = GlassroadRules.InitFrame(null, "Kit", 2, true, 1.5, 0.25);

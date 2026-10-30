@@ -41,6 +41,8 @@ internal static class GlassroadRules
                 ["trackPick"] = false, ["canSurface"] = false, ["mediaControls"] = false, ["songs"] = new JArray(),
                 // the pre-race room's "Invite a friend" asks this host (host/friendInvite.js)
                 ["friendInvite"] = true,
+                // the garage's Prize Counter row opens the counter window (host/prizeCounter.js)
+                ["prizeCounter"] = true,
             },
             ["identity"] = signedIn
                 ? new JObject { ["unifiedId"] = unifiedId, ["tier"] = Math.Clamp(tier, 0, 2),
@@ -51,18 +53,29 @@ internal static class GlassroadRules
         };
     }
 
-    /// <summary>The Prize Counter grants the garage reads: <c>cos.kart.*</c> only, sorted, at most 64
-    /// (glassroad CONTRACT.md section 7 "Owned kart bodies"). Everything else the account owns stays home.</summary>
+    /// <summary>The Prize Counter grants the garage reads: <c>cos.kart.*</c> plus the two kart Prime families
+    /// (<c>cos.prime.paint.*</c>, <c>cos.prime.trail.*</c>), sorted, at most 64 (glassroad CONTRACT.md section 7
+    /// "Owned kart looks"). Everything else the account owns stays home.</summary>
     public static JArray KartGrants(IEnumerable<string>? grants)
     {
         var list = new SortedSet<string>(StringComparer.Ordinal);
         if (grants != null)
             foreach (var g in grants)
-                if (g is { Length: <= 64 } && g.StartsWith("cos.kart.", StringComparison.Ordinal)) list.Add(g);
+                if (g is { Length: <= 64 } && IsKartGrant(g)) list.Add(g);
         var rows = new JArray();
         foreach (var g in list) { if (rows.Count >= 64) break; rows.Add(g); }
         return rows;
     }
+
+    private static bool IsKartGrant(string g)
+        => g.StartsWith("cos.kart.", StringComparison.Ordinal)
+        || g.StartsWith("cos.prime.paint.", StringComparison.Ordinal)
+        || g.StartsWith("cos.prime.trail.", StringComparison.Ordinal);
+
+    /// <summary>The Prize Counter tab the garage row asks for (<c>open-prize-counter { tab, from }</c>, 7.2
+    /// contract 1): Glassroad only ever opens on <c>kart</c>, whatever the page says.</summary>
+    public const string CounterTab = "kart";
+    public const string CounterFrom = "glassroad";
 
     /// <summary>The host -> page push when the account's grants change while the window is up.</summary>
     public static JObject OwnedFrame(IEnumerable<string>? grants)
