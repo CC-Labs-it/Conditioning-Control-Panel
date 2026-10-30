@@ -18,6 +18,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static Func<V2AuthService>? AnnouncementClient;
 
         private bool _announcementArmed;
+        private bool _announcementClosed;
+        private IDisposable? _announcementDelay;
 
         private void InitializeServerAnnouncement()
         {
@@ -25,7 +27,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (_announcementArmed || AnnouncementClient == null) return;
                 _announcementArmed = true;
-                DispatcherTimer.RunOnce(() => _ = CheckServerAnnouncementAsync(), TimeSpan.FromSeconds(7));
+                _announcementDelay = DispatcherTimer.RunOnce(() => _ = CheckServerAnnouncementAsync(), TimeSpan.FromSeconds(7));
+            };
+            Closed += (_, _) =>
+            {
+                _announcementClosed = true;
+                _announcementDelay?.Dispose();
+                _announcementDelay = null;
             };
         }
 
@@ -34,10 +42,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                if (_announcementClosed) return;
+                // An immediate check consumes the WPF seven-second startup check too
+                // (MainWindow.Marquee.cs:709-715). Never leave it armed across shell teardown.
+                _announcementDelay?.Dispose();
+                _announcementDelay = null;
                 var make = AnnouncementClient;
                 if (make == null) return;
                 var a = await make().GetAnnouncementAsync(CoreSettings.Current.UnifiedId);
-                if (a == null || a.Id == CoreSettings.Current.DismissedAnnouncementId) return;
+                if (_announcementClosed || a == null || a.Id == CoreSettings.Current.DismissedAnnouncementId) return;
                 Log.Information("Server announcement received: id={Id}, title={Title}", a.Id, a.Title);
 
                 string id = a.Id!, title = a.Title!, message = a.Message ?? "";

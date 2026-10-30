@@ -29,21 +29,23 @@ public sealed class ServerAnnouncementInboxTests
     private sealed class FakeProxy : HttpMessageHandler
     {
         public readonly List<string> Calls = new();
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
+        public TaskCompletionSource<bool>? AnnouncementRelease;
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             var path = r.RequestUri!.AbsolutePath;
             lock (Calls) Calls.Add(r.Method + " " + path + r.RequestUri.Query + " " + r.Content?.ReadAsStringAsync().Result);
+            if (path == "/config/announcement" && AnnouncementRelease != null) await AnnouncementRelease.Task;
             var body = path == "/config/announcement"
                 ? "{\"enabled\":true,\"id\":\"a1\",\"title\":\"The Spiral is open\",\"message\":\"Come\\n\\n  in,   dear.\"}"
                 : "{}";
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
         }
     }
 
     private static Task Run(Func<FakeProxy, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;   // the profile TestUserDataProfile seeded (feature intros spent)
@@ -158,4 +160,52 @@ public sealed class ServerAnnouncementInboxTests
         }
         finally { shell.Close(); foreach (var p in opened) p.Close(); }
     });
+    [Fact]
+    public Task ClosedShellAndCompletedCheckCannotRepostAnOpenedAnnouncement() => Run(async fake =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var opened = new List<AnnouncementPopup>();
+        using var sub = Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => { if (w is AnnouncementPopup p) opened.Add(p); });
+        var previous = new MainShellWindow();
+        var shell = new MainShellWindow();
+        try
+        {
+            previous.Show();
+            previous.Close(); // its seven-second callback must not reach the new shell's inbox
+            shell.Show();
+            await shell.CheckServerAnnouncementAsync();
+            StartupLadder.Inbox.Open(Assert.Single(StartupLadder.Inbox.Items));
+            Assert.Single(opened);
+            Assert.Empty(StartupLadder.Inbox.Items);
+
+            // Exercise the real seven-second startup timer, including callbacks from a closed shell.
+            await Task.Delay(TimeSpan.FromSeconds(8));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Single(fake.Calls.Where(c => c.StartsWith("GET /config/announcement")));
+            Assert.Empty(StartupLadder.Inbox.Items);
+            Assert.Single(opened);
+        }
+        finally { previous.Close(); shell.Close(); foreach (var p in opened) p.Close(); }
+    });
+
+    [Fact]
+    public Task ClosingDuringAnnouncementFetchCannotFileTheResponse() => Run(async fake =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        fake.AnnouncementRelease = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            var check = shell.CheckServerAnnouncementAsync();
+            Assert.Single(fake.Calls);
+            shell.Close();
+            fake.AnnouncementRelease.SetResult(true);
+            await check;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(StartupLadder.Inbox.Items);
+        }
+        finally { fake.AnnouncementRelease.TrySetResult(true); shell.Close(); }
+    });
+
 }
