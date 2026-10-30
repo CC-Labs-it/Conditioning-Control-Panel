@@ -16,8 +16,9 @@ namespace ConditioningControlPanel.Services.Companion;
 internal static class RainLookHash
 {
     /// <summary>Bump when the clip set the baker renders changes (new actions in the wardrobe GLB):
-    /// every old pack then misses and the look is baked again.</summary>
-    public const int ClipSetVersion = 1;
+    /// every old pack then misses and the look is baked again. 2 = the 17-action GLB
+    /// (release asset rain-assets-v1, clip set rain-v2-17-20261030).</summary>
+    public const int ClipSetVersion = 2;
 
     /// <summary>The pack layout revision (manifest.json "rev"); RainPackStore writes and checks it.</summary>
     public const int PackRev = 1;

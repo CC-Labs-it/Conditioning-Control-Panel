@@ -17,3 +17,13 @@
 @media(max-width:680px){.camera-controls{left:15px;right:15px;justify-content:center}.camera-controls button{padding:8px 7px;min-width:31px}.color-presets button{height:28px}}.camera-controls{flex-wrap:wrap;max-width:calc(100% - 40px)}
 /* Prize Counter: an item the account does not own yet. */
 .choice.locked{opacity:.55;cursor:default}.choice.locked:hover{transform:none;border-color:var(--line)}.choice.locked .choice-note{color:var(--rose)}
+/* Shop layer (wardrobe-shop.js): try-on ribbon, stamps, the Wearing now bar. Fades only. */
+.tryon-ribbon{position:absolute;top:28px;right:25px;z-index:3;font-size:10px;font-weight:600;letter-spacing:1.6px;color:var(--rose);background:var(--paper);border:1px solid var(--rose);padding:7px 12px;border-radius:2px;opacity:0;transition:opacity .3s;pointer-events:none}.tryon-ribbon.on{opacity:1}
+.choice.unowned .choice-note,.choice.stamp-locked .choice-note{color:var(--rose)}.choice.stamp-wearing .choice-note,.choice.stamp-owned .choice-note,.choice.stamp-price .choice-note,.choice.stamp-locked .choice-note{font-weight:600;letter-spacing:1px}
+.look-bar{position:fixed;left:0;right:0;bottom:0;height:64px;z-index:6;display:flex;align-items:center;gap:24px;padding:0 28px 0 42px;background:var(--paper);border-top:1px solid var(--line)}.look-bar[hidden]{display:none}
+.look-text{flex:1;min-width:0}.look-now{margin:0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#lookNowLabel{font-size:9px;font-weight:600;letter-spacing:2px;color:var(--muted);margin-right:6px}
+.look-blocker{margin:4px 0 0;font-size:11px;color:var(--rose);min-height:15px;opacity:0;transition:opacity .3s;display:flex;gap:12px;align-items:center}.look-blocker.on{opacity:1}.look-blocker .link{font-size:11px;text-decoration:underline;color:var(--ink);padding:0}
+.look-actions{display:flex;gap:18px;align-items:center}.look-actions .ink{background:var(--ink);color:var(--paper);font-size:12px;padding:11px 20px;border-radius:2px}
+body.shop-on main{min-height:calc(100vh - 148px)}body.shop-on .stage{height:calc(100vh - 148px);min-height:0}body.shop-on .wardrobe{overflow:auto}body.shop-on .outfit-summary,body.shop-on .wardrobe-foot{display:none}
+@media(min-width:681px) and (max-height:760px){body.shop-on main{height:calc(100vh - 132px);min-height:0}body.shop-on .stage{height:calc(100vh - 132px)}}
+html[data-calm] .swap-fx{display:none}html[data-calm] .choice{transition:none}html[data-calm] .choice:hover{transform:none}
