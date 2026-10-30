@@ -16,6 +16,8 @@ public sealed class MandatoryVideoSchedulerTests
     private sealed class Host : IMandatoryVideoHost
     {
         public readonly List<(string Path, bool Strict)> Shown = new();
+        public bool Floating;
+        public bool IsFloating(bool strict) => Floating && !strict;
         public int Closes;
         public double Watched;
         public void Show(string path, bool strict) => Shown.Add((path, strict));
@@ -33,6 +35,29 @@ public sealed class MandatoryVideoSchedulerTests
         try { body(); }
         finally { (s.MandatoryVideosEnabled, s.VideosPerHour, s.StrictLockEnabled, s.FlashEnabled) = (e, p, st, f); }
     }
+
+    [Theory]
+    [InlineData(true, false, true)]
+    [InlineData(false, false, false)]
+    [InlineData(true, true, false)]
+    public void Trigger_preserves_flashes_only_for_a_floating_video(bool floating, bool strict, bool stays)
+        => With(20, strict, () =>
+    {
+        var s = CoreSettings.Current;
+        s.FlashEnabled = true;
+        var clock = new FakeClock(); var host = new Host { Floating = floating };
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        CoreFlash.Start();
+        try
+        {
+            Assert.True(CoreFlash.IsRunning);
+            Assert.True(v.Trigger()); // Test and scheduler share this prologue.
+            Assert.Equal(stays, CoreFlash.IsRunning);
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(stays, CoreFlash.IsRunning);
+        }
+        finally { v.ForceCleanup(); CoreFlash.Stop(); }
+    });
 
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
 
