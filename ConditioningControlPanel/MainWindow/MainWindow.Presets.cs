@@ -124,6 +124,8 @@ namespace ConditioningControlPanel
             // The header icon is a plain TextBlock, so BMP glyphs only (no colour emoji).
             Controls.HelpPopover.Attach(BtnHelpPrizeCounter, BuildLocHelp("PrizeCounter", "help_counter", "✦"));
             Controls.HelpPopover.Attach(BtnHelpRain, BuildLocHelp("RainV2", "help_rain", "☂"));
+            // RainV2Gate off (7.2.0): no Help row for an avatar nobody can switch to.
+            if (!Services.Companion.RainV2Gate.On) HelpRainRow.Visibility = Visibility.Collapsed;
         }
 
         /// <summary>A Help page whose every line is a loc key: <c>&lt;stem&gt;_title</c>, <c>_what</c>, <c>_tip1</c>..<c>_tip3</c>, <c>_how</c>.</summary>

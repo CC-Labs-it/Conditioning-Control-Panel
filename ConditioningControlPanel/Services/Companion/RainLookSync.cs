@@ -330,7 +330,8 @@ internal sealed class RainLookSync
         s.RainLookAgreedUtc = at;
         App.Settings.Save();
         App.AvatarWindow?.RefreshRainLook();
-        if (RebakeOwed(look, s.RainPackHash, HasPack))
+        // RainV2Gate off: the look is adopted silently, never a toast about a wardrobe nobody can open.
+        if (RainV2Gate.On && RebakeOwed(look, s.RainPackHash, HasPack))
             App.Notifications?.Show(Loc.Get("rain_look_synced_rebake"), NotificationType.Info, TimeSpan.FromSeconds(8));
     }
 }
