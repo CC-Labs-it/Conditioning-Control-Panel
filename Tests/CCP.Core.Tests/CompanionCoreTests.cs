@@ -135,3 +135,27 @@ public sealed class CompanionCoreTests : IDisposable
         finally { CompanionCore.Switched -= on; }
     }
 }
+
+// The Windows CI failure was masked on Linux by another fixture loading English first.
+[Collection(SessionStatics.Name)]
+public sealed class CompanionCoreLocalizationTests
+{
+    [Fact]
+    public void FixtureSelectsEnglishAndRestoresThePreviousLanguage()
+    {
+        var loc = LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.Initialize("fr");
+            using (var fixture = new CompanionCoreTests())
+            {
+                Assert.Equal("en", loc.CurrentLanguage);
+                Assert.Equal("Companion level up", CompanionCore.MilestoneNotification("Circe", 10)?.Title);
+                Assert.Equal("Max level", CompanionCore.MilestoneNotification("Circe", CompanionProgress.MaxLevel)?.Title);
+            }
+            Assert.Equal("fr", loc.CurrentLanguage);
+        }
+        finally { loc.Initialize(previous); }
+    }
+}
