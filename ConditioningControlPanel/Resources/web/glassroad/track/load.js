@@ -19,9 +19,10 @@ import { shapeCourseNodes } from './courseShape.js';
 import { extendBoostRuns } from './boostRuns.js';
 import { safeBoostCorridor } from './boostCorridor.js';
 import { mapSpillStations } from './shapeWaterSpills.js';
+import { buildRamps, wrapQueryWithRamps } from './ramps.js';
 
 /** @returns {object} Track; throws an Error listing the schema errors */
-export function loadTrack(json, { validate = true, aerials: includeAerials = true, moving: includeMoving = false, boostSafety = true, courseShape: includeShape = true } = {}) {
+export function loadTrack(json, { validate = true, aerials: includeAerials = true, moving: includeMoving = false, boostSafety = true, courseShape: includeShape = true, ramps: includeRamps = true } = {}) {
   if (validate) {
     const r = validateJson(json);
     if (!r.ok) throw new Error('track invalid: ' + r.errors.join('; '));
@@ -97,7 +98,11 @@ export function loadTrack(json, { validate = true, aerials: includeAerials = tru
   // stones wave: fields of stepping stones ([] when the track has none), each stone with its s like a hole
   const fields = buildFields(json.fields, nodeS, frameAt);
   // B1 (CONTRACT-B1.md section 9): item boxes and pickup bubbles, s = node s + ds, wrapped
-  const items = (json.items || []).map((e) => ({ kind: e.kind, node: e.node, x: e.x, ds: e.ds || 0, s: wrap(nodeS[e.node] + (e.ds || 0), lengthM) }));
+  const items = (json.items || []).map((e) => ({ kind: e.kind, node: e.node, x: e.x, ds: e.ds || 0, s: wrap(nodeS[e.node] + (e.ds || 0), lengthM),
+    ...(e.liftM > 0 ? { liftM: e.liftM } : {}) }));
+  // ramps (handoff-1030): jump wedges riding on the road; the ground query stands every kart on them (track/ramps.js)
+  // ramps: false = the bare road, for planners and generators that place pads and boxes (unchanged by ramps)
+  const ramps = includeRamps ? buildRamps(json.ramps, nodeS, lengthM) : [];
 
   const grid = json.spawn.grid, spawnNode = json.spawn.node;
   const spawnPose = (slot = 0) => {
@@ -111,7 +116,7 @@ export function loadTrack(json, { validate = true, aerials: includeAerials = tru
   const track = {
     id: json.id, name: json.name, laps: json.laps, loop: true, lengthM, nodeCount: N, nodeS, courseShape,
     courseShapeNodes: courseShape ? nodes.map(n => n.p.slice()) : null,
-    sections, sectionAt, boosts, jumps, items, routes, courts, fields, aerials, reservoir: json.reservoir,
+    sections, sectionAt, boosts, jumps, items, ramps, routes, courts, fields, aerials, reservoir: json.reservoir,
     waterSpills: courseShape ? mapSpillStations(json, nodeS) : json.waterSpills,
     limits: { fallY: lm.fallY, edgeGraceM: lm.edgeGraceM, edgeGraceS: lm.edgeGraceS },
     spawnPose,
@@ -120,7 +125,7 @@ export function loadTrack(json, { validate = true, aerials: includeAerials = tru
     /** Water flow at (seg, segT) into out, see track/query.js flowAt. */
     flowAt: (seg, segT, out) => flowAt(nodes, ((seg % N) + N) % N, segT, out),
     frameAt, surfaceAt, canalProfile: profile,
-    query: createQuery(sp, refN, rollAt, widthAt, nodes, courts, fields, profile, aerials, routes),
+    query: wrapQueryWithRamps(createQuery(sp, refN, rollAt, widthAt, nodes, courts, fields, profile, aerials, routes), ramps, lengthM),
     checklines: null,
   };
   track.checklines = buildChecklines(track, json.checkpoints);

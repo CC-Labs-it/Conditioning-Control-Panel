@@ -152,6 +152,8 @@ export function sfxPlan(name, p = {}, o = {}) {
       return [one('boost')];
     }
     case 'hop': return [one('hop')];
+    // a ramp lip: the hop sample low and soft under a quiet pad sweep (the existing bank, no new file)
+    case 'ramp': return [one('hop', 0.55, 0.8), one('pad', 0.22, 1.18, 0.02)];
     case 'land': {
       if (p.airWord) return null; // The soft contact tap stays separate from the rebound spring.
       const t = p.tier | 0;
