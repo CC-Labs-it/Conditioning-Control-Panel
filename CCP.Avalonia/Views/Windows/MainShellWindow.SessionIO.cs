@@ -1,67 +1,5 @@
-// NOT PORTED from ConditioningControlPanel/MainWindow/MainWindow.SessionIO.cs (2212 lines).
-// Sorted member by member against the fifteen Core seams. SessionBtn_Edit and
-// BtnCreateSession_Click are restored in PresetsTabView (EditSession / BtnCreateSession_Click) over
-// Core SessionManager + SessionFileService; the rest is below.
-//
-// FIRST: the session rack pill (WPF MainWindow.SessionIO.cs:432-435) is live in PresetsTabView's
-// rack row builder, over CreateCatalogueStatusBadge (MainShellWindow.CatalogueStatus.cs).
-//
-// SECOND: Services.SessionManager, SessionFileService and AssetImportService are now in Core
-// (CCP.Core/Services/Session, CCP.Core/Services/Content). SessionManager owns AllSessions, the
-// reload and add/remove events, DeleteSession's refusal to touch a built-in, and the disk sync;
-// every member below either reads it or repaints something it changed. Models.Session IS in Core,
-// which is why the FILTER half looks portable - see the next paragraph for why it is still out.
-//
-//   The rack - RepaintSessionRack, EnumerateRackSessions, BuildSessionRackRow, MakeRackMeta,
-//   MakeRackPill, AttachRoundedClip, CreateSessionActionButton, CreateSessionDeleteButton,
-//   CreateSessionRowButton, SelectSession, RefreshSessionRackSelection, HasSessionRackRow,
-//   GenerateSessionTimelineDescription, RevealSessionInLibrary. The host panel for these rows
-//   already exists on this head (Views/Tabs/PresetsTabView.axaml:653 - "ONE panel.
-//   RepaintSessionRack clears and refills it"), so this is a real, bounded next layer.
-//
-//   The rack toolbar - EnsureSessionRackToolbar, RackSourceChip_Changed, RackDifficultyChip_Changed,
-//   CmbRackSort_SelectionChanged, TxtRackSearch_TextChanged, ClearSessionRackFilters,
-//   UpdateRackToolbarCounts, RackSourceLabel, RackSourceChipLabel, RackDifficultyLabel, the four
-//   RackSource* constants and the six filter fields.
-//
-//   RackAccepts, SortRackSessions and RackFileStamp now live in Core's shared SessionRackQuery and
-//   are consumed by PresetsTabView for its mounted available-only rack. The remaining WPF builder
-//   and lifecycle stay here as execution/CRUD/import work; this note does not claim those actions
-//   are restored on the Avalonia head.
-//
-//   Session lifecycle - InitializeSessionManager, OnSessionsReloaded, OnSessionAdded,
-//   OnSessionRemoved, RegisterExternallySavedSession, SyncCustomSessionsFromDisk, GetSessionById,
-//   SessionBtn_Share, SessionContextMenu_Export. RESTORED in PresetsTabView (session-io):
-//   SessionBtn_Export, BtnExportSession_Click, ExportSessionToFile, SessionBtn_Delete and
-//   HandleSessionDrop (a .session.json / .preset.json dropped on the Sessions tab).
-//   SessionBtn_Share also needs the catalogue client (App.Catalogue) and the WRITE half of
-//   MainShellWindow.CatalogueSubmissions.cs, which is out for its head-only SubmissionResult type.
-//
-//   Drag and drop - PORTED below: Window_DragEnter/Over/Leave/Drop, ImportDroppedFilesAsync,
-//   UpdateDropOverlay, HandleAssetDropAsync, over Core DropRules (the DetectDropType lift both
-//   heads call). Session/preset drops go to PresetsTabView; .ccpmod to HandleModDropAsync
-//   (MainShellWindow.ModCatalogue.cs). Not ported: the single-media Play/Edit choices and the
-//   enhancement import (no Deeper player/editor/library on this head) - a lone playable file
-//   offers "Add to Asset Library"/Cancel only, and an enhancement drop says the library is not
-//   ready, WPF's own string (docs/avalonia-decisions.html, 2026-10-09 window-wide drop).
-//
-//   The two global hotkeys - ApplyGlobalChatHotkey, ApplyGlobalCameraHotkey, ApplyCameraShortcutTo,
-//   ParseModifiers, FormatCameraShortcut, RefreshChatShortcutLabel, RefreshCameraShortcutLabel,
-//   BtnChatShortcut_Click, BtnCameraShortcut_Click, ToggleCameraCommand, OpenAvatarChat_Executed,
-//   BringToForegroundAndOpenChat, _cameraCommandBound. RoutedUICommand and ModifierKeys are WPF
-//   types, and a DESKTOP-WIDE hotkey is a Win32 RegisterHotKey - the bucket-E problem CLAUDE.md
-//   describes, not a port. ToggleCameraCommand is additionally a camera control: see the refusal
-//   already recorded for the two device pills in MainShellWindow.LabTab.cs.
-//
-//   RefreshImagesList / RefreshVideosList - the assets tab's lists, blocked with the asset tree in
-//   MainShellWindow.Assets.cs.
-//
-// Checked and NOT the blocker: CoreSession. It answers the RUNNING session (start, stop, current
-// state); this file is the session LIBRARY - files on disk, the rack that lists them, import and
-// export. They share the word and nothing else.
-//
-// No member of this partial is referenced from MainShellWindow.axaml.
-
+// Window-wide imports. WPF MainWindow.SessionIO.cs:1470-1654.
+// Session library CRUD remains in PresetsTabView; enhancement import in DeeperImport.
 using System;
 using System.IO;
 using System.Linq;
@@ -78,6 +16,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
+        internal void CloseDroppedMediaPlayer() => _deeperPlayer?.Close();
+
         private AssetImportService? _assetImportService;
 
         internal static string[] DroppedPaths(DragEventArgs e) =>
@@ -125,14 +65,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (files == null || files.Length == 0) return;
 
-            // WPF prompts Play / Edit / Add-to-Library. Play and Edit need the Deeper player and
-            // editor, which this head does not host yet, so only the library half is offered.
+            // WPF MainWindow.SessionIO.cs:1474-1484; MainWindow.Presets.cs:822-921.
             if (files.Length == 1 && File.Exists(files[0]) && DropRules.IsDeeperPlayableMedia(files[0]))
             {
-                var library = await Dialogs.MessageDialog.ConfirmAsync(this, Loc.Get("dlg_media_drop_title"),
-                    Path.GetFileName(files[0]), okText: Loc.Get("dlg_media_drop_library"),
-                    cancelText: Loc.Get("dlg_media_drop_cancel"));
-                if (library) await HandleAssetDropAsync(files);
+                var choice = await new Dialogs.MediaDropDialog(files[0]).ShowDialogSafe<Dialogs.MediaDropChoice>(this);
+                try
+                {
+                    switch (choice)
+                    {
+                        case Dialogs.MediaDropChoice.Play:
+                            ShowOrActivateDeeperPlayer().OpenLocalMediaFile(files[0]); break;
+                        case Dialogs.MediaDropChoice.Edit:
+                            OpenDeeperEditor(new Models.Deeper.Enhancement
+                            {
+                                MediaType = DropRules.AssetVideoExtensions.Contains(Path.GetExtension(files[0]))
+                                    ? Models.Deeper.MediaTypes.Video : Models.Deeper.MediaTypes.Audio,
+                                MediaSource = files[0],
+                            }, null); break;
+                        case Dialogs.MediaDropChoice.Library: await HandleAssetDropAsync(files); break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Failed to open dropped media");
+                    var target = choice == Dialogs.MediaDropChoice.Play ? "Player" : "Editor";
+                    await Dialogs.MessageDialog.ShowAsync(this, $"Open {target} failed",
+                        $"Couldn't open Deeper {target}:\n\n{ex.GetType().Name}: {ex.Message}");
+                }
                 return;
             }
 
@@ -198,6 +157,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 _assetImportService ??= new AssetImportService();
                 var result = await Task.Run(() => _assetImportService.ImportAsync(paths));
+                // WPF MainWindow.SessionIO.cs:1638-1642 invalidates the dealt video queue.
+                if (result.VideosImported > 0) CoreEngine.Video?.ReloadAssets();
                 ShowTab("assets");
                 Log.Information("Asset import complete: {Summary}", result.GetSummary());
                 await Dialogs.MessageDialog.ShowAsync(this, Loc.Get("title_import_complete"), result.GetSummary());
