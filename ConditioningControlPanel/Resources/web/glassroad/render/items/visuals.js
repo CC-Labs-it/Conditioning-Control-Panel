@@ -328,6 +328,13 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
       bubble(comp(b.p, 0) + N.x * lift, comp(b.p, 1) + N.y * lift, comp(b.p, 2) + N.z * lift, 'box', L.pickupR * (b.k === undefined ? 1 : b.k), 1, MODE.icon, b.i + 40);
     }
 
+    // knocked loose (social lane): the road pickup bubble wearing the knocked item's own icon
+    for (const lo of view.loose || []) {
+      normal(lo.n);
+      const lift = L.pickupHoverM + (soft || reduced ? 0 : Math.sin(timeS * 2.1 + lo.key) * 0.12);
+      bubble(comp(lo.p, 0) + N.x * lift, comp(lo.p, 1) + N.y * lift, comp(lo.p, 2) + N.z * lift, lo.id, L.pickupR * Math.max(0.01, lo.k), 1, MODE.icon, (lo.key | 0) * 3 + 90);
+    }
+
     // held: a bubble bobbing over each kart; rolling cycles the icons, never faster than rollSwapS
     for (const h of view.held || []) {
       const k = karts[h.racer];

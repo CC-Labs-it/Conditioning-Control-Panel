@@ -272,7 +272,12 @@
     "snapShoveSteer": 0.9,
     "bigSpiralS": 2.0,
     "bigSpiralCapMul": 0.7,
-    "popShowS": 0.6
+    "popShowS": 0.6,
+    "knockDvMps": 9,
+    "knockLifeS": 12,
+    "knockBehindM": 3,
+    "knockOwnerS": 1,
+    "knockMax": 6
   },
   "payoff": { "on": true, "cascadeMinS": 1.8, "cascadeMaxS": 3.0, "flashS": 0.7, "flashCover": 0.42, "flashCoolS": 6, "malusCoolS": 2.5, "padWordChance": 0.35, "padWordS": 1.0, "padCoolS": 4 },
   "itemFeel": {

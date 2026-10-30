@@ -47,6 +47,7 @@ import { createAi } from './sim/ai.js';
 import { createContact } from './sim/contact.js';
 import { createStandings } from './sim/standings.js';
 import { createItems } from './sim/items.js';
+import { createSocial, socialTap } from './sim/social.js';
 import { loadTrack } from './track/load.js';
 import { selectTrack, allowsOnline, courseSongs, courseSongRows } from './track/selection.js';
 import { createMainframeScan, scanClock } from './sim/mainframeScan.js';
@@ -724,7 +725,7 @@ async function boot(course, options, lifetime, isCurrent) {
   let assist;       // Rebuilt with the player's current pace overlay on every run.
   // the run: solo (count COUNT, the page seed) or online (one racer per seat from the room session, its seed, the
   // queue tapped so local cp / lap / finish / drop and pulses go up); rebuilt by buildRun on every switch
-  let race, racers, ai, contact, standings, items, scan, industry, moving, perfume, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
+  let social = null, race, racers, ai, contact, standings, items, scan, industry, moving, perfume, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
   let runAssist = false;                          // the Options assist switch (applyOptions), carried into every rebuilt run
   // ---- the Logbook (meta/): one run log per run, saved at the results; a throw never breaks the race ----
   let runLog = null;
@@ -791,7 +792,9 @@ async function boot(course, options, lifetime, isCurrent) {
     if (P) { bindAirWords(P.st, null); bindAirWords(P.view, null); }
     airWords?.reset(); airWords = null; airSong = null;
     if (s) runMode = 'race';
-    const q = s ? s.tap(queue) : queue, sd = s ? s.seed : seed, solo = !s && runMode === 'trial';
+    social = createSocial(feel);
+    const sq = social;   // the tap keeps this run's social even after a rebuild swaps it
+    const q = socialTap(s ? s.tap(queue) : queue, (n, p) => sq.see(n, p)), sd = s ? s.seed : seed, solo = !s && runMode === 'trial';
     race = createRace(track, feel, q);
     racers = createRacers(track, feel, q, s ? { net: s.layout(), seed: sd } : { count: solo ? 1 : COUNT, seed: sd });
     ai = createAi(track, feel, { seed: s ? sd + s.seat : sd });
@@ -816,6 +819,7 @@ async function boot(course, options, lifetime, isCurrent) {
     perfume = createBoudoirPerfume(track, q);
     standings = createStandings(track, feel, q);
     items = s ? s.mount(racers, race, q) : solo ? noItems() : createItems(track, feel, q, { seed: sd });
+    social.bind(items);
     P = racers.player;
     assist = createAssist(track, P.feel);
     if (!s) {
@@ -931,7 +935,7 @@ async function boot(course, options, lifetime, isCurrent) {
     glideHintLap = -1;
     aerialHints.clear(); airWords?.reset();
     for (const r of racers.list) resetGlide(r.st);
-    race.reset(); racers.place(); contact.reset(); standings.reset(); items.reset();
+    race.reset(); racers.place(); contact.reset(); standings.reset(); items.reset(); social.reset();
     scan.reset();
     industry.reset();
     moving.reset(); if (track.moving) track.moving.timeS = 0;

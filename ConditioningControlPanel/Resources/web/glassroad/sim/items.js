@@ -99,7 +99,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       v: { i, p: point(it.s, it.x, liftM), n: f.n.slice(), t: f.t.slice(), b: f.b.slice(), alive: true, k: 1, ...(liftM ? { lift: liftM } : {}) } };
   });
   const anyLift = pick.some((b) => b.liftM > 0);
-  let projectiles = [], traps = [], waves = [], pops = [], R = [], links = [];
+  let projectiles = [], traps = [], waves = [], pops = [], R = [], links = [], loose = [];
   const sinks = [];
   const sink = (i) => (i === 0 ? events : (sinks[i] ||= { emit: (name, p) => events.emit('racer-event', { racer: i, name, p }) }));
   const rs = (i) => (R[i] ||= { eff: null, viewEndT: -1e9, ledger: [], glass: 0, golden: 0, echo: 0, echoT: 0, snapGuard: 0 });
@@ -290,6 +290,46 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
         // the spin is the one real crash of the kit: like Shatter, never near an open edge
         if (!nearOpenEdge(vic.st[S.s], g('shatterEdgeSafeM'), vic.st[S.seg])) hit(vic, l.by, 'tether', 'tether', kartP(vic));
       } else if (l.t >= g('tetherMaxS')) breakLink(l, 'timeout');
+    }
+  }
+
+  // ---- knock-loose (social lane) ---------------------------------------------------------------
+  /** A hard bump or a tunnel ram knocks the loser's held item out: it lands on the road just behind the loser as a
+   * loose pickup carrying that exact id (any kart with an empty slot takes it; the loser only after knockOwnerS).
+   * @returns {string|null} the knocked id */
+  function knock(loserI, by, p = null) {
+    const r = racer(loserI);
+    if (!r || !r.item || !r.item.id || r.item.rolling || !free(r)) return null;
+    const id = r.item.id, st = r.st, fork = track.forkAtSeg?.(st[S.seg]), seg = fork ? st[S.seg] : -1;
+    const at = advance(st[S.s], seg, -g('knockBehindM'));
+    while (loose.length >= g('knockMax')) { const o = loose.shift(); pop(o.id, 'fizzle', o.s, o.x, 0, o.seg); }
+    loose.push({ key: nextId++, id, s: at.s, x: st[S.lateral], seg: at.seg, t: 0, from: loserI, by });
+    r.item.id = null; r.item.rolling = false; r.item.rollT = 0; r.item.heldT = 0;
+    pop(id, 'hit', st[S.s], st[S.lateral], 1, st[S.seg]);
+    events.emit('item-knocked', { from: loserI, by, id, p: p || kartP(r) });
+    return id;
+  }
+
+  function looseTick(dt) {
+    loose = loose.filter((l) => {
+      l.t += dt;
+      if (l.t >= g('knockLifeS')) { pop(l.id, 'fizzle', l.s, l.x, 0, l.seg); return false; }
+      return true;
+    });
+  }
+
+  function looseTake(r) {
+    if (!loose.length || r.item.id || r.item.rolling || !low(r)) return;
+    const rad = g('boxRadiusM'), ownerS = g('knockOwnerS');
+    for (let k = 0; k < loose.length; k++) {
+      const l = loose[k];
+      if ((l.from === r.i && l.t < ownerS) || !near(r, l.s, l.x, rad, l.seg)) continue;
+      loose.splice(k, 1);
+      r.item.id = l.id; r.item.rolling = false; r.item.rollT = 0; r.item.heldT = 0;
+      pop('box', 'box', l.s, l.x, 0, l.seg);
+      events.emit('item-loose-take', { racer: r.i, id: l.id, from: l.from, p: kartP(r) });
+      events.emit('item-roll', { racer: r.i, id: l.id });
+      return;
     }
   }
 
@@ -488,10 +528,12 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
     for (const r of racers) {
       if (!free(r)) continue;
       pickups(r, standings);
+      looseTake(r);
       if (r.input && r.input.item && r.item.id && !r.item.rolling) use(r, standings);
     }
     flights(dt);
     trapsTick(dt);
+    looseTick(dt);
     linksTick(dt, standings);
     for (const w of waves) w.t += dt;
     waves = waves.filter((w) => w.t < WAVE_S);
@@ -503,14 +545,14 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
   // ---- view -----------------------------------------------------------------------------------
   // Built at most once per tick (ver moves on update and reset) into pooled rows: the arrays and their
   // row objects are reused, so a reader must not keep a row past the next tick.
-  const V = { boxes: [], bubbles: [], held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [], tethers: [], guards: [] };
+  const V = { boxes: [], bubbles: [], held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [], tethers: [], guards: [], loose: [] };
   for (const b of pick) (b.kind === 'box' ? V.boxes : V.bubbles).push(b.v);
-  const POOL = { held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [], tethers: [], guards: [] };
+  const POOL = { held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [], tethers: [], guards: [], loose: [] };
   let builtVer = -1;
   /** Next pooled row of V[key] (call after V[key].length = 0). */
   function row(key) {
     const out = V[key], pool = POOL[key], k = out.length;
-    if (k >= pool.length) pool.push(key === 'traps' ? { p: [0, 0, 0], n: [0, 0, 0] } : key === 'tethers' ? { from: [0, 0, 0], to: [0, 0, 0] }
+    if (k >= pool.length) pool.push(key === 'traps' || key === 'loose' ? { p: [0, 0, 0], n: [0, 0, 0] } : key === 'tethers' ? { from: [0, 0, 0], to: [0, 0, 0] }
       : key === 'held' || key === 'shields' || key === 'guards' ? {} : { p: [0, 0, 0] });
     out.push(pool[k]);
     return pool[k];
@@ -543,6 +585,13 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       o.id = tp.id; o.kind = tp.kind; o.t = tp.t; o.armed = tp.t >= armS; o.s = tp.s; o.x = tp.x;
       o.radiusM = g(tp.kind === 'melt' ? 'meltRadiusM' : 'trapRadiusM');
     }
+    // knocked-loose items: a road pickup wearing its own icon; it grows in, then fades over its last second
+    const lifeS = g('knockLifeS');
+    for (const l of loose) {
+      const o = row('loose'), f = track.pathFrameAt ? track.pathFrameAt(l.s, l.seg, fr) : track.frameAt(l.s, fr);
+      for (let k = 0; k < 3; k++) { o.p[k] = f.p[k] + f.b[k] * l.x; o.n[k] = f.n[k]; }
+      o.key = l.key; o.id = l.id; o.from = l.from; o.t = l.t; o.k = Math.min(1, l.t / GROW_S, Math.max(0, lifeS - l.t));
+    }
     for (const w of waves) {
       const o = row('waves');
       o.id = w.id; o.kind = w.kind; o.from = w.from; point(w.s, w.x, 0, o.p, w.seg); o.t = w.t; o.rangeM = g('pinkRangeM');
@@ -571,9 +620,9 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
 
   function reset() {
     rand = makeRand(seed); now = 0; nextId = 1; ver++;
-    projectiles = []; traps = []; waves = []; pops = []; R = []; links = [];
+    projectiles = []; traps = []; waves = []; pops = []; R = []; links = []; loose = [];
     for (const b of pick) { b.downT = 0; b.upT = 1e9; }
   }
 
-  return { update, view, reset, nearOpenEdge, trapRows, lobTarget };
+  return { update, view, reset, nearOpenEdge, trapRows, lobTarget, knock };
 }

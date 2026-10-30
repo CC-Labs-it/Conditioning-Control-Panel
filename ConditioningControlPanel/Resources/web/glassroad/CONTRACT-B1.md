@@ -274,6 +274,8 @@ Queue = emitted in sim steps, flushed once per frame. Bus = emitted synchronousl
 | `race-standings` | `{ order }` (on a change) | standings | hud |
 | `race-result` | `Result` (once) | standings | boot (results card, host message), audio, hud |
 | `boost-start` | adds kinds `'slip'\|'surge'\|'bubble'` (tier 0) | grant.js | fx, audio |
+| `item-knocked` | `{ from, by, id, p }` (a hard bump or tunnel ram knocked `from`'s held item loose) | items (via sim/social.js) | audio, fx |
+| `item-loose-take` | `{ racer, id, from, p }` (a knocked-loose item taken; `item-roll` follows) | items | audio |
 
 Phase A events stay racer-0 only. Host message (integrator): `{ type: 'race-result', v: 1, track, laps, place, of,
 timeS, bestLapS, finished, items: true, xp: null }` (the desktop adds XP later); `run-ended` stays.

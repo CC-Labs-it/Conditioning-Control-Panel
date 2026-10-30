@@ -456,6 +456,11 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `items.snapShoveSteer` 0.9: Snap shove, stick share pushing away, fading over snapS.
 - `items.bigSpiralS` 2.0: Big Spiral: the leader is slowed this long.
 - `items.bigSpiralCapMul` 0.7: Big Spiral top speed multiplier.
+- `items.knockDvMps` 9: a `hard-bump` this hard (or any Tunnel Vision ram) knocks the loser's held item onto the road (`sim/social.js`).
+- `items.knockLifeS` 12: a knocked-loose item nobody takes pops after this.
+- `items.knockBehindM` 3: it lands this far behind the loser, in the loser's lane.
+- `items.knockOwnerS` 1: the loser cannot take it back for this long; anyone else with an empty slot takes it at once.
+- `items.knockMax` 6: the oldest loose item pops when one more is knocked out.
 
 ## payoff (toys kit 2026-10-25: subliminal words and flashes for the local player, `fx/payoff.js`; Gentle and photosafe still rule)
 
