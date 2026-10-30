@@ -397,6 +397,19 @@ namespace ConditioningControlPanel.Models
             set { _rainLook = value ?? ""; OnPropertyChanged(); }
         }
 
+        private string _chessLook = "";
+        /// <summary>
+        /// What the player's chess men wear (7.2 shop, Services/PieceByPiece/PbpLookRules), JSON
+        /// <c>{"set":id|null,"banner":id|null,"insignia":id|null,"at":unixMs}</c>. Empty = bare men. Always
+        /// clamped to the account's grants before the board sees it; synced through <c>/v2/equip</c> family
+        /// chess (newer <c>at</c> wins) and rides the settings backup like RainLook.
+        /// </summary>
+        public string ChessLook
+        {
+            get => _chessLook;
+            set { _chessLook = value ?? ""; OnPropertyChanged(); }
+        }
+
         private string _avatarGeneration = "v1";
         /// <summary>
         /// The tube's avatar generation, one GLOBAL choice: "v1" (the classic avatar, default) or
