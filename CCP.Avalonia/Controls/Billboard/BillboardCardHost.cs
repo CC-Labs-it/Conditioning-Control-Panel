@@ -129,7 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
-            _visibilityWatch = EffectiveVisibility.Watch(this, UpdateRunning);
+            _visibilityWatch = EffectiveVisibility.Watch(this, () => { UpdateRunning(); ApplyDirty(); });
             UpdateRunning();
         }
 
@@ -159,7 +159,29 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             Show(_deck.Next(), animate: true);
         }
 
-        public void MarkDirty() => _deck.MarkDirty();
+        public void MarkDirty()
+        {
+            _deck.MarkDirty();
+            ApplyDirty();
+        }
+
+        private void ApplyDirty()
+        {
+            if (!_begun || _folding || !IsEffectivelyVisible ||
+                TopLevel.GetTopLevel(this) is not { IsVisible: true } || _card == null || !_deck.IsDirty) return;
+            double progress = HoldProgress;
+            string ids = DeckIds();
+            bool arrived = _deck.Refresh();
+            if (_deck.IsDirty) return;
+            if (arrived && DashboardBillboard.JumpToArrival(progress, HoldMayRun)) { Advance(); return; }
+            if (ids == DeckIds()) return;
+            RebuildChips();
+            _holdBase = progress;
+            SetFill(progress);
+            UpdateRunning();
+        }
+
+        private string DeckIds() => string.Join("\n", _deck.Cards.Select(c => c.Spec.Id));
 
         /// <summary>The shell closed: every art view frees its player and bitmaps (P68).</summary>
         public void ReleaseArt()
@@ -168,7 +190,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
         }
 
         /// <summary>The motion level or a visibility gate changed: re-read every gate now.</summary>
-        public void RefreshMotion() => UpdateRunning();
+        public void RefreshMotion() { UpdateRunning(); ApplyDirty(); }
 
         internal bool HoldMayRun =>
             !_folding && _card != null && _fill != null && IsEffectivelyVisible && TopLevel.GetTopLevel(this) is { IsVisible: true } &&

@@ -105,6 +105,31 @@ public sealed class LocalAiSetupWizardTests
         Pump();
     }
 
+    [Theory]
+    [InlineData(8L, 4L, "label_local_ai_perf_title_below")]
+    [InlineData(16L, 8L, "label_local_ai_perf_title")]
+    [InlineData(0L, 0L, "label_local_ai_perf_title")]
+    public Task ConsentExplainsLocalCostWithoutBlocking(long ram, long vram, string title) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        using var fakes = new Fakes(canAutoInstall: false);
+        var w = new LocalAiSetupWizard();
+        try
+        {
+            w.UpdatePerfCard(ram << 30, vram << 30);
+            w.Show();
+            Pump();
+            Assert.True(C<Border>(w, "PerfCard").IsVisible);
+            Assert.Equal(Loc.Get(title), C<TextBlock>(w, "TxtPerfTitle").Text);
+            Assert.Contains(Loc.Get("label_local_ai_perf_recommended"), C<TextBlock>(w, "TxtPerfFound").Text);
+            Assert.True(C<Button>(w, "BtnPrimary").IsEnabled);
+            Assert.True(ConditioningControlPanel.Avalonia.Platform.LocalAiHardware.TotalRamBytes() >= 0);
+            Assert.True(ConditioningControlPanel.Avalonia.Platform.LocalAiHardware.LargestVramBytes() >= 0);
+        }
+        finally { w.Close(); }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task LinuxNotInstalledShowsManualInstallAndContinueReDetectsWithoutDownloading() => AvaloniaTestDispatcher.RunAsync(() =>
     {
