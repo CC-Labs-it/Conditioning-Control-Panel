@@ -143,7 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 case AutonomyActionType.PinkFilterPulse: PulsePinkFilter(); break;
                 // WPF: TriggerGame(forceTest: true) - runs with the engine stopped and the card off.
                 case AutonomyActionType.BubbleCount: CoreEngine.BubbleCount?.Trigger(forceTest: true); break;
-                case AutonomyActionType.Comment: MakeAutonomyComment(); break;
+                case AutonomyActionType.Comment: _ = MakeAutonomyCommentAsync(); break;
                 // WPF #1458's "switched off during the announcement" recheck is AutonomyScheduler.Run's.
                 case AutonomyActionType.MindWipe: CoreMindWipe.TriggerOnce(); break;
                 case AutonomyActionType.SpokenMantra: _ = RequestVoiceCommandAsync(allowCommands: false); break;
@@ -190,7 +190,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF MakeComment / MakeAICommentAsync: AI through GigglePriority, a preset through
         /// the low-priority Giggle (dropped under an AI request or bubble).</summary>
-        private async void MakeAutonomyComment()
+        internal async Task MakeAutonomyCommentAsync()
         {
             var tube = _avatarTubeWindow;
             if (tube == null) return;
@@ -220,7 +220,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private string? _lastAICommentLine;
         private void ShowAutonomyComment(string? text, bool aiGenerated)
         {
-            if (!Autonomy.IsEnabled || string.IsNullOrWhiteSpace(text)
+            if (string.IsNullOrWhiteSpace(text)
                 || TakeoverComment.IsRepeat(_lastAICommentLine, text)) return;
             _lastAICommentLine = text;
             _avatarTubeWindow?.GigglePriority(text, false, aiGenerated: aiGenerated);

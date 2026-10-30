@@ -80,8 +80,8 @@ internal static class PersonalityStudio
         form.Children.Add(advanced);
         var scroller = new ScrollViewer { Content = form, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Grid.SetRow(scroller, 1); grid.Children.Add(scroller);
-        // Wrap translated actions onto another line at the minimum window width.
-        var footer = new WrapPanel { Margin = new Thickness(0, 18, 0, 0) };
+        // WPF placement at normal widths; use a second row when translations need it.
+        var footer = new StudioFooter { Margin = new Thickness(0, 18, 0, 0) };
         var actions = new StackPanel { Orientation = Orientation.Horizontal };
         var cancel = new Button { Content = L("cancel"), IsCancel = true, Padding = new Thickness(16, 8, 16, 8), Margin = new Thickness(0, 0, 10, 0) };
         var save = new Button { Content = L(own != null ? "update" : "save"), Padding = new Thickness(16, 8, 16, 8) };
@@ -184,6 +184,27 @@ internal static class PersonalityStudio
 
     internal static PersonalityPreset? EditablePreset(PersonalityPreset source, IEnumerable<PersonalityPreset> users, bool overridden)
         => overridden ? null : OwnPreset(source, users);
+
+    internal sealed class StudioFooter : Panel
+    {
+        protected override Size MeasureOverride(Size availableSize)
+        {
+            foreach (var child in Children) child.Measure(Size.Infinity);
+            var width = Children.Sum(c => c.DesiredSize.Width);
+            return new Size(Math.Min(width, availableSize.Width), width > availableSize.Width
+                ? Children.Sum(c => c.DesiredSize.Height) + 8 : Children.Max(c => c.DesiredSize.Height));
+        }
+        protected override Size ArrangeOverride(Size finalSize)
+        {
+            var actions = Children[0];
+            var delete = Children.Count > 1 ? Children[1] : null;
+            var split = delete != null && actions.DesiredSize.Width + delete.DesiredSize.Width > finalSize.Width;
+            delete?.Arrange(new Rect(default(Point), delete.DesiredSize));
+            actions.Arrange(new Rect(Math.Max(0, finalSize.Width - actions.DesiredSize.Width),
+                split ? delete!.DesiredSize.Height + 8 : 0, actions.DesiredSize.Width, actions.DesiredSize.Height));
+            return finalSize;
+        }
+    }
 
     private static string L(string key) => Loc.Get("companion_studio_" + key);
 }

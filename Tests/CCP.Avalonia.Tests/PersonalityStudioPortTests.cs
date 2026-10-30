@@ -6,6 +6,9 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
+using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Localization;
 using Avalonia.Media;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -37,7 +40,8 @@ public class PersonalityStudioPortTests
     public Task SaveCopyAndConfirmedDeleteWithoutLayout() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
@@ -68,7 +72,7 @@ public class PersonalityStudioPortTests
         settings.Current.ActivePersonalityPresetId = mine.Id;
         settings.Current.CompanionPrompt.UseCustomPrompt = false;
         edit = PersonalityStudio.Create((_, _, _) => Task.FromResult(answer));
-        var delete = edit.GetLogicalDescendants().OfType<WrapPanel>().Single().Children.OfType<Button>().Single();
+        var delete = edit.GetLogicalDescendants().OfType<PersonalityStudio.StudioFooter>().Single().Children.OfType<Button>().Single();
         delete.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Contains(mine, settings.Current.UserPersonalityPresets);
         answer = true;
@@ -83,7 +87,8 @@ public class PersonalityStudioPortTests
     public Task OverrideSavesACopyAndDeleteWaitsForConfirmation() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
@@ -106,7 +111,7 @@ public class PersonalityStudioPortTests
         try
         {
             edit.Show();
-            var delete = edit.GetLogicalDescendants().OfType<WrapPanel>().Single().Children.OfType<Button>().Single();
+            var delete = edit.GetLogicalDescendants().OfType<PersonalityStudio.StudioFooter>().Single().Children.OfType<Button>().Single();
             delete.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Contains(mine, settings.Current.UserPersonalityPresets);
             var confirm = edit.OwnedWindows.OfType<MessageDialog>().Single();
@@ -126,7 +131,8 @@ public class PersonalityStudioPortTests
     public Task OwnedSaveUpdatesWithoutDuplicatesAndNameAndFooterFit() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
@@ -142,17 +148,43 @@ public class PersonalityStudioPortTests
             Assert.Equal(TextWrapping.NoWrap, name.TextWrapping);
             Assert.True(double.IsNaN(name.Height));
             name.Text = "After";
-            var footer = window.GetLogicalDescendants().OfType<WrapPanel>().Single();
-            Assert.Equal(2, footer.Children.Count); // actions and Delete share the wrapping row
-            footer.Children[0].Width = footer.Children[1].Width = 250;
-            footer.Measure(new Size(412, 200));
-            footer.Arrange(new Rect(0, 0, 412, 200));
-            Assert.True(footer.Children[1].Bounds.Top >= footer.Children[0].Bounds.Bottom);
+            var footer = window.GetLogicalDescendants().OfType<PersonalityStudio.StudioFooter>().Single();
+            Assert.Equal(2, footer.Children.Count);
             var save = footer.GetLogicalDescendants().OfType<Button>().ElementAt(1);
             save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Same(mine, Assert.Single(settings.Current.UserPersonalityPresets));
             Assert.Equal("After", mine.Name);
             Assert.Equal(mine.Id, settings.Current.ActivePersonalityPresetId);
+            foreach (var language in new[] { "en", "de", "es", "fr", "it", "ja", "ko", "pt-BR", "ru", "zh-CN" })
+            foreach (var owned in new[] { true, false })
+            {
+                LocalizationManager.Instance.SetLanguage(language);
+                settings.Current.CompanionPrompt.UseCustomPrompt = !owned;
+                var translated = PersonalityStudio.Create();
+                try
+                {
+                    translated.Show();
+                    var row = translated.GetLogicalDescendants().OfType<PersonalityStudio.StudioFooter>().Single();
+                    foreach (var width in new[] { 412d, 612d }) // minimum and normal dialog widths, less margins
+                    {
+                        row.Measure(new Size(width, double.PositiveInfinity));
+                        row.Arrange(new Rect(0, 0, width, row.DesiredSize.Height));
+                        var actions = row.Children[0]; var delete = owned ? row.Children[1] : null;
+                        if (delete != null) Assert.Equal(0, delete.Bounds.Left);
+                        Assert.Equal(width, actions.Bounds.Right, 3);
+                        Assert.True(delete == null || delete.Bounds.Right <= actions.Bounds.Left || delete.Bounds.Bottom <= actions.Bounds.Top);
+                        if (width == 612) Assert.Equal(0, actions.Bounds.Top);
+                        foreach (var button in row.GetLogicalDescendants().OfType<Button>())
+                        {
+                            var allocated = button.Bounds.Width;
+                            button.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                            Assert.True(allocated + button.Margin.Left + button.Margin.Right + .01 >= button.DesiredSize.Width, $"{language} {width}: {button.Content} allocated={allocated}, desired={button.DesiredSize.Width}, margin={button.Margin}");
+                        }
+                    }
+                }
+                finally { translated.Close(); }
+            }
+
         }
         finally { window.Close(); }
         return Task.CompletedTask;
