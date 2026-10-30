@@ -11,7 +11,7 @@
 // lift / glyph wiggle / choose sparks / idle sheen (wave 7, same partial). The "?" help badges:
 // SectionTabStrip.Help.cs.
 // Choose rings reuse NavGlow; the press squish shares WPF MotionFx's Core values.
-// ponytail: wire-ctrl-section-tab-strip-b owns the Moved redirects/note, Just Drop ask-first
+// ponytail: wire-ctrl-section-tab-strip-b owns Just Drop ask-first
 // with its missing window, absent Companion/Premium paths and section edge lap/fog/embers.
 
 using System;
@@ -132,10 +132,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             var trayHost = BuildDepthTray(_track);
             _pillRow.LayoutUpdated += (_, _) => { if (IsVisible) PositionFill(animate: false, onlyIfMoved: true); };
             _pillRow.AddHandler(KeyDownEvent, PillRow_KeyDown, RoutingStrategies.Tunnel);
-            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(0, 0, 0, 6) };
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(0, 0, 0, 6) };
             Grid.SetColumn(trayHost, 1);
             row.Children.Add(crumb);
             row.Children.Add(trayHost);
+            Grid.SetColumn(_movedNote, 2);
+            row.Children.Add(_movedNote);
             Content = new StackPanel { Children = { row, _accentLine } };
         }
 
@@ -149,6 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
+            _noteTimer?.Stop();
             _sheenClock?.Stop();   // P65: a detached strip never ticks
             base.OnDetachedFromVisualTree(e);
         }
