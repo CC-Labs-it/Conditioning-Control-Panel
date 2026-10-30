@@ -44,9 +44,7 @@ public sealed class BlinkTrainerSessionTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>().UseSkia()
-                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+                LabWebcamStatusTests.Setup();
 
             var s = CoreSettings.Current;
             var old = (s.WebcamConsentGiven, s.WebcamConsentVersion, s.BlinkTrainerFolders.ToArray(), s.BlinkTrainerMixImages, s.DualMonitorEnabled);
@@ -177,9 +175,7 @@ public sealed class BlinkTrainerSessionTests
     private static System.Threading.Tasks.Task WithSessionAsync(Func<string, List<BlinkTrainerSession.OverlayWindow>, System.Threading.Tasks.Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+            LabWebcamStatusTests.Setup();
         var s = CoreSettings.Current;
         var old = (s.WebcamConsentGiven, s.WebcamConsentVersion, s.WebcamConsentDate, s.WebcamCalibrated, s.WebcamCalibrationMode,
             s.WebcamTriggersEnabled, s.FocusGameEnabled, s.BlinkTrainerFolders.ToArray(), s.BlinkTrainerDurationMinutes);
@@ -259,6 +255,45 @@ public sealed class BlinkTrainerSessionTests
             Assert.NotSame(shown, tile.Source);
             BlinkTrainerSession.Stop();
             Assert.Equal(0, BlinkTrainerSession.AnimatedTiles);
+        });
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task StopDuringDecode_DropsLateFrames_AndDoesNotRestartTheLoop()
+    {
+        await WithSessionAsync(async (dir, made) =>
+        {
+            File.Delete(Path.Combine(dir, "a.png"));
+            File.WriteAllBytes(Path.Combine(dir, "loop.gif"), TwoFrameGif);
+            using var entered = new System.Threading.ManualResetEventSlim();
+            using var release = new System.Threading.ManualResetEventSlim();
+            var old = BlinkTrainerSession.AnimationDecodeEntered;
+            try
+            {
+                BlinkTrainerSession.AnimationDecodeEntered = () =>
+                {
+                    entered.Set();
+                    Assert.True(release.Wait(TimeSpan.FromSeconds(10)));
+                };
+                Assert.True(WebcamTracker.Instance.Start());
+                Assert.True(BlinkTrainerSession.Start(new Window()));
+                Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+                var child = Assert.Single(Assert.Single(made).Host.Children);
+                var tile = child as Image ?? ((UniformGrid)child).Children.OfType<Image>().First();
+                BlinkTrainerSession.Stop();
+                Assert.False(BlinkTrainerSession.IsRunning);
+                release.Set();
+                await BlinkTrainerSession.AnimationDecode.WaitAsync(TimeSpan.FromSeconds(10));
+                Assert.Null(tile.Source);
+                Assert.Empty(BlinkTrainerSession.Windows);
+                Assert.Equal(0, BlinkTrainerSession.AnimatedTiles);
+            }
+            finally
+            {
+                release.Set();
+                try { await BlinkTrainerSession.AnimationDecode.WaitAsync(TimeSpan.FromSeconds(10)); }
+                finally { BlinkTrainerSession.AnimationDecodeEntered = old; }
+            }
         });
     }
 

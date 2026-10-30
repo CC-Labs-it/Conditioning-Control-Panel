@@ -105,4 +105,51 @@ public sealed class BlinkTrainerDecodeTests
         // Ceiling division covers the tail rather than silently truncating at frame 95.
         Decode(1, Enumerable.Repeat(100, 100).ToArray(), 50, 200);
     }
+    [Fact]
+    public async System.Threading.Tasks.Task ConcurrentDecodes_AllowTwo_AndReleaseAfterFailure()
+    {
+        using var entered = new System.Threading.CountdownEvent(2);
+        using var third = new System.Threading.ManualResetEventSlim();
+        using var attempted = new System.Threading.ManualResetEventSlim();
+        using var release = new System.Threading.ManualResetEventSlim();
+        int calls = 0;
+        var old = BlinkTrainerSession.AnimationDecodeEntered;
+        System.Threading.Tasks.Task[] jobs = Array.Empty<System.Threading.Tasks.Task>();
+        System.Threading.Tasks.Task Start(bool signalAttempt = false) =>
+            System.Threading.Tasks.Task.Factory.StartNew(() =>
+            {
+                if (signalAttempt) attempted.Set();
+                BlinkTrainerSession.DecodeAnimation("missing.webp", 64);
+            }, System.Threading.CancellationToken.None, System.Threading.Tasks.TaskCreationOptions.LongRunning,
+                System.Threading.Tasks.TaskScheduler.Default);
+        try
+        {
+            BlinkTrainerSession.AnimationDecodeEntered = () =>
+            {
+                if (System.Threading.Interlocked.Increment(ref calls) <= 2) entered.Signal();
+                else third.Set();
+                Assert.True(release.Wait(TimeSpan.FromSeconds(10)));
+            };
+            jobs = new[] { Start(), Start() };
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+            jobs = jobs.Append(Start(signalAttempt: true)).ToArray();
+            Assert.True(attempted.Wait(TimeSpan.FromSeconds(10)));
+            Assert.False(third.Wait(TimeSpan.FromMilliseconds(500)), "A third native decode entered while two were held.");
+            release.Set();
+            await System.Threading.Tasks.Task.WhenAll(jobs).WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.True(third.IsSet);
+            // The callback throws inside the protected region, before opening the codec.
+            // All three calls must finish: the first two failures must return their permits.
+            BlinkTrainerSession.AnimationDecodeEntered = () => throw new InvalidOperationException("decode failure");
+            jobs = new[] { Start(), Start(), Start() };
+            await System.Threading.Tasks.Task.WhenAll(jobs).WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        finally
+        {
+            release.Set();
+            try { await System.Threading.Tasks.Task.WhenAll(jobs).WaitAsync(TimeSpan.FromSeconds(10)); }
+            finally { BlinkTrainerSession.AnimationDecodeEntered = old; }
+        }
+    }
+
 }

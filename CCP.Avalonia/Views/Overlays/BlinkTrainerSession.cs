@@ -330,13 +330,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return img;
         }
 
+        // WPF AnimatedWebp.cs:71,140-146: bound native canvas residency across all session tiles.
+        private static readonly System.Threading.SemaphoreSlim DecodeGate = new(2, 2);
+        internal static Action? AnimationDecodeEntered; // Tests hold a decode without timing native work.
+
         // WPF AnimatedWebp.cs:167-249,439: Blink Trainer uses 96 frames / 24 MiB.
         // Keep this separate from Spiral, whose playback policy is intentionally different.
         internal static (List<Bitmap> Frames, TimeSpan Delay) DecodeAnimation(string path, int dim)
         {
             var frames = new List<Bitmap>();
+            DecodeGate.Wait();
             try
             {
+                AnimationDecodeEntered?.Invoke();
                 using var codec = SKCodec.Create(path);
                 if (codec == null || codec.FrameCount <= 1) return (frames, TimeSpan.Zero);
                 int count = codec.FrameCount, w = codec.Info.Width, h = codec.Info.Height;
@@ -398,6 +404,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Log.Warning(ex, "BlinkTrainer: animation decode failed");
                 return (frames, TimeSpan.Zero);
             }
+            finally { DecodeGate.Release(); }
         }
 
         private static async System.Threading.Tasks.Task DecodeThenLoop(string path, Animation anim, int dim, int swap)
