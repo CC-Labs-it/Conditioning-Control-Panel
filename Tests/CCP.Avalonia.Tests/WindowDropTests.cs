@@ -115,12 +115,15 @@ public sealed class WindowDropTests
     {
         public bool Playing, Disposed;
         public int Plays;
+        public bool RejectStart;
         public int Volume { get; set; }
         public double DurationSeconds => 95;
         public double PositionSeconds { get; set; }
         public event Action? Ended;
-        public bool Subscribed => Ended != null;
-        public void Play() { Plays++; Playing = true; }
+        public event Action? Failed;
+        public bool Subscribed => Ended != null || Failed != null;
+        public void Play() { if (RejectStart) throw new InvalidOperationException("start failed"); Plays++; Playing = true; }
+        public void Fail() => Failed?.Invoke();
         public void Pause() => Playing = false;
         public void End() { Playing = false; Ended?.Invoke(); }
         public void Dispose() => Disposed = true;
@@ -151,6 +154,8 @@ public sealed class WindowDropTests
             Assert.True(first.Playing);
             Assert.Equal(80, first.Volume);
             Assert.Equal("1:35", player.FindControl<TextBlock>("TxtTotal")!.Text);
+            PanicSurfaces.StopAll("test"); Assert.False(first.Playing);
+            Click(player, "BtnPlayPause"); Assert.True(first.Playing);
             Click(player, "BtnPlayPause"); Assert.False(first.Playing);
             Click(player, "BtnPlayPause"); Assert.True(first.Playing);
             player.FindControl<Slider>("SliderVolume")!.Value = 42;
@@ -179,6 +184,7 @@ public sealed class WindowDropTests
 
     // WPF EnhancementPlayerWindow.xaml.cs:630-646,836,2623: a stale open must never start sound.
     [Theory]
+    [InlineData("panic")]
     [InlineData("stop")]
     [InlineData("close")]
     [InlineData("video")]
@@ -196,7 +202,8 @@ public sealed class WindowDropTests
         try
         {
             player.Show(); player.OpenLocalMediaFile("/tmp/first.mp3");
-            if (action == "stop") Click(player, "BtnStop");
+            if (action == "panic") PanicSurfaces.StopAll("test");
+            else if (action == "stop") Click(player, "BtnStop");
             else if (action == "close") player.Close();
             else player.OpenLocalMediaFile(action == "video" ? "/tmp/clip.mp4" : "/tmp/second.mp3");
             pending.SetResult(stale);
@@ -210,9 +217,11 @@ public sealed class WindowDropTests
 
     // WPF EnhancementPlayerWindow.xaml.cs:634,647-650: failed replacement stops the old clip.
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public Task FailedAudioOpenReportsFailureAndStopsTheOldClip(bool throws) => AvaloniaTestDispatcher.RunAsync(() =>
+    [InlineData("null")]
+    [InlineData("throw")]
+    [InlineData("start")]
+    [InlineData("late")]
+    public Task FailedAudioOpenReportsFailureAndStopsTheOldClip(string failure) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
@@ -225,13 +234,41 @@ public sealed class WindowDropTests
             player.Show();
             DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
             player.OpenLocalMediaFile("/tmp/first.mp3");
-            DeeperLocalAudio.Open = _ => throws ? throw new InvalidOperationException("bad media") : Task.FromResult<IDeeperLocalAudio?>(null);
+            var next = new ProbeAudio { RejectStart = failure == "start" };
+            DeeperLocalAudio.Open = _ => failure == "throw" ? throw new InvalidOperationException("bad media") : Task.FromResult<IDeeperLocalAudio?>(failure == "null" ? null : next);
             player.OpenLocalMediaFile("/tmp/bad.mp3");
+            if (failure == "late") { next.Fail(); Dispatcher.UIThread.RunJobs(); }
+            if (failure is "start" or "late") { Assert.True(next.Disposed); Assert.False(next.Playing); Assert.False(next.Subscribed); }
             Assert.True(audio.Disposed); Assert.False(audio.Playing); Assert.False(audio.Subscribed);
             Assert.Equal(Loc.Get("deeper_player_status_audio_failed"), player.FindControl<TextBlock>("TxtStatus")!.Text);
         }
         finally { player.Close(); DeeperLocalAudio.Open = original; }
         return Task.CompletedTask;
+    });
+
+    // WPF player:1325: cancel loading video and discard its outstanding time readback on audio swap.
+    [Fact]
+    public Task AudioSwapCancelsDelayedVideoAndItsPoll() => Run(async (shell, _, _) =>
+    {
+        var player = new EnhancementPlayerWindow(null, null); player.Show(shell);
+        var web = player.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>("VideoBrowser")!;
+        var pending = new TaskCompletionSource<string?>(); web.ScriptInvoker = _ => pending.Task;
+        var original = DeeperLocalAudio.Open; var audio = new ProbeAudio();
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
+        try
+        {
+            player.OpenLocalMediaFile("/tmp/clip.mp4");
+            var poll = (Task)typeof(EnhancementPlayerWindow).GetMethod("PollVideoTimeAsync", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(player, null)!;
+            PanicSurfaces.StopAll("video test"); Assert.True(web.Source!.IsFile); // WPF panic pauses, preserving the video for resume.
+            player.OpenLocalMediaFile("/tmp/track.mp3");
+            Assert.Equal("about:blank", web.Source!.AbsoluteUri); Assert.False(web.AllowNavigation!(new Uri("file:///tmp/clip.mp4")));
+            pending.SetResult("90|100|0"); await poll;
+            Assert.Equal(95d, typeof(EnhancementPlayerWindow).GetField("_durationSec", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(player));
+            Assert.True((bool)typeof(EnhancementPlayerWindow).GetField("_isPlaying", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(player)!);
+            Assert.True(audio.Playing); Assert.Equal("1:35", player.FindControl<TextBlock>("TxtTotal")!.Text);
+            Assert.Equal(Loc.Get("deeper_player_status_playing"), player.FindControl<TextBlock>("TxtStatus")!.Text);
+        }
+        finally { player.Close(); DeeperLocalAudio.Open = original; }
     });
 
     // WPF MainWindow.DeeperTab.cs:649-660: media type, blank project and no saved path.

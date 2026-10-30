@@ -66,6 +66,7 @@ public sealed class DeeperRowsTests
         public void Play() => Playing = true;
         public void Pause() => Playing = false;
         public event Action? Ended;
+        public event Action? Failed;
         public void End() { Playing = false; Ended?.Invoke(); }
         public void Dispose() => Disposed = true;
     }
@@ -129,7 +130,8 @@ public sealed class DeeperRowsTests
         public long Time { get; set; }
         public long Length => 6000;
         public int Stops;
-        public void Play() => State = LibVLCSharp.Shared.VLCState.Opening;
+        public bool Starts = true;
+        public bool Play() { State = LibVLCSharp.Shared.VLCState.Opening; return Starts; }
         public void SetPause(bool pause) => State = pause ? LibVLCSharp.Shared.VLCState.Paused : LibVLCSharp.Shared.VLCState.Playing;
         public void Stop() { Stops++; State = LibVLCSharp.Shared.VLCState.Stopped; }
     }
@@ -141,6 +143,8 @@ public sealed class DeeperRowsTests
         var t = new DeeperLocalAudio.Transport(e, 12000, () => { });
         t.Volume = 135; Assert.Equal(100, e.Volume);
         t.Volume = -1; Assert.Equal(0, e.Volume);
+        foreach (var (linear, native) in new[] { (25, 63), (50, 79), (75, 91) })
+        { t.Volume = linear; Assert.Equal(native, e.Volume); Assert.Equal(linear, t.Volume); }
         Assert.Equal(12, t.DurationSeconds);              // header estimate until playing
 
         // Seek before playback: taken by the first Playing, never again.
@@ -171,6 +175,8 @@ public sealed class DeeperRowsTests
         Assert.Equal(LibVLCSharp.Shared.VLCState.Opening, e.State);
         t.Pause();
         Assert.Equal(LibVLCSharp.Shared.VLCState.Stopped, e.State);
+        e.Starts = false; Assert.Throws<InvalidOperationException>(t.Play);
+        var failed = false; t.Failed += () => failed = true; t.OnError(); Assert.True(failed);
     }
 
     [Fact]
