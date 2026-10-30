@@ -89,7 +89,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF App.xaml.cs:480: the <see cref="CoreCornerGif"/> surface seam, on the UI thread.</summary>
         internal static void Seed(Func<Visual?> host)
         {
-            CoreCornerGif.RefreshHandler = index => Dispatcher.UIThread.Post(() =>
+            // Session startup reads StandaloneActive immediately after refreshing on the UI thread.
+            CoreCornerGif.RefreshHandler = index => OnUi(() =>
             {
                 if (host() is { } h) Refresh(h, index);
             });

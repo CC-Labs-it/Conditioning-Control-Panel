@@ -25,6 +25,19 @@ public sealed class Sync7UiTests
     });
 
     [Fact]
+    public void CornerGifRefreshOnUiThreadCompletesBeforeReturning() => Run(() =>
+    {
+        var calls = 0;
+        ConditioningControlPanel.Avalonia.Views.Overlays.CornerGifOverlay.Seed(() =>
+        {
+            calls++;
+            return null;
+        });
+        CoreCornerGif.Refresh();
+        Assert.Equal(1, calls);
+    });
+
+    [Fact]
     public void FineTuneBorrowsRemainingHeightAndLocalSourceRestoresBrowser() => Run(() =>
     {
         var tab = new AssetsTabView();
