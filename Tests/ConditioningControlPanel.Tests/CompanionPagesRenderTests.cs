@@ -16,6 +16,7 @@ namespace ConditioningControlPanel.Tests;
 /// cell instances stand in for the room's, which need a MainWindow). Set CCP_SHOTS_DIR to get
 /// companion-*.png for a desk look.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class CompanionPagesRenderTests
 {
     private static void Realize(FrameworkElement element, double width, double height)

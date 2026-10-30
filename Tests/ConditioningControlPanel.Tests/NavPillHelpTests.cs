@@ -17,6 +17,7 @@ namespace ConditioningControlPanel.Tests;
 /// a new window". Every visible pill carries a "what is this" line in every language, the badge
 /// never grows the pill, and a Window pill only opens after "Open it".
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class NavPillHelpTests
 {
     private static string LanguagesDir() => SourceRoots.LanguagesDirectory;

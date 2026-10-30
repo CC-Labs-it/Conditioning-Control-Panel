@@ -24,6 +24,7 @@ namespace ConditioningControlPanel.Tests;
 /// <para>Set CCP_NAV_FINAL_DIR to a folder to also save final-rail.png, final-strip-&lt;section&gt;.png
 /// and final-composite.png (rail + Play strip + page area on the 1585x901 canvas).</para>
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class NavFinalRenderTests
 {
     /// <summary>The canvas is 901 tall; row 0 (title bar, 36) is the only row above the rail.
