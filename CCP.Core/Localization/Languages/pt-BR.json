@@ -7959,5 +7959,10 @@
   "online_official_plan_prime": "O Prime recebe a maior cota diária. O que você já viu repete de graça.",
   "online_official_nice": "Legal",
   "online_official_stamped_line": "A mídia online vem do Scrolller. Cada imagem e clipe leva uma pequena marca \"via Scrolller\".",
-  "online_cache_day_line": "A mídia online fica um dia em um pequeno cache neste computador e nunca é enviada."
+  "online_cache_day_line": "A mídia online fica um dia em um pequeno cache neste computador e nunca é enviada.",
+  "companion_milestone_title": "Companheiro subiu de nível",
+  "companion_milestone_body": "{0} chegou ao nível {1}.",
+  "companion_milestone_max_title": "Nível máximo",
+  "companion_milestone_max_body": "{0} chegou ao nível máximo.",
+  "companion_wake_greeting": "Bom dia."
 }

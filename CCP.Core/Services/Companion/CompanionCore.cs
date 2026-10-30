@@ -9,7 +9,7 @@ namespace ConditioningControlPanel.Services.Companion
     /// (:185), the perk XP modifier (:226), companion XP and its level loop (:276), the Brain Parasite drain
     /// (:393) and active time (:429). The head owns the timers and the reactions. Named apart from WPF's type.
     /// ponytail: ApplyCompanionPrompt (:476) and the autonomy bonus's IsActionInProgress wait for a community-prompt
-    /// service and an autonomy service on this head; XPDrained for the drain flash's ported view.
+    /// service and an autonomy service on this head.
     /// </summary>
     public static class CompanionCore
     {
@@ -17,6 +17,8 @@ namespace ConditioningControlPanel.Services.Companion
         public const double DrainIntervalSeconds = 2.0;    // WPF DRAIN_INTERVAL_SECONDS
 
         public static event Action<CompanionId, int>? LevelUp;   // WPF CompanionLevelUp, once per level
+        public static event Action<CompanionId, double, double>? XPAwarded; // id, final amount, modifier
+        public static event Action<double>? XPDrained;
         public static event Action<CompanionId>? Switched;       // WPF CompanionSwitched
 
         private static DateTime _lastActiveTimeUpdate = DateTime.Now;
@@ -85,8 +87,14 @@ namespace ConditioningControlPanel.Services.Companion
                 try { LevelUp?.Invoke(id, level); } catch (Exception ex) { Log.Debug("CompanionLevelUp handler: {E}", ex.Message); }
                 _ = CoreHaptics.Service?.LevelUpPatternAsync();
             });
+            try { XPAwarded?.Invoke(id, finalAmount, modifier); } catch (Exception ex) { Log.Debug("CompanionXPAwarded handler: {E}", ex.Message); }
             CoreSettings.Save();
         }
+
+        /// <summary>WPF MainWindow.Companion: only decades and the maximum celebrate.</summary>
+        public static (string Title, string Body)? MilestoneNotification(string name, int level) =>
+            level == CompanionProgress.MaxLevel ? (Localization.Loc.Get("companion_milestone_max_title"), string.Format(Localization.Loc.Get("companion_milestone_max_body"), name))
+            : level % 10 == 0 ? (Localization.Loc.Get("companion_milestone_title"), string.Format(Localization.Loc.Get("companion_milestone_body"), name, level)) : null;
 
         /// <summary>WPF AddCompanionXP's credit and level loop (:298-317), shared by both heads; one call per level.</summary>
         public static void Credit(CompanionProgress progress, double amount, Action<int> onLevelUp)
@@ -113,6 +121,7 @@ namespace ConditioningControlPanel.Services.Companion
                 _lastDrainSaveUtc = nowUtc;
                 CoreSettings.Save();
             }
+            try { XPDrained?.Invoke(DrainXpPerTick); } catch (Exception ex) { Log.Debug("CompanionXPDrained handler: {E}", ex.Message); }
             return true;
         }
 

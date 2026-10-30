@@ -7959,5 +7959,10 @@
   "online_official_plan_prime": "Prime bekommt den größten Tagesanteil. Was du schon gesehen hast, läuft gratis noch mal.",
   "online_official_nice": "Schön",
   "online_official_stamped_line": "Online-Medien kommen von Scrolller. Jedes Bild und jeder Clip trägt einen kleinen \"via Scrolller\"-Vermerk.",
-  "online_cache_day_line": "Online-Medien bleiben einen Tag in einem kleinen Cache auf diesem Computer und werden nie hochgeladen."
+  "online_cache_day_line": "Online-Medien bleiben einen Tag in einem kleinen Cache auf diesem Computer und werden nie hochgeladen.",
+  "companion_milestone_title": "Begleiter aufgestiegen",
+  "companion_milestone_body": "{0} hat Level {1} erreicht.",
+  "companion_milestone_max_title": "Höchstlevel",
+  "companion_milestone_max_body": "{0} hat das Höchstlevel erreicht.",
+  "companion_wake_greeting": "Guten Morgen."
 }
