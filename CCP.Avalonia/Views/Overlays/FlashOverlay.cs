@@ -139,6 +139,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, FlashMotionStyle? inheritMotion = null)
         {
             var s = CoreSettings.Current;
+            if (Active.Count >= Cap(s, ambient)) { bmp.Dispose(); return false; }
             var multiplier = FlashFxRules.RollLucky(SkillTreeRules.HasSkill(s, FlashFxRules.LuckySkillId), hydraGeneration, remixMirror: false, Rng);
             var glow = FlashFxRules.ResolveGlow(s.FlashGlowEnabled, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier,
                 multiplier > 1, SkillTreeRules.GetSparkleBoostTier(s), natasha: false);
@@ -368,7 +369,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             : TimeSpan.FromMilliseconds((durationMs ?? s.FlashDuration * 1000) + 1000);
 
         /// <summary>WPF FlashService.cs:1692: the shared-host cap (30), 40 while flashes stay.</summary>
-        internal static int Cap(AppSettings s, bool ambient) => FlashStayRule.Cap(MaxConcurrent, Stays(s, ambient), sharedHost: true);
+        internal static int Cap(AppSettings s, bool ambient) => FlashStayRule.OnScreen(
+            FlashStayRule.Cap(MaxConcurrent, Stays(s, ambient), sharedHost: true), s.HydraLimit, Stays(s, ambient));
 
         /// <summary>WPF FlashService.cs:696-706: with stay on and the screen full, the ambient tick
         /// skips whole (picture and whisper) and waits for a pop.</summary>

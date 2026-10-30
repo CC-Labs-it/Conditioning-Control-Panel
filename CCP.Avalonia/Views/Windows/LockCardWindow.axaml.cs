@@ -218,7 +218,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ResetKeystrokeGate();
 
             _phrase = phrase;
-            _requiredRepeats = repeats;
+            _requiredRepeats = Math.Max(1, repeats);
             _strictMode = strictMode;
             // WPF :338-342: voice degrades to typing if the offline engine isn't usable, so the
             // user can never be trapped behind a mic that won't cooperate.

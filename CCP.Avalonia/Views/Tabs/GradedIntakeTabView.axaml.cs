@@ -180,7 +180,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 {
                     App.Notifications.Show(SpentBody(), Helpers.NotificationType.Warning,
                         TimeSpan.FromSeconds(8), Loc.Get("intake_gate_spent_cta"),
-                        () => (owner as Windows.MainShellWindow)?.OpenAppSettingsSection("account"));
+                        () => Dialogs.VaultGateDialog.ShowOffer(owner, "gradedintake", 1,
+                            () => (owner as Windows.MainShellWindow)?.OpenAppSettingsSection("account")));
                 }
                 return;
             }

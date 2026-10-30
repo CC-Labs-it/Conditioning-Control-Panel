@@ -13,6 +13,7 @@ using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls.Invites;
 using ConditioningControlPanel.Services.Invites;
 using Serilog;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -80,9 +81,45 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             // WPF MainWindow.InviteTicket.cs:99: the Tonight Board's Waiting card reads the same answer.
             try { Services.Billboard.Providers.WaitingSignals.NoteInvites(mine); } catch { }
+            PostInviteNews(mine);
             if (Named<Button>("BtnInviteTicket") is not { } ticket) return;
             ticket.IsVisible = _inviteTicketShown = InviteTicketRule.ShouldShow(mine);
             SyncInviteWobble();
+        }
+
+        private sealed class InviteNewsDialog : Dialogs.MessageDialog, Services.Startup.IPassiveStartupSurface
+        {
+            public InviteNewsDialog(string title, string body)
+                : base(title, body, showCancel: true, okText: Loc.Get("invites_news_see")) { }
+        }
+
+        private void PostInviteNews(InviteMine? mine)
+        {
+            try
+            {
+                var settings = CoreSettings.Current;
+                var news = InviteClaimNotice.Decide(mine, settings.UnifiedId, settings.InboxStamps, out bool changed);
+                if (changed) CoreSettings.Save();
+                foreach (var item in news)
+                {
+                    var name = item.Name ?? Loc.Get("invites_news_someone");
+                    bool subscribed = item.Kind == InviteNewsKind.Subscribed;
+                    var title = subscribed
+                        ? (item.Name == null ? Loc.Get("invites_news_subscribed_plain") : Loc.GetF("invites_news_subscribed", name))
+                        : Loc.GetF("invites_news_claimed", name);
+                    var body = Loc.Get(subscribed ? "invites_news_subscribed_body" : "invites_news_claimed_body");
+                    Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
+                    {
+                        Key = item.Key, Glyph = subscribed ? "💖" : "🎟", Title = title, Summary = body,
+                        Open = async () =>
+                        {
+                            if (await new InviteNewsDialog(title, body).ShowDialogSafe<bool?>(this) == true)
+                                OpenInvitesCard();
+                        },
+                    });
+                }
+            }
+            catch (Exception ex) { Log.Debug("[Invites] news failed: {E}", ex.GetType().Name); }
         }
 
         /// <summary>The wobble runs only while the ticket is up AND the window is shown.</summary>
