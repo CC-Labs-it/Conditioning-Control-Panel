@@ -69,11 +69,14 @@ export function normLook(look) {
   return out;
 }
 
-/** The look a client sends in a room `look` message: the keys every room takes (C2R.look). The extras ride the
- * seat ticket from the lobby's create / join / quick / claim bodies instead. */
+/** The look a client sends in a room `look` message (C2R.look): outfit, vehicle, skin and the extras worn. The room
+ * keeps a change inside what the seat's ticket carried (rooms/src/contracts.js boundLook, CCP-Server #371), so a
+ * lobby change that left the extras off would take them off for the race. */
 export function roomLook(look) {
   const n = normLook(look);
-  return { outfit: n.outfit, vehicle: n.vehicle, ...(n.skin ? { skin: n.skin } : {}) };
+  const out = { outfit: n.outfit, vehicle: n.vehicle, ...(n.skin ? { skin: n.skin } : {}) };
+  for (const k of Object.keys(LOOK_EXTRAS)) if (n[k] !== undefined) out[k] = n[k];
+  return out;
 }
 
 /** The look a bot wears in a seat (NET.md section 10). */
@@ -267,7 +270,7 @@ export const C2R = Object.freeze({
   ping: { c: 'num' },
   ready: { on: 'bool' },
   start: {},
-  look: { outfit: 'lookId', vehicle: 'lookId', skin: 'skin?' },
+  look: { outfit: 'lookId', vehicle: 'lookId', skin: 'skin?', paint: 'lookId?', umbrella: 'lookId?', trail: 'lookId?' },
   pickup: { box: 'u16', tick: 'u32', seat: 'seat?' },
   fire: { id: 'u16', item: 'item', mode: 'mode', tick: 'u32', s: 'num', x: 'num', seat: 'seat?' },
   cp: { idx: 'u8', lap: 'u8', tick: 'u32', seat: 'seat?' },
