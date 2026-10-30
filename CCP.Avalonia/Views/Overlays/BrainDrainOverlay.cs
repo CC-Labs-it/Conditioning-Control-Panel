@@ -29,6 +29,7 @@ internal static class BrainDrainOverlay
     private static readonly DispatcherTimer Timer = new() { Interval = TimeSpan.FromMilliseconds(500) };
     internal static Func<Window, bool> Prepare = X11Overlay.EnableDesktopBlur;
     internal static Func<IReadOnlyList<Window>, IReadOnlyList<BrainDrainKeepClear.BandEntry>> ReadBand = X11Overlay.VisibleOwnBand;
+    internal static Action<Window, uint> Capture = Win32Overlay.SetCaptureAffinity;
     internal static Action<Window, double> Alpha = (w, a) => X11Overlay.SetOpacity(w, a);
     internal static Action<Window> Raise = w => X11Overlay.Raise(w);
     internal static Action<Window, Window> Below = (w, a) => X11Overlay.RestackBelow(w, a);
@@ -67,6 +68,7 @@ internal static class BrainDrainOverlay
         if (!CoreSession.IsEngineRunning && App.Sessions?.IsRunning != true || App.Sessions?.IsPaused == true)
         { CloseAll(); return; }
         var s = CoreSettings.Current;
+        var affinity = Win32Overlay.CaptureAffinity(s.AllowOverlayCapture); // WPF OverlayCaptureAffinity.cs:27-28,51.
         if (!ReferenceEquals(s, _settings))
         {
             if (_settings != null) _settings.PropertyChanged -= Changed;
@@ -78,7 +80,8 @@ internal static class BrainDrainOverlay
         var screens = Screens(_owner);
         var targets = screens.Where(x => s.DualMonitorEnabled || x.IsPrimary).ToArray();
         if (targets.Length == 0 && screens.Count > 0) targets = new[] { screens[0] };
-        if (Hosts.Count != targets.Length || Hosts.Where((w, i) => i < targets.Length && w.Position != targets[i].Bounds.Position).Any())
+        // WPF OverlayService.cs:2985-3023: retain full physical bounds and scaling.
+        if (Hosts.Count != targets.Length || Hosts.Where((w, i) => i < targets.Length && (!Equals(w.Tag, targets[i]) || w.Position != targets[i].Bounds.Position)).Any())
         {
             CloseHosts();
             foreach (var screen in targets)
@@ -89,11 +92,13 @@ internal static class BrainDrainOverlay
                     ShowActivated = false, Focusable = false, IsHitTestVisible = false, CanResize = false,
                     Topmost = true, Background = Brushes.Transparent,
                     TransparencyLevelHint = new[] { WindowTransparencyLevel.Blur, WindowTransparencyLevel.Transparent },
-                    Position = b.Position, Width = b.Width / scale, Height = b.Height / scale };
-                try { w.Show(); if (!Prepare(w)) { w.Close(); CloseHosts(); _refused = true; Serilog.Log.Warning("Brain Drain: compositor blur or click-through unavailable"); return; } Hosts.Add(w); }
+                    Tag = screen, Position = b.Position, Width = b.Width / scale, Height = b.Height / scale };
+                try { Capture(w, affinity); w.Show(); Capture(w, affinity); if (!Prepare(w)) { w.Close(); CloseHosts(); _refused = true; Serilog.Log.Warning("Brain Drain: compositor blur or click-through unavailable"); return; } Hosts.Add(w); }
                 catch { w.Close(); CloseHosts(); _refused = true; return; }
             }
         }
+        // WPF OverlayService.cs:2814-2823,3786: creation, live change and replacement.
+        foreach (var w in Hosts) Capture(w, affinity);
         // WPF Compositor/BrainDrainLayer.cs:296-301, rounded alpha at 1..100 strength.
         foreach (var w in Hosts) Alpha(w, Math.Round((.10 + .75 * Math.Pow((Math.Clamp(s.BrainDrainBlurStrength, 1, 100) - 1) / 99.0, .66)) * 255) / 255);
         // Forced off transition raises the blur again. Ordinary ticks only repair an actual drift.

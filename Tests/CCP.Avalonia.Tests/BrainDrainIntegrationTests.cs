@@ -31,6 +31,7 @@ public sealed class BrainDrainIntegrationTests
         CoreSettings.Current.DualMonitorEnabled = true;
         CoreSettings.Current.BrainDrainKeepPicturesClear = false;
         BrainDrainOverlay.Prepare = _ => supported;
+        BrainDrainOverlay.Capture = (_, _) => { };
         BrainDrainOverlay.Alpha = (w, a) => w.Opacity = a;
         BrainDrainOverlay.Screens = _ => new[] {
             (new PixelRect(0, 0, 800, 600), 1.0, true),
@@ -127,6 +128,45 @@ public sealed class BrainDrainIntegrationTests
         {
             BrainDrainOverlay.Start(owner); BrainDrainOverlay.Reconcile();
             Assert.Empty(BrainDrainOverlay.Active); Assert.Equal(1, tries);
+        }
+        finally { BrainDrainOverlay.CloseAll(); owner.Close(); }
+        return Task.CompletedTask;
+    });
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task CaptureAffinityFollowsCreationToggleAndReplacement(bool allow) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var owner = Setup(); var service = new SettingsService(); CoreSettings.ServiceProvider = () => service;
+        service.Current.BrainDrainEnabled = true; service.Current.BrainDrainBlurStrength = 50; service.Current.AllowOverlayCapture = allow;
+        var calls = new List<(uint Flag, bool Visible)>(); BrainDrainOverlay.Capture = (w, flag) => calls.Add((flag, w.IsVisible));
+        try
+        {
+            BrainDrainOverlay.Start(owner);
+            Assert.NotEmpty(calls); Assert.All(calls, x => Assert.Equal(allow ? 0u : 0x11u, x.Flag));
+            Assert.Contains(calls, x => !x.Visible); Assert.Contains(calls, x => x.Visible);
+            calls.Clear(); service.Current.AllowOverlayCapture = !allow;
+            Assert.NotEmpty(calls); Assert.All(calls, x => Assert.Equal(allow ? 0x11u : 0u, x.Flag));
+            calls.Clear(); service.RestoreFrom(new() { BrainDrainEnabled = true, BrainDrainBlurStrength = 50, AllowOverlayCapture = allow });
+            Assert.NotEmpty(calls); Assert.All(calls, x => Assert.Equal(allow ? 0u : 0x11u, x.Flag));
+        }
+        finally { BrainDrainOverlay.CloseAll(); owner.Close(); }
+        return Task.CompletedTask;
+    });
+    [Fact]
+    public Task SameOriginResolutionAndDpiChangesRecreateFullMonitorHosts() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var owner = Setup(); var bounds = new PixelRect(0, 0, 800, 600); double scale = 1;
+        BrainDrainOverlay.Screens = _ => new[] { (bounds, scale, true) };
+        try
+        {
+            BrainDrainOverlay.Start(owner);
+            foreach (var next in new[] { (new PixelRect(0, 0, 1000, 800), 1.0), (new PixelRect(0, 0, 1000, 800), 2.0), (new PixelRect(0, 0, 2000, 1600), 4.0) })
+            {
+                var old = Assert.Single(BrainDrainOverlay.Active); (bounds, scale) = next; BrainDrainOverlay.Reconcile();
+                var host = Assert.Single(BrainDrainOverlay.Active); Assert.NotSame(old, host); Assert.False(old.IsVisible);
+                Assert.Equal(bounds.Position, host.Position); Assert.Equal(bounds.Width / scale, host.Width); Assert.Equal(bounds.Height / scale, host.Height);
+            }
         }
         finally { BrainDrainOverlay.CloseAll(); owner.Close(); }
         return Task.CompletedTask;
