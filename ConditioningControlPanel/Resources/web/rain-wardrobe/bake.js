@@ -192,40 +192,45 @@ export function selfCheck(source) {
 }
 
 /** The tube look (owner 2026-10-30: the HD clips felt plasticky and blurry, the fishnets blended
- *  into the legs; "black outlines on some hairs and the dress, the fishnets, the shoes", colours that
- *  pop). Two halves, the same in both pipelines (shipped clips: rain-tube-1024 toon_render.py +
- *  palette_pass.mjs; in-app bake: createThreeSource + tubeFrame):
- *  - at render time, INK: an inverted hull per outlined mesh (pushed out along its normals by
- *    INK.width metres, hair INK.hairWidth, head INK.headWidth; back faces only, #1b0f19), and the
- *    fishnet grid darker, more opaque and a little wider (INK.fishnet*);
- *  - after the 2x -> 1x box filter, the shared post pass (tubeFrame): a mild unsharp mask on the
- *    premultiplied colour (alpha untouched, colour never above alpha) and the pop: chroma x
- *    (1 + saturation + vibrance * (1 - sat)), skin-hued pixels get the plain saturation step only
- *    (no orange skin), capped so no channel clips (the pink dress stays pink, never neon).
- *  1 px of the 384x618 tube = 3.74 mm at the tube camera, so width 5.2 mm = about 1.4 px. */
+ *  into the legs; "black outlines on some hairs and the dress, the fishnets, the shoes", then "more
+ *  vibrancy, more definition, more contrast, more black outlines"). Two halves, the same in both
+ *  pipelines (shipped clips: rain-tube-1024 toon_render.py + palette_pass.mjs; in-app bake:
+ *  createThreeSource + tubeFrame):
+ *  - at render time, INK: an inverted hull per outlined mesh, pushed out along its normals by
+ *    INK.width metres (body, dress, boots: about 2.25 px of the 384x618 tube, 1 px = 3.74 mm), hair
+ *    INK.hairWidth (about 1.5 px: inked locks), head INK.headWidth; back faces only, opaque
+ *    near-black; and the fishnet grid darker, more opaque and a little wider (INK.fishnet*);
+ *  - after the 2x -> 1x box filter, the shared post pass (tubeFrame): an unsharp mask on the
+ *    premultiplied colour (5-tap Gaussian, alpha untouched, colour never above alpha), then a luma
+ *    S-curve (deeper shadows, brighter highlights: y - contrast * sin(2 pi y) / 2 pi, hue kept) and
+ *    the pop: chroma x (1 + saturation + vibrance * (1 - sat)); skin-hued pixels (hue 4-32 degrees)
+ *    get half the saturation step and no vibrance (warm, never orange), and the step is capped so no
+ *    channel clips (the pink dress punchy, never neon). */
 export const INK = Object.freeze({
-  color: 0x0b040a /* the #1b0f19 emission as Blender's AgX draws it */, width: 0.0052, hairWidth: 0.0038, headWidth: 0.003,
+  color: 0x0b040a /* the #1b0f19 emission as Blender's AgX draws it */, width: 0.0084, hairWidth: 0.0056, headWidth: 0.0035,
   skip: /eye|lash|brow|gum|teeth|tongue|mascara|hoop|zip|seam|clasp|cornea|dot|tip|welt/i,
   hair: /hair/i, head: /GEO-rain-head/,
   fishnetDarken: 0.3, fishnetOpacity: 0.95, fishnetStrand: 0.115
 });
-export const TOON = Object.freeze({ sharpen: 0.6, sharpenSigma: 0.7, saturation: 0.22, vibrance: 0.25 });
+export const TOON = Object.freeze({ sharpen: 1.0, sharpenSigma: 0.9, contrast: 0.35, saturation: 0.32, vibrance: 0.35 });
 
-/** Unsharp mask, 3x3 Gaussian (sigma ~0.7 px), on PREMULTIPLIED RGBA: colour sharpened and kept
- *  within [0, alpha], alpha untouched (no halo past the silhouette). */
+/** Unsharp mask, 5-tap Gaussian (sigma sharpenSigma px), on PREMULTIPLIED RGBA: colour sharpened and
+ *  kept within [0, alpha], alpha untouched (no halo past the silhouette). */
 export function sharpenPass(frame, opts = TOON) {
   const t = { ...TOON, ...opts }, { width: W, height: H } = frame, src = frame.data;
   const out = new Uint8ClampedArray(src);
   if (!(t.sharpen > 0)) return { data: out, width: W, height: H };
-  const e = Math.exp(-1 / (2 * t.sharpenSigma * t.sharpenSigma)), k0 = 1 / (1 + 2 * e), k1 = e / (1 + 2 * e);
+  const g = [0, 1, 2].map(d => Math.exp(-d * d / (2 * t.sharpenSigma * t.sharpenSigma)));
+  const sum = g[0] + 2 * g[1] + 2 * g[2], k = [g[0] / sum, g[1] / sum, g[2] / sum];
   const n = W * H, tmp = new Float32Array(n * 3), blur = new Float32Array(n * 3);
+  const cx = x => (x < 0 ? 0 : x >= W ? W - 1 : x), cy = y => (y < 0 ? 0 : y >= H ? H - 1 : y);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const p = y * W + x, l = x > 0 ? p - 1 : p, r = x < W - 1 ? p + 1 : p;
-    for (let c = 0; c < 3; c++) tmp[p * 3 + c] = k1 * src[l * 4 + c] + k0 * src[p * 4 + c] + k1 * src[r * 4 + c];
+    const p = y * W + x, a2 = y * W + cx(x - 2), a1 = y * W + cx(x - 1), b1 = y * W + cx(x + 1), b2 = y * W + cx(x + 2);
+    for (let c = 0; c < 3; c++) tmp[p * 3 + c] = k[0] * src[p * 4 + c] + k[1] * (src[a1 * 4 + c] + src[b1 * 4 + c]) + k[2] * (src[a2 * 4 + c] + src[b2 * 4 + c]);
   }
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const p = y * W + x, u = y > 0 ? p - W : p, d = y < H - 1 ? p + W : p;
-    for (let c = 0; c < 3; c++) blur[p * 3 + c] = k1 * tmp[u * 3 + c] + k0 * tmp[p * 3 + c] + k1 * tmp[d * 3 + c];
+    const p = y * W + x, a2 = cy(y - 2) * W + x, a1 = cy(y - 1) * W + x, b1 = cy(y + 1) * W + x, b2 = cy(y + 2) * W + x;
+    for (let c = 0; c < 3; c++) blur[p * 3 + c] = k[0] * tmp[p * 3 + c] + k[1] * (tmp[a1 * 3 + c] + tmp[b1 * 3 + c]) + k[2] * (tmp[a2 * 3 + c] + tmp[b2 * 3 + c]);
   }
   for (let p = 0; p < n; p++) {
     const i = p * 4, a = src[i + 3];
@@ -238,22 +243,33 @@ export function sharpenPass(frame, opts = TOON) {
   return { data: out, width: W, height: H };
 }
 
-/** The pop pass. Straight RGBA in and out, alpha untouched. */
+/** The contrast + pop pass. Straight RGBA in and out, alpha untouched. */
 export function popPass(frame, opts = TOON) {
   const t = { ...TOON, ...opts }, src = frame.data, out = new Uint8ClampedArray(src.length);
+  const TAU = 2 * Math.PI;
   for (let i = 0; i < src.length; i += 4) {
-    const r = src[i], g = src[i + 1], b = src[i + 2];
+    let r = src[i], g = src[i + 1], b = src[i + 2];
     out[i + 3] = src[i + 3];
+    if (!src[i + 3]) { out[i] = r; out[i + 1] = g; out[i + 2] = b; continue; }
+    // Contrast: an S-curve on luma, the colour scaled with it (hue kept, capped at white).
+    const Y0 = 0.299 * r + 0.587 * g + 0.114 * b;
+    if (t.contrast && Y0 > 0) {
+      const y = Y0 / 255, y1 = Math.min(1, Math.max(0, y - t.contrast * Math.sin(TAU * y) / TAU));
+      let f = y1 / y;
+      const mx0 = Math.max(r, g, b);
+      if (mx0 * f > 255) f = 255 / mx0;
+      r *= f; g *= f; b *= f;
+    }
     const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-    if (!src[i + 3] || mx === mn) { out[i] = r; out[i + 1] = g; out[i + 2] = b; continue; }
+    if (mx - mn < 1e-6) { out[i] = Math.round(r); out[i + 1] = Math.round(g); out[i + 2] = Math.round(b); continue; }
     const sat = (mx - mn) / mx;
-    // Skin: red leads, hue 5-45 degrees (the orange side), not already strongly saturated.
+    // Skin: red leads, hue 4-32 degrees (blonde, about 40, is not skin), not already strongly saturated.
     let skin = 0;
     if (mx === r && g >= b) {
       const hue = 60 * (g - b) / (mx - mn);
-      skin = Math.max(0, Math.min(1, (hue - 5) / 8, (45 - hue) / 10)) * Math.max(0, Math.min(1, (0.75 - sat) / 0.15));
+      skin = Math.max(0, Math.min(1, (hue - 4) / 6, (32 - hue) / 6)) * Math.max(0, Math.min(1, (0.75 - sat) / 0.15));
     }
-    let s = 1 + t.saturation + t.vibrance * (1 - sat) * (1 - skin);
+    let s = 1 + t.saturation * (1 - 0.5 * skin) + t.vibrance * (1 - sat) * (1 - skin);
     const Y = 0.299 * r + 0.587 * g + 0.114 * b;
     for (const c of [r, g, b]) {
       if (c > Y) s = Math.min(s, (255 - Y) / (c - Y));

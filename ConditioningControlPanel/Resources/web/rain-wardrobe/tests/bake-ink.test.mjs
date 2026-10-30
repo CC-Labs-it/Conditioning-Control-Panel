@@ -25,13 +25,18 @@ test('sharpen: flat colour stays flat, an edge gains contrast, alpha untouched, 
   assert.deepEqual([...sharpenPass({ data, width: W, height: H }, { sharpen: 0 }).data], [...data]);
 });
 
-test('pop: saturation raises chroma, greys stay grey, the pink stays pink and nothing clips, skin gets less', () => {
+test('pop: contrast S-curve, saturation raises chroma, greys stay grey, the pink stays pink and capped, skin gets less', () => {
   const run = (r, g, b) => [...popPass(px([r, g, b])).data];
   const dress = run(219, 79, 156), out = popPass(px([219, 79, 156])).data;
   assert.ok(chroma(...dress) > chroma(219, 79, 156));
   assert.ok(dress[0] > dress[2] && dress[2] > dress[1], `still pink ${dress}`);
-  assert.ok(dress.slice(0, 3).every(v => v > 0 && v < 255));
-  assert.deepEqual(run(120, 120, 120).slice(0, 3), [120, 120, 120]);
+  assert.ok(dress[1] > 0 && dress[2] < 255, `capped, not neon: ${dress}`);   // at most the lead channel reaches 255, the hue holds
+  const grey = run(120, 120, 120);
+  assert.ok(grey[0] === grey[1] && grey[1] === grey[2], 'greys stay grey');
+  // Contrast: an S-curve on luma, deeper shadows and brighter highlights, mid grey fixed.
+  assert.ok(grey[0] < 120 && run(190, 190, 190)[0] > 190, `${grey} ${run(190, 190, 190)}`);
+  assert.equal(run(128, 128, 128)[0], 128);
+  assert.equal(popPass(px([120, 120, 120]), { contrast: 0 }).data[0], 120);
   assert.equal(out[3], 255);
   assert.equal(popPass(px([200, 100, 50], 0)).data[0], 200);   // clear pixels untouched
   // A pale skin tone gains less than a pale violet of the same saturation (vibrance skips skin).
@@ -62,8 +67,9 @@ test('inkWidth: body / dress / boots full width, hair thinner, head thinnest, ti
   for (const name of ['GEO-rain-eyes', 'GEO-rain-eyelashes', 'Companion.BootV3.Zip tooth 3.L', 'GEO-rain-tongue', 'Companion.Wardrobe.Hoop.L'])
     assert.equal(inkWidth(mesh(name)), 0, name);
   assert.ok(INK.hairWidth < INK.width && INK.headWidth < INK.hairWidth);
-  // About 1.4 px of the 384x618 tube (3.74 mm a pixel).
-  assert.ok(INK.width / 0.00374 > 1.2 && INK.width / 0.00374 < 1.6);
+  // About 2-2.5 px of the 384x618 tube for the silhouette, about 1.5 px on the hair (3.74 mm a pixel).
+  assert.ok(INK.width / 0.00374 >= 2 && INK.width / 0.00374 <= 2.5);
+  assert.ok(INK.hairWidth / 0.00374 > 1.3 && INK.hairWidth / 0.00374 < 1.7);
 });
 
 test('ink hulls: one back-face child per outlined mesh on the bake layer, pushed along the normal, removed after', () => {
@@ -124,5 +130,5 @@ test('the bake asks for ink; the October pixel gate does not', async () => {
   await baker.start({ lookHash: 'c', clips: ['idle'], palette: 'shipped' }, () => {});
   assert.notEqual(seen[0].ink, false);
   assert.equal(seen[1].ink, false); assert.equal(seen[2].ink, false);
-  assert.ok(TOON.saturation > 0.15 && TOON.sharpen > 0.4 && TOON.sharpen < 0.8);
+  assert.ok(TOON.saturation > 0.25 && TOON.sharpen >= 0.8 && TOON.sharpen <= 1.2 && TOON.sharpenSigma >= 0.8 && TOON.sharpenSigma <= 1);
 });
