@@ -52,6 +52,7 @@ import { createFinalLap, finalLapMods, createFaceGlance } from './worldFeel.js';
 import { kickWobble, moteDensity, bumpCount } from './kartPose.js';
 import { setLensCamera } from './lens.js';
 import { racerLabels } from '../hud/format.js';
+import { tagKind } from './nameTag.js';
 import { createMusicRoad } from './musicRoad.js';
 import { updateAudioReactiveUniforms, disposeAudioReactiveUniforms } from './audioReactive.js';
 import { createPressContacts } from './pressContacts.js';
@@ -617,11 +618,12 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     const topMps = feel.get('speed.topMps');
     for (let i = 0; i < karts.list.length; i++) {
       const r = racers[i], kk = karts.list[i];
-      if (!r || !r.st || (r.meta && r.meta.left)) { karts.hide(kk); continue; }   // online: a seat that left is removed
+      if (r && r.st && r.meta && r.meta.left) { karts.leave(kk, view.paused ? 0 : dt); continue; }   // online: a seat that left is removed, its tag fades out
+      if (!r || !r.st) { karts.hide(kk); continue; }
       const d0 = i ? Math.hypot(r.st[S.posX] - k[S.posX], r.st[S.posY] - k[S.posY], r.st[S.posZ] - k[S.posZ]) : 0;
       // the HIT CAM's victim (view.focusRacer, render/hitCam.js) counts as near: full pose, face, stun stars
       const d = i && view.focusRacer === i ? Math.min(d0, Q.kartLodM) : d0;
-      karts.pose(kk, r.st, r.fxv, dt, d, { glide: !!r.glide, underwater: r.st[S.respawnPhase] ? 0 : immersion(r.st[S.s], r.st[S.posY] + 0.65), paused: !!view.paused, squash: i ? null : fx.squash || 0, gentle, topMps, name: r.meta ? labels[i] || r.meta.name : '', face: glance.face(i, nowS),
+      karts.pose(kk, r.st, r.fxv, dt, d, { glide: !!r.glide, underwater: r.st[S.respawnPhase] ? 0 : immersion(r.st[S.s], r.st[S.posY] + 0.65), paused: !!view.paused, squash: i ? null : fx.squash || 0, gentle, topMps, name: r.meta ? labels[i] || r.meta.name : '', tagKind: tagKind(r.meta, i), still: motionLevel === 'off' || !!view.reducedMotion, face: glance.face(i, nowS),
         rollAdd: i || gentle ? 0 : (fx.wobble || 0) * (feel.get('kart.wobble.maxDeg') || 0) * Math.PI / 180 });
       kk.root.updateMatrixWorld();
       const near = i === 0 || d <= Q.kartLodM;

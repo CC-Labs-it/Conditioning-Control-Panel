@@ -16,7 +16,7 @@
  * sim/ai.js (kind 'local'); losing them makes them remote again. Pure apart from the injected WebSocket and timers.
  */
 import { S, RESPAWN } from '../sim/state.js';
-import { NET_V, COUNT_MS, RATES, PLATFORMS, normLook, roomLook } from './protocol.js';
+import { NET_V, COUNT_MS, RATES, PLATFORMS, normLook, roomLook, fromHex, unpackKart, seqNewer, KART_BYTES } from './protocol.js';
 import { openSocket, FINAL_CLOSE } from './socket.js';
 import { createServerClock } from './clock.js';
 import { createInterp } from './interp.js';
@@ -24,6 +24,7 @@ import { createUplink } from './snapshot.js';
 import { createRemoteDriver } from './remote.js';
 import { createNetItems } from './items.js';
 
+const KEEP_WAIT_MS = 1000;   // a kept bot with no record: wait this long for one before driving it from where it stands
 const SIM_EVENTS = new Set(['checkpoint', 'lap', 'finish', 'drop', 'hop', 'land', 'boost-start', 'airborne', 'trick']);
 
 export function createRoomSession({ track, feel, courseHash = '', lobby = null, platform = 'web', WS = globalThis.WebSocket, now = () => Date.now(),
@@ -37,6 +38,7 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
   const st = { ...S0 };
   let sock = null, joinInfo = null, look = normLook(null), leaving = false, downAt = 0, tries = 0, retryT = 0;
   let racers = null, race = null, items = null, connectWait = null;
+  const keepWait = new Map();   // kept bot seat -> ms after which it is driven without a record
 
   const emit = (name, m) => { const set = handlers.get(name); if (set) for (const fn of [...set]) { try { fn(m); } catch (e) { log('warn', `net ${name}: ${e}`); } } };
   function on(name, fn) { let set = handlers.get(name); if (!set) handlers.set(name, (set = new Set())); set.add(fn); return () => set.delete(fn); }
@@ -51,7 +53,18 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
       WS,
       onOpen() { clock.restartPings(); send({ t: 'hello', v: NET_V, ticket: j.ticket, clientMs: now(), ...(courseHash ? { courseHash } : {}) }); pingNow(); },
       onMsg,
-      onBatch(f) { for (const k of f.karts) if (k.seat !== st.seat && !st.keep.includes(k.seat)) interp.push(k, clock.tickMs(k.tick)); },
+      onBatch(f) {
+        for (const k of f.karts) {
+          if (k.seat === st.seat) continue;
+          const r = racerOf(k.seat), kept = st.keep.includes(k.seat);
+          if (kept && r && r.kind !== 'remote') continue;
+          interp.push(k, clock.tickMs(k.tick));
+          // a kept bot handed over before this client had any record of it is taken on its first record
+          if (kept) { if (r) takeBot(k.seat); continue; }
+          // the room relays records only for seats it holds as present: a kart marked left that sends again is back
+          if (r && r.meta.left) seatBack(r);
+        }
+      },
       onClose,
     });
   }
@@ -84,12 +97,14 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
         Object.assign(st, { roomId: m.roomId, seat: m.seat, cfg: m.cfg, seed: m.seed, seats: m.seats, phase: m.phase });
         if (m.countAt !== undefined) Object.assign(st, { countAt: m.countAt, startAt: m.startAt, goTick: m.goTick });
         clock.setRoom(m.t0, m.serverMs);
+        resumeSeq(m.resume);
         downAt = 0;
         applyKeep(m.keep);
+        syncRacers();
         if (connectWait) { connectWait.res(m); connectWait = null; }
         break;
       case 'pong': clock.pong(m.c, m.s); break;
-      case 'seats': st.seats = m.seats; break;
+      case 'seats': st.seats = m.seats; syncRacers(); break;
       case 'seat': seatChange(m); break;
       case 'start': Object.assign(st, { countAt: m.countAt, startAt: m.startAt, goTick: m.goTick, seed: m.seed, phase: 'countdown' }); break;
       case 'keep': applyKeep(m.seats); break;
@@ -110,9 +125,38 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
     if (row) for (const k of ['ready', 'idle', 'left', 'look', 'paused']) if (m[k] !== undefined) row[k] = m[k];
     if (m.idle !== undefined) interp.hold(m.seat, m.idle);
     const r = racerOf(m.seat);
-    if (r && m.left !== undefined) r.meta.left = m.left;
+    if (r && m.left !== undefined) { if (m.left) seatGone(r); else seatBack(r); }
     if (r && m.paused !== undefined) r.meta.paused = m.paused;
   }
+
+  /* A seat's racer follows the room's seat list. The room clears `left` on a reconnect (and blanks a seat past the
+   * grace) with a whole `seats` list, not a `seat` message: without this a kart hidden by a drop stayed hidden for
+   * the rest of the race on every other client (owner's first phone race, 2026-10-30). */
+  function syncRacers() {
+    if (!racers) return;
+    for (const r of racers.list) {
+      if (r.i === 0) continue;
+      const row = st.seats.find((x) => x.seat === r.meta.seat);
+      const gone = !row || row.kind === 'empty' || !!row.left;
+      if (gone && !r.meta.left) seatGone(r);
+      else if (!gone && r.meta.left) seatBack(r);
+      if (row && !gone) { interp.hold(r.meta.seat, !!row.idle); r.meta.paused = !!row.paused; }
+    }
+  }
+  /* A rejoin mid-race in a fresh session (the page or the phone app rebuilt it) starts the uplink seq at 0, and the
+   * room drops every record whose seq is not newer than the seat's last one: the kart froze on every other screen
+   * for as long as it had raced. welcome.resume is the room's last record of this seat: continue past its seq. */
+  function resumeSeq(hex) {
+    if (!hex || st.seat < 0) return;
+    const u8 = fromHex(hex);
+    if (u8.length < KART_BYTES) return;
+    const k = unpackKart(new DataView(u8.buffer, u8.byteOffset, u8.byteLength), 0);
+    // fresh session (seq still the untouched 0): continue past the room's record whatever its value (a plain
+    // seqNewer against 0 fails past 0x8000, ~27 min at 20 Hz); a same-session reconnect only ever moves forward
+    if (!uplink.seqMoved(st.seat) || seqNewer(k.seq, uplink.seqOf(st.seat))) uplink.seqFrom(st.seat, k.seq);
+  }
+  function seatGone(r) { r.meta.left = true; }
+  function seatBack(r) { r.meta.left = false; }
 
   /** The bot keeper hand-off (NET.md section 6). */
   function applyKeep(seats) {
@@ -121,16 +165,27 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
     if (!racers) return;
     for (const s of was) {
       if (st.keep.includes(s)) continue;
+      keepWait.delete(s);
       const r = racerOf(s);
       interp.drop(s);                       // records from before this client kept it would bridge a long gap
       if (r) racers.setKind(r.i, 'remote');
     }
     for (const s of st.keep) { const r = racerOf(s); if (r && (!was.includes(s) || r.kind === 'remote')) takeBot(s); }
   }
-  function takeBot(seat) {
+  /* Mid-race, a bot handed to a client that has no record of it (a fresh session after a rejoin) stays a remote
+   * racer until the first batch carrying its record: driving it from the grid froze it at the start line on every
+   * screen. Before GO the grid is its true place. No record within KEEP_WAIT_MS (a room that never sends one): drive
+   * it from where it stands. */
+  function takeBot(seat, force = false) {
     const r = racerOf(seat);
     if (!r) return;
     const top = interp.newest(seat);
+    if (!top && !force && (st.phase === 'racing' || st.phase === 'done')) {
+      if (!keepWait.has(seat)) keepWait.set(seat, now() + KEEP_WAIT_MS);
+      if (r.kind !== 'remote') racers.setKind(r.i, 'remote');   // layout() built it local
+      return;
+    }
+    keepWait.delete(seat);
     if (top) {
       interp.seed(seat, r.st);
       r.st[S.respawnPhase] = top.k.respawn === RESPAWN.NONE ? RESPAWN.NONE : RESPAWN.GRACE;
@@ -175,6 +230,7 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
     racers.remote = createRemoteDriver(interp, () => clock.serverNow(), q).drive;
     items = createNetItems(track, feel, q, { send, tick: raceTick });
     const keep = st.keep; st.keep = []; applyKeep(keep);
+    syncRacers();
     return items;
   }
 
@@ -184,6 +240,7 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
     clock.slew(t);
     pingNow();
     if (st.phase === 'countdown' && clock.serverNow(t) >= st.startAt) st.phase = 'racing';
+    for (const [s, at] of keepWait) if (t >= at) { if (st.keep.includes(s)) takeBot(s, true); else keepWait.delete(s); }
     if (!racers || !sock || !sock.open || (st.phase !== 'countdown' && st.phase !== 'racing')) return;
     if (clock.serverNow(t) < st.countAt || !uplink.due(t)) return;
     const rows = [{ seat: st.seat, r: racers.player, bot: false, paused, assist: !!assist || paused }];
