@@ -84,14 +84,14 @@ public partial class PresetsTabView
         base.OnPropertyChanged(change);
         if (change.Property != IsVisibleProperty) return;
         // WPF OnPresetsTabVisibilityChanged: DATA BEFORE FX. A session drafted while the tab was hidden
-        // joins the rack, "Recent" re-sorts on the files' new dates, and the shelf repaints - all
+        // joins the rack and "Recent" re-sorts on the files' new dates - all
         // before the stagger animates them in. The shell snaps tabs (no outgoing re-show), so WPF's
         // IsIncomingTab guard has nothing to filter here.
+        // Keep prior receipts while the shell refreshes asynchronously (WPF MainWindow.Takeaway.cs:72-84).
         if (IsVisible && SessionRackPanel != null)
         {
             SyncCustomSessionsFromDisk();
             RepaintSessionRack();
-            SeedTakeaway();
         }
         if (IsVisible && _fxWindow != null) StaggerZones();
         else { CancelEntrances(); DetachRowSweep(); }
@@ -135,7 +135,7 @@ public partial class PresetsTabView
         return group;
     }
 
-    private void PrepareChipFx(Control chip)
+    internal void PrepareChipFx(Control chip)
     {
         CardTransforms(chip);
         chip.PointerEntered += (_, _) => ScaleCard(chip, 1.02, 150);

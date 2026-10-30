@@ -10,6 +10,9 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Threading;
+using Avalonia.Media;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -91,6 +94,60 @@ public sealed class TakeawayShelfTests
         Assert.False(GameWindow.IsAnyOpen());
         Assert.Equal(prior, shell.WindowState);
     });
+
+    [Fact]
+    public Task ArrivalKeepsReceiptsUntilTheRealDrawerRefreshLands() => InShell(async shell =>
+    {
+        shell.ShowTab("presets"); await shell.TakeawayLoad;
+        var tab = shell.Named<PresetsTabView>("PresetsTab")!;
+        var shelf = tab.FindControl<StackPanel>("TakeawayShelf")!;
+        var receipt = shelf.Children[0];
+        shell.ShowTab("quests");
+        var pending = new TaskCompletionSource<HttpResponseMessage>();
+        using var client = new HttpClient(new PendingDrawer(pending.Task));
+        JustDropOrdersService.Http = client;
+        JustDropOrdersService.Invalidate();
+        try
+        {
+            shell.ShowTab("presets");
+            Assert.False(shell.TakeawayLoad.IsCompleted);
+            Assert.Same(receipt, shelf.Children[0]);
+            Assert.True(shelf.IsVisible);
+            Assert.False(tab.FindControl<TextBlock>("TxtTakeawayEmpty")!.IsVisible);
+        }
+        finally
+        {
+            pending.TrySetResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"orders\":[{\"code\":\"fresh\",\"name\":\"Fresh\"}]}") });
+            await shell.TakeawayLoad;
+        }
+        Assert.Equal("fresh", ((JustDropOrdersService.Order)shelf.Children[0].Tag!).Code);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ReceiptAndShopHoverUseTheExistingChipLift(bool shop) => InShell(async shell =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        shell.ShowTab("presets"); await shell.TakeawayLoad;
+        Dispatcher.UIThread.RunJobs();
+        var shelf = shell.Named<PresetsTabView>("PresetsTab")!.FindControl<StackPanel>("TakeawayShelf")!;
+        foreach (var chip in new[] { shop ? shelf.Children[^1] : shelf.Children[0] })
+        {
+            var point = chip.TranslatePoint(new Point(chip.Bounds.Width / 2, chip.Bounds.Height / 2), shell)!.Value;
+            shell.MouseMove(point); Dispatcher.UIThread.RunJobs();
+            var scale = Assert.IsType<TransformGroup>(chip.RenderTransform).Children.OfType<ScaleTransform>().Single();
+            Assert.Equal(1.02, scale.ScaleX); Assert.Equal(1.02, scale.ScaleY);
+            shell.MouseMove(new Point(1, 1)); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, scale.ScaleX); Assert.Equal(1, scale.ScaleY);
+        }
+    });
+
+    private sealed class PendingDrawer(Task<HttpResponseMessage> response) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => response;
+    }
 
     private sealed class Drawer : HttpMessageHandler
     {
