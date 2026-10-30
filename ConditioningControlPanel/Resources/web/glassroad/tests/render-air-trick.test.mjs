@@ -1,0 +1,83 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { AIR_TRICK as T, createAirTrick, stepAirTrick, longFlight } from '../render/airTrickMath.js';
+
+const DT = 1 / 60;
+/** A flight: takeoff at upMps under hop gravity, airborne for airS, then onGround seconds on the road. */
+function fly(s, { upMps = 14, airS = 1, groundS = 2, gentle = false, blockedAt = -1, hop = false } = {}) {
+  const frames = [];
+  let vy = upMps;
+  for (let t = 0; t < airS + groundS; t += DT) {
+    const air = t < airS;
+    const o = stepAirTrick(s, DT, { air, airTime: air ? t : 0, velY: air ? vy : 0, hopT: hop ? t : 9, gentle, blocked: blockedAt >= 0 && t >= blockedAt });
+    if (air) vy -= T.gravityMps2 * DT;
+    frames.push({ t, air, ...o });
+  }
+  return frames;
+}
+
+test('air trick: a plain hop never qualifies, a ramp or long fall does', () => {
+  assert.equal(longFlight(0.15, 6.8 - 26 * 0.15), false, 'a hop is short');
+  assert.equal(longFlight(0.15, 11 - 28 * 0.15), true, 'an 11 m/s ramp launch (0.79 s) is long');
+  assert.equal(longFlight(0.05, 14), false, 'never before the lag');
+  assert.equal(longFlight(T.lateStartS, -3), true, 'falling off a ledge long enough');
+  assert.equal(longFlight(T.lateStartS, -3, T, true), false, 'a hop on a slope needs more');
+  for (const airS of [0.52, 0.7, 0.85]) {
+    const hop = fly(createAirTrick(1), { upMps: 6.8, airS, hop: true });
+    assert.ok(hop.every((f) => !f.active), 'no trick on a hop of ' + airS + ' s');
+  }
+  assert.ok(fly(createAirTrick(1), { upMps: 6.8, airS: 1.6, hop: true }).some((f) => f.active), 'a hop off a big drop still does');
+  const rampHop = fly(createAirTrick(1), { upMps: 14, airS: 1, hop: true }).find((f) => f.active);
+  assert.ok(rampHop && rampHop.t < 0.2, 'a hop on a ramp lip tricks on time');
+});
+
+test('air trick: EMI leaves a beat late, spins one whole turn, holds an arm up with a face, and lands back in', () => {
+  const f = fly(createAirTrick(3), { upMps: 14, airS: 1.0 });
+  const first = f.find((x) => x.active);
+  assert.ok(first && first.t >= T.lagS - 1e-9, 'starts after the kart left');
+  const peak = Math.max(...f.map((x) => x.lift));
+  assert.ok(peak > T.liftM * 0.95, 'clearly out of the cup');
+  const spins = f.filter((x) => x.active).map((x) => Math.abs(x.spin));
+  assert.ok(Math.max(...spins) > Math.PI * 1.9, 'a full 360');
+  assert.ok(f.some((x) => x.phase === 'hang' && x.armK > 0.99), 'arm fully up in the hang');
+  const faces = new Set(f.filter((x) => x.face).map((x) => x.face));
+  assert.equal(faces.size, 1); assert.ok(T.faces.includes([...faces][0]));
+  const hang = f.filter((x) => x.phase === 'hang');
+  const airborne = hang.length * DT;
+  assert.ok(airborne > 0.3 && airborne <= T.hangMaxS + DT, 'about a second up there, at most hangMaxS');
+  const settle = f.filter((x) => x.phase === 'settle');
+  assert.ok(settle.length > 10 && settle.some((x) => Math.abs(x.wobRoll) > 0.05), 'a wobble on the way back in');
+  const last = f[f.length - 1];
+  assert.equal(last.active, false); assert.equal(last.lift, 0); assert.equal(last.spin, 0); assert.equal(last.armK, 0);
+});
+
+test('air trick: an early landing cuts the hang short, a long glide sends EMI back while still flying', () => {
+  const short = fly(createAirTrick(5), { upMps: 14, airS: 0.6 });
+  const hangS = short.filter((x) => x.phase === 'hang').length * DT;
+  assert.ok(hangS < T.hangMinS + T.landHoldS + 0.1, 'returns soon after the kart lands');
+  const long = fly(createAirTrick(5), { upMps: 14, airS: 3, groundS: 1 });
+  const returnsAt = long.find((x) => x.phase === 'return').t;
+  assert.ok(returnsAt < 3, 'back in the cup before the kart lands');
+  assert.equal(long.filter((x) => x.air && x.phase === 'launch' && x.t > returnsAt).length, 0, 'one trick per flight');
+});
+
+test('air trick: faces vary between jumps, Gentle is half the height, blocked or motion off ends it at once', () => {
+  const s = createAirTrick(7), seen = [];
+  for (let n = 0; n < 6; n++) seen.push(fly(s, { airS: 1 }).find((x) => x.face).face);
+  for (let n = 1; n < seen.length; n++) assert.notEqual(seen[n], seen[n - 1], 'never the same face twice in a row');
+  const gentle = fly(createAirTrick(7), { airS: 1, gentle: true });
+  assert.ok(Math.max(...gentle.map((x) => x.lift)) < T.liftM * T.gentle.lift * 1.2);
+  const cut = fly(createAirTrick(7), { airS: 1.5, blockedAt: 0.5 });
+  assert.ok(cut.filter((x) => x.t >= 0.5).every((x) => !x.active && x.lift === 0), 'a rescue ends it');
+  const s2 = createAirTrick(2);
+  for (let t = 0; t < 1; t += DT) assert.equal(stepAirTrick(s2, DT, { air: true, airTime: t, velY: 14, motionOff: true }).active, false);
+});
+
+test('air trick: karts.js restores the rider before every pose and passes the trick face', () => {
+  const src = readFileSync(new URL('../render/karts.js', import.meta.url), 'utf8');
+  const top = src.indexOf('k.trickPieces?.beforePose();'), phrase = src.indexOf('k.phrasePieces?.beforePose();'), life = src.indexOf('k.life?.beforePose();');
+  assert.ok(top > 0 && top < phrase && phrase < life, 'restored in reverse order of application');
+  assert.match(src, /face \|\| trick\.face \|\| o\.face/);
+  assert.ok(src.indexOf('k.trickPieces?.update(trick, near)') > src.indexOf('k.phrasePieces?.update('), 'applied last');
+});

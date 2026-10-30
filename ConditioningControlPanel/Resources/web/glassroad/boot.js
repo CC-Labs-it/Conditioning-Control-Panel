@@ -130,6 +130,8 @@ if (qs.has('start')) {
   history.replaceState(history.state, '', url);
 }
 const BOT = qs.get('bot') === '1', BOT_FALL = BOT && qs.get('botFall') === '1';
+// ?boostRim=0..1: dev look at the boost speed rim, held at that level while racing (Motion off and Gentle still apply)
+const RIM_FORCE = Math.max(0, Math.min(1, Number(qs.get('boostRim')) || 0));
 // ?dev=1: the scripted drives in dev/hook.js (window.__glassroad.dev); refused without the query and online
 const DEV = devAllowed(location.search);
 // ?hitch=1 (dev/hitch-check.mjs): per-frame section times in window.__hitch (ms), read by the check's rAF probe
@@ -891,6 +893,10 @@ async function boot(course, options, lifetime, isCurrent) {
   // online: { s (net/room.js session), cfg, go (race.start() done) } or null; lobbyUi = the hud/lobby.js handle
   let opts = hud.options, assistKey = '', autopilotKind = null;
   const reactiveOptions = { paused: false, gentle: false, muted: false };
+  // the boost speed rim's view (render/boostRim.js via post.js), one object refilled every frame (no per-frame allocation)
+  const rimView = { enabled: false, off: true, boostKind: 0, motion: 'full', gentle: false, photosafe: false, riseMs: 300, fadeMs: 600,
+    palette: () => world.musicColours(), speedFeel: 0, speedLines: 0, force: RIM_FORCE };
+  const feelNum = (k, d) => { try { const v = feel.get(k); return Number.isFinite(+v) ? +v : d; } catch { return d; } };
   /** The Steer assist mode: the Options pick; online it is off on a no lane keeper table and Strong while paused
    *  (only Strong drives a hands-off kart: the paused coast needs its autopilot and cruise). */
   function syncAssist() {
@@ -1820,8 +1826,15 @@ async function boot(course, options, lifetime, isCurrent) {
     const garageScene=!!garage&&state==='menu',inGarage=garageScene&&hud.card==='menu';
     garage?.setVisible(inGarage);
     if(garageScene)garage.render(frameDt,matchMedia('(prefers-reduced-motion: reduce)').matches,{gentle:hostGentle||!!feel.get('gentle.on')||!!hud.options.gentlePreview});
-    else renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: frozen ? 0 : frameDt,
-      musicView: { song: beatSong, songS, audioReactive, paused: frozen, musicEdgeShift: musicEdges.shiftU } });   // 7. render
+    // the boost speed rim: racing only (menu, garage, intro and the count clear it); the player's finish, the finish slow
+    // frame and the hit cam ease it out; it reads the same settled fs.speedFeel as the boost fov widen
+    rimView.enabled = state === 'race';
+    rimView.off = race.phase !== 'racing' || !!P.finished || (fs.renderRate ?? 1) < 1 || !!(hitCam && hitCam.focus >= 0);
+    rimView.boostKind = P.st[S.boostKind] | 0; rimView.motion = opts?.motion || 'full';
+    rimView.gentle = !!feel.get('gentle.on'); rimView.photosafe = feelNum('photosafe.on', 0) > 0;
+    rimView.riseMs = feelNum('gentle.riseMs', 300); rimView.fadeMs = feelNum('gentle.fadeMs', 600);
+    if (!garageScene) renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: frozen ? 0 : frameDt,
+      musicView: { song: beatSong, songS, audioReactive, paused: frozen, musicEdgeShift: musicEdges.shiftU, boostRim: rimView } });   // 7. render
     if (HT) hLap('render');
 
     const place = inRace && standings.order.length ? standings.placeOf(0) : 0;   // 8. hud

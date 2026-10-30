@@ -38,6 +38,8 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { S, RESPAWN } from '../sim/state.js';
 import { phraseBouncePhase } from '../sim/airWords.js';
 import { createPhrasePieces } from './phrasePieces.js';
+import { createAirTrickPieces } from './airTrick.js';
+import { createAirTrick, stepAirTrick, resetAirTrick } from './airTrickMath.js';
 import { LOOK } from './look.js';
 import { KART_VIEW } from './viewMath.js';
 import { Q } from './quality.js';
@@ -326,7 +328,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     const surge = { mesh: surgeMesh, material: surgeMaterial, alpha: 0, time: 0 };
     list.push({
       i, root, body, model, lod, mats, bones, look, accessory, face, head, tint: look ? look.cup : [1, 1, 1], tagHex: look ? look.hex : '#fff4fa',
-      dress, skin, rig, glideCap, propeller, caustics, phrasePieces: art3d ? createPhrasePieces(model) : null, phrasePose: {}, underwater:0, life: art3d ? createEmiLife(model, {seed:i}) : null, lifeSignals:{}, lifeAir:0, dir: createDirector(),
+      dress, skin, rig, glideCap, propeller, caustics, phrasePieces: art3d ? createPhrasePieces(model) : null, phrasePose: {}, trick: createAirTrick(i + 1), trickPieces: art3d && kartGltf ? createAirTrickPieces(model, kartGltf.animations || []) : null, trickSig: {}, underwater:0, life: art3d ? createEmiLife(model, {seed:i}) : null, lifeSignals:{}, lifeAir:0, dir: createDirector(),
       tag: null, tagName: '', pose: createPose(), react: Object.assign(createReact(i), { rig: !!rig }), pend: [], mem: {}, ghost: 0, mark,
       rims, rimBase: look ? look.rimLin.slice() : [0, 0, 0], rimSet: false, stars, aura, surge,
     });
@@ -411,6 +413,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     k.underwater=underwater;
     if(!paused){k.caustics.time.value+=dt*(gentle?.5:1);k.caustics.amount.value+=(underwater*(gentle?.5:1)-k.caustics.amount.value)*Math.min(1,dt/.35);}
     const { root, body, pose: p, react: r } = k;
+    k.trickPieces?.beforePose();
     k.phrasePieces?.beforePose();
     k.life?.beforePose();
     root.visible = true;
@@ -429,6 +432,12 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     for (const [kind, a] of k.pend) { prep(k, kind, a, fxv); reactTo(r, kind, a, RR, gentle); if (rig) directorEvent(k.dir, kind, a, RIG_T, RN, sep); }
     k.pend.length = 0;
     const o = stepReact(r, st, dt, RR, { gentle, lean: p.lean, fxv });
+    // EMI's air trick on a long jump: out of the cup, a 360, an arm up and a face, back in with a wobble
+    const motionOff = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const ts = k.trickSig, airborne = st[S.airborne] > 0.5;
+    ts.air = airborne; ts.airTime = st[S.airTime]; ts.velY = st[S.velY]; ts.hopT = st[S.hopT]; ts.gentle = gentle; ts.motionOff = motionOff || !k.trickPieces;
+    ts.blocked = st[S.respawnPhase] !== RESPAWN.NONE || (glide && airborne) || phraseBouncePhase(st) != null;
+    const trick = paused ? k.trick.out : stepAirTrick(k.trick, dt, ts);
     if (rig) {
       // the clips own every joint; the body keeps the steering bank (not while a lean clip leans), the item
       // hit turns, flips and hops (polish 4) and the hit squash, layered over the rig
@@ -441,21 +450,20 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     body.position.set(0, o.lift, 0);
     body.quaternion.setFromAxisAngle(UPY, p.yawAdd + o.yaw)
       .multiply(QX.setFromAxisAngle(FZ, p.roll * o.stiff * (rig ? rig.bank : 1) + o.roll + rollAdd)).multiply(QX.setFromAxisAngle(RX, (rig ? 0 : p.pitch) + o.pitch));
-    const motionOff = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     const bounce = phraseReboundPose(motionOff ? null : phraseBouncePhase(st), gentle, k.phrasePose);
     // The brief body spring reads on every vehicle; only the accepted cup stack separates.
     const phraseSq = bounce.squash;
     const bodySq = phraseSq ? Math.max(-.25, Math.min(.35, o.sq + phraseSq)) : o.sq;
     body.scale.set(1 + bodySq / 2, 1 - bodySq, 1 + bodySq / 2);
     const near = k.i === 0 || distM <= Q.kartLodM;
-    if (near && rig) { if (k.face) k.face.set(face || o.face, o.blink, r.t); }
+    if (near && rig) { if (k.face) k.face.set(face || trick.face || o.face, o.blink, r.t); }
     else if (near) {
       // EMI frame: +Z up the antenna, Y forward; the sway rolls about Y, the arms lift about Y (mirrored)
       const arms = p.arms + (o.arms - p.arms) * o.armsK, ant = p.ant * o.stiff;
       turn(k.bones.ant0, UPY, -ant * 0.5); turn(k.bones.ant1, UPY, -ant * 0.3); turn(k.bones.ant2, UPY, -ant * 0.2);
       turn(k.bones.shoulderL, UPY, arms); turn(k.bones.shoulderR, UPY, -arms);
       if (k.head) poseHead(k.head, o);
-      if (k.face) k.face.set(face || o.face, o.blink, r.t);
+      if (k.face) k.face.set(face || trick.face || o.face, o.blink, r.t);
     }
     const signals=k.lifeSignals;
     signals.time=r.t; signals.speed=Math.min(1,Math.max(0,st[S.speedPct])); signals.steer=st[S.steerSlew];
@@ -464,6 +472,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     signals.near=near; signals.clip=k.dir.cur; signals.outfit=k.dress?.outfit||''; k.lifeAir=signals.air;
     k.life?.update(dt,signals); k.dress?.life?.update(dt,signals);
     k.phrasePieces?.update(bounce, !k.dress?.vehicle && !motionOff);
+    k.trickPieces?.update(trick, near);
     if (r.sprays.length) {
       if (particles && near) for (const [kind, n, item] of r.sprays) spray(k, kind, n, gentle, item);
       r.sprays.length = 0;
@@ -562,6 +571,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
   function resetReactions() {
     for (const k of list) {
       k.lod?.reset();
+      k.trickPieces?.beforePose(); resetAirTrick(k.trick);
       k.phrasePieces?.beforePose();
       k.react = Object.assign(createReact(k.i), { rig: !!k.rig }); k.pend.length = 0; k.dir = createDirector();
       if (k.glideCap) k.glideCap.reset();
@@ -578,6 +588,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     lods.dispose();
     detach();
     for (const k of list) {
+      k.trickPieces?.beforePose();
       k.phrasePieces?.beforePose();
       if (k.tag) { k.tag.material.map.dispose(); k.tag.material.dispose(); }
       for (const m of k.mats) m.dispose();

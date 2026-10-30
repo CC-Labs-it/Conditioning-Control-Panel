@@ -2,6 +2,7 @@ import { GOONWORKS_CONTACT } from '../track/goonworks-setpieces.js';
 import { BOUDOIR_PRESS_REVISION } from '../track/boudoir-setpieces.js';
 import { AERIAL_REVISION } from '../track/aerial.js';
 import { BOOST_SAFETY_REVISION } from '../track/boostSafety.js';
+import { RAMP_REVISION } from '../track/ramps.js';
 
 /** Runtime numbers come out of Math.hypot / sin / atan2, which the spec lets each engine round its own way (Safari's
  * libm is not V8's): a last-bit wobble must not refuse a seat, so derived floats are hashed on a 1e-6 grid (measured
@@ -25,6 +26,8 @@ export function onlineCourseHash(trackJson, feelJson, track) {
   return courseHash(trackJson, feelJson, { aerialRevision: AERIAL_REVISION, aerials: track.aerials, moving: track.moving,
     courseShapeRevision: track.courseShape?.revision ?? 0, courseShapeNodes: track.courseShapeNodes ?? null,
     boostSafetyRevision: BOOST_SAFETY_REVISION, boosts: track.boosts,
+    // ramps ride inside the track JSON already; the revision pins the wedge shape and launch rule (only when a course has any)
+    ...(track.ramps?.length ? { rampRevision: RAMP_REVISION } : {}),
     ...(track.id === 'goonworks' ? { goonworksContact: GOONWORKS_CONTACT } : {}),
     ...(track.id === 'boudoir' ? { boudoirPressRevision: BOUDOIR_PRESS_REVISION } : {}) });
 }
