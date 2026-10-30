@@ -16,7 +16,7 @@
  * sim/ai.js (kind 'local'); losing them makes them remote again. Pure apart from the injected WebSocket and timers.
  */
 import { S, RESPAWN } from '../sim/state.js';
-import { NET_V, COUNT_MS, RATES, PLATFORMS, normLook, roomLook } from './protocol.js';
+import { NET_V, COUNT_MS, RATES, PLATFORMS, normLook, roomLook, fromHex, unpackKart, seqNewer, KART_BYTES } from './protocol.js';
 import { openSocket, FINAL_CLOSE } from './socket.js';
 import { createServerClock } from './clock.js';
 import { createInterp } from './interp.js';
@@ -92,6 +92,7 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
         Object.assign(st, { roomId: m.roomId, seat: m.seat, cfg: m.cfg, seed: m.seed, seats: m.seats, phase: m.phase });
         if (m.countAt !== undefined) Object.assign(st, { countAt: m.countAt, startAt: m.startAt, goTick: m.goTick });
         clock.setRoom(m.t0, m.serverMs);
+        resumeSeq(m.resume);
         downAt = 0;
         applyKeep(m.keep);
         syncRacers();
@@ -136,6 +137,16 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
       else if (!gone && r.meta.left) seatBack(r);
       if (row && !gone) { interp.hold(r.meta.seat, !!row.idle); r.meta.paused = !!row.paused; }
     }
+  }
+  /* A rejoin mid-race in a fresh session (the page or the phone app rebuilt it) starts the uplink seq at 0, and the
+   * room drops every record whose seq is not newer than the seat's last one: the kart froze on every other screen
+   * for as long as it had raced. welcome.resume is the room's last record of this seat: continue past its seq. */
+  function resumeSeq(hex) {
+    if (!hex || st.seat < 0) return;
+    const u8 = fromHex(hex);
+    if (u8.length < KART_BYTES) return;
+    const k = unpackKart(new DataView(u8.buffer, u8.byteOffset, u8.byteLength), 0);
+    if (!seqNewer(uplink.seqOf(st.seat), k.seq)) uplink.seqFrom(st.seat, k.seq);
   }
   function seatGone(r) { r.meta.left = true; }
   function seatBack(r) { r.meta.left = false; }
