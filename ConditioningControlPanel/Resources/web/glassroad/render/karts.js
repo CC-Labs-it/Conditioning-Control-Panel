@@ -51,7 +51,7 @@ import { coolantCaustics } from './mainframeMaterials.js';
 import { objectUniform, objectState } from './objectUniform.js';
 import { createKartMaterial, createKartSurface } from './materials/kart.js';
 import {
-  createPose, stepPose, tagAlpha, rivalLook, rivalNumbers, createReact, reactNumbers, observeKart, reactTo, stepReact, reactionsFor, phraseReboundPose,
+  createPose, stepPose, rivalLook, rivalNumbers, createReact, reactNumbers, observeKart, reactTo, stepReact, reactionsFor, phraseReboundPose,
   hitRimRgb, stunStar, kindHex, holdFace, rigTable, rigNumbers, createDirector, directorEvent, directorStep,
 } from './kartPose.js';
 import { dressKart, lookForSeat } from './wardrobe.js';
@@ -61,6 +61,7 @@ import { skinFromWire } from '../hud/garageState.js';
 import { lookForTier } from './wardrobeMath.js';
 import { HIT_LOOK, AURA_LOOK, ITEM_TIERS } from './items/look.js';
 import { auraStyle } from './items/shieldMath.js';
+import { HUMAN_TAG, BOT_TAG_FADE, tagTarget, stepTagAlpha, tagScaleK } from './nameTag.js';
 import { createFaceCanvas, faceCell, FACE_LOOK, MARK_LOOK, markCell, createMarkAtlas } from './faces.js';
 
 const QX = new Quaternion(), QH = new Quaternion(), QI = new Quaternion(), EU = new Euler(), V = new Vector3(), AX = new Vector3();
@@ -167,6 +168,26 @@ function playRig(rig, ch) {
   if (prev && prev !== next) { if (ch.land) prev.timeScale = 0; prev.fadeOut(fade); }
   if (next) { next.reset(); next.timeScale = 1; next.time = ch.from || 0; next.fadeIn(fade); next.play(); }
   rig.cur = next;
+}
+
+/** A remote player's tag (render/nameTag.js HUMAN_TAG): a bright pink pill sized to the name, white ring and text,
+ * drawn over traffic (no depth test) so a human reads through the pack. Material kept in step with warmExtras.js. */
+function humanTagSprite(name) {
+  const H = HUMAN_TAG, cv = document.createElement('canvas'); cv.width = 512; cv.height = 128;
+  const g = cv.getContext('2d');
+  g.font = H.font; g.textBaseline = 'middle'; g.textAlign = 'center';
+  const tw = Math.min(420, Math.ceil(g.measureText(name).width || 200)), w = Math.max(160, tw + 72), x = (512 - w) / 2;
+  g.fillStyle = H.shade; g.beginPath(); g.roundRect(x + 2, 22, w, 92, 46); g.fill();
+  g.fillStyle = H.fill; g.beginPath(); g.roundRect(x, 16, w, 92, 46); g.fill();
+  g.strokeStyle = H.ring; g.lineWidth = 6; g.stroke();
+  g.fillStyle = H.shade; g.fillText(name, 257, 65, 420);
+  g.fillStyle = H.text; g.fillText(name, 256, 63, 420);
+  const t = new CanvasTexture(cv); t.colorSpace = SRGBColorSpace;
+  const m = new SpriteNodeMaterial({ map: t, transparent: true, depthWrite: false, depthTest: false });
+  const s = new Sprite(m);
+  s.scale.set(H.sizeM[0] * SPRITE_KEEP, H.sizeM[1] * SPRITE_KEEP, 1);
+  s.position.y = H.upM; s.renderOrder = 6; s.visible = false;
+  return s;
 }
 
 function tagSprite(name, hex) {
@@ -329,7 +350,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     list.push({
       i, root, body, model, lod, mats, bones, look, accessory, face, head, tint: look ? look.cup : [1, 1, 1], tagHex: look ? look.hex : '#fff4fa',
       dress, skin, rig, glideCap, propeller, caustics, phrasePieces: art3d ? createPhrasePieces(model) : null, phrasePose: {}, trick: createAirTrick(i + 1), trickPieces: art3d && kartGltf ? createAirTrickPieces(model, kartGltf.animations || []) : null, trickSig: {}, underwater:0, life: art3d ? createEmiLife(model, {seed:i}) : null, lifeSignals:{}, lifeAir:0, dir: createDirector(),
-      tag: null, tagName: '', pose: createPose(), react: Object.assign(createReact(i), { rig: !!rig }), pend: [], mem: {}, ghost: 0, mark,
+      tag: null, tagName: '', tagKind: null, tagBase: null, tagA: 0, leftTag: null, leftA: 0, pose: createPose(), react: Object.assign(createReact(i), { rig: !!rig }), pend: [], mem: {}, ghost: 0, mark,
       rims, rimBase: look ? look.rimLin.slice() : [0, 0, 0], rimSet: false, stars, aura, surge,
     });
   }
@@ -365,10 +386,27 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     resetReactions();
   }
 
-  function setName(k, name) {
-    if (k.i === 0 || !name || name === k.tagName) return;
+  function setName(k, name, kind) {
+    if (k.i === 0 || !name || (name === k.tagName && kind === k.tagKind)) return;
     if (k.tag) { k.root.remove(k.tag); k.tag.material.map.dispose(); k.tag.material.dispose(); }
-    k.tag = tagSprite(name, k.tagHex); k.tagName = name; k.root.add(k.tag);
+    k.tag = kind === 'human' ? humanTagSprite(name) : tagSprite(name, k.tagHex); k.tagName = name; k.tagKind = kind; k.root.add(k.tag);
+    k.tagBase = [k.tag.scale.x, k.tag.scale.y];
+  }
+  const dropTag = (t) => { if (!t) return; t.parent?.remove(t); t.material.map.dispose(); t.material.dispose(); };
+  /** A seat that left (online): the kart goes at once, its tag stays where it was and fades OUT (render/nameTag.js).
+   * Call every frame while the seat is gone; it hides the kart too. */
+  function leave(k, dt) {
+    if (k.tag && k.root.visible && k.tagA > 0.01 && k.root.parent) {
+      dropTag(k.leftTag);
+      k.root.parent.attach(k.tag);          // keeps its world place and size
+      k.leftTag = k.tag; k.leftA = k.tagA; k.tag = null; k.tagName = ''; k.tagKind = null;
+    }
+    if (k.leftTag) {
+      k.leftA = stepTagAlpha(k.leftA, 0, dt, k.leftTag.renderOrder === 6 ? HUMAN_TAG : BOT_TAG_FADE);
+      k.leftTag.material.opacity = k.leftA;
+      if (k.leftA <= 0.01) { dropTag(k.leftTag); k.leftTag = null; }
+    }
+    hide(k, true);
   }
 
   const turn = (bone, axis, rad) => { if (bone) bone.b.quaternion.copy(bone.rest).multiply(QX.setFromAxisAngle(AX.copy(axis), rad)); };
@@ -408,7 +446,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
    * One kart per frame. st = interpolated state, fxv = RacerFx or null, distM = distance to the camera,
    * opts: { squash (the player's fx.squash; the reaction layer now owns squash), gentle, topMps, name }.
    */
-  function pose(k, st, fxv, dt, distM, { squash = null, gentle = false, topMps = 30, name = '', glide = false, underwater = 0, paused = false, face = null, rollAdd = 0 } = {}) {
+  function pose(k, st, fxv, dt, distM, { squash = null, gentle = false, topMps = 30, name = '', tagKind: kind = 'bot', still = false, glide = false, underwater = 0, paused = false, face = null, rollAdd = 0 } = {}) {
     k.lod?.update(distM);
     k.underwater=underwater;
     if(!paused){k.caustics.time.value+=dt*(gentle?.5:1);k.caustics.amount.value+=(underwater*(gentle?.5:1)-k.caustics.amount.value)*Math.min(1,dt/.35);}
@@ -484,13 +522,17 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
       GC.set(LOOK.ghostEmissive).multiplyScalar(k.ghost * LOOK.ghostGain);
       for (const m of k.mats) if (m.emissive) m.emissive.copy(GC);
     }
-    setName(k, name);
+    setName(k, name, kind);
     if (k.tag) {
-      // a kart right beside the player needs no tag (it filled the view on the grid): fade it in over tagHideNearM
-      const [h0, h1] = LOOK.tagHideNearM || [0, 0], hn = h1 > h0 ? Math.min(1, Math.max(0, (distM - h0) / (h1 - h0))) : 1;
-      const a = near ? tagAlpha(distM, LOOK) * hn * hn * (3 - 2 * hn) : 0;
-      k.tag.visible = a > 0.01;
-      k.tag.material.opacity = a;
+      // render/nameTag.js: a bot tag only near (and not right beside the player), a human tag far and over traffic;
+      // both fade IN and OUT over time, the only motion a small grow on the way in (none with motion off or Gentle)
+      const human = k.tagKind === 'human';
+      k.tagA = stepTagAlpha(k.tagA, tagTarget(k.tagKind, distM, near, LOOK), paused ? 0 : dt, human ? HUMAN_TAG : BOT_TAG_FADE);
+      const sk = tagScaleK(k.tagKind, distM, k.tagA, still || gentle);
+      k.tag.scale.set(k.tagBase[0] * sk, k.tagBase[1] * sk, 1);
+      k.tag.position.y = (human ? HUMAN_TAG.upM : LOOK.tagUpM) + (sk - 1) * k.tagBase[1] * 0.5;
+      k.tag.visible = k.tagA > 0.01;
+      k.tag.material.opacity = k.tagA;
     }
     if (k.mark) showMark(k, o, near, gentle);
     showHit(k, o, near, gentle);
@@ -559,14 +601,17 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     if (!c) return;
     if (mk.id !== o.mark) { mk.id = o.mark; mk.u.cell.value.set(c.col, c.row); }
     const t = k.react.t, slow = gentle ? 0.5 : 1, kk = o.markK;
-    const side = M.sided.includes(o.mark) ? M.sideM : 0, up = M.upM + (k.tag && k.tag.visible ? LOOK.tagSizeM[1] * SPRITE_KEEP + 0.2 : 0);
+    const side = M.sided.includes(o.mark) ? M.sideM : 0, up = M.upM + (k.tag && k.tag.visible ? k.tag.scale.y + 0.2 : 0);
     mk.sprite.position.set(side, up + o.lift + Math.sin(t * 6.283 * M.bobHz * slow) * M.bobM * slow, 0);
     mk.sprite.scale.setScalar(M.sizeM * SPRITE_KEEP * (M.popIn + (1 - M.popIn) * kk));
     mk.u.k.value = kk;
     mk.u.rot.value = o.mark === 'swirl' ? -t * M.spinRadps * slow : Math.sin(t * 6.283 * M.wobbleHz * slow) * M.wobbleRad * slow;
   }
 
-  function hide(k) { k.root.visible = false; k.pend.length = 0; }
+  function hide(k, leaving = false) {
+    k.root.visible = false; k.pend.length = 0; k.tagA = 0;
+    if (!leaving && k.leftTag) { dropTag(k.leftTag); k.leftTag = null; }
+  }
   /** A fresh reaction state on every kart (Again, Restart, Menu): no cheer, sulk or daze carries over. */
   function resetReactions() {
     for (const k of list) {
@@ -590,7 +635,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     for (const k of list) {
       k.trickPieces?.beforePose();
       k.phrasePieces?.beforePose();
-      if (k.tag) { k.tag.material.map.dispose(); k.tag.material.dispose(); }
+      dropTag(k.tag); dropTag(k.leftTag); k.leftTag = null;
       for (const m of k.mats) m.dispose();
       if (k.face) k.face.dispose();
       k.surge.material.dispose();
@@ -632,5 +677,5 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
   const lookOf = (k) => ({ outfit: k.dress ? k.dress.outfit : null, vehicle: k.dress ? k.dress.vehicle : null,
     ...(k.dress && k.dress.umbrella ? { umbrella: k.dress.umbrella } : {}), ...(k.dress && k.dress.trail ? { trail: k.dress.trail } : {}) });
 
-  return { list, propellers, pose, hide, attach, rebind, resetReactions, setLook, looks: () => list.map(lookOf), dispose };
+  return { list, propellers, pose, hide, leave, attach, rebind, resetReactions, setLook, looks: () => list.map(lookOf), dispose };
 }
