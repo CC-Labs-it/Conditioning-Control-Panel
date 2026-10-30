@@ -7,20 +7,21 @@ namespace CCP.Core.Tests;
 
 public sealed class InstalledCommunityPromptsTests
 {
-    [Fact]
-    public void ImportUsesFreshIdsAndFilenameAssignsInactiveAndReappliesActive()
+    [Theory, InlineData(false), InlineData(true)]
+    public void ImportUsesFreshIdsAndFilenameAssignsInactiveAndReappliesActive(bool previouslyInstalled)
     {
         var old = ConditioningControlPanel.CoreSettings.ServiceProvider;
         var service = new ConditioningControlPanel.Services.SettingsService();
         ConditioningControlPanel.CoreSettings.ServiceProvider = () => service;
         var settings = service.Current;
+        if (previouslyInstalled) settings.InstalledCommunityPromptIds.Add("previous-test-prompt");
+        settings.InstalledCommunityPromptIds.Clear();
         var folder = Path.Combine(Path.GetTempPath(), "ccp-import-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
         var file = Path.Combine(folder, "Test voice.json");
         try
         {
-            settings.ActiveCompanionId = 0;
-            settings.SlutModeEnabled = false;
+            settings.ActiveCompanionId = 0; settings.SlutModeEnabled = false;
             File.WriteAllText(file, "{\"Id\":\"../unsafe\",\"Name\":\"ignored\",\"PromptSettings\":{\"Personality\":\"calm voice\"}}");
             var inactive = Assert.IsType<ConditioningControlPanel.Models.CommunityPrompt>(InstalledCommunityPrompts.ImportAndAssign(file, 1));
             Assert.Equal("Test voice", inactive.Name);
@@ -64,7 +65,6 @@ public sealed class InstalledCommunityPromptsTests
             ConditioningControlPanel.CoreSettings.ServiceProvider = old;
         }
     }
-
     [Fact]
     public void Load_matches_installed_prompt_flags_and_handles_missing_or_corrupt_files()
     {
