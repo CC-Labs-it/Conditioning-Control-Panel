@@ -7,6 +7,7 @@ import { createWardrobeColors } from './wardrobe-colors.js';
 import { expandWardrobe as expandJewelry } from './wardrobe-jewelry.js';
 import { installReviewStudio } from './wardrobe-review.js';
 import { hosted, BIG_ASSETS, reviewAllowed, qaAllowed, hostItems, hostColors, postLook, postHost, isLocked, toHostLook } from './host-bridge.js';
+import { installBaker } from './bake.js';
 import { createShop, listenToHost, paintShop, STR as SHOP } from './wardrobe-shop.js';
 const shop=createShop({isLocked,post:postHost,nameOf:key=>{const at=key.indexOf(':');const item=findItem(key.slice(0,at),key.slice(at+1));return item?.name||item?.label||'';}});
 const COLOR_CHANNELS=['fabric','trim','hair','skin','eyes','lips','nails','shoes','accessories'];
@@ -421,6 +422,9 @@ async function init(){
   if(info.camera?.target){target.fromArray(info.camera.target);target.y=.9;}if(info.camera?.position){const offset=new THREE.Vector3().fromArray(info.camera.position).sub(new THREE.Vector3().fromArray(info.camera.target||[0,1.08,0]));yaw=Math.atan2(offset.x,offset.z);}distance=4.3;pitch=.035;
   paintAnimations();let saved;if(hosted){const early=shop.source==='init'?shop.applied:undefined;if(early)colorOverrides=hostColors(COLOR_CHANNELS,early);saved=hostItems(early,!early);}else try{if(!reviewMode)saved=JSON.parse(localStorage.getItem(STORE)||'null');}catch{}
   applyLook(saved||info.defaultLook||{},{persist:!hosted&&!reviewMode});if(hosted){shop.markApplied();paintShop(document,shop);}setAnimation('idle');if(!action&&clips.length){const first=(info.animations||[])[0];setAnimation(typeof first==='string'?first:first?.id);}
+  // Bake on Apply (bake.js): its own renderer, camera and mixer; every frame hands the visible pose back.
+  const settle=()=>{for(const update of expansionUpdates)update(0,state.look);avatar.updateMatrixWorld(true);};
+  window.wardrobeDebug.bake=installBaker({THREE,scene,avatar,clips,getClip,hide:[ground],prepare:finishTransition,sync:settle,restore:()=>{mixer.update(0);settle();},post:postHost});
   state.ready=true;postHost({type:'rain-ready'});$('demo').disabled=false;$('loading').hidden=true;updateCamera(1/60);
   if(!clips.length){errors.push('No animation clips in avatar.glb');$('liveLabel').textContent='NO ANIMATIONS EXPORTED';}
   if(reviewMode)installReviewStudio({info,errors,renderCase:renderReviewCase});
