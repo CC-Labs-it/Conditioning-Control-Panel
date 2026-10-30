@@ -178,10 +178,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// The primary fallback never replaces the calibration's saved identity or geometry.</summary>
         internal static Point GazeToDesktop(Point p)
         {
-            var name = WebcamTracker.Instance.Calibration?.MonitorBounds?.DeviceName;
-            var screen = WebcamScreens.Resolve(WebcamScreens.Enumerate(), name);
+            var bounds = WebcamTracker.Instance.Calibration?.MonitorBounds;
+            var screen = WebcamScreens.Resolve(WebcamScreens.Enumerate(), bounds?.DeviceName);
             if (screen == null) return p;
-            var dpi = screen.Scaling > 0 ? screen.Scaling : 1;
+            // WPF CalOriginDips uses the saved calibration scale even after a display scale change.
+            var dpi = bounds is { DpiScale: > 0.25 and < 8.0 } ? bounds.DpiScale : 1.0;
             return new Point(p.X + screen.Bounds.X / dpi, p.Y + screen.Bounds.Y / dpi);
         }
 
