@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Avalonia
         public static SettingsService? Settings { get; private set; }
 
         /// <summary>In-app corner toasts (WPF App.Notifications). Queues until the shell attaches it.</summary>
-        public static Helpers.NotificationService Notifications { get; } = new();
+        public static Helpers.NotificationService Notifications { get; internal set; } = new();
 
         /// <summary>Weekly free-tier pass for the Graded Intake (WPF App.IntakePass).</summary>
         public static IntakePassService IntakePass { get; } = new();

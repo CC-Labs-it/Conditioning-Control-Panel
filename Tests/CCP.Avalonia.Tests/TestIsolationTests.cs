@@ -41,6 +41,7 @@ public class TestIsolationTests
     [InlineData(typeof(CoreSecrets), nameof(CoreSecrets.RetrieveProvider))]
     [InlineData(typeof(CoreAccount), nameof(CoreAccount.UnifiedUserId))]
     [InlineData(typeof(CoreMods), nameof(CoreMods.MakeModAwareProvider))]
+    [InlineData(typeof(AvApp), nameof(AvApp.Notifications))]
     [InlineData(typeof(AvApp), nameof(AvApp.Ai))]
     [InlineData(typeof(AvApp), nameof(AvApp.Brain))]
     [InlineData(typeof(ConditioningControlPanel.Services.LockdownService), nameof(ConditioningControlPanel.Services.LockdownService.Current))]
@@ -57,10 +58,12 @@ public class TestIsolationTests
         var before = hadFile ? File.ReadAllText(settingsFile) : null;
         var user = CoreAccount.UnifiedUserId;
         var provider = CoreSettings.ServiceProvider;
+        var notifications = AvApp.Notifications;
         var chat = CoreSettings.Current.AiChatEnabled;
 
         var snapshot = ProcessStateSnapshot.Take();
         CoreAccount.UnifiedUserId = "leaked-user";
+        AvApp.Notifications = new();
         CoreSettings.Current.AiChatEnabled = !chat;
         CoreSettings.ServiceProvider = () => null;
         File.WriteAllText(settingsFile, "{\"leaked\":true}");
@@ -71,6 +74,7 @@ public class TestIsolationTests
 
         Assert.Equal(user, CoreAccount.UnifiedUserId);
         Assert.Same(provider, CoreSettings.ServiceProvider);
+        Assert.Same(notifications, AvApp.Notifications);
         Assert.Equal(chat, CoreSettings.Current.AiChatEnabled);
         Assert.Equal(hadFile, File.Exists(settingsFile));
         if (hadFile) Assert.Equal(before, File.ReadAllText(settingsFile));

@@ -55,6 +55,9 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
             Current = ProcessStateSnapshot.Take();
+            // A get-only singleton retained queued toasts, old hosts and live sticky keys across tests.
+            // The snapshot restores the original service after each test; each body gets fresh state.
+            ConditioningControlPanel.Avalonia.App.Notifications = new();
             OpenWindows.Mark();
             // P76: a held startup card opens only when a test steps the ladder clock, never by wall time.
             ConditioningControlPanel.Avalonia.Platform.StartupLadder.Time = new ConditioningControlPanel.Avalonia.Platform.StartupLadder.TestClock();
