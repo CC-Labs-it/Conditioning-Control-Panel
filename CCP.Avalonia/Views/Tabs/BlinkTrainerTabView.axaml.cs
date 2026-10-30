@@ -47,6 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private int _demoIndex;
         private bool _demoUsingA = true;
         private Action? _statusAction;
+        private string? _statusActionKey, _consentKey;
 
         /// <summary>The status row's current state; read by tests and by nothing else yet.</summary>
         internal BlinkTrainerStatusState StatusState { get; private set; }
@@ -388,7 +389,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             _statusAction = action;
             BlinkTrainerStatusAction.IsVisible = key != null;
-            if (key != null) BlinkTrainerStatusAction.Content = BindLoc(new TextBlock(), key);
+            if (key != null && _statusActionKey != key)
+            {
+                BlinkTrainerStatusAction.Content = BindLoc(new TextBlock(), key);
+                _statusActionKey = key;
+            }
         }
 
         private static TextBlock BindLoc(TextBlock tb, string key)
@@ -407,12 +412,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF RefreshBlinkTrainerWebcamColumn's consent card and calibration line.</summary>
         private void RefreshWebcamColumn()
         {
-            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.Named<DeeperTabView>("DeeperTab")?.RefreshWebcamColumn();
             bool consented = WebcamConsent.IsCurrent(CoreSettings.Current);
             BlinkTrainerConsentCard.Background = new SolidColorBrush(consented ? Color.FromArgb(0x1A, 0x4A, 0xDE, 0x80) : Color.FromArgb(0x1A, 0xFF, 0xD0, 0x80));
             BlinkTrainerConsentCard.BorderBrush = consented ? Green : Amber;
             BlinkTrainerConsentStatus.Key = consented ? "blink_trainer_consent_granted" : "blink_trainer_consent_required";
-            BtnBlinkTrainerManageConsent.Content = BindLoc(new TextBlock { FontSize = 11 }, consented ? "blink_trainer_consent_manage" : "blink_trainer_consent_grant");
+            // Keep the bound label while its key is unchanged: replacing Content makes the
+            // button template and text layout start over on every tab show. The binding itself
+            // still follows language changes.
+            var consentKey = consented ? "blink_trainer_consent_manage" : "blink_trainer_consent_grant";
+            if (_consentKey != consentKey)
+            {
+                BtnBlinkTrainerManageConsent.Content = BindLoc(new TextBlock { FontSize = 11 }, consentKey);
+                _consentKey = consentKey;
+            }
             BtnBlinkTrainerRevokeConsent.IsVisible = consented;
             var cal = Platform.WebcamTracker.Instance.Calibration;
             if (cal?.MonitorBounds?.DeviceName is { Length: > 0 } device)
@@ -421,6 +433,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 BlinkTrainerCalibrationStatus.Text = Loc.GetF("blink_trainer_calibration_calibrated_format", device);
             }
             else BindLoc(BlinkTrainerCalibrationStatus, cal == null ? "blink_trainer_calibration_none" : "blink_trainer_calibration_outdated");
+            // WPF fans out to the Deeper card once, after its own card (MainWindow.BlinkTrainer.cs:1295).
             (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.Named<DeeperTabView>("DeeperTab")?.RefreshWebcamColumn();
         }
 
