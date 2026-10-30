@@ -6,7 +6,10 @@ import { expandWardrobe as expandTailoring } from './wardrobe-tailoring.js';
 import { createWardrobeColors } from './wardrobe-colors.js';
 import { expandWardrobe as expandJewelry } from './wardrobe-jewelry.js';
 import { installReviewStudio } from './wardrobe-review.js';
-import { hosted, BIG_ASSETS, reviewAllowed, qaAllowed, hostItems, hostColors, postLook, postHost, isLocked, lockNote } from './host-bridge.js';
+import { hosted, BIG_ASSETS, reviewAllowed, qaAllowed, hostItems, hostColors, postLook, postHost, isLocked, toHostLook } from './host-bridge.js';
+import { createShop, listenToHost, paintShop, STR as SHOP } from './wardrobe-shop.js';
+const shop=createShop({isLocked,post:postHost,nameOf:key=>{const at=key.indexOf(':');const item=findItem(key.slice(0,at),key.slice(at+1));return item?.name||item?.label||'';}});
+const COLOR_CHANNELS=['fabric','trim','hair','skin','eyes','lips','nails','shoes','accessories'];
 
 const $ = id => document.getElementById(id);
 const canvas = $('preview');
@@ -120,7 +123,7 @@ function validLook(input={}){
 }
 function selected(slot,id){if(slot==='looks'){const bundle=findItem(slot,id)?.look;return bundle&&singleSlots.every(s=>!bundle[s]||bundle[s]===state.look[s])&&JSON.stringify([...(bundle.accessories||[])].sort())===JSON.stringify([...(state.look.accessories||[])].sort());}return slot==='accessories'?state.look.accessories?.includes(id):state.look[slot]===id;}
 function finishTransition(){clearTimeout(transitionTimer);transitionOrbit=0;state.transition.active=false;state.transition.progress=1;$('swapFx')?.classList.remove('playing');}
-function beginTransition(){finishTransition();state.transition.sequence++;if(!state.ready||state.paused||motionPreference.matches)return;transitionStart=performance.now();state.transition.active=true;state.transition.progress=0;const fx=$('swapFx');void fx.offsetWidth;fx.classList.add('playing');transitionTimer=setTimeout(()=>{finishTransition();refreshQa();},850);}
+function beginTransition(){finishTransition();state.transition.sequence++;if(!state.ready||state.paused||motionPreference.matches||shop.calm)return;transitionStart=performance.now();state.transition.active=true;state.transition.progress=0;const fx=$('swapFx');void fx.offsetWidth;fx.classList.add('playing');transitionTimer=setTimeout(()=>{finishTransition();refreshQa();},850);}
 function updateTransition(now){if(!state.transition.active)return;const t=Math.min(1,(now-transitionStart)/850);state.transition.progress=Number(t.toFixed(3));transitionOrbit=Math.sin(t*Math.PI)*.14*Math.sin(t*Math.PI*2);if(t>=1)finishTransition();}
 motionPreference.addEventListener('change',()=>{if(motionPreference.matches)finishTransition();});
 function applyLook(input,{persist=!reviewMode}={}){
@@ -150,11 +153,11 @@ function applyLook(input,{persist=!reviewMode}={}){
     for(const mat of matches){const values=typeof props==='string'?{color:props}:props;if(values.color&&mat.color)mat.color.set(values.color);if(values.roughness!==undefined)mat.roughness=values.roughness;}
   }
   colorController?.apply(colorOverrides,look);
-  const changed=JSON.stringify(state.look)!==JSON.stringify(look);state.look=look;state.swaps++;if(changed)beginTransition();if(persist){if(postLook(look,colorOverrides))$('saveStatus').textContent='Saved';else try{localStorage.setItem(STORE,JSON.stringify(look));$('saveStatus').textContent='Saved on this device';}catch{$('saveStatus').textContent='Saved for this visit';}}
+  const changed=JSON.stringify(state.look)!==JSON.stringify(look);state.look=look;state.swaps++;if(changed)beginTransition();if(hosted)shopSync(persist);else if(persist){try{localStorage.setItem(STORE,JSON.stringify(look));$('saveStatus').textContent='Saved on this device';}catch{$('saveStatus').textContent='Saved for this visit';}}
   for(const update of expansionUpdates)update(0,look);
   paintChoices();paintEquipped();paintColorControls();refreshQa();return true;
 }
-function toggleItem(slot,id){if(isLocked(slot,id))return;stopDemo(false);if(slot==='looks'){applyLook({...info.defaultLook,...findItem(slot,id).look});return;}const next=structuredClone(state.look);if(slot==='skin'&&colorOverrides.skin){delete colorOverrides.skin;saveColors();}if(slot==='accessories'){if(coveredByHood(id))return;next.accessories=next.accessories.includes(id)?next.accessories.filter(x=>x!==id):[...next.accessories.filter(x=>accessoryGroup(x)!==accessoryGroup(id)),id];}else next[slot]=id;applyLook(next);}
+function toggleItem(slot,id){stopDemo(false);if(slot==='looks'){applyLook({...info.defaultLook,...findItem(slot,id).look});return;}const next=structuredClone(state.look);if(slot==='skin'&&colorOverrides.skin){delete colorOverrides.skin;saveColors();}if(slot==='accessories'){if(coveredByHood(id))return;next.accessories=next.accessories.includes(id)?next.accessories.filter(x=>x!==id):[...next.accessories.filter(x=>accessoryGroup(x)!==accessoryGroup(id)),id];}else next[slot]=id;applyLook(next);}
 function stopDemo(restore=true){
   for(const timer of demoTimers)clearTimeout(timer);demoTimers=[];
   if(state.demo&&restore&&demoPrevious)applyLook(demoPrevious,{persist:false});
@@ -252,7 +255,7 @@ function art(item,slot){
 }
 function paintChoices(){
   const slot=state.slot,covered=coveredSlot(slot);$('categoryTitle').textContent=titles[slot][0];$('categoryHint').textContent=covered?'Change the outfit to see this layer.':titles[slot][1];$('choices').replaceChildren();$('choices').setAttribute('aria-label',slot);
-  for(const item of slotItems(slot)){const b=document.createElement('button');b.className='choice';b.dataset.item=item.id;b.setAttribute('aria-pressed',String(!covered&&selected(slot,item.id)));const locked=isLocked(slot,item.id);if(locked){b.classList.add('locked');b.setAttribute('aria-disabled','true');}b.disabled=covered||(slot==='accessories'&&coveredByHood(item.id));b.append(art(item,slot));if(covered)b.querySelector('.check')?.remove();const name=document.createElement('span');name.className='choice-name';name.textContent=item.name || item.label || item.id;b.append(name);const note=document.createElement('span');note.className='choice-note';note.textContent=locked?lockNote:covered?'Covered by the outfit or boots':b.disabled?'Covered by the hood':item.note || (slot==='accessories'?(selected(slot,item.id)?'Wearing':'Add a detail'):(selected(slot,item.id)?'Wearing now':'Try on'));b.append(note);b.addEventListener('click',()=>toggleItem(slot,item.id));$('choices').append(b);}
+  for(const item of slotItems(slot)){const b=document.createElement('button');b.className='choice';b.dataset.item=item.id;b.setAttribute('aria-pressed',String(!covered&&selected(slot,item.id)));const badge=hosted?shop.badge(slot,item.id):null;if(badge){b.classList.add('stamp-'+badge.kind);if(!badge.owned)b.classList.add('unowned');}b.disabled=covered||(slot==='accessories'&&coveredByHood(item.id));b.append(art(item,slot));if(covered)b.querySelector('.check')?.remove();const name=document.createElement('span');name.className='choice-name';name.textContent=item.name || item.label || item.id;b.append(name);const note=document.createElement('span');note.className='choice-note';note.textContent=covered?'Covered by the outfit or boots':b.disabled?'Covered by the hood':badge?badge.text:item.note || (slot==='accessories'?(selected(slot,item.id)?'Wearing':'Add a detail'):(selected(slot,item.id)?'Wearing now':'Try on'));b.append(note);b.addEventListener('click',()=>toggleItem(slot,item.id));$('choices').append(b);}
 }
 function paintEquipped(){
   $('equipped').replaceChildren();for(const slot of [...singleSlots,'accessories'])for(const id of slot==='accessories'?state.look.accessories:[state.look[slot]]){const item=findItem(slot,id);if(!item||id==='none'||coveredSlot(slot))continue;const pill=document.createElement('span');pill.className='equipped-pill';const dot=document.createElement('i');dot.className='equipped-dot';dot.style.background=item.swatch || item.color || '#a76570';pill.append(dot,document.createTextNode(item.name||item.id));$('equipped').append(pill);}
@@ -272,7 +275,7 @@ const colorPresets={
   shoes:['#7d294f','#202128','#ddd5c2','#702430','#a5b3bd','#be6784','#25465b','#e6b62e'],
   accessories:['#d2a953','#c7d2da','#322331','#b44978','#74364a','#d6a18b','#4f4865','#647d83']
 };
-function saveColors(){if(postLook(state.look,colorOverrides))return;try{localStorage.setItem(COLOR_STORE,JSON.stringify(colorOverrides));}catch{}}
+function saveColors(){if(hosted){shopSync(true);return;}try{localStorage.setItem(COLOR_STORE,JSON.stringify(colorOverrides));}catch{}}
 function changeColor(value){const id=$('colorChannel').value;if(!/^#[0-9a-f]{6}$/i.test(value))return;stopDemo(false);colorOverrides[id]=value.toLowerCase();saveColors();applyLook(state.look,{persist:false});drawPreview();}
 function paintColorControls(){
   if(!colorController)return;const id=$('colorChannel').value||'fabric';const slot=({fabric:'dress',hair:'hair',skin:'skin',shoes:'shoes'})[id];const value=colorOverrides[id]||(slot&&findItem(slot,state.look[slot])?.swatch)||colorController.defaultColor(id);
@@ -416,8 +419,8 @@ async function init(){
   for(const channel of colorController.channels){const option=document.createElement('option');option.value=channel.id;option.textContent=channel.name;option.disabled=!channel.available;$('colorChannel').append(option);}
   // Preserve source facing while reserving stage space for feet, jump peaks and controls.
   if(info.camera?.target){target.fromArray(info.camera.target);target.y=.9;}if(info.camera?.position){const offset=new THREE.Vector3().fromArray(info.camera.position).sub(new THREE.Vector3().fromArray(info.camera.target||[0,1.08,0]));yaw=Math.atan2(offset.x,offset.z);}distance=4.3;pitch=.035;
-  paintAnimations();let saved;if(hosted)saved=hostItems();else try{if(!reviewMode)saved=JSON.parse(localStorage.getItem(STORE)||'null');}catch{}
-  applyLook(saved||info.defaultLook||{},{persist:!hosted&&!reviewMode});setAnimation('idle');if(!action&&clips.length){const first=(info.animations||[])[0];setAnimation(typeof first==='string'?first:first?.id);}
+  paintAnimations();let saved;if(hosted){const early=shop.source==='init'?shop.applied:undefined;if(early)colorOverrides=hostColors(COLOR_CHANNELS,early);saved=hostItems(early,!early);}else try{if(!reviewMode)saved=JSON.parse(localStorage.getItem(STORE)||'null');}catch{}
+  applyLook(saved||info.defaultLook||{},{persist:!hosted&&!reviewMode});if(hosted){shop.markApplied();paintShop(document,shop);}setAnimation('idle');if(!action&&clips.length){const first=(info.animations||[])[0];setAnimation(typeof first==='string'?first:first?.id);}
   state.ready=true;postHost({type:'rain-ready'});$('demo').disabled=false;$('loading').hidden=true;updateCamera(1/60);
   if(!clips.length){errors.push('No animation clips in avatar.glb');$('liveLabel').textContent='NO ANIMATIONS EXPORTED';}
   if(reviewMode)installReviewStudio({info,errors,renderCase:renderReviewCase});
@@ -433,5 +436,16 @@ function renderReviewCase({look,clip,time,view,frame,width:rw,height:rh}){
   }
   const rc=new THREE.PerspectiveCamera(32,rw/rh,.01,100);rc.position.set(aim.x+Math.sin(view)*zoom,aim.y+.035*zoom,aim.z+Math.cos(view)*zoom);rc.lookAt(aim);renderer.setPixelRatio(1);renderer.setSize(rw,rh,false);renderer.setScissorTest(false);renderer.setViewport(0,0,rw,rh);renderer.setClearColor(0xeee9df,1);renderer.clear();renderer.render(scene,rc);return renderer.domElement;
 }
-window.addEventListener('rain-locks',()=>{if(state.ready)paintChoices();});
+window.addEventListener('rain-locks',()=>{if(state.ready){paintChoices();paintShop(document,shop);}});
+// Shop layer: the draft is what Rain wears here, the applied look is what the tube wears.
+function shopSync(save){if(!state.demo)shop.setDraft(toHostLook(state.look,colorOverrides));if(save&&!shop.applyMode&&shop.status().wearable){postLook(state.look,colorOverrides);shop.markApplied();$('saveStatus').textContent=SHOP.saved;}paintShop(document,shop);}
+function showHostLook(look){colorOverrides=hostColors(COLOR_CHANNELS,look);applyLook(hostItems(look,shop.source!=='init')||info?.defaultLook||{},{persist:false});shop.markApplied();paintShop(document,shop);}
+if(hosted){
+  document.body.classList.add('shop-on');$('lookBar').hidden=false;
+  fetch('./items.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(json=>{if(!json)return;shop.setItems(json);if(state.ready){paintChoices();paintShop(document,shop);}}).catch(()=>{});
+  listenToHost(window,shop,kind=>{if(kind==='init'&&state.ready&&shop.applied){showHostLook(shop.applied);return;}if(kind==='applied')$('saveStatus').textContent=SHOP.applied;if(state.ready)paintChoices();paintShop(document,shop);});
+  $('applyLook').addEventListener('click',()=>{if(!shop.apply())return;if(!shop.applyMode){postLook(state.look,colorOverrides);$('saveStatus').textContent=SHOP.saved;}paintShop(document,shop);});
+  $('discardLook').addEventListener('click',()=>{stopDemo(false);const look=shop.discard();if(look&&state.ready)showHostLook(look);});
+  $('openCounter').addEventListener('click',()=>shop.openCounter());
+}
 init().catch(fail);
