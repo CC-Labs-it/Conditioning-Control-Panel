@@ -17,13 +17,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// Dismiss :420, EnsureWindow :607, MaybeAskAboutMuting :1541, AvatarMuted :80. The dock chip,
     /// the hover x and the settings switch all route here, so none of them owns her twice.</para>
     ///
-    /// <para>ponytail: not here yet, each a named WPF member: the moment bus (<c>Fire</c>, greeting,
-    /// backSoon/weekend/bedtime beats; EmiLineEngine and EmiState are in Core, unwired here), the nudge machine, the
+    /// <para>ponytail: not here yet, each a named WPF member: the ambient moment bus, offers and
+    /// backSoon/weekend/bedtime beats, the nudge machine, the
     /// knock (<c>TryKnock</c>) and the tube hand-off wiring (the <c>TubeDeskVisibility</c> rule itself is in
     /// CCP.Core; only the head call that hides/restores the desk is missing). The system-wide chord
     /// (<c>ApplyHotkey</c>) is here, grabbed through Platform/X11SummonChord.</para>
     /// </summary>
-    internal sealed class EmiDeskService
+    internal sealed partial class EmiDeskService
     {
         public static EmiDeskService Instance { get; } = new();
 
@@ -90,6 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 win.RunSummon();
                 bool first = !EmiState.Current.FirstBootSeen;
                 int summons = EmiState.NoteSummon();
+                ScheduleGreeting();
                 RaiseOutChanged();
                 Log.Information("[EmiDesk] summoned ({Why}), firstBoot={First}, summon #{N}", why ?? "user", first, summons);
             }
@@ -111,6 +112,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 }
                 // Invalidate a summon parked behind the mute prompt before anything else.
                 _summonGen++;
+                CancelGreeting();
                 // WPF EmiDeskService.cs:422: sending her away ends the welcome show she is presenting.
                 if (_window?.PresentationActive == true) _window.StopPresentation();
 
@@ -143,6 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             var window = EnsureWindow();
             if (window == null) return null;
+            CancelGreeting();
             _summonGen++;   // a summon parked behind the mute prompt must not finish over the show
             if (!IsOut) window.RestorePlacement();
             IsOut = true; RaiseOutChanged();
@@ -159,6 +162,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 {
                     if (!ReferenceEquals(_window, win)) return;
                     _window = null;
+                    CancelGreeting();
                     IsOut = false;
                     RaiseOutChanged();
                 };
