@@ -164,9 +164,13 @@ shared.feelTask = Promise.all([loadFeel(), loadFonts()]).then(([feel]) => {
 shared.bridge.on('gentle', m => { shared.hostGentle = m; });
 // THE PRIZE COUNTER'S KART BODIES (meta/owned.js): the garage offers the free kart, the earned ones and the owned
 // ones. The desktop host pushes `owned { grants }` after a buy; the profile pull answers the same list everywhere.
+// After the counter's Wear on a kart look it adds `wear: <counter row id>` (desktop only): the garage puts it on.
 shared.owned = createOwned();
 const adoptOwned = list => { if (shared.owned.adopt(list)) shared.garage?.refreshLocks?.(); };
-shared.bridge.on('owned', m => adoptOwned(m?.grants));
+shared.bridge.on('owned', m => {
+  adoptOwned(m?.grants);
+  if (typeof m?.wear === 'string') try { shared.garage?.wear?.(m.wear); } catch (e) { /* a look never breaks the page */ }
+});
 // SPARKLES BY PLACE (B1 W7): the desktop host's receipt for a finished race, bottom left of the results card
 // (styles.css moves it off the card); a new run takes it away. The website never sends one.
 // A receipt that lands once the next run is under way is dropped rather than covering the race; the
