@@ -80,7 +80,7 @@ public class RaceRoomInviteTests
     [Fact]
     public void Every_reason_line_is_in_all_ten_languages_and_keeps_the_voice()
     {
-        var dir = Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages");
+        var dir = SourceRoots.LanguagesDirectory;
         var files = Directory.GetFiles(dir, "*.json");
         Assert.Equal(10, files.Length);
         foreach (var file in files)
@@ -149,14 +149,5 @@ public class RaceRoomInviteTests
             To = to; Room = room;
             return Task.FromResult(new SendOutcome(SendResult.Refused, null) { Reason = "room_started" });
         }
-    }
-
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
-            dir = dir.Parent;
-        Assert.True(dir != null, "could not locate the repo root from " + AppContext.BaseDirectory);
-        return dir!.FullName;
     }
 }

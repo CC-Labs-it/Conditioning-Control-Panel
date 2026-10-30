@@ -94,9 +94,10 @@ public class GlassroadHostTests
     public void TheRaceDoor_OpensGlassroad_PrimeLocked_The2dRaceIsRetired()
     {
         var catalogue = Read("Services", "Launcher", "LauncherCatalogue.cs");
-        int race = catalogue.IndexOf("G(\"race\"", StringComparison.Ordinal);
+        // The stack keeps main's G(...) entries as a host dictionary: ["race"] = (revealed, locked, launch, active, ...).
+        int race = catalogue.IndexOf("[\"race\"] = (", StringComparison.Ordinal);
         Assert.True(race >= 0);
-        var entry = catalogue.Substring(race, catalogue.IndexOf(");", race, StringComparison.Ordinal) - race);
+        var entry = catalogue.Substring(race, catalogue.IndexOf("null),", race, StringComparison.Ordinal) - race);
         Assert.Contains("GlassroadHostService.Launch()", entry);
         Assert.Contains("GlassroadHostService.IsActive", entry);
         Assert.Contains("!Glassroad.GlassroadHostService.PrimeAllowed", entry);   // padlock below Prime

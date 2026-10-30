@@ -17,14 +17,7 @@ public class SparklesSlipTests
 {
     private static readonly string[] Languages = { "en", "de", "es", "fr", "it", "ja", "ko", "pt-BR", "ru", "zh-CN" };
 
-    private static string LangPath(string lang)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Localization")))
-            dir = dir.Parent;
-        Assert.NotNull(dir);
-        return Path.Combine(dir!.FullName, "ConditioningControlPanel", "Localization", "Languages", lang + ".json");
-    }
+    private static string LangPath(string lang) => Path.Combine(SourceRoots.LanguagesDirectory, lang + ".json");
 
     private static Dictionary<string, string> Strings(string lang) =>
         JObject.Parse(File.ReadAllText(LangPath(lang), Encoding.UTF8)).Properties()
