@@ -543,8 +543,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var visual = EnsureVisual();
                 _fogHost.IsVisible = true;
 
-                // Reduced motion is the WHOLE-reveal decision, taken once.
-                _firstLightReduced = CoreSettings.Current.MotionLevel != MotionLevel.Full;
+                // WPF SpiralTabView.xaml.cs:785 snapshots MotionFx.Level, including its OS and Gentle Visuals caps.
+                _firstLightReduced = Platform.UiMotionPreference.ResolveLevel(
+                    CoreSettings.Current.MotionLevel, Platform.UiMotionPreference.AnimationsEnabled,
+                    CoreSettings.Current.GentleVisuals) != MotionLevel.Full;
                 visual.Begin(_firstLightReduced);
 
                 _firstLight = true;
