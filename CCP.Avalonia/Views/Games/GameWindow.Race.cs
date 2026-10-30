@@ -3,14 +3,14 @@
 // manifest), run-started / run-ended with the one-payout latch (:336, :431), the ping-then-close heartbeat
 // watchdog (:595) and the teardown funnel (:686). Shell frames the race shares (boot-error, exit's 1200 ms
 // watchdog, exit-done) stay in GameWindow.HandleMessage, and panic closes it with every other game.
-// ponytail: WPF MainWindow.TryRacePauseOnEscape (:1505) keeps a lone Escape as the race's pause; here the
-// first Escape still panics the race closed (only Piece by Piece is ported, MainShellWindow.PanicKey.cs).
-// ponytail: still missing on this head, each its own unit (parity row game-race): BambiCloud levels
-// (cloud-open/cloud-start, settings.cloud stays false so the page hides the verb), the track player and
-// its decoder seed (own tracks + charting are GameWindow.RaceTracks.cs), sfx / fire-payload (no ChaosSfx bank or payload bridge here), favorites +
-// loom-list, report-bug, fullscreen-set, the mandatory-video pause, the grants watcher (PrizeOwnership has
-// no change event: nothing grants mid-run here), the meta frame, bubble credit and SeasonRecap TrackFeature.
+// Kept Escape already uses GameWindow.Escape.cs and MainShellWindow.PanicKey.cs.
+// WPF CaucusHostService.cs:383,435 stop audio on exit/run end; :558-592 pause for video;
+// :1108-1115 refresh ownership; :235-248 requests exit with a 1200 ms watchdog.
+// Remaining parity work is listed in docs/cloud/r72-fin4-game-race.md.
 using System;
+using System.Linq;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Friends;
@@ -50,6 +50,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_raceStarted) return;
             _raceStarted = true;
+            _raceOwnedTracks = RacingAccess.OwnedTracks;
+            PrizeOwnership.Changed += OnRaceOwnershipChanged;
+            _raceVideo = CoreEngine.Video;
+            if (_raceVideo != null)
+            {
+                _raceVideo.VideoStarted += OnRaceVideoStarted;
+                _raceVideo.VideoEnded += OnRaceVideoEnded;
+            }
             _raceRun.Reset();
             _raceExiting = _racePinged = false;
             _raceLastHeartbeatUtc = RaceUtcNow();
@@ -84,6 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     OnRaceRunEnded(o);
                     return true;
                 case "exit":
+                    RaceStopTrack();   // WPF CaucusHostService.cs:383
                     _raceExiting = true;   // the shell arms the 1200 ms close (WPF ArmExitWatchdog)
                     return false;
                 default:
@@ -143,6 +152,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private void OnRaceRunEnded(JObject o)
         {
             if (!_raceRun.TryEnd()) return;
+            RaceStopTrack();   // WPF CaucusHostService.cs:435
             try
             {
                 double score = Math.Max(0, (double?)o["score"] ?? 0);
@@ -184,11 +194,52 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             return "closed";
         }
 
+        // WPF CaucusHostService.cs:558-592; VideoService.cs:7950 announces clip cleanup.
+        private MandatoryVideoScheduler? _raceVideo;
+        private void OnRaceVideoStarted() => PostRacePause(true);
+        private void OnRaceVideoEnded() => PostRacePause(false);
+        private void PostRacePause(bool on) => Dispatcher.UIThread.Post(() =>
+        {
+            if (_closing || _raceDisposed) return;
+            Post(new { type = "pause", on });
+            if (!on) Web.Focus();
+        });
+
+        private int[] _raceOwnedTracks = Array.Empty<int>();
+        // WPF CaucusHostService.cs:1108 OnRaceGrantsChanged: additions refresh the menu; loss closes gracefully.
+        private void OnRaceOwnershipChanged() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_closing || _raceDisposed) return;
+            var owned = RacingAccess.OwnedTracks;
+            if (!RacingAccess.CanLaunch || _raceOwnedTracks.Except(owned).Any())
+            {
+                if (IsReady && !_raceExiting)   // WPF CloseActive (:239): a ready page gets exit-request + watchdog
+                {
+                    _raceExiting = true;
+                    Post(new { type = "exit-request" });
+                    DispatcherTimer.RunOnce(() => { if (!_closing) Close(); }, TimeSpan.FromMilliseconds(1200));
+                }
+                else Close();   // not ready (or already exiting): WPF DisposeAll at once
+                return;
+            }
+            if (_raceOwnedTracks.SequenceEqual(owned)) return;
+            _raceOwnedTracks = owned;
+            Post(new { type = "race-ownership", tracks = owned });
+        });
+
         /// <summary>WPF DisposeAll (:686): the one funnel every exit reaches (Closed). Idempotent.</summary>
         private void DisposeRace()
         {
             if (!_raceStarted || _raceDisposed) return;
             _raceDisposed = true;
+            PrizeOwnership.Changed -= OnRaceOwnershipChanged;
+            if (_raceVideo != null)
+            {
+                _raceVideo.VideoStarted -= OnRaceVideoStarted;
+                _raceVideo.VideoEnded -= OnRaceVideoEnded;
+                _raceVideo = null;
+            }
+
             try { _raceHeartbeatWatch?.Stop(); } catch { }
             _raceHeartbeatWatch = null;
             try { DisposeRaceTracks(); }

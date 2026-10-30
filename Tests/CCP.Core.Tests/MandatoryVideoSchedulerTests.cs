@@ -37,6 +37,28 @@ public sealed class MandatoryVideoSchedulerTests
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
 
     [Fact]
+    public void Clip_lifecycle_notifies_once_and_subscriber_failure_cannot_prevent_cleanup() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var video = new MandatoryVideoScheduler(host, clock, () => Clips);
+        int starts = 0, ends = 0;
+        video.VideoStarted += () => starts++;
+        video.VideoEnded += () => { ends++; throw new InvalidOperationException("test subscriber"); };
+        video.Trigger();
+        clock.Advance(TimeSpan.FromSeconds(1.3));
+        Assert.Equal(1, starts);
+        video.End();
+        video.End();
+        Assert.Equal(1, ends);
+        Assert.Equal(1, host.Closes);
+        Assert.False(video.IsPlaying);
+        video.Trigger();
+        video.Stop();
+        Assert.Equal(2, ends);
+        Assert.Equal(1, starts); // stopped during pre-roll
+    });
+
+    [Fact]
     public void Rate_follows_videos_per_hour_with_the_pre_roll_and_End_rearms() => With(6, false, () =>
     {
         var clock = new FakeClock(); var host = new Host();
