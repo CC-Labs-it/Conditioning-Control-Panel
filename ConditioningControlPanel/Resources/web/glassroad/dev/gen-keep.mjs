@@ -40,6 +40,21 @@ export function buildKeep() {
     for (const x of [-6, -2, 2, 6]) items.push({ node: node(id, u), x, kind: 'box' });
   for (const [id, x] of [['east-ascent', 3], ['tower-spiral', -3], ['north-tower', 3], ['west-tower', 3]])
     for (let k = 0; k < 5; k++) items.push({ node: node(id, .35), x, kind: 'bubble', ds: k * 3 });
+  // Jump ramps (tests/ramps-keep.test.mjs proves every landing at 40-66.7 m/s on the shaped runtime road).
+  // Lips sit on exact piece-relative nodes; the wedge rises over lenM before the lip.
+  const lip = (id, k) => starts[KEEP_PIECES.findIndex((p) => p.id === id)] + k;
+  const ramps = [
+    // no stair-cut ramp: a wedge in the keep-stair-cut-0 mouth launched ordinary entries past the landing
+    // (shortcut-guidance), and no single aim landed the cut at every speed on the 143 m helix
+    { id: 'keep-ramp-rampart', node: lip('north-approach', 29), x: 0, widthM: 6, lenM: 7, heightM: 1.2, upMps: 13, purpose: 'item',
+      note: 'crown rampart straight at 116 m, a vista launch through three floating boxes' },
+    { id: 'keep-ramp-courtyard', node: lip('courtyard-exit', 2), x: -10, widthM: 6, lenM: 7, heightM: 1.2, upMps: 14, purpose: 'cut',
+      note: 'inside line of the gallows courtyard exit corner, flies the apex' },
+    { id: 'keep-ramp-moat', node: lip('bridge-approach', 3), x: 0, widthM: 8, lenM: 8, heightM: 1.4, upMps: 14, purpose: 'air',
+      note: 'moat bridge approach: a warm-up hop that lands well before the drawbridge kick' },
+  ];
+  // Floating boxes on the rampart arc (ds after the lip, liftM = arc height near 55 m/s).
+  for (const [ds, liftM] of [[10, 3.2], [20, 4], [30, 4]]) items.push({ node: ramps.find((r) => r.id === 'keep-ramp-rampart').node, x: 0, kind: 'box', ds, liftM });
   for (const id of ['outer-exit', 'cell-gallery', 'west-approach', 'home']) {
     const n = node(id, .5); nodes[n].flags.push('boost'); boosts.push({ node: n, x: 0, w: 6, len: 7.5 });
   }
@@ -64,7 +79,7 @@ export function buildKeep() {
       section('moat-escape', node('west-tower'), nodes.length, 'release', .6)],
     checkpoints: [0, node('cell-gallery'), node('tower-spiral', .45), node('tower-bridge'), node('north-tower'), node('gallows-courtyard'), node('west-approach'), node('bridge-approach'), node('stones-approach'), node('south-tower')],
     spawn: { node: 0, grid: [[-4, -5], [4, -9], [-4, -13], [4, -17], [-4, -21], [4, -25], [-4, -29], [4, -33]] },
-    items, boosts, jumps: [{ node: node('drawbridge-gap'), airLen: 20, height: 16 }], routes, courts: [], fields, hazards: [], media: [],
+    items, boosts, jumps: [{ node: node('drawbridge-gap'), airLen: 20, height: 16 }], ramps, routes, courts: [], fields, hazards: [], media: [],
     ai: { lines: [], pace: [1, 1.05, 1.1] }, beat: { bpm: null, offsetMs: 0, map: [] },
     limits: { fallY: -30, edgeGraceM: 1.2, edgeGraceS: .8 },
   };
