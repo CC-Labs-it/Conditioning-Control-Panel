@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Chaos
 {
@@ -171,13 +172,14 @@ namespace ConditioningControlPanel.Services.Chaos
             };
             _fallers.Add(f);
             try { Spawned?.Invoke(f); }
-            catch
+            catch (Exception ex)
             {
+                Log.Debug("GifCascade spawn: {E}", ex.Message);
                 // A failed surface never reaches normal teardown. Drop its slot and surface now.
                 _fallers.Remove(f);
                 f.Animated = false;
-                Gone?.Invoke(f);
-                throw;
+                try { Gone?.Invoke(f); }
+                catch (Exception cleanup) { Log.Debug("GifCascade cleanup: {E}", cleanup.Message); }
             }
         }
     }
