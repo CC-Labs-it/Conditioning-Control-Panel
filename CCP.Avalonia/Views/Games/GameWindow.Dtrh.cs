@@ -153,6 +153,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             modContent = (object?)null,   // WPF DtrhModContent.BuildInitPayload: null = shipped assets
             runSetup = DtrhRunWire.RunSetup(CoreSettings.Current),
             m2Test = false,
+            plans = ConditioningControlPanel.Services.Vault.PlanCatalog.ToWire(ConditioningControlPanel.Services.Vault.PlanCatalog.Current),
         };
 
         /// <summary>WPF OnRequestRun (:523): persist the hub's choices, deal the run, answer run-config.</summary>
@@ -193,10 +194,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 ChaosRank? rankUp = null;
                 var nowRank = ChaosRanks.For(ChaosMeta.State.RunsCompleted);
                 if ((int)nowRank > ChaosMeta.State.LastRankSeen) rankUp = nowRank;
+                bool dailyGift = !CoreEntitlement.HasLab && CoreEntitlement.IsFreeToday("dtrh");
                 Post(new
                 {
                     type = "payout-result", baseXp = booking.BaseXp, skillMult, finalXp, sparksEarned, previousBest,
                     rankUp = rankUp?.ToString(), dryRun = false,
+                    plan = dailyGift ? "prime" : null, daily_gift = dailyGift,
                 });
                 Log.Information("DtrhHost: web run complete: base {Base:0} x skill {Mult:0.0} = {Final:0} XP, {Sparks} sparks{T}",
                     booking.BaseXp, skillMult, finalXp, sparksEarned, fromTeardown ? " (banked on close)" : "");
