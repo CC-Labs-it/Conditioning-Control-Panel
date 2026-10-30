@@ -1,4 +1,12 @@
 using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Styling;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.JustDrop;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -14,7 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// page message goes to Core <see cref="JustDropService"/>; a panic closes it with every other game
     /// window (PanicSurfaces "games", WPF GameSurfaces.cs:57).
     /// <para>Takeaway replay uses the bare player, fullscreen and panel duck/restore. Remaining:
-    /// HostOwnedFullscreen's persistent strip and Chromium no-throttle flags (WebKitGTK has no equivalent).</para>
+    /// Chromium no-throttle flags (WebKitGTK has no equivalent).</para>
     /// </summary>
     internal sealed partial class GameWindow
     {
@@ -44,8 +52,63 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web.AllowNavigation = JustDropHandoff.IsSite;
             Web.RequestHeader = uri => JustDropHeaderFor(uri, JustDropHandoff.AuthToken());
             Web.InjectCarrier = true;   // the remote page speaks chrome.webview; WebKitGTK needs the shim
+            // WPF ChaosWebViewHost.cs:1227-1231,1562-1578: Escape while the page owns focus.
+            Web.NavigationCompleted += uri =>
+            {
+                if (JustDropHandoff.IsSite(uri)) _ = Web.InvokeScriptAsync(
+                    "(function(){if(window.__ccpHostEscape)return;window.__ccpHostEscape=true;" +
+                    "window.addEventListener('keydown',function(e){if(e.key!=='Escape'&&e.keyCode!==27)return;" +
+                    "try{window.chrome.webview.postMessage({type:'ccp-host-escape'});}catch(_){}},true);})();");
+            };
+            BuildJustDropChrome();
             Web.Navigate(PageUrl);
             Log.Information("[Game] justdrop: launched (shop)");   // never the url: it names the account
+        }
+
+        // WPF Chaos/ChaosWebViewHost.cs:620-678: a permanent title and host-owned toggle,
+        // outside the remote page. No shop or order UI is recreated here.
+        private void BuildJustDropChrome()
+        {
+            Content = null; // detach the native web host before placing it under the strip
+            var toggle = new Button
+            {
+                Name = "JustDropFullscreen", MinWidth = 120,
+                Theme = this.TryFindResource("SmallPinkButton", out var theme) ? theme as ControlTheme : null,
+                Margin = new Thickness(8, 5, 10, 5), VerticalAlignment = VerticalAlignment.Center
+            };
+            void Stamp() => toggle.Content = Loc.Get(WindowState == WindowState.FullScreen
+                ? "btn_exit_fullscreen" : "btn_fullscreen");
+            Stamp();
+            ToolTip.SetTip(toggle, Loc.Get("tooltip_fill_the_screen_esc_brings_the_window_back"));
+            toggle.Click += (_, _) => WindowState = WindowState == WindowState.FullScreen
+                ? WindowState.Normal : WindowState.FullScreen;
+            PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty) Stamp(); };
+            var bar = new DockPanel { LastChildFill = true };
+            DockPanel.SetDock(toggle, Dock.Right);
+            bar.Children.Add(toggle);
+            bar.Children.Add(new TextBlock
+            {
+                Text = "Just Drop", Margin = new Thickness(12, 0, 8, 0),
+                VerticalAlignment = VerticalAlignment.Center, FontSize = 12,
+                FontWeight = FontWeight.SemiBold, Foreground = this.TryFindResource("PinkBrush", out var pink) ? pink as IBrush : Brushes.HotPink
+            });
+            var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
+            grid.Children.Add(new Border
+            {
+                Background = this.TryFindResource("PanelBgBrush", out var bg) ? bg as IBrush : Brushes.Black,
+                BorderBrush = this.TryFindResource("TransparentPink40Brush", out var border) ? border as IBrush : Brushes.HotPink,
+                BorderThickness = new Thickness(0, 0, 0, 1), Child = bar
+            });
+            Grid.SetRow(Web, 1);
+            grid.Children.Add(Web);
+            Content = grid;
+            // WPF :685-693: Escape from host chrome exits fullscreen before a child consumes it.
+            AddHandler(KeyDownEvent, (_, e) =>
+            {
+                if (e.Key != Key.Escape || WindowState != WindowState.FullScreen) return;
+                WindowState = WindowState.Normal;
+                e.Handled = true;
+            }, RoutingStrategies.Tunnel);
         }
 
         internal static GameWindow? LaunchJustDropReplay(string code, Windows.MainShellWindow shell)
@@ -61,8 +124,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var state = shell.WindowState;
             bool duck = shell.IsVisible && state != global::Avalonia.Controls.WindowState.Minimized;
             window.WindowState = global::Avalonia.Controls.WindowState.FullScreen;
-            // ponytail: WPF's persistent host-owned fullscreen strip still needs its own lane.
-            window.KeyDown += (_, e) => { if (e.Key == global::Avalonia.Input.Key.Escape) window.WindowState = global::Avalonia.Controls.WindowState.Normal; };
             window.Closed += (_, _) =>
             {
                 if (duck && shell.IsVisible && shell.WindowState == global::Avalonia.Controls.WindowState.Minimized)
@@ -76,6 +137,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF OnPageMessage (:227): the raw envelope to Core, so the source/version checks stay in one place.</summary>
         private void HandleJustDrop(JObject o)
         {
+            if ((string?)o["type"] == "ccp-host-escape")
+            {
+                if (WindowState == WindowState.FullScreen) WindowState = WindowState.Normal;
+                return;
+            }
             try { JustDropService.HandleWebMessage(o.ToString(Formatting.None)); }
             catch (Exception ex) { Log.Warning(ex, "[Game] justdrop: message handling failed"); }
         }
