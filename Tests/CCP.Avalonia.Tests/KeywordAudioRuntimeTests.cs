@@ -45,6 +45,8 @@ public sealed class KeywordAudioRuntimeTests
             CoreEntitlement.IsFreeTodayProvider = _ => false;
             CoreAudio.PlayStoppableProvider = (path, volume, _, _, _) => { played.Add((path, volume)); return () => played.Add(("stopped", 0)); };
             engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 0);
+            // A panic another test ran leaves its quiet armed, and the quiet holds every keyword (b9368d963).
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             engine.Start();
             await body(engine, s, played);
         }
@@ -176,5 +178,21 @@ public sealed class KeywordAudioRuntimeTests
         Assert.False(KeywordTriggerHead.Engine.IsActive);
         _ = new MainShellWindow();   // WPF MainWindow.xaml.cs:341 starts the service at boot
         Assert.True(KeywordTriggerHead.Engine.IsActive);
+    });
+
+    /// <summary>WPF b9368d963 KeywordTriggerService.DispatchMergedAsync: a keyword never plays inside a panic's quiet.</summary>
+    [Fact]
+    public void PanicQuietHoldsAMatchedKeyword() => Run((engine, s, played) =>
+    {
+        s.KeywordGlobalCooldownSeconds = 30;
+        try
+        {
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            Type(engine, "sit"); Assert.Empty(played);
+        }
+        finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
+        Type(engine, "sit"); Assert.Empty(played);   // WPF records the held match's cooldown (KeywordTriggerService :1194-1200)
+        engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 31);   // past the 30 s global cooldown
+        Type(engine, "sit"); Assert.Single(played);
     });
 }

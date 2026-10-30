@@ -162,6 +162,12 @@ internal sealed class KeywordAudioRuntime
             t.LastTriggeredAt = now;
             _cooldowns.Record(t, s, now.ToUniversalTime());
         }
+        // WPF KeywordTriggerService DispatchMergedAsync (b9368d963): matched and cooled down, but held during a panic's quiet.
+        if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced())
+        {
+            Log.Information("KeywordTriggers: held - a panic is still quiet");
+            return;
+        }
         // WPF merge: preset first, and only the first enabled PlayAudio action wins.
         var audio = fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled);
         if (audio == null && fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0))
