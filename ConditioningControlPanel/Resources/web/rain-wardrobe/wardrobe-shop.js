@@ -163,7 +163,7 @@ export function createShop({ items, isLocked = () => false, post = () => {}, nam
     return message;
   }
 
-  /** One host frame. Returns what changed: 'init' | 'owned' | 'applied' | null. */
+  /** One host frame. Returns what changed: 'init' | 'owned' | 'applied' | 'apply-failed' | null. */
   function handle(data) {
     if (!data || typeof data !== 'object') return null;
     if (data.type === 'init') {
@@ -182,8 +182,11 @@ export function createShop({ items, isLocked = () => false, post = () => {}, nam
       return 'owned';
     }
     if (data.type === 'rain-applied') {
-      if (s.pending) s.applied = s.pending;
+      // failed:true = cancelled, bake error or a host clamp (data.look): the applied look stays.
+      const failed = data.failed === true;
+      if (s.pending && !failed) s.applied = s.pending;
       s.pending = null; s.applying = false;
+      if (failed) return 'apply-failed';
       s.lookHash = typeof data.lookHash === 'string' ? data.lookHash : '';
       return 'applied';
     }

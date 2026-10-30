@@ -93,6 +93,14 @@ test('applyMode: draft frames, rain-apply, rain-applied commits, discard reverts
   assert.deepEqual([shop.lookHash, shop.applied.items.dress, shop.status().dirty], ['abc', 'rose-flare', false]);
 });
 
+test('a failed apply (cancel, bake error, host clamp) frees the button and keeps the applied look', () => {
+  const { shop } = shopWith({ applyMode: true, grants: ['cos.rain.dress.rose-flare'] });
+  shop.setDraft(look({ dress: 'rose-flare' }));
+  assert.equal(shop.apply(), true);
+  assert.equal(shop.handle({ type: 'rain-applied', failed: true, reason: 'cancelled' }), 'apply-failed');
+  assert.deepEqual([shop.applied.items.dress, shop.status().applying, shop.status().canApply], ['satin-original', false, true]);
+});
+
 test('without applyMode the page keeps the old autosave and posts no draft frames', () => {
   const { shop, posted } = shopWith({});
   assert.equal(shop.applyMode, false);
