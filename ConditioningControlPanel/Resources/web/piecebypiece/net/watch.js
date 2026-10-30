@@ -40,6 +40,7 @@ import { formatClock } from '../game/clock.js';
 import { parseUci, TICK_MS } from './match.js';
 import { createTape, WATCH_DELAY_MS } from './tape.js';
 import * as defaultApi from './api.js';
+import { seatCosmetics } from '../skins/profile.js';
 
 export { WATCH_DELAY_MS };
 
@@ -94,6 +95,7 @@ export function createWatchSession({
   let watchers = 0;
   let players = { w: null, b: null };
   let lastLooks = '';            // the last looks frame sent, so a steady head stays quiet
+  let lastFaces = '';            // the same for the seats' profile cosmetics
   let seat = 'w';               // which side the camera watches from
   let sided = false;            // the camera is set once; after that the swap is the watcher's own
   let adopted = false;          // watch-info waits for the tape's first head, so behindMs is right from the first one
@@ -169,6 +171,12 @@ export function createWatchSession({
     if (data && data.looks && typeof data.looks === 'object') {
       const l = { white: data.looks.white || null, black: data.looks.black || null };
       if (JSON.stringify(l) !== lastLooks) { lastLooks = JSON.stringify(l); bus.emit('looks', l); }
+    }
+    // And their profile frames and avatars, for the name tags (contract 4).
+    const faces = seatCosmetics(data);
+    if (faces && JSON.stringify(faces) !== lastFaces) {
+      lastFaces = JSON.stringify(faces);
+      bus.emit('cosmetics', faces);
     }
     const p = (data && data.players && typeof data.players === 'object') ? data.players : {};
     const next = { w: playerOf(p.w), b: playerOf(p.b) };

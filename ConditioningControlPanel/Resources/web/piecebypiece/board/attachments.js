@@ -22,7 +22,7 @@
  * ==========================================================================*/
 
 import * as THREE from 'three';
-import { lookIds } from '../skins/look.js';
+import { lookIds, slotOf } from '../skins/look.js';
 
 export const PIECE_WORD = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
 const TYPES = Object.keys(PIECE_WORD);
@@ -88,13 +88,26 @@ export function createAttachments({ base = './assets/skins/' } = {}) {
     const p = readRegistry().then((map) => {
       const file = map.get(key);
       return file ? bake(base + file + '?v=' + VERSION) : [];
-    }).catch(() => []).then((parts) => {
+    }).then((parts) => turnBadge(id, parts)).catch(() => []).then((parts) => {
       loaded.set(key, parts);
       pending.delete(key);
       return parts;
     });
     pending.set(key, p);
     return p;
+  }
+
+  /** An insignia is authored on the man's front (-Z); it belongs on his back, the side his owner's camera
+   *  sees (skins/mount.js). Half a turn about the up axis; pieces.js seats it against the body. */
+  function turnBadge(id, parts) {
+    const slot = slotOf(id);
+    for (const p of parts) {
+      p.slot = slot;
+      if (slot !== 'insignia') continue;
+      p.geometry.rotateY(Math.PI);
+      p.geometry.computeBoundingBox();
+    }
+    return parts;
   }
 
   /** Load everything a look needs, every piece type. Resolves true when anything new landed. */
