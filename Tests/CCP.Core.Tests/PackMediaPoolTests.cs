@@ -27,6 +27,48 @@ public sealed class PackMediaPoolTests : IDisposable
 
     private static string Plain(string path) => System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(path));
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RefusedDeleteKeepsIdentityAndPoolEntryUntilRetry(bool overCap)
+    {
+        ContentPackStoreTests.WritePack(_root, "p1", "One", ("a.png", "image"));
+        var store = NewStore();
+        var pool = new PackMediaPool(ContentPackStore.ImageType, store: () => store);
+        var path = pool.TryDraw(0)!;
+        // A directory at the minted path forces a portable delete refusal, even as root.
+        File.Delete(path);
+        Directory.CreateDirectory(path);
+        if (overCap)
+            for (int i = 0; i <= PackMediaPool.TempCap; i++) pool.TryDraw(0);
+        else pool.CleanupTemps();
+        Assert.True(store.TryGetSourceKey(path, out _));
+        Assert.True(pool.TempCount > 0);
+        Directory.Delete(path);
+        File.WriteAllText(path, "released");
+        pool.CleanupTemps();
+        Assert.False(File.Exists(path));
+        Assert.False(store.TryGetSourceKey(path, out _));
+        Assert.Equal(0, pool.TempCount);
+    }
+
+    [Fact]
+    public void StoreShutdownRetriesARefusedDelete()
+    {
+        ContentPackStoreTests.WritePack(_root, "p1", "One", ("a.png", "image"));
+        var store = NewStore();
+        var path = new PackMediaPool(ContentPackStore.ImageType, store: () => store).TryDraw(0)!;
+        File.Delete(path);
+        Directory.CreateDirectory(path);
+        store.CleanupTempFiles();
+        Assert.True(store.TryGetSourceKey(path, out _));
+        Directory.Delete(path);
+        File.WriteAllText(path, "released");
+        store.CleanupTempFiles();
+        Assert.False(File.Exists(path));
+        Assert.False(store.TryGetSourceKey(path, out _));
+    }
+
     [Fact]
     public void Weighting_FollowsWpf()
     {

@@ -22,6 +22,28 @@ namespace CCP.Avalonia.Tests;
 public sealed class NavSearchTests
 {
     [Fact]
+    public Task EmptyBoxLeadsWithStarredPinsThenRecentsOnce() => Run(() =>
+    {
+        var s = CoreSettings.Current;
+        s.RailFavorites = new() { "tab.leash", "game.backroom", "tab.quests", "unknown" };
+        s.NavSearchRecents = SettingsPaletteIndex.PushRecent(null, "tab.friends");
+        s.NavSearchRecents = SettingsPaletteIndex.PushRecent(s.NavSearchRecents, "tab.leash");
+        var palette = new SettingsPaletteWindow();
+        // Exercise row generation without measuring text on machines without Inter.
+        typeof(SettingsPaletteWindow).GetMethod("Refresh", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(palette, null);
+        var rows = palette.FindControl<ListBox>("ListResults")!.Items.Cast<PaletteRow>().ToList();
+        Assert.Equal(new[] { "tab.leash", "game.backroom", "tab.quests", "tab.friends" },
+            rows.Take(4).Select(r => r.Entry.Id).ToArray());
+        Assert.All(rows.Take(3), r => Assert.Equal("  ★", r.WasHint));
+        Assert.Equal("", rows[3].WasHint);
+        Assert.Equal(rows.Count, rows.Select(r => r.Entry.Id).Distinct().Count());
+        Assert.All(SettingsPaletteIndex.Search(""), e => Assert.Contains(rows, r => r.Entry.Id == e.Id));
+        Assert.DoesNotContain(rows, r => r.Entry.Id == "unknown");
+        palette.Close();
+    });
+
+    [Fact]
     public Task NoHitsShowsWhatWasTypedTheNearestGuessAndEveryPage() => Run(() =>
     {
         var palette = new SettingsPaletteWindow();
