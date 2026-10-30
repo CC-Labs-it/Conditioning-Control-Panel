@@ -16,7 +16,7 @@
  * sim/ai.js (kind 'local'); losing them makes them remote again. Pure apart from the injected WebSocket and timers.
  */
 import { S, RESPAWN } from '../sim/state.js';
-import { NET_V, COUNT_MS, RATES, PLATFORMS, normLook, roomLook } from './protocol.js';
+import { NET_V, COUNT_MS, RATES, PLATFORMS, normLook, roomLook, fromHex, unpackKart, seqNewer, KART_BYTES } from './protocol.js';
 import { openSocket, FINAL_CLOSE } from './socket.js';
 import { createServerClock } from './clock.js';
 import { createInterp } from './interp.js';
@@ -51,7 +51,15 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
       WS,
       onOpen() { clock.restartPings(); send({ t: 'hello', v: NET_V, ticket: j.ticket, clientMs: now(), ...(courseHash ? { courseHash } : {}) }); pingNow(); },
       onMsg,
-      onBatch(f) { for (const k of f.karts) if (k.seat !== st.seat && !st.keep.includes(k.seat)) interp.push(k, clock.tickMs(k.tick)); },
+      onBatch(f) {
+        for (const k of f.karts) {
+          if (k.seat === st.seat || st.keep.includes(k.seat)) continue;
+          interp.push(k, clock.tickMs(k.tick));
+          // the room relays records only for seats it holds as present: a kart marked left that sends again is back
+          const r = racerOf(k.seat);
+          if (r && r.meta.left) seatBack(r);
+        }
+      },
       onClose,
     });
   }
@@ -84,12 +92,14 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
         Object.assign(st, { roomId: m.roomId, seat: m.seat, cfg: m.cfg, seed: m.seed, seats: m.seats, phase: m.phase });
         if (m.countAt !== undefined) Object.assign(st, { countAt: m.countAt, startAt: m.startAt, goTick: m.goTick });
         clock.setRoom(m.t0, m.serverMs);
+        resumeSeq(m.resume);
         downAt = 0;
         applyKeep(m.keep);
+        syncRacers();
         if (connectWait) { connectWait.res(m); connectWait = null; }
         break;
       case 'pong': clock.pong(m.c, m.s); break;
-      case 'seats': st.seats = m.seats; break;
+      case 'seats': st.seats = m.seats; syncRacers(); break;
       case 'seat': seatChange(m); break;
       case 'start': Object.assign(st, { countAt: m.countAt, startAt: m.startAt, goTick: m.goTick, seed: m.seed, phase: 'countdown' }); break;
       case 'keep': applyKeep(m.seats); break;
@@ -110,9 +120,36 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
     if (row) for (const k of ['ready', 'idle', 'left', 'look', 'paused']) if (m[k] !== undefined) row[k] = m[k];
     if (m.idle !== undefined) interp.hold(m.seat, m.idle);
     const r = racerOf(m.seat);
-    if (r && m.left !== undefined) r.meta.left = m.left;
+    if (r && m.left !== undefined) { if (m.left) seatGone(r); else seatBack(r); }
     if (r && m.paused !== undefined) r.meta.paused = m.paused;
   }
+
+  /* A seat's racer follows the room's seat list. The room clears `left` on a reconnect (and blanks a seat past the
+   * grace) with a whole `seats` list, not a `seat` message: without this a kart hidden by a drop stayed hidden for
+   * the rest of the race on every other client (owner's first phone race, 2026-10-30). */
+  function syncRacers() {
+    if (!racers) return;
+    for (const r of racers.list) {
+      if (r.i === 0) continue;
+      const row = st.seats.find((x) => x.seat === r.meta.seat);
+      const gone = !row || row.kind === 'empty' || !!row.left;
+      if (gone && !r.meta.left) seatGone(r);
+      else if (!gone && r.meta.left) seatBack(r);
+      if (row && !gone) { interp.hold(r.meta.seat, !!row.idle); r.meta.paused = !!row.paused; }
+    }
+  }
+  /* A rejoin mid-race in a fresh session (the page or the phone app rebuilt it) starts the uplink seq at 0, and the
+   * room drops every record whose seq is not newer than the seat's last one: the kart froze on every other screen
+   * for as long as it had raced. welcome.resume is the room's last record of this seat: continue past its seq. */
+  function resumeSeq(hex) {
+    if (!hex || st.seat < 0) return;
+    const u8 = fromHex(hex);
+    if (u8.length < KART_BYTES) return;
+    const k = unpackKart(new DataView(u8.buffer, u8.byteOffset, u8.byteLength), 0);
+    if (!seqNewer(uplink.seqOf(st.seat), k.seq)) uplink.seqFrom(st.seat, k.seq);
+  }
+  function seatGone(r) { r.meta.left = true; }
+  function seatBack(r) { r.meta.left = false; }
 
   /** The bot keeper hand-off (NET.md section 6). */
   function applyKeep(seats) {
@@ -175,6 +212,7 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
     racers.remote = createRemoteDriver(interp, () => clock.serverNow(), q).drive;
     items = createNetItems(track, feel, q, { send, tick: raceTick });
     const keep = st.keep; st.keep = []; applyKeep(keep);
+    syncRacers();
     return items;
   }
 
