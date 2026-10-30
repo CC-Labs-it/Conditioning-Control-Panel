@@ -48,7 +48,7 @@ internal static class RainWardrobeHostService
     /// <summary>The counter's cached prices (grant or slot:id -> Sparkles); null or empty = no prices.</summary>
     internal static Func<IReadOnlyDictionary<string, int>?>? CounterPrices { get; set; }
 
-    public static bool IsActive => _host != null;
+    public static bool IsActive => _host != null || RainAssetInstallWindow.IsOpen;
 
     /// <summary>This run's big-asset folder.</summary>
     internal static string AssetsDir
@@ -73,11 +73,13 @@ internal static class RainWardrobeHostService
         if (_host != null) { _host.FocusWeb(); return; }
         var dir = AssetsDir;
         var missing = RainWardrobeAssets.Missing(dir);
-        if (missing.Count > 0)
+        var installer = RainAssetInstaller.ForApp();
+        if (!installer.IsInstalled())
         {
-            App.Logger?.Information("RainWardrobe: not installed: {Missing} missing from {Dir} (or set {Env})",
+            // Lane R12: the native install card, never a broken page; success reopens this door.
+            App.Logger?.Information("RainWardrobe: not installed: [{Missing}] missing or an older pack in {Dir} (or set {Env})",
                 string.Join(", ", missing), dir, RainWardrobeAssets.EnvVar);
-            App.Notifications?.Show(Loc.Get("rain_wardrobe_missing"), NotificationType.Info, TimeSpan.FromSeconds(8));
+            RainAssetInstallWindow.ShowFor(installer, () => RunOnUi(Open));
             return;
         }
         try
@@ -138,6 +140,8 @@ internal static class RainWardrobeHostService
         _disposing = true;
         try
         {
+            // The install card closes with the window it stands for, and closing it cancels the download.
+            RainAssetInstallWindow.CloseActive();
             try { if (App.Ownership != null) App.Ownership.OwnershipChanged -= OnOwnershipChanged; } catch (Exception ex) { Diag.Swallowed(ex); }
             // Panic or close mid-bake: the temp pack goes, the applied look and pack stay.
             try { _apply?.Abort(); } catch (Exception ex) { Diag.Swallowed(ex); }
