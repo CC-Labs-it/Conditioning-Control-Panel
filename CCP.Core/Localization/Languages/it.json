@@ -4274,6 +4274,7 @@
   "login_checking_availability": "Verifica disponibilità...",
   "login_could_not_check": "Impossibile verificare: {0}",
   "title_error": "Errore",
+  "title_trigger_phrases": "Frasi di attivazione",
   "title_invalid_name": "Nome non valido",
   "title_success": "Fatto",
   "title_confirm": "Conferma",

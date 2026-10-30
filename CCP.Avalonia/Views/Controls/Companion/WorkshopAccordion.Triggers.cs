@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using Serilog;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 
@@ -20,7 +21,7 @@ public partial class WorkshopAccordion
             var before = (settings.CustomTriggers ?? new List<string>())
                 .Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(t => t, _ => true);
-            var dialog = new TextEditorDialog("Trigger Phrases", before);
+            var dialog = new TextEditorDialog(Loc.Get("title_trigger_phrases"), before);
             // ponytail: recorded-voice markers need the unported HasRecordedVoice audio lookup.
             TriggerEditors.Add(dialog);
             try
@@ -44,7 +45,8 @@ public partial class WorkshopAccordion
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to open trigger editor");
-            await MessageDialog.ShowAsync(owner, "Error", $"Error opening trigger editor: {ex.Message}");
+            await MessageDialog.ShowAsync(owner, Loc.Get("title_error"),
+                Loc.GetF("msg_error_opening_trigger_editor_0", ex.Message));
         }
     }
 

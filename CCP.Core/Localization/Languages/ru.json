@@ -3287,6 +3287,7 @@
   "login_checking_availability": "Проверка доступности...",
   "login_could_not_check": "Не удалось проверить: {0}",
   "title_error": "Ошибка",
+  "title_trigger_phrases": "Триггерные фразы",
   "title_invalid_name": "Недопустимое имя",
   "title_success": "Успех",
   "title_confirm": "Подтверждение",

@@ -3287,6 +3287,7 @@
   "login_checking_availability": "利用可能か確認中...",
   "login_could_not_check": "確認できませんでした：{0}",
   "title_error": "エラー",
+  "title_trigger_phrases": "トリガーフレーズ",
   "title_invalid_name": "無効な名前",
   "title_success": "成功",
   "title_confirm": "確認",

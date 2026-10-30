@@ -3287,6 +3287,7 @@
   "login_checking_availability": "Vérification de la disponibilité...",
   "login_could_not_check": "Impossible de vérifier : {0}",
   "title_error": "Erreur",
+  "title_trigger_phrases": "Phrases de déclenchement",
   "title_invalid_name": "Nom Invalide",
   "title_success": "Succès",
   "title_confirm": "Confirmer",

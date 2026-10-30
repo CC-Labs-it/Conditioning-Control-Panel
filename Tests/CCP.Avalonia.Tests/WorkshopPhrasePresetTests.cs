@@ -13,6 +13,7 @@ using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Xunit;
 
@@ -20,6 +21,57 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class WorkshopPhrasePresetTests
 {
+    [Fact]
+    public Task TriggerEditorUsesTheSelectedLanguage() => Run(async (drawer, parts, owner, s) =>
+    {
+        var loc = LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("de");
+            Click(parts.Triggers.FindControl<Button>("BtnEditTriggersCompanion")!);
+            Dispatcher.UIThread.RunJobs();
+            var dialog = Assert.Single(owner.OwnedWindows);
+            Assert.Equal("Trigger-Phrasen-Manager", dialog.Title);
+            Click(dialog.FindControl<Button>("BtnCancel")!);
+            await Task.Yield(); Dispatcher.UIThread.RunJobs();
+        }
+        finally { loc.SetLanguage(previous); }
+    });
+
+    [Fact]
+    public Task TriggerEditorFailureUsesLocalizedTitleAndFormattedMessage() => Run(async (drawer, parts, owner, s) =>
+    {
+        var loc = LocalizationManager.Instance;
+        var previousLanguage = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("de");
+            // Corrupt the backing field to exercise the catch path without adding a product seam.
+            s.CustomTriggers.Clear();
+            typeof(AppSettings).GetField("_userAddedCustomTriggers",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(s, null);
+            Click(parts.Triggers.FindControl<Button>("BtnEditTriggersCompanion")!);
+            Dispatcher.UIThread.RunJobs();
+            var editor = Assert.Single(owner.OwnedWindows);
+            editor.FindControl<TextBox>("TxtNewItem")!.Text = "probe";
+            Click(editor.FindControl<Button>("BtnAdd")!);
+            Click(editor.FindControl<Button>("BtnSave")!);
+            await Task.Yield(); Dispatcher.UIThread.RunJobs();
+            var dialog = Assert.Single(owner.OwnedWindows);
+            Assert.Equal("Fehler", dialog.Title);
+            Assert.Equal("Fehler beim Öffnen des Trigger-Editors: " + new NullReferenceException().Message,
+                dialog.FindControl<TextBlock>("TxtMessage")!.Text);
+            Click(dialog.FindControl<Button>("BtnOk")!);
+            await Task.Yield(); Dispatcher.UIThread.RunJobs();
+        }
+        finally
+        {
+            s.UserAddedCustomTriggers = new();
+            loc.SetLanguage(previousLanguage);
+        }
+    });
+
     [Fact]
     public Task StandaloneRosterSwitchesAndCloudRestoreRefreshesTriggerSettings() => Run((drawer, parts, owner, s) =>
     {

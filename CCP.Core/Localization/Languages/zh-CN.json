@@ -4071,6 +4071,7 @@
   "login_checking_availability": "检查可用性...",
   "login_could_not_check": "无法检查：{0}",
   "title_error": "错误",
+  "title_trigger_phrases": "触发短语",
   "title_invalid_name": "无效名称",
   "title_success": "成功",
   "title_confirm": "确认",
