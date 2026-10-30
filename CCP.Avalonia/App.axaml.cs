@@ -1086,6 +1086,7 @@ namespace ConditioningControlPanel.Avalonia
         internal static void StopDesktopOverlays(bool final = true)
         {
             CoreFlash.Stop();
+            Services.Flash.FlashCelebrationVoice.Stop();
             CoreSubliminal.Stop();
             Views.Overlays.FlashOverlay.CloseAll(final);
             Views.Overlays.SubliminalWhisperShow.StopAll();
