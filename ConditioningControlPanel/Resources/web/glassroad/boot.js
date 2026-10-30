@@ -1169,7 +1169,7 @@ async function boot(course, options, lifetime, isCurrent) {
     return { transport: fetchTransport({ base: init.caps.relayBase || '' }), identity: init.identity };
   }
   const link = lobbyLink();
-  const lobbyApi = link ? createLobbyApi(link.transport) : null;
+  const lobbyApi = link ? createLobbyApi(link.transport, { platform: init.caps.platform }) : null;
   // the account record (CONTRACT-LOGBOOK.md section 8): pull once per page, push after each saved run; silent offline
   const profileSync = link ? createProfileSync({ request: link.transport, onGrants: adoptOwned }) : null;
   if (profileSync && !profilePulled) {

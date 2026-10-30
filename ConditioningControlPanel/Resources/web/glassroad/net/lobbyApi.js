@@ -43,7 +43,11 @@ export function hostTransport(bridge, { timeoutMs = 15000, timers = globalThis }
   });
 }
 
-export function createLobbyApi(transport, { timers = globalThis } = {}) {
+export function createLobbyApi(transport, { timers = globalThis, platform = null } = {}) {
+  // A phone says so on open, join and quick: the lobby writes it into the seat ticket and the room never hands the
+  // bots to a phone while a desktop or web seat is there (a slow phone keeper froze the bots, 2026-10-30). Without
+  // it the lobby guesses 'web' or 'desktop' from the auth path. Only 'phone' is sent: it is the one that changes it.
+  const plat = (b) => (platform === 'phone' ? { ...b, platform } : b);
   async function call(method, path, body) {
     if (!path.startsWith(PREFIX)) throw new Error('net: lobby path refused');
     const { status, body: b } = await transport(method, path, body);
@@ -53,10 +57,10 @@ export function createLobbyApi(transport, { timers = globalThis } = {}) {
     throw err;
   }
   const api = {
-    open: (o) => call('POST', PREFIX + 'open', o),
+    open: (o) => call('POST', PREFIX + 'open', plat(o)),
     list: () => call('GET', PREFIX + 'open'),
-    join: ({ roomId, look }) => call('POST', PREFIX + 'join', { roomId, look }),
-    quick: ({ track, look } = {}) => call('POST', PREFIX + 'quick', track ? { track, look } : { look }),
+    join: ({ roomId, look }) => call('POST', PREFIX + 'join', plat({ roomId, look })),
+    quick: ({ track, look } = {}) => call('POST', PREFIX + 'quick', plat(track ? { track, look } : { look })),
     invite: ({ friendUid, roomId }) => call('POST', PREFIX + 'invite', { friendUid, roomId }),
     leave: ({ roomId }) => call('POST', PREFIX + 'leave', { roomId }),
     board: (track) => call('GET', PREFIX + 'board/' + encodeURIComponent(track)),
