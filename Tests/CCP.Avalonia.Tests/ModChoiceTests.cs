@@ -32,6 +32,155 @@ namespace CCP.Avalonia.Tests;
 public sealed class ModChoiceTests
 {
     [Fact]
+    public Task LanguageChangeRepaintsHomeFallbackWithoutSpendingPendingChoice() => Run(async (shell, svc, server) =>
+    {
+        var manager = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var old = manager.CurrentLanguage;
+        PendingModChoice.Record(BuiltInMods.BambiSleepId, BuiltInMods.CCPDefaultId);
+        try
+        {
+            manager.SetLanguage(old == "fr" ? "en" : "fr");
+            Dispatcher.UIThread.RunJobs();
+            var dash = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView>("SettingsTab")!;
+            Assert.Equal(manager.CurrentLanguage == "fr" ? "Texte Rebondissant" : "Bouncing Text", dash.CardBouncingText.Title);
+            Assert.Equal(BuiltInMods.BambiSleepId, PendingModChoice.Pending);
+        }
+        finally { manager.SetLanguage(old); Dispatcher.UIThread.RunJobs(); }
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task EnhancementDropImportsOnceAndRemembersSourceFolder() => Run(async (shell, svc, server) =>
+    {
+        var path = Path.Combine(TestUserDataProfile.Root, "drop-import.ccpenh.json");
+        var enhancement = new ConditioningControlPanel.Models.Deeper.Enhancement { Metadata = new() { Name = "Drop import test" }, MediaSource = "test.mp3" };
+        File.WriteAllText(path, ConditioningControlPanel.Services.Deeper.EnhancementSerializer.Save(enhancement));
+        string? imported = null;
+        try
+        {
+            await shell.ImportDroppedFilesAsync(new[] { path });
+            using var library = new ConditioningControlPanel.Services.Deeper.EnhancementLibrary();
+            imported = library.FindDuplicateOf(path);
+            Assert.NotNull(imported);
+            Assert.NotEqual(path, imported);
+            Assert.Equal(Path.GetDirectoryName(path), CoreSettings.Current.DeeperLastDirectory);
+            var before = Directory.GetFiles(library.LibraryFolder).Length;
+            await shell.ImportDroppedFilesAsync(new[] { path });
+            Assert.Equal(before, Directory.GetFiles(library.LibraryFolder).Length);
+        }
+        finally { File.Delete(path); if (imported != null) File.Delete(imported); }
+    });
+
+    [Fact]
+    public Task MediaDropOffersWpfChoicesAndPanicCancelsWithoutImporting() => Run(async (shell, svc, server) =>
+    {
+        var path = Path.Combine(TestUserDataProfile.Root, "drop-test.mp3");
+        File.WriteAllBytes(path, new byte[] { 0 });
+        try
+        {
+            var pending = shell.ImportDroppedFilesAsync(new[] { path });
+            var dialog = await Owned<Window>(shell);
+            foreach (var action in new[] { "play", "edit", "library", "cancel" })
+            {
+                var button = dialog.FindControl<Button>("MediaDrop_" + action)!;
+                Assert.IsType<TextBlock>(button.Content);
+                Assert.True(shell.TryFindResource(action == "cancel" ? "SecondaryButton" : "ActionButton", out var theme));
+                Assert.Same(theme, button.Theme);
+            }
+            Assert.True(shell.TryFindResource("PinkBrush", out var pink));
+            var card = Assert.IsType<Border>(dialog.Content);
+            Assert.Same(pink, card.BorderBrush);
+            Assert.Equal(FontWeight.Bold, Assert.IsType<StackPanel>(card.Child).Children.OfType<TextBlock>().First().FontWeight);
+            PanicSurfaces.All.Single(x => x.Id == "media-drop").Stop(shell);
+            Assert.False(dialog.IsVisible);
+            await pending;
+            Assert.Empty(shell.OwnedWindows);
+        }
+        finally { File.Delete(path); }
+    });
+
+    [Theory]
+    [InlineData("edit")]
+    [InlineData("play")]
+    public Task MediaDropOpensTheExistingHost(string action) => Run(async (shell, svc, server) =>
+    {
+        var path = Path.Combine(TestUserDataProfile.Root, "drop-edit.mp3");
+        File.WriteAllBytes(path, new byte[] { 0 });
+        try
+        {
+            var pending = shell.ImportDroppedFilesAsync(new[] { path });
+            var dialog = await Owned<Window>(shell);
+            dialog.FindControl<Button>("MediaDrop_" + action)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            // By type: the choice dialog can still be listed while its Close completes.
+            Window host = action == "edit"
+                ? await Owned<ConditioningControlPanel.Avalonia.Views.Deeper.DeeperEditorWindow>(shell)
+                : await Owned<ConditioningControlPanel.Avalonia.Views.Deeper.EnhancementPlayerWindow>(shell);
+            Assert.True(host.IsVisible);
+            shell.StopDroppedMediaForPanic();
+            if (action == "play") Assert.False(host.IsVisible);
+            host.Close();
+            await pending;
+        }
+        finally { File.Delete(path); }
+    });
+
+    [Fact]
+    public Task ExternalActivationRepaintsPaletteHomeAndTakeoverWithoutSpendingPendingChoice() => Run(async (shell, svc, server) =>
+    {
+        PendingModChoice.Record(BuiltInMods.BambiSleepId, BuiltInMods.CCPDefaultId);
+        AvApp.Mods!.ActivateMod(BuiltInMods.DronificationId);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(Color.Parse(AvApp.Mods.GetAccentColorHex()), (Color)Application.Current!.Resources["PinkColor"]!);
+        var dash = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView>("SettingsTab")!;
+        Assert.Equal(AvApp.Mods.MakeModAware("Flash Images"), dash.CardFlash.Title);
+        var takeover = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.BambiTakeoverTabView>("BambiTakeoverTab")!;
+        Assert.Equal(AvApp.Mods.GetTakeoverLabel(), takeover.FindControl<TextBlock>("TxtBambiTakeoverHeader")!.Text);
+        Assert.Equal(AvApp.Mods.GetTakeoverLabel(), takeover.FindControl<ConditioningControlPanel.Avalonia.Controls.IconLabel>("TxtTakeoverLocked")!.Text);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("tooltip_start_stop_takeover", AvApp.Mods.GetTakeoverLabel()),
+            ToolTip.GetTip(takeover.FindControl<Button>("BtnAutonomyStartStop")!));
+        Assert.Equal(BuiltInMods.BambiSleepId, PendingModChoice.Pending);
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ModDefaultAssetsUseOnlyTheExplicitChoice() => Run(async (shell, svc, server) =>
+    {
+        var s = CoreSettings.Current;
+        var preset = new AssetPreset { Name = "Default assets", MediaSource = "online" };
+        s.AssetPresets.Add(preset);
+        s.ModDefaultAssetPreset[BuiltInMods.DronificationId] = preset.Id;
+        s.RemoteMediaConsented = s.FypOnlineConsented = false;
+        s.MediaSource = "local";
+        shell.ApplyModDefaultPresets(BuiltInMods.DronificationId);
+        Assert.Equal(preset.Id, s.CurrentAssetPresetId);
+        Assert.Equal("local", s.MediaSource); // The base Scrolller consent gate still wins.
+        s.RemoteMediaConsented = true;
+        shell.ApplyModDefaultPresets(BuiltInMods.DronificationId);
+        Assert.Equal("online", s.MediaSource);
+        s.ModDefaultAssetPreset[BuiltInMods.DronificationId] = "";
+        s.MediaSource = "local";
+        shell.ApplyModDefaultPresets(BuiltInMods.DronificationId);
+        Assert.Equal("local", s.MediaSource);
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ModDefaultSettingsUseOnlyTheExplicitChoice() => Run(async (shell, svc, server) =>
+    {
+        var s = CoreSettings.Current;
+        var preset = Preset.GetDefaultPresets().First();
+        s.ModDefaultSettingsPreset[BuiltInMods.DronificationId] = preset.Id;
+        s.CurrentPresetName = "before";
+        shell.ApplyModDefaultPresets(BuiltInMods.DronificationId);
+        Assert.Equal(preset.Name, s.CurrentPresetName);
+        s.ModDefaultSettingsPreset[BuiltInMods.DronificationId] = "";
+        s.CurrentPresetName = "keep";
+        shell.ApplyModDefaultPresets(BuiltInMods.DronificationId);
+        Assert.Equal("keep", s.CurrentPresetName);
+        await Task.CompletedTask;
+    });
+
+    [Fact]
     public Task HeaderComboSwitchesTheModSavesAndRethemes() => Run(async (shell, svc, server) =>
     {
         var combo = shell.FindControl<ComboBox>("ModSelectorCombo")!;
@@ -212,6 +361,46 @@ public sealed class ModChoiceTests
             Assert.NotEqual(2, ((global::Avalonia.Media.Imaging.Bitmap)dash.CardFlash.Icon!).Size.AspectRatio);
         }
         finally { CoreModArt.OverridePathProvider = old; scratch.Delete(true); }
+        await Task.CompletedTask;
+    });
+
+    [Fact]   // WPF ApplyActiveModChange :3139-3170
+    public Task HeaderModSwitchFollowsTheModsSitePersonalityAndDefaultPreset() => Run(async (shell, svc, server) =>
+    {
+        var dash = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView>("SettingsTab")!;
+        var bambi = dash.FindControl<RadioButton>("RbBambiCloud")!;
+        var hypno = dash.FindControl<RadioButton>("RbHypnoTube")!;
+        var web = dash.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>("BrowserWebHost")!;
+        bambi.IsChecked = true;
+        web.Navigate(new Uri("https://bambicloud.com/"));   // a loaded browser
+        var s = CoreSettings.Current;
+        var voice = new PersonalityPreset { Id = "mod-switch-test-voice", Name = "Test voice" };
+        s.UserPersonalityPresets.Add(voice);
+        s.ModPersonalityPreset[BuiltInMods.DronificationId] = voice.Id;
+        var oldVoice = s.ActivePersonalityPresetId;
+        var preset = Preset.GetDefaultPresets().First();
+        s.CurrentPresetName = "before";
+        s.ModDefaultSettingsPreset[BuiltInMods.DronificationId] = preset.Id;
+        try
+        {
+            var combo = shell.FindControl<ComboBox>("ModSelectorCombo")!;
+            combo.SelectedItem = shell.AvailableMods.Single(i => i.Id == BuiltInMods.DronificationId);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.False(AvApp.Mods!.ShowBambiCloudOption());
+            Assert.False(bambi.IsVisible);
+            Assert.True(hypno.IsChecked);
+            Assert.Equal(new Uri(AvApp.Mods.GetDefaultBrowserUrl()), web.Source);   // the mod's own page
+            Assert.Equal(voice.Id, s.ActivePersonalityPresetId);
+            Assert.Equal(preset.Name, s.CurrentPresetName);
+        }
+        finally
+        {
+            s.ActivePersonalityPresetId = oldVoice;
+            s.UserPersonalityPresets.Remove(voice);
+            s.ModPersonalityPreset.Remove(BuiltInMods.DronificationId);
+            s.ModDefaultSettingsPreset.Remove(BuiltInMods.DronificationId);
+        }
         await Task.CompletedTask;
     });
 

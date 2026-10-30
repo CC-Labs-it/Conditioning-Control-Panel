@@ -17,7 +17,7 @@ public partial class MainShellWindow
     private const int TileDecodeWidth = 768, WideTileDecodeWidth = 1024;
 
     // The event is authoritative: uninstalling the active mod also activates CCP Default.
-    private void OnModChangedFeatureImages(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(LoadFeatureImages);
+    private void OnModChangedFeatureImages(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(RefreshModShell);
 
     private void LoadFeatureImages()
     {
