@@ -278,6 +278,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // WPF Presets.cs:1171 reads TodayKey, not IsFreeToday: that predicate also includes
         // member gifts and post-code grants (Core DailyFreeService.cs:153), not just the box.
         internal static Func<string?> ReadDailyGiftKey = () => null;
+        internal static Func<System.Threading.Tasks.Task> RefreshDailyGift = () => System.Threading.Tasks.Task.CompletedTask;
         internal static string? TodayFreeKey() => ReadDailyGiftKey();
 
         /// <summary>WPF's key -> tab table, verbatim; Drop days go to the Play door, where the game's card lives.</summary>

@@ -413,6 +413,72 @@ public sealed class TabTransitionsTests
         Assert.False(badge.FreeToday);
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task HomeReentryRefreshesSameDayOverrideAndRetriesStartupFailure(bool startupFailed) => Run(shell =>
+    {
+        // Exercise the real Core success/retry gates without network or wall-clock sleeps.
+        var service = new DailyFreeService();
+        using var wire = new GiftOverrideWire { Fail = startupFailed };
+        using var http = new System.Net.Http.HttpClient(wire);
+        void Set(string field, object value) => typeof(DailyFreeService)
+            .GetField(field, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .SetValue(service, value);
+        var oldHttp = (System.Net.Http.HttpClient)typeof(DailyFreeService)
+            .GetField("_http", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(service)!;
+        Set("_http", http);
+        oldHttp.Dispose();
+        var timer = (System.Threading.Timer)typeof(DailyFreeService)
+            .GetField("_dayRollTimer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(service)!;
+        try
+        {
+            service.RefreshAsync().GetAwaiter().GetResult(); // startup attempt
+            Assert.Equal(1, wire.Calls);
+            ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.ReadDailyGiftKey = () => service.TodayKey;
+            ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.RefreshDailyGift = service.RefreshAsync;
+            // Same dispatcher-posted repaint used by App.axaml.cs's TodayChanged callback.
+            service.TodayChanged += () => Dispatcher.UIThread.Post(shell.RefreshNavPremiumTags);
+            CoreEntitlement.HasPremiumProvider = () => false;
+            shell.ShowTab("settings");
+            Assert.Equal(1, wire.Calls); // success and failure both throttle immediate re-entry
+
+            wire.Fail = false;
+            wire.Key = "dtrh"; // a same-day server override, outside the seeded pool
+            Set("_lastFetchUtc", DateTime.UtcNow.AddHours(-7));
+            Set("_lastAttemptUtc", DateTime.UtcNow.AddMinutes(-11));
+            shell.ShowTab("quests");
+            shell.ShowTab("settings");
+            Dispatcher.UIThread.RunJobs(); // let TodayChanged repaint the newly fetched override
+            Assert.Equal(2, wire.Calls);
+            Assert.Equal("dtrh", service.TodayKey);
+            Assert.Equal("Down the Rabbit Hole", shell.SettingsPage!.FindControl<TextBlock>("MysteryRevealName")!.Text);
+            Assert.Equal(2, shell.SettingsPage.FindControl<ConditioningControlPanel.Avalonia.Controls.TierBadge>("MysteryRevealBadge")!.Tier);
+            shell.RefreshNavPremiumTags();
+            shell.ShowTab("quests");
+            shell.ShowTab("settings");
+            Assert.Equal(2, wire.Calls); // callback and repeated visits cannot create a fetch loop
+        }
+        finally { timer.Dispose(); }
+    });
+
+    private sealed class GiftOverrideWire : System.Net.Http.HttpMessageHandler
+    {
+        internal bool Fail;
+        internal string Key = "voice";
+        internal int Calls;
+        protected override Task<System.Net.Http.HttpResponseMessage> SendAsync(System.Net.Http.HttpRequestMessage request,
+            System.Threading.CancellationToken cancellationToken)
+        {
+            Calls++;
+            return Task.FromResult(new System.Net.Http.HttpResponseMessage(Fail
+                ? System.Net.HttpStatusCode.ServiceUnavailable : System.Net.HttpStatusCode.OK)
+            {
+                Content = new System.Net.Http.StringContent("{\"key\":\"" + Key + "\"}"),
+            });
+        }
+    }
+
     private sealed class SteppedTime : TimeProvider
     {
         public long Now;
