@@ -89,6 +89,7 @@ public sealed class LocalAiSetupWizardTests
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         CoreSettings.Current.CompanionPrompt.AiProvider = AiProviderType.Cloud;
+        CoreSettings.Current.CompanionPrompt.AiOllamaHost = "";
         CoreSettings.Current.CompanionPrompt.AiModel = "test-model:1b";
     }
 
@@ -171,6 +172,8 @@ public sealed class LocalAiSetupWizardTests
             Assert.True(C<StackPanel>(w, "PanelDone").IsVisible);
             Assert.Equal(Loc.GetF("label_local_ai_done_detail", "test-model:1b", 3), C<TextBlock>(w, "TxtDoneDetail").Text);
             Assert.True(w.LocalAiReady);
+            Assert.Equal(OllamaSetupService.DefaultHost, CoreSettings.Current.CompanionPrompt.AiOllamaHost);
+            Assert.Equal("test-model:1b", CoreSettings.Current.CompanionPrompt.AiModel);
             Assert.Equal(AiProviderType.Local, CoreSettings.Current.CompanionPrompt.AiProvider);
         }
         finally { w.Close(); CoreSettings.ServiceProvider = null; }

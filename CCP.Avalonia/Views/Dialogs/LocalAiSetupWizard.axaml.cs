@@ -461,8 +461,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 var prompt = CoreSettings.Current?.CompanionPrompt;
                 if (prompt != null)
                 {
-                    prompt.AiProvider = AiProviderType.Local;
-                    prompt.AiModel = _targetModel;
+                    OllamaSetupService.ApplyVerifiedSetup(prompt, OllamaSetupService.DefaultHost, _targetModel);
                     CoreSettings.Save();
                 }
             }
