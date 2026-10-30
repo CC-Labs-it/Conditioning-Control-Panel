@@ -7,6 +7,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Localization;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -27,14 +28,20 @@ public sealed class ChaosDvdToyTests
 
     // WPF ChaosModeService.cs:2684-2697,2722-2734,2780,3020-3027.
     [Theory]
-    [InlineData(1, 0.7, 0.8, false, 10)]
-    [InlineData(2, 0.85, 0.9, false, 15)]
-    [InlineData(4, 1.0, 1.0, true, 20)]
-    public async Task EquippedDvdKeyLaunchesWithRankAndCapstoneThenRetires(int level, double speed, double scale, bool maxed, double duration)
+    [InlineData(1, 0.7, 0.8, false, 10, "en", "Porn DVD", "📀 now loading")]
+    [InlineData(2, 0.85, 0.9, false, 15, "de", "Porno-DVD", "📀 wird geladen")]
+    [InlineData(4, 1.0, 1.0, true, 20, "ja", "ポルノDVD", "📀 読み込み中")]
+    public async Task EquippedDvdKeyLaunchesWithRankAndCapstoneThenRetires(int level, double speed, double scale, bool maxed, double duration, string language, string title, string loading)
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
+            var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx,
+                ChaosEffectBannerOverlay.SkipPlatformChecksForTests, ConditioningControlPanel.CoreAudio.PlayOneShotProvider);
+            var oldClock = ChaosEffectBannerOverlay.Clock;
+            var savedLanguage = LocalizationManager.Instance.CurrentLanguage;
             Setup();
+            var clock = new Clock();
+            ChaosEffectBannerOverlay.Clock = clock;
             var meta = ChaosMeta.State;
             var savedMeta = Newtonsoft.Json.JsonConvert.SerializeObject(meta);
             meta.ActiveLifetimeBoons.Clear();
@@ -44,6 +51,7 @@ public sealed class ChaosDvdToyTests
             meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
             try
             {
+                LocalizationManager.Instance.SetLanguage(language);
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
                 ChaosRunHost.Overlay!.FinishCountdown();
                 ChaosRunHost.StopTimerForTests();
@@ -76,7 +84,8 @@ public sealed class ChaosDvdToyTests
                     logo.SplitBouncesLeft = 0; // lifetime assertion below does not need wall twins
                 }
                 Assert.Contains("dvd_launch", cues);
-                Assert.Contains("📀 now loading", state.RecentEvents);
+                Assert.Contains(loading, state.RecentEvents);
+                Assert.Equal(title, Assert.Single(ChaosEffectBannerOverlay.Active!.Strip.Row).Text);
                 Assert.Equal(60, toy.CooldownRemainingSec);
                 Assert.True(toy.IsEffectActive);
                 Assert.Single(ChaosEffectBannerOverlay.Active!.Row.Children);
@@ -87,9 +96,10 @@ public sealed class ChaosDvdToyTests
                 ChaosRunHost.Tick();
                 Assert.True(toy.IsEffectActive);
                 for (int i = 0; i < (duration + 1) * 20; i++) ChaosDvdOverlay.Advance(0.05);
+                clock.Now += TimeSpan.FromSeconds(duration + 1);
                 ChaosRunHost.Tick();
                 Assert.False(toy.IsEffectActive);
-                ChaosEffectBannerOverlay.Clock = new LaterClock();
+                clock.Now += TimeSpan.FromSeconds(1);
                 ChaosEffectBannerOverlay.Active!.Step();
                 Assert.Empty(ChaosEffectBannerOverlay.Active.Row.Children);
                 ChaosRunHost.ForceShutdown();
@@ -99,6 +109,10 @@ public sealed class ChaosDvdToyTests
             finally
             {
                 ChaosRunHost.ForceShutdown(); ChaosDvdOverlay.CloseActive();
+                ChaosEffectBannerOverlay.Clock = oldClock;
+                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx,
+                    ChaosEffectBannerOverlay.SkipPlatformChecksForTests, ConditioningControlPanel.CoreAudio.PlayOneShotProvider) = saved;
+                LocalizationManager.Instance.SetLanguage(savedLanguage);
                 Newtonsoft.Json.JsonConvert.PopulateObject(savedMeta, meta,
                     new Newtonsoft.Json.JsonSerializerSettings { ObjectCreationHandling = Newtonsoft.Json.ObjectCreationHandling.Replace });
             }
@@ -106,9 +120,27 @@ public sealed class ChaosDvdToyTests
         });
     }
 
-    private sealed class LaterClock : TimeProvider
+    private sealed class Clock : TimeProvider
     {
-        public override DateTimeOffset GetUtcNow() => DateTimeOffset.UtcNow.AddMinutes(1);
+        public DateTimeOffset Now = new(2026, 10, 30, 12, 0, 0, TimeSpan.Zero);
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
+    [Fact]
+    public async Task ConsecutiveToyCasesRestoreOverriddenGlobals()
+    {
+        var clock = ChaosEffectBannerOverlay.Clock;
+        var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx,
+            ChaosEffectBannerOverlay.SkipPlatformChecksForTests, ConditioningControlPanel.CoreAudio.PlayOneShotProvider);
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        for (int i = 0; i < 2; i++)
+        {
+            await EquippedDvdKeyLaunchesWithRankAndCapstoneThenRetires(2, 0.85, 0.9, false, 15, "de", "Porno-DVD", "📀 wird geladen");
+            Assert.Same(clock, ChaosEffectBannerOverlay.Clock);
+            Assert.Equal(saved, (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx,
+                ChaosEffectBannerOverlay.SkipPlatformChecksForTests, ConditioningControlPanel.CoreAudio.PlayOneShotProvider));
+            Assert.Equal(language, LocalizationManager.Instance.CurrentLanguage);
+        }
     }
 
     // WPF ChaosDvdOverlay.cs:388-390 and BubbleService.cs:325-340.
@@ -117,6 +149,8 @@ public sealed class ChaosDvdToyTests
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
+            var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx,
+                ChaosEffectBannerOverlay.SkipPlatformChecksForTests);
             Setup();
             var host = new global::Avalonia.Controls.Window();
             host.Show();
@@ -131,6 +165,8 @@ public sealed class ChaosDvdToyTests
                 var live = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsLive = true, FuseMs = 5000 });
                 var rabbit = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsDarter = true });
                 var freeze = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsFreeze = true });
+                var tease = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsTease = true });
+                var brittle = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsBrittle = true });
                 var far = BubbleOverlay.SpawnChaos(new EffectBubbleSpec());
                 foreach (var b in BubbleOverlay.Field.Bubbles) { b.X = 100; b.Y = 100; b.Size = 20; }
                 far.X = 900;
@@ -142,7 +178,7 @@ public sealed class ChaosDvdToyTests
                 Assert.Equal(1, pops);
                 Assert.Equal(1, snaps);
                 Assert.True(live.Deflating);
-                Assert.False(rabbit.Popping || freeze.Popping || far.Popping);
+                Assert.False(rabbit.Popping || freeze.Popping || tease.Popping || brittle.Popping || far.Popping);
                 ChaosDvdOverlay.Advance(0.05);
                 Assert.Equal(2, pops + snaps); // no duplicate rewards
                 far.X = 100;
@@ -150,7 +186,12 @@ public sealed class ChaosDvdToyTests
                 ChaosDvdOverlay.Advance(0.05);
                 Assert.False(far.Popping); // fading logo has no collider
             }
-            finally { BubbleOverlay.EndChaos(); ChaosDvdOverlay.CloseActive(); host.Close(); }
+            finally
+            {
+                BubbleOverlay.EndChaos(); ChaosDvdOverlay.CloseActive(); host.Close();
+                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx,
+                    ChaosEffectBannerOverlay.SkipPlatformChecksForTests) = saved;
+            }
             return Task.CompletedTask;
         });
     }

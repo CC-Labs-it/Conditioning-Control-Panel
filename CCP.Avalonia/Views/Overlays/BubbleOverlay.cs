@@ -292,7 +292,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 if (i >= Field.Bubbles.Count) continue;
                 var b = Field.Bubbles[i];
-                if (b.Popping || b.Spec == null || b.Spec.IsDarter || b.Spec.IsFreeze) continue;
+                // WPF BubbleService.cs:4652-4660: instant sweeps cannot end Tease or Brittle.
+                if (b.Popping || b.Spec == null || b.Spec.IsDarter || b.Spec.IsFreeze || b.Spec.IsTease || b.Spec.IsBrittle) continue;
                 if (!rect.Intersects(new Rect(b.X, b.Y, b.Size, b.Size))) continue;
                 if (b.IsLiveThreat)
                 {
