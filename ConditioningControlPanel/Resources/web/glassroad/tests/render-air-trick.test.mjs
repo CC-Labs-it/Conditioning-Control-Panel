@@ -62,6 +62,24 @@ test('air trick: an early landing cuts the hang short, a long glide sends EMI ba
   assert.equal(long.filter((x) => x.air && x.phase === 'launch' && x.t > returnsAt).length, 0, 'one trick per flight');
 });
 
+test('air trick: the landing follows through (owner: "abrupt") - EMI lands after the kart, rises, eases in, squashes', () => {
+  for (const seed of [1, 3, 6]) {
+    const f = fly(createAirTrick(seed), { upMps: 14, airS: 1.0 });
+    const touch = f.find((x) => !x.air);
+    assert.ok(f.find((x) => x.t >= touch.t + 0.1).lift > T.liftM * 0.8, 'still up a beat after the kart lands');
+    let worst = 0;
+    for (let n = 1; n < f.length; n++) worst = Math.max(worst, f[n - 1].lift - f[n].lift);
+    assert.ok(worst < T.liftM * 0.1, 'never drops more than a tenth of the lift in one frame (was the whole lift): ' + worst);
+    const ret = f.filter((x) => x.phase === 'return');
+    assert.ok(Math.max(...ret.map((x) => x.lift)) > ret[0].lift + 0.05, 'a small rise before the drop');
+    assert.ok(Math.min(...ret.map((x) => x.squash)) < -0.08, 'stretched by the fall');
+    const settle = f.filter((x) => x.phase === 'settle');
+    const low = settle.reduce((a, x) => (x.lift < a.lift ? x : a));
+    assert.ok(low.squash > 0.12, 'squashed into the cup at the bottom of the dip');
+    assert.ok(Math.abs(settle[settle.length - 1].squash) < 0.01, 'and springs back to rest');
+  }
+});
+
 test('air trick: faces vary between jumps, Gentle is half the height, blocked or motion off ends it at once', () => {
   const s = createAirTrick(7), seen = [];
   for (let n = 0; n < 6; n++) seen.push(fly(s, { airS: 1 }).find((x) => x.face).face);
