@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -73,11 +74,11 @@ public sealed class DashboardDecorationTests
     [Fact]
     public Task MysteryRevealUsesDailyFeatureAndPremiumTierRules() => WithShell((shell, tab, time) =>
     {
-        var oldDaily = CoreEntitlement.IsFreeTodayProvider;
+        var oldDaily = CoreEntitlement.DailyFreeKeyProvider;
         var oldPremium = CoreEntitlement.HasPremiumProvider;
         try
         {
-            CoreEntitlement.IsFreeTodayProvider = key => key == "dtrh";
+            CoreEntitlement.DailyFreeKeyProvider = () => "dtrh";
             CoreEntitlement.HasPremiumProvider = () => false;
             tab.ApplyDashboardDecoration(false, false);
             Assert.Equal("Down the Rabbit Hole", tab.FindControl<TextBlock>("MysteryRevealName")!.Text);
@@ -89,9 +90,32 @@ public sealed class DashboardDecorationTests
         }
         finally
         {
-            CoreEntitlement.IsFreeTodayProvider = oldDaily;
+            CoreEntitlement.DailyFreeKeyProvider = oldDaily;
             CoreEntitlement.HasPremiumProvider = oldPremium;
         }
+    });
+
+    // WPF MainWindow.Presets.cs:1086, :1171-1208: reveal and click follow TodayKey.
+    [Fact]
+    public Task MysterySelectionIgnoresOtherEligibleGrants() => WithShell((shell, tab, time) =>
+    {
+        CoreEntitlement.DailyFreeKeyProvider = () => "dtrh";
+        CoreEntitlement.IsFreeTodayProvider = key => key is "takeover" or "awareness" or "dtrh";
+        CoreEntitlement.HasPremiumProvider = () => false;
+        var artRequests = new List<string>();
+        CoreModArt.OverridePathProvider = path => { artRequests.Add(path); return null; };
+        tab.ApplyDashboardDecoration(false, false);
+        Assert.Equal("Down the Rabbit Hole", tab.FindControl<TextBlock>("MysteryRevealName")!.Text);
+        var badge = tab.FindControl<TierBadge>("MysteryRevealBadge")!;
+        Assert.Equal(2, badge.Tier);
+        Assert.True(badge.FreeToday);
+        Assert.Contains("features/dtrh.png", artRequests);
+        Assert.DoesNotContain("features/takeover.png", artRequests);
+        var box = tab.FindControl<ConditioningControlPanel.Avalonia.Views.Features.FeatureCard>("CardMystery")!;
+        box.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(
+            ConditioningControlPanel.Avalonia.Views.Features.FeatureCard.ClickEvent, box));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("play", shell.CurrentTab);
     });
 
     [Fact]
