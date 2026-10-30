@@ -312,8 +312,8 @@ message: files never cross the bridge or the room. Only the choice is kept (`gla
 | `boost-start` | `{ kind: 'drift'\|'pad'\|'launch', tier, amount, holdS }` | kart (applyBoost) | fx (fovKick, speedLines, bandSpeedMul, shake boost), audio (low-pass opens) |
 | `boost-end` | `{ kind }` | kart | fx, audio (ease back over boost.tailTcS) |
 | `hop` | `{ speed }` | kart | fx (squash then stretch), audio |
-| `air-word-launch` | `{ id, section, index: 0 }` | scripted solo aerial route, initial lip | faint spring on the shared SFX bus; no speech |
-| `air-word-hop` | `{ id, section, index, s, p }` (one automatic word launch; index starts at 0 per crossing) | scripted solo aerial route | quiet ascending pluck and airy spring on the shared SFX bus; no speech |
+| `air-word-launch` | `{ id, section, index: 0 }` | scripted aerial route, initial lip | faint spring on the shared SFX bus; no speech |
+| `air-word-hop` | `{ id, section, index, s, p }` (one automatic word launch; index starts at 0 per crossing) | scripted aerial route | quiet ascending pluck and airy spring on the shared SFX bus; no speech |
 | `airborne` | `{ cause: 'lip'\|'edge' }` | kart | fx (stretch) |
 | `ramp` | `{ racer, id, purpose, upMps, s, x, speed }` (a jump ramp lip launched the kart; track `ramps`, sim/ramps.js; a bot's arrives as racer-event) | kart (sim/racers.js adds racer) | audio (soft whoosh from the existing bank); EMI air trick stage |
 | `land` | `{ tier: 0..3, airTime }` (0 = under air.lightS) | kart, respawn | fx (squash, dust, shake on 3), audio (cue on 2 and 3) |

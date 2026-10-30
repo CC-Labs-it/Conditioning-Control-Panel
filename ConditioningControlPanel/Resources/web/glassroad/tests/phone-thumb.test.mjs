@@ -93,18 +93,16 @@ test('the Jump ring is paint: never a button, lights while held, reads Hold on t
 const keep = loadTrack(JSON.parse(readFileSync(new URL('../tracks/keep.json', import.meta.url), 'utf8')), { moving: true });
 const bridge = getKeepLayout(keep).drawbridge;
 
-test('hold cue: online every aerial gap and the launch, solo the launch only (the words catch solo)', () => {
-  const gap = keep.aerials[0], mid = gap.gapS0 + 10;
-  assert.equal(holdCueAt(keep, bridge, mid, true), true);
-  assert.equal(holdCueAt(keep, bridge, gap.rampS0 - 50, true), true, 'in time to find the ring');
-  assert.equal(holdCueAt(keep, bridge, gap.gapS1 + 1, true), false, 'off once over the far side');
-  assert.equal(holdCueAt(keep, bridge, mid, false), false);
-  assert.equal(holdCueAt(keep, bridge, bridge.rampS0, false), true);
-  assert.equal(holdCueAt(keep, null, 5, true), false);
-  assert.equal(holdCueAt({}, null, 5, true), false, 'no gaps, no cue');
+test('hold cue: the authored launch only, because the words catch every aerial gap', () => {
+  const gap = keep.aerials[0];
+  assert.equal(holdCueAt(bridge, bridge.rampS0), true);
+  assert.equal(holdCueAt(bridge, bridge.rampS0 - 50), true, 'in time to find the ring');
+  assert.equal(holdCueAt(bridge, bridge.gapS1 + 1), false, 'off once over the far side');
+  assert.equal(holdCueAt(bridge, gap.gapS0 + 10), false, 'a word gap needs no hold');
+  assert.equal(holdCueAt(null, 5), false, 'no launch, no cue');
 });
 
-test('a thumb crosses the online gap: real touch events through the action map into the sim, with a re-grip mid flight', () => {
+test('a thumb holds the hat across a gap: real touch events through the action map into the sim, with a re-grip mid flight', () => {
   const gap = keep.aerials[0], feel = makeFeel();
   const fly = (hold) => {
     const { touch, land, slide, lift } = rig();
@@ -127,7 +125,7 @@ test('a thumb crosses the online gap: real touch events through the action map i
     actions.dispose();
     return { fell: true, stuck: true };
   };
-  assert.equal(fly(false).fell, true, 'no hold, no crossing: online nothing catches');
+  assert.equal(fly(false).fell, true, 'with no word run bound, no hold is no crossing');
   const crossed = fly(true);
   assert.equal(crossed.fell, false, 'the hold crosses');
   assert.ok(crossed.s > gap.gapS1, 'and lands on the far side');
