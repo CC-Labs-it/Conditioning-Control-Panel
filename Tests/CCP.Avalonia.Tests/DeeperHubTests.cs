@@ -177,16 +177,30 @@ public sealed class DeeperHubTests
     public Task ShellSeedsTheBundledWelcomeDemoOnce() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
-        var settings = CoreSettings.Current;
+        var oldProvider = CoreSettings.ServiceProvider;
+        var service = new ConditioningControlPanel.Services.SettingsService
+            { SaveDebounceDueTimeMilliseconds = System.Threading.Timeout.Infinite };
+        CoreSettings.ServiceProvider = () => service;
+        var settings = service.Current;
         var seeded = settings.HasSeededDeeperDemos;
         var path = Path.Combine(DeeperLocalLibrary.DefaultFolder, "welcome.ccpenh.json");
         var prior = File.Exists(path) ? File.ReadAllBytes(path) : null;
         try
         {
+            Directory.CreateDirectory(DeeperLocalLibrary.DefaultFolder);
             File.Delete(path);
             settings.HasSeededDeeperDemos = false;
             var shell = new MainShellWindow();
-            try { shell.InitializeDeeperHub(); Assert.True(File.Exists(path)); Assert.True(settings.HasSeededDeeperDemos); }
+            try
+            {
+                service.SaveImmediate(); // flush constructor work before measuring the seeding save
+                shell.InitializeDeeperHub();
+                Assert.True(File.Exists(path));
+                Assert.True(settings.HasSeededDeeperDemos);
+                Assert.True(service.HasPendingSave, "first-run seeding must schedule its settings save");
+                service.SaveImmediate();
+                Assert.True(new ConditioningControlPanel.Services.SettingsService().Current.HasSeededDeeperDemos);
+            }
             finally { shell.Close(); }
             File.WriteAllText(path, "user-edited demo");
             settings.HasSeededDeeperDemos = false;
@@ -201,6 +215,7 @@ public sealed class DeeperHubTests
         finally
         {
             settings.HasSeededDeeperDemos = seeded;
+            CoreSettings.ServiceProvider = oldProvider;
             if (prior == null) File.Delete(path); else File.WriteAllBytes(path, prior);
         }
         return Task.CompletedTask;
