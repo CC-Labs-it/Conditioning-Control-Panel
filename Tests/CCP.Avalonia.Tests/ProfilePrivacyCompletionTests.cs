@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input.Platform;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -105,7 +106,58 @@ public sealed class ProfilePrivacyCompletionTests
         tab.DisplayProfileEntry(new LeaderboardRow { DisplayName = "", DiscordId = "987654" });
         Assert.True(tab.FindControl<Button>("BtnProfileDiscord")!.IsVisible);
         Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_message_on_discord"),
-            tab.FindControl<TextBlock>("TxtProfileDiscordId")!.Text); // WPF Browser.cs:2248
+            tab.FindControl<TextBlock>("TxtProfileDiscordId")!.Text); // WPF MainWindow.Browser.cs:2268
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public Task FailedDiscordOpenCopiesIdAndRestoresLabelAfter1500Ms(bool throws, bool changeCard) => Run(async (shell, tab) =>
+    {
+        shell.Show();
+        CoreSettings.Current.UserDisplayName = "me";
+        tab.DisplayProfileEntry(new LeaderboardRow { DisplayName = "other", DiscordId = "987654" });
+        tab.OpenDiscordProfile = _ => throws ? Task.FromException<bool>(new InvalidOperationException("test")) : Task.FromResult(false);
+        await shell.Clipboard!.SetTextAsync("untouched");
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var opening = tab.OpenProfileDiscordAsync();
+        var label = tab.FindControl<TextBlock>("TxtProfileDiscordId")!;
+        Assert.Equal("987654", await shell.Clipboard.TryGetTextAsync());
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_id_copied"), label.Text);
+        await Task.Delay(1000);
+        Assert.False(opening.IsCompleted); // WPF MainWindow.Browser.cs:1746 holds feedback for 1500 ms.
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_id_copied"), label.Text);
+        if (changeCard) tab.DisplayProfileEntry(new LeaderboardRow { DisplayName = "next", DiscordId = "654321" });
+        await opening.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(clock.ElapsedMilliseconds >= 1500);
+        Assert.Equal(changeCard ? "next" : "other", label.Text);
+    });
+
+    [Fact]
+    public Task OwnLeaderboardCardKeepsServerDiscordIdWithoutLocalDiscordSession() => Run((shell, tab) =>
+    {
+        CoreSecrets.RetrieveProvider = _ => null;
+        AccountSeed.Seed();
+        Assert.True(string.IsNullOrEmpty(AccountSeed.Discord?.UserId));
+        CoreSettings.Current.UserDisplayName = "me";
+        CoreSettings.Current.AllowDiscordDm = true;
+        tab.PrivacyPanel.RefreshPrivacy();
+        tab.DisplayProfileEntry(new LeaderboardRow { DisplayName = "me", DiscordId = "987654" });
+        var button = tab.FindControl<Button>("BtnProfileDiscord")!;
+        Assert.True(button.IsVisible); // WPF MainWindow.Browser.cs:2263 uses entry even on your own row.
+        Assert.Equal("987654", button.Tag);
+        string? opened = null;
+        tab.OpenDiscordProfile = url => { opened = url; return Task.FromResult(true); };
+        tab.PrivacyPanel.FindControl<CheckBox>("ChkDiscordTabAllowDm")!.IsChecked = false;
+        Assert.False(button.IsVisible);
+        tab.PrivacyPanel.FindControl<CheckBox>("ChkDiscordTabAllowDm")!.IsChecked = true;
+        Assert.True(button.IsVisible);
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal("https://discord.com/users/987654", opened);
+        tab.DisplayOwnProfile(); // Local cards must not inherit a previously displayed server id.
+        Assert.False(button.IsVisible);
         return Task.CompletedTask;
     });
 
