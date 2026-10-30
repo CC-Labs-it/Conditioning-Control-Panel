@@ -296,24 +296,9 @@
     </Style>
   </ControlTheme>
 
-  <!-- WPF Controls.xaml:262-267,298-303: choose the knob transition by direction.
-       Reuse BackEaseOutAmplitude so ON is 340ms / 0.6 and OFF is 300ms / 0.35.
-       RenderTransform uses transitions because Avalonia has no keyframe animator for it.
+  <!-- WPF Controls.xaml:257-267,295-303: ToggleKnob owns one transition per thumb,
+       updating timing before the target so reversals snapshot the visible position.
        Part B: WPF Controls.xaml:311-313 spark exit still snaps instead of fading for 80ms. -->
-  <Transitions x:Key="ToggleOffTransitions">
-    <TransformOperationsTransition Property="{x:Static Visual.RenderTransformProperty}" Duration="0:0:0.30">
-      <TransformOperationsTransition.Easing>
-        <theme:BackEaseOutAmplitude Amplitude="0.35"/>
-      </TransformOperationsTransition.Easing>
-    </TransformOperationsTransition>
-  </Transitions>
-  <Transitions x:Key="ToggleOnTransitions">
-    <TransformOperationsTransition Property="{x:Static Visual.RenderTransformProperty}" Duration="0:0:0.34">
-      <TransformOperationsTransition.Easing>
-        <theme:BackEaseOutAmplitude Amplitude="0.6"/>
-      </TransformOperationsTransition.Easing>
-    </TransformOperationsTransition>
-  </Transitions>
   <ControlTheme x:Key="ToggleStyle" TargetType="CheckBox">
     <Setter Property="Template">
       <ControlTemplate TargetType="CheckBox">
@@ -334,7 +319,8 @@
           </Border>
           <!-- WPF Controls.xaml:262-264: resting travel is 22 DIP. -->
           <Border x:Name="thumb" Width="16" Height="16" CornerRadius="8"
-                  Background="White" HorizontalAlignment="Left" Margin="3,0,0,0"/>
+                  Background="White" HorizontalAlignment="Left" Margin="3,0,0,0"
+                  RenderTransform="translateX(0px)" theme:ToggleKnob.IsOn="{TemplateBinding IsChecked}"/>
           <!-- Spark: parked invisible at the ON edge (centre x = 33, where the knob
                lands). Scales from its own centre, so it never moves anything. -->
           <Ellipse x:Name="spark" Width="12" Height="12" Fill="White"
@@ -358,14 +344,6 @@
 
     <Style Selector="^:checked /template/ Border#trackOn">
       <Setter Property="Opacity" Value="1"/>
-    </Style>
-    <Style Selector="^ /template/ Border#thumb">
-      <Setter Property="Transitions" Value="{StaticResource ToggleOffTransitions}"/>
-      <Setter Property="RenderTransform" Value="translateX(0px)"/>
-    </Style>
-    <Style Selector="^:checked /template/ Border#thumb">
-      <Setter Property="Transitions" Value="{StaticResource ToggleOnTransitions}"/>
-      <Setter Property="RenderTransform" Value="translateX(22px)"/>
     </Style>
     <Style Selector="^:checked /template/ Ellipse#spark">
       <!-- The 0.4 -> 3 growth is a Setter + the transition above, NOT a keyframe: Avalonia ships
