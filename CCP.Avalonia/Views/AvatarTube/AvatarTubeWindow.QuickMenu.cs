@@ -8,8 +8,10 @@
 // Every action goes through the shell's own entry (StartEngine/StopEngine, SetAutonomyEnabled), so
 // whatever the tube starts is what panic already stops (TubeQuickMenuTests proves it).
 //
-// ponytail: not ported - Pause browser (WPF mutes CoreWebView2 + pauses its media; this head's
-// browser has no mute/script channel, so the item is hidden rather than promising a pause), the
+// Pause browser (MenuItemPauseBrowser_Click :1383, SetBrowserPaused :1569) goes through the shell's
+// Home browser, the same channel the Workshop's Behavior cell uses, and the two mirror each other.
+//
+// ponytail: not ported - the
 // remote-controller emote swap (RefreshEmoteMenuItemsForRemoteState :878; the five items are greyed
 // as UpdateQuickMenuState does, the emote items stay hidden), and the tube's trigger-phrase timer
 // (Speech.cs:1594 StartTriggerTimer): Trigger mode flips and saves the setting WPF's timer reads.
@@ -57,7 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             Wire("MenuItemShrink", () => StepScale(-ScaleStep));
             Wire("MenuItemGrow", () => StepScale(+ScaleStep));
             Wire("MenuItemDismiss", OnMenuDismiss);
-            if (QuickItem("MenuItemPauseBrowser") is { } pause) pause.IsVisible = false;
+            Wire("MenuItemPauseBrowser", OnMenuPauseBrowser);
             // WPF Window_PreviewMouseDown: tunnel, so a child that handles the press still closes the box.
             AddHandler(PointerPressedEvent, OnTubePreviewPointerPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
         }
@@ -167,6 +169,33 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             else RunOnAvatar(Hide);
         }
 
+        private bool _isBrowserPaused;
+
+        /// <summary>WPF MenuItemPauseBrowser_Click: flip, pause/resume the Home browser, and tell the
+        /// Workshop's Behavior cell (WPF SyncQuickControlsUI(pauseBrowser)).</summary>
+        internal async void OnMenuPauseBrowser()
+        {
+            _isBrowserPaused = !_isBrowserPaused;
+            try
+            {
+                if (QuickShell is { } shell)
+                {
+                    // WPF AvatarTubeWindow.ChatInput.cs:1407: menu resume unmutes the live page.
+                    await shell.SetBrowserPausedFromWorkshopAsync(_isBrowserPaused, preserveSavedMute: false);
+                    shell.SyncPauseBrowserUI(_isBrowserPaused);
+                }
+            }
+            catch (Exception ex) { Log.Debug("Failed to toggle browser audio: {Error}", ex.Message); }
+            UpdateQuickMenuState();
+        }
+
+        /// <summary>WPF SetBrowserPaused: the Workshop toggle's mirror into this menu.</summary>
+        public void SetBrowserPaused(bool isPaused)
+        {
+            _isBrowserPaused = isPaused;
+            UpdateQuickMenuState();
+        }
+
         private static IconLabel MenuLabel(string key, params object[] args) => IconLabel.ForKey(key, args);
 
         /// <summary>WPF UpdateQuickMenuState: headers, colours and enabled state; on Opened and after each click.</summary>
@@ -218,11 +247,17 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 whispers.Header = MenuLabel(s.SubAudioMuted ? "menu_mute_whispers_on" : "menu_mute_whispers_off");
                 whispers.Foreground = s.SubAudioMuted ? MenuRed : Brushes.White;
             }
+            var pauseBrowser = QuickItem("MenuItemPauseBrowser");
+            if (pauseBrowser != null)
+            {
+                pauseBrowser.Header = MenuLabel(_isBrowserPaused ? "menu_resume_browser" : "menu_pause_browser");
+                pauseBrowser.Foreground = _isBrowserPaused ? MenuGreen : Brushes.White;
+            }
 
             if (RemoteControllerConnected)
             {
                 if (engine != null) engine.Header = MenuLabel("label_start_engine");
-                foreach (var item in new[] { engine, trigger, takeover, mute, whispers })
+                foreach (var item in new[] { engine, trigger, takeover, mute, whispers, pauseBrowser })
                     if (item != null) { item.IsEnabled = false; item.Foreground = MenuLocked; }
                 return;   // the personality root is locked by PopulatePersonalityMenu
             }
@@ -231,6 +266,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             if (takeover != null) takeover.IsEnabled = takeoverAvailable;
             if (mute != null) mute.IsEnabled = true;
             if (whispers != null) whispers.IsEnabled = true;
+            if (pauseBrowser != null) pauseBrowser.IsEnabled = true;
         }
     }
 }
