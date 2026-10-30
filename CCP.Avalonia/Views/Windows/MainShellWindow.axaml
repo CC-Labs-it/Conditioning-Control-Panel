@@ -299,6 +299,7 @@
                         <StackPanel Orientation="Horizontal">
                             <Ellipse x:Name="OnlineMeterPillDot" Width="8" Height="8" Fill="#FF69B4" Margin="0,0,7,0" VerticalAlignment="Center"/>
                             <TextBlock x:Name="TxtOnlineMeterPill" Foreground="White" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <Button x:Name="OnlinePillHelp" Content="?" Padding="4,0" Margin="5,0,0,0" FontSize="11" Focusable="False"/>
                         </StackPanel>
                     </Border>
 

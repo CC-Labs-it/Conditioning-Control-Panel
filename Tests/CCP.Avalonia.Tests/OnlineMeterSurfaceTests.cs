@@ -7,6 +7,9 @@ using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
+using Avalonia.Controls;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Fyp.Online;
@@ -76,6 +79,42 @@ public sealed class OnlineMeterSurfaceTests
             Assert.Equal(Loc.Get("online_pill_done"), shell.OnlinePillText!.Text);
             shell.PaintOnlineMeterPill(State(42, source: "local"));
             Assert.False(shell.OnlinePill!.IsVisible);
+        }
+        finally { shell.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task RepeatedAssetsHelpRequestsDoNotToggleThePinOff() => Run(() =>
+    {
+        var tab = new AssetsTabView();
+        tab.PinOnlineHelp();
+        Assert.True(LeashHelpButton.IsPinned(tab.OnlineHelp!));
+        tab.PinOnlineHelp();
+        Assert.True(LeashHelpButton.IsPinned(tab.OnlineHelp!));
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PillHelpPinsTheAssetsSlipAndRepeatedRequestsLeaveItOpen() => Run(() =>
+    {
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            var tab = shell.FindControl<AssetsTabView>("AssetsTab")!;
+            tab.PaintOnlineMeter(State(42), DateTime.Now, DateTime.Now.AddHours(1));
+            var request = shell.FindControl<Button>("OnlinePillHelp")!;
+            request.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var help = tab.OnlineHelp!;
+            Assert.True(LeashHelpButton.IsPinned(help));
+            Assert.True(LeashHelpButton.IsOpen(help));
+            request.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(LeashHelpButton.IsPinned(help));
+            Assert.True(LeashHelpButton.IsOpen(help));
+            Assert.Contains(Loc.Get("online_help_cache"), ((TextBlock)((Border)LeashHelpButton.Slip(help)!).Child!).Text);
         }
         finally { shell.Close(); }
         return Task.CompletedTask;
