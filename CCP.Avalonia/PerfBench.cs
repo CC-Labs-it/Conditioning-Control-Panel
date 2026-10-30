@@ -110,16 +110,21 @@ namespace ConditioningControlPanel.Avalonia
             return 0;
         }
 
-        /// <summary>Elapsed ms on <paramref name="clock"/> when the render thread has drawn the next frame:
-        /// the frame callback runs before that tick's layout and commit, so its batch carries the change.</summary>
-        private static Task<double> NextFrame(TopLevel w, Stopwatch clock)
+        /// <summary>Elapsed ms when the batch carrying the pending visual changes has rendered.
+        /// MediaContext processes layout and draw-list updates before committing this batch. An
+        /// animation-frame callback first would wait for a separate pulse (which is throttled by
+        /// outstanding composition), and can time an extra frame after the tab is already drawn.</summary>
+        internal static async Task<double> NextFrame(TopLevel w, Stopwatch clock)
         {
             var compositor = ElementComposition.GetElementVisual(w)?.Compositor
                 ?? throw new InvalidOperationException("the window has no compositor");
-            var done = new TaskCompletionSource<double>();
-            w.RequestAnimationFrame(_ => compositor.RequestCompositionBatchCommitAsync().Rendered
-                .ContinueWith(_ => done.TrySetResult(clock.Elapsed.TotalMilliseconds), TaskScheduler.Default));
-            return done.Task.WaitAsync(FrameTimeout);
+            var requestedMs = clock.Elapsed.TotalMilliseconds;
+            await compositor.RequestCompositionBatchCommitAsync().Rendered
+                .WaitAsync(FrameTimeout).ConfigureAwait(false);
+            var renderedMs = clock.Elapsed.TotalMilliseconds;
+            if (TabSwitchTiming.Enabled)
+                Serilog.Log.Debug("[TabSwitchFrame] requested={RequestedMs} rendered={RenderedMs}", requestedMs, renderedMs);
+            return renderedMs;
         }
 
         /// <summary>Median interpolates the middle pair; other percentiles are nearest-rank.</summary>

@@ -19,7 +19,8 @@ namespace ConditioningControlPanel.Avalonia
             PerfBench.SinceMain.Start();   // --perf-bench startup clock: the first line of Main, by definition
             // WPF logs to a file under UserData/logs (App.xaml.cs:1967, LogPipeline.cs); stderr stays for CI and kc.
             // ponytail: WPF's path redaction, flight recorder and per-run naming come with the bug-report port.
-            Serilog.Log.Logger = new Serilog.LoggerConfiguration().MinimumLevel.Information()
+            Serilog.Log.Logger = new Serilog.LoggerConfiguration().MinimumLevel.Is(
+                Views.Windows.TabSwitchTiming.Enabled ? Serilog.Events.LogEventLevel.Debug : Serilog.Events.LogEventLevel.Information)
                 .WriteTo.Sink(new StderrSink())
                 .WriteTo.File(System.IO.Path.Combine(ConditioningControlPanel.CorePaths.UserData, "logs", "ccp-avalonia-.log"),
                     rollingInterval: Serilog.RollingInterval.Day, retainedFileCountLimit: 14,
