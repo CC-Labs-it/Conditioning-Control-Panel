@@ -67,8 +67,15 @@ namespace ConditioningControlPanel.Avalonia.Helpers
                 catch (Exception ex) { Log.Warning(ex, "[ModArt] mod override {Path} would not load", overridePath); }
             }
 
-            return TryLoadBuiltIn(resourceName, decodeWidth);
+            return TryLoadBuiltIn(EmbeddedPathFor(resourceName), decodeWidth);
         }
+
+        // Existence is immutable for compiled resources. A mod switch still selects a fresh twin.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> EmbeddedExists = new();
+        internal static string EmbeddedPathFor(string resourceName) =>
+            CoreModArt.EmbeddedPathFor(resourceName, CoreMods.ActiveModId, path =>
+                EmbeddedExists.GetOrAdd(path, static p => AssetLoader.Exists(
+                    new Uri($"avares://CCP.Avalonia/Resources/{p}"))));
 
         /// <summary>Compiled art only, for WPF surfaces that bind pack:// directly rather than use a mod resolver.</summary>
         internal static Bitmap? TryLoadBuiltIn(string? resourceName, int? decodeWidth = null)

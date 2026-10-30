@@ -116,8 +116,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF ApplyDoorArt (:825): points the medallions at the active mod's art. The paths
         /// (nav/door_*.png) are the mod compatibility surface. A null resolve leaves the authored
         /// Source alone. Social's XAML placeholder (the Lobby picture under a shade) gives way to the
-        /// shipped or modded nav/door_social.png, and the shade goes with it. ponytail: WPF's
-        /// per-mod embedded twins (nav/mods/&lt;mod-id&gt;/, polish wave 11) are lane wire-shell-nav-rail-b.</summary>
+        /// shipped or modded nav/door_social.png, and the shade goes with it. ModArt also tries
+        /// per-mod embedded twins (nav/mods/&lt;mod-id&gt;/) before the default art.</summary>
         internal void ApplyDoorArt()
         {
             try
