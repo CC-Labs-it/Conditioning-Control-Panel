@@ -12,7 +12,7 @@ import { wrap, damp, lerp, clamp } from '../core/math.js';
 import { grantBoost } from './grant.js';
 import { cancelDrift } from './drift.js';
 import { endBoost } from './boost.js';
-import { ITEMS, bucketOf, rollItem, durationOf, makeRand, BUCKETS, SPIN_KINDS } from './itemTable.js';
+import { ITEMS, ITEM_IDS, bucketOf, rollItem, durationOf, makeRand, BUCKETS, SPIN_KINDS } from './itemTable.js';
 import { itemUseMode } from './itemUse.js';
 import { liftedNear } from './ramps.js';
 import { createTunnel } from './tunnel.js';
@@ -25,7 +25,9 @@ const SHATTER_WAIT_M = 6;    // feel gap: a Shatter throw waits this far behind 
 
 const VIEW_KINDS = { full: 1, mild: 1 };
 
-export function createItems(track, feel, events, { seed = 1 } = {}) {
+export function createItems(track, feel, events, { seed = 1, force = null } = {}) {
+  // dev ?item=<id> (offline races; online the room rolls): every box the player takes rolls that id, to try an item at the desk
+  const forced = ITEM_IDS.includes(force) ? force : null;
   const L = track.lengthM;
   const g = (k) => feel.get('items.' + k);
   const pathFrame = (s, seg, out) => track.pathFrameAt ? track.pathFrameAt(s, seg, out) : track.frameAt(s, out);
@@ -374,7 +376,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       if (b.kind === 'box') {
         if (r.item.id || r.item.rolling || !(b.liftM ? liftedNear(r.st, b.v, boxR) : near(r, b.s, b.x, boxR))) continue;
         b.downT = g('boxRespawnS'); b.upT = 0;
-        const id = rollItem(feel, bucketOf(feel, standings.placeOf(r.i), standings.gapToLeader(r.i)), rand);
+        const id = forced && r.i === 0 ? forced : rollItem(feel, bucketOf(feel, standings.placeOf(r.i), standings.gapToLeader(r.i)), rand);
         r.item.id = id; r.item.rolling = true; r.item.rollT = 0; r.item.heldT = 0;
         pop('box', 'box', b.s, b.x, b.liftM || 0);
         events.emit('item-box', { racer: r.i, box: i, p: b.v.p.slice() });

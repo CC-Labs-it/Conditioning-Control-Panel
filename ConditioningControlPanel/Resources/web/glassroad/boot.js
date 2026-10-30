@@ -818,7 +818,7 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     perfume = createBoudoirPerfume(track, q);
     standings = createStandings(track, feel, q);
-    items = s ? s.mount(racers, race, q) : solo ? noItems() : createItems(track, feel, q, { seed: sd });
+    items = s ? s.mount(racers, race, q) : solo ? noItems() : createItems(track, feel, q, { seed: sd, force: qs.get('item') });
     social.bind(items);
     social.attach(q, (i) => { const r = racers.list[i]; return !!(r && r.meta && r.meta.isBot && r.kind !== 'remote'); });
     P = racers.player;
