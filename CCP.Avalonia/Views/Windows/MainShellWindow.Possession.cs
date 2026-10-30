@@ -1,9 +1,6 @@
-// Adapted from MainWindow/MainWindow.Possession.cs at 73b1ccf0d793bb3fde6091c18a9fa6b5c692964a.
-// WPF MainWindow.Possession.cs:53 (lifecycle), :96 (stage), :149 (invalidation),
-// :257 (cache), :323 (labels), :355 (walk), :432 (identity), :454 (roles),
-// :529 (placement), :563 (names), :623 (coordinates), :658 (usability).
-// Stage/registry only. Do not start the director before attribution and the effect
-// adapters exist: WPF requires a charge and outline before any control moves.
+// WPF MainWindow.Possession.cs:53,96,149,257,323,355,432,454 (lifecycle, stage, cache, walk, roles).
+// WPF :529,563,623,658 (placement, names, coordinates, usability).
+// Stage/registry only. The director requires attribution and effect adapters before controls move.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -78,12 +75,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         bool IPossessionHost.IsUsable => !_possessionClosed && IsVisible
             && WindowState != WindowState.Minimized && !LockCardWindow.IsAnyOpen()
             && !OwnedWindows.Any(w => w.IsVisible);
-        // ponytail: conservatively pause behind any owned surface until each takeover has a live service seam.
         private List<PossessionTarget>? _possessionTargetCache;
-        private DateTime _possessionCacheAt = DateTime.MinValue;
-        private bool _possessionCacheDirty = true;
-        private DateTime _possessionLayoutSeenAt = DateTime.MinValue;
-        private bool _possessionLayoutHooked;
+        private DateTime _possessionCacheAt = DateTime.MinValue, _possessionLayoutSeenAt = DateTime.MinValue;
+        private bool _possessionCacheDirty = true, _possessionLayoutHooked;
         private static readonly TimeSpan PossessionRebuildFloor = TimeSpan.FromMilliseconds(750);
         private static readonly TimeSpan PossessionCacheMaxAge = TimeSpan.FromSeconds(10);
         private static readonly HashSet<string> PossessionNeverNames = new(StringComparer.Ordinal)
@@ -285,12 +279,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                if (!fe.IsEnabled || !fe.IsHitTestVisible) return false;
+                if (!fe.IsEffectivelyEnabled || !fe.IsHitTestVisible) return false;
                 if (fe.Bounds.Width <= 0 || fe.Bounds.Height <= 0) return false;
                 if (!TryWindowBounds(fe, out var r)) return false;
                 if (r.Width < MinTargetPx || r.Height < MinTargetPx) return false;
-                var w = Bounds.Width;
-                var h = Bounds.Height;
+                double w = Bounds.Width, h = Bounds.Height;
                 if (w <= 0 || h <= 0) return false;
                 return r.Right > 0 && r.Bottom > 0 && r.X < w && r.Y < h;
             }

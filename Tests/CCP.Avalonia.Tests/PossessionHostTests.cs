@@ -23,8 +23,6 @@ public sealed class PossessionHostTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
-        // A returning user: a fresh profile opens the owned first-run / age-gate / What-moved windows,
-        // and any visible owned window makes the host unusable.
         settings.Current.Welcomed = true;
         settings.Current.HasAcceptedAgeVerification = true;
         settings.Current.WhatMovedCardShown = 1;
@@ -112,6 +110,17 @@ public sealed class PossessionHostTests
         Assert.Same(timer, target.Visual);
         Assert.Equal(PossessionRole.Timer, target.Role);
         Assert.Equal("the timer", target.DisplayName);
+    });
+    [Theory, InlineData(false), InlineData(true)]
+    public void EffectivelyDisabledControlsAreNotTargets(bool command) => Run((shell, panel) =>
+    {
+        var button = Button("Disabled");
+        if (command) button.Command = new ConditioningControlPanel.Avalonia.Views.Controls.Companion.RelayCommand(() => throw new InvalidOperationException(), () => false);
+        panel.Children.Add(new StackPanel { IsEnabled = command, Children = { button } });
+        Layout(shell);
+        Assert.True(button.IsEnabled);
+        Assert.False(button.IsEffectivelyEnabled);
+        Assert.DoesNotContain(shell.GetPossessionTargets(), t => t.Visual == button);
     });
     [Fact]
     public void LabelBudgetKeepsLargestAndExplicitLabelsDoNotSpendIt() => Run((shell, panel) =>
