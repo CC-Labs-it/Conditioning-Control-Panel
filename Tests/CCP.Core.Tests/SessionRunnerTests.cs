@@ -66,6 +66,108 @@ public sealed class SessionRunnerTests : IDisposable
         },
     };
 
+    // WPF SessionEngine.cs:1498-1525, :818-832, :925-935, :521/:570.
+    [Theory]
+    [InlineData(false, 0)]
+    [InlineData(true, 0)]
+    [InlineData(true, 2)]
+    public void SessionBubblesApplyDelayRampPauseAndRestore(bool enabled, int delay)
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.BubblesEnabled, s.BubblesFrequency, s.BubblesClickable);
+        var hooks = (CoreBubbles.StartAction, CoreBubbles.StopAction, CoreBubbles.RefreshFrequencyAction);
+        bool running = false;
+        int refreshes = 0;
+        CoreBubbles.StartAction = () => running = true;
+        CoreBubbles.StopAction = () => running = false;
+        CoreBubbles.RefreshFrequencyAction = () => refreshes++;
+        try
+        {
+            (s.BubblesEnabled, s.BubblesFrequency, s.BubblesClickable) = (true, 37, true);
+            var session = OneMinute();
+            session.DurationMinutes = 20;
+            var ss = session.Settings;
+            (ss.BubblesEnabled, ss.BubblesStartMinute, ss.BubblesFrequency, ss.BubblesClickable) = (enabled, delay, 5, false);
+            _runner.Start(session);
+            Assert.Equal(enabled && delay == 0, running);
+            Assert.Equal(enabled && delay == 0, s.BubblesEnabled);
+            if (enabled) Assert.False(s.BubblesClickable);
+            _runner.Tick(TimeSpan.FromMinutes(1));
+            Assert.Equal(enabled && delay == 0, running);
+            _runner.Tick(TimeSpan.FromMinutes(2));
+            Assert.Equal(enabled, running);
+            if (enabled)
+            {
+                Assert.Equal(5, s.BubblesFrequency);
+                _runner.Pause();
+                Assert.False(running);
+                _runner.Resume();
+                Assert.True(running);
+                var before = refreshes;
+                _runner.Tick(TimeSpan.FromMinutes(7));
+                Assert.Equal(delay > 0 ? 6 : 5, s.BubblesFrequency);
+                Assert.Equal(before + (delay > 0 ? 1 : 0), refreshes);
+            }
+            _runner.Stop();
+            Assert.False(running);
+            Assert.Equal((true, 37, true), (s.BubblesEnabled, s.BubblesFrequency, s.BubblesClickable));
+        }
+        finally
+        {
+            _runner.Stop();
+            (CoreBubbles.StartAction, CoreBubbles.StopAction, CoreBubbles.RefreshFrequencyAction) = hooks;
+            (s.BubblesEnabled, s.BubblesFrequency, s.BubblesClickable) = saved;
+        }
+    }
+
+    // WPF SessionEngine.cs:1013-1067: active-time scheduling, wall-time burst expiry.
+    [Fact]
+    public void SessionBubblesBurstsExpireAcrossPauseAndResetOnNextRun()
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.BubblesEnabled, s.BubblesFrequency, s.BubblesClickable);
+        var hooks = (CoreBubbles.StartAction, CoreBubbles.StopAction, CoreBubbles.RefreshFrequencyAction);
+        bool running = false;
+        CoreBubbles.StartAction = () => running = true;
+        CoreBubbles.StopAction = () => running = false;
+        CoreBubbles.RefreshFrequencyAction = () => { };
+        try
+        {
+            var session = OneMinute();
+            session.DurationMinutes = 20;
+            var ss = session.Settings;
+            (ss.BubblesEnabled, ss.BubblesIntermittent, ss.BubblesBurstCount, ss.BubblesPerBurst) = (true, true, 1, 4);
+            _runner.Start(session);
+            Assert.False(running);
+            var now = new DateTime(2026, 1, 1);
+            _runner.Tick(TimeSpan.FromMinutes(1), now);
+            Assert.False(running);
+            _runner.Tick(TimeSpan.FromMinutes(4), now);
+            Assert.True(running);
+            Assert.Equal(8, s.BubblesFrequency);
+            _runner.Pause();
+            Assert.False(running);
+            _runner.Tick(TimeSpan.FromMinutes(4), now.AddMinutes(3));
+            Assert.False(running);
+            _runner.Resume();
+            Assert.True(running); // WPF resumes the saved enabled flag before the next tick.
+            _runner.Tick(TimeSpan.FromMinutes(4), now.AddMinutes(3));
+            Assert.False(running);
+            _runner.Tick(TimeSpan.FromMinutes(10), now.AddMinutes(10));
+            Assert.False(running); // exactly one burst
+            _runner.Stop();
+            _runner.Start(session);
+            _runner.Tick(TimeSpan.FromMinutes(4), now.AddMinutes(20));
+            Assert.True(running); // new run resets the schedule
+        }
+        finally
+        {
+            _runner.Stop();
+            (CoreBubbles.StartAction, CoreBubbles.StopAction, CoreBubbles.RefreshFrequencyAction) = hooks;
+            (s.BubblesEnabled, s.BubblesFrequency, s.BubblesClickable) = saved;
+        }
+    }
+
     private static JObject SettingsJson() =>
         JObject.Parse(JsonConvert.SerializeObject(CoreSettings.Current, Formatting.Indented));   // = settings.json
 
