@@ -888,7 +888,7 @@ LockCard, Pink Filter/Spiral minutes or a completed Lockdown. A Linux enrollment
 <ul>
 <li>Wire the three cheap signals exactly like WPF: <code>App.Quests.TrackLockCardCompleted()</code> on a non-test card
 (WPF AchievementService:544), Pink Filter/Spiral quest minutes on a 1 s tick that runs only while the overlay windows show
-(WPF AchievementService:239/276, same &lt; 6 s interval ceiling; <code>Platform/OverlayQuestMinutes.cs</code>), and
+(WPF AchievementService:239/276, same &lt; 6 s interval ceiling, 3 min <code>RunningTimeCredit</code> ceiling since r72-sync8-real-time; <code>Platform/OverlayQuestMinutes.cs</code>), and
 <code>TrackLockdownCompleted(LastActiveDuration)</code> on <code>LockdownDeactivated</code> (WPF App.xaml.cs:3295).</li>
 <li>Core: <code>CoreProgram.TaskAvailableProvider</code> (null = everything available; WPF never seeds it, so WPF is unchanged) and the pure
 <code>ProgramService.UnavailableTasks</code> (required tasks only; a day's Ambient layer is not a task). <code>CanEnroll</code> refuses after the
