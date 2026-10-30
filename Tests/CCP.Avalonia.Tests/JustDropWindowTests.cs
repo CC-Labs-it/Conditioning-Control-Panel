@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Fonts.Inter;
 using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
@@ -171,6 +172,32 @@ public sealed class JustDropWindowTests
         Assert.Equal(GameWindow.JustDropEscapeScript, injected);
         Assert.Contains("},true)", injected);
         Assert.DoesNotContain("preventDefault", injected);
+    });
+
+    [Fact]
+    public void ShopStripUsesTheExistingThemeAndItsHoverAndPressedFeedback() => Run(shell =>
+    {
+        JustDropService.SetServerEnabledForTests(true);
+        shell.ShowTab("justdrop");
+        var w = Open()!;
+        var chrome = Assert.IsType<Border>(Assert.IsType<Grid>(w.Content).Children[0]);
+        var bar = Assert.IsType<DockPanel>(chrome.Child);
+        var title = Assert.Single(bar.Children.OfType<TextBlock>());
+        var toggle = Assert.Single(bar.Children.OfType<Button>());
+        Assert.Same(w.FindResource("SmallPinkButton"), toggle.Theme);
+        Assert.Same(w.FindResource("PanelBgBrush"), chrome.Background);
+        Assert.Same(w.FindResource("TransparentPink40Brush"), chrome.BorderBrush);
+        Assert.Same(w.FindResource("PinkBrush"), title.Foreground);
+        Assert.Same(w.FindResource("PinkBrush"), toggle.Background);
+        toggle.ApplyTemplate();
+        var face = Assert.Single(toggle.GetVisualDescendants().OfType<Border>(), b => b.Name == "border");
+        ((IPseudoClasses)toggle.Classes).Set(":pointerover", true);
+        Assert.Same(w.FindResource("PinkButtonHoveredBrush"), face.Background);
+        ((IPseudoClasses)toggle.Classes).Set(":pressed", true);
+        Assert.Same(w.FindResource("AccentPressedBrush"), face.Background);
+        ((IPseudoClasses)toggle.Classes).Set(":pressed", false);
+        ((IPseudoClasses)toggle.Classes).Set(":pointerover", false);
+        Assert.Same(w.FindResource("PinkBrush"), face.Background);
     });
 
     [Fact]

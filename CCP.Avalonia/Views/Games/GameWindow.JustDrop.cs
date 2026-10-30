@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.JustDrop;
 using Newtonsoft.Json;
@@ -41,6 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var bar = new DockPanel { LastChildFill = true };
             _justDropFullscreenToggle = new Button
             {
+                [!ThemeProperty] = new DynamicResourceExtension("SmallPinkButton"),
                 Name = "JustDropFullscreen", MinWidth = 120, Margin = new global::Avalonia.Thickness(8, 5, 10, 5),
                 VerticalAlignment = VerticalAlignment.Center,
             };
@@ -51,11 +53,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 Text = "Just Drop", Margin = new global::Avalonia.Thickness(12, 0, 8, 0),
                 VerticalAlignment = VerticalAlignment.Center, FontSize = 12, FontWeight = FontWeight.SemiBold,
-                Foreground = Brushes.HotPink, TextTrimming = TextTrimming.CharacterEllipsis,
+                [!TextBlock.ForegroundProperty] = new DynamicResourceExtension("PinkBrush"),
+                TextTrimming = TextTrimming.CharacterEllipsis,
             });
             grid.Children.Add(new Border
             {
-                Background = Brushes.Black, BorderBrush = Brushes.HotPink,
+                [!Border.BackgroundProperty] = new DynamicResourceExtension("PanelBgBrush"),
+                [!Border.BorderBrushProperty] = new DynamicResourceExtension("TransparentPink40Brush"),
                 BorderThickness = new global::Avalonia.Thickness(0, 0, 0, 1), Child = bar,
             });
             Content = null;
