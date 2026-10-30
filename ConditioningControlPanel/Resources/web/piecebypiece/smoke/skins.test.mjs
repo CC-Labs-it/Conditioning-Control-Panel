@@ -241,6 +241,9 @@ import { existsSync } from 'node:fs';
 
 test('profile: both seats read off the state, unknown ids and junk wear nothing', () => {
   assert.equal(seatCosmetics({}), null, 'an old server sends nothing');
+  assert.deepEqual(seatCosmetics({ cards: { white: { avatar_id: null, frame_id: 'profile.frame.gilt' }, black: null } }),
+    { white: { avatar: null, frame: 'profile.frame.gilt' }, black: null }, 'the server answers them as cards (CCP-Server #378)');
+  assert.deepEqual(seatCosmetics({ cards: { white: null, black: null } }), { white: null, black: null }, 'an old match answers two nulls');
   assert.equal(seatCosmetics({ cosmetics: [1] }), null);
   assert.deepEqual(seatCosmetics({ cosmetics: { white: { avatar_id: 'profile.avatar.emi-pixel', frame_id: 'profile.frame.lace' }, black: { frame_id: 'nope' } } }),
     { white: { avatar: 'profile.avatar.emi-pixel', frame: 'profile.frame.lace' }, black: null });

@@ -4,9 +4,9 @@
  *
  * The art is the Prize Counter's profile family (Astra's 512 px PNGs, copied
  * from Resources/cosmetics/shop/ into assets/profile/). A seat's cosmetics ride
- * the match state and the watch head as
+ * the match state and the watch head as (CCP-Server #378)
  *
- *   cosmetics: { white: { avatar_id, frame_id }, black: { avatar_id, frame_id } }
+ *   cards: { white: { avatar_id, frame_id }, black: { avatar_id, frame_id } }
  *
  * clamped by the server to each player's grants. This side only drops ids it
  * has no art for. A server that sends nothing leaves the plain side discs.
@@ -28,9 +28,11 @@ export function normCosmetics(raw) {
   return avatar || frame ? { avatar, frame } : null;
 }
 
-/** Both seats off a match state or watch head, or null when it carries no cosmetics at all. */
+/** Both seats off a match state or watch head, or null when it carries no cosmetics at all. The server
+ *  (CCP-Server #378, pbp-online-api.md section 11) answers them as `cards`; `cosmetics` is the same shape. */
 export function seatCosmetics(src) {
-  const c = src && typeof src === 'object' ? src.cosmetics : null;
+  const o = src && typeof src === 'object' ? src : null;
+  const c = o ? (o.cards ?? o.cosmetics) : null;
   if (!c || typeof c !== 'object' || Array.isArray(c)) return null;
   return { white: normCosmetics(c.white), black: normCosmetics(c.black) };
 }
