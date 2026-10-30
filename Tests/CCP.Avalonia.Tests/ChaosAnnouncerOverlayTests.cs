@@ -1,11 +1,16 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
@@ -28,7 +33,9 @@ public sealed class ChaosAnnouncerOverlayTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options(systemEmoji: false))
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
 
@@ -135,6 +142,80 @@ public sealed class ChaosAnnouncerOverlayTests
             Assert.False(w.IsVisible);
         });
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Banner_replaces_text_and_renders_only_nonblank_uppercase_suffix(bool suffix)
+    {
+        await Run(_ =>
+        {
+            var key = "announcer-test-" + Guid.NewGuid().ToString("N");
+            var path = Path.Combine(CorePaths.UserData, "assets", "assets", "Chaos", "announce", key + ".png");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            using (var bitmap = new WriteableBitmap(new PixelSize(2, 2), new Vector(96, 96)))
+                bitmap.Save(path);
+            try
+            {
+                ChaosAnnouncerOverlay.Announce("fallback", ChaosAnnounceKind.Item, key, suffix ? "ten seconds" : " ");
+                var host = Assert.IsType<Grid>(ChaosAnnouncerOverlay.Active!.Content);
+                var anchor = Assert.IsType<Grid>(Assert.Single(host.Children));
+                var panel = Assert.IsType<StackPanel>(Assert.Single(anchor.Children));
+                var image = Assert.IsType<Image>(panel.Children[0]);
+                Assert.NotNull(image.Source);
+                Assert.Equal(120, image.Height);
+                Assert.Equal(Stretch.Uniform, image.Stretch);
+                Assert.Equal(suffix ? 2 : 1, panel.Children.Count);
+                if (suffix)
+                {
+                    var label = Assert.IsType<OutlinedTextBlock>(panel.Children[1]);
+                    Assert.Equal("TEN SECONDS", label.Text);
+                    Assert.Equal(26, label.FontSize);
+                    Assert.Equal(2.2, label.StrokeThickness);
+                }
+            }
+            finally { File.Delete(path); }
+        });
+    }
+
+    // The live art keys (ChaosRunHost T-10 s / relapse, ChaosOverlayWindow "it noticed.") resolve from the
+    // shipped build output, not only from a user-data drop: CCP.Avalonia.csproj links WPF's announce PNGs.
+    [Theory]
+    [InlineData("ending_soon")]
+    [InlineData("relapse")]
+    [InlineData("it_noticed")]
+    public async Task Live_art_keys_ship_with_the_head(string key)
+    {
+        await Run(_ =>
+        {
+            Assert.True(File.Exists(Path.Combine(AppContext.BaseDirectory, "assets", "Chaos", "announce", key + ".png")));
+            Assert.NotNull(ChaosEffectBannerOverlay.ResolveArt(key));
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Missing_or_unreadable_art_uses_uppercase_text_without_suffix(bool corrupt)
+    {
+        await Run(_ =>
+        {
+            var key = "announcer-missing-" + Guid.NewGuid().ToString("N");
+            var path = Path.Combine(CorePaths.UserData, "assets", "assets", "Chaos", "announce", key + ".png");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            if (corrupt) File.WriteAllText(path, "invalid image");
+            try
+            {
+                ChaosAnnouncerOverlay.Announce("fallback", ChaosAnnounceKind.Item, key, "ignored");
+                var host = Assert.IsType<Grid>(ChaosAnnouncerOverlay.Active!.Content);
+                var anchor = Assert.IsType<Grid>(Assert.Single(host.Children));
+                var label = Assert.IsType<OutlinedTextBlock>(Assert.Single(anchor.Children));
+                Assert.Equal("FALLBACK", label.Text);
+                Assert.Equal(60, label.FontSize);
+            }
+            finally { File.Delete(path); }
+        });
+    }
+
     [Fact]
     public void Line_is_anchored_to_the_work_area_including_a_left_docked_panel()
     {
