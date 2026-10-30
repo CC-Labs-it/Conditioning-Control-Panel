@@ -320,63 +320,91 @@ public sealed class PlayWallTests
     }
 
     [Fact]
-    public void PlayEntranceFollowsMotion_AndCancelsWhenHiddenOrDetached()
+    public void PlayEntranceUsesShellTiming_AndCleansUpOnLeaveOrClose()
     {
         AvaloniaTestDispatcher.Run(() =>
         {
-            if (Application.Current is null)
-                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+            LabWebcamStatusTests.Setup();
             var settings = CoreSettings.Current;
             var previous = settings.MotionLevel;
-            var play = new global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView();
-            var field = play.GetType().GetField("_entrance", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
-            System.Threading.CancellationTokenSource? Active() => (System.Threading.CancellationTokenSource?)field.GetValue(play);
-            var host = new Window { Content = play };
+            settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            var shell = new MainShellWindow { TabClock = new FrozenEntranceClock() };
             try
             {
-                settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full;
-                // Before Show: once animating, a section drops out of EntranceTargets (opacity filter).
-                var last = play.EntranceTargets()[^1];
-                host.Show();
-                Dispatcher.UIThread.RunJobs();
-                var first = Assert.IsType<System.Threading.CancellationTokenSource>(Active()).Token;
-                Assert.False(first.IsCancellationRequested);
-                // The animations really run: one frame in, the last section (240 ms delay) holds its "from" values.
+                shell.Show();
+                shell.ShowTab("appsettings");
+                shell.CompleteTabTransition();
+                var play = shell.Named<PlayTabView>("PlayTab")!;
+                Assert.False(play.IsVisible); // hidden startup attach starts no Play-local animation
+                var targets = MainShellWindow.FindStaggerTargets(play).ToArray();
+                Assert.Equal(8, targets.Length);
+                Assert.Equal("GamesGrid", targets[2].Name);
+                void AtRest(Control target)
+                {
+                    Assert.Equal(1, target.Opacity);
+                    Assert.Equal(0, Assert.IsType<global::Avalonia.Media.TranslateTransform>(target.RenderTransform).Y);
+                }
+
+                shell.ShowTab("play");
+                Assert.Same(play, shell.EnteringTab);
                 AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                 Dispatcher.UIThread.RunJobs();
-                Assert.Equal(0, last.Opacity);
-                Assert.Equal(10, Assert.IsType<global::Avalonia.Media.TranslateTransform>(last.RenderTransform).Y);
-                play.IsVisible = false;
-                Assert.True(first.IsCancellationRequested);
-                Assert.Null(Active());
-                play.IsVisible = true;
-                var second = Assert.IsType<System.Threading.CancellationTokenSource>(Active()).Token;
-                Assert.NotEqual(first, second);
-                host.Content = null;
-                Assert.True(second.IsCancellationRequested);
-                settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Off;
-                host.Content = play;
-                Assert.Null(Active());
-                Assert.Equal(1, play.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Opacity);
-                // WPF AnimateTabIn returns at Reduced before StaggerTabCards.
-                host.Content = null;
-                settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Reduced;
-                host.Content = play;
-                play.IsVisible = false; play.IsVisible = true;
-                Assert.Null(Active());
-                // P07: attaching while hidden (startup) starts nothing.
-                host.Content = null;
-                settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full;
-                play.IsVisible = false;
-                host.Content = play;
-                Assert.Null(Active());
+                shell.StepTabTransition(0);
+                // WPF Services/MotionFx.cs:123-138: BeginTime leaves delayed cards at base values.
+                // Rendering is essential: a competing backward-fill animation overrides local values.
+                AtRest(targets[^1]);
+                for (var i = 0; i < targets.Length; i++)
+                {
+                    var delay = 40 * Math.Min(i, 6);
+                    if (delay > 0)
+                    {
+                        shell.StepTabTransition(delay - 1);
+                        AtRest(targets[i]);
+                    }
+                    shell.StepTabTransition(delay);
+                    Assert.Equal(0, targets[i].Opacity);
+                    Assert.Equal(10, Assert.IsType<global::Avalonia.Media.TranslateTransform>(targets[i].RenderTransform).Y);
+                    shell.StepTabTransition(delay + 110);
+                    Assert.Equal(0.75, targets[i].Opacity, 5); // half of the 220 ms quadratic fade
+                }
+                shell.StepTabTransition(250);
+                Assert.Equal(targets[6].Opacity, targets[7].Opacity); // six-slot cap
+                Assert.Equal(0.62, play.FindControl<Border>("PlayFocusCard")!.Opacity);
+
+                shell.ShowTab("appsettings");
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Dispatcher.UIThread.RunJobs();
+                Assert.All(targets, AtRest); // WPF ChromeFx.cs:400 cleanup on a new entrance
+
+                settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Reduced;
+                shell.ShowTab("play");
+                Assert.Same(play, shell.EnteringTab);
+                Assert.All(targets, AtRest);
+                shell.StepTabTransition(100);
+                Assert.Equal(0.75, play.Opacity, 5); // WPF ChromeFx.cs:244 retains the crossfade
+                settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+                shell.ShowTab("appsettings");
+                shell.ShowTab("play");
+                Assert.Null(shell.EnteringTab);
+                Assert.Equal(1, play.Opacity);
+                Assert.All(targets, AtRest);
+
+                settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+                shell.ShowTab("appsettings");
+                shell.ShowTab("play");
+                shell.StepTabTransition(50);
+                shell.Close();
+                Assert.Null(shell.EnteringTab);
+                Assert.All(targets, AtRest);
             }
-            finally { host.Close(); settings.MotionLevel = previous; }
+            finally { shell.Close(); settings.MotionLevel = previous; }
         });
     }
 
+    private sealed class FrozenEntranceClock : TimeProvider
+    {
+        public override long GetTimestamp() => 0;
+    }
 
     [Fact]
     public void LanguageChangeRepaintsTrackerText_OnlyWhileAttached()

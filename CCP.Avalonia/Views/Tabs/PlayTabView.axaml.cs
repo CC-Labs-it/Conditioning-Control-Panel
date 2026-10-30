@@ -1,6 +1,4 @@
 using System;
-using System.Linq;
-using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -65,12 +63,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             App.IntakePass.PassStateChanged += OnIntakePassStateChanged;
             LocalizationManager.Instance.LanguageChanged += OnIntakePassStateChanged;
             RefreshPlayCards();
-            if (IsVisible) StartEntrance();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
-            StopEntrance();
             Platform.WebcamTracker.Instance.StateChanged -= RefreshWebcamStatus;
             Gaze.ActiveChanged -= OnGazeActiveChanged;
             CoreMods.ModChanged -= OnModChangedRepaintArt;
@@ -83,10 +79,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
-            if (change.Property == IsVisibleProperty && VisualRoot != null)
+            if (change.Property == IsVisibleProperty && IsVisible && VisualRoot != null)
             {
-                if (IsVisible) { RefreshPlayCards(); RefreshWebcamStatus(); StartEntrance(); }
-                else StopEntrance();
+                RefreshPlayCards();
+                RefreshWebcamStatus();
             }
         }
 
@@ -103,36 +99,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void OnIntakePassStateChanged(object? sender, EventArgs e) =>
             Dispatcher.UIThread.Post(() => { RefreshPlayCards(); RefreshWebcamStatus(); });
 
-        private CancellationTokenSource? _entrance;
-
-        // WPF MainWindow/MainWindow.ChromeFx.cs:430 walks through ScrollViewer to the wall panel,
-        // takes eight visible children; Services/MotionFx.cs:106 caps the 40 ms delay at six.
-        internal Control[] EntranceTargets() => WallScroll.Content is Panel wall
-            ? wall.Children.Where(c => c.IsVisible && c.Opacity > 0.99).Take(8).ToArray()
-            : Array.Empty<Control>();
-
-        private void StopEntrance()
-        {
-            _entrance?.Cancel();
-            _entrance?.Dispose();
-            _entrance = null;
-        }
-
-        private void StartEntrance()
-        {
-            StopEntrance();
-            // WPF AnimateTabIn returns at Reduced before StaggerTabCards (ChromeFx.cs:248-255).
-            if (AmbientFxCanvas.Env.Level != MotionLevel.Full) return;
-            _entrance = new CancellationTokenSource();
-            int index = 0;
-            foreach (var target in EntranceTargets())
-            {
-                target.RenderTransform = new TranslateTransform();
-                var delay = TimeSpan.FromMilliseconds(40 * Math.Min(index++, 6));
-                MainShellWindow.Entrance(target, delay, 220, OpacityProperty, 0, 1, _entrance.Token);
-                MainShellWindow.Entrance(target, delay, 260, TranslateTransform.YProperty, 10, 0, _entrance.Token);
-            }
-        }
+        // The shell owns the one entrance: WPF MainWindow/MainWindow.ChromeFx.cs:248,375.
+        // MainShellWindow.TabTransitions.cs keeps delayed sections at base values until BeginTime.
 
         /// <summary>
         /// Every card hero, WPF's <c>PlayTabView.xaml</c> table restated: the Border that owns the
