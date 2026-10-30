@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Skia;
 using Avalonia.Threading;
@@ -694,6 +695,42 @@ public sealed partial class GameWindowTests
         Assert.Equal(new[] { 250.0 }, xp);
         Assert.Equal(new[] { 1000.0 }, sparks);
         Assert.Equal((40, 40), GameWindow.RacePayout(200, 60, 1.0));
+    });
+
+    [Fact]
+    public void Race_and_launcher_follow_grant_additions_and_close_on_any_revocation() => RunRace("rt.original.03", (launcher, _, _) =>
+    {
+        var tracks = new HashSet<string> { "rt.original.03" };
+        RacingAccess.IsGrantedProvider = tracks.Contains;
+        launcher.BuildTiles();
+        var w = GameWindow.Launch("race")!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        tracks.Add("rt.original.04");
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        var update = Assert.Single(sent);
+        Assert.Equal("race-ownership", (string?)update["type"]);
+        Assert.Equal(new[] { 3, 4 }, update["tracks"]!.Values<int>());
+        sent.Clear();
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(sent); // An unrelated grant cannot restage the race menu.
+        tracks.Remove("rt.original.03");
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(w.RaceWatchRunning);
+        tracks.Clear();
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
+            c => Equals(c.Tag, "race"));
+        tracks.Add("rt.original.00");
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
+            c => Equals(c.Tag, "race"));
     });
 
     /// <summary>WPF StartHeartbeatWatch :595: idle until ready; silent past 20 s on the menu (10 s mid-run)

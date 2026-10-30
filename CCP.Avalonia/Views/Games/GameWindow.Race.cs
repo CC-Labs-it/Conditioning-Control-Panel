@@ -8,9 +8,10 @@
 // ponytail: still missing on this head, each its own unit (parity row game-race): BambiCloud levels
 // (cloud-open/cloud-start, settings.cloud stays false so the page hides the verb), the track player and
 // its decoder seed (own tracks + charting are GameWindow.RaceTracks.cs), sfx / fire-payload (no ChaosSfx bank or payload bridge here), favorites +
-// loom-list, report-bug, fullscreen-set, the mandatory-video pause, the grants watcher (PrizeOwnership has
-// no change event: nothing grants mid-run here), the meta frame, bubble credit and SeasonRecap TrackFeature.
+// loom-list, report-bug, fullscreen-set, the mandatory-video pause, the meta frame, bubble credit and SeasonRecap TrackFeature.
 using System;
+using System.Linq;
+using ConditioningControlPanel.Services.Prizes;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Friends;
@@ -38,6 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private readonly RaceRunLifecycle _raceRun = new();
         private DispatcherTimer? _raceHeartbeatWatch;
         private DateTime _raceLastHeartbeatUtc;
+        private int[] _raceOwnedTracks = Array.Empty<int>();
         private bool _racePinged, _raceExiting, _raceStarted, _raceDisposed;
 
         internal bool RaceRunActive => _raceRun.IsActive;
@@ -50,6 +52,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_raceStarted) return;
             _raceStarted = true;
+            _raceOwnedTracks = RacingAccess.OwnedTracks;
+            PrizeGrants.GrantsChanged += OnRaceGrantsChanged;
             _raceRun.Reset();
             _raceExiting = _racePinged = false;
             _raceLastHeartbeatUtc = RaceUtcNow();
@@ -60,6 +64,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             catch (Exception ex) { Log.Debug("RaceHost: presence enter: {E}", ex.Message); }
             Log.Information("CaucusHostService: launched");
         }
+
+        // WPF CaucusHostService.OnRaceGrantsChanged: additions update the menu; any loss closes
+        // the host, even when another owned track would still allow launch.
+        private void OnRaceGrantsChanged() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_raceDisposed || _closing) return;
+            var owned = RacingAccess.OwnedTracks;
+            if (!RacingAccess.CanLaunch || _raceOwnedTracks.Except(owned).Any()) { Close(); return; }
+            if (_raceOwnedTracks.SequenceEqual(owned)) return;
+            _raceOwnedTracks = owned;
+            Post(new { type = "race-ownership", tracks = owned });
+        });
 
         /// <summary>WPF OnPageMessage (:317). True = claimed; false falls through to the shell frames.</summary>
         private bool HandleRace(JObject o)
@@ -189,6 +205,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (!_raceStarted || _raceDisposed) return;
             _raceDisposed = true;
+            PrizeGrants.GrantsChanged -= OnRaceGrantsChanged;
             try { _raceHeartbeatWatch?.Stop(); } catch { }
             _raceHeartbeatWatch = null;
             try { DisposeRaceTracks(); }
