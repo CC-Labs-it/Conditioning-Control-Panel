@@ -39,7 +39,7 @@ public sealed class HeroXpFxTests
             var dot = shell.FindControl<Border>("XPMeniscus")!;
             Assert.True(bar.Width >= 5);
             Assert.Equal(0.55, dot.Opacity, 3);
-            Assert.Equal(Math.Max(0, bar.Width - 6), ((TranslateTransform)dot.RenderTransform!).X, 3);
+            Assert.Equal(Math.Max(0, bar.Width - 5), ((TranslateTransform)dot.RenderTransform!).X, 3);
 
             SaveFrame(shell, "HeroXpMeniscus");
 

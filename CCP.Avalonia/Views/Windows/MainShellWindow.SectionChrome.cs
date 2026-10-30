@@ -227,7 +227,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// Leash, the Companion pages, Folders' scroll...) is not drawn rather than drawn dead.</summary>
         private static bool CanOpenNavTab(NavTab tab) => tab.Kind == NavTabKind.Launcher
             ? tab.Key is "mods" or "catalogue" or "phrases" or "medialog"
-            : TabPanels.ContainsKey(tab.Key);
+            : tab.Kind == NavTabKind.Window
+                ? tab.Key == "justdrop" && Services.JustDrop.JustDropService.DoorAvailable
+                : TabPanels.ContainsKey(tab.Key);
 
         /// <summary>WPF OnSectionPillChosen (:246): launchers through their old handlers, pages and
         /// zones through ShowTab.</summary>
