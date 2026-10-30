@@ -165,3 +165,24 @@ test('paintShop fills the ribbon and the bar by the ids index.html carries', asy
   assert.equal(nodes.lookBlockerText.textContent, 'Buy Midnight cocktail at the Prize Counter');
   assert.deepEqual([nodes.openCounter.hidden, nodes.applyLook.disabled, nodes.discardLook.disabled], [false, true, false]);
 });
+
+test('counter Wear door: init.tryOn and rain-tryon hand one known piece over once; unknown keys and bundled looks never', () => {
+  const { shop } = shopWith({ tryOn: 'dress:midnight-cocktail' });
+  assert.deepEqual(shop.takeTryOn(), { slot: 'dress', id: 'midnight-cocktail' });
+  assert.equal(shop.takeTryOn(), null, 'taken once');
+  assert.equal(shop.handle({ type: 'rain-tryon', key: 'accessories:hair-bow' }), 'tryon');
+  assert.deepEqual(shop.takeTryOn(), { slot: 'accessories', id: 'hair-bow' });
+  shop.handle({ type: 'rain-tryon', key: 'dress:not-a-dress' });
+  assert.equal(shop.takeTryOn(), null);
+  shop.handle({ type: 'rain-tryon', key: 'looks:anything' });
+  assert.equal(shop.takeTryOn(), null);
+  assert.equal(shop.handle({ type: 'rain-tryon', key: 7 }), null);
+});
+
+test('counter Wear door: a try-on that lands before items.json waits for it', () => {
+  const shop = createShop({ items: new Map() });
+  shop.handle({ type: 'init', look: look(), grants: [], tryOn: 'hair:rose-waves' });
+  assert.equal(shop.takeTryOn(), null);
+  shop.setItems(items);
+  assert.deepEqual(shop.takeTryOn(), { slot: 'hair', id: 'rose-waves' });
+});

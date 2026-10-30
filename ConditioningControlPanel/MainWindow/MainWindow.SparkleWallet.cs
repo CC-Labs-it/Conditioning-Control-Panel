@@ -17,6 +17,7 @@ public partial class MainWindow
         App.Settings.CurrentReplaced += ReplaceSparkleWalletSettings;
         SparklePointRewards.Awarded += OnSparklePointAwarded;
         HeaderSparkleWallet.VisitRequested += VisitFromSparkleWallet;
+        HeaderSparkleWallet.CounterRequested += OpenCounterFromSparkleWallet;
         Closed += (_, _) => ShutdownSparkleWallet();
         Deactivated += (_, _) => HeaderSparkleWallet.ClosePopup();
         ReplaceSparkleWalletSettings();
@@ -84,6 +85,9 @@ public partial class MainWindow
 
     private void VisitFromSparkleWallet(object? sender, EventArgs e) => BtnStartBackRoom_Click(this, new RoutedEventArgs());
 
+    /// <summary>The wallet pill opens the Prize Counter (7.2 shop); the Back Room keeps its own doors.</summary>
+    private void OpenCounterFromSparkleWallet(object? sender, EventArgs e) => Services.PrizeCounter.PrizeCounterHostService.Launch(from: "wallet");
+
     private void ShutdownSparkleWallet()
     {
         _sparkleWalletActive = false;
@@ -92,6 +96,7 @@ public partial class MainWindow
         if (_sparkleWalletSettings != null) _sparkleWalletSettings.PropertyChanged -= OnSparkleWalletSettingChanged;
         _sparkleWalletSettings = null;
         HeaderSparkleWallet.VisitRequested -= VisitFromSparkleWallet;
+        HeaderSparkleWallet.CounterRequested -= OpenCounterFromSparkleWallet;
         HeaderSparkleWallet.ClosePopup();
     }
 }

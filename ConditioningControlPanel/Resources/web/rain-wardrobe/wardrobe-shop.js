@@ -1,7 +1,7 @@
 // The dressing room's shop layer (RAIN-V2-PLAN 2.4 / 2.5): badges, try-on, draft then Apply.
 // Pure on purpose: no location, no document at import, so node tests load it as is. viewer.js wires it.
 // Host -> page: init {look, grants[], level, achievements[], locale, motion, gentle, prices?, applyMode?},
-//   rain-owned {grants}, rain-applied {lookHash}. Page -> host: rain-draft {look, unowned},
+//   rain-owned {grants}, rain-applied {lookHash}, rain-tryon {key} (init.tryOn too). Page -> host: rain-draft {look, unowned},
 //   rain-apply {look}, open-counter {tab}. Without init the page reads today's ?locked= list instead
 //   (fallback), and without applyMode:true the page keeps the old autosave (viewer.js decides).
 
@@ -71,7 +71,7 @@ export function createShop({ items, isLocked = () => false, post = () => {}, nam
   const s = {
     items: items instanceof Map ? items : indexItems(items),
     source: 'fallback', grants: new Set(), level: 0, achievements: [], prices: {},
-    applyMode: false, calm: false, applied: null, draft: null, pending: null, applying: false, lookHash: '',
+    applyMode: false, calm: false, applied: null, draft: null, pending: null, applying: false, lookHash: '', tryOn: null,
   };
 
   function owned(key) {
@@ -175,8 +175,11 @@ export function createShop({ items, isLocked = () => false, post = () => {}, nam
       s.applyMode = data.applyMode === true;
       s.calm = data.gentle === true || data.motion === false || data.motion === 0 || data.motion === 'off' || data.motion === 'reduced';
       if (data.look && typeof data.look === 'object' && !Array.isArray(data.look)) { s.applied = data.look; s.draft = data.look; }
+      if (typeof data.tryOn === 'string') s.tryOn = data.tryOn;
       return 'init';
     }
+    // The Prize Counter's Wear door on a window that is already up.
+    if (data.type === 'rain-tryon' && typeof data.key === 'string') { s.tryOn = data.key; return 'tryon'; }
     if (data.type === 'rain-owned' && Array.isArray(data.grants)) {
       if (s.source === 'init') s.grants = new Set(data.grants.filter(g => typeof g === 'string'));
       return 'owned';
@@ -197,6 +200,15 @@ export function createShop({ items, isLocked = () => false, post = () => {}, nam
     get applyMode() { return s.applyMode; }, get calm() { return s.calm; }, get source() { return s.source; },
     get applied() { return s.applied; }, get lookHash() { return s.lookHash; },
     owned, badge, status, setDraft, apply, discard, openCounter, handle,
+    /** The piece the counter asked to try on, once: {slot, id} when items.json knows it (never a bundled
+     *  look), else null. Kept until items.json has loaded, so an early init is not lost. */
+    takeTryOn() {
+      const key = s.tryOn;
+      if (!key || !s.items.size) return null;
+      s.tryOn = null;
+      const row = s.items.get(key);
+      return row && row.slot !== 'looks' ? { slot: row.slot, id: row.pageId } : null;
+    },
     setItems(json) { s.items = json instanceof Map ? json : indexItems(json); },
     /** The old autosave reached the host: that look is the applied one now. */
     markApplied() { s.applied = s.draft; },

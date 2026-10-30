@@ -2204,6 +2204,8 @@ namespace ConditioningControlPanel
             // CCP_PRIZE_GRANTS desk-test override. The static PrizeGrants facade the effect lanes call forwards here.
             Ownership = new Services.Prizes.OwnershipService();
             Services.Prizes.PrizeGrants.Attach(Ownership);
+            // Rain's wardrobe reaches the Prize Counter (its Open counter door and price badges).
+            Services.PrizeCounter.PrizeCounterHostService.WireRainWardrobe();
             // Buying a v2 prize from the options panel instead of the Back Room (owner decision,
             // 2026-09-19). Pure constructor: the counter is read only when a "Get it" row is put on
             // screen. The relay is the room's own, so a reply applies its prizes block.
@@ -5798,6 +5800,7 @@ Application State:
             // and here is a straight dispose - the board has nothing to flush and no verdict to
             // protect, so there is no graceful wind-down whose 1200ms timer would never tick.
             try { Services.PieceByPiece.PieceByPieceHostService.Close(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            try { Services.PrizeCounter.PrizeCounterHostService.Close(); } catch (Exception ex) { Diag.Swallowed(ex); }
             // Glassroad (3D race preview): the same straight dispose.
             try { Services.Glassroad.GlassroadHostService.Close(); } catch (Exception ex) { Diag.Swallowed(ex); }
 
