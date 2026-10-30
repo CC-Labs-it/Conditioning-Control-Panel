@@ -31,6 +31,7 @@ import { createRoadMaterial } from './materials/road.js';
 import { createRailMaterial } from './materials/rails.js';
 import { createEdges } from './edges.js';
 import { createPadMaterial } from './materials/pads.js';
+import { createRampView } from './ramps.js';
 import { createSkyMaterial, SKY_PALETTES } from './materials/sky.js';
 import { buildCountdown, buildFinish, buildScatter, reelTexture } from './dressing.js';
 import { buildTerrace } from './terrace.js';
@@ -263,6 +264,11 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   // Composite over the transparent road and water, before wakes, with depth occlusion intact.
   if (padMesh) padMesh.renderOrder = .9;
   add(meshFrom(track.meshes.jumps, lip.material));
+  // jump ramps (render/ramps.js): palette wedges, accent chevrons and the shared lit lip, built before the warm
+  let rampView = null;
+  try { rampView = createRampView(track, pal, { chevronMask: art && art.tex('boost-chevron-mask'), lipMaterial: lip.material, accent: pal.accentHex() }); }
+  catch (e) { console.warn('[glassroad/world] ramps failed: ' + (e && e.message)); }
+  if (rampView) scene.add(rampView.group);
   // the hero colossi lean over the road; the scatter keeps clear of them (WORLD lane)
   const samples = sampleTrack(track, 4);
   const mainframe = isMainframe ? buildMainframe(track, art, { samples, mediaLayout: MAINFRAME_MEDIA_LAYOUT, reactive: road.uniforms.reactive }) : null;
@@ -676,6 +682,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (!view.paused && pad.uniforms.spiralTurn) pad.uniforms.spiralTurn.value =
       (pad.uniforms.spiralTurn.value + dt * .45 * scroll * padBeat.update(dt, view, gentle)) % (Math.PI * 2);
     pad.uniforms.pulse.value = glow;
+    if (rampView) rampView.update(padPhase, glow);
     ringMesh.visible = pr > 0 && glow > 0;
     ringMesh.scale.setScalar(1 + pr * LOOK.ringMaxM);
     ring.uniforms.opacity.value = glow;
@@ -759,6 +766,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (disposed) return; disposed = true;
     detachKarts?.();
     railBarrier.dispose();
+    rampView?.dispose();
     if (kartPool) { ringMesh.removeFromParent(); for (const k of karts.list) if(k.root.parent===scene)scene.remove(k.root); if (karts.propellers?.group.parent === scene) scene.remove(karts.propellers.group); }
     // r186 Sprite quads are a global singleton shared with retained racer tags and stars.
     // Disposing a departing particle Sprite's geometry destroys their still-bound GPU buffers.
