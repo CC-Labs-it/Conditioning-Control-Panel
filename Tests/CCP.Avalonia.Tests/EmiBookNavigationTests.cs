@@ -38,12 +38,8 @@ public sealed class EmiBookNavigationTests : IDisposable
         public void Latch(string name) { }
     }
 
-    private static void Setup()
-    {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-    }
+    private static void Setup() => AmbientBeatLoopsTests.Setup();
+
     private static void Click(EmiBookWindow book, string name) =>
         book.FindControl<Button>(name)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
