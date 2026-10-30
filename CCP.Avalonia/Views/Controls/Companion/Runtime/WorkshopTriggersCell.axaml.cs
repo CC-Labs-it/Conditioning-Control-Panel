@@ -81,7 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             var data = (CoreSettings.Current.CustomTriggers ?? new List<string>())
                 .Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(t => t, _ => true);
-            var dialog = new TextEditorDialog("Trigger Phrases", data);
+            var dialog = new TextEditorDialog(Loc.Get("title_trigger_phrases"), data);
             // MarkSilentLines needs the unported recorded-voice lookup; keep editing independent.
             if (await dialog.ShowDialogSafe<bool?>(owner) != true || dialog.ResultData is not { } result) return;
             var enabled = result.Where(kv => kv.Value).Select(kv => kv.Key).ToList();
