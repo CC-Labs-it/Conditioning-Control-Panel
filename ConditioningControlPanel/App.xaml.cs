@@ -182,9 +182,17 @@ namespace ConditioningControlPanel
 
         private static string ResolveUserDataPath()
         {
+            string? overrideDir = null;
+            try { overrideDir = Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"); }
+            catch (Exception ex) { Diag.Swallowed(ex); }
+            return ResolveUserDataPath(overrideDir);
+        }
+
+        /// <summary>The user data root for a given CCP_USERDATA_DIR value (null = not set).</summary>
+        internal static string ResolveUserDataPath(string? overrideDir)
+        {
             try
             {
-                var overrideDir = Environment.GetEnvironmentVariable("CCP_USERDATA_DIR");
                 if (!string.IsNullOrWhiteSpace(overrideDir) && Path.IsPathRooted(overrideDir))
                     return overrideDir;
             }
@@ -2719,6 +2727,12 @@ namespace ConditioningControlPanel
                     Settings?.Save();
             }
             catch (Exception ex) { Logger?.Warning(ex, "Remote holdings heal failed (non-fatal)"); }
+            // Baked Rain looks: drop half-written bakes and packs whose manifest no longer reads.
+            _ = System.Threading.Tasks.Task.Run(() =>
+            {
+                try { Services.Companion.RainPackStore.CreateDefault().Sweep(); }
+                catch (Exception ex) { Logger?.Warning(ex, "Rain pack sweep failed (non-fatal)"); }
+            });
             Lockdown = new LockdownService();
             // Possession: the haunt that rides the lockdown timer. It only arms when a lockdown starts
             // and LockdownPossessionEnabled is on, so constructing it here costs nothing.
