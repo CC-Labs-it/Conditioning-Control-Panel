@@ -231,6 +231,61 @@ public sealed class ShellNotificationCallerTests
         Assert.Equal(toasts + 1, host.Children.Count);
     });
 
+    [Theory]
+    [InlineData(true, false, "local", false, 1)]
+    [InlineData(false, false, "local", false, 0)]
+    [InlineData(true, true, "local", false, 0)]
+    [InlineData(true, false, "mixed", false, 0)]
+    [InlineData(true, false, "local", true, 0)]
+    public void SessionStartWarnsOnlyWhenStartingTheEngineWithLocalFlashes(
+        bool flash, bool audioOnly, string source, bool engineRunning, int expected) => WithShell(null, (shell, settings, host, _) =>
+    {
+        // WPF Presets.cs:1616-1622 checks the user's settings before session overrides.
+        var s = settings.Current;
+        (s.FlashEnabled, s.AudioOnlySession, s.MediaSource) = (flash, audioOnly, source);
+        var runner = App.Sessions = new SessionRunner(new SessionLogService());
+        var session = new Session { Id = "library-start", Name = "Library start", DurationMinutes = 10 };
+        session.Settings.FlashEnabled = !flash; // Catch a warning moved after runner.Start.
+        try
+        {
+            if (engineRunning) CoreEngine.Start();
+            var before = host.Children.Count;
+            shell.StartSession(session);
+            Assert.True(runner.IsRunning);
+            Assert.Equal(before + expected, host.Children.Count);
+        }
+        finally { runner.Stop(); }
+    });
+
+    [Theory]
+    [InlineData(true, false, "local", false, 1)]
+    [InlineData(false, false, "local", false, 0)]
+    [InlineData(true, true, "local", false, 0)]
+    [InlineData(true, false, "mixed", false, 0)]
+    [InlineData(true, false, "local", true, 0)]
+    public void ResumeButtonWarnsOnlyWhenThePanicStoppedEngineWouldRestart(
+        bool flash, bool audioOnly, string source, bool engineRunning, int expected) => WithShell(null, (shell, settings, host, _) =>
+    {
+        var runner = App.Sessions = new SessionRunner(new SessionLogService());
+        var session = new Session { Id = "library-resume", Name = "Library resume", DurationMinutes = 10 };
+        session.Settings.FlashEnabled = flash;
+        try
+        {
+            runner.Start(session);
+            if (engineRunning) runner.Pause();
+            else PanicSurfaces.All.Single(surface => surface.Id == "engine").Stop(shell);
+            Assert.True(runner.IsPaused);
+            Assert.Equal(engineRunning, CoreEngine.IsRunning);
+            var s = settings.Current;
+            (s.FlashEnabled, s.AudioOnlySession, s.MediaSource) = (flash, audioOnly, source);
+            var before = host.Children.Count;
+            Click(shell.Named<Button>("BtnPauseSession")!);
+            Assert.False(runner.IsPaused);
+            Assert.Equal(before + expected, host.Children.Count);
+        }
+        finally { runner.Stop(); }
+    });
+
     [Fact]
     public void KeepWallpaperCheckboxWarnsOnAnEmptyWallpaperLibrary() => WithShell(null, (shell, settings, host, _) =>
     {
