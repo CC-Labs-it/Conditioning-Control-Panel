@@ -10,17 +10,15 @@ using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
-using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class FriendNoticesTests
 {
     private static void Platform()
@@ -134,6 +132,12 @@ public sealed class FriendNoticesTests
             FriendsLanding.Waiting(new[] { request, request with { Id = "other" } }, false, false);
             Assert.Equal(string.Format(ConditioningControlPanel.Localization.Loc.Get("friends_land_waiting_many"), 2),
                 StartupLadder.Inbox.Items.Single(i => i.Key == "friends-requests-waiting").Title);
+            var host = new Window { Content = new InboxFlyout() }; try
+            {
+                host.Show(); Dispatcher.UIThread.RunJobs();
+                var icons = host.GetVisualDescendants().OfType<IconGlyph>().Where(g => g.Emoji == IconMap.FriendRequest).ToArray();
+                Assert.Equal(2, icons.Length); Assert.All(icons, g => { Assert.Equal(FluentIcons.Common.Symbol.Mail, g.Kind); Assert.False(g.IsFallback); });
+            } finally { host.Close(); }
             FriendsLanding.Waiting(Array.Empty<FriendRequest>(), false, false);
             Assert.False(StartupLadder.Inbox.Contains("friends-requests-waiting"));
         }
@@ -149,7 +153,6 @@ public sealed class FriendNoticesTests
     private static Point Centre(Control c, Window w) => c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), w)!.Value;
     private static Control Tagged(Window w, string tag) => w.GetVisualDescendants().OfType<Control>().First(c => Equals(c.Tag, tag));
     private static string PillText(Control pill) => ((TextBlock)((Button)pill).Content!).Text!;
-
     /// <summary>Real pointer input: hit testing reads the last rendered frame, so render first.</summary>
     private static void Press(Window w, Point p, MouseButton button)
     {
@@ -254,8 +257,7 @@ public sealed class FriendNoticesTests
             var chip = shell.FindControl<FriendsRailChip>("FriendsChip")!;
             if (launcher != null)
             {
-                Assert.True(launcher.IsVisible);
-                Assert.False(shell.IsVisible);
+                Assert.True(launcher.IsVisible); Assert.False(shell.IsVisible);
                 Assert.False(chip.IsOpen);
                 for (int i = 0; i < 30; i++) launcher.StepFx(0.02);
                 Dispatcher.UIThread.RunJobs();

@@ -7,7 +7,6 @@ using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Controls.Friends;
 using ConditioningControlPanel.Localization;
-using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
 using RowItem = ConditioningControlPanel.Services.Startup.InboxItem;
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -32,7 +31,7 @@ internal static partial class FriendsLanding
     // WPF Services/Friends/FriendsLanding.cs:311-382,436-461: requests, waiting and drawer.
     internal static void FileRequest(FriendRequest request) => StartupLadder.Inbox.File(new RowItem
     {
-        Key = "friends-request:" + request.Id, Title = request.Name, Glyph = "💌",
+        Key = "friends-request:" + request.Id, Title = request.Name, Glyph = global::ConditioningControlPanel.Avalonia.Controls.IconMap.FriendRequest,
         Summary = Str("friends_land_request_line", "wants to be friends"),
         Open = () => OpenDrawer(null),
     });
@@ -69,7 +68,7 @@ internal static partial class FriendsLanding
         var title = waiting.Count == 1 ? newest.Name : string.Format(Str("friends_land_waiting_many", "{0} friend requests waiting"), waiting.Count);
         var summary = waiting.Count == 1 ? Str("friends_land_request_line", "wants to be friends") : "";
         StartupLadder.Inbox.Remove(key);
-        StartupLadder.Inbox.File(new RowItem { Key = key, Title = title, Summary = summary, Glyph = "💌", Open = () => OpenDrawer(null) });
+        StartupLadder.Inbox.File(new RowItem { Key = key, Title = title, Summary = summary, Glyph = global::ConditioningControlPanel.Avalonia.Controls.IconMap.FriendRequest, Open = () => OpenDrawer(null) });
         var anchor = inGame ? ActiveGameWindow() ?? Anchor() : Anchor();
         if (!announce || !NoticesOn || anchor == null) return;
         SfxRequest();

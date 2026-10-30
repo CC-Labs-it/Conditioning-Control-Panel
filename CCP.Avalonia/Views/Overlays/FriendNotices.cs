@@ -12,9 +12,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
-
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
-
 internal sealed class NoticeLook
 {
     public string Line = "";
@@ -22,7 +20,6 @@ internal sealed class NoticeLook
     public bool Pink;
     public Action<object?>? Act, Open, Left, Missed;
 }
-
 // WPF Windows/Friends/FriendNotices.cs:64-188,202-393: passive stack, timers, placement and cards.
 // Core owns coalescing, caps and timers.
 internal sealed class FriendNotices : Window
@@ -35,7 +32,6 @@ internal sealed class FriendNotices : Window
     private readonly BeatLoop _beat;
     private Window? _anchor;
     private double _lastT;
-
     internal FriendNotices()
     {
         WindowDecorations = WindowDecorations.None;
@@ -61,7 +57,6 @@ internal sealed class FriendNotices : Window
         _beat = new BeatLoop(this, t => { Advance((t - _lastT) * 1000); _lastT = t; });
         Closed += (_, _) => { _beat.Stop(); if (ReferenceEquals(Current, this)) Current = null; };
     }
-
     internal static void Present(Window? anchor, FriendNotice notice, NoticeLook look)
     {
         try
@@ -77,7 +72,6 @@ internal sealed class FriendNotices : Window
         }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Friend notice presentation failed"); }
     }
-
     internal static void CloseAll(bool fold = false)
     {
         var w = Current;
@@ -86,7 +80,6 @@ internal sealed class FriendNotices : Window
         w.Stack.Clear();
         w.Close();
     }
-
     internal void Advance(double ms)
     {
         var gone = Stack.Tick(ms);
@@ -95,7 +88,6 @@ internal sealed class FriendNotices : Window
         foreach (var n in gone) Leave(n, false, true);
         if (gone.Count > 0) AfterRemoval();
     }
-
     private void Leave(FriendNotice n, bool acted, bool missed)
     {
         if (!_looks.Remove(n, out var look) || acted) return;
@@ -104,7 +96,6 @@ internal sealed class FriendNotices : Window
         if (missed) try { look.Missed?.Invoke(n.Payload); }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Friend notice missed"); }
     }
-
     internal void Dismiss(FriendNotice n, bool acted, bool open = false)
     {
         if (!_looks.TryGetValue(n, out var look) || !Stack.Remove(n)) return;
@@ -113,12 +104,10 @@ internal sealed class FriendNotices : Window
         try { if (acted) look.Act?.Invoke(n.Payload); else if (open) look.Open?.Invoke(n.Payload); }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Friend notice action"); }
     }
-
     private void AfterRemoval()
     {
         if (Stack.All.Count == 0) Close(); else Rebuild();
     }
-
     private void Place()
     {
         if (!IsVisible) return;
@@ -130,13 +119,11 @@ internal sealed class FriendNotices : Window
             area.Width / scale, area.Height / scale, Bounds.Width, Bounds.Height);
         Position = new PixelPoint((int)Math.Round(x * scale), (int)Math.Round(y * scale));
     }
-
     private static string Ago(FriendNotice n)
     {
         var (key, arg) = FriendNoticeRules.Ago(n.At, DateTimeOffset.UtcNow);
         return string.Format(Loc.Get(key), arg);
     }
-
     private void Rebuild()
     {
         _column.Children.Clear();
