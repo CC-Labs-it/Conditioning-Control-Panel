@@ -9,7 +9,7 @@ namespace ConditioningControlPanel.Services;
 /// <summary>
 /// The head-free half of WPF <c>AchievementService</c>: owns the progress object and its
 /// <see cref="AchievementStore"/>, unlocks, the dirty flag and the <see cref="Unlocked"/> event.
-/// Timers, Track* counters, haptics, popups and dispatcher marshalling stay in the head.
+/// Timers, remaining Track* counters, haptics, popups and dispatcher marshalling stay in the head.
 ///
 /// <para><see cref="Unlocked"/> is raised synchronously on the caller's thread; the WPF wrapper
 /// marshals it to the UI thread exactly as it did before (DispatcherHelper.RunOnUI).</para>
@@ -128,6 +128,35 @@ internal sealed class AchievementEngine
     {
         foreach (var (id, milestone) in AchievementRules.LevelMilestones)
             if (level >= milestone) TryUnlock(id);
+    }
+
+    /// <summary>A pop or batch credited at least one 100-pop milestone; the head shows the WPF popup.</summary>
+    public event Action<int>? BubbleMilestone;
+
+    /// <summary>WPF AchievementService.cs:378-414: flush every ten pops (#1071), even when XP is exhausted.</summary>
+    public void TrackBubblePopped() => TrackBubblesPopped(1, flush: false);
+
+    /// <summary>WPF AchievementService.cs:428-462: a run-end batch credits every boundary, in one award.</summary>
+    public void TrackBubblesPopped(int count) => TrackBubblesPopped(count, flush: true);
+
+    private void TrackBubblesPopped(int count, bool flush)
+    {
+        if (count <= 0) return;
+        var before = Progress.TotalBubblesPopped;
+        Progress.TotalBubblesPopped += count;
+        var after = Progress.TotalBubblesPopped;
+        _isDirty = true;
+        if (after >= AchievementRules.PopTheThoughtBubbles) TryUnlock("pop_the_thought");
+        // WPF ShowBubbleMilestoneNotification: at most one popup, for the highest hundred reached.
+        if (SparklePointRewards.CreditBubbleMilestones(before, after) > 0) BubbleMilestone?.Invoke(after - after % 100);
+        if (flush || after % 10 == 0) Save();
+    }
+
+    /// <summary>WPF AchievementService.cs:823: level-up earn statistics, independent of the wallet cap.</summary>
+    public void TrackSkillPointsEarned(int amount)
+    {
+        Progress.TotalSkillPointsEarned += amount;
+        _isDirty = true;
     }
 
     /// <summary>A bubble-count answer: the correct-answer streak (mathematicians_nightmare) and the totals.</summary>
