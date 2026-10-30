@@ -28,10 +28,14 @@ public sealed class CompanionQuietTests
         var tube = new AvatarTubeWindow(null);
         var audio = 0;
         tube.SpeechAudioPlayer = (_, _, _, done) => { audio++; done?.Invoke(); };
+        var previousTubeProvider = BarkHead.TubeProvider;
+        // A headless app has no desktop lifetime window list for AvatarTubeWindow.Live.
+        BarkHead.TubeProvider = () => tube;
         try
         {
             tube.Show();
             AvApp.WindowAwareness.Stop();
+            Assert.Same(tube, BarkHead.TubeProvider());
             BarkHead.Speak(new BarkSpeech("sensing", null, true, null, false, Unprompted: true));
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("sensing", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
@@ -45,7 +49,11 @@ public sealed class CompanionQuietTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(2, audio);
         }
-        finally { tube.Close(); }
+        finally
+        {
+            tube.Close();
+            BarkHead.TubeProvider = previousTubeProvider;
+        }
         return Task.CompletedTask;
     });
 
@@ -96,7 +104,7 @@ public sealed class CompanionQuietTests
     private static void EnsureApp()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 }
