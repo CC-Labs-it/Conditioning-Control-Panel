@@ -233,3 +233,35 @@ test('mount: attachments turn insignias only, and pieces seat them against the b
   assert.match(pcs, /seated\(art, attachments\.partsFor\(type, looks\[side\]\)\)/);
   assert.match(pcs, /backMountShift\(art\.geometry\.attributes\.position/);
 });
+
+// ---- the players' profile frames and avatars on the name tags (contract 4, fix wave 2 F4a) --------------------------
+
+import { FRAMES, AVATARS, normCosmetics, seatCosmetics, artUrl, faceKey } from '../skins/profile.js';
+import { existsSync } from 'node:fs';
+
+test('profile: both seats read off the state, unknown ids and junk wear nothing', () => {
+  assert.equal(seatCosmetics({}), null, 'an old server sends nothing');
+  assert.equal(seatCosmetics({ cosmetics: [1] }), null);
+  assert.deepEqual(seatCosmetics({ cosmetics: { white: { avatar_id: 'profile.avatar.emi-pixel', frame_id: 'profile.frame.lace' }, black: { frame_id: 'nope' } } }),
+    { white: { avatar: 'profile.avatar.emi-pixel', frame: 'profile.frame.lace' }, black: null });
+  assert.deepEqual(normCosmetics({ frame_id: 'prime.frame.room-host', avatar_id: 'avatar_bambi_1' }), { avatar: null, frame: 'prime.frame.room-host' });
+  assert.equal(faceKey(null), '');
+  assert.notEqual(faceKey({ avatar: null, frame: 'profile.frame.gilt' }), faceKey({ avatar: null, frame: 'profile.frame.lace' }));
+});
+
+test('profile: every frame and avatar has its picture beside the page, with the attribution', () => {
+  for (const id of [...FRAMES, ...AVATARS]) {
+    const file = fileURLToPath(new URL('../' + artUrl(id).replace(/^\.\//, ''), import.meta.url));
+    assert.ok(existsSync(file), id);
+  }
+  assert.ok(existsSync(fileURLToPath(new URL('../assets/profile/ATTRIBUTION.txt', import.meta.url))));
+});
+
+test('profile: the match and the watch head hand the seats\' cosmetics to the name tags', () => {
+  const src = (p) => readFileSync(fileURLToPath(new URL(p, import.meta.url)), 'utf8');
+  assert.match(src('../net/match.js'), /const faces = seatCosmetics\(state\);\s*if \(faces\) bus\.emit\('cosmetics', faces\);/);
+  assert.match(src('../net/watch.js'), /const faces = seatCosmetics\(data\);/);
+  const tags = src('../board/name-tags.js');
+  assert.match(tags, /on\('cosmetics', \(p\) => setFaces\(p\)\);/);
+  assert.match(tags, /paintLabel\(t\.canvas\.getContext\('2d'\), side, label, faceArt\[side\]\)/);
+});
