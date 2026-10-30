@@ -487,7 +487,7 @@ internal static class BackRoomHostService
         _counterOpen = false;
         if (_host == null || _bridge == null || _racePage || generation != _roomGeneration) return;
         var (resume, focus) = CounterReturn(reason, _panicSuspended);
-        if (resume) _bridge.Suspend(false, "counter");
+        if (resume && !_minimised) _bridge.Suspend(false, "counter");
         Post(new { type = "owned", grants = App.Ownership?.Grants?.ToArray() ?? Array.Empty<string>() });
         if (focus)
         {
@@ -631,11 +631,21 @@ internal static class BackRoomHostService
         bool min = w.WindowState == WindowState.Minimized;
         if (min == _minimised) return;
         _minimised = min;
+        // A restore under an open counter keeps the room held: the counter's close resumes it.
+        if (!min && _counterOpen) return;
         _bridge?.Suspend(min, "minimise");
     }
 
     private static void OnWindowActivated()
     {
+        // The counter and the room are sibling windows: a click on the held room raised it over the
+        // counter, a frozen room whose Escape the page ignores. The counter owns the room until it closes.
+        if (_counterOpen && PrizeCounter.PrizeCounterHostService.IsActive)
+        {
+            Application.Current?.Dispatcher.BeginInvoke(DispatcherPriority.Background,
+                new Action(() => { if (_counterOpen) PrizeCounter.PrizeCounterHostService.BringForward(); }));
+            return;
+        }
         if (!_panicSuspended || DateTime.UtcNow - _lastPanicPressUtc <= PanicDoublePressWindow) return;
         _panicSuspended = false;
         _bridge?.Suspend(false, "panic");

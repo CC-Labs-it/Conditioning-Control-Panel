@@ -245,6 +245,9 @@ internal static class PrizeCounterHostService
         }
     }
 
+    /// <summary>Raise an open counter over the game it was opened from (never opens one).</summary>
+    public static void BringForward() => _host?.FocusWeb();
+
     /// <summary>Hand the page an Escape the panel kept as its back (PanicPolicy.KeptEscapeGoesTo).</summary>
     public static void PostKeptEscape()
     {

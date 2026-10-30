@@ -132,6 +132,11 @@ public class PrizeCounterDoorsTests
         Assert.Contains("PrizeCounter.PrizeCounterHostService.Launch(\"backroom\", tab ?? \"backroom\",", src);
         Assert.Contains("Post(new { type = \"owned\", grants =", src);
         Assert.Contains("prizeCounter = !_breakoutPage,", src);
+        // A click on the held room raises the counter again; a restore never wakes a room under it.
+        Assert.Contains("if (_counterOpen && PrizeCounter.PrizeCounterHostService.IsActive)", src);
+        Assert.Contains("PrizeCounter.PrizeCounterHostService.BringForward()", src);
+        Assert.Contains("if (!min && _counterOpen) return;", src);
+        Assert.Contains("if (resume && !_minimised) _bridge.Suspend(false, \"counter\");", src);
         // The ask is read BEFORE the bridge, which would log it as unhandled.
         Assert.True(src.IndexOf("TryReadOpenRequest(message", StringComparison.Ordinal)
             < src.IndexOf("_bridge?.Handle(message)", StringComparison.Ordinal));
