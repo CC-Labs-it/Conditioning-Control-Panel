@@ -247,3 +247,45 @@ test('wiring: one Race online door opens the lobby in the card; no free text inp
   assert.ok(!/\buid\b[^;]*innerHTML|data-uid/.test(lobby), 'uids never reach the DOM');
   assert.ok(/"lb-leave"\]'\)\?\.focus/.test(lobby), 'Escape in a room only moves focus to Leave');
 });
+
+// ---- the Your look picker: owned only, and the extras ride the room look message (fix wave 2, F4c) ------------------
+
+import { ownedChoices, fitLook, lookKeys } from '../hud/lobbyMath.js';
+import { roomLook } from '../net/protocol.js';
+
+test('look picker: offers only the rides and outfits this account has, plus each owned extra', () => {
+  const none = lookChoices(null, null, ownedChoices([], new Set()));
+  assert.deepEqual(none.vehicle.map((c) => c.id), ['emi-teacup-kart', 'emi-vehicle-lovebomb'], 'the teacup and the free kart');
+  assert.equal(none.outfit.some((c) => /pit-crew|ringmaster|ballerina/.test(c.id || '')), false, 'no shop outfit unowned');
+  assert.equal(none.paint, undefined); assert.equal(none.umbrella, undefined); assert.equal(none.trail, undefined);
+  const rich = lookChoices(null, null, ownedChoices(['cos.kart.body.petal', 'cos.kart.outfit.ballerina', 'cos.kart.paint.pattern-bundle', 'cos.kart.umbrella.lace', 'cos.prime.trail.podium'], new Set()));
+  assert.ok(rich.vehicle.some((c) => c.id === 'emi-vehicle-petal'));
+  assert.ok(!rich.vehicle.some((c) => c.id === 'emi-vehicle-trinket'), 'an unowned body stays out');
+  assert.ok(rich.outfit.some((c) => c.id === 'emi-outfit-ballerina'));
+  assert.deepEqual(rich.paint.map((c) => c.id), [null, 'hearts', 'spiral']);
+  assert.deepEqual(rich.umbrella.map((c) => c.id), [null, 'lace']);
+  assert.deepEqual(rich.trail.map((c) => c.id), [null, 'podium']);
+  assert.deepEqual(lookKeys({ vehicle: 'emi-vehicle-petal' }, rich), ['outfit', 'vehicle', 'umbrella', 'trail'], 'paint needs a custom skin');
+  const skin = 'e7a7c080344ed74b80f1cdd7c94e7dfff1d20';
+  assert.deepEqual(lookKeys({ vehicle: 'emi-vehicle-petal', skin }, rich), ['outfit', 'vehicle', 'paint', 'umbrella', 'trail']);
+  assert.equal(lookChoices().owned, undefined, 'no ownership: every wire id, as before');
+});
+
+test('look picker: an unowned pick comes off, the extras cycle to none and back, the message keeps them', () => {
+  const c = lookChoices(null, null, ownedChoices(['cos.kart.umbrella.lace'], new Set()));
+  const fit = fitLook({ outfit: 'emi-outfit-ballerina', vehicle: 'emi-vehicle-trinket', umbrella: 'lace', trail: 'podium' }, c);
+  assert.deepEqual(fit, { outfit: null, vehicle: 'emi-vehicle-lovebomb', umbrella: 'lace' });
+  const off = cycleLook(fit, 'umbrella', 1, c);
+  assert.equal('umbrella' in off, false, 'none takes the key off');
+  assert.deepEqual(cycleLook(off, 'umbrella', 1, c).umbrella, 'lace');
+  assert.deepEqual(roomLook(fit), { outfit: null, vehicle: 'emi-vehicle-lovebomb', umbrella: 'lace' });
+  assert.deepEqual(fitLook(fit, lookChoices()), fit, 'choices without ownership leave a look alone');
+});
+
+test('look picker: the lobby sends the whole look, and boot hands it the garage ownership', () => {
+  const lobby = readFileSync(fileURLToPath(new URL('../hud/lobby.js', import.meta.url)), 'utf8');
+  assert.match(lobby, /send\(\{ t: 'look', \.\.\.roomLook\(st\.look\) \}\)/);
+  assert.doesNotMatch(lobby, /send\(\{ t: 'look', outfit: st\.look\.outfit, vehicle: st\.look\.vehicle \}\)/);
+  const boot = readFileSync(fileURLToPath(new URL('../boot.js', import.meta.url)), 'utf8');
+  assert.match(boot, /lookOwned:\(\)=>ownedChoices\(shared\.owned\.grants,unlockedSet\(loadRecord\(\)\)\)/);
+});
