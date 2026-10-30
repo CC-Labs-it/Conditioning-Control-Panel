@@ -36,7 +36,7 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
   const S0 = { roomId: null, seat: -1, cfg: null, seed: 0, seats: [], keep: [], phase: 'lobby', countAt: 0, startAt: 0, goTick: 0 };
   const st = { ...S0 };
   let sock = null, joinInfo = null, look = normLook(null), leaving = false, downAt = 0, tries = 0, retryT = 0;
-  let racers = null, race = null, items = null, connectWait = null;
+  let racers = null, race = null, items = null, connectWait = null, simQ = null;
 
   const emit = (name, m) => { const set = handlers.get(name); if (set) for (const fn of [...set]) { try { fn(m); } catch (e) { log('warn', `net ${name}: ${e}`); } } };
   function on(name, fn) { let set = handlers.get(name); if (!set) handlers.set(name, (set = new Set())); set.add(fn); return () => set.delete(fn); }
@@ -97,6 +97,11 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
       case 'fired': if (items) items.onFired(m); break;
       case 'hit': if (items) items.onHit(m); break;
       case 'fizzle': if (items) items.onFizzle(m); break;
+      case 'react': {   // a relayed reaction: shown for remote seats only (this client already showed its own and its bots')
+        const r = m.seat !== st.seat && !st.keep.includes(m.seat) ? racerOf(m.seat) : null;
+        if (r && simQ) simQ.emit('kart-react', { racer: r.i, id: m.id, remote: true });
+        break;
+      }
       case 'finish': st.phase = 'done'; break;
       case 'error': if (m.code === 'item' && m.re === 'pickup' && items) items.onPickupRefused(); break;
       case 'abort': leaving = leaving || ['ticket', 'expired', 'replay', 'version', 'config', 'full', 'started', 'closed'].includes(m.reason); break;
@@ -171,7 +176,7 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
 
   /** Wire the racers in: remote driver, kept bots, online items. @returns the items object for boot.js */
   function mount(rs, rc, q) {
-    racers = rs; race = rc;
+    racers = rs; race = rc; simQ = q;
     racers.remote = createRemoteDriver(interp, () => clock.serverNow(), q).drive;
     items = createNetItems(track, feel, q, { send, tick: raceTick });
     const keep = st.keep; st.keep = []; applyKeep(keep);
@@ -230,6 +235,8 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
     ready: (on2 = true) => send({ t: 'ready', on: !!on2 }),
     start: () => send({ t: 'start' }),
     setLook(l) { look = normLook(l); return send({ t: 'look', ...roomLook(look) }); },
+    /** A reaction (sim/social.js REACTIONS) for this seat or a kept bot's; the room relays it to every seat. */
+    react(id, seat = st.seat) { return send({ t: 'react', id, ...(seat !== st.seat ? { seat } : {}) }); },
     emote(code, poseId = 0) { if (poseId) uplink.pose(st.seat, poseId, now()); return send({ t: 'emote', code }); },
     /** One collected lyric floor word, bubble or song gate: shared pulse and cumulative race total. */
     wordPop(total) { uplink.event(st.seat, 'word-pop', {}); if (Number.isFinite(total)) uplink.setPops(st.seat, total); },

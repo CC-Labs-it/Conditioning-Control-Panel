@@ -47,6 +47,7 @@ import { createAi } from './sim/ai.js';
 import { createContact } from './sim/contact.js';
 import { createStandings } from './sim/standings.js';
 import { createItems } from './sim/items.js';
+import { createSocial, socialTap } from './sim/social.js';
 import { loadTrack } from './track/load.js';
 import { selectTrack, allowsOnline, courseSongs, courseSongRows } from './track/selection.js';
 import { createMainframeScan, scanClock } from './sim/mainframeScan.js';
@@ -724,7 +725,7 @@ async function boot(course, options, lifetime, isCurrent) {
   let assist;       // Rebuilt with the player's current pace overlay on every run.
   // the run: solo (count COUNT, the page seed) or online (one racer per seat from the room session, its seed, the
   // queue tapped so local cp / lap / finish / drop and pulses go up); rebuilt by buildRun on every switch
-  let race, racers, ai, contact, standings, items, scan, industry, moving, perfume, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
+  let social = null, race, racers, ai, contact, standings, items, scan, industry, moving, perfume, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
   let runAssist = false;                          // the Options assist switch (applyOptions), carried into every rebuilt run
   // ---- the Logbook (meta/): one run log per run, saved at the results; a throw never breaks the race ----
   let runLog = null;
@@ -791,7 +792,9 @@ async function boot(course, options, lifetime, isCurrent) {
     if (P) { bindAirWords(P.st, null); bindAirWords(P.view, null); }
     airWords?.reset(); airWords = null; airSong = null;
     if (s) runMode = 'race';
-    const q = s ? s.tap(queue) : queue, sd = s ? s.seed : seed, solo = !s && runMode === 'trial';
+    social = createSocial(feel);
+    const sq = social;   // the tap keeps this run's social even after a rebuild swaps it
+    const q = socialTap(s ? s.tap(queue) : queue, (n, p) => sq.see(n, p)), sd = s ? s.seed : seed, solo = !s && runMode === 'trial';
     race = createRace(track, feel, q);
     racers = createRacers(track, feel, q, s ? { net: s.layout(), seed: sd } : { count: solo ? 1 : COUNT, seed: sd });
     ai = createAi(track, feel, { seed: s ? sd + s.seat : sd });
@@ -816,6 +819,8 @@ async function boot(course, options, lifetime, isCurrent) {
     perfume = createBoudoirPerfume(track, q);
     standings = createStandings(track, feel, q);
     items = s ? s.mount(racers, race, q) : solo ? noItems() : createItems(track, feel, q, { seed: sd });
+    social.bind(items);
+    social.attach(q, (i) => { const r = racers.list[i]; return !!(r && r.meta && r.meta.isBot && r.kind !== 'remote'); });
     P = racers.player;
     assist = createAssist(track, P.feel);
     if (!s) {
@@ -931,7 +936,7 @@ async function boot(course, options, lifetime, isCurrent) {
     glideHintLap = -1;
     aerialHints.clear(); airWords?.reset();
     for (const r of racers.list) resetGlide(r.st);
-    race.reset(); racers.place(); contact.reset(); standings.reset(); items.reset();
+    race.reset(); racers.place(); contact.reset(); standings.reset(); items.reset(); social.reset();
     scan.reset();
     industry.reset();
     moving.reset(); if (track.moving) track.moving.timeS = 0;
@@ -1296,6 +1301,11 @@ async function boot(course, options, lifetime, isCurrent) {
   hud.on('back', ({ from } = {}) => { if (from === 'menu') bridge.send({ type: 'menu-back' }); });
 
   // dev status for the boot check's reaction and item shots (times are performance.now())
+  // reactions online: a local racer's (you or a kept bot) goes up; the room relays it, net/room.js shows the others'
+  bus.on('kart-react', ({ racer, id, remote } = {}) => {
+    const r = online && !remote ? racers.list[racer] : null;
+    if (r && r.kind !== 'remote') online.s.react(id, r.meta.seat);
+  });
   bus.on('bump', ({ a, b, dv = 0 }) => { if (a === 0 || b === 0) { debug.bumpMeAt = performance.now(); debug.bumpDv = Math.round(dv * 10) / 10; } });
   bus.on('item-fire', ({ racer, id, mode }) => { if (mode === 'throw' || mode === 'lob') { debug.fireAt = performance.now(); debug.fire = { racer, id, mode }; } });
   bus.on('lap', () => { debug.laps++; });
@@ -1570,6 +1580,7 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     if (paused) { hopLatch.clear(); itemLatch.clear(); } else { hopLatch.hold(a); itemLatch.hold(a); }
     const inRace = state === 'race' || state === 'results';
+    if (a.react && !card && !paused && inRace && race.phase !== 'ready') social.press(0);   // reactions: the next of four, 1 per react.gapS
     // online: go lands on the room's startAt (race.start() runs the local count of goS); the sim never pauses
     if (online && state === 'race' && !online.go && online.s.serverNow() >= online.s.raceStartAt(goS)) { online.go = true; race.start(); syncAssist(); }
     // online the count keeps server time (bells and go on the room's clock, even through a slow frame)
@@ -1617,6 +1628,7 @@ async function boot(course, options, lifetime, isCurrent) {
       contact.update(clock.dt, racers.list, race);                //    bumps, ghosts, slipstream
       standings.update(racers.list, race, clock.dt);              //    places, race-result
       items.update(clock.dt, racers.list, standings, race);       //    pickups, use, flights, hits, mods
+      social.update(clock.dt);                                    //    payback marks
       moving.decorate(racers.list, racers.clockS);
       hopLatch.spent(a); itemLatch.spent(a);
     }
@@ -1709,6 +1721,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (HT) hLap('cam');
     if (BOT && debug.peek) peekCamera(cam.camera, track, debug.peek, renderer.aspect);
     const iv = items.view();
+    iv.payback = social ? social.markView(0) : null;              // your payback mark, drawn on your screen only
     // Share one near-pass crossing with sound and the world-space toy accent.
     cam.camera.updateMatrixWorld();
     const cameraBasis = cam.camera.matrixWorld.elements;

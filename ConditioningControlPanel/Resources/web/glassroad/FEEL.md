@@ -456,6 +456,12 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `items.snapShoveSteer` 0.9: Snap shove, stick share pushing away, fading over snapS.
 - `items.bigSpiralS` 2.0: Big Spiral: the leader is slowed this long.
 - `items.bigSpiralCapMul` 0.7: Big Spiral top speed multiplier.
+- `items.knockDvMps` 9: a `hard-bump` this hard (or any Tunnel Vision ram) knocks the loser's held item onto the road (`sim/social.js`).
+- `items.knockLifeS` 12: a knocked-loose item nobody takes pops after this.
+- `items.knockBehindM` 3: it lands this far behind the loser, in the loser's lane.
+- `items.knockOwnerS` 1: the loser cannot take it back for this long; anyone else with an empty slot takes it at once.
+- `items.knockMax` 6: the oldest loose item pops when one more is knocked out.
+- `items.paybackS` 20: whoever last hit you (item hit, hard bump lost, tunnel ram) stays your mark this long; your next throw prefers the mark when it is ahead in throw range. The mark shows on your screen only.
 
 ## payoff (toys kit 2026-10-25: subliminal words and flashes for the local player, `fx/payoff.js`; Gentle and photosafe still rule)
 
@@ -531,6 +537,12 @@ pose). Gentle and OS reduced motion drop the edge flash and keep fades only; the
 - `ai.resultsWaitS` 10: after the player finishes, results wait at most this for the bots (the rest are placed by distance).
 - `ai.audibleKarts` 3: the nearest this many bot engines are heard.
 - `ai.cornerMargin` 0.9: share of the kart's calmed full-lock grip yaw a bot plans a bend with (was a feel gap in sim/ai.js).
+
+## react (interaction wave 2026-10-30: preset race reactions, `sim/social.js`; Q / pad LB / touch heart)
+
+- `react.gapS` 2: one reaction per racer per this long (the room keeps the same gap online).
+- `react.botChance` 0.35: a bot reacts to a hard bump, a landed hit, a knock, being passed or the finish this often.
+- `react.botDelayS` 0.5: a bot's reaction waits about this long (0.6x to 1.4x).
 
 ## contact (B1 kart contact and slipstream, sim/contact.js)
 - `contact.radiusM` 0.58 (interaction wave 2026-10-30: 0.54 x 1.08 with the racers 8% larger, look scale 0.8424): kart contact radius (two karts touch under 2x this).

@@ -328,6 +328,13 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
       bubble(comp(b.p, 0) + N.x * lift, comp(b.p, 1) + N.y * lift, comp(b.p, 2) + N.z * lift, 'box', L.pickupR * (b.k === undefined ? 1 : b.k), 1, MODE.icon, b.i + 40);
     }
 
+    // knocked loose (social lane): the road pickup bubble wearing the knocked item's own icon
+    for (const lo of view.loose || []) {
+      normal(lo.n);
+      const lift = L.pickupHoverM + (soft || reduced ? 0 : Math.sin(timeS * 2.1 + lo.key) * 0.12);
+      bubble(comp(lo.p, 0) + N.x * lift, comp(lo.p, 1) + N.y * lift, comp(lo.p, 2) + N.z * lift, lo.id, L.pickupR * Math.max(0.01, lo.k), 1, MODE.icon, (lo.key | 0) * 3 + 90);
+    }
+
     // held: a bubble bobbing over each kart; rolling cycles the icons, never faster than rollSwapS
     for (const h of view.held || []) {
       const k = karts[h.racer];
@@ -339,6 +346,21 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
       const id = h.rolling ? rollIconAt(h.rollT, ITEM_IDS, soft ? L.rollSwapGentleS : L.rollSwapS) : h.id;
       if (!h.rolling && toys.place(id, [W.x, W.y, W.z], { held: true, rotation: QT })) continue;
       bubble3d(W.x, W.y, W.z, id || 'box', L.heldR * (TOYS.has(id) ? 1.5 : 1) * (me ? L.playerHeldScale : 1), 1, h.racer * 7, me ? 4 : -1);
+    }
+
+    // payback mark (social lane): a small ring of sparks over whoever last hit you, on your screen only; IN 0.3 s, OUT 0.5 s
+    const pm = view.payback, mk = pm && pm.racer > 0 ? karts[pm.racer] : null;
+    if (mk && pm.k > 0.01) {
+      kartPos(mk); kartQuat(mk);
+      const a = pm.k, spin = soft || reduced ? 0 : timeS * 1.4, n = 6, up = L.heldUpM + 0.85;
+      W.set(0, up, 0).applyQuaternion(QT).add(V);
+      motes.push(W.x, W.y, W.z, 0.32, 1, 0.92, 0.95, a * 0.9);
+      motes.push(W.x, W.y, W.z, 0.9, 1, 0.3, 0.45, a * 0.22);
+      for (let j = 0; j < n; j++) {   // the ring stands in the kart's own right/up plane, so a chase camera sees it face on
+        const t = spin + j * 6.283 / n;
+        W.set(Math.cos(t) * 0.42, up + Math.sin(t) * 0.42, 0).applyQuaternion(QT).add(V);
+        motes.push(W.x, W.y, W.z, 0.16, 1, 0.3, 0.45, a * 0.85);
+      }
     }
 
     // throws and lobs: the sim's p already carries the arc. A throw draws a sparkling ribbon of motes

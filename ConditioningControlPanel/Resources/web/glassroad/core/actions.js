@@ -24,7 +24,7 @@ export function createActions() {
 
 function zero(a, items, camera) {
   a.steer = 0; a.throttle = 0; a.brake = 0; a.hop = false; a.hopPressed = false; a.pause = false;
-  if (items) { a.item = false; a.back = false; }
+  if (items) { a.item = false; a.back = false; a.react = false; }
   if (camera) { a.cameraPressed = false; a.rearView = false; }
   return a;
 }
@@ -60,7 +60,7 @@ export function createActionMap(sources = [], { items = false, camera = false, f
       out.hop = out.hop || !!tmp.hop;
       out.hopPressed = out.hopPressed || !!tmp.hopPressed;
       out.pause = out.pause || !!tmp.pause;
-      if (items) { out.item = out.item || !!tmp.item; out.back = out.back || !!tmp.back; }
+      if (items) { out.item = out.item || !!tmp.item; out.back = out.back || !!tmp.back; out.react = out.react || !!tmp.react; }
       if (camera) { out.cameraPressed = out.cameraPressed || !!tmp.cameraPressed; out.rearView = out.rearView || !!tmp.rearView; }
     }
     out.steer = clamp(out.steer, -1, 1);
