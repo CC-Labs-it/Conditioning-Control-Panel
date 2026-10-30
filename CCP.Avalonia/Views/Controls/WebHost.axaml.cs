@@ -237,6 +237,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public bool HasEngine => _web is not null || ScriptInvoker != null;
 
+        // WPF MainWindow.Browser.cs:249-280: localized initialization failure categories.
+        internal string FailureStatusKey { get; private set; } = "label_not_installed";
+        internal static string FailureKey(Exception error) => error switch
+        {
+            DllNotFoundException => "label_missing_dll",
+            System.Runtime.InteropServices.COMException => "label_com_error",
+            InvalidOperationException => "label_not_installed",
+            _ => "label_error_2",
+        };
+
         // Native script boundary; tests supply a per-instance page adapter without opening a desktop.
         internal Func<string, Task<string?>>? ScriptInvoker { get; set; }
 
@@ -334,6 +344,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 catch (Exception ex)
                 {
                     _web = null;
+                    FailureStatusKey = FailureKey(ex);
                     _txtReason.Text = ex.Message;
                 }
             }
