@@ -7,6 +7,8 @@
 // ?lockNote= (the host's localised "In the Prize Counter") and cannot be worn. The host posts
 // {type:'rain-locked', locked:[...]} when ownership changes while the window is up. Single items
 // only: the bundled "Looks" tab is hidden in the app.
+// Rain V2 (wardrobe-shop.js): a host that posts init {applyMode:true} gets draft then rain-apply in
+// place of the rain-look autosave; ?locked= stays the fallback until that init arrives.
 // Outside the app nothing here is active and the page keeps its localStorage save.
 // The review studio (?review=1) and QA panel (?qa=1) never open inside the app.
 
@@ -52,22 +54,23 @@ function readHostLook() {
 const hostLook = readHostLook();
 
 /** The host's saved items as the viewer's look shape, or null for Rain's authored default.
- *  A locked item never comes through (the host clamps too). */
-export function hostItems() {
-  const items = hostLook?.items;
+ *  A locked item never comes through (the host clamps too); clamp=false trusts the host's init look,
+ *  since ?locked= goes stale once the shop layer tracks grants. */
+export function hostItems(source = hostLook, clamp = true) {
+  const items = source?.items;
   if (!items || typeof items !== 'object' || Array.isArray(items)) return null;
   const look = {};
   for (const [slot, id] of Object.entries(items)) {
-    if (slot === 'accessories') { if (Array.isArray(id)) look.accessories = id.filter(x => typeof x === 'string' && !isLocked(slot, x)); }
-    else if (typeof id === 'string' && id && !isLocked(slot, id)) look[slot] = id;
+    if (slot === 'accessories') { if (Array.isArray(id)) look.accessories = id.filter(x => typeof x === 'string' && !(clamp && isLocked(slot, x))); }
+    else if (typeof id === 'string' && id && !(clamp && isLocked(slot, id))) look[slot] = id;
   }
   return Object.keys(look).length ? look : null;
 }
 
 /** The host's saved colour overrides (channel -> #rrggbb), lower-cased; {} = the original palette. */
-export function hostColors(channels) {
+export function hostColors(channels, look = hostLook) {
   const out = {};
-  const colors = hostLook?.colors;
+  const colors = look?.colors;
   if (!colors || typeof colors !== 'object' || Array.isArray(colors)) return out;
   for (const id of channels) if (typeof colors[id] === 'string' && HEX.test(colors[id])) out[id] = colors[id].toLowerCase();
   return out;
