@@ -9869,6 +9869,17 @@ namespace ConditioningControlPanel.Models
             set { _emiDeskEquipUpdatedMs = Math.Max(0, value); OnPropertyChanged(); }
         }
 
+        private bool _emiDeskEquipPushOwed;
+        /// <summary>True while a local desk pick has not reached /v2/equip (route missing, offline, signed out).
+        /// The launch pull sends it up instead of adopting the server copy, so a pick made before the route
+        /// deployed is never replaced by an empty server copy stamped by another family's PUT.</summary>
+        [JsonProperty]
+        public bool EmiDeskEquipPushOwed
+        {
+            get => _emiDeskEquipPushOwed;
+            set { _emiDeskEquipPushOwed = value; OnPropertyChanged(); }
+        }
+
         private double _emiDeskWidth = 220;
         /// <summary>
         /// Her body width in DIPs, mirrored from the widget's own resize handle. Clamped to the

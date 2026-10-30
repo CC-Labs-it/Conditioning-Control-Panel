@@ -66,16 +66,24 @@ public static class DeskEquipSync
             var s = App.Settings?.Current;
             if (s == null) return;
             var clean = EmiDeskItems.Clamp(pick, EmiDeskItems.KnownGrants());
+            var stamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             s.EmiDeskHat = clean.Hat;
             s.EmiDeskToy = clean.Toy;
-            s.EmiDeskEquipUpdatedMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            s.EmiDeskEquipUpdatedMs = stamp;
+            s.EmiDeskEquipPushOwed = true;
             App.Settings?.Save();
-            _ = PutAsync(clean);
+            _ = PutAsync(clean, stamp, UiPost);
         }
         catch (Exception ex) { App.Logger?.Debug("DeskEquipSync save failed: {E}", ex.Message); }
     }
 
-    private static async Task PutAsync(DeskLook look)
+    private static void UiPost(Action a)
+    {
+        try { System.Windows.Application.Current?.Dispatcher?.BeginInvoke(a); }
+        catch { }
+    }
+
+    private static async Task PutAsync(DeskLook look, long stamp, Action<Action> onUi)
     {
         var id = BackRoomApi.AppIdentity();
         if (id == null) return;
@@ -89,7 +97,26 @@ public static class DeskEquipSync
             req.Headers.Add("X-Auth-Token", id.Value.Token);
             using var res = await Http.SendAsync(req).ConfigureAwait(false);
             if (!res.IsSuccessStatusCode)
+            {
                 App.Logger?.Debug("DeskEquipSync PUT answered {Status}; keeping the local pick", (int)res.StatusCode);
+                return;
+            }
+            var body = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
+            JObject? o = null;
+            try { o = JsonConvert.DeserializeObject(body, NoDates) as JObject; } catch { }
+            if (ReadDesk(o) == null) return;
+            // Stored: the push is no longer owed, unless she was re-dressed while this PUT was out.
+            onUi(() =>
+            {
+                try
+                {
+                    var s = App.Settings?.Current;
+                    if (s == null || s.EmiDeskEquipUpdatedMs != stamp || !s.EmiDeskEquipPushOwed) return;
+                    s.EmiDeskEquipPushOwed = false;
+                    App.Settings?.Save();
+                }
+                catch (Exception ex) { App.Logger?.Debug("DeskEquipSync PUT settle failed: {E}", ex.Message); }
+            });
         }
         catch (Exception ex) { App.Logger?.Debug("DeskEquipSync PUT failed soft: {E}", ex.Message); }
     }
@@ -105,6 +132,18 @@ public static class DeskEquipSync
         _pulledFor = id.Value.UnifiedId;
         try
         {
+            // A pick that never reached the server goes up first instead of being judged against a server
+            // stamp: updatedAt is shared by every family, so another family's PUT can make an empty desk
+            // copy look newer than a pick made while the route was missing. UI thread here (the desk's
+            // refresh), so the settings read is safe.
+            var s = App.Settings?.Current;
+            if (s != null && s.EmiDeskEquipPushOwed)
+            {
+                var owed = EmiDeskItems.Clamp(new DeskLook(s.EmiDeskHat, s.EmiDeskToy), EmiDeskItems.KnownGrants());
+                await PutAsync(owed, s.EmiDeskEquipUpdatedMs, onUi).ConfigureAwait(false);
+                return;
+            }
+
             using var req = new HttpRequestMessage(HttpMethod.Get,
                 $"{BackRoomApi.BaseUrl}{Path}?unified_id={Uri.EscapeDataString(id.Value.UnifiedId)}");
             req.Headers.Add("X-Auth-Token", id.Value.Token);
@@ -125,7 +164,8 @@ public static class DeskEquipSync
         {
             var s = App.Settings?.Current;
             if (s == null || BackRoomApi.AppIdentity()?.UnifiedId != account) return;
-            if (!ShouldAdopt(updatedMs, s.EmiDeskEquipUpdatedMs)) return;
+            // A pick made while the GET was out owes its own push and wins.
+            if (s.EmiDeskEquipPushOwed || !ShouldAdopt(updatedMs, s.EmiDeskEquipUpdatedMs)) return;
             var clean = EmiDeskItems.Clamp(look, EmiDeskItems.KnownGrants());
             s.EmiDeskHat = clean.Hat;
             s.EmiDeskToy = clean.Toy;

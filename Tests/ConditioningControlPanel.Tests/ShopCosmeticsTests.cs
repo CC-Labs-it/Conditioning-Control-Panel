@@ -54,6 +54,16 @@ public class ShopCosmeticsTests
     }
 
     [Fact]
+    public void Rain_portrait_ships_with_its_cc_by_attribution()
+    {
+        var path = RepoFile("Resources", "cosmetics", "shop", "ATTRIBUTION.txt");
+        Assert.True(File.Exists(path), path);
+        Assert.Contains("creativecommons.org/licenses/by/4.0", File.ReadAllText(path));
+        Assert.Contains("Resources\\cosmetics\\shop\\ATTRIBUTION.txt",
+            File.ReadAllText(RepoFile("ConditioningControlPanel.csproj")));
+    }
+
+    [Fact]
     public void Every_item_has_a_shop_name_in_english()
     {
         var en = JObject.Parse(File.ReadAllText(RepoFile("Localization", "Languages", "en.json")));

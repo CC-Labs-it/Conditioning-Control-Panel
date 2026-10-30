@@ -36,6 +36,19 @@ public class DeskEquipSyncTests
     }
 
     [Fact]
+    public void A_push_owed_survives_a_settings_round_trip()
+    {
+        // A pick made while /v2/equip is missing must still go up at the next launch instead of losing to an
+        // empty server copy that another family's PUT stamped newer.
+        Assert.False(new ConditioningControlPanel.Models.AppSettings().EmiDeskEquipPushOwed);
+        var json = Newtonsoft.Json.JsonConvert.SerializeObject(
+            new ConditioningControlPanel.Models.AppSettings { EmiDeskHat = "desk.hat.party", EmiDeskEquipPushOwed = true });
+        var back = Newtonsoft.Json.JsonConvert.DeserializeObject<ConditioningControlPanel.Models.AppSettings>(json)!;
+        Assert.True(back.EmiDeskEquipPushOwed);
+        Assert.Equal("desk.hat.party", back.EmiDeskHat);
+    }
+
+    [Fact]
     public void Only_a_newer_server_copy_is_adopted()
     {
         Assert.True(DeskEquipSync.ShouldAdopt(200, 100));
