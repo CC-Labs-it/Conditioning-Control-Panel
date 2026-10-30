@@ -153,6 +153,42 @@ public sealed class RainLookSyncTests
         Assert.Empty(pc.Adopted);
     }
 
+    /// <summary>The real server (CCP-Server equip.js clampRain) stores and answers Rain's default look as
+    /// <c>rain: null</c>. A default pushed from one PC must settle there and reach the other PC.</summary>
+    [Fact]
+    public async Task A_default_look_settles_and_spreads_although_the_server_answers_it_as_null()
+    {
+        // PC A had a dress agreed at 10:00, then chose the default: the PUT answer is rain null.
+        var a = new Pc { Look = "", Owed = true, Agreed = new DateTime(2026, 10, 30, 10, 0, 0, DateTimeKind.Utc) };
+        a.Http.Answer = (_, _) => Json(Equip(null, "2026-10-30T11:00:00Z"));
+        await a.Sync().SyncAsync();
+        Assert.False(a.Owed);                               // settled, not owed forever
+        Assert.Empty(a.Adopted);
+        Assert.Equal(new DateTime(2026, 10, 30, 11, 0, 0, DateTimeKind.Utc), a.Agreed);
+
+        // PC B still wears the dress it agreed at 10:00: the newer null copy is adopted, never overwritten.
+        var b = new Pc { Look = Dress, Agreed = new DateTime(2026, 10, 30, 10, 0, 0, DateTimeKind.Utc) };
+        b.Http.Answer = (_, _) => Json(Equip(null, "2026-10-30T11:00:00Z"));
+        await b.Sync().SyncAsync();
+        Assert.Equal(new[] { "" }, b.Adopted);
+        Assert.All(b.Http.Seen, s => Assert.Equal(HttpMethod.Get, s.Method));
+
+        // A server copy that was never set still gets seeded from a PC that never agreed.
+        Assert.Equal(RainSyncStep.Push, RainLookSync.Decide(Dress, false, null, new RainEquipCopy(false, "", new DateTime(2026, 10, 30, 11, 0, 0, DateTimeKind.Utc))));
+        Assert.Equal(RainSyncStep.Push, RainLookSync.Decide(Dress, false, new DateTime(2026, 10, 30, 12, 0, 0, DateTimeKind.Utc),
+            new RainEquipCopy(false, "", new DateTime(2026, 10, 30, 11, 0, 0, DateTimeKind.Utc))));
+    }
+
+    [Fact]
+    public async Task A_push_the_clamp_empties_to_null_is_adopted_as_the_default()
+    {
+        var pc = new Pc { Look = Dress, Owed = true };
+        pc.Http.Answer = (_, _) => Json(Equip(null, "2026-10-30T11:00:00Z"));
+        await pc.Sync().SyncAsync();
+        Assert.Equal(new[] { "" }, pc.Adopted);
+        Assert.False(pc.Owed);
+    }
+
     [Fact]
     public async Task A_server_clamp_on_push_is_adopted()
     {

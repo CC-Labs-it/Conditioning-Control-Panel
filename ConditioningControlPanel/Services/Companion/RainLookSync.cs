@@ -103,19 +103,28 @@ internal sealed class RainLookSync
 
     /// <summary>What one sync does. A push owed always goes up first; a server that never stored a look
     /// gets ours (when ours is not the default); a different server copy newer than the last agreement
-    /// (or with no agreement yet) is adopted; an older one is overwritten by ours.</summary>
+    /// (or with no agreement yet) is adopted; an older one is overwritten by ours.
+    /// The server stores Rain's DEFAULT look as null (CCP-Server equip.js clampRain), so a null copy is
+    /// "never set" only until this PC has agreed once: after an agreement, a null copy newer than it means
+    /// another device chose the default, and that is adopted like any other newer look.</summary>
     internal static RainSyncStep Decide(string? localLook, bool pushOwed, DateTime? agreedUtc, RainEquipCopy server)
     {
         var local = RainLookCodec.Normalize(localLook);
         if (pushOwed) return RainSyncStep.Push;
-        if (!server.Present) return local.Length > 0 ? RainSyncStep.Push : RainSyncStep.None;
+        if (!server.Present)
+        {
+            if (local.Length == 0) return RainSyncStep.None;
+            return agreedUtc != null && server.UpdatedUtc != null && server.UpdatedUtc > agreedUtc
+                ? RainSyncStep.Adopt
+                : RainSyncStep.Push;
+        }
         if (string.Equals(server.Look, local, StringComparison.Ordinal)) return RainSyncStep.None;
         if (agreedUtc == null || server.UpdatedUtc == null || server.UpdatedUtc > agreedUtc) return RainSyncStep.Adopt;
         return RainSyncStep.Push;
     }
 
-    /// <summary>The look as the wire's <c>value</c>: always an object, so "set to the default" (empty
-    /// items) stays distinct from "never set" (null).</summary>
+    /// <summary>The look as the wire's <c>value</c>: always an object (the default is empty items). The
+    /// server answers the default as <c>rain: null</c>; <see cref="Decide"/> and the push receipt read it so.</summary>
     internal static JObject LookValue(string? look)
     {
         var n = RainLookCodec.Normalize(look);
@@ -182,7 +191,9 @@ internal sealed class RainLookSync
     {
         var body = await SendAsync(HttpMethod.Put, id, PutBody(id.UnifiedId, look), ct);
         if (body == null || SafeIdentity()?.UnifiedId != id.UnifiedId) return;   // owed stays: next run
-        if (ReadEquip(body) is not { Present: true } server) { _h.Log?.Invoke("push: reply without a rain copy"); return; }
+        // An ok equip reply with rain: null is the server's default look (a default push, or a look the
+        // clamp emptied): it compares as "" below. Only a reply with no equip block keeps the push owed.
+        if (ReadEquip(body) is not { } server) { _h.Log?.Invoke("push: reply without an equip block"); return; }
         var now = _h.Local();
         if (now == null) return;
         // Changed again while the PUT was out: that change owes its own push.
