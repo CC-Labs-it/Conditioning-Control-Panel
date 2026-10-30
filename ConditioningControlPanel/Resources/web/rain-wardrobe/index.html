@@ -3,15 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#ede9e2">
+  <meta name="theme-color" content="#140d19">
   <title>Emi | Dressing room</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="./style.css">
   <script type="importmap">{"imports":{"three":"../vendor/three/three.module.min.js","three/addons/":"../vendor/three/addons/"}}</script>
 </head>
-<body>
+<body class="booting">
+  <div class="load-card" id="loading" role="status"><span class="spinner" aria-hidden="true"></span><p id="loadMessage">Getting dressed</p><div class="load-track" id="loadProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="loadBar"></i></div><span class="load-line" id="loadLine"></span></div>
   <header class="topbar">
-    <a class="brand" id="brand" href="./" aria-label="Emi dressing room">EMI<span>01 / DRESSING ROOM</span></a>
+    <a class="brand" id="brand" href="./" aria-label="Dressing room"><span>01 / DRESSING ROOM</span></a>
     <div class="top-actions"><span class="live-dot" id="liveLabel">LIVE PREVIEW</span><button class="quiet" id="demo" disabled>Show swaps <span aria-hidden="true">▷</span></button><button class="quiet" id="reset">Original look <span aria-hidden="true">↺</span></button></div>
   </header>
   <main>
@@ -19,7 +20,6 @@
       <div class="stage-title"><p class="eyebrow">MAKE IT YOURS</p><h1>A little<br><em>change.</em></h1></div>
       <canvas id="preview" aria-label="Emi. Drag to rotate, scroll to zoom." tabindex="0"></canvas>
       <div class="swap-fx" id="swapFx" aria-hidden="true"><i></i><b>✦</b><b>✧</b><b>✦</b><b>✧</b><b>✦</b><b>✧</b></div>
-      <div class="load-card" id="loading" role="status"><span class="spinner"></span><p id="loadMessage">Getting dressed</p><progress id="loadProgress"></progress></div>
       <div class="stage-caption"><span id="lookCaption">The original</span><span class="drag-hint">Drag to turn · Scroll to zoom</span></div>
       <div class="camera-controls" aria-label="Camera angle"><button data-view="front">Front</button><button data-view="quarter" class="active">¾</button><button data-view="side">Side</button><button data-view="back">Back</button><button id="headView">Head</button><button id="handsView">Hands</button><button id="feetView">Feet</button><button id="outfitView">Outfit</button><button id="fullView">Full</button><button id="tube" aria-pressed="false" title="Show at companion size">Tube size</button></div>
       <div class="tube-label" id="tubeLabel" hidden>190 px</div>

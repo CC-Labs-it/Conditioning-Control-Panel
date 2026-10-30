@@ -117,6 +117,36 @@ public class RainWardrobeTests
 
         var withLook = System.Web.HttpUtility.ParseQueryString(new Uri(RainWardrobeHostService.PageUrl(Look, null, "x")).Query);
         Assert.DoesNotContain("rose-flare", withLook["look"]!);    // clamped before it goes in
+        Assert.Null(q["companion"]);
+        Assert.Null(q["calm"]);
+    }
+
+    [Fact]
+    public void PageUrl_CarriesTheBootCoverFacts_BeforeInit()
+    {
+        var strings = new System.Collections.Generic.Dictionary<string, string> { ["loadTitle"] = "Bambi si sta vestendo" };
+        var sizes = new System.Collections.Generic.Dictionary<string, long> { ["avatar.glb"] = 240069668, ["pelvis-data.js"] = 59827244 };
+        var q = System.Web.HttpUtility.ParseQueryString(new Uri(RainWardrobeHostService.PageUrl(null, null, "x", "Bambi", strings, true, sizes)).Query);
+        Assert.Equal("Bambi", q["companion"]);
+        Assert.Equal("Bambi si sta vestendo", (string)JObject.Parse(q["strings"]!)["loadTitle"]!);
+        Assert.Equal("1", q["calm"]);
+        Assert.Equal("avatar.glb:240069668,pelvis-data.js:59827244", q["sizes"]);
+    }
+
+    [Fact]
+    public void AssetSizes_ReadsTheBigFilesOnDisk_SkipsMissingOnes()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ccp-rain-sizes-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllBytes(Path.Combine(dir, "avatar.glb"), new byte[1234]);
+            var sizes = RainWardrobeHostService.AssetSizes(dir);
+            Assert.Equal(1234, sizes["avatar.glb"]);
+            Assert.False(sizes.ContainsKey("pelvis-data.js"));
+            Assert.Empty(RainWardrobeHostService.AssetSizes(null));
+        }
+        finally { Directory.Delete(dir, true); }
     }
 
     [Fact]

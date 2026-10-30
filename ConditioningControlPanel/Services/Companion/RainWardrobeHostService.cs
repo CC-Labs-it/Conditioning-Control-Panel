@@ -56,8 +56,12 @@ internal static class RainWardrobeHostService
         => RainWardrobeAssets.ResolveDir(Environment.GetEnvironmentVariable(RainWardrobeAssets.EnvVar), App.UserDataPath);
 
     /// <summary>The page URL, pure: host mode, the saved look (clamped, omitted when default), the
-    /// locked items and the localised lock line. Never the review or QA studio.</summary>
-    internal static string PageUrl(string? storedLook, IEnumerable<string>? grants, string lockNote)
+    /// locked items and the localised lock line. Never the review or QA studio. The boot cover needs its
+    /// facts before init (init only answers rain-ready, ~30 s in): the companion's name, the cover's
+    /// localised lines, Calm, and the big files' sizes for a true progress bar.</summary>
+    internal static string PageUrl(string? storedLook, IEnumerable<string>? grants, string lockNote,
+        string? companion = null, IReadOnlyDictionary<string, string>? bootStrings = null, bool calm = false,
+        IReadOnlyDictionary<string, long>? sizes = null)
     {
         var look = RainWardrobeCatalog.Clamp(storedLook, grants);
         var q = "host=ccp";
@@ -65,6 +69,11 @@ internal static class RainWardrobeHostService
         var locked = RainWardrobeCatalog.LockedKeys(grants);
         if (locked.Count > 0) q += "&locked=" + Uri.EscapeDataString(string.Join(",", locked));
         if (!string.IsNullOrWhiteSpace(lockNote)) q += "&lockNote=" + Uri.EscapeDataString(lockNote);
+        if (!string.IsNullOrWhiteSpace(companion)) q += "&companion=" + Uri.EscapeDataString(companion);
+        if (bootStrings is { Count: > 0 }) q += "&strings=" + Uri.EscapeDataString(JObject.FromObject(bootStrings).ToString(Newtonsoft.Json.Formatting.None));
+        if (calm) q += "&calm=1";
+        if (sizes is { Count: > 0 })
+            q += "&sizes=" + Uri.EscapeDataString(string.Join(",", sizes.Where(kv => kv.Value > 0).Select(kv => $"{kv.Key}:{kv.Value}")));
         return $"https://{PageHost}/{PagePath}?{q}";
     }
 
@@ -121,7 +130,8 @@ internal static class RainWardrobeHostService
             var webRoot = Path.Combine(AppContext.BaseDirectory, "Resources", "web");
             _host = new ChaosWebViewHost(new ChaosWebViewHost.Options
             {
-                StartUrl = PageUrl(settings?.RainLook, grants, Loc.Get("rain_wardrobe_locked")),
+                StartUrl = PageUrl(settings?.RainLook, grants, Loc.Get("rain_wardrobe_locked"),
+                    CompanionName.ForActiveMod(), BootStrings(Loc.Get), BootCalm(), AssetSizes(dir)),
                 PrimaryHost = PageHost,
                 Mappings = new List<(string, string, CoreWebView2HostResourceAccessKind)>
                 {
@@ -282,11 +292,45 @@ internal static class RainWardrobeHostService
         ["bakeHint"] = "rain_wardrobe_bake_hint",
     };
 
+    /// <summary>Loc keys behind the boot cover's lines (<c>wardrobe-loading.js LOAD_STR</c> key -> loc key),
+    /// sent in the page URL; Loc fills <c>{companion}</c> here, the page fills the byte counts.</summary>
+    internal static readonly IReadOnlyDictionary<string, string> BootStringKeys = new Dictionary<string, string>
+    {
+        ["loadTitle"] = "rain_wardrobe_load_title",
+        ["loadSize"] = "rain_wardrobe_load_size",
+        ["loadAlmost"] = "rain_wardrobe_load_almost",
+    };
+
+    /// <summary>The boot cover's lines in the user's language; a missing key stays English.</summary>
+    internal static IReadOnlyDictionary<string, string> BootStrings(Func<string, string> loc) => Localised(BootStringKeys, loc);
+
+    /// <summary>Calm for the boot cover (Gentle Visuals, or motion below Full): its fades only lengthen.</summary>
+    private static bool BootCalm()
+    {
+        try { return Safety.GentleVisuals.On || MotionFx.Level != Models.MotionLevel.Full; }
+        catch (Exception ex) { Diag.Swallowed(ex); return false; }
+    }
+
+    /// <summary>The big files' sizes on disk (the page's progress totals); a missing file is left out.</summary>
+    internal static IReadOnlyDictionary<string, long> AssetSizes(string? dir)
+    {
+        var map = new Dictionary<string, long>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(dir)) return map;
+        foreach (var f in RainWardrobeAssets.Files)
+        {
+            try { var info = new FileInfo(Path.Combine(dir, f)); if (info.Exists) map[f] = info.Length; }
+            catch (Exception ex) { Diag.Swallowed(ex); }
+        }
+        return map;
+    }
+
     /// <summary>The page's bake lines in the user's language; a missing key (Loc echoes it) stays English.</summary>
-    internal static IReadOnlyDictionary<string, string> PageStrings(Func<string, string> loc)
+    internal static IReadOnlyDictionary<string, string> PageStrings(Func<string, string> loc) => Localised(PageStringKeys, loc);
+
+    private static IReadOnlyDictionary<string, string> Localised(IReadOnlyDictionary<string, string> keys, Func<string, string> loc)
     {
         var map = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var (page, key) in PageStringKeys)
+        foreach (var (page, key) in keys)
         {
             var text = loc(key);
             if (!string.IsNullOrWhiteSpace(text) && !string.Equals(text, key, StringComparison.Ordinal)) map[page] = text;

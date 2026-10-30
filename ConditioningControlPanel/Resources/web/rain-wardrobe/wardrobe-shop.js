@@ -48,6 +48,7 @@ export function paintCompanion(doc, name) {
     brand.setAttribute('aria-label', `${n} dressing room`);
     const first = brand.firstChild;
     if (first && first.nodeType === 3) first.nodeValue = n.toUpperCase();
+    else brand.insertBefore(doc.createTextNode(n.toUpperCase()), first);
   }
   if ($('preview')) $('preview').setAttribute('aria-label', `${n}. Drag to rotate, scroll to zoom.`);
   if ($('sameName')) $('sameName').textContent = `Your look. Same ${n}.`;
@@ -93,14 +94,14 @@ const prettify = key => { const id = String(key).split(':').pop().replace(/-/g, 
  * The shop state for one window. `isLocked(slot, id)` is today's ?locked= reader (fallback until init).
  * `post(message)` reaches the host (host-bridge postHost); `nameOf(key)` is the page's display name.
  */
-export function createShop({ items, isLocked = () => false, post = () => {}, nameOf = prettify } = {}) {
+export function createShop({ items, isLocked = () => false, post = () => {}, nameOf = prettify, companion = null } = {}) {
   const s = {
     items: items instanceof Map ? items : indexItems(items),
     source: 'fallback', grants: new Set(), level: 0, achievements: [], prices: {},
     applyMode: false, calm: false, applied: null, draft: null, pending: null, applying: false, lookHash: '', tryOn: null,
     // bake = {shown, total, fraction} while a bake reports; outcome = how the last Apply ended (the meter's OUT).
     bake: null, outcome: null, str: { ...STR },
-    companion: companionName(null),
+    companion: companionName(companion),
   };
 
   function owned(key) {
@@ -207,7 +208,8 @@ export function createShop({ items, isLocked = () => false, post = () => {}, nam
       if (typeof data.tryOn === 'string') s.tryOn = data.tryOn;
       // The host's localised lines: known keys only, plain strings only.
       if (data.strings && typeof data.strings === 'object') for (const [k, v] of Object.entries(data.strings)) if (k in STR && typeof v === 'string' && v.trim()) s.str[k] = v;
-      s.companion = companionName(data.companion);
+      // The page already paints the query's name at boot; an init without one keeps it.
+      if (typeof data.companion === 'string') s.companion = companionName(data.companion);
       return 'init';
     }
     // The Prize Counter's Wear door on a window that is already up.
