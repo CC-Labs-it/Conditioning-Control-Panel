@@ -54,6 +54,63 @@ public sealed class ChaosUnlockCardOverlayTests
             return Task.CompletedTask;
         });
     }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Lesson_pause_rejects_late_field_callbacks(bool defuse) => await Run(_ =>
+    {
+        Begin();
+        Complete("taking_chances");
+        var state = ChaosRunHost.State!;
+        var bubble = new ConditioningControlPanel.Services.AmbientBubble
+        {
+            Spec = new EffectBubbleSpec { Payload = new FlashPayload() },
+        };
+        var before = (state.Score, state.Focus, state.Detonated, state.Shields);
+        if (defuse) ChaosRunHost.OnDefused(bubble);
+        else ChaosRunHost.OnDetonated(bubble);
+        Assert.Equal(before, (state.Score, state.Focus, state.Detonated, state.Shields));
+    });
+
+    [Fact]
+    public async Task Card_art_uses_explicit_and_convention_paths_with_glyph_fallback() => await Run(_ =>
+    {
+        string root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(System.IO.Path.Combine(root, "boons"));
+        try
+        {
+            ChaosArt.RootsOverride = () => new[] { root };
+            var info = ChaosUnlockCardRules.ForLesson("taking_chances")! with { IconFolder = "boons", IconId = "test" };
+            global::Avalonia.Controls.Image[] Images(ChaosUnlockCardInfo card) =>
+                global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(ChaosUnlockCardLayer.Build(card, 420).Root)
+                    .OfType<global::Avalonia.Controls.Image>().ToArray();
+            Assert.Empty(Images(info with { IconId = "missing" }));
+            string file = System.IO.Path.Combine(root, "boons", "test.png");
+            using (var bitmap = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(6, 3), new Vector(96, 96)))
+                bitmap.Save(file);
+            Assert.Single(Images(info));
+            Assert.Single(Images(info with { IconPath = file }));
+            Assert.Same(ChaosArt.TryLoad(file), ChaosArt.TryLoad(file));
+            Assert.Null(ChaosArt.FilePath("../test.png"));
+        }
+        finally { ChaosArt.ResetForTest(); System.IO.Directory.Delete(root, true); }
+    });
+
+    [Fact]
+    public async Task Passive_card_style_keeps_clicks_without_activation_or_changing_topmost() => await Run(_ =>
+    {
+        var window = new ChaosUnlockCardOverlay();
+        bool topmost = window.Topmost;
+        ConditioningControlPanel.Avalonia.Platform.Win32Overlay.SetPassive(window, IntPtr.Zero);
+        Assert.True(ConditioningControlPanel.Avalonia.Platform.Win32Overlay.IsPassive(window));
+        Assert.False(window.ShowActivated);
+        Assert.Equal(topmost, window.Topmost);
+        var style = ConditioningControlPanel.Avalonia.Platform.Win32Overlay.Style(0, false, passive: true);
+        Assert.Equal(0u, style & 0x20u); // clickable
+        Assert.NotEqual(0u, style & 0x08000000u); // NOACTIVATE
+        window.Close();
+    });
+
     private sealed class SteppedClock : TimeProvider
     {
         public long Ticks;

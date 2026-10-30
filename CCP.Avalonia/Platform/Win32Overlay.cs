@@ -50,7 +50,7 @@ internal static class Win32Overlay
     // Subliminal opt-in: keep TRANSPARENT but clear NOACTIVATE, including on Avalonia rebuilds.
     private static readonly ConditionalWeakTable<TopLevel, object> FocusAllowed = new();
     private static bool AllowsFocus(TopLevel window) => FocusAllowed.TryGetValue(window, out _);
-    private static bool IsPassive(TopLevel window) => Passive.TryGetValue(window, out _);
+    internal static bool IsPassive(TopLevel window) => Passive.TryGetValue(window, out _);
 
     internal static uint Style(uint exStyle, bool clickThrough, bool passive = false, bool allowFocus = false)
         => (exStyle | OverlayBits) & ~ClickThroughBits
@@ -71,6 +71,14 @@ internal static class Win32Overlay
         if (passive) Passive.AddOrUpdate(window, Passive);
         return Apply(hwnd, Track(window).Value, IsPassive(window), AllowsFocus(window))
             && SetWindowPos(hwnd, new IntPtr(-1), 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+    }
+
+    // WPF ChaosUnlockCardOverlay.cs:388-396: take clicks without activating or changing z-order.
+    internal static bool SetPassive(TopLevel window, IntPtr hwnd)
+    {
+        Passive.AddOrUpdate(window, Passive);
+        if (!OperatingSystem.IsWindows()) return false;
+        return Apply(hwnd, Track(window).Value, true, AllowsFocus(window));
     }
 
     /// <summary>WPF ApplyWindowStyles(stealsFocus): activation and mouse pass-through are independent.</summary>
