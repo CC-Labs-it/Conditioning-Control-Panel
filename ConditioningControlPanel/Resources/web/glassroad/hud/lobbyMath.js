@@ -194,6 +194,13 @@ export function lobbyNote(seats, mySeat, mode) {
   if (hostSeat(seats) >= 0 && !(me && me.host)) return 'Waiting for the host, ' + count;
   return (mode === 'friends' ? 'Friends room' : 'Open table') + ', ' + count;
 }
+/** The start is waiting on seats still loading: the line everyone sees, or '' when nobody is. */
+export function holdNote(seats, hold, mySeat) {
+  const w = (hold || []).filter((i) => seats && seats[i] && seats[i].kind === 'human' && !seats[i].left);
+  if (!w.length) return '';
+  if (w.length > 1) return 'Waiting for ' + w.length + ' players to load';
+  return w[0] === mySeat ? 'Still loading, the race waits for you' : 'Waiting for ' + (seats[w[0]].name || 'a player') + ' to load';
+}
 /** The host moved to another seat (the old host left the lobby): the line everyone sees, or '' when nothing moved. */
 export function hostMoved(was, now, mySeat) {
   const a = hostSeat(was), b = hostSeat(now);

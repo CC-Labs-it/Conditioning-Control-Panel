@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   hostGate, isPrime, signedIn, tableRows, rowStartsIn, startsLabel, pollDue, quickDelay, cleanHost, stepHost, hostBody, HOST_DEFAULTS,
-  applySeats, applySeat, seatName, seatBadges, raceTags, seatRows, readyCount, canStart, hostSeat, lobbyNote, hostMoved, lookChoices, cycleLook, lookLabel,
+  applySeats, applySeat, seatName, seatBadges, raceTags, seatRows, readyCount, canStart, hostSeat, lobbyNote, holdNote, hostMoved, lookChoices, cycleLook, lookLabel,
   loadLook, saveLook, LOOK_KEY, countdown, serverNow, resultLines, popsLabel, errorCopy, abortCopy, closeCopy, trackName,
 } from '../hud/lobbyMath.js';
 import { PRESETS, POSE_BASE, presetOf, poseOf, presetByPose, poseHoldS, emoteAllowed, isPreset, CLIP_S } from '../hud/presets.js';
@@ -90,6 +90,16 @@ const SEATS = [
   { seat: 1, kind: 'human', name: 'Bo', platform: 'phone', look: { outfit: 'emi-outfit-swim', vehicle: 'emi-vehicle-petal' }, host: false, ready: false, idle: false, left: false },
   { seat: 3, kind: 'bot', name: 'EMI bot', platform: null, look: { outfit: 'emi-outfit-pool', vehicle: 'emi-vehicle-trinket' }, host: false, ready: false, idle: false, left: false },
 ];
+
+test('the load hold says who the start is waiting on', () => {
+  const s = applySeats(SEATS);
+  const name = s[1].name;
+  assert.equal(holdNote(s, [], 0), '');
+  assert.equal(holdNote(s, [1], 0), 'Waiting for ' + name + ' to load');
+  assert.equal(holdNote(s, [1], 1), 'Still loading, the race waits for you');
+  assert.equal(holdNote(s, [0, 1], 0), 'Waiting for 2 players to load');
+  assert.equal(holdNote(s, [5], 0), '', 'an empty seat is nobody to wait for');
+});
 
 test('host start (owner 2026-10-30): joiners wait for the host, a hand-off says who hosts now', () => {
   const s = applySeats(SEATS);

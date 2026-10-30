@@ -27,7 +27,7 @@ import { createNetItems } from './items.js';
 const KEEP_WAIT_MS = 1000;   // a kept bot with no record: wait this long for one before driving it from where it stands
 const SIM_EVENTS = new Set(['checkpoint', 'lap', 'finish', 'drop', 'hop', 'land', 'boost-start', 'airborne', 'trick']);
 
-export function createRoomSession({ track, feel, courseHash = '', lobby = null, platform = 'web', WS = globalThis.WebSocket, now = () => Date.now(),
+export function createRoomSession({ track, feel, courseHash = '', lobby = null, platform = 'web', loads = false, WS = globalThis.WebSocket, now = () => Date.now(),
   timers = globalThis, log = () => {} } = {}) {
   const plat = PLATFORMS.includes(platform) ? platform : 'web';
   const clock = createServerClock({ now });
@@ -37,7 +37,7 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
   const S0 = { roomId: null, seat: -1, cfg: null, seed: 0, seats: [], keep: [], phase: 'lobby', countAt: 0, startAt: 0, goTick: 0 };
   const st = { ...S0 };
   let sock = null, joinInfo = null, look = normLook(null), leaving = false, downAt = 0, tries = 0, retryT = 0;
-  let racers = null, race = null, items = null, connectWait = null;
+  let racers = null, race = null, items = null, connectWait = null, isLoaded = false;
   const keepWait = new Map();   // kept bot seat -> ms after which it is driven without a record
 
   const emit = (name, m) => { const set = handlers.get(name); if (set) for (const fn of [...set]) { try { fn(m); } catch (e) { log('warn', `net ${name}: ${e}`); } } };
@@ -51,7 +51,7 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
     joinInfo = j;
     sock = openSocket(j.wsUrl, {
       WS,
-      onOpen() { clock.restartPings(); send({ t: 'hello', v: NET_V, ticket: j.ticket, clientMs: now(), ...(courseHash ? { courseHash } : {}) }); pingNow(); },
+      onOpen() { clock.restartPings(); send({ t: 'hello', v: NET_V, ticket: j.ticket, clientMs: now(), ...(courseHash ? { courseHash } : {}), ...(loads ? { loads: true } : {}) }); pingNow(); },
       onMsg,
       onBatch(f) {
         for (const k of f.karts) {
@@ -101,6 +101,7 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
         downAt = 0;
         applyKeep(m.keep);
         syncRacers();
+        if (loads && isLoaded) send({ t: 'loaded' });   // a new socket is a new seat to the room's load hold
         if (connectWait) { connectWait.res(m); connectWait = null; }
         break;
       case 'pong': clock.pong(m.c, m.s); break;
@@ -284,6 +285,8 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
       rows.sort((a, b) => (a.seat === st.seat ? -1 : b.seat === st.seat ? 1 : a.seat - b.seat));
       return rows.map((x) => ({ seat: x.seat, kind: x.kind, name: x.name, look: normLook(x.look), local: x.seat === st.seat || st.keep.includes(x.seat) }));
     },
+    /** This page can race now: the room's start waits for it (NET.md, the load hold). */
+    markLoaded() { isLoaded = true; if (loads) send({ t: 'loaded' }); },
     ready: (on2 = true) => send({ t: 'ready', on: !!on2 }),
     start: () => send({ t: 'start' }),
     setLook(l) { look = normLook(l); return send({ t: 'look', ...roomLook(look) }); },
