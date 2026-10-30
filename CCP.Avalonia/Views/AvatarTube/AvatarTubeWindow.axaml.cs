@@ -1257,6 +1257,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     StopThinkingAnimation();   // the reply pre-empts the thinking bubble (WPF Speech.cs:335)
                     _speechTimer?.Stop();
                     if (!preset) AddToChatHistory(text, isUser: false);   // WPF Giggle logs nothing
+                    if (aiGenerated) App.Brain?.NoteTubeLine(text);
 
                     var source = preset ? SpeechSource.Preset : SpeechSource.AI;
                     if (Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted)
