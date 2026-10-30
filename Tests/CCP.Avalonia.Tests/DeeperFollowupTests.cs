@@ -22,7 +22,7 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-public sealed class DeeperFollowupTests
+public sealed partial class DeeperFollowupTests
 {
     private static void Setup()
     {

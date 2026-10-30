@@ -210,6 +210,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     else OpenFor(panel);
                     return;
                 }
+                var media = Services.Deeper.DeeperFileOpen.Decode(payload);
+                if (media.Action != null && media.Path != null)
+                {
+                    OpenPanel(panel);
+                    panel.HandlePendingFileOpen(media.Action, media.Path);
+                    return;
+                }
                 var (kind, id) = LauncherHandoff.Decode(payload);
                 Log.Information("[Launcher] second instance asked for {Kind} {Id}", kind, id);
                 switch (kind)

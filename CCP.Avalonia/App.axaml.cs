@@ -1023,6 +1023,18 @@ namespace ConditioningControlPanel.Avalonia
                     Serilog.Log.Warning(ex, "[Launcher] boot decision failed; booting the panel");
                     Views.Windows.LauncherWindow.Boot = Services.Launcher.BootDecision.PanelFirst;
                 }
+                var fileOpen = Services.Deeper.DeeperFileOpen.Parse(desktop.Args);
+                if (fileOpen.Action != null && fileOpen.Path != null)
+                {
+                    Views.Windows.LauncherWindow.Boot = Services.Launcher.BootDecision.PanelFirst;
+                    // WPF App.xaml.cs:4016-4027 consumes the pending request once.
+                    void OpenMediaOnce(object? sender, EventArgs e)
+                    {
+                        shell.Opened -= OpenMediaOnce;
+                        Dispatcher.UIThread.Post(() => shell.HandlePendingFileOpen(fileOpen.Action, fileOpen.Path), DispatcherPriority.Background);
+                    }
+                    shell.Opened += OpenMediaOnce;
+                }
                 var boot = Views.Windows.LauncherWindow.Boot;
                 bool panelHidden = Services.Launcher.LauncherBoot.PanelStartsHidden(boot, Views.Windows.MainShellWindow.LockdownActive);
                 Serilog.Log.Information("[Launcher] boot surface {Surface} game {GameId}, panel shown: {Shown}", boot.Surface, boot.GameId, !panelHidden);

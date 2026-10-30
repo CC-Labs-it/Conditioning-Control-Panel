@@ -1333,6 +1333,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 return;
             }
 
+            // WPF MainWindow.DeeperTab.cs:628: shell ownership refreshes the hub on close.
+            if ((Owner as Windows.MainShellWindow ?? Windows.MainShellWindow.Current) is { IsVisible: true } mainShell)
+            {
+                mainShell.OpenDeeperEditorFromPlayer(path);
+                return;
+            }
+
             // Dedupe: one editor per file.
             foreach (var ed in DeeperEditorWindow.OpenEditors)
             {

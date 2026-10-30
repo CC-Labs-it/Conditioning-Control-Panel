@@ -5,7 +5,7 @@
 // DeeperLocalLibrary; this partial owns the windows, dialogs, timers and files.
 //
 // Import picker/drop and the shared batch live in MainShellWindow.DeeperImport.cs.
-// Still out (shell-deeper-hub): startup demo seeding, the persistent library watcher,
+// Still out (shell-deeper-hub): startup demo seeding,
 // and duration probing. The tab's tour uses the existing head tour lifecycle.
 
 using System;
@@ -45,7 +45,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private DeeperTabViewModel? DeeperModel => Named<DeeperTabView>("DeeperTab")?.DataContext as DeeperTabViewModel;
 
         /// <summary>Reloads the local index when the Deeper view is attached or the tab opens.</summary>
-        internal void InitializeDeeperHub() => ReloadDeeperLibraryFromDisk();
+        // WPF MainWindow.DeeperTab.cs:677-689: refresh only the visible hub.
+        private EnhancementLibrary? _deeperLibrary;
+        private EnhancementLibrary DeeperLibrary
+        {
+            get
+            {
+                if (_deeperLibrary != null) return _deeperLibrary;
+                _deeperLibrary = new EnhancementLibrary();
+                _deeperLibrary.LibraryChanged += OnDeeperLibraryChanged;
+                Closed += (_, _) =>
+                {
+                    _deeperLibrary.LibraryChanged -= OnDeeperLibraryChanged;
+                    _deeperLibrary.Dispose();
+                };
+                return _deeperLibrary;
+            }
+        }
+
+        private void OnDeeperLibraryChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(() =>
+        {
+            if (Named<DeeperTabView>("DeeperTab")?.IsVisible == true) ReloadDeeperLibraryFromDisk();
+        });
+
+        internal void InitializeDeeperHub()
+        {
+            _ = DeeperLibrary;
+            ReloadDeeperLibraryFromDisk();
+        }
 
         private void ReloadDeeperLibraryFromDisk() => DeeperModel?.ReloadLibrary();
 
