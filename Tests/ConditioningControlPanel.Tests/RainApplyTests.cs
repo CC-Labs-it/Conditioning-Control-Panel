@@ -33,14 +33,9 @@ public sealed class RainApplyTests : IDisposable
         public IReadOnlyCollection<string> UnlockedAchievements { get; init; } = Array.Empty<string>();
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
-            dir = dir.Parent;
-        Assert.True(dir != null, "could not locate the repo root from " + AppContext.BaseDirectory);
-        return Path.Combine(new[] { dir!.FullName, "ConditioningControlPanel", "Resources" }.Concat(parts).ToArray());
-    }
+    // The stack keeps the shared media (rain_emotes, web/rain-wardrobe) under Assets/.
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine(new[] { SourceRoots.RepoRoot, "Assets" }.Concat(parts).ToArray());
 
     private RainPackStore Store() =>
         new(RainPackStore.RootFor(_dir), () => _hash, name => File.ReadAllText(RepoFile("rain_emotes", name)));

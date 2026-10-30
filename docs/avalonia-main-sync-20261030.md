@@ -5,9 +5,10 @@ Branch `avalonia-port/main-20261030` (merge) + `avalonia-port/main-20261030-comp
 Pin: `origin/main` = `7e01ec326` (Merge PR #3132 rt-prime-only, 2026-10-29), then follow-up pin `a11ada22e`
 (Merge PR #3138 garage-owned-bodies, 2026-10-29; rows 590-591, merge `a9605b2cc`), then `ddc43afeb`
 (Merge PR #3146 rain-wardrobe page 4, 2026-10-30; rows 592-594, merge `047449d1f`), then `39845d2af`
-(Merge PR #3157 rain-v2 packplay, 2026-10-30; rows 595-607, merge `7127eba85`).
+(Merge PR #3157 rain-v2 packplay, 2026-10-30; rows 595-607, merge `7127eba85`), then `aa9918833`
+(Merge PR #3162 rain-v2 assets, 2026-10-30; rows 608-613, merge `df54ebd05`).
 Last sync pin: `f81ea01fb` (main sync #8, [`avalonia-main-sync-20261024.md`](avalonia-main-sync-20261024.md)).
-Delta: 607 non-merge commits (589 + 2 + 3 + 13 follow-up), 1562 + 22 + 12 + 71 files. Almost all of it is the Racing Thoughts 3D (Glassroad) web tree, which now
+Delta: 613 non-merge commits (589 + 2 + 3 + 13 + 6 follow-up), 1562 + 22 + 12 + 71 + 30 files. Almost all of it is the Racing Thoughts 3D (Glassroad) web tree, which now
 lives in `Assets/web/glassroad` (moved in the merge, same rule git applied to the other web trees). The rest is the 7.1.15
 release, Sparkles by place (B1), Lobby race rows and the friends race invite (A3), and a few bug fixes.
 
@@ -17,7 +18,7 @@ Every non-merge commit has one row. Status legend as in `avalonia-main-sync-2026
 - **needs-port (`lane`)**: WPF-only behaviour the Avalonia head lacks; the lane owns it.
 - **n/a**: no Avalonia counterpart by design, reason given.
 
-Counts: 566 ported-by-merge, 35 needs-port, 6 n/a (total 607)
+Counts: 567 ported-by-merge, 40 needs-port, 6 n/a (total 613)
 
 Under the 7.2 plan these lanes are A5 work and go as PRs of 600 lines or less against `port/7.2` after A1 lands.
 Sparkles waits for the B1 DECISIONS file; Lobby/invite waits for the A3 server half.
@@ -29,7 +30,7 @@ Sparkles waits for the B1 DECISIONS file; Lobby/invite waits for the A3 server h
 | `sync9-fixes` | 4 | `97eca18de`, `08bb30ba7`, `81bc9fa21`, `cdda883ac` |
 | `sync9-glassroad` | 4 | `5121933ee`, `099607382`, `c7af815a0`, `9718fd3f4` |
 | `sync9-lobby-invite` | 3 | `5a353e6b0`, `d6a39c7ac`, `cc6ad7a39` |
-| `sync9-rain` | 9 | `9654cbdc3`, `5b1fd1cef`, `7e169d311`, `005e6b16e`, `4ce385c71`, `e1183f408`, `18c6980f4`, `bbd74c792`, `baabe4839` |
+| `sync9-rain` | 14 | `9654cbdc3`, `5b1fd1cef`, `7e169d311`, `005e6b16e`, `4ce385c71`, `e1183f408`, `18c6980f4`, `bbd74c792`, `baabe4839`, `68b0a3eda`, `8b53ae720`, `1e03a33dd`, `3bfe3d96f`, `2d005c419` |
 | `sync9-sparkles` | 15 | `3930199ac`, `9d7d5406e`, `28c334234`, `21873bc05`, `48d232dd9`, `a568665e0`, `de0947d9f`, `b96b5931c`, `cc1bdc4b0`, `b2487a365`, `7c086f322`, `70c3d96e6`, `d7348e6a0`, `ba537a09b`, `e0356be6e` |
 
 What each lane is:
@@ -661,6 +662,12 @@ What each lane is:
 | 605 | `673447410` | feat(rain-wardrobe): bake on Apply, page side (R6) | Assets/web/rain-wardrobe bake.js + test (web only); WPF csproj exclude kept in the merge | ported-by-merge |
 | 606 | `bbd74c792` | feat(rain-v2): the tube plays baked look packs (R8) | WPF: AvatarTube EmoteClipPlayer/EmoteLayers/CirceEmotes, RainPackPlayback | needs-port (`sync9-rain`) |
 | 607 | `baabe4839` | fix(rain): pack fold knows the five new reactions (main red after #3150 + #3154) | WPF: Services/Companion RainPackStore | needs-port (`sync9-rain`) |
+| 608 | `ca1ae972b` | feat(rain-v2): dressing room shop layer - badges, try-on, draft then Apply (R4) | Assets/web/rain-wardrobe (web only, shop layer; Lobby of B3) | ported-by-merge |
+| 609 | `68b0a3eda` | feat(rain-v2): the wardrobe's Apply transaction, host side (R5a) | WPF: Services/Companion RainApplyController; web half merged in Assets/web/rain-wardrobe | needs-port (`sync9-rain`) |
+| 610 | `8b53ae720` | feat(rain-v2): the wardrobe window speaks Apply, and the hero card door (R5b) | WPF: AvatarTube RainLook, RainWardrobeHostService, CompanionHeroCard door; languages merged | needs-port (`sync9-rain`) |
+| 611 | `1e03a33dd` | feat(rain-v2): in-app install of Rain's 3D files (R12) | WPF: Services/Companion RainAssetInstaller, Windows/RainAssetInstallWindow; languages merged | needs-port (`sync9-rain`) |
+| 612 | `3bfe3d96f` | feat(rain-v2): the wardrobe knows all 17 actions (R9) | WPF: RainLookHash; Assets/web/rain-wardrobe/assets/runtime-info.json merged | needs-port (`sync9-rain`) |
+| 613 | `2d005c419` | fix(rain-assets): an older pack is not "installed" | WPF: RainAssetInstaller, RainWardrobeHostService | needs-port (`sync9-rain`) |
 
 ## Follow-up merge `a9605b2cc` (pin `a11ada22e`)
 
@@ -685,6 +692,13 @@ layout with Rain's emote includes and the wardrobe test exclude. The new `Resour
 read through `SourceRoots` and `Assets/`, and `App.ResolveUserDataPath(string?)` forwards to the new pure
 `CorePaths.UserDataFor`. Lane `sync9-rain` ports the WPF-only half (clip player, pill, pack store/playback, wardrobe
 window) to the Avalonia tube; the wardrobe's Prize Counter ownership hook waits for the B3 shop decision.
+
+## Follow-up merge `df54ebd05` (pin `aa9918833`)
+
+Rain v2 wardrobe: the dressing-room shop layer (web), the Apply transaction (host), the hero card door, the in-app
+install of Rain's 3D files and all 17 actions. Conflict fixes only: two new wardrobe files kept where git's
+directory-rename detection put them (`Assets/web/rain-wardrobe`). -compat: `RainApplyTests` reads `Assets/` through
+`SourceRoots`. The host half belongs to `sync9-rain` (and the shop ownership to the B3 decision).
 
 ## Watch list: on the way to main, not merged here yet
 
