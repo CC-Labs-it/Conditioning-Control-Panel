@@ -266,7 +266,8 @@ export const TYPES = Object.freeze({
 
 /** Client -> room messages: field -> type ('?' suffix = optional). */
 export const C2R = Object.freeze({
-  hello: { v: 'u8', ticket: 'str', clientMs: 'num', courseHash: 'str?' },
+  hello: { v: 'u8', ticket: 'str', clientMs: 'num', courseHash: 'str?', loads: 'bool?' },
+  loaded: {},
   ping: { c: 'num' },
   ready: { on: 'bool' },
   start: {},
@@ -287,6 +288,7 @@ export const R2C = Object.freeze({
   pong: { c: 'num', s: 'num' },
   seats: { seats: 'seatList' },
   seat: { seat: 'seat', ready: 'bool?', idle: 'bool?', left: 'bool?', reason: 'leftWhy?', look: 'look?', paused: 'bool?' },
+  hold: { seats: 'seats' },
   start: { countAt: 'num', startAt: 'num', goTick: 'u32', seed: 'u32' },
   keep: { seats: 'seats' },
   roll: { seat: 'seat', box: 'u16', item: 'item' },

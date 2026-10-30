@@ -1179,6 +1179,7 @@ async function boot(course, options, lifetime, isCurrent) {
   }
   const platform = init.caps.platform === 'desktop' || init.caps.platform === 'phone' ? init.caps.platform : 'web';
   const goS = feel.get('juice.countdownPulses') * 60 / feel.get('clock.bpm');
+  let lightsSession = null;   // the room session still waiting to tell its room this page has loaded
   /** The lobby UI's room: a net/room.js session behind the on / send / close / now shape hud/lobby.js codes to. */
   async function connectRoom(join) {
     if (!course.online) throw new Error('This course is for solo races');
@@ -1187,10 +1188,12 @@ async function boot(course, options, lifetime, isCurrent) {
       void selectCourse(join.track, { join, replace: true });
       throw Object.assign(new Error('Changing course'), { handoff: true });
     }
-    const s = createRoomSession({ track, feel, courseHash: onlineCourseHash, lobby: lobbyApi, platform, log: (lv, m) => console.warn('[glassroad]', m) });
+    const s = createRoomSession({ track, feel, courseHash: onlineCourseHash, lobby: lobbyApi, platform, loads: true, log: (lv, m) => console.warn('[glassroad]', m) });
     lifetime.defer(() => s.leave());
     const welcome = await s.connect(join, { lookNow: join.look });
     if (!lifetime.alive) { s.leave(); throw new Error('Course closed'); }
+    // the room's start waits for this seat until its lights are warm (owner 2026-10-30)
+    if (lights.ready) s.markLoaded(); else lightsSession = s;
     return {
       session: s,
       on(t, fn) {
@@ -1474,6 +1477,7 @@ async function boot(course, options, lifetime, isCurrent) {
       lights.busy = false;
       if (lifetime.alive && isCurrent()) {
         lights.ready = true; hud.setLights({ ready: true });
+        if (lightsSession) { lightsSession.markLoaded(); lightsSession = null; }
         loaded('lights'); debug.loading.lightsMs = Math.round(performance.now() - loadStarted);
         const want = lights.want; lights.want = null;
         if (lights.covered) { lights.covered = false; void loading.finish(); }
