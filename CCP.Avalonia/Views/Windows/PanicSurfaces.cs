@@ -83,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // so the leash task parks before StopEngine and before its lock card closes.
             new("engine", _ => MainShellWindow.StopEngine(),
                 After: ["ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task"]),
+            new("voice-overlays", _ => { Overlays.SpiralOverlay.StopForPanic(); Overlays.PinkFilterOverlay.StopForPanic(); }, After: ["engine"]),
             new("flash", _ => Overlays.FlashOverlay.CloseAll(final: false)), // Includes standalone pops and mid-Shatter exits.
             // WPF StopEngine -> MainWindow.StartStop.cs:505 App.SkillTree?.Stop(): the 3x ends with/after the engine.
             new("pink-rush", _ => PinkRushHost.Stop(), After: ["engine"]),                 // WPF StopEngine -> SkillTree.Stop: the 3x ends
