@@ -214,6 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosLessons.Tick("taking_chances");   // WPF ChaosLessonHooks.OnPrismPopped
                 _state.PushEvent($"🔮 prism! 10x · {spec.Payload.DisplayName} fires");
                 App.Achievements?.TrackBubblePopped(); // WPF Services/Chaos/ChaosModeService.cs:1837
+                App.Quests?.TrackBubblePopped(); // WPF AchievementService.cs:417
                 return;
             }
             spec.Payload.Fire();   // benign pop = a treat
@@ -225,6 +226,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     $"+{(int)ChaosFieldMath.TreatFocusGain(spec.PayMult)} FOCUS", Color.FromRgb(0x7A, 0xE0, 0xFF));
             ShowPopScore(pts);
             App.Achievements?.TrackBubblePopped(); // WPF Services/Chaos/ChaosModeService.cs:1866
+            App.Quests?.TrackBubblePopped(); // WPF AchievementService.cs:417
             if (spec.PayMult > 1) _state.PushEvent("🪨 heavy drop! x3");
         }
 
@@ -245,6 +247,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 b.DefusedViaChannel, free: false, pendulum: 1.0, ChaosFieldMath.ChanceFlip(_state, Rng));
             ShowPopScore(pts);
             App.Achievements?.TrackBubblePopped(); // WPF Services/Chaos/ChaosModeService.cs:2018
+            App.Quests?.TrackBubblePopped(); // WPF AchievementService.cs:417
             if (_state.LastSecondGoldEnabled && fuseSecLeft <= 1.0)
             {
                 int gold = ChaosRunEngine.GoldScaled(_state, Rng.Next(5, 10));

@@ -6,6 +6,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Models;
+using AvApp = ConditioningControlPanel.Avalonia.App;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -749,7 +751,8 @@ public sealed class ChaosRunHostTests
         });
     }
     /// <summary>WPF ChaosModeService.cs:1837/1866/2018: prism, treat and defuse pops each count toward the
-    /// lifetime pop total that pays the 100-pop sparkle milestones.</summary>
+    /// lifetime pop total that pays the 100-pop sparkle milestones. WPF AchievementService.cs:417
+    /// also credits quests; ambient BubbleOverlay.cs:318 already credits quests once.</summary>
     [Fact]
     public async Task Chaos_treat_prism_and_defuse_pops_count_toward_lifetime_pops()
     {
@@ -761,6 +764,11 @@ public sealed class ChaosRunHostTests
                 System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)!;
             var (achWas, firerWas) = (prop.GetValue(null), EffectPayload.Firer);
             var dir = System.IO.Directory.CreateTempSubdirectory("ccp-chaos-pops-").FullName;
+            var questsWas = AvApp.Quests;
+            using var quests = new QuestService(null, dir);
+            quests.Progress.DailyQuests = new List<ActiveQuest> { new("pop_parade_d") };
+            AvApp.Quests = quests;
+            Action? ambientHandler = null;
             try
             {
                 var engine = new AchievementEngine(new AchievementStore(System.IO.Path.Combine(dir, "a.json")));
@@ -769,11 +777,28 @@ public sealed class ChaosRunHostTests
                 ChaosRunHost.StartRun(Cfg());
                 ChaosRunHost.Overlay!.FinishCountdown();
                 ChaosRunHost.OnBubblePopped(new AmbientBubble { Spec = new EffectBubbleSpec { Payload = new FlashPayload() } });
+                Assert.Equal(1, quests.Progress.DailyQuests[0]!.CurrentProgress);
                 ChaosRunHost.OnBubblePopped(new AmbientBubble { Spec = new EffectBubbleSpec { Payload = new FlashPayload(), IsPrism = true } });
+                Assert.Equal(2, quests.Progress.DailyQuests[0]!.CurrentProgress);
                 ChaosRunHost.OnDefused(new AmbientBubble { Spec = new EffectBubbleSpec { Payload = new FlashPayload() } });
+                Assert.Equal(3, quests.Progress.DailyQuests[0]!.CurrentProgress);
                 Assert.Equal(3, engine.Progress.TotalBubblesPopped);
+
+                ChaosRunHost.ForceShutdown();
+                ambientHandler = AvApp.SeedBubbleAchievements(engine);
+                BubbleOverlay.Pop(new AmbientBubble { Clickable = true });
+                Assert.Equal(4, quests.Progress.DailyQuests[0]!.CurrentProgress);
+                Assert.Equal(4, engine.Progress.TotalBubblesPopped);
             }
-            finally { ChaosRunHost.ForceShutdown(); prop.SetValue(null, achWas); EffectPayload.Firer = firerWas; FreshMeta(); }
+            finally
+            {
+                if (ambientHandler != null) BubbleOverlay.Popped -= ambientHandler;
+                ChaosRunHost.ForceShutdown();
+                AvApp.Quests = questsWas;
+                prop.SetValue(null, achWas);
+                EffectPayload.Firer = firerWas;
+                FreshMeta();
+            }
             return Task.CompletedTask;
         });
     }
