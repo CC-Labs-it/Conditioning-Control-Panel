@@ -31,7 +31,10 @@ public sealed class RemoteHapticPanicTests
     [Fact]
     public void EveryPanicPathStopsTheRemoteHapticLoop() => AvaloniaTestDispatcher.Run(() =>
     {
-        AmbientBeatLoopsTests.Setup();
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
         var s = CoreSettings.Current;
         var (enabled, key) = (s.PanicKeyEnabled, s.PanicKey);
         (s.PanicKeyEnabled, s.PanicKey) = (true, "F8");
