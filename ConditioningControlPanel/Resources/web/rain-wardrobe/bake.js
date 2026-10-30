@@ -16,7 +16,7 @@
 export const BAKE = Object.freeze({ scale: 2, grain: 2, colors: 48, smoothColors: 256, alphaCut: 128, fps: 15, w: 384, h: 618, toneMapping: 'AgXToneMapping', exposure: 1 });
 const BAKE_TONE = { AgXToneMapping: 1, ACESFilmicToneMapping: 1, NeutralToneMapping: 1 };
 
-/** Opaque colours of the shipped idle.webp (Resources/rain_emotes, 44 of its 48 median-cut
+/** Opaque colours of the October 24 shipped idle.webp (the 192x309 pixel pass, 44 of its 48 median-cut
  *  entries are used). Only for request.palette === 'shipped' (the default-look side-by-side gate);
  *  a custom look gets its own median cut from its idle rest frame, as pixel.py builds one. */
 export const SHIPPED_IDLE_PALETTE = Object.freeze(['561b30', '854747', 'bb2c7a', 'ab5861', 'd45095', 'b26f5d', '9a7a68', 'b67767', 'd75c9c', 'bb7a67', 'd8619d', 'd962a0', 'da64a1', 'be7f67', 'be817a', 'dc6aa4', 'd5709d', 'c18472', 'c58875', 'dd72a8', 'b7927d', 'c98f7e', 'e28299', 'cc9482', 'd19787', 'cc9a89', 'bda28c', 'd39c89', 'd29d8d', 'd2a08f', 'd5a18f', 'b9b095', 'd4a395', 'd8a595', 'c8b29d', 'd7ac9e', 'ccb49f', 'ccb8a4', 'e6aea1', 'd0b9a6', 'cdbca8', 'd0beac', 'd7bfae', 'dac9b8']
