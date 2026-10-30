@@ -45,6 +45,49 @@ internal static class PrizeCounterHostService
     private static bool _disposing;
     private static string? _opener;
     private static bool _signingIn;
+    /// <summary>The games paused under this counter (contract 1): each hears the close once, with its reason.</summary>
+    private static readonly List<Action<string>> _onClosed = new();
+
+    /// <summary>Why the counter went, as an opener under it hears it: <c>back</c> returns to the game,
+    /// <c>panic</c> and <c>app-exit</c> never hand focus back, <c>wear</c> hands it to Rain's dressing room.</summary>
+    internal const string CloseBack = "back", ClosePanic = "panic", CloseWear = "wear", CloseAppExit = "app-exit", CloseFailed = "failed";
+
+    /// <summary>The counter's tabs, in the server's order (CONTRACT "Server body").</summary>
+    internal static readonly string[] Tabs = { "rain-clothes", "rain-hair", "kart", "chess", "profile", "desk", "prime", "backroom" };
+
+    /// <summary>The game pages that may ask for the counter (contract 1, <c>open-prize-counter</c>).</summary>
+    internal static readonly string[] GameDoors = { "glassroad", "piecebypiece", "backroom", "rain-wardrobe" };
+
+    /// <summary>A door's tab as the page knows it: contract 1's <c>rain</c> is the clothes tab, any
+    /// other unknown name is null (the page opens on its first tab).</summary>
+    internal static string? CounterTab(string? tab)
+    {
+        if (string.IsNullOrWhiteSpace(tab)) return null;
+        var t = tab.Trim().ToLowerInvariant();
+        if (t == "rain") return "rain-clothes";
+        return Array.IndexOf(Tabs, t) >= 0 ? t : null;
+    }
+
+    /// <summary>A game page's <c>{ type:'open-prize-counter', tab, from }</c> (contract 1). False for any
+    /// other frame or an unknown door; the tab is normalised (<see cref="CounterTab"/>).</summary>
+    internal static bool TryReadOpenRequest(JObject? m, out string from, out string? tab)
+    {
+        from = string.Empty; tab = null;
+        if (m == null || m["type"]?.Type != JTokenType.String || (string?)m["type"] != "open-prize-counter") return false;
+        var f = m["from"]?.Type == JTokenType.String ? ((string?)m["from"])?.Trim() : null;
+        if (f == null || Array.IndexOf(GameDoors, f) < 0) return false;
+        from = f;
+        tab = CounterTab(m["tab"]?.Type == JTokenType.String ? (string?)m["tab"] : null);
+        return true;
+    }
+
+    /// <summary>An open counter asked again from another door: it reloads only when that door names a
+    /// different tab (a door with no tab just brings it forward).</summary>
+    internal static bool ReopensOnTab(string? current, string? wanted)
+        => wanted != null && !string.Equals(current, wanted, StringComparison.Ordinal);
+
+    /// <summary>The page's own <c>close {reason}</c>: only <c>panic</c> is kept, anything else is back.</summary>
+    internal static string PageCloseReason(string? reason) => reason == ClosePanic ? ClosePanic : CloseBack;
 
     /// <summary>The panel's account sign-in, centred over the counter (the launcher's and the Back
     /// Room's flow). Settable so a test can answer without a dialog.</summary>
@@ -114,17 +157,28 @@ internal static class PrizeCounterHostService
 
     public static bool IsActive => _host != null;
     public static bool IsInFront => _host?.IsForeground == true;
-
-    /// <summary>Raised once each time an open counter closes (any exit): a game that opened it over itself re-sends
-    /// its grants frame (7.2 contract 1).</summary>
-    public static event Action? Closed;
     public static bool IsReady => _host?.IsReady == true;
 
     /// <summary>Open the counter, or bring it forward. <paramref name="from"/> is the door
-    /// (<c>wallet</c>, ...); <paramref name="tab"/> the tab to open on, null for the first.</summary>
-    public static void Launch(string from = "wallet", string? tab = null)
+    /// (<c>wallet</c>, ...); <paramref name="tab"/> the tab to open on, null for the first.
+    /// <paramref name="onClosed"/> is a game paused under it (contract 1): it hears the close once,
+    /// with its reason (<see cref="CloseBack"/> and the rest), and re-reads its grants then.
+    /// An open counter asked from another door on another tab reloads on that tab.</summary>
+    public static void Launch(string from = "wallet", string? tab = null, Action<string>? onClosed = null)
     {
-        if (_host != null) { _host.FocusWeb(); return; }
+        tab = CounterTab(tab);
+        if (onClosed != null) _onClosed.Add(onClosed);
+        if (_host != null)
+        {
+            if (ReopensOnTab(_tab, tab))
+            {
+                _tab = tab;
+                _from = string.IsNullOrWhiteSpace(from) ? _from : from;
+                Reload("tab " + tab);
+            }
+            _host?.FocusWeb();
+            return;
+        }
         try
         {
             _from = string.IsNullOrWhiteSpace(from) ? "wallet" : from;
@@ -159,19 +213,40 @@ internal static class PrizeCounterHostService
                 ExtraBrowserArguments = BrowserArguments,
                 OnReady = () => Post(BuildInit()),
                 OnMessage = m => OnPageMessage(m, generation),
-                OnProcessFailed = kind => { App.Logger?.Warning("PrizeCounter: process failed ({Kind}), closing", kind); OnUi(Close); },
+                OnProcessFailed = kind => { App.Logger?.Warning("PrizeCounter: process failed ({Kind}), closing", kind); OnUi(() => CloseFor(CloseFailed)); },
             });
             _host.Show();
             if (_host.Window != null) _host.Window.Closed += (_, _) => Close();
             _host.FocusWeb();
-            App.Logger?.Information("PrizeCounterHostService: launched from {From}", _from);
+            App.Logger?.Information("PrizeCounterHostService: launched from {From} on {Tab}", _from, _tab ?? "(first)");
         }
         catch (Exception ex)
         {
             App.Logger?.Error(ex, "PrizeCounterHostService.Launch failed");
-            Close();
+            CloseFor(CloseFailed);
         }
     }
+
+    /// <summary>The page again in the same window, with a fresh init (a new tab, a new account).</summary>
+    private static void Reload(string why)
+    {
+        if (_host == null) return;
+        _relay = NewRelay();
+        var generation = ++_generation;
+        try
+        {
+            _host.NavigatePage(StartUrl, () => Post(BuildInit()), m => OnPageMessage(m, generation));
+            App.Logger?.Information("PrizeCounterHostService: reloaded ({Why})", why);
+        }
+        catch (Exception ex)
+        {
+            App.Logger?.Warning(ex, "PrizeCounter: reload failed, closing");
+            CloseFor(CloseFailed);
+        }
+    }
+
+    /// <summary>Raise an open counter over the game it was opened from (never opens one).</summary>
+    public static void BringForward() => _host?.FocusWeb();
 
     /// <summary>Hand the page an Escape the panel kept as its back (PanicPolicy.KeptEscapeGoesTo).</summary>
     public static void PostKeptEscape()
@@ -184,11 +259,16 @@ internal static class PrizeCounterHostService
         catch (Exception ex) { App.Logger?.Debug("PrizeCounter: kept Escape post failed: {E}", ex.Message); }
     }
 
-    /// <summary>Every exit: the page's close, the title-bar X, panic, a dead process, app exit. Idempotent.</summary>
-    public static void Close()
+    /// <summary>Every exit: the page's close, the title-bar X, a dead process. Idempotent. The reason is
+    /// <see cref="CloseBack"/> unless a <see cref="CloseFor"/> named another one.</summary>
+    public static void Close() => CloseFor(CloseBack);
+
+    /// <summary>Close with a reason the games under it hear (panic: GameSurfaces; app exit: App).</summary>
+    public static void CloseFor(string reason)
     {
         if (_disposing) return;
         _disposing = true;
+        List<Action<string>> openers;
         try
         {
             ++_generation;
@@ -197,11 +277,27 @@ internal static class PrizeCounterHostService
             _host = null;
             _relay = null;
             _opener = null;
-            if (had) App.Logger?.Information("PrizeCounterHostService: closed");
-            if (had) try { Closed?.Invoke(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            if (had) App.Logger?.Information("PrizeCounterHostService: closed ({Reason})", reason);
         }
         catch (Exception ex) { App.Logger?.Debug("PrizeCounterHostService.Close: {E}", ex.Message); }
-        finally { _disposing = false; }
+        finally
+        {
+            // Snapshotted before the callbacks run: one may open the counter again (a fresh list).
+            openers = new List<Action<string>>(_onClosed);
+            _onClosed.Clear();
+            _disposing = false;
+        }
+        NotifyOpeners(openers, reason);
+    }
+
+    /// <summary>Each game under the counter hears the close once; one that throws cannot starve the rest.</summary>
+    internal static void NotifyOpeners(IEnumerable<Action<string>> openers, string reason)
+    {
+        foreach (var opener in openers)
+        {
+            try { opener(reason); }
+            catch (Exception ex) { App.Logger?.Warning("PrizeCounter: an opener's close hook threw: {E}", ex.Message); }
+        }
     }
 
     private static void OnPageMessage(JObject m, int generation)
@@ -229,7 +325,8 @@ internal static class PrizeCounterHostService
                 break;
             case "close":
                 App.Logger?.Information("PrizeCounter: page closed ({Reason})", (string?)m["reason"] ?? "back");
-                OnUi(Close);
+                var why = PageCloseReason((string?)m["reason"]);
+                OnUi(() => CloseFor(why));
                 break;
             case "wear":
                 // An owned card's Wear on a Rain row: the counter steps aside (queued, never inside the
@@ -237,7 +334,7 @@ internal static class PrizeCounterHostService
                 if (generation == _generation)
                     HandleWear(m, Companion.RainItemManifest.Shipped, key => Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
                     {
-                        Close();
+                        CloseFor(CloseWear);
                         try { OpenWardrobe(key); } catch (Exception ex) { App.Logger?.Warning(ex, "PrizeCounter: wardrobe open failed"); }
                     })));
                 break;

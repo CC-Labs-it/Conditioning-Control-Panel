@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using ConditioningControlPanel.Services.Glassroad;
+using ConditioningControlPanel.Services.PrizeCounter;
 using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -174,14 +175,24 @@ public class GlassroadHostTests
         Assert.Contains("case \"open-prize-counter\":", host);
         int start = host.IndexOf("private static void OpenPrizeCounter()", StringComparison.Ordinal);
         Assert.True(start >= 0);
-        var body = host.Substring(start, host.IndexOf("private static void OnCounterClosed()", start, StringComparison.Ordinal) - start);
+        var body = host.Substring(start, host.IndexOf("private static void OnCounterClosed(string reason)", start, StringComparison.Ordinal) - start);
         int pause = body.IndexOf("type = \"pause\", on = true", StringComparison.Ordinal);
-        int launch = body.IndexOf("PrizeCounterHostService.Launch(GlassroadRules.CounterFrom, GlassroadRules.CounterTab)", StringComparison.Ordinal);
+        int launch = body.IndexOf("PrizeCounterHostService.Launch(GlassroadRules.CounterFrom, GlassroadRules.CounterTab,", StringComparison.Ordinal);
         Assert.True(pause >= 0 && launch > pause, "pause first, then the counter window");
-        Assert.Contains("PrizeCounterHostService.Closed += OnCounterClosed", body);
-        Assert.Contains("GlassroadRules.OwnedFrame(App.Ownership?.Grants)", host.Substring(host.IndexOf("private static void OnCounterClosed()", StringComparison.Ordinal)));
-        var counter = Read("Services", "PrizeCounter", "PrizeCounterHostService.cs");
-        Assert.Contains("if (had) try { Closed?.Invoke(); }", counter);
+        Assert.Contains("OnCounterClosed(reason)", body);
+        var closed = host.Substring(host.IndexOf("private static void OnCounterClosed(string reason)", StringComparison.Ordinal));
+        Assert.Contains("GlassroadRules.OwnedFrame(App.Ownership?.Grants)", closed);
+        Assert.Contains("GlassroadRules.CounterReturn(reason)", closed);
+    }
+
+    [Fact]
+    public void TheCounterClosing_ResendsOwnedOnBack_ButNeverComesForwardOnPanicOrExit()
+    {
+        Assert.Equal((true, true), GlassroadRules.CounterReturn(PrizeCounterHostService.CloseBack));
+        Assert.Equal((true, true), GlassroadRules.CounterReturn(PrizeCounterHostService.CloseFailed));
+        Assert.Equal((true, false), GlassroadRules.CounterReturn(PrizeCounterHostService.CloseWear));
+        Assert.Equal((false, false), GlassroadRules.CounterReturn(PrizeCounterHostService.ClosePanic));
+        Assert.Equal((false, false), GlassroadRules.CounterReturn(PrizeCounterHostService.CloseAppExit));
     }
 
     [Fact]

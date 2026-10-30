@@ -92,6 +92,15 @@ namespace ConditioningControlPanel.Services.Safety
             return true;
         }
 
+        /// <summary>
+        /// The legacy ladder (PanicOverridesAll off): a Prize Counter opened over a game whose own rung
+        /// takes the press (Back Room, Arcademy, DtRH, the feed, a descent) closes BEFORE that rung, which
+        /// returns and so never reaches the registry rung that closes the counter. A counter on its own
+        /// is left to the registry rung (it closes there and the exit ladder stays unarmed).
+        /// </summary>
+        internal static bool CounterClosesBeforeHandOff(bool counterActive, bool handOffGameActive)
+            => counterActive && handOffGameActive;
+
         /// <summary>Which game page an Escape the panel kept as its pause is handed to.</summary>
         internal enum KeptEscapePage { None, Race, Board, Breakout, Dtrh, Arcademy, Goon, Room, Intake, Counter, Glassroad }
 

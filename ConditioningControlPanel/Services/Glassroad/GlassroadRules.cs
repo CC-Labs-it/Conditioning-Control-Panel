@@ -77,6 +77,16 @@ internal static class GlassroadRules
     public const string CounterTab = "kart";
     public const string CounterFrom = "glassroad";
 
+    /// <summary>What the garage does when the counter over it closes (<c>PrizeCounterHostService.Close*</c>
+    /// reasons): panic and app exit close this window too, so nothing is re-sent or focused; Rain's Wear hands
+    /// the keyboard to the dressing room; anything else re-sends <c>owned</c> and takes the keyboard back.</summary>
+    public static (bool Resend, bool Focus) CounterReturn(string? reason)
+    {
+        bool calm = reason != PrizeCounter.PrizeCounterHostService.ClosePanic
+            && reason != PrizeCounter.PrizeCounterHostService.CloseAppExit;
+        return (calm, calm && reason != PrizeCounter.PrizeCounterHostService.CloseWear);
+    }
+
     /// <summary>The host -> page push when the account's grants change while the window is up.</summary>
     public static JObject OwnedFrame(IEnumerable<string>? grants)
         => new JObject { ["type"] = "owned", ["grants"] = KartGrants(grants) };

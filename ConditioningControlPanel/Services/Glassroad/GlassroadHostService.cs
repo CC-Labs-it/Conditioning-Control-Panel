@@ -150,7 +150,7 @@ internal static class GlassroadHostService
             try { if (_core != null) _core.DOMContentLoaded -= OnDomContentLoaded; } catch (Exception ex) { Diag.Swallowed(ex); }
             _core = null;
             try { if (App.Ownership != null) App.Ownership.OwnershipChanged -= OnOwnershipChanged; } catch (Exception ex) { Diag.Swallowed(ex); }
-            PrizeCounter.PrizeCounterHostService.Closed -= OnCounterClosed;
+            _counterOpen = false;
             try { _host?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _host = null;
             if (had)
@@ -254,23 +254,35 @@ internal static class GlassroadHostService
         }
     }
 
+    /// <summary>The Prize Counter is open over the garage (one close hook at a time).</summary>
+    private static bool _counterOpen;
+
     /// <summary>The garage's Prize Counter row (7.2 contract 1, owner call: no per-game relay): pause the page and
-    /// open the counter WINDOW over it on the kart tab. When the counter closes the page gets the owned frame
-    /// again, so a look bought there lights up even if no ownership event reached us.</summary>
+    /// open the counter WINDOW over it on the kart tab (the shared seam, <c>Launch(from, tab, onClosed)</c>). When
+    /// the counter closes the page gets the owned frame again, so a look bought there lights up even if no
+    /// ownership event reached us.</summary>
     private static void OpenPrizeCounter()
     {
         if (_host == null) return;
         try { _host.Post(new { type = "pause", on = true }); } catch (Exception ex) { Diag.Swallowed(ex); }
-        PrizeCounter.PrizeCounterHostService.Closed -= OnCounterClosed;
-        PrizeCounter.PrizeCounterHostService.Closed += OnCounterClosed;
-        PrizeCounter.PrizeCounterHostService.Launch(GlassroadRules.CounterFrom, GlassroadRules.CounterTab);
-        if (!PrizeCounter.PrizeCounterHostService.IsActive) PrizeCounter.PrizeCounterHostService.Closed -= OnCounterClosed;
+        if (_counterOpen) { PrizeCounter.PrizeCounterHostService.BringForward(); return; }
+        _counterOpen = true;
+        PrizeCounter.PrizeCounterHostService.Launch(GlassroadRules.CounterFrom, GlassroadRules.CounterTab,
+            reason => RunOnUi(() => OnCounterClosed(reason)));
     }
 
-    private static void OnCounterClosed()
+    /// <summary>The counter went: a plain back re-sends <c>owned</c> and hands the keyboard back; panic and app
+    /// exit close this window too, so nothing comes forward then.</summary>
+    private static void OnCounterClosed(string reason)
     {
-        PrizeCounter.PrizeCounterHostService.Closed -= OnCounterClosed;
-        try { _host?.Post(GlassroadRules.OwnedFrame(App.Ownership?.Grants)); _host?.FocusWeb(); }
+        if (!_counterOpen) return;
+        _counterOpen = false;
+        var (resend, focus) = GlassroadRules.CounterReturn(reason);
+        try
+        {
+            if (resend) _host?.Post(GlassroadRules.OwnedFrame(App.Ownership?.Grants));
+            if (focus) _host?.FocusWeb();
+        }
         catch (Exception ex) { App.Logger?.Debug("Glassroad: owned re-send after the counter failed: {E}", ex.Message); }
     }
 
