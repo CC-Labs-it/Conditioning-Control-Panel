@@ -164,6 +164,15 @@ public sealed class GameWindowFypTests
         Assert.Equal(1, fetches);
         Assert.Equal(new[] { "assets-append", "online-status" }, sent.Select(o => (string?)o["type"]));
         Assert.Equal(7, (int)sent[1]["poolTotal"]!);
+        Assert.Equal(1, (int)sent[1]["fresh"]!);
+        sent.Clear();
+        Wait(w.ServeFypRemoteBatch());
+        Assert.Equal(0, (int)sent[1]["fresh"]!);
+        Assert.Equal(0, (int)sent[1]["added"]!);
+        w.HandleMessage("{\"type\":\"ready\"}");
+        sent.Clear();
+        Wait(w.ServeFypRemoteBatch());
+        Assert.Equal(1, (int)sent[1]["fresh"]!);
         sent.Clear();
         w.HandleMessage("{\"type\":\"probe-sub\",\"sub\":\"hypnofeed\"}");
         Wait(w.FypLastProbe!);

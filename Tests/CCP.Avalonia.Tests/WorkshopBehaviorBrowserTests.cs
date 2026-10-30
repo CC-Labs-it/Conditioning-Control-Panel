@@ -55,6 +55,20 @@ public sealed class WorkshopBehaviorBrowserTests
     });
 
     [Fact]
+    public void IdleVoiceToggleSeedsAndWritesTheOptIn() => Run((cell, _) =>
+    {
+        var toggle = cell.FindControl<CheckBox>("ChkIdleVoiceEngineOffCompanion")!;
+        Assert.False(toggle.IsChecked);
+        toggle.IsChecked = true;
+        Assert.True(CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff);
+        CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff = false;
+        cell.SyncFromSettings();
+        Assert.False(toggle.IsChecked);
+        toggle.IsChecked = true;
+        Assert.True(CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff);
+    });
+
+    [Fact]
     public void PauseSwitchMutesAndPausesTheHomePageThenResumesWithoutChangingTheSavedMute() => Run((cell, host) =>
     {
         CoreSettings.Current.BrowserVideoMuted = true;
