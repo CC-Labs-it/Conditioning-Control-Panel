@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Controls;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -76,6 +77,57 @@ public sealed class OnlineMeterSurfaceTests
             Assert.Equal(Loc.Get("online_pill_done"), shell.OnlinePillText!.Text);
             shell.PaintOnlineMeterPill(State(42, source: "local"));
             Assert.False(shell.OnlinePill!.IsVisible);
+        }
+        finally { shell.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Dashboard_faces_have_matching_insets_and_rounded_clipping() => Run(() =>
+    {
+        var tab = new SettingsTabView();
+        var logo = tab.FindControl<global::Avalonia.Controls.Border>("LogoFaceLogo")!;
+        var pass = tab.FindControl<global::Avalonia.Controls.Border>("IntakePassFace")!;
+        Assert.Equal(new Thickness(24), logo.Margin);
+        Assert.Equal(logo.Margin, pass.Margin);
+        Assert.True(logo.ClipToBounds);
+        Assert.Equal(new CornerRadius(12), logo.CornerRadius);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Daily_share_slip_uses_the_shared_title_and_all_paragraphs() => Run(() =>
+    {
+        var slip = new ConditioningControlPanel.Avalonia.Views.Controls.OnlineMediaHelpSlip();
+        var texts = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(slip)
+            .OfType<TextBlock>().Select(t => t.Text).ToArray();
+        Assert.Equal(new[] { Loc.Get(OnlineMeterRules.HelpTitleKey) }
+            .Concat(OnlineMeterRules.HelpParagraphs(Loc.Get)), texts);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Daily_share_help_pins_from_the_spent_card_and_contains_every_paragraph() => Run(() =>
+    {
+        var shell = new MainShellWindow();
+        shell.Show();
+        try
+        {
+            shell.PaintOnlineMeterPill(State(100, spent: true));
+            shell.OpenOnlineMeterHover();
+            Assert.NotNull(shell.OnlineHoverHelp);
+            shell.OnlineHoverHelp!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var tab = shell.Named<AssetsTabView>("AssetsTab")!;
+            var help = tab.OnlineHelpButton!;
+            Assert.True(ConditioningControlPanel.Avalonia.Views.Controls.Leash.LeashHelpButton.IsOpen(help));
+            Assert.True(ConditioningControlPanel.Avalonia.Views.Controls.Leash.LeashHelpButton.IsPinned(help));
+            var slip = ConditioningControlPanel.Avalonia.Views.Controls.Leash.LeashHelpButton.Slip(help)!;
+            Assert.Equal("online-help-slip", slip.Tag);
+            var text = string.Join("\n", global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(slip)
+                .OfType<TextBlock>().Select(t => t.Text));
+            foreach (var key in OnlineMeterRules.HelpParagraphKeys) Assert.Contains(Loc.Get(key), text);
+            Assert.Null(shell.OnlineHoverHelp);
         }
         finally { shell.Close(); }
         return Task.CompletedTask;
