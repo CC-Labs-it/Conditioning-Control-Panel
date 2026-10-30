@@ -1,7 +1,7 @@
 using System;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
-namespace ConditioningControlPanel.Services.Sparkles;
+namespace ConditioningControlPanel.Services.Sparkles.Claims;
 public sealed record SparklesResult(string Kind, int Place = 0, int Of = 0, string? Outcome = null, string? Medal = null)
 {
     public static SparklesResult ForPlace(int place, int of) => new("place", Place: place, Of: of);

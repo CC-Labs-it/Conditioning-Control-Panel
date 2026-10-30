@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
-namespace ConditioningControlPanel.Services.Sparkles;
+namespace ConditioningControlPanel.Services.Sparkles.Claims;
 public sealed record SparklesDaySide(int Paid, int Ceil, int Fees, int Jar);
 public sealed record SparklesDay(SparklesDaySide Solo, SparklesDaySide Online, IReadOnlyDictionary<string, int> Games);
 public sealed record SparklesReceipt

@@ -6,7 +6,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using ConditioningControlPanel.Services.Sparkles;
+using ConditioningControlPanel.Services.Sparkles.Claims;
 using Newtonsoft.Json.Linq;
 using Xunit;
 namespace CCP.Core.Tests;
@@ -230,5 +230,16 @@ public class SparklesClaimServiceTests
         Assert.Equal("unreachable", (await rig.Service.ClaimAsync(Claim(), cancelled.Token)).Reason);
         Assert.Empty(rig.Handler.Seen);
     }
+
+    [Theory]
+    [InlineData("SparklesClaim")]
+    [InlineData("SparklesResult")]
+    [InlineData("SparklesReceipt")]
+    [InlineData("SparklesDay")]
+    [InlineData("SparklesDaySide")]
+    [InlineData("SparklesClaimService")]
+    [InlineData("SparklesClaimOutcome")]
+    public void CoreDoesNotExportWpfSparklesNames(string name) =>
+        Assert.Null(typeof(SparklesClaim).Assembly.GetType("ConditioningControlPanel.Services.Sparkles." + name));
 
 }

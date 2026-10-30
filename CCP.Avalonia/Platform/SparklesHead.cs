@@ -3,7 +3,7 @@ using System.Net.Http;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Prizes;
-using ConditioningControlPanel.Services.Sparkles;
+using ConditioningControlPanel.Services.Sparkles.Claims;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 

@@ -8,7 +8,7 @@ using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.Prizes;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-namespace ConditioningControlPanel.Services.Sparkles;
+namespace ConditioningControlPanel.Services.Sparkles.Claims;
 public sealed record SparklesClaimOutcome(SparklesReceipt? Receipt, string? Reason, bool Adopted = false)
 {
     public bool Ok => Receipt != null;
