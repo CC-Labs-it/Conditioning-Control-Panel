@@ -7,6 +7,7 @@ import { createShop, windowShelves } from './state/shop.js';
 import { makeT } from './state/strings.js';
 import { createHud } from './hud/index.js';
 import { asHost } from './host.js';
+import { createPressGuard, keyName } from './state/press-guard.js';
 
 const mintIdem = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
 const KEYS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', q: 'tabPrev', e: 'tabNext',
@@ -15,7 +16,7 @@ const KEYS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown:
 export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
   const host = typeof hostIn.ready === 'function' && hostIn.hosted !== undefined ? hostIn : asHost(hostIn);
   const init = (await host.ready()) || {};
-  const t = makeT(init.lexicon), motion = init.motion || 'full';
+  const t = makeT(init.lexicon, init.companion), motion = init.motion || 'full';
   root.classList.add('pc');
   root.dataset.motion = motion;
   root.replaceChildren();
@@ -24,15 +25,21 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
   root.append(canvas);
 
   const shop = createShop({ request: host.request, newIdem: mintIdem, tab: init.tab || null, wears: init.wears });
+  // Stray keys never spend (desk bug 2026-10-30): Space, Enter and pad A confirm only as a deliberate press and
+  // release after the counter has held focus a while (state/press-guard.js). Mounting counts as gaining focus.
+  const guard = createPressGuard({ now: () => performance.now(), focused: document.hasFocus() });
+  const onFocus = () => guard.focus(true), onBlur = () => guard.focus(false);
+  window.addEventListener('focus', onFocus);
+  window.addEventListener('blur', onBlur);
   let scene = null;
   try {
     const m = await import('./scene/index.js');
-    scene = await m.createScene(canvas, { base: './assets/', motion });
+    scene = await m.createScene(canvas, { base: './assets/', motion, guard });
   } catch (e) { host.log(`prizecounter: scene unavailable, plain list (${(e && e.message) || e})`); }
   if (scene) scene.fx = await import('./fx/index.js').then((m) => m.installFx(scene, init)).catch((e) => host.log(`prizecounter: no juice (${(e && e.message) || e})`));
   canvas.hidden = !scene;
 
-  const hud = createHud(root, { t, send: (i) => intent(i), goTab, signIn: () => host.signIn(), list: !scene, gentle: !!init.gentle,
+  const hud = createHud(root, { t, send: (i) => intent(i), goTab, signIn: () => host.signIn(), list: !scene, gentle: !!init.gentle, guard,
     motion: motion === 'full' && init.reducedMotion ? 'less' : motion });
   // The preview box (lane B3-W5): the focused item's model or picture, loaded when the focus rests, freed when it leaves.
   const preview = await import('./preview/index.js')
@@ -52,7 +59,11 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
     if (!ch) return;
     if (scene && (ch.tab || ch.effects || ch.status)) scene.setWallet(shop.sp(), tier());
     // showTab builds the shelves first; focus again once they hang, or the camera never leaves the wide shot.
-    if (ch.tab && scene) scene.showTab(ch.tab.id, ch.tab.shelves).then(() => { const f = shop.focus(); if (f) scene.focus(f.bay, f.slot); });
+    // Nothing focused (just opened): the wide shot, or the first bay on a portrait view.
+    if (ch.tab && scene) scene.showTab(ch.tab.id, ch.tab.shelves).then(() => {
+      const f = shop.focus();
+      if (f) scene.focus(f.bay, f.slot); else if (canvas.clientWidth < canvas.clientHeight) scene.frameBay(0);
+    });
     if (ch.focus && scene) scene.focus(ch.focus.bay, ch.focus.slot);
     if (ch.owned && scene && !ch.tab) scene.stamp?.(ch.owned);
     for (const e of ch.effects || []) if (e.type === 'wallet') { host.wallet(e.sp); hud.receipt(e.sp, itemPos()); }
@@ -70,15 +81,23 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
     if (ch.buy) ch.buy.then(apply);
     paint();
   }
-  function intent(i) { apply(shop.intent(i)); }
+  // A key's select from the shelves never reaches an open card: the card takes keys only on its own buttons.
+  function intent(i) { if (i && i.type === 'select' && i.key && shop.card()) return; apply(shop.intent(i)); }
   // A tab stamp jumps straight there: walk the model, then draw only where it lands.
   function goTab(id) { let ch = null, n = 8; while (shop.tabId() !== id && n--) ch = shop.intent({ type: 'tabNext' }); apply(ch); }
+  const keyOf = (e) => KEYS[e.key] || KEYS[e.key.toLowerCase()];
   const onKey = (e) => {
-    const k = KEYS[e.key] || KEYS[e.key.toLowerCase()];
-    if (k && !(e.target && e.target.tagName === 'BUTTON' && k === 'select')) { e.preventDefault(); intent({ type: k }); }
+    const k = keyOf(e);
+    if (!k || (e.target && e.target.tagName === 'BUTTON' && k === 'select')) return;
+    e.preventDefault();
+    if (k === 'select') guard.down(keyName(e), e.repeat); else intent({ type: k });
+  };
+  const onKeyUp = (e) => {
+    if (keyOf(e) !== 'select') return;
+    if (guard.up(keyName(e)) && !(e.target && e.target.tagName === 'BUTTON')) intent({ type: 'select', key: true });
   };
   const onResize = () => { if (scene) { scene.resize(); scene.setInsets(hud.insets()); } };
-  if (scene) scene.onIntent(intent); else window.addEventListener('keydown', onKey);
+  if (scene) scene.onIntent(intent); else { window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKeyUp); }
   // The host's answer to an in-place Wear: a refusal replaces the card's "Wearing it now." (fix wave F1).
   if (typeof host.onWorn === 'function') host.onWorn((m) => apply(shop.worn(m && m.id, !!(m && m.ok === true))));
   window.addEventListener('resize', onResize);
@@ -87,6 +106,9 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
 
   return {
     shop, scene, hud, intent,
-    dispose() { window.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); hud.dispose(); if (preview) preview.dispose(); if (scene) scene.dispose(); root.replaceChildren(); },
+    dispose() {
+      window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('focus', onFocus); window.removeEventListener('blur', onBlur);
+      window.removeEventListener('resize', onResize); hud.dispose(); if (preview) preview.dispose(); if (scene) scene.dispose(); root.replaceChildren(); },
   };
 }

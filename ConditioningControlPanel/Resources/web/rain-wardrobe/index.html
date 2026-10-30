@@ -4,20 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ede9e2">
-  <title>Rain | Dressing room</title>
+  <title>Emi | Dressing room</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="./style.css">
   <script type="importmap">{"imports":{"three":"../vendor/three/three.module.min.js","three/addons/":"../vendor/three/addons/"}}</script>
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="./" aria-label="Rain dressing room">RAIN<span>01 / DRESSING ROOM</span></a>
+    <a class="brand" id="brand" href="./" aria-label="Emi dressing room">EMI<span>01 / DRESSING ROOM</span></a>
     <div class="top-actions"><span class="live-dot" id="liveLabel">LIVE PREVIEW</span><button class="quiet" id="demo" disabled>Show swaps <span aria-hidden="true">▷</span></button><button class="quiet" id="reset">Original look <span aria-hidden="true">↺</span></button></div>
   </header>
   <main>
     <section class="stage" aria-label="Animated avatar preview">
       <div class="stage-title"><p class="eyebrow">MAKE IT YOURS</p><h1>A little<br><em>change.</em></h1></div>
-      <canvas id="preview" aria-label="Rain. Drag to rotate, scroll to zoom." tabindex="0"></canvas>
+      <canvas id="preview" aria-label="Emi. Drag to rotate, scroll to zoom." tabindex="0"></canvas>
       <div class="swap-fx" id="swapFx" aria-hidden="true"><i></i><b>✦</b><b>✧</b><b>✦</b><b>✧</b><b>✦</b><b>✧</b></div>
       <div class="load-card" id="loading" role="status"><span class="spinner"></span><p id="loadMessage">Getting dressed</p><progress id="loadProgress"></progress></div>
       <div class="stage-caption"><span id="lookCaption">The original</span><span class="drag-hint">Drag to turn · Scroll to zoom</span></div>
@@ -51,10 +51,11 @@
       <div class="section-intro"><h2 id="categoryTitle">The dress.</h2><p id="categoryHint">Pick a silhouette.</p></div>
       <div class="choices" id="choices" role="tabpanel" aria-label="Dresses"></div>
       <div class="outfit-summary"><span class="eyebrow">WEARING NOW</span><div id="equipped"></div></div>
-      <div class="wardrobe-foot"><span class="small-star">✳</span><p>Your look. Same Rain.</p><span class="prototype">FITTING PROTOTYPE</span></div>
+      <div class="wardrobe-foot"><span class="small-star">✳</span><p id="sameName">Your look. Same Emi.</p><span class="prototype">FITTING PROTOTYPE</span></div>
     </aside>
   </main>
   <footer class="look-bar" id="lookBar" hidden>
+    <div class="bake-meter" id="bakeMeter" aria-hidden="true"><i></i></div>
     <div class="look-text"><p class="look-now"><span id="lookNowLabel">Wearing now:</span> <span id="lookNow"></span></p>
     <p class="look-blocker" id="lookBlocker" role="status"><span id="lookBlockerText"></span><button class="link" id="openCounter" hidden>Open counter</button></p></div>
     <div class="look-actions"><button class="quiet" id="discardLook" disabled>Discard</button><button class="ink" id="applyLook" disabled>Apply look</button></div>

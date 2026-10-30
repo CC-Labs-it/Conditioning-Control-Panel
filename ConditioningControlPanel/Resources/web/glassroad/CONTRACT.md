@@ -277,6 +277,11 @@ Prize Counter row (7.2 contract 1, `host/prizeCounter.js`): a host that sets `ca
 Counter" row on the garage menu. Page -> host `open-prize-counter { tab: 'kart', from: 'glassroad' }`; the host pauses
 the page, opens the counter over it (desktop: the counter window, `PrizeCounterHostService.Launch`; web:
 `/prize-counter?tab=kart&from=glassroad`; phone: the counter screen) and re-sends `owned { grants }` when it closes.
+Wear (7.2 fix wave, desktop only): after the counter's Wear on an owned kart look it closes with reason `wear` and
+re-sends `owned { grants, wear: '<counter row id>' }` (`kart.body.<id>`, `kart.outfit.<id>`, `kart.paint.pattern-bundle`,
+`kart.umbrella.lace`, `prime.paint.host-gold`, `prime.trail.podium`). The garage adopts the grants first, then puts the
+item on like its own picker (`hud/garageState.js wearPick`; the bundle keeps hearts or spiral if worn, else hearts),
+saves it, turns to the kart or opens Customize on the section, and shows a short note. Unknown or unowned ids are ignored.
 Web Scrolller pictures (2026-10-26, `host/scrolllerFeed.js`): a host that can feed them sets `caps.scrolller:
 { consent: boolean }` (the web shim; the desktop never does). Host -> page `scrolller-feed { v: 1, rows: [{ url, kind:
 'image' }] }` (https on a scrolller.com host, at most 12 used; an empty list when consent is off) and the `setting

@@ -1,7 +1,10 @@
 // Rain V2 bake on Apply (lane R6, RAIN-V2-PLAN 2.3 / 2.5). The tube never runs live 3D: when the
 // host sends {type:'rain-bake', lookHash, clips, fps, w, h} the page renders each clip of the
-// CURRENT look offscreen at 2x, runs the tube clips' pixel pass (a port of
-// blender-scripting/rain-tube-1024/scripts/pixel.py) and streams PNG frames to the host:
+// CURRENT look offscreen at 2x, box-filters it down to the tube size (2x the tube's on-screen size, so
+// it stays crisp at 200% DPI), maps the colours onto one shared 256-colour palette (soft alpha kept:
+// a smaller pack, no visible banding) and streams PNG frames to the host. The old pixel pass (a port of
+// blender-scripting/rain-tube-1024/scripts/pixel.py, 2x2 grain, 48 colours, hard alpha) stays for
+// request.pixel / request.palette === 'shipped' (the side-by-side gate against the shipped clips):
 //   rain-bake-frame {clip, index, png}   rain-bake-progress {clip, frame, of}
 //   rain-bake-done {clip, frames}        rain-bake-done {all:true}   (plus lookHash on each)
 // A clip the GLB does not carry yet answers rain-bake-done {clip, frames:0, skipped:true}.
@@ -10,7 +13,7 @@
 // The visible view keeps running: the bake draws through its own renderer and its own mixer,
 // and every bake frame hands the pose back before the next paint.
 
-export const BAKE = Object.freeze({ scale: 2, grain: 2, colors: 48, alphaCut: 128, fps: 15, w: 192, h: 309, toneMapping: 'AgXToneMapping', exposure: 1 });
+export const BAKE = Object.freeze({ scale: 2, grain: 2, colors: 48, smoothColors: 256, alphaCut: 128, fps: 15, w: 384, h: 618, toneMapping: 'AgXToneMapping', exposure: 1 });
 const BAKE_TONE = { AgXToneMapping: 1, ACESFilmicToneMapping: 1, NeutralToneMapping: 1 };
 
 /** Opaque colours of the shipped idle.webp (Resources/rain_emotes, 44 of its 48 median-cut
@@ -123,6 +126,7 @@ export function nearestColor(palette) {
     const key = (r << 16) | (g << 8) | b;
     let hit = cache.get(key);
     if (hit) return hit;
+    if (cache.size >= 1 << 20) cache.clear();   // one lookup serves a whole bake: keep it bounded
     let best = Infinity;
     for (const p of palette) {
       const d = (p[0] - r) ** 2 + (p[1] - g) ** 2 + (p[2] - b) ** 2;
@@ -152,6 +156,19 @@ export function pixelate(frame, { grain = BAKE.grain, palette, alphaCut = BAKE.a
     }
   }
   return { data: out, width: W, height: H };
+}
+
+/** The tube pass: every visible pixel's colour snaps to the shared palette (pick = nearestColor),
+ *  its alpha is kept as is, so edges stay soft and nothing is cut to blocks. Straight RGBA in and out. */
+export function smoothPass(frame, pick) {
+  const src = frame.data, out = new Uint8ClampedArray(src.length);
+  for (let i = 0; i < src.length; i += 4) {
+    const a = src[i + 3];
+    if (!a) continue;
+    const c = pick(src[i], src[i + 1], src[i + 2]);
+    out[i] = c[0]; out[i + 1] = c[1]; out[i + 2] = c[2]; out[i + 3] = a;
+  }
+  return { data: out, width: frame.width, height: frame.height };
 }
 
 /** The alpha / premultiply self-check: a usable readback holds both clear and solid pixels
@@ -197,7 +214,11 @@ export async function runBake({ request, source, post, yieldFrame = () => new Pr
       send({ type: 'rain-bake-done', all: true, error: check.reason });
       return { ok: false, reason: check.reason };
     }
-    const palette = request.palette === 'shipped' ? SHIPPED_IDLE_PALETTE : medianCut(toTubeFrame(check.raw, w, h).data);
+    const pixel = request.pixel === true || request.palette === 'shipped';
+    const palette = request.palette === 'shipped' ? SHIPPED_IDLE_PALETTE
+      : medianCut(toTubeFrame(check.raw, w, h).data, pixel ? BAKE.colors : BAKE.smoothColors);
+    const pick = nearestColor(palette);
+    const pass = pixel ? frame => pixelate(frame, { palette }) : frame => smoothPass(frame, pick);
     const baked = {};
     for (const clip of clips) {
       if (cancelled()) break;
@@ -205,7 +226,7 @@ export async function runBake({ request, source, post, yieldFrame = () => new Pr
       const of = frameCount(source.duration(clip), fps);
       for (let index = 0; index < of; index++) {
         if (cancelled()) break;
-        const frame = pixelate(toTubeFrame(source.render(clip, index / fps), w, h), { palette });
+        const frame = pass(toTubeFrame(source.render(clip, index / fps), w, h));
         send({ type: 'rain-bake-frame', clip, index, png: await source.encode(frame) });
         send({ type: 'rain-bake-progress', clip, frame: index + 1, of });
         await yieldFrame();

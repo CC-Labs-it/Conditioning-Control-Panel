@@ -36,10 +36,13 @@ export function garageUi({change,select,customize,action,hover,trackId='threshol
   $('.g-course-name').textContent=COURSES.find(c=>c.id===trackId)?.name||'Threshold';
   const record=createRecordPanel({root,courses:COURSES,load:()=>loadRecord()});let noteTimer=0;
   const make=(parent,label,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=fn;$(parent).append(b);return b;};
-  let owns=undefined,shopTimer=0;
+  let owns=undefined,shopTimer=0,wornTimers=[],wornEl=null;
+  // a deny or lock line cuts a worn note short; the worn note owns its own timers
+  const stopWorn=()=>{for(const t of wornTimers)clearTimeout(t);wornTimers=[];wornEl?.classList.remove('g-worn');wornEl=null;};
+  const plain=el=>{stopWorn();el.classList.remove('g-note-in','g-note-out');};
   // A dark shop look says where it is sold and changes nothing.
   const shop=(kind,id,values)=>()=>{if(wearable(kind,id,owns)){change(values());return;}
-    const el=$('.g-shop-note');el.textContent=shopLockLine(id);clearTimeout(shopTimer);shopTimer=setTimeout(()=>{el.textContent='';},3200);deny(shopLockLine(id));};
+    const el=$('.g-shop-note');plain(el);el.textContent=shopLockLine(id);clearTimeout(shopTimer);shopTimer=setTimeout(()=>{el.textContent='';},3200);deny(shopLockLine(id));};
   for(const [id,label]of OUTFITS)make('.g-outfits',label,shop('outfit',id,()=>({outfit:id}))).dataset.outfit=id;
   for(const p of PRESETS){const b=make('.g-palettes','',()=>change({...p,skin:p.name,original:false}));b.setAttribute('aria-label',p.name+' colors');b.dataset.palette=p.name;b.style.background=`linear-gradient(135deg,${p.primary} 50%,${p.secondary} 50%)`;}
   ['Plain','Stripes','Dots','Checks'].forEach((label,pattern)=>{const b=make('.g-patterns','',()=>change({pattern,paint:null,original:false}));b.dataset.pattern=pattern;b.setAttribute('aria-label',label);});
@@ -62,7 +65,7 @@ export function garageUi({change,select,customize,action,hover,trackId='threshol
   return {
     root,get trackPicking(){return picker.open||courseMedia.open;},trackNav:dir=>courseMedia.open?courseMedia.nav(dir):picker.nav(dir),get recordOpen(){return record.open;},recordNav:dir=>record.nav(dir),
     setMedia(fn){mediaFor=typeof fn==='function'?fn:()=>({});refreshMedia();},refreshMedia,
-    lockNote(kart){const line=lockLine(kart);if(!line)return;const el=$('.g-lock-note');el.textContent=KARTS.find(k=>k[0]===kart)[1]+'. '+line;clearTimeout(noteTimer);noteTimer=setTimeout(()=>{el.textContent='';},3200);},
+    lockNote(kart){const line=lockLine(kart);if(!line)return;const el=$('.g-lock-note');plain(el);el.textContent=KARTS.find(k=>k[0]===kart)[1]+'. '+line;clearTimeout(noteTimer);noteTimer=setTimeout(()=>{el.textContent='';},3200);},
     layout(l){root.style.setProperty("--g-menu",l.menuWidth+"px");root.style.setProperty("--g-stage-center",l.center*100+"%");root.style.setProperty("--g-left-arrow",l.arrowLeft*100+"%");root.style.setProperty("--g-right-arrow",l.arrowRight*100+"%");root.style.setProperty("--g-arrow-y",l.arrowY*100+"%");},
     paint(s,{custom,busy,locked,owned}){
       current=s;owns=owned;
@@ -81,6 +84,13 @@ export function garageUi({change,select,customize,action,hover,trackId='threshol
       for(const el of root.querySelectorAll('[data-g=race],[data-g=online],[data-g=tracks]'))el.disabled=busy;
       $('.g-announce').textContent=custom?'Customize EMI':KARTS.find(k=>k[0]===s.kart)[1]+' selected';
     },
+    /** The counter's Wear landed (render/garage.js wear): the item's button pulses, its note slides in and out. */
+    worn(kind,id,line){const sel={kart:'data-kart',outfit:'data-outfit',paint:'data-paint',umbrella:'data-extra-id',trail:'data-extra-id'}[kind];if(!sel)return;
+      const note=$(kind==='kart'?'.g-lock-note':'.g-shop-note');clearTimeout(noteTimer);clearTimeout(shopTimer);plain(note);
+      wornEl=[...root.querySelectorAll('['+sel+']')].find(el=>el.getAttribute(sel)===id)||null;
+      if(wornEl){void wornEl.offsetWidth;wornEl.classList.add('g-worn');if(kind!=='kart')wornEl.scrollIntoView?.({block:'nearest'});}
+      note.textContent=line;void note.offsetWidth;note.classList.add('g-note-in');
+      wornTimers=[setTimeout(()=>{note.classList.replace('g-note-in','g-note-out');},2600),setTimeout(()=>{plain(note);note.textContent='';},3200)];},
     track(name,laps){$('.g-track').textContent=name+' · '+laps+(laps===1?' lap':' laps');},
     setCourse(course){
       trackId=course.trackId;online=course.online!==false;
@@ -94,6 +104,6 @@ export function garageUi({change,select,customize,action,hover,trackId='threshol
     },
     setVisible(on){if(root.hidden===!on)return;if(!on)record.close();root.hidden=!on;document.body.classList.toggle('garage-open',on);if(on)$('[data-g=race]').focus({preventScroll:true});},
     customFocus(on){$(on?'[data-g=done]':'[data-g=customize]').focus({preventScroll:true});},
-    dispose(){clearTimeout(noteTimer);clearTimeout(shopTimer);record.dispose();picker.dispose();courseMedia.dispose();root.remove();document.body.classList.remove('garage-open');},
+    dispose(){clearTimeout(noteTimer);clearTimeout(shopTimer);stopWorn();record.dispose();picker.dispose();courseMedia.dispose();root.remove();document.body.classList.remove('garage-open');},
   };
 }

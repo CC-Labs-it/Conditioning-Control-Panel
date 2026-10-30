@@ -1,8 +1,44 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  BAKE, SHIPPED_IDLE_PALETTE, TUBE_CAMERA, tubeFrustum, frameCount, boxDownscale, medianCut, pixelate, checkReadback, runBake, installBaker
+  BAKE, SHIPPED_IDLE_PALETTE, TUBE_CAMERA, tubeFrustum, frameCount, boxDownscale, medianCut, nearestColor, pixelate, smoothPass, checkReadback, runBake, installBaker
 } from '../bake.js';
+
+test('the tube bake is 2x the tube (384x618, same aspect as the shipped 192x309 clips)', () => {
+  assert.deepEqual([BAKE.w, BAKE.h], [384, 618]);
+  assert.ok(Math.abs(BAKE.w / BAKE.h - 192 / 309) < 0.001);
+});
+
+test('smooth pass: full resolution, soft alpha kept, at most 256 colours', () => {
+  const frame = synthetic(96, 154);
+  const palette = medianCut(frame.data, BAKE.smoothColors);
+  assert.ok(palette.length <= 256 && palette.length > 48);
+  const out = smoothPass(frame, nearestColor(palette));
+  assert.equal(out.width, 96); assert.equal(out.height, 154);
+  for (let i = 3; i < frame.data.length; i += 4) assert.equal(out.data[i], frame.data[i]);   // alpha untouched
+  assert.ok([...out.data].some((v, i) => i % 4 === 3 && v > 0 && v < 255), 'soft edges survive');
+  assert.ok(colours(out).size <= 256);
+  // No 2x2 grain: some horizontal neighbour pair differs inside the body.
+  let differ = 0;
+  for (let i = 0; i < out.data.length - 4; i += 8) if (out.data[i + 3] === 255 && out.data[i + 7] === 255 && out.data[i] !== out.data[i + 4]) differ++;
+  assert.ok(differ > 100);
+});
+
+test('runBake: the smooth pass by default, the pixel pass only on request', async () => {
+  const run = async extra => {
+    const seen = [];
+    const source = {
+      hasClip: () => true, duration: () => 0.1, render: () => synthetic(W * 2, H * 2),
+      encode: frame => { seen.push(frame); return 'png'; }
+    };
+    await runBake({ request: { lookHash: 'q', clips: ['idle'], fps: 15, w: W, h: H, ...extra }, source, post: () => {}, yieldFrame: async () => {} });
+    return seen[0];
+  };
+  const smooth = await run({}), pixel = await run({ pixel: true });
+  assert.ok([...smooth.data].some((v, i) => i % 4 === 3 && v > 0 && v < 255), 'smooth keeps soft alpha');
+  assert.ok([...pixel.data].every((v, i) => i % 4 !== 3 || v === 0 || v === 255), 'pixel pass cuts alpha hard');
+  assert.ok(colours(smooth).size > colours(pixel).size);
+});
 
 const W = 192, H = 309;
 

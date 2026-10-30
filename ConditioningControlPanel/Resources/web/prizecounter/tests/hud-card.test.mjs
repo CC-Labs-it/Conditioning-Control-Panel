@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cardModel, renderCard } from '../hud/card.js';
 import { createHud } from '../hud/index.js';
-import { makeT, itemDesc } from '../state/strings.js';
+import { makeT, itemDesc, LEX } from '../state/strings.js';
 import { fakeDocument } from './fake-dom.mjs';
 
 const t = makeT({});
@@ -65,7 +65,7 @@ test('pending: aria-busy, the buy button disabled, the note says so; a note key 
   assert.match(draw({ ...CARDS.buy, noteKey: 'shop_note_retry' }).el.text(), /Confirm again to retry/);
 });
 
-test('the HUD opens the card with focus on Buy, traps Tab, Esc keeps looking, and closes it', () => {
+test('the HUD opens the card with focus on the card (no default action), traps Tab, Esc keeps looking, and closes it', () => {
   const doc = fakeDocument(), root = doc.createElement('main'), sent = [];
   const hud = createHud(root, { t, send: (i) => sent.push(i), goTab: () => {}, motion: 'off' });
   const view = (card) => ({ status: 'ready', sp: 1850, week: '2026-W44', tier: 1, tabs: ['rain-clothes', 'kart'], tabId: 'kart',
@@ -73,6 +73,8 @@ test('the HUD opens the card with focus on Buy, traps Tab, Esc keeps looking, an
   hud.paint(view(CARDS.buy));
   const modal = root.querySelectorAll('.pc-modal')[0];
   assert.equal(modal.hidden, false);
+  assert.ok(doc.activeElement.classList.contains('pc-card'), 'the card itself, never Buy');
+  modal.dispatch('keydown', { key: 'Tab' });
   assert.equal(doc.activeElement.textContent, 'Buy');
   modal.dispatch('keydown', { key: 'Tab' });
   assert.equal(doc.activeElement.textContent, 'Keep looking');
@@ -107,11 +109,20 @@ test('signed out: one Sign in to shop button, no wallet, no tabs; it asks for th
 });
 
 test('the card carries the item description: its own key, else the family + slot key, else none', () => {
-  assert.match(draw(CARDS.buy).el.text(), /Scarlet bell dress for Rain/);
+  assert.match(draw(CARDS.buy).el.text(), /Scarlet bell dress for Emi\./);
   assert.equal(draw(CARDS.buy).el.querySelectorAll('.pc-card-desc').length, 1);
   assert.match(draw({ ...CARDS.owned, itemId: 'kart.body.petal' }).el.text(), /A kart body for EMI/);
   assert.equal(itemDesc(t, 'kart.body.velvet-lock'), itemDesc(t, 'kart.body.petal'));
   assert.equal(itemDesc(t, 'kart.paint.hearts'), null);
   assert.equal(draw({ ...CARDS.soon, itemId: 'kart.paint.hearts' }).el.querySelectorAll('.pc-card-desc').length, 0);
   assert.equal(itemDesc(makeT({ shop_item_rain_dress_teal_tulip_desc: 'Lexicon wins.' }), 'rain.dress.teal-tulip'), 'Lexicon wins.');
+});
+
+test('{companion} is the mod name from init.companion, Emi without one (web, phone); "Rain" never shows', () => {
+  assert.equal(makeT({}, 'Bambi')('shop_tab_rain_clothes'), 'Bambi: clothes');
+  assert.equal(makeT({}, 'Bimbo')('shop_item_rain_dress_scarlet_bell_desc'), 'Scarlet bell dress for Bimbo.');
+  assert.equal(makeT({})('shop_tab_rain_hair'), 'Emi: hair');
+  assert.equal(makeT({}, '   ')('shop_item_profile_avatar_rain_portrait_name'), 'Emi Portrait');
+  assert.equal(makeT({ shop_tab_rain_hair: '{companion}: Haare' }, 'Bambi')('shop_tab_rain_hair'), 'Bambi: Haare');
+  for (const key of Object.keys(LEX)) assert.doesNotMatch(makeT({}, 'Bambi')(key), /\bRain\b/, key);
 });

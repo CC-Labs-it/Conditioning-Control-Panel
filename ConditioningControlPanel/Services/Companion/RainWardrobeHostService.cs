@@ -142,6 +142,11 @@ internal static class RainWardrobeHostService
                 OnMessage = OnPageMessage,
                 OnProcessFailed = kind =>
                 {
+                    if (!ClosesOn(kind))
+                    {
+                        App.Logger?.Information("RainWardrobe: page busy ({Kind}), kept open", kind);
+                        return;
+                    }
                     App.Logger?.Warning("RainWardrobe: browser process failed ({Kind}) - closing", kind);
                     RunOnUi(Close);
                 },
@@ -159,6 +164,12 @@ internal static class RainWardrobeHostService
             Close();
         }
     }
+
+    /// <summary>Which process failures close the window. RenderProcessUnresponsive does not: the renderer is alive
+    /// and busy. The page parses ~300 MB of Rain (avatar.glb + pelvis-data.js) for about 30 s on boot, and any key
+    /// or click sent to the window meanwhile trips Chromium's hang monitor (desk 2026-10-30: stray Spaces after a
+    /// counter Wear closed the dressing room 26 s in). The title-bar X and panic still close it.</summary>
+    internal static bool ClosesOn(CoreWebView2ProcessFailedKind kind) => kind != CoreWebView2ProcessFailedKind.RenderProcessUnresponsive;
 
     /// <summary>The one funnel for every exit (title-bar X, panic, dead browser, shutdown). Idempotent.</summary>
     public static void Close()
@@ -255,10 +266,56 @@ internal static class RainWardrobeHostService
             AccountGrants(), progress.Level, progress.UnlockedAchievements,
             LocalizationManager.Instance.CurrentLanguage,
             MotionFx.Level.ToString().ToLowerInvariant(),
-            Safety.GentleVisuals.On, prices);
+            Safety.GentleVisuals.On, prices, PageStrings(Loc.Get));
+        // What the page calls her: the active mod's name (Bambi, Bimbo, Emi), never the model's "Rain".
+        init["companion"] = CompanionName.ForActiveMod();
         // The counter's Wear door: one piece on as a draft, once (a later ready never re-applies it).
         if (_tryOn != null) { init["tryOn"] = _tryOn; _tryOn = null; }
         return init;
+    }
+
+    /// <summary>Loc keys behind the page's bake lines (<c>wardrobe-shop.js STR</c> key -> loc key).</summary>
+    internal static readonly IReadOnlyDictionary<string, string> PageStringKeys = new Dictionary<string, string>
+    {
+        ["applying"] = "rain_wardrobe_applying",
+        ["baking"] = "rain_wardrobe_baking",
+        ["bakeHint"] = "rain_wardrobe_bake_hint",
+    };
+
+    /// <summary>The page's bake lines in the user's language; a missing key (Loc echoes it) stays English.</summary>
+    internal static IReadOnlyDictionary<string, string> PageStrings(Func<string, string> loc)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (page, key) in PageStringKeys)
+        {
+            var text = loc(key);
+            if (!string.IsNullOrWhiteSpace(text) && !string.Equals(text, key, StringComparison.Ordinal)) map[page] = text;
+        }
+        return map;
+    }
+
+    /// <summary>The bake as the window shows it outside the page: the title carries "n of 17" and the
+    /// taskbar button fills, so a user who switched away still sees it move. Null puts both back.</summary>
+    internal static string TitleFor(string title, RainBakeProgress? progress, string bakingLine)
+        => progress is { ClipsTotal: > 0 } p ? $"{title} - {p.Fill(bakingLine)}" : title;
+
+    private static void ShowProgress(ChaosWebViewHost host, RainBakeProgress? progress)
+    {
+        try
+        {
+            var window = host.Window;
+            if (window == null) return;
+            window.Title = TitleFor(Loc.Get("rain_wardrobe_title"), progress, Loc.Get("rain_wardrobe_baking"));
+            if (progress is { ClipsTotal: > 0 } p)
+            {
+                window.TaskbarItemInfo ??= new System.Windows.Shell.TaskbarItemInfo();
+                window.TaskbarItemInfo.ProgressState = System.Windows.Shell.TaskbarItemProgressState.Normal;
+                window.TaskbarItemInfo.ProgressValue = p.Fraction;
+            }
+            else if (window.TaskbarItemInfo != null)
+                window.TaskbarItemInfo.ProgressState = System.Windows.Shell.TaskbarItemProgressState.None;
+        }
+        catch (Exception ex) { Diag.Swallowed(ex); }
     }
 
     /// <summary>The grants the host's Apply clamp honours (PrizeGrants, so a dev override agrees with the page).</summary>
@@ -284,6 +341,7 @@ internal static class RainWardrobeHostService
         Ui = RunOnUi,
         Log = line => App.Logger?.Information("RainWardrobe: {Line}", line),
         OnFailed = () => App.Notifications?.Show(Loc.Get("rain_wardrobe_apply_failed"), NotificationType.Info, TimeSpan.FromSeconds(6)),
+        Progress = p => ShowProgress(host, p),
     };
 
     /// <summary>Apply landed: the look and its pack become the tube's, saved, and the tube re-enters emote mode.</summary>

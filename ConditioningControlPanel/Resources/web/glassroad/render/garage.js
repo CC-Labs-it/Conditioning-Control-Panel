@@ -13,7 +13,7 @@ import {createEmiSkin} from './emiSkin.js';
 import {garageArrows} from './garageArrows.js';
 import {garageUi} from '../hud/garage.js';
 import {createGarageNav} from '../hud/garageNav.js';
-import {KARTS,OUTFITS,STORAGE,loadGarage,cleanGarage,stepKart,routeTo,raceLook,lockedKarts,ownedKarts,ownedLooks} from '../hud/garageState.js';
+import {KARTS,OUTFITS,STORAGE,loadGarage,cleanGarage,stepKart,routeTo,raceLook,lockedKarts,ownedKarts,ownedLooks,wearPick} from '../hud/garageState.js';
 import {loadRecord} from '../meta/record.js';
 import {unlockedSet} from '../meta/unlocks.js';
 import {warmGarageWardrobe} from './garageWarm.js';
@@ -75,7 +75,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
       asset.traverse(m=>{if(m.isMesh&&m.userData.garageLit){m.material=m.userData.garageLit;delete m.userData.garageLit;}});style.apply(asset);}
     if(lifted){locked=new Set([...locked].filter(id=>next.has(id)));renderer.three.compileAsync?.(scene,camera)?.catch?.(()=>{});}
     paint();}
-  function change(values,colors=false){if(viewBusy)return;const previous=state.outfit+'|'+state.umbrella+'|'+state.trail;Object.assign(state,values);if(colors){state.antenna=state.secondary;state.shoes=state.secondary;state.hands='#'+new T.Color(state.primary).lerp(new T.Color('#ffffff'),.24).getHexString();state.face='#'+new T.Color(state.primary).lerp(new T.Color('#ffffff'),.65).getHexString();}
+  function change(values,colors=false,force=false){if(viewBusy&&!force)return;const previous=state.outfit+'|'+state.umbrella+'|'+state.trail;Object.assign(state,values);if(colors){state.antenna=state.secondary;state.shoes=state.secondary;state.hands='#'+new T.Color(state.primary).lerp(new T.Color('#ffffff'),.24).getHexString();state.face='#'+new T.Color(state.primary).lerp(new T.Color('#ffffff'),.65).getHexString();}
     if(previous!==state.outfit+'|'+state.umbrella+'|'+state.trail)redress();paint();sound('menu-toggle');}
   // the garage shows an owned umbrella open; the trail ribbons never count toward the framing bounds
   // the lace umbrella glides open when it is picked (update), and stays open through any other re-dress
@@ -99,6 +99,15 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
     const route=relative?stepKart(selected,value,locked):routeTo(selected,value,locked);if(!route){if(!relative&&KARTS[value]&&locked.has(KARTS[value][0]))ui.lockNote(KARTS[value][0]);sound('menu-deny');return;}
     moving={elapsed:0,duration:reduced?.32:1.12,from:orbit,to:orbit-route.steps*STEP,index:route.index,yaw,landed:false};
     arrows.press(Math.sign(route.steps));sound('menu-move');if(hop){mixer.stopAllAction();hop.reset().play();}paint();}
+  // THE COUNTER'S WEAR (desktop host `owned { wear }`, hud/garageState.js wearPick): put the item on the way the picker
+  // would (paint() saves it), turn to the kart or open Customize on its section, and say so. Unknown, unowned or dark
+  // ids change nothing. A body the carousel cannot turn to now (Customize open, a view move) is set without the turn.
+  function wear(item){const pick=wearPick(item,state,{locked,owns});if(!pick)return false;
+    if(pick.kind==='kart'){const index=KARTS.findIndex(k=>k[0]===pick.id);
+      if(visible&&!custom&&!viewBusy){if(moving?moving.index!==index:index!==selected)select(index);}
+      else if(index!==selected){moving=null;queued=null;selected=index;orbit=-index*STEP;state.kart=pick.id;mixer.stopAllAction();mixer.update(0);paint();if(visible&&custom)customize(false);}}
+    else{change(pick.values,false,true);if(visible&&!custom)customize(true);}
+    ui.worn(pick.kind,pick.id,(pick.kind==='kart'?'Driving ':'Wearing ')+pick.label);return true;}
   function sparkle(){if(reduced)return;for(let i=0;i<20;i++){const mesh=new T.Mesh(particleGeo,particleMaterial);mesh.position.set((Math.random()-.5)*.4,.25,0);scene.add(mesh);particles.push({mesh,v:new T.Vector3((Math.random()-.5)*.9,Math.random()*.7+.2,(Math.random()-.5)*.7),life:0});}}
   function resize(){const w=Math.max(1,canvas.clientWidth),h=Math.max(1,canvas.clientHeight);layout=garageLayout(w,h);ui.layout(layout);camera.aspect=w/h;
     if(custom||view>0)customFrame=customFraming(w,h,riderBounds(),customRectangle(w,h));
@@ -165,7 +174,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
     restore(){redress();paint();},
   });
   return {
-    scene,camera,nav,backdrop,life:{emi:emiLife.metrics,vehicles:vehicleLives.map(l=>l.metrics)},get state(){return cleanGarage(state,new Set(),owns);},get yaw(){return yaw;},get custom(){return custom;},get busy(){return !!moving||viewBusy;},get transition(){return {progress:view,busy:viewBusy,framing:customFrame};},get selected(){return KARTS[selected][0];},select,customize,change,
+    scene,camera,nav,backdrop,life:{emi:emiLife.metrics,vehicles:vehicleLives.map(l=>l.metrics)},get state(){return cleanGarage(state,new Set(),owns);},get yaw(){return yaw;},get custom(){return custom;},get busy(){return !!moving||viewBusy;},get transition(){return {progress:view,busy:viewBusy,framing:customFrame};},get selected(){return KARTS[selected][0];},select,customize,change,wear,
     setMedia(getter){ui.setMedia(getter);},
     refreshMedia(){ui.refreshMedia();},
     setCourse(course){ui.setCourse(course);},
