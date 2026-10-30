@@ -25,11 +25,9 @@ internal static class CompanionHead
         if (Started) return;
         try { CompanionCore.Start(); } catch (Exception ex) { Log.Warning(ex, "CompanionCore start failed"); }
         CoreModsHooks.ActiveCompanionProvider = () => CompanionCore.ActiveCompanion;
-        CoreModsHooks.SwitchCompanion = id =>
-        {
-            if (id == CompanionCore.ActiveCompanion) return; // WPF's already-active switch is a no-op.
-            if (CompanionCore.SwitchCompanion(id)) UpdateDrainTimer();
-        };
+        CoreModsHooks.SwitchCompanion = id => CompanionCore.SwitchCompanion(id);
+        // WPF CompanionService.cs:183-209: every real switch restarts/stops drain, including the roster.
+        CompanionCore.Switched += OnSwitched;
 
         _activeTimer = DispatcherTimer.Run(() => { try { CompanionCore.UpdateActiveTime(); } catch { } return true; }, TimeSpan.FromMinutes(1));
         UpdateDrainTimer();
@@ -43,6 +41,8 @@ internal static class CompanionHead
         UpdateDrainTimer();
         return true;
     }
+
+    private static void OnSwitched(CompanionId _) => UpdateDrainTimer();
 
     private static void UpdateDrainTimer()
     {
@@ -61,6 +61,7 @@ internal static class CompanionHead
     /// <summary>Stops both timers (tests; the hooks are the caller's to restore).</summary>
     internal static void Stop()
     {
+        CompanionCore.Switched -= OnSwitched;
         _drainTimer?.Stop();
         _activeTimer?.Dispose();
         _drainTimer = null;
