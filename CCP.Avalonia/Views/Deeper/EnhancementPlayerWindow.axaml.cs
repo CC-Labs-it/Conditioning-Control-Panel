@@ -299,6 +299,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _btnCreateNewEnhancement.Click += (_, _) => BtnCreateNewEnhancement_Click();
             _btnUnloadEnhancement.Click += (_, _) => Unload();
             this.FindControl<Button>("BtnEyeTracking")!.Click += (_, _) => BtnEyeTracking_Click();
+            AddHandler(KeyDownEvent, OnVideoHostKeyDown, global::Avalonia.Interactivity.RoutingStrategies.Tunnel); Deactivated += (_, _) => _pressed.Clear();
+            AddHandler(KeyUpEvent, OnPlayerKeyUp, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
             _videoBrowser.NavigationCompleted += OnVideoNavigationCompleted;
             _videoBrowser.WebMessage += OnVideoWebMessage;
             _btnPictureInPicture.Click += (_, _) => BtnPictureInPicture_Click();
@@ -885,6 +887,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void SliderVolume_PropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
         {
             if (e.Property != RangeBase.ValueProperty) return;
+            _volumeBeforeMute = null;
             // ponytail: needs EnhancementAudioPlayer.Volume, wired when it moves to Core — both
             // directions: the write on drag, and UpdateVolumeFromPlayer's read-back on open, which
             // is why the WPF handler carried a _suppressVolumeSync re-entrancy flag. Not routed to
@@ -898,6 +901,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void UiTimer_Tick(object? sender, EventArgs e)
         {
+            TickPlayerInput();
             if (_miniScrubbing) return;
 
             if (_isVideoMode) _ = PollVideoTimeAsync();
