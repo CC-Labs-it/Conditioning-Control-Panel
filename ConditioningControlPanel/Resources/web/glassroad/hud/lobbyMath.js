@@ -136,6 +136,21 @@ export function applySeat(seats, msg) {
   return out;
 }
 
+/** Racers who were seated and are now gone (left, or the seat emptied), never `me`: [{ seat, name }] for the
+ *  '<name> left' line in the room and in the race. */
+export function seatsGone(was, now, me = -1) {
+  const out = [];
+  if (!Array.isArray(was) || !Array.isArray(now)) return out;
+  for (const a of was) {
+    if (!a || a.kind !== 'human' || a.left || a.seat === me) continue;
+    const b = now[a.seat];
+    if (!b || b.kind === 'empty' || b.left) out.push({ seat: a.seat, name: seatName(a) });
+  }
+  return out;
+}
+/** The line for one racer gone. */
+export const goneLine = (name) => (name || 'Racer') + ' left';
+
 /** The name a seat shows: its ticket name, our short names for bots, 'Open seat' when empty. */
 export function seatName(s) {
   if (!s || s.kind === 'empty') return 'Open seat';

@@ -89,13 +89,14 @@ import { createMusicEdges } from './render/musicEdges.js';
 import { loadFonts } from './render/fonts.js';
 import { createAssist } from './sim/assist.js';
 import { createRoomSession } from './net/room.js';
+import { catchUpSteps } from './net/catchUp.js';
 import { onlineCourseHash as onlineHash } from './net/courseHash.js';
 import { createLobbyApi, fetchTransport, hostTransport } from './net/lobbyApi.js';
 import { createProfileSync } from './meta/profileSync.js';
 import { createOwned } from './meta/owned.js';
 import { configureLobby } from './hud/lobby.js';
 import { hostInvites, createHostInvite } from './host/friendInvite.js';
-import { linkToken, dropLinkParam, joinParam } from './hud/lobbyMath.js';
+import { linkToken, dropLinkParam, joinParam, goneLine } from './hud/lobbyMath.js';
 import { poseOf } from './hud/presets.js';
 import { createDevHook, devAllowed } from './dev/hook.js';
 import { chipAlpha, kartPoint } from './hud/countdown.js';
@@ -144,6 +145,7 @@ const hLap = (k) => { const t = performance.now(); HT[k] = t - hT; hT = t; };
 // init.caps.songs (host/bridge.js songCharts). Set once the init lands, before any race can start. The phone app's
 // own loopback server is a host, not the preview server (isPreviewSongHost).
 
+const CATCH_UP_MAX_S = 2;                          // online: a sim further behind the room than this (a late join) is not replayed
 const COUNT = 8;                                   // offline grid (and the kart slots the world builds); online = the room's seats
 const LOCAL_URL = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/;
 let canvas = document.getElementById('view');   // replaced by a fresh element after a WebGPU fallback or a GPU rebuild
@@ -1233,7 +1235,7 @@ async function boot(course, options, lifetime, isCurrent) {
     const s = ctx && ctx.room && ctx.room.session;
     if (!s || (online && online.s === s)) return;
     stopSong(); unpause();
-    online = { s, cfg: s.cfg, go: false };
+    online = { s, cfg: s.cfg, go: false, simS: 0 };
     track.laps = (s.cfg && s.cfg.laps) || TRACK_LAPS; laps = track.laps;
     buildRun(s);
     resetAll();
@@ -1281,6 +1283,8 @@ async function boot(course, options, lifetime, isCurrent) {
     state = 'results';
     hud.setCard('lobby', { view: 'results' });
   });
+  // someone left the race (or dropped past the reconnect grace): one line in the toast band; their kart is removed
+  hud.on('online-gone', (g) => { if (online && state === 'race' && g && g.name) hud.toast(goneLine(g.name), { group: 'gone-' + g.seat }); });
   hud.on('online-left', () => endOnline());
   hud.on('online-abort', () => endOnline(true));
   hud.on('online-closed', () => endOnline(true));
@@ -1575,15 +1579,24 @@ async function boot(course, options, lifetime, isCurrent) {
     // online the count keeps server time (bells and go on the room's clock, even through a slow frame)
     if (online && online.go && race.phase === 'countdown') race.syncCount((online.s.serverNow() - online.s.raceStartAt(goS)) / 1000 - steps * clock.dt);
     const simOn = inRace && (online ? online.go : !paused);
+    // online the kart sim keeps the room's race clock: a slow frame (a GO hitch, a phone under 30 fps) runs extra
+    // steps instead of dropping the time (net/catchUp.js); a gap past CATCH_UP_MAX_S (a late join) is not replayed
+    let simSteps = steps;
+    if (simOn && online && (race.phase === 'racing' || race.phase === 'finished')) {
+      const behind = online.s.raceTimeS() - online.simS;
+      if (behind > CATCH_UP_MAX_S) online.simS += behind - steps * clock.dt;
+      else simSteps += catchUpSteps(behind, steps, clock.dt);
+    }
+    if (debug.online) debug.online.behindS = online && online.go ? Math.round((online.s.raceTimeS() - online.simS) * 1000) / 1000 : 0;
     const machineryMusic = audio.music;
     const machinerySong = machineryMusic?.song || machineryMusic?.analysis;
     sctx.cleanPace = !online;
     sctx.songDrive = machineryMusic?.playing ? songDrive(machinerySong, machineryMusic.songS) : 0;
     if (!paused || online) setMachineryBeat(track, { enabled: inRace && !online && (race.phase === 'racing' || race.phase === 'finished'),
       fallback: !machineryMusic?.playing || !(machinerySong?.bpm >= 40 && machinerySong?.bpm <= 240),
-      songS: machineryMusic?.songS, raceS: racers.clockS + (simOn ? steps * clock.dt : 0),
+      songS: machineryMusic?.songS, raceS: racers.clockS + (simOn ? simSteps * clock.dt : 0),
       song: machinerySong, bpm: machinerySong?.bpm, offsetS: machinerySong?.downbeatS ?? machinerySong?.downbeats?.[0] ?? 0, playing: simOn });
-    if (simOn) for (let i = 0; i < steps; i++) {                    // 2. sim
+    if (simOn) for (let i = 0; i < simSteps; i++) {                 // 2. sim
       if (BOT && !P.finished) {
         ai.drive(P, aiCtx, clock.dt, a); if (fall) fall.apply(a);
         if (debug.hands) {                                      // dev drive scripts (steerAdd leans on the AI's own steer)
@@ -1600,6 +1613,10 @@ async function boot(course, options, lifetime, isCurrent) {
       const pa = BOT && !debug.assistOn && !coast ? a : assist.apply(a, P.st, clock.dt, race.phase);
       if (devHook && !online) devHook.apply(pa, clock.dt);         //    ?dev=1 only: a scripted drive holds the hands
       race.update(clock.dt, pa, P.st);
+      if (online && (race.phase === 'racing' || race.phase === 'finished')) {   // the race clock = sim seconds since go
+        online.simS += clock.dt;
+        if (race.phase === 'racing') race.timeS = online.simS;
+      }
       airWords?.update(audio.music?.playing ? audio.music.songS : NaN, P.st,
         { active: !online && (race.phase === 'racing' || race.phase === 'finished'), paused });
       sctx.timeS = online ? online.s.raceTimeS() : undefined;
