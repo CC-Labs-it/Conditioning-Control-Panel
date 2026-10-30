@@ -24,9 +24,7 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Chaster;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class ChasterTrailerTests
 {
     private static void App()
@@ -35,7 +33,6 @@ public sealed class ChasterTrailerTests
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().WithInterFont().With(AppFonts.Options(systemEmoji: false)).UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
-
     private const string NoLock = "[]";
     private sealed class FakeChaster : HttpMessageHandler
     {
@@ -51,7 +48,6 @@ public sealed class ChasterTrailerTests
                 }),
             });
     }
-
     private static async Task WithTab(Func<ChasterTabView, Window, Task> body)
     {
         App();
@@ -95,7 +91,6 @@ public sealed class ChasterTrailerTests
             service.SaveImmediate(); CoreSettings.ServiceProvider = null;
         }
     }
-
     [Fact]
     public Task HoverWaitsThenRetargetsImmediatelyAndClosesAfterTheGrace() => AvaloniaTestDispatcher.RunAsync(() => WithTab((tab, w) =>
     {
@@ -144,7 +139,6 @@ public sealed class ChasterTrailerTests
         Assert.False(tab.TrailerDrifting);
         return Task.CompletedTask;
     }));
-
     [Fact]
     public Task EveryRowHasItsCopyTierAndLiveFiguresAndEditResetRefreshTheCard() => AvaloniaTestDispatcher.RunAsync(() => WithTab(async (tab, w) =>
     {
@@ -210,4 +204,71 @@ public sealed class ChasterTrailerTests
         Assert.False(tab.TrailerDrifting);
         await Task.CompletedTask;
     }));
+    // WPF ChasterTabView.xaml.cs:1434-1437, PriceEdit.cs:158; Controls/ChasterTrailerView.cs:181-209.
+    [Fact]
+    public Task ScenesFollowLatestHoverAndEditedPrices() => AvaloniaTestDispatcher.RunAsync(() => WithTab(async (tab, w) =>
+    {
+        var view = tab.FindControl<ChasterTrailerView>("TrailerWeb")!;
+        var scripts = new List<string>(); var pending = new TaskCompletionSource<string?>();
+        var host = new ConditioningControlPanel.Avalonia.Views.Controls.WebHost { ScriptInvoker = script =>
+        { scripts.Add(script); return script.StartsWith("window.__mount") && scripts.Count == 2 ? pending.Task : Task.FromResult<string?>("true"); } };
+        view.Browser = host;
+        tab.OpenTrailer(tab.PriceRows["typo"]); tab.OpenTrailer(tab.PriceRows["program_done"]);
+        Assert.Empty(scripts);
+        var navigation = view.NavigationFinished(view.Page, true);
+        var figures = TabMenuCopy.SceneFigures("program_done", ChasterTabView.ShownSeconds);
+        Assert.Equal(ChasterTrailerView.MountScript(TabMenuCopy.VignetteFor("program_done"), figures.Add, figures.Sub), scripts[1]);
+        Assert.False(view.IsReady); Assert.False(view.IsVisible);
+        tab.OpenTrailer(tab.PriceRows["typo"]); Assert.True(tab.BeginPriceEdit("typo"));
+        tab.PriceEditor!.Text = "2:00"; tab.CommitPriceEdit();
+        pending.SetResult("true"); await navigation;
+        Assert.Equal(3, scripts.Count);
+        Assert.Equal(ChasterTrailerView.MountScript(TabMenuCopy.VignetteFor("typo"), 120, 60), scripts[2]);
+        Assert.True(view.IsReady); Assert.True(view.IsVisible);
+        Assert.True(host.AllowNavigation!(view.Page!)); Assert.False(host.AllowNavigation(new Uri("https://example.invalid/")));
+        Assert.True(host.SuppressNewWindows);
+        tab.HideTrailer(); Assert.False(view.IsVisible); Assert.Equal(ChasterTrailerView.PauseScript, scripts.Last());
+    }));
+    [Theory]
+    [InlineData(false, "true")]
+    [InlineData(true, "false")]
+    [InlineData(true, null)]
+    [InlineData(true, "throw")]
+    public Task BrowserFailureKeepsTheArtwork(bool navigationOk, string? result) => AvaloniaTestDispatcher.RunAsync(() => WithTab(async (tab, w) =>
+    {
+        var view = tab.FindControl<ChasterTrailerView>("TrailerWeb")!;
+        view.Browser = new ConditioningControlPanel.Avalonia.Views.Controls.WebHost { ScriptInvoker = script =>
+            !script.StartsWith("window.__mount") ? Task.FromResult<string?>("true") : result == "throw" ? Task.FromException<string?>(new InvalidOperationException()) : Task.FromResult(result) };
+        tab.OpenTrailer(tab.PriceRows["typo"]);
+        view.Browser.OnNavigationCompleted(view.Page, navigationOk);
+        Assert.True(view.HasFailed); Assert.False(view.IsVisible); Assert.False(view.IsReady);
+        Assert.NotNull(tab.FindControl<Image>("TrailerArt")!.Source);
+        tab.OpenTrailer(tab.PriceRows["program_done"]); Assert.True(view.HasFailed); Assert.False(view.IsVisible);
+        await Task.CompletedTask;
+    }));
+
+    [Fact]
+    public Task HidingDuringMountStopsTheSceneAndNeverRevealsIt() => AvaloniaTestDispatcher.RunAsync(() => WithTab(async (tab, w) =>
+    {
+        var view = tab.FindControl<ChasterTrailerView>("TrailerWeb")!; var scripts = new List<string>();
+        var pending = new TaskCompletionSource<string?>();
+        view.Browser = new ConditioningControlPanel.Avalonia.Views.Controls.WebHost { ScriptInvoker = script =>
+        { scripts.Add(script); return script.StartsWith("window.__mount") ? pending.Task : Task.FromResult<string?>("true"); } };
+        tab.OpenTrailer(tab.PriceRows["typo"]); var navigation = view.NavigationFinished(view.Page, true);
+        tab.HideTrailer(); pending.SetResult("true"); await navigation;
+        Assert.False(view.IsVisible); Assert.Equal(ChasterTrailerView.PauseScript, scripts.Last());
+    }));
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void NativeOptionsMatchTheTrailerProfile(bool windows)
+    {
+        var args = (WebViewEnvironmentRequestedEventArgs)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(windows ? typeof(global::Avalonia.Platform.WindowsWebView2EnvironmentRequestedEventArgs) : typeof(global::Avalonia.Platform.GtkWebViewEnvironmentRequestedEventArgs));
+        args.EnableDevTools = true; ChasterTrailerView.ConfigureBrowser(args); Assert.False(args.EnableDevTools);
+        if (args is global::Avalonia.Platform.WindowsWebView2EnvironmentRequestedEventArgs win)
+        { Assert.Equal(Path.Combine(CorePaths.UserData, "browser_data_chaster"), win.UserDataFolder); Assert.Equal("--disable-direct-composition-video-overlays --disable-features=CalculateNativeWinOcclusion --disable-backgrounding-occluded-windows", win.AdditionalBrowserArguments); }
+        else Assert.True(((global::Avalonia.Platform.GtkWebViewEnvironmentRequestedEventArgs)args).EphemeralDataManager);
+    }
+
 }

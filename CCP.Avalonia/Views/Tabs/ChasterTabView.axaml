@@ -681,6 +681,7 @@
                     <StackPanel>
                         <Grid x:Name="TrailerPlate" Height="190" ClipToBounds="True" Background="#FF120C1F">
                             <Image x:Name="TrailerArt" Stretch="UniformToFill" RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                            <fx:ChasterTrailerView x:Name="TrailerWeb" IsVisible="False"/>
                         </Grid>
                         <Grid Margin="6,8,6,0" ColumnDefinitions="*,Auto">
                             <TextBlock x:Name="TxtTrailerFlavour" FontFamily="Fredoka, Segoe UI" FontSize="14" FontWeight="Medium"
