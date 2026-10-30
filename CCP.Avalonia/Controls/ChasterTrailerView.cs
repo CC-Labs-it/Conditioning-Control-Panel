@@ -8,8 +8,7 @@ using Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 namespace ConditioningControlPanel.Avalonia.Controls;
-public sealed class ChasterTrailerView : Grid
-{
+public sealed class ChasterTrailerView : Grid {
     internal WebHost? Browser { get; set; }
     internal Uri? Page { get; private set; }
     private bool _started, _disposed, _mounting, _paused;
@@ -24,12 +23,10 @@ public sealed class ChasterTrailerView : Grid
         + "return window.__ccpTrailerStage=window.__ccpTrailerRun.apply(CT,arguments);};}return true;})()";
     internal const string PauseScript = "(function(){var s=window.__ccpTrailerStage;if(s)s.dead=true;"
         + "document.getAnimations().forEach(function(a){a.cancel();});})()";
-    private void Start()
-    {
+    private void Start() {
         if (_started || _disposed || HasFailed) return;
         _started = true;
-        try
-        {
+        try {
             if (!File.Exists(Path.Combine(AppContext.BaseDirectory, "Resources", "web", "chaster", "trailers.html"))) { Fail(); return; }
             Browser ??= new WebHost();
             if (!Browser.HasEngine) { Fail(); return; }
@@ -37,37 +34,33 @@ public sealed class ChasterTrailerView : Grid
             Browser.AllowNavigation = uri => uri == Page;
             Browser.SuppressNewWindows = true;
             Browser.EnvironmentRequested += ConfigureBrowser;
+            Browser.BrowserProcessFailed += Fail;
             Browser.NavigationFinished += (uri, ok) => _ = NavigationFinished(uri, ok);
             Children.Add(Browser);
             Browser.Navigate(Page);
         }
         catch (Exception) { Fail(); }
     }
-    internal static void ConfigureBrowser(WebViewEnvironmentRequestedEventArgs e)
-    {
+    internal static void ConfigureBrowser(WebViewEnvironmentRequestedEventArgs e) {
         e.EnableDevTools = false;
-        if (e is WindowsWebView2EnvironmentRequestedEventArgs win)
-        {
+        if (e is WindowsWebView2EnvironmentRequestedEventArgs win) {
             win.UserDataFolder = Path.Combine(CorePaths.UserData, "browser_data_chaster");
             win.AdditionalBrowserArguments = "--disable-direct-composition-video-overlays --disable-features=CalculateNativeWinOcclusion --disable-backgrounding-occluded-windows";
         }
         if (e is GtkWebViewEnvironmentRequestedEventArgs gtk) gtk.EphemeralDataManager = true;
     }
-    internal static string MountScript(string id, int? add = null, int? sub = null)
-    {
+    internal static string MountScript(string id, int? add = null, int? sub = null) {
         var safe = id.Replace("\\", "").Replace("'", "").Replace("\"", "").Replace("<", "").Replace(">", "");
         static string Num(int? n) => n?.ToString(CultureInfo.InvariantCulture) ?? "null";
         return "window.__mount && window.__mount('" + safe + "'," + Num(add) + "," + Num(sub) + ")";
     }
-    public void Show(string id, int? add, int? sub)
-    {
+    public void Show(string id, int? add, int? sub) {
         if (_disposed || HasFailed) return;
         _pending = (id, add, sub); _version++; _paused = false;
         Start();
         if (IsReady) _ = MountPending();
     }
-    internal async Task NavigationFinished(Uri? uri, bool success)
-    {
+    internal async Task NavigationFinished(Uri? uri, bool success) {
         if (_disposed || HasFailed) return;
         IsReady = false;
         if (!success || uri != Page) { Fail(); return; }
@@ -75,26 +68,24 @@ public sealed class ChasterTrailerView : Grid
         await MountPending();
     }
     private static bool True(string? result) => string.Equals(result?.Trim('"'), "true", StringComparison.OrdinalIgnoreCase);
-    private async Task MountPending()
-    {
+    private async Task MountPending() {
         if (_mounting || _disposed || HasFailed) return;
-        _mounting = true;
-        try
-        {
+        _mounting = true; IsReady = false;
+        try {
             int mounted;
-            do
-            {
+            do {
                 mounted = _version;
                 if (!_paused && _pending is { } p && !True(await Browser!.InvokeScriptAsync(MountScript(p.Id, p.Add, p.Sub)))) { Fail(); return; }
-            } while (mounted != _version && !_disposed && !HasFailed && !_paused);
+                if (_disposed || HasFailed) return;
+                if (_paused) await Browser!.InvokeScriptAsync(PauseScript);
+            } while (mounted != _version && !_disposed && !HasFailed);
             if (_disposed || HasFailed) return;
-            if (_paused) await Browser!.InvokeScriptAsync(PauseScript);
             IsReady = true; Ready?.Invoke(this, EventArgs.Empty);
         }
         finally { _mounting = false; }
     }
     internal IDisposable? PreserveForMove() => Browser?.PreserveForMove();
-    public void Pause() { _paused = true; IsVisible = false; if (IsReady) _ = Browser?.InvokeScriptAsync(PauseScript); }
+    public void Pause() { _paused = true; IsVisible = false; if (IsReady) _ = MountPending(); }
     private void Fail() { if (_disposed || HasFailed) return; HasFailed = true; IsReady = false; IsVisible = false; Children.Clear(); Failed?.Invoke(this, EventArgs.Empty); }
     public void Shutdown() { Pause(); _disposed = true; IsReady = false; Children.Clear(); }
 }
