@@ -17,10 +17,12 @@ public class SparklesClaimServiceTests
     {
         public readonly Queue<(HttpStatusCode Status, string Body)> Replies = new();
         public (HttpStatusCode Status, string Body) Default = (HttpStatusCode.OK, "{\"ok\":false,\"reason\":\"bad\"}");
+        public bool TimesOut;
         public readonly List<(HttpRequestMessage Req, string Body)> Seen = new();
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Seen.Add((request, request.Content == null ? "" : await request.Content.ReadAsStringAsync(ct)));
+            if (TimesOut) throw new TaskCanceledException("Request timed out", new TimeoutException());
             var (status, body) = Replies.Count > 0 ? Replies.Dequeue() : Default;
             return new HttpResponseMessage(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
         }
@@ -201,4 +203,32 @@ public class SparklesClaimServiceTests
         Assert.Single(rig.Handler.Seen);
         Assert.Empty(rig.Waits);
     }
+    [Theory]
+    [InlineData(0)]
+    [InlineData(404)]
+    [InlineData(500)]
+    [InlineData(503)]
+    public async Task UnansweredClaimsAreUnreachableAfterBoundedSameClaimRetries(int status)
+    {
+        var rig = new Rig();
+        rig.Handler.TimesOut = status == 0;
+        rig.Handler.Default = ((HttpStatusCode)status, """{"error":"unavailable"}""");
+        var outcome = await rig.Service.ClaimAsync(Claim());
+        Assert.Equal("unreachable", outcome.Reason);
+        Assert.False(outcome.Ok || outcome.Adopted);
+        Assert.Equal(4, rig.Handler.Seen.Count);
+        Assert.Single(rig.Handler.Seen.Select(s => s.Body).Distinct());
+        Assert.Equal(3, rig.Waits.Count);
+        Assert.Empty(rig.Adopted);
+    }
+    [Fact]
+    public async Task CancelledBeforeSendingIsUnreachable()
+    {
+        var rig = new Rig();
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        Assert.Equal("unreachable", (await rig.Service.ClaimAsync(Claim(), cancelled.Token)).Reason);
+        Assert.Empty(rig.Handler.Seen);
+    }
+
 }

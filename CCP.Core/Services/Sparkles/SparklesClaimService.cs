@@ -58,7 +58,7 @@ public sealed class SparklesClaimService
         if (id == null) return SparklesClaimOutcome.Refused("signin");
         var sentFor = id.Value.UnifiedId;
         var body = claim.ToJson(sentFor).ToString(Formatting.None);
-        var last = "offline";
+        var last = "unreachable";
         for (var attempt = 1; attempt <= MaxAttempts; attempt++)
         {
             if (ct.IsCancellationRequested) break;
@@ -89,7 +89,7 @@ public sealed class SparklesClaimService
             }
             else
             {
-                last = "offline";
+                last = "unreachable";
                 wait = DefaultRetryWait;
             }
             if (attempt == MaxAttempts) break;
