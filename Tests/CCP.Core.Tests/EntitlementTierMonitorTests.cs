@@ -5,9 +5,7 @@ using System.Threading.Tasks;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
-
 namespace CCP.Core.Tests;
-
 [Collection(CoreSecretsStatics.Name)]
 public sealed class EntitlementTierMonitorTests : IDisposable
 {
@@ -20,9 +18,7 @@ public sealed class EntitlementTierMonitorTests : IDisposable
         CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
     }
     public void Dispose() { CoreSecrets.RetrieveProvider = _get; CoreSecrets.StoreProvider = _set; }
-
     private static AppSettings SignedIn() => new() { UnifiedId = "test-account", AuthToken = "test-token" };
-
     [Fact]
     public void RiseSavesBeforeNotifyingAndLowerReadingsNeverRevokeGrace()
     {
@@ -41,16 +37,11 @@ public sealed class EntitlementTierMonitorTests : IDisposable
         Assert.Equal((1, 2, 2, (DateTime?)now.AddDays(14)), observed);
         Assert.False(monitor.Apply(settings, "test-account", 2, now.AddDays(1), () => saves++));
         Assert.Equal(now.AddDays(14), settings.PatreonLabValidUntil); // same is not a perpetual renewal
-        Assert.False(monitor.Apply(settings, "test-account", 0, now, () => saves++));
-        Assert.Equal(0, settings.ServerTierSeen);
-        Assert.Equal(2, settings.PatreonTier);
-        Assert.Equal(now.AddDays(14), settings.PatreonPremiumValidUntil);
-        Assert.False(monitor.Apply(settings, "test-account", 2, now, () => saves++));
-        Assert.Null(settings.ServerTierSeen);
-        Assert.Equal(1, rises);
-        Assert.Equal(3, saves);
+        Assert.False(monitor.Apply(settings, "test-account", 0, now, () => saves++)); Assert.Equal(0, settings.ServerTierSeen);
+        Assert.Equal(2, settings.PatreonTier); Assert.Equal(now.AddDays(14), settings.PatreonPremiumValidUntil);
+        Assert.False(monitor.Apply(settings, "test-account", 2, now, () => saves++)); Assert.Null(settings.ServerTierSeen);
+        Assert.Equal(1, rises); Assert.Equal(3, saves);
     }
-
     [Fact]
     public void MissingInvalidOfflineAndOldAccountReadingsAreIgnored()
     {
@@ -68,7 +59,6 @@ public sealed class EntitlementTierMonitorTests : IDisposable
         Reject("test-account", 2);
         Assert.Equal(0, settings.PatreonTier);
     }
-
     [Fact]
     public async Task FocusReadsAreThrottledSingleFlightAndNeverRunOffline()
     {

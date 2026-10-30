@@ -2,9 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Models;
-
 namespace ConditioningControlPanel.Services;
-
 /// <summary>WPF Services/Account/EntitlementTierSync.cs:59,182: live tier rule and focus throttle.
 /// The head calls Apply on its UI thread and raises the provider event after TierRaised.</summary>
 public sealed class EntitlementTierMonitor
@@ -13,7 +11,6 @@ public sealed class EntitlementTierMonitor
     private DateTime _lastFocusCheckUtc = DateTime.MinValue;
     private int _inFlight;
     public event Action<int>? TierRaised;
-
     public bool Apply(AppSettings settings, string accountId, int? tier, DateTime nowUtc, Action save)
     {
         if (settings.OfflineMode || string.IsNullOrEmpty(settings.AuthToken)
@@ -32,7 +29,6 @@ public sealed class EntitlementTierMonitor
         }
         return rose;
     }
-
     /// <summary>One read at a time, at most once per 20 seconds; offline/unsigned never reads.
     /// A late reading carries the original account id so Apply rejects it after account switching.</summary>
     public async Task OnAppFocusedAsync(AppSettings settings, DateTime nowUtc, Func<string, Task> read)

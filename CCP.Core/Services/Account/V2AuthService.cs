@@ -689,6 +689,7 @@ namespace ConditioningControlPanel.Services
                 var result = Descent.DescentReader.ParseWire(json);
                 var user = result?["user"] as JObject;
                 TierReadingProvider?.Invoke(unifiedId, EntitlementTierRule.ParseTier(user?["effective_tier"]));
+                PatreonReadingProvider?.Invoke(unifiedId, PatreonActiveRule.Parse(user));
                 return user;
             }
             catch (Exception ex)
@@ -741,6 +742,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>Head dispatches successful profile/heartbeat tier readings to its UI thread.
         /// Unseeded heads preserve their existing entitlement host.</summary>
         public static Action<string, int?>? TierReadingProvider;
+        public static Action<string, PatreonActiveReading?>? PatreonReadingProvider;
 
         /// <summary>Send heartbeat to update online status.</summary>
         public async Task<bool> SendHeartbeatAsync(string unifiedId, bool isActive = true, bool inSession = false)

@@ -133,7 +133,6 @@ public sealed class PremiumCelebrationTests
         }
         finally { File.Delete(clip); }
     });
-
     [Fact]
     public void VoiceGrammarReachesMuteRestoreAndClampedVolumeActions() => Run(false, (shell, opened, grant) =>
     {
@@ -159,7 +158,6 @@ public sealed class PremiumCelebrationTests
         host.ActionFor("quieter")!();
         Assert.Equal(0, CoreSettings.Current.MasterVolume);
     });
-
     [Fact]
     public void TierChangeRepaintsEffectiveAiPermissionWithoutDestroyingSavedChoice() => Run(false, (shell, opened, grant) =>
     {
@@ -184,7 +182,6 @@ public sealed class PremiumCelebrationTests
         }
         finally { window.Close(); }
     });
-
     [Fact]
     public void LiveRiseIgnoresLegacyFlagAndFirstLaunchQuietButBusyRiseStaysInInbox() => Run(false, (shell, opened, grant) =>
     {
@@ -204,7 +201,6 @@ public sealed class PremiumCelebrationTests
             Assert.IsAssignableFrom<global::Avalonia.Media.ISolidColorBrush>(ring.Stroke).Color);
         Assert.Contains(TierCelebration.KeyT1, CoreSettings.Current.SeenFeatureIntros);
         Celebration(opened, TierCelebration.KeyT1);
-
         MainShellWindow.IsStartupDialogShowing = true;
         try
         {
@@ -219,7 +215,6 @@ public sealed class PremiumCelebrationTests
         }
         finally { MainShellWindow.IsStartupDialogShowing = false; }
     });
-
     [Fact]
     public void ProviderChangesRebuildProgramsAndRepaintTakeoverLock() => Run(false, (shell, opened, grant) =>
     {
@@ -246,7 +241,6 @@ public sealed class PremiumCelebrationTests
         Dispatcher.UIThread.RunJobs();
         Assert.True(takeover.FindControl<Control>("AutonomyLocked")!.IsVisible);
     });
-
     [Fact]
     public void SubscribeStarTierChangeCelebratesEachTierOnce() => Run(premiumAtLaunch: false, (shell, opened, grant) =>
     {

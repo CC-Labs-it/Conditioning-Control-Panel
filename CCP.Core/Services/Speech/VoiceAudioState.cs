@@ -1,7 +1,5 @@
 using ConditioningControlPanel.Models;
-
 namespace ConditioningControlPanel.Services;
-
 /// <summary>WPF MainWindow/MainWindow.Patreon.cs:2233 ApplyVoiceMute: remember the last nonzero volume,
 /// disable whisper playback and avatar voice together, then restore 70 if nothing was remembered.</summary>
 public sealed class VoiceAudioState

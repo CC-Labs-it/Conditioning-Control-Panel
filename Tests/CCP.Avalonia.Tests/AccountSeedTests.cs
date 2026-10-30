@@ -1,3 +1,5 @@
+using Avalonia;
+using Avalonia.Headless;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -196,9 +198,37 @@ public sealed partial class AccountSeedTests : IDisposable
         finally { s.UnifiedId = oldId; s.AuthToken = null; }
     }
 
-    private sealed class Answer(HttpStatusCode status) : HttpMessageHandler
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public Task FocusConfirmationRestoresExpiredGraceAtTheSameTier(int tier) => CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (global::Avalonia.Application.Current is null)
+            global::Avalonia.AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        s.UnifiedId = "returning"; s.AuthToken = "test-token"; s.OfflineMode = false; s.PatreonTier = tier;
+        var confirmed = DateTime.UtcNow.AddHours(-1);
+        s.PatreonPremiumValidUntil = s.PatreonLabValidUntil = confirmed.AddDays(-1);
+        Assert.True(AccountSeed.Seed(p => new ProviderSubscription(p, () => s)));
+        Assert.False(CoreAccount.HasPremiumAccess);
+        var notifications = 0;
+        AccountSeed.Patreon!.TierChanged += (_, _) => notifications++;
+        var body = JsonConvert.SerializeObject(new { user = new { effective_tier = tier, patreon_tier = tier,
+            patreon_is_active = true, patreon_confirmed_at = confirmed } });
+        var client = new V2AuthService(() => s, new Answer(HttpStatusCode.OK, body));
+        await AccountSeed.TierSync.OnAppFocusedAsync(s, DateTime.UtcNow, async id => { await client.GetUserProfileAsync(id); });
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(tier, s.PatreonTier);
+        Assert.Equal(confirmed.AddDays(14), s.PatreonPremiumValidUntil);
+        Assert.True(CoreAccount.HasPremiumAccess);
+        Assert.Equal(tier == 2, CoreAccount.HasLabAccess);
+        Assert.Equal(1, notifications);
+    });
+
+    private sealed class Answer(HttpStatusCode status, string body = "{}") : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct) =>
-            Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent("{}") });
+            Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) });
     }
 }

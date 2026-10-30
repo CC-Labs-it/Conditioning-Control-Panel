@@ -66,6 +66,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Services\Account\PatreonActivation.cs" />
     <!-- Platform-agnostic engine (net10.0). Types moved there keep their original namespaces,
          so consuming files here need no changes. -->
     <ProjectReference Include="..\CCP.Core\CCP.Core.csproj" />

@@ -54,6 +54,18 @@ internal static class AccountSeed
             if (TierSync.Apply(CoreSettings.Current, id, tier, DateTime.UtcNow, () => CoreSettings.Save()))
                 patreon.NotifyEntitlementRaised(tier >= 2 ? Models.PatreonTier.Level2 : Models.PatreonTier.Level1);
         });
+        // WPF EntitlementTierSync.cs:147-169: fresh confirmation renews even an unchanged tier.
+        V2AuthService.PatreonReadingProvider = (id, reading) => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            var s = CoreSettings.Current;
+            if (s.OfflineMode || string.IsNullOrEmpty(s.AuthToken) || string.IsNullOrEmpty(id) || s.UnifiedId != id) return;
+            var before = CoreAccount.HasLabAccess ? 2 : CoreAccount.HasPremiumAccess
+                && !ProviderSubscription.IsInviteWeekOnly(patreon, substar, s) ? 1 : 0;
+            if (!PatreonActiveRule.Restamp(s, reading, DateTime.UtcNow)) return;
+            CoreSettings.Save();
+            var after = CoreAccount.HasLabAccess ? 2 : CoreAccount.HasPremiumAccess ? 1 : 0;
+            if (after > before) patreon.NotifyEntitlementRaised(after >= 2 ? Models.PatreonTier.Level2 : Models.PatreonTier.Level1);
+        });
         patreon.PeerDisplayName = () => discord.CustomDisplayName; // WPF PatreonService
 
         // WPF App.IsLoggedIn / UserDisplayName / the PatreonService gates.
