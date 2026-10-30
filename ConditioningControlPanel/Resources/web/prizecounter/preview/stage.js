@@ -11,8 +11,69 @@ import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { HOME_YAW, fitDistance, spinRate, viewBox } from './frame.js';
+import { KART_JOINTS, bindsTo, cutBelow, paintWalk, shellMask } from './fit.js';
 
 const FOV = 28;
+const I4 = new T.Matrix4();
+
+/** A clone of a skinned tree with its own skeletons on the cloned bones (three's SkeletonUtils.clone, small). */
+export function cloneSkinned(src) {
+  const root = src.clone(true), a = [], b = [], skeletons = [];
+  src.traverse((o) => a.push(o)); root.traverse((o) => b.push(o));
+  const map = new Map(a.map((o, i) => [o, b[i]]));
+  a.forEach((o, i) => {
+    if (!o.isSkinnedMesh) return;
+    const s = new T.Skeleton(o.skeleton.bones.map((x) => map.get(x)), o.skeleton.boneInverses);
+    b[i].bind(s, o.bindMatrix);
+    skeletons.push(s);
+  });
+  return { root, skeletons };
+}
+
+/** The shell mask attribute on a kart geometry, made once per shared geometry (the other clones never read it). */
+const shellDone = new WeakSet();
+function withShell(mesh) {
+  const g = mesh.geometry;
+  if (shellDone.has(g)) return;
+  const j = g.getAttribute('skinIndex'), w = g.getAttribute('skinWeight'), n = g.getAttribute('position').count;
+  const flat = (a) => { const o = new Float32Array(a.count * 4); for (let i = 0; i < a.count; i++) for (let k = 0; k < 4; k++) o[i * 4 + k] = a.getComponent(i, k); return o; };
+  g.setAttribute('pcShell', new T.BufferAttribute(j && w ? shellMask(flat(j), flat(w), mesh.skeleton.bones.map((x) => x.name), n) : new Float32Array(n), 1));
+  shellDone.add(g);
+}
+
+// Glassroad's shell paint (render/emiSkin.js, TSL there) in GLSL for r169: two layers so a walk blends, never cuts.
+const PAINT_GLSL = `
+float pcPat(float id, vec2 p, sampler2D mask) {
+  float stripes = step(.5, fract((p.x + p.y * 1.2) * 14.));
+  float dots = 1. - step(.23, length(fract(p * 17.) - .5));
+  float checks = fract((floor(p.x * 14.) + floor(p.y * 14.)) * .5) * 2.;
+  float m = texture2D(mask, vec2((p.x + .255) / .511, (p.y - .427) / .52)).r;
+  return id < .5 ? 0. : id < 1.5 ? stripes : id < 2.5 ? dots : id < 3.5 ? checks : m;
+}`;
+function paintMaterial(src, u) {
+  const m = src.clone();
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    // Declarations go after the material's own #defines (behind <common>), never in front of them.
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float pcShell;\nvarying float vPcShell;\nvarying vec2 vPcP;\n')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPcShell = pcShell;\nvPcP = position.xy;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vPcShell;\nvarying vec2 vPcP;\n'
+        + 'uniform vec3 pcPrimaryA, pcSecondaryA, pcPrimaryB, pcSecondaryB;\nuniform float pcPatternA, pcPatternB, pcBlend;\n'
+        + 'uniform sampler2D pcMaskA, pcMaskB;\n' + PAINT_GLSL + '\n')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+  {
+    vec3 pcBase = diffuseColor.rgb;
+    float pcShade = min(dot(pcBase, vec3(.299, .587, .114)) * 1.5 + .42, 1.2);
+    vec3 pcA = mix(pcPrimaryA, pcSecondaryA, pcPat(pcPatternA, vPcP, pcMaskA));
+    vec3 pcB = mix(pcPrimaryB, pcSecondaryB, pcPat(pcPatternB, vPcP, pcMaskB));
+    diffuseColor.rgb = mix(pcBase, mix(pcA, pcB, pcBlend) * pcShade, vPcShell);
+  }`);
+  };
+  m.customProgramCacheKey = () => 'prizecounter-kart-paint';
+  return m;
+}
 
 /** Free a loaded tree's geometry, materials and textures. Only for trees this stage owns, never for clones. */
 export function disposeTree(root) {
@@ -97,7 +158,8 @@ export function createStage(box, { base = './assets/', motion = 'full', reducedM
     camera.updateProjectionMatrix();
   }
 
-  // What each kind builds: { root, owned[] } (owned = trees loaded for this item only).
+  // What each kind builds: { root, owned[], free[], live? } (owned = trees loaded for this item only, free = what this
+  // item made from shared art, live = { show(), hide() } for an item that moves on its own, the paint walk).
   const build = {
     async model(spec) { const s = await own(spec.file); return { root: s, owned: [s] }; },
     async chess(spec) {
@@ -110,18 +172,110 @@ export function createStage(box, { base = './assets/', motion = 'full', reducedM
       const gltf = await keep(spec.base, 'rain'), wear = spec.wear ? await own(spec.wear) : null;
       const root = gltf.scene.clone(true), rain = root.getObjectByName(spec.root) || root;
       const lib = gltf.scenes.find((s) => s.name === spec.library);
+      // spec.hide already carries the slots the item covers (catalog.js coveredGroups): boots under the coverall...
       for (const n of [...(spec.hide || []), ...(spec.hideNamed || [])]) { const o = root.getObjectByName(n); if (o) o.visible = false; }
       for (const n of spec.show || []) { const o = lib && lib.getObjectByName(n); if (o) rain.add(o.clone(true)); }
       if (wear) rain.add(wear);
-      return { root, owned: wear ? [wear] : [] };
+      // ...and a suit's hideBodyBelow cuts the legs out of the body it covers (the wardrobe's lower-body mask).
+      const free = [], below = spec.coverage && spec.coverage.hideBodyBelow;
+      if (Number.isFinite(below)) {
+        root.updateMatrixWorld(true);
+        const inv = rain.matrixWorld.clone().invert(), m4 = new T.Matrix4(), v = new T.Vector3();
+        for (const n of spec.body || []) {
+          const g = root.getObjectByName(n);
+          if (!g || !g.visible) continue;
+          g.traverse((mesh) => {
+            if (!mesh.isMesh) return;
+            m4.multiplyMatrices(inv, mesh.matrixWorld);
+            const src = mesh.geometry, pos = src.getAttribute('position');
+            const at = (i) => v.fromBufferAttribute(pos, i).applyMatrix4(m4).toArray();
+            const geo = src.clone();
+            geo.setIndex(new T.BufferAttribute(cutBelow(src.index ? src.index.array : null, pos.count, at, below), 1));
+            mesh.geometry = geo; free.push(geo);
+          });
+        }
+      }
+      return { root, owned: wear ? [wear] : [], free };
+    },
+    // EMI's rigged kart: outfits and the umbrella bound to its own bones (glassroad render/wardrobe.js rebind), a paint
+    // on its shell. The base stays parsed while the focus walks the kart shelf.
+    async kart(spec) {
+      const [gltf, ...wears] = await Promise.all([keep(spec.base, 'kart'), ...spec.wear.map(own)]);
+      const { root, skeletons } = cloneSkinned(gltf.scene), free = [...skeletons];
+      const meshes = [];
+      root.traverse((o) => { if (o.isSkinnedMesh) meshes.push(o); });
+      const kart = meshes.find((m) => m.material && m.material.name === 'kart_surface') || meshes[0];
+      if (!kart) throw new Error('kart base has no skinned mesh');
+      const byName = new Map(kart.skeleton.bones.map((b) => [b.name, b]));
+      if (!bindsTo(KART_JOINTS, [...byName.keys()])) throw new Error('kart base bones are not the accepted set');
+      // Hold the accepted idle pose (time zero), as the garage shows EMI.
+      const idle = gltf.animations.find((c) => c.name === 'idle_bob');
+      const mixer = idle ? new T.AnimationMixer(root) : null;
+      if (mixer) { mixer.clipAction(idle).play(); mixer.update(0); free.push({ dispose: () => { mixer.stopAllAction(); mixer.uncacheRoot(root); } }); }
+      for (const w of wears) {
+        const parts = [];
+        w.traverse((o) => { if (o.isSkinnedMesh) parts.push(o); });
+        for (const s of parts) {
+          const names = s.skeleton.bones.map((b) => b.name);
+          if (!bindsTo(names, KART_JOINTS)) throw new Error('outfit bones are not the accepted kart set');
+          const m = new T.SkinnedMesh(s.geometry, s.material), sk = new T.Skeleton(names.map((n) => byName.get(n)), s.skeleton.boneInverses);
+          m.name = s.name; m.frustumCulled = false;
+          m.bind(sk, I4);   // identity local transform and bind: the kart mesh's own space
+          kart.parent.add(m);
+          free.push(sk);
+        }
+      }
+      let live = null;
+      if (spec.layers && spec.layers.length) {
+        const blank = new T.DataTexture(new Uint8Array(4), 1, 1), masks = new Map(), tl = new T.TextureLoader();
+        blank.needsUpdate = true;
+        free.push(blank);
+        await Promise.all([...new Set(spec.layers.map((l) => l.mask).filter(Boolean))].map(async (f) => {
+          const t = await tl.loadAsync(base + f);
+          t.wrapS = t.wrapT = T.RepeatWrapping; t.colorSpace = T.NoColorSpace;
+          masks.set(f, t); free.push(t);
+        }));
+        const u = { pcBlend: { value: 0 } };
+        for (const s of ['A', 'B']) Object.assign(u, { ['pcPrimary' + s]: { value: new T.Color() }, ['pcSecondary' + s]: { value: new T.Color() },
+          ['pcPattern' + s]: { value: 0 }, ['pcMask' + s]: { value: blank } });
+        const put = (s, l) => {
+          u['pcPrimary' + s].value.set(l.primary); u['pcSecondary' + s].value.set(l.secondary);
+          u['pcPattern' + s].value = l.pattern; u['pcMask' + s].value = (l.mask && masks.get(l.mask)) || blank;
+        };
+        put('A', spec.layers[0]); put('B', spec.layers[0]);
+        withShell(kart);
+        kart.material = paintMaterial(kart.material, u);
+        free.push(kart.material);
+        const walk = paintWalk(spec.layers.length, { motion, reducedMotion, gentle });
+        if (walk) live = paintWalker(spec.layers, walk, u, put);
+      }
+      return { root, owned: wears, free, live };
     },
   };
+
+  // A paint with several patterns: hold one, then blend to the next over blendMs (each pattern's OUT is the next one's IN).
+  function paintWalker(layers, { holdMs, blendMs }, u, put) {
+    let i = 0, timer = 0, anim = 0, t0 = 0;
+    const step = (now) => {
+      anim = 0;
+      if (!t0) t0 = now;
+      const k = Math.min(1, (now - t0) / blendMs);
+      u.pcBlend.value = k * k * (3 - 2 * k);
+      if (!raf) draw();   // the turntable draws while it runs
+      if (k < 1) { anim = requestAnimationFrame(step); return; }
+      put('A', layers[i]); u.pcBlend.value = 0;
+      timer = setTimeout(next, holdMs);
+    };
+    const next = () => { timer = 0; i = (i + 1) % layers.length; put('B', layers[i]); t0 = 0; anim = requestAnimationFrame(step); };
+    const stop = () => { clearTimeout(timer); cancelAnimationFrame(anim); timer = anim = 0; };
+    return { show() { stop(); put('A', layers[i]); u.pcBlend.value = 0; timer = setTimeout(next, holdMs); }, hide: stop };
+  }
 
   return {
     canvas,
     async open(spec) {
       if (dead || !build[spec.kind]) throw new Error(`no stage for ${spec.kind}`);
-      const { root, owned } = await build[spec.kind](spec);
+      const { root, owned, free = [], live = null } = await build[spec.kind](spec);
       root.traverse((o) => { if (o.isSkinnedMesh) o.frustumCulled = false; });
       let gone = false;
       return {
@@ -136,13 +290,16 @@ export function createStage(box, { base = './assets/', motion = 'full', reducedM
           last = 0;
           draw();
           if (rate && !raf) raf = requestAnimationFrame(tick);
+          if (live) live.show();
         },
-        hide() { if (current === root) canvas.classList.remove('pc-pv-on'); },
+        hide() { if (live) live.hide(); if (current === root) canvas.classList.remove('pc-pv-on'); },
         dispose() {
           if (gone) return;
           gone = true;
+          if (live) live.hide();
           if (current === root) { current = null; turn.remove(root); if (raf) { cancelAnimationFrame(raf); raf = 0; } }
           for (const o of owned) disposeTree(o);
+          for (const x of free) x.dispose();
         },
       };
     },
