@@ -35,14 +35,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var room = Named<Tabs.CompanionTabView>("CompanionTab")?.FindControl<CompanionRoomView>("Room");
             var service = room?.WorkshopParts?.Community.Service;
             if (!string.IsNullOrEmpty(id) && service?.GetInstalledPrompt(id)?.PromptSettings != null)
+            {
                 service.ActivatePrompt(id);
+                room!.RefreshCommunity(); // WPF MainWindow.CompanionTab.cs:147,175 after switching
+            }
         }
 
         private void InitializeCompanionPromptSwitch()
         {
-            void OnSwitched(CompanionId id) => Dispatcher.UIThread.Post(() => ApplyRosterPrompt((int)id));
+            bool closed = false;
+            void OnSwitched(CompanionId id) => Dispatcher.UIThread.Post(() =>
+            {
+                if (!closed) ApplyRosterPrompt((int)id);
+            });
             CompanionCore.Switched += OnSwitched;
-            Closed += (_, _) => CompanionCore.Switched -= OnSwitched;
+            Closed += (_, _) => { closed = true; CompanionCore.Switched -= OnSwitched; };
         }
 
         /// <summary>Test seams: the native picker (null = cancelled) and the message box.</summary>
@@ -52,14 +59,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var shipped = Path.Combine(AppContext.BaseDirectory, "assets", "prompts");
             var start = Directory.Exists(custom) && Directory.EnumerateFiles(custom, "*.json").Any() ? custom : shipped;
             var sp = shell.StorageProvider;
-            var files = await sp.OpenFilePickerAsync(new FilePickerOpenOptions
-            {
-                Title = $"Select AI Personality for {CompanionDefinition.GetById(index).Name}",
-                AllowMultiple = false,
-                FileTypeFilter = new[] { new FilePickerFileType("Prompt JSON files") { Patterns = new[] { "*.json" } } },
-                SuggestedStartLocation = Directory.Exists(start) ? await sp.TryGetFolderFromPathAsync(start) : null
-            });
+            var options = CompanionPromptPickerOptions(index);
+            options.SuggestedStartLocation = Directory.Exists(start) ? await sp.TryGetFolderFromPathAsync(start) : null;
+            var files = await sp.OpenFilePickerAsync(options);
             return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+        };
+
+        // WPF MainWindow.CompanionTab.cs:402-406, localized for the Avalonia head.
+        internal static FilePickerOpenOptions CompanionPromptPickerOptions(int index) => new()
+        {
+            Title = Loc.GetF("title_companion_personality_picker", CompanionDefinition.GetById(index).Name),
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType(Loc.Get("filter_prompt_json_files")) { Patterns = new[] { "*.json" } } }
         };
 
         internal static Func<Window, string, string, Task> InformPrompt = (owner, title, text) => MessageDialog.ShowAsync(owner, title, text);

@@ -219,6 +219,83 @@ public sealed class CompanionRosterSwitchTests
         Assert.Equal(0, CoreSettings.Current.ActiveCompanionId);
     });
 
+    [Fact]
+    public Task ForcedSwitchRefreshesVisibleCommunityIndicator() => WithRoster((shell, room, roster) =>
+    {
+        var s = CoreSettings.Current;
+        s.InstalledCommunityPromptIds.Clear();
+        s.ActiveCommunityPromptId = null;
+        var file = System.IO.Path.GetTempFileName();
+        try
+        {
+            System.IO.File.WriteAllText(file, "{\"Name\":\"Voice\",\"PromptSettings\":{\"Personality\":\"kind\"}}");
+            var prompt = room.WorkshopParts!.Community.Service.ImportFromFile(file)!;
+            s.SetCompanionPromptId(2, prompt.Id);
+            shell.ShowTab("personality");
+            Dispatcher.UIThread.RunJobs();
+            var panel = room.WorkshopParts.Community.FindControl<StackPanel>("InstalledPromptsPanel")!;
+            Assert.True(panel.IsEffectivelyVisible);
+            Assert.Empty(panel.GetVisualDescendants().OfType<global::Avalonia.Controls.Shapes.Ellipse>());
+            CompanionCore.SwitchCompanion((CompanionId)2);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(prompt.Id, s.ActiveCommunityPromptId);
+            Assert.Single(panel.GetVisualDescendants().OfType<global::Avalonia.Controls.Shapes.Ellipse>());
+            Assert.DoesNotContain(panel.GetVisualDescendants().OfType<Button>(), b => b.Name == "ActivatePrompt");
+        }
+        finally { System.IO.File.Delete(file); }
+    });
+
+    [Fact]
+    public Task QueuedSwitchCannotApplyPromptAfterClose() => WithRoster((shell, room, roster) =>
+    {
+        var file = System.IO.Path.GetTempFileName();
+        try
+        {
+            System.IO.File.WriteAllText(file, "{\"PromptSettings\":{\"Personality\":\"queued voice\"}}");
+            var prompt = room.WorkshopParts!.Community.Service.ImportFromFile(file)!;
+            var s = CoreSettings.Current;
+            s.SetCompanionPromptId(2, prompt.Id);
+            var previous = s.CompanionPrompt;
+            var previousId = s.ActiveCommunityPromptId;
+            CompanionCore.SwitchCompanion((CompanionId)2);
+            Assert.Same(previous, s.CompanionPrompt); // callback is still queued
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(previous, s.CompanionPrompt);
+            Assert.Equal(previousId, s.ActiveCommunityPromptId);
+        }
+        finally { System.IO.File.Delete(file); }
+    });
+
+    [Theory]
+    [InlineData("en","Select AI personality for {0}","Prompt JSON files")]
+    [InlineData("de","KI-Persönlichkeit für {0} auswählen","JSON-Promptdateien")]
+    [InlineData("es","Seleccionar personalidad de IA para {0}","Archivos JSON de instrucciones")]
+    [InlineData("fr","Choisir une personnalité IA pour {0}","Fichiers JSON de consignes")]
+    [InlineData("it","Seleziona la personalità IA per {0}","File JSON di istruzioni")]
+    [InlineData("ja","{0} の AI パーソナリティを選択","プロンプト JSON ファイル")]
+    [InlineData("ko","{0}의 AI 성격 선택","프롬프트 JSON 파일")]
+    [InlineData("pt-BR","Selecionar personalidade de IA para {0}","Arquivos JSON de instruções")]
+    [InlineData("ru","Выберите личность ИИ для {0}","Файлы промптов JSON")]
+    [InlineData("zh-CN","为 {0} 选择 AI 人格","提示词 JSON 文件")]
+    public Task PersonalityPickerUsesLocalizedTitleAndFilter(string language, string title, string filter) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage(language);
+            var options = MainShellWindow.CompanionPromptPickerOptions(2);
+            Assert.Equal(string.Format(title, CompanionDefinition.GetById(2).Name), options.Title);
+            var type = Assert.Single(options.FileTypeFilter!);
+            Assert.Equal(filter, type.Name);
+            Assert.Equal("*.json", Assert.Single(type.Patterns!));
+            Assert.False(options.AllowMultiple);
+        }
+        finally { loc.SetLanguage(previous); }
+        return Task.CompletedTask;
+    });
+
     private static Task WithRoster(Action<MainShellWindow, CompanionRoomView, WorkshopRosterCell> test) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
