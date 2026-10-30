@@ -137,8 +137,10 @@ public sealed partial class AccountSeedTests
         }
     }
 
-    [Fact]
-    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(750)]
+    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard(int renderDelayMs)
     {
         var s = CoreSettings.Current;
         var old = (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId);
@@ -150,7 +152,7 @@ public sealed partial class AccountSeedTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
-                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
@@ -164,11 +166,35 @@ public sealed partial class AccountSeedTests
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
+                // Headless MouseDown/Up render before and after each event, but their timestamps
+                // use a stopwatch. Slow CI rendering must not turn a simulated double-click into
+                // two single clicks. Keep real hit testing and gesture routing with an input clock.
+                var platform = w.PlatformImpl!;
+                var inputProperty = platform.GetType().GetProperty("Input")!;
+                var input = (Action<global::Avalonia.Input.Raw.RawInputEventArgs>)inputProperty.GetValue(platform)!;
+                var eventTime = typeof(global::Avalonia.Input.Raw.RawInputEventArgs).GetProperty("Timestamp",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)!;
+                ulong timestamp = 1000;
+                inputProperty.SetValue(platform, new Action<global::Avalonia.Input.Raw.RawInputEventArgs>(e =>
                 {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                    if (e is global::Avalonia.Input.Raw.RawPointerEventArgs) eventTime.SetValue(e, timestamp += 10);
+                    input(e);
+                }));
+                try
+                {
+                    for (var i = 0; i < 2; i++)
+                    {
+                        w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
+                        w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                        if (i == 0)
+                        {
+                            Assert.False(w.ProfilePage!.IsEffectivelyVisible);
+                            Assert.DoesNotContain(wire.Seen, r => r.Contains("/user/lookup"));
+                            await Task.Delay(renderDelayMs); // emulate a slow render between clicks
+                        }
+                    }
                 }
+                finally { inputProperty.SetValue(platform, input); }
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
