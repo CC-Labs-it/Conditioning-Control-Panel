@@ -124,6 +124,8 @@ Client -> room:
 | `drop` | `tick: u32, s: num, seat?` | fell off (rescue starts); progress may go back |
 | `emote` | `code` | preset id (`hud/presets.js`), at most 1 per 2 s, never free text |
 | `react` | `id, seat?` | race reaction (`laugh kiss wink pout`, `net/protocol.js` REACTIONS), countdown or racing phase, at most 1 per 2 s per seat, never free text; `seat` = a kept bot's |
+| `knock` | `by: seat, dv: num, tick: u32, seat?` | the loser's client: a hard bump (dv >= items.knockDvMps) or a tunnel ram knocked its held item loose; the room checks `by` is close in its records |
+| `take` | `lid: u16, tick: u32, seat?` | drive through a loose item with an empty slot (the loser after items.knockOwnerS) |
 | `leave` | | leaving on purpose |
 
 Room -> client:
@@ -144,6 +146,8 @@ Room -> client:
 | `finish` | `rows: [{ seat, place, name, bot, finished, timeMs, bestLapMs, pops }]` (final, by place) |
 | `emote` | `seat, code` |
 | `react` | `seat, id` (to every seat; the sender's own clients ignore their own seats) |
+| `loose` | `lid, item, s, x, from, by, fork?` (a knocked item on the road, the loser's slot is empty; clients fade it after items.knockLifeS and keep at most items.knockMax, oldest first) |
+| `took` | `lid, seat, item` (that seat holds it now, no roll) |
 | `error` | `code, re?` (`code`: bad phase seat item host rate; `re` = the refused `t`) |
 | `abort` | `reason`, then the socket closes |
 

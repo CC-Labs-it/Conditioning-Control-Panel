@@ -37,7 +37,7 @@ export function unwrap(name, p) {
 /** Who knocked whom, or null: a hard bump at or above items.knockDvMps, or any tunnel ram. */
 export function knockOf(feel, name, p) {
   if (name === 'hard-bump') {
-    return (p.dv || 0) >= feel.get('items.knockDvMps') && p.loser >= 0 && p.winner !== p.loser ? { loser: p.loser, by: p.winner, p: p.p || null } : null;
+    return (p.dv || 0) >= feel.get('items.knockDvMps') && p.loser >= 0 && p.winner !== p.loser ? { loser: p.loser, by: p.winner, p: p.p || null, dv: p.dv || 0 } : null;
   }
   if (name === 'tunnel-ram') return p.victim >= 0 && p.attacker !== p.victim ? { loser: p.victim, by: p.attacker, p: p.p || null } : null;
   return null;
@@ -77,7 +77,7 @@ export function createSocial(feel, { seed = 1 } = {}) {
   function see(name0, p0) {
     const [name, p] = unwrap(name0, p0);
     const k = knockOf(feel, name, p);
-    if (k && items && items.knock) items.knock(k.loser, k.by, k.p);
+    if (k && items && items.knock) items.knock(k.loser, k.by, k.p, k.dv);
     const pb = paybackOf(name, p);
     if (pb) marks.set(pb[0], { target: pb[1], t: feel.get('items.paybackS'), age: 0 });
     botsReact(name, p);

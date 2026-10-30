@@ -282,6 +282,8 @@ export const C2R = Object.freeze({
   drop: { tick: 'u32', s: 'num', seat: 'seat?' },
   emote: { code: 'code' },
   react: { id: 'react', seat: 'seat?' },
+  knock: { by: 'seat', dv: 'num', tick: 'u32', seat: 'seat?' },
+  take: { lid: 'u16', tick: 'u32', seat: 'seat?' },
   leave: {},
 });
 
@@ -298,6 +300,8 @@ export const R2C = Object.freeze({
   fired: { sid: 'u32', seat: 'seat', id: 'u16', item: 'item', mode: 'mode', tick: 'u32', s: 'num', x: 'num', target: 'seatOrNull', fork: 'u8?', targetFork: 'u8?', vx: 'num?' },
   hit: { sid: 'u32', victim: 'seat', by: 'seat', item: 'item', verdict: 'verdict', durationS: 'num', tick: 'u32' },
   fizzle: { sid: 'u32', tick: 'u32' },
+  loose: { lid: 'u16', item: 'item', s: 'num', x: 'num', from: 'seat', by: 'seat', fork: 'u8?' },
+  took: { lid: 'u16', seat: 'seat', item: 'item' },
   standings: { tick: 'u32', rows: 'standRows' },
   finish: { rows: 'finishRows' },
   emote: { seat: 'seat', code: 'code' },

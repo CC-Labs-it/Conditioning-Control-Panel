@@ -97,13 +97,18 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
       case 'fired': if (items) items.onFired(m); break;
       case 'hit': if (items) items.onHit(m); break;
       case 'fizzle': if (items) items.onFizzle(m); break;
+      case 'loose': if (items) items.onLoose(m); break;
+      case 'took': if (items) items.onTook(m); break;
       case 'react': {   // a relayed reaction: shown for remote seats only (this client already showed its own and its bots')
         const r = m.seat !== st.seat && !st.keep.includes(m.seat) ? racerOf(m.seat) : null;
         if (r && simQ) simQ.emit('kart-react', { racer: r.i, id: m.id, remote: true });
         break;
       }
       case 'finish': st.phase = 'done'; break;
-      case 'error': if (m.code === 'item' && m.re === 'pickup' && items) items.onPickupRefused(); break;
+      case 'error':
+        if (m.code === 'item' && m.re === 'pickup' && items) items.onPickupRefused();
+        if (items && (m.re === 'fire' || m.re === 'take')) items.onRefused(m.re);   // in send order: the oldest pending one
+        break;
       case 'abort': leaving = leaving || ['ticket', 'expired', 'replay', 'version', 'config', 'full', 'started', 'closed'].includes(m.reason); break;
       default: break;
     }
