@@ -17,8 +17,8 @@ namespace ConditioningControlPanel.Tests;
 /// </summary>
 public class CompanionNameTests
 {
-    /// <summary>Language files already moved to the token (the rest land in the next stacked PR).</summary>
-    private static readonly string[] Languages = { "en" };
+    /// <summary>All ten language files.</summary>
+    private static readonly string[] Languages = { "en", "de", "es", "fr", "it", "ja", "ko", "pt-BR", "ru", "zh-CN" };
 
     [Theory]
     [InlineData(BuiltInMods.BambiSleepId, "Bambi")]
