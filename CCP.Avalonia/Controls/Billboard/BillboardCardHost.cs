@@ -457,8 +457,9 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             }
             else if (card.Spec.ArtKey == BuiltInArtKeys.Poster && card.Spec.ArtData is string poster)
             {
-                try { root.Children.Add(new Image { Stretch = Stretch.UniformToFill, Source = new Bitmap(AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/" + poster))) }); }
-                catch (Exception ex) { Log.Debug("Billboard poster {Poster} did not load: {E}", poster, ex.Message); }
+                var view = new PosterArtView(poster);
+                root.Children.Add(view);
+                root.Tag = view;
             }
             if (!DashboardBillboard.IsFullBleed(card.Spec))
             {
