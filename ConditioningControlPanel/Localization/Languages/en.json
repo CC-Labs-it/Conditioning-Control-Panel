@@ -4337,6 +4337,7 @@
   "rain_wardrobe_locked": "In the Prize Counter",
   "rain_wardrobe_counter_soon": "The Prize Counter opens in 7.2.",
   "rain_wardrobe_apply_failed": "Rain could not get dressed. The last look stays on.",
+  "rain_look_synced_rebake": "Rain's look arrived from another device. Open the wardrobe once to fit it.",
   "rain_assets_title": "Rain's dressing room",
   "rain_assets_line": "Rain's 3D files are not on this PC yet: about 250 MB to download, 300 MB on disk.",
   "rain_assets_install": "Install",

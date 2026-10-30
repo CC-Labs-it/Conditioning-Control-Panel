@@ -667,7 +667,12 @@ namespace ConditioningControlPanel.Services
         /// resolved; a block for any other record is ignored.
         /// </summary>
         public static void ApplyValidatePrizes(string? requestedFor, string? answeredFor, PrizesBlock? prizes, string source)
-            => PrizeFeed.Apply(requestedFor, answeredFor, prizes, source);
+        {
+            PrizeFeed.Apply(requestedFor, answeredFor, prizes, source);
+            // Rain look sync (/v2/equip family rain): queued behind the snapshot, so the clamp sees the grants.
+            if (!string.IsNullOrEmpty(requestedFor) && string.Equals(requestedFor, answeredFor, StringComparison.Ordinal))
+                PostPrizeWork(() => Companion.RainLookSync.OnAccountReady(requestedFor));
+        }
 
         /// <summary>
         /// Queue one ownership change on the UI thread, always behind what is already queued.
@@ -4749,6 +4754,9 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.ServerPaidUntil),
             // Names a baked Rain clip pack folder on this PC; another PC has no such folder.
             nameof(AppSettings.RainPackHash),
+            // Rain look sync state: what THIS PC owes the server and last agreed with it.
+            nameof(AppSettings.RainLookPushOwed),
+            nameof(AppSettings.RainLookAgreedUtc),
             // The one-time "online media is official" note: this PC saw it, not the account.
             nameof(AppSettings.ScrolllerOfficialNoteSeen),
         };
@@ -4808,6 +4816,8 @@ namespace ConditioningControlPanel.Services
             restored.ModPersonalityPreset = current.ModPersonalityPreset; // the setter copies
             restored.ScrolllerOfficialNoteSeen = current.ScrolllerOfficialNoteSeen;
             restored.RainPackHash = current.RainPackHash;
+            restored.RainLookPushOwed = current.RainLookPushOwed;
+            restored.RainLookAgreedUtc = current.RainLookAgreedUtc;
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so
             // an empty list in the restore may just mean "not carried": keep this PC's own.
             if (restored.DisabledAssetPaths.Count == 0 && current.DisabledAssetPaths.Count > 0)

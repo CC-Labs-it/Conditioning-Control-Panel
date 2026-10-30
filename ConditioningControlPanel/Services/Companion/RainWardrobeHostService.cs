@@ -202,14 +202,15 @@ internal static class RainWardrobeHostService
         {
             var host = _host;
             if (host == null) return;
-            Route(o, _apply, host.Post, BuildLiveInit, ShowCounterSoon);
+            Route(o, _apply, host.Post, BuildLiveInit, ShowCounterSoon, RainLookSync.LookOwingABake);
         }
         catch (Exception ex) { App.Logger?.Warning("RainWardrobe: message handler threw: {E}", ex.Message); }
     }
 
     /// <summary>One page frame (testable): init on ready, Apply and bake frames to the controller, the
     /// counter door, and no per-change autosave (Apply is the only way a look reaches the tube).</summary>
-    internal static void Route(JObject o, RainApplyController? apply, Action<object> post, Func<JObject> init, Action counterMissing)
+    internal static void Route(JObject o, RainApplyController? apply, Action<object> post, Func<JObject> init, Action counterMissing,
+        Func<string?>? lookOwingABake = null)
     {
         var type = (string?)o["type"];
         if (apply != null && apply.Handle(o)) return;
@@ -218,6 +219,13 @@ internal static class RainWardrobeHostService
             case "rain-ready":
                 App.Logger?.Information("RainWardrobe: page ready");
                 post(init());
+                // Rain look sync: a look adopted from another device (or restored) has no pack on this PC.
+                // The page now shows it, so a host-side Apply bakes it (the same clamp, bake and commit).
+                if (apply != null && !apply.IsBaking && lookOwingABake?.Invoke() is { Length: > 0 } owed)
+                {
+                    App.Logger?.Information("RainWardrobe: re-baking the synced look");
+                    apply.Handle(new JObject { ["type"] = "rain-apply", ["look"] = JObject.Parse(owed) });
+                }
                 break;
             case "open-counter":
                 var tab = (string?)o["tab"];
@@ -288,6 +296,8 @@ internal static class RainWardrobeHostService
         App.Settings!.Save();
         App.AvatarWindow?.RefreshRainLook();
         App.Logger?.Information("RainWardrobe: applied look {Hash}", packHash.Length > 0 ? packHash[..12] : "default");
+        // The look follows the account (/v2/equip family rain); the pack stays on this PC.
+        RainLookSync.NoteLocalChange();
     }
 
     private static string? ReadEmbeddedEmotes()
