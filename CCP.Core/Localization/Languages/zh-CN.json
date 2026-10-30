@@ -1,4 +1,7 @@
 {
+  "msg_export_login_required": "必须登录才能导出数据",
+  "msg_export_connection_required": "导出数据需要连接互联网",
+  "msg_export_server_error_0": "服务器错误：{0}",
   "deeper_submission_badge_published": "已发布",
   "deeper_submission_badge_published_tip": "此增强已在社区目录中上线。",
   "deeper_submission_badge_pending": "待审核",

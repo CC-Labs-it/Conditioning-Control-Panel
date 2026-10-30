@@ -329,6 +329,34 @@ public sealed class CloudSettingsBackupTests : IDisposable
         Assert.False((await c.ExportDataAsync(Signed())).success);
     }
 
+    // WPF ProfileSyncService.cs:4262,4299,4314: keep each export failure's meaning.
+    [Theory]
+    [InlineData("identity", HttpStatusCode.OK, "You must be logged in to export your data")]
+    [InlineData("transport", HttpStatusCode.OK, "Data export requires an internet connection")]
+    [InlineData("malformed", HttpStatusCode.OK, "Data export requires an internet connection")]
+    [InlineData("status", HttpStatusCode.Forbidden, "Server error: Forbidden")]
+    [InlineData("status", HttpStatusCode.BadGateway, "Server error: BadGateway")]
+    public async Task ExportErrorsMatchWpf(string failure, HttpStatusCode status, string expected)
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var oldLanguage = loc.CurrentLanguage;
+        loc.Initialize("en");
+        try
+        {
+            var settings = Signed();
+            if (failure == "identity") settings.UnifiedId = null;
+            _fake.Status = status;
+            _fake.Body = failure == "malformed" ? "invalid json" : "{}";
+            if (failure == "transport") _fake.BodyFor = _ => throw new HttpRequestException("connection failed");
+            var result = await new CloudSettingsBackup(_fake).ExportDataAsync(settings);
+            Assert.False(result.success);
+            Assert.Null(result.jsonData);
+            Assert.Equal(expected, result.error);
+            if (failure == "identity") Assert.Empty(_fake.Seen);
+        }
+        finally { loc.SetLanguage(oldLanguage); }
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

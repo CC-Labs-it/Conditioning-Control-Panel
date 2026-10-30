@@ -1,4 +1,7 @@
 {
+  "msg_export_login_required": "Vous devez vous connecter pour exporter vos données",
+  "msg_export_connection_required": "L’exportation des données nécessite une connexion Internet",
+  "msg_export_server_error_0": "Erreur du serveur : {0}",
   "deeper_submission_badge_published": "Publié",
   "deeper_submission_badge_published_tip": "Cette amélioration est en ligne dans le catalogue communautaire.",
   "deeper_submission_badge_pending": "En attente",

@@ -40,7 +40,7 @@ namespace ConditioningControlPanel.Services
         public async Task<(bool success, string? error, string? jsonData)> ExportDataAsync(AppSettings settings)
         {
             if (string.IsNullOrEmpty(settings.UnifiedId))
-                return (false, Localization.Loc.Get("account_login_first"), null);
+                return (false, Localization.Loc.Get("msg_export_login_required"), null);
             try
             {
                 using var first = await PostAsync("/v2/user/export-data", settings, new { unified_id = settings.UnifiedId });
@@ -61,7 +61,7 @@ namespace ConditioningControlPanel.Services
                         }
                     }
                     if (!response.IsSuccessStatusCode)
-                        return (false, (string?)JObject.Parse(json)["error"] ?? Localization.Loc.Get("msg_failed_to_export_data"), null);
+                        return (false, (string?)JObject.Parse(json)["error"] ?? Localization.Loc.GetF("msg_export_server_error_0", response.StatusCode), null);
                     return (true, null, JToken.Parse(json).ToString(Formatting.Indented));
                 }
                 finally { retry?.Dispose(); }
@@ -69,7 +69,7 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex)
             {
                 Log.Warning(ex, "Data export request failed");
-                return (false, Localization.Loc.Get("msg_failed_to_export_data"), null);
+                return (false, Localization.Loc.Get("msg_export_connection_required"), null);
             }
         }
 

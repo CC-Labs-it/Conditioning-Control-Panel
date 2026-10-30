@@ -1,4 +1,7 @@
 {
+  "msg_export_login_required": "Du musst angemeldet sein, um deine Daten zu exportieren",
+  "msg_export_connection_required": "Der Datenexport erfordert eine Internetverbindung",
+  "msg_export_server_error_0": "Serverfehler: {0}",
   "deeper_submission_badge_published": "Veröffentlicht",
   "deeper_submission_badge_published_tip": "Diese Erweiterung ist im Community-Katalog live.",
   "deeper_submission_badge_pending": "Ausstehend",
