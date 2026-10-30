@@ -178,4 +178,29 @@ public sealed class DeeperEditorInteractionTests
         Assert.Equal(8, effect.Start);
     });
 
+    [Fact]
+    public Task EscapeClearsRulePinHighlightAndHeavyLine() => Run((w, model) =>
+    {
+        // WPF DeeperEditorWindow.xaml.cs:1928 and Unified.cs:1186,1212.
+        Set(w, "_totalSeconds", 30d);
+        var rule = new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 3 } };
+        model.Rules.Add(rule);
+        Call(w, "SelectRule", rule);
+        var selected = ((System.Collections.Generic.IEnumerable<Control>)Field(w, "_ruleVisuals")!).ToArray();
+        var flag = selected.OfType<global::Avalonia.Controls.Shapes.Polygon>().Single();
+        Assert.Same(global::Avalonia.Media.Brushes.White, flag.Stroke);
+        Assert.Equal(1.5, flag.StrokeThickness);
+        Assert.Equal(2.5, selected.OfType<global::Avalonia.Controls.Shapes.Line>().Single().StrokeThickness);
+
+        Key(w, global::Avalonia.Input.Key.Escape);
+
+        Assert.Null(Field(w, "_selectedRule"));
+        Assert.Same(rule, Assert.Single(model.Rules));
+        var cleared = ((System.Collections.Generic.IEnumerable<Control>)Field(w, "_ruleVisuals")!).ToArray();
+        flag = cleared.OfType<global::Avalonia.Controls.Shapes.Polygon>().Single();
+        Assert.Null(flag.Stroke);
+        Assert.Equal(0, flag.StrokeThickness);
+        Assert.Equal(1.5, cleared.OfType<global::Avalonia.Controls.Shapes.Line>().Single().StrokeThickness);
+    });
+
 }

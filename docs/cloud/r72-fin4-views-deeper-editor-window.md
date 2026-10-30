@@ -9,10 +9,10 @@ Paths below are relative to CCP.Avalonia/Views/Deeper unless prefixed otherwise.
 
 | Behavior | Current | Old | WPF |
 | --- | --- | --- | --- |
-| Delete and Escape include rules and effects, retain text editing | DeeperEditorWindow.axaml.cs:3034; DeeperEditorWindow.MultiSelect.cs:83 | DeeperEditorWindow.axaml.cs:3114; DeeperEditorWindow.MultiSelect.cs:594 | DeeperEditorWindow.xaml.cs:5054; DeeperEditorWindow.MultiSelect.cs:631 |
-| Left/Right nudge by 0.1s, Shift by 1s; no selection seeks; arrow controls retain keys | DeeperEditorWindow.axaml.cs:3046; DeeperEditorWindow.MultiSelect.cs:102 | DeeperEditorWindow.axaml.cs:3127; DeeperEditorWindow.MultiSelect.cs:646 | DeeperEditorWindow.xaml.cs:5027,5066; DeeperEditorWindow.MultiSelect.cs:738 |
+| Delete and Escape include rules and effects, retain text editing | DeeperEditorWindow.axaml.cs:3035; DeeperEditorWindow.MultiSelect.cs:83 | DeeperEditorWindow.axaml.cs:3114; DeeperEditorWindow.MultiSelect.cs:594 | DeeperEditorWindow.xaml.cs:5054; DeeperEditorWindow.MultiSelect.cs:631 |
+| Left/Right nudge by 0.1s, Shift by 1s; no selection seeks; arrow controls retain keys | DeeperEditorWindow.axaml.cs:3047; DeeperEditorWindow.MultiSelect.cs:102 | DeeperEditorWindow.axaml.cs:3127; DeeperEditorWindow.MultiSelect.cs:646 | DeeperEditorWindow.xaml.cs:5027,5066; DeeperEditorWindow.MultiSelect.cs:738 |
 | Preserve lengths and clamp starts; move rule time and constrained band; undo | DeeperEditorWindow.MultiSelect.cs:95 | DeeperEditorWindow.MultiSelect.cs:639 | DeeperEditorWindow.MultiSelect.cs:731 |
-| End seeks to end; brackets skip current start and jump across region, haptic, effect and time rules | DeeperEditorWindow.axaml.cs:3053; DeeperEditorWindow.MultiSelect.cs:140 | DeeperEditorWindow.axaml.cs:3134; DeeperEditorWindow.MultiSelect.cs:684 | DeeperEditorWindow.xaml.cs:5073; DeeperEditorWindow.MultiSelect.cs:776 |
+| End seeks to end; brackets skip current start and jump across region, haptic, effect and time rules | DeeperEditorWindow.axaml.cs:3054; DeeperEditorWindow.MultiSelect.cs:140 | DeeperEditorWindow.axaml.cs:3134; DeeperEditorWindow.MultiSelect.cs:684 | DeeperEditorWindow.xaml.cs:5073; DeeperEditorWindow.MultiSelect.cs:776 |
 | Undo/redo rebuild rule pins with restored object identities | DeeperEditorWindow.MultiSelect.cs:692 | DeeperEditorWindow.MultiSelect.cs:805 | DeeperEditorWindow.MultiSelect.cs:851 |
 
 ## Already on base
@@ -41,7 +41,7 @@ These old-lane additions are absent from this cut. Locations identify reusable o
 
 Still missing even in the old lane: interactive tutorial Part 2 dispatch/advance, native browser-focus shortcut forwarding, Linux profile isolation/native browser hardening and native zoom equivalence, detached/past-end/non-time rule markers, relink probe with three-way cancel, anchored click-away help, local-video codec and waveform channel parity. Fluent icon divergence remains.
 
-## Validation
+## Initial validation (238e17503)
 
 Installed .NET SDK 10.0.403 with dotnet-install --channel 10.0 --version 10.0.403. Channel-only discovery tried a denied ci.dot.net endpoint; the stable builds endpoint succeeded.
 
@@ -57,3 +57,9 @@ Installed .NET SDK 10.0.403 with dotnet-install --channel 10.0 --version 10.0.40
 The affected older tests now use the production app builder, including bundled fonts, instead of a bare builder. Their assertions are unchanged. The first combined run exposed missing Inter registration; the corrected combined run passed.
 
 Validation is headless. Native browser focus/fullscreen, physical haptics, native title chrome, real audio/video codecs and interactive rendering were not exercised. The full Avalonia test assembly was compiled; only the listed affected suites were run. Core speech integration retains its existing environment-dependent skips.
+
+## Review follow-up
+
+P2 fixed: SelectNothing now rebuilds rule pins at CCP.Avalonia/Views/Deeper/DeeperEditorWindow.axaml.cs:1673, matching WPF ConditioningControlPanel/Views/Deeper/DeeperEditorWindow.xaml.cs:1928. WPF DeeperEditorWindow.Unified.cs:1186,1212 specifies the unselected line width and flag stroke.
+The focused EscapeClearsRulePinHighlightAndHeavyLine test checks selected and cleared styling plus retained rule identity. Before the fix it failed with Expected: null, Actual: White. No new strings or WPF/Core changes.
+Follow-up validation: Core, Avalonia and Avalonia.Tests builds succeeded with 0 errors; Core tests 4635 passed, 6 existing skips, 0 failures; affected editor suites and TestIsolationTests 28 passed, 0 failures. Core guards, avalonia_docs.py and git diff --check passed. Headless only, with the native/hardware limits listed above.

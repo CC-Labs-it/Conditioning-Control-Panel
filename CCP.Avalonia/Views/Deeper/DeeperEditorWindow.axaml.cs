@@ -1670,6 +1670,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             RebuildRegionVisuals();
             RebuildHapticVisuals();
             RebuildEffectVisuals();
+            RebuildRuleVisuals(); // WPF DeeperEditorWindow.xaml.cs:1928.
             RefreshRulesList();
         }
 
