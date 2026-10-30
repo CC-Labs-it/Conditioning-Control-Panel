@@ -33,6 +33,33 @@ namespace CCP.Avalonia.Tests;
 public sealed class ProgramIgnitionTests
 {
     [Fact]
+    public void PanicStopsQueuedAndLiveProgramFxUntilReentryOrNewRun() => WithRun(lastDay: true, (shell, tab, svc, _) =>
+    {
+        Assert.True(tab.IgnitionLoopsRunning);
+        tab.RefreshPrograms(); // leaves generated pip work queued
+        PanicSurfaces.StopAll("test", shell);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(tab.IgnitionLoopsRunning);
+        Assert.False(tab.SessionSheenRunning);
+        bool InTab(BeatLoop l) => l.Owner == tab || global::Avalonia.VisualTree.VisualExtensions.IsVisualAncestorOf(tab, l.Owner);
+        Assert.DoesNotContain(BeatLoop.Running, InTab);
+        tab.RefreshPrograms();
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(BeatLoop.Running, InTab);
+        Assert.Equal(0, tab.FindControl<Rectangle>("ProgramsEdgeGlow")!.Opacity);
+        tab.IsVisible = false;
+        tab.IsVisible = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(tab.IgnitionLoopsRunning);
+        PanicSurfaces.StopAll("test", shell);
+        svc.ActiveEnrollment!.AttemptNumber++;
+        tab.RefreshPrograms();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(tab.IgnitionLoopsRunning);
+    });
+
+    [Fact]
     public void IgnitedRunLightsTheRigAndItsClocksFollowTheGates() => WithRun(lastDay: true, (shell, tab, svc, program) =>
     {
         T F<T>(string n) where T : Control => tab.FindControl<T>(n)!;

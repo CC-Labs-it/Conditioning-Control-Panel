@@ -73,7 +73,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (VisualRoot is not null) RefreshPrograms();
         });
 
-        private void OnProgramSessionChanged() => OnProgramChanged(null, EventArgs.Empty);
+        private void OnProgramSessionChanged()
+        {
+            // WPF MainWindow.ProgramsTab.cs:2169-2196 starts a fresh session. Preserve the base's explicit
+            // restart path after panic, while ordinary service repaints stay suppressed.
+            if (AvApp.Sessions is { IsRunning: true } runner &&
+                AvApp.Programs?.IsProgramSession(runner.CurrentSession) == true)
+                _programFxSuppressed = false;
+            OnProgramChanged(null, EventArgs.Empty);
+        }
 
         /// <summary>WPF :509-516: a hidden tab only remembers that it is stale; showing it flushes.</summary>
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -81,6 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             base.OnPropertyChanged(change);
             if (change.Property != IsVisibleProperty) return;
             if (!IsVisible || VisualRoot is null) { SyncIgnition(); return; }
+            _programFxSuppressed = false;
             var enrollment = AvApp.Programs?.ActiveEnrollment;
             var boundaryCrossed = _builtStale is { } built && enrollment != null &&
                                   built != IsSnapshotStale(enrollment, Clock.GetLocalNow().DateTime);
