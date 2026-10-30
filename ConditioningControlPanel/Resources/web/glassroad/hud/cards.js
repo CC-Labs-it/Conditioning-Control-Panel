@@ -50,6 +50,14 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   const go = card.querySelector('#card-go') || card.querySelector('button');
   let extra = card.querySelector('.card-extra');
   if (!extra) { extra = doc.createElement('div'); extra.className = 'card-extra'; go.before(extra); }
+  // desk run 2026-10-30: the Options list scrolls, so its card also gets a close at the top (the same act as Back);
+  // a zero-height sticky row keeps it in reach while the list scrolls
+  let topClose = card.querySelector('.c-top-close');
+  if (!topClose) {
+    topClose = doc.createElement('div'); topClose.className = 'c-top-close'; topClose.hidden = true;
+    topClose.innerHTML = btn('back', '<span aria-hidden="true">&times;</span>', 'c-close', ' aria-label="Close" title="Close"');
+    title.before(topClose);
+  }
   const old = card.querySelector('#card-restart');
   if (old) old.remove();
 
@@ -107,6 +115,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     go.hidden = !(k === 'start' || k === 'finish');
     extra.innerHTML = '';
     note.hidden = false;
+    topClose.hidden = k !== 'options';
     if (k === 'start') {
       title.textContent = data.title || 'Threshold';
       note.textContent = ready ? 'Press any key' : waitNote;
@@ -287,7 +296,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   function focusFirst() {
     if (kind === 'start' && go.disabled) return;
     const list = focusables();
-    const first = list.find((e) => e.classList.contains('hot')) || list[0];
+    const first = list.find((e) => e.classList.contains('hot')) || list.find((e) => !e.classList.contains('c-close')) || list[0];
     first?.focus?.({ preventScroll: true });
   }
 
