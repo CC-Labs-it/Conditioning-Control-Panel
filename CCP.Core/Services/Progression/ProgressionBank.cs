@@ -45,6 +45,39 @@ namespace ConditioningControlPanel
             Log.Information("XP awarded: +{Amount} from {Source} (now {Now})", adjusted, source, s.PlayerXP);
             // WPF AddXP:117: the active companion gets the BASE amount, after the gates, before the level loop.
             Services.Companion.CompanionCore.AddCompanionXP(amount, source);
+            SpendAndRaise(s, amount, source);
+        }
+
+        /// <summary>WPF ProgressionService.AddClaimedXP: web XP the server already earned - the login gate and the level
+        /// loop, no multipliers, no companion share; one first-claim toast per install.</summary>
+        public static void AddClaimed(double amount)
+        {
+            var s = CoreSettings.Current;
+            if (amount <= 0) return;
+            if (!CoreAccount.IsLoggedIn && !(s.OfflineMode && !string.IsNullOrWhiteSpace(s.OfflineUsername)))
+            {
+                Log.Debug("Web XP claim not applied - user not logged in and not in offline mode");
+                return;
+            }
+            s.PlayerXP += amount;
+            Log.Information("Web XP claim applied: +{Amount} (now {Now})", amount, s.PlayerXP);
+            SpendAndRaise(s, amount, null);   // no quest award: WPF AddClaimedXP:140-175 tracks achievement XP only
+            // WPF AnnounceFirstWebXpClaim: spend the seen flag beside the toast on the UI thread.
+            // No new surface: use the head's existing passive notification presenter.
+            if (CoreProgram.NotifyProvider == null || !CoreDispatch.HasUiThread) return;
+            CoreDispatch.Post(() =>
+            {
+                var live = CoreSettings.Current;
+                if (live.SeenFeatureIntros.Contains("web-xp")) return;
+                live.SeenFeatureIntros.Add("web-xp");
+                CoreSettings.Save();
+                CoreProgram.Notify(Localization.Loc.GetF("web_xp_claim_notice", amount.ToString("0")),
+                    "Success", TimeSpan.FromSeconds(9));
+            });
+        }
+
+        private static void SpendAndRaise(Models.AppSettings s, double amount, string? source)
+        {
             var epoch = ProfileAdopt.Epoch(s);
             var levels = new System.Collections.Generic.List<int>();
             for (var need = XpCurve.GetXPForLevel(s.PlayerLevel, epoch); s.PlayerXP >= need; need = XpCurve.GetXPForLevel(s.PlayerLevel, epoch))
@@ -57,7 +90,7 @@ namespace ConditioningControlPanel
             }
             CoreSettings.Save();
             foreach (var l in levels) LevelUp?.Invoke(l);
-            Awarded?.Invoke(amount, source);
+            if (source != null) Awarded?.Invoke(amount, source);
         }
     }
 }
