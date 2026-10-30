@@ -11,11 +11,7 @@
 // The profile menu's Level/XP rail is painted from the same numbers.
 // XP readout, meniscus and chip pop now follow WPF on the existing shared beat (see below).
 //
-// STILL MISSING vs WPF, so the row stays a stub:
-//   the level-up burst (FireBurstAt) and THE BANK hold
-//   (MainWindow.BankFx.cs); the rank title (TxtPlayerTitle, a {loc:Str} a code write would lose);
-//   the Start button's charge/exhale/ignition/heartbeat set and FlashSaveAbsorb - no caller here
-//   (BtnStart_Click and the settings-save half are stubs); level-up sound and toast.
+// Remaining: THE BANK counter hold depends on the pot/flight host (MainShellWindow.BankFx.cs).
 // Sign-in, startup profile restore and logout repaint through UpdateQuickLoginUI
 // (MainShellWindow.Login.cs), and the login dialog's ProfileLoad is awaited before a repaint.
 
@@ -45,8 +41,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void HookLevelDisplay()
         {
             Action<double, string> awarded = (_, _) => Dispatcher.UIThread.Post(UpdateLevelDisplay);
-            Action<int> levelUp = _ => Dispatcher.UIThread.Post(() => { FlashLevelUp(); PopLevelChip(); UpdateLevelDisplay(); });
+            Action<int> levelUp = level => Dispatcher.UIThread.Post(() => CelebrateHeroLevelUp(level));
             HookHeroXpFx();
+            HookHeroMoments();
             ProgressionBank.Awarded += awarded;
             ProgressionBank.LevelUp += levelUp;
             Closed += (_, _) => { ProgressionBank.Awarded -= awarded; ProgressionBank.LevelUp -= levelUp; };
@@ -69,6 +66,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var s = CoreSettings.Current;
                 var level = s.PlayerLevel;
                 var xp = s.PlayerXP;
+                // WPF MainWindow.UiUpdates.cs:72-79: mod-aware rank thresholds.
+                if (Named<TextBlock>("TxtPlayerTitle") is { } title)
+                    title.Text = CoreMods.MakeModAware(level switch
+                    {
+                        < 20 => "BASIC BIMBO", < 50 => "DUMB AIRHEAD",
+                        < 100 => "SYNTHETIC BLOWDOLL", _ => "PERFECT FUCKPUPPET"
+                    });
                 var needed = XpCurve.GetXPForLevel(level, XpCurve.EpochOf(s));
                 if (Named<TextBlock>("TxtLevelLabel") is { } label) label.Text = $"LVL {level}";
                 if (Named<TextBlock>("TxtXP") is { } txt) AnimateXpReadout(txt, xp, needed, level);
@@ -142,6 +146,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void RefreshHeroXpFx()
         {
             ApplyXpMeniscusPulse();
+            ApplyStartHeroState();
+            if (!AmbientFxCanvas.Env.AllowTransitions || !IsVisible || WindowState == WindowState.Minimized) StopHeroOneShots();
             if (AmbientFxCanvas.Env.AllowTransitions && IsVisible && WindowState != WindowState.Minimized) return;
             _xpOdometer?.Stop();
             if (_xpReadoutTarget != null && Named<TextBlock>("TxtXP") is { } txt) txt.Text = _xpReadoutTarget;
