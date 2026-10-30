@@ -1,8 +1,7 @@
 /* tests/net-frozen-rivals.test.mjs - owner's phone vs PC race (2026-10-30): "I'm always first; after a few seconds
  * the other players, bots included, get stuck" (screenshot from the PC).
- *  - Not the cause: records are stamped with the sender's server-clock tick at upload (snapshot build gets
- *    clock.tick(now), not the sim tick), and a steadily late stream keeps moving (dead reckoning + the 150 ms blend).
- *    Kept as a guard so nobody "fixes" interp.js for it.
+ *  - Not the cause: a steadily late stream keeps moving (dead reckoning + the 150 ms blend). Kept as a guard so nobody
+ *    "fixes" interp.js for it. A sim-step stamp that lost the room clock WOULD be such a stream: recordTick re-anchors.
  *  - A fresh session rejoining mid-race restarted the uplink seq at 0 and the room dropped all its records until the
  *    seq passed the old one: welcome.resume now continues it (net/room.js).
  *  - A fresh keeper with no record of a bot leaves it remote until a batch carries one (it drove it from the grid).
@@ -24,8 +23,7 @@ const track = loadTrack(JSON.parse(readFileSync(new URL('../tracks/boudoir.json'
 const SPEED = 30, GAP_MS = 1000 / 15;   // a phone uploads at 15 Hz
 
 /** A sender driving at SPEED whose stamps are `lateMs` older than their arrival; frames drawn every 16 ms for 3 s.
- * A new record shows the previous pose for one frame (the blend starts where the kart was shown), so a healthy seat
- * stands still for one 16 ms frame at most; a held seat stands for whole record gaps.
+ * A healthy seat stands still for one 16 ms frame at most; a held seat stands for whole record gaps.
  * @returns the longest time (ms) after the first second that the drawn kart did not move */
 function drive(lateMs) {
   const interp = createInterp(track), out = createState();
@@ -111,6 +109,43 @@ async function botSession(keep) {
 const botRecord = (s, seq) => encodeFrame(BIN.BATCH, 0, [Object.assign(createKart(), { seat: 2, seq, tick: s.clock.tick() - 3, s: 640, x: 1.2,
   lap: 1, checkpoint: 2, bot: true, q: [0, 0, 0, 1], grounded: true, speedPct: 0.8 })]);
 const upSeats = (ws) => decodeFrame(ws.sent.filter((d) => typeof d !== 'string').at(-1)).karts.map((k) => [k.seat, k.seq]);
+
+// ---- record stamps: "they race but you see them teleporting 10cm at the time" (owner 2026-10-30) -------------------
+/** A racing session; upload() steps the wall clock and the sim, and returns the tick the record carried. */
+async function stamping() {
+  const r = await session();
+  const q = r.s.tap({ emit() {} }), race = { phase: 'racing', timeS: 40, lapStartS: 0, finish() {} };
+  const racers = createRacers(threshold(), makeFeel(), q, { net: r.s.layout(), seed: 7 });
+  r.s.mount(racers, race, q);
+  const upload = (wallMs, steps) => { r.t += wallMs; race.timeS += steps / 60; r.s.update(); return decodeFrame(r.ws.sent.filter((d) => typeof d !== 'string').at(-1)).karts[0].tick; };
+  return Object.assign(r, { race, upload });
+}
+
+test('while racing a record is stamped by sim steps: frame phase on the wall clock never reaches a rival', async () => {
+  const r = await stamping();
+  let last = r.upload(60, 3);
+  for (const [wall, steps] of [[52, 3], [50.5, 3], [51, 3], [55, 3], [50, 3], [53, 3], [50, 3]]) {   // equal travel, uneven wall
+    const tick = r.upload(wall, steps);
+    assert.equal(tick - last, steps, 'one tick here is 67 cm at 40 m/s on every rival\'s screen');
+    last = tick;
+  }
+});
+
+test('dropped sim time re-anchors the stamp to the room clock, so rivals never run out of records', async () => {
+  const r = await stamping();
+  r.upload(60, 3);
+  const tick = r.upload(600, 6);                            // 600 ms of wall, 100 ms of sim
+  assert.ok(Math.abs(tick - r.s.clock.tick(r.t)) <= 2, `stamp ${tick} against room tick ${r.s.clock.tick(r.t)}`);
+});
+
+test('outside the race the stamp is the room clock (a frozen timeS at the finish never freezes the stamp)', async () => {
+  const r = await stamping();
+  r.upload(60, 3);
+  r.race.phase = 'finished';
+  const a = r.upload(100, 0), b = r.upload(100, 0);
+  assert.equal(b - a, 6);
+  assert.equal(b, r.s.clock.tick(r.t));
+});
 
 test('the room sends the bot record before keep: the new keeper seeds position, lap and seq + 1', async () => {
   const r = await botSession([]);

@@ -1688,7 +1688,7 @@ async function boot(course, options, lifetime, isCurrent) {
     // poseLag.lagS behind the sim (fs.renderRate), closing once the rate is back to 1.
     const holdPose = fs.holdS > 0 && !frozen;
     if (!holdPose) racers.interpolate(alpha);                     // 6. camera
-    if (online && !holdPose) online.s.drawRemotes();              //    remote karts at this frame's server time (100 ms back)
+    if (online && !holdPose) online.s.drawRemotes(now);              //    remote karts at this frame's server time (100 ms back)
     poseLag.step(fxDt, fs.renderRate ?? 1);
     if (!holdPose && (poseLag.lagS > 0 || fs.renderRate < 1)) poseLag.record(renderTime, racers.list.map(r => r.view));
     else if (poseLag.lagS === 0) poseLag.reset();

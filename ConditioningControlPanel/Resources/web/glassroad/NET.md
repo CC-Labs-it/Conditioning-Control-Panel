@@ -91,7 +91,7 @@ that client's last batch, except the seats that client uploads. 8 karts: 328 B p
 The room accepts at most 25 upload frames per second per socket (more are dropped and count toward the `rate` flag),
 and only records whose seat is the sender's own or one it keeps; uploads before `countAt` are ignored.
 
-Client render rule (B2-c): remote karts 100 ms in the past, dead reckoning up to 250 ms, corrections blended over 150 ms.
+Client render rule (B2-c): remote karts 100 ms in the past, dead reckoning up to 250 ms, corrections blended over 150 ms. While racing a record's tick counts the sender's sim steps (re-anchored to the room clock when they part by more than 2 ticks, dropped sim time or a pause); the viewer draws on its frame clock, leaning toward server time. A wall-clock stamp or a Date.now draw time costs up to a tick: 67 cm at 40 m/s.
 
 ## 4. JSON messages (text frames)
 
