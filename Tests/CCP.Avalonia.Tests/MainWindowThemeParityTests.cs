@@ -119,6 +119,32 @@ public sealed class MainWindowThemeParityTests
         finally { host.Close(); }
         return Task.CompletedTask;
     });
+    // WPF App.xaml:16 loads MainWindow.xaml globally; Windows/LayeredAudioWindow.xaml:61
+    // therefore receives MainWindow.xaml:341's 18px PinkSlider, not Fluent's taller blue slider.
+    [Fact]
+    public Task AudioLayersMasterUsesTheGlobalWpfSliderChrome() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var window = new global::ConditioningControlPanel.Avalonia.Views.Windows.LayeredAudioWindow();
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var slider = window.FindControl<Slider>("SliderMaster")!;
+            Assert.Equal(18, slider.Bounds.Height);
+            Assert.Equal(new Thickness(0), slider.Margin);
+            var groove = slider.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TrackGroove");
+            Assert.Equal(3, groove.Height);
+            var thumb = slider.GetVisualDescendants().OfType<global::Avalonia.Controls.Primitives.Thumb>().Single();
+            Assert.Equal(14, thumb.Bounds.Width);
+            Assert.Equal(14, thumb.Bounds.Height);
+            var fill = slider.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PART_DecreaseButton");
+            Assert.Same(window.FindResource("PinkBrush"), fill.Background);
+        }
+        finally { window.Close(); }
+        return Task.CompletedTask;
+    });
+
     // MainWindow.xaml:341 implicit Slider + :409-500 implicit ScrollBar (WPF ScrollViewer keeps
     // the bar beside the content, never over it).
     [Theory]
