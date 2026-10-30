@@ -13,6 +13,9 @@ using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 
@@ -32,9 +35,13 @@ public sealed class ContentHitTestTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .UseSkia().WithInterFont()
+                    .With(AppFonts.Options())
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            var w = new MainShellWindow();
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            CoreSettings.Current.PerformanceMode = false;
+            var w = new MainShellWindow { TabClock = new FrozenTime() };
             // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
             // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
@@ -45,11 +52,16 @@ public sealed class ContentHitTestTests
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
                 w.ShowTab(tab);
+                Assert.Same(w.Named<Control>(panelName), w.EnteringTab);
+                // A rendered batch can still be mid-entrance (Windows CI 41084330918).
+                // Settle the real animation before sampling geometry; keep full motion enabled.
+                w.CompleteTabTransition();
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
                 if (tab == "awareness") w.Named<Control>(panelName)!.FindControl<Border>("AwarenessGate")!.IsVisible = false;
                 RenderLiveTree(w);
+                Assert.Null(w.EnteringTab);
                 int tested = 0;
                 foreach (var b in w.Named<Control>(panelName)!.GetVisualDescendants().OfType<Button>().ToList())
                 {
@@ -103,4 +115,11 @@ public sealed class ContentHitTestTests
     private static bool Inside(Visual v, Point p, Visual root)
         => v.TranslatePoint(default, root) is { } tl && v.TranslatePoint(new Point(v.Bounds.Width, v.Bounds.Height), root) is { } br
            && new Rect(tl, br).Contains(p);
+    // Hold the entrance at its first frame until the test explicitly settles it.
+    // A fast runner must exercise the same pending animation as Windows CI.
+    private sealed class FrozenTime : TimeProvider
+    {
+        public override long GetTimestamp() => 0;
+    }
+
 }
