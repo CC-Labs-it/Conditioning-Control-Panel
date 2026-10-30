@@ -218,14 +218,14 @@ public sealed class VaultGateDialog : Window
     internal async Task FillPlansAsync()
     {
         _plans = await PlanCatalog.GetAsync(InviteApi.DefaultBaseUrl());
-        if (_plans.Sale != null)
+        if (_plans.FromServer)
         {
             Sale = _plans.Sale;
             _saleReadUtc = DateTime.UtcNow;
         }
         foreach (var (slot, tier, compact, yearly, hints) in _priceSlots)
             PaintPrice(slot, tier, compact, yearly, hints);
-        if (_plans.Sale == null) await FillSaleAsync();
+        if (!_plans.FromServer) await FillSaleAsync();
     }
 
     /// <summary>Reads the sale switch (cached five minutes); any failure means no sale.</summary>
@@ -481,7 +481,8 @@ public sealed class VaultGateDialog : Window
             {
                 CornerRadius = new CornerRadius(99), Padding = new Thickness(12, 5, 12, 5),
                 Background = on ? RowBg : Brushes.Transparent, BorderBrush = on ? Gold : Edge, BorderThickness = new Thickness(1),
-                Child = new TextBlock { Text = Loc.Get(yearly ? "vaultgate_billing_yearly" : "vaultgate_billing_monthly"), Foreground = on ? Gold : Muted, FontSize = 12, FontWeight = FontWeight.SemiBold },
+                Child = new TextBlock { Text = yearly ? Loc.GetF("vaultgate_billing_yearly", PlanCatalog.YearlyOffPercent(_plans.Basic))
+                    : Loc.Get("vaultgate_billing_monthly"), Foreground = on ? Gold : Muted, FontSize = 12, FontWeight = FontWeight.SemiBold },
             });
             pill.Margin = new Thickness(0, 0, 6, 0);
             var choice = yearly;
