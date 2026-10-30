@@ -77,6 +77,10 @@ public sealed class ChaosFieldFxOverlayTests
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var savedNow = ChaosFieldFxOverlay.NowMs;
+            var savedProvider = global::ConditioningControlPanel.CoreSettings.ServiceProvider;
+            var savedSettings = global::ConditioningControlPanel.CoreSettings.Current;
+            bool savedGentle = savedSettings.GentleVisuals;
+            double savedFade = savedSettings.GentleFadeSeconds;
             try
             {
                 var service = new ConditioningControlPanel.Services.SettingsService();
@@ -103,7 +107,13 @@ public sealed class ChaosFieldFxOverlayTests
                 ChaosFieldFxOverlay.CloseActive();
                 ChaosFieldFxOverlay.SkipPlatformChecksForTests = false;
                 ChaosFieldFxOverlay.NowMs = savedNow;
+                global::ConditioningControlPanel.CoreSettings.ServiceProvider = savedProvider;
             }
+            // Check before the assembly isolation hook runs, so it cannot hide a local leak.
+            Assert.Same(savedProvider, global::ConditioningControlPanel.CoreSettings.ServiceProvider);
+            Assert.Same(savedSettings, global::ConditioningControlPanel.CoreSettings.Current);
+            Assert.Equal(savedGentle, global::ConditioningControlPanel.CoreSettings.Current.GentleVisuals);
+            Assert.Equal(savedFade, global::ConditioningControlPanel.CoreSettings.Current.GentleFadeSeconds);
             return Task.CompletedTask;
         });
     }

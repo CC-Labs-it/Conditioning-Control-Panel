@@ -192,7 +192,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return true;
             }
             // Override-redirect before any geometry, or KWin can replay a stale size (X11Overlay.SetOverrideRedirect).
-            if (!X11Overlay.SetClickThrough(this, true) | !X11Overlay.SetOverrideRedirect(this, bounds))
+            if (!X11Overlay.SetClickThrough(this, true) | !X11Overlay.SetOverrideRedirect(this, bounds, topmost: Topmost))
             {
                 Log.Warning("ChaosFieldFx: the platform refused a click-through overlay, so no field FX are drawn");
                 _refused = true;

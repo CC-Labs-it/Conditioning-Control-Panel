@@ -35,4 +35,28 @@ public sealed class OverlayBackendDispatchTests
         // A passive toast takes clicks but keeps WS_EX_NOACTIVATE (WPF PassiveToastWindow).
         Assert.Equal(avaloniaRebuild | 0x00080000u | 0x80u | 0x08000000u, Win32Overlay.Style(on, false, passive: true));
     }
+    [Theory]
+    [InlineData(false, -2)]  // HWND_NOTOPMOST, WPF ChaosWindowZ.cs:50
+    [InlineData(true, -1)]   // HWND_TOPMOST, WPF ChaosWindowZ.cs:53
+    public void Win32Stacking_submits_the_native_band_without_activation(bool pinned, int band)
+    {
+        var saved = Win32Overlay.PositionWindow;
+        int calls = 0;
+        try
+        {
+            Win32Overlay.PositionWindow = (hwnd, after, x, y, width, height, flags) =>
+            {
+                calls++;
+                Assert.Equal(new IntPtr(42), hwnd);
+                Assert.Equal(new IntPtr(band), after);
+                Assert.Equal((0, 0, 0, 0), (x, y, width, height));
+                Assert.Equal(0x13u, flags); // SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+                return false;
+            };
+            Assert.False(Win32Overlay.SetStacking(new IntPtr(42), pinned));
+            Assert.Equal(1, calls);
+        }
+        finally { Win32Overlay.PositionWindow = saved; }
+    }
+
 }
