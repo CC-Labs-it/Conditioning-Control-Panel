@@ -74,6 +74,50 @@ public sealed partial class GameWindowTests
         });
     }
 
+    /// <summary>WPF ChaosWebViewHost.cs:222-225,1704: query/fragment changes are the same document;
+    /// a different path, origin or scheme cannot drive the game bridge.</summary>
+    [Fact]
+    public void PageFrames_OnlyTheLoadedDocumentCanDriveTheBridge() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var root = Directory.CreateTempSubdirectory("game-document-").FullName;
+        using var server = new WebAssetServer(root);
+        var w = new GameWindow(GameWindow.Games["breakoutdemo"]);
+        try
+        {
+            w.Load(server);
+            w.Show();
+            var sent = new List<string>();
+            w.Posted += sent.Add;
+            var page = w.PageUrl!;
+            foreach (var other in new[]
+            {
+                new Uri(page, "/intake/index.html"),
+                new UriBuilder(page) { Port = page.Port + 1 }.Uri,
+                new UriBuilder(page) { Scheme = "https" }.Uri,
+            })
+            {
+                w.Web.OnNavigationCompleted(other);
+                w.Web.OnWebMessage("{\"type\":\"ready\"}");
+                w.Web.OnWebMessage("{\"type\":\"exit-done\"}");
+                Assert.Empty(sent);
+                Assert.False(w.IsReady);
+                Assert.Contains(w, GameWindow.OpenWindowsForTests());
+            }
+            w.Web.OnNavigationCompleted(new UriBuilder(page) { Query = "changed=1", Fragment = "dock" }.Uri);
+            w.Web.OnWebMessage("{\"type\":\"ready\"}");
+            Assert.True(w.IsReady);
+            Assert.Equal("init", (string?)JObject.Parse(Assert.Single(sent))["type"]);
+            w.Web.OnWebMessage("{\"type\":\"exit-done\"}");
+            Assert.DoesNotContain(w, GameWindow.OpenWindowsForTests());
+        }
+        finally { w.Close(); Directory.Delete(root, true); }
+    });
+
     [Fact]
     public void Play_OpensTheGameHost_AndPanicClosesIt() => Run((shell, launcher) =>
     {

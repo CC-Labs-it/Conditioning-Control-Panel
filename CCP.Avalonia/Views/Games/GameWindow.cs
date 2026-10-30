@@ -128,10 +128,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static bool SameOrigin(Uri a, Uri b) =>
             a.IsAbsoluteUri && b.IsAbsoluteUri && a.Scheme == b.Scheme && a.Authority == b.Authority;
 
-        /// <summary>WPF ChaosWebViewHost.OnWebMessage's same-document guard.</summary>
+        /// <summary>WPF ChaosWebViewHost.cs:1704: reject messages from another document, even on our origin.
+        /// NativeWebView carries no message source; use its last completed top-level URL, as Intake does.</summary>
         private void OnPageMessage(string json)
         {
-            if (PageUrl == null || Web.CurrentUrl == null || !SameOrigin(Web.CurrentUrl, PageUrl)) return;
+            if (PageUrl == null || Web.CurrentUrl == null || !ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(Web.CurrentUrl, PageUrl)) return;
             HandleMessage(json);
         }
 
