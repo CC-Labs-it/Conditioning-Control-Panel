@@ -222,7 +222,7 @@ internal static class RainWardrobeHostService
             case "open-counter":
                 var tab = (string?)o["tab"];
                 var launch = CounterLauncher;
-                if (launch != null) launch("wardrobe", string.IsNullOrWhiteSpace(tab) ? null : tab);
+                if (launch != null) launch("rain-wardrobe", string.IsNullOrWhiteSpace(tab) ? null : tab);
                 else counterMissing();
                 break;
             case "rain-look":
