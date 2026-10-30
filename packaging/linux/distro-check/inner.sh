@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Runs INSIDE a distro container (run.sh drives it). Never run on a host: it starts its own Xvfb.
-#   inner.sh install          -> installs docs/avalonia-linux-install.md runtime deps + test tooling (network on)
+#   inner.sh install          -> installs docs/avalonia-linux-install.html runtime deps + test tooling (network on)
 #   inner.sh run /ccp.tar.gz /out   -> extracts the tarball, runs the app under Xvfb, writes /out (network off)
 set -uo pipefail
 . /etc/os-release
 fam=$ID; case " $ID ${ID_LIKE:-} " in *" debian "*|*" ubuntu "*) fam=debian;; *" fedora "*) fam=fedora;; *" arch "*) fam=arch;; *suse*) fam=suse;; esac
 
 install() {
-  # Runtime deps: exactly the docs/avalonia-linux-install.md row for this family. Fonts: none added (distro default only).
+  # Runtime deps: exactly the docs/avalonia-linux-install.html row for this family. Fonts: none added (distro default only).
   case $fam in
     debian) deps="libwebkit2gtk-4.1-0 libwpewebkit-2.0-1 libwpebackend-fdo-1.0-1 libwpe-1.0-1 libvlc5 vlc-plugin-base libsecret-1-0 libx11-6 libxi6"
             tools="xvfb openbox imagemagick xdotool x11-utils fontconfig procps"

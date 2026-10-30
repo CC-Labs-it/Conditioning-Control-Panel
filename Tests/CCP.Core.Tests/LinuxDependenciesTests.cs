@@ -4,7 +4,7 @@ using Xunit;
 
 namespace CCP.Core.Tests;
 
-// docs/avalonia-linux-install.md: the missing-dependency message names the exact command per distro
+// docs/avalonia-linux-install.html: the missing-dependency message names the exact command per distro
 // family (fake /etc/os-release), and only for libraries the (fake) probe cannot load.
 public sealed class LinuxDependenciesTests
 {

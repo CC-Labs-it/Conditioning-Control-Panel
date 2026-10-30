@@ -9,7 +9,7 @@ namespace ConditioningControlPanel.Services
 {
     /// <summary>
     /// The Linux runtime libraries the head needs, and the distro-aware message that names the one
-    /// command installing whichever are missing (docs/avalonia-linux-install.md, "In-app work").
+    /// command installing whichever are missing (docs/avalonia-linux-install.html, "In-app work").
     /// Replaces the adapter's generic "Install webkit2gtk 4.0+ package."; an unknown distro keeps a
     /// generic list of package names as the fallback for tarball users. Package names are the
     /// table in that doc and must stay in step with packaging/aur/PKGBUILD.

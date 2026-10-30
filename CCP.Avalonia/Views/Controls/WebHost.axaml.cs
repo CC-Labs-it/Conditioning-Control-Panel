@@ -339,7 +339,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             }
             else
             {
-                // Linux: name the distro's install command (docs/avalonia-linux-install.md) instead of
+                // Linux: name the distro's install command (docs/avalonia-linux-install.html) instead of
                 // the adapter's generic "Install webkit2gtk 4.0+ package.", which stays the fallback.
                 // CCP_LINUX_WEBVIEW=off: the reason is the user's own choice, not a missing package.
                 var hint = LinuxChoice == "off" ? null : _linuxHint.Value;
@@ -559,7 +559,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>
         /// CCP_LINUX_WEBVIEW = <c>off</c> -> "off" (fallback panel), <c>wpe</c> -> "wpe" when <paramref name="wpeLegacyApi"/>
         /// says libWPEWebKit still exports the libwpe API that 12.1's WPE adapter calls, anything else -> "gtk" (the default:
-        /// it draws continuously in the live runs, docs/avalonia-decisions.md 2026-10-13). The earlier "rAF stalls" on both
+        /// it draws continuously in the live runs, docs/avalonia-decisions.html 2026-10-13). The earlier "rAF stalls" on both
         /// engines were WebKitWebProcess aborting without GStreamer's autoaudiosink, not the engines.
         /// </summary>
         internal static string LinuxEngine(string? env, Func<bool> wpeLegacyApi) => env?.Trim().ToLowerInvariant() switch

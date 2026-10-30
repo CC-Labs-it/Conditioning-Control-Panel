@@ -61,7 +61,7 @@ namespace ConditioningControlPanel.Avalonia
         internal static FeatureDayLogService? FeatureDayLog { get; private set; }
 
         /// <summary>WPF App.WindowAwareness (App.xaml.cs:2674), the legacy title observer. X11/XWayland
-        /// titles only; unlike WPF, the privacy rules run on each title first (docs/avalonia-decisions.md).</summary>
+        /// titles only; unlike WPF, the privacy rules run on each title first (docs/avalonia-decisions.html).</summary>
         internal static WindowAwarenessService WindowAwareness { get; } =
             new(Platform.X11ActiveWindow.ReadTitle, WindowAwarenessService.PassesPrivacyRules);
 
@@ -122,7 +122,7 @@ namespace ConditioningControlPanel.Avalonia
         internal static QuestDefinitionService? QuestDefinitions { get; set; }
 
         /// <summary>WPF App.Programs (App.xaml.cs:2704), the full writing instance since programs 3a
-        /// (docs/avalonia-decisions.md): timers, startup repair + rollover, Dispose flush. A file stamped by
+        /// (docs/avalonia-decisions.html): timers, startup repair + rollover, Dispose flush. A file stamped by
         /// a newer build loads read-only (IsReadOnly) and the Programs tab greys its lifecycle controls.</summary>
         internal static Services.Program.ProgramService? Programs { get; set; }
 
@@ -1064,7 +1064,7 @@ namespace ConditioningControlPanel.Avalonia
                 // Do-not-disturb reads the foreground app: user32 on Windows (as WPF DoNotDisturbGuard), X elsewhere.
                 ConditioningControlPanel.Services.UI.DndGuard.ForegroundProcess = Platform.Win32Windows.ForegroundSource;
                 // Linux: one toast naming the distro's install command for any missing runtime library
-                // (docs/avalonia-linux-install.md). dlopen off the UI thread; nothing when all load.
+                // (docs/avalonia-linux-install.html). dlopen off the UI thread; nothing when all load.
                 Dispatcher.UIThread.Post(async () =>
                 {
                     if (await System.Threading.Tasks.Task.Run(() => LinuxDependencies.Check(

@@ -20,7 +20,7 @@ namespace CCP.Avalonia.Tests;
 /// (ChasterServiceApp.cs:40,49). End to end: the engine runs N minutes on a stepped clock, the
 /// conditioning-time tracker grows TotalConditioningMinutes, the day log credits today, and the
 /// head's MinutesOn fed to TabDayEnd.IdleCharge (the verdict ChasterService.JudgeEndedDay books) lets
-/// today off and charges a day without conditioning (docs/avalonia-decisions.md). JudgeEndedDay's
+/// today off and charges a day without conditioning (docs/avalonia-decisions.html). JudgeEndedDay's
 /// linked / priced gates and BookSeconds are not driven here (no fake linked lock).</summary>
 public sealed class ChasterMinutesTests
 {

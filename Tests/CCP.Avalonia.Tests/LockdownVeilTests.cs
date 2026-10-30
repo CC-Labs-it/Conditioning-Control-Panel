@@ -25,7 +25,7 @@ using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
-/// <summary>Lockdown's structural shield (docs/avalonia-decisions.md, Lockdown veil). WPF veils the
+/// <summary>Lockdown's structural shield (docs/avalonia-decisions.html, Lockdown veil). WPF veils the
 /// launcher only (LauncherWindow.xaml:597); the panel stays usable and every door on it refuses, so
 /// the panel half is a table of every control WPF greys or refuses under Lockdown.</summary>
 public sealed class LockdownVeilTests

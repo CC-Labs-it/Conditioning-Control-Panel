@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build the linux-x64 tarball the Flatpak manifest and the AUR PKGBUILD consume
-# (docs/avalonia-linux-install.md). Local only: never uploads anything.
+# (docs/avalonia-linux-install.html). Local only: never uploads anything.
 #   bash packaging/linux/build-tarball.sh [out-dir]   -> prints the tarball path
 # Layout: ConditioningControlPanel/{CCP.Avalonia, LICENSE, Resources/Models/vosk/<model>,
 #         share/{applications,icons/hicolor/*/apps,metainfo}/<app-id>.*}  (share/ maps onto /usr/share or /app/share)

@@ -2,9 +2,9 @@
 # Runs Tests/CCP.Avalonia.Tests in several testhosts instead of one.
 #
 # Why: each MainShellWindow a test built used to leave ~250 MB of native memory behind
-# (docs/avalonia-decisions.md), so one testhost for the whole suite peaked at 12-15 GB RSS and
+# (docs/avalonia-decisions.html), so one testhost for the whole suite peaked at 12-15 GB RSS and
 # the 16 GB ubuntu runner died mid-suite ("runner has received a shutdown signal", MSB4166).
-# The owners are fixed (docs/avalonia-decisions.md, suite-memory: shards now peak at 1.6-2.9 GB); the
+# The owners are fixed (docs/avalonia-decisions.html, suite-memory: shards now peak at 1.6-2.9 GB); the
 # shards stay as headroom and for wall time.
 # Shards are by the first letter of the test class; the last shard is the complement of all the
 # others, so a test cannot fall between shards. The guard below still proves it: the shards'

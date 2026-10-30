@@ -43,7 +43,7 @@
 //   (MainShellWindow.ModCatalogue.cs). Not ported: the single-media Play/Edit choices and the
 //   enhancement import (no Deeper player/editor/library on this head) - a lone playable file
 //   offers "Add to Asset Library"/Cancel only, and an enhancement drop says the library is not
-//   ready, WPF's own string (docs/avalonia-decisions.md, 2026-10-09 window-wide drop).
+//   ready, WPF's own string (docs/avalonia-decisions.html, 2026-10-09 window-wide drop).
 //
 //   The two global hotkeys - ApplyGlobalChatHotkey, ApplyGlobalCameraHotkey, ApplyCameraShortcutTo,
 //   ParseModifiers, FormatCameraShortcut, RefreshChatShortcutLabel, RefreshCameraShortcutLabel,

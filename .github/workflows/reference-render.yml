@@ -1,7 +1,7 @@
 name: reference-render
 
 # WPF (the frozen reference, Windows only) and Avalonia renders of one commit, paired per row of
-# docs/avalonia-parity.md into side-by-side PNGs. Evidence for moving rows wired -> verified; it
+# docs/avalonia-parity.html into side-by-side PNGs. Evidence for moving rows wired -> verified; it
 # never fails on a view that does not draw - that is what _failures.txt / _unpaired.txt are for.
 # No secrets, no servers: both renderers run in a throwaway CCP_USERDATA_DIR profile.
 on:
@@ -12,11 +12,12 @@ on:
       - 'ConditioningControlPanel/**'
       - 'CCP.Avalonia/**'
       - 'CCP.Core/**'
-      - 'docs/avalonia-parity.md'
+      - 'docs/avalonia-parity.html'
       - 'Tests/ConditioningControlPanel.Tests/WpfReferenceRender*'
       - '.github/workflows/reference-render.yml'
       - '.github/scripts/pair-renders.py'
       - '.github/scripts/uia-parity.py'
+      - '.github/scripts/avalonia_docs.py'
       - '.github/wpf-uia/**'
 
 concurrency:
@@ -166,7 +167,7 @@ jobs:
           name: avalonia-uia
           path: ${{ runner.temp }}/avalonia-uia
       - run: |
-          python3 .github/scripts/uia-parity.py docs/avalonia-parity.md $RUNNER_TEMP/wpf-uia $RUNNER_TEMP/avalonia-uia $RUNNER_TEMP/uia-parity
+          python3 .github/scripts/uia-parity.py docs/avalonia-parity.html $RUNNER_TEMP/wpf-uia $RUNNER_TEMP/avalonia-uia $RUNNER_TEMP/uia-parity
           sed -n '1,40p' $RUNNER_TEMP/uia-parity/parity-diff.md >> $GITHUB_STEP_SUMMARY
       - uses: actions/upload-artifact@v4
         with:
@@ -189,7 +190,7 @@ jobs:
           name: avalonia-render
           path: ${{ runner.temp }}/avalonia
       - run: pip install --quiet Pillow
-      - run: python3 .github/scripts/pair-renders.py docs/avalonia-parity.md $RUNNER_TEMP/wpf $RUNNER_TEMP/avalonia $RUNNER_TEMP/side-by-side
+      - run: python3 .github/scripts/pair-renders.py docs/avalonia-parity.html $RUNNER_TEMP/wpf $RUNNER_TEMP/avalonia $RUNNER_TEMP/side-by-side
       - uses: actions/upload-artifact@v4
         with:
           name: side-by-side

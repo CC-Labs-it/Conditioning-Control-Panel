@@ -72,7 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>
         /// WPF App.xaml.cs:3622-3664: an install already Welcomed but never accepted (a kill
         /// mid-wizard, or a WPF settings file in that state) is asked before anything else.
-        /// "Yes" reads "OK" to match this head's buttons (docs/avalonia-decisions.md).
+        /// "Yes" reads "OK" to match this head's buttons (docs/avalonia-decisions.html).
         /// </summary>
         internal const string AgeGateBody =
             "This application contains adult content intended for users aged 18 and older.\n\n" +

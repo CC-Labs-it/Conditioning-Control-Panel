@@ -52,12 +52,12 @@
          12.1.2 as Avalonia itself - a control package built against a different Avalonia minor
          throws at attach, which no compiler catches. -->
     <PackageReference Include="Avalonia.Controls.ColorPicker" Version="12.1.2" />
-    <!-- Fluent UI System Icons (docs/avalonia-decisions.md, 2026-10-10). Only Controls/Icons/* may
+    <!-- Fluent UI System Icons (docs/avalonia-decisions.html, 2026-10-10). Only Controls/Icons/* may
          name FluentIcons.*: every view draws icons through fx:IconGlyph. Built against Avalonia 12.0;
          IconGlyphRenderTests proves it draws on 12.1.2 headless. MIT: ThirdPartyNotices/FluentIcons.txt. -->
     <PackageReference Include="FluentIcons.Avalonia" Version="2.1.343" />
     <Content Include="ThirdPartyNotices\FluentIcons.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <!-- Audio (and later video) on both OSes; see docs/avalonia-decisions.md. Linux loads the
+    <!-- Audio (and later video) on both OSes; see docs/avalonia-decisions.html. Linux loads the
          system libvlc (libvlc.so.5); only Windows needs the bundled natives. -->
     <PackageReference Include="LibVLCSharp" Version="3.10.1" />
     <!-- Vosk speech (Core SpeechEngine): the head references it itself so libvosk ships with it.
@@ -69,7 +69,7 @@
     <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
     <!-- Remote Control pairing QR, same package and version WPF uses (ConditioningControlPanel.csproj:154). -->
     <PackageReference Include="QRCoder" Version="1.6.0" />
-    <!-- Webcam tracking (Platform/WebcamTracker.cs), docs/avalonia-decisions.md 2026-09-30. 4.13, not
+    <!-- Webcam tracking (Platform/WebcamTracker.cs), docs/avalonia-decisions.html 2026-09-30. 4.13, not
          WPF's 4.9: no Linux runtime exists for 4.9, and 4.10/4.11 link Ubuntu-22.04-only libs (libavcodec58,
          libtiff5, gtk2...); 4.13 needs only glibc 2.28 + GTK3 (ldd: nothing missing). OnnxRuntime carries CPU natives
          for every RID; a RID publish keeps only its own. -->

@@ -12,7 +12,7 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 
 /// <summary>
-/// The loopback Scrolller relay (WebAssetServer /scrolller-media/, Core ScrolllerRelay; docs/avalonia-decisions.md
+/// The loopback Scrolller relay (WebAssetServer /scrolller-media/, Core ScrolllerRelay; docs/avalonia-decisions.html
 /// "scrolller-web-gate"): the token rule like every page file, 403 while the switch is off or the share is spent,
 /// cached copies served with Range and no-store, a fresh copy only through the device cache, never an open proxy;
 /// and the hosts rewrite Scrolller urls in every frame they post.

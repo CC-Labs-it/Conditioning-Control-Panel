@@ -26,7 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// (<c>IsLegacyPipeline = on &amp;&amp; !AwarenessObserver.IsEnabled</c>) reads as "legacy whenever
     /// on": the warning band shows, the wire says "not reported" and the JSON stays empty. That band
     /// over-warns here (the head's poll does enforce the deny list and incognito drop), which is the
-    /// safe direction (docs/avalonia-decisions.md, 2026-10-08). The shared ledger supplies retained known-apps and erasure; the seen-apps row is the window in front right now (no keyword-trigger ring here).</para>
+    /// safe direction (docs/avalonia-decisions.html, 2026-10-08). The shared ledger supplies retained known-apps and erasure; the seen-apps row is the window in front right now (no keyword-trigger ring here).</para>
     /// </summary>
     public sealed class AwarenessPrivacyViewModel : INotifyPropertyChanged
     {

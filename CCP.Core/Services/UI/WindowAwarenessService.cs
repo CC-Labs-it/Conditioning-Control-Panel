@@ -102,7 +102,7 @@ namespace ConditioningControlPanel.Services
 
         // Optional privacy filter run on the raw title BEFORE anything else reads it; false = drop
         // (treated as Unknown, no event, nothing kept). WPF passes none: its legacy observer never
-        // applied the deny list (docs/avalonia-decisions.md).
+        // applied the deny list (docs/avalonia-decisions.html).
         private readonly Func<string, bool>? _allowTitle;
 
         // Timers post back to the context Start() ran on (the UI thread on both heads), which is what

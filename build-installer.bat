@@ -11,7 +11,7 @@ set VERSION=7.1.15
 :: 7.2+: the shipped app is the Avalonia head (one app on Windows and Linux). Its exe is
 :: CCP.Avalonia.exe in the publish tree; installer.iss installs it as ConditioningControlPanel.exe
 :: (DestName), same AppId and folder, so a WPF install upgrades in place
-:: (docs/avalonia-decisions.md, "Upgrade in place from WPF"). The WPF head is not packaged.
+:: (docs/avalonia-decisions.html, "Upgrade in place from WPF"). The WPF head is not packaged.
 set PROJECT_DIR=CCP.Avalonia
 set CORE_DIR=CCP.Core
 set PUBLISH_DIR=%PROJECT_DIR%\bin\publish\win-x64

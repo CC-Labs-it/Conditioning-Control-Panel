@@ -330,7 +330,7 @@
                         </Border>
                     </StackPanel>
 
-                    <!-- Linux-only (docs/avalonia-decisions.md, programs 3a): shown with any run panel only
+                    <!-- Linux-only (docs/avalonia-decisions.html, programs 3a): shown with any run panel only
                          while ProgramService.IsReadOnly (programs.json stamped by a newer build); the
                          lifecycle buttons are greyed then. -->
                     <Border x:Name="RunReadOnlyNote" IsVisible="False"
