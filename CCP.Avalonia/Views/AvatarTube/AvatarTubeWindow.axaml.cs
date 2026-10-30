@@ -115,6 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         // Pose cycling (static avatars only). Four PNGs per set; a set with fewer than two that
         // actually loaded never starts the timer, which is the WPF rule verbatim.
         private readonly DispatcherTimer _poseTimer;
+        private DispatcherTimer? _idleTimer;
         private int _currentPoseIndex;
         private int _currentAvatarSet;
         private Bitmap?[] _avatarPoses = new Bitmap?[4];
@@ -249,6 +250,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // one pose actually loaded - a set that ships one PNG has nothing to rotate between.
             _poseTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
             _poseTimer.Tick += (_, _) => AdvancePose();
+            Opened += (_, _) => RestartIdleTimer();
 
             // The art. WPF did all of this in its constructor off App.Settings / App.Mods; every
             // read it needs is in Core now (CoreSettings for the chosen set, CoreModArt for a mod's
@@ -268,7 +270,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // ponytail: GIF/emote/portrait playback and non-awareness service reactions remain
             // in the WPF reference. Look selection and ModChanged repaint use AvatarSets.cs.
 
-            // ponytail: the WPF ctor also started four timers here - a 2s greeting, the idle-giggle,
+            // ponytail: the WPF ctor also started three timers here: a 2s greeting,
             // the trigger and the random-bubble loops. Deliberately NOT started: every one of them
             // calls into a partial this layer does not have, and --render-all constructs ~180 windows
             // in one process, where a stray timer firing at a closed window is a flaky failure.
@@ -336,6 +338,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // failure the constructor's note refuses to risk.
             LocalizationManager.Instance.LanguageChanged -= OnTubeLanguageChanged;
             _poseTimer.Stop();
+            _idleTimer?.Stop();
             _speechTimer?.Stop();
             ClearSpeechQueue();
             _cooldownTickTimer?.Stop();
@@ -401,7 +404,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // same two timers for the same reason.
             _speechTimer?.Stop();
             _cancelSpeechDelay();   // WPF ChatInput.cs:475 _speechDelayTimer.Stop (the queue stays)
-            _cancelSpeechDelay = static () => { };
+            _cancelSpeechDelay = NoSpeechDelay;
             _isGiggling = false;
 
             _isShowingChatHistory = true;
@@ -1218,6 +1221,40 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         private int _presetGiggleCounter;
 
+        /// <summary>WPF RestartIdleTimer (Speech.cs): the idle cadence restarts after every line.</summary>
+        public void RestartIdleTimer() => RunOnAvatar(() =>
+        {
+            _idleTimer?.Stop();
+            _idleTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(CoreSettings.Current.IdleGiggleIntervalSeconds) };
+            _idleTimer.Tick += (_, _) => IdleTick();
+            _idleTimer.Start();
+        });
+
+        internal void IdleTick()
+        {
+            if (_idleTimer != null) _idleTimer.Interval = TimeSpan.FromSeconds(CoreSettings.Current.IdleGiggleIntervalSeconds);
+            ClearStaleSpeechLatch();   // WPF Speech.cs:1612-1614: the one beat still running once she is wedged
+            if (IsSpeechReady()) Platform.BarkHead.Engine?.DispatchIdle();
+        }
+
+        /// <summary>WPF ClearStaleSpeechLatch (Speech.cs:3070): drop a latch nothing can lower any more.
+        /// This head has no lead-in timer.</summary>
+        private void ClearStaleSpeechLatch()
+        {
+            if (!ConditioningControlPanel.Services.Companion.SpeechLatchRule.IsLatchStale(
+                    isGiggling: _isGiggling,
+                    bubbleVisible: _speechBubble.IsVisible,
+                    waitingForAi: _isWaitingForAi,
+                    queueEmpty: _speechQueue.Count == 0,
+                    leadInPending: false,
+                    delayPending: _cancelSpeechDelay != NoSpeechDelay))
+                return;
+            _isGiggling = false;
+            _isMouseOverSpeechBubble = false;
+            _lastSpeechEndTime = SpeechNow;
+            Log.Warning("[Speech] stale speech latch cleared - the companion was wedged silent");
+        }
+
         /// <summary>WPF Giggle (Speech.cs:240): a PRESET line. Dropped while an AI request is in
         /// flight or an AI bubble is up, never logged to chat history, sound on every fifth. Queued
         /// behind a line still up, or until the previous line's gap has passed (Speech.cs:273-294).</summary>
@@ -1245,6 +1282,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void ShowSpeech(string text, bool playSound, bool aiGenerated, string? phraseAudioPath,
                                 bool barkVoice, bool preset, Action? onSpoken = null)
         {
+            RestartIdleTimer();
                 var spokenHandled = false;
                 var clipDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 Action spoken = () => { clipDone.TrySetResult(); onSpoken?.Invoke(); };
