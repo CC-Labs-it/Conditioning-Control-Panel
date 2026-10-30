@@ -177,4 +177,18 @@ public sealed class KeywordAudioRuntimeTests
         _ = new MainShellWindow();   // WPF MainWindow.xaml.cs:341 starts the service at boot
         Assert.True(KeywordTriggerHead.Engine.IsActive);
     });
+
+    /// <summary>WPF b9368d963 KeywordTriggerService.DispatchMergedAsync: a keyword never plays inside a panic's quiet.</summary>
+    [Fact]
+    public void PanicQuietHoldsAMatchedKeyword() => Run((engine, s, played) =>
+    {
+        try
+        {
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            Type(engine, "sit"); Assert.Empty(played);
+        }
+        finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
+        engine.Now = () => new DateTime(2026, 10, 14, 12, 1, 0);   // past the held match's cooldown
+        Type(engine, "sit"); Assert.Single(played);
+    });
 }

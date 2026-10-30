@@ -15,6 +15,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// </summary>
     internal static class WebHostMedia
     {
+        /// <summary>WPF b9368d963 (MainWindow.xaml.cs PanicEndBrowserMedia, EnhancementPlayerWindow.PanicPauseAll): a
+        /// panic pauses every page video/audio (playhead kept) and drops page fullscreen. Never latches the Workshop pause.</summary>
+        internal const string PanicPauseScript = "(function(){var pause=function(d){try{"
+            + "d.querySelectorAll('video,audio').forEach(function(e){e.pause();});"
+            + "if(d.fullscreenElement)d.exitFullscreen();"
+            + "d.querySelectorAll('iframe').forEach(function(f){try{if(f.contentDocument)pause(f.contentDocument);}catch(e){}});"
+            + "}catch(e){}};pause(document);})();";
+
         /// <summary>The script for a mute state. Idempotent: running it twice installs one observer.</summary>
         internal static string MuteScript(bool muted) =>
             "(function(m){try{" +
