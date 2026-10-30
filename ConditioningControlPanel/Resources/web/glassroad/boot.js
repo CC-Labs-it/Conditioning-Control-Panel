@@ -105,6 +105,8 @@ import { ORDER as TIER_ORDER } from './render/quality.js';
 import { dismantleScene } from './render/sceneResources.js';
 import { createGarage } from './render/garage.js';
 import { raceLook } from './hud/garageState.js';
+import { ownedChoices } from './hud/lobbyMath.js';
+import { unlockedSet } from './meta/unlocks.js';
 import { hostCounter, counterMessage } from './host/prizeCounter.js';
 import { COURSES, selectedCourse, courseUrl, courseRaceIntent } from './track/catalog.js';
 import { getKeepLayout } from './track/keep-layout.js';
@@ -1219,6 +1221,7 @@ async function boot(course, options, lifetime, isCurrent) {
   } : null, connect: lobbyApi ? connectRoom : null, identity: () => (link && link.identity) || null, track: track.id, trackLaps: TRACK_LAPS, platform,
   ...(hostInvite ? { friends: hostInvite.friends } : {}),
   garageLook:()=>garage?raceLook(garage.state):null,
+  lookOwned:()=>ownedChoices(shared.owned.grants,unlockedSet(loadRecord())),
   // a race link (?r=<token>, NET.md section 13): the address drops its r after the first claim answer
   linkClaimed: () => { const to = dropLinkParam(location.href); if (to) history.replaceState(history.state, '', to); } });
   hud.on('online', (e) => { lobbyUi = (e && e.lobby) || lobbyUi; });

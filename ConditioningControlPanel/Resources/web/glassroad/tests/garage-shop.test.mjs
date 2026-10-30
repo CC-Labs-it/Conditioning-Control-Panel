@@ -68,7 +68,7 @@ test('the race look carries outfit, paint, umbrella and trail next to the vehicl
   assert.deepEqual(Object.keys(raceLook(DEFAULT)).sort(), ['outfit', 'vehicle'], 'a plain look is unchanged on the wire');
 });
 
-test('wire: extras are known lists, the room look message stays the old shape, bots never wear shop pieces', () => {
+test('wire: extras are known lists, the room look message carries them, bots never wear shop pieces', () => {
   assert.deepEqual([...LOOK_PAINTS], SHOP_PIECES.paints);
   assert.deepEqual([...LOOK_UMBRELLAS], Object.keys(SHOP_PIECES.umbrellas));
   assert.deepEqual([...LOOK_TRAILS], Object.keys(SHOP_PIECES.trails));
@@ -77,8 +77,9 @@ test('wire: extras are known lists, the room look message stays the old shape, b
   assert.deepEqual(normLook({ ...full, paint: 'gold-leaf', trail: 'x' }), { outfit: 'emi-outfit-ballerina', vehicle: 'emi-vehicle-petal', umbrella: 'lace' });
   assert.ok(TYPES.look(full), 'a seat record with extras decodes');
   assert.ok(TYPES.seatList([{ seat: 0, kind: 'human', name: 'a', look: { ...full, extra: 1 } }]) === false, 'unknown keys still refuse');
-  assert.deepEqual(roomLook(full), { outfit: 'emi-outfit-ballerina', vehicle: 'emi-vehicle-petal' });
-  assert.deepEqual(Object.keys(C2R.look).sort(), ['outfit', 'skin', 'vehicle'], 'rooms that predate the shop take the look message');
+  assert.deepEqual(roomLook(full), full, 'a lobby look change keeps the extras the ticket carried (room boundLook)');
+  assert.deepEqual(roomLook({ outfit: null, vehicle: 'emi-vehicle-petal' }), { outfit: null, vehicle: 'emi-vehicle-petal' }, 'nothing worn, no extra keys');
+  assert.deepEqual(Object.keys(C2R.look).sort(), ['outfit', 'paint', 'skin', 'trail', 'umbrella', 'vehicle'], 'the room look message matches CCP-Server #371');
   for (let seat = 0; seat < 8; seat++) for (const seed of [0, 7, 99, 12345]) {
     const b = botLook(seat, seed);
     assert.ok(LOOK_OUTFITS.includes(b.outfit) && !SHOP_LOOK_OUTFITS.includes(b.outfit));
