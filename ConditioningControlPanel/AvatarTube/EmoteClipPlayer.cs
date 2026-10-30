@@ -26,6 +26,11 @@ namespace ConditioningControlPanel
     /// first frame off the UI thread; everything after runs on the UI thread. A newer Load or Stop makes
     /// a load still in flight a no-op. The source is a pack:// URI or an absolute file (a mod's or a
     /// baked pack's own folder).</para>
+    ///
+    /// <para>Second source (lane R8): a baked look pack's vertical PNG strip (<see cref="LoadStrip"/>),
+    /// frames and fps from the pack manifest. The strip decodes ONCE into Pbgra32 frames (about 21 MB for
+    /// 90 frames at 192x309), each tick copies one into the same bitmap; the frames go on any other load
+    /// or Stop. One player per layer, so at most the current and the next clip are held.</para>
     /// </summary>
     internal sealed class EmoteClipPlayer : IDisposable
     {
@@ -46,6 +51,9 @@ namespace ConditioningControlPanel
         private long _frameStartMs;
         private long _pausedAtMs = -1;
         private WriteableBitmap? _bitmap;
+        // A baked look's clip: every frame decoded once from the vertical PNG strip (Pbgra32 rows).
+        private Services.Companion.RainStripFrames? _strip;
+        private string? _stripPath;
 
         public EmoteClipPlayer(Image target)
         {
@@ -89,14 +97,45 @@ namespace ConditioningControlPanel
             return LoadAsync(gen, source);
         }
 
-        private async Task LoadAsync(int gen, Uri source)
+        /// <summary>Start loading a baked pack's clip: a vertical PNG strip of <paramref name="frames"/>
+        /// frames at <paramref name="fps"/> (from the pack manifest). The strip decodes once; replaying the
+        /// same strip on this layer reuses the frames, any other load frees them.</summary>
+        public Task LoadStrip(Uri source, int frames, int fps)
+        {
+            int gen = ++_generation;
+            Source = source;
+            ReadyToken = null;
+            IsComplete = false;
+            _pausedAtMs = -1;
+            _timer.Stop();
+            var path = source.IsFile ? source.LocalPath : null;
+            var keep = path != null && _strip != null && _strip.Frames.Count == frames
+                       && string.Equals(_stripPath, path, StringComparison.OrdinalIgnoreCase) ? _strip : null;
+            ReleaseCodec();
+            if (keep != null) { Adopt(StripDecoded(keep, path!, fps)); return Task.CompletedTask; }
+            return LoadAsync(gen, source, () => path == null ? null : DecodeStrip(path, frames, fps));
+        }
+
+        private Task LoadAsync(int gen, Uri source)
+        {
+            byte[]? bytes = null;
+            Exception? readError = null;
+            try { bytes = ReadBytes(source); }   // the caller's thread, as before
+            catch (Exception ex) { readError = ex; }
+            return LoadAsync(gen, source, () =>
+            {
+                if (readError != null) throw readError;
+                return Decode(bytes);
+            });
+        }
+
+        private async Task LoadAsync(int gen, Uri source, Func<Decoded?> decode)
         {
             Decoded? d = null;
             string? error = null;
             try
             {
-                var bytes = ReadBytes(source);   // pack resources resolve on any thread
-                d = await Task.Run(() => Decode(bytes)).ConfigureAwait(true);
+                d = await Task.Run(decode).ConfigureAwait(true);
                 if (d == null) error = "not decodable";
             }
             catch (Exception ex) { error = ex.Message; }
@@ -125,7 +164,36 @@ namespace ConditioningControlPanel
             public SKBitmap Canvas = null!;
             public int[] Durations = null!;
             public int[] Required = null!;
-            public void Dispose() { Codec.Dispose(); Data.Dispose(); Canvas.Dispose(); }
+            /// <summary>Set for a pack strip (Codec, Data and Canvas stay null then).</summary>
+            public Services.Companion.RainStripFrames? Strip;
+            public string? StripPath;
+            public void Dispose() { Codec?.Dispose(); Data?.Dispose(); Canvas?.Dispose(); Strip = null; }
+        }
+
+        /// <summary>Reads a pack strip as <paramref name="frames"/> Pbgra32 frames at <paramref name="fps"/>
+        /// (any thread). Null when the file is missing, not an image or does not split into that many frames.</summary>
+        internal static Decoded? DecodeStrip(string path, int frames, int fps)
+        {
+            if (frames <= 0 || fps <= 0 || !File.Exists(path)) return null;
+            try
+            {
+                var strip = Services.Companion.RainPackSink.ReadStrip(path, frames, SKColorType.Bgra8888, SKAlphaType.Premul);
+                return StripDecoded(strip, path, fps);
+            }
+            catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                return null;
+            }
+        }
+
+        private static Decoded StripDecoded(Services.Companion.RainStripFrames strip, string path, int fps)
+        {
+            int ms = Math.Max(MinFrameMs, (int)Math.Round(1000.0 / fps));
+            var durations = new int[strip.Frames.Count];
+            var required = new int[strip.Frames.Count];
+            Array.Fill(durations, ms);
+            Array.Fill(required, -1);
+            return new Decoded { Strip = strip, StripPath = path, Durations = durations, Required = required };
         }
 
         /// <summary>Opens the clip and decodes frame 0 (any thread). Null when it is not an image.</summary>
@@ -172,24 +240,35 @@ namespace ConditioningControlPanel
 
         private void Adopt(Decoded d)
         {
-            _codec = d.Codec;
-            _data = d.Data;
-            _info = d.Canvas.Info;
             _durations = d.Durations;
             _required = d.Required;
             _index = 0;
             _bufferFrame = 0;
             _frameStartMs = Now();
-            var bmp = EnsureBitmap();
-            bmp.Lock();
-            try
+            if (d.Strip != null)
             {
-                using var pm = d.Canvas.PeekPixels();
-                pm.ReadPixels(_info, bmp.BackBuffer, bmp.BackBufferStride);
-                bmp.AddDirtyRect(new Int32Rect(0, 0, _info.Width, _info.Height));
+                _strip = d.Strip;
+                _stripPath = d.StripPath;
+                _info = new SKImageInfo(_strip.Width, _strip.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
+                EnsureBitmap();
+                CopyStripFrame(0);
             }
-            finally { bmp.Unlock(); }
-            d.Canvas.Dispose();   // later frames decode straight into the bitmap
+            else
+            {
+                _codec = d.Codec;
+                _data = d.Data;
+                _info = d.Canvas.Info;
+                var bmp = EnsureBitmap();
+                bmp.Lock();
+                try
+                {
+                    using var pm = d.Canvas.PeekPixels();
+                    pm.ReadPixels(_info, bmp.BackBuffer, bmp.BackBufferStride);
+                    bmp.AddDirtyRect(new Int32Rect(0, 0, _info.Width, _info.Height));
+                }
+                finally { bmp.Unlock(); }
+                d.Canvas.Dispose();   // later frames decode straight into the bitmap
+            }
             Show();
             ReadyToken = new object();
             IsComplete = false;
@@ -200,7 +279,7 @@ namespace ConditioningControlPanel
         /// frame's duration. Cheap when nothing is due.</summary>
         public void Tick(long nowMs)
         {
-            if (!IsReady || IsComplete || IsPaused || _codec == null) return;
+            if (!IsReady || IsComplete || IsPaused || (_codec == null && _strip == null)) return;
             bool moved = false;
             while (nowMs - _frameStartMs >= _durations[_index])
             {
@@ -229,6 +308,7 @@ namespace ConditioningControlPanel
         // dependent frame lets the codec rebuild its required frame itself (priorFrame -1).
         private bool DecodeInto(int frame)
         {
+            if (_strip != null) return CopyStripFrame(frame);
             if (_codec == null || _bitmap == null) return false;
             int req = frame < _required.Length ? _required[frame] : -1;
             int prior = req >= 0 && req == _bufferFrame ? req : -1;
@@ -243,6 +323,15 @@ namespace ConditioningControlPanel
                 return r == SKCodecResult.Success || r == SKCodecResult.IncompleteInput;
             }
             finally { _bitmap.Unlock(); }
+        }
+
+        // A strip frame is already whole (no inter-frame dependency): copy its rows into the bitmap.
+        private bool CopyStripFrame(int frame)
+        {
+            if (_strip == null || _bitmap == null || frame < 0 || frame >= _strip.Frames.Count) return false;
+            _bitmap.WritePixels(new Int32Rect(0, 0, _strip.Width, _strip.Height), _strip.Frames[frame], _strip.Width * 4, 0);
+            _bufferFrame = frame;
+            return true;
         }
 
         private WriteableBitmap EnsureBitmap()
@@ -291,6 +380,7 @@ namespace ConditioningControlPanel
         {
             _codec?.Dispose(); _codec = null;
             _data?.Dispose(); _data = null;
+            _strip = null; _stripPath = null;   // the layer drops its decoded frames on any switch
             _durations = Array.Empty<int>();
             _required = Array.Empty<int>();
         }

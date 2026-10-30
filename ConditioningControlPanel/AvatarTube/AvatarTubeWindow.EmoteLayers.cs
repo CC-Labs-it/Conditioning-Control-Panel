@@ -13,7 +13,9 @@ namespace ConditioningControlPanel
     /// (SkiaSharp) for an animated .webp (Rain, 7.2). The crossfade, watchdog and pause code in
     /// AvatarTubeWindow.CirceEmotes.cs talk to a layer only through these members, so both lanes keep
     /// the same play-once, completion and "new frame ready" rules. A folder may hold either format:
-    /// for clip <c>x</c> the layer plays <c>x.webp</c> when it ships, else <c>x.gif</c>.
+    /// for clip <c>x</c> the layer plays <c>x.webp</c> when it ships, else <c>x.gif</c>. A baked look
+    /// pack (lane R8) maps <c>x</c> through its manifest to <c>x.strip.png</c>, played by the same
+    /// SkiaSharp player from the strip.
     /// </summary>
     public partial class AvatarTubeWindow
     {
@@ -51,9 +53,31 @@ namespace ConditioningControlPanel
             return exists;
         }
 
-        /// <summary>The clip to play: the .webp when the folder ships one, else the .gif.</summary>
+        // The manifest of the baked look pack being played (lane R8); packs are look-hashed and never
+        // change once committed, so one read per folder.
+        private string? _packManifestFolder;
+        private Services.Companion.RainPackManifest? _packManifest;
+
+        private Services.Companion.RainPackManifest? PackManifestFor(string folder)
+        {
+            if (!Services.Companion.RainPackPlayback.IsPackFolder(folder)) return null;
+            string key;
+            try { key = System.IO.Path.GetFullPath(folder).TrimEnd(System.IO.Path.DirectorySeparatorChar); }
+            catch { return null; }
+            if (!string.Equals(_packManifestFolder, key, StringComparison.OrdinalIgnoreCase))
+            {
+                _packManifest = Services.Companion.RainPackPlayback.ManifestFor(key);
+                _packManifestFolder = key;
+            }
+            return _packManifest;
+        }
+
+        /// <summary>The clip to play. A baked pack: the manifest's strip. Anything else: the .webp when the
+        /// folder ships one, else the .gif.</summary>
         private Uri ResolveEmoteClipUri(string folder, string clip)
         {
+            var strip = Services.Companion.RainPackPlayback.ClipPath(folder, PackManifestFor(folder), clip);
+            if (strip != null) return new Uri(strip, UriKind.Absolute);
             var webp = EmoteClipUri(folder, clip, ".webp");
             return EmoteClipFileExists(webp) ? webp : EmoteClipUri(folder, clip, ".gif");
         }
@@ -77,6 +101,15 @@ namespace ConditioningControlPanel
         /// layer already holds the same source (an identical XamlAnimatedGif URI would be a silent no-op).</summary>
         private void LayerLoadOnce(Image img, Uri uri)
         {
+            if (Services.Companion.RainPackPlayback.IsStripFile(uri))
+            {
+                if (AnimationBehavior.GetSourceUri(img) != null) AnimationBehavior.SetSourceUri(img, null);
+                var folder = System.IO.Path.GetDirectoryName(uri.LocalPath) ?? "";
+                var c = Services.Companion.RainPackPlayback.ClipForFile(PackManifestFor(folder), uri.LocalPath);
+                // No manifest entry: frames 0 makes the player report Failed (the usual error path).
+                _ = WebpLayerFor(img).LoadStrip(uri, c?.Frames ?? 0, c?.Fps ?? 0);
+                return;
+            }
             if (IsWebpClip(uri))
             {
                 if (AnimationBehavior.GetSourceUri(img) != null) AnimationBehavior.SetSourceUri(img, null);
