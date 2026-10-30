@@ -87,6 +87,17 @@ namespace ConditioningControlPanel.Avalonia
             Dispatcher.UIThread.Post(() => shell()?.UpdateLevelDisplay());
         }
 
+        /// <summary>WPF App.xaml.cs:3184-3187: follow the curve before adopting level/XP.
+        /// ProfileSyncService.cs:475-489 saves and repaints only an accepted progression change.</summary>
+        internal static void AdoptServerProgression(int level, double xp, string? season, int? epoch,
+            Func<Views.Windows.MainShellWindow?> shell)
+        {
+            AdoptServerCurveEpoch(epoch, shell);
+            if (!Services.ProfileAdopt.AdoptProfilePoll(CoreSettings.Current, level, xp, season)) return;
+            CoreSettings.Save();
+            Dispatcher.UIThread.Post(() => shell()?.UpdateLevelDisplay());
+        }
+
         /// <summary>WPF App.xaml.cs:3126: built always, armed only if asked AND a Discord is linked. The client
         /// connects on its own thread; no Discord running is a logged failure, nothing else.</summary>
         internal static void StartRichPresence()
@@ -651,8 +662,8 @@ namespace ConditioningControlPanel.Avalonia
                 DescentCountdown.Start();
                 Descent = new Services.Descent.DescentService
                 {
-                    // ponytail: full clean-ledger level/XP poll adoption needs the remaining profile lane.
-                    ProgressionReceived = (_, _, _, epoch) => AdoptServerCurveEpoch(epoch, () => desktop.MainWindow as Views.Windows.MainShellWindow),
+                    ProgressionReceived = (level, xp, season, epoch) =>
+                        AdoptServerProgression(level, xp, season, epoch, () => desktop.MainWindow as Views.Windows.MainShellWindow),
                 };
                 // WPF MainWindow.Marquee.cs:688: the server announcement check, 7 s after the shell opens.
                 // A sandbox never reaches the real proxy (the dailyFree rule above).

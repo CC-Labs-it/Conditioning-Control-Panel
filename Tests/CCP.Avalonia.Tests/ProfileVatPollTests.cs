@@ -18,6 +18,62 @@ namespace CCP.Avalonia.Tests;
 [Collection(RunsAloneCollection.Name)]
 public sealed class ProfileVatPollTests
 {
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public Task CardOpenReadAdoptsCleanProgressionOnTheServerCurveAndRepaints(int epoch) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        (s.UnifiedId, s.OfflineMode, s.CurrentSeason, s.DescentEpoch, s.PlayerLevel, s.PlayerXP,
+            s.PendingDescentMigrationChoice) = ("poll-adopt", false, "2026-10", 0, 100, 100, null);
+        s.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off; // Assert the settled readout, not the odometer.
+        double total = ProfileAdopt.TotalXp(s);
+        (s.LastConfirmedServerXpAccount, s.LastConfirmedServerXpSeason, s.LastConfirmedServerXp) =
+            (s.UnifiedId, s.CurrentSeason, total);
+        CoreSecrets.RetrieveProvider = key => key == CoreSecrets.AuthToken ? "test-token" : null;
+        CoreSecrets.StoreProvider = (_, _) => { };
+        var expected = XpCurve.RepriceLedger(100, 125, 0, epoch);
+        var applied = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        MainShellWindow? shell = null;
+        var response = new TaskCompletionSource<JObject?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new DescentService(_ => response.Task);
+        var server = new JObject
+        {
+            ["level"] = expected.Level, ["xp"] = total + 25,
+            ["current_season"] = "2026-10", ["curve_epoch"] = epoch,
+        };
+        service.ProgressionReceived = (level, xp, season, epoch) =>
+        {
+            global::ConditioningControlPanel.Avalonia.App.AdoptServerProgression(level, xp, season, epoch, () => shell);
+            applied.TrySetResult();
+        };
+        global::ConditioningControlPanel.Avalonia.App.Descent = service;
+        try
+        {
+            shell = new MainShellWindow(); shell.Show();
+            shell.ShowTab("discord");
+            Dispatcher.UIThread.RunJobs(); // Finish tab-entry repaints before the server answers.
+            shell.Named<TextBlock>("TxtXP")!.Text = "stale";
+            response.SetResult(server);
+            await applied.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(epoch, s.DescentEpoch);
+            Assert.Equal(expected.Level, s.PlayerLevel);
+            Assert.Equal(expected.XpIntoLevel, s.PlayerXP, 6);
+            Assert.Equal(total + 25, ProfileAdopt.ActiveXpWatermark(s));
+            Assert.Equal($"LVL {expected.Level}", shell.Named<TextBlock>("TxtLevelLabel")!.Text);
+            var needed = XpCurve.GetXPForLevel(expected.Level, epoch);
+            Assert.Equal($"{(int)expected.XpIntoLevel} / {(int)needed} XP", shell.Named<TextBlock>("TxtXP")!.Text);
+            // A progression-only response must not reveal the unfinished jar.
+            Assert.False(shell.ProfilePage.FindControl<VatGlassCanvas>("ProfileVatGlass")!.IsVisible);
+        }
+        finally { s.OfflineMode = true; service.Reset(); shell?.Close(); }
+    });
+
     [Fact]
     public Task PollWaitsForTheDrawnJarThenNeedsTheVisibleActiveCardAndAnAcceptedBlock() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
