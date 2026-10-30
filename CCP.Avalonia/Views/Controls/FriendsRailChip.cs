@@ -23,11 +23,14 @@ public sealed class FriendsRailChip : Grid
     private FriendsFeed? _feed;
     private readonly Popup _popup;
     private IFriendsService? _svc;
+    private readonly Func<IFriendsService?> _resolve;
     private Window? _host;
     private DateTime _closedAt = DateTime.MinValue;
     public FriendsRailChip() : this(null) { }
     internal FriendsRailChip(IFriendsService? service)
     {
+        // WPF FriendsRailChip.cs:251-263: resolve afresh after account replacement.
+        _resolve = service != null ? () => service : () => Platform.FriendsHead.Service;
         Drawer = new FriendsDrawer(service);
         (Height, Margin, Background, Cursor) = (48, new Thickness(0, 2, 0, 4), Brushes.Transparent, FriendsDrawer.Hand());
         ColumnDefinitions = new ColumnDefinitions("56,*");
@@ -140,7 +143,7 @@ public sealed class FriendsRailChip : Grid
 
     private void Rebind()
     {
-        var next = Drawer.Service ?? Platform.FriendsHead.Service;
+        var next = _resolve();
         if (!ReferenceEquals(next, _svc)) { Unwire(); _svc = next; if (_svc != null) _svc.SnapshotChanged += OnSnapshot; }
         // WPF RebindFeed: the feed is re-read on every rebind in case the chip was built before it.
         FriendsFeed? feed;

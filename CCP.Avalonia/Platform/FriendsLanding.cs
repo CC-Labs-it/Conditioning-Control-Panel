@@ -293,7 +293,10 @@ internal static class FriendsLanding
         try
         {
             var s = CoreSettings.Current;
-            if (s.MasterVolume <= 0) return;
+            // WPF FriendsSfx.cs:47-51,66-69: suppression must not consume the cue gap.
+            if (s.MasterVolume <= 0 || CoreAudio.IsOutputSuppressed
+                || CoreEngine.Video?.IsPlaying == true
+                || ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance.HoldActive) return;
             lock (SfxGate) if (!SfxGate.TryPass(DateTime.UtcNow, incoming)) return;
             var path = CoreModArt.AudioOverridePath(rel)
                 ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", rel.Replace('/', Path.DirectorySeparatorChar)));
