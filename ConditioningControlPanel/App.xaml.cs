@@ -3452,6 +3452,12 @@ namespace ConditioningControlPanel
                     Settings?.Save();
             }
             catch (Exception ex) { Logger?.Warning(ex, "Remote holdings heal failed (non-fatal)"); }
+            // Baked Rain looks: drop half-written bakes and packs whose manifest no longer reads.
+            _ = System.Threading.Tasks.Task.Run(() =>
+            {
+                try { Services.Companion.RainPackStore.CreateDefault().Sweep(); }
+                catch (Exception ex) { Logger?.Warning(ex, "Rain pack sweep failed (non-fatal)"); }
+            });
             Lockdown = new LockdownService();
             LockdownService.Current = Lockdown;
             // Possession: the haunt that rides the lockdown timer. It only arms when a lockdown starts
