@@ -102,6 +102,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void StopMoments()
         {
             _burstGeneration++;
+            _pendingTaskCompletions.Clear();
             _momentCts?.Cancel();
             _momentCts?.Dispose();
             _momentCts = null;

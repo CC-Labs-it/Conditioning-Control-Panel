@@ -15,6 +15,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 public partial class ProgramsTabView
 {
     private readonly HashSet<string> _tasksSeenIncomplete = new();
+    private readonly HashSet<(int Day, string Task)> _pendingTaskCompletions = new();
     private readonly EventBurstLayer _programBursts = new();
     private int _burstGeneration;
     internal int CompletionBursts => _programBursts.Count;
@@ -66,20 +67,27 @@ public partial class ProgramsTabView
     private void CelebrateTasks(IReadOnlyList<ProgramTaskItem> items)
     {
         var list = Find<ItemsControl>("TodayTaskList");
+        var day = App.Programs?.ActiveEnrollment?.CurrentDay ?? 0;
+        foreach (var item in items.Where(item => item.JustCompleted))
+            _pendingTaskCompletions.Add((day, item.TaskId));
         var generation = _burstGeneration;
         Dispatcher.UIThread.Post(() =>
         {
-            if (generation != _burstGeneration || !ReferenceEquals(list.ItemsSource, items) || !IsVisible || VisualRoot == null
+            if (generation != _burstGeneration || !IsVisible || VisualRoot == null
                 || Shell is { WindowState: WindowState.Minimized }) return;
             UpdateLayout();
+            // WPF ProgramsFx.cs:1006-1019 resolves the live containers after any queued rebuilds.
+            var currentDay = App.Programs?.ActiveEnrollment?.CurrentDay ?? 0;
             foreach (var card in list.GetVisualDescendants().OfType<Border>()
-                         .Where(b => b.Name == "TaskCard" && b.DataContext is ProgramTaskItem { JustCompleted: true }))
+                         .Where(b => b.Name == "TaskCard" && b.DataContext is ProgramTaskItem { DoneChipVisible: true } task
+                                     && _pendingTaskCompletions.Remove((currentDay, task.TaskId))))
             {
                 Pop(card, .93, .35, .6);
                 var chip = card.GetVisualDescendants().OfType<Border>().FirstOrDefault(b => b.Name == "TaskDoneChip");
                 if (chip != null) Pop(chip, .2, .42, .9);
                 QueueProgramBurst(card, ConditioningControlPanel.Helpers.ProgramHeat.BurstCount(_heat), AccentNow);
             }
+            _pendingTaskCompletions.Clear(); // a missing container or a different day never replays later
         }, DispatcherPriority.Loaded);
     }
 

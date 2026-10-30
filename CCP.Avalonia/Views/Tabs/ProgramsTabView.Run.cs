@@ -71,7 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void OnProgramChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(() =>
         {
             if (VisualRoot is not null) RefreshPrograms();
-        });
+        }, DispatcherPriority.Normal); // WPF ProgramsTab.cs:130-140: refresh before Loaded celebrations
 
         private void OnProgramSessionChanged() => OnProgramChanged(null, EventArgs.Empty);
 

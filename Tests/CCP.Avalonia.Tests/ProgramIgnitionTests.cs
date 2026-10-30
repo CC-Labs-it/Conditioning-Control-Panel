@@ -257,6 +257,35 @@ public sealed class ProgramIgnitionTests
         Assert.DoesNotContain(BeatLoop.Running, b => b.Owner is Border { Name: "TaskCard" or "TaskDoneChip" });
     });
 
+    [Fact]
+    public void PendingTaskCompletionsSurviveConsecutiveRebuildsOnce() => WithRun(true, (_, tab, svc, _) =>
+    {
+        var tasks = svc.Today!.Tasks.Take(2).ToArray();
+        foreach (var task in tasks)
+        {
+            svc.TodayRecord!.CompletedTaskIds.Add(task.Id);
+            tab.RefreshPrograms(); // no Loaded turn between either completion or the extra rebuild
+        }
+        tab.RefreshPrograms();
+        tab.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        foreach (var task in tasks)
+        {
+            var card = global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(tab)
+                .OfType<Border>().Single(b => b.Name == "TaskCard" && b.DataContext is ProgramTaskItem t && t.TaskId == task.Id);
+            Assert.Equal(.93, ((ScaleTransform)card.RenderTransform!).ScaleX, 3);
+            var chip = global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(card)
+                .OfType<Border>().Single(b => b.Name == "TaskDoneChip");
+            Assert.Equal(.2, ((ScaleTransform)chip.RenderTransform!).ScaleX, 3);
+        }
+        Assert.Equal(2, tab.CompletionBursts);
+        Step(.42);
+        tab.RefreshPrograms();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(2, tab.CompletionBursts);
+        Assert.DoesNotContain(BeatLoop.Running, b => b.Owner is Border { Name: "TaskCard" or "TaskDoneChip" });
+    });
+
     [Theory]
     [InlineData(MotionLevel.Full)]
     [InlineData(MotionLevel.Reduced)]
