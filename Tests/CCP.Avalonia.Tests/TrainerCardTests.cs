@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Input.Raw;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -62,7 +64,7 @@ public sealed partial class AccountSeedTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
-                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 LocalizationManager.Instance.SetLanguage("en");
@@ -150,7 +152,7 @@ public sealed partial class AccountSeedTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
-                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
@@ -164,11 +166,24 @@ public sealed partial class AccountSeedTests
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
+                // Headless MouseDown/Up render the whole shell between events, so wall-clock
+                // click counting can time out on a loaded runner. Hit-test the row and deliver
+                // the platform's click counts, retaining Avalonia's routed double-tap recognizer.
+                var target = Assert.IsAssignableFrom<Control>(w.InputHitTest(at));
+                var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+                void Click(int count)
                 {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                    target.RaiseEvent(new PointerPressedEventArgs(target, pointer, w, at, 0,
+                        new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed),
+                        KeyModifiers.None, count));
+                    target.RaiseEvent(new PointerReleasedEventArgs(target, pointer, w, at, 0,
+                        new PointerPointProperties(RawInputModifiers.None, PointerUpdateKind.LeftButtonReleased),
+                        KeyModifiers.None, MouseButton.Left));
                 }
+                Click(1);
+                Assert.False(w.ProfilePage!.IsEffectivelyVisible); // one click only selects the row
+                Dispatcher.UIThread.RunJobs();
+                Click(2);
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
