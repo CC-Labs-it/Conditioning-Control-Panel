@@ -5800,7 +5800,7 @@ Application State:
             // and here is a straight dispose - the board has nothing to flush and no verdict to
             // protect, so there is no graceful wind-down whose 1200ms timer would never tick.
             try { Services.PieceByPiece.PieceByPieceHostService.Close(); } catch (Exception ex) { Diag.Swallowed(ex); }
-            try { Services.PrizeCounter.PrizeCounterHostService.Close(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            try { Services.PrizeCounter.PrizeCounterHostService.CloseFor(Services.PrizeCounter.PrizeCounterHostService.CloseAppExit); } catch (Exception ex) { Diag.Swallowed(ex); }
             // Glassroad (3D race preview): the same straight dispose.
             try { Services.Glassroad.GlassroadHostService.Close(); } catch (Exception ex) { Diag.Swallowed(ex); }
 

@@ -1741,6 +1741,21 @@ namespace ConditioningControlPanel
                 return;
             }
 
+            // 7.2: a Prize Counter opened over a game whose own ladder takes the press below (the Back
+            // Room, the Arcademy, DtRH, the feed, a descent) closes first. Those rungs return, so the
+            // registry rung that would close the counter is never reached and the shop stayed on screen
+            // over the suspended game. Not returning: the game's own rung still takes the press.
+            if (Services.Safety.PanicPolicy.CounterClosesBeforeHandOff(
+                    Services.PrizeCounter.PrizeCounterHostService.IsActive,
+                    App.Chaos?.IsDescending == true || Services.Chaos.DtrhHostService.IsActive
+                    || Services.Arcademy.ArcademyHostService.IsActive || Services.BackRoom.BackRoomHostService.IsActive
+                    || Services.Fyp.FypHostService.IsActive))
+            {
+                VideoDiag.Log("PANIC", "closing the Prize Counter over the game first");
+                try { Services.PrizeCounter.PrizeCounterHostService.CloseFor(Services.PrizeCounter.PrizeCounterHostService.ClosePanic); }
+                catch (Exception ex) { App.Logger?.Warning("PANIC: closing the Prize Counter failed: {Error}", ex.Message); }
+            }
+
             // A live Rabbit Hole descent owns the panic key: the chaos key hook pauses the
             // run (and a second press surfaces it). Without this hand-off a mid-run panic
             // fell into the "not running" branch below — where a second press EXITS the app.

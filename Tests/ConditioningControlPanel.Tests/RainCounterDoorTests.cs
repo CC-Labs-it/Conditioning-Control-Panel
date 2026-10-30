@@ -116,7 +116,7 @@ public class RainCounterDoorTests
         var src = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "PrizeCounter", "PrizeCounterHostService.cs"));
         int wear = src.IndexOf("case \"wear\":", StringComparison.Ordinal);
         Assert.True(wear > 0);
-        int close = src.IndexOf("Close();", wear, StringComparison.Ordinal);
+        int close = src.IndexOf("CloseFor(CloseWear);", wear, StringComparison.Ordinal);
         int open = src.IndexOf("OpenWardrobe(key)", wear, StringComparison.Ordinal);
         Assert.True(close > wear && open > close, "the counter closes first: never two WebView2 windows fighting focus");
     }
