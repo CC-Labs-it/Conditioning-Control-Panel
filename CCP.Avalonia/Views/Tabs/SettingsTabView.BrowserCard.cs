@@ -55,7 +55,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private void OnBrowserCardTrackerChanged() => Dispatcher.UIThread.Post(RefreshBrowserWebcamButton);
-        private void OnBrowserCardModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(SyncBrowserCard);
+        private void OnBrowserCardModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(OnBrowserModSwitched);
+
+        /// <summary>WPF MainWindow/MainWindow.xaml.cs:3244-3262: the radios follow the new mod, and a mod that does not offer
+        /// BambiCloud also sends an open page to its own default, even when the override reveals the radio. Only a
+        /// page that was ever loaded moves (WPF: _browserInitialized), and never offline (#867).</summary>
+        internal void OnBrowserModSwitched()
+        {
+            SyncBrowserCard();
+            if (App.Mods is { } mods && !mods.ShowBambiCloudOption() && BrowserWebHost.Source != null
+                && !CoreSettings.Current.OfflineMode)
+                BrowserWebHost.Navigate(new Uri(mods.GetDefaultBrowserUrl()));
+        }
 
         /// <summary>The saved state into the row: the mute glyph, the webcam pill, the BambiCloud override and the prompt.</summary>
         internal void SyncBrowserCard()
@@ -156,14 +167,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// HypnoTube and, on a user change, the page follows (WPF SyncSiteRadiosToActiveMod(navigateIfChanged: true)).</summary>
         private void ApplyBambiCloudVisibility(bool navigateIfHidden)
         {
-            bool modWants = true;
-            try { modWants = App.Mods?.ShowBambiCloudOption() ?? true; }
-            catch (Exception ex) { Log.Debug("ShowBambiCloudOption: {E}", ex.Message); }
-            bool show = modWants || CoreSettings.Current.ForceShowBambiCloud;
-            RbBambiCloud.IsVisible = show;
-            if (show || RbBambiCloud.IsChecked != true) return;
-            RbHypnoTube.IsChecked = true;
-            if (navigateIfHidden) Shell?.BrowserSiteToggle_Click(RbHypnoTube, new RoutedEventArgs());
+            var modWants = App.Mods?.ShowBambiCloudOption() ?? true;
+            RbBambiCloud.IsVisible = modWants || CoreSettings.Current.ForceShowBambiCloud;
+            SyncBrowserSite(modWants, App.Mods?.GetDefaultBrowserUrl() ?? "https://bambicloud.com/", navigateIfHidden);
+        }
+
+        // WPF MainWindow/MainWindow.Browser.cs:547-580, SyncSiteRadiosToActiveMod: visibility is not the site's default. In particular,
+        // revealing BambiCloud with the override must not change a HypnoTube mod's default.
+        internal void SyncBrowserSite(bool modWantsBambiCloud, string defaultUrl, bool navigateIfChanged)
+        {
+            var current = BrowserWebHost.CurrentUrl?.AbsoluteUri;
+            var known = current != null && (current.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase)
+                || current.Contains("hypnotube.com", StringComparison.OrdinalIgnoreCase));
+            if (modWantsBambiCloud && known) return;
+            var onBambi = modWantsBambiCloud && defaultUrl.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase);
+            var target = onBambi ? RbBambiCloud : RbHypnoTube;
+            var moved = target.IsChecked != true;
+            target.IsChecked = true;
+            if (moved && navigateIfChanged && !CoreSettings.Current.OfflineMode)
+                Shell?.BrowserSiteToggle_Click(target, new RoutedEventArgs());
         }
 
         // ------------------------------------------------------------------ the load prompt
