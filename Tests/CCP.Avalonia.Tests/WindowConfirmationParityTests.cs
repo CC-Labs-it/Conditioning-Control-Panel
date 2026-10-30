@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia;
@@ -150,6 +151,47 @@ public sealed class WindowConfirmationParityTests
             Assert.DoesNotContain(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, card));
         }
         finally { host.Window.Close(); BeatLoop.Time = old; }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData("confirm")]
+    [InlineData("cancel")]
+    [InlineData("dismiss")]
+    [InlineData("rebuild")]
+    [InlineData("remove")]
+    public Task PopupDetachesAfterEveryClosePath(string path) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        AmbientBeatLoopsTests.Setup();
+        var strip = new SectionTabStrip { MotionOverride = MotionLevel.Off };
+        using var host = new ClosingWindow(Host(strip));
+        var inheritance = typeof(AvaloniaObject).GetProperty("InheritanceParent", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        for (int i = 0; i < 3; i++)
+        {
+            var card = Open(strip);
+            var popup = strip.ConfirmationPopup!;
+            Assert.Same(strip, popup.Parent);
+            Assert.Same(strip, inheritance.GetValue(popup));
+            switch (path)
+            {
+                case "confirm": Click(Buttons(card)[0]); break;
+                case "cancel": Click(Buttons(card)[1]); break;
+                case "dismiss":
+                    host.Window.MouseDown(new Point(5, 175), MouseButton.Left);
+                    host.Window.MouseUp(new Point(5, 175), MouseButton.Left);
+                    break;
+                case "rebuild": strip.Rebuild(); break;
+                case "remove": host.Window.Content = null; break;
+            }
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(popup.IsOpen);
+            Assert.Null(strip.ConfirmationPopup);
+            Assert.Null(popup.Parent);
+            Assert.Null(inheritance.GetValue(popup));
+            Assert.DoesNotContain(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, card));
+            if (path == "remove") host.Window.Content = strip;
+            host.Window.UpdateLayout();
+        }
         return Task.CompletedTask;
     });
 

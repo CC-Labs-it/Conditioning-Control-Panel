@@ -139,6 +139,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             popup.Closed += (_, _) =>
             {
                 if (ReferenceEquals(_confirm, popup)) { StopConfirmFade(); _confirm = null; _confirmTab = null; }
+                ((ISetLogicalParent)popup).SetParent(null); // Release the strip's inheritance-child reference.
             };
             // WPF PopupAnimation.Fade: a 150 ms fade at Full and Reduced, none at Off.
             popup.Opened += (_, _) =>
