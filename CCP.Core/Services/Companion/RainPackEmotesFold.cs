@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 
-namespace ConditioningControlPanel.Services.Companion;
+namespace ConditioningControlPanel.Services.Companion.Rain;
 
 internal static class RainPackEmotesFold
 {

@@ -4,7 +4,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
-using ConditioningControlPanel.Services.Companion;
+using ConditioningControlPanel.Services.Companion.Rain;
 using Newtonsoft.Json.Linq;
 using Xunit;
 

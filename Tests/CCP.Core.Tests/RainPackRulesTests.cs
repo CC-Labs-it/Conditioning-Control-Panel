@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using ConditioningControlPanel.Services.Companion;
+using ConditioningControlPanel.Services.Companion.Rain;
 using Newtonsoft.Json.Linq;
 using Xunit;
 

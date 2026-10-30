@@ -8,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 
-namespace ConditioningControlPanel.Services.Companion
+namespace ConditioningControlPanel.Services.Companion.Rain
 {
     /// <summary>The one pinned download of Rain's big files (lane R12, RAIN-V2-PLAN owner answer 2).</summary>
     public sealed record RainAssetPin(string Url, string Sha256, long Bytes, string Version)

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace ConditioningControlPanel.Services.Companion
+namespace ConditioningControlPanel.Services.Companion.Rain
 {
     public static class RainWardrobeAssets
     {

@@ -5,7 +5,7 @@ using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace ConditioningControlPanel.Services.Companion;
+namespace ConditioningControlPanel.Services.Companion.Rain;
 
 /// <summary>
 /// Names a baked Rain look (RAIN-V2-PLAN 2.3): SHA-256 over the normalized look JSON, the pack
