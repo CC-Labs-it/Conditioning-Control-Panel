@@ -921,6 +921,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         public void Say(string? line, string reactionFace = "^_^", Action? done = null)
             => PlayChain(EmiChains.MakeSay(line, reactionFace, EmiChains.SayHoldMs(line)), done);
 
+        // WPF MainWindow.xaml.cs:1934-2013 leaves desk FX running. This head cancels feedback,
+        // so panic must also complete the hide/callback from WPF EmiDeskWindow.Fx.cs:182-203.
+        internal void StopForPanic()
+        {
+            CancelChain();
+            _finishDismiss?.Invoke();
+        }
+
         public void CancelChain()
         {
             StopPatFeedback();
@@ -2168,6 +2176,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private int _summonEpoch;
 
         private Action? _summonDone;
+        private Action? _finishDismiss;
 
         /// <summary>
         /// Bring her in: smoke bomb, CRT power-on, then the <c>wake</c> chain. Input is locked for
@@ -2272,6 +2281,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     return;
                 }
 
+                if (_finishDismiss != null) return;
+                bool finished = false;
+                Action finish = () =>
+                {
+                    if (finished) return;
+                    finished = true;
+                    _finishDismiss = null;
+                    FinishDismiss(done);
+                };
+                _finishDismiss = finish;
                 _transiting = true;
                 InputLocked = true;
                 StopIdleBeats();
@@ -2285,20 +2304,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
                 PlayChain("wink", () =>
                 {
-                    if (_closingForGood) { FinishDismiss(done); return; }
+                    if (finished) return;
+                    if (_closingForGood) { finish(); return; }
                     CrtOff();
                     After(CrtOffMs, () =>
                     {
+                        if (finished) return;
                         _bodyRoot.IsVisible = false;
                         Burst(spark: true);
-                        After(FxLifeMs, () => FinishDismiss(done));
+                        After(FxLifeMs, finish);
                     });
                 });
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "[EmiDesk] dismiss FX failed, hiding her plain");
-                FinishDismiss(done);
+                if (_finishDismiss is { } finish) finish();
+                else FinishDismiss(done);
             }
         }
 
@@ -2575,7 +2597,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 if (_transiting || InputLocked) return;
-                if (ChainLive) return;   // WPF React.cs:132-137: a live chain eats the click (summon-cut is -b)
+                if (ChainLive) // WPF React.cs:132-138: only the wake chain may be cut by a pat.
+                {
+                    if (!_summonChainLive) return;
+                    FinishSummon();
+                    CancelChain();
+                }
                 DisarmPet();
                 _petArmed = true;
                 RaiseActivity();

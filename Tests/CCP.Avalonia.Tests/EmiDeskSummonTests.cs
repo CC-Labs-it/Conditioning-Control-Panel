@@ -209,6 +209,63 @@ public sealed class EmiDeskSummonTests
         finally { win.ShutDown(); }
     });
 
+    // WPF Fx.cs:143-202 completes dismissal; MainWindow.xaml.cs:1934-2013 leaves it running.
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1500)]
+    public Task PanicCompletesDismissalExactlyOnce(int delay) => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async svc =>
+    {
+        await svc.Summon();
+        var win = svc.Window!;
+        int dismissed = 0;
+        EventHandler<bool> changed = (_, isOut) => { if (!isOut) dismissed++; };
+        svc.OutChanged += changed;
+        try
+        {
+            svc.Dismiss();
+            await Pump(delay);
+            Assert.True(win.InputLocked);
+            var entry = Assert.Single(ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All, s => s.Id == "emi-desk-feedback");
+            entry.Stop(null);
+            Assert.False(win.ChainLive);
+            Assert.False(win.IsVisible);
+            Assert.False(win.InputLocked);
+            Assert.False(svc.IsOut);
+            entry.Stop(null);
+            await Pump(3000); // deferred FX and duplicate panic cannot complete it twice
+            Assert.Equal(1, dismissed);
+        }
+        finally { svc.OutChanged -= changed; }
+    });
+
+    // WPF React.cs:132-138 cuts wake, completes summon, then processes this same click as a pat.
+    [Fact]
+    public Task LeftClickDuringWakeCompletesSummonAndPats() => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async _ =>
+    {
+        var win = new EmiDeskWindow();
+        int completed = 0;
+        int pets = ConditioningControlPanel.Services.EmiDesk.EmiState.Current.PetsTotal;
+        try
+        {
+            win.RunSummon(() => completed++);
+            await Pump(700);
+            Assert.True(win.ChainLive);
+            Assert.False(win.InputLocked);
+            var body = (Control)typeof(EmiDeskWindow).GetField("_bodyRoot",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(win)!;
+            var point = body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), win)!.Value;
+            win.MouseDown(point, global::Avalonia.Input.MouseButton.Left);
+            win.MouseUp(point, global::Avalonia.Input.MouseButton.Left);
+            Assert.Equal(1, completed);
+            Assert.Equal("^_^", win.Face);
+            Assert.Equal(pets + 1, ConditioningControlPanel.Services.EmiDesk.EmiState.Current.PetsTotal);
+            await Pump(2000);
+            Assert.Equal(1, completed);
+            Assert.Equal("0_0", win.Face); // cancelled wake cannot replace the pat
+        }
+        finally { win.ShutDown(); }
+    });
+
     /// <summary>P06: the panic registry's emi-desk-feedback entry kills a running chain.</summary>
     [Fact]
     public Task PanicEntryCancelsHerChain() => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async svc =>
