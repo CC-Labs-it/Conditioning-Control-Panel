@@ -86,3 +86,32 @@ Review validation uses `/tmp/ccp-dotnet/dotnet` (SDK 10.0.403):
 | `git diff --check` | exit 0, no output |
 
 The skips retain the dependency and opt-in reasons listed above. Both new headless race cases and all five new Core cases ran and passed. No live desktop parity check was performed.
+
+## PR 3286 CI fix
+
+Failure: [Windows shard 0, job 124160241832](https://github.com/CC-Labs-it/Conditioning-Control-Panel/actions/runs/41084004903/job/124160241832) reported `LeaderboardRowDoubleClick_OpensThatTrainersCard`, with 1 failed, 534 passed and 2 skipped. The later run at 7474c3db5 was cancelled during setup/restore; its cancellation is separate from this test failure.
+
+Cause: Avalonia Headless 12.1.2 `MouseDown`/`MouseUp` run jobs and Skia frames before and after each input, while the headless backend timestamps input with a real stopwatch. Slow rendering can push the second press beyond the platform double-click interval, leaving the Profile tab closed. The test was accidentally measuring render throughput rather than two clicks within that interval.
+
+Fix in `Tests/CCP.Avalonia.Tests/TrainerCardTests.cs:172-201`: settle and render the actual tab, assert the row is hit, then supply monotonic 1 ms input timestamps through the existing backend callback. Keep `MouseDown`/`MouseUp`, the actual mouse device, click counting, gesture recognizer and routed handler. Restore the callback in `finally`. Add assertions that one click does not open a card and the two press counts are exactly 1 and 2. Preserve every original visibility, trainer identity, request-count, offline-cache and GET-only assertion. Both standalone Trainer Card setups now register the shared Inter/AppFonts configuration, avoiding a first-test font failure on Linux.
+
+WPF behavior remains `ConditioningControlPanel/MainWindow/MainWindow.Leaderboard.cs:938-953`: double-click the selected trainer, switch to Profile and search that name. No production, WPF or workflow source changed; no test was removed, bypassed or skipped.
+
+Fail-proof: temporarily space the raw input timestamps by 1000 ms. The same test fails with expected click counts `[1, 2]`, actual `[1, 1]`. Restored input timing passes.
+
+The related 43-test cold-start selection also exposed an existing font-order gap: `LeaderboardFxTests` had two custom builders with Inter but without `AppFonts.Options/Register`. That could initialize the process before the other fixtures and cause `Segoe UI Black` glyph failures (27 failed, 16 passed). Both builders now use the same complete font registration as the application. The transition and profile-vat fixtures already use `Program.BuildAvaloniaApp` and remain unchanged. The standalone transition suite passed all 11 cases; the narrower affected trainer/race/isolation selection passed all 29.
+
+Final CI-fix validation uses `/tmp/ccp-dotnet/dotnet` (10.0.403):
+
+| Command | Result tail |
+| --- | --- |
+| `dotnet build CCP.Core -c Release` | 0 warnings, 0 errors |
+| `dotnet build CCP.Avalonia -c Release` | 0 warnings, 0 errors |
+| `dotnet build Tests/CCP.Avalonia.Tests -c Release` | 145 warnings, 0 errors |
+| `dotnet test Tests/CCP.Core.Tests -c Release --no-build` | Passed!  - Failed:     0, Passed:  4642, Skipped:     5, Total:  4647, Duration: 44 s - CCP.Core.Tests.dll (net10.0) |
+| `dotnet test Tests/CCP.Avalonia.Tests -c Release --no-build --filter "FullyQualifiedName~TrainerCard\|FullyQualifiedName~LeaderboardRowDoubleClick\|FullyQualifiedName~LeaderboardFxTests\|FullyQualifiedName~TabTransitionsTests\|FullyQualifiedName~TestIsolationTests\|FullyQualifiedName~GameWindowTests.Race_"` | Passed!  - Failed:     0, Passed:    43, Skipped:     0, Total:    43, Duration: 2 m 34 s - CCP.Avalonia.Tests.dll (net10.0) |
+| `bash .github/scripts/core-guards.sh` | All Core guards passed |
+| `python3 .github/scripts/avalonia_docs.py` | avalonia_docs self-check OK |
+| `git diff --check` | exit 0, no output |
+
+Core's five skips are the existing Vosk model dependencies. No test was skipped in the 43-case UI selection. Windows execution is left to GitHub CI; the same Release test assembly and real headless mouse pipeline ran locally on Linux.
