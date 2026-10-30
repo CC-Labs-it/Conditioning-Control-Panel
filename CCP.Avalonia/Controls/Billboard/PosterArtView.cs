@@ -1,6 +1,8 @@
 using System;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -13,7 +15,8 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard;
 // WPF 80a8cdfc9: one image, one matrix, on the shared 30 fps beat.
 public sealed class PosterArtView : Grid, IBillboardArtView
 {
-    private readonly Image _image;
+    private readonly PosterCoverImage _image;
+    private readonly Control _pointerScope;
     private readonly MatrixTransform _matrix = new();
     private readonly Helpers.BeatLoop _loop;
     private Bitmap? _bitmap;
@@ -23,12 +26,14 @@ public sealed class PosterArtView : Grid, IBillboardArtView
     private bool _hovered, _landed, _released;
     internal bool IsAnimating => _loop.IsRunning;
     internal Matrix CurrentMatrix => _matrix.Matrix;
+    internal bool Hovered => _hovered;
+    internal Point Aim => _aim;
 
-    public PosterArtView(string? path)
+    public PosterArtView(string? path, Control? pointerScope = null)
     {
         ClipToBounds = true;
         Background = new SolidColorBrush(Color.FromRgb(0x0c, 0x0d, 0x1a));
-        _image = new Image { Stretch = Stretch.UniformToFill, RenderTransform = _matrix,
+        _image = new PosterCoverImage { RenderTransform = _matrix,
             RenderTransformOrigin = new RelativePoint(0, 0, RelativeUnit.Relative) };
         RenderOptions.SetBitmapInterpolationMode(_image, BitmapInterpolationMode.HighQuality);
         try
@@ -47,15 +52,20 @@ public sealed class PosterArtView : Grid, IBillboardArtView
             Step(seconds - _last, _hovered, _aim);
             _last = seconds;
         });
-        PointerMoved += (_, e) =>
-        {
-            var p = e.GetPosition(this);
-            _hovered = true;
-            _aim = new Point(p.X / Math.Max(1, Bounds.Width), p.Y / Math.Max(1, Bounds.Height));
-        };
-        PointerExited += (_, _) => _hovered = false;
+        // Observe the whole card, including handled events over its overlay buttons.
+        _pointerScope = pointerScope ?? this;
+        _pointerScope.AddHandler(PointerMovedEvent, OnPointerMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
+        _pointerScope.PointerExited += OnPointerExited;
         SizeChanged += (_, _) => Apply();
     }
+
+    private void OnPointerMoved(object? sender, PointerEventArgs e)
+    {
+        var p = e.GetPosition(this);
+        _hovered = p.X >= 0 && p.Y >= 0 && p.X <= Bounds.Width && p.Y <= Bounds.Height;
+        if (_hovered) _aim = new Point(p.X / Math.Max(1, Bounds.Width), p.Y / Math.Max(1, Bounds.Height));
+    }
+    private void OnPointerExited(object? sender, PointerEventArgs e) => _hovered = false;
 
     public void Run()
     {
@@ -77,6 +87,8 @@ public sealed class PosterArtView : Grid, IBillboardArtView
     {
         Hold();
         _released = true;
+        _pointerScope.RemoveHandler(PointerMovedEvent, OnPointerMoved);
+        _pointerScope.PointerExited -= OnPointerExited;
         _image.Source = null;
         _bitmap?.Dispose();
         _bitmap = null;
@@ -106,5 +118,26 @@ public sealed class PosterArtView : Grid, IBillboardArtView
             : PosterMotion.Still;
         var m = PosterMotion.Matrix(pose, w, h);
         _matrix.Matrix = new Matrix(m.A, m.B, m.C, m.D, m.X, m.Y);
+    }
+}
+
+// WPF LivingPosterArt.CoverImage: keep more of the right side of wide artwork.
+internal sealed class PosterCoverImage : Control
+{
+    private IImage? _source;
+    public IImage? Source
+    {
+        get => _source;
+        set { _source = value; InvalidateVisual(); }
+    }
+    public PosterCoverImage() { IsHitTestVisible = false; ClipToBounds = true; }
+    public override void Render(DrawingContext context)
+    {
+        base.Render(context);
+        double w = Bounds.Width, h = Bounds.Height;
+        if (_source == null || !(w > 0 && h > 0)) return;
+        double iw = Math.Max(1, _source.Size.Width), ih = Math.Max(1, _source.Size.Height);
+        double k = Math.Max(w / iw, h / ih), dw = iw * k, dh = ih * k;
+        context.DrawImage(_source, new Rect(_source.Size), new Rect((w - dw) * .62, (h - dh) * .5, dw, dh));
     }
 }
