@@ -112,6 +112,16 @@ namespace ConditioningControlPanel.Services
         /// Only <paramref name="force"/> (trigger_panic) takes the subject's own engine down (#878).</summary>
         public static void StopEffects(bool force)
         {
+            // Remote session verbs are refused on this head, so a running engine belongs to the
+            // wearer. Ending remote control must not stop its services or unduck its audio (#1405).
+            // Panic still tears everything down. A leash cut stops the engine before ending remote.
+            if (!force && CoreEngine.IsRunning)
+            {
+                RemoteHaptics.Stop();
+                Remote.RemoteWearer.HandBackAllButStrict();
+                Remote.RemoteWearer.ReleaseSafetyState();
+                return;
+            }
             if (force) Commands.AiCommandService.CancelAll();   // a remote panic cancels pending AI follow-ups too
             // A controller's panic is a way out like the key: Circe's Tab opens its safety hold (PanicChasterHold).
             if (force) Safety.PanicChasterHold.Open("remote panic");
