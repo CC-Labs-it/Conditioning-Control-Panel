@@ -278,6 +278,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     return;
                 }
                 svc.AttachSessionRunner(runner);
+                // WPF ProgramsTab.cs:2210-2214: "Start today's session" is the user's own START (ends the post-panic quiet).
+                if (!CoreEngine.IsRunning) ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
                 StartSession(session);   // the row repaints when the runner really starts (StartSession)
                 Serilog.Log.Information("[Programs] Started program session: {Name}", session.Name);
             }

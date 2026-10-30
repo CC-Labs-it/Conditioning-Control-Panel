@@ -125,6 +125,7 @@ public sealed class PanicAftermathHeadTests
     [InlineData("CCP.Avalonia/Platform/PanicWatchdog.cs", "private static void RunEmergencyTeardown()", "PanicAftermath.ArmQuiet()")]
     [InlineData("CCP.Core/Services/RemoteControl/RemoteCommands.cs", "public static void StopEffects(bool force)", "if (force) Safety.PanicAftermath.ArmQuiet();")]
     [InlineData("CCP.Avalonia/Views/Windows/MainShellWindow.SessionRun.cs", "private async void BtnPauseSession_Click(", "PanicAftermath.EndQuiet();")]
+    [InlineData("CCP.Avalonia/Views/Windows/MainShellWindow.ProgramsTab.cs", "internal async Task StartProgramSessionAsync()", "if (!CoreEngine.IsRunning) ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();")]
     public void EveryRouteArmsOrEndsTheQuiet(string file, string signature, string call)
     {
         var src = File.ReadAllText(Path.Combine(RepoRoot(), file)).ReplaceLineEndings("\n");
