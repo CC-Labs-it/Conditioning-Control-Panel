@@ -48,6 +48,31 @@ public sealed class HapticsHeadTests
         }
     }
 
+    [Fact]
+    public void AllToyPatternPreviewsWorkWithMasterOffAndStopOnHide() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        WithHaptics(premium: true, mock: true, (h, toasts) =>
+        {
+            Assert.True(h.ConnectAsync().Result);
+            var tab = new HapticsTabView();
+            var host = new Window { Content = tab };
+            host.Show();
+            try
+            {
+                tab.CmbPatternToy.SelectedIndex = 0;
+                tab.BtnPatternPlay.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.True(Wait(() => toasts.Any(t => t.Contains('%'))));
+                tab.IsVisible = false;
+                Assert.True(tab.LastPreview.Wait(3000));
+                Assert.False(tab.PreviewRunning);
+            }
+            finally { host.Close(); }
+        });
+    });
+
     private static bool Wait(Func<bool> done, int ms = 3000)
     {
         for (var t = 0; t < ms && !done(); t += 50) Thread.Sleep(50);

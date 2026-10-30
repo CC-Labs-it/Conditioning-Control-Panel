@@ -61,6 +61,7 @@ public sealed class CornerGifOverlayTests
                 CornerGifOverlay.SkipPlatformChecksForTests = true;
                 CornerGifOverlay.ManualFramesForTests = true;
                 CornerGifOverlay.Seed(() => shell);
+                CoreEngine.Start();
                 (s.PanicKeyEnabled, s.PanicKey) = (true, "F8");
                 s.CornerGifOverlays = new List<CornerGifOverlaySetting>
                 {
@@ -118,6 +119,7 @@ public sealed class CornerGifOverlayTests
             {
                 dialog?.Close();
                 CornerGifOverlay.StopAll();
+                CoreEngine.Stop();
                 CornerGifOverlay.SkipPlatformChecksForTests = false;
                 CornerGifOverlay.ManualFramesForTests = false;
                 CornerGifOverlay.Clock = TimeProvider.System;

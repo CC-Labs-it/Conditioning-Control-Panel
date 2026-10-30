@@ -70,6 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static IReadOnlyCollection<int> ShownSlots => Windows.Keys;
         /// <summary>The session's slot: outside the standalone range, never in settings.</summary>
         internal const int SessionSlot = 99;
+        private static bool EngineRunning => CoreEngine.IsRunning || App.Sessions?.IsRunning == true;
         private static bool Standalone(int slot) => slot != SessionSlot;
 
         /// <summary>A STANDALONE slot is up, queued or decoding (WPF CornerGifService.HasActiveOverlays).</summary>
@@ -142,7 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     var o = overlays[i];
                     if (o is not { Enabled: true }) continue;
-                    if (!CornerGifPlanner.AllowStandaloneCornerGif(o.Enabled, SessionActive)) continue;
+                    if (!CornerGifPlanner.AllowStandaloneCornerGif(o.Enabled, SessionActive, EngineRunning)) continue;
                     if (queued >= CornerGifPlanner.MaxOverlays)
                     {
                         Log.Warning("CornerGif: more than {Max} enabled corner-GIF slots - ignoring the rest", CornerGifPlanner.MaxOverlays);
@@ -156,7 +157,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             CloseSlot(index);
             if (overlays == null || index >= overlays.Count || index >= CornerGifPlanner.MaxOverlays) return;
-            if (overlays[index] is { Enabled: true } setting && CornerGifPlanner.AllowStandaloneCornerGif(true, SessionActive))
+            if (overlays[index] is { Enabled: true } setting && CornerGifPlanner.AllowStandaloneCornerGif(true, SessionActive, EngineRunning))
                 QueueShow(index, setting);
         }
 
@@ -249,6 +250,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static void Realize(int index, CornerGifOverlaySetting setting)
         {
             if (_host is not { } host) return;
+            if (Standalone(index) && !CornerGifPlanner.AllowStandaloneCornerGif(setting.Enabled, SessionActive, EngineRunning)) return;
             if (!SkipPlatformChecksForTests && (_refused || !X11Overlay.IsAvailable || !X11Overlay.IsCompositing))
             {
                 Log.Debug("CornerGif: no composited click-through overlay on this platform, so no corner GIF");
