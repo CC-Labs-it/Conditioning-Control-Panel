@@ -457,7 +457,7 @@ public sealed class FriendsApi : IFriendsApi
         if (at == DateTimeOffset.MinValue) return null;
 
         SendKind kind;
-        string? poke = null, destination = null, code = null, room = null;
+        string? poke = null, destination = null, code = null, room = null, track = null;
         WatchRef? watch = null;
         TimeSpan life;
         switch (Str(o["kind"]))
@@ -480,6 +480,7 @@ public sealed class FriendsApi : IFriendsApi
                 else if (code != null && !IsJoinCode(code)) return null;
                 // A race room the grammar does not admit is dropped: the invite stays a bare "come race".
                 if (destination == InviteDestination.Race && Str(o["room"]) is { } r && InviteDestination.IsRoomId(r)) room = r;
+                if (room != null && Str(o["track"]) is { } t && Lobby.RaceOpenApi.TrackName(t).Length > 0) track = t;
                 life = TimeSpan.FromSeconds(InviteDestination.LifetimeSeconds);
                 break;
             case "watch":
@@ -502,7 +503,7 @@ public sealed class FriendsApi : IFriendsApi
         }
         var expires = ParseTime(o["expires_at"], at + life);
         return new InboxItem(id, kind, from, Str(o["from_name"]) ?? "", Str(o["from_avatar"]), poke, destination, code, watch,
-            at, expires) { Room = room };
+            at, expires) { Room = room, Track = track };
     }
 
     internal static bool IsJoinCode(string s)
