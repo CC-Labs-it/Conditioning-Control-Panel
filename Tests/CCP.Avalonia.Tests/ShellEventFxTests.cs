@@ -59,6 +59,32 @@ public sealed class ShellEventFxTests
     });
 
     [Fact]
+    public void LockedFilterUnlockFallsBackToNavAndVisibleTileStillBurstsOnce() => WithShell((shell, engine, _) =>
+    {
+        shell.ShowTab("achievements");
+        Dispatcher.UIThread.RunJobs();
+        var tab = shell.Named<AchievementsTabView>("AchievementsTab")!;
+        tab.SelectFilter(AchievementsTabView.FilterLocked);
+        var card = tab.Cards.Single(c => (string)c.Tag! == "plastic_initiation");
+        Assert.True(card.IsVisible);
+        engine.CheckLevelAchievements(10);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(card.IsVisible);
+        Assert.Equal(0, tab.Bursts);
+        Assert.Equal(1, Bursts(shell));
+        AssertAt(shell, shell.NavAnchorForTab("achievements")!);
+
+        tab.SelectFilter(AchievementsTabView.FilterAll);
+        shell.UpdateLayout();
+        engine.CheckLevelAchievements(20);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, tab.Bursts);
+        Assert.Equal(1, Bursts(shell));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, Bursts(shell));
+    });
+
+    [Fact]
     public void LevelBurstUsesTrackCapAndMotionMinimizeCloseAndPanicStopIt() => WithShell((shell, engine, quests) =>
     {
         var s = CoreSettings.Current;

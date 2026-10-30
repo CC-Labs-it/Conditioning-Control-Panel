@@ -229,7 +229,7 @@ public sealed class ProgramIgnitionTests
     });
 
     [Fact]
-    public void HiddenDayCompletionDoesNotReplayItsBurstOnReturn() => WithRun(lastDay: false, (shell, tab, svc, _) =>
+    public void HiddenDayCompletionCelebratesOnceOnReturn() => WithRun(lastDay: false, (shell, tab, svc, _) =>
     {
         tab.IsVisible = false;
         svc.TodayRecord!.DayCompleted = true;
@@ -237,7 +237,12 @@ public sealed class ProgramIgnitionTests
         Assert.Equal(0, ShellEventFxTests.Bursts(shell));
         tab.IsVisible = true;
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal(0, ShellEventFxTests.Bursts(shell));
+        Assert.Equal(1, ShellEventFxTests.Bursts(shell));
+        tab.RefreshPrograms();
+        tab.IsVisible = false;
+        tab.IsVisible = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, ShellEventFxTests.Bursts(shell));
     });
 
     /// <summary>40 beats of stepped time, time-bounded (P73); returns how many distinct values each loop showed:

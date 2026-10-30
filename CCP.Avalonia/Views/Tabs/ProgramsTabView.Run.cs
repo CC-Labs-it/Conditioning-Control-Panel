@@ -93,11 +93,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (!IsVisible && VisualRoot is not null)
             {
-                // WPF EventFx.cs:407-410: hidden completion is remembered without replay.
-                var hiddenEnrollment = AvApp.Programs?.ActiveEnrollment;
-                ResetRunPopsIfRunChanged(hiddenEnrollment);
-                if (hiddenEnrollment != null)
-                    NoteDayCompletion(hiddenEnrollment, AvApp.Programs?.TodayRecord, tabVisible: false);
+                // WPF ProgramsTab.cs:469,1665 defers the rebuild and celebration until shown.
                 _refreshPending = true;
                 return;
             }

@@ -24,9 +24,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var achievements = App.Achievements;
             EventHandler<Achievement> unlocked = (_, _) => Dispatcher.UIThread.Post(() =>
             {
-                // WPF CelebrateAchievementUnlock: a visible tile already celebrates itself.
+                // Visible tiles own the attempt and its nav fallback (WPF EventFx.cs:295).
                 if (Named<Tabs.AchievementsTabView>("AchievementsTab")?.IsEffectivelyVisible != true)
-                    FireEventBurst(NavAnchorForTab("achievements"), 95, color: Env.GlowColor);
+                    CelebrateAchievementNav();
             });
             if (achievements != null) achievements.Unlocked += unlocked;
             Closed += (_, _) =>
@@ -36,6 +36,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 StopEventFx();
             };
         }
+
+        internal void CelebrateAchievementNav() =>
+            FireEventBurst(NavAnchorForTab("achievements"), 95, color: Env.GlowColor);
 
         // WPF OnLevelUp calls this before UpdateLevelDisplay: keep the flash on the old fill,
         // while particles use the track's cap even when the fill resets to the next level.
