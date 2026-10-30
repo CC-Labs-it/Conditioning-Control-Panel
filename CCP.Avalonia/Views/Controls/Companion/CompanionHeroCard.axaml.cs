@@ -14,6 +14,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Companion;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
@@ -83,6 +84,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             if (!_modHooked)
             {
                 CoreMods.ModChanged += OnModChanged;
+                // WPF MainWindow.Companion.cs:48-52,133-138 -> MainWindow.CompanionTab.cs:144 SyncHero.
+                CompanionCore.Switched += OnCompanionSwitched;
+                CompanionCore.LevelUp += OnCompanionLevelUp;
                 _modHooked = true;
             }
 
@@ -97,9 +101,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             Observe(null);
             StopAmbientLoop();
 
-            if (_modHooked) CoreMods.ModChanged -= OnModChanged;
+            if (_modHooked)
+            {
+                CoreMods.ModChanged -= OnModChanged;
+                CompanionCore.Switched -= OnCompanionSwitched;
+                CompanionCore.LevelUp -= OnCompanionLevelUp;
+            }
             _modHooked = false;
         }
+
+        private void OnCompanionSwitched(CompanionId id) => Dispatcher.UIThread.Post(ApplyAvatarArt);
+        private void OnCompanionLevelUp(CompanionId id, int level) => Dispatcher.UIThread.Post(ApplyAvatarArt);
 
         /// <summary>ModChanged can be raised off the UI thread; marshal before touching the art.</summary>
         private void OnModChanged(object? sender, ModPackage mod)

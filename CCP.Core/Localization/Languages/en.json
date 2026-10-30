@@ -4452,6 +4452,7 @@
   "login_checking_availability": "Checking availability...",
   "login_could_not_check": "Could not check: {0}",
   "title_error": "Error",
+  "title_trigger_phrases": "Trigger Phrases",
   "title_invalid_name": "Invalid Name",
   "title_success": "Success",
   "title_confirm": "Confirm",

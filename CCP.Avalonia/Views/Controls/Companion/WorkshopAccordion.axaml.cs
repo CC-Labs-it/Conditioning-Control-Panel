@@ -1,4 +1,7 @@
 using System;
+using Avalonia.LogicalTree;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Companion;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
@@ -38,17 +41,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private void WireCellHostActions(WorkshopShelfParts parts)
         {
             parts.Behavior.ChatShortcutRequested += async (_, _) => await RebindChatShortcutAsync();
+            // WPF CompanionCard_Click: the cell supplies the same 0..4 Tag index.
+            parts.Roster.CompanionCardClicked += (_, index) =>
+            {
+                try
+                {
+                    // One switch owner: the shell also refreshes the room and the tube avatar set.
+                    if (TopLevel.GetTopLevel(this) is Windows.MainShellWindow shell &&
+                        this.FindLogicalAncestorOfType<CompanionRoomView>() is { } room)
+                        shell.SwitchCompanionFromRoster(index, room);
+                    else
+                        // Standalone drawer hosts still switch through Core; hero/roster hooks
+                        // follow Core switches and level-ups independently of the shell.
+                        CompanionCore.SwitchCompanion((CompanionId)index);
+                }
+                catch (Exception ex) { Log.Warning(ex, "Workshop: companion switch failed"); }
+            };
+
             WirePhrasePresets(parts);
+            parts.Triggers.EditTriggersRequested += async (_, _) => await EditTriggersAsync();
+
 
             // Deliberately NOT wired, each for the reason a previous layer already recorded:
             //
-            //  · Behavior.CameraShortcutRequested — the combo drives MainWindow.SessionIO.cs:1485
-            //    ToggleWebcamFromHotkey / WebcamTrackingService, and no webcam engine exists on this
-            //    head, so a rebind would configure a key for a feature that cannot fire. Same
-            //    refusal as DevicesSettingsSection.axaml.cs's BtnCameraShortcutDevices.
+            // CameraShortcutRequested still needs the camera hotkey route. The webcam tracker
+            // exists, but a rebind alone would configure a shortcut that cannot fire.
             // Browser pause forwards from the cell to the shell's live Home WebHost.
             //  · Roster.PersonalityAssignRequested — personality prompt assignment remains absent.
-            //    CompanionTabView wires CompanionCardClicked to the shell's shared-Core switch.
             // Community owns its shared-service actions and native picker presentation.
         }
 

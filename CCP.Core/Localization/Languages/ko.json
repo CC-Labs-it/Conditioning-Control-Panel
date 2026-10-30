@@ -3287,6 +3287,7 @@
   "login_checking_availability": "사용 가능 여부 확인 중...",
   "login_could_not_check": "확인할 수 없었어요: {0}",
   "title_error": "오류",
+  "title_trigger_phrases": "트리거 문구",
   "title_invalid_name": "유효하지 않은 이름",
   "title_success": "성공",
   "title_confirm": "확인",
