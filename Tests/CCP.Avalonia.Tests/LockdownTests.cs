@@ -102,8 +102,10 @@ public sealed class LockdownTests
         });
     }
 
-    [Fact]
-    public async Task EmergencyExitPressUsesSixtyMsOutAndOneFortyMsHome()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EmergencyExitPressUsesSixtyMsOutAndOneFortyMsHome(bool repressDuringRelease)
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
@@ -155,6 +157,42 @@ public sealed class LockdownTests
                 Step(1000); Step(1070);
                 ScaleIs(0.9825);
                 Step(1140);
+                ScaleIs(1.0);
+
+                // WPF BeginAnimation (LockdownTabView.xaml.cs:330-342) starts a reversal
+                // from the current animated scale, including release before the press settles.
+                win.MouseDown(p, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                Step(2000); Step(2030);
+                ScaleIs(0.97375);
+                var reversalSamples = new System.Collections.Generic.List<double>();
+                root.PropertyChanged += (_, e) =>
+                {
+                    if (e.Property == Visual.RenderTransformProperty && root.RenderTransform is { } transform)
+                        reversalSamples.Add(transform.Value.M11);
+                };
+                win.MouseUp(p, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                Assert.All(reversalSamples, scale => Assert.InRange(scale, 0.97375 - 0.000001, 1.0));
+                ScaleIs(0.97375); // no jump to the old press target
+                Step(3000); Step(3070);
+                ScaleIs(0.986875);
+                if (repressDuringRelease)
+                {
+                    reversalSamples.Clear();
+                    win.MouseDown(p, MouseButton.Left);
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.All(reversalSamples, scale => Assert.InRange(scale, 0.965 - 0.000001, 0.986875 + 0.000001));
+                    ScaleIs(0.986875); // no jump to the old release target
+                    Step(4000); Step(4030);
+                    ScaleIs(0.97046875);
+                    Step(4060);
+                    ScaleIs(0.965);
+                    win.MouseUp(p, MouseButton.Left);
+                    Dispatcher.UIThread.RunJobs();
+                    Step(5000); Step(5140);
+                }
+                else Step(3140);
                 ScaleIs(1.0);
             }
             finally
