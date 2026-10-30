@@ -11,6 +11,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// drive the editor's play/seek/end path without a sound card.</summary>
     internal interface IDeeperLocalAudio : IDisposable
     {
+        int Volume { get; set; }
         double DurationSeconds { get; }
         double PositionSeconds { get; set; }
         void Play();
@@ -53,6 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// tested without libvlc or real time.</summary>
         internal interface IEngine
         {
+            int Volume { get; set; }
             VLCState State { get; }
             long Time { get; set; }
             long Length { get; }
@@ -63,6 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private sealed class VlcEngine(MediaPlayer p) : IEngine
         {
+            public int Volume { get => p.Volume; set => p.Volume = value; }
             public VLCState State => p.State;
             public long Time { get => p.Time; set => p.Time = value; }
             public long Length => p.Length;
@@ -80,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             private int _disposed;
             internal bool IsDisposed => _disposed != 0;
 
+            public int Volume { get => player.Volume; set => player.Volume = Math.Clamp(value, 0, 100); }
             public event Action? Ended;
 
             private bool Live => player.State is VLCState.Playing or VLCState.Paused;

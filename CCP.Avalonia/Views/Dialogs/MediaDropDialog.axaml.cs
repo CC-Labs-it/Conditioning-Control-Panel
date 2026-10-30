@@ -1,7 +1,6 @@
 using System.IO;
 using Avalonia.Controls;
 using ConditioningControlPanel.Localization;
-using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Dialogs;
 
@@ -15,8 +14,6 @@ public partial class MediaDropDialog : Window
         InitializeComponent();
         Title = Loc.Get("dlg_media_drop_title");
         TxtFileName.Text = Path.GetFileName(path);
-        // Part B: the existing player's LoadAudio (line 654) has no audio transport.
-        BtnPlay.IsVisible = DropRules.AssetVideoExtensions.Contains(Path.GetExtension(path));
         BtnPlay.Click += (_, _) => Close(MediaDropChoice.Play);
         BtnEdit.Click += (_, _) => Close(MediaDropChoice.Edit);
         BtnOk.Click += (_, _) => Close(MediaDropChoice.Library);

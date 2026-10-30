@@ -12,16 +12,16 @@
                        FontSize="18" FontWeight="Bold" TextAlignment="Center" Margin="0,0,0,8"/>
             <TextBlock x:Name="TxtFileName" Foreground="{DynamicResource TextLightBrush}"
                        FontSize="12" Opacity="0.75" TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,16"/>
-            <Button x:Name="BtnPlay" Theme="{StaticResource ActionButton}" HorizontalAlignment="Stretch" Padding="20,12" Margin="0,0,0,8">
+            <Button x:Name="BtnPlay" Theme="{StaticResource ActionButton}" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Stretch" Padding="20,12" Margin="0,0,0,8">
                 <TextBlock Text="{loc:Str dlg_media_drop_play}"/>
             </Button>
-            <Button x:Name="BtnEdit" Theme="{StaticResource ActionButton}" HorizontalAlignment="Stretch" Padding="20,12" Margin="0,0,0,8">
+            <Button x:Name="BtnEdit" Theme="{StaticResource ActionButton}" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Stretch" Padding="20,12" Margin="0,0,0,8">
                 <TextBlock Text="{loc:Str dlg_media_drop_edit}"/>
             </Button>
-            <Button x:Name="BtnOk" Theme="{StaticResource ActionButton}" HorizontalAlignment="Stretch" Padding="20,12" Margin="0,0,0,8">
+            <Button x:Name="BtnOk" Theme="{StaticResource ActionButton}" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Stretch" Padding="20,12" Margin="0,0,0,8">
                 <TextBlock Text="{loc:Str dlg_media_drop_library}"/>
             </Button>
-            <Button x:Name="BtnCancel" Theme="{StaticResource SecondaryButton}" HorizontalAlignment="Center" Padding="8,6" Margin="0,8,0,0" FontSize="11" Opacity="0.7">
+            <Button x:Name="BtnCancel" Theme="{StaticResource SecondaryButton}" HorizontalAlignment="Center" Padding="8,6" Margin="0,8,0,0" FontSize="11" FontWeight="Normal" Background="Transparent" Opacity="0.7">
                 <TextBlock Text="{loc:Str dlg_media_drop_cancel}"/>
             </Button>
         </StackPanel>

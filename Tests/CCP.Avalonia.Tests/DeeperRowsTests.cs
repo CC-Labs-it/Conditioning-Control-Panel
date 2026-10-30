@@ -25,7 +25,7 @@ public sealed class DeeperRowsTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
@@ -60,6 +60,7 @@ public sealed class DeeperRowsTests
     private sealed class FakeAudio : IDeeperLocalAudio
     {
         public bool Playing, Disposed;
+        public int Volume { get; set; }
         public double DurationSeconds { get; set; } = 95;
         public double PositionSeconds { get; set; }
         public void Play() => Playing = true;
@@ -124,6 +125,7 @@ public sealed class DeeperRowsTests
     private sealed class FakeEngine : DeeperLocalAudio.IEngine
     {
         public LibVLCSharp.Shared.VLCState State { get; set; } = LibVLCSharp.Shared.VLCState.NothingSpecial;
+        public int Volume { get; set; }
         public long Time { get; set; }
         public long Length => 6000;
         public int Stops;
@@ -137,6 +139,8 @@ public sealed class DeeperRowsTests
     {
         var e = new FakeEngine();
         var t = new DeeperLocalAudio.Transport(e, 12000, () => { });
+        t.Volume = 135; Assert.Equal(100, e.Volume);
+        t.Volume = -1; Assert.Equal(0, e.Volume);
         Assert.Equal(12, t.DurationSeconds);              // header estimate until playing
 
         // Seek before playback: taken by the first Playing, never again.

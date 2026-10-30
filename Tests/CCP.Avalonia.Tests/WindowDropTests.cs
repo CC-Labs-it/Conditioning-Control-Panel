@@ -52,6 +52,16 @@ public sealed class WindowDropTests
             Assert.Equal(new[] { "BtnPlay", "BtnEdit", "BtnOk", "BtnCancel" }, buttons.Select(b => b.Name));
             Assert.Equal(new[] { "play", "edit", "library", "cancel" }.Select(k => Loc.Get("dlg_media_drop_" + k)),
                 buttons.Select(b => ButtonText(dialog, b.Name!)));
+            foreach (var action in buttons.Take(3))
+            {
+                var label = action.GetVisualDescendants().OfType<TextBlock>().Single();
+                Assert.Equal(13, label.FontSize);
+                Assert.Equal(global::Avalonia.Media.FontWeight.SemiBold, label.FontWeight);
+            }
+            Assert.Equal(global::Avalonia.Media.Colors.Transparent,
+                Assert.IsAssignableFrom<global::Avalonia.Media.ISolidColorBrush>(buttons[3].Background).Color);
+            Assert.Equal(11, buttons[3].FontSize);
+            Assert.Equal(global::Avalonia.Media.FontWeight.Normal, buttons[3].FontWeight);
             if (button == null) dialog.Close(); else Click(dialog, button);
             Assert.Equal(Enum.Parse<MediaDropChoice>(result), await pending);
         }
@@ -101,16 +111,126 @@ public sealed class WindowDropTests
         Assert.True(File.Exists(path));
     });
 
+    private sealed class ProbeAudio : IDeeperLocalAudio
+    {
+        public bool Playing, Disposed;
+        public int Plays;
+        public int Volume { get; set; }
+        public double DurationSeconds => 95;
+        public double PositionSeconds { get; set; }
+        public event Action? Ended;
+        public bool Subscribed => Ended != null;
+        public void Play() { Plays++; Playing = true; }
+        public void Pause() => Playing = false;
+        public void End() { Playing = false; Ended?.Invoke(); }
+        public void Dispose() => Disposed = true;
+    }
+
+    // WPF EnhancementPlayerWindow.xaml.cs:616,686,836,1017,1180,1223,2621.
     [Fact]
-    public Task AudioDropWithholdsPlayUntilThePlayerHasAnAudioTransport() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task AudioDropPlaysAndTransportStopsReplaysAndCleansUp() => Run(async (shell, root, _) =>
+    {
+        var path = Path.Combine(root, "track.mp3");
+        File.WriteAllBytes(path, new byte[16]);
+        var original = DeeperLocalAudio.Open;
+        var opened = new System.Collections.Generic.List<ProbeAudio>();
+        DeeperLocalAudio.Open = p =>
+        {
+            Assert.Equal(path, p);
+            var audio = new ProbeAudio(); opened.Add(audio);
+            return Task.FromResult<IDeeperLocalAudio?>(audio);
+        };
+        try
+        {
+            Drop(shell, path);
+            var ask = await WaitFor(() => shell.OwnedWindows.OfType<MediaDropDialog>().SingleOrDefault());
+            Assert.True(ask.FindControl<Button>("BtnPlay")!.IsVisible);
+            Click(ask, "BtnPlay");
+            var player = await WaitFor(() => shell.OwnedWindows.OfType<EnhancementPlayerWindow>().SingleOrDefault());
+            var first = Assert.Single(opened);
+            Assert.True(first.Playing);
+            Assert.Equal(80, first.Volume);
+            Assert.Equal("1:35", player.FindControl<TextBlock>("TxtTotal")!.Text);
+            Click(player, "BtnPlayPause"); Assert.False(first.Playing);
+            Click(player, "BtnPlayPause"); Assert.True(first.Playing);
+            player.FindControl<Slider>("SliderVolume")!.Value = 42;
+            Assert.Equal(42, first.Volume);
+            first.PositionSeconds = 12;
+            await WaitFor(() => player.FindControl<TextBlock>("TxtCurrent")!.Text == "0:12" ? player : null);
+            var canvas = player.FindControl<Canvas>("WaveformCanvas")!;
+            var point = canvas.TranslatePoint(new Point(canvas.Bounds.Width / 2, 2), player)!.Value;
+            player.MouseDown(point, MouseButton.Left); player.MouseUp(point, MouseButton.Left);
+            Assert.InRange(first.PositionSeconds, 40, 55);
+            first.End();
+            await WaitFor(() => first.Disposed ? player : null);
+            Assert.False(first.Subscribed);
+            Assert.Equal(Loc.Get("deeper_player_status_ended"), player.FindControl<TextBlock>("TxtStatus")!.Text);
+            Click(player, "BtnPlayPause");
+            Assert.True(opened[1].Playing); Assert.Equal(0, opened[1].PositionSeconds);
+            Click(player, "BtnStop");
+            Assert.True(opened[1].Disposed); Assert.False(opened[1].Playing);
+            Click(player, "BtnPlayPause");
+            player.Close();
+            Assert.True(opened[2].Disposed); Assert.False(opened[2].Playing);
+            Assert.False(opened[2].Subscribed);
+        }
+        finally { DeeperLocalAudio.Open = original; }
+    });
+
+    // WPF EnhancementPlayerWindow.xaml.cs:630-646,836,2623: a stale open must never start sound.
+    [Theory]
+    [InlineData("stop")]
+    [InlineData("close")]
+    [InlineData("video")]
+    [InlineData("replace")]
+    public Task PendingAudioCannotOutliveItsOwnerOrReplacement(string action) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var dialog = new MediaDropDialog("/tmp/track.mp3");
-        Assert.False(dialog.FindControl<Button>("BtnPlay")!.IsVisible);
-        Assert.True(dialog.FindControl<Button>("BtnEdit")!.IsVisible);
-        dialog.Close();
+        var pending = new TaskCompletionSource<IDeeperLocalAudio?>();
+        var original = DeeperLocalAudio.Open;
+        var stale = new ProbeAudio(); var next = new ProbeAudio();
+        DeeperLocalAudio.Open = p => p.EndsWith("first.mp3") ? pending.Task : Task.FromResult<IDeeperLocalAudio?>(next);
+        var player = new EnhancementPlayerWindow(null, null);
+        try
+        {
+            player.Show(); player.OpenLocalMediaFile("/tmp/first.mp3");
+            if (action == "stop") Click(player, "BtnStop");
+            else if (action == "close") player.Close();
+            else player.OpenLocalMediaFile(action == "video" ? "/tmp/clip.mp4" : "/tmp/second.mp3");
+            pending.SetResult(stale);
+            await WaitFor(() => stale.Disposed ? player : null);
+            Assert.Equal(0, stale.Plays); Assert.False(stale.Subscribed);
+            if (action == "replace") Assert.True(next.Playing);
+        }
+        finally { player.Close(); DeeperLocalAudio.Open = original; }
+        if (action == "replace") { Assert.True(next.Disposed); Assert.False(next.Playing); }
+    });
+
+    // WPF EnhancementPlayerWindow.xaml.cs:634,647-650: failed replacement stops the old clip.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task FailedAudioOpenReportsFailureAndStopsTheOldClip(bool throws) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var original = DeeperLocalAudio.Open;
+        var audio = new ProbeAudio();
+        var player = new EnhancementPlayerWindow(null, null);
+        try
+        {
+            player.Show();
+            DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
+            player.OpenLocalMediaFile("/tmp/first.mp3");
+            DeeperLocalAudio.Open = _ => throws ? throw new InvalidOperationException("bad media") : Task.FromResult<IDeeperLocalAudio?>(null);
+            player.OpenLocalMediaFile("/tmp/bad.mp3");
+            Assert.True(audio.Disposed); Assert.False(audio.Playing); Assert.False(audio.Subscribed);
+            Assert.Equal(Loc.Get("deeper_player_status_audio_failed"), player.FindControl<TextBlock>("TxtStatus")!.Text);
+        }
+        finally { player.Close(); DeeperLocalAudio.Open = original; }
         return Task.CompletedTask;
     });
 
