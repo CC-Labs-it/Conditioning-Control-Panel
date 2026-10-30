@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Companion;
 using Xunit;
 
@@ -11,12 +12,14 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public sealed class CompanionCoreTests : IDisposable
 {
+    private readonly string _oldLanguage = LocalizationManager.Instance.CurrentLanguage;
     private readonly AppSettings _s = CoreSettings.Current;
     private readonly (int, CompanionBonusType?, double, int, int, bool, bool, string) _old;
     private readonly Dictionary<int, CompanionProgress> _oldProgress;
 
     public CompanionCoreTests()
     {
+        LocalizationManager.Instance.Initialize("en");
         _old = (_s.ActiveCompanionId, _s.CompanionPerk, _s.PlayerXP, _s.PlayerLevel, _s.HighestLevelEver, _s.StrictLockEnabled, _s.OfflineMode, _s.OfflineUsername);
         (_oldProgress, _s.CompanionProgressData) = (_s.CompanionProgressData, new());
     }
@@ -25,6 +28,48 @@ public sealed class CompanionCoreTests : IDisposable
     {
         (_s.ActiveCompanionId, _s.CompanionPerk, _s.PlayerXP, _s.PlayerLevel, _s.HighestLevelEver, _s.StrictLockEnabled, _s.OfflineMode, _s.OfflineUsername) = _old;
         _s.CompanionProgressData = _oldProgress;
+        LocalizationManager.Instance.Initialize(_oldLanguage);
+    }
+
+    [Fact]
+    public void AwardAndDrainEventsMatchWpfPayloadAndObserveTheUpdatedSettings()
+    {
+        (_s.CompanionPerk, _s.StrictLockEnabled) = (CompanionBonusType.StrictModeBonus, false);
+        var awards = new List<(CompanionId Id, double Amount, double Modifier)>();
+        var drained = new List<double>();
+        Action<CompanionId, double, double> award = (id, amount, modifier) =>
+        {
+            Assert.Equal(amount, _s.ActiveCompanionProgress.CurrentXP);
+            awards.Add((id, amount, modifier));
+        };
+        Action<double> drain = amount => { Assert.Equal(0, _s.PlayerXP); drained.Add(amount); };
+        CompanionCore.XPAwarded += award;
+        CompanionCore.XPDrained += drain;
+        try
+        {
+            CompanionCore.AddCompanionXP(12, "test");
+            Assert.Equal((CompanionCore.ActiveCompanion, 6.0, 0.5), Assert.Single(awards));
+            _s.ActiveCompanionProgress.Level = CompanionProgress.MaxLevel;
+            CompanionCore.AddCompanionXP(12, "test");
+            Assert.Single(awards);
+            (_s.CompanionPerk, _s.PlayerXP) = (CompanionBonusType.XPDrain, 2);
+            Assert.True(CompanionCore.DrainTick(DateTime.UtcNow));
+            Assert.Equal(3.0, Assert.Single(drained)); // WPF announces its tick rate, even at the floor.
+            Assert.False(CompanionCore.DrainTick(DateTime.UtcNow));
+            Assert.Single(drained);
+        }
+        finally { CompanionCore.XPAwarded -= award; CompanionCore.XPDrained -= drain; }
+    }
+
+    [Theory]
+    [InlineData(9, null, null)]
+    [InlineData(10, "Companion level up", "Circe reached Level 10.")]
+    [InlineData(CompanionProgress.MaxLevel, "Max level", "Circe has reached maximum level.")]
+    public void MilestoneRuleUsesTheSuppliedModAwareName(int level, string? title, string? body)
+    {
+        var notice = CompanionCore.MilestoneNotification("Circe", level);
+        Assert.Equal(title, notice?.Title);
+        Assert.Equal(body, notice?.Body);
     }
 
     [Fact]
@@ -88,5 +133,29 @@ public sealed class CompanionCoreTests : IDisposable
             Assert.NotEqual(DateTime.MinValue, _s.CompanionProgressData[(int)CompanionId.BrainParasite].FirstActivated);
         }
         finally { CompanionCore.Switched -= on; }
+    }
+}
+
+// The Windows CI failure was masked on Linux by another fixture loading English first.
+[Collection(SessionStatics.Name)]
+public sealed class CompanionCoreLocalizationTests
+{
+    [Fact]
+    public void FixtureSelectsEnglishAndRestoresThePreviousLanguage()
+    {
+        var loc = LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.Initialize("fr");
+            using (var fixture = new CompanionCoreTests())
+            {
+                Assert.Equal("en", loc.CurrentLanguage);
+                Assert.Equal("Companion level up", CompanionCore.MilestoneNotification("Circe", 10)?.Title);
+                Assert.Equal("Max level", CompanionCore.MilestoneNotification("Circe", CompanionProgress.MaxLevel)?.Title);
+            }
+            Assert.Equal("fr", loc.CurrentLanguage);
+        }
+        finally { loc.Initialize(previous); }
     }
 }

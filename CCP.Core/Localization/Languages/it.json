@@ -8707,5 +8707,10 @@
   "online_official_plan_prime": "Prime ha la quota giornaliera più ampia. Quello che hai già visto si riguarda gratis.",
   "online_official_nice": "Bello",
   "online_official_stamped_line": "I media online arrivano da Scrolller. Ogni immagine e clip porta un piccolo marchio \"via Scrolller\".",
-  "online_cache_day_line": "I media online restano un giorno in una piccola cache su questo computer e non vengono mai caricati."
+  "online_cache_day_line": "I media online restano un giorno in una piccola cache su questo computer e non vengono mai caricati.",
+  "companion_milestone_title": "Compagno salito di livello",
+  "companion_milestone_body": "{0} ha raggiunto il livello {1}.",
+  "companion_milestone_max_title": "Livello massimo",
+  "companion_milestone_max_body": "{0} ha raggiunto il livello massimo.",
+  "companion_wake_greeting": "Buongiorno."
 }
