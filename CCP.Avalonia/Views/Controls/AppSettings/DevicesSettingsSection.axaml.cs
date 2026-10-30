@@ -318,8 +318,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         }
         private void DebugFaceFound() { _face = "yes"; PaintDebugCounters(); AppendWebcamDebugLog("Face FOUND"); }
         private void DebugFaceLost() { _face = "lost"; PaintDebugCounters(); AppendWebcamDebugLog("Face LOST"); }
-        private void DebugMouth() => AppendWebcamDebugLog($"Mouth-open #{++_mouths}");
-        private void DebugTongue() => AppendWebcamDebugLog($"Tongue-out #{++_tongues}");
+        private void DebugMouth() => AppendWebcamDebugLog(Loc.GetF("webcam_debug_mouth_fmt", ++_mouths));
+        private void DebugTongue() => AppendWebcamDebugLog(Loc.GetF("webcam_debug_tongue_fmt", ++_tongues));
         private void DebugBlink() { _blinks++; PaintDebugCounters(); AppendWebcamDebugLog($"Blink #{_blinks}"); }
         private void DebugGaze(GazeSide side)
         {

@@ -142,6 +142,40 @@ public sealed class WebcamGestureTests
         finally { owner.Close(); }
     });
 
+    [Theory]
+    [InlineData("en", "Mouth-open #1", "Tongue-out #1")]
+    [InlineData("de", "Mund geöffnet #1", "Zunge herausgestreckt #1")]
+    [InlineData("es", "Boca abierta #1", "Lengua fuera #1")]
+    [InlineData("fr", "Bouche ouverte n° 1", "Langue sortie n° 1")]
+    [InlineData("it", "Bocca aperta n. 1", "Lingua fuori n. 1")]
+    [InlineData("ja", "口を開く #1", "舌を出す #1")]
+    [InlineData("ko", "입 벌림 #1", "혀 내밀기 #1")]
+    [InlineData("pt-BR", "Boca aberta nº 1", "Língua de fora nº 1")]
+    [InlineData("ru", "Рот открыт № 1", "Язык высунут № 1")]
+    [InlineData("zh-CN", "张嘴 #1", "伸舌 #1")]
+    public void DevicesGestureDiagnosticsUseTheCurrentLanguage(string language, string mouth, string tongue) => AvaloniaTestDispatcher.Run(() =>
+    {
+        LabWebcamStatusTests.Setup();
+        var section = new DevicesSettingsSection();
+        var owner = new global::Avalonia.Controls.Window { Content = section };
+        try
+        {
+            owner.Show();
+            var tracker = WebcamTracker.Instance;
+            void Gesture(string name) => ((Action?)typeof(WebcamTracker).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(tracker))?.Invoke();
+            LocalizationManager.Instance.SetLanguage(language);
+            Gesture("OnMouthOpen"); Gesture("OnTongueOut");
+            var log = section.FindControl<TextBlock>("TxtWebcamDebugLog")!;
+            Assert.Contains(mouth, log.Text);
+            Assert.Contains(tongue, log.Text);
+            LocalizationManager.Instance.SetLanguage("en");
+            Gesture("OnMouthOpen"); Gesture("OnTongueOut");
+            Assert.Contains("Mouth-open #2", log.Text);
+            Assert.Contains("Tongue-out #2", log.Text);
+        }
+        finally { owner.Close(); LocalizationManager.Instance.SetLanguage("en"); }
+    });
+
     /// <summary>The status pill carries {loc:Str rf_webcam_stopped}; the live state is a bound key, so a
     /// language change shows the current state in the new language, not a frozen or reverted text.</summary>
     [Fact]

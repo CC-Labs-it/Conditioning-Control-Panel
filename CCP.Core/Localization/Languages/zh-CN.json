@@ -6489,6 +6489,8 @@
   "rf_skill_night_shift_req": "午夜之后使用应用 10 次",
   "rf_skill_early_bird_bimbo_req": "早上 7 点前使用应用 10 次",
   "rf_skill_eternal_doll_req": "达到 50 级",
+  "webcam_debug_mouth_fmt": "张嘴 #{0}",
+  "webcam_debug_tongue_fmt": "伸舌 #{0}",
   "rf_webcam_stopped": "已停止",
   "rf_webcam_starting": "启动中…",
   "rf_webcam_tracking": "追踪中",
