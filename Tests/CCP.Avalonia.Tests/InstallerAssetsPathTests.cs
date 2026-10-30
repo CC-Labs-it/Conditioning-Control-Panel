@@ -13,10 +13,12 @@ public sealed class InstallerAssetsPathTests
     private static string RepoRoot([CallerFilePath] string here = "") =>
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", ".."));
 
-    [Fact]
-    public void ReadsTheExactKeyAndValueTheInstallerWrites()
+    [Theory]
+    [InlineData("installer.iss")]
+    [InlineData("installer-avalonia.iss")]
+    public void ReadsTheExactKeyAndValueTheInstallerWrites(string installer)
     {
-        var iss = File.ReadAllText(Path.Combine(RepoRoot(), "installer.iss"));
+        var iss = File.ReadAllText(Path.Combine(RepoRoot(), installer));
         string Define(string name) => Regex.Match(iss, "#define " + name + " \"([^\"]+)\"").Groups[1].Value;
 
         var write = Regex.Match(iss, @"RegWriteStringValue\(HKEY_CURRENT_USER,\s*'([^']+)',\s*'([^']+)',\s*SelectedAssetsPath\)");

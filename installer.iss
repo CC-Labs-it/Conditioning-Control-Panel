@@ -3,7 +3,7 @@
 ;
 ; Requirements:
 ; 1. Install Inno Setup from https://jrsoftware.org/isinfo.php
-; 2. Build the app first: dotnet publish CCP.Avalonia/CCP.Avalonia.csproj -c Release -p:PublishProfile=win-x64 (.NET 10 SDK; build-installer.bat does this)
+; 2. Build the app first: dotnet publish -c Release
 ; 3. Compile this script with Inno Setup Compiler
 ;
 ; The installer will:
@@ -17,10 +17,6 @@
 #define MyAppPublisher "CodeBambi"
 #define MyAppURL "https://github.com/CC-Labs-it/Conditioning-Control-Panel"
 #define MyAppExeName "ConditioningControlPanel.exe"
-; 7.2+: the Avalonia head's exe as published. It is installed under MyAppExeName (DestName) so the
-; AppId, folder, exe name, shortcuts, taskkill and the updater's relaunch all stay what WPF had
-; (docs/avalonia-decisions.html, "Upgrade in place from WPF").
-#define SourceExeName "CCP.Avalonia.exe"
 #define MyAppDescription "A professional visual conditioning application with gamification features"
 
 ; Path to the published output (adjust if needed)
@@ -29,7 +25,7 @@
 ; ~131 chars deep, and a handful of builtin-sissyhypno audio files push past MAX_PATH (260)
 ; from there, aborting the ISCC compile. Staging to e.g. C:\ccpb\pub keeps every path short.
 #ifndef PublishDir
-  #define PublishDir "CCP.Avalonia\bin\publish\win-x64"
+  #define PublishDir "ConditioningControlPanel\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish"
 #endif
 
 [Setup]
@@ -70,7 +66,7 @@ UsePreviousPrivileges=yes
 ; Output settings
 OutputDir=.\installer-output
 OutputBaseFilename=ConditioningControlPanel-{#MyAppVersion}-Setup
-SetupIconFile=Assets\app.ico
+SetupIconFile=ConditioningControlPanel\Resources\app.ico
 
 ; Compression
 Compression=lzma2/ultra64
@@ -114,9 +110,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 Name: "startmenuicon"; Description: "Create a Start Menu shortcut"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
-; 7.2: the "Open with CCP" task (fileassoc, --play / --edit) is retired. The Avalonia head has no
-; --play / --edit entry point yet (parse + second-instance handoff + both windows), so the entries
-; would open a bare app. CurStepChanged removes any left by an earlier install.
+Name: "fileassoc"; Description: "Add 'Open with CCP' to right-click menu for media files (.mp4, .mp3, etc.)"; GroupDescription: "File associations:"; Flags: unchecked
 
 [Files]
 ; Microsoft Visual C++ 2015-2022 x64 runtime bootstrapper. OpenCvSharpExtern.dll
@@ -137,11 +131,11 @@ Source: "redist\VC_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall;
 ;   https://go.microsoft.com/fwlink/p/?LinkId=2124703
 Source: "redist\MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: WebView2RuntimeNeeded
 
-; Main executable: the SIGNED Avalonia exe, renamed on install (build-installer.bat signs it before staging)
-Source: "{#PublishDir}\{#SourceExeName}"; DestDir: "{app}"; DestName: "{#MyAppExeName}"; Flags: ignoreversion
+; Main executable
+Source: "{#PublishDir}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 
-; All other files from publish directory (the original exe name is excluded: it is installed above)
-Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "\{#SourceExeName},*.pdb,cs\*,de\*,es\*,fr\*,it\*,ja\*,ko\*,pl\*,pt-BR\*,ru\*,tr\*,zh-Hans\*,zh-Hant\*"
+; All other files from publish directory
+Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.pdb,cs\*,de\*,es\*,fr\*,it\*,ja\*,ko\*,pl\*,pt-BR\*,ru\*,tr\*,zh-Hans\*,zh-Hant\*"
 
 ; NOTE: Don't include user data files - those go to %APPDATA%
 
@@ -205,10 +199,6 @@ Type: files;      Name: "{app}\Resources\sounds\PRIMPED AND PAMPERED.MP3"
 Type: files;      Name: "{app}\Resources\sounds\SNAP AND FORGET.MP3"
 Type: files;      Name: "{app}\Resources\sounds\ZAP COCK DRAIN OBEY.mp3"
 
-; 7.2 (WPF -> Avalonia upgrade): WPF's loose WebView2 loader. The Avalonia head bundles its own web
-; view natives in the single-file exe, so a stale loader beside it could only shadow them.
-Type: files;      Name: "{app}\WebView2Loader.dll"
-
 [Icons]
 ; Start Menu shortcut
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: startmenuicon
@@ -222,6 +212,57 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Root: HKCU; Subkey: "Software\{#MyAppPublisher}\{#MyAppName}"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\{#MyAppPublisher}\{#MyAppName}"; ValueType: string; ValueName: "Version"; ValueData: "{#MyAppVersion}"; Flags: uninsdeletekey
 ; Assets path will be written by [Code] section during install
+
+; --- "Open with CCP" file association (per-user, no admin required) ---
+; Two ProgIDs so the Open With list shows two entries with the app icon:
+;   "CCP Player" (--play)  →  EnhancementPlayerWindow
+;   "CCP Editor" (--edit)  →  DeeperEditorWindow with blank enhancement
+; Note: this only adds CCP to the Open With list. It does NOT change which
+; app is the default for .mp4/.mp3/etc. Users promote to default manually.
+
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Player.1"; ValueType: string; ValueName: ""; ValueData: "Conditioning Control Panel - Player"; Flags: uninsdeletekey; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Player.1"; ValueType: string; ValueName: "FriendlyTypeName"; ValueData: "CCP Player"; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Player.1\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Player.1\shell\open"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "CCP Player"; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Player.1\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" --play ""%1"""; Tasks: fileassoc
+
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Editor.1"; ValueType: string; ValueName: ""; ValueData: "Conditioning Control Panel - Editor"; Flags: uninsdeletekey; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Editor.1"; ValueType: string; ValueName: "FriendlyTypeName"; ValueData: "CCP Editor"; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Editor.1\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Editor.1\shell\open"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "CCP Editor"; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\CCPanel.Editor.1\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" --edit ""%1"""; Tasks: fileassoc
+
+; --- Add CCP to OpenWith for each supported media extension ---
+; uninsdeletevalue (NOT uninsdeletekey) — we only own our two values, must not
+; nuke the whole OpenWithProgids subkey on uninstall (other apps live there too).
+
+; Video
+Root: HKCU; Subkey: "Software\Classes\.mp4\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.mp4\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.webm\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.webm\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.mkv\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.mkv\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.mov\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.mov\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.avi\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.avi\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.m4v\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.m4v\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+
+; Audio
+Root: HKCU; Subkey: "Software\Classes\.mp3\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.mp3\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.wav\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.wav\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.m4a\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.m4a\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.aac\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.aac\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.flac\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.flac\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.ogg\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Player.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.ogg\OpenWithProgids"; ValueType: string; ValueName: "CCPanel.Editor.1"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
 
 [Run]
 ; Install the VC++ runtime first (only if missing) so the webcam native library
@@ -246,11 +287,6 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 Filename: "taskkill"; Parameters: "/F /IM {#MyAppExeName}"; Flags: runhidden; RunOnceId: "KillApp"
 
 [UninstallDelete]
-; WebView2's default profile beside the exe. The app points it at
-; %LOCALAPPDATA%\ConditioningControlPanel\browser_data_avalonia (offered for removal below with the
-; rest of the user data); these catch a run that predates that or a dev copy of CCP.Avalonia.exe.
-Type: filesandordirs; Name: "{app}\{#MyAppExeName}.WebView2"
-Type: filesandordirs; Name: "{app}\{#SourceExeName}.WebView2"
 ; Clean up any generated files (optional)
 Type: filesandordirs; Name: "{app}\logs"
 
@@ -547,7 +583,7 @@ begin
   RegDeleteKeyIncludingSubkeys(HKCU, 'Software\ConditioningControlPanel');
 end;
 
-// Remove the retired file-association registry entries (every install since 7.2)
+// Remove file-association registry entries (called on upgrade when user opts out)
 procedure CleanupFileAssociations();
 var
   Exts: array of String;
@@ -644,9 +680,9 @@ begin
         ForceDirectories(SelectedAssetsPath + '\videos');
     end;
 
-    // The "Open with CCP" task is retired (7.2): remove the entries an earlier install wrote, so
-    // Explorer stops offering a --play / --edit this exe does not understand.
-    CleanupFileAssociations();
+    // Remove any pre-existing file associations if the user opted out (or silent install)
+    if not WizardIsTaskSelected('fileassoc') then
+      CleanupFileAssociations();
 
     // Offer to clean up old Velopack installation
     if HasOldVelopackInstall then
