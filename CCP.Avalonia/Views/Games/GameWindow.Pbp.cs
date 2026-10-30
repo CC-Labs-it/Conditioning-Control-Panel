@@ -137,6 +137,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     case "boot-error":
                         PbpBootFailedThisSession = true;
                         return false;
+                    case "pbp:game-over":
+                        _ = ConditioningControlPanel.Services.GameRewards.SparklesPageResults.Send(
+                            ConditioningControlPanel.Services.GameRewards.SparklesPageResults.Chess(o), Platform.SparklesHead.Service);
+                        return true;
                     case "pbp:exit":
                         Close();
                         return true;
