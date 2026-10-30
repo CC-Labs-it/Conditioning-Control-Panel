@@ -885,6 +885,7 @@ namespace ConditioningControlPanel.Avalonia
                     }
                 };
                 SeedLevelAchievements(Achievements);
+                SeedBubbleAchievements(Achievements);
                 StartQuests();
                 Platform.CompanionHead.Start();   // WPF App.Companion: switch seams, companion XP, drain, level-up
                 Platform.BarkHead.Start();        // WPF App.Bark (App.xaml.cs:313/336/604/2826): rules, gate, sources
@@ -1095,13 +1096,24 @@ namespace ConditioningControlPanel.Avalonia
             Views.Overlays.SpiralOverlay.CloseAll();   // WPF StopEngine -> App.Overlay.Stop(); panic and exit too
         }
 
-        /// <summary>WPF App.OnAchievementUnlocked (App.xaml.cs:3815): one popup per unlock, shown at once.
-        /// ponytail: no sound, no Discord webhook - neither service exists on this head.</summary>
+        /// <summary>WPF BubbleService.cs:1082-1126 -> AchievementService.cs:378, even when no XP pays.
+        /// Returns the handler so tests can detach the startup subscription.</summary>
+        internal static Action SeedBubbleAchievements(AchievementEngine engine)
+        {
+            Action popped = engine.TrackBubblePopped;
+            Views.Overlays.BubbleOverlay.Popped += popped;
+            return popped;
+        }
+
         /// <summary>WPF ProgressionService.cs:285 (a level-up celebrates) and App.xaml.cs:3174 (retroactive,
         /// silent). Returns the LevelUp handler so a test can detach it.</summary>
         internal static Action<int> SeedLevelAchievements(AchievementEngine engine)
         {
-            Action<int> onLevel = engine.CheckLevelAchievements;
+            Action<int> onLevel = level =>
+            {
+                engine.CheckLevelAchievements(level);
+                engine.TrackSkillPointsEarned(SparklePointRewards.PointsPerLevel);
+            };
             ProgressionBank.LevelUp += onLevel;
             var was = engine.SuppressPopups;
             engine.SuppressPopups = true;
@@ -1145,6 +1157,19 @@ namespace ConditioningControlPanel.Avalonia
             engine.Unlocked += (_, a) => Dispatcher.UIThread.Post(() => ShowAchievementPopup(a));
             engine.Unlocked += (_, a) => ShowWardrobeRewardToasts(a);
             engine.Unlocked += (_, a) => AnnounceAchievement(a, discord ?? Platform.AccountSeed.Discord);
+            engine.BubbleMilestone += n => Dispatcher.UIThread.Post(() => ShowBubbleMilestonePopup(n), DispatcherPriority.ApplicationIdle);
+        }
+
+        /// <summary>WPF AchievementService.ShowBubbleMilestoneNotification (AchievementService.cs:468-490).</summary>
+        internal static void ShowBubbleMilestonePopup(int totalBubbles)
+        {
+            try
+            {
+                new Views.Windows.AchievementPopup(Loc.GetF("achievement_bubble_milestone_name", totalBubbles),
+                    Loc.Get("achievement_bubble_milestone_flavor"), "bubble_pop.png",
+                    new Controls.IconEntry(IconKind.Sparkle, IconVariant.Filled), Loc.Get("achievement_bubble_milestone_header")).Show();
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Failed to show bubble milestone popup"); }
         }
 
         /// <summary>WPF PlayAchievementSound + the DiscordShareAchievements post (App.xaml.cs:4180-4205).
