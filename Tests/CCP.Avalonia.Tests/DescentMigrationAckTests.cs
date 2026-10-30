@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -18,10 +19,54 @@ namespace CCP.Avalonia.Tests;
 /// <summary>
 /// Main sync #5 rows fc9640ff7 / abac4fa02 on this head: the bonus is for migrated accounts only (not a bare
 /// curve_epoch 1 stamp), the server's ack settles and heals an account migrated on any device, and the own
-/// Trainer Card wears the receipt + "(+N%)" readout. This head never takes the offer (no descent_auto).
+/// Trainer Card wears the receipt + "(+N%)" readout. This head takes offers silently through Core.
 /// </summary>
 public sealed partial class AccountSeedTests
 {
+    [Fact]
+    public void DescentPending_LoginUpdatesIdentityWithoutResurrectingTheOldLedger()
+    {
+        var s = new ConditioningControlPanel.Models.AppSettings
+        {
+            UnifiedId = "u1", PlayerLevel = 51, PlayerXP = 110, DescentEpoch = 1, HighestLevelEver = 150,
+            PendingDescentMigrationChoice = "restore",
+        };
+        AccountSeed.ApplyLoginUserData(s, new V2AuthService.V2User
+        {
+            UnifiedId = "u1", DisplayName = "Fixture", Level = 150, Xp = 999999,
+        }, "fixture-token", T0);
+        Assert.Equal((51, 110d, 1), (s.PlayerLevel, s.PlayerXP, s.DescentEpoch));
+        Assert.Equal(150, s.HighestLevelEver);
+        Assert.Equal("Fixture", s.UserDisplayName);
+        Assert.Equal("fixture-token", s.AuthToken);
+    }
+
+    [Fact]
+    public void DescentOffer_SubmitsRelevel_AndReloadBeforeAckKeepsEarnedXp() => WithFreshInstall(async () =>
+    {
+        var s = CoreSettings.Current;
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
+        wire.SyncReply = """{"descent_migration":{"required":true,"total_xp_earned":16343,"restore_basis_xp":70343,"devotion_days":180}}""";
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.Equal("restore", s.PendingDescentMigrationChoice);
+        Assert.Equal(70343, ProfileAdopt.TotalXp(s), 5);
+        s.PlayerXP += 110;
+        wire.SyncReply = """{"user":{"level":150,"xp":999999,"curve_epoch":0}}""";
+        wire.Profile = """{"user":{"unified_id":"u1","level":150,"xp":999999,"curve_epoch":0}}""";
+        sync.UtcNow = () => T0.AddMinutes(1);
+        Assert.True(await AccountSeed.LoadProfileAsync()); // simulates reload with a persisted pending choice
+        var submit = wire.Syncs.Last();
+        Assert.Equal("restore", (string?)submit["descent_migration"]?["choice"]);
+        Assert.True((bool)submit["descent_auto"]!);
+        Assert.Equal(70453, (int)submit["xp"]!);
+        Assert.Equal(70453, ProfileAdopt.TotalXp(s), 5);
+        sync.UtcNow = () => T0.AddMinutes(2);
+        wire.SyncReply = """{"descent_migration":{"completed":true,"choice":"restore"}}""";
+        Assert.True(await sync.PushAsync("ack"));
+        Assert.True(s.DescentMigrationCompleted);
+        Assert.Null(s.PendingDescentMigrationChoice);
+    });
+
     [Fact]
     public void DescentAck_FromTheSync_SettlesTheAccount_AndOnlyThenPaysTheBonus() => WithFreshInstall(async () =>
     {
@@ -53,7 +98,7 @@ public sealed partial class AccountSeedTests
         before = s.PlayerXP;
         ProgressionBank.Add(100, "Session");
         Assert.Equal(before + 110, s.PlayerXP, 3);
-        Assert.DoesNotContain(wire.Syncs, b => b.ContainsKey("descent_auto"));   // never claims to take offers
+        Assert.All(wire.Syncs, b => Assert.True((bool)b["descent_auto"]!));
     });
 
     [Fact]
