@@ -27,14 +27,15 @@ export const RATES = Object.freeze({
 
 /** Item ids in wire order (must equal sim/itemTable.js ITEM_IDS; a test checks). The first 8 are the hit kinds. */
 export const WIRE_ITEMS = Object.freeze(['flash', 'spiral', 'brainDrain', 'freeze', 'blackout', 'pink', 'melt', 'shatter',
-  'surge', 'glass', 'echo', 'golden', 'pendulum', 'disc', 'tether', 'snap', 'bigSpiral']);
+  'surge', 'glass', 'echo', 'golden', 'pendulum', 'disc', 'tether', 'snap', 'bigSpiral', 'tunnel']);
 export const EFFECT_COUNT = 8;
 /** Preset reactions in a race (sim/social.js REACTIONS; no free text). Append only. */
 export const REACTIONS = Object.freeze(['laugh', 'kiss', 'wink', 'pout']);
-/** Effect kinds a record carries (byte 35, 4 bits): the 8 old hit kinds, then the toys kit's. */
-export const EFFECTS = Object.freeze([...WIRE_ITEMS.slice(0, EFFECT_COUNT), 'pendulum', 'disc', 'tether', 'snap', 'bigSpiral']);
+/** Effect kinds a record carries (byte 35, 4 bits): the 8 old hit kinds, then the toys kit's, then 'tunnel' (14: the seat
+ * rides Tunnel Vision, immune and fast; the room widens its speed check for it). */
+export const EFFECTS = Object.freeze([...WIRE_ITEMS.slice(0, EFFECT_COUNT), 'pendulum', 'disc', 'tether', 'snap', 'bigSpiral', 'tunnel']);
 export const SHIELDS = Object.freeze([null, 'glass', 'golden', 'echo']);
-export const MODES = Object.freeze(['throw', 'lob', 'wide', 'drop', 'self', 'bounce', 'tether']);
+export const MODES = Object.freeze(['throw', 'lob', 'wide', 'drop', 'self', 'bounce', 'tether', 'ride']);
 export const VERDICTS = Object.freeze(['hit', 'glass', 'golden', 'mercy', 'decoy', 'snapped']);
 export const PHASES = Object.freeze(['lobby', 'countdown', 'racing', 'done']);
 export const ERRORS = Object.freeze(['bad', 'phase', 'seat', 'item', 'host', 'rate']);

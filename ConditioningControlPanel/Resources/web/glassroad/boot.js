@@ -1654,7 +1654,8 @@ async function boot(course, options, lifetime, isCurrent) {
       boosting: pst[S.boostKind] > 0, drifting: pst[S.driftDir] !== 0, driftTier: pst[S.driftStage],
       airborne: pst[S.airborne] > 0, onRoad: pst[S.grounded] > 0, edge: fs.edgeGlow > 0, paused: frozen, duck: fs.duck,
       driftCharge: pst[S.driftCharge] || 0, traumaOut: fs.traumaOut ?? 0,
-      submerged: inRace ? immersion(pst[S.s], cam.camera.position.y) : 0,
+      // Tunnel Vision: the ride sweeps the mix through the same low-pass (fx.state.tunnel eases in and out)
+      submerged: inRace ? Math.max(immersion(pst[S.s], cam.camera.position.y), (fs.tunnel || 0) * 0.55) : 0,
       ...waterContact(pst, inRace, feel.get('speed.topMps')),
     }, inRace ? racers.nearby(feel.get('ai.audibleKarts'), 80) : []);
     // rumble follows fs.rumble (zero under Gentle): re-sent every juice.rumbleMs at its current level,

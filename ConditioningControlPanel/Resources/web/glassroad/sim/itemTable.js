@@ -13,7 +13,7 @@
  */
 
 export const ITEM_IDS = ['flash', 'spiral', 'brainDrain', 'freeze', 'blackout', 'pink', 'melt', 'shatter', 'surge', 'glass', 'echo', 'golden',
-  'pendulum', 'disc', 'tether', 'snap', 'bigSpiral'];
+  'pendulum', 'disc', 'tether', 'snap', 'bigSpiral', 'tunnel'];
 
 /** Kinds whose hit stalls and spins the kart (sim/items.js land()). */
 export const SPIN_KINDS = Object.freeze(['shatter', 'disc', 'tether']);
@@ -38,6 +38,8 @@ export const ITEMS = Object.freeze({
   tether: { use: 'tether', view: 'none', bot: 'spin', icon: fx('tether.png') },
   snap: { use: 'self', view: null, bot: 'steer', icon: fx('snap.png') },
   bigSpiral: { use: 'lob', view: 'none', bot: 'steer', icon: fx('bigspiral.png') },
+  // Tunnel Vision (lane B 2026-10-30): the catch-up ride for the back of the pack (sim/tunnel.js); placeholder icon
+  tunnel: { use: 'ride', view: null, bot: null, icon: fx('tunnel.png') },
 });
 
 export const BUCKETS = ['front', 'middle', 'back'];

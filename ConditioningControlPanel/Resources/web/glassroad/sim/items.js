@@ -15,6 +15,7 @@ import { endBoost } from './boost.js';
 import { ITEMS, bucketOf, rollItem, durationOf, makeRand, BUCKETS, SPIN_KINDS } from './itemTable.js';
 import { itemUseMode } from './itemUse.js';
 import { liftedNear } from './ramps.js';
+import { createTunnel } from './tunnel.js';
 
 const GROW_S = 0.4;          // feel gap: a respawned box or bubble grows in over this
 const WAVE_S = 1.2;          // feel gap: a Pink wave stays in the view this long
@@ -102,9 +103,11 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
   let projectiles = [], traps = [], waves = [], pops = [], R = [], links = [], loose = [];
   const sinks = [];
   const sink = (i) => (i === 0 ? events : (sinks[i] ||= { emit: (name, p) => events.emit('racer-event', { racer: i, name, p }) }));
-  const rs = (i) => (R[i] ||= { eff: null, viewEndT: -1e9, ledger: [], glass: 0, golden: 0, echo: 0, echoT: 0, snapGuard: 0 });
+  const rs = (i) => (R[i] ||= { eff: null, viewEndT: -1e9, ledger: [], glass: 0, golden: 0, echo: 0, echoT: 0, snapGuard: 0, guardMax: 0 });
+  // Tunnel Vision: a rider is never free (nothing lands on it, it takes and fires nothing) until the ride ends
+  const tunnel = createTunnel(track, feel, events, { sink });
   const racer = (i) => (list[i] && list[i].i === i ? list[i] : list.find((r) => r.i === i));
-  const free = (r) => !r.finished && (r.st[S.respawnPhase] === RESPAWN.NONE || r.st[S.respawnPhase] === RESPAWN.GRACE);
+  const free = (r) => !r.finished && !tunnel.riding(r.i) && (r.st[S.respawnPhase] === RESPAWN.NONE || r.st[S.respawnPhase] === RESPAWN.GRACE);
   const low = (r) => r.st[S.grounded] || Math.abs(r.st[S.height]) <= g('pickHeightM');
   const near = (r, s, x, rad, seg = -1) => {
     if (!track.forks?.length) return Math.abs(sd(r.st[S.s], s)) <= rad && Math.abs(r.st[S.lateral] - x) <= rad;
@@ -246,6 +249,10 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       }
       updateLanding(fired, racer(target));
       projectiles.push(fired);
+    } else if (mode === 'ride') {
+      // kept (refused) at place tunnelStopPlace or better, where the ride would end at once, and on a fork
+      if (standings.placeOf(r.i) <= g('tunnelStopPlace')) { events.emit('item-refused', { racer: r.i, id, reason: 'place' }); return; }
+      if (!startRide(r)) { events.emit('item-refused', { racer: r.i, id, reason: 'fork' }); return; }
     } else if (mode === 'wide') {
       const me = standings.progressOf(r.i);
       waves.push({ id: nextId++, kind: id, from: r.i, s, x, seg, t: 0 });
@@ -259,6 +266,17 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       projectileId: fired ? fired.id : null, launchP: fired ? point(fired.s, fired.x, fired.h, undefined, fired.seg) : kartP(r), direction: pathFrame(s, seg).t.slice() });
   }
 
+  /** Tunnel Vision: the ride starts clean (its effect and any link end; sim/tunnel.js drops the drift and boost). */
+  function startRide(r) {
+    if (!tunnel.start(r)) return false;
+    const x = rs(r.i), last = x.ledger[x.ledger.length - 1];
+    if (last && last.t1 > now) last.t1 = now;
+    if (x.eff && VIEW_KINDS[ITEMS[x.eff.kind].view]) x.viewEndT = now;
+    x.eff = null;
+    for (const l of links.filter(l => l.by === r.i || l.target === r.i)) breakLink(l, 'out');
+    return true;
+  }
+
   function self(r, id, standings) {
     const x = rs(r.i);
     if (id === 'surge') {
@@ -270,7 +288,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
     else if (id === 'snap') {
       // A shockwave: nearby karts are shoved aside, a link on you breaks, and for snapGuardS anything that
       // reaches you pops (verdict 'snapped').
-      x.snapGuard = g('snapGuardS');
+      x.snapGuard = x.guardMax = g('snapGuardS');
       for (const l of links.filter(l => l.target === r.i)) breakLink(l, 'snap');
       const me = kartP(r), rad = g('snapRadiusM');
       for (const o of list) {
@@ -505,7 +523,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
     const m = r.mods, x = rs(r.i), e = x.eff, fxv = r.fxv;
     m.steerMul = 1; m.steerAdd = 0; m.throttleMul = 1; m.gripMul = 1; m.slideMul = 1; m.capMul = 1; m.shoveMul = 1; m.blind = 0;
     fxv.spinRad = 0;
-    fxv.effect = e ? e.kind : null;
+    fxv.effect = tunnel.riding(r.i) ? 'tunnel' : e ? e.kind : null;
     if (e && e.t < e.durS) {
       if (e.kind === 'spiral') m.steerAdd = g('spiralSteerAmp') * Math.sin(2 * Math.PI * g('spiralSteerHz') * e.t);
       else if (e.kind === 'freeze') m.steerMul = g('freezeSteerMul');
@@ -528,6 +546,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
     }
   }
 
+  const rideOpts = { free, nearOpenEdge, onEnd: (r) => { const x = rs(r.i); x.snapGuard = x.guardMax = g('tunnelGuardS'); } };
   function update(dt, racers, standings, race) {
     if (!race || (race.phase !== 'racing' && race.phase !== 'finished')) return;
     list = racers;
@@ -547,6 +566,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
     trapsTick(dt);
     looseTick(dt);
     linksTick(dt, standings);
+    tunnel.tick(dt, racers, standings, rideOpts);
     for (const w of waves) w.t += dt;
     waves = waves.filter((w) => w.t < WAVE_S);
     for (const p of pops) p.t += dt;
@@ -557,7 +577,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
   // ---- view -----------------------------------------------------------------------------------
   // Built at most once per tick (ver moves on update and reset) into pooled rows: the arrays and their
   // row objects are reused, so a reader must not keep a row past the next tick.
-  const V = { boxes: [], bubbles: [], held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [], tethers: [], guards: [], loose: [] };
+  const V = { boxes: [], bubbles: [], held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [], tethers: [], guards: [], loose: [], rides: [] };
   for (const b of pick) (b.kind === 'box' ? V.boxes : V.bubbles).push(b.v);
   const POOL = { held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [], tethers: [], guards: [], loose: [] };
   let builtVer = -1;
@@ -614,7 +634,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       if (x.glass > 0) shield(r, 'glass', g('glassMaxS') - x.glass, x.glass / g('glassMaxS'), 0);
       if (x.golden > 0) shield(r, 'golden', g('goldenS') - x.golden, x.golden / g('goldenS'), 0);
       if (x.echo > 0) shield(r, 'echo', g('echoS') - x.echoT, Math.max(0, x.echoT / g('echoS')), x.echo);
-      if (x.snapGuard > 0) { const o = row('guards'); o.racer = r.i; o.k = x.snapGuard / g('snapGuardS'); }
+      if (x.snapGuard > 0) { const o = row('guards'); o.racer = r.i; o.k = x.snapGuard / (x.guardMax || g('snapGuardS')); }
     }
     for (const l of links) {
       const a = racer(l.by), b = racer(l.target);
@@ -622,6 +642,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       const o = row('tethers'); o.id = l.id; o.by = l.by; o.target = l.target; o.t = l.t; o.k = Math.min(1, l.t / g('tetherMaxS'));
       for (let j = 0; j < 3; j++) { o.from[j] = a.st[S.posX + j]; o.to[j] = b.st[S.posX + j]; }
     }
+    tunnel.rows(V.rides);
     for (const p of pops) { const o = row('pops'); o.kind = p.kind; o.at = p.at; point(p.s, p.x, p.h, o.p, p.seg); if (p.worldP) for (let j = 0; j < 3; j++) o.p[j] = p.worldP[j]; o.t = p.t; }
     return V;
   }
@@ -634,7 +655,8 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
     rand = makeRand(seed); now = 0; nextId = 1; ver++;
     projectiles = []; traps = []; waves = []; pops = []; R = []; links = []; loose = [];
     for (const b of pick) { b.downT = 0; b.upT = 1e9; }
+    tunnel.reset();
   }
 
-  return { update, view, reset, nearOpenEdge, trapRows, lobTarget, knock, setPayback(p) { payback = p || null; } };
+  return { update, view, reset, nearOpenEdge, trapRows, lobTarget, tunnel, knock, setPayback(p) { payback = p || null; } };
 }

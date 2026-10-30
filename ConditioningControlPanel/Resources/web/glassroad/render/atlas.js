@@ -100,6 +100,7 @@ export const FAMILIES = Object.freeze({
   tether: [['heart', 2], ['glint', 1]],
   snap: [['ring', 1], ['spark', 2]],
   bigSpiral: [['swirl', 3], ['glitter', 1]],
+  tunnel: [['spark', 2], ['glint', 1], ['glitter', 1]],   // Tunnel Vision: a ram's burst
 });
 
 /** Polish 2 particle numbers (move to LOOK.fx2 when the integrator wants them there; LOOK.fx2 wins). */
@@ -148,7 +149,7 @@ export function familyOf(opts, L) {
 }
 
 const HIT_KINDS = new Set(['freeze', 'golden', 'melt', 'glass', 'decoy', 'flash', 'spiral', 'brainDrain', 'blackout', 'pink', 'shatter', 'surge', 'echo',
-  'pendulum', 'disc', 'tether', 'snap', 'bigSpiral']);
+  'pendulum', 'disc', 'tether', 'snap', 'bigSpiral', 'tunnel']);
 /** The item-hit family for an effect kind or verdict, or null when that hit sprays nothing (mercy, immune). */
 export function hitFamily(kind) {
   return HIT_KINDS.has(kind) ? kind : null;
