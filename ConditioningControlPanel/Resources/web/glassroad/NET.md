@@ -118,7 +118,7 @@ Client -> room:
 | `start` | | host only, lobby phase, at least one human |
 | `look` | `outfit: lookId, vehicle: lookId, skin?: skinCode` | lobby phase; unknown ids become the default look |
 | `pickup` | `box: u16, tick: u32, seat?` | touched item box `track.items[box]`; the room rolls or refuses |
-| `fire` | `id: u16, item, mode, tick: u32, s: num, x: num, seat?` | use the held item; `id` = sender's shot id |
+| `fire` | `id: u16, item, mode, tick: u32, s: num, x: num, seat?, prefer?` | use the held item; `id` = sender's shot id; `prefer` = the payback mark's seat on a throw (sim/social.js), the room homes on it when that kart is free, ahead on the same road and within throwRangeM, else on the nearest ahead; `mode: ride` (Tunnel Vision) only outside the top two and off a fork, the room then excuses the ride speed while the records show effect `tunnel` |
 | `cp` | `idx: u8, lap: u8, tick: u32, seat?` | checkpoint crossed (idx 0 with lap = laps completed) |
 | `finish` | `tick: u32, frac: unit, seat?` | crossed the line on the final lap, `frac` within the tick |
 | `drop` | `tick: u32, s: num, seat?` | fell off (rescue starts); progress may go back |

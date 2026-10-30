@@ -276,7 +276,7 @@ export const C2R = Object.freeze({
   start: {},
   look: { outfit: 'lookId', vehicle: 'lookId', skin: 'skin?', paint: 'lookId?', umbrella: 'lookId?', trail: 'lookId?' },
   pickup: { box: 'u16', tick: 'u32', seat: 'seat?' },
-  fire: { id: 'u16', item: 'item', mode: 'mode', tick: 'u32', s: 'num', x: 'num', seat: 'seat?' },
+  fire: { id: 'u16', item: 'item', mode: 'mode', tick: 'u32', s: 'num', x: 'num', seat: 'seat?', prefer: 'seat?' },
   cp: { idx: 'u8', lap: 'u8', tick: 'u32', seat: 'seat?' },
   finish: { tick: 'u32', frac: 'unit', seat: 'seat?' },
   drop: { tick: 'u32', s: 'num', seat: 'seat?' },

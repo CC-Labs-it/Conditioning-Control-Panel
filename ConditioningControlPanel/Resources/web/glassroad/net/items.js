@@ -161,7 +161,10 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
       events.emit('item-refused', { racer: r.i, id, reason: standings.placeOf(r.i) <= g('tunnelStopPlace') ? 'place' : 'fork' });
       return;                                                               // keep it, as offline
     }
-    if (send(seatArg(r, { t: 'fire', id: shotId, item: id, mode, tick: tick(), s, x })) === false) return;
+    // payback (sim/social.js): a throw names the mark when it is ahead in range; the room homes on it if it agrees
+    const mark = mode === 'throw' ? markAhead(r, standings) : null;
+    if (send(seatArg(r, { t: 'fire', id: shotId, item: id, mode, tick: tick(), s, x, ...(mark ? { prefer: mark.meta.seat } : {}) })) === false) return;
+    if (mark) payback.spend(r.i);
     shotId = (shotId % 65535) + 1;
     if (mode === 'self') self(r, id, standings);
     else if (mode === 'ride' && tunnel.start(r)) rs(r.i).eff = null;
@@ -182,6 +185,14 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
       pop('snap', 'hit', r.st[S.s], r.st[S.lateral], 1);
       events.emit('snap-burst', { racer: r.i, p: kartP(r) });
     }
+  }
+  let payback = null;   // sim/social.js { markOf, spend }: whoever last hit a racer
+  /** r's payback mark when it is a free kart ahead on r's road within throw range (sim/items.js markAhead), else null. */
+  function markAhead(r, standings) {
+    const m = payback ? payback.markOf(r.i) : -1, o = m >= 0 ? list.find((k) => k.i === m) : null;
+    if (!o || o === r || !free(o) || o.meta.left || racerFork(track, o.st) !== racerFork(track, r.st)) return null;
+    const d = standings.progressOf(o.i) - standings.progressOf(r.i);
+    return d > 0 && d <= g('throwRangeM') ? o : null;
   }
   function tetherable(r, standings) {
     if (links.some((l) => l.by === r.i)) return false;
@@ -424,5 +435,6 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
     tunnel.reset(); rideSeen.clear(); rammed.clear();
   }
 
-  return { update, view, reset, nearOpenEdge, trapRows, lobTarget, onRoll, onPickupRefused, onFired, onHit, onFizzle, state: rs, tunnel };
+  return { update, view, reset, nearOpenEdge, trapRows, lobTarget, onRoll, onPickupRefused, onFired, onHit, onFizzle, state: rs, tunnel,
+    setPayback(p) { payback = p || null; } };
 }
