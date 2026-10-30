@@ -35,6 +35,7 @@ import { createKeyboard } from './input/keyboard.js';
 import { createGamepad } from './input/gamepad.js';
 import { createPointerLook } from './input/pointerLook.js';
 import { createTouch } from './input/touch.js';
+import { holdCueAt } from './input/holdCue.js';
 import { glideActive, resetGlide } from './sim/glide.js';
 import { S, RESPAWN, createState } from './sim/state.js';
 import { resolveMode } from './meta/mode.js';
@@ -824,10 +825,9 @@ async function boot(course, options, lifetime, isCurrent) {
     items = s ? s.mount(racers, race, q) : solo ? noItems() : createItems(track, feel, q, { seed: sd });
     P = racers.player;
     assist = createAssist(track, P.feel);
-    if (!s) {
-      airWords = createAirWordRun(null, track);
-      bindAirWords(P.st, airWords); bindAirWords(P.view, airWords);
-    }
+    // online too (owner 2026-10-30), and with no song at all: the flights fall back to stock words
+    airWords = createAirWordRun(null, track);
+    bindAirWords(P.st, airWords); bindAirWords(P.view, airWords);
     sctx = { ai, items, standings, hazards, industry, moving };
     Object.defineProperty(debug, 'movingTraps', { get: () => moving.inspect(racers.clockS), configurable: true });
     aiCtx = { racers: racers.list, items, standings, race };
@@ -876,7 +876,8 @@ async function boot(course, options, lifetime, isCurrent) {
   let tapItem = false;                            // touch: a tap on the HUD item slot
   hud.on('item', () => { tapItem = true; });
   const tapSource = { poll(into) { into.item = tapItem; tapItem = false; }, dispose() {} };
-  const actions = createActionMap([createKeyboard({ target: window }), padSource, createTouch({ root: document.body }), tapSource], { items: true, camera: true, feel });
+  const touch = createTouch({ root: document.body });
+  const actions = createActionMap([createKeyboard({ target: window }), padSource, touch, tapSource], { items: true, camera: true, feel });
   lifetime.defer(() => actions.dispose());
   const hopLatch = createEdgeLatch('hopPressed'), itemLatch = createItemLatch();
 
@@ -963,8 +964,7 @@ async function boot(course, options, lifetime, isCurrent) {
   function armWords() {
     const song = audio.music && audio.music.song;
     songCues?.dispose(); songCues = song ? createSongCueRun(song, track) : null;
-    if (online) { airWords?.reset(); airWords = null; bindAirWords(P.st, null); bindAirWords(P.view, null); }
-    else if (!airWords) {
+    if (!airWords) {
       airSong = song;
       airWords = createAirWordRun(song, track); bindAirWords(P.st, airWords); bindAirWords(P.view, airWords);
     } else if (airSong !== song) {
@@ -1626,7 +1626,7 @@ async function boot(course, options, lifetime, isCurrent) {
         if (race.phase === 'racing') race.timeS = online.simS;
       }
       airWords?.update(audio.music?.playing ? audio.music.songS : NaN, P.st,
-        { active: !online && (race.phase === 'racing' || race.phase === 'finished'), paused });
+        { active: race.phase === 'racing' || race.phase === 'finished', paused: paused && !online });   // online a pause stops nothing
       sctx.timeS = online ? online.s.raceTimeS() : undefined;
       racers.step(clock.dt, pa, race, sctx);
       if (ghostRec || ghost) {                                    //    Time Trial: record you, run the ghost's clock on
@@ -1768,15 +1768,17 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     // renderTime (sim time + alpha x dt), not simTime: whole sim steps would judder the world on a
     // display that is not 60 Hz
-    for (let i = 0; i < kartViews.length; i++) kartViews[i].glide = !online && glideActive(racers.list[i].st);
-    if ((keepLayout || boudoirLayout || goonworksLayout) && inRace && !paused && !online && pst[S.lap] !== glideHintLap) {
-      const bridge = goonworksLayout?.launch || boudoirLayout?.mirrorJump || keepLayout.drawbridge;
-      if (pst[S.s] >= bridge.rampS0 - 65 && pst[S.s] < bridge.rampS1) {
+    // online the local kart still flies its own sim (racer 0); a rival's flight state does not exist on this page
+    for (let i = 0; i < kartViews.length; i++) kartViews[i].glide = (!online || i === 0) && glideActive(racers.list[i].st);
+    const launchLip = goonworksLayout?.launch || boudoirLayout?.mirrorJump || keepLayout?.drawbridge || null;
+    touch?.setHoldCue(state === 'race' && race.phase === 'racing' && !paused && holdCueAt(launchLip, pst[S.s]));
+    if (launchLip && inRace && !paused && pst[S.lap] !== glideHintLap) {
+      if (pst[S.s] >= launchLip.rampS0 - 65 && pst[S.s] < launchLip.rampS1) {
         glideHintLap = pst[S.lap]; hud.toast('Hold jump to fly with the propeller cap');
       }
     }
     if (BOT) debug.gliding = !!kartViews[0]?.glide;
-    if (inRace && !paused && !online) for (const zone of track.aerials || []) {
+    if (inRace && !paused) for (const zone of track.aerials || []) {
       const key = `${pst[S.lap]}:${zone.id}`;
       if (pst[S.s] < zone.rampS0 - 55 || pst[S.s] >= zone.gapS0 || aerialHints.has(key)) continue;
       aerialHints.add(key);
@@ -1793,7 +1795,7 @@ async function boot(course, options, lifetime, isCurrent) {
     world.roadWords?.setCoins?.(coinsLive() ? coinSink : null);
     world.update({ kart: P.view, karts: shownKarts, fx: viewFx, timeS: renderTime, beat: clock.beat, motion: opts?.motion || 'full',
         raceTimeS: racers.clockS, sectionIdx: viewSection, items: iv, mode, camera: cam.camera, paused, gentle: cueSafety.on, song, songS, audioReactive, words: wordLive, beatSong,
-      airWords: inRace && !online ? airWords : null,
+      airWords: inRace ? airWords : null,
       songCues: cueView?.live || NO_WORDS, cueGentle: cueSafety.on, songCueList: songCues?.cues || NO_WORDS,
       cueFired: cueView?.fired || NO_WORDS, cueSpeed: cueView?.speed || 0, cueSolo: !online,
       scanTimeS: sc.timeS, scanBpm: sc.bpm, scanReady: scan.ready, perfumeReady: perfume.ready,
