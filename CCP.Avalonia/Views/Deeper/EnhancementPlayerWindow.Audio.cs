@@ -43,20 +43,16 @@ public partial class EnhancementPlayerWindow
         _lastAudioPath = path;
         _txtAudioPath.Text = path;
         _txtStatus.Text = Loc.Get("deeper_player_status_loading_audio");
-        // A reused player must not leave a hidden video audible behind its audio pane.
-        if (_videoNavigated)
-        {
-            try { await _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke("l.pause();")); }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "EnhancementPlayer: previous video could not pause");
-                if (!_isClosing && generation == _audioGeneration)
-                    _txtStatus.Text = Loc.Get("deeper_player_status_audio_failed");
-                return;
-            }
-        }
-        if (_isClosing || generation != _audioGeneration) return;
+        // WPF EnhancementPlayerWindow.xaml.cs:1325-1353: unload even a pending video.
+        // A script failure is returned as null; clearing the page must not depend on it.
         _videoNavigated = false;
+        if (_videoBrowser.Source != null)
+        {
+            var blank = new Uri("about:blank");
+            _videoBrowser.AllowNavigation = u => u == blank;
+            _videoBrowser.Source = null;
+            _videoBrowser.Navigate(blank);
+        }
         ShowMediaPaneFor(MediaTypes.Audio);
         _peaks = null;
         _waveformPath.Data = null;
@@ -90,13 +86,32 @@ public partial class EnhancementPlayerWindow
             UiTimer_Tick(null, EventArgs.Empty);
             _txtStatus.Text = Loc.Get("deeper_player_status_ended");
         });
+        audio.Failed += () => Dispatcher.UIThread.Post(() =>
+        {
+            if (!_isClosing && _localAudio == audio) FailLocalAudio();
+        });
         _durationSec = audio.DurationSeconds;
-        audio.Play();
+        if (!audio.Play()) { FailLocalAudio(); return; }
         _isPlaying = true;
         _txtPlayPauseGlyph.Kind = IconKind.Pause;
         _txtStatus.Text = Loc.Get("deeper_player_status_playing");
         _uiTimer?.Start();
         UiTimer_Tick(null, EventArgs.Empty);
+    }
+
+    // WPF EnhancementPlayerWindow.xaml.cs:648-652; EnhancementAudioPlayer.cs:178-205 errors.
+    private void FailLocalAudio()
+    {
+        DisposeLocalAudio();
+        _currentSec = _durationSec = 0;
+        _txtCurrent.Text = _txtTotal.Text = "0:00";
+        _txtStatus.Text = Loc.Get("deeper_player_status_audio_failed");
+        var generation = _audioGeneration;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!_isClosing && generation == _audioGeneration)
+                _txtStatus.Text = Loc.Get("deeper_player_status_audio_failed");
+        }); // Discovery runs after a synchronous picker load; retain the playback error.
     }
 
     private void DisposeLocalAudio()

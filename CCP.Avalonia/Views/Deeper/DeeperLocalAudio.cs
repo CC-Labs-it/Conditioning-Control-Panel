@@ -14,10 +14,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         double DurationSeconds { get; }
         double PositionSeconds { get; set; }
         int Volume { get; set; }
-        void Play();
+        bool Play();
         void Pause();
         /// <summary>Raised off the UI thread once the clip has played to its end and rewound.</summary>
         event Action? Ended;
+        event Action? Failed;
     }
 
     internal static class DeeperLocalAudio
@@ -46,6 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 lock (audio.Gate) if (!audio.IsDisposed) LibVlcAudio.ApplyPreferredDevice(mp);
                 audio.OnPlaying();
             });
+            mp.EncounteredError += (_, _) => ThreadPool.QueueUserWorkItem(_ => audio.OnError());
             mp.EndReached += (_, _) => ThreadPool.QueueUserWorkItem(_ => audio.OnEndReached());
             return audio;
         }
@@ -58,7 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             long Time { get; set; }
             long Length { get; }
             int Volume { get; set; }
-            void Play();
+            bool Play();
             void SetPause(bool pause);
             void Stop();
         }
@@ -69,7 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             public long Time { get => p.Time; set => p.Time = value; }
             public long Length => p.Length;
             public int Volume { get => p.Volume; set => p.Volume = value; }
-            public void Play() => p.Play();
+            public bool Play() => p.Play();
             public void SetPause(bool pause) => p.SetPause(pause);
             public void Stop() => p.Stop();
         }
@@ -85,6 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             internal bool IsDisposed => _disposed != 0;
 
             public event Action? Ended;
+            public event Action? Failed;
 
             private bool Live => player.State is VLCState.Playing or VLCState.Paused;
 
@@ -126,12 +129,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 set { lock (Gate) { _volume = Math.Clamp(value, 0, 100); player.Volume = _volume; } }
             }
 
-            public void Play()
+            public bool Play()
             {
                 lock (Gate)
                 {
-                    if (player.State == VLCState.Paused) player.SetPause(false);
-                    else player.Play();
+                    if (IsDisposed) return false;
+                    if (player.State == VLCState.Paused) { player.SetPause(false); return true; }
+                    return player.Play();
                 }
             }
 
@@ -166,10 +170,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 Ended?.Invoke();
             }
 
+            internal void OnError()
+            {
+                lock (Gate) { if (IsDisposed) return; player.Stop(); }
+                Failed?.Invoke();
+            }
+
             public void Dispose()
             {
                 if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
                 Ended = null;
+                Failed = null;
                 // Never dispose a player from inside its own libvlc event: that deadlocks.
                 ThreadPool.QueueUserWorkItem(_ => { lock (Gate) release(); });
             }

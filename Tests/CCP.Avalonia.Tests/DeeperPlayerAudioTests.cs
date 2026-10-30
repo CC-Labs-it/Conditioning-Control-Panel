@@ -28,7 +28,10 @@ public sealed class DeeperPlayerAudioTests
         public int Volume { get; set; }
         public bool Playing, Disposed;
         public event Action? Ended;
-        public void Play() => Playing = true;
+        public bool StartSucceeds = true;
+        public bool Play() { Playing = StartSucceeds; return Playing; }
+        public event Action? Failed;
+        public void Error() => Failed?.Invoke();
         public void Pause() => Playing = false;
         public void Dispose() { Disposed = true; Playing = false; }
         public void End() { PositionSeconds = 0; Playing = false; Ended?.Invoke(); }
@@ -44,6 +47,80 @@ public sealed class DeeperPlayerAudioTests
         obj.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(obj, args);
     private static void Click(EnhancementPlayerWindow window, string name) =>
         window.FindControl<Button>(name)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task AudioUnloadsFailedOrPendingVideo(bool navigated) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var open = DeeperLocalAudio.Open;
+        var audio = new Audio();
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
+        var win = new EnhancementPlayerWindow(null, null);
+        try
+        {
+            win.Show();
+            var web = win.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>("VideoBrowser")!;
+            var pending = new TaskCompletionSource<string?>();
+            web.ScriptInvoker = _ => navigated ? Task.FromException<string?>(new InvalidOperationException()) : pending.Task;
+            win.OpenLocalMediaFile("/tmp/pending.mp4");
+            if (navigated) Assert.Null(await web.InvokeScriptAsync("throw new Error()"));
+            else Invoke(win, "PollVideoTimeAsync");
+            typeof(EnhancementPlayerWindow).GetField("_videoNavigated", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(win, navigated);
+            var cleared = false;
+            web.PropertyChanged += (_, e) => { if (e.Property == ConditioningControlPanel.Avalonia.Views.Controls.WebHost.SourceProperty && e.NewValue is null) cleared = true; };
+            win.OpenLocalMediaFile("audio.mp3");
+            Assert.True(cleared);
+            Assert.Equal(new Uri("about:blank"), web.Source);
+            Assert.True(web.NavigationRequests > 0);
+            Assert.False(web.AllowNavigation!(new Uri("https://hypnotube.com/video/late")));
+            Assert.True(web.AllowNavigation(new Uri("about:blank")));
+            Assert.True(audio.Playing);
+            Click(win, "BtnPlayPause");
+            pending.SetResult("40|500|1");
+            await Task.Yield();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(IconKind.Play, win.FindControl<ConditioningControlPanel.Avalonia.Controls.IconGlyph>("TxtPlayPauseGlyph")!.Kind);
+        }
+        finally { win.Close(); DeeperLocalAudio.Open = open; }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task AudioStartRejectionOrLaterErrorResetsAndDisposes(bool laterError) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var open = DeeperLocalAudio.Open;
+        var audio = new Audio { StartSucceeds = laterError };
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
+        var win = new EnhancementPlayerWindow(null, null);
+        try
+        {
+            win.Show();
+            win.OpenLocalMediaFile("error.mp3");
+            if (laterError) { Assert.True(audio.Playing); audio.Error(); }
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(audio.Disposed);
+            Assert.False(audio.Playing);
+            Assert.Equal(Loc.Get("deeper_player_status_audio_failed"), win.FindControl<TextBlock>("TxtStatus")!.Text);
+            Assert.Equal("0:00", win.FindControl<TextBlock>("TxtTotal")!.Text);
+            Assert.Equal(IconKind.Play, win.FindControl<ConditioningControlPanel.Avalonia.Controls.IconGlyph>("TxtPlayPauseGlyph")!.Kind);
+            var replacement = new Audio();
+            DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(replacement);
+            win.OpenLocalMediaFile("replacement.mp3");
+            audio.Error();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(replacement.Playing);
+            Click(win, "BtnPlayPause");
+            replacement.StartSucceeds = false;
+            Click(win, "BtnPlayPause");
+            Assert.True(replacement.Disposed);
+        }
+        finally { win.Close(); DeeperLocalAudio.Open = open; }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public Task LocalPickerPathAutoplaysPausesSeeksStopsReplaysAndPanics() => AvaloniaTestDispatcher.RunAsync(() =>

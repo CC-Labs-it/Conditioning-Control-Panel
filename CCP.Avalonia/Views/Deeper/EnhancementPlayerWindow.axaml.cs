@@ -768,7 +768,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 if (_localAudio != null)
                 {
-                    if (_isPlaying) _localAudio.Pause(); else { _localAudio.Play(); }
+                    if (_isPlaying) _localAudio.Pause(); else if (!_localAudio.Play()) { FailLocalAudio(); return; }
                     _isPlaying = !_isPlaying;
                     _txtPlayPauseGlyph.Kind = _isPlaying ? IconKind.Pause : IconKind.Play;
                     _txtStatus.Text = Loc.Get(_isPlaying ? "deeper_player_status_playing" : "deeper_player_status_stopped");
@@ -934,6 +934,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             try
             {
                 var raw = await _videoBrowser.InvokeScriptAsync(DeeperPreview.ReadTime());
+                if (_pollDisabled || !_videoNavigated || !_isVideoMode) return;
 
                 var parts = DeeperPreview.Unquote(raw).Split('|');
                 if (parts.Length != 3) return;

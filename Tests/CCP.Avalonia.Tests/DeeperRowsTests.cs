@@ -25,7 +25,7 @@ public sealed class DeeperRowsTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
@@ -63,7 +63,8 @@ public sealed class DeeperRowsTests
         public int Volume { get; set; }
         public double DurationSeconds { get; set; } = 95;
         public double PositionSeconds { get; set; }
-        public void Play() => Playing = true;
+        public bool Play() { Playing = true; return true; }
+        public event Action? Failed;
         public void Pause() => Playing = false;
         public event Action? Ended;
         public void End() { Playing = false; Ended?.Invoke(); }
@@ -129,7 +130,8 @@ public sealed class DeeperRowsTests
         public long Length => 6000;
         public int Volume { get; set; }
         public int Stops;
-        public void Play() => State = LibVLCSharp.Shared.VLCState.Opening;
+        public bool StartSucceeds = true;
+        public bool Play() { State = LibVLCSharp.Shared.VLCState.Opening; return StartSucceeds; }
         public void SetPause(bool pause) => State = pause ? LibVLCSharp.Shared.VLCState.Paused : LibVLCSharp.Shared.VLCState.Playing;
         public void Stop() { Stops++; State = LibVLCSharp.Shared.VLCState.Stopped; }
     }
@@ -139,6 +141,13 @@ public sealed class DeeperRowsTests
     {
         var e = new FakeEngine();
         var t = new DeeperLocalAudio.Transport(e, 12000, () => { });
+        e.StartSucceeds = false;
+        Assert.False(t.Play());
+        e.StartSucceeds = true;
+        var errors = 0;
+        t.Failed += () => errors++;
+        t.OnError();
+        Assert.Equal(1, errors);
         Assert.Equal(12, t.DurationSeconds);              // header estimate until playing
 
         // Seek before playback: taken by the first Playing, never again.
