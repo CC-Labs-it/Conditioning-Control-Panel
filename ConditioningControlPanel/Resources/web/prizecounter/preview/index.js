@@ -4,7 +4,7 @@
  *   pv.focus(itemId | null); pv.dispose();
  *
  * Which preview: preview/catalog.js over assets/preview/index.json. When: preview/loader.js (rests 140 ms, drops
- * stale loads, disposes on leave). How: preview/stage.js for Rain, karts, the trail and chess (three.js, made on the
+ * stale loads, disposes on leave). How: preview/stage.js for Rain, karts (worn and painted), the trail and chess (three.js, made on the
  * first 3D item), preview/pictures.js for frames, avatars, EMI desk sheets and paints. The slot shows as soon as an
  * item with a preview takes the focus, so a phone's framing does not jump when the art lands. */
 import { previewSpec, STAGE_KINDS } from './catalog.js';
@@ -29,7 +29,15 @@ export async function createPreview(slot, { base = './assets/', motion = 'full',
   const stageFor = () => (staging ||= import('./stage.js').then((m) => (stage = m.createStage(box, { base, motion, reducedMotion, gentle }))));
   const loader = createPreviewLoader({
     resolve: (id) => previewSpec(id, index, manifest),
-    open: async (spec) => (STAGE_KINDS.has(spec.kind) ? (await stageFor()).open(spec) : openPicture(box, spec, { base, motion, gentle })),
+    open: async (spec) => {
+      if (!STAGE_KINDS.has(spec.kind)) return openPicture(box, spec, { base, motion, gentle });
+      try { return await (await stageFor()).open(spec); } catch (e) {
+        // No WebGL (or the art failed): a paint still shows its flat swatch.
+        if (!spec.fallback) throw e;
+        log(`prizecounter: 3D preview unavailable, flat swatch (${(e && e.message) || e})`);
+        return openPicture(box, spec.fallback, { base, motion, gentle });
+      }
+    },
     release: (kind) => { if (stage && STAGE_KINDS.has(kind)) stage.release(kind); },
     empty: (none) => { slot.hidden = none; },
     outMs: fade.out,

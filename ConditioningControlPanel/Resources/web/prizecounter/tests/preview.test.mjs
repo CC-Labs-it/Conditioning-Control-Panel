@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { previewSpec, specFiles, sharedFile, KINDS, STAGE_KINDS } from '../preview/catalog.js';
 import { createPreviewLoader } from '../preview/loader.js';
 import { spinRate, fadeMs, viewBox, fitDistance, HEAD_SPAN, BODY_SPAN } from '../preview/frame.js';
+import { coveredGroups, cutBelow, BODY_BELOW_MAX, bindsTo, KART_JOINTS, shellMask, PATTERN_ID, paintWalk } from '../preview/fit.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS = path.join(here, '..', 'assets');
@@ -40,16 +41,19 @@ test('every family previews its own art, Back Room prizes their shelf model, a r
   assert.equal(kind('rain.acc.back-katana'), 'rain');
   assert.equal(kind('kart.body.petal'), 'model');
   assert.equal(previewSpec('kart.body.petal', index, manifest).file, 'preview/kart/emi-vehicle-petal.glb');
-  assert.equal(kind('kart.paint.pattern-bundle'), 'swatch');
-  assert.equal(previewSpec('kart.paint.pattern-bundle', index, manifest).srcs.length, 5);
-  assert.equal(kind('kart.paint.hearts'), 'swatch', 'an owned retired paint shows its pattern');
+  assert.equal(kind('kart.paint.pattern-bundle'), 'kart', 'a paint previews on the kart shell (F5)');
+  assert.equal(previewSpec('kart.paint.pattern-bundle', index, manifest).layers.length, 5);
+  assert.equal(previewSpec('kart.paint.pattern-bundle', index, manifest).fallback.srcs.length, 5, 'no 3D: the flat swatch walk');
+  assert.equal(kind('kart.paint.hearts'), 'kart', 'an owned retired paint shows its pattern');
+  assert.equal(kind('kart.outfit.ringmaster'), 'kart', 'an outfit previews worn on the kart (F5)');
+  assert.equal(kind('kart.umbrella.lace'), 'kart');
   assert.equal(kind('chess.set.royal-capes'), 'chess');
   assert.equal(kind('prime.banner.arena'), 'chess');
   assert.equal(kind('profile.frame.lace'), 'card');
   assert.equal(kind('prime.frame.room-host'), 'card');
   assert.equal(kind('profile.avatar.emi-pixel'), 'avatar');
   assert.equal(kind('desk.toy.snow-globe'), 'desk');
-  assert.equal(kind('prime.paint.host-gold'), 'swatch');
+  assert.equal(kind('prime.paint.host-gold'), 'kart');
   assert.equal(kind('prime.trail.podium'), 'model');
   assert.deepEqual(previewSpec('jackpot_remix', index, manifest), { kind: 'model', file: 'items/jackpot_remix.glb' });
   assert.equal(previewSpec('kart.body.glass-slipper', index, manifest), null);
@@ -82,11 +86,93 @@ test('size rule: no preview file over 8 MB, the preview tree under 10 MB', () =>
   assert.ok(fs.existsSync(path.join(ASSETS, 'preview', 'ATTRIBUTION.txt')), 'Rain is CC BY: the licence travels with her');
 });
 
-test('only Rain and chess keep art between items; the 3D kinds go to the stage', () => {
+test('only Rain, the kart base and chess keep art between items; the 3D kinds go to the stage', () => {
   assert.equal(sharedFile(previewSpec('rain.hair.ink-sleek', index, manifest)), index.rain.file);
   assert.equal(sharedFile(previewSpec('chess.insignia.star', index, manifest)), 'preview/chess/knight.glb');
+  assert.equal(sharedFile(previewSpec('kart.outfit.pit-crew', index, manifest)), index.kart.base);
   assert.equal(sharedFile(previewSpec('kart.body.petal', index, manifest)), null);
-  assert.deepEqual([...STAGE_KINDS].sort(), ['chess', 'model', 'rain']);
+  assert.deepEqual([...STAGE_KINDS].sort(), ['chess', 'kart', 'model', 'rain']);
+});
+
+// Lane F5: worn kart pieces, paints on the shell, Rain coverage.
+const glbJson = (file) => { const b = fs.readFileSync(path.join(ASSETS, file)), n = b.readUInt32LE(12); return JSON.parse(b.subarray(20, 20 + n).toString('utf8')); };
+const jointNames = (j, skin) => skin.joints.map((i) => j.nodes[i].name);
+
+test('F5 kart: the base is rigged, uncompressed (no KTX2 for r169), and every worn piece binds to its bones', () => {
+  const kart = index.kart, b = glbJson(kart.base);
+  assert.deepEqual(b.extensionsRequired || [], [], 'the counter three has no KTX2Loader: the base must not need one');
+  assert.ok(!(b.images || []).some((i) => /ktx2/.test(i.mimeType || '')));
+  assert.equal(b.skins.length, 1);
+  const bones = jointNames(b, b.skins[0]);
+  assert.ok(bindsTo(KART_JOINTS, bones), 'the base carries the accepted 15 joints');
+  assert.ok(b.animations.some((a) => a.name === 'idle_bob'), 'the preview holds the garage idle at time zero');
+  for (const id of ['kart.outfit.ballerina', 'kart.outfit.pit-crew', 'kart.outfit.ringmaster', 'kart.umbrella.lace']) {
+    const spec = previewSpec(id, index, manifest);
+    assert.equal(spec.base, kart.base);
+    assert.ok(spec.wear.length > 0, `${id} wears something`);
+    for (const f of spec.wear) {
+      const w = glbJson(f);
+      assert.ok(w.skins && w.skins.length, `${id}: ${f} is rigged (not the shelf GLB)`);
+      for (const s of w.skins) assert.ok(bindsTo(jointNames(w, s), bones), `${id}: ${f} names a bone the kart lacks`);
+    }
+  }
+  assert.ok(!bindsTo(['kart_root', 'tail'], KART_JOINTS) && !bindsTo([], KART_JOINTS), 'an unknown bone or none refuses the bind');
+});
+
+test('F5 paints: each layer names a known pattern, its mask is on disk, host gold keeps its own colours', () => {
+  for (const id of ['kart.paint.pattern-bundle', 'kart.paint.hearts', 'kart.paint.pink-checker', 'kart.paint.spiral', 'prime.paint.host-gold']) {
+    const spec = previewSpec(id, index, manifest);
+    assert.ok(spec.layers.length > 0, `${id} has a pattern`);
+    for (const l of spec.layers) {
+      assert.equal(l.pattern, PATTERN_ID[l.id]);
+      assert.match(l.primary, /^#[0-9a-f]{6}$/i); assert.match(l.secondary, /^#[0-9a-f]{6}$/i);
+      if (l.pattern >= 4) assert.ok(l.mask && fs.existsSync(path.join(ASSETS, l.mask)), `${id}: ${l.id} needs its mask`);
+    }
+    assert.equal(spec.fallback.kind, 'swatch');
+    for (const f of specFiles(spec.fallback)) assert.ok(fs.existsSync(path.join(ASSETS, f)), `${id}: fallback ${f} missing`);
+  }
+  assert.deepEqual(previewSpec('kart.paint.pattern-bundle', index, manifest).layers.map((l) => l.id), ['stripes', 'dots', 'checks', 'hearts', 'spiral']);
+  const gold = previewSpec('prime.paint.host-gold', index, manifest).layers[0];
+  assert.deepEqual([gold.primary, gold.secondary], ['#d79b14', '#fff09a'], 'glassroad PAINT_COLORS host-gold');
+  assert.equal(previewSpec('kart.paint.hearts', index, manifest).layers[0].primary, index.kart.primary, 'other paints wear the Blush preset');
+});
+
+test('F5 paint walk: motion off and reduced motion hold; Gentle blends slower, never cuts', () => {
+  assert.equal(paintWalk(1), null);
+  assert.equal(paintWalk(5, { motion: 'off' }), null);
+  assert.equal(paintWalk(5, { reducedMotion: true }), null);
+  const full = paintWalk(5), gentle = paintWalk(5, { gentle: true });
+  assert.ok(full.blendMs > 0 && full.holdMs > full.blendMs);
+  assert.ok(gentle.blendMs >= 300 && gentle.blendMs > full.blendMs);
+});
+
+test('F5 shell mask: only vertices EMI_root carries at half weight or more', () => {
+  const names = ['kart_root', 'EMI_root', 'ant0'];
+  const joints = new Float32Array([1, 0, 0, 0, 1, 2, 0, 0, 2, 0, 0, 0, 0, 1, 0, 0]);
+  const weights = new Float32Array([1, 0, 0, 0, 0.4, 0.6, 0, 0, 1, 0, 0, 0, 0.5, 0.5, 0, 0]);
+  assert.deepEqual([...shellMask(joints, weights, names, 4)], [1, 0, 0, 1]);
+  assert.deepEqual([...shellMask(joints, weights, ['kart_root'], 4)], [0, 0, 0, 0]);
+});
+
+test('F5 Rain coverage: the coverall hides boots, hair and earrings; the action suit cuts the legs, keeps the hands', () => {
+  const base = glbNames(index.rain.file, 'rain_default').names;
+  for (const groups of Object.values(index.rain.slots)) for (const n of groups) assert.ok(base.has(n), `slot group ${n} not in the dressed default`);
+  const hazmat = previewSpec('rain.suit.hazmat-yellow', index, manifest).hide;
+  for (const n of ['accepted_boots', 'wear_original-blonde', 'wear_hoops-original', 'body_satin-original']) assert.ok(hazmat.includes(n), `coverall leaves ${n}`);
+  const dress = previewSpec('rain.dress.rose-flare', index, manifest).hide;
+  assert.ok(!dress.includes('accepted_boots'), 'a dress keeps the boots');
+  assert.deepEqual(coveredGroups({ hide: ['a'], coverage: { hideSlots: ['hair', 'none'] } }, { hair: ['h', 'a'] }).sort(), ['a', 'h']);
+  const action = previewSpec('rain.suit.action-yellow', index, manifest);
+  assert.equal(action.coverage.hideBodyBelow, 0.92);
+  assert.deepEqual(action.body, index.rain.slots.body);
+  // Four triangles: a leg (all covered), a hand beside the hip, a shoulder above the cut, one straddling the hem.
+  const pts = [[0.1, 0.3, 0], [0.12, 0.3, 0], [0.1, 0.35, 0], [0.25, 0.75, 0], [0.26, 0.75, 0], [0.25, 0.8, 0],
+    [0.1, 1.2, 0], [0.12, 1.2, 0], [0.1, 1.25, 0], [0.1, 0.8, 0], [0.12, 0.8, 0], [0.1, 0.95, 0]];
+  const kept = cutBelow(null, pts.length, (i) => pts[i], 0.92);
+  assert.deepEqual([...kept], [3, 4, 5, 6, 7, 8, 9, 10, 11], 'only the leg goes; 0.92 clamps to the 0.86 neckline rule');
+  assert.equal(BODY_BELOW_MAX, 0.86);
+  const idx = new Uint16Array([0, 1, 2, 3, 4, 5]);
+  assert.deepEqual([...cutBelow(idx, 6, (i) => pts[i], 0.5)], [3, 4, 5]);
 });
 
 // A loader over fake drawing: every handle records what happened to it; wait() resolves when the test says so.
