@@ -422,6 +422,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash .github/scripts/core-guards.sh
+      - name: Check tester steps cover the parity ledger
+        run: bash .github/scripts/test-plan-coverage.sh
       # The port docs parse: every ledger table row on one line, main-sync meta totals match, the dashboard builds
       # (shallow checkout, so its over-time chart has one point here; that is fine for a build check).
       - run: |
