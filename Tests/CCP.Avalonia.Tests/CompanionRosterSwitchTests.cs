@@ -31,6 +31,7 @@ public sealed class CompanionRosterSwitchTests
     public Task RosterSwitchRestartsOrStopsDrainWithAndWithoutV2(bool v2) => WithRoster((shell, room, roster) =>
     {
         var oldV2 = Environment.GetEnvironmentVariable("CCP_COMPANION_V2");
+        var oldHonourEnvironment = CompanionExperience.HonourEnvironmentForTests;
         DispatcherTimer? Drain() => (DispatcherTimer?)typeof(CompanionHead)
             .GetField("_drainTimer", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null);
         int Subscribers() => ((Delegate?)typeof(CompanionCore)
@@ -41,7 +42,10 @@ public sealed class CompanionRosterSwitchTests
         try
         {
             CompanionHead.Stop();
+            // Release ignores the debug switch unless this existing test-only seam is enabled.
+            CompanionExperience.HonourEnvironmentForTests = true;
             Environment.SetEnvironmentVariable("CCP_COMPANION_V2", v2 ? "1" : "0");
+            Assert.Equal(v2, CompanionExperience.IsV2Enabled);
             CoreSettings.Current.CompanionPerk = CompanionBonusType.XPDrain;
             CoreSettings.Current.ActiveCompanionId = (int)other;
             CompanionHead.Start();
@@ -70,6 +74,7 @@ public sealed class CompanionRosterSwitchTests
         {
             CompanionHead.Stop();
             Environment.SetEnvironmentVariable("CCP_COMPANION_V2", oldV2);
+            CompanionExperience.HonourEnvironmentForTests = oldHonourEnvironment;
         }
     });
 
