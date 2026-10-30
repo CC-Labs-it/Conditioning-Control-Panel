@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Headless;
@@ -18,6 +19,90 @@ namespace CCP.Avalonia.Tests;
 /// App.Companion / App.Bark over the shipped rules, and the CoreBark doorbell reaches the engine.</summary>
 public sealed class CompanionBarkHeadTests
 {
+    [Fact]
+    public void IdleVoiceIsHeldWithTheEngineOffUnlessOptedIn()
+    {
+        var engine = CoreSession.IsEngineRunningProvider;
+        var session = CoreSession.IsSessionRunningProvider;
+        var s = CoreSettings.Current;
+        var opt = s.CompanionSpeaksIdleWhenEngineOff;
+        try
+        {
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            CoreSession.IsEngineRunningProvider = () => false;
+            CoreSession.IsSessionRunningProvider = () => false;
+            s.CompanionSpeaksIdleWhenEngineOff = false;
+            Assert.True(BarkHead.HoldIdleVoice());
+            CoreSession.IsEngineRunningProvider = () => true;
+            Assert.False(BarkHead.HoldIdleVoice());
+            CoreSession.IsEngineRunningProvider = () => false;
+            s.CompanionSpeaksIdleWhenEngineOff = true;
+            Assert.False(BarkHead.HoldIdleVoice());
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            Assert.True(BarkHead.HoldIdleVoice());
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            CoreSession.IsEngineRunningProvider = engine;
+            CoreSession.IsSessionRunningProvider = session;
+            s.CompanionSpeaksIdleWhenEngineOff = opt;
+        }
+    }
+
+    [Fact]
+    public void OpenTubeIdleTickReachesBarksAndPanicAndCloseStopItsTimer() => WithSeamsRestored(s =>
+    {
+        var old = (BarkHead.Engine, s.MasterVolume, s.IdleGiggleIntervalSeconds, s.BarkIdleRotation);
+        var lifetime = Application.Current!.ApplicationLifetime;
+        // SetupWithoutStarting seals the public setter; supply the lifetime only for this live-window lookup.
+        var lifetimeField = typeof(Application).GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            .Single(f => typeof(global::Avalonia.Controls.ApplicationLifetimes.IApplicationLifetime).IsAssignableFrom(f.FieldType));
+        using var desktop = new global::Avalonia.Controls.ApplicationLifetimes.ClassicDesktopStyleApplicationLifetime
+            { ShutdownMode = global::Avalonia.Controls.ShutdownMode.OnExplicitShutdown };
+        desktop.GetType().GetMethod("SubscribeGlobalEvents", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(desktop, null);
+        lifetimeField.SetValue(Application.Current, desktop);
+        var shell = new MainShellWindow();
+        try
+        {
+            s.MasterVolume = 50;
+            s.IdleGiggleIntervalSeconds = 120;
+            s.BarkIdleRotation = new();
+            var e = Seeded(Rule("Idle", "idle hello"), out var spoken);
+            // Keep the headless test's mouth observational, avoiding audio or notifications.
+            e.Speak = _ => { };
+            BarkHead.Engine = e;
+            shell.Show();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var tube = shell.Tube!;
+            Assert.True(tube.IdleTimerRunning);
+            var latch = tube.GetType().GetField("_isGiggling", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            latch.SetValue(tube, true); // a collapsed bubble left the WPF speech latch stranded
+            tube.OnIdleTick();
+            Assert.False(tube.IsSpeaking);
+            Assert.Equal("idle hello", spoken());
+            s.IdleGiggleIntervalSeconds = 60;
+            BarkHead.OnSettingChanged(e, nameof(s.IdleGiggleIntervalSeconds));
+            Assert.Equal(System.TimeSpan.FromSeconds(60), tube.IdleInterval);
+            CoreSettingsHooks.SettingChangedSink = null; // isolate the speech reset from the slider notification
+            s.IdleGiggleIntervalSeconds = 30;
+            tube.GigglePriority("idle reset", playSound: false);
+            Assert.Equal(System.TimeSpan.FromSeconds(30), tube.IdleInterval);
+            tube.PanicSilence();
+            Assert.False(tube.IdleTimerRunning);
+            tube.RestartIdleTimer();
+            Assert.True(tube.IdleTimerRunning);
+            shell.Close();
+            Assert.False(tube.IdleTimerRunning);
+        }
+        finally
+        {
+            shell.Close();
+            lifetimeField.SetValue(Application.Current, lifetime);
+            (BarkHead.Engine, s.MasterVolume, s.IdleGiggleIntervalSeconds, s.BarkIdleRotation) = old;
+        }
+    });
+
     [Fact]
     public void AppStartupStartsBothHeadsOnceQuestsExist()
     {
@@ -130,9 +215,7 @@ public sealed class CompanionBarkHeadTests
     /// <summary>Every seam BarkHead / CompanionHead set, and the settings the engine writes, restored (P02).</summary>
     private static void WithSeamsRestored(System.Action<ConditioningControlPanel.Models.AppSettings> body) => AvaloniaTestDispatcher.Run(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        AmbientBeatLoopsTests.Setup();
         var s = CoreSettings.Current;
         var hooks = (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion, CoreModsHooks.ReloadBarkRules,
             CoreSettingsHooks.SettingChangedSink, CoreBark.UiAction, CoreBark.TabNavigated, CoreBark.FeatureOpened, CoreBark.AvatarClicked);
