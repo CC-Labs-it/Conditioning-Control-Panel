@@ -99,6 +99,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("companion-transcript", _ => Controls.Companion.CompanionTranscriptWindow.CloseForPanic()),   // P06; WPF left the History modal up
             new("possession", _ => Possession.PossessionRuntime.UndoAllLive()),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)
+            // WPF MainWindow.xaml.cs:2101 "audio unduck": other apps come back up. That pass runs before WPF's StopEngine;
+            // After: engine mirrors StopEngineCore's unduck (StartStop.cs:547). Panic only: the plain Stop does not unduck here yet.
+            new("audio-duck", _ => Platform.LibVlcAudio.Instance?.ForceUnduck(), After: ["engine"]),
             new("descent-fuse", _ => DescentFuseWindow.ForceCloseAll()), // WPF StartStop.cs:525
             new("deeper-editor-audio", _ => Deeper.DeeperEditorWindow.PauseAllForPanic()),   // P06; WPF left it playing
             new("knock-cards", _ => Overlays.KnockCard.FoldAll()),   // P06; WPF left them up. Folded as Later: they wait in the Inbox
