@@ -59,7 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Platform.ProgramEngineBridge.RaiseSessionChanged();   // the Programs session row (WPF OnSessionStarted)
                     PinkRushHost.Start();          // WPF: a session starts through StartEngine -> SkillTree.Start()
                     StartConditioningTimeTracker();   // ... and StartEngine :423
-                    PinkFilterOverlay.Refresh(this);
+                    PinkFilterOverlay.Refresh(this); BrainDrainOverlay.Start(this);
                     SpiralOverlay.Refresh(this);
                     Log.Information("Started session: {Name} ({Difficulty}, +{XP} XP)", session.Name, session.Difficulty, session.BonusXP);
                 }
@@ -114,7 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     if (App.Sessions is not { IsPaused: true } r) return;
                     r.Resume();
-                    PinkFilterOverlay.Refresh(this);
+                    PinkFilterOverlay.Refresh(this); BrainDrainOverlay.Start(this);
                     SpiralOverlay.Refresh(this);
                     SetPauseButton(false);
                     OnSessionTick();
@@ -126,7 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Loc.GetF("msg_pause_session_body", runner.XPPenalty, runner.XPPenalty + SessionXp.PausePenalty));
             if (!confirmed || !runner.IsRunning) return;
             runner.Pause();
-            PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Stop()
+            PinkFilterOverlay.Refresh(this); BrainDrainOverlay.Start(this);   // WPF App.Overlay.Stop()
             SpiralOverlay.Refresh(this);
             SetPauseButton(true);
         }
@@ -153,7 +153,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RefreshSessionFeatureLock(force: false);
             Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshLiveSessionProgress();
             if (App.Sessions is not { IsRunning: true, CurrentSession: { } session } runner) return;
-            PinkFilterOverlay.Refresh(this);   // the delayed start and the ramp (SessionRunner.PinkOpacity)
+            PinkFilterOverlay.Refresh(this); BrainDrainOverlay.Start(this);   // the delayed start and the ramp (SessionRunner.PinkOpacity)
             // The same for SessionRunner.SpiralOpacity (SessionEngine.cs:731, 823), only when the start or the
             // ramp moved it: a Refresh enumerates screens and probes the file. A landing decode refreshes itself.
             var spiralKey = (CoreSettings.Current.SpiralEnabled, runner.SpiralOpacity);
