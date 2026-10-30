@@ -119,7 +119,23 @@ namespace ConditioningControlPanel
             SetHelpContent(HapticsTab.HelpBtnVideoHapticSync, "VideoHapticSync");
             SetHelpContent(DiscordTab.HelpBtnDiscordProfile, "DiscordProfile");
             SetHelpContent(LeaderboardTab.HelpBtnLeaderboard, "Leaderboard");
+
+            // 7.2 Help pages (the How-to overlay rows): the Prize Counter and Rain, all loc keys.
+            // The header icon is a plain TextBlock, so BMP glyphs only (no colour emoji).
+            Controls.HelpPopover.Attach(BtnHelpPrizeCounter, BuildLocHelp("PrizeCounter", "help_counter", "✦"));
+            Controls.HelpPopover.Attach(BtnHelpRain, BuildLocHelp("RainV2", "help_rain", "☂"));
         }
+
+        /// <summary>A Help page whose every line is a loc key: <c>&lt;stem&gt;_title</c>, <c>_what</c>, <c>_tip1</c>..<c>_tip3</c>, <c>_how</c>.</summary>
+        internal static HelpContent BuildLocHelp(string sectionId, string stem, string icon) => new()
+        {
+            SectionId = sectionId,
+            Icon = icon,
+            Title = Loc.Get(stem + "_title"),
+            WhatItDoes = Loc.Get(stem + "_what"),
+            Tips = new List<string> { Loc.Get(stem + "_tip1"), Loc.Get(stem + "_tip2"), Loc.Get(stem + "_tip3") },
+            HowItWorks = Loc.Get(stem + "_how"),
+        };
 
         private void SetHelpContent(Button helpButton, string sectionId)
         {

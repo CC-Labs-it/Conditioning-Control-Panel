@@ -2924,6 +2924,44 @@
                                     </Grid>
                                 </Border>
 
+                                <!-- Prize Counter (7.2 Help page: hover or click Read for the page) -->
+                                <Border Background="{DynamicResource SurfaceBgBrush}" CornerRadius="8" Padding="12" Margin="0,0,0,8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Image Grid.Column="0" Width="22" Height="22" VerticalAlignment="Center" Margin="0,0,12,0"
+                                               Source="{Binding Source='🛍', Converter={StaticResource EmojiToImageSource}}"/>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{loc:Str help_counter_title}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{loc:Str help_counter_sub}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="2" x:Name="BtnHelpPrizeCounter" Content="{loc:Str help_read_btn}"
+                                                Style="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Rain (7.2 Help page: hover or click Read for the page) -->
+                                <Border Background="{DynamicResource SurfaceBgBrush}" CornerRadius="8" Padding="12" Margin="0,0,0,8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Image Grid.Column="0" Width="22" Height="22" VerticalAlignment="Center" Margin="0,0,12,0"
+                                               Source="{Binding Source='👗', Converter={StaticResource EmojiToImageSource}}"/>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{loc:Str help_rain_title}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{loc:Str help_rain_sub}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="2" x:Name="BtnHelpRain" Content="{loc:Str help_read_btn}"
+                                                Style="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
+
                                 <!-- Modding Guide -->
                                 <Border Background="{DynamicResource SurfaceBgBrush}" CornerRadius="8" Padding="12" Margin="0,0,0,8" Cursor="Hand">
                                     <Grid>
