@@ -20,6 +20,19 @@ public class GifCascadeTests
         return c;
     }
 
+    [Fact]
+    public void AFailedSpawnReleasesItsAnimatedSlotAndSurface()
+    {
+        var c = new GifCascade(new Random(1));
+        var gone = new List<GifCascade.Faller>();
+        c.Gone += gone.Add;
+        c.Spawned += f => { f.Animated = true; throw new InvalidOperationException("spawn failed"); };
+        Assert.Throws<InvalidOperationException>(() => c.Restart(1, 1, 2, 100, 4, 1, 1, 1000, 0, 1000));
+        Assert.Empty(c.Fallers);
+        Assert.Equal(0, c.AnimatedAlive);
+        Assert.Single(gone);
+    }
+
     [Theory]
     [InlineData(1.67, 6.0, 17)]   // the payload: ceil(10.02) + 6
     [InlineData(0.1, 0.5, 8)]     // floor 8 (duration counts as at least 1 s)

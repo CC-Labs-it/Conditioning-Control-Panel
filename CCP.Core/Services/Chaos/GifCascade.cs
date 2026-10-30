@@ -170,7 +170,15 @@ namespace ConditioningControlPanel.Services.Chaos
                 Speed = FallSpeed * (0.7 + _rng.NextDouble() * 0.6),
             };
             _fallers.Add(f);
-            Spawned?.Invoke(f);
+            try { Spawned?.Invoke(f); }
+            catch
+            {
+                // A failed surface never reaches normal teardown. Drop its slot and surface now.
+                _fallers.Remove(f);
+                f.Animated = false;
+                Gone?.Invoke(f);
+                throw;
+            }
         }
     }
 }
