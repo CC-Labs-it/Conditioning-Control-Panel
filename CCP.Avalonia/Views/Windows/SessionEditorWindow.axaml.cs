@@ -30,8 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///    fires the dialog without awaiting it and its two callers stay synchronous.
     ///  - Import/Export use Core's <c>SessionFileService</c> with <c>StorageProvider</c> pickers in
     ///    place of <c>OpenFileDialog</c>/<c>SaveFileDialog</c>.
-    ///  - <c>BtnHelp</c> opens the drawn help loop in HelpVideoWindow like WPF; a clip alone keeps
-    ///    the coach-mark overlay (no video surface here); see the handler.
+    ///  - <c>BtnHelp</c> opens a drawn help loop or clip in HelpVideoWindow like WPF.
     ///  - Mouse -> pointer: <c>DragMove</c> -> <c>BeginMoveDrag</c>, <c>CaptureMouse</c> ->
     ///    <c>e.Pointer.Capture</c>, <c>MouseRightButtonDown</c> -> <c>PointerPressed</c> filtered
     ///    on <c>IsRightButtonPressed</c>, <c>Line.X1/Y1/X2/Y2</c> -> <c>StartPoint/EndPoint</c>,
@@ -170,12 +169,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void BtnHelp_Click()
         {
-            // WPF SessionEditorWindow.BtnHelp_Click: prefer the help loop (or a clip) when the topic
-            // has one; otherwise the coach-mark overlay. Deviation: a clip alone does not take the
-            // video branch - this head has no video surface, so it would swap a working walkthrough
-            // for a caption-only popup.
+            // WPF Windows/SessionEditorWindow.xaml.cs:119-130: prefer a loop or clip;
+            // otherwise keep the coach-mark overlay.
             var content = Services.HelpContentService.GetContent("SessionEditor");
-            if (ConditioningControlPanel.Avalonia.Controls.HelpLoops.HelpLoopRegistry.Has(content.SectionId))
+            if (content.HasClip || ConditioningControlPanel.Avalonia.Controls.HelpLoops.HelpLoopRegistry.Has(content.SectionId))
             {
                 HelpVideoWindow.Show(content, this);
                 return;
