@@ -28,7 +28,7 @@ import {
   seatRows, raceTags, readyCount, humans, canStart, lookChoices, cycleLook, lookLabel, loadLook, saveLook, countdown,
   lookKeys, fitLook, LOOK_ROW_LABEL,
   serverNow, resultLines, popsLabel, errorCopy, abortCopy, closeCopy, connectFailCopy, trackName, startsLabel, rowStartsIn, BADGE_COPY,
-  linkButton, linkNote, claimStep, pollNow, pollStep, pollReset, listKey,
+  linkButton, linkNote, claimStep, pollNow, pollStep, pollReset, listKey, seatsGone, goneLine,
 } from './lobbyMath.js';
 import { PRESETS, presetOf, poseOf, poseHoldS, emoteAllowed, EMOTE_GAP_MS, EMOTE_SHOW_MS } from './presets.js';
 import { normLook, roomLook } from '../net/protocol.js';
@@ -404,8 +404,8 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     if (!room || st.join !== join) { if (room && st.join !== join) room.close?.(); if (st.join === join) { st.msg = connectFailCopy(why); st.view = 'msg'; st.join = null; paint(); } return; }
     st.room = room;
     const on = (t, fn) => { const off = room.on(t, m => { if(alive() && st.room===room)fn(m); }); if (typeof off === 'function') st.offs.push(off); };
-    on('welcome', onWelcome); on('seats', (m) => { const was = st.seats; st.seats = applySeats(m.seats, st.seats); seatSay(was); seatsChanged(); });
-    on('seat', (m) => { const was = st.seats; st.seats = applySeat(st.seats, m); seatSay(was); seatsChanged(m.seat); });
+    on('welcome', onWelcome); on('seats', (m) => { const was = st.seats; st.seats = applySeats(m.seats, st.seats); seatSay(was); seatGone(was); seatsChanged(); });
+    on('seat', (m) => { const was = st.seats; st.seats = applySeat(st.seats, m); seatSay(was); seatGone(was); seatsChanged(m.seat); });
     on('start', onStart); on('emote', onEmote); on('finish', onFinish); on('abort', onAbort); on('error', onError); on('close', onClose);
   }
 
@@ -422,6 +422,17 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     if (m.phase === 'countdown' || m.phase === 'racing') {
       emit('online-start', { ...ctx(), resume: m.resume || null });
       if (srv() >= st.start.countAt) { st.raced = true; emit('online-race', ctx()); }
+    }
+  }
+  /** Someone left (or dropped past the reconnect grace): '<name> left' under the room's seats while it waits, and
+   *  online-gone for the race (boot.js toasts it). */
+  function seatGone(was) {
+    for (const g of seatsGone(was, st.seats, st.seat)) {
+      emit('online-gone', g);
+      if (st.phase !== 'lobby' || st.view !== 'room') continue;
+      const line = goneLine(g.name);
+      st.msg = line; setNote(line);
+      win.setTimeout(() => { if (st.msg !== line) return; st.msg = ''; if (st.view === 'room') paint(); }, 2400);
     }
   }
   /** Someone sat down, left or got ready while the room waits: one sound (never in a race). */
