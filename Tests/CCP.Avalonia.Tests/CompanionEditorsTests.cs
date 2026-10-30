@@ -5,9 +5,12 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia;
@@ -189,7 +192,7 @@ public sealed class CompanionEditorsTests
         Setup();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
-        var shell = new MainShellWindow();
+        var shell = new MainShellWindow { TabClock = new SteppedClock() };
         try
         {
             shell.Show();
@@ -197,6 +200,7 @@ public sealed class CompanionEditorsTests
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            shell.CompleteTabTransition(); // pointer geometry must be at the entrance's final position
             Dispatcher.UIThread.RunJobs();
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
@@ -206,7 +210,18 @@ public sealed class CompanionEditorsTests
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
                 button.BringIntoView();
                 Dispatcher.UIThread.RunJobs();
+                // InputHitTest reads the last rendered composition, not the live layout.
+                // Match ContentHitTestTests: one tick can still render an older pending batch.
+                var batch = ElementComposition.GetElementVisual(shell)!.Compositor.RequestCompositionBatchCommitAsync();
+                var deadline = System.Diagnostics.Stopwatch.StartNew();
+                while (!batch.Rendered.IsCompleted)
+                {
+                    Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "the compositor never rendered the prompt links");
+                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    Dispatcher.UIThread.RunJobs();
+                }
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
+                Assert.Same(button, (shell.InputHitTest(at) as Visual)?.FindAncestorOfType<Button>(includeSelf: true));
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();
