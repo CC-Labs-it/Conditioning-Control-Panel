@@ -125,6 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (!_active || _state == null || _spawning) return;
             ChaosRunEffects.ApplyLifetimeBoons(_state);
+            ChaosSkiaFxOverlay.EnsureCreated();   // WPF ChaosModeService.cs:412, idle run-start prewarm
             _hud?.SetPreRunExpanded(false);
             _hud?.SetClockVisible(_state.ShowWaveTimer);
             // WPF BeginRun :417-420: the run-pick ribbon, rebuilt live on every drafted pick.
