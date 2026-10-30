@@ -110,6 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try { Web.Focus(); }   // Escape (pause / hold-to-exit) works from the first frame
             catch (Exception ex) { Log.Debug("DtrhHost: focus: {E}", ex.Message); }
             Post(DtrhInitMessage());
+            _ = ConditioningControlPanel.Services.Vault.PlanCatalog.GetAsync(); // warm the next launch without waiting
             try { PostDtrhManifest(); }
             catch (Exception ex) { Log.Warning("DtrhHostService.OnPageReady: {E}", ex.Message); }
             // WPF :303: online media copied to this machine after this frame reaches the page as a fresh manifest

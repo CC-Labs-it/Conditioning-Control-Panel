@@ -17,6 +17,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Launcher;
 using ConditioningControlPanel.Services.Race;
+using ConditioningControlPanel.Services.Vault;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -893,6 +894,9 @@ public sealed partial class GameWindowTests
     /// <summary>Lab (or not), signed in, a throwaway library; XP and each payout's counts-as-run go to lists.</summary>
     private static void RunDtrh(bool lab, Action<MainShellWindow, List<double>, List<bool>, List<string>> body) => Run((shell, launcher) =>
     {
+        var oldPlansFetch = PlanCatalog.FetchOverride;
+        PlanCatalog.Reset();
+        PlanCatalog.FetchOverride = _ => Task.FromResult<string?>(null);
         var (oldLab, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock) = (CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider,
             CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow);
         var (oldRuns, oldForce) = (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun);
@@ -919,6 +923,8 @@ public sealed partial class GameWindowTests
         }
         finally
         {
+            PlanCatalog.Reset();
+            PlanCatalog.FetchOverride = oldPlansFetch;
             (CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider, CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks,
                 CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow) = (oldLab, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock);
             (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun) = (oldRuns, oldForce);

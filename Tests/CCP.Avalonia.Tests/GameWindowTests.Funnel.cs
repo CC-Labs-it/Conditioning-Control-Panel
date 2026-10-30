@@ -1,3 +1,7 @@
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -74,6 +78,53 @@ public sealed partial class GameWindowTests
             }
         }
         finally { GameWindow.DtrhOpenCheckout = previous; FunnelPageMessage.Reset(); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DtrhReadyWarmsPlansForNextLaunchWithoutWaiting(bool offline) => RunDtrh(true, (_, _, _, _) =>
+    {
+        CoreSettings.Current.OfflineMode = offline;
+        PlanCatalog.Reset();
+        var response = new TaskCompletionSource<string?>();
+        int reads = 0;
+        PlanCatalog.FetchOverride = _ => { reads++; return response.Task; };
+        try
+        {
+            var window = GameWindow.Launch("dtrh")!;
+            var sent = new List<JObject>();
+            window.Posted += json => sent.Add(JObject.Parse(json));
+            window.HandleMessage("{\"type\":\"ready\"}");
+            // Init and manifest must reach the page while the plan response is still pending.
+            Assert.Equal(new[] { "init", "manifest" }, sent.Select(m => (string?)m["type"]));
+            Assert.False(response.Task.IsCompleted);
+            Assert.Equal(offline ? 0 : 1, reads);
+            Assert.Equal("12.50", (string?)sent[0]["plans"]!["prime"]!["monthly"]);
+            if (!offline)
+            {
+                var plans = PlanCatalog.ToWire(PlanCatalog.Fallback);
+                plans["prime"]!["monthly"] = "14.50";
+                plans["prime"]!["patreon_url"] = "https://www.patreon.com/checkout/CodeBambi?rid=999999";
+                response.SetResult(plans.ToString(Formatting.None));
+                Assert.True(SpinWait.SpinUntil(() => PlanCatalog.Current.FromServer, TimeSpan.FromSeconds(5)));
+            }
+            window.Close();
+            sent.Clear();
+            var next = GameWindow.Launch("dtrh")!;
+            next.Posted += json => sent.Add(JObject.Parse(json));
+            next.HandleMessage("{\"type\":\"ready\"}");
+            var init = sent.Single(m => (string?)m["type"] == "init");
+            Assert.Equal(offline ? "12.50" : "14.50", (string?)init["plans"]!["prime"]!["monthly"]);
+            Assert.Equal(offline ? PlanCatalog.Fallback.Prime.PatreonUrl
+                : "https://www.patreon.com/checkout/CodeBambi?rid=999999", (string?)init["plans"]!["prime"]!["patreon_url"]);
+            Assert.Equal(offline ? 0 : 1, reads);
+        }
+        finally
+        {
+            response.TrySetResult(null);
+            PlanCatalog.Reset();
+        }
     });
 
     private static string? DtrhSummaryClick(JObject payout, JObject init, bool expectRow,
