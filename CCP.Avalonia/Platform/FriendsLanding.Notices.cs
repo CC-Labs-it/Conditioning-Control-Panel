@@ -10,29 +10,25 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
 using RowItem = ConditioningControlPanel.Services.Startup.InboxItem;
-
 namespace ConditioningControlPanel.Avalonia.Platform;
-
 internal static partial class FriendsLanding
 {
     private static FriendNotice Notice(NoticeKind kind, string id, string name, object payload, DateTimeOffset at) =>
         new(kind, id, name, LandingRules.NoticeAt(at, DateTimeOffset.UtcNow), FriendNoticeRules.LifetimeMs(kind), payload);
-
     internal static Action<string?> OpenDrawer { get; set; } = id => OpenDrawerIn(MainShellWindow.Current, id);
-
     /// <summary>WPF Services/Friends/FriendsLanding.cs:457: the panel up, then (after a layout pass) the rail chip's drawer on the friend.</summary>
     internal static void OpenDrawerIn(MainShellWindow? panel, string? id)
     {
         if (panel == null) return;
-        LauncherWindow.OpenPanel(panel);
-        Dispatcher.UIThread.Post(() => panel.FindControl<FriendsRailChip>("FriendsChip")?.OpenDrawer(id), DispatcherPriority.ApplicationIdle);
+        void Shown(MainShellWindow shown) => Dispatcher.UIThread.Post(
+            () => shown.FindControl<FriendsRailChip>("FriendsChip")?.OpenDrawer(id), DispatcherPriority.ApplicationIdle);
+        if (LauncherWindow.Instance is { } launcher) launcher.OpenPanel(Shown);
+        else { LauncherWindow.OpenPanel(panel); Shown(panel); }
     }
-
     // WPF FriendsSfx (Services/Friends/FriendsSfx.cs:25-39).
     private static void SfxClick() => Sfx("chaos/ui_click.mp3", 0.12f, "friends-click");
     private static void SfxDenied() => Sfx("chaos/ui_denied.mp3", 0.14f, "friends-denied");
     private static void SfxRequest() => Sfx("chaos/dling.mp3", 0.16f, "friends-request", true);
-
     // WPF Services/Friends/FriendsLanding.cs:311-382,436-461: requests, waiting and drawer.
     internal static void FileRequest(FriendRequest request) => StartupLadder.Inbox.File(new RowItem
     {
@@ -40,7 +36,6 @@ internal static partial class FriendsLanding
         Summary = Str("friends_land_request_line", "wants to be friends"),
         Open = () => OpenDrawer(null),
     });
-
     internal static void AnnounceRequest(FriendRequest request, bool inGame)
     {
         var anchor = inGame ? ActiveGameWindow() ?? Anchor() : Anchor();
@@ -65,7 +60,6 @@ internal static partial class FriendsLanding
         });
         FriendsSeen.Shared.RequestSeen(Service(), request);
     }
-
     internal static void Waiting(IReadOnlyList<FriendRequest> waiting, bool announce, bool inGame)
     {
         const string key = "friends-requests-waiting";
@@ -86,5 +80,4 @@ internal static partial class FriendsLanding
         });
         if (waiting.Count == 1) FriendsSeen.Shared.RequestSeen(Service(), newest);
     }
-
 }

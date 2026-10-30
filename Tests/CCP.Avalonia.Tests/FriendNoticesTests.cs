@@ -7,7 +7,6 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
-using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
@@ -17,7 +16,6 @@ using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
-using ConditioningControlPanel.Services.Launcher;
 using ConditioningControlPanel.Services.Friends;
 using Xunit;
 
@@ -27,10 +25,9 @@ public sealed class FriendNoticesTests
 {
     private static void Platform()
     {
-        if (Application.Current == null) AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia()
+        if (Application.Current == null) global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
-
     [Fact]
     public Task RepeatsActOnNewestPayloadAndNeverFileMissed() => AvaloniaTestDispatcher.RunAsync(() =>
     {
@@ -55,7 +52,6 @@ public sealed class FriendNoticesTests
         finally { FriendNotices.CloseAll(); }
         return Task.CompletedTask;
     });
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -81,7 +77,6 @@ public sealed class FriendNoticesTests
         finally { FriendNotices.CloseAll(); }
         return Task.CompletedTask;
     });
-
     [Fact]
     public Task CloseAndBodyClickAreSeenDepartures() => AvaloniaTestDispatcher.RunAsync(() =>
     {
@@ -99,7 +94,6 @@ public sealed class FriendNoticesTests
         finally { FriendNotices.CloseAll(); }
         return Task.CompletedTask;
     });
-
     [Fact]
     public Task OverflowFilesTheOldestAndOnlyThreeTimersRun() => AvaloniaTestDispatcher.RunAsync(() =>
     {
@@ -122,7 +116,6 @@ public sealed class FriendNoticesTests
         finally { FriendNotices.CloseAll(); }
         return Task.CompletedTask;
     });
-
     [Fact]
     public Task RequestBellAndWaitingSummaryFollowWpf() => AvaloniaTestDispatcher.RunAsync(() =>
     {
@@ -153,11 +146,8 @@ public sealed class FriendNoticesTests
         }
         return Task.CompletedTask;
     });
-
     private static Point Centre(Control c, Window w) => c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), w)!.Value;
-
     private static Control Tagged(Window w, string tag) => w.GetVisualDescendants().OfType<Control>().First(c => Equals(c.Tag, tag));
-
     private static string PillText(Control pill) => ((TextBlock)((Button)pill).Content!).Text!;
 
     /// <summary>Real pointer input: hit testing reads the last rendered frame, so render first.</summary>
@@ -170,7 +160,6 @@ public sealed class FriendNoticesTests
         w.MouseUp(p, button);
         Dispatcher.UIThread.RunJobs();
     }
-
     [Fact]
     public Task RealInputActsOpensOnLeftOnlyAndHoverPauses() => AvaloniaTestDispatcher.RunAsync(() =>
     {
@@ -206,7 +195,6 @@ public sealed class FriendNoticesTests
         finally { FriendNotices.CloseAll(); }
         return Task.CompletedTask;
     });
-
     [Fact]
     public Task RequestAcceptAndSafetyTeardown() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
@@ -246,23 +234,39 @@ public sealed class FriendNoticesTests
         }
         finally { FriendsLanding.Stop(); panel.Close(); }
     });
-
-    [Fact]
-    public Task OpenDrawerRaisesTheShellsRailChipOnTheFriend() => AvaloniaTestDispatcher.RunAsync(() =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task OpenDrawerRaisesTheShellsRailChipOnTheFriend(bool fromLauncher) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Platform();
+        CoreSettings.Current.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full;
+        CoreSettings.Current.PerformanceMode = false;
         var shell = new MainShellWindow();
         try
         {
             shell.Show();
             Dispatcher.UIThread.RunJobs();
+            var launcher = fromLauncher ? LauncherWindow.OpenFor(shell) : null;
+            if (fromLauncher) shell.Hide();
             FriendsLanding.OpenDrawerIn(shell, "u_on");
             Dispatcher.UIThread.RunJobs();
             var chip = shell.FindControl<FriendsRailChip>("FriendsChip")!;
+            if (launcher != null)
+            {
+                Assert.True(launcher.IsVisible);
+                Assert.False(shell.IsVisible);
+                Assert.False(chip.IsOpen);
+                for (int i = 0; i < 30; i++) launcher.StepFx(0.02);
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(launcher.IsVisible);
+                Assert.True(shell.IsVisible);
+                Assert.True(chip.Bounds.Width > 0);
+            }
             Assert.True(chip.IsOpen);
             Assert.Equal("u_on", chip.Drawer.OpenId);
         }
-        finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
+        finally { LauncherWindow.Instance?.Close(); shell.Close(); Dispatcher.UIThread.RunJobs(); }
         return Task.CompletedTask;
     });
 }
