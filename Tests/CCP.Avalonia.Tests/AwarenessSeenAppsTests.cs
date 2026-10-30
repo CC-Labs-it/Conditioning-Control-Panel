@@ -9,6 +9,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Xunit;
 
@@ -58,12 +59,23 @@ public sealed class AwarenessSeenAppsTests
         Assert.DoesNotContain("stopped", engine.GetRecentForegroundApps());
     }
 
-    [Fact]
-    public void ChipAddsAndSavesAnAppThenDisappearsAndManualEditsRefreshSuggestions() => AvaloniaTestDispatcher.Run(() =>
+    [Theory]
+    [InlineData("en", "Add 'discord' to the list")]
+    [InlineData("de", "'discord' zur Liste hinzufügen")]
+    [InlineData("es", "Añadir 'discord' a la lista")]
+    [InlineData("fr", "Ajouter 'discord' à la liste")]
+    [InlineData("it", "Aggiungi 'discord' all'elenco")]
+    [InlineData("pt-BR", "Adicionar 'discord' à lista")]
+    [InlineData("ru", "Добавить 'discord' в список")]
+    [InlineData("ja", "'discord' をリストに追加")]
+    [InlineData("ko", "'discord'을 목록에 추가")]
+    [InlineData("zh-CN", "将“discord”添加到列表")]
+    public void ChipAddsAndSavesWithoutRearmingKeyboardAndUsesLocalizedTooltip(string language, string tooltip) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var previousLanguage = LocalizationManager.Instance.CurrentLanguage;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         CoreEntitlement.HasPremiumProvider = () => true;
@@ -80,15 +92,26 @@ public sealed class AwarenessSeenAppsTests
         {
             engine.Key(KeywordInputKey.None, "chrome");
             engine.Key(KeywordInputKey.None, "discord");
+            LocalizationManager.Instance.SetLanguage(language);
             var view = new AwarenessTabView();
+            var master = view.FindControl<CheckBox>("ChkAwarenessMaster")!;
+            var keyboard = view.FindControl<CheckBox>("ChkAwarenessKeyboard")!;
+            Assert.True(master.IsChecked);
+            keyboard.IsChecked = false; // real user path: master stays on, keyboard source detaches
+            Assert.False(keyboard.IsChecked);
+            Assert.True(master.IsChecked);
             var chips = view.FindControl<WrapPanel>("AwarenessSeenAppsPanel")!;
             var label = view.FindControl<TextBlock>("TxtAwarenessSeenAppsLabel")!;
             Assert.True(label.IsVisible);
             var chip = Assert.Single(chips.Children.OfType<Button>());
             Assert.Equal("+ discord", chip.Content);
+            Assert.Equal(tooltip, ToolTip.GetTip(chip));
             service.SaveImmediate();
             Assert.False(service.HasPendingSave);
             chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(keyboard.IsChecked);
+            Assert.True(master.IsChecked);
+            Assert.True(service.Current.KeywordTriggersEnabled);
             Assert.Equal(new[] { "CHROME.exe", "discord" }, service.Current.KeywordTriggerApps);
             Assert.True(service.HasPendingSave);
             service.SaveImmediate();
@@ -101,6 +124,10 @@ public sealed class AwarenessSeenAppsTests
             box.RaiseEvent(new RoutedEventArgs(global::Avalonia.Input.InputElement.LostFocusEvent));
             Assert.Equal("+ discord", Assert.Single(chips.Children.OfType<Button>()).Content);
         }
-        finally { engine.Stop(); ring.Clear(); foreach (var app in before) ring.AddLast(app); }
+        finally
+        {
+            engine.Stop(); ring.Clear(); foreach (var app in before) ring.AddLast(app);
+            LocalizationManager.Instance.SetLanguage(previousLanguage);
+        }
     });
 }

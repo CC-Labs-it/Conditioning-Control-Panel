@@ -348,14 +348,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x44)),
                     BorderBrush = SwatchIdle, BorderThickness = new Thickness(1),
                 };
-                ToolTip.SetTip(chip, $"Add '{app}' to the list");
+                ToolTip.SetTip(chip, ConditioningControlPanel.Localization.Loc.GetF("awareness_add_app_tip", app));
                 chip.Click += (_, _) =>
                 {
                     var apps = new System.Collections.Generic.List<string>(CoreSettings.Current.KeywordTriggerApps ?? new());
                     if (!AwarenessAppScopeRules.MatchesAppList(apps, app)) apps.Add(app);
                     CoreSettings.Current.KeywordTriggerApps = apps;
                     CoreSettings.Save();
-                    SyncAwarenessTabUi();
+                    // WPF MainWindow.Awareness.cs:637 refreshes only app-scope controls.
+                    TxtAwarenessAppList.Text = string.Join(", ", apps);
+                    RefreshAwarenessSeenAppChips();
                 };
                 AwarenessSeenAppsPanel.Children.Add(chip);
             }
