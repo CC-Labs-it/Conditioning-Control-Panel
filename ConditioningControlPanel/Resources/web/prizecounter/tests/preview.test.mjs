@@ -91,22 +91,22 @@ test('only Rain and chess keep art between items; the 3D kinds go to the stage',
 
 // A loader over fake drawing: every handle records what happened to it; wait() resolves when the test says so.
 function rig(specs) {
-  const log = [], timers = [], handles = [];
+  const log = [], order = [], timers = [], handles = [];
   const wait = (ms) => new Promise((r) => timers.push({ ms, r }));
   const flush = async () => { for (let i = 0; i < 20; i++) { while (timers.length) timers.shift().r(); await new Promise((r) => setImmediate(r)); } };
   const pending = new Map();
   const pv = createPreviewLoader({
     resolve: (id) => specs[id] || null,
     open: (spec) => new Promise((res, rej) => pending.set(spec.name, { res, rej })).then(() => {
-      const h = { name: spec.name, events: [], show() { this.events.push('show'); }, hide() { this.events.push('hide'); }, dispose() { this.events.push('dispose'); } };
+      const h = { name: spec.name, events: [], show() { this.events.push('show'); }, hide() { this.events.push('hide'); }, dispose() { this.events.push('dispose'); order.push(`dispose:${spec.name}`); } };
       handles.push(h); return h;
     }),
-    release: (k) => log.push(`release:${k}`),
+    release: (k) => { log.push(`release:${k}`); order.push(`release:${k}`); },
     empty: (on) => log.push(`empty:${on}`),
     wait, settleMs: 140, outMs: 120,
   });
   const land = async (name) => { await flush(); pending.get(name).res(); await flush(); };
-  return { pv, log, handles, flush, land, pending };
+  return { pv, log, order, handles, flush, land, pending };
 }
 const SPECS = { a: { kind: 'rain', name: 'a' }, b: { kind: 'rain', name: 'b' }, c: { kind: 'model', name: 'c' }, d: { kind: 'chess', name: 'd' } };
 
@@ -123,13 +123,14 @@ test('loader: nothing loads until the focus rests; a stale load is disposed unse
 });
 
 test('loader: leaving an item fades it OUT then frees it; same kind keeps the shared art, a new kind releases it', async () => {
-  const { pv, handles, log, land } = rig(SPECS);
+  const { pv, handles, log, order, land } = rig(SPECS);
   pv.focus('a'); await land('a');
   pv.focus('b'); await land('b');
   assert.deepEqual(handles[0].events, ['show', 'hide', 'dispose']);
   assert.ok(!log.includes('release:rain'), 'a to b stays on the avatar');
   pv.focus('d'); await land('d');
   assert.ok(log.includes('release:rain'), 'leaving Rain frees the avatar');
+  assert.ok(order.indexOf('release:rain') > order.indexOf('dispose:b'), 'the avatar is freed only after the last Rain item faded OUT');
   pv.focus(null);
   await land('d').catch(() => {});
   assert.deepEqual(handles[2].events, ['show', 'hide', 'dispose']);

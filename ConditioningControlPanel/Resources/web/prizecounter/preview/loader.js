@@ -34,7 +34,14 @@ export function createPreviewLoader({ resolve, open, release = () => {}, empty =
       empty(!spec);
       const out = retire(old, outMs);
       if (!spec) return out;
-      if (spec.kind !== kind) { if (kind) release(kind); kind = spec.kind; }
+      // Release a kind's shared art only once the old preview is gone: it is a clone of that art and keeps drawing
+      // through its fade OUT, so freeing it sooner re-uploads the freed buffers (and leaks them). Skip the release if
+      // the focus came back to that kind meanwhile.
+      if (spec.kind !== kind) {
+        const was = kind;
+        kind = spec.kind;
+        if (was) out.then(() => { if (kind !== was) release(was); });
+      }
       await pause(settleMs);
       if (tok !== seq || dead) return out;
       let h = null;
