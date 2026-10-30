@@ -3004,6 +3004,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             // Don't hijack typing inside text fields.
             var inTextBox = FocusManager?.GetFocusedElement() is TextBox;
+            // WPF DeeperEditorWindow.xaml.cs:5027-5082.
+            var arrowsOwned = inTextBox || FocusManager?.GetFocusedElement() is Slider or ComboBox or ListBox or ListBoxItem;
             bool ctrl = (e.KeyModifiers & KeyModifiers.Control) == KeyModifiers.Control;
             bool shift = (e.KeyModifiers & KeyModifiers.Shift) == KeyModifiers.Shift;
 
@@ -3029,30 +3031,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 CreateHapticEventAtPlayhead();
                 e.Handled = true;
             }
-            else if (e.Key == Key.Delete && !inTextBox && _selectionSet.Count > 1)
+            else if (e.Key == Key.Delete && !inTextBox && HasAnySelection)
             {
-                // Multi-select takes priority - bulk delete everything in the set.
-                DeleteSelection();
+                DeleteCurrentSelection();
                 e.Handled = true;
             }
-            else if (e.Key == Key.Delete && !inTextBox && _selectedRegion != null)
-            {
-                BtnDeleteRegion_Click(this, new RoutedEventArgs());
-                e.Handled = true;
-            }
-            else if (e.Key == Key.Delete && !inTextBox && _selectedHaptic != null)
-            {
-                BtnDeleteHaptic_Click(this, new RoutedEventArgs());
-                e.Handled = true;
-            }
-            else if (e.Key == Key.Delete && !inTextBox && _selectedEffect != null)
-            {
-                BtnDeleteEffect_Click(this, new RoutedEventArgs());
-                e.Handled = true;
-            }
-            else if (e.Key == Key.Escape && !inTextBox && (_selectedRegion != null || _selectedHaptic != null || _selectionSet.Count > 0))
+            else if (e.Key == Key.Escape && !inTextBox && HasAnySelection)
             {
                 SelectNothing();
+                e.Handled = true;
+            }
+            // Left / Right: nudge the selection by 0.1 s (Shift = 1 s), or seek
+            // the playhead by the same step when nothing is selected.
+            else if ((e.Key == Key.Left || e.Key == Key.Right) && !arrowsOwned)
+            {
+                var step = (shift ? 1.0 : 0.1) * (e.Key == Key.Left ? -1 : 1);
+                if (HasAnySelection) NudgeSelection(step);
+                else if (_totalSeconds > 0) SeekToFraction((_currentSeconds + step) / _totalSeconds);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.End && !arrowsOwned)
+            {
+                SeekToFraction(1);
+                e.Handled = true;
+            }
+            else if ((e.Key == Key.OemOpenBrackets || e.Key == Key.OemCloseBrackets) && !inTextBox)
+            {
+                JumpToAdjacentItemStart(forward: e.Key == Key.OemCloseBrackets);
                 e.Handled = true;
             }
             // Ctrl+Z / Ctrl+Shift+Z (or Ctrl+Y) - undo / redo. The !inTextBox guard keeps standard
