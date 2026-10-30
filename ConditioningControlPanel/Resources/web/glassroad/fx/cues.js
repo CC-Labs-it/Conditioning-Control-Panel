@@ -17,7 +17,7 @@ export const STONE_CUES = Object.freeze({ tickMul: 0.5, tickOutS: 0.18, bobM: 0.
 
 /** Trauma each hit adds (owner brief): hits, bumps, landings by tier, a hit received, a tier 3 drift release. */
 export const TRAUMA = Object.freeze({ hit: 0.5, bump: 0.2, land: Object.freeze([0.1, 0.2, 0.3]), received: 0.35,
-  drift3: 0.15, finish: 0.3, lap: 0.08, launchEarly: 0.1, launchPerfect: 0.15 });
+  drift3: 0.15, finish: 0.3, lap: 0.08, launchEarly: 0.1, launchPerfect: 0.15, hardBump: 0.18 });
 /** Physical trap events that hit like a wall (fx/payoff.js MALUS_EVENTS minus the non-physical ones). */
 export const TRAP_EVENTS = Object.freeze(['keep-gate-hit', 'keep-chain-hit', 'boudoir-press-hit', 'boudoir-sweeper-hit',
   'boudoir-mirror-hit', 'goonworks-hit', 'moving-trap-hit']);
@@ -78,6 +78,14 @@ export function bumpFeel(dv, minDv, L = BUMP_LOOK) {
   const k = Math.min(1, Math.max(0, (d - from) / Math.max(L.fullDvMps - from, 1e-3)));
   const sideM = L.sideAmpM[1] * k;
   return { level, sideM, rumbleTier: level >= 0.35 ? 2 : 1 };
+}
+
+/** Trauma a hard bump adds: TRAUMA.hardBump x (0.5 at the threshold .. 1 at twice it), x 0.7 for the winner. */
+export function hardBumpTrauma(dv, minDv, lost = true) {
+  const min = Math.max(Number(minDv) || 0, 1e-3), d = Number(dv) || 0;
+  if (d < min) return 0;
+  const k = Math.min(1, (d - min) / min);
+  return TRAUMA.hardBump * (0.5 + 0.5 * k) * (lost ? 1 : 0.7);
 }
 
 export const FX_CUES = {
@@ -220,6 +228,12 @@ export const FX_CUES = {
     if (!f) return;
     if (f.sideM > 0) fx.shock?.(TRAUMA.bump * (0.4 + 0.6 * f.sideM / BUMP_LOOK.sideAmpM[1]));
     fx.fire('thud', fx.gentle.kick(rumbleOf(fx, f.rumbleTier)), 0, 0, j(fx, 'landGoneS') * (1 + f.level));
+  },
+  // interaction wave: a hard bump (contact.hardBumpDvMps) adds a short trauma pulse on top of the bump's thud,
+  // growing with dv; the loser takes it whole, the winner most of it. Trauma decays on its own (the OUT).
+  'hard-bump'(fx, { winner = -1, loser = -1, dv = 0 }) {
+    if (winner !== 0 && loser !== 0) return;
+    fx.shock?.(hardBumpTrauma(dv, fx.feel.get('contact.hardBumpDvMps'), loser === 0));
   },
   // slipstream: a thin wake of speed lines while the charge builds; the boost itself is a boost-start
   slipstream(fx, { racer = -1, state }) {

@@ -46,10 +46,11 @@ import { createParticles } from './particles.js';
 import { createSpeedLines, speedFieldVisibility } from './speedlines.js';
 import { buildKarts } from './karts.js';
 import { createWakes } from './wakes.js';
+import { createSlipRibbons } from './slipRibbon.js';
 import { createMotes } from './motes.js';
 import { createSkids } from './skids.js';
 import { createFinalLap, finalLapMods, createFaceGlance } from './worldFeel.js';
-import { kickWobble, moteDensity, bumpCount } from './kartPose.js';
+import { kickWobble, moteDensity, bumpCount, hardBumpBurst } from './kartPose.js';
 import { setLensCamera } from './lens.js';
 import { racerLabels } from '../hud/format.js';
 import { createMusicRoad } from './musicRoad.js';
@@ -339,6 +340,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const particles = createParticles(feel, art), lines = createSpeedLines(feel), wakes = createWakes(feel, count, undefined, { waterAt }), motes = createMotes(pal, seed);
   add(particles.object); add(lines.object); add(motes.object);
   for (const o of wakes.objects) add(o);
+  // interaction wave: the slipstream ribbon from the kart ahead to the drafter (fxv.slip / fxv.slipFrom)
+  const slipRibbons = createSlipRibbons(count), nearKart = new Array(count).fill(false);
+  add(slipRibbons.object);
   // All fluid meshes and spray materials exist before shader warmup.
   const waterPal = boudoir ? createBoudoirWaterPalette(pal) : pal;
   const waterVolume = buildWaterVolume(track, waterPal, art, { quality: Q.name, scene, renderer, reactive: road.uniforms.reactive });
@@ -437,6 +441,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
       : name === 'goonworks-hit' || name === 'goonworks-launch' ? ['machine', racer, name === 'goonworks-launch' ? 1 : 0]
       : [name === 'water-hop' ? 'splash' : name, racer, (p && p.tier) || 0, p]));
     on('bump', (p) => ['bump', p.a, p.dv || 0, p.p, p.b]);
+    offs.push(bus.on('slipstream', (p) => { if (p && p.state === 'fire' && p.racer >= 0) slipRibbons.fire(p.racer); }));
+    on('hard-bump', (p) => ['hard-bump', p.loser, p.dv || 0, p.p, p.winner]);
     on('bubble-ram', (p) => ['ram', p.attacker, 0, p.p, p.victim]);
     on('scan-hit', (p) => ['machine', p.racer, p.effect === 'boost' ? 1 : 0]);
     on('industry-hit', (p) => ['machine', p.racer, 0]);
@@ -536,6 +542,13 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
       // near: the player is in it, so the burst sits right under the camera (half the count and the stars)
       particles.burst(p || posOf(i), Math.round(bumpCount(a, LOOK) * few), { colours: LOOK.bumpColours, speed: LOOK.bumpSpeedMps, sparkle: 0.7, near: i === 0 || b === 0 });
     }
+    else if (kind === 'hard-bump') {
+      // interaction wave: a hard bump adds a bigger, faster spark burst and a small ground ring at the contact
+      // point, both growing with dv; sparks and ring fade out on their own (Gentle: fewer, the ring grows half)
+      const h = hardBumpBurst(a, feel.get('contact.hardBumpDvMps'), LOOK), at = p || posOf(i);
+      particles.burst(at, Math.round(h.count * few), { colours: LOOK.bumpColours, speed: LOOK.bumpSpeedMps * h.speedMul, sparkle: 1, lifeS: 0.6, up: 1.4, near: i === 0 || b === 0 });
+      if (at && obj && obj.visible) wakes.ring(at, obj.quaternion, LOOK.ringMaxM[0], { gentle, gain: LOOK.ringGain * (0.4 + 0.4 * h.k) });
+    }
     else if (kind === 'pop') {
       particles.burst(p || posOf(i), Math.round(LOOK.popCount * few), { colours: LOOK.popColours, speed: LOOK.popSpeedMps, sizeM: LOOK.popSizeM, petal: 0.3, sparkle: 0.3, g: 0.15 });
       if (obj && obj.visible) wakes.ring(p || posOf(i), obj.quaternion, LOOK.ringMaxM[0], { gentle, gain: LOOK.ringGain * 0.6 });
@@ -617,7 +630,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     const topMps = feel.get('speed.topMps');
     for (let i = 0; i < karts.list.length; i++) {
       const r = racers[i], kk = karts.list[i];
-      if (!r || !r.st || (r.meta && r.meta.left)) { karts.hide(kk); continue; }   // online: a seat that left is removed
+      if (!r || !r.st || (r.meta && r.meta.left)) { karts.hide(kk); nearKart[i] = false; continue; }   // online: a seat that left is removed
       const d0 = i ? Math.hypot(r.st[S.posX] - k[S.posX], r.st[S.posY] - k[S.posY], r.st[S.posZ] - k[S.posZ]) : 0;
       // the HIT CAM's victim (view.focusRacer, render/hitCam.js) counts as near: full pose, face, stun stars
       const d = i && view.focusRacer === i ? Math.min(d0, Q.kartLodM) : d0;
@@ -625,11 +638,13 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
         rollAdd: i || gentle ? 0 : (fx.wobble || 0) * (feel.get('kart.wobble.maxDeg') || 0) * Math.PI / 180 });
       kk.root.updateMatrixWorld();
       const near = i === 0 || d <= Q.kartLodM;
+      nearKart[i] = near;
       if (near) particles.kart(kk.root, r.st, kk.mem, dt, { mul: i ? LOOK.botSparkMul : 1, slip: (r.fxv && r.fxv.slip) || 0 });
       wakes.kart(i, kk.root, r.st, dt, near);
       if (waterfall) waterfall.kart(i, r.st, dt, { gentle, visible: near, paused: !!view.paused });
       skids.kart(i, kk.root, r.st, near);
     }
+    slipRibbons.update(dt, racers, kartObjs, { gentle: gentle || !!view.gentle, paused: !!view.paused, near: (i) => !!nearKart[i] });
     underwaterFx.update(dt,{karts:karts.list,playerS:k[S.s],playerPos:kart.position,paused:!!view.paused,gentle});
     skids.update(dt, !!view.paused);
     const wake = finalLap.step(dt, !!view.paused);
@@ -771,7 +786,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     // r186 Sprite quads are a global singleton shared with retained racer tags and stars.
     // Disposing a departing particle Sprite's geometry destroys their still-bound GPU buffers.
     for (const o of owned) o.traverse((m) => { if (m.geometry && !m.isSprite) m.geometry.dispose(); if (m.material) m.material.dispose(); });
-    particles.dispose(); skids.dispose(); lines.dispose(); wakes.dispose(); motes.dispose(); if (!kartPool) karts.dispose();
+    particles.dispose(); skids.dispose(); lines.dispose(); wakes.dispose(); slipRibbons.dispose(); motes.dispose(); if (!kartPool) karts.dispose();
     if (itemVis) itemVis.dispose();
     if (shadows) shadows.dispose();
     if (colossi && colossi.dispose) colossi.dispose();

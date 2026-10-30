@@ -269,11 +269,12 @@ Queue = emitted in sim steps, flushed once per frame. Bus = emitted synchronousl
 | `effect-end` | `{ kind, replaced }` | effects (bus) | audio, hud |
 | `bump` | `{ a, b, dv, p }` | contact | fx (shake when a or b is 0), audio |
 | `slipstream` | `{ racer, state: 'in'\|'fire'\|'out' }` | contact | hud (toast on fire, racer 0), audio, fx |
+| `hard-bump` | `{ winner, loser, dv, p }` (closing >= contact.hardBumpDvMps; winner = heavier kart; after its `bump`) | contact | fx (trauma, winner or loser 0), render (sparks), items (knock-loose, payback) |
 | `place-change` | `{ racer, from, to }` | standings | hud, audio (racer 0) |
 | `overtake` | `{ racer, passed }` (racer 0 is one of them) | standings | audio, fx |
 | `race-standings` | `{ order }` (on a change) | standings | hud |
 | `race-result` | `Result` (once) | standings | boot (results card, host message), audio, hud |
-| `boost-start` | adds kinds `'slip'\|'surge'\|'bubble'` (tier 0) | grant.js | fx, audio |
+| `boost-start` | adds kinds `'slip'\|'surge'\|'bubble'\|'bump'` (tier 0) | grant.js | fx, audio |
 
 Phase A events stay racer-0 only. Host message (integrator): `{ type: 'race-result', v: 1, track, laps, place, of,
 timeS, bestLapS, finished, items: true, xp: null }` (the desktop adds XP later); `run-ended` stays.

@@ -115,6 +115,15 @@ export function bumpCount(dv, L) {
   return Math.round(L.bumpSparks[0] + (L.bumpSparks[1] - L.bumpSparks[0]) * clamp(dv / 8, 0, 1));
 }
 
+/**
+ * Interaction wave: a hard bump's extra burst on top of the bump's own. k = 0 at contact.hardBumpDvMps (minDv) .. 1 at
+ * twice it; count from half to all of bumpSparks[1], sparks flying 1.3x .. 1.8x the bump speed.
+ */
+export function hardBumpBurst(dv, minDv, L) {
+  const min = Math.max(Number(minDv) || 0, 1e-3), k = clamp(((Number(dv) || 0) - min) / min, 0, 1);
+  return { k, count: Math.round(L.bumpSparks[1] * (0.5 + 0.5 * k)), speedMul: 1.3 + 0.5 * k };
+}
+
 // ---- rivals (wave 2 art): colourways from art/palettes.json `karts`, pushed apart, one accessory each ----
 
 /** Rival look numbers; LOOK.rival (render/look.js, integrator) overrides any of them. */

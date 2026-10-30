@@ -533,11 +533,11 @@ pose). Gentle and OS reduced motion drop the edge flash and keep fades only; the
 - `ai.cornerMargin` 0.9: share of the kart's calmed full-lock grip yaw a bot plans a bend with (was a feel gap in sim/ai.js).
 
 ## contact (B1 kart contact and slipstream, sim/contact.js)
-- `contact.radiusM` 0.54 (retained from polish 6 when visual scale rose to 0.78): kart contact radius (two karts touch under 2x this).
-- `contact.maxHeightM` 1.05 (polish 6, was 1.5): karts further apart than this along the road normal never touch.
-- `contact.pushMps` 3.5: least sideways speed a touch gives.
+- `contact.radiusM` 0.58 (interaction wave 2026-10-30: 0.54 x 1.08 with the racers 8% larger, look scale 0.8424): kart contact radius (two karts touch under 2x this).
+- `contact.maxHeightM` 1.13 (interaction wave: 1.05 x 1.08; polish 6 was 1.5): karts further apart than this along the road normal never touch.
+- `contact.pushMps` 4.2 (interaction wave, was 3.5): least sideways speed a touch gives.
 - `contact.pushPerDv` 0.5: extra sideways speed per m/s of closing speed.
-- `contact.maxPushMps` 7: cap on the sideways speed of one bump.
+- `contact.maxPushMps` 8.4 (interaction wave, was 7): cap on the sideways speed of one bump.
 - `contact.speedRefMps` 12: weight = 1 + speed / this (the faster kart moves less).
 - `contact.boostShoveMul` 1.6: a boosting kart weighs this much more.
 - `contact.stalledShoveMul` 1.6: a stalled kart weighs this much less (divides).
@@ -553,6 +553,10 @@ pose). Gentle and OS reduced motion drop the edge flash and keep fades only; the
 - `contact.slipAmount` 0.1: slingshot boost size, share of top speed.
 - `contact.slipHoldS` 0.6: slingshot boost hold.
 - `contact.slipCooldownS` 2.5: no second slingshot for this.
+- `contact.hardBumpDvMps` 6 (interaction wave): a kart-vs-kart contact closing at least this fast also emits `hard-bump` { winner (heavier kart), loser, dv, p }: extra sparks, a trauma pulse, a louder bump.
+- `contact.bumpBoostAmount` 0.06: the hard-bump winner's small boost (share of top over top, sim/grant.js kind 'bump'); never on an open stretch or a court / stones hold, never cutting a bigger boost.
+- `contact.bumpBoostHoldS` 0.4: that boost's hold.
+- `contact.bumpBoostCooldownS` 3: per racer, no second bump boost for this.
 
 ## glide (Keep drawbridge)
 
