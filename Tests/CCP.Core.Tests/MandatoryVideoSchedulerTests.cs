@@ -63,6 +63,66 @@ public sealed class MandatoryVideoSchedulerTests
         finally { v.Stop(); }
     });
 
+    [Fact]
+    public void Duplicate_during_bubble_handoff_keeps_the_pending_clip_and_strictness() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { BubbleCountActive = true };
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        try
+        {
+            Assert.True(v.Trigger(true, "/first.mp4"));
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            host.BubbleCountActive = false;
+            Assert.True(v.Trigger(false, "/duplicate.mp4")); // before the pending poll runs
+            Assert.False(v.IsPlaying);
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            Assert.True(v.IsPlaying);
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            var shown = Assert.Single(host.Shown);
+            Assert.Equal("/first.mp4", shown.Path);
+            Assert.True(shown.Strict);
+        }
+        finally { v.Stop(); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Deferred_library_failure_is_contained_and_only_scheduled_playback_rearms(bool scheduled) => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { BubbleCountActive = true };
+        var picks = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () =>
+        {
+            if (++picks == 1) throw new System.IO.IOException("library unavailable");
+            return Clips;
+        });
+        try
+        {
+            if (scheduled) { v.Start(); clock.Advance(TimeSpan.FromSeconds(722)); }
+            else Assert.True(v.Trigger());
+            host.BubbleCountActive = false;
+            Assert.Null(Record.Exception(() => clock.Advance(BubbleCountScheduler.QueuePoll)));
+            Assert.Equal(1, picks);
+            Assert.False(v.IsPlaying);
+            clock.Advance(TimeSpan.FromSeconds(724)); // next 480..720 s interval plus pre-roll
+            if (scheduled)
+            {
+                Assert.Equal(2, picks);
+                Assert.Single(host.Shown);
+            }
+            else
+            {
+                Assert.Equal(1, picks);
+                Assert.Empty(host.Shown);
+                Assert.True(v.Trigger()); // latch released: an explicit retry can still play
+                clock.Advance(MandatoryVideoScheduler.PreRoll);
+                Assert.Single(host.Shown);
+            }
+        }
+        finally { v.Stop(); }
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

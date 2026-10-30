@@ -316,18 +316,19 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>WPF TriggerVideo -> PlayVideo: pick a clip, stop the flash, and show it after the
-        /// pre-roll. False when nothing was started (no clip, or one is already playing).
+        /// pre-roll. True when playback starts or a request remains queued.
         /// <paramref name="path"/> plays that clip instead of a pick (WPF PlaySpecificVideo).</summary>
         public bool Trigger(bool? strictOverride = null, string? path = null)
         {
             if (_playing) return false;
+            // WPF InteractionQueueService.cs:108-121: the first queued request owns the handoff too.
+            if (_bubbleWait != null) return true;
             // WPF VideoService.cs:2305-2313 queues one video before picking or taking effects.
             if (_host.BubbleCountActive)
             {
-                if (_bubbleWait == null) WaitForBubbleCount(strictOverride, path, _running);
+                WaitForBubbleCount(strictOverride, path, _running);
                 return true;
             }
-            Dispose(ref _bubbleWait);
             path ??= PickNext();
             if (path == null)
             {
@@ -425,9 +426,19 @@ namespace ConditioningControlPanel.Services
             {
                 if (!ReferenceEquals(mine, _bubbleWait)) return;
                 Dispose(ref _bubbleWait);
-                if (scheduled && (!_running || !CoreSettings.Current.MandatoryVideosEnabled)) return;
-                if (_host.BubbleCountActive) WaitForBubbleCount(strict, path, scheduled);
-                else if (!Trigger(strict, path) && scheduled) ScheduleNext();
+                try
+                {
+                    if (scheduled && (!_running || !CoreSettings.Current.MandatoryVideosEnabled)) return;
+                    if (_host.BubbleCountActive) WaitForBubbleCount(strict, path, scheduled);
+                    else if (!Trigger(strict, path) && scheduled) ScheduleNext();
+                }
+                catch (Exception ex)
+                {
+                    // WPF VideoService.cs:2356-2363,2990-2998: contain selection/trigger failures.
+                    Log.Error(ex, "VideoService: deferred trigger failed - re-arming scheduled playback");
+                    _playing = false;
+                    if (scheduled) ScheduleNext();
+                }
             }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             _bubbleWait = created;
             created.Change(BubbleCountScheduler.QueuePoll, Timeout.InfiniteTimeSpan);
