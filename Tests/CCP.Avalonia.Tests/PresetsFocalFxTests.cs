@@ -161,6 +161,8 @@ public sealed class PresetsFocalFxTests
             var manager = new SessionManager(files); manager.LoadAllSessions();
             var added = 0; manager.SessionAdded += _ => added++;
             var view = new PresetsTabView(); view.UseSessionManager(manager);
+            var animationClock = new SharedDeeperThemeTests.StepClock();
+            view.SetValue(SharedDeeperThemeTests.StepClock.Property, animationClock.Instance);
             host = new Window { Width = 1200, Height = 900, Content = view }; host.Show(); host.Activate(); Settle();
             var rack = view.FindControl<StackPanel>("SessionRackPanel")!;
             string[] Ids() => rack.Children.OfType<Border>().Select(b => ((Session)b.Tag!).Id).Where(id => id.StartsWith("sync_")).ToArray();
@@ -179,9 +181,14 @@ public sealed class PresetsFocalFxTests
             Assert.Equal(new[] { "sync_c", "sync_a", "sync_b" }, Ids());
             Assert.Contains(manager.AllSessions, s => s.Id == "sync_c");
             Assert.Equal(0, added);
+            // Reproduce a loaded runner: wall time must not choose the frame being asserted.
+            System.Threading.Thread.Sleep(600); Settle();
+            animationClock.Step(0); animationClock.Step(100);
             Assert.Contains(rack.Children.OfType<Border>(), c => c.Opacity < 1);
             Assert.Contains(view.FindControl<StackPanel>("RackSourceChips")!.Children.OfType<ToggleButton>(),
                 chip => chip.Content is TextBlock t && t.Text!.EndsWith("  3"));
+            animationClock.Step(1000);
+            Assert.All(rack.Children.OfType<Border>(), c => Assert.Equal(1, c.Opacity));
         }
         finally
         {

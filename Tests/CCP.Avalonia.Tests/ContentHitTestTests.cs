@@ -34,7 +34,10 @@ public sealed class ContentHitTestTests
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            var w = new MainShellWindow();
+            var w = new MainShellWindow { TabClock = new SteppedTime() };
+            var animationClock = new SharedDeeperThemeTests.StepClock();
+            w.SetValue(SharedDeeperThemeTests.StepClock.Property, animationClock.Instance);
+            double frameMs = 0;
             // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
             // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
@@ -49,6 +52,11 @@ public sealed class ContentHitTestTests
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
                 if (tab == "awareness") w.Named<Control>(panelName)!.FindControl<Border>("AwarenessGate")!.IsVisible = false;
+                // Hit geometry and the compositor must see the same, completed entrance.
+                // Otherwise a clock tick between the commit and TranslatePoint moves the hero.
+                w.CompleteTabTransition();
+                RenderLiveTree(w); // Loaded may start the Presets card entrances.
+                animationClock.Step(frameMs); animationClock.Step(frameMs += 1000);
                 RenderLiveTree(w);
                 int tested = 0;
                 foreach (var b in w.Named<Control>(panelName)!.GetVisualDescendants().OfType<Button>().ToList())
