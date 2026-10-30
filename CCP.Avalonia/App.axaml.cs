@@ -619,6 +619,8 @@ namespace ConditioningControlPanel.Avalonia
                 var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
                 CoreReleaseContent.AppVersionProvider = () =>
                     version is null ? null : $"{version.Major}.{version.Minor}.{version.Build}";
+                // WPF App.xaml.cs:4982-4985: notes for a returning account without a backup.
+                CoreReleaseContent.PatchNotesProvider = () => ReleaseNotes.Current;
                 // WPF App.xaml.cs:2567-2576, after the version seed (the honest user-agent carries it): the Scrolller
                 // licence switch (launch + every 30 min), the device cache's books, and the hourly 24 h sweep.
                 Platform.ScrolllerHead.Start();
