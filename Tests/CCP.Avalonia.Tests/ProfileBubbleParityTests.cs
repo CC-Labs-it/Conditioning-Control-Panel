@@ -1,5 +1,9 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
@@ -247,15 +251,8 @@ public sealed class ProfileBubbleParityTests : IDisposable
     public Task FlashWobblesAndSubliminalShimmersTheBubble(MotionLevel motion, bool animates) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var shell = Shell(motion);
-        var savedFlash = (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider,
-            global::ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.Fire);
         try
         {
-            // The startup seam App.axaml.cs uses; the burst itself is stubbed (no overlay windows in a test).
-            global::ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.Fire = (_, _) => { };
-            global::ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.SeedCore(() => shell,
-                () => global::ConditioningControlPanel.Avalonia.App.NoteFeatureUsed(
-                    ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureFlash));
             var visual = shell.FindControl<Grid>("ProfileBubbleVisual")!;
             double Angle() => visual.RenderTransform is TransformGroup g
                 ? g.Children.OfType<RotateTransform>().Single().Angle
@@ -272,15 +269,14 @@ public sealed class ProfileBubbleParityTests : IDisposable
                 }
             }
 
-            CoreFlash.ShowProvider!();
+            DisplayFlash(shell);
             Run();
             if (animates) Assert.True(maxTilt > 1, $"a flash never tilted the bubble (max {maxTilt})");
             else Assert.Equal(0, maxTilt);
             Assert.Equal(1, minOpacity);
 
             maxTilt = 0;
-            global::ConditioningControlPanel.Avalonia.App.NoteFeatureUsed(
-                ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureSubliminal);
+            DisplaySubliminal();
             Run();
             if (animates) Assert.True(minOpacity < 0.95, $"a subliminal never dipped the bubble (min {minOpacity})");
             else Assert.Equal(1, minOpacity);
@@ -288,8 +284,8 @@ public sealed class ProfileBubbleParityTests : IDisposable
         }
         finally
         {
-            (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider,
-                global::ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.Fire) = savedFlash;
+            FlashOverlay.CloseAll(final: false);
+            SubliminalOverlay.CloseAll();
             shell.Close(); Dispatcher.UIThread.RunJobs();
         }
         return Task.CompletedTask;
@@ -306,7 +302,7 @@ public sealed class ProfileBubbleParityTests : IDisposable
         var field = typeof(MainShellWindow).GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance)!;
         void Fire()
         {
-            global::ConditioningControlPanel.Avalonia.App.NoteFeatureUsed(feature);
+            if (feature == "flash") DisplayFlash(shell); else DisplaySubliminal();
             Dispatcher.UIThread.RunJobs();
         }
         try
@@ -330,9 +326,155 @@ public sealed class ProfileBubbleParityTests : IDisposable
             Fire();
             Assert.Equal(DateTime.MinValue, field.GetValue(shell));
         }
-        finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
+        finally { FlashOverlay.CloseAll(final: false); SubliminalOverlay.CloseAll(); shell.Close(); Dispatcher.UIThread.RunJobs(); }
         return Task.CompletedTask;
     });
+
+    // WPF FlashService.cs:1645-1674 and MainWindow.ProfileBubble.cs:623: arrival, not request.
+    [Theory]
+    [InlineData("shown")]
+    [InlineData("canceled")]
+    [InlineData("refused")]
+    [InlineData("empty")]
+    [InlineData("cap")]
+    public Task FlashReactionWaitsForAnAdmittedDisplay(string outcome) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var shell = Shell();
+        var field = typeof(MainShellWindow).GetField("_profileBubbleLastWobble", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var timers = new List<(Action Then, TimeSpan Delay)>();
+        var saved = (FlashOverlay.After, FlashOverlay.Present);
+        var closed = typeof(FlashOverlay).GetField("_closed", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var wasClosed = closed.GetValue(null);
+        closed.SetValue(null, false); // a live app, not the final-teardown state left by a panic test
+        FlashOverlay.After = (then, delay) => timers.Add((then, delay));
+        FlashOverlay.Present = (_, _, _) => outcome != "refused";
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.App.NoteFeatureUsed("flash");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(DateTime.MinValue, field.GetValue(shell));
+            var pictures = new List<(Bitmap, PixelRect, string, Screen)>();
+            if (outcome != "empty") pictures.Add((new RenderTargetBitmap(new PixelSize(1, 1)),
+                new PixelRect(0, 0, 1, 1), "test.png", shell.Screens.All[0]));
+            if (outcome == "shown") pictures.Add((new RenderTargetBitmap(new PixelSize(1, 1)),
+                new PixelRect(2, 0, 1, 1), "second.png", shell.Screens.All[0]));
+            FlashOverlay.Schedule(pictures, 1000, 300, FlashOverlay.Generation, outcome == "cap" ? 0 : 30,
+                1, TimeSpan.Zero, TimeSpan.FromSeconds(30), false, false, 0, null);
+            Assert.Equal(DateTime.MinValue, field.GetValue(shell));
+            if (outcome == "empty") Assert.Empty(timers);
+            else Assert.Equal(TimeSpan.FromSeconds(1), timers[0].Delay);
+            if (outcome == "shown") Assert.Equal(TimeSpan.FromMilliseconds(1300), timers[1].Delay);
+            if (outcome == "canceled") FlashOverlay.CloseAll(final: false);
+            if (timers.Count > 0) timers[0].Then();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(outcome == "shown", (DateTime)field.GetValue(shell)! != DateTime.MinValue);
+            if (outcome == "shown")
+            {
+                field.SetValue(shell, DateTime.MinValue); // prove batch semantics independently of the throttle
+                timers[1].Then(); Dispatcher.UIThread.RunJobs();
+                Assert.Equal(2, FlashOverlay.Active.Count);
+                Assert.Equal(DateTime.MinValue, field.GetValue(shell));
+            }
+        }
+        finally
+        {
+            FlashOverlay.CloseAll(final: false);
+            (FlashOverlay.After, FlashOverlay.Present) = saved;
+            closed.SetValue(null, wasClosed);
+            shell.Close(); Dispatcher.UIThread.RunJobs();
+        }
+        return Task.CompletedTask;
+    });
+
+    // WPF SubliminalService.cs:609-629: delayed arrivals honor Stop, including Freeze and Reset.
+    [Theory]
+    [InlineData("freeze")]
+    [InlineData("phrase")]
+    [InlineData("cancel-delay")]
+    [InlineData("cancel-queued")]
+    [InlineData("skip")]
+    public Task SubliminalReactionFollowsGuardedWhisperFreezeAndResetDisplays(string outcome) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var shell = Shell();
+        var field = typeof(MainShellWindow).GetField("_profileBubbleLastShimmer", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var timers = new List<(int Ms, Action Then)>();
+        var drawn = new List<string>();
+        var saved = (SubliminalWhisperShow.DrawNow, SubliminalWhisperShow.After, SubliminalWhisperShow.Roll,
+            CoreAudio.PlayStoppableProvider, CoreSubliminal.BambiFreezeProvider);
+        SubliminalWhisperShow.DrawNow = text =>
+        {
+            if (outcome == "skip") SubliminalOverlay.Show(shell, text);
+            else { drawn.Add(text); SubliminalOverlay.Present(new SubliminalOverlayWindow(text)); }
+        };
+        SubliminalWhisperShow.After = (ms, then) => timers.Add((ms, then));
+        SubliminalWhisperShow.Roll = () => 0.9;
+        CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => () => { };
+        CoreSubliminal.BambiFreezeProvider = SubliminalWhisperShow.Freeze;
+        _settings.Current.SubAudioEnabled = true;
+        _settings.Current.SubAudioMuted = false;
+        void Fire(int ms)
+        {
+            var index = timers.FindIndex(t => t.Ms == ms);
+            Assert.True(index >= 0, $"missing {ms} ms display delay");
+            var next = timers[index]; timers.RemoveAt(index); next.Then();
+        }
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.App.NoteFeatureUsed("subliminal");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(DateTime.MinValue, field.GetValue(shell));
+            if (outcome == "phrase") SubliminalWhisperShow.Phrase("Freeze");
+            else CoreSubliminal.TriggerBambiFreeze();
+            Assert.Equal(DateTime.MinValue, field.GetValue(shell));
+            Fire(50); // whisper lead, then haptic anticipation
+            Assert.Equal(DateTime.MinValue, field.GetValue(shell));
+            if (outcome == "cancel-delay") SubliminalWhisperShow.StopAll();
+            Fire(250); // posts the card to the UI queue
+            Assert.Equal(DateTime.MinValue, field.GetValue(shell));
+            if (outcome == "cancel-queued") SubliminalWhisperShow.StopAll();
+            Dispatcher.UIThread.RunJobs();
+            bool shown = outcome is "freeze" or "phrase";
+            Assert.Equal(shown, (DateTime)field.GetValue(shell)! != DateTime.MinValue);
+            if (shown)
+            {
+                Assert.Equal(new[] { "Freeze" }, drawn);
+                if (outcome == "phrase")
+                {
+                    Assert.Empty(timers); // WPF SubliminalService.cs:289: plain Freeze is not Bambi Freeze.
+                    return Task.CompletedTask;
+                }
+                field.SetValue(shell, DateTime.MinValue); // advance past the independent 4 s reaction throttle
+                Fire(Assert.Single(timers).Ms); // 4-8 s Reset delay
+                Fire(50); Fire(250);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(new[] { "Freeze", "Reset" }, drawn);
+                Assert.NotEqual(DateTime.MinValue, field.GetValue(shell));
+            }
+            else Assert.Empty(drawn);
+        }
+        finally
+        {
+            SubliminalWhisperShow.StopAll(); SubliminalOverlay.CloseAll();
+            (SubliminalWhisperShow.DrawNow, SubliminalWhisperShow.After, SubliminalWhisperShow.Roll,
+                CoreAudio.PlayStoppableProvider, CoreSubliminal.BambiFreezeProvider) = saved;
+            shell.Close(); Dispatcher.UIThread.RunJobs();
+        }
+        return Task.CompletedTask;
+    });
+
+    private static void DisplayFlash(MainShellWindow shell)
+    {
+        var present = FlashOverlay.Present;
+        FlashOverlay.Present = (_, _, _) => true;
+        try
+        {
+            Assert.True(FlashOverlay.Show(new RenderTargetBitmap(new PixelSize(1, 1)), new PixelRect(0, 0, 1, 1),
+                "profile-test.png", shell.Screens.All[0], 1, TimeSpan.Zero, TimeSpan.FromSeconds(30), false, false, 0));
+        }
+        finally { FlashOverlay.Present = present; }
+    }
+
+    private static void DisplaySubliminal() => SubliminalOverlay.Present(new SubliminalOverlayWindow("Freeze"));
 
     /// <summary>WPF tier grow: BackEase EaseOut Amplitude 0.45 (overshoot ~1.11), not Avalonia's amplitude-1 BackEaseOut (~1.37).</summary>
     [Fact]

@@ -9,8 +9,8 @@
 // (UpdateQuickLoginUI) and tier changes (App RepaintVeils). XP / level-up / achievement events
 // pulse and glow the bubble (WPF OnBubble*).
 //
-// Flash / subliminal reactions ride App.FeatureUsed, which fires where WPF raised FlashDisplayed /
-// SubliminalDisplayed (App.axaml.cs flash + subliminal seeds).
+// Flash / subliminal reactions subscribe to guarded overlay display notifications, as WPF
+// MainWindow.ProfileBubble.cs:92-94 subscribes to the service display events.
 // ponytail: still missing vs WPF - the spiral row (shell-profile-spiral, no DescentService here).
 // PlaceProfileBubblePopup is dropped: Placement="BottomEdgeAlignedRight" is the same result.
 //
@@ -328,17 +328,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Action<double, string> awarded = (_, _) => Dispatcher.UIThread.Post(OnBubbleXPChanged);
             Action<int> levelUp = _ => Dispatcher.UIThread.Post(OnBubbleLevelUp);
             EventHandler<Achievement> unlocked = (_, _) => Dispatcher.UIThread.Post(OnBubbleAchievementUnlocked);
-            Action<string> featureUsed = f => Dispatcher.UIThread.Post(() => OnBubbleFeatureUsed(f));
+            Action flashDisplayed = () => Dispatcher.UIThread.Post(() => OnBubbleFeatureDisplayed("flash"));
+            Action subliminalDisplayed = () => Dispatcher.UIThread.Post(() => OnBubbleFeatureDisplayed("subliminal"));
             var engine = App.Achievements;
             ProgressionBank.Awarded += awarded;
             ProgressionBank.LevelUp += levelUp;
-            App.FeatureUsed += featureUsed;
+            Overlays.FlashOverlay.Displayed += flashDisplayed;
+            Overlays.SubliminalOverlay.Displayed += subliminalDisplayed;
             if (engine != null) engine.Unlocked += unlocked;
             Closed += (_, _) =>
             {
                 ProgressionBank.Awarded -= awarded;
                 ProgressionBank.LevelUp -= levelUp;
-                App.FeatureUsed -= featureUsed;
+                Overlays.FlashOverlay.Displayed -= flashDisplayed;
+                Overlays.SubliminalOverlay.Displayed -= subliminalDisplayed;
                 if (engine != null) engine.Unlocked -= unlocked;
             };
             RefreshProfileBubble();
@@ -438,7 +441,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF MainWindow.ProfileBubble.cs:623-649: flash wobble (2.5 s) / subliminal shimmer (4 s).</summary>
-        private void OnBubbleFeatureUsed(string feature)
+        private void OnBubbleFeatureDisplayed(string feature)
         {
             try
             {
