@@ -2368,6 +2368,8 @@
   "dialog_avatar_tube": "Avatar-Tube",
   "btn_tube_fit": "Tube-Anpassung",
   "tooltip_tube_fit": "Passe an, wie der Avatar in der Tube skaliert und positioniert wird, mit Live-Vorschau.",
+  "tube_pill_v1_tip": "Klassischer Avatar. Klick für V2, Rain.",
+  "tube_pill_v2_tip": "V2: Rain. Klick für den klassischen Avatar.",
   "tube_fit_title": "Avatar-Tube anpassen",
   "tube_fit_subtitle": "Sieh genau, wie der Avatar dieses Mods in der Tube sitzt, und passe ihn dann an.",
   "tube_fit_attached": "Angeheftet",

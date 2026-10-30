@@ -162,6 +162,17 @@ namespace ConditioningControlPanel
             var modId = App.Mods?.ActiveModId;
             if (string.IsNullOrEmpty(modId)) return null;
 
+            // The V1/V2 pill (Rain): with V2 on and a v2 row for this mod the whole avatar is Rain,
+            // whatever the set; otherwise today's (mod, set) answer. The setting is never changed here.
+            return Services.Companion.AvatarGenerationRule.ResolveFolder(
+                App.Settings?.Current?.AvatarGeneration,
+                EmoteGenerationFolder(modId, Services.Companion.AvatarGenerationRule.V2),
+                () => ResolveV1EmoteFolder(modId!));
+        }
+
+        /// <summary>Today's (mod, set) folder: mod-local set{N} first, then the embedded registry.</summary>
+        private string? ResolveV1EmoteFolder(string modId)
+        {
             var local = ModLocalEmoteFolder(_currentAvatarSet);
             if (local != null) return local;
 
@@ -284,8 +295,16 @@ namespace ConditioningControlPanel
             !string.IsNullOrEmpty(folder)
             && string.Equals(System.IO.Path.GetFileName(folder.TrimEnd('/', System.IO.Path.DirectorySeparatorChar)), RainEmoteFolder, StringComparison.OrdinalIgnoreCase);
 
-        /// <summary>True while the tube plays Rain (the wardrobe door shows only then).</summary>
-        internal bool IsRainLookActive => _circeEmoteMode && IsRainFolder(_emoteFolder);
+        /// <summary>True while the tube plays Rain (the wardrobe door shows only then). Follows the V1/V2
+        /// setting through the folder: V2 on a mod with a v2 row plays that row's folder (embedded, or later
+        /// an absolute baked pack), V1 never does.</summary>
+        internal bool IsRainLookActive => _circeEmoteMode
+            && (IsRainFolder(_emoteFolder)
+                || (Services.Companion.AvatarGenerationRule.IsV2(App.Settings?.Current?.AvatarGeneration)
+                    && !string.IsNullOrEmpty(_emoteFolder)
+                    && string.Equals(_emoteFolder,
+                        EmoteGenerationFolder(App.Mods?.ActiveModId, Services.Companion.AvatarGenerationRule.V2),
+                        StringComparison.OrdinalIgnoreCase)));
 
         private void MenuItemRainWardrobe_Click(object sender, RoutedEventArgs e)
             => Services.Companion.RainWardrobeHostService.Open();
@@ -302,21 +321,9 @@ namespace ConditioningControlPanel
                 if (sri != null)
                 {
                     using var r = new System.IO.StreamReader(sri.Stream);
-                    var j = JObject.Parse(r.ReadToEnd());
-                    if (j["sets"] is JArray arr)
-                        foreach (var it in arr)
-                        {
-                            var modId = (string?)it["modId"];
-                            var set = (int?)it["avatarSet"];
-                            var folder = (string?)it["folder"];
-                            var generation = (string?)it["generation"];
-                            // A generation row (Rain = v2) is a whole avatar, never an avatar set: it
-                            // stays off the arrows, the level picker and EmoteSetsForActiveMod.
-                            if (!string.IsNullOrEmpty(modId) && !string.IsNullOrEmpty(generation) && !string.IsNullOrEmpty(folder))
-                                generations.Add((modId!, generation!, folder!));
-                            else if (!string.IsNullOrEmpty(modId) && set.HasValue && !string.IsNullOrEmpty(folder))
-                                list.Add((modId!, set.Value, folder!));
-                        }
+                    // A generation row (Rain = v2) is a whole avatar, never an avatar set: it
+                    // stays off the arrows, the level picker and EmoteSetsForActiveMod.
+                    (list, generations) = Services.Companion.AvatarGenerationRule.ParseRegistry(r.ReadToEnd());
                 }
                 else App.Logger?.Warning("avatar_emotes_registry.json not found");
             }
@@ -383,6 +390,7 @@ namespace ConditioningControlPanel
             {
                 App.Logger?.Warning("Emote mode toggle failed: {Error}", ex.Message);
             }
+            UpdateGenerationPill();
         }
 
         private void EnterCirceEmoteMode(string folder)
@@ -715,10 +723,10 @@ namespace ConditioningControlPanel
         /// Play a single expressive/reaction emote (no talking) for its full length, then return to idle —
         /// used for giggles / "mmm" / short non-verbal sounds. Honors the min-hold of whatever's showing.
         /// </summary>
-        private void StartReactionOnly(string clip, int leadInMs)
+        private void StartReactionOnly(string clip, int leadInMs, bool skipHold = false)
         {
             StopTalkSequence();
-            int defer = CurrentClipRemainingHold();
+            int defer = skipHold ? 0 : CurrentClipRemainingHold();
             _circeNextAudioLeadInMs = Math.Clamp(defer + leadInMs, 0, 3000);
 
             void Begin()

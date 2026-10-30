@@ -3795,6 +3795,8 @@
   "btn_create_new_2": "Create New",
   "btn_tube_fit": "Tube Fit",
   "tooltip_tube_fit": "Adjust how the avatar is scaled and positioned inside the tube, with a live preview.",
+  "tube_pill_v1_tip": "Classic avatar. Click for V2, Rain.",
+  "tube_pill_v2_tip": "V2: Rain. Click for the classic avatar.",
   "tube_fit_title": "Avatar Tube Fit",
   "tube_fit_subtitle": "Preview exactly how this mod's avatar sits in the tube, then adjust it.",
   "tube_fit_attached": "Attached",

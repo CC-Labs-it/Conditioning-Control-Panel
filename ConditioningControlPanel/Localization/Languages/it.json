@@ -3651,6 +3651,8 @@
   "btn_create_new_2": "Crea nuova",
   "btn_tube_fit": "Adatta al tubo",
   "tooltip_tube_fit": "Regola dimensione e posizione dell'avatar dentro il tubo, con anteprima dal vivo.",
+  "tube_pill_v1_tip": "Avatar classico. Clic per V2, Rain.",
+  "tube_pill_v2_tip": "V2: Rain. Clic per l'avatar classico.",
   "tube_fit_title": "Avatar nel tubo",
   "tube_fit_subtitle": "Guarda come sta l'avatar di questa mod nel tubo, poi regolalo.",
   "tube_fit_attached": "Agganciato",
