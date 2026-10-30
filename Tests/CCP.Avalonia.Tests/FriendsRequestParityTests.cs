@@ -181,4 +181,38 @@ public sealed class FriendsRequestParityTests
             new Pointer(1, PointerType.Mouse, true), row, default, 0, new PointerPointProperties(), KeyModifiers.None));
         Assert.Same(rest, row.Background);
     });
+    [Fact]
+    public Task RequestPaddingRespondsToRealPointerMovement() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        SetupApp();
+        var (svc, _) = Service();
+        await svc.RefreshAsync();
+        var d = new FriendsDrawer(svc);
+        var host = new Window
+        {
+            Width = 400, Height = 700,
+            Content = new Border { Padding = new Thickness(20), Child = d },
+        };
+        try
+        {
+            host.Show();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            using var frame = host.CaptureRenderedFrame();
+            var row = Tagged<Border>(d, "friends-request-in:u_req")!;
+            // The left padding, clear of content and rounded corners (WPF FriendsDrawer.cs:752).
+            var padding = new Point(2, row.Bounds.Height / 2);
+            Assert.True(row.Bounds.Height > 12);
+            Assert.True(padding.X < row.Padding.Left);
+            var at = row.TranslatePoint(padding, host)!.Value;
+            host.MouseMove(new Point(2, 2));
+            host.MouseMove(at);
+            Assert.True(row.IsPointerOver);
+            Assert.Equal(Color.Parse("#14FFFFFF"), Assert.IsType<SolidColorBrush>(row.Background).Color);
+            host.MouseMove(new Point(2, 2));
+            Assert.False(row.IsPointerOver);
+            Assert.Equal(Colors.Transparent, Assert.IsAssignableFrom<ISolidColorBrush>(row.Background).Color);
+        }
+        finally { d.OnClosed(); host.Close(); }
+    });
+
 }
