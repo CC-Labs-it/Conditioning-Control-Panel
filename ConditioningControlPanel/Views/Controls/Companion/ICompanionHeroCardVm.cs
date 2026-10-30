@@ -79,8 +79,12 @@ namespace ConditioningControlPanel.Views.Controls.Companion
         string ChatShortcutHint { get; }
         bool IsMuted { get; }
         bool IsCompanionShown { get; }
+        /// <summary>The active mod has a Rain (v2) row: the "Rain's wardrobe" chip shows.</summary>
+        bool IsRainWardrobeAvailable { get; }
 
         ICommand ChatCommand { get; }
+        /// <summary>Opens Rain's dressing room (RainWardrobeHostService).</summary>
+        ICommand OpenRainWardrobeCommand { get; }
         ICommand SwitchCommand { get; }
         ICommand DetachCommand { get; }
         ICommand ToggleMuteCommand { get; }
