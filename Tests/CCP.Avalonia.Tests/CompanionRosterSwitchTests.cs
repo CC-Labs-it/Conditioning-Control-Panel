@@ -23,6 +23,156 @@ namespace CCP.Avalonia.Tests;
 public sealed class CompanionRosterSwitchTests
 {
     [Fact]
+    public Task AssignedPromptLabelAndRosterSwitchReachTheLiveVoice() => WithRoster((shell, room, roster) =>
+    {
+        var s = CoreSettings.Current;
+        var oldId = s.GetCompanionPromptId(2);
+        var oldPrompt = s.CompanionPrompt;
+        var oldActive = s.ActiveCommunityPromptId;
+        var folder = System.IO.Path.Combine(CorePaths.UserData, InstalledCommunityPrompts.FolderName);
+        System.IO.Directory.CreateDirectory(folder);
+        var id = "test-roster-" + Guid.NewGuid().ToString("N");
+        var file = System.IO.Path.Combine(folder, id + ".json");
+        System.IO.File.WriteAllText(file, "{\"Name\":\"Kind voice\",\"PromptSettings\":{\"Personality\":\"be kind\"}}");
+        try
+        {
+            s.SetCompanionPromptId(2, id);
+            roster.Refresh();
+            var label = roster.FindControl<TextBlock>("TxtCompanion2Prompt")!;
+            Assert.Equal("Kind voice", label.Text);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("tooltip_ai_personality", "Kind voice"), ToolTip.GetTip(label));
+            // A mod-forced switch (CoreModsHooks.SwitchCompanion -> CompanionCore) applies it too (WPF CompanionService.cs:212).
+            CompanionCore.SwitchCompanion((CompanionId)2);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(id, s.ActiveCommunityPromptId);
+            Assert.Equal("be kind", s.CompanionPrompt.Personality);
+            CompanionCore.SwitchCompanion(CompanionId.OGBambiSprite);
+            Dispatcher.UIThread.RunJobs();
+            s.CompanionPrompt = oldPrompt;
+            s.ActiveCommunityPromptId = oldActive;
+            Click(shell, roster.FindControl<Border>("CompanionCard2")!, MouseButton.Left);
+            Assert.Equal(id, s.ActiveCommunityPromptId);
+            Assert.Equal("be kind", s.CompanionPrompt.Personality);
+            s.SetCompanionPromptId(2, "missing");
+            roster.Refresh();
+            Assert.Equal("", label.Text);
+            Assert.Null(ToolTip.GetTip(label));
+        }
+        finally
+        {
+            s.SetCompanionPromptId(2, oldId);
+            s.CompanionPrompt = oldPrompt;
+            s.ActiveCommunityPromptId = oldActive;
+            System.IO.File.Delete(file);
+        }
+    });
+
+    [Fact]
+    public Task PersonalityButtonCancelsImportsAndIgnoresCorruptFiles() => WithRoster((shell, room, roster) =>
+    {
+        var s = CoreSettings.Current;
+        var oldId = s.GetCompanionPromptId(3);
+        var oldPrompt = s.CompanionPrompt;
+        var oldPick = MainShellWindow.PickPromptFile;
+        var oldInform = MainShellWindow.InformPrompt;
+        var dir = System.IO.Directory.CreateTempSubdirectory("ccp-prompt-").FullName;
+        string? picked = null;
+        var told = new System.Collections.Generic.List<string>();
+        MainShellWindow.PickPromptFile = (_, _) => Task.FromResult(picked);
+        MainShellWindow.InformPrompt = (_, title, _) => { told.Add(title); return Task.CompletedTask; };
+        void Press() { roster.FindControl<Button>("BtnCompanion3Personality")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
+        try
+        {
+            s.SetCompanionPromptId(3, null);
+            Press();   // cancelled picker: nothing assigned, nothing said
+            Assert.True(string.IsNullOrEmpty(s.GetCompanionPromptId(3)));
+            Assert.Empty(told);
+
+            picked = System.IO.Path.Combine(dir, "Sharp voice.json");
+            System.IO.File.WriteAllText(picked, "{\"Name\":\"x\",\"PromptSettings\":{\"Personality\":\"be sharp\"}}");
+            Press();
+            Assert.False(string.IsNullOrEmpty(s.GetCompanionPromptId(3)));
+            Assert.Equal("Sharp voice", roster.FindControl<TextBlock>("TxtCompanion3Prompt")!.Text);
+            Assert.Equal(new[] { ConditioningControlPanel.Localization.Loc.Get("title_personality_assigned") }, told);
+            Assert.Equal(CompanionId.OGBambiSprite, CompanionCore.ActiveCompanion);
+            Assert.Same(oldPrompt, s.CompanionPrompt);   // not the active card: the live voice is untouched
+
+            System.IO.File.WriteAllText(picked, "{ not json");
+            Press();
+            Assert.Single(told); // WPF ImportFromFile returns null on corrupt JSON.
+        }
+        finally
+        {
+            var installed = s.GetCompanionPromptId(3);
+            if (!string.IsNullOrEmpty(installed))
+            {
+                s.InstalledCommunityPromptIds.Remove(installed);
+                System.IO.File.Delete(System.IO.Path.Combine(CorePaths.UserData, InstalledCommunityPrompts.FolderName, installed + ".json"));
+            }
+            s.SetCompanionPromptId(3, oldId);
+            s.CompanionPrompt = oldPrompt;
+            MainShellWindow.PickPromptFile = oldPick;
+            MainShellWindow.InformPrompt = oldInform;
+            System.IO.Directory.Delete(dir, true);
+        }
+    });
+
+    [Fact]
+    public Task AssigningActiveCompanionAppliesImmediatelyAndClosedShellUnsubscribes() => WithRoster((shell, room, roster) =>
+    {
+        var file = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid() + ".json");
+        System.IO.File.WriteAllText(file, "{\"PromptSettings\":{\"Personality\":\"active voice\"}}");
+        MainShellWindow.PickPromptFile = (_, _) => Task.FromResult<string?>(file);
+        var inform = MainShellWindow.InformPrompt;
+        MainShellWindow.InformPrompt = (_, _, _) => Task.CompletedTask;
+        try
+        {
+            roster.FindControl<Button>("BtnCompanion0Personality")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("active voice", CoreSettings.Current.CompanionPrompt.Personality);
+            Assert.Equal(CoreSettings.Current.GetCompanionPromptId(0), CoreSettings.Current.ActiveCommunityPromptId);
+            CoreSettings.Current.SetCompanionPromptId(2, CoreSettings.Current.GetCompanionPromptId(0));
+            shell.Close();
+            CoreSettings.Current.CompanionPrompt = new();
+            CompanionCore.SwitchCompanion((CompanionId)2);
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotEqual("active voice", CoreSettings.Current.CompanionPrompt.Personality);
+        }
+        finally
+        {
+            MainShellWindow.InformPrompt = inform;
+            System.IO.File.Delete(file);
+        }
+    });
+
+    [Fact]
+    public Task NullPromptSettingsCannotBeAssignedOrApplied() => WithRoster((shell, room, roster) =>
+    {
+        var file = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid() + ".json");
+        System.IO.File.WriteAllText(file, "{\"PromptSettings\":null}");
+        MainShellWindow.PickPromptFile = (_, _) => Task.FromResult<string?>(file);
+        var inform = MainShellWindow.InformPrompt;
+        MainShellWindow.InformPrompt = (_, _, _) => Task.CompletedTask;
+        var s = CoreSettings.Current;
+        var previous = s.CompanionPrompt;
+        var count = s.InstalledCommunityPromptIds.Count;
+        try
+        {
+            roster.FindControl<Button>("BtnCompanion2Personality")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(string.IsNullOrEmpty(s.GetCompanionPromptId(2)));
+            Assert.Equal(count, s.InstalledCommunityPromptIds.Count);
+            // A previously stored invalid assignment also leaves the current voice alone.
+            var prompt = room.WorkshopParts!.Community.Service.ImportFromFile(file)!;
+            s.SetCompanionPromptId(2, prompt.Id);
+            CompanionCore.SwitchCompanion((CompanionId)2);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(previous, s.CompanionPrompt);
+        }
+        finally { MainShellWindow.InformPrompt = inform; System.IO.File.Delete(file); }
+    });
+
+    [Fact]
     public Task RealRosterCardsSwitchCoreAndRefreshHeroAndActiveRing() => WithRoster((shell, room, roster) =>
     {
         int switches = 0;
@@ -73,7 +223,16 @@ public sealed class CompanionRosterSwitchTests
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+                .WithInterFont().With(new global::Avalonia.Media.FontManagerOptions
+                {
+                    DefaultFamilyName = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
+                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily>
+                    {
+                        ["Segoe UI"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                        ["Segoe UI Black"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter)
+                    }
+                })
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var previous = CoreSettings.ServiceProvider;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
@@ -92,6 +251,8 @@ public sealed class CompanionRosterSwitchTests
         s.AvatarEnabled = false;
         s.SlutModeEnabled = false;
         for (int i = 0; i < 5; i++) s.CompanionProgressData[i] = new CompanionProgress { Level = i + 2 };
+        var oldPicker = MainShellWindow.PickPromptFile;
+        MainShellWindow.PickPromptFile = (_, _) => Task.FromResult<string?>(null);
         var shell = new MainShellWindow();
         try
         {
@@ -109,6 +270,7 @@ public sealed class CompanionRosterSwitchTests
         }
         finally
         {
+            MainShellWindow.PickPromptFile = oldPicker;
             shell.Close();
             Dispatcher.UIThread.RunJobs();
             s.ActiveCompanionId = oldActive;
