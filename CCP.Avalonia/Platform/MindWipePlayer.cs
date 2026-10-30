@@ -29,7 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private IVoice? _oneShot, _loop;
         private bool _running, _sessionMode;
         private int _sessionBase;
-        private long _sessionStart;
+        private DateTime _sessionStart;
         private double _frequency = 6, _volume = 0.5;
 
         /// <summary>Raised with the loop's length in seconds once it has played 60 s (WPF Clean Slate).</summary>
@@ -99,7 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 if (_running) return;
                 _running = _sessionMode = true;
                 _sessionBase = baseMultiplier;
-                _sessionStart = _time.GetTimestamp();
+                _sessionStart = _time.GetLocalNow().DateTime;
                 _volume = MindWipeSchedule.ClampVolume(volume);
                 var every = MindWipeSchedule.TickInterval;
                 _tick = _time.CreateTimer(_ => Tick(), null, every, every);
@@ -144,8 +144,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
             lock (_lock)
             {
                 if (!_running || _loop != null || _clips.Length == 0) return;
+                // WPF MindWipeService.cs:238,717: local wall time, including backward/DST jumps.
                 var probability = _sessionMode
-                    ? MindWipeSchedule.SessionProbability(_sessionBase, _time.GetElapsedTime(_sessionStart))
+                    ? MindWipeSchedule.SessionProbability(_sessionBase, _time.GetLocalNow().DateTime - _sessionStart)
                     : MindWipeSchedule.Probability(_frequency);
                 if (_roll() >= probability) return;
             }

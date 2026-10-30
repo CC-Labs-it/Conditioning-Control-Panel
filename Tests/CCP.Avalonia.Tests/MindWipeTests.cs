@@ -33,6 +33,11 @@ public sealed class MindWipeTests
     private sealed class Clock : TimeProvider
     {
         private long _now;
+        private DateTimeOffset _wallOrigin = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        public TimeZoneInfo Zone = TimeZoneInfo.Utc;
+        public override TimeZoneInfo LocalTimeZone => Zone;
+        public override DateTimeOffset GetUtcNow() => _wallOrigin.AddMilliseconds(_now);
+        public void JumpWallClock(TimeSpan by) => _wallOrigin += by;
         private readonly List<Timer> _timers = new();
         public override long TimestampFrequency => 1000;
         public override long GetTimestamp() => _now;
@@ -177,6 +182,36 @@ public sealed class MindWipeTests
             global::ConditioningControlPanel.Avalonia.App.DiscordRpc = oldRpc;
         }
     }, roll: 0.05);
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Session_escalation_uses_local_wall_time_for_clock_jumps_and_dst(bool daylightSaving, bool forward) => Run((player, voices, clock) =>
+    {
+        // WPF MindWipeService.cs:238,717: subtract local DateTimes, including DST offset changes.
+        if (daylightSaving)
+        {
+            clock.Zone = TimeZoneInfo.CreateCustomTimeZone("MindWipe-test", TimeSpan.FromHours(-5), "Test", "Standard", "Daylight",
+                new[] { TimeZoneInfo.AdjustmentRule.CreateAdjustmentRule(new DateTime(2026, 1, 1), new DateTime(2026, 12, 31), TimeSpan.FromHours(1),
+                    TimeZoneInfo.TransitionTime.CreateFloatingDateRule(new DateTime(1, 1, 1, 2, 0, 0), 3, 2, DayOfWeek.Sunday),
+                    TimeZoneInfo.TransitionTime.CreateFloatingDateRule(new DateTime(1, 1, 1, 2, 0, 0), 11, 1, DayOfWeek.Sunday)) });
+            // Five minutes before the tick that crosses the spring-forward or fall-back boundary.
+            var start = forward ? new DateTimeOffset(2026, 3, 8, 6, 54, 50, TimeSpan.Zero)
+                                : new DateTimeOffset(2026, 11, 1, 5, 54, 50, TimeSpan.Zero);
+            clock.JumpWallClock(start - clock.GetUtcNow());
+        }
+        CoreMindWipe.StartSession(1, 0.7);
+        clock.Advance(TimeSpan.FromMinutes(5));
+        if (forward) Assert.Empty(voices); else Assert.NotEmpty(voices);
+        var played = voices.Count;
+        if (!daylightSaving) clock.JumpWallClock(TimeSpan.FromHours(forward ? 1 : -1));
+        clock.Advance(TimeSpan.FromSeconds(10));
+        // Forward: the wall clock crosses 65 minutes and raises the probability above 0.4.
+        // Backward: negative elapsed time must go quiet, even though monotonic time advanced.
+        Assert.Equal(forward ? played + 1 : played, voices.Count);
+    }, roll: forward ? 0.4 : 0.05);
 
     [Fact]
     public void A_loop_that_dies_stops_reporting_looping_and_pays_no_clean_slate() => Run((player, voices, clock) =>
