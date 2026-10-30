@@ -32,5 +32,7 @@
     </Style>
     <!-- Icon size ramp + semantic icon brushes (Controls/Icons, fluent icons 2026-10-10). -->
     <StyleInclude Source="avares://CCP.Avalonia/Theme/Icons.axaml"/>
+    <!-- WPF MainWindow.xaml:457: scrollbar occupies its own row/column. -->
+    <Style Selector="ScrollViewer"><Setter Property="AllowAutoHide" Value="False"/></Style>
   </Application.Styles>
 </Application>

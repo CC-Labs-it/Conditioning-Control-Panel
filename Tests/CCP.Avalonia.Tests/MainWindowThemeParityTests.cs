@@ -119,4 +119,137 @@ public sealed class MainWindowThemeParityTests
         finally { host.Close(); }
         return Task.CompletedTask;
     });
+    // MainWindow.xaml:341 implicit Slider + :409-500 implicit ScrollBar (WPF ScrollViewer keeps
+    // the bar beside the content, never over it).
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task UnthemedSlidersAndScrollBarsWearTheWpfChrome(bool sliderOnly) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var slider = new Slider();
+        var viewer = new ScrollViewer
+        {
+            Height = 200,
+            VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+            Content = new Border { Height = 2000 },
+        };
+        var panel = new DockPanel();
+        DockPanel.SetDock(slider, Dock.Top);
+        panel.Children.Add(slider);
+        panel.Children.Add(viewer);
+        var host = new Window { Width = 300, Height = 300, Content = panel };
+        host.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            if (sliderOnly)
+            {
+                Assert.Equal(18, slider.Height);
+                Assert.Contains(slider.GetVisualDescendants(), v => v is Border { Name: "TrackGroove" });
+                return Task.CompletedTask;
+            }
+
+            var bar = viewer.GetVisualDescendants().OfType<global::Avalonia.Controls.Primitives.ScrollBar>()
+                .Single(b => b.Name == "PART_VerticalScrollBar");
+            Assert.Equal(8, bar.Bounds.Width);
+            var presenter = viewer.GetVisualDescendants().OfType<global::Avalonia.Controls.Presenters.ScrollContentPresenter>().Single();
+            Assert.Equal(viewer.Bounds.Width - 8, presenter.Bounds.Width);
+
+            var thumb = bar.GetVisualDescendants().OfType<global::Avalonia.Controls.Primitives.Thumb>().Single();
+            Assert.Same(host.FindResource("PanelAccentHoverBrush"), thumb.Background);
+            host.MouseMove(thumb.TranslatePoint(new Point(4, 10), host)!.Value);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(host.FindResource("PinkBrush"), thumb.Background);
+
+            // The track halves are WPF's LineUp/LineDown: one click scrolls one SmallChange.
+            bar.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PART_LineDownButton")
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(viewer.SmallChange.Height, viewer.Offset.Y);
+        }
+        finally { host.Close(); }
+        return Task.CompletedTask;
+    });
+
+    // WPF Resources/Theme/MainWindow.xaml:750. Close/detach cancel ownership;
+    // panic cleanup is stricter than WPF and preserves the base stop ordering.
+    [Theory]
+    [InlineData("expiry")]
+    [InlineData("stale")]
+    [InlineData("close")]
+    [InlineData("detach")]
+    [InlineData("panic")]
+    public Task OrdinaryHelpTooltipLifetime(string scenario) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var clock = new TooltipClock();
+        var oldTime = global::ConditioningControlPanel.Avalonia.Controls.ToolTipLifetime.Time;
+        global::ConditioningControlPanel.Avalonia.Controls.ToolTipLifetime.Time = clock;
+        var owner = new Button { Theme = (ControlTheme)Application.Current!.FindResource("HelpButtonStyle")! };
+        var host = new Window { Width = 100, Height = 100, Content = owner };
+        ToolTip.SetTip(owner, "ordinary help");
+        host.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            ToolTip.SetIsOpen(owner, true);
+            if (scenario == "expiry")
+            {
+                clock.Advance(59999);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(ToolTip.GetIsOpen(owner));
+                clock.Advance(1);
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(ToolTip.GetIsOpen(owner));
+            }
+            else if (scenario == "stale")
+            {
+                clock.Advance(60001); // queue expiry, then reopen before it dispatches
+                ToolTip.SetIsOpen(owner, false);
+                ToolTip.SetIsOpen(owner, true);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(ToolTip.GetIsOpen(owner));
+            }
+            else
+            {
+                if (scenario == "close") ToolTip.SetIsOpen(owner, false);
+                if (scenario == "detach") host.Content = null;
+                if (scenario == "panic")
+                    global::ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All
+                        .Single(s => s.Id == "help-tooltips").Stop(null);
+                Assert.False(ToolTip.GetIsOpen(owner));
+                Assert.True(clock.Last!.Disposed);
+            }
+        }
+        finally
+        {
+            ToolTip.SetIsOpen(owner, false);
+            host.Close();
+            global::ConditioningControlPanel.Avalonia.Controls.ToolTipLifetime.Time = oldTime;
+        }
+        return Task.CompletedTask;
+    });
+
+    private sealed class TooltipClock : TimeProvider
+    {
+        private long _now;
+        internal Alarm? Last;
+        public override System.Threading.ITimer CreateTimer(System.Threading.TimerCallback callback, object? state,
+            TimeSpan dueTime, TimeSpan period) => Last = new Alarm(callback, state, _now + (long)dueTime.TotalMilliseconds);
+        internal void Advance(long milliseconds)
+        {
+            _now += milliseconds;
+            if (Last is { Disposed: false } alarm && _now >= alarm.Due) alarm.Fire();
+        }
+        internal sealed class Alarm(System.Threading.TimerCallback callback, object? state, long due) : System.Threading.ITimer
+        {
+            internal long Due = due;
+            internal bool Disposed;
+            internal void Fire() { Due = long.MaxValue; callback(state); }
+            public bool Change(TimeSpan dueTime, TimeSpan period) => throw new NotSupportedException();
+            public void Dispose() => Disposed = true;
+            public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
+        }
+    }
 }
