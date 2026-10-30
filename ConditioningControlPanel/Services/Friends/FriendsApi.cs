@@ -392,6 +392,7 @@ public sealed class FriendsApi : IFriendsApi
                     Platforms = online && fo["platforms"] is JArray pa
                         ? FriendPlatform.Normalise(pa.Select(Str))
                         : Array.Empty<string>(),
+                    Look = Services.PlayerLook.From(fo["cosmetics"]),
                 });
             }
 
@@ -428,7 +429,7 @@ public sealed class FriendsApi : IFriendsApi
         {
             if (r is not JObject ro || Str(ro["id"]) is not { Length: > 0 } rid) continue;
             list.Add(new FriendRequest(rid, Str(ro["name"]) ?? "", Str(ro["avatar"]), Str(ro["via"]),
-                ParseTime(ro["at"], DateTimeOffset.MinValue)));
+                ParseTime(ro["at"], DateTimeOffset.MinValue)) { Look = Services.PlayerLook.From(ro["cosmetics"]) });
         }
         return list;
     }

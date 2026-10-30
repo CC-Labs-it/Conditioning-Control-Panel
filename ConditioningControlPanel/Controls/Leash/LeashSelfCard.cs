@@ -73,7 +73,7 @@ public sealed class LeashSelfCard : Border
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var av = FriendsLook.Avatar(_me.Holder.Name, _me.Holder.AvatarUrl, 40);
+        var av = FriendsLook.Avatar(_me.Holder.Name, _me.Holder.AvatarUrl, 40, null, _me.Holder.Look);
         av.Margin = new Thickness(0, 0, 10, 0);
         g.Children.Add(av);
 

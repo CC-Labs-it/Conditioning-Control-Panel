@@ -167,6 +167,10 @@ public partial class EmiOptionsWindow : Window
             LblSpice.Text = Loc.Get("emi_desk_opt_spice");
             LblOffers.Text = Loc.Get("emi_desk_opt_offers");
             LblGlass.Text = Loc.Get("emi_desk_opt_glass");
+            TxtHeadThings.Text = Loc.Get("emi_desk_opt_head_things");
+            LblDeskHat.Text = Loc.Get("emi_desk_opt_hat");
+            LblDeskToy.Text = Loc.Get("emi_desk_opt_toy");
+            BtnDeskCounter.Content = Loc.Get("emi_desk_opt_counter");
             SpiceInnocent.Content = Loc.Get("emi_desk_spice_innocent");
             SpiceSuggestive.Content = Loc.Get("emi_desk_spice_suggestive");
             SpiceAnything.Content = Loc.Get("emi_desk_spice_anything");
@@ -212,6 +216,8 @@ public partial class EmiOptionsWindow : Window
         SpiceInnocent.Checked += (_, _) => OnSpicePicked(0);
         SpiceSuggestive.Checked += (_, _) => OnSpicePicked(1);
         SpiceAnything.Checked += (_, _) => OnSpicePicked(2);
+
+        BtnDeskCounter.Click += (_, _) => OpenCounterForDesk();
     }
 
     private void Hold(bool on)
@@ -315,6 +321,8 @@ public partial class EmiOptionsWindow : Window
                 SpiceInnocent.IsChecked = spice == 0;
                 SpiceSuggestive.IsChecked = spice == 1;
                 SpiceAnything.IsChecked = spice == 2;
+
+                BuildDeskPicks();
 
                 var chord = s.EmiDeskHotkey;
                 TxtHotkey.Text = string.IsNullOrWhiteSpace(chord)

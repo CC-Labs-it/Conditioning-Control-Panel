@@ -54,7 +54,7 @@ public sealed class LeashSnapCard : Border
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var left = FriendsLook.Avatar(_holder.Name, _holder.AvatarUrl, 68);
+        var left = FriendsLook.Avatar(_holder.Name, _holder.AvatarUrl, 68, null, _holder.Look);
         row.Children.Add(left);
         _chain = LeashLook.Chain(190, 14);
         _chain.HorizontalAlignment = HorizontalAlignment.Center;
@@ -65,7 +65,7 @@ public sealed class LeashSnapCard : Border
         Grid.SetColumn(chainHost, 1);
         row.Children.Add(chainHost);
         var rightHost = new Grid();
-        _right = FriendsLook.Avatar(_leashed.Name, _leashed.AvatarUrl, 68);
+        _right = FriendsLook.Avatar(_leashed.Name, _leashed.AvatarUrl, 68, null, _leashed.Look);
         rightHost.Children.Add(_right);
         var tag = LeashLook.HeartTag(26);
         tag.HorizontalAlignment = HorizontalAlignment.Left;

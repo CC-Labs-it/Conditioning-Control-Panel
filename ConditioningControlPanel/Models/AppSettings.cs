@@ -9851,6 +9851,48 @@ namespace ConditioningControlPanel.Models
             set { _emiDeskGlass = value; OnPropertyChanged(); }
         }
 
+        private string? _emiDeskHat;
+        /// <summary>
+        /// Prize Counter hat EMI wears on the desk (<c>desk.hat.*</c>), or null. Clamped to owned grants on
+        /// read (Services/EmiDesk/EmiDeskItems); synced through /v2/equip family desk (DeskEquipSync).
+        /// </summary>
+        [JsonProperty]
+        public string? EmiDeskHat
+        {
+            get => _emiDeskHat;
+            set { _emiDeskHat = value; OnPropertyChanged(); }
+        }
+
+        private string? _emiDeskToy;
+        /// <summary>Prize Counter toy EMI holds on the desk (<c>desk.toy.*</c>), or null. Same rules as the hat.</summary>
+        [JsonProperty]
+        public string? EmiDeskToy
+        {
+            get => _emiDeskToy;
+            set { _emiDeskToy = value; OnPropertyChanged(); }
+        }
+
+        private long _emiDeskEquipUpdatedMs;
+        /// <summary>When the desk pick last changed (unix ms, local or adopted server copy). A server copy is
+        /// adopted only when its updatedAt is newer.</summary>
+        [JsonProperty]
+        public long EmiDeskEquipUpdatedMs
+        {
+            get => _emiDeskEquipUpdatedMs;
+            set { _emiDeskEquipUpdatedMs = Math.Max(0, value); OnPropertyChanged(); }
+        }
+
+        private bool _emiDeskEquipPushOwed;
+        /// <summary>True while a local desk pick has not reached /v2/equip (route missing, offline, signed out).
+        /// The launch pull sends it up instead of adopting the server copy, so a pick made before the route
+        /// deployed is never replaced by an empty server copy stamped by another family's PUT.</summary>
+        [JsonProperty]
+        public bool EmiDeskEquipPushOwed
+        {
+            get => _emiDeskEquipPushOwed;
+            set { _emiDeskEquipPushOwed = value; OnPropertyChanged(); }
+        }
+
         private double _emiDeskWidth = 220;
         /// <summary>
         /// Her body width in DIPs, mirrored from the widget's own resize handle. Clamped to the

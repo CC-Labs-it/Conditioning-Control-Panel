@@ -239,6 +239,17 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
+    <!-- profile.avatar.rain-portrait is Rain-derived (CC BY 4.0): its attribution ships beside it. -->
+    <Content Include="Resources\cosmetics\shop\ATTRIBUTION.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- EMI desk Prize Counter items (Resources\emi\desk-items\<id>\over-body-*.png, Astra's ten-pose
+         over-layer sheets): read off disk by Services\EmiDesk\EmiDeskItems like the outfit overlays.
+         The registry.json beside them already ships through the Resources\emi\**\*.json Content below. -->
+    <None Remove="Resources\emi\desk-items\**\*.png" />
+    <Content Include="Resources\emi\desk-items\**\*.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
     <!-- The Exclusives vault backdrop used to live at assets\exclusives\ as loose Content and
          was loaded off AppContext.BaseDirectory - outside Resources\, so no .ccpmod could ever
          shadow it. It moved to Resources\exclusives\ (declared as <Resource> further down) and
