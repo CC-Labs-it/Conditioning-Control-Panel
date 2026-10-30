@@ -151,7 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
-            _noteTimer?.Stop();
+            HideMovedNote();
             _sheenClock?.Stop();   // P65: a detached strip never ticks
             base.OnDetachedFromVisualTree(e);
         }
