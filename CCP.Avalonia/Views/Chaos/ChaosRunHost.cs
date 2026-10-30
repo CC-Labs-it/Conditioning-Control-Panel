@@ -40,7 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
     /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
     /// milestones, lessons/first-times, the announcer and the achievement credit; slow-mo,
-    /// freeze hold and the perf backoff on the cadence; the payload firer is a logging no-op; the
+    /// freeze hold and the perf backoff on the cadence; only the Gif Rain payload fires; the
     /// pop text is the <see cref="PopText"/> hook (chaos-pop-text lane). Also missing: the boon draft
     /// on a wave boundary (BeginWaveTransition rolls straight on, as WPF does with drafts off);
     /// chaos barks (run started/completed, gold-first, defuse/detonate) still need their callers
@@ -281,10 +281,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 case "click": _state.PushEvent("💥 a tap isn't a hold"); break;
                 case "release": _state.PushEvent("💥 you let go"); break;
             }
-            // ponytail: WPF FirePayloadForDetonation's ambient remap and one-heavy-at-a-time gate
-            // land with the real payload firer (the Avalonia firer is a logging no-op).
+            // Other payload runners and the ambient remap remain unported.
             EffectLabel(b);   // WPF Detonate :4862
-            FireScaledPayload(spec.Payload);
+            FirePayloadForDetonation(spec.Payload);
             ChaosRunLessons.OnDetonation();   // silk_touch: the loop is no longer clean
             string name = spec.Payload.DisplayName;
             double s = spec.Strength / 100.0;
@@ -358,6 +357,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!ChaosFieldMath.ShowsPopScore(_state?.ShowPopScores == true, pts)) return;
             PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY + 30,
                 "+" + ((long)pts).ToString("N0"), Color.FromRgb(0xFF, 0xE9, 0xA0));
+        }
+
+        private static DateTime _heavyUntilUtc = DateTime.MinValue;
+
+        // WPF ChaosModeService.cs:2155-2156,2295-2322: drop overlapping heavy
+        // detonations, including during the off-thread pool pick, without queuing.
+        internal static void FirePayloadForDetonation(EffectPayload payload)
+        {
+            bool heavy = payload.Kind is EffectBubblePayloadKind.GifCascade or EffectBubblePayloadKind.Video;
+            var now = BubbleOverlay.Field.Clock();
+            if (heavy && (CoreEngine.Video?.IsPlaying == true || ChaosGifCascadeOverlay.IsRaining || now < _heavyUntilUtc))
+                return;
+            if (payload.Kind == EffectBubblePayloadKind.GifCascade)
+                _heavyUntilUtc = now.AddSeconds(GifCascadePayload.DURATION_SEC + 5);
+            FireScaledPayload(payload);
         }
 
         /// <summary>WPF FireScaledPayload (:2267) minus the lesson hook.</summary>
@@ -489,6 +503,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3177; also clears a queue left by an idle caller
             ChaosCursorGlowOverlay.CloseActive();   // WPF ForceShutdown :3183
             ChaosSkiaFxOverlay.CloseActive();   // WPF ChaosModeService.ForceShutdown; before the idle return
+            _heavyUntilUtc = DateTime.MinValue;
+            ChaosGifCascadeOverlay.CloseActive(); // also cancel a pending pick before the idle return
             if (!_active && _hud == null && _overlay == null && _fx == null) return;
             _spawning = false;
             _runTimer?.Stop();
@@ -500,7 +516,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 try { _overlay.Close(); } catch (Exception ex) { Log.Debug("Chaos overlay close: {E}", ex.Message); }
             }
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
-            ChaosGifCascadeOverlay.CloseActive();   // WPF ForceShutdown :3176
             ChaosWaveTimerWindow.CloseActive();   // WPF ForceShutdown :3181
             CloseBoonBar();   // WPF ForceShutdown :3181
             CloseFx();   // WPF ForceShutdown :3189
@@ -701,6 +716,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _hud = null;
             _overlay = null;
             _state = null;
+            _heavyUntilUtc = DateTime.MinValue;
             _active = false;
             _spawning = false;
             _manualPaused = false;
