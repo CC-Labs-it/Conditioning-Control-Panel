@@ -9,13 +9,13 @@ namespace CCP.Core.Tests;
 public sealed class NavRailRemainingRulesTests
 {
     [Fact]
-    public void ArtWashUsesWaveNineAlphasForEverySection()
+    public void ArtWashUsesCurrentWaveElevenAlphasForEverySection()
     {
         foreach (var section in NavSections.Order)
         {
             var hue = 0xFF000000 | NavStripTable.AccentRgb(section.Key);
-            Assert.Equal(0x2E, NavStripPaint.A(NavRailPaintRules.ArtTint(hue, true)));
-            Assert.Equal(0x14, NavStripPaint.A(NavRailPaintRules.ArtTint(hue, false)));
+            Assert.Equal(0x0D, NavStripPaint.A(NavRailPaintRules.ArtTint(hue, true)));
+            Assert.Equal(0x00, NavStripPaint.A(NavRailPaintRules.ArtTint(hue, false)));
             Assert.Equal(hue & 0xFFFFFF, NavRailPaintRules.ArtTint(hue, true) & 0xFFFFFF);
             Assert.Equal(hue & 0xFFFFFF, NavRailPaintRules.ArtTint(hue, false) & 0xFFFFFF);
         }

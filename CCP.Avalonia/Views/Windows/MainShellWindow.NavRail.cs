@@ -49,7 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // WPF NavRailRules: row tint 0x33, tile tint 0x40, ring idle/hover/active alpha, lit halo.
         private const byte NavFillAlpha = 0x33, NavTileTintAlpha = 0x40;
         private const double NavGlowActive = 0.55;
-        // WPF NavRailRules: wave 9 art wash (lit 18%, idle 8%), the spur (90% edge, 60% ring),
+        // WPF NavRailRules: wave 11 art wash (lit 5%, idle none), the spur (90% edge, 60% ring),
         // the badge cap and its seen opacity; NavRail.cs: the 160 ms halo fade; ChromeFx: the nudge.
         internal const byte NavSpurEdgeAlpha = 0xE6, NavSpurRingAlpha = 0x99;
         internal const int NavGlowFadeMs = 160, NavBadgeCap = 9, NavIconHoverMs = 150;

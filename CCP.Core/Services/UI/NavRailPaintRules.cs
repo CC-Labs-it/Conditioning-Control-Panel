@@ -10,8 +10,8 @@ public static class NavRailPaintRules
     public const byte RingIdleAlpha = 0xCC, RingHoverAlpha = 0xF2, RingActiveAlpha = 0xFF;
     public const double RingIdleThickness = 3.0, RingActiveThickness = 3.5;
 
-    /// <summary>Wave 9: hue wash over the art, brighter on the selected row.</summary>
-    public static uint ArtTint(uint hue, bool active) => NavStripPaint.WithAlphaByte(hue, active ? (byte)0x2E : (byte)0x14);
+    /// <summary>Wave 11: keep idle art untinted and only a faint hue on the selected row.</summary>
+    public static uint ArtTint(uint hue, bool active) => NavStripPaint.WithAlphaByte(hue, active ? (byte)0x0D : (byte)0x00);
 
     public static uint Vivid(uint hue)
     {

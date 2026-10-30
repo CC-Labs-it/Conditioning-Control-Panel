@@ -68,8 +68,8 @@ public sealed class NavRailPaintTests
         Assert.True(play.Spur!.IsVisible);
         Assert.Equal(1.0, play.Spur.GetBaseValue(Visual.OpacityProperty).Value);   // fading in (160 ms)
         Assert.False(home.Spur!.IsVisible);
-        Assert.Equal(0x2E, ((ISolidColorBrush)play.Tint!.Background!).Color.A);
-        Assert.Equal(0x14, ((ISolidColorBrush)home.Tint!.Background!).Color.A);
+        Assert.Equal(0x0D, ((ISolidColorBrush)play.Tint!.Background!).Color.A);
+        Assert.Equal(0x00, ((ISolidColorBrush)home.Tint!.Background!).Color.A);
         foreach (var row in w.NavSectionRowsForTests)
         {
             var face = Assert.IsAssignableFrom<Panel>(row.Button.Content);
