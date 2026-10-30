@@ -32,6 +32,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal static class SubliminalOverlay
     {
         private static readonly List<SubliminalOverlayWindow> Active = new();
+        // WPF SubliminalService.cs:609-629: notify only after the delayed show is admitted.
+        internal static event Action? Displayed;
         private static bool _warnedUnavailable;
 
         /// <summary>Draw one card for <paramref name="text"/> on every targeted screen; <paramref name="opacity"/>
@@ -100,6 +102,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Active.Add(overlay);
             }
             card.Show();
+            Displayed?.Invoke();
             if (!stealsFocus) return;
             try { ActivateCard(card); }
             catch (Exception ex) { Log.Debug("Subliminal: focus steal refused: {E}", ex.Message); }
