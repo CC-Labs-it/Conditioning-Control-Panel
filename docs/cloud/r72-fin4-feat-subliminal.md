@@ -1,0 +1,30 @@
+# Subliminal re-cut onto 7.2
+
+Base: 74ac6ce3d5e0ae082c2871c00e864943e15aa2ad. Source lane: b2c6b4d7e1dd, own diff from 700e3f57ed09.
+
+## Ported gaps
+
+- Silent hint for enabled unrecorded phrases, refreshed on load, whisper toggle, pool save and mod change: CCP.Avalonia/Views/Features/SubliminalFeatureControl.axaml.cs:161, :164, :243, :299, :321. Editor marks blank-safe silent rows without changing enablement, including new rows/removals: CCP.Avalonia/Views/Dialogs/TextEditorDialog.axaml.cs:44, :90. Uses the playback resolver at CCP.Avalonia/Views/Overlays/SubliminalWhisperShow.cs:120. WPF ConditioningControlPanel/Features/SubliminalFeatureControl.xaml.cs:186, :215, :291; ConditioningControlPanel/Dialogs/TextEditorDialog.xaml.cs:52, :98, :164; ConditioningControlPanel/Services/Subliminal/SubliminalService.cs:492. Existing hint_silent_lines reused in all ten languages.
+- Bundled Fredoka first in the installed-font preview list, resolved on cards: CCP.Avalonia/Views/Features/SubliminalFeatureControl.axaml.cs:98 and CCP.Avalonia/Views/Overlays/SubliminalOverlay.cs:212. WPF ConditioningControlPanel/Helpers/FontPickerHelper.cs:28, :76, :128. Reuses the base font registration at CCP.Avalonia/Platform/AppFonts.cs:18.
+- Solid mode: passive per-screen lease, newest card replaces old, 50 ms fades, classic fallback on native refusal, focus request or live video; Stop releases leases: CCP.Avalonia/Views/Overlays/SharedOverlayHost.cs:14, :28 and SubliminalOverlay.cs:40, :43, :108, :169. WPF ConditioningControlPanel/Services/Subliminal/SubliminalService.cs:145, :634, :667, :675, :821, :917. Video fallback retains the old lane's conservative choice. This is a subliminal host, not a completed cross-family compositor.
+- Video Freeze gets an 800 ms head start unless attention checks or bubble count needs input: CCP.Core/Services/Video/MandatoryVideoScheduler.cs:331, :360. Audible Freeze defers Reset until cleanup, consumes it once, rolls 90 percent, delays 1 to 2 seconds; muted Freeze has no Reset; Stop cancels pending work: CCP.Avalonia/Views/Overlays/SubliminalWhisperShow.cs:50, :80, :96, :109; CCP.Core/Services/Video/MandatoryVideoScheduler.cs:437; App.axaml.cs:583. WPF ConditioningControlPanel/Services/Video/VideoService.cs:2479, :2485, :2489, :7937 and ConditioningControlPanel/Services/Subliminal/SubliminalService.cs:333, :364, :388, :403.
+- Whisper start extends the bark voice floor through duration plus 250 ms; shorter clips cannot shorten it; safety/guaranteed and text-only attribution bypass: CCP.Core/Services/Subliminal/WhisperActivity.cs:6, CCP.Core/Services/Bark/BarkEngine.cs:38, :280; CCP.Avalonia/Platform/BarkHead.cs:55; SubliminalWhisperShow.cs:135. WPF ConditioningControlPanel/Services/AudioService.cs:933, :948; ConditioningControlPanel/Services/Subliminal/SubliminalService.cs:543; ConditioningControlPanel/Services/Companion/BarkService.cs:1668.
+
+## Already on the base
+
+Settings, enable gating, pool bookkeeping, mod art and installed-font previews: CCP.Avalonia/Views/Features/SubliminalFeatureControl.axaml.cs:42 (WPF ConditioningControlPanel/Features/SubliminalFeatureControl.xaml.cs:35). Outlined cards, hold and first-frame backstop: CCP.Avalonia/Views/Overlays/SubliminalOverlay.cs:144, :183, :191 in base (WPF ConditioningControlPanel/Services/Subliminal/SubliminalService.cs:634, :1344). Focus opt-in including native retry: base SubliminalOverlay.cs:75, :98 (WPF SubliminalService.cs:689). Whisper lookup, duck, haptic timing, XP, replacement/Stop: base SubliminalWhisperShow.cs:48, :64, :117 (WPF SubliminalService.cs:237, :333, :525, :563). Existing panic implementation retained unchanged.
+
+## Missing
+
+Cross-family shared compositor ownership/z-order: ConditioningControlPanel/Services/Subliminal/SubliminalService.cs:660, :821 versus CCP.Avalonia/Views/Overlays/SharedOverlayHost.cs:14. Closed font picker face preview: ConditioningControlPanel/Helpers/FontPickerHelper.cs:128 versus CCP.Avalonia/Views/Features/SubliminalFeatureControl.axaml.cs:98. These were already missing on the old lane. Native focus, multi-monitor and click-through require a desktop run. No part B of the old lane's completed scope remains.
+
+## Validation
+
+- SDK installed with dotnet-install --channel 10.0: 10.0.403 (10.0.100 fallback also installed).
+- Required builds: CCP.Core, CCP.Avalonia, Tests/CCP.Avalonia.Tests, all 0 errors.
+- Full Core suite before executor loss: Failed 0, Passed 4638, Skipped 6, Total 4644. Existing skips were retained.
+- New/extended headless tests: SubliminalSilentHintTests, SubliminalSolidHostTests, SubliminalWhisperShowTests. Affected existing tests: TextOverlayTests, SubliminalStealsFocusTests, PanicSurfacesTests and TestIsolationTests.
+- Failure proofs: editor marking, panel hint, font picker, card font, hosted fade and retirement failed under temporary production mutations before the executor loss. On resume, mutations of routing, passive host, lease release, deferred Reset, whisper activity, bark gate and video head start produced the expected 6 Avalonia and 2 Core assertion failures. A separate Stop cancellation mutation produced the expected assertion failure. All mutations were restored. Production files were restored from the staged implementation on resume.
+- Initial mixed testhost run: 2 existing font-resolution failures (Arial and Segoe UI Black). A fresh affected-test host passed 24 tests, including TestIsolationTests. Tests were not removed, weakened or newly skipped.
+- Native focus, click-through and multi-monitor presentation compiled but were not run; execution was headless Linux.
+- Final restored run: full Core 4638 passed, 6 existing skips; new/extended Avalonia 16 passed; affected existing tests including TestIsolationTests 24 passed; focus tests 2 passed, in fresh testhosts. Required builds: 0 errors. Core guards passed; avalonia_docs self-check OK.

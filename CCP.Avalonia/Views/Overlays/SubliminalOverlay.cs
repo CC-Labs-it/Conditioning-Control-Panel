@@ -27,12 +27,70 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>Whisper audio, ducking, XP and the Bambi Freeze/Reset pair: <see cref="SubliminalWhisperShow"/>.
     /// SubliminalStealsFocus opts into activation after a passive show, still click-through.
-    /// ponytail: the solid-mode shared host remains a separate follow-up.</para>
+    /// Solid mode uses the shared passive host; focus requests stay on classic cards.</para>
     /// </summary>
     internal static class SubliminalOverlay
     {
         private static readonly List<SubliminalOverlayWindow> Active = new();
         private static bool _warnedUnavailable;
+        private static readonly Dictionary<PixelRect, SharedOverlayHost.Lease> Hosts = new();
+        private static readonly List<Action> RetireHosted = new();
+
+        /// <summary>Solid mode goes to the shared stage unless focus is requested or a mandatory video owns the screen.</summary>
+        internal static bool UseSolidHost(bool solidMode, bool stealsFocus, int liveVideoWindows) =>
+            solidMode && !stealsFocus && liveVideoWindows == 0;
+
+        internal static bool ShowHosted(PixelRect bounds, string text, double alpha, TimeSpan hold)
+        {
+            if (!Hosts.TryGetValue(bounds, out var lease))
+            {
+                lease = SharedOverlayHost.Acquire(bounds);
+                if (lease == null) return false;
+                Hosts.Add(bounds, lease);
+            }
+            var card = SubliminalOverlayWindow.Build(text, CoreSettings.Current);
+            card.Opacity = 0;
+            card.ZIndex = 1200; // WPF: above hosted image flashes
+            lease.Canvas.Children.Add(card);
+            var retired = false;
+            Action retire = () =>
+            {
+                if (retired) return;
+                retired = true;
+                lease.Canvas.Children.Remove(card);
+            };
+            RetireHosted.Add(retire);
+            void Step(double value, TimeSpan at) => DispatcherTimer.RunOnce(() =>
+            {
+                if (!retired) card.Opacity = Math.Clamp(value, 0, 1);
+            }, at);
+            var fade = TimeSpan.FromMilliseconds(SubliminalCard.DefaultFadeMs);
+            for (var i = 1; i <= 3; i++)
+            {
+                Step(alpha * i / 3, fade * i / 3);
+                Step(alpha * (1 - i / 3.0), fade + hold + fade * i / 3);
+            }
+            DispatcherTimer.RunOnce(() =>
+            {
+                retire();
+                RetireHosted.Remove(retire);
+                if (!CoreSubliminal.IsRunning && RetireHosted.Count == 0) ReleaseHosts();
+            }, fade + hold + fade);
+            return true;
+        }
+
+        private static void ClearCards()
+        {
+            foreach (var retire in RetireHosted) retire();
+            RetireHosted.Clear();
+            foreach (var w in Active.ToList()) w.Close();
+        }
+
+        private static void ReleaseHosts()
+        {
+            foreach (var lease in Hosts.Values) lease.Dispose();
+            Hosts.Clear();
+        }
 
         /// <summary>Draw one card for <paramref name="text"/> on every targeted screen; <paramref name="opacity"/>
         /// (percent) overrides the setting, as WPF FlashSubliminalCustom's does.</summary>
@@ -47,13 +105,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var screens = ScreenList.Enumerate(host);
             if (screens.Count == 0) return;
 
-            CloseAll();
+            ClearCards();
             var s = CoreSettings.Current;
             var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
             var hold = TimeSpan.FromMilliseconds(SubliminalCard.HoldMs(s.SubliminalDuration));
             var alpha = SubliminalCard.Alpha(opacity ?? s.SubliminalOpacity);
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
+                if (UseSolidHost(s.SubliminalSolidMode, s.SubliminalStealsFocus, MandatoryVideoOverlay.Instance.Windows.Count) &&
+                    ShowHosted(screens[i].Bounds, text, alpha, hold)) continue;
                 var w = new SubliminalOverlayWindow(text);
                 if (!X11Overlay.SetClickThrough(w, true) || !X11Overlay.SetOpacity(w, 0) || !X11Overlay.SetOverrideRedirect(w, screens[i].Bounds))
                 {
@@ -108,7 +168,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Take every card off screen now (WPF <c>TearDownSurfaces</c> on Stop).</summary>
         public static void CloseAll()
         {
-            foreach (var w in Active.ToList()) w.Close();
+            ClearCards();
+            ReleaseHosts();
         }
     }
 
@@ -148,7 +209,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (!s.SubBackgroundTransparent)
                 grid.Children.Add(new Rectangle { Fill = new SolidColorBrush(Parse(s.SubBackgroundColor, Colors.Black)) });
 
-            var family = new FontFamily(string.IsNullOrWhiteSpace(s.SubliminalFont) ? "Arial" : s.SubliminalFont + ", Arial");
+            var family = new FontFamily(s.SubliminalFont == "Fredoka (bundled)" ? Platform.AppFonts.Fredoka :
+                string.IsNullOrWhiteSpace(s.SubliminalFont) ? "Arial" : s.SubliminalFont + ", Arial");
             TextBlock Text(Color c, double x, double y) => new()
             {
                 Text = text,

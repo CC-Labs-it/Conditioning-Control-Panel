@@ -258,6 +258,7 @@ public sealed class PanicSurfacesTests
         ["PlayTabView"] = "Focus Gaze switch's camera pre-warm: the 'camera' surface stops WebcamTracker, and GazeFocus follows it down",
         ["BlinkTrainerTabView"] = "camera: the 'camera' and 'blink-trainer' surfaces",
         ["LibVlcAudio"] = "the CoreAudio sink: Core services stop their clips on the 'engine' surface",
+        ["SharedOverlayHost"] = "subliminal leases: engine StopDesktopOverlays calls SubliminalOverlay.CloseAll; tested by SubliminalSolidHostTests",
         ["MandatoryVideoOverlay"] = "Core video sink: the 'engine' surface (CoreEngine.Stop) closes it",
         ["BubbleCountWindow"] = "Core bubble-count sink: the 'engine' surface closes it",
         ["BubbleCountHost"] = "Core bubble-count sink: the 'engine' surface closes it",

@@ -35,6 +35,25 @@ public sealed class BarkEngineTests : IDisposable
     }
 
     [Fact]
+    public void Whisper_floor_suppresses_ordinary_barks_but_not_guaranteed_or_text_only_attribution()
+    {
+        var now = DateTime.UtcNow;
+        var activity = new ConditioningControlPanel.Services.WhisperActivity(() => now);
+        activity.Mark(double.NaN); activity.Mark(0);
+        Assert.False(activity.IsPlaying);
+        activity.Mark(2); activity.Mark(1);
+        now = now.AddSeconds(2.1);
+        Assert.True(activity.IsPlaying);
+        var e = Engine(Rule("T", "ordinary"), Rule("EmergencyExitOpened", "attribution"));
+        e.IsWhisperActive = () => activity.IsPlaying;
+        Assert.False(e.Raise("T"));
+        Assert.True(e.Raise("EmergencyExitOpened"));
+        Assert.True(e.Raise("T", guaranteed: true));
+        now = now.AddSeconds(0.15);
+        Assert.False(activity.IsPlaying);
+    }
+
+    [Fact]
     public void TheHighestPriorityRuleWhoseConditionsPassSpeaksWithSubstitutions()
     {
         var high = Rule("T", "level {level} in {0}");
