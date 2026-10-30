@@ -23,7 +23,7 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed partial class AccountSeedTests
 {
-    private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "achievements" };
+    private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "achievements", "total_conditioning_minutes" };
 
     /// <summary>Records every request with its body; profile GET answers <see cref="Profile"/> (500 when null).</summary>
     private sealed class SyncWire : HttpMessageHandler
@@ -139,6 +139,7 @@ public sealed partial class AccountSeedTests
         foreach (var k in new[] { "stats", "allow_discord_dm", "public_share_avatar", "web_xp_claim_ack", "install_date",
                      "reset_weekly_quest", "reset_daily_quest", "force_streak_override", "force_skills_reset", "cosmetics" })
             Assert.Null(body[k]);
+        Assert.Equal(CoreSettings.Current.TotalConditioningMinutes, body.Value<double>("total_conditioning_minutes"));
         Assert.Equal("u1", (string?)body["unified_id"]);
         Assert.True((int)body["xp"]! >= L40Xp, $"xp {body["xp"]} < {L40Xp}");
         Assert.Equal(40, (int)body["level"]!);

@@ -36,6 +36,9 @@ public sealed class HeaderQuestStampsTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var oldQuests = AvApp.Quests;
         var oldSettings = CoreSettings.ServiceProvider;
+        // Signed out, WPF's XP login veil covers the stamps (MainWindow.xaml:2002); these tests are about the stamps.
+        var oldLogin = CoreAccount.IsLoggedInProvider;
+        CoreAccount.IsLoggedInProvider = () => true;
         var dir = Directory.CreateTempSubdirectory("ccp-header-stamps-").FullName;
         var quests = new QuestService(null, dir);
         var service = new SettingsService();
@@ -60,6 +63,7 @@ public sealed class HeaderQuestStampsTests
             Dispatcher.UIThread.RunJobs();
             AvApp.Quests = oldQuests;
             CoreSettings.ServiceProvider = oldSettings;
+            CoreAccount.IsLoggedInProvider = oldLogin;
             quests.Dispose();
             Directory.Delete(dir, recursive: true);
         }

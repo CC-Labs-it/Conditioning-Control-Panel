@@ -196,6 +196,9 @@ namespace ConditioningControlPanel.Services
             [JsonProperty("curve_epoch")]
             public int? CurveEpoch { get; set; }
 
+            [JsonProperty("total_conditioning_minutes")]
+            public double? TotalConditioningMinutes { get; set; }
+
             [JsonProperty("current_season")]
             public string? CurrentSeason { get; set; }
 
