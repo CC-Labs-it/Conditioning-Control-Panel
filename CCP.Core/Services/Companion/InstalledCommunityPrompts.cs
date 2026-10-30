@@ -26,16 +26,24 @@ public static class InstalledCommunityPrompts
         return prompt;
     }
 
-    // WPF CompanionService.cs:424: missing assignments keep the current voice.
+    // WPF CompanionService.cs:424-446: missing assignments keep the current voice.
     // Reuse the base service's acknowledgement gate and soft moderation pass.
     public static bool ApplyAssigned(CompanionId companion)
     {
-        var id = CoreSettings.Current.GetCompanionPromptId((int)companion);
-        if (string.IsNullOrEmpty(id)) return false;
-        using var service = new CommunityPromptService();
-        if (service.GetInstalledPrompt(id)?.PromptSettings == null) return false;
-        service.ValidationAdvisory += (_, count) => ValidationAdvisory?.Invoke(count);
-        return service.ActivatePrompt(id);
+        try
+        {
+            var id = CoreSettings.Current.GetCompanionPromptId((int)companion);
+            if (string.IsNullOrEmpty(id)) return false;
+            using var service = new CommunityPromptService();
+            if (service.GetInstalledPrompt(id)?.PromptSettings == null) return false;
+            service.ValidationAdvisory += (_, count) => ValidationAdvisory?.Invoke(count);
+            return service.ActivatePrompt(id);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not apply assigned companion prompt");
+            return false;
+        }
     }
 
     /// <summary>Folder under the user-data root that holds installed prompt JSON files.</summary>

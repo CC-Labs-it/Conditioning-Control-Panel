@@ -15,11 +15,28 @@ using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Companion;
 using Xunit;
+using ConditioningControlPanel.Localization;
 
 namespace CCP.Avalonia.Tests;
 
 public sealed class WorkshopRosterPersonalityTests
 {
+    [Fact]
+    public Task PickerUsesLocalizedTitleAndFilter() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var loc = LocalizationManager.Instance; var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("fr");
+            var options = WorkshopAccordion.RosterPickerOptions("Test");
+            Assert.Equal("Choisir la personnalité IA de Test", options.Title);
+            Assert.Equal("Fichiers JSON de personnalité", Assert.Single(options.FileTypeFilter!).Name);
+            Assert.Equal("*.json", Assert.Single(options.FileTypeFilter![0].Patterns!));
+            Assert.False(options.AllowMultiple);
+        }
+        finally { loc.SetLanguage(previous); }
+        return Task.CompletedTask;
+    });
     [Fact]
     public Task PersonalityButtonImportsWithoutSwitchingAndRefreshesLabels() => AvaloniaTestDispatcher.RunAsync(async () =>
     {

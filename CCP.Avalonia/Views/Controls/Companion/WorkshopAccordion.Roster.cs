@@ -34,14 +34,15 @@ public partial class WorkshopAccordion
     // Small OS-picker seam: headless tests never invoke a desktop picker.
     internal Func<Window, string, Task<string?>> RosterPromptPicker { get; set; } = PickRosterPromptAsync;
 
+    internal static FilePickerOpenOptions RosterPickerOptions(string name) => new()
+    {
+        Title = Loc.GetF("title_select_companion_personality", name), AllowMultiple = false,
+        FileTypeFilter = new[] { new FilePickerFileType(Loc.Get("filter_personality_json_files")) { Patterns = new[] { "*.json" } } }
+    };
     private static async Task<string?> PickRosterPromptAsync(Window owner, string name)
     {
         var provider = owner.StorageProvider;
-        var options = new FilePickerOpenOptions
-        {
-            Title = $"Select AI Personality for {name}", AllowMultiple = false,
-            FileTypeFilter = new[] { new FilePickerFileType("Prompt JSON files") { Patterns = new[] { "*.json" } } }
-        };
+        var options = RosterPickerOptions(name);
         var custom = Path.Combine(CorePaths.EffectiveAssets, "prompts");
         var shipped = Path.Combine(AppContext.BaseDirectory, "assets", "prompts");
         var start = Directory.Exists(custom) && Directory.EnumerateFiles(custom, "*.json").Any()

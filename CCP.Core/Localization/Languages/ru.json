@@ -1,4 +1,6 @@
 {
+  "title_select_companion_personality": "Выбрать личность ИИ для {0}",
+  "filter_personality_json_files": "Файлы личности JSON",
   "deeper_submission_badge_published": "Опубликовано",
   "deeper_submission_badge_published_tip": "Это улучшение доступно в каталоге сообщества.",
   "deeper_submission_badge_pending": "На проверке",

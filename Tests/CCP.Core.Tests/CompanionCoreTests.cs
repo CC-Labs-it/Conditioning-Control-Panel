@@ -26,6 +26,33 @@ public sealed class CompanionCoreTests : IDisposable
         (_s.ActiveCompanionId, _s.CompanionPerk, _s.PlayerXP, _s.PlayerLevel, _s.HighestLevelEver, _s.StrictLockEnabled, _s.OfflineMode, _s.OfflineUsername) = _old;
         _s.CompanionProgressData = _oldProgress;
     }
+    [Fact]
+    public void PromptStoreFailureStillCompletesTheSwitch()
+    {
+        var folder = System.IO.Path.Combine(CorePaths.UserData, InstalledCommunityPrompts.FolderName);
+        var backup = folder + Guid.NewGuid().ToString("N"); var hadFolder = System.IO.Directory.Exists(folder);
+        var oldAssigned = _s.GetCompanionPromptId(1); CompanionId? announced = null;
+        Action<CompanionId> on = id => announced = id;
+        if (hadFolder) System.IO.Directory.Move(folder, backup);
+        CompanionCore.Switched += on;
+        try
+        {
+            System.IO.Directory.CreateDirectory(CorePaths.UserData);
+            System.IO.File.WriteAllText(folder, "block directory creation");
+            _s.ActiveCompanionId = 0;
+            _s.SetCompanionPromptId(1, "assigned");
+            Assert.False(InstalledCommunityPrompts.ApplyAssigned((CompanionId)1));
+            Assert.True(CompanionCore.SwitchCompanion((CompanionId)1)); Assert.Equal(1, _s.ActiveCompanionId);
+            Assert.Equal((CompanionId)1, announced);
+        }
+        finally
+        {
+            CompanionCore.Switched -= on;
+            System.IO.File.Delete(folder);
+            if (hadFolder) System.IO.Directory.Move(backup, folder);
+            _s.SetCompanionPromptId(1, oldAssigned);
+        }
+    }
 
     [Fact]
     public void SwitchAppliesInstalledAssignmentBeforeAnnouncingTheCompanion()
