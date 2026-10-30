@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Serilog;
-using Avalonia;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
@@ -27,7 +26,7 @@ internal static class X11PanicKey
     private const string LibX11 = "libX11.so.6";
     private const string LibXi = "libXi.so.6";
     // Values and offsets from the compiler against X11/extensions/XInput2.h on x86_64.
-    private const int MappingNotify = 34, GenericEvent = 35, XI_RawKeyPress = 13, XI_RawKeyRelease = 14, XI_RawButtonPress = 15, XIAllMasterDevices = 1;
+    private const int MappingNotify = 34, GenericEvent = 35, XI_RawKeyPress = 13, XI_RawKeyRelease = 14, XIAllMasterDevices = 1;
     private const int XEventSize = 192, CookieExtension = 32, CookieEvType = 36, CookieData = 48, RawDetail = 56;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -39,8 +38,6 @@ internal static class X11PanicKey
     [DllImport(LibX11)] private static extern int XNextEvent(IntPtr display, IntPtr ev);
     [DllImport(LibX11)] private static extern bool XGetEventData(IntPtr display, IntPtr cookie);
     [DllImport(LibX11)] private static extern void XFreeEventData(IntPtr display, IntPtr cookie);
-    [DllImport(LibX11)] private static extern bool XQueryPointer(IntPtr display, IntPtr window,
-        out IntPtr root, out IntPtr child, out int rootX, out int rootY, out int winX, out int winY, out uint mask);
     [DllImport(LibX11)] private static extern int XFlush(IntPtr display);
     [DllImport(LibX11)] private static extern int XCloseDisplay(IntPtr display);
     [DllImport(LibX11)] private static extern int XRefreshKeyboardMapping(IntPtr mappingEvent);
@@ -48,37 +45,6 @@ internal static class X11PanicKey
     [DllImport(LibX11)] private static extern byte XKeysymToKeycode(IntPtr display, ulong keysym);
     [DllImport(LibXi)] private static extern int XIQueryVersion(IntPtr display, ref int major, ref int minor);
     [DllImport(LibXi)] private static extern int XISelectEvents(IntPtr display, IntPtr window, ref XIEventMask mask, int count);
-
-    // WPF Windows/EmiDesk/EmiOptionsWindow.xaml.cs:608-692: scoped left/right and Escape hooks.
-    // Scoped subscribers reuse the existing non-consuming XI2 host; panic still routes first.
-    private static event Action<PixelPoint?, bool>? OptionsPress;
-
-    internal static IDisposable? ListenForOptions(Action<PixelPoint?, bool> press)
-        => IsListening ? new OptionsSubscription(press) : null;
-
-    internal sealed class OptionsSubscription : IDisposable
-    {
-        private Action<PixelPoint?, bool>? _press;
-        internal OptionsSubscription(Action<PixelPoint?, bool> press)
-        {
-            _press = press;
-            OptionsPress += press;
-        }
-        public void Dispose()
-        {
-            var press = Interlocked.Exchange(ref _press, null);
-            if (press != null) OptionsPress -= press;
-        }
-    }
-
-    // Kept independent of Xlib so tests never install a hook on the real desktop.
-    internal static void RouteOptions(int eventType, int detail, int escapeCode, Func<PixelPoint?> pointer)
-    {
-        var press = OptionsPress;
-        if (press == null) return;
-        if (eventType == XI_RawKeyPress && escapeCode != 0 && detail == escapeCode) press(null, true);
-        else if (eventType == XI_RawButtonPress && detail is 1 or 3 && pointer() is { } at) press(at, false);
-    }
 
     private static int _started;
 
@@ -162,7 +128,7 @@ internal static class X11PanicKey
             if (XIQueryVersion(display, ref major, ref minor) != 0) return Fail("XInput 2.2 unavailable");
 
             var bits = Marshal.AllocHGlobal(4);   // bit 13 (XI_RawKeyPress) lives in the first 4 mask bytes
-            Marshal.WriteInt32(bits, (1 << XI_RawKeyPress) | (1 << XI_RawKeyRelease) | (1 << XI_RawButtonPress));
+            Marshal.WriteInt32(bits, (1 << XI_RawKeyPress) | (1 << XI_RawKeyRelease));
             var mask = new XIEventMask { DeviceId = XIAllMasterDevices, MaskLen = 4, Mask = bits };
             XISelectEvents(display, XDefaultRootWindow(display), ref mask, 1);
             XFlush(display);
@@ -199,9 +165,6 @@ internal static class X11PanicKey
             _boundCode = sym == 0 ? 0 : XKeysymToKeycode(display, sym);
             if (_boundCode == 0) Log.Warning("Panic key: '{Key}' has no X keycode; only the tray can panic", name);
         }
-        PixelPoint? ReadPointer()
-            => XQueryPointer(display, XDefaultRootWindow(display), out _, out _, out int x, out int y,
-                out _, out _, out _) ? new PixelPoint(x, y) : null;
         Resolve();
         while (true)
         {
@@ -220,21 +183,14 @@ internal static class X11PanicKey
                 if (!XGetEventData(display, ev)) continue;
                 int keycode = -1;
                 var evType = Marshal.ReadInt32(ev, CookieEvType);
-                if (evType is XI_RawKeyPress or XI_RawKeyRelease or XI_RawButtonPress)
+                if (evType is XI_RawKeyPress or XI_RawKeyRelease)
                     keycode = Marshal.ReadInt32(Marshal.ReadIntPtr(ev, CookieData), RawDetail);
                 XFreeEventData(display, ev);
                 if (keycode < 0) continue;
 
-                // Buttons only matter to an open options panel; skip Resolve() so desktop clicks stay cheap.
-                if (evType == XI_RawButtonPress)
-                {
-                    RouteOptions(evType, keycode, 0, ReadPointer);
-                    continue;
-                }
                 Resolve();
                 if (evType == XI_RawKeyRelease) { Route(false, keycode, onPress); continue; }
                 Route(true, keycode, onPress);
-                RouteOptions(evType, keycode, XKeysymToKeycode(display, 0xff1b), ReadPointer);
                 // She's Listening push-to-talk rides the same XI2 listener (WPF GlobalKeyboardHook).
                 if (PushToTalk is { } ptt && KeysymOf(PushToTalkKey?.Invoke()) is var ps and not 0
                     && keycode == XKeysymToKeycode(display, ps)) ptt();
