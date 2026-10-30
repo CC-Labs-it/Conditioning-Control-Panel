@@ -149,6 +149,31 @@ public sealed partial class AccountSeedTests
     });
 
     [Fact]
+    public void ProfileLoadAndSyncRebaselineMinutesBeforeTheNextPush() => WithFreshInstall(async () =>
+    {
+        var profile = JObject.Parse(L40Profile("u1"));
+        profile["user"]!["total_conditioning_minutes"] = 60;
+        var (wire, sync, _) = SignIn("u1", profile.ToString());
+        wire.SyncReply = "{\"success\":true,\"total_conditioning_minutes\":75}";
+        var s = CoreSettings.Current;
+        s.TotalConditioningMinutes = 25;
+        var lifts = new List<double>();
+        void OnLift(AppSettings lifted) { if (ReferenceEquals(lifted, s)) lifts.Add(lifted.TotalConditioningMinutes); }
+        ProfileAdopt.ConditioningMinutesLifted += OnLift;
+        try
+        {
+            Assert.True(await AccountSeed.LoadProfileAsync());
+            Assert.Equal(60, Assert.Single(wire.Syncs).Value<double>("total_conditioning_minutes"));
+            Assert.Equal(75, s.TotalConditioningMinutes);
+            sync.UtcNow = () => T0.AddMinutes(16);
+            Assert.True(await sync.PushAsync("after conditioning merge"));
+            Assert.Equal(75, wire.Syncs.Last().Value<double>("total_conditioning_minutes"));
+            Assert.Equal(new double[] { 60, 75 }, lifts);
+        }
+        finally { ProfileAdopt.ConditioningMinutesLifted -= OnLift; }
+    });
+
+    [Fact]
     public void LevelReset_TheNextBodyCarriesTheResetLevel() => WithFreshInstall(async () =>
     {
         var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
