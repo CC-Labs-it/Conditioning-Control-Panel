@@ -235,6 +235,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// probe; the constructor can still fail after it passes, and a caller about to drive the
         /// page through script needs to know about this control, not about the machine.
         /// </summary>
+        internal IDisposable? BeginReparenting() => _web?.BeginReparenting();
+
         public bool HasEngine => _web is not null || ScriptInvoker != null;
 
         // Native script boundary; tests supply a per-instance page adapter without opening a desktop.
@@ -435,7 +437,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private bool _loadedOnThisEngine;
 
         /// <summary>A new engine behind this view, or the old one gone (UI thread). Avalonia.Controls.WebView destroys
-        /// the native control on every detach (nothing here calls BeginReparenting), so a view that is unloaded and
+        /// the native control on every detach outside BeginReparenting scopes, so a view that is unloaded and
         /// loaded again (a tab switch, a moved view) gets a NEW engine: it is held again until its own gate reports,
         /// and a late report from an older engine is dropped. Returns that engine's report.</summary>
         internal Action<bool> NewScrolllerEngine()
