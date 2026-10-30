@@ -23,9 +23,10 @@ namespace ConditioningControlPanel.Services.Companion;
 /// </summary>
 internal sealed class RainApplyController
 {
-    public const int Fps = 15, Width = 192, Height = 309;
-    /// <summary>One frame's base64 cap: a 192x309 RGBA PNG is at most ~240 KB raw, so 1 MB of text is a broken page.</summary>
-    internal const int MaxPngChars = 1024 * 1024;
+    public const int Fps = 15, Width = 384, Height = 618;
+    /// <summary>One frame's base64 cap: a 384x618 RGBA PNG is at most ~950 KB raw (~1.3 MB as base64), so 2 MB of text is a broken page.
+    /// The size is 2x the tube's on-screen Rain (about 190x306 DIP), so she stays crisp at 200% DPI.</summary>
+    internal const int MaxPngChars = 2 * 1024 * 1024;
     /// <summary>A clip longer than a minute at 15 fps is a broken page, not a performance.</summary>
     internal const int MaxFramesPerClip = 900;
 

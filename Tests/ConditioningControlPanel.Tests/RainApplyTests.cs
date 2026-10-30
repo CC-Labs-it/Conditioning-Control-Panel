@@ -88,7 +88,7 @@ public sealed class RainApplyTests : IDisposable
         var hash = (string)bake["lookHash"]!;
         Assert.Equal(RainLookHash.Compute(RainLookCodec.Normalize(Look("rose-flare").ToString(Formatting.None))), hash);
         Assert.Equal(new[] { "idle", "greeting", "jump" }, bake["clips"]!.Values<string>());
-        Assert.Equal((15, 192, 309), ((int)bake["fps"]!, (int)bake["w"]!, (int)bake["h"]!));
+        Assert.Equal((15, 384, 618), ((int)bake["fps"]!, (int)bake["w"]!, (int)bake["h"]!));
         Assert.Equal(0, _commits);
 
         PageBakes(c, hash, skip: "jump");

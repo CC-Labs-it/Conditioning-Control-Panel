@@ -28,8 +28,8 @@ namespace ConditioningControlPanel
     /// baked pack's own folder).</para>
     ///
     /// <para>Second source (lane R8): a baked look pack's vertical PNG strip (<see cref="LoadStrip"/>),
-    /// frames and fps from the pack manifest. The strip decodes ONCE into Pbgra32 frames (about 21 MB for
-    /// 90 frames at 192x309), each tick copies one into the same bitmap; the frames go on any other load
+    /// frames and fps from the pack manifest. The strip decodes ONCE into Pbgra32 frames (about 85 MB for
+    /// 90 frames at 384x618), each tick copies one into the same bitmap; the frames go on any other load
     /// or Stop. One player per layer, so at most the current and the next clip are held.</para>
     /// </summary>
     internal sealed class EmoteClipPlayer : IDisposable
