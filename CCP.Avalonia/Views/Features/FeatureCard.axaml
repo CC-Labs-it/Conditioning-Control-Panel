@@ -36,8 +36,13 @@
 
         <Grid x:Name="ContentRoot">
             <!-- Full-bleed background image via ImageBrush (respects parent CornerRadius) -->
+            <!-- Retain the resampled picture between tab shows. Text, controls and FX stay outside
+                 the cache; code resets it for new artwork, and the renderer tracks bounds and clips.
+                 RenderAtScale = FeatureCard.ArtCacheScale: the hover lift/pop must not upscale it. -->
             <Border x:Name="ImgIconHost" CornerRadius="11"
-                    RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                    RenderOptions.BitmapInterpolationMode="HighQuality">
+                <Border.CacheMode><BitmapCache RenderAtScale="1.1"/></Border.CacheMode>
+            </Border>
 
             <!-- Glyph fallback (for cards without an image) -->
             <Border x:Name="GlyphHost"
