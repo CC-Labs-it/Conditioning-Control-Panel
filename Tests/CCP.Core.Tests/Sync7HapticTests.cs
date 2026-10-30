@@ -9,6 +9,36 @@ namespace CCP.Core.Tests;
 
 public sealed class Sync7HapticTests
 {
+    private sealed class BlockedUiContext : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback callback, object? state) { }
+    }
+
+    [Fact]
+    public void AllToyPreviewCancellationCompletesWithoutUiDispatcher()
+    {
+        var previousPremium = CoreEntitlement.HasPremiumProvider;
+        var previousContext = SynchronizationContext.Current;
+        CoreEntitlement.HasPremiumProvider = () => true;
+        try
+        {
+            using var service = new HapticService(new HapticSettings { Enabled = false });
+            using var cancel = new CancellationTokenSource();
+            SynchronizationContext.SetSynchronizationContext(new BlockedUiContext());
+            var preview = service.TestPatternAsync(0.5, 8000, VibrationMode.Constant, cancel.Token);
+            Assert.False(preview.IsCompleted);
+            cancel.Cancel();
+            // Hiding the page cancels then waits on the UI thread. Core must finish independently.
+            Assert.True(preview.Wait(3000));
+            Assert.False(preview.Result);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previousContext);
+            CoreEntitlement.HasPremiumProvider = previousPremium;
+        }
+    }
+
     [Fact]
     public void TestWindowAdmitsOnlyTestPulsesWhileMasterIsOff()
     {

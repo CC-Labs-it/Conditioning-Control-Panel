@@ -458,7 +458,7 @@ namespace ConditioningControlPanel.Services
                                               durationMs, priority: 5);
             var seq = _mixer.Play(steps, isTest: true);
             using var reg = token.Register(seq.Cancel);
-            try { await seq.Completion; } catch (OperationCanceledException) { return false; }
+            try { await seq.Completion.ConfigureAwait(false); } catch (OperationCanceledException) { return false; }
             return !token.IsCancellationRequested;
         }
 
