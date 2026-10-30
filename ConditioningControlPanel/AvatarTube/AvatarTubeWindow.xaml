@@ -474,6 +474,8 @@
                             </MenuItem.ItemContainerStyle>
                         </MenuItem>
                         <MenuItem x:Name="MenuItemMute" Header="{loc:Str section_mute_avatar}" Click="MenuItemMute_Click"/>
+                        <!-- Rain's wardrobe: shown only while the tube plays Rain (UpdateQuickMenuState). -->
+                        <MenuItem x:Name="MenuItemRainWardrobe" Header="{loc:Str section_rain_wardrobe}" Click="MenuItemRainWardrobe_Click" Visibility="Collapsed"/>
                         <!-- Emote MenuItems replace the 5 items above (Engine, TriggerMode, BambiTakeover,
                              Personality, Mute) whenever a remote controller is connected. Header strings
                              and Tag references are populated in AvatarContextMenu_Opened from

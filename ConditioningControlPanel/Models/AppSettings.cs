@@ -383,6 +383,20 @@ namespace ConditioningControlPanel.Models
             }
         }
 
+        private string _rainLook = "";
+        /// <summary>
+        /// Rain's wardrobe look (7.2 V2 avatar), JSON per Services/Companion/RainLookCodec:
+        /// <c>{"rev":1,"items":{slot:id, accessories:[ids]},"colors":{channel:"#rrggbb"}}</c>. Empty = Rain's
+        /// authored default look. Written by the wardrobe window, always clamped to the items the account
+        /// owns (RainWardrobeCatalog). Cosmetic: rides the settings backup like SelectedAvatarSet, and every
+        /// machine clamps it to that account's grants again on open.
+        /// </summary>
+        public string RainLook
+        {
+            get => _rainLook;
+            set { _rainLook = value ?? ""; OnPropertyChanged(); }
+        }
+
         // Retired with tube EMI (companion pivot, 2026-09-25). Kept only so settings files that
         // carry these keys still load; nothing reads or writes them.
         [Obsolete("Tube EMI was retired as the companion (2026-09-25).")]
