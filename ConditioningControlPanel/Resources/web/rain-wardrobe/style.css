@@ -26,4 +26,6 @@
 .look-actions{display:flex;gap:18px;align-items:center}.look-actions .ink{background:var(--ink);color:var(--paper);font-size:12px;padding:11px 20px;border-radius:2px}
 body.shop-on main{min-height:calc(100vh - 148px)}body.shop-on .stage{height:calc(100vh - 148px);min-height:0}body.shop-on .wardrobe{overflow:auto}body.shop-on .outfit-summary,body.shop-on .wardrobe-foot{display:none}
 @media(min-width:681px) and (max-height:760px){body.shop-on main{height:calc(100vh - 132px);min-height:0}body.shop-on .stage{height:calc(100vh - 132px)}}
+/* Bake meter (wardrobe-shop.js paintMeter): IN = fade up from empty, OUT = fill to the end, then fade. Calm only lengthens the fades. */
+.bake-meter{position:absolute;left:0;right:0;top:-1px;height:3px;background:#a7657024;opacity:0;transition:opacity .45s ease .35s;pointer-events:none}.bake-meter.on{opacity:1;transition:opacity .3s ease}.bake-meter i{display:block;height:100%;background:var(--rose);transform:scaleX(0);transform-origin:left center;transition:transform .35s ease-out}.bake-meter.calm{transition-duration:.9s}.bake-meter.calm.on{transition-duration:.6s}
 html[data-calm] .swap-fx{display:none}html[data-calm] .choice{transition:none}html[data-calm] .choice:hover{transform:none}
