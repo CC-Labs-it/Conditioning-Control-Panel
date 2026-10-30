@@ -57,6 +57,20 @@ public sealed class LauncherWindowTests
         });
     }
 
+    [Fact]
+    public void LauncherHoldsStartupUntilPanelOrTrayReturns() => Run(shell =>
+    {
+        // WPF Services/Launcher/LauncherHost.cs:272,278: tucked panel parks startup.
+        Assert.True(LauncherWindow.BackToLauncher(shell));
+        Assert.True(ConditioningControlPanel.Avalonia.Platform.StartupLadder.Held);
+        LauncherWindow.Instance!.OpenPanel();
+        Assert.False(ConditioningControlPanel.Avalonia.Platform.StartupLadder.Held);
+        LauncherWindow.BackToLauncher(shell);
+        Assert.True(ConditioningControlPanel.Avalonia.Platform.StartupLadder.Held);
+        shell.ShowFromTray();
+        Assert.False(ConditioningControlPanel.Avalonia.Platform.StartupLadder.Held);
+    }, pumpUntilIdle: false);
+
     private static string[] Tiles(LauncherWindow w) =>
         w.FindControl<UniformGrid>("GamesGrid")!.Children.Select(c => (string)c.Tag!).ToArray();
 

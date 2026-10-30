@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -71,7 +72,7 @@ public sealed class AppUpdaterTests
             try
             {
                 if (Application.Current is null)
-                    AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                         .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
 
@@ -91,15 +92,26 @@ public sealed class AppUpdaterTests
                 File.WriteAllText(ReleaseFeed.AttemptFilePath(CorePaths.UserData), "6.11.3");
                 File.WriteAllText(ReleaseFeed.AttemptResultFilePath(CorePaths.UserData), "0");
 
-                CoreSettings.Current.HasAcceptedAgeVerification = false;
+                CoreSettings.Current.HasAcceptedAgeVerification = true;
                 ReleaseFeed.ClearSkippedUpdateVersion(CorePaths.UserData);
                 var shell = new MainShellWindow();
                 shell.Show();
+                CoreSettings.Current.HasAcceptedAgeVerification = false;
+                MainShellWindow.IsStartupDialogShowing = true; // the age gate owns the screen
                 var startup = AppUpdater.StartupAsync(shell);
                 await Task.Delay(1500);
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
+                ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(1));
                 Assert.Null(AppUpdater.OpenDialog);   // waits behind the age gate
                 CoreSettings.Current.HasAcceptedAgeVerification = true;
-                for (var i = 0; i < 100 && AppUpdater.OpenDialog is null; i++) await Task.Delay(50);
+                MainShellWindow.IsStartupDialogShowing = false;
+                // The offer waits its turn on the startup ladder's stepped clock (750 ms settle).
+                for (var i = 0; i < 100 && AppUpdater.OpenDialog is null; i++)
+                {
+                    Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
+                    ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromMilliseconds(250));
+                    await Task.Delay(50);
+                }
                 var dialog = AppUpdater.OpenDialog;
                 Assert.NotNull(dialog);   // offered once at startup, as WPF App.xaml.cs:4903
                 Assert.Equal(Loc.Get("btn_download_installer_manually"),
@@ -117,8 +129,12 @@ public sealed class AppUpdaterTests
                 Assert.Equal(new[] { "/api/releases/latest" }, feed.Requests);
 
                 // "Later": the version is skipped for 24h, so the next startup neither lights nor asks.
+                // The offer runs as a ladder modal now: the ladder drains once "Later" has been handled.
+                var drained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                StartupLadder.Drained += () => drained.TrySetResult();
                 dialog.FindControl<Button>("BtnLater")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                 await startup;
+                await drained.Task.WaitAsync(TimeSpan.FromSeconds(10));
                 Assert.Equal("99.1.0", ReleaseFeed.GetSkippedUpdateVersion(CorePaths.UserData));
                 var shell2 = new MainShellWindow();
                 shell2.Show();

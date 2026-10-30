@@ -253,6 +253,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         // ---- panic (PanicSurfaces "games", WPF GameSurfaces.cs:53-55 -> CloseActive("panic")) ----
 
         internal static bool IsAnyOpen() { lock (Open) return Open.Count > 0; }
+        /// <summary>WPF ChaosWebViewHost.AnyGameActive: a GAME is up. Leaves the For You feed out on
+        /// purpose (WPF StartupPresenter.cs:378): people keep it open for hours and a parked startup
+        /// queue has no clock.</summary>
+        internal static bool IsAnyGameOpen()
+        { lock (Open) return Open.Any(w => !string.Equals(w.Spec.Id, FypId, StringComparison.OrdinalIgnoreCase)); }
 
         internal static GameWindow[] OpenWindowsForTests() { lock (Open) return Open.ToArray(); }
 

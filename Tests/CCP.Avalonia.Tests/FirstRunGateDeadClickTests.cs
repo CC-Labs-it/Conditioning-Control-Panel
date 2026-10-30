@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -52,7 +53,7 @@ public sealed class FirstRunGateDeadClickTests
         shell.Closed += (_, _) => closed = true;
         wizard.Close();
         await WaitFor(() => !wizard.IsVisible);
-        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
         Assert.False(closed);
     });
 
@@ -67,9 +68,28 @@ public sealed class FirstRunGateDeadClickTests
         Assert.Equal(MainShellWindow.AgeGateBody, dialog.FindControl<TextBlock>("TxtMessage")!.Text);
         dialog.FindControl<Button>(answer ? "BtnOk" : "BtnCancel")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         await WaitFor(() => answer ? CoreSettings.Current.HasAcceptedAgeVerification : closed);
-        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
         Assert.Equal(!answer, closed);
         Assert.Equal(answer, CoreSettings.Current.HasAcceptedAgeVerification);
+    });
+
+    [Fact]
+    public Task AgeGateThatNeverGetsItsTurnAsksAnyway() => Run(welcomed: true, accepted: false, async shell =>
+    {
+        // WPF App.xaml.cs:4092 onAbandoned: a tray start hides the shell past the 5-minute wait;
+        // the gate is then asked anyway, never dropped (the app must not run unverified).
+        ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog? asked = null;
+        using var seen = Window.WindowOpenedEvent.AddClassHandler<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>((d, _) => asked = d);
+        var closed = false;
+        shell.Closed += (_, _) => closed = true;
+        shell.Hide();
+        Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
+        ((StartupLadder.TestClock)StartupLadder.Time).Advance(System.TimeSpan.FromMinutes(5) + System.TimeSpan.FromSeconds(1));
+        await WaitFor(() => asked != null);
+        Assert.Equal(MainShellWindow.AgeGateBody, asked!.FindControl<TextBlock>("TxtMessage")!.Text);
+        asked.FindControl<Button>("BtnOk")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        await WaitFor(() => CoreSettings.Current.HasAcceptedAgeVerification);
+        Assert.False(closed);
     });
 
     [Fact]
@@ -111,7 +131,9 @@ public sealed class FirstRunGateDeadClickTests
         var deadline = System.DateTime.UtcNow.AddSeconds(5);
         while (!condition() && System.DateTime.UtcNow < deadline)
         {
-            Dispatcher.UIThread.RunJobs();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
+            // Startup modals wait on the ladder's stepped clock (750 ms settle), never wall time.
+            ((StartupLadder.TestClock)StartupLadder.Time).Advance(System.TimeSpan.FromMilliseconds(250));
             await Task.Delay(20);
         }
         Assert.True(condition(), "timed out");
@@ -120,7 +142,7 @@ public sealed class FirstRunGateDeadClickTests
     private static Task Run(bool welcomed, bool accepted, System.Func<MainShellWindow, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();
@@ -138,7 +160,7 @@ public sealed class FirstRunGateDeadClickTests
         {
             foreach (var w in shell?.OwnedWindows.ToList() ?? new()) w.Close();
             shell?.RequestExit();
-            Dispatcher.UIThread.RunJobs();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
             service.SaveImmediate();   // cancels the 500ms debounce so it cannot land in a later test's file
             CoreSettings.ServiceProvider = null;
         }

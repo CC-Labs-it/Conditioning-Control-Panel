@@ -126,6 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (_windowClosed) return;
             RestoreLauncherPanelOpacity();
+            Platform.StartupLadder.Release();
             Show();
             WindowState = WindowState.Normal;
             Activate();

@@ -10,6 +10,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
@@ -188,6 +189,7 @@ public sealed class FirstShowStageTests
     public Task ShownOnceAfterTheFirstRunWizard() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
+        StartupLadder.ResetForTests();
         var service = new SettingsService();
         var old = CoreSettings.ServiceProvider;
         CoreSettings.ServiceProvider = () => service;
@@ -199,6 +201,8 @@ public sealed class FirstShowStageTests
             CoreSettings.Current.HasAcceptedAgeVerification = false;
             shell = new MainShellWindow { OpenWelcomeShow = _ => { opened++; return true; } };
             shell.Show();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
+            ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromMilliseconds(750));
             await Until(() => shell.OwnedWindows.OfType<FirstRunWizard>().Any());
             var wizard = shell.OwnedWindows.OfType<FirstRunWizard>().Single();
             Assert.Equal(0, opened);
@@ -210,15 +214,16 @@ public sealed class FirstShowStageTests
 
             second = new MainShellWindow { OpenWelcomeShow = _ => { opened++; return true; } };
             second.Show();
-            for (int i = 0; i < 20; i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
+            for (int i = 0; i < 20; i++) { Dispatcher.UIThread.RunJobs(DispatcherPriority.Default); await Task.Yield(); }
             Assert.Empty(second.OwnedWindows.OfType<FirstRunWizard>());
             Assert.Equal(1, opened);
         }
         finally
         {
             foreach (var w in new[] { shell, second }) { foreach (var o in w?.OwnedWindows.ToList() ?? new()) o.Close(); w?.RequestExit(); }
-            Dispatcher.UIThread.RunJobs();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
             service.SaveImmediate(); CoreSettings.ServiceProvider = old;
+            StartupLadder.ResetForTests();
         }
     });
 
@@ -253,7 +258,7 @@ public sealed class FirstShowStageTests
             Assert.Equal(.7, fx.SubliminalAlpha, 2);
             var host = new Window { Width = 1600, Height = 900, Content = fx };
             host.Show();
-            Dispatcher.UIThread.RunJobs();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
             using (var bmp = new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(400, 225))) bmp.Render(fx);
             host.Content = null; host.Close();
             fx.Tick(S.SubliminalUntil + .5, .016);
@@ -283,7 +288,7 @@ public sealed class FirstShowStageTests
             FirstShowService.RequireClickThrough = false;
             shell = new MainShellWindow { OpenWelcomeShow = _ => false };
             shell.Show();
-            Dispatcher.UIThread.RunJobs();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
             Assert.True(FirstShowService.Open(shell));
             var stage = FirstShowService.Window!;
             double t = S.GreetAfter + .1; stage.Clock = () => t; stage.Frame();
@@ -321,7 +326,7 @@ public sealed class FirstShowStageTests
             EmiDeskService.Instance.Window?.ShutDown();
             foreach (var o in shell?.OwnedWindows.ToList() ?? new()) o.Close();
             shell?.RequestExit();
-            Dispatcher.UIThread.RunJobs();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
             service.SaveImmediate(); CoreSettings.ServiceProvider = old;
         }
     });
@@ -331,14 +336,14 @@ public sealed class FirstShowStageTests
     private static async Task Until(Func<bool> probe)
     {
         var deadline = DateTime.UtcNow.AddSeconds(10);   // P73: bounded by time
-        while (!probe() && DateTime.UtcNow < deadline) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
+        while (!probe() && DateTime.UtcNow < deadline) { Dispatcher.UIThread.RunJobs(DispatcherPriority.Default); await Task.Yield(); }
         Assert.True(probe(), "timed out");
     }
 
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
@@ -363,7 +368,7 @@ public sealed class FirstShowStageTests
             FirstShowService.Stop();
             FirstShowService.RequireClickThrough = true;
             EmiDeskService.Instance.Window?.ShutDown();
-            Dispatcher.UIThread.RunJobs();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
             service.SaveImmediate(); CoreSettings.ServiceProvider = old;
         }
     });

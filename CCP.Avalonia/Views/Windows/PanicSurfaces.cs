@@ -108,10 +108,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         };
 
         /// <summary>WPF AnyGameSurfaceOwnsTheScreen. Sample BEFORE <see cref="StopAll"/>.</summary>
-        internal static bool AnyOwnsTheScreen()
+        internal static bool AnyOwnsTheScreen(string? skipId = null)
         {
             foreach (var s in All)
             {
+                if (string.Equals(s.Id, skipId, StringComparison.Ordinal)) continue;
                 try { if (s.OwnsTheScreen?.Invoke() == true) return true; }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "Panic: {Id} screen probe failed", s.Id); }
             }

@@ -17,10 +17,8 @@
 //     load-bearing: this app keeps the dispatcher busy enough that Loaded-priority work is starved
 //     and the first-launch tour silently never started.
 //
-// WHAT IS DELIBERATELY NOT PORTED:
-//   * The 30s `App.IsUpdateDialogActive` wait. That flag lives in ConditioningControlPanel/
-//     App.xaml.cs and this head never shows an update dialog at all (UpdateNotificationDialog has
-//     no caller here - see its own file for why), so waiting on it would be waiting on a constant.
+// Startup arbitration now uses Platform.StartupLadder (WPF StartupPresenter), including the update
+// offer and parked-screen wait. Remaining dependencies:
 //   * `App.EmiDesk.Fire("firstLaunchEver") / ReleaseHold(...)`. There is no EmiDesk seam in Core -
 //     CCP.Core/Services/EmiDesk/ carries the book's layout and text, not the desk - so the HOLD
 //     has nothing to hold back on this head. Nothing talks over the wizard here either way.
@@ -33,6 +31,7 @@
 //     worsen it - the fix is ShowWhatsNewIfNeeded, not a second stamp here.
 
 using System;
+using System.Threading.Tasks;
 using Avalonia.Threading;
 using Serilog;
 
@@ -82,13 +81,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void OnAgeGateShellOpened(object? sender, EventArgs e)
         {
             Opened -= OnAgeGateShellOpened;
-            Dispatcher.UIThread.Post(async () =>
+            // WPF App.xaml.cs:4124: priority 5, and a gate that never gets its turn (hidden shell,
+            // tray start) asks anyway. ShowDialogSafe survives a hidden owner.
+            async Task Ask()
             {
-                var ok = IsVisible && await Dialogs.MessageDialog.ConfirmAsync(this, "Age Verification", AgeGateBody, defaultToCancel: true);
+                var ok = await Dialogs.MessageDialog.ConfirmAsync(this, "Age Verification", AgeGateBody, defaultToCancel: true);
                 if (!ok) { ExitWithoutBill(); return; }   // WPF App.xaml.cs:3835 Shutdown, no bill
                 CoreSettings.Current.HasAcceptedAgeVerification = true;
                 CoreSettings.Save();
-            }, DispatcherPriority.Normal);
+            }
+            Platform.StartupLadder.EnqueueModal("age-gate", 5, this, Ask,
+                () => Dispatcher.UIThread.Post(async () => await Ask(), DispatcherPriority.Normal));
         }
 
         /// <summary>Test seam: stands in for <see cref="WelcomeShow.FirstShowService.Open"/>.</summary>
@@ -111,29 +114,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             Opened -= OnFirstRunShellOpened;   // one launch, one wizard
 
-            // Normal, never Loaded - see the header. Posting also gets us off the Opened callback
-            // before a modal takes the loop.
-            Dispatcher.UIThread.Post(async () =>
+            Platform.StartupLadder.EnqueueModal("first-run-wizard", 20, this, async () =>
             {
-                try
-                {
-                    // ShowDialog throws on an owner that is not VISIBLE, and "loaded" is not the
-                    // same question. If the shell never actually made it onto the screen, hand the
-                    // flags back rather than spending a first run nobody was shown.
-                    if (!IsVisible)
-                    {
-                        FirstRunWizard.AbortUngatedLaunch(this, "shell window never became visible");
-                        return;
-                    }
-
-                    await FirstRunWizard.Run(this);
-                    OfferWelcomeShowAfterFirstRun();
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "[FirstRun] The first-run wizard failed to run");
-                }
-            }, DispatcherPriority.Normal);
+                await FirstRunWizard.Run(this);
+                OfferWelcomeShowAfterFirstRun();
+            }, () => FirstRunWizard.AbortUngatedLaunch(this, "startup screen never became available"));
         }
     }
 }
