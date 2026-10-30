@@ -5280,6 +5280,7 @@
   "companion_constellation_flavor_new": "elle vient tout juste de te rencontrer. ",
   "companion_constellation_flavor_new_accent": "donne-lui quelque chose à retenir.",
   "companion_engine_api_key_note": "la clé reste sur cette machine.",
+  "companion_engine_api_key_session_only": "Le changement de clé n’a pas été enregistré. Il s’applique jusqu’au redémarrage.",
   "companion_engine_btn_sampler": "Réglages du sampler",
   "companion_engine_btn_setup_local": "Configurer l'IA locale",
   "companion_engine_btn_test": "Tester la connexion",

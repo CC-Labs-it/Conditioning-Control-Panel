@@ -5834,6 +5834,7 @@
   "companion_constellation_flavor_new": "she's only just met you. ",
   "companion_constellation_flavor_new_accent": "give her something to remember.",
   "companion_engine_api_key_note": "the key stays on this machine.",
+  "companion_engine_api_key_session_only": "Key change was not saved. It applies until restart.",
   "companion_engine_btn_sampler": "Sampler settings",
   "companion_engine_btn_setup_local": "Setup local AI",
   "companion_engine_btn_test": "Test connection",

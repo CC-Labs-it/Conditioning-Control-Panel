@@ -31,6 +31,7 @@ internal static class SecretStore
 
     /// <summary>Tests only: replaces the OS write, and makes OS reads return an empty store.</summary>
     internal static Func<string, string?, bool>? OsWriteOverride;
+    internal static Func<string, (bool Ok, string? Value)>? OsReadOverride;
 
     /// <summary>A CCP_USERDATA_DIR sandbox (tests, kc) does not isolate the keyring, so it never touches it: memory only.</summary>
     internal static bool Sandboxed = Environment.GetEnvironmentVariable("CCP_USERDATA_DIR") != null;
@@ -39,6 +40,7 @@ internal static class SecretStore
     {
         CoreSecrets.RetrieveProvider = Retrieve;
         CoreSecrets.StoreProvider = Store;
+        Services.AIService.OpenAiCompatibleService.ApiKeyUnprotect = CompanionApiKey.Read;
     }
 
     internal static string? Retrieve(string name)
@@ -49,28 +51,32 @@ internal static class SecretStore
         return value;
     }
 
-    internal static void Store(string name, string? value)
+    internal static void Store(string name, string? value) => StoreWithStatus(name, value);
+
+    // The drawer must distinguish a saved key from the memory-only fallback.
+    internal static bool StoreWithStatus(string name, string? value)
     {
         if (string.IsNullOrEmpty(value)) value = null;
         _cache[name] = value;
-        if (OsWrite(name, value)) return;
+        if (OsWrite(name, value)) return true;
         if (value is null)
         {
             // Memory-only runs (sandbox, no Secret Service) wrote nothing to the OS store: the memory clear is the clear.
-            if (Sandboxed || NotRemembered) return;
+            if (Sandboxed || NotRemembered) return false;
             Log.Warning("Could not clear {Name} from the secret store", name);
             ClearFailed = true;
-            return;
+            return false;
         }
         // A sandbox is memory-only on purpose, not a missing Secret Service: no warning, no "no secret store" notice.
-        if (Sandboxed) return;
+        if (Sandboxed) return false;
         Log.Warning("No usable secret store: {Name} is kept in memory for this run only", name);
         NotRemembered = true;
+        return false;
     }
 
     // A faked OS write means a test owns the store: it never reads the real keyring either (empty store).
     private static (bool Ok, string? Value) OsRead(string name) =>
-        Sandboxed || OsWriteOverride is not null ? (true, null) : OperatingSystem.IsWindows() ? (true, Dpapi.Read(CorePaths.UserData, name))
+        OsReadOverride is { } fake ? fake(name) : Sandboxed || OsWriteOverride is not null ? (true, null) : OperatingSystem.IsWindows() ? (true, Dpapi.Read(CorePaths.UserData, name))
         : OperatingSystem.IsLinux() ? Libsecret.Read(name) : (true, null);
 
     private static bool OsWrite(string name, string? value) =>

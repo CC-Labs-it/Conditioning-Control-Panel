@@ -5280,6 +5280,7 @@
   "companion_constellation_flavor_new": "彼女はあなたに会ったばかり。 ",
   "companion_constellation_flavor_new_accent": "覚えられる何かをあげて。",
   "companion_engine_api_key_note": "キーはこのマシンから出ない。",
+  "companion_engine_api_key_session_only": "キーの変更は保存されませんでした。再起動まで有効です。",
   "companion_engine_btn_sampler": "サンプラー設定",
   "companion_engine_btn_setup_local": "ローカルAIをセットアップ",
   "companion_engine_btn_test": "接続をテスト",

@@ -5280,6 +5280,7 @@
   "companion_constellation_flavor_new": "ela acabou de te conhecer. ",
   "companion_constellation_flavor_new_accent": "dê a ela algo para lembrar.",
   "companion_engine_api_key_note": "a chave fica nesta máquina.",
+  "companion_engine_api_key_session_only": "A alteração da chave não foi salva. Ela vale até reiniciar.",
   "companion_engine_btn_sampler": "Ajustes do sampler",
   "companion_engine_btn_setup_local": "Configurar IA local",
   "companion_engine_btn_test": "Testar conexão",

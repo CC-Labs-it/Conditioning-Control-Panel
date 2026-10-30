@@ -5280,6 +5280,7 @@
   "companion_constellation_flavor_new": "она только что с тобой познакомилась. ",
   "companion_constellation_flavor_new_accent": "дай ей что-нибудь запомнить.",
   "companion_engine_api_key_note": "ключ остаётся на этой машине.",
+  "companion_engine_api_key_session_only": "Изменение ключа не сохранено. Оно действует до перезапуска.",
   "companion_engine_btn_sampler": "Настройки сэмплера",
   "companion_engine_btn_setup_local": "Настроить локальный ИИ",
   "companion_engine_btn_test": "Проверить соединение",

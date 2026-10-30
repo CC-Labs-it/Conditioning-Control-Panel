@@ -5647,6 +5647,7 @@
   "companion_constellation_flavor_new": "ti ha appena conosciuto. ",
   "companion_constellation_flavor_new_accent": "dalle qualcosa da ricordare.",
   "companion_engine_api_key_note": "la chiave resta su questo computer.",
+  "companion_engine_api_key_session_only": "La modifica della chiave non è stata salvata. Vale fino al riavvio.",
   "companion_engine_btn_sampler": "Parametri di generazione",
   "companion_engine_btn_setup_local": "Configura AI locale",
   "companion_engine_btn_test": "Prova connessione",

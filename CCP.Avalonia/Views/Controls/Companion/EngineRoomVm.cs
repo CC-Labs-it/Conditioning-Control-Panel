@@ -22,8 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// heads cannot drift; the active transport follows the setting through Core AiServiceStrategy.
     ///
     /// <para>The live-actions collection is shared with the command sink, and remains observable.
-    /// The BYO API key box writes nothing:
-    /// MainShellWindow.CompanionRoom.cs says why (no at-rest store reads it yet). Login has
+    /// The BYO API key box writes only to the secret store. Login has
     /// no account tab deep link here yet, so LoginCommand stays null.</para>
     /// </summary>
     public sealed class EngineRoomVm : INotifyPropertyChanged
@@ -128,8 +127,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             set { if (Set(ref _customEndpoint, value ?? "") && !_suppressWrite) Write(p => p.OpenAiCompatibleEndpoint = _customEndpoint.Trim()); }
         }
 
-        /// <summary>Never round-trips, never stored on this head (see the class remarks).</summary>
-        public string CustomApiKey { get => ""; set { } }
+        /// <summary>One-way, including an explicit clear; Sync never rehydrates the key box.</summary>
+        public string CustomApiKey
+        {
+            get => "";
+            set
+            {
+                if (_suppressWrite) return;
+                Platform.CompanionApiKey.Store(value);
+                Raise(nameof(CustomKeySessionOnly));
+                CoreSettings.Save();
+            }
+        }
+
+        public bool CustomKeySessionOnly => Platform.CompanionApiKey.SessionKey is not null;
 
         public string CustomModel
         {
@@ -171,6 +182,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                     : Loc.Get("companion_engine_daily_limit_none");
                 IsLoggedIn = !string.IsNullOrEmpty(CoreAccount.UnifiedUserId);
                 Raise(nameof(ShowLiveActions));
+                Raise(nameof(CustomKeySessionOnly));
                 RefreshStatus();
             }
             catch (Exception ex) { Serilog.Log.Warning(ex, "EngineRoomVm: sync failed"); }

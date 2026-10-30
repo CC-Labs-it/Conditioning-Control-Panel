@@ -27,6 +27,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             // local-providers: the drawer's own viewmodel (WPF EngineRoomRuntimeVm). The sampler
             // button's Click hook is gone with it - SamplerSettingsCommand binds now.
             DataContext = new EngineRoomVm(this);
+            // Attach after initialization: an initial empty binding value is not an explicit clear.
+            this.FindControl<TextBox>("CustomKeyBox")!.TextChanged += (_, _) =>
+            {
+                if (DataContext is EngineRoomVm vm)
+                    vm.CustomApiKey = this.FindControl<TextBox>("CustomKeyBox")!.Text ?? "";
+            };
         }
 
         /// <summary>
@@ -121,6 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public string LocFieldCustomEndpoint => Loc.Get("companion_engine_field_custom_endpoint");
         public string LocFieldCustomModel => Loc.Get("companion_engine_field_custom_model");
         public string LocFieldApiKey => Loc.Get("companion_engine_field_api_key");
+        public string LocApiKeySessionOnly => Loc.Get("companion_engine_api_key_session_only");
         public string LocApiKeyNote => Loc.Get("companion_engine_api_key_note");
     }
 }
