@@ -20,7 +20,9 @@ internal sealed partial class GameWindow
     // Hardware/modal boundaries only: tests never open a camera or a real consent window.
     internal Func<bool> FypCameraRunning = () => WebcamTracker.Instance.IsRunning;
     internal Func<Task<bool>> FypStartCamera = () => WebcamTracker.Instance.StartAsync();
-    internal Action FypStopCamera = () => _ = WebcamTracker.Instance.StopAsync();
+    internal Func<Task> FypStopCamera = () => WebcamTracker.Instance.StopAsync();
+    // The tracker is shared across feed visits. WPF FypHostService.cs:1019 stops synchronously.
+    private static Task _fypCameraStop = Task.CompletedTask;
     internal Func<Task<bool>>? FypConsent;
     internal Func<Task>? FypCalibration;
 
@@ -40,6 +42,8 @@ internal sealed partial class GameWindow
         try
         {
             await Task.Yield(); // leave the browser callback before opening a modal dialog
+            await _fypCameraStop; // never attach to a camera whose previous stop is still queued
+            if (_closing || !CoreSettings.Current.FypEyeControl) return;
             if (!await GetFypConsent()) { FailFypEyes("consent"); return; }
             if (_closing || !CoreSettings.Current.FypEyeControl) return;
             if (!FypCameraRunning())
@@ -84,7 +88,7 @@ internal sealed partial class GameWindow
             camera.OnGazeMove -= FypGaze;
         }
         _fypEyeSubscribed = false;
-        if (_fypOwnsCamera) FypStopCamera();
+        if (_fypOwnsCamera) _fypCameraStop = FypStopCamera();
         _fypOwnsCamera = false;
     }
 

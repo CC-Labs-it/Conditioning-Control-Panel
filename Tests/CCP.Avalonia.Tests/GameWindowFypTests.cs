@@ -247,7 +247,7 @@ public sealed class GameWindowFypTests
         w.FypConsent = () => Task.FromResult(true);
         w.FypCameraRunning = () => running;
         w.FypStartCamera = () => { starts++; running = true; return Task.FromResult(true); };
-        w.FypStopCamera = () => { stops++; running = false; };
+        w.FypStopCamera = () => { stops++; running = false; return Task.CompletedTask; };
         w.FypCalibration = () => { calibrations++; return Task.CompletedTask; };
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
@@ -272,6 +272,65 @@ public sealed class GameWindowFypTests
     });
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Eyes_ReenableWaitsForDelayedStop_EvenAfterReopen(bool reopen) => Run((_, _) =>
+    {
+        CoreEntitlement.HasPremiumProvider = () => true;
+        var w = GameWindow.Launch(GameWindow.FypId)!;
+        var stop = new TaskCompletionSource<bool>();
+        bool running = false;
+        int starts = 0, stops = 0;
+        async Task StopCamera()
+        {
+            stops++;
+            await stop.Task;
+            running = false;
+        }
+        void Configure(GameWindow window)
+        {
+            window.FypConsent = () => Task.FromResult(true);
+            window.FypCameraRunning = () => running;
+            window.FypStartCamera = () => { starts++; running = true; return Task.FromResult(true); };
+            window.FypStopCamera = StopCamera;
+        }
+        Configure(w);
+        w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}");
+        Wait(w.FypEyeTask!);
+        try
+        {
+            if (reopen)
+            {
+                w.Close();
+                w = GameWindow.Launch(GameWindow.FypId)!;
+                Configure(w);
+            }
+            else w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":false}");
+            Assert.Equal(1, stops);
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(w.FypEyeTask!.IsCompleted); // the old camera still reports running
+            WebcamTracker.Instance.RaiseBlinkForTest();
+            Assert.DoesNotContain(sent, frame => (string?)frame["type"] == "blink");
+            Assert.Equal(1, starts);
+            stop.SetResult(true);
+            Wait(w.FypEyeTask!);
+            Assert.Equal(2, starts);
+            Assert.True(running);
+            WebcamTracker.Instance.RaiseBlinkForTest();
+            Assert.Equal("blink", (string?)sent.Last()["type"]);
+        }
+        finally
+        {
+            stop.TrySetResult(true);
+            Wait(w.FypEyeTask!);
+            w.Close();
+        }
+    });
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public void Eyes_ClosingOrDisablingDuringCameraStart_ReleasesLateCamera(bool close) => Run((_, _) =>
@@ -283,7 +342,7 @@ public sealed class GameWindowFypTests
         w.FypConsent = () => Task.FromResult(true);
         w.FypCameraRunning = () => false;
         w.FypStartCamera = () => start.Task;
-        w.FypStopCamera = () => stops++;
+        w.FypStopCamera = () => { stops++; return Task.CompletedTask; };
         w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}");
         Dispatcher.UIThread.RunJobs();
         if (close) w.Close();
