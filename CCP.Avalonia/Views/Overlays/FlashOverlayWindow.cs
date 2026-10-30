@@ -34,6 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private readonly Border _glow, _whiten;
         private Canvas? _sparks;
         private Panel? _slices;
+        private Image? _redGhost, _cyanGhost;
         private Panel? _shards;
         internal FlashShatterState? Shatter { get; private set; }
         private double _alpha = 1;
@@ -146,6 +147,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _shards.Children.Add(new Border
                 {
                     Name = "FlashShard",
+                    Background = _look.HasGlow ? null : Brushes.Black,
                     Child = new Image { Source = source, Stretch = Stretch.Fill },
                     Clip = new RectangleGeometry(cut),
                     RenderTransformOrigin = new RelativePoint(cut.Center, RelativeUnit.Absolute),
@@ -228,6 +230,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 const int n = 7;
                 double w = _card.Bounds.Width, h = _card.Bounds.Height;
                 _slices = new Panel();
+                var pixels = CopyPixels(src as Bitmap);
+                _redGhost = BuildGhost("FlashGlitchRed", src, pixels, Color.FromRgb(255, 40, 90));
+                _cyanGhost = BuildGhost("FlashGlitchCyan", src, pixels, Color.FromRgb(40, 230, 255));
+                var index = _card.Children.IndexOf(_image) + 1;
+                _card.Children.Insert(index, _redGhost);
+                _card.Children.Insert(index + 1, _cyanGhost);
                 for (var k = 0; k < n; k++)
                     _slices.Children.Add(new Image
                     {
@@ -235,7 +243,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         Clip = new RectangleGeometry(new Rect(0, h * k / n, w, h / n)),
                     });
                 _image.IsVisible = false;
-                _card.Children.Insert(_card.Children.IndexOf(_image) + 1, _slices);
+                _card.Children.Insert(_card.Children.IndexOf(_cyanGhost) + 1, _slices);
             }
             if (FlashExit.SparkCount(exit) > 0)
             {
@@ -244,6 +252,53 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     _sparks.Children.Add(new global::Avalonia.Controls.Shapes.Ellipse { Fill = new SolidColorBrush(Color.FromRgb(0xFF, 0x69, 0xB4)) });
                 _root.Children.Add(_sparks);
             }
+        }
+
+        // WPF FlashLayer.DrawGlitch modulates the source pixels, not a solid colored rectangle.
+        // ponytail: cache two tinted frames only for this 280 ms exit; no Effect or animated filter.
+        // One CopyPixels per exit, then a byte-wise modulate per ghost: no encode/decode on the UI thread.
+        private static (byte[] Data, Bitmap Source)? CopyPixels(Bitmap? bmp)
+        {
+            if (bmp?.Format is not { } fmt || (fmt != PixelFormat.Bgra8888 && fmt != PixelFormat.Rgba8888)) return null;
+            var size = bmp.PixelSize;
+            var data = new byte[size.Width * 4 * size.Height];
+            var pin = System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
+            try { bmp.CopyPixels(new PixelRect(size), pin.AddrOfPinnedObject(), data.Length, size.Width * 4); }
+            finally { pin.Free(); }
+            return (data, bmp);
+        }
+
+        private Image BuildGhost(string name, IImage source, (byte[] Data, Bitmap Source)? pixels, Color tint)
+        {
+            var ghost = source;
+            if (pixels is var (data, bmp))
+            {
+                var bgra = bmp.Format == PixelFormat.Bgra8888;
+                byte c0 = bgra ? tint.B : tint.R, c2 = bgra ? tint.R : tint.B;
+                var tinted = new byte[data.Length];
+                // Modulate (Skia SKBlendMode.Modulate): channel * tint / 255; alpha unchanged, so premul stays valid.
+                for (var i = 0; i < data.Length; i += 4)
+                {
+                    tinted[i] = (byte)(data[i] * c0 / 255);
+                    tinted[i + 1] = (byte)(data[i + 1] * tint.G / 255);
+                    tinted[i + 2] = (byte)(data[i + 2] * c2 / 255);
+                    tinted[i + 3] = data[i + 3];
+                }
+                var wb = new WriteableBitmap(bmp.PixelSize, bmp.Dpi, bmp.Format!.Value, bmp.AlphaFormat ?? AlphaFormat.Premul);
+                using (var fb = wb.Lock())
+                {
+                    var stride = bmp.PixelSize.Width * 4;
+                    for (var y = 0; y < bmp.PixelSize.Height; y++)
+                        System.Runtime.InteropServices.Marshal.Copy(tinted, y * stride, fb.Address + y * fb.RowBytes, stride);
+                }
+                Closed += (_, _) => wb.Dispose();
+                ghost = wb;
+            }
+            return new Image
+            {
+                Name = name, Source = ghost, Stretch = Stretch.Uniform,
+                RenderTransform = new TranslateTransform(), IsHitTestVisible = false, Opacity = 0,
+            };
         }
 
         private void Apply(FlashExitSample s)
@@ -256,6 +311,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _exitShift!.Y = s.OffsetY * _card.Bounds.Height;
             // TV off: the picture burns white as it collapses (FlashLayer: white at Whiten x alpha).
             _whiten.Opacity = Math.Clamp(s.Whiten, 0, 1);
+            if (_redGhost != null && _cyanGhost != null)
+            {
+                var fit = Stretch.Uniform.CalculateSize(_card.Bounds.Size, _image.Source!.Size);
+                var split = s.Glitch * 0.04 * fit.Width;
+                ((TranslateTransform)_redGhost.RenderTransform!).X = -split;
+                ((TranslateTransform)_cyanGhost.RenderTransform!).X = split;
+                // WPF applies alpha both in the modulation filter and in the image paint.
+                _redGhost.Opacity = _cyanGhost.Opacity = split > 0.5 ? Math.Clamp(_alpha * s.Alpha / 2, 0, 1) : 0;
+            }
             if (_slices != null && Exit is { } exit)
                 for (var k = 0; k < _slices.Children.Count; k++)
                     ((TranslateTransform)_slices.Children[k].RenderTransform!).X = FlashExit.SliceOffset(exit, k) * _card.Bounds.Width;
@@ -285,8 +349,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal int ApplyGlow(FlashGlowLook look, double scaling)
         {
             if (!look.HasGlow) return 0;
-            var c = Color.FromArgb((byte)Math.Clamp(look.Opacity * 255, 0, 255), (byte)(look.Rgb >> 16), (byte)(look.Rgb >> 8), (byte)look.Rgb);
-            _glow.BoxShadow = new BoxShadows(new BoxShadow { Blur = look.BlurRadius, Color = c });
+            _look = look;
+            SetGlow(look.BlurRadius, look.Opacity);
             _glow.Background = Brushes.Black;
             var pad = look.BlurRadius / 2;
             _card.Margin = new Thickness(pad);
@@ -296,10 +360,61 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Pixels the glow added on each edge of the picture (0 without a glow).</summary>
         internal int GlowPadPx { get; private set; }
 
+        private FlashGlowLook _look;
+        private ConditioningControlPanel.Avalonia.Helpers.BeatLoop? _pulse;
+
+        private void SetGlow(double blur, double opacity)
+        {
+            var c = Color.FromArgb((byte)Math.Clamp(opacity * 255, 0, 255), (byte)(_look.Rgb >> 16), (byte)(_look.Rgb >> 8), (byte)_look.Rgb);
+            _glow.BoxShadow = new BoxShadows(new BoxShadow { Blur = blur, Color = c });
+        }
+
+        /// <summary>WPF FlashService.cs:2002-2015 (FlashLayer.cs:417 on the compositor): a lucky flash's
+        /// gold glow pulses, blur r..1.6r and opacity 0.7..1.0, 400 ms autoreverse, until it closes.
+        /// Core <see cref="FlashFxRules.LuckyPulseAt"/> is the curve, on the shared BeatLoop.</summary>
+        internal void StartLuckyPulse()
+        {
+            if (!_look.LuckyPulse || _pulse != null) return;
+            _pulse = new ConditioningControlPanel.Avalonia.Helpers.BeatLoop(_glow, t =>
+            {
+                var (blur, opacity) = FlashFxRules.LuckyPulseAt(_look.BlurRadius, t);
+                SetGlow(blur, opacity);
+            });
+            _pulse.Start();   // the shared 30 fps beat; it stops itself when the window closes
+        }
+
+        internal bool Pulsing => _pulse?.IsRunning == true;
+
+        /// <summary>The corner radius (DIPs) from Core <see cref="FlashCorners"/>: WPF rounds the glow card
+        /// and clips the picture to it (FlashService.cs:1956-1966, 2020-2040, ApplyCornerClip :2411).</summary>
+        internal double CornerRadiusDip { get; private set; }
+
+        internal void ApplyCorners(double radius)
+        {
+            CornerRadiusDip = radius;
+            _glow.CornerRadius = new CornerRadius(radius);
+            ClipCorners();
+        }
+
+        /// <summary>The clip follows the letterboxed picture, not the Image's box.</summary>
+        private void ClipCorners()
+        {
+            if (CornerRadiusDip <= 0 || _image.Source is not { } src || _image.Bounds.Width <= 0 || _image.Bounds.Height <= 0)
+            {
+                _image.Clip = null;
+                return;
+            }
+            var box = _image.Bounds.Size;
+            var fit = Stretch.Uniform.CalculateSize(box, src.Size);
+            var r = Math.Min(CornerRadiusDip, Math.Min(fit.Width, fit.Height) / 2);
+            _image.Clip = new RectangleGeometry(new Rect((box.Width - fit.Width) / 2, (box.Height - fit.Height) / 2, fit.Width, fit.Height), r, r);
+        }
+
         /// <summary>Test seams: the picture's current transform (null before an exit), the glow, the
         /// whiten, the glitch slices and the sparks.</summary>
         internal Transform? PictureTransform => _card.RenderTransform as Transform;
         internal BoxShadows GlowShadow => _glow.BoxShadow;
+        internal Geometry? PictureClip => _image.Clip;
         internal double WhitenOpacity => _whiten.Opacity;
         internal Panel? Slices => _slices;
         internal Canvas? Sparks => _sparks;
@@ -334,7 +449,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Focusable = false;
             IsHitTestVisible = false;
             _image = new Image { Source = picture, Stretch = Stretch.Uniform };
-            _glow = new Border { IsHitTestVisible = false };
+            _image.SizeChanged += (_, _) => ClipCorners();
+            _glow = new Border { Background = Brushes.Black, IsHitTestVisible = false };
             _whiten = new Border { Background = Brushes.White, Opacity = 0, IsHitTestVisible = false };
             // Centred, so the card is the letterboxed picture, not the window (as the bare Image was).
             _card = new Panel

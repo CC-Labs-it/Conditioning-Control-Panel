@@ -226,6 +226,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable)
         {
             var pad = w.ApplyGlow(glow, scaling);
+            w.ApplyCorners(FlashCorners.Resolve(CoreSettings.Current.FlashRoundedCorners, PrizeOwnership.OwnsFlashV2(), glow.HasGlow,
+                Math.Min(rect.Width, rect.Height) / (scaling > 0 ? scaling : 1), dpiScale: 1.0));
             var winRect = new PixelRect(rect.X - pad, rect.Y - pad, rect.Width + 2 * pad, rect.Height + 2 * pad);
             // Click on (WPF FlashService.cs:1765): the window keeps its input and never takes focus
             // (passive); off: exactly the click-through recipe above.
@@ -242,6 +244,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Active.Add(entry);
             w.Show();
             w.Run(alpha, fade, lifetime);
+            w.StartLuckyPulse();
             var motion = BuildMotion(rect, screen, CoreSettings.Current, Rng, w.InheritMotion);
             w.MotionStyle = motion?.Style ?? FlashMotionStyle.Still;
             if (motion != null) StartDrift(w, motion);
