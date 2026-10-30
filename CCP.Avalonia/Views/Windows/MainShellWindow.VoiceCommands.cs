@@ -166,7 +166,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             s.SubAudioEnabled = !muted;
             s.AvatarMuted = muted;
             if (muted) _avatarTubeWindow?.StopVoiceCommandAudio();
-            _avatarTubeWindow?.UpdateQuickMenuState();
+            _avatarTubeWindow?.SetWindowMute(false); // WPF AvatarTubeWindow.ChatInput.cs:1356: explicit mute choice wins.
             SyncHero();
             AdjustVoiceVolume(0);
         }

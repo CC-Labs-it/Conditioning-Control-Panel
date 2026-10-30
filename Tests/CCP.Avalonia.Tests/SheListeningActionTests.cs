@@ -107,6 +107,31 @@ public sealed class SheListeningActionTests
         finally { (s.MasterVolume, s.SubAudioEnabled, s.AvatarMuted) = saved; AudioSettingsBinder.RaiseChanged(); }
     });
 
+    // WPF MainWindow.Patreon.cs:2269 calls ApplyMuteState, which overwrites the effective
+    // mute in AvatarTubeWindow.ChatInput.cs:1353-1362 even after minimize muted the window.
+    [Fact]
+    public void VoiceUnmuteClearsTemporaryWindowMute() => Run(shell =>
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.MasterVolume, s.SubAudioEnabled, s.AvatarMuted, s.AvatarEnabled);
+        try
+        {
+            s.AvatarEnabled = true;
+            s.AvatarMuted = false;
+            shell.Show();
+            shell.ShowAvatarTube();
+            Dispatcher.UIThread.RunJobs();
+            var tube = Assert.IsType<AvatarTubeWindow>(shell.Tube);
+            tube.SetWindowMute(true);
+            Assert.True(tube.IsMuted);
+            Speak(shell, "unmute");
+            Assert.False(s.AvatarMuted);
+            Assert.False(tube.IsMuted);
+            Assert.Equal("menu_mute_avatar_off", (tube.FindControl<MenuItem>("MenuItemMute")!.Header as IconLabel)?.Key);
+        }
+        finally { (s.MasterVolume, s.SubAudioEnabled, s.AvatarMuted, s.AvatarEnabled) = saved; AudioSettingsBinder.RaiseChanged(); }
+    });
+
     [Fact]
     public void MuteCutsTheClipAndRefreshesQuickMenuAndHeroMirror() => Run(shell =>
     {
