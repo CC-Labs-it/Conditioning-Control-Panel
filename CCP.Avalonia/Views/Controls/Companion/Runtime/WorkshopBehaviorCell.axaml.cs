@@ -137,12 +137,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             var value = (int)SliderIdleIntervalCompanion.Value;
             TxtIdleIntervalCompanion.Text = $"{value}s";
             CoreSettings.Current.IdleGiggleIntervalSeconds = value;
+            Views.AvatarTube.AvatarTubeWindow.Live?.RestartIdleTimer();
             CoreSettings.Save();
-            // ponytail: WPF also restarts the tube's idle timer. This head's tube IS ported
-            // (CCP.Avalonia/Views/AvatarTube/AvatarTubeWindow.axaml.cs) but has no idle-giggle
-            // timer to restart - its ctor deliberately starts none of WPF's four loops, because
-            // each calls into a Reactions/Speech partial that has not been ported. The new
-            // interval is on CoreSettings either way, so it applies whenever that loop lands.
+
         }
 
         private void SliderBubbleDuration_ValueChanged(object? sender, RangeBaseValueChangedEventArgs e)

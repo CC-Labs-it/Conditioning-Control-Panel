@@ -10,8 +10,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// <summary>
 /// The head half of WPF 7.1.5 <c>Services/Companion/BarkService.cs</c>: one Core <see cref="BarkEngine"/>, its
 /// mouth (the tube), and the seams WPF App.xaml.cs:313/336-346/604/2826 points at its BarkService.
-/// ponytail: the rest of WireSubscriptions (:660-925) is the next unit (line cap): flash / subliminal / bubble,
-/// video, level-ups, achievements, quests, mantra and lockdown have sources here already.
+/// Subscription lifetime follows the app; Stop detaches every source for headless tests.
 /// </summary>
 internal static class BarkHead
 {
@@ -23,6 +22,7 @@ internal static class BarkHead
         var e = Engine = new BarkEngine();
         Seed(e);
         e.Start();
+        WireSources(e);
         App.Brain?.AttachBarkSource(h => e.BarkSpoken += h, h => e.BarkSpoken -= h);   // App.xaml.cs:2826, the echo
         // The two WireSubscriptions the engine's own state needs: chat suppression (:806) and, on a mod switch,
         // the switch bark off the OLD set then the new mod's manifest (:903).
@@ -36,13 +36,55 @@ internal static class BarkHead
             };
     }
 
+    private static readonly List<Action> _unsubscribe = new();
+
+    private static void Wire<T>(Action<T> add, Action<T> remove, T handler) where T : Delegate
+    {
+        add(handler);
+        _unsubscribe.Add(() => remove(handler));
+    }
+
+    // WPF BarkService.cs:715, :795-804, :822-840, :876-894. Preserve context and event order.
+    internal static void WireSources(BarkEngine e)
+    {
+        Wire<Action<int>>(h => ProgressionBank.LevelUp += h, h => ProgressionBank.LevelUp -= h,
+            level => e.Raise("LevelUp", c => c.Set("level", level)));
+        Wire<Action<double, string>>(h => ProgressionBank.Awarded += h, h => ProgressionBank.Awarded -= h,
+            (_, _) => e.Raise("XPChanged", c => c.Set("xp", CoreSettings.Current.PlayerXP)));
+        Wire<Action<CompanionId, int>>(h => global::ConditioningControlPanel.Services.Companion.CompanionCore.LevelUp += h,
+            h => global::ConditioningControlPanel.Services.Companion.CompanionCore.LevelUp -= h, (_, level) => e.Raise("CompanionLevelUp", c => c.Set("level", level)));
+        if (App.Achievements is { } a)
+            Wire<EventHandler<Achievement>>(h => a.Unlocked += h, h => a.Unlocked -= h,
+                (_, achievement) => e.Raise("AchievementUnlocked", c => c.Set("achievement", achievement.Id)));
+        if (App.Quests is { } q)
+        {
+            Wire<EventHandler<QuestCompletedEventArgs>>(h => q.QuestCompleted += h, h => q.QuestCompleted -= h, (_, _) => e.Raise("QuestCompleted"));
+            Wire<EventHandler<QuestProgressEventArgs>>(h => q.QuestProgressChanged += h, h => q.QuestProgressChanged -= h, (_, _) => e.Raise("QuestProgressChanged"));
+            Wire<EventHandler>(h => q.QuestsRefreshed += h, h => q.QuestsRefreshed -= h, (_, _) => e.Raise("QuestsRefreshed"));
+        }
+        Wire<Action>(h => App.Mantra.MantraCompleted += h, h => App.Mantra.MantraCompleted -= h, () => e.Raise("MantraCompleted"));
+        Wire<Action<int>>(h => App.Mantra.StreakChanged += h, h => App.Mantra.StreakChanged -= h,
+            streak => e.Raise("MantraStreakChanged", c => c.Set("streak", streak)));
+        Wire<Action>(h => App.Mantra.StreakBroken += h, h => App.Mantra.StreakBroken -= h, () => e.Raise("MantraStreakBroken"));
+        if (global::ConditioningControlPanel.Services.LockdownService.Current is { } ld)
+        {
+            Wire<Action>(h => ld.LockdownActivated += h, h => ld.LockdownActivated -= h, () => e.Raise("LockdownActivated"));
+            Wire<Action>(h => ld.LockdownDeactivated += h, h => ld.LockdownDeactivated -= h, () => e.Raise("LockdownDeactivated"));
+            Wire<Action<TimeSpan>>(h => ld.CountdownTick += h, h => ld.CountdownTick -= h,
+                ts => e.Raise("LockdownCountdownTick", c => c.Set("remaining_sec", ts.TotalSeconds)));
+        }
+        Wire<Action>(h => Views.Overlays.BubbleOverlay.Popped += h, h => Views.Overlays.BubbleOverlay.Popped -= h, () => e.Raise("BubblePopped"));
+    }
+
     private static Action? _onUserMessage;
     private static EventHandler<ModPackage>? _onModChanged;
     private static ModService? _mods;
 
-    /// <summary>Drops the engine and the two subscriptions Start made (tests; the seams are the caller's to restore).</summary>
+    /// <summary>Drops the engine and detaches sources (tests; the seams are the caller's to restore).</summary>
     internal static void Stop()
     {
+        foreach (var detach in _unsubscribe) detach();
+        _unsubscribe.Clear();
         App.UserMessageSent -= _onUserMessage;
         if (_mods != null) _mods.ModChanged -= _onModChanged;
         (_onUserMessage, _onModChanged, _mods, Engine) = (null, null, null, null);
