@@ -17,6 +17,7 @@ namespace ConditioningControlPanel.Tests;
 /// resting state (what Motion Off shows and what the animation settles on), and a copy is saved
 /// to D:/wt-leash/shots when that folder exists, for the owner's review.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class LeashExplainRenderTests
 {
     private const string ShotDir = @"D:\wt-leash\shots";

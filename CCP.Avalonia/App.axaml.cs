@@ -900,6 +900,7 @@ namespace ConditioningControlPanel.Avalonia
                 // (WPF leaves it unseeded = all available). Seeded before the service so it is never unset.
                 CoreProgram.TaskAvailableProvider = Platform.ProgramCapabilities.IsAvailable;
                 Programs = new Services.Program.ProgramService();
+                Platform.ChasterHead.AttachPrograms(Programs);   // WPF ChasterHooks.cs:65-69
                 CoreQuests.TrackProgramVerifierProvider = (category, amount) => Programs?.TrackVerifier(category, amount);   // WPF App.xaml.cs:413
 
                 // WPF App.xaml.cs:447: ritual photos file through the roadmap. Lazy - the shell creates its

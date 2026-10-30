@@ -13,6 +13,7 @@ namespace ConditioningControlPanel.Tests;
 /// strips running only the EdgeDrift layer, nothing allocated under Reduced or Off, a retint
 /// reaching all four, and the drift keeping every mote inside its band while it moves clockwise.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class EdgeParticlesTests
 {
     private static readonly Color Lilac = Color.FromRgb(0xB7, 0x9C, 0xFF);

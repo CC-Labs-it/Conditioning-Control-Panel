@@ -30,6 +30,7 @@ namespace ConditioningControlPanel.Tests;
 /// brightest pixel the glows add must sit within 1 px of the last fill pixel. Set CCP_HUD11_DIR to a
 /// folder to also save the strips and the numbers.</para>
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class HudPolish11Tests
 {
     private const double TrackWidth = 600;

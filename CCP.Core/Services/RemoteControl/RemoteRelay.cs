@@ -71,6 +71,8 @@ namespace ConditioningControlPanel.Services
         internal bool AutoPoll = true;
 
         public bool IsActive { get; private set; }
+        /// <summary>WPF RemoteControlService.cs:377: session end starts Chaster RemoteGrace.</summary>
+        public DateTime? LastEndedUtc { get; private set; }
         public string? SessionCode { get; private set; }
         public string? ConnectPin { get; private set; }
         public string? Tier { get; private set; }
@@ -187,6 +189,7 @@ namespace ConditioningControlPanel.Services
             _loop?.Cancel();
             _loop = null;
             (IsActive, SessionCode, ConnectPin, Tier, ControllerIdle, _idleSince, _autoDisconnected) = (false, null, null, null, false, null, false);
+            LastEndedUtc = Now();
             (_pollBackedOff, _lastControllerCommand) = (false, DateTime.MinValue);
             (_lastOptInTags, _lastOptInStatus) = (null, null);
             Interlocked.Increment(ref _sessionGeneration);   // an opt-in still in flight must not list the next session

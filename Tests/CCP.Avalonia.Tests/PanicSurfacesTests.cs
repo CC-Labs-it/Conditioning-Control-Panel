@@ -129,6 +129,7 @@ public sealed class PanicSurfacesTests
         "speak-cue",
         "companion-transcript",
         "possession",
+        "chaster-booked-pop",
         "attention-test",
         "descent-fuse",
         "deeper-editor-audio",
