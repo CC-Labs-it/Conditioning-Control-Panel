@@ -350,9 +350,10 @@ namespace ConditioningControlPanel.Services
                 var restored = JsonConvert.DeserializeObject<AppSettings>(obj.ToString(),
                     new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace });
                 if (restored == null) return null;
+                // Normalize downloaded presets before KeepLocal can share this machine's preset objects.
+                NormalizeRelativePaths(restored);
                 KeepLocal(current, restored);
                 HoldSafetyFloor(current, restored);
-                NormalizeRelativePaths(restored);
                 Log.Information("Settings restored from cloud");
                 return restored;
             }
