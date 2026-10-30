@@ -90,6 +90,52 @@ public class SyncSevenTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData("escape")]
+    [InlineData("close")]
+    [InlineData("invites")]
+    public Task InviteNewsPresentsAModelessCardWithDismissalAndAction(string action) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        StartupLadder.ResetForTests();
+        CoreTutorial.IsActiveProvider = () => false;
+        CoreSession.IsSessionRunningProvider = () => false;
+        CoreSettings.Current.UnifiedId = "sync-seven";
+        CoreSettings.Current.InboxStamps.Clear();
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("settings");
+            shell.ApplyInviteTicket(new InviteMine(true, new InviteSnapshot(new[] {
+                new InviteSlot("SYNC-CARD", InviteSlotState.Trying, "Ann", 1) }, null, 0)));
+            var card = Assert.IsType<InboxNoticeCard>(InboxNoticeCard.Open);
+            Assert.True(card.IsVisible);
+            Assert.False(card.IsDialog);
+            Assert.True(shell.IsEnabled);
+            Assert.Same(shell, card.Owner);
+            Assert.Equal(WindowDecorations.None, card.WindowDecorations);
+            Assert.False(card.ShowInTaskbar);
+            Assert.False(card.CanResize);
+            Assert.Equal(400, card.Width);
+            Assert.Equal(SizeToContent.Height, card.SizeToContent);
+            Assert.Empty(StartupLadder.Inbox.Items);
+            var buttons = card.GetVisualDescendants().OfType<Button>().ToArray();
+            var close = buttons.Single(b => b.Name == "NoticeClose");
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("vaultgate_close"), Assert.IsType<TextBlock>(close.Content).Text);
+            if (action == "escape") card.RaiseEvent(new global::Avalonia.Input.KeyEventArgs {
+                RoutedEvent = global::Avalonia.Input.InputElement.KeyDownEvent, Key = global::Avalonia.Input.Key.Escape });
+            else (action == "close" ? close : buttons.Single(b => b.Name == "NoticePrimary"))
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(card.IsVisible);
+            Assert.Null(InboxNoticeCard.Open);
+            Assert.True(shell.IsEnabled);
+            Assert.Equal(action == "invites", shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.ExclusivesTabView>("ExclusivesTab")!.IsVisible);
+        }
+        finally { InboxNoticeCard.Open?.Close(); shell.Close(); StartupLadder.ResetForTests(); }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task SpentIntakeToastOpensBasicPricedCard() => AvaloniaTestDispatcher.RunAsync(() =>
     {

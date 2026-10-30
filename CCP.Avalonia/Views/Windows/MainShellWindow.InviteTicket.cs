@@ -87,12 +87,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             SyncInviteWobble();
         }
 
-        private sealed class InviteNewsDialog : Dialogs.MessageDialog, Services.Startup.IPassiveStartupSurface
-        {
-            public InviteNewsDialog(string title, string body)
-                : base(title, body, showCancel: true, okText: Loc.Get("invites_news_see")) { }
-        }
-
         private void PostInviteNews(InviteMine? mine)
         {
             try
@@ -111,11 +105,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
                     {
                         Key = item.Key, Glyph = subscribed ? "💖" : "🎟", Title = title, Summary = body,
-                        Open = async () =>
-                        {
-                            if (await new InviteNewsDialog(title, body).ShowDialogSafe<bool?>(this) == true)
-                                OpenInvitesCard();
-                        },
+                        Open = () => Dialogs.InboxNoticeCard.Present(this, title, body,
+                            Loc.Get("invites_news_see"), OpenInvitesCard),
                     });
                 }
             }
