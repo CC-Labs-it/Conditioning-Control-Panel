@@ -212,6 +212,26 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return voice.Play() ? voice : null;
         }
 
+        // WPF QuizWindow.xaml.cs:1191-1227, using its sequential decoded loop (:41-54).
+        internal static Action<MediaPlayer>? ConfigureQuizDrone;
+        internal MindWipePlayer.IVoice? PlayQuizDrone(string path, double volume, Action onEnded)
+        {
+            var input = new QuizDroneInput(path);
+            Media? media = null;
+            var owned = false;
+            try
+            {
+                media = new Media(_vlc, input, NoVideo, ":demux=rawaud", ":rawaud-fourcc=f32l",
+                    $":rawaud-samplerate={input.SampleRate}", $":rawaud-channels={input.Channels}");
+                var player = new MediaPlayer(media);
+                var voice = new Voice(player, media, () => { input.Dispose(); onEnded(); });
+                owned = true;
+                try { ConfigureQuizDrone?.Invoke(player); voice.Volume = volume; return voice.Play() ? voice : null; }
+                catch { voice.Dispose(); throw; }
+            }
+            catch { if (!owned) { media?.Dispose(); input.Dispose(); } throw; }
+        }
+
         private Voice NewVoice(string path, Action onEnded)
         {
             var media = new Media(_vlc, path, FromType.FromPath);

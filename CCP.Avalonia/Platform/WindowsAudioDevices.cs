@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.Versioning;
 using NAudio.CoreAudioApi;
 using Serilog;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
@@ -21,6 +22,8 @@ internal static class WindowsAudioDevices
         return list;
     }
 
+    internal static string DisplayName(string? name) => name ?? Loc.Get("audio_device_unnamed");
+
     [SupportedOSPlatform("windows")]
     private static IEnumerable<LibVlcAudio.OutputDevice> ReadActive()
     {
@@ -30,7 +33,7 @@ internal static class WindowsAudioDevices
             using (device)
             {
                 LibVlcAudio.OutputDevice? entry = null;
-                try { entry = new(device.ID ?? "", device.FriendlyName ?? "(unnamed)"); }
+                try { entry = new(device.ID ?? "", DisplayName(device.FriendlyName)); }
                 catch (Exception ex) { Log.Debug(ex, "Audio: unreadable playback endpoint"); }
                 if (entry != null) yield return entry;
             }

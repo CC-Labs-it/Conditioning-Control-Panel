@@ -40,7 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///    original's.
     ///  - Categories, history, trend and fallback content are Core's <see cref="QuizStore"/>; only
     ///    the AI round trip of <c>QuizService</c> stays head-side (see StartQuizAsync).
-    ///  - The drone loop uses LibVLC's existing overlap player. The desktop effects and avatar
+    ///  - The drone loop rewinds decoded PCM sequentially through one LibVLC player. The desktop effects and avatar
     ///    remain head-side. There is no XP call to port: WPF awards quiz XP through
     ///    <c>QuizService.RaiseQuizCompleted</c> -> <c>GamificationBridge</c>, both head-side, so a
     ///    <c>CoreProgression.AddXP</c> here would be a second, divergent copy of bridge logic.
@@ -161,7 +161,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly bool _playDrone;
         private Platform.MindWipePlayer.IVoice? _drone;
         internal static Func<string, double, bool, Action, Platform.MindWipePlayer.IVoice?> PlayDrone =
-            (path, volume, loop, ended) => Platform.LibVlcAudio.Instance?.PlayVoice(path, volume, loop, ended);
+            (path, volume, loop, ended) => Platform.LibVlcAudio.Instance?.PlayQuizDrone(path, volume, ended);
         internal static Func<string, string?> ResolveDrone = name =>
             CoreModArt.AudioOverridePath(name) ?? ContentLocator.Resolve(IOPath.Combine("Resources", "sounds", name));
 
@@ -1140,7 +1140,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         // WPF Windows/QuizWindow.xaml.cs:1191-1227: neutral mod cue first, bundled legacy name second, missing = silence.
-        // ponytail: reuse the existing overlap player rather than another looping audio backend.
+        // WPF LoopStream (:41-54) fills across EOF without overlap.
         private void StartDrone()
         {
             if (_drone != null) return;

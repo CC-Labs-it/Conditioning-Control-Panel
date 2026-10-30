@@ -61,6 +61,9 @@
          system libvlc (libvlc.so.5); only Windows needs the bundled natives. -->
     <PackageReference Include="LibVLCSharp" Version="3.10.1" />
     <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+    <!-- Pure managed MP3 decoding for WPF-style sequential quiz loops. -->
+    <PackageReference Include="NLayer" Version="1.16.0" />
+    <Content Include="ThirdPartyNotices\NLayer.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- Vosk speech (Core SpeechEngine): the head references it itself so libvosk ships with it.
          Vosk.targets picks the native lib by the BUILD machine's OS; build Linux releases on Linux. -->
     <PackageReference Include="Vosk" Version="0.3.38" />
