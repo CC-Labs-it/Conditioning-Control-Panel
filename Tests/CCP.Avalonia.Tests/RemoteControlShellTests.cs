@@ -177,4 +177,30 @@ public sealed class RemoteControlShellTests
         for (var i = 0; i < 200 && !done(); i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
         Assert.True(done());
     }
+
+    /// <summary>WPF SettleTemporarySettingsForExit (main bafe52cfc): exit with a controller connected hands its
+    /// strict lock back before the final save, through the app's own relay.</summary>
+    [Fact]
+    public Task Exit_save_hands_back_the_controllers_strict_lock() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var s = CoreSettings.Current;
+        var (oldRelay, strict) = (RemoteControlTabView.Relay, s.StrictLockEnabled);
+        using var relay = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, _ => { }, new FakeRelay()) { AutoPoll = false };
+        try
+        {
+            RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
+            s.StrictLockEnabled = false;
+            Assert.Equal("ABC123", await RemoteControlTabView.Relay.Value.StartAsync("full"));
+            Assert.Null(RemoteCommands.Execute("enable_strict_lock", null));
+            bool? saved = null;
+            global::ConditioningControlPanel.Avalonia.App.SaveSettingsOnExit(null, () => saved = s.StrictLockEnabled);
+            Assert.False(saved);
+        }
+        finally
+        {
+            global::ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            RemoteControlTabView.Relay = oldRelay;
+            s.StrictLockEnabled = strict;
+        }
+    });
 }

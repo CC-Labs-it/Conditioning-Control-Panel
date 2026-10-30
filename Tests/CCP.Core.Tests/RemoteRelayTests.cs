@@ -292,6 +292,49 @@ public sealed class RemoteRelayTests
         }
     }
 
+    // WPF ReleaseHoldingsForExit (RemoteControlService.V2.cs:261, main bafe52cfc): exit hands back the controller's
+    // strict lock before the final save, keeps the wearer's own, and refuses a command fetched before exit.
+    [Fact]
+    public async Task Exit_releases_the_controllers_strict_lock_keeps_the_wearers_and_refuses_late_commands()
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.StrictLockEnabled, s.PanicKeyEnabled);
+        var savedInvoke = CoreDispatch.InvokeProvider;
+        try
+        {
+            (s.StrictLockEnabled, s.PanicKeyEnabled) = (false, false);
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, _ => { }, f) { AutoPoll = false };
+            await r.StartAsync("full");
+            Assert.Null(RemoteCommands.Execute("enable_strict_lock", null));
+            r.ReleaseHoldingsForExit();
+            r.ReleaseHoldingsForExit();   // idempotent
+            Assert.False(s.StrictLockEnabled);
+            Assert.True(s.PanicKeyEnabled);
+
+            s.StrictLockEnabled = true;   // the wearer's own
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Take();
+            r.ReleaseHoldingsForExit();
+            Assert.True(s.StrictLockEnabled);
+
+            // A command fetched before exit whose UI dispatch lands after it is refused.
+            s.StrictLockEnabled = false;
+            Func<object?>? parked = null;
+            CoreDispatch.InvokeProvider = (fn, _) => { parked ??= fn; return (false, null); };
+            Poll(f, "{\"controller_connected\":true,\"commands\":[{\"id\":\"3\",\"action\":\"enable_strict_lock\"}]}");
+            await r.PollOnceAsync();
+            r.ReleaseHoldingsForExit();
+            Assert.Equal("the controller left", parked!());
+            Assert.False(s.StrictLockEnabled);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            (s.StrictLockEnabled, s.PanicKeyEnabled) = saved;
+            CoreDispatch.InvokeProvider = savedInvoke;
+        }
+    }
+
     // A crash mid-session: the recovery file hands the controller's strict lock back at the next launch.
     [Fact]
     public void A_crash_mid_session_heals_the_controllers_strict_lock_at_launch()
