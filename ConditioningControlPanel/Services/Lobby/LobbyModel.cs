@@ -31,6 +31,9 @@ public sealed record LobbyRow
     /// <summary>Playing chess: the other seat's name ("white vs black").</summary>
     public string? OpponentName { get; init; }
     public string? Avatar { get; init; }
+    /// <summary>The host's profile frame/avatar (contract 4): the wire's own <c>cosmetics</c> when the server
+    /// sends it, else a friend's look off the friends state; <see cref="PlayerLook.None"/> otherwise.</summary>
+    public PlayerLook Look { get; init; } = PlayerLook.None;
     public int Level { get; init; }
     public bool Friend { get; init; }
     /// <summary>Seconds the table has waited (Open) or run (Playing); 0 when unknown.</summary>
@@ -66,7 +69,10 @@ public sealed record LobbyRow
 }
 
 /// <summary>A chess lobby answer from <c>GET /v2/pbp/lobby</c>, reduced to what the Lobby shows.</summary>
-public sealed record PbpOpenSeat(string Id, string Name, int InitialMs, int IncrementMs, long SinceMs);
+public sealed record PbpOpenSeat(string Id, string Name, int InitialMs, int IncrementMs, long SinceMs)
+{
+    public PlayerLook Look { get; init; } = PlayerLook.None;
+}
 /// <summary>A chess match under way. <paramref name="MatchId"/> is set only when the server says
 /// it is <paramref name="Watchable"/> (public, and neither seat switched watching off).</summary>
 public sealed record PbpPlayingGame(string White, string Black, int InitialMs, int IncrementMs, long StartedMs, int Moves,
@@ -119,6 +125,24 @@ public static class LobbyMerge
         var friendList = friends ?? Array.Empty<Friend>();
         var friendIds = new HashSet<string>(friendList.Select(f => f.Id), StringComparer.Ordinal);
         var friendNames = new HashSet<string>(friendList.Where(f => !string.IsNullOrEmpty(f.Name)).Select(f => f.Name), StringComparer.Ordinal);
+        // A friend's look off the friends state, for rows whose wire carries none. Names only where the row
+        // matched a friend by name (the same rule as the Friend flag); duplicate names never pick one.
+        var lookById = new Dictionary<string, PlayerLook>(StringComparer.Ordinal);
+        var lookByName = new Dictionary<string, PlayerLook?>(StringComparer.Ordinal);
+        foreach (var f in friendList)
+        {
+            if (!string.IsNullOrEmpty(f.Id)) lookById[f.Id] = f.Look;
+            if (string.IsNullOrEmpty(f.Name)) continue;
+            lookByName[f.Name] = lookByName.ContainsKey(f.Name) ? null : f.Look;
+        }
+        PlayerLook Pick(PlayerLook? wire, bool friend, string? id, string? name)
+        {
+            if (wire is { IsEmpty: false }) return wire;
+            if (!friend) return PlayerLook.None;
+            if (id != null && lookById.TryGetValue(id, out var byId)) return byId;
+            if (name != null && lookByName.TryGetValue(name, out var byName) && byName != null) return byName;
+            return PlayerLook.None;
+        }
 
         var rows = new List<LobbyRow>();
 
@@ -133,6 +157,7 @@ public static class LobbyMerge
                     // The chess wire hands opaque p_ ids, never a unified id: a friend is only
                     // recognisable by an exact, unique display name. Server follow-up: a friend flag.
                     Friend = friendNames.Contains(s.Name),
+                    Look = Pick(s.Look, friendNames.Contains(s.Name), null, s.Name),
                 });
             foreach (var p in chess.Playing)
             {
@@ -144,6 +169,7 @@ public static class LobbyMerge
                     InitialMs = p.InitialMs, IncrementMs = p.IncrementMs, Moves = p.Moves,
                     AgeSec = AgeSec(nowMs, p.StartedMs),
                     Friend = friendNames.Contains(p.White) || friendNames.Contains(p.Black),
+                    Look = Pick(null, friendNames.Contains(p.White), null, p.White),
                 });
             }
         }
@@ -155,6 +181,7 @@ public static class LobbyMerge
                     Game = LobbyGame.Goon, State = LobbyRowState.Open, Key = t.Code, HostName = t.Name,
                     Avatar = t.Avatar, Level = t.Level, Friend = t.Friend, AgeSec = t.WaitingSec,
                     Song = t.Song, CardSec = t.CardSec, Pictures = t.Pictures,
+                    Look = Pick(t.Look, t.Friend, t.FriendId, t.Name),
                 });
 
         if (remote != null)
@@ -166,6 +193,7 @@ public static class LobbyMerge
                     Key = r.Claimed ? null : r.UnifiedId,
                     HostName = r.Name, Level = r.Level, RemoteTier = r.Tier, Tags = r.Tags,
                     Friend = friendIds.Contains(r.UnifiedId),
+                    Look = Pick(null, friendIds.Contains(r.UnifiedId), r.UnifiedId, null),
                 });
 
         // A tier refusal carries no rows: a non-Prime account simply sees no races.
@@ -176,6 +204,7 @@ public static class LobbyMerge
                     Game = LobbyGame.Race, State = LobbyRowState.Open, Key = r.RoomId, HostName = r.HostName,
                     Friend = r.Friend, Track = r.Track, Seats = r.Seats, Filled = r.Filled, Laps = r.Laps,
                     Staked = r.Staked, StartsInSec = r.StartsInSec,
+                    Look = Pick(r.Look, r.Friend, null, r.HostName),
                 });
 
         // Friends in a game the lists above do not show (a chess match off the open list, a
@@ -195,6 +224,7 @@ public static class LobbyMerge
             rows.Add(new LobbyRow
             {
                 Game = game.Value, State = LobbyRowState.Playing, HostName = f.Name, Avatar = f.AvatarUrl, Friend = true,
+                Look = f.Look,
             });
         }
 
