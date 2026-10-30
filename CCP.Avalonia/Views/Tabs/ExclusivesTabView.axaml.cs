@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
@@ -35,6 +36,52 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class ExclusivesTabView : UserControl
     {
         private readonly AmbientFxCanvas _ambientFx;
+
+        private bool _plansMode, _contentLifted, _plansActive;
+        internal Controls.Invites.InvitePanel? InvitesPanel { get; private set; }
+
+        /// <summary>WPF PlansMode: header, tier plates, Premium link and invites, inside Settings' scroller.</summary>
+        public bool PlansMode
+        {
+            get => _plansMode;
+            set
+            {
+                _plansMode = value;
+                this.FindControl<ItemsControl>("ExclusivesShelf")!.IsVisible = !value;
+                this.FindControl<Border>("SpotlightCard")!.IsVisible = !value;
+                this.FindControl<Button>("BtnSeePremium")!.IsVisible = value;
+                this.FindControl<Border>("InvitesWrap")!.IsVisible = value;
+                if (value && InvitesPanel == null)
+                    this.FindControl<ContentControl>("InvitesSlot")!.Content = InvitesPanel = new Controls.Invites.InvitePanel();
+                this.FindControl<Image>("VaultBackdrop")!.IsVisible = !value;
+                BindLoc("TxtVaultTitle", value ? "plans_header_title" : "premium_page_title");
+                BindLoc("TxtVaultSub", value ? "plans_header_sub" : "premium_page_sub");
+                var scroll = this.FindControl<ScrollViewer>("ContentScroll")!;
+                if (value && !_contentLifted && scroll.Parent is Panel host && scroll.Content is Control content)
+                {
+                    int at = host.Children.IndexOf(scroll);
+                    scroll.Content = null;
+                    host.Children.RemoveAt(at);
+                    host.Children.Insert(at, content);
+                    _contentLifted = true;
+                }
+                RefreshVault();
+                UpdateMotion();
+            }
+        }
+
+        private void BindLoc(string name, string key) => this.FindControl<TextBlock>(name)!
+            .Bind(TextBlock.TextProperty, (Binding)new Localization.StrExtension(key).ProvideValue(null!));
+
+        internal void SetPlansActive(bool active)
+        {
+            _plansActive = active;
+            if (active) { RefreshVault(); _ = InvitesPanel?.RefreshAsync(); }
+            UpdateMotion();
+        }
+
+        private void SeePremium_Click(object? sender, RoutedEventArgs e) =>
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.ShowTab("premium");
 
         public ExclusivesTabView()
         {
@@ -129,11 +176,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void RefreshVault()
         {
             RetintVaultChrome();
+            ApplyHeroArt();
+            _ = App.DailyFree?.RefreshAsync();
             // WPF ArrangeVaultShelf (polish 12): Basic, Prime, Free, each under its header, open doors first,
             // roster order within each half (Core PremiumShelfOrder). The two reserved seats are dropped. Just
             // Drop until the server opens its door and the Arcademy behind its build flag are hidden, not veiled.
             var rows = new List<object>();
-            var cards = ExclusiveFeature.All.Where(f => f.Shown()).Select(f => new ExclusiveCardRow(f));
+            var cards = (PlansMode ? Enumerable.Empty<ExclusiveFeature>() : ExclusiveFeature.All).Where(f => f.Shown()).Select(f => new ExclusiveCardRow(f));
             foreach (var (group, items) in Services.UI.PremiumShelfOrder.Arrange(cards, r => r.Feature.Key, r => r.Tier, r => !r.IsLocked))
             {
                 rows.Add(new ExclusiveGroupRow(group, items.Count(r => !r.IsLocked), items.Count));
@@ -175,6 +224,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             RefreshTierPlates();
             Dress(this.FindControl<Control>("SpotFreeToday")!);
             Dress(this.FindControl<Control>("SpotVeilLock")!);   // WPF :799 breathes only under a shown veil
+        }
+
+        /// <summary>WPF ModTileVariant: built-in fork first; external mods override the base path.</summary>
+        private void ApplyHeroArt()
+        {
+            var art = ModArt.FirstOf(Services.UI.ModTileArt.Candidates("vault", CoreMods.ActiveModId), 480);
+            var plate = this.FindControl<Border>("VaultHeroPlate")!;
+            if (art != null)
+            {
+                if (plate.Background is not ImageBrush brush) plate.Background = brush = new ImageBrush { Stretch = Stretch.UniformToFill, AlignmentX = AlignmentX.Right, Opacity = 0.9 };
+                brush.Source = art;
+                if (plate.Child != null) plate.Child.IsVisible = false;
+            }
+            // WPF's pack images: commerce art never resolves through a mod override.
+            for (int i = 1; i <= 2; i++)
+            {
+                var tierPlate = this.FindControl<Border>($"TierPlate{i}")!;
+                if (tierPlate.Child is Image) continue;
+                try
+                {
+                    using var stream = global::Avalonia.Platform.AssetLoader.Open(new Uri($"avares://CCP.Avalonia/Resources/Patreon tier{i}.png"));
+                    tierPlate.Child = new Image { Source = Bitmap.DecodeToWidth(stream, 160), Stretch = Stretch.Uniform };
+                    tierPlate.Width = double.NaN;
+                    tierPlate.Background = tierPlate.BorderBrush = null;
+                    tierPlate.BorderThickness = default;
+                }
+                catch (Exception ex) { Serilog.Log.Debug("Vault tier plate art: {E}", ex.Message); }
+            }
         }
 
         // WPF RetintVaultChrome: only decor follows the mod; gold free-day and tier commerce do not.
@@ -237,7 +314,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>The only start/stop: visible, attached and MotionFx.AllowAmbientLoops (PLAYBOOK P01).</summary>
         private void UpdateMotion()
         {
-            bool want = IsVisible && this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
+            _ambientFx.IsVisible = !PlansMode || _plansActive;
+            bool want = IsVisible && (!PlansMode || _plansActive) && this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
             // Re-dressed either way: a glow-gate change (performance tier) alone must re-apply the glows.
             if (want == (_motion != null)) { }
             else if (want)
