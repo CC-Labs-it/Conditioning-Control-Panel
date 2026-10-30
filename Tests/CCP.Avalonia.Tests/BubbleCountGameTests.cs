@@ -56,7 +56,7 @@ public sealed class BubbleCountGameTests
                 await AvaloniaTestDispatcher.RunAsync(async () =>
                 {
                     if (Application.Current is null)
-                        AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                             .UseSkia()
                             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                             .SetupWithoutStarting();
@@ -64,21 +64,43 @@ public sealed class BubbleCountGameTests
                     async Task<BubbleCountWindow> Open(bool strict)
                     {
                         s.BubbleCountStrictLock = strict;
+                        var ready = new TaskCompletionSource<BubbleCountWindow>();
+                        using var opened = Window.WindowOpenedEvent.AddClassHandler<BubbleCountWindow>((w, _) =>
+                        {
+                            // WindowOpened precedes Show/Opened. Subscribe after the game's own
+                            // Opened handler has installed its decoder, then observe presented frames.
+                            w.Opened += (_, _) =>
+                            {
+                                var sink = BubbleCountWindow.Sink!;
+                                void Presented()
+                                {
+                                    if (sink.FrameCount < 3) return;
+                                    sink.FramePresented -= Presented;
+                                    try
+                                    {
+                                        // Hold real playback while checking strict/panic input. Polling a
+                                        // two-second clip could observe the hidden result-screen window.
+                                        BubbleCountWindow.Player!.SetPause(true);
+                                        Assert.Same(w, Assert.Single(BubbleCountWindow.OpenWindows));
+                                        Assert.True(sink.FrameCount >= 3, "frames decoded");
+                                        Assert.Same(sink.Bitmap, w.VideoImage.Source);
+                                        Assert.True(w.Topmost && w.IsVisible);
+                                        ready.TrySetResult(w);
+                                    }
+                                    catch (Exception error) { ready.TrySetException(error); }
+                                }
+                                sink.FramePresented += Presented;
+                            };
+                        });
                         b.Trigger(forceTest: true);
                         Assert.True(b.IsBusy);
-                        Assert.Empty(BubbleCountWindow.OpenWindows);        // the 800 ms lead-in
-                        // 20 s, not 5: a cold LibVLC on the windows-latest runner (plugin scan, loaded shard) has
-                        // missed 5 s on unrelated lanes; the loop exits as soon as frames arrive.
-                        for (var i = 0; i < 400 && (BubbleCountWindow.OpenWindows.Count == 0 || (BubbleCountWindow.Sink?.FrameCount ?? 0) < 3); i++) await Task.Delay(50);
-                        var w = Assert.Single(BubbleCountWindow.OpenWindows);
-                        Assert.True(BubbleCountWindow.Sink!.FrameCount >= 3, "frames decoded");
-                        Assert.Same(BubbleCountWindow.Sink.Bitmap, w.VideoImage.Source);
-                        Assert.True(w.Topmost && w.IsVisible);
-                        return w;
+                        Assert.Empty(BubbleCountWindow.OpenWindows); // the 800 ms lead-in
+                        return await ready.Task.WaitAsync(TimeSpan.FromSeconds(20));
                     }
 
                     // Non-strict: the 2 s clip ends, the answer window asks, the right count wins.
                     await Open(strict: false);
+                    BubbleCountWindow.Player!.SetPause(false); // the real EndReached opens the answer window
                     for (var i = 0; i < 400 && BubbleCountResultWindow.OpenWindows.Count == 0; i++) await Task.Delay(50);
                     var r = Assert.Single(BubbleCountResultWindow.OpenWindows);
                     Assert.Equal(2, BubbleCountWindow.LastVideoDurationSeconds, 0);   // LengthChanged replaced the 30 s fallback

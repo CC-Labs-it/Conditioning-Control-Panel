@@ -42,6 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         public WriteableBitmap? Bitmap { get; private set; }
         public int FrameCount => Volatile.Read(ref _frames);
+        internal event Action? FramePresented;
         public bool Freed { get { lock (_lock) return _buffer == IntPtr.Zero; } }
 
         private uint Format(ref IntPtr opaque, IntPtr chroma, ref uint width, ref uint height, ref uint pitches, ref uint lines)
@@ -105,6 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
             Interlocked.Increment(ref _frames);
             _frame();
+            FramePresented?.Invoke();
         }
 
         private static ref byte At(IntPtr p) => ref Unsafe.AddByteOffset(ref Unsafe.NullRef<byte>(), p);
