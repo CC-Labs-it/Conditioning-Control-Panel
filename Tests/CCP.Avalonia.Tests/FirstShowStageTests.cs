@@ -326,6 +326,102 @@ public sealed class FirstShowStageTests
         }
     });
 
+    [Fact]
+    public Task DesktopEscapeStopsWithoutSpeechFocus() => Run(stage =>
+    {
+        stage.ReadDesktopInput = () => (new PixelPoint(0, 0), false, true);
+        stage.Frame();
+        Assert.False(FirstShowService.IsActive);
+        Assert.False(EmiDeskService.Instance.Window!.PresentationActive);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task OnlyLiveBubbleCirclesTakeInputAndAPressPopsThem() => Run(async stage =>
+    {
+        stage.BundledPictures = () => Enumerable.Range(0, 4).Select(i => ContentLocator.Resolve(Path.Combine("Resources", "web", "backroom", "stations", "slot", "fallback", $"gif{i}.webp"))).ToArray();
+        await stage.Bundled();
+        double t = 0; stage.Clock = () => t;
+        stage.Start();
+        stage.Frame();
+        Assert.Empty(stage.InputRects);
+        var pushes = stage.InputPushes;
+        stage.Frame();
+        Assert.Equal(pushes, stage.InputPushes);   // empty stays empty: no region re-sent
+        t = S.BubblesAt; stage.Frame();
+        Assert.NotEmpty(stage.InputRects);
+        var rows = stage.Effects!.BubbleInputRects(1);
+        Assert.True(rows.Length < rows.Sum(r => r.Height), $"{rows.Length} rects, no rows merged");
+        var center = rows[rows.Length / 2];
+        var cues = new List<string>();
+        CoreSettings.Current.MasterVolume = 50;
+        stage.Audio.Play = (path, _, _) => { cues.Add(Path.GetFileName(path)); return () => { }; };
+        var at = new Point(center.X + center.Width / 2.0, center.Y);
+        stage.MouseDown(at, global::Avalonia.Input.MouseButton.Right);
+        stage.MouseUp(at, global::Avalonia.Input.MouseButton.Right);
+        Assert.NotEmpty(stage.InputRects);
+        Assert.Empty(cues);
+        // The native region feeds the same routed press as a real platform window.
+        stage.MouseDown(new Point(center.X + center.Width / 2.0, center.Y), global::Avalonia.Input.MouseButton.Left);
+        stage.MouseUp(new Point(center.X + center.Width / 2.0, center.Y), global::Avalonia.Input.MouseButton.Left);
+        Assert.Empty(stage.InputRects);
+        Assert.Contains("Pop3.mp3", cues);
+        t += S.BubbleEvery; stage.Frame();
+        Assert.NotEmpty(stage.InputRects);
+        t = S.GatherAt; stage.Frame();
+        Assert.Empty(stage.InputRects);
+        pushes = stage.InputPushes;
+        t += .1; stage.Frame();
+        Assert.Equal(pushes, stage.InputPushes);
+    });
+
+    [Fact]
+    public Task HelpReplayClosesItsPanelBeforeOpeningTheShow() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var shell = new MainShellWindow();
+        var overlay = shell.FindControl<Border>("MainTutorialOverlay")!;
+        overlay.IsVisible = true;
+        int opened = 0;
+        shell.OpenWelcomeShow = owner => { Assert.Same(shell, owner); Assert.False(overlay.IsVisible); opened++; return true; };
+        shell.FindControl<Button>("BtnFirstShowReplay")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(1, opened);
+        shell.RequestExit();
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task CuesUseModsAndHonorSuppressionAndMaster() => Run(stage =>
+    {
+        var path = Path.GetTempFileName();
+        int played = 0;
+        CoreSettings.Current.MasterVolume = 50;
+        CoreModArt.AudioOverridePathProvider = _ => path;
+        CoreAudio.IsOutputSuppressedProvider = () => false;
+        stage.Audio.Play = (p, volume, tag) =>
+        {
+            Assert.Equal(path, p);
+            Assert.Equal(.16f, volume);
+            Assert.Equal("first-show-cue", tag);
+            played++;
+            return () => { };
+        };
+        try
+        {
+            stage.Audio.Cue("pop");
+            Assert.Equal(1, played);
+            CoreAudio.IsOutputSuppressedProvider = () => true;
+            stage.Audio.Cue("pop");
+            Assert.Equal(1, played);
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreSettings.Current.MasterVolume = 0;
+            stage.Audio.Cue("pop");
+            Assert.Equal(1, played);
+        }
+        finally { File.Delete(path); }
+        return Task.CompletedTask;
+    });
+
     private static void Click(FirstShowStageWindow stage, int i) => stage.ChoiceButtons[i].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
     private static async Task Until(Func<bool> probe)
@@ -335,12 +431,8 @@ public sealed class FirstShowStageTests
         Assert.True(probe(), "timed out");
     }
 
-    private static void Setup()
-    {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-    }
+    private static void Setup() => AmbientBeatLoopsTests.Setup();
+
 
     private static Task Run(Func<FirstShowStageWindow, Task> body, string? panicKey = null) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
