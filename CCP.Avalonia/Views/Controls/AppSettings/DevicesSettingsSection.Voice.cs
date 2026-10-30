@@ -81,10 +81,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                     // Always-on mic is more invasive than the prompt-only path: an explicit OK (WPF copy).
                     bool yes = AskAlwaysOn != null
                         ? await AskAlwaysOn()
-                        : TopLevel.GetTopLevel(this) is Window owner && await MessageDialog.ConfirmAsync(owner, "Always-on microphone",
-                            "Wake word keeps the microphone open continuously while Takeover is running so she can hear you call her.\n\n" +
-                            "Everything stays offline. Audio is processed on your device and never recorded or sent anywhere.\n\n" +
-                            "Turn on always-on listening?", okText: "Yes", cancelText: "No");
+                        : TopLevel.GetTopLevel(this) is Window owner && await MessageDialog.ConfirmAsync(owner,
+                            Loc.Get("devices_always_on_title"), Loc.Get("devices_always_on_body"),
+                            okText: Loc.Get("btn_yes"), cancelText: Loc.Get("btn_no"));
                     if (!yes) { RevertVoiceToggle(ChkSpeechWakeWord); return; }
                 }
                 s.SpeechWakeWordEnabled = on;

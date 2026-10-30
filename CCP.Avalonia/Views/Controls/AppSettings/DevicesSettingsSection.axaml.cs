@@ -199,7 +199,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             if (_loading) return;
             CoreSettings.Current.SpeechHeadphonesMode = ChkHeadphones.IsChecked == true;
             CoreSettings.Save();
-            ApplyVoiceLive(reopen: false);
+            // WPF DevicesSettingsSection.xaml.cs:285-292 only refreshes presentation.
+            try { Shell?.RefreshSheListeningDeviceChips(); }
+            catch (Exception ex) { Log.Warning(ex, "Settings/Devices: device chips refresh failed"); }
         }
 
         /// <summary>

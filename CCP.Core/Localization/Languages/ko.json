@@ -1,4 +1,6 @@
 {
+  "devices_always_on_title": "항상 켜진 마이크",
+  "devices_always_on_body": "호출어를 사용하면 Takeover 실행 중 마이크가 계속 열려 있어 그녀를 부르는 소리를 들을 수 있습니다.\n\n모든 처리는 오프라인으로 이루어집니다. 오디오는 기기에서 처리되며 녹음되거나 전송되지 않습니다.\n\n상시 듣기를 켤까요?",
   "deeper_submission_badge_published": "게시됨",
   "deeper_submission_badge_published_tip": "이 인핸스먼트는 커뮤니티 카탈로그에 게시되어 있습니다.",
   "deeper_submission_badge_pending": "대기 중",

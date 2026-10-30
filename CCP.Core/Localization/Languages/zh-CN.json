@@ -1,4 +1,6 @@
 {
+  "devices_always_on_title": "始终开启的麦克风",
+  "devices_always_on_body": "启用唤醒词后，Takeover 运行期间麦克风将持续开启，以便她听到你的呼唤。\n\n一切均离线运行。音频仅在你的设备上处理，不会被录制或发送。\n\n开启持续聆听？",
   "deeper_submission_badge_published": "已发布",
   "deeper_submission_badge_published_tip": "此增强已在社区目录中上线。",
   "deeper_submission_badge_pending": "待审核",

@@ -1,4 +1,8 @@
 using System.Threading.Tasks;
+using System.Linq;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -18,6 +22,89 @@ namespace CCP.Avalonia.Tests;
 [Collection(RunsAloneCollection.Name)]
 public sealed class DevicesVoiceModesTests
 {
+    [Fact]
+    public Task HeadphonesPreserveSpokenStopListening() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var shell = new MainShellWindow();
+        try
+        {
+            var section = new DevicesSettingsSection();
+            shell.Content = section;
+            shell.Show();
+            var s = CoreSettings.Current;
+            s.MicConsentGiven = s.SpeechWakeWordEnabled = true;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            CoreSpeech.IsAvailableProvider = () => true;
+            section.SyncFromSettings();
+            shell.RefreshVoiceInputModes();
+            Assert.True(shell.WakeLoopArmed);
+            shell.StopVoiceInput(); // The spoken stop_listening action, WPF AutonomyService.Voice.cs.
+            Assert.True(s.SpeechWakeWordEnabled);
+            var headphones = section.FindControl<CheckBox>("ChkHeadphones")!;
+            Assert.Same(shell, TopLevel.GetTopLevel(section));
+            var applies = section.VoiceApplies;
+            var before = s.SpeechHeadphonesMode;
+            headphones.IsChecked = !(headphones.IsChecked == true);
+            Assert.NotEqual(before, s.SpeechHeadphonesMode);
+            Assert.Equal(applies, section.VoiceApplies);
+            Assert.True(CoreSpeech.IsAvailable);
+            Assert.True(CoreEntitlement.HasPremium);
+            Assert.Equal(headphones.IsChecked == true, s.SpeechHeadphonesMode);
+            Assert.False(shell.WakeLoopArmed);
+        }
+        finally { shell.StopVoiceInput(); shell.RequestExit(); }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData("en", "Always-on microphone")]
+    [InlineData("de", "Dauerhaft aktives Mikrofon")]
+    [InlineData("es", "Micrófono siempre activo")]
+    [InlineData("fr", "Microphone toujours actif")]
+    [InlineData("it", "Microfono sempre attivo")]
+    [InlineData("ja", "常時オンのマイク")]
+    [InlineData("ko", "항상 켜진 마이크")]
+    [InlineData("pt-BR", "Microfone sempre ativo")]
+    [InlineData("ru", "Постоянно включённый микрофон")]
+    [InlineData("zh-CN", "始终开启的麦克风")]
+    public Task AlwaysOnDialogUsesSelectedLanguage(string language, string title) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var before = LocalizationManager.Instance.CurrentLanguage;
+        var owner = new Window();
+        try
+        {
+            LocalizationManager.Instance.SetLanguage(language);
+            CoreSettings.Current.MicConsentGiven = true;
+            CoreSettings.Current.SpeechWakeWordEnabled = false;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            var section = new DevicesSettingsSection();
+            owner.Content = section;
+            owner.Show();
+            section.FindControl<CheckBox>("ChkSpeechWakeWord")!.IsChecked = true;
+            await Task.Yield();
+            var dialog = Assert.Single(owner.OwnedWindows.OfType<MessageDialog>());
+            Assert.Equal(title, dialog.Title);
+            Assert.Equal(Loc.Get("devices_always_on_body"), dialog.FindControl<TextBlock>("TxtMessage")!.Text);
+            Assert.Equal(Loc.Get("btn_yes"), Assert.IsType<TextBlock>(dialog.FindControl<Button>("BtnOk")!.Content).Text);
+            Assert.Equal(Loc.Get("btn_no"), Assert.IsType<TextBlock>(dialog.FindControl<Button>("BtnCancel")!.Content).Text);
+            dialog.Close(false);
+            await Task.Yield();
+            Assert.False(CoreSettings.Current.SpeechWakeWordEnabled);
+        }
+        finally
+        {
+            foreach (var dialog in owner.OwnedWindows.ToList()) dialog.Close();
+            owner.Close();
+            LocalizationManager.Instance.SetLanguage(before);
+        }
+    });
+
     [Fact]
     public async Task VoiceSwitchesWrite_GatedOnConsent_AndApplyLive()
     {
@@ -110,27 +197,27 @@ public sealed class DevicesVoiceModesTests
                 Assert.IsType<TextBlock>(section.FindControl<Button>("BtnSetPttKey")!.Content);
                 Assert.Equal(4, section.VoiceApplies);
 
-                // G12: headphones mode applies live, no restart.
+                // G12: headphones update presentation without reconciling voice modes.
                 var head = section.FindControl<CheckBox>("ChkHeadphones")!;
                 head.IsChecked = !(head.IsChecked == true);
                 Assert.Equal(head.IsChecked == true, s.SpeechHeadphonesMode);
-                Assert.Equal(5, section.VoiceApplies);
+                Assert.Equal(4, section.VoiceApplies);
                 var phrases = section.FindControl<TextBox>("TxtSpeechWakeWords")!;
                 phrases.Text = "  ";
                 phrases.RaiseEvent(new FocusChangedEventArgs(InputElement.LostFocusEvent));   // TextBox's own handler casts to this
                 Assert.Equal("hey bambi", s.SpeechWakeWords);
                 Assert.Equal("hey bambi", phrases.Text);
-                Assert.Equal(6, section.VoiceApplies);
+                Assert.Equal(5, section.VoiceApplies);
                 var mic = section.FindControl<ComboBox>("CmbMicDevice")!;
                 mic.Items.Add(new ComboBoxItem { Content = "Test mic", Tag = 999 });
                 mic.SelectedIndex = mic.Items.Count - 1;
                 Assert.Equal(999, s.SpeechInputDeviceIndex);
                 Assert.Equal("Test mic", s.SpeechInputDeviceName);
-                Assert.Equal(7, section.VoiceApplies);
+                Assert.Equal(6, section.VoiceApplies);
                 premium = false;
                 ptt.IsChecked = false;
                 Assert.False(s.SpeechPushToTalkEnabled);
-                Assert.Equal(8, section.VoiceApplies);
+                Assert.Equal(7, section.VoiceApplies);
                 window.Close();
             });
         }

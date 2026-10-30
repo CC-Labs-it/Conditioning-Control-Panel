@@ -1,4 +1,6 @@
 {
+  "devices_always_on_title": "Dauerhaft aktives Mikrofon",
+  "devices_always_on_body": "Das Aktivierungswort hält das Mikrofon während Takeover ständig offen, damit sie deinen Ruf hören kann.\n\nAlles bleibt offline. Audio wird auf deinem Gerät verarbeitet und weder aufgezeichnet noch übertragen.\n\nDauerhaftes Zuhören einschalten?",
   "deeper_submission_badge_published": "Veröffentlicht",
   "deeper_submission_badge_published_tip": "Diese Erweiterung ist im Community-Katalog live.",
   "deeper_submission_badge_pending": "Ausstehend",

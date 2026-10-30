@@ -1,4 +1,6 @@
 {
+  "devices_always_on_title": "Microphone toujours actif",
+  "devices_always_on_body": "Le mot d’activation garde le microphone ouvert pendant Takeover pour qu’elle puisse vous entendre l’appeler.\n\nTout reste hors ligne. Le son est traité sur votre appareil, sans enregistrement ni transmission.\n\nActiver l’écoute continue ?",
   "deeper_submission_badge_published": "Publié",
   "deeper_submission_badge_published_tip": "Cette amélioration est en ligne dans le catalogue communautaire.",
   "deeper_submission_badge_pending": "En attente",
