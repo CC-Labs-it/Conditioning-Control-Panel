@@ -13,6 +13,7 @@ using ConditioningControlPanel.Avalonia.Tours;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -70,12 +71,22 @@ public sealed class FeatureIntroUpgradeTests
     [Fact]
     public Task PanicClosesUpgradeAndReleasesModalGate() => Run("old-version", async shell =>
     {
+        var settle = new TaskCompletionSource();
+        shell.UpgradeDelay = _ => settle.Task;
         var showing = shell.ShowWhatsNewIfNeeded();
+        FeatureIntroPopup.ShowWhenStartupSettles("lockdown", shell, "play");
+        settle.SetResult();
+        await Task.Yield();
+        Dispatcher.UIThread.RunJobs();
         Assert.Single(shell.OwnedWindows.OfType<WhatsNewDialog>());
         PanicSurfaces.All.Single(s => s.Id == "upgrade-intro").Stop(shell);
         Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
         await showing;
+        Dispatcher.UIThread.RunJobs();
         Assert.False(MainShellWindow.IsStartupDialogShowing);
+        Assert.Empty(shell.OwnedWindows.OfType<FeatureIntroPopup>());
+        Assert.False(StartupLadder.Inbox.Contains("intro:lockdown"));
+        Assert.DoesNotContain("lockdown", CoreSettings.Current.SeenFeatureIntros);
     });
 
     [Fact]
@@ -103,10 +114,15 @@ public sealed class FeatureIntroUpgradeTests
         settle.SetResult();
         await Task.Yield();
         Dispatcher.UIThread.RunJobs();
-        Assert.Single(shell.OwnedWindows.OfType<WhatsNewDialog>()).Close();
+        var news = Assert.Single(shell.OwnedWindows.OfType<WhatsNewDialog>());
+        ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(3));
+        Assert.True(StartupLadder.ModalPending);
+        Assert.False(StartupLadder.Inbox.Contains("intro:lockdown"));
+        Assert.DoesNotContain("lockdown", CoreSettings.Current.SeenFeatureIntros);
+        Assert.Empty(shell.OwnedWindows.OfType<FeatureIntroPopup>());
+        news.Close();
         await showing;
         Assert.False(StartupLadder.ModalPending);
-        StartupLadder.PumpHeld();
         Dispatcher.UIThread.RunJobs();
         Assert.Single(shell.OwnedWindows.OfType<FeatureIntroPopup>());
         Assert.Contains("lockdown", CoreSettings.Current.SeenFeatureIntros);
@@ -152,11 +168,35 @@ public sealed class FeatureIntroUpgradeTests
         global::ConditioningControlPanel.Avalonia.Tours.TutorialHead.OnPanic();
     });
 
+    [Theory]
+    [InlineData("en", "What's New in v{0}", "Show me around (60s)")]
+    [InlineData("de", "Neu in v{0}", "Rundgang starten (60 s)")]
+    [InlineData("es", "Novedades de v{0}", "Mostrar recorrido (60 s)")]
+    [InlineData("fr", "Nouveautés de la v{0}", "Voir la visite (60 s)")]
+    [InlineData("it", "Novità della v{0}", "Mostra il tour (60 s)")]
+    [InlineData("ja", "v{0} の新機能", "使い方を見る (60秒)")]
+    [InlineData("ko", "v{0}의 새로운 기능", "둘러보기 (60초)")]
+    [InlineData("pt-BR", "Novidades da v{0}", "Mostrar o tour (60 s)")]
+    [InlineData("ru", "Что нового в v{0}", "Показать обзор (60 с)")]
+    [InlineData("zh-CN", "v{0} 版本更新", "查看导览 (60秒)")]
+    public Task UpgradeNotesUseSelectedLanguage(string language, string title, string tour) => Run("old-version", async shell =>
+    {
+        LocalizationManager.Instance.SetLanguage(language);
+        var showing = shell.ShowWhatsNewIfNeeded();
+        var news = Assert.Single(shell.OwnedWindows.OfType<WhatsNewDialog>());
+        Assert.Equal(title.Replace("{0}", CoreReleaseContent.AppVersion), news.FindControl<TextBlock>("TxtTitle")!.Text);
+        Assert.Equal(tour, news.FindControl<TextBlock>("TourLabel")!.Text);
+        news.Close();
+        await showing;
+    });
+
     private static Task Run(string? previous, Func<MainShellWindow, Task> body, bool detachStartup = true) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current == null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+        LocalizationManager.Instance.SetLanguage("en");
         var old = CoreSettings.ServiceProvider;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
@@ -182,6 +222,7 @@ public sealed class FeatureIntroUpgradeTests
             MainShellWindow.IsStartupDialogShowing = false;
             service.SaveImmediate();
             CoreSettings.ServiceProvider = old;
+            LocalizationManager.Instance.SetLanguage(oldLanguage);
             StartupLadder.ResetForTests();
             FeatureIntroPopup.ResetForTests();
             Dispatcher.UIThread.RunJobs();

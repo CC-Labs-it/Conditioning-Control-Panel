@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Avalonia.Threading;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Startup;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using Serilog;
@@ -60,15 +61,15 @@ public partial class MainShellWindow
             }
             if (_upgradeCancelled || !CanShowUpgrade()) return; // unspent, owed next launch
             IsStartupDialogShowing = true;
-            Platform.StartupLadder.ModalPending = false;
+            // WPF StartupPresenter.cs:247,497,554: deferred offers wait until the modal drains.
             try
             {
-                _upgradeDialog = new WhatsNewDialog($"What's New in v{version}", CoreReleaseContent.PatchNotes,
+                _upgradeDialog = new WhatsNewDialog(Loc.GetF("upgrade_notes_title_fmt", version), CoreReleaseContent.PatchNotes,
                     tourAction: () =>
                     {
                         IsStartupDialogShowing = false;
                         Tours.TutorialHead.StartOnShell(Tours.TutorialType.UpgradeTour);
-                    }, tourButtonText: "Show me around (60s)");
+                    }, tourButtonText: Loc.Get("upgrade_notes_tour_button"));
                 await _upgradeDialog.ShowDialogSafe(this);
                 CoreSettings.Current.LastSeenVersion = version;
                 CoreSettings.Save();
@@ -80,7 +81,11 @@ public partial class MainShellWindow
             }
         }
         catch (Exception ex) { Log.Warning(ex, "Failed to show What's New dialog"); }
-        finally { Platform.StartupLadder.ModalPending = false; }
+        finally
+        {
+            Platform.StartupLadder.ModalPending = false;
+            if (!_upgradeCancelled) Platform.StartupLadder.PumpHeld();
+        }
     }
 
     private bool CanShowUpgrade() => StartupQueueCore.CanStartModal(IsStartupDialogShowing,

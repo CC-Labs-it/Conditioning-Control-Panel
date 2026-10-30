@@ -1,4 +1,6 @@
 {
+  "upgrade_notes_title_fmt": "v{0} の新機能",
+  "upgrade_notes_tour_button": "使い方を見る (60秒)",
   "deeper_submission_badge_published": "公開済み",
   "deeper_submission_badge_published_tip": "このエンハンスメントはコミュニティカタログで公開中です。",
   "deeper_submission_badge_pending": "審査中",

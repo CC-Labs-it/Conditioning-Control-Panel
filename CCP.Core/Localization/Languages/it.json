@@ -1,4 +1,6 @@
 {
+  "upgrade_notes_title_fmt": "Novità della v{0}",
+  "upgrade_notes_tour_button": "Mostra il tour (60 s)",
   "Sparkles_Slip_Paid": "Pagato",
   "Sparkles_Slip_Place": "Posto {0} su {1}",
   "Sparkles_Slip_Gold": "Oro",

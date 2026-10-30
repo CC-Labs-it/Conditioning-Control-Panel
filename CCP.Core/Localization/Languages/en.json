@@ -1,4 +1,6 @@
 {
+  "upgrade_notes_title_fmt": "What's New in v{0}",
+  "upgrade_notes_tour_button": "Show me around (60s)",
   "Sparkles_Slip_Paid": "Paid",
   "Sparkles_Slip_Place": "Place {0} of {1}",
   "Sparkles_Slip_Gold": "Gold",
