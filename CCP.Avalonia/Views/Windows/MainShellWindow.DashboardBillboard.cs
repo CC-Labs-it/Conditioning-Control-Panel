@@ -118,6 +118,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// It holds no service subscription, so a closed shell has nothing to detach from it.</summary>
         internal static Func<IBillboardProvider> MakeShowcase = () => new ShowcaseProvider();
 
+        internal IReadOnlyList<ConditioningControlPanel.Services.Companion.Asks.AskOption> CompanionSessionOptions() =>
+            Named<Tabs.PresetsTabView>("PresetsTab")?.CompanionSessionOptions()
+            ?? Array.Empty<ConditioningControlPanel.Services.Companion.Asks.AskOption>();
+
         /// <summary>WPF MainWindow.StartSessionFromCompanion: the Sessions page's own Start path (it
         /// asks first). False while a session runs or when the session is gone.</summary>
         internal bool StartSessionFromBillboard(string sessionId)
