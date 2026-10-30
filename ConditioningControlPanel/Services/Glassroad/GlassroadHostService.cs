@@ -127,6 +127,8 @@ internal static class GlassroadHostService
             if (App.Ownership != null) { App.Ownership.OwnershipChanged -= OnOwnershipChanged; App.Ownership.OwnershipChanged += OnOwnershipChanged; }
             _host.FocusWeb();
             try { App.Friends?.EnterActivity(Friends.PresenceActivity.Race); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // Feature day log: one e_race3d per window opened (re-focusing a live window is not a launch).
+            try { SeasonRecapService.TrackFeature(Models.SeasonFeatureKeys.Race3d); } catch (Exception ex) { Diag.Swallowed(ex); }
             App.Logger?.Information("GlassroadHostService: launched");
         }
         catch (Exception ex)

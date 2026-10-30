@@ -107,6 +107,26 @@ public class PrizeCounterRelayTests
     }
 
     [Fact]
+    public async Task OnlyALandedBuy_FeedsTheDayLogSink()
+    {
+        var (relay, h, _, _) = Make();
+        int landed = 0;
+        relay.BuyLanded = () => landed++;
+        h.Answer = _ => Json(200, "{\"ok\":true,\"sp\":10}");
+        await relay.RelayAsync("shop-state", null, null);
+        Assert.Equal(0, landed);                                   // a read is not a buy
+        await relay.RelayAsync("shop-buy", BuyBody(), "idem-1");
+        Assert.Equal(1, landed);
+        h.Answer = _ => Json(409, "{\"ok\":false,\"reason\":\"insufficient\",\"sp\":3}");
+        await relay.RelayAsync("shop-buy", BuyBody(), "idem-2");
+        Assert.Equal(1, landed);                                   // a refusal is not a buy
+        relay.BuyLanded = () => throw new InvalidOperationException("sink");
+        h.Answer = _ => Json(200, "{\"ok\":true,\"sp\":1}");
+        var reply = await relay.RelayAsync("shop-buy", BuyBody(), "idem-3");
+        Assert.True(reply.Value<bool>("ok"));                     // a throwing sink never breaks the reply
+    }
+
+    [Fact]
     public async Task Buy_WithoutAnIdem_IsRefused()
     {
         var (relay, h, _, _) = Make();

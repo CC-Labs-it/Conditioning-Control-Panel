@@ -160,6 +160,7 @@ public sealed class PrizeCounterRelay
             Adopt(sentFor, settlement, sp.Value<int>());
         }
         if (ok || reason == "owned") ApplyPrizes(sentFor, o["prizes"]);
+        if (op == OpBuy && ok) NoteBuyLanded();
         return o;
     }
 
@@ -181,6 +182,16 @@ public sealed class PrizeCounterRelay
         var grants = list.Where(g => g.Type == JTokenType.String).Select(g => (string)g!).ToArray();
         try { _applyPrizes(sentFor, rev.Value<long>(), grants); }
         catch (Exception ex) { App.Logger?.Debug("PrizeCounter apply prizes failed: {E}", ex.Message); }
+    }
+
+    /// <summary>A buy receipt landed (ok:true). The app sets this to the feature day log's <c>e_shop</c>;
+    /// a throwing sink never breaks the reply.</summary>
+    public Action? BuyLanded { get; set; }
+
+    private void NoteBuyLanded()
+    {
+        try { BuyLanded?.Invoke(); }
+        catch (Exception ex) { App.Logger?.Debug("PrizeCounter buy-landed sink failed: {E}", ex.Message); }
     }
 
     private (string UnifiedId, string Token)? SafeIdentity()

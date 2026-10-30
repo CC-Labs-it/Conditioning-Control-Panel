@@ -61,7 +61,11 @@ internal static class PrizeCounterHostService
         () => BackRoomApi.AppIdentity() is { } id && id.UnifiedId == _opener ? id : null,
         () => App.Settings?.Current?.OfflineMode == true,
         AdoptOnUi,
-        (account, revision, grants) => App.Ownership?.ApplySnapshot(account, revision, grants));
+        (account, revision, grants) => App.Ownership?.ApplySnapshot(account, revision, grants))
+    {
+        // Feature day log: one e_shop per buy receipt (server EVENT_KEYS whitelists it, lane L6).
+        BuyLanded = () => SeasonRecapService.TrackFeature(Models.SeasonFeatureKeys.Shop),
+    };
 
     /// <summary>Rain's prices from the last shop-state this run (grant -> Sparkles), for the wardrobe's
     /// badges. Empty until the counter has been opened once; the server stays the price authority.</summary>
