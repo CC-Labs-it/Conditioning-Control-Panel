@@ -102,6 +102,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         private static readonly (string Plate, string Art, Stretch Fit)[] HeroPlates =
         {
+            ("PlayBackRoomHeroPlate", "features/backroom.png", Stretch.UniformToFill),
+            ("PlayDtrhHeroPlate", "features/dtrh.png", Stretch.UniformToFill),
+            ("PlayArcademyHeroPlate", "features/arcademy.png", Stretch.UniformToFill),
+            ("PlayRacingThoughtsHeroPlate", "features/race.png", Stretch.UniformToFill),
+            ("PlayWebAppHeroPlate", "billboard/webapp.png", Stretch.UniformToFill),
             ("PlayGoonHeroPlate",     "features/goon_game_tile.png",    Stretch.UniformToFill),
             ("PlayChessHeroPlate",    "features/piecebypiece.png",      Stretch.UniformToFill),
             ("PlayRemoteHeroPlate",   "features/remote_control.png",    Stretch.UniformToFill),
@@ -181,6 +186,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 // BreakoutAccess.FullAllowed (WPF Services/BackRoom/BreakoutAccess.cs:9).
                 PlayLockBreakout.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed;
+                PlayLockDtrh.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_dtrh_title"), "dtrh").Allowed;
+                PlayLockArcademy.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_arcademy_title")).Allowed;
+                PlayBadgeDtrh.FreeToday = !CoreEntitlement.HasLab && CoreEntitlement.IsFreeToday("dtrh");
                 PlayLockGaze.IsVisible = !TierGate.RequiresLab(Loc.Get("label_gaze_minigame")).Allowed;
                 PlayLockFocusGaze.IsVisible = !TierGate.RequiresLab(Loc.Get("label_focus_gaze")).Allowed;
                 PlayLockRemote.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed;
@@ -225,6 +233,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // host on this head, so their buttons stay disabled in the markup with the
         // exclusives_not_on_this_build tooltip and carry no shim.
         // ==================================================================================
+
+        // WPF MainWindow.PlayTab.cs:79-86.
+        private void BtnPlayWebApp_Click(object? sender, RoutedEventArgs e) => Owner?.OpenPlayWebApp();
 
         // ---- GAMES -----------------------------------------------------------------------
 

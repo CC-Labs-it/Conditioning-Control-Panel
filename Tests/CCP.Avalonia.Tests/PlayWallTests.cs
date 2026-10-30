@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -24,6 +25,97 @@ namespace CCP.Avalonia.Tests;
 /// zone, the Graded Intake card's four pass states, and the two doors that land on a section.</summary>
 public sealed class PlayWallTests
 {
+    [Fact]
+    public void WebAppCardUsesBrowserFallbackThenRetiresBanner()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var seen = CoreSettings.Current.SeenFeatureIntros;
+            bool hadKey = seen.Remove(MainShellWindow.WebBannerSeenKey);
+            var previousOpen = MainShellWindow.OpenWebAppLink;
+            var opened = new System.Collections.Generic.List<string>();
+            bool browserTakesIt = false;
+            MainShellWindow.OpenWebAppLink = (_, url) => { opened.Add(url); return Task.FromResult(browserTakesIt); };
+            var shell = new MainShellWindow();
+            shell.Show();
+            try
+            {
+                shell.ShowTab("play");
+                Dispatcher.UIThread.RunJobs();
+                var play = shell.Named<Control>("PlayTab")!;
+                var button = play.FindControl<Button>("BtnPlayWebApp")!;
+                Assert.True(button.IsEnabled);
+                // No browser takes the link: WPF OpenUrlOrPrompt copies it and says so.
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(new[] { "https://app.cclabs.app" }, opened);
+                var prompt = Assert.Single(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>());
+                Assert.Contains("https://app.cclabs.app", prompt.FindControl<TextBlock>("TxtMessage")!.Text);
+                Assert.DoesNotContain(MainShellWindow.WebBannerSeenKey, seen);
+                prompt.Close();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Contains(MainShellWindow.WebBannerSeenKey, seen);
+                Assert.Equal("play", shell.CurrentTab);
+
+                // The browser opens: no prompt, and the beat retires.
+                seen.Remove(MainShellWindow.WebBannerSeenKey);
+                browserTakesIt = true;
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(2, opened.Count);
+                Assert.Empty(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>());
+                Assert.Contains(MainShellWindow.WebBannerSeenKey, seen);
+                Assert.Equal("play", shell.CurrentTab);
+            }
+            finally
+            {
+                foreach (var window in shell.OwnedWindows.ToArray()) window.Close();
+                shell.Close();
+                MainShellWindow.OpenWebAppLink = previousOpen;
+                if (!hadKey) seen.Remove(MainShellWindow.WebBannerSeenKey);
+                else if (!seen.Contains(MainShellWindow.WebBannerSeenKey)) seen.Add(MainShellWindow.WebBannerSeenKey);
+            }
+        });
+    }
+
+    [Fact]
+    public void RestoredGameCardsMatchWpfOrderArtAndTierRims()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var view = new PlayTabView();
+            T C<T>(string name) where T : Control => view.FindControl<T>(name)!;
+            foreach (var name in new[] { "BackRoom", "Dtrh", "Arcademy", "RacingThoughts" })
+            {
+                var button = C<Button>("BtnPlay" + name);
+                Assert.False(button.IsEnabled);
+                Assert.Equal(Loc.Get("exclusives_not_on_this_build"), ToolTip.GetTip(button));
+            }
+            var games = (Panel)C<Grid>("SlotBackRoom").Parent!;
+            Assert.Equal(3, ((global::Avalonia.Controls.Primitives.UniformGrid)games).Columns);
+            Assert.Equal(new[] { "SlotBackRoom", "SlotDtrh", "SlotArcademy", "SlotRacingThoughts", "SlotWebApp" },
+                games.Children.Skip(4).Select(c => c.Name));
+            foreach (var name in new[] { "BackRoom", "Dtrh", "Arcademy", "RacingThoughts", "WebApp" })
+                Assert.NotNull(C<Border>("Play" + name + "HeroPlate").Background);
+            // WPF PlayCardT2 (PlayTabView.xaml:131-132): tier-2 living-metal rim, 3 px.
+            foreach (var slot in new[] { "SlotBreakout", "SlotDtrh", "SlotArcademy" })
+            {
+                var card = (Border)C<Grid>(slot).Children[0];
+                Assert.Equal(2, ConditioningControlPanel.Avalonia.Controls.TierFxBorder.GetTier(card));
+                Assert.Equal(3, ConditioningControlPanel.Avalonia.Controls.TierFxBorder.GetRimThickness(card));
+            }
+
+        });
+    }
+
+
     [Fact]
     public void IntakeCardFollowsThePass_GamesAreHonest_DoorsLandOnTheirSection()
     {
