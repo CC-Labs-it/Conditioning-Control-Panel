@@ -31,6 +31,17 @@ public class TestIsolationTests
         Assert.Empty(bad);
     }
 
+    [Fact]
+    public void SharedPlatformRegistersProductionFontsBeforeAnyTest() =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+        {
+            Assert.NotNull(global::Avalonia.Application.Current);
+            var fonts = global::Avalonia.Media.FontManager.Current;
+            Assert.Equal("Inter", fonts.DefaultFontFamily.Name);
+            Assert.True(fonts.TryGetGlyphTypeface(new global::Avalonia.Media.Typeface("Fredoka, Segoe UI"), out var face));
+            Assert.StartsWith("Fredoka", face!.FamilyName);
+        });
+
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
 
     [Fact]
