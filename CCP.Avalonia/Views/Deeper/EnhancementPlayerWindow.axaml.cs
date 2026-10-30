@@ -169,11 +169,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         // -- controls ------------------------------------------------------------------------
         private readonly Border _statusPill, _mediaTypeIconBg, _sourcePill, _audioPane, _videoPane,
-                                _nowRegionPanel;
+                                _nowRegionPanel, _miniHoverLabel;
         private readonly IconGlyph _mediaTypeIcon, _txtPlayPauseGlyph, _txtCollapseGlyph;
         private readonly TextBlock _statusPillText, _txtEnhName, _txtEnhPath,
                                    _txtEnhMetadata, _txtEnhSource, _txtAudioPath, _txtVideoStatus,
-                                   _txtNowRegion, _txtMiniTimelineReadout, _txtCurrent, _txtTotal,
+                                   _txtNowRegion, _txtMiniTimelineReadout, _txtMiniHoverTime, _txtCurrent, _txtTotal,
                                    _txtStatus,
                                    _txtFilterCountAll, _txtFilterCountActions, _txtFilterCountEngine,
                                    _txtFilterCountErrors;
@@ -263,6 +263,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _miniTimelinePanel = this.FindControl<StackPanel>("MiniTimelinePanel")!;
             _waveformCanvas = this.FindControl<Canvas>("WaveformCanvas")!;
             _miniTimelineCanvas = this.FindControl<Canvas>("MiniTimelineCanvas")!;
+            _miniHoverLabel = this.FindControl<Border>("MiniHoverLabel")!;
+            _txtMiniHoverTime = this.FindControl<TextBlock>("TxtMiniHoverTime")!;
             _waveformPath = this.FindControl<ShapePath>("WaveformPath")!;
             _playheadLine = this.FindControl<Line>("PlayheadLine")!;
             _nowRegionSwatch = this.FindControl<Rectangle>("NowRegionSwatch")!;
@@ -315,6 +317,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
             _miniTimelineCanvas.PointerPressed += MiniTimelineCanvas_PointerPressed;
             _miniTimelineCanvas.PointerMoved += MiniTimelineCanvas_PointerMoved;
+            _miniTimelineCanvas.PointerExited += (_, _) => _miniHoverLabel.IsVisible = false;
             _miniTimelineCanvas.PointerReleased += MiniTimelineCanvas_PointerReleased;
             _miniTimelineCanvas.PointerCaptureLost += (_, _) => _miniScrubbing = false;
             _waveformCanvas.PointerPressed += WaveformCanvas_PointerPressed;
@@ -1593,8 +1596,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void MiniTimelineCanvas_PointerMoved(object? sender, PointerEventArgs e)
         {
-            if (!_miniScrubbing) return;
-            try { SeekToMiniPosition(e.GetPosition(_miniTimelineCanvas).X); } catch { }
+            try
+            {
+                var x = e.GetPosition(_miniTimelineCanvas).X;
+                UpdateMiniHoverLabel(x);
+                if (_miniScrubbing) SeekToMiniPosition(x);
+            }
+            catch { }
+        }
+
+        // WPF EnhancementPlayerWindow.Mission3.cs:734: m:ss under the pointer, kept in the strip.
+        private void UpdateMiniHoverLabel(double xInCanvas)
+        {
+            var w = _miniTimelineCanvas.Bounds.Width;
+            if (w <= 0 || _miniTotalSeconds <= 0 || _miniEnhancement == null)
+            {
+                _miniHoverLabel.IsVisible = false;
+                return;
+            }
+            _txtMiniHoverTime.Text = FormatTime(Math.Clamp(xInCanvas / w, 0, 1) * _miniTotalSeconds);
+            _miniHoverLabel.IsVisible = true;
+            var labelW = _miniHoverLabel.Bounds.Width > 0 ? _miniHoverLabel.Bounds.Width : 36;
+            var left = Math.Clamp(xInCanvas - labelW / 2, 0, Math.Max(0, w - labelW));
+            _miniHoverLabel.Margin = new Thickness(left, 2, 0, 0);
         }
 
         private void MiniTimelineCanvas_PointerReleased(object? sender, PointerReleasedEventArgs e)
