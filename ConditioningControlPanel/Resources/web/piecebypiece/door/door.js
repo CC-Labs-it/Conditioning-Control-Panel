@@ -63,6 +63,7 @@ import { endPlan } from '../ui/ladder-plan.js';
 import { ui } from '../audio/ui-cues.js';
 import { backButton, wireBack } from './back-button.js';
 import { screenIn, leaveGhost, countUp, kick } from './screen-fx.js';
+import { wardrobeHtml, readPick } from './wardrobe.js';
 
 /** Every number the door decides with. */
 export const TUNING = Object.freeze({
@@ -129,6 +130,7 @@ const ICON_PATHS = Object.freeze({
   go: '<path d="M5 12h12.5M13 7l5 5-5 5"/>',
   host: '<path d="M4 11.5h16M6 11.5v8M18 11.5v8M8.5 7.5h7"/><circle cx="12" cy="5" r="1.6"/>',
   replay: '<path d="M4.5 12a7.5 7.5 0 1 1 2.2 5.3"/><path d="M8.5 10.2v3.6l3.2-1.8z" fill="currentColor"/>',
+  wardrobe: '<path d="M10 5.2a2 2 0 1 1 2 2v1.6M12 8.8l-8 5.6c-.9.6-.5 1.9.6 1.9h14.8c1.1 0 1.5-1.3.6-1.9z"/>',
 });
 function ico(name) {
   return `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[name] || ''}</svg>`;
@@ -177,6 +179,8 @@ export function createDoor(opts = {}) {
   const lobby = (opts.lobby && !(isHosted && opts.lobby.debug && opts.lobby.debug.isMock)) ? opts.lobby : null;
   const settings = () => (opts.settings ? opts.settings() : ((typeof window !== 'undefined' && window.PBP && window.PBP.settings) || {}));
   const startGame = typeof opts.startGame === 'function' ? opts.startGame : () => {};
+  // What the player's men wear (skins/wear.js); no wardrobe without one.
+  const wear = opts.wear || null;
   if (!root) return { show() {}, hide() {}, isUp: () => false, debug: () => ({ ok: false, why: 'no #door' }), dispose() {} };
 
   const veil = document.createElement('div'); veil.className = 'door-veil';
@@ -334,7 +338,8 @@ export function createDoor(opts = {}) {
     // the ghost stays (it removes itself); everything else goes
     for (const n of Array.from(card.children)) if (!n.classList.contains('fx-ghost')) n.remove();
     const body = document.createElement('div'); body.className = 'door-body screen-' + screen;
-    body.innerHTML = ({ menu, lobby: lobbyScreen, found, games, profile, replay: replayScreen, end, ladder: () => ladder.screenHtml(me()) }[screen] || menu)();
+    body.innerHTML = ({ menu, lobby: lobbyScreen, found, games, profile, replay: replayScreen, end, ladder: () => ladder.screenHtml(me()),
+      wardrobe: () => wardrobeHtml(wear, { esc, bar, bigBtn, hosted: !!host.isHosted }) }[screen] || menu)();
     card.prepend(body);   // first, so every card.querySelector finds the live screen before a ghost
     if (fresh) land(body);
     if (screen === 'end' && endRating) ladder.mountEnd(body.querySelector('.rating-slot'), endRating, { still: still(), sfx });
@@ -431,6 +436,8 @@ export function createDoor(opts = {}) {
     stakeChip.hidden = false;
   }
   unbind.push(stake.subscribe(paintStake));
+  // A buy at the counter (the host re-sends the grants) repaints the open wardrobe.
+  if (wear) unbind.push(wear.onChange(() => { if (screen === 'wardrobe') render(); }));
 
   // ---------------------------------------------------------------- screens
   const me = () => playerName(settings());
@@ -453,8 +460,9 @@ export function createDoor(opts = {}) {
       <details class="door-setup"><summary><span class="chev" aria-hidden="true"></span><span>Solo setup</span><span class="k">${esc(setupWord())}</span></summary>
         <div class="door-settings"><div class="setup-slot">${setupHtml()}</div>
         ${saved ? '<p class="door-sub">A new solo game replaces your unfinished one.</p>' : ''}</div></details>
-      <div class="door-tiles${pictures.available() ? '' : ' three'}">
+      <div class="door-tiles${({ 3: ' three', 5: ' five' })[3 + (wear ? 1 : 0) + (pictures.available() ? 1 : 0)] || ''}">
         ${tile('games', 'games', 'Past games')}${tile('profile', 'profile', 'Profile')}${tile('ladder', 'ladder', 'Ladder')}
+        ${wear ? tile('wardrobe', 'wardrobe', 'Wardrobe') : ''}
         ${pictures.available() ? tile('pictures', 'pictures', 'Pictures') : ''}
       </div>`;
   }
@@ -990,6 +998,7 @@ export function createDoor(opts = {}) {
     try { if (typeof game.switchBack === 'function') game.switchBack(); } catch { /* one driver only */ }
     try { game.reset(); board.pieces.setPosition(game.rules.position()); } catch { /* the board stays as it is */ }
     try { board.setSide('w', true); } catch { /* no rig */ }
+    try { wear?.toMenu?.(); } catch { /* the men keep what they wear */ }
     show('menu');
   }
 
@@ -1106,6 +1115,16 @@ export function createDoor(opts = {}) {
       case 'games': show('games'); break;
       case 'profile': show('profile'); break;
       case 'ladder': ladderFrom = screen === 'lobby' ? 'lobby' : 'menu'; show('ladder'); Promise.all([ladder.loadTop(), freshMe()]).then(() => { if (screen === 'ladder') render(); }); break;
+      case 'wardrobe': if (wear) show('wardrobe'); break;
+      case 'wear': {
+        const pick = readPick(id);
+        if (!wear || !pick) break;
+        if (!wear.choose(pick[0], pick[1])) { nope(); break; }
+        render();
+        picked(`.ward-row [data-id="${pick[0]}:${pick[1] || ''}"]`);
+        break;
+      }
+      case 'counter': if (wear) wear.openCounter(); break;
       case 'pictures': Promise.resolve(pictures.manage({ still: still() })).then(() => { if (screen === 'menu') render(); }).catch(() => {}); break;
       case 'challenge': if (lobby) gate(() => look(afterHost(() => lobby.challenge(id)))); break;
       case 'cancel': try { if (lobby) lobby.cancel(); } catch { /* fine */ } break;

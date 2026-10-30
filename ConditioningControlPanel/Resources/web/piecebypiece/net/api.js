@@ -25,6 +25,7 @@
  * ==========================================================================*/
 
 import { netRequest, netInfo, identity } from '../bridge.js';
+import { wireLook } from '../skins/look.js';
 
 /** The one place the base path is written down. */
 export const BASE = '/v2/pbp';
@@ -216,9 +217,23 @@ function withWatch(body) {
   return yes ? body : Object.assign(body, { watchable: false });
 }
 
+/**
+ * What the player's men wear (skins/wear.js), on every call that seats them:
+ * `look: { set, banner, insignia }` (Prize Counter contract 4). The server
+ * clamps it to the account's grants and hands both seats' looks back in the
+ * match state. A bare look sends no field, so an old server never sees one.
+ */
+let lookSource = () => null;
+export function setLookSource(fn) { lookSource = (typeof fn === 'function') ? fn : () => null; }
+function withLook(body) {
+  let look = null;
+  try { look = wireLook(lookSource()); } catch { look = null; }
+  return look ? Object.assign(body, { look }) : body;
+}
+
 /** Sit down in the lobby, advertising a time control. */
 export function lobbyEnter(tc) {
-  return call('POST', ROUTES.lobbyEnter(), withWatch(withIdentity({ time_control: tc })));
+  return call('POST', ROUTES.lobbyEnter(), withLook(withWatch(withIdentity({ time_control: tc }))));
 }
 
 /** Stand up again. Best-effort at every call site: a lost goodbye must not wedge anything. */
@@ -238,7 +253,7 @@ export function lobbyList() {
  * server's word rides on `serverError`).
  */
 export function join(target) {
-  return call('POST', ROUTES.join(), withWatch(withIdentity({ target })));
+  return call('POST', ROUTES.join(), withLook(withWatch(withIdentity({ target }))));
 }
 
 /**
@@ -246,7 +261,7 @@ export function join(target) {
  * or `{ waiting: true }` (you are in the queue; ask again).
  */
 export function quick(tc) {
-  return call('POST', ROUTES.quick(), withWatch(withIdentity({ time_control: tc })));
+  return call('POST', ROUTES.quick(), withLook(withWatch(withIdentity({ time_control: tc }))));
 }
 
 /**
@@ -259,12 +274,12 @@ export function challenge(target, tc, color) {
   if (tc) body.time_control = tc;
   if (color === 'w' || color === 'b' || color === 'random') body.color = color;
   // a challenge to a lobby row is a public, listed game; the server ignores it on a friend's invite
-  return call('POST', ROUTES.challenge(), withWatch(withIdentity(body)));
+  return call('POST', ROUTES.challenge(), withLook(withWatch(withIdentity(body))));
 }
 
 /** Take one up. Answers `{ match_id, color }`. */
 export function acceptChallenge(id) {
-  return call('POST', ROUTES.challengeAccept(id), withWatch(withIdentity({})));
+  return call('POST', ROUTES.challengeAccept(id), withLook(withWatch(withIdentity({}))));
 }
 
 /** Turn one down. Either side may: the challenger declining his own is a cancel. */

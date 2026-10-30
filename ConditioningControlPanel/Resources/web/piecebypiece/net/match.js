@@ -626,6 +626,8 @@ export function createOnlineMatch({
       seatKnown = true;
       if (changed) bus.emit('seat', { color: me });
     }
+    // What each seat wears (Prize Counter contract 4), already clamped by the server.
+    if (state.looks && typeof state.looks === 'object') bus.emit('looks', { white: state.looks.white || null, black: state.looks.black || null });
     if (state.white || state.black) {
       bus.emit('players', {
         white: state.white || null,
