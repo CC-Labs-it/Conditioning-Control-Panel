@@ -37,10 +37,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             return (JustDropHandoff.AuthHeaderName, token);
         }
 
+        private bool _handoffFellBack;
+
+        /// <summary>WPF AttachAuthHeader's NavigationCompleted (JustDropHostService.cs:176-188, ccp-bugs #1499):
+        /// a refused handoff navigates ONCE to the signed-out destination instead of showing the raw JSON.</summary>
+        private void FallBackOnRefusedHandoff(Uri completed, string nextPath)
+        {
+            if (_handoffFellBack || !JustDropHandoff.IsRefusedHandoff(completed)) return;
+            _handoffFellBack = true;
+            Log.Warning("[Game] justdrop: sign-in handoff refused; opening signed-out");
+            Web.Navigate(new Uri(JustDropHandoff.SiteOrigin + nextPath));
+        }
+
         /// <summary>WPF Launch(ShopPath) (:75-158): windowed, the panel stays where it is (this is browsing).</summary>
         private void LoadJustDrop()
         {
-            PageUrl = new Uri(JustDropHandoff.BuildStartUrl(Spec.Query ?? JustDropHandoff.ShopPath, JustDropHandoff.UnifiedId(), JustDropHandoff.AuthToken()));
+            var nextPath = Spec.Query ?? JustDropHandoff.ShopPath;
+            PageUrl = new Uri(JustDropHandoff.BuildStartUrl(nextPath, JustDropHandoff.UnifiedId(), JustDropHandoff.AuthToken()));
+            Web.NavigationCompleted += url => FallBackOnRefusedHandoff(url, nextPath);
             Web.AllowNavigation = JustDropHandoff.IsSite;
             Web.RequestHeader = uri => JustDropHeaderFor(uri, JustDropHandoff.AuthToken());
             Web.InjectCarrier = true;   // the remote page speaks chrome.webview; WebKitGTK needs the shim
