@@ -253,7 +253,7 @@ test('signed out: back still leaves, select asks for the sign-in, the rest does 
 
 test('windowShelves: the art in four bays by family, no Back Room rows, no prices, at most nine a bay', () => {
   const items = JSON.parse(readFileSync(new URL('../assets/manifest.json', import.meta.url), 'utf8')).items;
-  const shelves = windowShelves(items);
+  const shelves = windowShelves(items, { rain: true });
   assert.equal(shelves.length, 4);
   const fam = new Map(items.map((i) => [i.id, i.family]));
   shelves.forEach((s, bay) => {
@@ -265,4 +265,16 @@ test('windowShelves: the art in four bays by family, no Back Room rows, no price
   });
   assert.deepEqual(shelves[2].rows.map((r) => fam.get(r.id)), ['chess', 'chess', 'chess', 'chess', 'chess', 'chess', 'desk', 'desk', 'desk']);
   assert.deepEqual(windowShelves(null).map((s) => s.rows.length), [0, 0, 0, 0]);
+});
+
+test('windowShelves: without init.rainV2 no Rain art, no portrait, and no empty bay', () => {
+  const items = JSON.parse(readFileSync(new URL('../assets/manifest.json', import.meta.url), 'utf8')).items;
+  const fam = new Map(items.map((i) => [i.id, i.family]));
+  const rows = windowShelves(items).map((s) => s.rows);
+  assert.equal(rows.length, 4);
+  rows.forEach((r, bay) => assert.ok(r.length > 0, `bay ${bay}`));
+  const ids = rows.flat().map((r) => r.id);
+  assert.ok(!ids.some((id) => fam.get(id) === 'rain'));
+  assert.ok(!ids.includes('profile.avatar.rain-portrait'));
+  assert.ok(windowShelves(items, { rain: true }).flatMap((s) => s.rows).some((r) => r.id.startsWith('rain.')));
 });

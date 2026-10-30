@@ -160,6 +160,14 @@ public class RainV2GateTests
     }
 
     [Fact]
+    public void GateOff_TheSignedOutWindowHasNoRainArt()
+    {
+        // The counter hides the Rain bay and the portrait unless the host says otherwise.
+        Assert.Contains("rainV2 = Companion.RainV2Gate.On,", Src("Services", "PrizeCounter", "PrizeCounterHostService.cs"));
+        Assert.Contains("windowShelves(scene.items, { rain: init.rainV2 === true })", Src("Resources", "web", "prizecounter", "main.js"));
+    }
+
+    [Fact]
     public void GateOff_TheEmiBookHasNoRainPage()
     {
         Assert.DoesNotContain(EmiBookDeckShop.Shipping(false), c => c.Id == "rain");

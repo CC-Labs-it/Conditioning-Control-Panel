@@ -75,7 +75,7 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
       root.classList.toggle('pc-signed-out', out);
       // Signed out: the art hangs as a window display (no prices) behind the sign-in button.
       // A portrait view frames one bay of it; the whole counter would be a strip across the middle.
-      if (out && scene) scene.showTab('window', windowShelves(scene.items))
+      if (out && scene) scene.showTab('window', windowShelves(scene.items, { rain: init.rainV2 === true }))
         .then(() => { if (canvas.clientWidth < canvas.clientHeight) scene.frameBay(0); }).catch((e) => host.log(`prizecounter: no window display (${(e && e.message) || e})`));
     }
     if (ch.buy) ch.buy.then(apply);
