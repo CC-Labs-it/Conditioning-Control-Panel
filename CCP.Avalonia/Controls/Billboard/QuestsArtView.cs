@@ -31,12 +31,14 @@ public sealed class QuestsArtView : Control, IBillboardArtView
 
     public int Shown => _shown;
     public int DoneShown => _done;
+    internal bool ShowSheen = true, ShowStamp = true; // Isolate effects in render proofs.
+    internal double Seconds => _time;
     internal bool Running => _beat.IsRunning;
     internal void Frame(double t) { _time = t; InvalidateVisual(); }
     public void Run()
     {
         if (_released) return;
-        if (!Env.AllowAmbientLoops) { Hold(); _time = 1.6; InvalidateVisual(); return; }
+        if (!Env.AllowAmbientLoops) { Hold(); InvalidateVisual(); return; }
         if (!_beat.IsRunning) _beat.Start();
     }
     public void Hold() { if (_beat.IsRunning) _held = _time; _beat.Stop(); }
@@ -132,9 +134,7 @@ public sealed class QuestsArtView : Control, IBillboardArtView
                 if (next)
                 {
                     d.DrawRectangle(null, new Pen(Fill(Pink, 0.4 + 0.2 * Math.Sin(t * 3.1)), sh * 0.05), new Rect(-sw / 2 - sh * 0.06, -sh * 0.56, sw + sh * 0.12, sh * 1.12), sh * 0.2, sh * 0.2);
-                    // A clipped glint travels across the next open slip.
-                    using (d.PushClip(new RoundedRect(new Rect(-sw / 2, -sh / 2, sw, sh), sh * 0.16)))
-                        d.DrawRectangle(Fill(Colors.White, 0.18), null, new Rect(-sw / 2 + (t % 2.9) / 2.9 * sw, -sh / 2, sh * 0.2, sh));
+                    if (ShowSheen) PaintSheen(d, new Rect(-sw / 2, -sh / 2, sw, sh), t);
                     double poke = p >= 3.25 && p < 3.7 ? Math.Sin((p - 3.25) / 0.45 * Math.PI) * sh * 0.224 : 0;
                     using (d.PushTransform(new Matrix(sh * 0.364, 0, 0, sh * 0.364, -sw / 2 - sh * 0.53 + Math.Sin(t * 3.2) * sh * 0.056 + poke, 0))) d.DrawGeometry(Fill(Pink), null, Arrow);
                 }
@@ -149,18 +149,48 @@ public sealed class QuestsArtView : Control, IBillboardArtView
                 }
             }
         }
+        if (ShowStamp) PaintStamp(d, sh, sw, bh, y0, gap, target, p);
+    }
+
+    internal static void PaintSheen(DrawingContext d, Rect bounds, double t)
+    {
+        double u = (t + 0.4) / 2.9, k = (u - Math.Floor(u)) / 0.32;
+        if (k <= 0 || k >= 1) return;
+        double band = Math.Max(8, bounds.Width * 0.22);
+        double x = bounds.Left - band + Ease(k) * (bounds.Width + band * 2 + bounds.Height * 0.5);
+        var g = new StreamGeometry();
+        using (var c = g.Open())
+        {
+            c.BeginFigure(new Point(x, bounds.Top), true);
+            c.LineTo(new Point(x + band, bounds.Top));
+            c.LineTo(new Point(x + band - bounds.Height * 0.5, bounds.Bottom));
+            c.LineTo(new Point(x - bounds.Height * 0.5, bounds.Bottom));
+            c.EndFigure(true);
+        }
+        var brush = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0.5, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 0.5, RelativeUnit.Relative),
+            GradientStops = { new GradientStop(Color.FromArgb(0, 255, 255, 255), 0), new GradientStop(Color.FromArgb(0x60, 255, 255, 255), 0.5), new GradientStop(Color.FromArgb(0, 255, 255, 255), 1) },
+        };
+        using var clip = d.PushClip(new RoundedRect(bounds, bounds.Height * 0.16));
+        using var opacity = d.PushOpacity(0.95 * Math.Sin(k * Math.PI));
+        d.DrawGeometry(brush, null, g);
+    }
+
+    internal static Matrix StampTransform(double p, double sh, double bh, double x, double y)
+    {
+        var f = QuestClipboard.StampFrame(p, sh, bh);
+        return Matrix.CreateScale(f.Sx, f.Sy) * Matrix.CreateRotation(f.Tilt * Math.PI / 180) * Matrix.CreateTranslation(x, y + f.Y);
+    }
+
+    internal static void PaintStamp(DrawingContext d, double sh, double sw, double bh, double y0, double gap, int target, double p)
+    {
         if (target >= 0 && p >= 0.6 && p <= 3.2)
         {
-            double y, alpha = 1, sx = 1, sy = 1;
-            double hover = -sh * 0.9;
-            if (p < 1.2) { double e = Ease((p - 0.6) / 0.6); y = -bh * 0.75 + (hover + bh * 0.75) * e; alpha = e; }
-            else if (p < 1.5) y = hover - Math.Sin((p - 1.2) / 0.3 * Math.PI / 2) * sh * 0.35;
-            else if (p < 1.62) { double k = (p - 1.5) / 0.12; y = (hover - sh * 0.35) * (1 - k * k); sy = 1.08; sx = 0.95; }
-            else if (p < 2.3) { y = 0; sy = 1 - 0.22 * Math.Exp(-(p - 1.62) * 9) * Math.Cos((p - 1.62) * 28); sx = 2 - sy; }
-            else { double e = Ease((p - 2.3) / 0.9); y = -e * bh * 0.75; alpha = 1 - e; }
+            var f = QuestClipboard.StampFrame(p, sh, bh);
             double s = sh * 1.4;
-            using var fade = d.PushOpacity(alpha);
-            using var stamp = d.PushTransform(new Matrix(sx, 0, 0, sy, -sw / 2 + sh * 0.5, y0 + target * (sh + gap) + sh * 0.62 + y));
+            using var fade = d.PushOpacity(f.Alpha);
+            using var stamp = d.PushTransform(StampTransform(p, sh, bh, -sw / 2 + sh * 0.5, y0 + target * (sh + gap) + sh * 0.62));
             Plate(d, new Rect(-s * 0.4, -s * 0.13, s * 0.8, s * 0.13), s * 0.03, Fill(Ink));
             Plate(d, new Rect(-s * 0.36, -s * 0.5, s * 0.72, s * 0.38), s * 0.08, Face(Pink, Color.Parse("#993366")), s * 0.03);
             Plate(d, new Rect(-s * 0.09, -s * 0.78, s * 0.18, s * 0.3), s * 0.04, Fill(Color.Parse("#8a629c")));

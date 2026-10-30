@@ -52,4 +52,25 @@ public sealed class QuestClipboardTests
         Assert.Equal(QuestClipboard.BoardHeight(340, 1), QuestClipboard.BoardHeight(340, 0));
         Assert.Equal(QuestClipboard.BoardHeight(340, 5), QuestClipboard.BoardHeight(340, 8));
     }
+    [Theory]
+    [InlineData(0.6, -150, 0, 10, 1, 1)]
+    [InlineData(0.9, -32.925, 0.875, 1.25, 1, 1)]
+    [InlineData(1.5, -22.5, 1, -4, 0.95, 1.08)]
+    [InlineData(1.56, -16.875, 1, -2, 0.95, 1.08)]
+    [InlineData(1.62, 0, 1, 0, 1.22, 0.78)]
+    [InlineData(2.75, -131.25, 0.125, 7, 1, 1)]
+    public void StampFollowsWpfBeats(double p, double y, double alpha, double tilt, double sx, double sy)
+    {
+        var f = QuestClipboard.StampFrame(p, 18, 200);
+        Assert.Equal(y, f.Y, 6); Assert.Equal(alpha, f.Alpha, 6); Assert.Equal(tilt, f.Tilt, 6);
+        Assert.Equal(sx, f.Sx, 6); Assert.Equal(sy, f.Sy, 6);
+    }
+
+    [Fact]
+    public void StampStretchesDuringWindUp()
+    {
+        var f = QuestClipboard.StampFrame(1.35, 18, 200);
+        Assert.Equal(-2.828427, f.Tilt, 6);
+        Assert.Equal(0.971716, f.Sx, 6); Assert.Equal(1.042426, f.Sy, 6);
+    }
 }

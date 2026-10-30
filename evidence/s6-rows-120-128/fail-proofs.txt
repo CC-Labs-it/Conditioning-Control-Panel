@@ -29,3 +29,9 @@ art: freeze the sampled frame at zero, exit=1
   Failed CCP.Avalonia.Tests.QuestClipboardArtTests.ClipboardPaintsTheLoopAndReleasesItsClock [1 s]
    The clipboard story must change across the loop.
 Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 1 s - CCP.Avalonia.Tests.dll (net10.0)
+Review glint-gate exit=1: Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 637 ms - CCP.Avalonia.Tests.dll (net10.0)
+Review stamp-tracks exit=1: Failed!  - Failed:     7, Passed:     0, Skipped:     0, Total:     7, Duration: 29 ms - CCP.Core.Tests.dll (net10.0)
+Review pause-jump exit=1: Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 502 ms - CCP.Avalonia.Tests.dll (net10.0)
+Review registration exit=1: Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 499 ms - CCP.Avalonia.Tests.dll (net10.0)
+Review missing-glint exit=1: Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 548 ms - CCP.Avalonia.Tests.dll (net10.0)
+Review missing-stamp exit=1: Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 552 ms - CCP.Avalonia.Tests.dll (net10.0)

@@ -22,3 +22,12 @@ Attempt failed during shell construction: Could not create glyphTypeface, Segoe 
 The failure is in PremiumSpark.BuildLabel before provider assertions, not in the clipboard.
 No font substitution, test skip or assertion weakening was introduced.
 Final docs check: avalonia_docs self-check OK; git diff --check: clean.
+Review follow-up on 85fe501d0: all four P2 findings fixed; WPF remains unchanged.
+Spec: BillboardVectorArt.cs:372 Sheen, QuestsArtView.cs:333 PaintStamp, BillboardVectorArt.cs:54 Play/Pause.
+SDK command: /tmp/ccp-dotnet/dotnet (10.0.403).
+Review final builds, --no-restore: CCP.Core 0 errors; CCP.Avalonia 0 errors; CCP.Avalonia.Tests 0 errors.
+Review final Core suite: Passed 4651, Failed 0, Skipped 6, Total 4657, Duration 37 s.
+Review final QuestClipboardArtTests: Passed 6, Failed 0, Skipped 0, Duration 4 s.
+Review registration uses the shell provider factory without font-dependent shell chrome.
+Six review mutations failed their assertions, then were restored: see fail-proofs.txt.
+Review final core-guards.sh: All Core guards passed; avalonia_docs.py: self-check OK; diff --check: clean.
