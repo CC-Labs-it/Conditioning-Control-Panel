@@ -596,6 +596,7 @@
       Resources\web\piecebypiece\**\*.md;
       Resources\web\piecebypiece\package.json;
       Resources\web\dtrh\tests\**\*;
+      Resources\web\rain-wardrobe\tests\**\*;
       Resources\web\intake\tests\**\*
     </ArcademyHarnessExclude>
     <!-- Remix engine (Resources\web\remix, vendored from cclabs-site/remix for the Jackpot Remix
@@ -628,6 +629,7 @@
       $(MSBuildProjectDirectory)\Resources\web\piecebypiece\**\*.md;
       $(MSBuildProjectDirectory)\Resources\web\piecebypiece\package.json;
       $(MSBuildProjectDirectory)\Resources\web\dtrh\tests\**\*;
+      $(MSBuildProjectDirectory)\Resources\web\rain-wardrobe\tests\**\*;
       $(MSBuildProjectDirectory)\Resources\web\intake\tests\**\*
     </ArcademyHarnessExcludeAbs>
   </PropertyGroup>
