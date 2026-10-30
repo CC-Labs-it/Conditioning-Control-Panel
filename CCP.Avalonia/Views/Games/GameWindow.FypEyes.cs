@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -23,6 +24,8 @@ internal sealed partial class GameWindow
     internal Func<Task> FypStopCamera = () => WebcamTracker.Instance.StopAsync();
     // The tracker is shared across feed visits. WPF FypHostService.cs:1019 stops synchronously.
     private static Task _fypCameraStop = Task.CompletedTask;
+    // WPF FypHostService.cs:928 shares its startup guard across every feed visit.
+    private static readonly SemaphoreSlim FypEyeStartup = new(1, 1);
     internal Func<Task<bool>>? FypConsent;
     internal Func<Task>? FypCalibration;
 
@@ -39,6 +42,7 @@ internal sealed partial class GameWindow
     {
         if (_fypEyeEnabling || _fypEyeSubscribed || _closing) return;
         _fypEyeEnabling = true;
+        await FypEyeStartup.WaitAsync();
         try
         {
             await Task.Yield(); // leave the browser callback before opening a modal dialog
@@ -67,13 +71,19 @@ internal sealed partial class GameWindow
             PostFypEyeStatus(null);
         }
         catch (Exception ex) { Log.Warning("[FYP] eye enable failed: {E}", ex.Message); FailFypEyes("error"); }
-        finally { _fypEyeEnabling = false; }
+        finally
+        {
+            // A closed visit must finish returning its late camera before the next visit starts.
+            try { await _fypCameraStop; }
+            finally { _fypEyeEnabling = false; FypEyeStartup.Release(); }
+        }
     }
 
     private void FailFypEyes(string reason)
     {
-        CoreSettings.Current.FypEyeControl = false;
         DisableFypEyes();
+        if (_closing) return; // a stale visit cannot turn off the current visit's saved setting
+        CoreSettings.Current.FypEyeControl = false;
         PostFypEyeStatus(reason);
     }
 

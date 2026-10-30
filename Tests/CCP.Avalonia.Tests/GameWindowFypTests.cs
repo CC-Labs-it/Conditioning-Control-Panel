@@ -333,6 +333,88 @@ public sealed class GameWindowFypTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
+    public void Eyes_ReopenDuringStartup_WaitsForStartupAndCleanup(bool firstStarts) => Run((_, _) =>
+    {
+        CoreEntitlement.HasPremiumProvider = () => true;
+        var first = new TaskCompletionSource<bool>();
+        var stop = new TaskCompletionSource<bool>();
+        bool busy = false, running = false;
+        int starts = 0, stops = 0;
+        async Task<bool> StartCamera()
+        {
+            starts++;
+            if (busy) return false; // WebcamTracker.Start refuses a second start while busy.
+            if (starts == 1)
+            {
+                busy = true;
+                try { running = await first.Task; }
+                finally { busy = false; }
+            }
+            else running = true;
+            return running;
+        }
+        async Task StopCamera()
+        {
+            stops++;
+            await stop.Task;
+            running = false;
+        }
+        void Configure(GameWindow window)
+        {
+            window.FypConsent = () => Task.FromResult(true);
+            window.FypCameraRunning = () => running;
+            window.FypStartCamera = StartCamera;
+            window.FypStopCamera = StopCamera;
+        }
+        var old = GameWindow.Launch(GameWindow.FypId)!;
+        Configure(old);
+        old.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(busy);
+        old.Close();
+        var current = GameWindow.Launch(GameWindow.FypId)!;
+        Configure(current);
+        var sent = new List<JObject>();
+        current.Posted += json => sent.Add(JObject.Parse(json));
+        current.HandleMessage("{\"type\":\"ready\"}"); // saved eye setting re-arms the new visit
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, starts);
+            Assert.True(CoreSettings.Current.FypEyeControl);
+            Assert.False(current.FypEyeTask!.IsCompleted);
+            first.SetResult(firstStarts);
+            Dispatcher.UIThread.RunJobs();
+            if (firstStarts)
+            {
+                Assert.Equal(1, stops);
+                Assert.Equal(1, starts);
+                Assert.False(current.FypEyeTask.IsCompleted);
+            }
+            stop.SetResult(true);
+            Wait(old.FypEyeTask!);
+            Wait(current.FypEyeTask);
+            Assert.Equal(2, starts);
+            Assert.Equal(firstStarts ? 1 : 0, stops);
+            Assert.True(running);
+            Assert.True(CoreSettings.Current.FypEyeControl);
+            sent.Clear();
+            WebcamTracker.Instance.RaiseBlinkForTest();
+            Assert.Equal("blink", (string?)Assert.Single(sent)["type"]);
+        }
+        finally
+        {
+            first.TrySetResult(firstStarts);
+            stop.TrySetResult(true);
+            Wait(old.FypEyeTask!);
+            Wait(current.FypEyeTask!);
+            current.Close();
+        }
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
     public void Eyes_ClosingOrDisablingDuringCameraStart_ReleasesLateCamera(bool close) => Run((_, _) =>
     {
         CoreEntitlement.HasPremiumProvider = () => true;
