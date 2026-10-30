@@ -87,6 +87,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_pbpOpen) return;
             _pbpOpen = true;
+            // WPF PieceByPieceHostService.cs:230-232: keys work before the first click.
+            Dispatcher.UIThread.Post(() => { if (!_closing) Web.FocusPage(); }, DispatcherPriority.Loaded);
             _pbpLastBeatUtc = _pbpLastProgressUtc = DateTime.UtcNow;
             Closed += (_, _) => ClosePbp();
             _pbpWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
@@ -178,7 +180,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             PbpBootFailedThisSession = false;
             _pbpLastBeatUtc = _pbpLastProgressUtc = DateTime.UtcNow;
             _pbpPinged = false;
-            try { Web.Focus(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // WPF PieceByPieceHostService.cs:284: focus the native child, not its wrapper.
+            try { Web.FocusPage(); } catch (Exception ex) { Diag.Swallowed(ex); }
             return _pbpBootFrames ??= PostPbpBootFrames();
         }
 
