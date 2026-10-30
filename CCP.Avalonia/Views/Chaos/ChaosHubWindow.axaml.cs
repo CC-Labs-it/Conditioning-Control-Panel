@@ -16,6 +16,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Localization;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
@@ -599,7 +600,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             line.Children.Add(new IconGlyph { Kind = IconKind.LockClosed, Size = 13, Margin = new Thickness(0, 0, 5, 0) });
             var text = new TextBlock
             {
-                Text = def.Text, FontSize = 10.5, FontStyle = FontStyle.Italic,
+                Text = Loc.Get($"chaos_lesson_{id}_text"), FontSize = 10.5, FontStyle = FontStyle.Italic,
                 Foreground = new SolidColorBrush(Color.FromArgb(0xB0, accent.R, accent.G, accent.B)),
                 TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Right,
             };
@@ -631,20 +632,57 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             });
             panel.Children.Add(new TextBlock
             {
-                Text = $"lesson: {progress} of {target}", FontSize = 10.5,
+                Text = Loc.GetF("chaos_lesson_count", progress, target), FontSize = 10.5,
                 Foreground = new SolidColorBrush(Color.FromArgb(0xA0, 0xB8, 0xB8, 0xD0)),
                 HorizontalAlignment = HorizontalAlignment.Right,
             });
-            ToolTip.SetTip(panel, new StackPanel
+            // WPF ChaosTips.cs:20-66, called by ChaosHubWindow.Lessons.cs:75-79.
+            AttachLessonTip(panel, new StackPanel
             {
+                MaxWidth = 260,
                 Children =
                 {
-                    new TextBlock { Text = progress <= 0 ? "the lesson" : "the lesson, half-learned" },
-                    new TextBlock { Text = string.IsNullOrEmpty(def.Detail) ? def.Text : def.Detail, TextWrapping = TextWrapping.Wrap },
-                    new TextBlock { Text = $"progress: {progress} of {target}" },
+                    new TextBlock
+                    {
+                        Text = Loc.Get(progress <= 0 ? "chaos_lesson_title" : "chaos_lesson_started"),
+                        FontWeight = FontWeight.Bold, FontSize = 13, Foreground = new SolidColorBrush(accent),
+                    },
+                    new TextBlock
+                    {
+                        Text = Loc.Get($"chaos_lesson_{id}_detail"), FontSize = 12, TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 3, 0, 0), Foreground = new SolidColorBrush(Color.FromArgb(0xDD, 0xE0, 0xE0, 0xF0)),
+                    },
+                    new TextBlock
+                    {
+                        Text = Loc.GetF("chaos_lesson_progress", progress, target), FontSize = 12, TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 3, 0, 0), Foreground = GoldBrush,
+                    },
                 },
             });
             return panel;
+        }
+
+        // WPF ChaosTips.cs:54-66. Avalonia has no ShowDuration, so stop a one-shot
+        // UI timer on close/detach and restart it for each opening.
+        internal static DispatcherTimer AttachLessonTip(Control target, StackPanel content)
+        {
+            ToolTip.SetTip(target, new ToolTip
+            {
+                Content = content,
+                Background = new SolidColorBrush(Color.FromArgb(0xF2, 0x15, 0x12, 0x26)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x55, 0xFF, 0x69, 0xB4)),
+                Foreground = Brushes.White, Padding = new Thickness(10, 8, 10, 8),
+            });
+            ToolTip.SetShowDelay(target, 250);
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+            timer.Tick += (_, _) => { timer.Stop(); ToolTip.SetIsOpen(target, false); };
+            target.GetObservable(ToolTip.IsOpenProperty).Subscribe(new AnonymousObserver<bool>(open =>
+            {
+                timer.Stop();
+                if (open) timer.Start();
+            }));
+            target.DetachedFromVisualTree += (_, _) => { timer.Stop(); ToolTip.SetIsOpen(target, false); };
+            return timer;
         }
 
         /// <summary>The card every shelf row sits in: gold edge while switched on, pink otherwise,
@@ -879,7 +917,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 {
                     // WPF ChaosHubWindow.xaml.cs:731-747: rank, her script, then lesson.
                     var held = BuyButton(Glyphed(13, "Unlock", IconKind.Sparkle, $"{b.UnlockCost}"), b.Id, false, BoonUnlock_Click);
-                    ToolTip.SetTip(held, "she sells these in an order of her own.");
+                    ToolTip.SetTip(held, Loc.Get("chaos_accessory_script_lock"));
                     ToolTip.SetShowOnDisabled(held, true);
                     right.Children.Add(held);
                 }
