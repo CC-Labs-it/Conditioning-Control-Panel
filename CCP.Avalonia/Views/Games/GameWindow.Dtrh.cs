@@ -45,6 +45,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>The host's own clock inside a descent (P08); tests step it.</summary>
         internal static Func<DateTime> DtrhUtcNow = () => DateTime.UtcNow;
 
+        internal static Action<string> DtrhOpenCheckout = url => ExternalOpener.Open(url);
+
         private bool IsDtrh => string.Equals(Spec.Id, DtrhId, StringComparison.OrdinalIgnoreCase);
         private bool _dtrhRunActive, _dtrhExiting;
         private JObject? _dtrhLastProgress;
@@ -68,6 +70,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             switch ((string?)o["type"])
             {
+                case "funnel":
+                    ConditioningControlPanel.Services.Funnel.FunnelPageMessage.Handle(o, DtrhOpenCheckout, !_dtrhRunActive && !_dtrhExiting && !_closing);
+                    return true;
                 case "ready":
                     IsReady = true;
                     OnDtrhPageReady();
