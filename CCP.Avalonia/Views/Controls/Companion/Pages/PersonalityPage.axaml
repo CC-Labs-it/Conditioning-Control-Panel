@@ -15,6 +15,9 @@
             <!-- Presets, re-interview, adjust -->
             <ContentControl x:Name="PresetsHost" Focusable="False" Margin="0,0,0,16"/>
 
+            <Button Click="OpenStudio_Click" Content="{loc:Str companion_studio_title}"
+                    HorizontalAlignment="Left" Margin="0,0,0,16"/>
+
             <!-- Advanced: the full prompt editor (trait dashboard, fork, knowledge links) -->
             <Border x:Name="AdvancedRow" Background="#14FFFFFF" CornerRadius="10" Padding="16" Margin="0,0,0,16">
                 <Grid ColumnDefinitions="*,Auto">
