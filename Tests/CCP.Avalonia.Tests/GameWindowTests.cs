@@ -1085,10 +1085,81 @@ public sealed partial class GameWindowTests
 
             shell.HandlePanicKeyPress(t0.AddSeconds(1));                          // again within 2 s: panic
             Dispatcher.UIThread.RunJobs();
+            Assert.True(GameWindow.IsAnyOpen()); // WPF gives the page its settlement window
+            Assert.Equal("end-run", (string?)sent.Last()["type"]);
+            Assert.Equal("host", (string?)sent.Last()["reason"]);
+            Assert.False(w.KeptEscapeReady);
+            w.HandleMessage("{\"type\":\"exit-done\"}");
             Assert.False(GameWindow.IsAnyOpen());
             Assert.False(shellClosed);                                            // a game owned the screen: no exit rung
         }
         finally { (s.PanicKey, s.PanicKeyEnabled) = (oldKey, oldEnabled); }
+    });
+
+    /// <summary>WPF DtrhHostService.cs:250-266,1017-1028: final page booking wins over
+    /// the older progress snapshot; no response forces close after 1200 ms.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Dtrh_PanicSettlesOrTimesOut(bool responds) => RunDtrh(lab: true, (_, xp, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        w.HandleMessage("{\"type\":\"ready\"}");
+        w.HandleMessage("{\"type\":\"run-started\"}");
+        w.HandleMessage("{\"type\":\"run-progress\",\"score\":10,\"durationSec\":180}");
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        GameWindow.CloseAllForPanic();
+        Assert.True(GameWindow.IsAnyOpen());
+        Assert.False(w.DtrhReady);
+        Assert.Equal("end-run", (string?)Assert.Single(sent)["type"]);
+        Assert.Equal("host", (string?)sent[0]["reason"]);
+        Assert.Empty(xp);
+        if (responds)
+        {
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");
+            w.HandleMessage("{\"type\":\"exit-done\"}");
+            Assert.Equal(300.0, Assert.Single(xp));
+        }
+        else
+        {
+            // RunJobs drains queued work but does not service native dispatcher timers.
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            w.Closed += (_, _) => deadline.Cancel();
+            Dispatcher.UIThread.MainLoop(deadline.Token);
+            Assert.InRange(clock.ElapsedMilliseconds, 1100, 2999);
+            Assert.Single(xp); // forced close still banks the last snapshot
+        }
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.Single(xp);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Dtrh_PanicClosesBootingOrAlreadyExitingPage(bool ready) => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        if (ready)
+        {
+            w.HandleMessage("{\"type\":\"ready\"}");
+            GameWindow.CloseAllForPanic();
+            Assert.True(GameWindow.IsAnyOpen());
+        }
+        GameWindow.CloseAllForPanic();
+        Assert.False(GameWindow.IsAnyOpen());
+    });
+
+    /// <summary>WPF DtrhHostService.cs:266: a failed end-run post must still close the window.</summary>
+    [Fact]
+    public void Dtrh_PanicClosesIfTheBridgeThrows() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        w.HandleMessage("{\"type\":\"ready\"}");
+        w.Posted += _ => throw new InvalidOperationException("bridge failed");
+        GameWindow.CloseAllForPanic();
+        Assert.False(GameWindow.IsAnyOpen());
     });
 
     /// <summary>WPF TryRacePauseOnEscape (owner 2026-10-12: Escape only pauses a game) on every game this head
