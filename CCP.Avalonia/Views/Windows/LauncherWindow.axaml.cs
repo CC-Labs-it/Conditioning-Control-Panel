@@ -326,6 +326,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 bool running = CoreEngine.IsRunning;
+                RefreshPanelComet();
                 StatusText.Text = running
                     ? Loc.GetF("launcher_panel_running", (CoreEngine.StartedUtc ?? DateTime.UtcNow).ToLocalTime().ToString("HH:mm"))
                     : Loc.Get("launcher_panel_idle");
@@ -558,6 +559,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void BuildTiles()
         {
+            ClearHoverComet();
             StopWanderingSheen();
             GamesGrid.Children.Clear();
             _revealedAtBuild.Clear();
