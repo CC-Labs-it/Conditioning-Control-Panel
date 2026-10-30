@@ -657,6 +657,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         internal static void CloseAudioForPanic()
         { foreach (var player in AudioPlayers.ToArray()) player.Close(); }
         private IDeeperLocalAudio? _audio;
+        private string? _lastAudioPath;
+        private int? _loadingAudio;
         private int _audioLoad;
         private bool _audioClosed;
         private void ReleaseAudio()
@@ -671,6 +673,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             AudioPlayers.Add(this);
             ReleaseAudio();
             var load = _audioLoad;
+            _loadingAudio = load;
+            _lastAudioPath = path; // WPF EnhancementPlayerWindow.xaml.cs:634,730
             _durationSec = _currentSec = 0;
             _videoNavigated = false;
             _videoBrowser.Source = null; // WPF TearDownVideoForAudio, no hidden audible video.
@@ -705,6 +709,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 Log.Warning(ex, "Deeper player audio load failed");
                 if (!_audioClosed && load == _audioLoad) { ReleaseAudio(); _txtStatus.Text = Loc.Get("deeper_player_status_audio_failed"); }
             }
+            finally { if (_loadingAudio == load) _loadingAudio = null; }
         }
 
         /// <summary>
@@ -829,6 +834,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _txtPlayPauseGlyph.Kind = _isPlaying ? IconKind.Pause : IconKind.Play;
                 _txtStatus.Text = Loc.Get(_isPlaying ? "deeper_player_status_playing" : "deeper_player_status_stopped");
                 UpdateStatusPill();
+                return;
+            }
+            // WPF :727-732: Stop can clear the transport while keeping the selected file.
+            if (!_isVideoMode && !_audioClosed && !string.IsNullOrEmpty(_lastAudioPath))
+            {
+                if (_loadingAudio != _audioLoad) LoadAudio(_lastAudioPath);
                 return;
             }
             if (_loadedEnhancement == null && _durationSec <= 0)

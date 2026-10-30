@@ -321,13 +321,15 @@ public sealed class WindowDropTests
     {
         var old = DeeperLocalAudio.Open;
         var pending = new TaskCompletionSource<IDeeperLocalAudio?>();
-        DeeperLocalAudio.Open = _ => pending.Task;
+        var opens = 0;
+        DeeperLocalAudio.Open = _ => { ++opens; return pending.Task; };
         try
         {
             var path = Path.Combine(root, "clip.wav"); File.WriteAllBytes(path, Array.Empty<byte>());
             Drop(shell, path);
             Click(await WaitFor(() => shell.OwnedWindows.OfType<MediaDropDialog>().SingleOrDefault()), "BtnPlay");
             var player = await WaitFor(() => shell.OwnedWindows.OfType<EnhancementPlayerWindow>().SingleOrDefault());
+            Click(player, "BtnPlayPause"); Assert.Equal(1, opens); // no duplicate parse
             var stale = new PlayerAudio(); var closing = new PlayerAudio();
             var later = new TaskCompletionSource<IDeeperLocalAudio?>();
             DeeperLocalAudio.Open = _ => later.Task;
@@ -337,6 +339,11 @@ public sealed class WindowDropTests
             Click(player, "BtnStop");
             var stopped = new PlayerAudio(); later.SetResult(stopped); Dispatcher.UIThread.RunJobs();
             Assert.True(stopped.Disposed); Assert.False(stopped.Playing);
+            var replay = new PlayerAudio(); var reopens = 0;
+            DeeperLocalAudio.Open = selected =>
+            { Assert.Equal(path, selected); ++reopens; return Task.FromResult<IDeeperLocalAudio?>(replay); };
+            Click(player, "BtnPlayPause");
+            Assert.Equal(1, reopens); Assert.True(replay.Playing); Assert.False(replay.Disposed);
             var afterClose = new TaskCompletionSource<IDeeperLocalAudio?>();
             DeeperLocalAudio.Open = _ => afterClose.Task; player.OpenLocalMediaFile(path);
             PanicSurfaces.All.Single(s => s.Id == "deeper-drop-player").Stop(shell);
