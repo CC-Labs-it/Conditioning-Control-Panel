@@ -5052,6 +5052,39 @@ Tests: ShellLabTabTests (fail-proven x3), MandatoryVideoOverlayTests, WebcamTrac
 <li>Friends watch-delivery opener stays deferred with the corner notices (FriendsLanding.cs:25,235).</li>
 </ul>
 
+<h2 data-branch="avalonia-port/sync8-rows-on-reconcile" data-pr="3170" data-added="25" data-removed="23">avalonia-port/sync8-rows-on-reconcile (#3170): +25/-23</h2>
+<ul>
+<li>Main sync #8 rows 1, 3, 9, 12, 16, 17, 20, 25, 27, 28, 29 closed: their behaviour was already on the 7.2 reconcile line (legend <code>ported (reconcile line sha: file:line)</code>); row 12 n/a by design. Old lanes remote-end, crash-exit, hunt-oct22, scrolller, chaster-leash dropped as superseded.</li>
+</ul>
+<h2 data-branch="avalonia-port/r72-sync8-real-time" data-pr="3171" data-added="23" data-removed="15">avalonia-port/r72-sync8-real-time (#3171): +23/-15</h2>
+<ul>
+<li>a4a5aa43b: Pink filter / spiral quest minutes credit late ticks in full up to the Core RunningTimeCredit 3 min ceiling instead of dropping gaps of 6 s or more (CCP.Avalonia/Platform/OverlayQuestMinutes.cs:18; WPF AchievementService.cs:45-46/:228/:249); OverlayQuestMinutesTests fail-proven.</li>
+<li>Gaze game dwell was already on the reconcile line (3cd113665, GazeMinigameWindow.axaml.cs:1058); GazeMinigameTests now has a 62.5 ms tick case that fails on tick counting. Calibration dwell already in Core; attention check n/a.</li>
+<li>rgate GATE-OK run 40986902597.</li>
+</ul>
+<h2 data-branch="avalonia-port/r72-sync8-ai-gates" data-pr="3172" data-added="20" data-removed="1">avalonia-port/r72-sync8-ai-gates (#3172): +20/-1</h2>
+<ul>
+<li>61eeb4d0d (AI effects obey the user's gates): already on the 7.2 reconcile line (lock card follows the strict setting, panic quiet armed by the panic key, the panic stop list, the panic watchdog and remote panic, StartEngineFromUser). Re-cut ports only the missing part: "Start today's session" ends the post-panic quiet (WPF ProgramsTab.cs:2210-2214, Avalonia MainShellWindow.ProgramsTab.cs:282).</li>
+<li>Behaviour test ProgramsSessionProgressTests.StartTodaysSessionEndsThePostPanicQuiet (proven to fail with the line removed); WPF PanicAftermathTests expects the new Avalonia EndQuiet call site. rgate 40988184272 GATE-OK.</li>
+</ul>
+<h2 data-branch="avalonia-port/r72-sync8-settings-freeze" data-pr="3173" data-added="121" data-removed="5">avalonia-port/r72-sync8-settings-freeze (#3173): +121/-5</h2>
+<ul>
+<li>Exit with a remote controller connected hands its strict lock back (wearer's own kept, panic key per the Lockdown rule) before the final save, and refuses a command already queued (WPF bafe52cfc ReleaseHoldingsForExit): Core <code>RemoteRelay.ReleaseHoldingsForExit</code>, called from <code>App.SaveSettingsOnExit</code>.</li>
+<li>Tests: Core <code>RemoteRelayTests.Exit_releases_the_controllers_strict_lock_keeps_the_wearers_and_refuses_late_commands</code> and <code>Exit_mid_lockdown_keeps_the_forced_strict_lock_and_the_panic_key_off</code>, Avalonia <code>RemoteControlShellTests.Exit_save_hands_back_the_controllers_strict_lock</code>; each shown red with the behaviour removed.</li>
+<li>Already on the reconcile line, ledger set n/a: 8fe2a80a0 (SessionRunner SettleBeforeSnapshot), 9f2065296 (engine stop hook cancels pulses), 36370021a (no ramp timer on this head).</li>
+</ul>
+<h2 data-branch="avalonia-port/r72-sync8-lockdown" data-pr="3174" data-added="28" data-removed="2">avalonia-port/r72-sync8-lockdown (#3174): +28/-2</h2>
+<ul>
+<li>605c451ae and 2b3e44432 were already on the 7.2 reconcile line (c1ae0f6bb via b15840ea6: MainShellWindow.Patreon.cs:161/:115, Lockdown.cs:82, TabNavigation.cs:199); no product code changed.</li>
+<li>Tests: PanicReachHeadTests now checks that reopening the Lockdown tab keeps the padlock off during a run (2b3e44432). The new LockdownVeilTests case checks that the padlock goes down when a run starts after a sign-out and comes back when it ends, through the shell's own lockdown events (605c451ae). Both fail when the behaviour is broken.</li>
+<li>Ledger rows 21 and 22 changed from needs-port to n/a with file:line and commit evidence.</li>
+</ul>
+<h2 data-branch="avalonia-port/r72-test-plan-areas" data-pr="3175" data-added="375" data-removed="41">avalonia-port/r72-test-plan-areas (#3175): +375/-41</h2>
+<ul>
+<li>docs/avalonia-test-plan.html: tester steps for every ledger area (safety, shell/views/windows/dialogs/feature supplements, main syncs 7/8, DTRH feel, retained rows), render-only notes for dead WPF paths; sync 7 steps the build lacks are marked "Not on this build yet" (checked against the Avalonia/Core source).</li>
+<li>.github/scripts/test-plan-coverage.sh + build.yml core-guards step: CI checks that every wired/stub/improved/verified parity row has a step (412 IDs), reading the HTML through avalonia_docs.py.</li>
+</ul>
+
 <script>
 (()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
 const m=document.getElementById('ledger-meta');const s=document.querySelector('.counts');if(m&&s){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
