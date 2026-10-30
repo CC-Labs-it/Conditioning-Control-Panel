@@ -13,7 +13,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 internal sealed class FloatingVideoFrame
 {
     private readonly Window _window;
-    private readonly FloatingVideoMotion _motion;
+    private readonly FloatingVideoMotionModel _motion;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private readonly Func<double> _nowMs;

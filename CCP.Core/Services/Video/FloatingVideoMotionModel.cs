@@ -4,7 +4,7 @@ using ConditioningControlPanel.Services.Flash;
 
 namespace ConditioningControlPanel.Services.Video.Floating
 {
-    internal sealed class FloatingVideoMotion
+    internal sealed class FloatingVideoMotionModel
     {
         public const double MinSpeed = 0.1, MaxSpeed = 1.0;
         public const double TopSpeedPxPerSec = 3600.0;
@@ -32,7 +32,7 @@ namespace ConditioningControlPanel.Services.Video.Floating
 
         public (double X, double Y, double W, double H) Bounds => (_s.BoundsX, _s.BoundsY, _s.BoundsW, _s.BoundsH);
 
-        public FloatingVideoMotion(double x, double y, double w, double h,
+        public FloatingVideoMotionModel(double x, double y, double w, double h,
             double bx, double by, double bw, double bh)
         {
             SetBounds(bx, by, bw, bh);
