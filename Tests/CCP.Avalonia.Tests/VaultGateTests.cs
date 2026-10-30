@@ -276,6 +276,97 @@ public sealed class VaultGateTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData("prices")]
+    [InlineData("hints")]
+    [InlineData("links")]
+    public Task PlanRefreshRepaintsHintsAndEveryCheckoutUsesItsTier(string check) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureAvalonia();
+        PlanCatalog.Reset();
+        var launch = VaultGateDialog.Launch;
+        var baseUrl = ConditioningControlPanel.Services.Invites.InviteApi.DefaultBaseUrl;
+        var opened = new System.Collections.Generic.List<string>();
+        VaultGateDialog.Launch = url => { opened.Add(url); return true; };
+        ConditioningControlPanel.Services.Invites.InviteApi.DefaultBaseUrl = () => null;
+        VaultGateDialog.Sale = null;
+        var card = new VaultGateDialog();
+        try
+        {
+            card.Show();
+            var plans = PlanCatalog.Fallback with
+            {
+                Basic = PlanCatalog.Fallback.Basic with { MonthlyCents = 1000, MonthlyEurCents = 800, YearlyCents = 9600,
+                    PatreonUrl = "https://www.patreon.com/checkout/CodeBambi?rid=101",
+                    WebUrl = "https://app.cclabs.app/subscribe?plan=basic&offer=test" },
+                Prime = PlanCatalog.Fallback.Prime with { PatreonUrl = "https://www.patreon.com/checkout/CodeBambi?rid=202" },
+            };
+            var body = PlanCatalog.ToWire(plans);
+            body["basic"]!["web_url"] = plans.Basic.WebUrl;
+            body["prime"]!["web_url"] = plans.Prime.WebUrl;
+            PlanCatalog.FetchOverride = _ => Task.FromResult<string?>(body.ToString());
+            await PlanCatalog.GetAsync("https://plans.test");
+            await card.FillPlansAsync();
+            Dispatcher.UIThread.RunJobs();
+            if (check == "prices") { Assert.Contains("$10", Texts(card)); return; }
+            if (check == "hints")
+            {
+                Assert.Contains(Loc.GetF("vaultgate_price_eur", "€8"), Texts(card));
+                Assert.Contains(Loc.GetF("vaultgate_yearly_hint", "$96", 20), Texts(card));
+                return;
+            }
+            Click(card, Loc.Get("vaultgate_open_vault"));
+            Assert.Equal(plans.Basic.PatreonUrl, Assert.Single(opened));
+
+            card = VaultGateDialog.ShowOffer(null, null, 2, () => { });
+            Click(card, Loc.Get("vaultgate_open_lab"));
+            Assert.Equal(plans.Prime.PatreonUrl, opened.Last());
+            card = VaultGateDialog.ShowOffer(null, null, 1, () => { });
+            Click(card, Loc.Get("vaultgate_or_card"));
+            Assert.Equal(plans.Basic.WebUrl + "&from=panel", opened.Last());
+
+            card = VaultGateDialog.ShowOffer(null, null, 1, () => { });
+            Click(card, Loc.Get("vaultgate_compare"));
+            Assert.DoesNotContain(Loc.GetF("vaultgate_price_eur", "€8"), Texts(card));
+            Click(card, Loc.GetF("vaultgate_choose", Loc.Get("vaultgate_tier_lab_name")));
+            Assert.Equal(plans.Prime.PatreonUrl, opened.Last());
+            card = VaultGateDialog.ShowEnding(null, DateTime.UtcNow.AddHours(12), () => { });
+            Assert.Contains(Loc.GetF("vaultgate_price_eur", "€8"), Texts(card));
+            Click(card, Loc.Get("vaultgate_ending_keep"));
+            Assert.Equal(plans.Basic.PatreonUrl, opened.Last());
+        }
+        finally
+        {
+            card.Close();
+            VaultGateDialog.Launch = launch;
+            ConditioningControlPanel.Services.Invites.InviteApi.DefaultBaseUrl = baseUrl;
+            PlanCatalog.Reset();
+            VaultGateDialog.Sale = null;
+        }
+    });
+
+    [Fact]
+    public Task CatalogSaleReplacesNormalHints() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureAvalonia();
+        PlanCatalog.Reset();
+        var card = new VaultGateDialog();
+        try
+        {
+            var body = PlanCatalog.ToWire(PlanCatalog.Fallback);
+            body["sale"] = Newtonsoft.Json.Linq.JObject.Parse("{\"active\":true,\"percent\":20,\"tiers\":[\"basic\"]}");
+            PlanCatalog.FetchOverride = _ => Task.FromResult<string?>(body.ToString());
+            await PlanCatalog.GetAsync("https://plans.test");
+            await card.FillPlansAsync();
+            card.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(20, VaultGateDialog.Sale?.Percent);
+            Assert.Contains("$6", Texts(card));
+            Assert.DoesNotContain(Loc.GetF("vaultgate_price_eur", "€6"), Texts(card));
+        }
+        finally { card.Close(); PlanCatalog.Reset(); VaultGateDialog.Sale = null; }
+    });
+
     private static ConditioningControlPanel.Avalonia.Helpers.NotificationService Toasts(out StackPanel host)
     {
         var toasts = new ConditioningControlPanel.Avalonia.Helpers.NotificationService();
@@ -294,6 +385,7 @@ public sealed class VaultGateTests
     {
         if (global::Avalonia.Application.Current is not null) return;
         global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
             .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
