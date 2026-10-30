@@ -3109,6 +3109,8 @@
   "dialog_avatar_tube": "头像窗口",
   "btn_tube_fit": "头像适配",
   "tooltip_tube_fit": "调整头像在窗口内的缩放和位置，并实时预览",
+  "tube_pill_v1_tip": "经典形象。点击切换到 V2 (Rain)。",
+  "tube_pill_v2_tip": "V2: Rain。点击切换回经典形象。",
   "tube_fit_title": "头像窗口适配",
   "tube_fit_subtitle": "先看清这个模组的头像在窗口里的实际效果，再进行调整",
   "tube_fit_attached": "吸附",

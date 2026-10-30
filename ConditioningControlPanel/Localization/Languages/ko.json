@@ -2368,6 +2368,8 @@
   "dialog_avatar_tube": "아바타 튜브",
   "btn_tube_fit": "튜브 맞춤",
   "tooltip_tube_fit": "아바타가 튜브 안에서 어떻게 확대되고 배치되는지 실시간 미리보기로 조절해요",
+  "tube_pill_v1_tip": "클래식 아바타. 클릭하면 V2, Rain.",
+  "tube_pill_v2_tip": "V2: Rain. 클릭하면 클래식 아바타.",
   "tube_fit_title": "아바타 튜브 맞춤",
   "tube_fit_subtitle": "이 모드의 아바타가 튜브에 어떻게 들어가는지 확인하고 조절해요",
   "tube_fit_attached": "연결",

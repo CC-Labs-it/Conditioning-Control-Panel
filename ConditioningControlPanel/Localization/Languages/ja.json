@@ -2368,6 +2368,8 @@
   "dialog_avatar_tube": "アバターチューブ",
   "btn_tube_fit": "チューブ調整",
   "tooltip_tube_fit": "アバターがチューブ内でどのように拡大縮小・配置されるかを、ライブプレビューで調整します",
+  "tube_pill_v1_tip": "クラシックアバター。クリックでV2 (Rain) へ。",
+  "tube_pill_v2_tip": "V2: Rain。クリックでクラシックアバターへ。",
   "tube_fit_title": "アバターチューブ調整",
   "tube_fit_subtitle": "このModのアバターがチューブ内でどう収まるかを確認しながら調整します",
   "tube_fit_attached": "固定",

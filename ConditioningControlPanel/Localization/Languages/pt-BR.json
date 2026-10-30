@@ -2368,6 +2368,8 @@
   "dialog_avatar_tube": "Tubo do Avatar",
   "btn_tube_fit": "Ajuste do Tubo",
   "tooltip_tube_fit": "Ajuste como o avatar é dimensionado e posicionado dentro do tubo, com prévia ao vivo.",
+  "tube_pill_v1_tip": "Avatar clássico. Clique para V2, Rain.",
+  "tube_pill_v2_tip": "V2: Rain. Clique para o avatar clássico.",
   "tube_fit_title": "Ajuste do Tubo do Avatar",
   "tube_fit_subtitle": "Veja exatamente como o avatar deste mod fica no tubo e depois ajuste.",
   "tube_fit_attached": "Ancorado",
