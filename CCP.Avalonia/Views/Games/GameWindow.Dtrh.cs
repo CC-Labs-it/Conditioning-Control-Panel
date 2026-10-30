@@ -68,6 +68,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             switch ((string?)o["type"])
             {
+                case "boot-error":
+                    // WPF DtrhHostService.cs:925-954: close the failed web host, then fall back.
+                    if (_closing) return true;
+                    Log.Warning("DtrhHost: page boot-error: {Msg}; opening classic game", (string?)o["msg"]);
+                    Close();
+                    try { LaunchDtrhLegacy(); }
+                    catch (Exception ex) { Log.Error(ex, "DtrhHost: legacy fallback failed"); }
+                    return true;
                 case "ready":
                     IsReady = true;
                     OnDtrhPageReady();
@@ -97,6 +105,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 default:
                     return false;
             }
+        }
+
+        /// <summary>WPF DtrhHostService.cs:939-954. The existing Core first-run deal is shared
+        /// with ChaosHappyPath; repeat players enter the hub and use its FALL IN button.</summary>
+        private static void LaunchDtrhLegacy()
+        {
+            if (Chaos.ChaosRunHost.IsActive) return;
+            if (ChaosMeta.State.RunsCompleted == 0)
+            {
+                Chaos.ChaosRunHost.StartRun(DtrhRunWire.FirstRunConfig());
+                return;
+            }
+            var desktop = global::Avalonia.Application.Current?.ApplicationLifetime
+                as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+            var hub = desktop?.Windows.OfType<Chaos.ChaosHubWindow>().FirstOrDefault();
+            if (hub != null) { hub.Activate(); return; }
+            hub = new Chaos.ChaosHubWindow();
+            if (desktop?.MainWindow is { IsVisible: true } owner) hub.Show(owner);
+            else hub.Show();
         }
 
         /// <summary>WPF OnPageReady (:271): init, then the manifest.</summary>
