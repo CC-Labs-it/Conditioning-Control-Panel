@@ -52,6 +52,7 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
     for (const e of ch.effects || []) if (e.type === 'wallet') { host.wallet(e.sp); hud.receipt(e.sp, itemPos()); }
     if (ch.close) host.close(ch.close.reason);
     if (ch.signIn) host.signIn();
+    if (ch.wear) host.wear(ch.wear.itemId);
     if (ch.status) {
       const out = ch.status === 'signed_out';
       root.classList.toggle('pc-signed-out', out);

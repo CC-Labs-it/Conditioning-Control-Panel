@@ -40,6 +40,7 @@ internal static class RainWardrobeHostService
     private static RainApplyController? _apply;
     private static readonly RainSerialQueue BakeQueue = new();
     private static IReadOnlyList<string>? _clips;
+    private static string? _tryOn;
 
     /// <summary>The Prize Counter door (lane R5): the counter host sets it when it lands on this
     /// branch (<c>PrizeCounterHostService.Launch(from, tab)</c>). Null = no counter in this build.</summary>
@@ -65,6 +66,32 @@ internal static class RainWardrobeHostService
         if (locked.Count > 0) q += "&locked=" + Uri.EscapeDataString(string.Join(",", locked));
         if (!string.IsNullOrWhiteSpace(lockNote)) q += "&lockNote=" + Uri.EscapeDataString(lockNote);
         return $"https://{PageHost}/{PagePath}?{q}";
+    }
+
+    /// <summary>The counter's Wear door: open (or focus) with one items.json key (<c>slot:pageId</c>) tried
+    /// on as a draft (<c>init.tryOn</c>, or <c>rain-tryon</c> to a live window). An unknown key opens plain.
+    /// False when the window is not up (assets missing, open failed).</summary>
+    public static bool Open(string? tryOn)
+    {
+        var key = TryOnKey(tryOn, RainItemManifest.Shipped);
+        if (_host != null)
+        {
+            if (key != null) _host.Post(new { type = "rain-tryon", key });
+            _host.FocusWeb();
+            return true;
+        }
+        _tryOn = key;
+        Open();
+        if (_host == null) _tryOn = null;
+        return _host != null;
+    }
+
+    /// <summary>The key when items.json knows it, else null (only shipped items are ever tried on).</summary>
+    internal static string? TryOnKey(string? key, RainItemManifest manifest)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return null;
+        int colon = key.IndexOf(':');
+        return colon > 0 && manifest.Find(key[..colon], key[(colon + 1)..]) is { } item ? item.Id : null;
     }
 
     /// <summary>The door (tube menu while Rain plays). One live window, focused rather than reopened.</summary>
@@ -142,6 +169,7 @@ internal static class RainWardrobeHostService
             // Panic or close mid-bake: the temp pack goes, the applied look and pack stay.
             try { _apply?.Abort(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _apply = null;
+            _tryOn = null;
             bool had = _host != null;
             try { _host?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _host = null;
@@ -210,12 +238,15 @@ internal static class RainWardrobeHostService
         var settings = App.Settings?.Current;
         IReadOnlyDictionary<string, int>? prices = null;
         try { prices = CounterPrices?.Invoke(); } catch (Exception ex) { Diag.Swallowed(ex); }
-        return RainApplyController.BuildInit(
+        var init = RainApplyController.BuildInit(
             RainWardrobeCatalog.Clamp(settings?.RainLook, App.Ownership?.Grants),
             AccountGrants(), progress.Level, progress.UnlockedAchievements,
             LocalizationManager.Instance.CurrentLanguage,
             MotionFx.Level.ToString().ToLowerInvariant(),
             Safety.GentleVisuals.On, prices);
+        // The counter's Wear door: one piece on as a draft, once (a later ready never re-applies it).
+        if (_tryOn != null) { init["tryOn"] = _tryOn; _tryOn = null; }
+        return init;
     }
 
     /// <summary>The grants the host's Apply clamp honours (PrizeGrants, so a dev override agrees with the page).</summary>

@@ -444,10 +444,12 @@ window.addEventListener('rain-locks',()=>{if(state.ready){paintChoices();paintSh
 // Shop layer: the draft is what Rain wears here, the applied look is what the tube wears.
 function shopSync(save){if(!state.demo)shop.setDraft(toHostLook(state.look,colorOverrides));if(save&&!shop.applyMode&&shop.status().wearable){postLook(state.look,colorOverrides);shop.markApplied();$('saveStatus').textContent=SHOP.saved;}paintShop(document,shop);}
 function showHostLook(look){colorOverrides=hostColors(COLOR_CHANNELS,look);applyLook(hostItems(look,shop.source!=='init')||info?.defaultLook||{},{persist:false});shop.markApplied();paintShop(document,shop);}
+// The Prize Counter's Wear door: put that one piece on as a draft (try-on, Apply stays the host's call).
+function wearTryOn(){if(!state.ready)return;const t=shop.takeTryOn();if(t&&findItem(t.slot,t.id)&&!selected(t.slot,t.id))toggleItem(t.slot,t.id);}
 if(hosted){
   document.body.classList.add('shop-on');$('lookBar').hidden=false;
-  fetch('./items.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(json=>{if(!json)return;shop.setItems(json);if(state.ready){paintChoices();paintShop(document,shop);}}).catch(()=>{});
-  listenToHost(window,shop,(kind,data)=>{if(kind==='init'&&state.ready&&shop.applied){showHostLook(shop.applied);return;}if(kind==='applied')$('saveStatus').textContent=SHOP.applied;
+  fetch('./items.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(json=>{if(!json)return;shop.setItems(json);if(state.ready){paintChoices();paintShop(document,shop);wearTryOn();}}).catch(()=>{});
+  listenToHost(window,shop,(kind,data)=>{if(kind==='init'&&state.ready&&shop.applied){showHostLook(shop.applied);wearTryOn();return;}if(kind==='tryon'||kind==='init')wearTryOn();if(kind==='applied')$('saveStatus').textContent=SHOP.applied;
     // A host clamp sends the look it would wear back as the draft (never applied, never baked).
     if(kind==='apply-failed'&&state.ready&&data&&data.look&&typeof data.look==='object'){stopDemo(false);colorOverrides=hostColors(COLOR_CHANNELS,data.look);applyLook(hostItems(data.look,false)||info?.defaultLook||{},{persist:false});}if(state.ready)paintChoices();paintShop(document,shop);});
   $('applyLook').addEventListener('click',()=>{if(!shop.apply())return;if(!shop.applyMode){postLook(state.look,colorOverrides);$('saveStatus').textContent=SHOP.saved;}paintShop(document,shop);});

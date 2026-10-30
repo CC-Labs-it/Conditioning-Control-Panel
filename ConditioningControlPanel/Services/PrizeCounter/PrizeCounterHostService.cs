@@ -63,6 +63,55 @@ internal static class PrizeCounterHostService
         AdoptOnUi,
         (account, revision, grants) => App.Ownership?.ApplySnapshot(account, revision, grants));
 
+    /// <summary>Rain's prices from the last shop-state this run (grant -> Sparkles), for the wardrobe's
+    /// badges. Empty until the counter has been opened once; the server stays the price authority.</summary>
+    private static IReadOnlyDictionary<string, int> _rainPrices = new Dictionary<string, int>(StringComparer.Ordinal);
+    internal static IReadOnlyDictionary<string, int>? RainPrices => _rainPrices.Count > 0 ? _rainPrices : null;
+
+    /// <summary>The Wear door's far end: Rain's dressing room with one item tried on. Settable for tests.</summary>
+    internal static Func<string, bool> OpenWardrobe { get; set; } = key => Companion.RainWardrobeHostService.Open(tryOn: key);
+
+    /// <summary>Startup (App): the wardrobe's "Open counter" door and its price badges come from here.</summary>
+    internal static void WireRainWardrobe()
+    {
+        Companion.RainWardrobeHostService.CounterLauncher = (from, tab) => Launch(from, tab);
+        Companion.RainWardrobeHostService.CounterPrices = () => RainPrices;
+    }
+
+    /// <summary>A counter row id -> the wardrobe key it wears (<c>slot:pageId</c>), through the row's grant
+    /// <c>cos.&lt;id&gt;</c> in items.json. Null = not a Rain item the wardrobe knows: refused.</summary>
+    internal static string? WearKey(string? rowId, Companion.RainItemManifest manifest)
+    {
+        if (string.IsNullOrWhiteSpace(rowId) || !rowId.StartsWith("rain.", StringComparison.Ordinal)) return null;
+        var grant = "cos." + rowId;
+        return manifest.Items.FirstOrDefault(i => string.Equals(i.Grant, grant, StringComparison.Ordinal))?.Id;
+    }
+
+    /// <summary>The page's <c>wear {id}</c> frame: a known Rain row hands its key to <paramref name="wear"/>.</summary>
+    internal static bool HandleWear(JObject m, Companion.RainItemManifest manifest, Action<string> wear)
+    {
+        var id = m["id"]?.Type == JTokenType.String ? (string?)m["id"] : null;
+        var key = WearKey(id, manifest);
+        if (key == null) { App.Logger?.Information("PrizeCounter: wear {Id} refused (no Rain item)", id ?? "(none)"); return false; }
+        wear(key);
+        return true;
+    }
+
+    /// <summary>Every <c>cos.rain.*</c> grant's price in one shop-state body (or a refusal carrying <c>state</c>).</summary>
+    internal static Dictionary<string, int> RainPricesFrom(JObject? body)
+    {
+        var map = new Dictionary<string, int>(StringComparer.Ordinal);
+        var state = body?["state"] as JObject ?? body;
+        if (state?["tabs"] is not JArray tabs) return map;
+        foreach (var row in tabs.SelectTokens("[*].shelves[*].rows[*]").OfType<JObject>())
+        {
+            if (row["priceSp"] is not JValue { Type: JTokenType.Integer } price || row["grants"] is not JArray grants) continue;
+            foreach (var g in grants.Values<string>())
+                if (g != null && g.StartsWith("cos.rain.", StringComparison.Ordinal)) map[g] = price.Value<int>();
+        }
+        return map;
+    }
+
     public static bool IsActive => _host != null;
     public static bool IsInFront => _host?.IsForeground == true;
     public static bool IsReady => _host?.IsReady == true;
@@ -164,6 +213,8 @@ internal static class PrizeCounterHostService
                 _ = System.Threading.Tasks.Task.Run(async () =>
                 {
                     var reply = await relay.RelayAsync(op, body, idem).ConfigureAwait(false);
+                    var prices = RainPricesFrom(reply);
+                    if (prices.Count > 0) _rainPrices = prices;
                     OnUi(() => { if (generation == _generation) _host?.Post(new { type = "reply", reqId, body = reply }); });
                 });
                 break;
@@ -174,6 +225,16 @@ internal static class PrizeCounterHostService
             case "close":
                 App.Logger?.Information("PrizeCounter: page closed ({Reason})", (string?)m["reason"] ?? "back");
                 OnUi(Close);
+                break;
+            case "wear":
+                // An owned card's Wear on a Rain row: the counter steps aside (queued, never inside the
+                // WebView2 callback) and the dressing room opens with that piece on. One window at a time.
+                if (generation == _generation)
+                    HandleWear(m, Companion.RainItemManifest.Shipped, key => Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        Close();
+                        try { OpenWardrobe(key); } catch (Exception ex) { App.Logger?.Warning(ex, "PrizeCounter: wardrobe open failed"); }
+                    })));
                 break;
             case "signin":
                 // Queued, never inside the WebView2 message callback: the dialog runs its own loop.

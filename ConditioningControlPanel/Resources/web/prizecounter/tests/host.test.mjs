@@ -49,3 +49,20 @@ test('sign-in: standalone posts a signin frame, a mounted object calls its signI
   asHost({}).signIn();
   assert.equal(asked, 1);
 });
+
+test('wear: standalone posts a wear frame with the row id, never an empty one; a mounted object calls its wear', () => {
+  const w = fakeWebview();
+  const host = createHost(w.win);
+  host.wear('rain.dress.rose-flare'); host.wear(''); host.wear(null);
+  assert.deepEqual(w.posted, [{ type: 'wear', id: 'rain.dress.rose-flare' }]);
+  const seen = [];
+  asHost({ wear: (id) => seen.push(id) }).wear('rain.hair.ink-sleek');
+  asHost({}).wear('x');
+  assert.deepEqual(seen, ['rain.hair.ink-sleek']);
+});
+
+test('main.js hands an owned card\'s wear intent to the host', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const src = await readFile(new URL('../main.js', import.meta.url), 'utf8');
+  assert.match(src, /if \(ch\.wear\) host\.wear\(ch\.wear\.itemId\);/);
+});
