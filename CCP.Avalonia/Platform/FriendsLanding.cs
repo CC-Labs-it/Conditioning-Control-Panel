@@ -282,7 +282,10 @@ internal static class FriendsLanding
         if (item.Destination == InviteDestination.Ramp) OpenPanelTab("studio");
     }
 
-    private static readonly FriendsSfxGate SfxGate = new();
+    internal static FriendsSfxGate SfxGate = new();
+    // WPF FriendsSfx.cs:23-24, through the existing master-volume and gap gate.
+    internal static void DrawerOpen() => Sfx("chaos/cards_in.mp3", 0.14f, "friends-open");
+    internal static void DrawerClose() => Sfx("chaos/ui_unequip.mp3", 0.10f, "friends-close");
 
     /// <summary>WPF FriendsSfx.Play: master volume, the 1.5 s incoming gap, half level in a session.</summary>
     private static void Sfx(string rel, float scale, string tag, bool incoming = false)
