@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -41,7 +42,7 @@ public sealed class LeashSelfCard : Border
         Padding = new Thickness(12);
         Margin = new Thickness(0, 4, 0, 6);
         Child = _body;
-        // ponytail: holder preview, sticker artwork, help and LeashFx need the remaining drawer lane.
+        // ponytail: holder preview, help and LeashFx need the remaining drawer lane.
         Render();
     }
 
@@ -105,11 +106,53 @@ public sealed class LeashSelfCard : Border
         _body.Children.Add(Caption(Loc.GetF("leash_self_hold_hint", LeashHoldToCut.KeyLabel(CoreSettings.Current.PanicKey)), "leash-self-hold"));
         if (_me.Stickers.Count > 0)
         {
-            _body.Children.Add(Caption(Loc.GetF("leash_self_shelf", _me.Stickers.Count), "leash-shelf"));
-            // WPF Controls/Leash/LeashSelfCard.cs:248-260. Artwork remains unported.
+            // WPF Controls/Leash/LeashSelfCard.cs:248-264: compact shelf, newest first.
+            var shelf = new StackPanel { Margin = new Thickness(0, 10, 0, 0), Tag = "leash-shelf" };
+            var caption = Caption(Loc.GetF("leash_self_shelf", _me.Stickers.Count));
+            caption.Margin = new Thickness(2, 0, 0, 4);
+            shelf.Children.Add(caption);
+            var wrap = new WrapPanel();
+            int i = 0;
             foreach (var s in _me.Stickers.Reverse().Take(14))
-                _body.Children.Add(Label(s.Id + " · " + Loc.GetF("leash_sticker_from", s.From.Name), 12, F.Text, "leash-sticker"));
+            {
+                var disc = StickerDisc(s.Id, i++);
+                ToolTip.SetTip(disc, Loc.GetF("leash_sticker_from", s.From.Name));
+                wrap.Children.Add(disc);
+            }
+            shelf.Children.Add(wrap);
+            _body.Children.Add(shelf);
         }
+    }
+
+    // WPF Controls/Leash/LeashLook.cs:351-383: the same disc artwork and seeded tilt.
+    private static Grid StickerDisc(string id, int seed)
+    {
+        var (brush, word) = id switch
+        {
+            "good" => (F.Gold, "GOOD"), "star" => (F.Gold, "★"),
+            "pet" => (F.Lilac, "PET"), "heart" => (F.Pink, "♥"), "wow" => (F.Mint, "WOW"),
+            _ => (F.Lilac, (id.Length > 4 ? id.Substring(0, 4) : id).ToUpperInvariant()),
+        };
+        var disc = new Grid
+        {
+            Width = 26, Height = 26, Margin = new Thickness(0, 0, 5, 5),
+            RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative),
+            RenderTransform = new RotateTransform(((seed * 37) % 21) - 10),
+            Tag = "leash-sticker:" + id,
+        };
+        disc.Children.Add(new Ellipse
+        {
+            Fill = brush,
+            Effect = new DropShadowEffect { Color = ((ISolidColorBrush)brush).Color, BlurRadius = 6, OffsetX = 0, OffsetY = 0, Opacity = 0.35 },
+        });
+        disc.Children.Add(new TextBlock
+        {
+            Text = word, FontFamily = F.Mono, FontWeight = FontWeight.Bold,
+            FontSize = word.Length > 1 ? 26 * 0.26 : 26 * 0.5,
+            Foreground = new SolidColorBrush(Color.Parse("#1B1026")),
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+        });
+        return disc;
     }
 
     internal async Task CutAsync()
