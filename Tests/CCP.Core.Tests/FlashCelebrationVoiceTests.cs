@@ -114,6 +114,76 @@ public sealed class FlashCelebrationVoiceTests
     }
 
     [Fact]
+    public void CatalogueFlacIsSelectedForPlayback()
+    {
+        var root = Directory.CreateTempSubdirectory("ccp-flac-voice-").FullName;
+        var oldMod = CoreMods.ActiveModPackageProvider;
+        var oldBuild = FlashVoicePool.Build;
+        var oldPlay = CoreAudio.PlayStoppableProvider;
+        try
+        {
+            var dir = Directory.CreateDirectory(Path.Combine(root, "resources", "sounds", "flashes_audio"));
+            var file = Path.Combine(dir.FullName, "catalogue.flac");
+            File.WriteAllText(file, "audio");
+            CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest(), root, false);
+            FlashVoicePool.Build = FlashVoicePool.BuildPool;
+            FlashVoicePool.Reset();
+            string? played = null;
+            CoreAudio.PlayStoppableProvider = (path, _, _, _, _) => { played = path; return () => { }; };
+            FlashCelebrationVoice.Play(new AppSettings());
+            Assert.Equal(file, played);
+        }
+        finally
+        {
+            FlashCelebrationVoice.Stop();
+            FlashVoicePool.Build = oldBuild;
+            FlashVoicePool.Reset();
+            CoreAudio.PlayStoppableProvider = oldPlay;
+            CoreMods.ActiveModPackageProvider = oldMod;
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LegacyExclusionsMigrateAgainstSortedCatalogueAndRequestSave(bool removed)
+    {
+        var root = Directory.CreateTempSubdirectory("ccp-legacy-voice-").FullName;
+        var oldMod = CoreMods.ActiveModPackageProvider;
+        var oldSettings = CoreSettings.ServiceProvider;
+        var service = new SettingsService { SaveDebounceDueTimeMilliseconds = int.MaxValue };
+        try
+        {
+            CoreSettings.ServiceProvider = () => service;
+            var settings = service.Current;
+            settings.DisabledPhraseIds.Clear();
+            settings.RemovedPhraseIds.Clear();
+            var exclusions = removed ? settings.RemovedPhraseIds : settings.DisabledPhraseIds;
+            exclusions.Add("VoiceLine:0");
+            var dir = Directory.CreateDirectory(Path.Combine(root, "resources", "sounds", "flashes_audio"));
+            File.WriteAllText(Path.Combine(dir.FullName, "Zulu.mp3"), "audio");
+            File.WriteAllText(Path.Combine(dir.FullName, "Alpha.flac"), "audio");
+            var nested = Directory.CreateDirectory(Path.Combine(dir.FullName, "category"));
+            File.WriteAllText(Path.Combine(nested.FullName, "Aardvark.mp3"), "audio");
+            CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest(), root, false);
+            Assert.False(service.HasPendingSave);
+            var pool = FlashVoicePool.BuildPool(settings).Select(Path.GetFileName).OrderBy(x => x).ToArray();
+            Assert.Equal(new[] { "Aardvark.mp3", "Zulu.mp3" }, pool);
+            Assert.DoesNotContain("VoiceLine:0", exclusions);
+            Assert.Contains("VoiceLine:Alpha", exclusions);
+            Assert.True(service.HasPendingSave);
+        }
+        finally
+        {
+            service.SealForReset(); // cancel the test's deferred save before restoring the provider
+            CoreSettings.ServiceProvider = oldSettings;
+            CoreMods.ActiveModPackageProvider = oldMod;
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public void PoolUsesPackagedModRecursesAndHonoursPhraseFilters()
     {
         var root = Directory.CreateTempSubdirectory("ccp-voice-pool-").FullName;

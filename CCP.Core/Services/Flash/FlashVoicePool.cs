@@ -69,10 +69,21 @@ namespace ConditioningControlPanel.Services.Flash
 
         internal static List<string> BuildPool(AppSettings? s)
         {
+            // WPF CompanionPhraseService.cs:398/:430-455 seeds the catalogue and migrates
+            // positional exclusions before filtering; recursive extras do not change its indices.
+            var catalogue = CompanionVoiceLines.GetFiles();
+            if (s != null && CompanionVoiceLines.MigrateLegacyIds(s, catalogue)) CoreSettings.Save();
             var pool = new List<string>();
             var removed = s?.RemovedPhraseIds ?? new HashSet<string>();
             var disabled = s?.DisabledPhraseIds ?? new HashSet<string>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            void AddEnabled(string file)
+            {
+                if (!seen.Add(Path.GetFileName(file))) return;
+                var id = CompanionPhraseIds.VoiceLineId(file);
+                if (!removed.Contains(id) && !disabled.Contains(id)) pool.Add(file);
+            }
+            foreach (var file in catalogue) AddEnabled(file);
             foreach (var dir in VoiceDirs())
             {
                 IEnumerable<string> files;
@@ -81,10 +92,7 @@ namespace ConditioningControlPanel.Services.Flash
                 foreach (var f in files)
                 {
                     if (!Extensions.Contains(Path.GetExtension(f).ToLowerInvariant())) continue;
-                    if (!seen.Add(Path.GetFileName(f))) continue;   // install + pack copies of one line
-                    var id = CompanionPhraseIds.VoiceLineId(f);
-                    if (removed.Contains(id) || disabled.Contains(id)) continue;
-                    pool.Add(f);
+                    AddEnabled(f);
                 }
             }
 
