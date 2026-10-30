@@ -165,6 +165,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     RadiusY = 8,
                 };
             }
+            // WPF ProgramsTab.cs:1770-1800 retries until measured. Layout can precede the next tick.
+            RefreshLiveSessionProgress();
         }
 
         // ---- BROWSE DATA ----------------------------------------------------------
