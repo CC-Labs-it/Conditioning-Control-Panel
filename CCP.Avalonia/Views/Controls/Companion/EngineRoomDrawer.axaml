@@ -239,12 +239,9 @@
                              through a binding, a screenshot or a UI-automation dump.
                              AVALONIA HAS NO PasswordBox. This is a TextBox with PasswordChar, so
                              the masking survives but the "cannot be read back" guarantee does not.
-                             The binding is OneWayToSource, which keeps the one behaviour markup
-                             still can keep: the key travels from the box to the viewmodel and is
-                             never read back out of it — the same direction the WPF code-behind's
-                             PasswordChanged handler pushed it. -->
-                        <TextBox x:Name="CustomKeyBox" Theme="{StaticResource CmpFieldPasswordStyle}"
-                                 Text="{ReflectionBinding CustomApiKey, Mode=OneWayToSource}"/>
+                             TextChanged is attached after construction, like WPF's PasswordChanged:
+                             opening a blank box must not clear an existing stored key. -->
+                        <TextBox x:Name="CustomKeyBox" Theme="{StaticResource CmpFieldPasswordStyle}"/>
                         <TextBlock Text="{ReflectionBinding #Root.Strings.LocApiKeyNote}"
                                    Theme="{StaticResource CmpFaintTextStyle}" Margin="2,4,0,0"/>
                     </StackPanel>

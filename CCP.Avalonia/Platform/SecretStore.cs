@@ -39,6 +39,7 @@ internal static class SecretStore
     {
         CoreSecrets.RetrieveProvider = Retrieve;
         CoreSecrets.StoreProvider = Store;
+        Services.AIService.OpenAiCompatibleService.ApiKeyUnprotect = CompanionApiKey.Read;
     }
 
     internal static string? Retrieve(string name)
