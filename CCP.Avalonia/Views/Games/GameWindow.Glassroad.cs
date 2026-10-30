@@ -1,6 +1,6 @@
 // PORTED from ConditioningControlPanel/Services/Glassroad/GlassroadHostService.cs (feat/glassroad-a 5121933ee):
-// GLASSROAD, the 3D race (Assets/web/glassroad/index.html), private preview behind CCP_GLASSROAD=1. With the switch
-// on, the Racing Thoughts door opens this page instead (GameWindow.Launch); without it nothing changes for anyone.
+// Racing Thoughts 3D (Assets/web/glassroad/index.html), open to everyone since 7.2.
+// Every public Racing Thoughts door opens this page (GameWindow.Launch).
 // INIT GOES OUT BEFORE READY: the page awaits init at boot (3 s, then defaults with no net) but says ready only once
 // shaders are warm, so init is posted at the page's load (NavigationCompleted, this engine's nearest seam to WPF's
 // DOMContentLoaded), on the first message and on ready (a repeat is harmless). The relay signs as the player, so it
@@ -26,24 +26,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     {
         internal const string GlassroadId = "glassroad";
 
-        /// <summary>The door switch's raw value; tests swap it rather than the process env.</summary>
-        internal static Func<string?> GlassroadDoorEnv { get; set; } =
-            () => Environment.GetEnvironmentVariable(GlassroadHostRules.DoorEnv);
-
-        /// <summary>The live read of the door switch. Never throws.</summary>
-        internal static bool GlassroadDoorOpen() { try { return GlassroadHostRules.DoorOpen(GlassroadDoorEnv()); } catch { return false; } }
-
-        /// <summary>WPF LauncherCatalogue "race": with the switch on, every Racing Thoughts door opens Glassroad.</summary>
+        /// <summary>7.2: every public Racing Thoughts door opens the 3D race, with no purchase or env gate.</summary>
         internal static string ResolveDoor(string id) =>
-            string.Equals(id, "race", StringComparison.OrdinalIgnoreCase) && GlassroadDoorOpen() ? GlassroadId : id;
-
-        /// <summary>A direct launch of the page needs the switch too.</summary>
-        internal static bool GlassroadGate()
-        {
-            if (GlassroadDoorOpen()) return true;
-            Log.Information("GlassroadHost: launch refused, {Env} is not 1", GlassroadHostRules.DoorEnv);
-            return false;
-        }
+            string.Equals(id, "race", StringComparison.OrdinalIgnoreCase) ? GlassroadId : id;
 
         private bool IsGlassroad => string.Equals(Spec.Id, GlassroadId, StringComparison.OrdinalIgnoreCase);
         private bool _grOpen, _grEarlyInitSent, _grPinged;
