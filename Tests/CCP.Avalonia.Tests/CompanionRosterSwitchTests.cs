@@ -158,7 +158,8 @@ public sealed class CompanionRosterSwitchTests
         CoreSettings.Current.OfflineMode = false;
         var handler = new PendingManifest();
         using var http = new System.Net.Http.HttpClient(handler);
-        using var service = new CommunityPromptService(http);
+        var root = System.IO.Path.Combine(CorePaths.UserData, "pending-manifest-" + Guid.NewGuid().ToString("N"));
+        using var service = new CommunityPromptService(http, root);
         var owner = new Window();
         owner.Show();
         int ownerReads = 0;
@@ -174,7 +175,7 @@ public sealed class CompanionRosterSwitchTests
             await pending;
             Assert.Equal(0, ownerReads);
         }
-        finally { owner.Close(); }
+        finally { owner.Close(); System.IO.Directory.Delete(root, true); }
     });
 
     private sealed class PendingManifest : System.Net.Http.HttpMessageHandler
@@ -204,6 +205,94 @@ public sealed class CompanionRosterSwitchTests
             WorkshopCommunityCell.StopForPanic();
             System.IO.File.Delete(path);
             if (id != null) room.WorkshopParts!.Community.Service.RemovePrompt(id);
+        }
+    });
+
+    [Fact]
+    public Task TriggerEditsSurviveHideAndShow() => WithRoster((shell, room, roster) =>
+    {
+        var settings = CoreSettings.Current;
+        settings.TriggerModeEnabled = false;
+        settings.TriggerIntervalSeconds = 60;
+        var cell = room.WorkshopParts!.Triggers;
+        cell.SyncFromSettings();
+        cell.FindControl<CheckBox>("ChkTriggerModeCompanion")!.IsChecked = true;
+        cell.FindControl<Slider>("SliderTriggerIntervalCompanion")!.Value = 90;
+        Assert.True(settings.TriggerModeEnabled);
+        Assert.Equal(90, settings.TriggerIntervalSeconds);
+        shell.ShowTab("settings");
+        shell.ShowTab("companion");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(cell.FindControl<CheckBox>("ChkTriggerModeCompanion")!.IsChecked);
+        Assert.Equal(90, cell.FindControl<Slider>("SliderTriggerIntervalCompanion")!.Value);
+        cell.FindControl<CheckBox>("ChkTriggerModeCompanion")!.IsChecked = false;
+        cell.FindControl<Slider>("SliderTriggerIntervalCompanion")!.Value = 120;
+        shell.ShowTab("settings");
+        shell.ShowTab("companion");
+        Assert.False(cell.FindControl<CheckBox>("ChkTriggerModeCompanion")!.IsChecked);
+        Assert.False(settings.TriggerModeEnabled);
+        Assert.Equal(120, settings.TriggerIntervalSeconds);
+    });
+
+    [Fact]
+    public Task TriggerSyncDoesNotWriteSettings() => WithRoster((shell, room, roster) =>
+    {
+        var settings = CoreSettings.Current;
+        var cell = room.WorkshopParts!.Triggers;
+        settings.TriggerModeEnabled = false;
+        settings.TriggerIntervalSeconds = 60;
+        cell.SyncFromSettings();
+        settings.TriggerModeEnabled = true;
+        settings.TriggerIntervalSeconds = 90;
+        int writes = 0;
+        void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName is nameof(settings.TriggerModeEnabled) or nameof(settings.TriggerIntervalSeconds)) writes++;
+        }
+        settings.PropertyChanged += Changed;
+        try
+        {
+            cell.SyncFromSettings();
+            Assert.Equal(0, writes);
+            Assert.True(cell.FindControl<CheckBox>("ChkTriggerModeCompanion")!.IsChecked);
+            Assert.Equal(90, cell.FindControl<Slider>("SliderTriggerIntervalCompanion")!.Value);
+        }
+        finally { settings.PropertyChanged -= Changed; }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PanicInvalidatesDelayedPersonalityPicker(bool throws) => WithRoster((shell, room, roster) =>
+    {
+        var picker = new TaskCompletionSource<string?>();
+        shell.PersonalityFileForTests = () => picker.Task;
+        var path = System.IO.Path.Combine(CorePaths.UserData, "Delayed Persona.json");
+        System.IO.File.WriteAllText(path, "{\"Name\":\"Delayed\",\"PromptSettings\":{\"Personality\":\"fixture\"}}");
+        var settings = CoreSettings.Current;
+        var installed = settings.InstalledCommunityPromptIds.ToArray();
+        var active = settings.ActiveCommunityPromptId;
+        var assigned = settings.GetCompanionPromptId(0);
+        try
+        {
+            var pending = shell.AssignCompanionPersonalityAsync(0, room);
+            Assert.False(pending.IsCompleted);
+            PanicSurfaces.StopAll("test", shell);
+            if (throws) picker.SetException(new System.IO.IOException("Picker failed"));
+            else picker.SetResult(path);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(installed, settings.InstalledCommunityPromptIds);
+            Assert.Equal(active, settings.ActiveCommunityPromptId);
+            Assert.Equal(assigned, settings.GetCompanionPromptId(0));
+            Assert.Empty(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>());
+            Assert.True(pending.IsCompletedSuccessfully);
+        }
+        finally
+        {
+            WorkshopCommunityCell.StopForPanic();
+            System.IO.File.Delete(path);
+            foreach (var id in settings.InstalledCommunityPromptIds.Except(installed).ToArray())
+                room.WorkshopParts!.Community.Service.RemovePrompt(id);
         }
     });
 

@@ -9,6 +9,7 @@ using Serilog;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Companion;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -33,6 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal async Task AssignCompanionPersonalityAsync(int index, CompanionRoomView room)
         {
             if (index is < 0 or > 4) return;
+            var epoch = WorkshopCommunityCell.PanicEpoch;
             try
             {
                 string? path;
@@ -43,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     var shipped = Path.Combine(AppContext.BaseDirectory, "assets", "prompts");
                     var initial = Directory.Exists(own) && Directory.EnumerateFiles(own, "*.json").Any() ? own : shipped;
                     var folder = Directory.Exists(initial) ? await StorageProvider.TryGetFolderFromPathAsync(initial) : null;
+                    if (epoch != WorkshopCommunityCell.PanicEpoch) return;
                     path = (await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
                     {
                         Title = Loc.Get("title_import_community_prompt"), AllowMultiple = false,
@@ -50,17 +53,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         FileTypeFilter = new[] { new FilePickerFileType("JSON") { Patterns = new[] { "*.json" } } }
                     })).FirstOrDefault()?.TryGetLocalPath();
                 }
-                if (path == null) return;
+                if (epoch != WorkshopCommunityCell.PanicEpoch || path == null) return;
                 var prompt = room.WorkshopParts!.Community.Service.ImportFromFile(path);
                 if (prompt == null) return;
                 AssignImportedPersonality(index, prompt.Id, room);
-                await Controls.Companion.Runtime.WorkshopCommunityCell.ShowPromptDialogAsync(this, new MessageDialog(Loc.Get("title_personality_assigned"),
+                if (epoch != WorkshopCommunityCell.PanicEpoch) return;
+                await WorkshopCommunityCell.ShowPromptDialogAsync(this, new MessageDialog(Loc.Get("title_personality_assigned"),
                     Loc.GetF("msg_personality_assigned", CompanionDefinition.GetById(index).Name, prompt.Name), false));
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "Failed to assign companion prompt");
-                await Controls.Companion.Runtime.WorkshopCommunityCell.ShowPromptDialogAsync(this, new MessageDialog(Loc.Get("title_error"), Loc.GetF("msg_failed_to_import_prompt", ex.Message), false));
+                if (epoch != WorkshopCommunityCell.PanicEpoch) return;
+                await WorkshopCommunityCell.ShowPromptDialogAsync(this, new MessageDialog(Loc.Get("title_error"), Loc.GetF("msg_failed_to_import_prompt", ex.Message), false));
             }
         }
 

@@ -24,6 +24,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
     {
         private static readonly System.Collections.Generic.HashSet<Window> Dialogs = new();
         private static int _panicEpoch;
+        internal static int PanicEpoch => _panicEpoch;
         internal static void StopForPanic()
         {
             _panicEpoch++;
