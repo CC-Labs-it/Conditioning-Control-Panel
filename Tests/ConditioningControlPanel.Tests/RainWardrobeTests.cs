@@ -49,7 +49,7 @@ public class RainWardrobeTests
     public void Catalog_LocksEverySellableItem_UntilItsGrant()
     {
         var none = RainWardrobeCatalog.LockedKeys(null);
-        Assert.Equal(RainWardrobeCatalog.Items.Count, none.Count);
+        Assert.Equal(RainWardrobeCatalog.Items.Count + 4, none.Count);      // + the four level / achievement unlocks (items.json)
         Assert.Contains("dress:rose-flare", none);
         Assert.Contains("dress:hazmat-yellow", none);           // rain.suit.* sits in the dress slot
         Assert.Contains("accessories:silver-drops", none);
