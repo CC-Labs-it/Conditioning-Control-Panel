@@ -297,7 +297,7 @@
                     <Border x:Name="OnlineMeterPill" IsVisible="False" CornerRadius="11" Padding="9,3,11,3"
                             Margin="0,0,8,0" VerticalAlignment="Center" Cursor="Hand" Background="#251A38">
                         <StackPanel Orientation="Horizontal">
-                            <Ellipse x:Name="OnlineMeterPillDot" Width="8" Height="8" Fill="#FF69B4" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                            <fx:OnlineMeterRing x:Name="OnlineMeterPillRing" Margin="0,0,7,0" VerticalAlignment="Center"/>
                             <TextBlock x:Name="TxtOnlineMeterPill" Foreground="White" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
