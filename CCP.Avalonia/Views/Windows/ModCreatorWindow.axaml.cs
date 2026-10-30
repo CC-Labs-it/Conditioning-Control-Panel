@@ -323,13 +323,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <c>Tours.TutorialHead.Seed</c> backs the seam; if <c>Start</c> is refused (another tour
         /// running) <c>IsActive</c> answers for that tour, never an empty coach-mark card.</para>
         ///
-        /// <para>ponytail: the step-rewriting half cannot be done through the seam. WPF walks
-        /// <c>App.Tutorial.CurrentSteps</c> and replaces each <c>step.OnActivate</c> so a step
-        /// tagged <c>RequiresTab="mod:&lt;section&gt;"</c> calls <see cref="NavigateToSection"/>.
-        /// <c>CoreTutorial</c> deliberately exposes only a per-step SNAPSHOT (no step list, no
-        /// OnActivate) because activation is head navigation - so until the seam grows a
-        /// step-activation callback, a Modding tour spotlights sections this window does not
-        /// navigate to. NavigateToSection is ready for it.</para>
+        /// <para>Section callbacks stay in the head, as in WPF
+        /// Windows/ModCreatorWindow.xaml.cs:256-267.</para>
         /// </summary>
         private void LaunchTutorial()
         {
@@ -337,6 +332,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             CoreTutorial.Start("Modding");
             if (!CoreTutorial.IsActive) return;
+
+            // WPF Windows/ModCreatorWindow.xaml.cs:256-267: bind each section before
+            // showing the card, then replay the first activation (Start already ran it).
+            foreach (var step in Tours.TutorialHead.Service.CurrentSteps)
+            {
+                if (step.RequiresTab != null && step.RequiresTab.StartsWith("mod:", StringComparison.Ordinal))
+                {
+                    var sectionKey = step.RequiresTab.Substring(4);
+                    step.OnActivate = () => NavigateToSection(sectionKey);
+                }
+            }
+            Tours.TutorialHead.Service.CurrentStep?.OnActivate?.Invoke();
 
             _tutorialOverlay = new TutorialOverlay(this);
             _tutorialOverlay.Closed += (_, _) => _tutorialOverlay = null;
