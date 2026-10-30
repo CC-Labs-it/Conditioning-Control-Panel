@@ -408,6 +408,14 @@
                     <TextBlock Text="{loc:Str launcher_play}"/>
                   </Button>
                 </Grid>
+                <!-- WPF PlayTabView.xaml:574-580. -->
+                <Border x:Name="PlayLockRacingThoughts" Theme="{StaticResource PlayLockBandT2}" Margin="-22">
+                  <StackPanel VerticalAlignment="Center">
+                    <fx:IconGlyph Kind="LockClosed" Foreground="{DynamicResource IconTier1Brush}" Theme="{StaticResource PlayLockGlyph}"/>
+                    <TextBlock Text="{loc:Str hm3_rail_lock_t2}" Theme="{StaticResource PlayLockTeaserT2}"/>
+                  </StackPanel>
+                </Border>
+                <fx:TierBadge x:Name="PlayBadgeRacingThoughts" Theme="{StaticResource PlayTierBadge}" Tier="2"/>
               </Grid>
             </Border>
           </Grid>

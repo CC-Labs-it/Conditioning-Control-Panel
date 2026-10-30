@@ -26,6 +26,44 @@ namespace CCP.Avalonia.Tests;
 public sealed class PlayWallTests
 {
     [Fact]
+    public void RacingThoughtsBandAndBadgeFollowLabEntitlement()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var previous = CoreEntitlement.HasLabProvider;
+            bool lab = false;
+            CoreEntitlement.HasLabProvider = () => lab;
+            var shell = new MainShellWindow();
+            try
+            {
+                shell.Show();
+                shell.ShowTab("play");
+                Dispatcher.UIThread.RunJobs();
+                var play = shell.Named<Control>("PlayTab")!;
+                var band = play.FindControl<Border>("PlayLockRacingThoughts");
+                var badge = play.FindControl<ConditioningControlPanel.Avalonia.Controls.TierBadge>("PlayBadgeRacingThoughts");
+                Assert.NotNull(band);
+                Assert.NotNull(badge);
+                // WPF PlayTabView.xaml:574-580 and MainWindow.PlayTab.cs:132.
+                Assert.Equal(2, badge.Tier);
+                Assert.True(band.IsVisible);
+                lab = true;
+                shell.UpdateQuickLoginUI();
+                Assert.False(band.IsVisible);
+                Assert.True(badge.IsVisible);
+                lab = false;
+                shell.UpdateQuickLoginUI();
+                Assert.True(band.IsVisible);
+                Assert.False(play.FindControl<Button>("BtnPlayRacingThoughts")!.IsEnabled);
+            }
+            finally { shell.Close(); CoreEntitlement.HasLabProvider = previous; }
+        });
+    }
+
+    [Fact]
     public void WebAppCardUsesBrowserFallbackThenRetiresBanner()
     {
         AvaloniaTestDispatcher.Run(() =>
