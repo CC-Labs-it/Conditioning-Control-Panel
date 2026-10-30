@@ -180,7 +180,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             {
                 if (QuickShell is { } shell)
                 {
-                    await shell.SetBrowserPausedFromWorkshopAsync(_isBrowserPaused);
+                    // WPF AvatarTubeWindow.ChatInput.cs:1407: menu resume unmutes the live page.
+                    await shell.SetBrowserPausedFromWorkshopAsync(_isBrowserPaused, preserveSavedMute: false);
                     shell.SyncPauseBrowserUI(_isBrowserPaused);
                 }
             }

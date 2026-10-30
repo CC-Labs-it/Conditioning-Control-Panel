@@ -145,6 +145,37 @@ public sealed class WorkshopBehaviorBrowserTests
         Assert.Equal("menu_pause_browser", (item.Header as IconLabel)?.Key);
     }, avatar: true);
 
+    // WPF AvatarTubeWindow.ChatInput.cs:1407: menu resume unmutes without a settings write.
+    [Fact]
+    public void TubeMenuResumeUnmutesTransientlyWhenTheSavedMuteIsEnabled() => Run((cell, host) =>
+    {
+        CoreSettings.Current.BrowserVideoMuted = true;
+        var sent = new List<string>();
+        host.ScriptInvoker = script => { sent.Add(script); return Task.FromResult<string?>("playing"); };
+        var tube = ((MainShellWindow)TopLevel.GetTopLevel(cell)!).Tube!;
+        var item = tube.FindControl<MenuItem>("MenuItemPauseBrowser")!;
+        var toggle = cell.FindControl<CheckBox>("ChkPauseBrowserCompanion")!;
+        item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(toggle.IsChecked);
+        Assert.Equal(2, sent.Count);
+        Assert.Contains(")(true)", sent[0]);
+        Assert.Contains("el.pause()", sent[1]);
+        item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(toggle.IsChecked);
+        Assert.False(host.MediaPaused);
+        Assert.Equal(4, sent.Count);
+        Assert.Contains(")(false)", sent[2]);
+        Assert.Contains("el.play()", sent[3]);
+        Assert.True(CoreSettings.Current.BrowserVideoMuted);
+        Assert.Equal("menu_pause_browser", (item.Header as IconLabel)?.Key);
+        sent.Clear();
+        host.FindLogicalAncestorOfType<SettingsTabView>()!.ApplyBrowserMute();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(")(true)", Assert.Single(sent)); // navigation reapplies the saved preference
+    }, avatar: true);
+
     [Fact]
     public void WhisperMuteRefreshesTheOpenTubeMenuWithoutDisablingWhispers() => Run((cell, _) =>
     {
@@ -163,14 +194,15 @@ public sealed class WorkshopBehaviorBrowserTests
     public void MidnightArtUsesBothPanesAndYieldsToModGlass() => Run((cell, _) =>
     {
         var path = System.IO.Path.Combine(CorePaths.UserData, "arcademy_meta.json");
-        System.IO.Directory.CreateDirectory(CorePaths.UserData);
-        System.IO.File.WriteAllText(path, "{\"wallet\":{\"inv\":{\"tube_midnight\":{\"n\":1}}}}");
-        CoreSettings.Current.TubeMidnightGlass = true;
+        var backup = System.IO.File.Exists(path) ? System.IO.File.ReadAllText(path) : null;
         var tube = ((MainShellWindow)TopLevel.GetTopLevel(cell)!).Tube!;
         var previous = CoreModArt.OverridePathProvider;
         var requested = new List<string>();
         try
         {
+            System.IO.Directory.CreateDirectory(CorePaths.UserData);
+            System.IO.File.WriteAllText(path, "{\"wallet\":{\"inv\":{\"tube_midnight\":{\"n\":1}}}}");
+            CoreSettings.Current.TubeMidnightGlass = true;
             CoreModArt.OverridePathProvider = p => { requested.Add(p); return null; };
             tube.SetTubeStyle(false);
             tube.SetTubeStyle(true);
@@ -179,7 +211,12 @@ public sealed class WorkshopBehaviorBrowserTests
             CoreModArt.OverridePathProvider = p => p == "tube2.png" ? "/mod/tube2.png" : null;
             Assert.False(global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow.MidnightGlassWanted());
         }
-        finally { CoreModArt.OverridePathProvider = previous; }
+        finally
+        {
+            CoreModArt.OverridePathProvider = previous;
+            if (backup != null) System.IO.File.WriteAllText(path, backup); else System.IO.File.Delete(path);
+        }
+        Assert.Equal(backup, System.IO.File.Exists(path) ? System.IO.File.ReadAllText(path) : null);
     }, avatar: true);
 
     /// <summary>WPF SyncTubeMidnightRow + MidnightGlassWanted: the row and the tube's glass follow the
