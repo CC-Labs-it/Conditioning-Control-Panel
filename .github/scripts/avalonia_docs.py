@@ -2,7 +2,6 @@
 
 Format (written by the converter, kept by hand edits): every table row is one line, <tr><td>..</td>..</tr>, header rows
 use <th>; main-sync ledgers carry <script type="application/json" id="ledger-meta">{"total": N}</script>."""
-import html
 import json
 import re
 from html.parser import HTMLParser
@@ -18,6 +17,8 @@ class _Row(HTMLParser):
             self._buf, self.head = [], tag == "th"
         elif tag == "code" and self._buf is not None:
             self._buf.append("`")
+        elif tag == "br" and self._buf is not None:
+            self._buf.append(" ")
 
 
     def handle_endtag(self, tag):
@@ -41,9 +42,9 @@ def parse_row(line):
 
 
 def tables(text):
-    """Every table as {"header": [...], "rows": [[...], ...], "lines": [line numbers of the rows]} (0-based)."""
+    """Every table as {"header": [...], "rows": [[...], ...]}."""
     out, cur = [], None
-    for n, line in enumerate(text.split("\n")):
+    for line in text.split("\n"):
         s = line.strip()
         if s.startswith("<table"):
             cur = None
@@ -51,11 +52,10 @@ def tables(text):
             continue
         head, cells = parse_row(s)
         if head:
-            cur = {"header": cells, "rows": [], "lines": []}
+            cur = {"header": cells, "rows": []}
             out.append(cur)
         elif cur is not None:
             cur["rows"].append(cells)
-            cur["lines"].append(n)
     return out
 
 
@@ -67,10 +67,21 @@ def rows(text, first):
 
 def meta(text):
     m = re.search(r'<script type="application/json" id="ledger-meta">(.*?)</script>', text, re.S)
-    return json.loads(html.unescape(m.group(1))) if m else None
+    return json.loads(m.group(1)) if m else None
 
 
 def bad_lines(text):
     """Line numbers (1-based) where a table row does not sit on exactly one line."""
     return [n for n, line in enumerate(text.split("\n"), 1)
-            if ("<tr" in line or "</tr>" in line) and not re.fullmatch(r"\s*<tr[^>]*>.*</tr>\s*", line)]
+            if ("<tr" in line or "</tr>" in line)
+            and (line.count("<tr") != 1 or line.count("</tr>") != 1 or not re.fullmatch(r"\s*<tr[^>]*>.*</tr>\s*", line))]
+
+
+if __name__ == "__main__":  # self-check: python3 .github/scripts/avalonia_docs.py
+    t = ("<table>\n<tr><th>id</th><th>status</th><th>notes</th></tr>\n"
+         "<tr><td>a-b</td><td>wired</td><td>x.<br>Y <code>F.cs</code> 1|2 &amp; &lt;slug&gt;</td></tr>\n</table>\n"
+         '<script type="application/json" id="ledger-meta">{"total": 1}</script>')
+    assert rows(t, "id") == [{"id": "a-b", "status": "wired", "notes": "x. Y `F.cs` 1|2 & <slug>"}], rows(t, "id")
+    assert meta(t) == {"total": 1} and bad_lines(t) == []
+    assert bad_lines("<tr><td>a</td></tr><tr><td>b</td></tr>\n<tr><td>c\n</td></tr>") == [1, 2, 3]
+    print("avalonia_docs self-check OK")

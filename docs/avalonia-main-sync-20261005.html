@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
 <title>Main sync #4 delta ledger (2026-10-05)</title>
 <style>
 :root{color-scheme:light dark;--fg:#1f2328;--bg:#fff;--muted:#59636e;--line:#d1d9e0;--code:#f6f8fa;--link:#0969da}
@@ -28,8 +29,7 @@ Last sync merge-base: <code>7bbf78c06</code>. Delta: 210 commits (137 non-merge)
 <li><strong>needs-port (<code>lane</code>)</strong>: WPF-only behaviour the Avalonia head lacks; the lane name is the port lane that owns it. Tick the row when that lane lands.</li>
 <li><strong>n/a</strong>: no Avalonia counterpart by design (installer/version bump, WPF-only test, Win32 hook or Windows shortcut), reason given.</li>
 </ul>
-
-<p class="counts">Counts: 47 ported-by-merge, 79 needs-port, 11 n/a (total 137).</p>
+<p><span class="counts"></span>.</p>
 <p>Web-only rows for Piece by Piece (chess) reach Avalonia users only once the head hosts the game; that host is the existing <code>feat-pbp-*</code> gap in <code>avalonia-parity.html</code>, tracked as lane <code>chess-host</code>.</p>
 <h2 id="needs-port-lanes">needs-port lanes</h2>
 
@@ -222,7 +222,7 @@ HypnoTube video is refused on Avalonia until a browser host seeds it: lane <code
 
 <script>
 (()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
-const m=document.getElementById('ledger-meta');const s=document.querySelector('.counts');if(m&&s){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
+const m=document.getElementById('ledger-meta');for(const s of document.querySelectorAll('.counts'))if(m){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
 </script>
 </body>
 </html>

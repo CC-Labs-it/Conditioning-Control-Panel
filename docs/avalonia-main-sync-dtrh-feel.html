@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
 <title>Main-sync delta ledger: DTRH feel rework (dtrh-feel 17-pace)</title>
 <style>
 :root{color-scheme:light dark;--fg:#1f2328;--bg:#fff;--muted:#59636e;--line:#d1d9e0;--code:#f6f8fa;--link:#0969da}
@@ -32,8 +33,7 @@ No new non-text asset types (no audio/images), so <code>CCP.Avalonia.csproj</cod
 lifecycle, Escape as the game's pause (<code>MainShellWindow.PanicKey.cs</code> -&gt; <code>PanicPolicy.GameClaimsEscapeAsPause</code> /
 <code>KeptEscapeGoesTo</code> -&gt; kept-escape) and panic closing it (PanicSurfaces &quot;games&quot;). Lane <strong>game-dtrh-host-b</strong> moved the
 <code>DtrhAssetManifest</code> remote half (online media copies, loops lane, loops-dry back-off) to Core <code>DtrhRemoteMedia</code>.</p>
-
-<p class="counts">Counts: 22 ported-by-merge, 5 ported-here, 0 needs-port, 0 n/a (total 27). A row whose host part is open counts as needs-port.</p>
+<p><span class="counts"></span>. A row whose host part is open counts as needs-port.</p>
 
 <table>
 <tr><th>#</th><th>sha</th><th>subject</th><th>WPF files outside web/dtrh</th><th>Avalonia/Core counterpart</th><th>status</th></tr>
@@ -68,7 +68,7 @@ lifecycle, Escape as the game's pause (<code>MainShellWindow.PanicKey.cs</code> 
 
 <script>
 (()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
-const m=document.getElementById('ledger-meta');const s=document.querySelector('.counts');if(m&&s){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
+const m=document.getElementById('ledger-meta');for(const s of document.querySelectorAll('.counts'))if(m){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
 </script>
 </body>
 </html>

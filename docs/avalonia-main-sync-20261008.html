@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
 <title>Main sync #5 delta ledger (2026-10-08)</title>
 <style>
 :root{color-scheme:light dark;--fg:#1f2328;--bg:#fff;--muted:#59636e;--line:#d1d9e0;--code:#f6f8fa;--link:#0969da}
@@ -28,8 +29,7 @@ Last sync pin: <code>4629b1f4a</code> (main sync #4). Delta: 5 non-merge commits
 <li><strong>needs-port (<code>lane</code>)</strong>: WPF-only behaviour the Avalonia head lacks; the lane name is the port lane that owns it. Tick the row when that lane lands.</li>
 <li><strong>n/a</strong>: no Avalonia counterpart by design, reason given.</li>
 </ul>
-
-<p class="counts">Counts: 3 ported-by-merge, 2 needs-port, 0 n/a (total 5).</p>
+<p><span class="counts"></span>.</p>
 <h2 id="needs-port-lanes">needs-port lanes</h2>
 
 <table>
@@ -58,7 +58,7 @@ field (<code>Field.DescentAuto</code>, inside <code>All</code>), set by WPF only
 
 <script>
 (()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
-const m=document.getElementById('ledger-meta');const s=document.querySelector('.counts');if(m&&s){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
+const m=document.getElementById('ledger-meta');for(const s of document.querySelectorAll('.counts'))if(m){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
 </script>
 </body>
 </html>

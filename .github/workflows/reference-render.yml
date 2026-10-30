@@ -17,6 +17,7 @@ on:
       - '.github/workflows/reference-render.yml'
       - '.github/scripts/pair-renders.py'
       - '.github/scripts/uia-parity.py'
+      - '.github/scripts/avalonia_docs.py'
       - '.github/wpf-uia/**'
 
 concurrency:

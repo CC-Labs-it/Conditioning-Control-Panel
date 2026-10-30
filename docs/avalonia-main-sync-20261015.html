@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
 <title>Main sync #7 delta ledger (2026-10-15)</title>
 <style>
 :root{color-scheme:light dark;--fg:#1f2328;--bg:#fff;--muted:#59636e;--line:#d1d9e0;--code:#f6f8fa;--link:#0969da}
@@ -33,8 +34,7 @@ Piece by Piece spectate v2, friend links, the DtRH feel passes and the repo move
 <li><strong>needs-port (<code>lane</code>)</strong>: WPF-only behaviour the Avalonia head lacks; the lane owns it. Strings and Core files such a commit touched are already merged (see notes); the lane ports the head half.</li>
 <li><strong>n/a</strong>: no Avalonia counterpart by design, reason given.</li>
 </ul>
-
-<p class="counts">Counts: 80 ported-by-merge, 195 needs-port, 34 n/a (total 309). Needs-port by lane: sync7-scrolller 47, sync7-scrolller-d-native 3 (rows 194/201/204; sync7-scrolller-d moved the gate rules to Core and ported the header half), sync7-engine-fixes 27, sync7-mandatory-video 25, sync7-conversion 16, sync7-companion 14, sync7-session-safety 9, sync7-audio-player 9, sync7-shell-ui 8, sync7-leash 6, sync7-gentle-visuals 6, sync7-friends-link 6, sync7-chaster-billboard 5, sync7-pbp-host 4, sync7-account 3, sync7-repo-urls-updater 2, sync7-game-hosts 2, sync7-local-ai 2, sync7-webcam 1.</p>
+<p><span class="counts"></span>. Needs-port by lane: sync7-scrolller 47, sync7-scrolller-d-native 3 (rows 194/201/204; sync7-scrolller-d moved the gate rules to Core and ported the header half), sync7-engine-fixes 27, sync7-mandatory-video 25, sync7-conversion 16, sync7-companion 14, sync7-session-safety 9, sync7-audio-player 9, sync7-shell-ui 8, sync7-leash 6, sync7-gentle-visuals 6, sync7-friends-link 6, sync7-chaster-billboard 5, sync7-pbp-host 4, sync7-account 3, sync7-repo-urls-updater 2, sync7-game-hosts 2, sync7-local-ai 2, sync7-webcam 1.</p>
 <p>Release 7.1.13 and 7.1.14 are in the pin (rows 308-309): version, notes, release-button strings; no new behaviour.</p>
 <h2 id="needs-port-lanes">needs-port lanes</h2>
 
@@ -464,7 +464,7 @@ one copy in Core <code>ScrolllerDiskCache</code>).</li>
 
 <script>
 (()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
-const m=document.getElementById('ledger-meta');const s=document.querySelector('.counts');if(m&&s){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
+const m=document.getElementById('ledger-meta');for(const s of document.querySelectorAll('.counts'))if(m){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
 </script>
 </body>
 </html>

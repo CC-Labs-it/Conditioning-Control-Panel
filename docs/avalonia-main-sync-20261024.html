@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
 <title>Main sync #8 delta ledger (2026-10-24)</title>
 <style>
 :root{color-scheme:light dark;--fg:#1f2328;--bg:#fff;--muted:#59636e;--line:#d1d9e0;--code:#f6f8fa;--link:#0969da}
@@ -32,9 +33,8 @@ real-time clocks, crash exit), companion quiet lines, the Breakout pause menu an
 <li><strong>n/a</strong>: no Avalonia counterpart by design, reason given.</li>
 </ul>
 <p>Safety rows (panic / lockdown / stop / lock) are needs-port unless the Avalonia head is shown to behave that way already.</p>
-
-<p class="counts">Counts: 2 ported-by-merge, 30 needs-port, 0 n/a (total 32). Needs-port by lane (lanes from `briefs/cloud/sync8/lanes.tsv`,</p>
-<p>a commit split across two lanes is counted under each): sync8-panic-voice 5, sync8-settings-freeze 5, sync8-remote-end 3,
+<p><span class="counts"></span>. Needs-port by lane (lanes from <code>briefs/cloud/sync8/lanes.tsv</code>,
+a commit split across two lanes is counted under each): sync8-panic-voice 5, sync8-settings-freeze 5, sync8-remote-end 3,
 sync8-chaster-leash 3, sync8-factory-reset 2, sync8-lockdown 2, sync8-crash-exit 2, sync8-audio-duck 2, sync8-scrolller 2,
 sync8-ai-gates 1, sync8-real-time 1, sync8-companion-quiet 1, sync8-account-name 1, sync8-friends-links 1, sync8-hunt-oct22 1.</p>
 <h2 id="needs-port-lanes">needs-port lanes</h2>
@@ -132,7 +132,7 @@ files (<code>ChasterLadder</code>, <code>CircesTab</code>, <code>MediaCommand</c
 
 <script>
 (()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
-const m=document.getElementById('ledger-meta');const s=document.querySelector('.counts');if(m&&s){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
+const m=document.getElementById('ledger-meta');for(const s of document.querySelectorAll('.counts'))if(m){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
 </script>
 </body>
 </html>

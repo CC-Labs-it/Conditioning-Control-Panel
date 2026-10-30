@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Regenerate docs/avalonia-dashboard.html (self-contained, offline, inline SVG) from the port ledgers.
+"""Build the port dashboard (self-contained, offline, inline SVG) from the port ledgers.
 
-usage: port-dashboard.py [repo] [--flakes FILE] [--prs FILE.json] [--out FILE]
+usage: port-dashboard.py [repo] --out FILE [--flakes FILE] [--prs FILE.json]
   parity status per area (last row per id wins), parity over time (one point per day from the ledger's git history,
   .md before the HTML move), main-sync progress per ledger, perf rows, known flakes (one test name per line,
   '#' comments) and open PRs (gh pr list --json number,title,isDraft,headRefName).
@@ -106,7 +106,7 @@ def main():
     ap.add_argument("repo", nargs="?", default=".")
     ap.add_argument("--flakes")
     ap.add_argument("--prs")
-    ap.add_argument("--out")
+    ap.add_argument("--out", required=True)
     a = ap.parse_args()
     repo = os.path.abspath(a.repo)
     rd = lambda p: open(os.path.join(repo, p), encoding="utf-8").read()
@@ -199,11 +199,11 @@ matchMedia('(prefers-reduced-motion: reduce)').matches?b.textContent=n:requestAn
             "history": [[d, dict(c)] for d, c in pts], "syncs": {n: dict(c) for n, c, _ in syncs},
             "flakes": flakes, "open_prs": len(prs) if prs is not None else None}
     blob = json.dumps(data).replace("</", "<\\/")
-    doc = ('<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+    doc = ('<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<meta name="robots" content="noindex">\n'
            f'<title>CCP Avalonia port dashboard</title>\n<style>\n{css}\n</style>\n'
            f'<script type="application/json" id="dashboard-data">{blob}</script>\n</head>\n<body>\n'
            + "\n".join(s) + f"\n<script>\n{js}\n</script>\n</body>\n</html>\n")
-    out = a.out or os.path.join(repo, "docs/avalonia-dashboard.html")
+    out = a.out
     open(out, "w", encoding="utf-8").write(doc)
     print(out, f"{len(parity)} rows, {len(pts)} days, {len(syncs)} syncs")
 

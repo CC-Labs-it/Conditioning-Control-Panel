@@ -422,8 +422,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash .github/scripts/core-guards.sh
-      # The port docs parse: every ledger table row on one line, main-sync meta totals match, the dashboard builds.
+      # The port docs parse: every ledger table row on one line, main-sync meta totals match, the dashboard builds
+      # (shallow checkout, so its over-time chart has one point here; that is fine for a build check).
       - run: |
+          python3 .github/scripts/avalonia_docs.py
           python3 - <<'PY'
           import glob, sys
           sys.path.insert(0, ".github/scripts"); import avalonia_docs as A

@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
 <title>Main sync #6 delta ledger (2026-10-09)</title>
 <style>
 :root{color-scheme:light dark;--fg:#1f2328;--bg:#fff;--muted:#59636e;--line:#d1d9e0;--code:#f6f8fa;--link:#0969da}
@@ -31,8 +32,7 @@ launcher badges, 7.1.5 fixes).</p>
 <li><strong>needs-port (<code>lane</code>)</strong>: WPF-only behaviour the Avalonia head lacks; the lane name is the port lane that owns it. Tick the row when that lane lands. Strings and Core files a needs-port commit touched are already merged (see notes); the lane ports the head half.</li>
 <li><strong>n/a</strong>: no Avalonia counterpart by design, reason given.</li>
 </ul>
-
-<p class="counts">Counts: 8 ported-by-merge, 132 needs-port, 8 n/a (total 148). Lane progress: sync6-nav-search ticked its 8 rows (6 ported, 2 partial: rows 38 and 46 wait on sync6-nav-rail for the Games zone landing and the Settings-pill ring). sync6-nav-rail-c: rows 2, 23 ported, 33 partial (Folders glow -&gt; rail-d) and 46 completed (landing glow, NavBadges, title crumb, rail paint); rows 1, 6, 11, 14, 15, 17, 20, 21, 25, 27, 42, 96 left for sync6-nav-rail-d. sync6-nav-rail-d: rows 1, 25, 33 ported; 6, 11, 17, 21, 96 partial (Monitors, Folders zone + logs row, &quot;?&quot; badges, mod door art); rows 14, 15, 20, 27, 42 and the partial remainders (Account &amp; Plans, Games cards, Exclusives unmount, Just Drop ask, Moved note) left for sync6-nav-rail-e.</p>
+<p><span class="counts"></span>. Lane progress: sync6-nav-search ticked its 8 rows (6 ported, 2 partial: rows 38 and 46 wait on sync6-nav-rail for the Games zone landing and the Settings-pill ring). sync6-nav-rail-c: rows 2, 23 ported, 33 partial (Folders glow -&gt; rail-d) and 46 completed (landing glow, NavBadges, title crumb, rail paint); rows 1, 6, 11, 14, 15, 17, 20, 21, 25, 27, 42, 96 left for sync6-nav-rail-d. sync6-nav-rail-d: rows 1, 25, 33 ported; 6, 11, 17, 21, 96 partial (Monitors, Folders zone + logs row, &quot;?&quot; badges, mod door art); rows 14, 15, 20, 27, 42 and the partial remainders (Account &amp; Plans, Games cards, Exclusives unmount, Just Drop ask, Moved note) left for sync6-nav-rail-e.</p>
 <h2 id="needs-port-lanes">needs-port lanes</h2>
 
 <table>
@@ -235,7 +235,7 @@ launcher badges, 7.1.5 fixes).</p>
 
 <script>
 (()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
-const m=document.getElementById('ledger-meta');const s=document.querySelector('.counts');if(m&&s){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
+const m=document.getElementById('ledger-meta');for(const s of document.querySelectorAll('.counts'))if(m){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();
 </script>
 </body>
 </html>
