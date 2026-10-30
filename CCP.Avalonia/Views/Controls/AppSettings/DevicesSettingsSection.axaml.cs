@@ -45,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             SliderWakePrecision.ValueChanged += SliderWakePrecision_ValueChanged;
             SliderCmdPrecision.ValueChanged += SliderCmdPrecision_ValueChanged;
             ChkHeadphones.IsCheckedChanged += ChkHeadphones_Changed;
+            WireVoiceModes();
             ChkBlinkRecalWebcamBar.IsCheckedChanged += ChkBlinkRecalShortcut_Changed;
             ChkWebcamDriftCorrection.IsCheckedChanged += ChkWebcamDriftCorrection_Changed;
             ChkRestrictGazeToCalScreen.IsCheckedChanged += ChkRestrictGazeToCalScreen_Changed;
@@ -198,8 +199,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             if (_loading) return;
             CoreSettings.Current.SpeechHeadphonesMode = ChkHeadphones.IsChecked == true;
             CoreSettings.Save();
-            // ponytail: WPF also re-quotes the device on the She's Listening chip
-            // (MainWindow.RefreshSheListeningDeviceChips); no such host on this head.
+            ApplyVoiceLive(reopen: false);
         }
 
         /// <summary>
@@ -242,10 +242,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             s.SpeechInputDeviceIndex = idx;
             s.SpeechInputDeviceName = name; // matched by name on reopen - robust to ordinal reshuffle (#441b)
             CoreSettings.Save();
-            // ponytail: WPF also cuts the open capture so the wake loop reopens on the new device
-            // (App.Speech.StopListening + App.Autonomy.RefreshVoiceInputModes) and re-quotes the
-            // device on the She's Listening chip. The seam carries capability only, and neither
-            // the autonomy service nor that chip exists on this head.
+            ApplyVoiceLive(reopen: true);
         }
 
         private void BtnMicRefresh_Click(object? sender, RoutedEventArgs e) => PopulateMicDevices();
@@ -296,7 +293,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
         // WPF LabTab diagnostics: subscriptions belong to this visible section, never the singleton.
         private bool _diagnosticsSubscribed, _gazeSet, _monitorPopulating;
-        private int _blinks;
+        private int _blinks, _mouths;
         private WebcamTrackingState _debugState;
         private string _face = "—";
         private GazeSide _gaze;
@@ -306,8 +303,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             if (_diagnosticsSubscribed == subscribe) return;
             _diagnosticsSubscribed = subscribe;
             var t = Platform.WebcamTracker.Instance;
-            if (subscribe) { _debugState = t.State; t.OnFaceFound += DebugFaceFound; t.OnFaceLost += DebugFaceLost; t.OnBlink += DebugBlink; t.OnGazeSide += DebugGaze; t.StateChanged += DebugState; }
-            else { t.OnFaceFound -= DebugFaceFound; t.OnFaceLost -= DebugFaceLost; t.OnBlink -= DebugBlink; t.OnGazeSide -= DebugGaze; t.StateChanged -= DebugState; }
+            if (subscribe) { _debugState = t.State; t.OnFaceFound += DebugFaceFound; t.OnFaceLost += DebugFaceLost; t.OnBlink += DebugBlink; t.OnMouthOpen += DebugMouth; t.OnGazeSide += DebugGaze; t.StateChanged += DebugState; }
+            else { t.OnFaceFound -= DebugFaceFound; t.OnFaceLost -= DebugFaceLost; t.OnBlink -= DebugBlink; t.OnMouthOpen -= DebugMouth; t.OnGazeSide -= DebugGaze; t.StateChanged -= DebugState; }
         }
         private void DebugState()
         {
@@ -319,6 +316,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         private void DebugFaceFound() { _face = "yes"; PaintDebugCounters(); AppendWebcamDebugLog("Face FOUND"); }
         private void DebugFaceLost() { _face = "lost"; PaintDebugCounters(); AppendWebcamDebugLog("Face LOST"); }
         private void DebugBlink() { _blinks++; PaintDebugCounters(); AppendWebcamDebugLog($"Blink #{_blinks}"); }
+        // WPF MainWindow.LabTab.cs:518-523, 691-695.
+        internal void ResetDebugCounters()
+        {
+            _blinks = _mouths = 0; _face = "—"; _gazeSet = false;
+            PaintDebugCounters();
+        }
+        private void DebugMouth() => AppendWebcamDebugLog($"Mouth-open #{++_mouths}");
         private void DebugGaze(GazeSide side)
         {
             if (_gazeSet && _gaze == side) return;
@@ -441,6 +445,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                     if (!Services.Webcam.WebcamConsent.IsCurrent(CoreSettings.Current)) { AppendWebcamDebugLog("Consent declined or dialog cancelled."); return; }
                     AppendWebcamDebugLog("Consent granted.");
                 }
+                ResetDebugCounters();
                 AppendWebcamDebugLog("Starting webcam (camera open + model load can take a few seconds)…");
                 BtnWebcamDebugStart.IsEnabled = false;
                 bool started = await tracker.StartAsync();
@@ -624,13 +629,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         //  voice modes
         // =====================================================================================
 
-        // ponytail: ChkSpeechWakeWord / ChkSpeechPushToTalk need App.Autonomy.RefreshVoiceInputModes
-        // (ConditioningControlPanel/Services/Autonomy/), still in the WPF head. TierGate is not the
-        // blocker any more - CCP.Core/Services/TierGate.cs - but the mic half is. They are
-        // seeded above and left without a write handler: a toggle that saved the flag but could
-        // neither charge the premium bar nor open the mic would be a lie in both directions.
-        // BtnSetPttKey likewise needs MainWindow's global-hook key capture.
-
         private void TxtSpeechWakeWords_LostFocus(object? sender, RoutedEventArgs e)
         {
             if (_loading) return;
@@ -638,8 +636,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             CoreSettings.Current.SpeechWakeWords = string.IsNullOrWhiteSpace(text) ? "hey bambi" : text;
             if (string.IsNullOrWhiteSpace(text)) TxtSpeechWakeWords.Text = "hey bambi";
             CoreSettings.Save();
-            // ponytail: WPF also restarts the wake loop so new phrases take effect immediately
-            // (App.Autonomy.RefreshVoiceInputModes); no speech engine on this head.
+            ApplyVoiceLive(reopen: true);
         }
 
         // =====================================================================================
