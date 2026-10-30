@@ -154,3 +154,5 @@ body.garage-open .gr-touch{display:none}
 .g-extras{display:flex;gap:8px;flex-wrap:wrap}
 #race-garage .g-extras button{font-size:11px;padding:7px 10px;background:var(--g-paper);border-width:2px;border-radius:7px}
 .g-shop-note{min-height:15px;margin:10px 0 0;font-size:11px;color:#ffce62}
+/* a pad step focuses from script: paint :focus like :focus-visible (hud/hud.js sets html.pad-nav) */
+html.pad-nav #race-garage button:focus,html.pad-nav #race-garage input:focus{outline:3px solid var(--g-rose);outline-offset:4px}html.pad-nav #race-garage .g-track-tile:focus{transform:translateY(-3px);border-color:var(--course-color);background:#194b57;outline:3px solid var(--g-rose);outline-offset:2px}html.pad-nav #race-garage .g-track-tile:focus .g-course-map{opacity:1;transform:none}html.pad-nav #race-garage .g-media-picker button:focus,html.pad-nav #race-garage .g-course-customize:focus{outline:3px solid #ffce62;outline-offset:2px}

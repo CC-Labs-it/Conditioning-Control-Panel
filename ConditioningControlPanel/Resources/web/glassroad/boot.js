@@ -1554,7 +1554,7 @@ async function boot(course, options, lifetime, isCurrent) {
     const cameraToggle = canLook() && a.cameraPressed;
     const rearView = canLook() && a.rearView;
     if (cameraToggle) hud.toast(cam.views.toggle() === 'first' ? 'First person' : 'Chase view');
-    const nav = gamepad.takeNav();
+    const nav = gamepad.takeNav(!!hud.card);                     // no card: a held stick waits for a release (input/stickNav.js)
     const card = hud.card;
     if (card) {                                                   // 0. cards take the pad; Escape only ever pauses
       if (card === 'pause' && pad.pause) setPaused(false);
@@ -1867,7 +1867,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (!renderer.frameDue(now)) return;
     const { frameDt } = clock.frame(now);
     const a = actions.sample();
-    const nav = gamepad.takeNav();
+    const nav = gamepad.takeNav(!!hud.card);                     // no card: a held stick waits for a release (input/stickNav.js)
     if (hud.card) { if (nav) hud.nav(nav); else if (a.throttle >= 0.5 && !cardThrottle) hud.nav('throttle'); }
     cardThrottle = a.throttle >= 0.5;
     hopLatch.clear(); itemLatch.clear();
